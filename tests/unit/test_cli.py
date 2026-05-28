@@ -113,6 +113,65 @@ def test_eval_subparser_accepts_bare_id():
     assert args.id == "task-y"
 
 
+def test_eval_subparser_accepts_repo_root():
+    """``cap eval`` must accept ``--repo-root <path>`` for parity with every
+    other subcommand (sync/check/validate/render). Without it, tests and
+    non-cwd invocations would have to ``os.chdir`` into the target repo —
+    fragile and surprising next to the other subcommands."""
+    parser = build_parser()
+    args = parser.parse_args(["eval", "--list", "--repo-root", "/tmp/somewhere"])
+    assert args.command == "eval"
+    assert args.list is True
+    assert args.repo_root == "/tmp/somewhere"
+
+    # Combined with --show.
+    args2 = parser.parse_args(["eval", "--show", "task-x", "--repo-root", "/tmp/elsewhere"])
+    assert args2.show == "task-x"
+    assert args2.repo_root == "/tmp/elsewhere"
+
+
+def test_eval_main_uses_repo_root_without_chdir(monkeypatch, tmp_path, make_synthetic_repo):
+    """Running ``cap eval --list --repo-root <path>`` through ``main`` must
+    enumerate the *given* repo, not the process's cwd. The original
+    process cwd must be unchanged after the call (no covert ``os.chdir``).
+
+    Seeded with a single repo-local prompt + task so the listing is
+    non-trivial — confirms the flag actually plumbs through to
+    ``commands.eval.run``."""
+    import os
+
+    make_synthetic_repo(tmp_path)
+    prompts_dir = tmp_path / "playbook" / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+    (prompts_dir / "demo.md").write_text(
+        "---\n"
+        "id: demo\n"
+        "name: Demo\n"
+        "description: demo\n"
+        "slash: demo\n"
+        "eval_tasks:\n"
+        "  - demo-task\n"
+        "---\n"
+        "Body.\n",
+        encoding="utf-8",
+    )
+    task_dir = tmp_path / "playbook" / "eval_tasks" / "demo-task"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    (task_dir / "task.toml").write_text(
+        'id = "demo-task"\n'
+        'prompt_id = "demo"\n'
+        'description = "Demo task"\n',
+        encoding="utf-8",
+    )
+
+    # Pin cwd to a unrelated dir; the command must NOT silently chdir into
+    # tmp_path.
+    cwd_before = os.getcwd()
+    rc = main(["eval", "--list", "--repo-root", str(tmp_path)])
+    assert rc == 0
+    assert os.getcwd() == cwd_before
+
+
 def test_main_returns_func_exit_code(monkeypatch, tmp_path):
     """Plumb a fake subcommand and verify main forwards its return code."""
     from coding_agent_playbook.commands import sync as sync_cmd
