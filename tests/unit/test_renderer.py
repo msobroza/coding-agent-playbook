@@ -445,16 +445,7 @@ def test_render_for_claude_md_section_exact_output(tmp_path: Path) -> None:
             "globs": ["**/*.py"],
         },
     )
-    expected = (
-        "## X\n"
-        "\n"
-        "*Applies to: `**/*.py`*\n"
-        "\n"
-        "body line 1\n"
-        "body line 2\n"
-        "\n"
-        "---\n"
-    )
+    expected = "## X\n\n*Applies to: `**/*.py`*\n\nbody line 1\nbody line 2\n\n---\n"
     assert out == expected
 
 
