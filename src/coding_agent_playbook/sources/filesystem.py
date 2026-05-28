@@ -65,8 +65,8 @@ def _format_toml_scalar(value: Any) -> str:
     if isinstance(value, int):
         return str(value)
     if isinstance(value, str):
-        # tomllib rejects unescaped control chars (U+0000–U+001F) in basic
-        # strings. Escape the special-named ones inline and fall back to
+        # tomllib rejects unescaped control chars (U+0000 through U+001F) in
+        # basic strings. Escape the special-named ones inline and fall back to
         # \uXXXX for the rest so the emitted TOML is always parseable.
         out: list[str] = ['"']
         for ch in value:
