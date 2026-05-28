@@ -17,13 +17,13 @@ without the sentinel header are user-authored and never touched.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from coding_agent_playbook._typing import Prompt, Rule
 
 
@@ -39,7 +39,21 @@ class ContinueAdapter(Adapter):
     name = "continue"
 
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
-        raise NotImplementedError("Task 6.2 wires up Continue write_rule.")
+        target = (
+            repo_root
+            / ".continue"
+            / "rules"
+            / f"{rule.frontmatter.priority:02d}-{rule.frontmatter.id}.md"
+        )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        rendered = render_for(
+            rule.source_path or Path("inline"),
+            rule.body,
+            "continue_rule",
+            frontmatter=rule.frontmatter.__dict__,
+        )
+        target.write_text(rendered, encoding="utf-8")
+        return [target]
 
     def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
         raise NotImplementedError("Task 6.3 wires up Continue write_prompt.")
