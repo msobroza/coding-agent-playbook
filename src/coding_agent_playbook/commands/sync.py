@@ -108,10 +108,12 @@ def _build_lockfile(written_paths: list[Path], repo_root: Path, engine_version: 
                 bytes=len(content),
             )
         )
+    # RFC 3339 Zulu timestamp for the lockfile per SPEC §14.4
+    rendered_at = _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     return Lockfile(
         schema_version=_LOCKFILE_SCHEMA,
         engine_version=engine_version,
-        rendered_at=_dt.datetime.now(_dt.UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        rendered_at=rendered_at,
         entries=entries,
     )
 
