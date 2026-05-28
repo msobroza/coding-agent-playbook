@@ -445,5 +445,21 @@ def test_evaluate_predicate_has_framework_requires_list() -> None:
         evaluate_predicate({"has_framework": "fastapi"}, facts)
 
 
+def test_evaluate_predicate_any_framework_one_present() -> None:
+    facts: Facts = {"frameworks": {"pytest": ">=8.0"}}
+    assert evaluate_predicate({"any_framework": ["pytest", "unittest"]}, facts) is True
+
+
+def test_evaluate_predicate_any_framework_none_present_false() -> None:
+    facts: Facts = {"frameworks": {"fastapi": ">=0.110"}}
+    assert evaluate_predicate({"any_framework": ["pytest", "unittest"]}, facts) is False
+
+
+def test_evaluate_predicate_any_framework_empty_list_false() -> None:
+    # Vacuous "any of nothing" is False — there's no framework satisfying it.
+    facts: Facts = {"frameworks": {"fastapi": ">=0.110"}}
+    assert evaluate_predicate({"any_framework": []}, facts) is False
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])

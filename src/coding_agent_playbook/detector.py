@@ -385,6 +385,11 @@ def evaluate_predicate(predicate: dict[str, Any], facts: Facts) -> bool:
             present = set(facts.get("frameworks", {}).keys())
             if not all(name in present for name in wanted):
                 return False
+        elif key == "any_framework":
+            wanted = _coerce_string_list(value, key)
+            present = set(facts.get("frameworks", {}).keys())
+            if not any(name in present for name in wanted):
+                return False
         else:
             raise ValueError(f"unknown predicate key: {key!r}")
     return True
