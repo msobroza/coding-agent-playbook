@@ -18,7 +18,7 @@ Type hints aren't decoration — they're the cheapest documentation you can ship
 
 ## Generics
 
-{% if python_version >= "3.12" %}
+{% if python_version is defined and python_version >= "3.12" %}
 This project targets Python {{ python_version }}, so use **PEP 695** generic syntax. It is concise, scoped to the function/class that needs it, and removes the boilerplate `TypeVar` declarations.
 
 ```python
@@ -31,7 +31,7 @@ class Cache[K, V]:
         self._store: dict[K, V] = {}
 ```
 {% else %}
-This project targets Python {{ python_version }}, which predates PEP 695. Declare type variables explicitly and reuse them across related signatures.
+This project predates PEP 695. Declare type variables explicitly and reuse them across related signatures.
 
 ```python
 from typing import TypeVar
