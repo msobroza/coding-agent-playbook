@@ -6,7 +6,7 @@ from __future__ import annotations
 import sys
 import tomllib
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.commands import sync as _sync
@@ -16,6 +16,8 @@ from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 
 if TYPE_CHECKING:
     import argparse
+
+    from coding_agent_playbook.detector import Facts
 
 
 class _Answers(TypedDict):
@@ -197,7 +199,7 @@ def _write_config(repo_root: Path, answers: _Answers) -> Path:
     return primary
 
 
-def _facts_to_cache(facts: Any) -> dict[str, object]:
+def _facts_to_cache(facts: Facts) -> dict[str, object]:
     """Project ``Facts`` into a TOML-serializable shape for the
     ``detector_cache`` table.
 
