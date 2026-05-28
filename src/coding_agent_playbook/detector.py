@@ -180,11 +180,21 @@ def _detect_package_manager(
 
 
 def _read_pyproject(repo_root: Path) -> dict[str, Any] | None:
+    """Read and parse ``pyproject.toml`` if present.
+
+    Returns ``None`` when the file is missing OR malformed — a corrupted
+    pyproject is treated identically to a missing one so that ``detect()``
+    can honour its "never raises" docstring guarantee (SPEC §8).
+    """
     pyproject = repo_root / "pyproject.toml"
     if not pyproject.is_file():
         return None
-    with pyproject.open("rb") as f:
-        return tomllib.load(f)
+    try:
+        with pyproject.open("rb") as f:
+            return tomllib.load(f)
+    except tomllib.TOMLDecodeError:
+        # Malformed TOML — fall back to python-unknown as if no pyproject existed.
+        return None
 
 
 def _collect_dev_dependencies(pyproject: dict[str, Any]) -> dict[str, str]:

@@ -631,6 +631,17 @@ def test_detect_dependency_with_environment_marker(tmp_path: Path) -> None:
     assert "fastapi" in facts.get("frameworks", {})
 
 
+def test_detect_handles_malformed_pyproject(tmp_path: Path) -> None:
+    """A malformed pyproject.toml must not crash detect() — fall back to
+    python-unknown like a missing pyproject would. The docstring guarantees
+    detect() never raises (code-quality review C1)."""
+    (tmp_path / "pyproject.toml").write_text("this is { not = valid toml")
+    facts = detect(tmp_path)
+    assert facts["project_kind"] == "python-unknown"
+    # Other keys should be absent (no pyproject to read from)
+    assert "dependencies" not in facts
+
+
 def test_detect_skips_non_dev_optional_groups(tmp_path: Path) -> None:
     # An "extras" group named "docs" or "performance" must NOT inflate dev_dependencies.
     repo = tmp_path / "with-extras"
