@@ -23,9 +23,11 @@ if TYPE_CHECKING:
 
     _T = TypeVar("_T")
 
-# Placeholder for eval tasks until PR 11 defines the type. Listed by ID only
-# for now so that list_eval_tasks() can return an empty list without raising.
-EvalTask = Any
+    # Placeholder for eval tasks until PR 11 defines the type. Listed by ID
+    # only for now so list_eval_tasks() can return an empty list without
+    # raising. Scoped to TYPE_CHECKING (private until PR 11) — same pattern
+    # as sources/base.py.
+    EvalTask = Any
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
