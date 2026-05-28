@@ -62,9 +62,16 @@ def test_render_show_source_prints_template_path(tmp_path, make_synthetic_repo, 
     rc = _render.run(_ns(repo, "my-rule", show_source=True))
     assert rc == 0
     out = capsys.readouterr().out
+    # SPEC §12.7: Template line carries the full path to the source file.
     assert "Template:" in out
+    assert "playbook/rules/my-rule.md" in out
+    # Format line classifies templated vs verbatim.
     assert "Format:" in out
-    assert "my-rule" in out or "playbook/rules" in out
+    assert ".md (verbatim)" in out
+    # Adapters line lists discovered adapters.
+    assert "Adapters:" in out
+    # SPEC §12.7 final line: applies_if outcome under the current facts.
+    assert "applies_if evaluated: True" in out
 
 
 def test_render_show_rules_lists_inclusion_graph(tmp_path, make_synthetic_repo, capsys):

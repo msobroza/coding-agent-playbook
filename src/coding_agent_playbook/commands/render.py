@@ -68,11 +68,18 @@ def _resolve_format(fmt: str | None, kind: str) -> str:
 
 
 def _show_source(artifact: _Artifact, kind: str, ctx: SyncContext) -> str:
-    """Print provenance (template path, applicable adapters, overlay losers)."""
+    """Print provenance per SPEC §12.7: template path, format flavour,
+    overlay losers (if any), enabled adapters, and the evaluated
+    ``applies_if`` outcome against the current facts.
+    """
     lines: list[str] = []
     template_path = getattr(artifact, "source_path", None)
     if template_path is None:
-        lines.append("Template:  (inline / not on disk)")
+        # In-memory artifact (no on-disk source). Fall back to the source
+        # package name with an explicit marker so the line still tells the
+        # user *where* it conceptually came from.
+        source_package = getattr(artifact, "source_package", "<unknown>")
+        lines.append(f"Template:  {source_package}/(in-memory)")
     else:
         lines.append(f"Template:  {template_path}")
     is_templated = getattr(artifact, "is_templated", False)
@@ -87,6 +94,25 @@ def _show_source(artifact: _Artifact, kind: str, ctx: SyncContext) -> str:
         lines.append(f"Overrides: {losers}")
     adapters = sorted(ctx.adapters.keys())
     lines.append(f"Adapters:  {', '.join(adapters)}")
+    # Final line: SPEC §12.7 surfaces the predicate outcome under the
+    # current facts so the user can see at a glance whether `cap sync`
+    # would emit this artifact.
+    frontmatter = artifact.frontmatter
+    predicate: dict[str, object] = {}
+    if hasattr(frontmatter, "applies_if"):
+        predicate = dict(frontmatter.applies_if or {})
+    elif isinstance(frontmatter, dict):
+        raw = frontmatter.get("applies_if") or {}
+        if isinstance(raw, dict):
+            predicate = dict(raw)
+    if predicate:
+        try:
+            evaluated = evaluate_predicate(predicate, ctx.facts, repo_root=ctx.repo_root)
+        except ValueError:
+            evaluated = False
+    else:
+        evaluated = True
+    lines.append(f"applies_if evaluated: {evaluated}")
     return "\n".join(lines)
 
 
