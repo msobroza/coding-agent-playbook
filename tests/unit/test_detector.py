@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.detector import detect
+from coding_agent_playbook.detector import Facts, detect, evaluate_predicate
 
 
 def _write(repo: Path, rel: str, content: str) -> Path:
@@ -388,6 +388,41 @@ def test_detect_framework_includes_pytest_from_dev_deps(tmp_path: Path) -> None:
     frameworks = facts.get("frameworks", {})
     assert "pytest" in frameworks
     assert "pytest-asyncio" in frameworks
+
+
+@pytest.mark.parametrize(
+    ("constraint", "version", "expected"),
+    [
+        (">=3.11", "3.12", True),
+        (">=3.11", "3.10", False),
+        (">3.11", "3.12", True),
+        (">3.11", "3.11", False),
+        ("==3.12", "3.12", True),
+        ("==3.12", "3.13", False),
+        ("<=3.12", "3.12", True),
+        ("<=3.12", "3.13", False),
+        ("<3.13", "3.12", True),
+        ("<3.13", "3.13", False),
+        ("~=3.12", "3.12.5", True),
+        ("~=3.12", "4.0", False),
+    ],
+)
+def test_evaluate_predicate_python_version(
+    constraint: str, version: str, expected: bool
+) -> None:
+    facts: Facts = {"python_version": version}
+    assert evaluate_predicate({"python_version": constraint}, facts) is expected
+
+
+def test_evaluate_predicate_python_version_absent_returns_false() -> None:
+    # If facts lack python_version, the constraint can't be satisfied.
+    assert evaluate_predicate({"python_version": ">=3.11"}, {}) is False
+
+
+def test_evaluate_predicate_python_version_rejects_unknown_operator() -> None:
+    facts: Facts = {"python_version": "3.12"}
+    with pytest.raises(ValueError, match=r"must start with"):
+        evaluate_predicate({"python_version": "@3.12"}, facts)
 
 
 if __name__ == "__main__":  # pragma: no cover

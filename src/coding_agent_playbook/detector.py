@@ -12,6 +12,9 @@ import tomllib
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
+from packaging.version import InvalidVersion, Version
+
 _IGNORE_DIRS: frozenset[str] = frozenset(
     {".venv", "venv", "node_modules", ".git", "__pycache__", ".tox", ".mypy_cache"}
 )
@@ -329,6 +332,26 @@ def detect(repo_root: Path) -> Facts:
     return facts
 
 
+_SUPPORTED_OPERATORS = (">=", "<=", "==", "~=", ">", "<")
+
+
+def _check_python_version(constraint: str, facts: Facts) -> bool:
+    """Compare ``facts["python_version"]`` against a PEP 440-style constraint."""
+    spec = constraint.strip()
+    if not any(spec.startswith(op) for op in _SUPPORTED_OPERATORS):
+        raise ValueError(
+            f"python_version constraint must start with one of {_SUPPORTED_OPERATORS}; "
+            f"got {constraint!r}"
+        )
+    actual = facts.get("python_version")
+    if actual is None:
+        return False
+    try:
+        return Version(actual) in SpecifierSet(spec)
+    except (InvalidVersion, InvalidSpecifier) as exc:
+        raise ValueError(f"invalid python_version constraint or value: {exc}") from exc
+
+
 def evaluate_predicate(predicate: dict[str, Any], facts: Facts) -> bool:
     """Evaluate an ``applies_if`` predicate against facts (SPEC §6.4).
 
@@ -342,4 +365,14 @@ def evaluate_predicate(predicate: dict[str, Any], facts: Facts) -> bool:
     Multiple keys are AND-ed together. Unknown keys raise ``ValueError`` so
     typos fail loudly at validate time.
     """
-    raise NotImplementedError("detector.evaluate_predicate not yet implemented")
+    for key, value in predicate.items():
+        if key == "python_version":
+            if not isinstance(value, str):
+                raise ValueError(
+                    f"python_version constraint must be a string; got {type(value).__name__}"
+                )
+            if not _check_python_version(value, facts):
+                return False
+        else:
+            raise ValueError(f"unknown predicate key: {key!r}")
+    return True
