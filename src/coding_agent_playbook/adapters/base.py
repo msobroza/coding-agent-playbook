@@ -10,7 +10,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.renderer import SENTINEL
+
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from pathlib import Path
 
     from coding_agent_playbook._typing import Prompt, Rule, Skill
@@ -58,8 +61,40 @@ class Adapter(ABC):
         """
         return self._default_cleanup(written_paths, repo_root)
 
+    def _output_directories(self, repo_root: Path) -> Iterable[Path]:
+        """Directories the default cleanup scanner should walk.
+
+        Subclasses override to point at the adapter's harness-specific output
+        directories (e.g. ``.continue/rules``, ``.opencode/command``). The ABC
+        default returns ``[]`` so any adapter that does not opt in is a no-op
+        for cleanup — matching the behaviour declared by :meth:`cleanup_stale`.
+        """
+        return []
+
     def _default_cleanup(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
-        raise NotImplementedError(
-            "Default cleanup lands with PR 6 (Continue adapter). "
-            "Override cleanup_stale() to opt out until then."
-        )
+        """Default cleanup: for each directory in ``_output_directories``,
+        walk the tree; for every file whose first line contains :data:`SENTINEL`,
+        delete it if its resolved path is not in ``written_paths``. Return the
+        deleted paths.
+
+        Files without the sentinel marker are user-authored and are never
+        touched. Binary or undecodable files are skipped silently so the
+        scanner cannot crash a sync.
+        """
+        deleted: list[Path] = []
+        for output_dir in self._output_directories(repo_root):
+            if not output_dir.is_dir():
+                continue
+            for path in output_dir.rglob("*"):
+                if not path.is_file():
+                    continue
+                if path.resolve() in written_paths:
+                    continue
+                try:
+                    first_line = path.read_text(encoding="utf-8").split("\n", 1)[0]
+                except (UnicodeDecodeError, OSError):
+                    continue
+                if SENTINEL in first_line:
+                    path.unlink()
+                    deleted.append(path)
+        return deleted
