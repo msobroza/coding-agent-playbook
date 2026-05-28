@@ -146,3 +146,56 @@ class ClaudeCodeAdapter(Adapter):
             repo_root / ".claude" / "commands",
             repo_root / ".claude" / "skills",
         ]
+
+    def cleanup_stale(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
+        """Remove generated files that no longer back a current artifact.
+
+        Three output kinds need cleanup:
+
+        - ``.claude/commands/`` and ``.claude/skills/`` are directories — every
+          file with a leading sentinel marker that isn't in ``written_paths``
+          is deleted.
+        - ``.claude/CLAUDE.md`` is a single file. If it isn't in
+          ``written_paths`` (i.e. the buffer was empty so ``finalize`` skipped
+          it) AND it carries the sentinel, delete it; otherwise leave it alone
+          so a user-authored CLAUDE.md is preserved.
+
+        Each guard mirrors the ABC's default scan algorithm (Track 6 lands a
+        shared ``_default_cleanup`` on the ABC; this override exists because
+        Claude Code uniquely needs the single-file CLAUDE.md branch).
+        """
+        deleted: list[Path] = []
+        deleted.extend(self._scan_for_stale(written_paths, repo_root))
+        claude_md = repo_root / ".claude" / "CLAUDE.md"
+        if claude_md.is_file() and claude_md.resolve() not in written_paths:
+            try:
+                first_line = claude_md.read_text(encoding="utf-8").split("\n", 1)[0]
+            except (UnicodeDecodeError, OSError):
+                return deleted
+            if SENTINEL in first_line:
+                claude_md.unlink()
+                deleted.append(claude_md)
+        return deleted
+
+    def _scan_for_stale(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
+        """Walk each output directory and delete sentinel-tagged files not in
+        ``written_paths``. Files without the sentinel (user-authored) are
+        preserved; binary files (UnicodeDecodeError) are skipped.
+        """
+        deleted: list[Path] = []
+        for output_dir in self._output_directories(repo_root):
+            if not output_dir.is_dir():
+                continue
+            for path in output_dir.rglob("*"):
+                if not path.is_file():
+                    continue
+                if path.resolve() in written_paths:
+                    continue
+                try:
+                    first_line = path.read_text(encoding="utf-8").split("\n", 1)[0]
+                except (UnicodeDecodeError, OSError):
+                    continue
+                if SENTINEL in first_line:
+                    path.unlink()
+                    deleted.append(path)
+        return deleted

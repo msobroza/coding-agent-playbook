@@ -272,3 +272,134 @@ def test_claude_code_write_skill_does_not_degrade_to_prompt(tmp_path):
     # Skills land under .claude/skills/, not under .claude/commands/.
     assert (tmp_path / ".claude" / "skills" / "native" / "SKILL.md").is_file()
     assert not (tmp_path / ".claude" / "commands").exists()
+
+
+def test_claude_code_output_directories(tmp_path):
+    """Output directories advertise where cleanup can scan for stale files."""
+    adapter = ClaudeCodeAdapter()
+    dirs = list(adapter._output_directories(tmp_path))
+    assert dirs == [
+        tmp_path / ".claude" / "commands",
+        tmp_path / ".claude" / "skills",
+    ]
+
+
+def test_claude_code_cleanup_stale_removes_stale_command(tmp_path):
+    """A sentinel-tagged command file not in written_paths is deleted."""
+    commands = tmp_path / ".claude" / "commands"
+    commands.mkdir(parents=True)
+    current = commands / "current.md"
+    stale = commands / "stale.md"
+    current.write_text(f"<!-- {SENTINEL} -->\n# current\n", encoding="utf-8")
+    stale.write_text(f"<!-- {SENTINEL} -->\n# stale\n", encoding="utf-8")
+
+    adapter = ClaudeCodeAdapter()
+    deleted = adapter.cleanup_stale({current.resolve()}, repo_root=tmp_path)
+
+    assert stale.resolve() in {p.resolve() for p in deleted}
+    assert not stale.exists()
+    assert current.is_file()
+
+
+def test_claude_code_cleanup_stale_preserves_user_authored_files(tmp_path):
+    """A file without the sentinel is never deleted, even if not in written_paths."""
+    commands = tmp_path / ".claude" / "commands"
+    commands.mkdir(parents=True)
+    user_file = commands / "user.md"
+    user_file.write_text("# User-authored, no sentinel\n", encoding="utf-8")
+
+    adapter = ClaudeCodeAdapter()
+    deleted = adapter.cleanup_stale(set(), repo_root=tmp_path)
+
+    assert user_file.resolve() not in {p.resolve() for p in deleted}
+    assert user_file.is_file()
+
+
+def test_claude_code_cleanup_stale_removes_stale_files_under_skills(tmp_path):
+    """A sentinel-tagged file under .claude/skills/ not in written_paths is deleted.
+
+    The first-line sentinel check matches files whose first line contains
+    SENTINEL (HTML comment or '#' comment). SKILL.md files written by this
+    adapter today start with a '---' fence, so they're not auto-deleted —
+    only files explicitly carrying a leading sentinel banner are.
+    """
+    skills_dir = tmp_path / ".claude" / "skills" / "old-skill"
+    skills_dir.mkdir(parents=True)
+    stale = skills_dir / "stale_helper.md"
+    stale.write_text(f"# {SENTINEL}\nold helper content\n", encoding="utf-8")
+
+    adapter = ClaudeCodeAdapter()
+    deleted = adapter.cleanup_stale(set(), repo_root=tmp_path)
+
+    assert stale.resolve() in {p.resolve() for p in deleted}
+    assert not stale.exists()
+
+
+def test_claude_code_cleanup_stale_deletes_claude_md_when_buffer_empty(tmp_path):
+    """If finalize would skip CLAUDE.md (empty buffer), an existing sentinel-tagged
+    CLAUDE.md must be deleted so prior renders don't linger."""
+    claude_md = tmp_path / ".claude" / "CLAUDE.md"
+    claude_md.parent.mkdir(parents=True)
+    claude_md.write_text(f"<!-- {SENTINEL} -->\n# old\n", encoding="utf-8")
+
+    adapter = ClaudeCodeAdapter()  # empty buffer
+    deleted = adapter.cleanup_stale(set(), repo_root=tmp_path)
+
+    assert claude_md.resolve() in {p.resolve() for p in deleted}
+    assert not claude_md.exists()
+
+
+def test_claude_code_cleanup_stale_preserves_user_authored_claude_md(tmp_path):
+    """A user-authored CLAUDE.md (no sentinel) is never deleted."""
+    claude_md = tmp_path / ".claude" / "CLAUDE.md"
+    claude_md.parent.mkdir(parents=True)
+    claude_md.write_text("# My own CLAUDE.md\n", encoding="utf-8")
+
+    adapter = ClaudeCodeAdapter()
+    deleted = adapter.cleanup_stale(set(), repo_root=tmp_path)
+
+    assert claude_md.resolve() not in {p.resolve() for p in deleted}
+    assert claude_md.is_file()
+
+
+def test_claude_code_cleanup_stale_keeps_claude_md_when_in_written_paths(tmp_path):
+    """When CLAUDE.md was just regenerated, written_paths contains it and cleanup
+    must skip the regenerate-or-delete branch."""
+    claude_md = tmp_path / ".claude" / "CLAUDE.md"
+    claude_md.parent.mkdir(parents=True)
+    claude_md.write_text(f"<!-- {SENTINEL} -->\n# fresh\n", encoding="utf-8")
+
+    adapter = ClaudeCodeAdapter()
+    deleted = adapter.cleanup_stale({claude_md.resolve()}, repo_root=tmp_path)
+
+    assert claude_md.resolve() not in {p.resolve() for p in deleted}
+    assert claude_md.is_file()
+
+
+def test_claude_code_cleanup_stale_skips_binary_files(tmp_path):
+    """A non-UTF-8 file in an output directory must not crash the scan."""
+    commands = tmp_path / ".claude" / "commands"
+    commands.mkdir(parents=True)
+    binary = commands / "image.bin"
+    # Write bytes that are not valid UTF-8.
+    binary.write_bytes(b"\x80\x81\x82\x83\xff\xfe")
+
+    adapter = ClaudeCodeAdapter()
+    deleted = adapter.cleanup_stale(set(), repo_root=tmp_path)
+
+    # Binary file is neither deleted nor crashes the scan.
+    assert binary.resolve() not in {p.resolve() for p in deleted}
+    assert binary.exists()
+
+
+def test_claude_code_cleanup_stale_skips_binary_claude_md(tmp_path):
+    """A binary CLAUDE.md is left alone (defensive — never realistically happens)."""
+    claude_md = tmp_path / ".claude" / "CLAUDE.md"
+    claude_md.parent.mkdir(parents=True)
+    claude_md.write_bytes(b"\x80\x81\x82\x83")
+
+    adapter = ClaudeCodeAdapter()
+    deleted = adapter.cleanup_stale(set(), repo_root=tmp_path)
+
+    assert claude_md.resolve() not in {p.resolve() for p in deleted}
+    assert claude_md.exists()
