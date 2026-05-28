@@ -26,18 +26,28 @@ from coding_agent_playbook.renderer import SENTINEL, render_for
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from coding_agent_playbook.renderer import RuleRegistry
     from coding_agent_playbook.types import Prompt, Rule, Skill
 
 
 class ClaudeCodeAdapter(Adapter):
-    """Adapter for Anthropic's Claude Code (``.claude/`` layout)."""
+    """Adapter for Anthropic's Claude Code (``.claude/`` layout).
+
+    The optional ``rule_registry`` is plumbed into :func:`render_for` so the
+    ``includes_rules:`` appendix in prompts can be rendered. When the
+    orchestrator (PR 10) builds the merged-overlay registry, it passes it in;
+    when callers (or tests) omit it, prompts render with no auto-appendix —
+    ``includes_rules:`` becomes purely declarative. Mirrors the
+    ``ContinueAdapter`` plumbing pattern.
+    """
 
     name = "claude_code"
 
-    def __init__(self) -> None:
+    def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
         # Buffer of (priority, rule_id, rendered_section) tuples populated by
         # ``write_rule``. ``finalize`` sorts by (priority, rule_id) and joins.
         self._buffered_rules: list[tuple[int, str, str]] = []
+        self._rule_registry = rule_registry
 
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
         """Buffer a rendered claude_md_section for ``finalize`` to compose.
@@ -70,6 +80,7 @@ class ClaudeCodeAdapter(Adapter):
             prompt.body,
             "prompt_claude_command",
             frontmatter=dataclasses.asdict(prompt.frontmatter),
+            rule_registry=self._rule_registry,
         )
         output_path = repo_root / ".claude" / "commands" / f"{prompt.frontmatter.slash}.md"
         output_path.parent.mkdir(parents=True, exist_ok=True)
