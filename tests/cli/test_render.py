@@ -74,6 +74,23 @@ def test_render_show_source_prints_template_path(tmp_path, make_synthetic_repo, 
     assert "applies_if evaluated: True" in out
 
 
+def test_render_show_source_omits_overrides_when_no_collision(
+    tmp_path, make_synthetic_repo, capsys
+):
+    """A rule with no overlay collision should NOT emit an 'Overrides:' line.
+
+    SPEC §12.7 shows ``Overrides:`` only when a winner shadows a loser; when
+    there's no shadowing the line is omitted entirely.
+    """
+    repo = make_synthetic_repo(tmp_path, rules=[("loner-rule", "Body\n")])
+    rc = _render.run(_ns(repo, "loner-rule", show_source=True))
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Template:" in out
+    # No collision means no "Overrides:" header at all.
+    assert "Overrides:" not in out
+
+
 def test_render_show_rules_lists_inclusion_graph(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(
         tmp_path,
