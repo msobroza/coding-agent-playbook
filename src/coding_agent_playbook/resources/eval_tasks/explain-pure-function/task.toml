@@ -1,0 +1,26 @@
+id = "explain-pure-function"
+prompt_id = "explain"
+description = "Happy path: a small pure function with a non-obvious invariant — a clear explanation names the invariant."
+version = 1
+
+[setup]
+files = ["src/midpoint.py"]
+project_kind = "python-application"
+python_version = "3.12"
+frameworks = ["pytest"]
+
+[invocation]
+prompt_args = "explain src/midpoint.py"
+input_variables = {}
+
+[expected]
+files_unchanged = ["src/midpoint.py"]
+
+[rubric]
+criteria = [
+  "The explanation states WHAT the function does in one paragraph (returns the integer midpoint of two non-negative integers)",
+  "The explanation states WHY the unsigned-right-shift formulation matters (it avoids integer overflow that a `(a + b) // 2` would otherwise risk in fixed-width arithmetic — the non-obvious thing)",
+  "The explanation does NOT restate the code line by line",
+  "The explanation does not propose changes; it only describes what is there",
+]
+weights = [0.3, 0.4, 0.15, 0.15]

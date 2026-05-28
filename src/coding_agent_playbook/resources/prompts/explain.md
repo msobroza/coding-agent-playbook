@@ -4,6 +4,8 @@ name: Explain
 description: Explain the provided code in plain English — what it does, why it exists, and one non-obvious thing.
 slash: explain
 version: 1
+eval_tasks:
+  - explain-pure-function
 ---
 
 # Explain
