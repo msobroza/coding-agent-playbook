@@ -145,9 +145,7 @@ def test_render_prompt_format_against_rule_exits_one(tmp_path, make_synthetic_re
 
 def test_render_rule_format_against_prompt_exits_one(tmp_path, make_synthetic_repo, capsys):
     """Requesting a rule-only format for a prompt should fail with a clear error."""
-    repo = make_synthetic_repo(
-        tmp_path, prompts=[("hello", {"slash": "hello", "body": "Hello\n"})]
-    )
+    repo = make_synthetic_repo(tmp_path, prompts=[("hello", {"slash": "hello", "body": "Hello\n"})])
     rc = _render.run(_ns(repo, "hello", fmt="continue_rule"))
     assert rc == 1
     err = capsys.readouterr().err

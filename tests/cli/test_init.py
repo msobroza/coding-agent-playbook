@@ -170,9 +170,7 @@ def test_prompt_multi_select_falls_back_to_defaults_on_out_of_range(monkeypatch)
     all-out-of-range reply falls back to ``defaults``."""
     answers = iter(["99,0,-1"])
     monkeypatch.setattr("builtins.input", lambda *_a, **_k: next(answers))
-    result = _init._prompt_multi_select(
-        "pick", ["alpha", "beta", "gamma"], defaults=["gamma"]
-    )
+    result = _init._prompt_multi_select("pick", ["alpha", "beta", "gamma"], defaults=["gamma"])
     assert result == ["gamma"]
 
 
@@ -181,9 +179,7 @@ def test_prompt_multi_select_mixed_valid_and_invalid_keeps_valid(monkeypatch):
     (defaults are NOT mixed in)."""
     answers = iter(["1,nope,99,2"])
     monkeypatch.setattr("builtins.input", lambda *_a, **_k: next(answers))
-    result = _init._prompt_multi_select(
-        "pick", ["alpha", "beta", "gamma"], defaults=["gamma"]
-    )
+    result = _init._prompt_multi_select("pick", ["alpha", "beta", "gamma"], defaults=["gamma"])
     assert result == ["alpha", "beta"]
 
 
