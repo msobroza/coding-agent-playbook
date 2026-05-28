@@ -358,11 +358,14 @@ def test_filesystem_artifact_source_overlay_packages_is_read_only(tmp_path: Path
 
 
 def test_list_rules_walks_engine_package_resources(tmp_path: Path) -> None:
-    # v1 of the engine ships zero rules (PR 13 adds them); confirm an empty
-    # list is returned without raising.
+    # The engine ships rules under coding_agent_playbook/resources/rules/
+    # (PR 13 onwards). Confirm the walker picks them up and tags them with
+    # source_package="coding_agent_playbook".
     source = FileSystemArtifactSource(repo_root=tmp_path)
     rules = source.list_rules()
-    assert rules == []
+    engine_rules = [r for r in rules if r.source_package == "coding_agent_playbook"]
+    assert engine_rules, "expected at least one engine-shipped rule"
+    assert all(r.source_package == "coding_agent_playbook" for r in engine_rules)
 
 
 def test_list_rules_includes_overlay_packages(tmp_path: Path, temp_pkg_cleanup: None) -> None:
@@ -378,9 +381,9 @@ def test_list_rules_includes_overlay_packages(tmp_path: Path, temp_pkg_cleanup: 
         overlay_packages=["temp_overlay"],
     )
     rules = source.list_rules()
-    assert len(rules) == 1
-    assert rules[0].frontmatter.id == "foo"
-    assert rules[0].source_package == "temp_overlay"
+    overlay_rules = [r for r in rules if r.source_package == "temp_overlay"]
+    assert len(overlay_rules) == 1
+    assert overlay_rules[0].frontmatter.id == "foo"
 
 
 def test_dotted_directories_skipped_in_iter_md_files(tmp_path: Path) -> None:
@@ -401,7 +404,8 @@ def test_dotted_directories_skipped_in_iter_md_files(tmp_path: Path) -> None:
     )
     source = FileSystemArtifactSource(repo_root=tmp_path)
     rules = source.list_rules()
-    assert [r.frontmatter.id for r in rules] == ["real"]
+    repo_local_ids = [r.frontmatter.id for r in rules if r.source_package == "<repo-local>"]
+    assert repo_local_ids == ["real"]
 
 
 def test_list_rules_includes_repo_local_playbook(tmp_path: Path) -> None:
@@ -413,9 +417,9 @@ def test_list_rules_includes_repo_local_playbook(tmp_path: Path) -> None:
     )
     source = FileSystemArtifactSource(repo_root=tmp_path)
     rules = source.list_rules()
-    assert len(rules) == 1
-    assert rules[0].frontmatter.id == "bar"
-    assert rules[0].source_package == "<repo-local>"
+    repo_local_rules = [r for r in rules if r.source_package == "<repo-local>"]
+    assert len(repo_local_rules) == 1
+    assert repo_local_rules[0].frontmatter.id == "bar"
 
 
 def test_list_prompts_walks_same_layout(tmp_path: Path, temp_pkg_cleanup: None) -> None:

@@ -165,6 +165,37 @@ def test_rule_registry_re_renders_templated_body():
     )
 
 
+def test_rule_registry_falls_back_to_stored_facts_when_caller_passes_empty_context():
+    """Regression — the auto-appended `includes_rules` appendix path in
+    renderer.py calls ``render_for_inclusion(rule_id, {})``. The registry
+    must merge its stored facts into the render context so templated rule
+    bodies don't fail under StrictUndefined. Caller-supplied keys still win.
+    """
+    rule = Rule(
+        frontmatter=RuleFrontmatter(
+            id="ver",
+            name="Version",
+            description="d",
+            scope="always",
+            priority=50,
+        ),
+        body="placeholder",
+        template_body="Python {{ python_version }}\n",
+        is_templated=True,
+        source_path=None,
+        source_package="engine",
+    )
+    env = build_environment([])
+    env.globals["_facts"] = {"python_version": "3.12"}
+    registry = RuleRegistryImpl([rule], {"python_version": "3.12"}, env)
+    # Auto-append path passes {} — must still succeed
+    assert registry.render_for_inclusion("ver", {}) == "### Version\n\nPython 3.12\n"
+    # Caller override wins on key collision
+    assert registry.render_for_inclusion("ver", {"python_version": "3.13"}) == (
+        "### Version\n\nPython 3.13\n"
+    )
+
+
 # --- discover_adapters + SyncContext.from_repo -----------------------------
 
 
