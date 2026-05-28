@@ -209,16 +209,7 @@ def test_rule_markdown_roundtrip_with_blank_optional_fields(tmp_path):
     """A rule authored with blank 'globs:' / 'priority:' lines round-trips
     through markdown (bug_001 — SPEC §6.6.3 contract)."""
     text = (
-        "---\n"
-        "id: x\n"
-        "name: x\n"
-        "description: x\n"
-        "scope: scoped\n"
-        "globs:\n"
-        "priority:\n"
-        "tags:\n"
-        "---\n"
-        "body\n"
+        "---\nid: x\nname: x\ndescription: x\nscope: scoped\nglobs:\npriority:\ntags:\n---\nbody\n"
     )
     path = tmp_path / "rule.md"
     path.write_text(text, encoding="utf-8")
