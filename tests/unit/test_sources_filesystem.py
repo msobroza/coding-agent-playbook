@@ -346,6 +346,55 @@ def test_list_eval_tasks_returns_empty_until_pr11(tmp_path: Path) -> None:
     assert source.list_eval_tasks() == []
 
 
+def test_resource_subdir_returns_none_for_missing_package() -> None:
+    from coding_agent_playbook.sources.filesystem import _resource_subdir
+
+    assert _resource_subdir("nonexistent_pkg_xyz_abc_999", "rules") is None
+
+
+def test_iter_skills_skips_directories_without_skill_md(
+    tmp_path: Path, temp_pkg_cleanup: None
+) -> None:
+    # Create a package with one valid skill dir and one bare dir (no SKILL.md).
+    _make_temp_package(
+        tmp_path,
+        "temp_overlay_skills",
+        skills={
+            "good": SKILL_MD_TEMPLATE.format(name="Good", description="ok"),
+        },
+    )
+    bare = tmp_path / "temp_overlay_skills" / "resources" / "skills" / "bare"
+    bare.mkdir()
+    (bare / "notes.txt").write_text("no SKILL here", encoding="utf-8")
+    source = FileSystemArtifactSource(
+        repo_root=tmp_path,
+        overlay_packages=["temp_overlay_skills"],
+    )
+    skills = source.list_skills()
+    assert len(skills) == 1
+    assert skills[0].frontmatter["name"] == "Good"
+
+
+def test_list_skills_includes_repo_local_playbook_skills(tmp_path: Path) -> None:
+    repo_local = tmp_path / "playbook" / "skills" / "local-skill"
+    repo_local.mkdir(parents=True)
+    (repo_local / "SKILL.md").write_text(
+        SKILL_MD_TEMPLATE.format(name="Local skill", description="Repo-local"),
+        encoding="utf-8",
+    )
+    source = FileSystemArtifactSource(repo_root=tmp_path)
+    skills = source.list_skills()
+    assert len(skills) == 1
+    assert skills[0].source_package == "<repo-local>"
+
+
+def test_dump_toml_rejects_nested_dict_in_list_of_tables() -> None:
+    from coding_agent_playbook.sources.filesystem import _dump_toml
+
+    with pytest.raises(TypeError, match=r"single-level mappings"):
+        _dump_toml({"items": [{"key": {"deeper": 1}}]})
+
+
 def test_entry_point_registers_filesystem_artifact_source() -> None:
     from importlib import metadata
 
