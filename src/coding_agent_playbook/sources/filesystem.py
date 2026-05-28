@@ -74,13 +74,18 @@ def _format_toml_scalar(value: Any) -> str:
 def _dump_toml(data: dict[str, Any]) -> str:
     """Serialize ``data`` to a TOML document.
 
-    Only handles the shapes produced by ``Config.to_dict()`` and
+    Handles the shapes produced by ``Config.to_dict()`` and
     ``Lockfile.to_dict()``: top-level scalars/lists, single-level mappings
-    used as ``[section]`` headers, and a single list-of-tables case used for
-    lockfile entries.
+    used as ``[section]`` headers, two-level nested mappings emitted as
+    ``[parent.child]`` dotted-table headers (e.g. ``detector_cache.frameworks``
+    per SPEC §8.2), and a single list-of-tables case used for lockfile
+    entries. Mappings nested deeper than two levels raise ``TypeError``.
     """
     lines: list[str] = []
     section_keys: list[str] = []
+    # Emit scalars before section headers — TOML requires top-level keys to
+    # appear above any [section] headers, otherwise the parser puts them
+    # under the previous section.
     for key, value in data.items():
         if isinstance(value, dict):
             section_keys.append(key)
@@ -93,16 +98,7 @@ def _dump_toml(data: dict[str, Any]) -> str:
     for key in section_keys:
         value = data[key]
         if isinstance(value, dict):
-            if lines:
-                lines.append("")
-            lines.append(f"[{key}]")
-            for subkey, subvalue in value.items():
-                if isinstance(subvalue, dict):
-                    raise TypeError(
-                        f"_dump_toml supports only single-level mappings; nested mapping "
-                        f"at [{key}].{subkey}"
-                    )
-                lines.append(f"{subkey} = {_format_toml_scalar(subvalue)}")
+            _emit_table(lines, [key], value)
         else:
             # list-of-tables — TOML [[key]] syntax
             for entry in value:
@@ -117,6 +113,34 @@ def _dump_toml(data: dict[str, Any]) -> str:
                         )
                     lines.append(f"{subkey} = {_format_toml_scalar(subvalue)}")
     return "\n".join(lines) + "\n"
+
+
+def _emit_table(lines: list[str], path: list[str], table: dict[str, Any]) -> None:
+    """Emit a TOML ``[a.b]`` table header plus its scalar children, then
+    recurse into any dict-valued children as ``[a.b.subkey]`` sub-tables.
+
+    Only two levels of nesting are allowed: a top-level ``[section]`` plus at
+    most one nested ``[section.child]``. Inside a ``[section.child]`` table,
+    encountering another dict value raises ``TypeError`` because Config/Lockfile
+    don't need deeper structure, and a deeper schema should fail loudly rather
+    than silently produce ambiguous TOML.
+    """
+    if lines:
+        lines.append("")
+    lines.append(f"[{'.'.join(path)}]")
+    nested: list[tuple[str, dict[str, Any]]] = []
+    for subkey, subvalue in table.items():
+        if isinstance(subvalue, dict):
+            if len(path) >= 2:
+                raise TypeError(
+                    f"_dump_toml supports at most 2-level nested mappings; nested mapping "
+                    f"at [{'.'.join([*path, subkey])}]"
+                )
+            nested.append((subkey, subvalue))
+        else:
+            lines.append(f"{subkey} = {_format_toml_scalar(subvalue)}")
+    for subkey, subtable in nested:
+        _emit_table(lines, [*path, subkey], subtable)
 
 
 def _resource_subdir(package: str, subdir: str) -> Path | None:

@@ -198,11 +198,32 @@ def test_dump_toml_rejects_unsupported_scalar() -> None:
         _dump_toml({"weird": object()})
 
 
-def test_dump_toml_rejects_nested_section_mapping() -> None:
+def test_dump_toml_rejects_mapping_deeper_than_two_levels() -> None:
+    """Two levels of nesting (e.g. ``[detector_cache.frameworks]``) are
+    accepted; deeper nesting must raise so a deeper schema fails loudly
+    rather than silently producing ambiguous TOML."""
     from coding_agent_playbook.sources.filesystem import _dump_toml
 
-    with pytest.raises(TypeError, match=r"single-level mappings"):
-        _dump_toml({"outer": {"inner": {"deep": 1}}})
+    with pytest.raises(TypeError, match=r"at most 2-level nested mappings"):
+        _dump_toml({"a": {"b": {"c": {"d": 1}}}})
+
+
+def test_save_then_load_config_roundtrip_with_nested_detector_cache(tmp_path: Path) -> None:
+    """Config with a 2-level nested detector_cache.frameworks dict (the
+    canonical SPEC §8.2 shape) must round-trip through TOML
+    (code-quality review C1)."""
+    config = Config(
+        schema_version=1,
+        project=ProjectMeta(name="r", kind="python-application"),
+        engine_version="0.1.0a0",
+        detector_cache={
+            "python_version": "3.12",
+            "frameworks": {"fastapi": "0.110.0", "pydantic": "2.9.2"},
+        },
+    )
+    source = FileSystemStateSource(repo_root=tmp_path)
+    source.save_config(config)
+    assert source.load_config() == config
 
 
 def test_save_then_load_config_roundtrip(tmp_path: Path) -> None:
