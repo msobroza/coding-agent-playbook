@@ -17,7 +17,6 @@ from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
 )
-from coding_agent_playbook.evals.task import EvalTask
 from coding_agent_playbook.lockfile import Lockfile
 from coding_agent_playbook.sources.base import ArtifactSource, StateSource
 from coding_agent_playbook.types import Prompt, Rule, Skill, split_frontmatter
@@ -25,6 +24,8 @@ from coding_agent_playbook.types import Prompt, Rule, Skill, split_frontmatter
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from typing import TypeVar
+
+    from coding_agent_playbook.evals.task import EvalTask
 
     _T = TypeVar("_T")
 

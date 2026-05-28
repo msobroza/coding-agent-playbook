@@ -188,9 +188,7 @@ def _load_eval_tasks_for_validation(
     repo_local = repo_root / "playbook" / "eval_tasks"
     for task_dir in discover_eval_task_dirs(repo_local):
         try:
-            tasks.append(
-                load_eval_task_from_dir(task_dir, source_package="<repo-local>")
-            )
+            tasks.append(load_eval_task_from_dir(task_dir, source_package="<repo-local>"))
         except (FileNotFoundError, ValueError) as exc:
             errors.append(
                 ValidationError(

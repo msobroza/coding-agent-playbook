@@ -154,9 +154,7 @@ def _print_show(task_id: str, tasks: list[EvalTask]) -> int:
     lines.append(f"  Prompt: /{task.prompt_id}")
     lines.append(f'  Args: "{task.invocation.prompt_args}"')
     if task.invocation.input_variables:
-        bindings = ", ".join(
-            f"{k}={v}" for k, v in task.invocation.input_variables.items()
-        )
+        bindings = ", ".join(f"{k}={v}" for k, v in task.invocation.input_variables.items())
         lines.append(f"  Variables: {bindings}")
 
     if task.expected is None:
@@ -183,7 +181,7 @@ def _print_show(task_id: str, tasks: list[EvalTask]) -> int:
                 f"weights sum={total:.1f}):"
             )
             lines.append(header)
-            for weight, criterion in zip(task.rubric.weights, task.rubric.criteria):
+            for weight, criterion in zip(task.rubric.weights, task.rubric.criteria, strict=True):
                 lines.append(f"  - {weight}: {criterion}")
         else:
             lines.append(
@@ -197,9 +195,7 @@ def _print_show(task_id: str, tasks: list[EvalTask]) -> int:
     return 0
 
 
-def _print_runner_deferral(
-    task_id: str, tasks: list[EvalTask], prompts: list[Prompt]
-) -> int:
+def _print_runner_deferral(task_id: str, tasks: list[EvalTask], prompts: list[Prompt]) -> int:
     """Bare ``cap eval <id>`` — verify task exists, then print deferral. Exit 0.
 
     Unknown task ids exit 1 so typos surface (the deferral promise applies

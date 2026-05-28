@@ -121,9 +121,7 @@ def test_validate_tasks_flags_unknown_prompt_id(tmp_path: Path) -> None:
     task_dir.mkdir()
     task = _make_task(task_id="task-4", prompt_id="missing", task_dir=task_dir)
     errors = validate_tasks([task], [])
-    assert any(
-        "prompt_id" in e.message and "missing" in e.message for e in errors
-    )
+    assert any("prompt_id" in e.message and "missing" in e.message for e in errors)
 
 
 # Rule 4 (positive): prompt's eval_tasks lists the task id → no error.
@@ -144,9 +142,7 @@ def test_validate_tasks_flags_prompt_missing_back_reference(tmp_path: Path) -> N
     task = _make_task(task_id="foo-happy-path", prompt_id="foo", task_dir=task_dir)
     errors = validate_tasks([task], [prompt])
     assert any(
-        "foo" in e.message
-        and "foo-happy-path" in e.message
-        and "eval_tasks" in e.message
+        "foo" in e.message and "foo-happy-path" in e.message and "eval_tasks" in e.message
         for e in errors
     )
 
@@ -183,9 +179,7 @@ def test_validate_tasks_passes_when_prompt_to_task_refs_resolve(tmp_path: Path) 
 def test_validate_tasks_flags_prompt_referencing_missing_task(tmp_path: Path) -> None:
     prompt = _make_prompt("demo", eval_tasks=["missing-task"])
     errors = validate_tasks([], [prompt])
-    assert any(
-        "missing-task" in e.message and "not found" in e.message for e in errors
-    )
+    assert any("missing-task" in e.message and "not found" in e.message for e in errors)
 
 
 def test_validate_tasks_aggregates_multiple_errors(tmp_path: Path) -> None:

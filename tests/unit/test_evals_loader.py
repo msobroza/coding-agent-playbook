@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -12,6 +12,8 @@ from coding_agent_playbook.evals.loader import (
 )
 from coding_agent_playbook.evals.task import EvalTask
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _FULL_TASK_TOML = """\
 id = "generate-tests-happy-path"
@@ -68,7 +70,7 @@ def test_load_eval_task_from_dir_parses_well_formed_task(tmp_path: Path) -> None
 def test_load_eval_task_from_dir_raises_when_task_toml_missing(tmp_path: Path) -> None:
     empty = tmp_path / "no-toml-here"
     empty.mkdir()
-    with pytest.raises(FileNotFoundError, match="task.toml"):
+    with pytest.raises(FileNotFoundError, match=r"task\.toml"):
         load_eval_task_from_dir(empty, source_package="coding_agent_playbook")
 
 
@@ -85,9 +87,7 @@ def test_load_eval_task_from_dir_raises_on_malformed_toml(tmp_path: Path) -> Non
 def test_load_eval_task_from_dir_raises_with_path_on_schema_violation(tmp_path: Path) -> None:
     task_dir = tmp_path / "missing-fields"
     task_dir.mkdir()
-    (task_dir / "task.toml").write_text(
-        'description = "no id, no prompt_id"\n', encoding="utf-8"
-    )
+    (task_dir / "task.toml").write_text('description = "no id, no prompt_id"\n', encoding="utf-8")
     with pytest.raises(ValueError) as excinfo:
         load_eval_task_from_dir(task_dir, source_package="coding_agent_playbook")
     assert str(task_dir / "task.toml") in str(excinfo.value)

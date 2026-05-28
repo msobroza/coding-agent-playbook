@@ -43,9 +43,7 @@ def _make_overlay_with_eval_task(
     task_dir = pkg_dir / "resources" / "eval_tasks" / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
     (task_dir / "task.toml").write_text(
-        TASK_TOML_TEMPLATE.format(
-            task_id=task_id, prompt_id=prompt_id, description=description
-        ),
+        TASK_TOML_TEMPLATE.format(task_id=task_id, prompt_id=prompt_id, description=description),
         encoding="utf-8",
     )
     if str(tmp_path) not in sys.path:
@@ -71,9 +69,7 @@ def test_list_eval_tasks_walks_engine_resources(tmp_path: Path) -> None:
     assert source.list_eval_tasks() == []
 
 
-def test_list_eval_tasks_walks_overlay_packages(
-    tmp_path: Path, overlay_cleanup: None
-) -> None:
+def test_list_eval_tasks_walks_overlay_packages(tmp_path: Path, overlay_cleanup: None) -> None:
     _make_overlay_with_eval_task(tmp_path, "temp_eval_overlay", "overlay-task-foo")
     source = FileSystemArtifactSource(
         repo_root=tmp_path,
@@ -110,9 +106,7 @@ def test_list_eval_tasks_aggregates_overlay_and_repo_local(
     repo_local = tmp_path / "playbook" / "eval_tasks" / "repo-task"
     repo_local.mkdir(parents=True)
     (repo_local / "task.toml").write_text(
-        TASK_TOML_TEMPLATE.format(
-            task_id="repo-task", prompt_id="p", description="repo task"
-        ),
+        TASK_TOML_TEMPLATE.format(task_id="repo-task", prompt_id="p", description="repo task"),
         encoding="utf-8",
     )
     source = FileSystemArtifactSource(

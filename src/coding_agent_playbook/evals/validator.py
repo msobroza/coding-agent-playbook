@@ -60,9 +60,7 @@ def validate_tasks(
                 errors.append(
                     EvalValidationError(
                         path=task.source_path,
-                        message=(
-                            f"setup.files declares {declared} but {absolute} not found"
-                        ),
+                        message=(f"setup.files declares {declared} but {absolute} not found"),
                     )
                 )
 

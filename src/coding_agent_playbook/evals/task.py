@@ -155,13 +155,9 @@ def _parse_setup(raw: Any) -> TaskSetup:
     known = {"files", "project_kind", "python_version", "frameworks"}
     extra_facts = {k: v for k, v in raw.items() if k not in known}
     if not isinstance(project_kind, str):
-        raise ValueError(
-            f"[setup].project_kind must be str, got {type(project_kind).__name__}"
-        )
+        raise ValueError(f"[setup].project_kind must be str, got {type(project_kind).__name__}")
     if not isinstance(python_version, str):
-        raise ValueError(
-            f"[setup].python_version must be str, got {type(python_version).__name__}"
-        )
+        raise ValueError(f"[setup].python_version must be str, got {type(python_version).__name__}")
     return TaskSetup(
         files=files,
         project_kind=project_kind,
@@ -176,9 +172,7 @@ def _parse_invocation(raw: Any) -> TaskInvocation:
         raise ValueError(f"[invocation] must be a table, got {type(raw).__name__}")
     prompt_args = raw.get("prompt_args", "")
     if not isinstance(prompt_args, str):
-        raise ValueError(
-            f"[invocation].prompt_args must be str, got {type(prompt_args).__name__}"
-        )
+        raise ValueError(f"[invocation].prompt_args must be str, got {type(prompt_args).__name__}")
     input_variables_raw = raw.get("input_variables", {})
     if not isinstance(input_variables_raw, dict):
         raise ValueError(
@@ -189,8 +183,7 @@ def _parse_invocation(raw: Any) -> TaskInvocation:
     for key, value in input_variables_raw.items():
         if not isinstance(value, str):
             raise ValueError(
-                f"[invocation].input_variables[{key!r}] must be str, "
-                f"got {type(value).__name__}"
+                f"[invocation].input_variables[{key!r}] must be str, got {type(value).__name__}"
             )
         input_variables[str(key)] = value
     return TaskInvocation(prompt_args=prompt_args, input_variables=input_variables)
@@ -220,8 +213,7 @@ def _parse_expected(raw: Any) -> ExpectedOutcome:
         pattern = entry["pattern"]
         if not isinstance(path, str) or not isinstance(pattern, str):
             raise ValueError(
-                f"[expected].files_must_contain[{index}] 'path' and 'pattern' "
-                "must be strings"
+                f"[expected].files_must_contain[{index}] 'path' and 'pattern' must be strings"
             )
         files_must_contain.append({"path": path, "pattern": pattern})
     return ExpectedOutcome(

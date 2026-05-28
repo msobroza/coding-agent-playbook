@@ -8,9 +8,12 @@ to SPEC §15.3.
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from coding_agent_playbook.evals.judge import Judge
 from coding_agent_playbook.evals.runner import (
@@ -51,7 +54,7 @@ def test_run_task_raises_with_v2_pointer(tmp_path: Path) -> None:
         source_path=tmp_path / "task.toml",
         source_package="<test>",
     )
-    with pytest.raises(NotImplementedError, match="15.3"):
+    with pytest.raises(NotImplementedError, match=r"15\.3"):
         runner.run_task(task, tmp_path)
 
 
@@ -68,7 +71,7 @@ def test_judge_score_raises_with_v2_pointer() -> None:
             return super().score(rubric, transcript, scratch_dir_state)  # type: ignore[safe-super]
 
     judge = _Judge()
-    with pytest.raises(NotImplementedError, match="15.3"):
+    with pytest.raises(NotImplementedError, match=r"15\.3"):
         judge.score(Rubric(criteria=["A"]), "", {})
 
 
