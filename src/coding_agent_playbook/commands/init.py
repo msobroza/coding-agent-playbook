@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import sys
-import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 
@@ -284,10 +283,3 @@ def run(args: argparse.Namespace) -> int:
     # output. Use the typed programmatic entry point (``sync.execute``) so
     # we don't have to fake an argparse.Namespace.
     return _sync.execute(repo_root=repo_root, check=False)
-
-
-# Re-export so tests can probe the parsed TOML without needing the helper
-# explicitly.
-def _load_toml(path: Path) -> dict[str, object]:
-    with path.open("rb") as f:
-        return tomllib.load(f)
