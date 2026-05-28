@@ -119,6 +119,7 @@ def _check_rule_bodies_do_not_include_rules(rules: list[Rule]) -> list[Validatio
 
 
 def _check_jinja_compiles(rules: list[Rule], prompts: list[Prompt]) -> list[ValidationError]:
+    # Syntax-only parse — no rule_registry/no facts needed.
     env = Environment(autoescape=False, undefined=StrictUndefined)
     errors: list[ValidationError] = []
     for rule in rules:
