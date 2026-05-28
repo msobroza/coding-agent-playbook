@@ -433,7 +433,10 @@ def test_list_skills_constructs_from_directory(tmp_path: Path, temp_pkg_cleanup:
     assert skill.references_dir is None
 
 
-def test_list_eval_tasks_returns_empty_until_pr11(tmp_path: Path) -> None:
+def test_list_eval_tasks_returns_empty_for_engine_only(tmp_path: Path) -> None:
+    """The engine ships zero eval tasks in v1 (PR 13 adds them); confirm the
+    method returns ``[]`` without raising. The full walk (overlay + repo-local)
+    is covered in :mod:`tests.unit.test_filesystem_list_eval_tasks`."""
     source = FileSystemArtifactSource(repo_root=tmp_path)
     assert source.list_eval_tasks() == []
 

@@ -6,7 +6,7 @@ ABC modules never have to change:
 
 - ``Rule`` / ``Prompt`` / ``Skill`` -> ``coding_agent_playbook.types`` (PR 2)
 - ``Config`` / ``Lockfile``         -> placeholders until PR 5
-- ``EvalTask``                      -> placeholder until PR 11
+- ``EvalTask``                      -> ``coding_agent_playbook.evals.task`` (PR 11)
 
 Everything lives under ``TYPE_CHECKING``: this module has no runtime symbols,
 and nothing imports from it at runtime.
@@ -19,10 +19,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Any
 
+    from coding_agent_playbook.evals.task import EvalTask as EvalTask
     from coding_agent_playbook.types import Prompt as Prompt
     from coding_agent_playbook.types import Rule as Rule
     from coding_agent_playbook.types import Skill as Skill
 
     Config = Any
     Lockfile = Any
-    EvalTask = Any
