@@ -161,7 +161,9 @@ def _parse_dep_spec(spec: str) -> tuple[str, str]:
         close = tail.find("]")
         if close >= 0:
             tail = tail[close + 1 :].lstrip()
-    return name, tail
+    # Defensive: ensure no leading whitespace leaks into the version constraint
+    # (e.g. "fastapi == 0.110" must yield "== 0.110", not " == 0.110").
+    return name, tail.lstrip()
 
 
 def _detect_package_manager(

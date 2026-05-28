@@ -641,6 +641,33 @@ def test_detect_dependency_with_environment_marker(tmp_path: Path) -> None:
     assert "fastapi" in facts.get("frameworks", {})
 
 
+def test_detect_dep_spec_strips_interior_whitespace(tmp_path: Path) -> None:
+    """A spaced version constraint like ``fastapi == 0.110`` must yield a
+    version with no leading whitespace inside the constraint string
+    (code-quality review M3). Tested via detect() since _parse_dep_spec is
+    a module-private helper."""
+    repo = tmp_path / "spaced-deps"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "x"
+        requires-python = ">=3.12"
+        dependencies = [
+            "fastapi == 0.110",
+        ]
+        """,
+    )
+
+    facts = detect(repo)
+    deps = facts.get("dependencies", {})
+    assert deps.get("fastapi") == "== 0.110"
+    # No leading whitespace inside the version constraint.
+    assert not deps.get("fastapi", "").startswith(" ")
+
+
 def test_detect_handles_malformed_pyproject(tmp_path: Path) -> None:
     """A malformed pyproject.toml must not crash detect() — fall back to
     python-unknown like a missing pyproject would. The docstring guarantees
