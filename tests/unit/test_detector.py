@@ -261,5 +261,134 @@ def test_detect_package_manager_poetry_via_tool_section(tmp_path: Path) -> None:
     assert facts.get("package_manager") == "poetry"
 
 
+def test_detect_python_version_from_requires_python(tmp_path: Path) -> None:
+    repo = tmp_path / "py-version"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "x"
+        requires-python = ">=3.12,<4"
+        dependencies = []
+        """,
+    )
+
+    facts = detect(repo)
+
+    assert facts.get("python_version") == "3.12"
+
+
+def test_detect_dev_dependencies_populated(tmp_path: Path) -> None:
+    repo = tmp_path / "with-dev"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "x"
+        requires-python = ">=3.12"
+        dependencies = []
+
+        [project.optional-dependencies]
+        dev = [
+            "ruff>=0.5",
+            "mypy>=1.10",
+        ]
+        """,
+    )
+
+    facts = detect(repo)
+
+    dev_deps = facts.get("dev_dependencies", {})
+    assert "ruff" in dev_deps
+    assert "mypy" in dev_deps
+    dev_tools = facts.get("dev_tools", set())
+    assert "ruff" in dev_tools
+    assert "mypy" in dev_tools
+
+
+def test_detect_dev_dependencies_from_dependency_groups(tmp_path: Path) -> None:
+    """PEP 735 ``[dependency-groups]`` table also feeds dev_dependencies."""
+    repo = tmp_path / "with-dg"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "x"
+        requires-python = ">=3.12"
+        dependencies = []
+
+        [dependency-groups]
+        dev = ["pyright>=1.1"]
+        """,
+    )
+
+    facts = detect(repo)
+
+    dev_deps = facts.get("dev_dependencies", {})
+    assert "pyright" in dev_deps
+    assert "pyright" in facts.get("dev_tools", set())
+
+
+def test_detect_dev_tools_from_config_section(tmp_path: Path) -> None:
+    # Even with no dep declared, ``[tool.ruff]`` etc. signals the tool is in use.
+    repo = tmp_path / "config-only"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "x"
+        requires-python = ">=3.12"
+        dependencies = []
+
+        [tool.ruff]
+        line-length = 100
+
+        [tool.mypy]
+        strict = true
+
+        [tool.black]
+        line-length = 100
+        """,
+    )
+
+    facts = detect(repo)
+
+    dev_tools = facts.get("dev_tools", set())
+    assert {"ruff", "mypy", "black"}.issubset(dev_tools)
+
+
+def test_detect_framework_includes_pytest_from_dev_deps(tmp_path: Path) -> None:
+    """Testing frameworks (pytest) count as frameworks even when declared dev-only."""
+    repo = tmp_path / "with-pytest"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "x"
+        requires-python = ">=3.12"
+        dependencies = []
+
+        [project.optional-dependencies]
+        dev = ["pytest>=8.0", "pytest-asyncio"]
+        """,
+    )
+
+    facts = detect(repo)
+
+    frameworks = facts.get("frameworks", {})
+    assert "pytest" in frameworks
+    assert "pytest-asyncio" in frameworks
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])

@@ -182,6 +182,45 @@ def _read_pyproject(repo_root: Path) -> dict[str, Any] | None:
         return tomllib.load(f)
 
 
+def _collect_dev_dependencies(pyproject: dict[str, Any]) -> dict[str, str]:
+    """Aggregate dev dependencies from PEP 621 optional-deps + PEP 735 groups."""
+    collected: dict[str, str] = {}
+    optional = pyproject.get("project", {}).get("optional-dependencies", {}) or {}
+    for group_name, deps in optional.items():
+        if group_name not in {"dev", "test", "tests", "lint", "type", "typecheck", "dev-deps"}:
+            # Only inspect dev-shaped groups. Conservative but extensible.
+            continue
+        for raw in deps or []:
+            if not isinstance(raw, str):
+                continue
+            name, version = _parse_dep_spec(raw)
+            if name:
+                collected[name] = version
+
+    groups = pyproject.get("dependency-groups", {}) or {}
+    for group_name, deps in groups.items():
+        if group_name not in {"dev", "test", "tests", "lint", "type", "typecheck", "dev-deps"}:
+            continue
+        for raw in deps or []:
+            if not isinstance(raw, str):
+                continue
+            name, version = _parse_dep_spec(raw)
+            if name:
+                collected[name] = version
+
+    return collected
+
+
+def _dev_tools_from_config_sections(pyproject: dict[str, Any]) -> set[str]:
+    """Tools whose ``[tool.<x>]`` table appears in pyproject."""
+    tool = pyproject.get("tool", {}) or {}
+    found: set[str] = set()
+    for name in KNOWN_DEV_TOOLS:
+        if name in tool:
+            found.add(name)
+    return found
+
+
 def _has_notebooks(repo_root: Path) -> bool:
     for path in repo_root.rglob("*.ipynb"):
         if any(part in _IGNORE_DIRS for part in path.relative_to(repo_root).parts):
@@ -258,13 +297,25 @@ def detect(repo_root: Path) -> Facts:
         if dependencies:
             facts["dependencies"] = dependencies
 
-        frameworks = {n: v for n, v in dependencies.items() if n in KNOWN_FRAMEWORKS}
+        dev_dependencies = _collect_dev_dependencies(pyproject)
+        if dev_dependencies:
+            facts["dev_dependencies"] = dev_dependencies
+
+        # Frameworks include testing frameworks declared as dev deps.
+        framework_pool: dict[str, str] = {**dependencies, **dev_dependencies}
+        frameworks = {n: v for n, v in framework_pool.items() if n in KNOWN_FRAMEWORKS}
         if frameworks:
             facts["frameworks"] = frameworks
 
+        # ml_stack is runtime deps only.
         ml_stack = {n: v for n, v in dependencies.items() if n in KNOWN_ML_STACK}
         if ml_stack:
             facts["ml_stack"] = ml_stack
+
+        dev_tools = {n for n in dev_dependencies if n in KNOWN_DEV_TOOLS}
+        dev_tools |= _dev_tools_from_config_sections(pyproject)
+        if dev_tools:
+            facts["dev_tools"] = dev_tools
 
     has_notebooks = _has_notebooks(repo_root)
     if has_notebooks:
