@@ -528,5 +528,47 @@ def test_evaluate_predicate_boolean_false_does_not_match_absent_fact() -> None:
     assert evaluate_predicate({"has_dockerfile": False}, {}) is False
 
 
+def test_evaluate_predicate_multiple_keys_anded_all_true() -> None:
+    facts: Facts = {
+        "python_version": "3.12",
+        "frameworks": {"fastapi": ">=0.110"},
+    }
+    assert (
+        evaluate_predicate(
+            {"python_version": ">=3.11", "has_framework": ["fastapi"]}, facts
+        )
+        is True
+    )
+
+
+def test_evaluate_predicate_multiple_keys_anded_one_false() -> None:
+    facts: Facts = {
+        "python_version": "3.10",
+        "frameworks": {"fastapi": ">=0.110"},
+    }
+    assert (
+        evaluate_predicate(
+            {"python_version": ">=3.11", "has_framework": ["fastapi"]}, facts
+        )
+        is False
+    )
+
+
+def test_evaluate_predicate_empty_predicate_returns_true() -> None:
+    # Vacuous truth — no constraints means the predicate is satisfied.
+    assert evaluate_predicate({}, {}) is True
+
+
+def test_evaluate_predicate_unknown_key_raises() -> None:
+    with pytest.raises(ValueError, match="unknown predicate"):
+        evaluate_predicate({"wat": 1}, {})
+
+
+def test_evaluate_predicate_unknown_key_with_string_value_raises() -> None:
+    # Strings are not boolean, not a structured operator — must raise.
+    with pytest.raises(ValueError, match="unknown predicate"):
+        evaluate_predicate({"frobnicate": "yes"}, {})
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])
