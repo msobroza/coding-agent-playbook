@@ -130,3 +130,26 @@ def test_render_unknown_format_exits_one(tmp_path, make_synthetic_repo, capsys):
     assert rc == 1
     err = capsys.readouterr().err
     assert "unknown format" in err.lower() or "valid" in err.lower()
+
+
+def test_render_prompt_format_against_rule_exits_one(tmp_path, make_synthetic_repo, capsys):
+    """Requesting a prompt-only format for a rule should fail with a clear error."""
+    repo = make_synthetic_repo(tmp_path, rules=[("rule-a", "body\n")])
+    rc = _render.run(_ns(repo, "rule-a", fmt="prompt_continue"))
+    assert rc == 1
+    err = capsys.readouterr().err
+    # The error should call out that the format is not valid for rules.
+    assert "prompt_continue" in err
+    assert "rule" in err.lower()
+
+
+def test_render_rule_format_against_prompt_exits_one(tmp_path, make_synthetic_repo, capsys):
+    """Requesting a rule-only format for a prompt should fail with a clear error."""
+    repo = make_synthetic_repo(
+        tmp_path, prompts=[("hello", {"slash": "hello", "body": "Hello\n"})]
+    )
+    rc = _render.run(_ns(repo, "hello", fmt="continue_rule"))
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "continue_rule" in err
+    assert "prompt" in err.lower()
