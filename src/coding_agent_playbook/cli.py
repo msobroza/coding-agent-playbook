@@ -93,6 +93,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     # cap eval (PR 11 finishes)
     eval_p = subcommands.add_parser(_SUBCOMMANDS[5], help="eval enumeration (PR 11 ships)")
+    # Every other subcommand exposes ``--repo-root <path>`` for testability
+    # and so users can run against a non-cwd checkout; eval gets the same
+    # surface for parity. The command runner in ``commands/eval.py`` already
+    # falls back to ``Path.cwd()`` when this is absent.
+    eval_p.add_argument(
+        "--repo-root", help="repo to enumerate eval tasks against (defaults to cwd)"
+    )
     eval_group = eval_p.add_mutually_exclusive_group()
     eval_group.add_argument("--list", action="store_true")
     eval_group.add_argument("--show", help="show one task by id")

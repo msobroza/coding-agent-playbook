@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.config import Config
+from coding_agent_playbook.evals.loader import (
+    discover_eval_task_dirs,
+    load_eval_task_from_dir,
+)
 from coding_agent_playbook.lockfile import Lockfile
 from coding_agent_playbook.sources.base import ArtifactSource, StateSource
 from coding_agent_playbook.types import Prompt, Rule, Skill, split_frontmatter
@@ -21,13 +25,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from typing import TypeVar
 
-    _T = TypeVar("_T")
+    from coding_agent_playbook.evals.task import EvalTask
 
-    # Placeholder for eval tasks until PR 11 defines the type. Listed by ID
-    # only for now so list_eval_tasks() can return an empty list without
-    # raising. Scoped to TYPE_CHECKING (private until PR 11) — same pattern
-    # as sources/base.py.
-    EvalTask = Any
+    _T = TypeVar("_T")
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -262,6 +262,28 @@ class FileSystemArtifactSource(ArtifactSource):
         self._engine_package = engine_package
         self._overlay_packages = overlay_packages or []
 
+    @property
+    def engine_package(self) -> str:
+        """Public read-only accessor for the engine package name.
+
+        Callers that need to walk the same package set this source walks
+        (e.g. ``commands/validate.py``'s per-task loader-error aggregator)
+        should use this and :attr:`overlay_packages` instead of reaching
+        into the private ``_engine_package`` / ``_overlay_packages``
+        attributes, so a future rename can't silently degrade them.
+        """
+        return self._engine_package
+
+    @property
+    def overlay_packages(self) -> tuple[str, ...]:
+        """Public read-only accessor for the overlay package names.
+
+        Returns a tuple (not the live list) so callers cannot mutate the
+        source's internal package list. Order matches the walk order in
+        :meth:`list_rules` / :meth:`list_prompts` / :meth:`list_eval_tasks`.
+        """
+        return tuple(self._overlay_packages)
+
     def list_rules(self) -> list[Rule]:
         return self._walk_artifacts(
             subdir="rules",
@@ -306,8 +328,29 @@ class FileSystemArtifactSource(ArtifactSource):
         return items
 
     def list_eval_tasks(self) -> list[EvalTask]:
-        # PR 11 populates this with real EvalTask objects.
-        return []
+        """Walk engine + overlay packages + repo-local for ``eval_tasks/<id>/``.
+
+        Mirrors the rules/prompts walking pattern: each layer's
+        ``resources/eval_tasks/`` is scanned via :func:`_resource_subdir`, then
+        ``<repo>/playbook/eval_tasks/`` is appended. Later layers do NOT
+        override earlier ones here — the orchestrator's :class:`OverlayResolver`
+        handles ID-based collision semantics for rules/prompts/skills, but eval
+        tasks are aggregated as-is in v1 (no per-layer override pass yet; the
+        collision-by-id pattern is identical and lands when first overlay
+        ships eval tasks). All entries are returned with their ``source_package``
+        set to the importable package name or ``"<repo-local>"``.
+        """
+        tasks: list[EvalTask] = []
+        for package in (self._engine_package, *self._overlay_packages):
+            root = _resource_subdir(package, "eval_tasks")
+            if root is None:
+                continue
+            for task_dir in discover_eval_task_dirs(root):
+                tasks.append(load_eval_task_from_dir(task_dir, source_package=package))
+        repo_local = self._repo_root / "playbook" / "eval_tasks"
+        for task_dir in discover_eval_task_dirs(repo_local):
+            tasks.append(load_eval_task_from_dir(task_dir, source_package="<repo-local>"))
+        return tasks
 
 
 class FileSystemStateSource(StateSource):

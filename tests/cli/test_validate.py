@@ -122,7 +122,9 @@ def test_validate_flags_orphan_eval_task(tmp_path, make_synthetic_repo, capsys):
     task_dir = repo / "playbook" / "eval_tasks" / "orphan-task"
     task_dir.mkdir(parents=True, exist_ok=True)
     (task_dir / "task.toml").write_text(
-        'prompt_id = "deleted-prompt"\n',
+        'id = "orphan-task"\n'
+        'prompt_id = "deleted-prompt"\n'
+        'description = "An orphan that points at a deleted prompt"\n',
         encoding="utf-8",
     )
     rc = _validate.run(_ns(repo))

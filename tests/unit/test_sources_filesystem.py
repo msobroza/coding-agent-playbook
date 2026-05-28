@@ -317,6 +317,46 @@ def test_save_then_load_lockfile_roundtrip(tmp_path: Path) -> None:
     assert restored == original
 
 
+def test_filesystem_artifact_source_exposes_engine_package_property(tmp_path: Path) -> None:
+    """``FileSystemArtifactSource.engine_package`` / ``overlay_packages`` are the
+    canonical public read-only accessors.
+
+    Reviewers flagged that ``commands/validate.py`` reaching into the private
+    ``_engine_package`` / ``_overlay_packages`` attributes via ``getattr(...,
+    default)`` would silently degrade if those names ever changed (overlay
+    validation would just drop, with no test catching it). The fix exposes
+    typed read-only properties; this test pins their contract so a rename
+    requires updating both the property and its consumers together.
+    """
+    source = FileSystemArtifactSource(
+        repo_root=tmp_path,
+        engine_package="my_engine",
+        overlay_packages=["a", "b"],
+    )
+    assert source.engine_package == "my_engine"
+    assert source.overlay_packages == ("a", "b")
+
+
+def test_filesystem_artifact_source_engine_package_is_read_only(tmp_path: Path) -> None:
+    """Assigning to the public property must fail — the source's package
+    membership is determined at construction and never mutated."""
+    source = FileSystemArtifactSource(repo_root=tmp_path)
+    with pytest.raises(AttributeError):
+        source.engine_package = "other"  # type: ignore[misc]
+
+
+def test_filesystem_artifact_source_overlay_packages_is_read_only(tmp_path: Path) -> None:
+    """The overlay-packages accessor returns a tuple (not the internal list),
+    so callers cannot append to it and mutate the source's walk order."""
+    source = FileSystemArtifactSource(
+        repo_root=tmp_path,
+        overlay_packages=["pkg"],
+    )
+    assert isinstance(source.overlay_packages, tuple)
+    with pytest.raises(AttributeError):
+        source.overlay_packages = ("other",)  # type: ignore[misc]
+
+
 def test_list_rules_walks_engine_package_resources(tmp_path: Path) -> None:
     # v1 of the engine ships zero rules (PR 13 adds them); confirm an empty
     # list is returned without raising.
@@ -433,7 +473,10 @@ def test_list_skills_constructs_from_directory(tmp_path: Path, temp_pkg_cleanup:
     assert skill.references_dir is None
 
 
-def test_list_eval_tasks_returns_empty_until_pr11(tmp_path: Path) -> None:
+def test_list_eval_tasks_returns_empty_for_engine_only(tmp_path: Path) -> None:
+    """The engine ships zero eval tasks in v1 (PR 13 adds them); confirm the
+    method returns ``[]`` without raising. The full walk (overlay + repo-local)
+    is covered in :mod:`tests.unit.test_filesystem_list_eval_tasks`."""
     source = FileSystemArtifactSource(repo_root=tmp_path)
     assert source.list_eval_tasks() == []
 
