@@ -8,6 +8,7 @@ rendered through Jinja2 with ``StrictUndefined`` so typos fail loudly.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Protocol
 
 import yaml
@@ -59,7 +60,7 @@ class RuleRegistry(Protocol):
 
 
 def build_environment(
-    template_search_paths: list[Path],
+    template_search_paths: Sequence[Path],
     *,
     is_prompt_context: bool = False,
     rule_registry: RuleRegistry | None = None,
