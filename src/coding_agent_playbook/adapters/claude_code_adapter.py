@@ -56,7 +56,22 @@ class ClaudeCodeAdapter(Adapter):
         return []
 
     def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
-        raise NotImplementedError
+        """Write a Claude Code slash-command to ``.claude/commands/{slash}.md``.
+
+        Claude Code commands are pure markdown (no top-level frontmatter
+        fence); the ``prompt_claude_command`` renderer handles that shape
+        plus optional ``includes_rules`` appendix.
+        """
+        rendered = render_for(
+            prompt.source_path or Path("inline"),
+            prompt.body,
+            "prompt_claude_command",
+            frontmatter=dataclasses.asdict(prompt.frontmatter),
+        )
+        output_path = repo_root / ".claude" / "commands" / f"{prompt.frontmatter.slash}.md"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(rendered, encoding="utf-8")
+        return [output_path]
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
         raise NotImplementedError

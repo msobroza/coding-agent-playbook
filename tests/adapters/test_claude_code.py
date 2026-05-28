@@ -161,3 +161,38 @@ def test_claude_code_finalize_with_no_rules_returns_empty(tmp_path):
     written = adapter.finalize(tmp_path)
     assert written == []
     assert not (tmp_path / ".claude" / "CLAUDE.md").exists()
+
+
+def test_claude_code_write_prompt_creates_command_file(tmp_path):
+    prompt = _make_prompt(
+        slash="review",
+        name="Review",
+        description="Review code",
+        body="# Review\n\nReview the diff.\n",
+    )
+    adapter = ClaudeCodeAdapter()
+    written = adapter.write_prompt(prompt, repo_root=tmp_path)
+    expected = tmp_path / ".claude" / "commands" / "review.md"
+    assert written == [expected]
+    assert expected.is_file()
+    content = expected.read_text(encoding="utf-8")
+    # Claude Code commands are pure markdown — no top-level frontmatter fence.
+    assert not content.startswith("---")
+    # The H1 from the body is preserved (renderer doesn't double-prepend).
+    assert "# Review" in content
+    # Sanity: the body content is present.
+    assert "Review the diff." in content
+
+
+def test_claude_code_write_prompt_prepends_h1_when_body_lacks_one(tmp_path):
+    prompt = _make_prompt(
+        slash="audit",
+        name="Audit",
+        description="Audit code",
+        body="Audit the diff for issues.\n",
+    )
+    adapter = ClaudeCodeAdapter()
+    adapter.write_prompt(prompt, repo_root=tmp_path)
+    content = (tmp_path / ".claude" / "commands" / "audit.md").read_text(encoding="utf-8")
+    # Renderer prepends `# {name}` when the body doesn't start with an H1.
+    assert content.startswith("# Audit\n\n")
