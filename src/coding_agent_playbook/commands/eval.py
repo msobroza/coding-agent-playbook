@@ -1,37 +1,246 @@
-"""`cap eval` — PR-11 deferral stub (SPEC §12.8).
+"""``cap eval`` — Tier 0 read-only enumeration (SPEC §12.8 + §15.2).
 
-PR 11 ships the read-only eval enumeration (``--list``/``--show``) and the
-schema validator. The v2 runner remains absent. This stub keeps the CLI
-shape stable so consumers can wire ``cap eval`` into CI today as a no-op
-placeholder that won't break the pipeline.
+In v1 ``cap eval`` is a read-only enumeration of the prompt-to-task graph.
+The runner ships in v2 (SPEC §15.3); bare ``cap eval <id>`` prints a
+deferral message and exits 0 (not 1) so CI pipelines that wire ``cap eval``
+today won't break when the runner activates.
+
+Sub-modes:
+
+- ``cap eval --list`` (also the default when no arg is given): tree-shape
+  coverage report across every prompt, with per-task summary lines.
+- ``cap eval --show <id>``: detailed dump for one task — sections from
+  SPEC §12.8 (Task / Source / Prompt under test / Description / Setup /
+  Invocation / Expected / Rubric).
+- ``cap eval <id>``: runner-deferral message. Exits 0 if the task is known,
+  exits 1 if it isn't (so typos still surface — the deferral only applies
+  to tasks that genuinely exist).
 """
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
+
+from coding_agent_playbook.orchestrator import SyncContext
 
 if TYPE_CHECKING:
     import argparse
 
+    from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.types import Prompt
 
-_DEFERRAL_MESSAGE = (
-    "cap eval is not implemented yet; PR 11 ships the read-only eval enumeration "
-    "(--list / --show) and the schema validator. The v2 runner remains absent — "
-    "see SPEC §6.5.6 'what runs in v1' for the full deferral matrix."
+
+_RUNNER_DEFERRAL_TEMPLATE = (
+    "Eval runner not yet implemented (v1 ships task schema only).\n"
+    "The task is well-formed and ready to run when the v2 runner lands. For now:\n"
+    "  - Use `cap eval --show {task_id}` to inspect the task.\n"
+    "  - Use `cap eval --list` to see all task coverage.\n"
+    "  - To run manually: copy setup/ to a scratch repo, invoke /{slash}\n"
+    "    with the documented args, and grade against the expected/rubric.\n"
+    "See SPEC.md Section 15 for the v2 runner API."
 )
 
 
 def run(args: argparse.Namespace) -> int:
-    """Print the deferral message regardless of which variant the user
-    asked for (``--list``, ``--show <id>``, or bare ``<id>``).
-    """
+    repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
+    ctx = SyncContext.from_repo(repo_root)
+    tasks = ctx.artifact_source.list_eval_tasks()
+
     if getattr(args, "list", False):
-        prefix = "cap eval --list"
-    elif getattr(args, "show", None):
-        prefix = f"cap eval --show {args.show}"
-    elif getattr(args, "id", None):
-        prefix = f"cap eval {args.id}"
-    else:
-        prefix = "cap eval"
-    print(f"{prefix}: {_DEFERRAL_MESSAGE}")
+        return _print_list(ctx.prompts_resolved, tasks)
+    show_id = getattr(args, "show", None)
+    if show_id:
+        return _print_show(show_id, tasks)
+    bare_id = getattr(args, "id", None)
+    if bare_id:
+        return _print_runner_deferral(bare_id, tasks, ctx.prompts_resolved)
+    # No flag — default to --list (matches the "helpful empty invocation" rule).
+    return _print_list(ctx.prompts_resolved, tasks)
+
+
+def _print_list(prompts: list[Prompt], tasks: list[EvalTask]) -> int:
+    """Tree-shape coverage report per SPEC §12.8.
+
+    Layout (one prompt per block):
+
+        === Eval tasks ===
+        <prompt-id> (<source>)
+          ├── <task-id>        ✓ task defined
+          │   └── N rubric criteria, M programmatic checks
+          └── ...
+
+        Total: P prompts, T eval tasks, U prompts without tasks
+    """
+    tasks_by_id: dict[str, EvalTask] = {t.id: t for t in tasks}
+    tasks_by_prompt: dict[str, list[EvalTask]] = {}
+    for task in tasks:
+        tasks_by_prompt.setdefault(task.prompt_id, []).append(task)
+
+    lines: list[str] = ["=== Eval tasks ==="]
+    prompts_without_tasks = 0
+    for prompt in prompts:
+        prompt_id = prompt.frontmatter.id
+        # Order tasks by the prompt's eval_tasks: frontmatter (the
+        # authoring-order users expect). Tasks present on-disk but missing
+        # from the frontmatter still get rendered, in alphabetical order,
+        # so authoring drift is visible.
+        declared_order = prompt.frontmatter.eval_tasks or []
+        ordered: list[EvalTask] = []
+        seen: set[str] = set()
+        for declared_id in declared_order:
+            candidate = tasks_by_id.get(declared_id)
+            if candidate is not None and candidate.prompt_id == prompt_id:
+                ordered.append(candidate)
+                seen.add(declared_id)
+        for leftover in sorted(tasks_by_prompt.get(prompt_id, []), key=lambda t: t.id):
+            if leftover.id not in seen:
+                ordered.append(leftover)
+        prompt_tasks = ordered
+        source = _short_source(prompt.source_package)
+        lines.append(f"{prompt_id} ({source})")
+        if not prompt_tasks:
+            lines.append("  └── (no eval tasks declared)         ⚠ consider adding tasks")
+            prompts_without_tasks += 1
+            continue
+        for index, task in enumerate(prompt_tasks):
+            is_last = index == len(prompt_tasks) - 1
+            connector = "└──" if is_last else "├──"
+            sub_connector = "    " if is_last else "│   "
+            id_padded = f"{task.id:<36}"
+            lines.append(f"  {connector} {id_padded}✓ task defined")
+            criteria_count = len(task.rubric.criteria) if task.rubric else 0
+            checks_count = _count_programmatic_checks(task)
+            lines.append(
+                f"  {sub_connector}└── "
+                f"{criteria_count} rubric criteria, {checks_count} programmatic checks"
+            )
+
+    lines.append("")
+    lines.append(
+        f"Total: {len(prompts)} prompts, {len(tasks)} eval tasks, "
+        f"{prompts_without_tasks} prompt{'s' if prompts_without_tasks != 1 else ''} without tasks"
+    )
+    print("\n".join(lines))
     return 0
+
+
+def _print_show(task_id: str, tasks: list[EvalTask]) -> int:
+    """Detailed task dump per SPEC §12.8."""
+    task = next((t for t in tasks if t.id == task_id), None)
+    if task is None:
+        print(f"error: no eval task with id {task_id!r}", file=sys.stderr)
+        return 1
+
+    lines: list[str] = []
+    lines.append(f"Task: {task.id}")
+    lines.append(f"Source: {task.source_path.parent}/")
+    lines.append(f"Prompt under test: {task.prompt_id}")
+    lines.append(f"Description: {task.description}")
+    lines.append("Setup:")
+    facts = (
+        f"python_version={task.setup.python_version}, "
+        f"frameworks=[{', '.join(task.setup.frameworks)}]"
+    )
+    lines.append(f"  Mock facts: {facts}")
+    files_list = ", ".join(str(p) for p in task.setup.files) or "(none)"
+    lines.append(f"  Files ({len(task.setup.files)}): {files_list}")
+    lines.append("Invocation:")
+    # Reach into the prompt id for the slash name; the actual slash is the
+    # prompt's own — we render the task's prompt_id as a useful surrogate when
+    # the prompt isn't loaded here (it would require looking up resolved
+    # prompts, which we don't need for the v1 dump).
+    lines.append(f"  Prompt: /{task.prompt_id}")
+    lines.append(f'  Args: "{task.invocation.prompt_args}"')
+    if task.invocation.input_variables:
+        bindings = ", ".join(
+            f"{k}={v}" for k, v in task.invocation.input_variables.items()
+        )
+        lines.append(f"  Variables: {bindings}")
+
+    if task.expected is None:
+        lines.append("Expected: (none)")
+    else:
+        checks_count = _count_programmatic_checks(task)
+        lines.append(f"Expected (programmatic, {checks_count} checks):")
+        for created in task.expected.files_created:
+            lines.append(f"  - File created: {created}")
+        for entry in task.expected.files_must_contain:
+            lines.append(f"  - {entry['path']} contains: {entry['pattern']}")
+        for unchanged in task.expected.files_unchanged:
+            lines.append(f"  - File unchanged: {unchanged}")
+        for forbidden in task.expected.files_forbidden:
+            lines.append(f"  - File forbidden: {forbidden}")
+
+    if task.rubric is None:
+        lines.append("Rubric: (none)")
+    else:
+        if task.rubric.weights is not None:
+            total = sum(task.rubric.weights)
+            header = (
+                f"Rubric (manual / LLM-judge, {len(task.rubric.criteria)} criteria, "
+                f"weights sum={total:.1f}):"
+            )
+            lines.append(header)
+            for weight, criterion in zip(task.rubric.weights, task.rubric.criteria):
+                lines.append(f"  - {weight}: {criterion}")
+        else:
+            lines.append(
+                f"Rubric (manual / LLM-judge, {len(task.rubric.criteria)} criteria, "
+                "weights=uniform):"
+            )
+            for criterion in task.rubric.criteria:
+                lines.append(f"  - {criterion}")
+
+    print("\n".join(lines))
+    return 0
+
+
+def _print_runner_deferral(
+    task_id: str, tasks: list[EvalTask], prompts: list[Prompt]
+) -> int:
+    """Bare ``cap eval <id>`` — verify task exists, then print deferral. Exit 0.
+
+    Unknown task ids exit 1 so typos surface (the deferral promise applies
+    only to tasks that genuinely exist).
+    """
+    task = next((t for t in tasks if t.id == task_id), None)
+    if task is None:
+        print(f"error: no eval task with id {task_id!r}", file=sys.stderr)
+        return 1
+    # If the prompt is loadable, use its slash; otherwise fall back to the
+    # prompt id so the message is still useful in mid-authoring states.
+    slash = task.prompt_id
+    for prompt in prompts:
+        if prompt.frontmatter.id == task.prompt_id:
+            slash = prompt.frontmatter.slash
+            break
+    print(f"cap eval {task_id}:")
+    print(_RUNNER_DEFERRAL_TEMPLATE.format(task_id=task_id, slash=slash))
+    return 0
+
+
+def _short_source(source_package: str) -> str:
+    """Render the prompt's source package as ``"engine"``/``"overlay X"``/etc.
+
+    Matches the SPEC §12.8 example where the engine is annotated ``engine`` and
+    overlay packages get ``overlay <name>``.
+    """
+    if source_package == "coding_agent_playbook":
+        return "engine"
+    if source_package == "<repo-local>":
+        return "repo-local"
+    return f"overlay {source_package}"
+
+
+def _count_programmatic_checks(task: EvalTask) -> int:
+    """Sum every entry across the four ``ExpectedOutcome`` lists."""
+    if task.expected is None:
+        return 0
+    return (
+        len(task.expected.files_created)
+        + len(task.expected.files_must_contain)
+        + len(task.expected.files_unchanged)
+        + len(task.expected.files_forbidden)
+    )
