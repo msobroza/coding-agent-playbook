@@ -8,8 +8,6 @@ Covers the three load-bearing pieces:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import pytest
 
 from coding_agent_playbook.config import Config, ProjectMeta, StorageConfig
@@ -27,9 +25,6 @@ from coding_agent_playbook.types import (
     RuleFrontmatter,
     Skill,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def _make_rule(rule_id: str, source: str, name: str = "Rule", body: str = "body\n") -> Rule:
@@ -78,7 +73,7 @@ def _make_skill(skill_id: str, source: str) -> Skill:
 # --- OverlayResolver -------------------------------------------------------
 
 
-def test_overlay_resolver_engine_only_passes_through() -> None:
+def test_overlay_resolver_engine_only_passes_through():
     resolver = OverlayResolver()
     engine = [_make_rule("a", "engine"), _make_rule("b", "engine")]
     result = resolver.resolve_rules(engine, [], [])
@@ -86,7 +81,7 @@ def test_overlay_resolver_engine_only_passes_through() -> None:
     assert resolver.collisions == []
 
 
-def test_overlay_resolver_overlay_overrides_engine() -> None:
+def test_overlay_resolver_overlay_overrides_engine():
     resolver = OverlayResolver()
     engine = [_make_rule("a", "engine", name="Engine A")]
     overlay = [_make_rule("a", "overlay-bnp", name="BNP A")]
@@ -102,7 +97,7 @@ def test_overlay_resolver_overlay_overrides_engine() -> None:
     assert collision.losers == ("engine",)
 
 
-def test_overlay_resolver_repo_local_overrides_overlay_and_engine() -> None:
+def test_overlay_resolver_repo_local_overrides_overlay_and_engine():
     resolver = OverlayResolver()
     engine = [_make_rule("a", "engine")]
     overlay = [_make_rule("a", "overlay-bnp")]
@@ -116,7 +111,7 @@ def test_overlay_resolver_repo_local_overrides_overlay_and_engine() -> None:
     assert collision.winner == "<repo-local>"
 
 
-def test_overlay_resolver_handles_prompts_and_skills() -> None:
+def test_overlay_resolver_handles_prompts_and_skills():
     resolver = OverlayResolver()
     engine_prompts = [_make_prompt("p", "engine")]
     overlay_prompts = [_make_prompt("p", "overlay")]
@@ -132,7 +127,7 @@ def test_overlay_resolver_handles_prompts_and_skills() -> None:
 # --- RuleRegistryImpl ------------------------------------------------------
 
 
-def test_rule_registry_returns_formatted_body_for_known_rule(tmp_path: Path) -> None:
+def test_rule_registry_returns_formatted_body_for_known_rule(tmp_path):
     rule = _make_rule("style", "engine", name="Style", body="Body of style\n")
     env = build_environment([])
     env.globals["_facts"] = {}
@@ -140,14 +135,14 @@ def test_rule_registry_returns_formatted_body_for_known_rule(tmp_path: Path) -> 
     assert registry.render_for_inclusion("style", {}) == "### Style\n\nBody of style\n"
 
 
-def test_rule_registry_returns_empty_string_for_unknown_rule() -> None:
+def test_rule_registry_returns_empty_string_for_unknown_rule():
     env = build_environment([])
     env.globals["_facts"] = {}
     registry = RuleRegistryImpl([], {}, env)
     assert registry.render_for_inclusion("missing", {}) == ""
 
 
-def test_rule_registry_re_renders_templated_body() -> None:
+def test_rule_registry_re_renders_templated_body():
     rule = Rule(
         frontmatter=RuleFrontmatter(
             id="ver",
@@ -184,7 +179,7 @@ def _make_config(adapters: list[str], overlays: list[str] | None = None) -> Conf
     )
 
 
-def test_discover_adapters_always_includes_agents_md() -> None:
+def test_discover_adapters_always_includes_agents_md():
     """``agents_md`` must always be present even if not in adapters_enabled."""
     config = _make_config(adapters=["continue"])
     adapters = discover_adapters(config)
@@ -192,7 +187,7 @@ def test_discover_adapters_always_includes_agents_md() -> None:
     assert "continue" in adapters
 
 
-def test_discover_adapters_respects_enabled_list() -> None:
+def test_discover_adapters_respects_enabled_list():
     config = _make_config(adapters=["claude_code"])
     adapters = discover_adapters(config)
     assert "claude_code" in adapters
@@ -201,9 +196,7 @@ def test_discover_adapters_respects_enabled_list() -> None:
     assert "agents_md" in adapters  # always
 
 
-def test_sync_context_from_repo_loads_synthetic_repo(
-    tmp_path: Path, make_synthetic_repo
-) -> None:
+def test_sync_context_from_repo_loads_synthetic_repo(tmp_path, make_synthetic_repo):
     repo = make_synthetic_repo(
         tmp_path,
         rules=[("repo-rule", "Body content\n")],
@@ -218,7 +211,7 @@ def test_sync_context_from_repo_loads_synthetic_repo(
     assert "project_kind" in ctx.facts
 
 
-def test_sync_context_from_repo_missing_config_raises(tmp_path: Path) -> None:
+def test_sync_context_from_repo_missing_config_raises(tmp_path):
     """Without ``.coding-agent-playbook.toml``, FileSystemStateSource raises
     ``FileNotFoundError`` and the orchestrator does not swallow it."""
     with pytest.raises(FileNotFoundError):

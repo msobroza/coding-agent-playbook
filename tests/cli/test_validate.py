@@ -18,9 +18,7 @@ def _ns(repo: Path) -> argparse.Namespace:
     return argparse.Namespace(repo_root=str(repo))
 
 
-def test_validate_clean_repo_returns_zero(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_validate_clean_repo_returns_zero(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(
         tmp_path,
         rules=[("clean-rule", "Clean body\n")],
@@ -32,9 +30,7 @@ def test_validate_clean_repo_returns_zero(
     assert "OK" in out
 
 
-def test_validate_flags_applies_if_unknown_fact(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_validate_flags_applies_if_unknown_fact(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path)
     rules_dir = repo / "playbook" / "rules"
     rules_dir.mkdir(parents=True, exist_ok=True)
@@ -58,8 +54,8 @@ def test_validate_flags_applies_if_unknown_fact(
 
 
 def test_validate_flags_prompt_rule_call_not_in_includes_rules(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+    tmp_path, make_synthetic_repo, capsys
+):
     repo = make_synthetic_repo(tmp_path)
     prompts_dir = repo / "playbook" / "prompts"
     prompts_dir.mkdir(parents=True, exist_ok=True)
@@ -80,9 +76,7 @@ def test_validate_flags_prompt_rule_call_not_in_includes_rules(
     assert "includes_rules" in out
 
 
-def test_validate_flags_rule_calling_rule_helper(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_validate_flags_rule_calling_rule_helper(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path)
     rules_dir = repo / "playbook" / "rules"
     rules_dir.mkdir(parents=True, exist_ok=True)
@@ -102,9 +96,7 @@ def test_validate_flags_rule_calling_rule_helper(
     assert "rules cannot include other rules" in out
 
 
-def test_validate_flags_jinja_syntax_error(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_validate_flags_jinja_syntax_error(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path)
     rules_dir = repo / "playbook" / "rules"
     rules_dir.mkdir(parents=True, exist_ok=True)
@@ -124,9 +116,7 @@ def test_validate_flags_jinja_syntax_error(
     assert "Jinja syntax error" in out
 
 
-def test_validate_flags_orphan_eval_task(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_validate_flags_orphan_eval_task(tmp_path, make_synthetic_repo, capsys):
     """An on-disk task.toml referencing a non-existent prompt."""
     repo = make_synthetic_repo(tmp_path)
     task_dir = repo / "playbook" / "eval_tasks" / "orphan-task"
@@ -141,9 +131,7 @@ def test_validate_flags_orphan_eval_task(
     assert "deleted-prompt" in out
 
 
-def test_validate_flags_missing_eval_task_for_prompt(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_validate_flags_missing_eval_task_for_prompt(tmp_path, make_synthetic_repo, capsys):
     """A prompt declares eval_tasks: [...] but the task dir doesn't exist."""
     repo = make_synthetic_repo(tmp_path)
     prompts_dir = repo / "playbook" / "prompts"

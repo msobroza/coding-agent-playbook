@@ -19,7 +19,7 @@ def _ns(repo: Path, **kwargs: object) -> argparse.Namespace:
     return argparse.Namespace(**base)
 
 
-def test_check_prints_all_sections(tmp_path: Path, make_synthetic_repo, capsys) -> None:
+def test_check_prints_all_sections(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(
         tmp_path,
         rules=[("rule-a", "Body a\n")],
@@ -34,9 +34,7 @@ def test_check_prints_all_sections(tmp_path: Path, make_synthetic_repo, capsys) 
     assert "=== Drift ===" in out
 
 
-def test_check_artifact_section_marks_applies_if(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_check_artifact_section_marks_applies_if(tmp_path, make_synthetic_repo, capsys):
     """A rule with applies_if not matching the facts should show as not-applicable."""
     repo = make_synthetic_repo(tmp_path)
     # Inject a rule with a predicate the facts can't satisfy.
@@ -64,9 +62,7 @@ def test_check_artifact_section_marks_applies_if(
     assert "[--]" in out
 
 
-def test_check_drift_section_reports_drift(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_check_drift_section_reports_drift(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
     sync_args = argparse.Namespace(repo_root=str(repo), check=False)
     _sync.run(sync_args)
@@ -80,9 +76,7 @@ def test_check_drift_section_reports_drift(
     assert "AGENTS.md" in out
 
 
-def test_check_refresh_updates_detector_cache(
-    tmp_path: Path, make_synthetic_repo
-) -> None:
+def test_check_refresh_updates_detector_cache(tmp_path, make_synthetic_repo):
     repo = make_synthetic_repo(tmp_path)
     # Update pyproject after the config was written — the cache should pick
     # up the new dependency once refresh runs.
@@ -95,7 +89,6 @@ def test_check_refresh_updates_detector_cache(
         data = tomllib.load(f)
     # fastapi should appear in either dependencies or frameworks after refresh.
     cache = data.get("detector_cache", {})
-    assert (
-        "fastapi" in (cache.get("dependencies") or {})
-        or "fastapi" in (cache.get("frameworks") or {})
+    assert "fastapi" in (cache.get("dependencies") or {}) or "fastapi" in (
+        cache.get("frameworks") or {}
     )

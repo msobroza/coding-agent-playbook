@@ -26,18 +26,20 @@ from coding_agent_playbook.renderer import (
     build_environment,
     render_for,
 )
+from coding_agent_playbook.types import Prompt, Rule, Skill
 
 if TYPE_CHECKING:
     import argparse
-
-    from coding_agent_playbook.types import Prompt, Rule
 
 
 _RULE_FORMATS = {"continue_rule", "claude_md_section", "agents_md_section"}
 _PROMPT_FORMATS = {"prompt_continue", "prompt_claude_command", "prompt_opencode_command"}
 
+# Either of the three artifact dataclasses can come back from _find_artifact.
+_Artifact = Rule | Prompt | Skill
 
-def _find_artifact(ctx: SyncContext, artifact_id: str):  # type: ignore[no-untyped-def]
+
+def _find_artifact(ctx: SyncContext, artifact_id: str) -> tuple[str | None, _Artifact | None]:
     """Locate an artifact by ID across rules/prompts/skills. Returns
     ``(kind, artifact)`` or ``(None, None)``.
     """
@@ -48,7 +50,9 @@ def _find_artifact(ctx: SyncContext, artifact_id: str):  # type: ignore[no-untyp
         if prompt.frontmatter.id == artifact_id:
             return "prompt", prompt
     for skill in ctx.skills_resolved:
-        skill_id = skill.frontmatter.get("id", "skill") if isinstance(skill.frontmatter, dict) else None
+        skill_id = (
+            skill.frontmatter.get("id", "skill") if isinstance(skill.frontmatter, dict) else None
+        )
         if skill_id == artifact_id:
             return "skill", skill
     return None, None
@@ -57,13 +61,15 @@ def _find_artifact(ctx: SyncContext, artifact_id: str):  # type: ignore[no-untyp
 def _resolve_format(fmt: str | None, kind: str) -> str:
     """Apply :data:`FORMAT_ALIASES` and default to a sensible format."""
     if fmt is None:
-        return {"rule": "continue_rule", "prompt": "prompt_continue", "skill": "prompt_continue"}[kind]
+        return {"rule": "continue_rule", "prompt": "prompt_continue", "skill": "prompt_continue"}[
+            kind
+        ]
     return FORMAT_ALIASES.get(fmt, fmt)
 
 
-def _show_source(artifact, kind: str, ctx: SyncContext) -> str:  # type: ignore[no-untyped-def]
+def _show_source(artifact: _Artifact, kind: str, ctx: SyncContext) -> str:
     """Print provenance (template path, applicable adapters, overlay losers)."""
-    lines = []
+    lines: list[str] = []
     template_path = getattr(artifact, "source_path", None)
     if template_path is None:
         lines.append("Template:  (inline / not on disk)")
@@ -71,7 +77,11 @@ def _show_source(artifact, kind: str, ctx: SyncContext) -> str:  # type: ignore[
         lines.append(f"Template:  {template_path}")
     is_templated = getattr(artifact, "is_templated", False)
     lines.append(f"Format:    {'.md.j2 (Jinja-templated)' if is_templated else '.md (verbatim)'}")
-    relevant = [c for c in ctx.overlay_collisions if c.kind == kind and c.artifact_id == _artifact_id(artifact)]
+    relevant = [
+        c
+        for c in ctx.overlay_collisions
+        if c.kind == kind and c.artifact_id == _artifact_id(artifact)
+    ]
     if relevant:
         losers = ", ".join(relevant[0].losers)
         lines.append(f"Overrides: {losers}")
@@ -80,11 +90,11 @@ def _show_source(artifact, kind: str, ctx: SyncContext) -> str:  # type: ignore[
     return "\n".join(lines)
 
 
-def _artifact_id(artifact) -> str:  # type: ignore[no-untyped-def]
-    frontmatter = getattr(artifact, "frontmatter")
-    if hasattr(frontmatter, "id"):
-        return frontmatter.id
-    return frontmatter.get("id", "skill")
+def _artifact_id(artifact: _Artifact) -> str:
+    frontmatter = artifact.frontmatter
+    if isinstance(frontmatter, dict):
+        return str(frontmatter.get("id", "skill"))
+    return str(frontmatter.id)
 
 
 def _show_rules(prompt: Prompt, ctx: SyncContext) -> str:
@@ -111,36 +121,47 @@ def _show_rules(prompt: Prompt, ctx: SyncContext) -> str:
     return "\n".join(lines)
 
 
-def _render_artifact(ctx: SyncContext, kind: str, artifact, resolved_format: str) -> str:  # type: ignore[no-untyped-def]
+def _render_rule(ctx: SyncContext, rule: Rule, resolved_format: str) -> str:
     base_env = build_environment([], is_prompt_context=False)
     base_env.globals["_facts"] = dict(ctx.facts)
     context = _build_jinja_context(ctx)
+    rendered = _render_rule_body(rule, context, base_env)
+    return render_for(
+        rendered.source_path or Path("inline"),
+        rendered.body,
+        resolved_format,
+        frontmatter=dataclasses.asdict(rendered.frontmatter),
+    )
+
+
+def _render_prompt(ctx: SyncContext, prompt: Prompt, resolved_format: str) -> str:
+    base_env = build_environment([], is_prompt_context=False)
+    base_env.globals["_facts"] = dict(ctx.facts)
+    context = _build_jinja_context(ctx)
+    rendered_rules = [_render_rule_body(rule, context, base_env) for rule in ctx.rules_resolved]
+    registry = RuleRegistryImpl(rendered_rules, ctx.facts, base_env)
+    prompt_env = build_environment([], is_prompt_context=True, rule_registry=registry)
+    prompt_env.globals["_facts"] = dict(ctx.facts)
+    rendered_prompt = _render_prompt_body(prompt, context, prompt_env)
+    return render_for(
+        rendered_prompt.source_path or Path("inline"),
+        rendered_prompt.body,
+        resolved_format,
+        frontmatter=dataclasses.asdict(rendered_prompt.frontmatter),
+        rule_registry=registry,
+    )
+
+
+def _render_artifact(ctx: SyncContext, kind: str, artifact: _Artifact, resolved_format: str) -> str:
     if kind == "rule":
-        rendered = _render_rule_body(artifact, context, base_env)
-        return render_for(
-            rendered.source_path or Path("inline"),
-            rendered.body,
-            resolved_format,
-            frontmatter=dataclasses.asdict(rendered.frontmatter),
-        )
+        assert isinstance(artifact, Rule)
+        return _render_rule(ctx, artifact, resolved_format)
     if kind == "prompt":
-        # Build the registry against the full resolved rules so {{ rule() }}
-        # calls still work in --format prompt_*.
-        rendered_rules = [_render_rule_body(rule, context, base_env) for rule in ctx.rules_resolved]
-        registry = RuleRegistryImpl(rendered_rules, ctx.facts, base_env)
-        prompt_env = build_environment([], is_prompt_context=True, rule_registry=registry)
-        prompt_env.globals["_facts"] = dict(ctx.facts)
-        rendered = _render_prompt_body(artifact, context, prompt_env)
-        return render_for(
-            rendered.source_path or Path("inline"),
-            rendered.body,
-            resolved_format,
-            frontmatter=dataclasses.asdict(rendered.frontmatter),
-            rule_registry=registry,
-        )
+        assert isinstance(artifact, Prompt)
+        return _render_prompt(ctx, artifact, resolved_format)
     # skills degrade to prompts for render purposes
-    promoted = artifact.to_prompt()
-    return _render_artifact(ctx, "prompt", promoted, resolved_format)
+    assert isinstance(artifact, Skill)
+    return _render_prompt(ctx, artifact.to_prompt(), resolved_format)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -148,7 +169,7 @@ def run(args: argparse.Namespace) -> int:
     artifact_id = args.id
     ctx = SyncContext.from_repo(repo_root)
     kind, artifact = _find_artifact(ctx, artifact_id)
-    if artifact is None:
+    if artifact is None or kind is None:
         print(f"no artifact matching id {artifact_id!r}", file=sys.stderr)
         return 1
 
@@ -158,8 +179,12 @@ def run(args: argparse.Namespace) -> int:
 
     if getattr(args, "show_rules", False):
         if kind != "prompt":
-            print(f"--show-rules only valid for prompts; {artifact_id!r} is a {kind}", file=sys.stderr)
+            print(
+                f"--show-rules only valid for prompts; {artifact_id!r} is a {kind}",
+                file=sys.stderr,
+            )
             return 1
+        assert isinstance(artifact, Prompt)
         print(_show_rules(artifact, ctx))
         return 0
 

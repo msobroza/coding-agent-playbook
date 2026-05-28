@@ -26,7 +26,7 @@ def _ns(repo: Path, **kwargs: object) -> argparse.Namespace:
     return argparse.Namespace(**base)
 
 
-def test_init_non_interactive_writes_expected_files(tmp_path: Path) -> None:
+def test_init_non_interactive_writes_expected_files(tmp_path):
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=["fastapi"]\n'
     )
@@ -61,9 +61,7 @@ def test_init_non_interactive_writes_expected_files(tmp_path: Path) -> None:
     assert "coding-agent-playbook-sync" in pre_commit.read_text()
 
 
-def test_init_non_interactive_missing_name_returns_error_code(
-    tmp_path: Path, capsys
-) -> None:
+def test_init_non_interactive_missing_name_returns_error_code(tmp_path, capsys):
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n'
     )
@@ -76,7 +74,7 @@ def test_init_non_interactive_missing_name_returns_error_code(
     assert "name" in err.lower()
 
 
-def test_init_interactive_uses_input(tmp_path: Path, monkeypatch) -> None:
+def test_init_interactive_uses_input(tmp_path, monkeypatch):
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n'
     )
@@ -100,7 +98,7 @@ def test_init_interactive_uses_input(tmp_path: Path, monkeypatch) -> None:
     assert data["project"]["kind"] == "python-library"
 
 
-def test_init_is_idempotent_does_not_clobber_existing_config(tmp_path: Path) -> None:
+def test_init_is_idempotent_does_not_clobber_existing_config(tmp_path):
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n'
     )
@@ -143,7 +141,7 @@ docstring_style = "numpy"
     assert data.get("user_choices", {}).get("docstring_style") == "numpy"
 
 
-def test_init_does_not_duplicate_pre_commit_hook(tmp_path: Path) -> None:
+def test_init_does_not_duplicate_pre_commit_hook(tmp_path):
     """Running init twice must not append the hook block twice."""
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n'

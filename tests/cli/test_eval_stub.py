@@ -17,14 +17,14 @@ def _ns(**kwargs: object) -> argparse.Namespace:
     return argparse.Namespace(**base)
 
 
-def test_eval_list_returns_zero_with_message(capsys) -> None:
+def test_eval_list_returns_zero_with_message(capsys):
     rc = _eval.run(_ns(list=True))
     assert rc == 0
     out = capsys.readouterr().out
     assert "PR 11" in out
 
 
-def test_eval_show_returns_zero_with_message(capsys) -> None:
+def test_eval_show_returns_zero_with_message(capsys):
     rc = _eval.run(_ns(show="some-task"))
     assert rc == 0
     out = capsys.readouterr().out
@@ -32,7 +32,7 @@ def test_eval_show_returns_zero_with_message(capsys) -> None:
     assert "some-task" in out
 
 
-def test_eval_bare_id_returns_zero_with_message(capsys) -> None:
+def test_eval_bare_id_returns_zero_with_message(capsys):
     rc = _eval.run(_ns(id="some-task"))
     assert rc == 0
     out = capsys.readouterr().out
@@ -40,7 +40,7 @@ def test_eval_bare_id_returns_zero_with_message(capsys) -> None:
     assert "some-task" in out
 
 
-def test_eval_no_args_returns_zero_with_message(capsys) -> None:
+def test_eval_no_args_returns_zero_with_message(capsys):
     rc = _eval.run(_ns())
     assert rc == 0
     out = capsys.readouterr().out

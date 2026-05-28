@@ -26,6 +26,9 @@ from coding_agent_playbook.renderer import build_environment, render_string
 if TYPE_CHECKING:
     import argparse
 
+    from jinja2 import Environment
+
+    from coding_agent_playbook.detector import Facts
     from coding_agent_playbook.types import Prompt, Rule, Skill
 
 
@@ -46,7 +49,7 @@ def _build_jinja_context(ctx: SyncContext) -> dict[str, object]:
     return context
 
 
-def _render_rule_body(rule: Rule, context: dict[str, object], env) -> Rule:  # type: ignore[no-untyped-def]
+def _render_rule_body(rule: Rule, context: dict[str, object], env: Environment) -> Rule:
     """Re-emit a Rule with ``body`` set to the Jinja-rendered output.
 
     Non-templated rules pass through verbatim. The template/body split lets
@@ -59,7 +62,7 @@ def _render_rule_body(rule: Rule, context: dict[str, object], env) -> Rule:  # t
     return rule
 
 
-def _render_prompt_body(prompt: Prompt, context: dict[str, object], env) -> Prompt:  # type: ignore[no-untyped-def]
+def _render_prompt_body(prompt: Prompt, context: dict[str, object], env: Environment) -> Prompt:
     """Render a prompt's body through Jinja, masking ``input_variables`` so
     the opencode placeholder substitution can still find them (SPEC §9.7 +
     the ``prompt_opencode_command`` contract in renderer.py)."""
@@ -103,15 +106,17 @@ def _build_lockfile(written_paths: list[Path], repo_root: Path, engine_version: 
     )
 
 
-def _filter_applies_if(
-    artifacts: list, facts, repo_root: Path  # type: ignore[no-untyped-def]
-) -> list:
+def _filter_applies_if[T: "Rule | Prompt"](
+    artifacts: list[T],
+    facts: Facts,
+    repo_root: Path,
+) -> list[T]:
     """Apply :func:`evaluate_predicate` to each artifact and drop the ones
     whose ``applies_if`` evaluates to False. Empty predicate → always pass.
     """
-    kept = []
+    kept: list[T] = []
     for artifact in artifacts:
-        predicate = getattr(artifact.frontmatter, "applies_if", None) or {}
+        predicate = artifact.frontmatter.applies_if or {}
         if not predicate or evaluate_predicate(predicate, facts, repo_root=repo_root):
             kept.append(artifact)
     return kept
@@ -124,7 +129,7 @@ def _filter_skills(skills: list[Skill]) -> list[Skill]:
     return list(skills)
 
 
-def _resolve_repo_root(args) -> Path:  # type: ignore[no-untyped-def]
+def _resolve_repo_root(args: argparse.Namespace) -> Path:
     raw = getattr(args, "repo_root", None)
     if raw is None:
         return Path.cwd()

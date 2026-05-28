@@ -72,9 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
     check_p.set_defaults(func=check_cmd.run)
 
     # cap validate
-    validate_p = subcommands.add_parser(
-        "validate", help="cross-reference checks (SPEC §12.6)"
-    )
+    validate_p = subcommands.add_parser("validate", help="cross-reference checks (SPEC §12.6)")
     validate_p.add_argument("--repo-root", help="repo to validate (defaults to cwd)")
     validate_p.set_defaults(func=validate_cmd.run)
 

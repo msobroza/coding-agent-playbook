@@ -60,9 +60,7 @@ def _format_artifacts_section(ctx: SyncContext) -> str:
     for rule in rules:
         predicate = rule.frontmatter.applies_if or {}
         applies = (
-            evaluate_predicate(predicate, facts, repo_root=ctx.repo_root)
-            if predicate
-            else True
+            evaluate_predicate(predicate, facts, repo_root=ctx.repo_root) if predicate else True
         )
         marker = "[OK]" if applies else "[--]"
         rule_lines.append(
@@ -73,9 +71,7 @@ def _format_artifacts_section(ctx: SyncContext) -> str:
     for prompt in prompts:
         predicate = prompt.frontmatter.applies_if or {}
         applies = (
-            evaluate_predicate(predicate, facts, repo_root=ctx.repo_root)
-            if predicate
-            else True
+            evaluate_predicate(predicate, facts, repo_root=ctx.repo_root) if predicate else True
         )
         marker = "[OK]" if applies else "[--]"
         rules_note = (
@@ -88,17 +84,13 @@ def _format_artifacts_section(ctx: SyncContext) -> str:
         1
         for rule in rules
         if not rule.frontmatter.applies_if
-        or evaluate_predicate(
-            rule.frontmatter.applies_if, facts, repo_root=ctx.repo_root
-        )
+        or evaluate_predicate(rule.frontmatter.applies_if, facts, repo_root=ctx.repo_root)
     )
     applicable_prompts = sum(
         1
         for prompt in prompts
         if not prompt.frontmatter.applies_if
-        or evaluate_predicate(
-            prompt.frontmatter.applies_if, facts, repo_root=ctx.repo_root
-        )
+        or evaluate_predicate(prompt.frontmatter.applies_if, facts, repo_root=ctx.repo_root)
     )
     out = ["=== Artifacts ==="]
     out.append(f"  Rules ({applicable_rules} applicable / {len(rules)} total):")

@@ -24,7 +24,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from importlib import metadata
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.detector import detect
@@ -35,6 +34,8 @@ from coding_agent_playbook.sources.filesystem import (
 )
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from jinja2 import Environment
 
     from coding_agent_playbook.adapters.base import Adapter
@@ -103,11 +104,17 @@ class OverlayResolver:
     ) -> list[Skill]:
         return self._resolve("skill", engine, overlays, repo_local)
 
-    def _resolve(self, kind, engine, overlays, repo_local):  # type: ignore[no-untyped-def]
-        winners: dict[str, object] = {}
+    def _resolve[T](
+        self,
+        kind: str,
+        engine: list[T],
+        overlays: list[list[T]],
+        repo_local: list[T],
+    ) -> list[T]:
+        winners: dict[str, T] = {}
         loser_log: dict[str, list[str]] = {}
         # Flatten the layers in priority-ascending order; later layers win.
-        layers: list[list[object]] = [engine, *overlays, repo_local]
+        layers: list[list[T]] = [engine, *overlays, repo_local]
         for layer in layers:
             for artifact in layer:
                 artifact_id = _artifact_id(artifact)
@@ -135,9 +142,9 @@ def _artifact_id(artifact: object) -> str:
     carry an open dict (``frontmatter["id"]``). Skills without an explicit id
     fall back to ``"skill"`` to mirror :meth:`Skill.to_prompt`'s behaviour.
     """
-    frontmatter = getattr(artifact, "frontmatter")
+    frontmatter = artifact.frontmatter  # type: ignore[attr-defined]
     if hasattr(frontmatter, "id"):
-        return str(frontmatter.id)  # type: ignore[attr-defined]
+        return str(frontmatter.id)
     if isinstance(frontmatter, dict):
         return str(frontmatter.get("id", "skill"))
     raise TypeError(f"cannot extract id from artifact {artifact!r}")

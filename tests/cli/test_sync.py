@@ -24,7 +24,7 @@ def _ns(repo: Path, **kwargs: object) -> argparse.Namespace:
     return argparse.Namespace(**base)
 
 
-def test_sync_writes_continue_rules_and_agents_md(tmp_path: Path, make_synthetic_repo) -> None:
+def test_sync_writes_continue_rules_and_agents_md(tmp_path, make_synthetic_repo):
     repo = make_synthetic_repo(
         tmp_path,
         rules=[("style-guide", "Use spaces, not tabs.\n")],
@@ -49,7 +49,7 @@ def test_sync_writes_continue_rules_and_agents_md(tmp_path: Path, make_synthetic
     assert opencode_command.is_file()
 
 
-def test_sync_stamps_lockfile(tmp_path: Path, make_synthetic_repo) -> None:
+def test_sync_stamps_lockfile(tmp_path, make_synthetic_repo):
     repo = make_synthetic_repo(
         tmp_path,
         rules=[("a-rule", "A rule body\n")],
@@ -70,7 +70,7 @@ def test_sync_stamps_lockfile(tmp_path: Path, make_synthetic_repo) -> None:
         assert entry.bytes > 0
 
 
-def test_sync_uses_cwd_when_repo_root_not_set(tmp_path: Path, make_synthetic_repo, monkeypatch) -> None:
+def test_sync_uses_cwd_when_repo_root_not_set(tmp_path, make_synthetic_repo, monkeypatch):
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
     monkeypatch.chdir(repo)
     rc = _sync.run(argparse.Namespace(repo_root=None, check=False))
@@ -78,7 +78,7 @@ def test_sync_uses_cwd_when_repo_root_not_set(tmp_path: Path, make_synthetic_rep
     assert (repo / "AGENTS.md").is_file()
 
 
-def test_sync_prints_summary_line(tmp_path: Path, make_synthetic_repo, capsys) -> None:
+def test_sync_prints_summary_line(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
     rc = _sync.run(_ns(repo))
     assert rc == 0
@@ -87,7 +87,7 @@ def test_sync_prints_summary_line(tmp_path: Path, make_synthetic_repo, capsys) -
     assert "files written" in out
 
 
-def test_sync_no_artifacts_still_succeeds(tmp_path: Path, make_synthetic_repo) -> None:
+def test_sync_no_artifacts_still_succeeds(tmp_path, make_synthetic_repo):
     """A repo with no rules/prompts is valid; sync should succeed and the
     lockfile should be created (possibly empty)."""
     repo = make_synthetic_repo(tmp_path)
@@ -100,9 +100,7 @@ def test_sync_no_artifacts_still_succeeds(tmp_path: Path, make_synthetic_repo) -
 # --- cap sync --check (drift detection) -----------------------------------
 
 
-def test_sync_check_clean_repo_returns_zero(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_sync_check_clean_repo_returns_zero(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body of x\n")])
     # Build the on-disk artifacts first.
     assert _sync.run(_ns(repo)) == 0
@@ -113,9 +111,7 @@ def test_sync_check_clean_repo_returns_zero(
     assert "No drift" in out
 
 
-def test_sync_check_detects_modified_file(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_sync_check_detects_modified_file(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Original body\n")])
     assert _sync.run(_ns(repo)) == 0
     # Mutate the rendered file so the next --check sees drift.
@@ -129,9 +125,7 @@ def test_sync_check_detects_modified_file(
     assert "AGENTS.md" in out
 
 
-def test_sync_check_detects_missing_file(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_sync_check_detects_missing_file(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("y", "Body y\n")])
     assert _sync.run(_ns(repo)) == 0
     # Delete a written file to simulate a drift-by-omission case.

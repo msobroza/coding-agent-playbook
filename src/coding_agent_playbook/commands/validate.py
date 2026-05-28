@@ -47,13 +47,15 @@ class ValidationError:
 _RULE_CALL_RE = re.compile(r"\{\{\s*rule\(\s*['\"]([^'\"]+)['\"]\s*\)\s*\}\}")
 
 
-def _check_applies_if(rules: list[Rule], prompts: list[Prompt], facts: Facts, repo_root: Path) -> list[ValidationError]:
+def _check_applies_if(
+    rules: list[Rule], prompts: list[Prompt], facts: Facts, repo_root: Path
+) -> list[ValidationError]:
     """Pass each artifact's ``applies_if`` to :func:`evaluate_predicate`; if
     it raises ``ValueError`` (unknown key) record the error.
     """
     errors: list[ValidationError] = []
-    for artifact in (*rules, *prompts):
-        predicate = artifact.frontmatter.applies_if or {}
+    for rule in rules:
+        predicate = rule.frontmatter.applies_if or {}
         if not predicate:
             continue
         try:
@@ -61,7 +63,20 @@ def _check_applies_if(rules: list[Rule], prompts: list[Prompt], facts: Facts, re
         except ValueError as exc:
             errors.append(
                 ValidationError(
-                    path=str(artifact.source_path or artifact.frontmatter.id),
+                    path=str(rule.source_path or rule.frontmatter.id),
+                    message=f"applies_if: {exc}",
+                )
+            )
+    for prompt in prompts:
+        predicate = prompt.frontmatter.applies_if or {}
+        if not predicate:
+            continue
+        try:
+            evaluate_predicate(predicate, facts, repo_root=repo_root)
+        except ValueError as exc:
+            errors.append(
+                ValidationError(
+                    path=str(prompt.source_path or prompt.frontmatter.id),
                     message=f"applies_if: {exc}",
                 )
             )
@@ -82,7 +97,7 @@ def _check_prompt_rule_calls(prompts: list[Prompt]) -> list[ValidationError]:
                     ValidationError(
                         path=str(prompt.source_path or prompt.frontmatter.id),
                         message=(
-                            f"body calls {{ rule(\"{rule_id}\") }} but {rule_id!r} "
+                            f'body calls {{ rule("{rule_id}") }} but {rule_id!r} '
                             "is not in includes_rules"
                         ),
                     )
@@ -106,15 +121,27 @@ def _check_rule_bodies_do_not_include_rules(rules: list[Rule]) -> list[Validatio
 def _check_jinja_compiles(rules: list[Rule], prompts: list[Prompt]) -> list[ValidationError]:
     env = Environment(autoescape=False, undefined=StrictUndefined)
     errors: list[ValidationError] = []
-    for artifact in (*rules, *prompts):
-        if not artifact.is_templated:
+    for rule in rules:
+        if not rule.is_templated:
             continue
         try:
-            env.parse(artifact.template_body)
+            env.parse(rule.template_body)
         except TemplateSyntaxError as exc:
             errors.append(
                 ValidationError(
-                    path=str(artifact.source_path or artifact.frontmatter.id),
+                    path=str(rule.source_path or rule.frontmatter.id),
+                    message=f"Jinja syntax error: {exc.message}",
+                )
+            )
+    for prompt in prompts:
+        if not prompt.is_templated:
+            continue
+        try:
+            env.parse(prompt.template_body)
+        except TemplateSyntaxError as exc:
+            errors.append(
+                ValidationError(
+                    path=str(prompt.source_path or prompt.frontmatter.id),
                     message=f"Jinja syntax error: {exc.message}",
                 )
             )
@@ -138,9 +165,7 @@ def _discover_eval_tasks(repo_root: Path) -> dict[str, Path]:
     return tasks
 
 
-def _check_eval_tasks(
-    prompts: list[Prompt], tasks: dict[str, Path]
-) -> list[ValidationError]:
+def _check_eval_tasks(prompts: list[Prompt], tasks: dict[str, Path]) -> list[ValidationError]:
     """Two-way check: every prompt-declared task exists on disk, and every
     on-disk task references an existing prompt.
     """
@@ -160,7 +185,7 @@ def _check_eval_tasks(
                         ),
                     )
                 )
-    for task_id, toml_path in tasks.items():
+    for _task_id, toml_path in tasks.items():
         try:
             with toml_path.open("rb") as f:
                 data = tomllib.load(f)
@@ -195,9 +220,7 @@ def run(args: argparse.Namespace) -> int:
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     ctx = SyncContext.from_repo(repo_root)
     errors: list[ValidationError] = []
-    errors.extend(
-        _check_applies_if(ctx.rules_resolved, ctx.prompts_resolved, ctx.facts, repo_root)
-    )
+    errors.extend(_check_applies_if(ctx.rules_resolved, ctx.prompts_resolved, ctx.facts, repo_root))
     errors.extend(_check_prompt_rule_calls(ctx.prompts_resolved))
     errors.extend(_check_rule_bodies_do_not_include_rules(ctx.rules_resolved))
     errors.extend(_check_jinja_compiles(ctx.rules_resolved, ctx.prompts_resolved))

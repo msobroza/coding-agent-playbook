@@ -72,9 +72,7 @@ def test_validate_subparser_accepts_repo_root():
 
 def test_render_subparser_requires_id_and_accepts_flags():
     parser = build_parser()
-    args = parser.parse_args(
-        ["render", "my-rule", "--format", "continue", "--show-source"]
-    )
+    args = parser.parse_args(["render", "my-rule", "--format", "continue", "--show-source"])
     assert args.command == "render"
     assert args.id == "my-rule"
     assert args.format == "continue"
@@ -110,15 +108,11 @@ def test_main_returns_func_exit_code(monkeypatch, tmp_path):
     def fake_run(args):
         return 7
 
+    # The CLI's argparse parser was already built with sync_cmd.run as the
+    # subparser's func. Patching the module attribute is enough because
+    # build_parser is re-called inside main() each invocation.
     monkeypatch.setattr(sync_cmd, "run", fake_run)
-    # Re-import so build_parser binds the patched function.
-    from importlib import reload
-
-    from coding_agent_playbook import cli as cli_module
-
-    reload(cli_module)
-    monkeypatch.setattr(cli_module.sync_cmd, "run", fake_run)
-    assert cli_module.main(["sync"]) == 7
+    assert main(["sync"]) == 7
 
 
 def test_main_translates_missing_config_to_exit_2(tmp_path, capsys):

@@ -6,7 +6,7 @@ from __future__ import annotations
 import sys
 import tomllib
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.commands import sync as _sync
@@ -16,6 +16,21 @@ from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 
 if TYPE_CHECKING:
     import argparse
+
+
+class _Answers(TypedDict):
+    """Shape of the user-collected answers handed to ``_write_config``.
+
+    Keeping this in a TypedDict lets mypy verify each field is the right
+    type without sprinkling ``cast`` / ``type: ignore`` at every key access.
+    """
+
+    name: str
+    kind: str
+    description: str
+    adapters: list[str]
+    overlays: list[str]
+
 
 _DEFAULT_ADAPTERS = ("continue", "claude_code", "opencode")
 _VALID_KINDS = (
@@ -74,9 +89,9 @@ def _prompt_multi_select(question: str, choices: list[str], defaults: list[str])
     return selected or list(defaults)
 
 
-def _collect_answers(args: argparse.Namespace) -> dict[str, object]:
+def _collect_answers(args: argparse.Namespace) -> _Answers:
     """Resolve the project parameters from flags (non-interactive) or prompts
-    (interactive). Returns a dict the writer functions consume."""
+    (interactive). Returns a typed mapping the writer functions consume."""
     if getattr(args, "non_interactive", False):
         name = getattr(args, "name", None)
         kind = getattr(args, "kind", None)
@@ -96,13 +111,13 @@ def _collect_answers(args: argparse.Namespace) -> dict[str, object]:
         adapters = [a.strip() for a in str(adapters_raw).split(",") if a.strip()]
         overlays_raw = getattr(args, "overlays", "") or ""
         overlays = [o.strip() for o in str(overlays_raw).split(",") if o.strip()]
-        return {
-            "name": name,
-            "kind": kind,
-            "description": getattr(args, "description", "") or "",
-            "adapters": adapters,
-            "overlays": overlays,
-        }
+        return _Answers(
+            name=str(name),
+            kind=str(kind),
+            description=str(getattr(args, "description", "") or ""),
+            adapters=adapters,
+            overlays=overlays,
+        )
     # Interactive path.
     name = _prompt("Project name")
     while not name:
@@ -114,7 +129,7 @@ def _collect_answers(args: argparse.Namespace) -> dict[str, object]:
         kind = _prompt("Project kind", default="python-application")
     adapters = _prompt_multi_select(
         "Which assistants will the team use?",
-        list(_DEFAULT_ADAPTERS) + ["codex"],
+        [*_DEFAULT_ADAPTERS, "codex"],
         list(_DEFAULT_ADAPTERS),
     )
     overlays = _prompt_multi_select(
@@ -122,16 +137,16 @@ def _collect_answers(args: argparse.Namespace) -> dict[str, object]:
         [],
         [],
     )
-    return {
-        "name": name,
-        "kind": kind,
-        "description": description,
-        "adapters": adapters,
-        "overlays": overlays,
-    }
+    return _Answers(
+        name=name,
+        kind=kind,
+        description=description,
+        adapters=adapters,
+        overlays=overlays,
+    )
 
 
-def _write_config(repo_root: Path, answers: dict[str, object]) -> Path:
+def _write_config(repo_root: Path, answers: _Answers) -> Path:
     """Write or update ``.coding-agent-playbook.toml`` with the user's
     answers. Idempotent: an existing config is *merged* with the new
     answers — user-edited fields win over freshly-asked defaults, but new
@@ -149,30 +164,30 @@ def _write_config(repo_root: Path, answers: dict[str, object]) -> Path:
         state = FileSystemStateSource(repo_root=repo_root)
         existing = state.load_config()
         existing.project = ProjectMeta(
-            name=str(answers["name"]),
-            kind=str(answers["kind"]),
-            description=str(answers["description"]),
+            name=answers["name"],
+            kind=answers["kind"],
+            description=answers["description"],
         )
         # Adapters: union of existing and new defaults, preserving order.
         existing_adapters = list(existing.adapters_enabled)
-        for adapter in answers["adapters"]:  # type: ignore[union-attr]
+        for adapter in answers["adapters"]:
             if adapter not in existing_adapters:
                 existing_adapters.append(adapter)
         existing.adapters_enabled = existing_adapters
-        existing.overlays_enabled = list(answers["overlays"])  # type: ignore[arg-type]
+        existing.overlays_enabled = list(answers["overlays"])
         existing.detector_cache = detector_cache
         config = existing
     else:
         config = Config(
             schema_version=1,
             project=ProjectMeta(
-                name=str(answers["name"]),
-                kind=str(answers["kind"]),
-                description=str(answers["description"]),
+                name=answers["name"],
+                kind=answers["kind"],
+                description=answers["description"],
             ),
             engine_version=_engine_version,
-            overlays_enabled=list(answers["overlays"]),  # type: ignore[arg-type]
-            adapters_enabled=list(answers["adapters"]),  # type: ignore[arg-type]
+            overlays_enabled=list(answers["overlays"]),
+            adapters_enabled=list(answers["adapters"]),
             storage=StorageConfig(),
             detector_cache=detector_cache,
         )
@@ -182,9 +197,12 @@ def _write_config(repo_root: Path, answers: dict[str, object]) -> Path:
     return primary
 
 
-def _facts_to_cache(facts: dict[str, object]) -> dict[str, object]:
+def _facts_to_cache(facts: Any) -> dict[str, object]:
     """Project ``Facts`` into a TOML-serializable shape for the
     ``detector_cache`` table.
+
+    ``Facts`` is a ``TypedDict`` with ``total=False``; we treat it as an
+    open mapping at this seam since we only inspect values, not keys.
 
     Sets are not TOML; lists are. Booleans/strings/ints pass through.
     """

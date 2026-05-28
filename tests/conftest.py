@@ -16,13 +16,13 @@ fixture only seeds repo-local content when callers ask for it.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from pathlib import Path
 
 
 _DEFAULT_CONFIG = """\
@@ -43,7 +43,9 @@ state_source = "filesystem"
 """
 
 
-def _write_rule(target: Path, rule_id: str, *, name: str | None = None, body: str = "Body\n") -> None:
+def _write_rule(
+    target: Path, rule_id: str, *, name: str | None = None, body: str = "Body\n"
+) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     display_name = name or rule_id.replace("-", " ").title()
     text = (
@@ -110,8 +112,8 @@ def make_synthetic_repo():
         *,
         config_text: str = _DEFAULT_CONFIG,
         rules: Iterable[tuple[str, str]] | None = None,
-        prompts: Iterable[tuple[str, dict]] | None = None,
-        pyproject_extras: dict | None = None,
+        prompts: Iterable[tuple[str, dict[str, Any]]] | None = None,
+        pyproject_extras: dict[str, Any] | None = None,
         write_config: bool = True,
     ) -> Path:
         repo = tmp_path

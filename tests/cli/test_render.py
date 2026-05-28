@@ -28,9 +28,7 @@ def _ns(
     )
 
 
-def test_render_rule_as_continue_writes_to_stdout(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_render_rule_as_continue_writes_to_stdout(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("my-rule", "Body content\n")])
     rc = _render.run(_ns(repo, "my-rule", fmt="continue"))
     assert rc == 0
@@ -39,9 +37,7 @@ def test_render_rule_as_continue_writes_to_stdout(
     assert "Body content" in out
 
 
-def test_render_rule_as_claude_section(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_render_rule_as_claude_section(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("my-rule", "Body content\n")])
     rc = _render.run(_ns(repo, "my-rule", fmt="claude"))
     assert rc == 0
@@ -51,9 +47,7 @@ def test_render_rule_as_claude_section(
     assert "Body content" in out
 
 
-def test_render_prompt_as_prompt_continue(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_render_prompt_as_prompt_continue(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(
         tmp_path, prompts=[("hello", {"slash": "hello", "body": "Hello prompt\n"})]
     )
@@ -63,9 +57,7 @@ def test_render_prompt_as_prompt_continue(
     assert "Hello prompt" in out
 
 
-def test_render_show_source_prints_template_path(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_render_show_source_prints_template_path(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("my-rule", "Body\n")])
     rc = _render.run(_ns(repo, "my-rule", show_source=True))
     assert rc == 0
@@ -75,9 +67,7 @@ def test_render_show_source_prints_template_path(
     assert "my-rule" in out or "playbook/rules" in out
 
 
-def test_render_show_rules_lists_inclusion_graph(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_render_show_rules_lists_inclusion_graph(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(
         tmp_path,
         rules=[("included-rule", "Inner body\n")],
@@ -102,9 +92,7 @@ def test_render_show_rules_lists_inclusion_graph(
     assert "UNKNOWN" in out
 
 
-def test_render_unknown_id_exits_one(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_render_unknown_id_exits_one(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path)
     rc = _render.run(_ns(repo, "does-not-exist"))
     assert rc == 1
@@ -112,9 +100,7 @@ def test_render_unknown_id_exits_one(
     assert "does-not-exist" in err
 
 
-def test_render_unknown_format_exits_one(
-    tmp_path: Path, make_synthetic_repo, capsys
-) -> None:
+def test_render_unknown_format_exits_one(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("rule-a", "body\n")])
     rc = _render.run(_ns(repo, "rule-a", fmt="nonsense"))
     assert rc == 1
