@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from coding_agent_playbook._typing import Prompt, Rule, Skill
+    from coding_agent_playbook.renderer import RuleRegistry
 
 
 class OpenCodeAdapter(Adapter):
@@ -29,9 +30,19 @@ class OpenCodeAdapter(Adapter):
     them up from the AGENTS.md adapter's output (``AGENTS.md`` at repo root)
     and the Claude Code adapter's output (``.claude/skills/``). See
     SPEC.md §10.6 and §10.6.4 for the OpenCode-touches/does-not-touch matrix.
+
+    The optional ``rule_registry`` is plumbed into :func:`render_for` so the
+    ``includes_rules:`` appendix in prompts can be rendered. When the
+    orchestrator (PR 10) builds the merged-overlay registry, it passes it in;
+    when callers (or tests) omit it, prompts render with no auto-appendix —
+    ``includes_rules:`` becomes purely declarative. Mirrors the
+    ``ContinueAdapter`` plumbing pattern.
     """
 
     name = "opencode"
+
+    def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
+        self._rule_registry = rule_registry
 
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
         """Return ``[]`` — OpenCode reads ``AGENTS.md`` natively.
@@ -66,6 +77,7 @@ class OpenCodeAdapter(Adapter):
             prompt.body,
             "prompt_opencode_command",
             frontmatter=dataclasses.asdict(prompt.frontmatter),
+            rule_registry=self._rule_registry,
         )
         target.write_text(rendered, encoding="utf-8")
         return [target]
