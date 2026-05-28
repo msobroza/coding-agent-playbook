@@ -155,6 +155,8 @@ def render_for(
 
     if resolved == "continue_rule":
         return _render_continue_rule(body, frontmatter)
+    if resolved in ("claude_md_section", "agents_md_section"):
+        return _render_markdown_rule_section(body, frontmatter)
 
     raise NotImplementedError(f"render_for: format {resolved!r} not yet implemented")
 
@@ -175,3 +177,26 @@ def _render_continue_rule(body: str, frontmatter: dict[str, Any]) -> str:
         continue_frontmatter["globs"] = list(globs)
     fenced = yaml.safe_dump(continue_frontmatter, sort_keys=False, allow_unicode=True).rstrip("\n")
     return f"<!-- {SENTINEL} -->\n---\n{fenced}\n---\n{body}"
+
+
+def _render_markdown_rule_section(body: str, frontmatter: dict[str, Any]) -> str:
+    """Emit a markdown section suitable for CLAUDE.md or AGENTS.md (SPEC §9.7).
+
+    The two adapters share byte-identical output: a level-2 heading with the
+    rule name, an optional ``*Applies to: ...*`` line for scoped rules, the
+    rendered body, and a ``---`` separator so successive sections stack
+    cleanly.
+    """
+    name = frontmatter["name"]
+    scope = frontmatter.get("scope", "scoped")
+    globs = frontmatter.get("globs") or []
+    parts = [f"## {name}", ""]
+    if scope == "scoped" and globs:
+        globs_str = ", ".join(f"`{glob}`" for glob in globs)
+        parts.append(f"*Applies to: {globs_str}*")
+        parts.append("")
+    parts.append(body.rstrip("\n"))
+    parts.append("")
+    parts.append("---")
+    parts.append("")
+    return "\n".join(parts)

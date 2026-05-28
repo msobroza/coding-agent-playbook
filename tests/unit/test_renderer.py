@@ -168,3 +168,72 @@ def test_unknown_format_raises_value_error(tmp_path: Path) -> None:
             "bogus",
             frontmatter={"id": "x", "name": "X", "description": "x", "scope": "always"},
         )
+
+
+# --- Task B.4 step 2: claude_md_section + agents_md_section ----------------
+
+
+def test_render_for_claude_md_section_scoped(tmp_path: Path) -> None:
+    frontmatter = {
+        "id": "fastapi-routers",
+        "name": "FastAPI routers",
+        "description": "Use APIRouter for grouping endpoints.",
+        "scope": "scoped",
+        "globs": ["src/**/routers/*.py"],
+    }
+    body = "Group endpoints with APIRouter.\n"
+    out = render_for(
+        tmp_path / "rules" / "fastapi-routers.md",
+        body,
+        "claude_md_section",
+        frontmatter=frontmatter,
+    )
+    assert "## FastAPI routers" in out
+    assert "*Applies to: `src/**/routers/*.py`*" in out
+    assert "Group endpoints with APIRouter." in out
+    assert out.rstrip().endswith("---")
+
+
+def test_render_for_claude_md_section_always(tmp_path: Path) -> None:
+    frontmatter = {
+        "id": "py-typing",
+        "name": "Python typing",
+        "description": "Always use type hints.",
+        "scope": "always",
+        "globs": [],
+    }
+    body = "Use type hints everywhere.\n"
+    out = render_for(
+        tmp_path / "rules" / "py-typing.md",
+        body,
+        "claude_md_section",
+        frontmatter=frontmatter,
+    )
+    assert "## Python typing" in out
+    assert "Applies to:" not in out
+    assert "Use type hints everywhere." in out
+    assert out.rstrip().endswith("---")
+
+
+def test_render_for_agents_md_section_identical_to_claude(tmp_path: Path) -> None:
+    frontmatter = {
+        "id": "fastapi-routers",
+        "name": "FastAPI routers",
+        "description": "Use APIRouter for grouping endpoints.",
+        "scope": "scoped",
+        "globs": ["src/**/routers/*.py"],
+    }
+    body = "Group endpoints with APIRouter.\n"
+    claude_out = render_for(
+        tmp_path / "rules" / "fastapi-routers.md",
+        body,
+        "claude_md_section",
+        frontmatter=frontmatter,
+    )
+    agents_out = render_for(
+        tmp_path / "rules" / "fastapi-routers.md",
+        body,
+        "agents_md_section",
+        frontmatter=frontmatter,
+    )
+    assert claude_out == agents_out
