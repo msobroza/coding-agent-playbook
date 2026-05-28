@@ -115,6 +115,9 @@ def _parse_python_version(requires_python: str | None) -> str | None:
     # Walk comma-separated constraints, find a min-bound.
     for raw in requires_python.split(","):
         spec = raw.strip()
+        # Only lower-bound operators (>=, ~=, ==, >) yield a meaningful
+        # python_version; upper-bound operators (<, <=) don't pin a minimum
+        # and are silently skipped.
         for op in (">=", "~=", "==", ">"):
             if spec.startswith(op):
                 version = spec[len(op) :].strip().rstrip(".*")
