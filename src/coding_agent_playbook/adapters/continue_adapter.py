@@ -24,6 +24,8 @@ from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from coding_agent_playbook._typing import Prompt, Rule
     from coding_agent_playbook.renderer import RuleRegistry
 
@@ -77,3 +79,9 @@ class ContinueAdapter(Adapter):
         )
         target.write_text(rendered, encoding="utf-8")
         return [target]
+
+    def _output_directories(self, repo_root: Path) -> Iterable[Path]:
+        return [
+            repo_root / ".continue" / "rules",
+            repo_root / ".continue" / "prompts",
+        ]

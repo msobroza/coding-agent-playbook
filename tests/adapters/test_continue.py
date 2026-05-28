@@ -170,6 +170,74 @@ def test_continue_write_prompt_renders_includes_rules_appendix(tmp_path: Path) -
 # --- Task 6.4: write_skill degrades to write_prompt -----------------------
 
 
+# --- Task 6.5: cleanup_stale -----------------------------------------------
+
+
+def test_continue_cleanup_removes_stale_rule(tmp_path: Path) -> None:
+    """A sentinel-tagged rule file not in written_paths is removed."""
+    rules_dir = tmp_path / ".continue" / "rules"
+    rules_dir.mkdir(parents=True)
+    current = rules_dir / "01-current.md"
+    current.write_text(f"<!-- {SENTINEL} -->\n---\nname: c\n---\n", encoding="utf-8")
+    stale = rules_dir / "02-stale.md"
+    stale.write_text(f"<!-- {SENTINEL} -->\n---\nname: s\n---\n", encoding="utf-8")
+
+    adapter = ContinueAdapter()
+    deleted = adapter.cleanup_stale({current.resolve()}, tmp_path)
+
+    assert deleted == [stale]
+    assert not stale.exists()
+    assert current.exists()
+
+
+def test_continue_cleanup_removes_stale_prompt(tmp_path: Path) -> None:
+    """The prompts directory is also scanned by _output_directories."""
+    prompts_dir = tmp_path / ".continue" / "prompts"
+    prompts_dir.mkdir(parents=True)
+    stale = prompts_dir / "obsolete.md"
+    stale.write_text(f"<!-- {SENTINEL} -->\n---\nname: o\n---\n", encoding="utf-8")
+
+    adapter = ContinueAdapter()
+    deleted = adapter.cleanup_stale(set(), tmp_path)
+
+    assert deleted == [stale]
+    assert not stale.exists()
+
+
+def test_continue_cleanup_preserves_user_authored_files(tmp_path: Path) -> None:
+    """A user-authored file (no sentinel) must NEVER be removed, even if it
+    is not in written_paths."""
+    rules_dir = tmp_path / ".continue" / "rules"
+    rules_dir.mkdir(parents=True)
+    user_authored = rules_dir / "99-handwritten.md"
+    user_authored.write_text(
+        "---\nname: hand\nalwaysApply: false\n---\n# I wrote this by hand.\n",
+        encoding="utf-8",
+    )
+
+    adapter = ContinueAdapter()
+    deleted = adapter.cleanup_stale(set(), tmp_path)
+
+    assert deleted == []
+    assert user_authored.exists()
+
+
+def test_continue_cleanup_skips_when_directories_missing(tmp_path: Path) -> None:
+    """If neither .continue/rules nor .continue/prompts exists, cleanup is a no-op."""
+    adapter = ContinueAdapter()
+    assert adapter.cleanup_stale(set(), tmp_path) == []
+
+
+def test_continue_output_directories_lists_rules_and_prompts(tmp_path: Path) -> None:
+    """The adapter's _output_directories points at both .continue subdirs."""
+    adapter = ContinueAdapter()
+    dirs = list(adapter._output_directories(tmp_path))
+    assert dirs == [
+        tmp_path / ".continue" / "rules",
+        tmp_path / ".continue" / "prompts",
+    ]
+
+
 def test_continue_write_skill_degrades_to_prompt_path(tmp_path: Path) -> None:
     """ContinueAdapter has no native skill support — write_skill must inherit
     the ABC default, which calls Skill.to_prompt() and forwards to write_prompt.
