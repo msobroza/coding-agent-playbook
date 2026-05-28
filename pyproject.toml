@@ -25,6 +25,7 @@ classifiers = [
 dependencies = [
     "jinja2>=3.1.4",
     "packaging>=24.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -33,6 +34,7 @@ dev = [
     "mypy>=1.13.0",
     "pytest>=8.3.0",
     "pytest-cov>=5.0.0",
+    "types-pyyaml>=6.0",
 ]
 
 [project.scripts]
