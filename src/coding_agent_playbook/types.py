@@ -68,6 +68,8 @@ class RuleFrontmatter:
         # YAML parses 'key:' (blank value) as None; the dataclass default does
         # not fire for an explicit None argument. Coerce so the declared field
         # types hold and markdown round-trip stays lossless (SPEC §6.6.3).
+        # This also normalises None passed from Python code: callers should
+        # pass {} or [] for "empty/always", never None.
         if self.version is None:
             self.version = 1
         if self.globs is None:
@@ -138,6 +140,8 @@ class PromptFrontmatter:
         # YAML parses 'key:' (blank value) as None; the dataclass default does
         # not fire for an explicit None argument. Coerce so the declared field
         # types hold and markdown round-trip stays lossless (SPEC §6.6.3).
+        # This also normalises None passed from Python code: callers should
+        # pass {} or [] for "empty/always", never None.
         if self.version is None:
             self.version = 1
         if self.applies_if is None:

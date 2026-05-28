@@ -68,6 +68,11 @@ def _make_rule() -> Rule:
     )
 
 
+# ---------------------------------------------------------------------------
+# split_frontmatter
+# ---------------------------------------------------------------------------
+
+
 def test_split_frontmatter_parses_mapping_and_body():
     data, body = split_frontmatter(RULE_MD)
     assert data["id"] == "python-typing"
@@ -84,11 +89,47 @@ def test_split_frontmatter_requires_closing_fence():
         split_frontmatter("---\nid: x\nstill open\n")
 
 
+def test_split_frontmatter_rejects_non_mapping():
+    with pytest.raises(ValueError, match="YAML mapping"):
+        split_frontmatter("---\n- a\n- b\n---\nbody\n")
+
+
+def test_split_frontmatter_rejects_indented_closing_fence():
+    """An indented '---' inside a YAML multi-line scalar must not be treated
+    as the closing fence (bug_006 — round-trip regression)."""
+    text = (
+        "---\n"
+        "id: x\n"
+        "name: x\n"
+        "description: 'line one\n"
+        "\n"
+        "  ---\n"
+        "\n"
+        "  line two'\n"
+        "scope: scoped\n"
+        "---\n"
+        "body\n"
+    )
+    data, body = split_frontmatter(text)
+    assert data["description"] == "line one\n---\nline two"
+    assert body == "body\n"
+
+
+# ---------------------------------------------------------------------------
+# format_frontmatter round-trip
+# ---------------------------------------------------------------------------
+
+
 def test_frontmatter_text_roundtrip():
     data, body = split_frontmatter(RULE_MD)
     reparsed, reparsed_body = split_frontmatter(format_frontmatter(data, body))
     assert reparsed == data
     assert reparsed_body == body
+
+
+# ---------------------------------------------------------------------------
+# Rule and RuleFrontmatter
+# ---------------------------------------------------------------------------
 
 
 def test_rule_from_markdown_reads_fields(tmp_path):
@@ -120,84 +161,6 @@ def test_rule_markdown_roundtrip(tmp_path):
     rule = Rule.from_markdown(path, "pkg")
     path.write_text(rule.to_markdown(), encoding="utf-8")  # same path → same source_path
     assert Rule.from_markdown(path, "pkg") == rule
-
-
-def test_prompt_dict_roundtrip():
-    prompt = Prompt(
-        frontmatter=PromptFrontmatter(
-            id="generate-tests",
-            name="Generate tests",
-            description="Generate pytest tests",
-            slash="generate-tests",
-            includes_rules=["python-typing", "pytest"],
-            eval_tasks=["generate-tests-happy-path"],
-        ),
-        body="# Task\n",
-        template_body="# Task\n",
-        is_templated=False,
-        source_path=None,
-        source_package="pkg",
-    )
-    assert Prompt.from_dict(prompt.to_dict()) == prompt
-
-
-def test_prompt_markdown_roundtrip(tmp_path):
-    path = tmp_path / "generate-tests.md.j2"
-    path.write_text(PROMPT_MD, encoding="utf-8")
-    prompt = Prompt.from_markdown(path, "pkg")
-    assert prompt.frontmatter.slash == "generate-tests"
-    assert prompt.frontmatter.includes_rules == ["python-typing", "pytest"]
-    path.write_text(prompt.to_markdown(), encoding="utf-8")
-    assert Prompt.from_markdown(path, "pkg") == prompt
-
-
-def test_split_frontmatter_rejects_non_mapping():
-    with pytest.raises(ValueError, match="YAML mapping"):
-        split_frontmatter("---\n- a\n- b\n---\nbody\n")
-
-
-def test_skill_to_prompt_deferred_to_pr6():
-    skill = Skill(
-        frontmatter={"name": "demo"},
-        body="b",
-        scripts_dir=None,
-        references_dir=None,
-        source_package="pkg",
-    )
-    with pytest.raises(NotImplementedError):
-        skill.to_prompt()
-
-
-def test_skill_dict_roundtrip():
-    skill = Skill(
-        frontmatter={"name": "demo"},
-        body="b",
-        scripts_dir=Path("skills/demo/scripts"),
-        references_dir=None,
-        source_package="pkg",
-    )
-    assert Skill.from_dict(skill.to_dict()) == skill
-
-
-def test_split_frontmatter_rejects_indented_closing_fence():
-    """An indented '---' inside a YAML multi-line scalar must not be treated
-    as the closing fence (bug_006 — round-trip regression)."""
-    text = (
-        "---\n"
-        "id: x\n"
-        "name: x\n"
-        "description: 'line one\n"
-        "\n"
-        "  ---\n"
-        "\n"
-        "  line two'\n"
-        "scope: scoped\n"
-        "---\n"
-        "body\n"
-    )
-    data, body = split_frontmatter(text)
-    assert data["description"] == "line one\n---\nline two"
-    assert body == "body\n"
 
 
 def test_rule_markdown_roundtrip_with_horizontal_rule_in_description(tmp_path):
@@ -242,26 +205,6 @@ def test_rule_frontmatter_coerces_none_to_defaults():
     assert fm.tags == []
 
 
-def test_prompt_frontmatter_coerces_none_to_defaults():
-    """Same coercion contract for PromptFrontmatter (bug_001)."""
-    fm = PromptFrontmatter(
-        id="x",
-        name="x",
-        description="x",
-        slash="x",
-        version=None,  # type: ignore[arg-type]
-        applies_if=None,  # type: ignore[arg-type]
-        input_variables=None,  # type: ignore[arg-type]
-        includes_rules=None,  # type: ignore[arg-type]
-        eval_tasks=None,  # type: ignore[arg-type]
-    )
-    assert fm.version == 1
-    assert fm.applies_if == {}
-    assert fm.input_variables == []
-    assert fm.includes_rules == []
-    assert fm.eval_tasks == []
-
-
 def test_rule_markdown_roundtrip_with_blank_optional_fields(tmp_path):
     """A rule authored with blank 'globs:' / 'priority:' lines round-trips
     through markdown (bug_001 — SPEC §6.6.3 contract)."""
@@ -285,6 +228,88 @@ def test_rule_markdown_roundtrip_with_blank_optional_fields(tmp_path):
     assert rule.frontmatter.tags == []
     path.write_text(rule.to_markdown(), encoding="utf-8")
     assert Rule.from_markdown(path, "pkg") == rule
+
+
+# ---------------------------------------------------------------------------
+# Prompt and PromptFrontmatter
+# ---------------------------------------------------------------------------
+
+
+def test_prompt_dict_roundtrip():
+    prompt = Prompt(
+        frontmatter=PromptFrontmatter(
+            id="generate-tests",
+            name="Generate tests",
+            description="Generate pytest tests",
+            slash="generate-tests",
+            includes_rules=["python-typing", "pytest"],
+            eval_tasks=["generate-tests-happy-path"],
+        ),
+        body="# Task\n",
+        template_body="# Task\n",
+        is_templated=False,
+        source_path=None,
+        source_package="pkg",
+    )
+    assert Prompt.from_dict(prompt.to_dict()) == prompt
+
+
+def test_prompt_markdown_roundtrip(tmp_path):
+    path = tmp_path / "generate-tests.md.j2"
+    path.write_text(PROMPT_MD, encoding="utf-8")
+    prompt = Prompt.from_markdown(path, "pkg")
+    assert prompt.frontmatter.slash == "generate-tests"
+    assert prompt.frontmatter.includes_rules == ["python-typing", "pytest"]
+    path.write_text(prompt.to_markdown(), encoding="utf-8")
+    assert Prompt.from_markdown(path, "pkg") == prompt
+
+
+def test_prompt_frontmatter_coerces_none_to_defaults():
+    """Same coercion contract for PromptFrontmatter (bug_001)."""
+    fm = PromptFrontmatter(
+        id="x",
+        name="x",
+        description="x",
+        slash="x",
+        version=None,  # type: ignore[arg-type]
+        applies_if=None,  # type: ignore[arg-type]
+        input_variables=None,  # type: ignore[arg-type]
+        includes_rules=None,  # type: ignore[arg-type]
+        eval_tasks=None,  # type: ignore[arg-type]
+    )
+    assert fm.version == 1
+    assert fm.applies_if == {}
+    assert fm.input_variables == []
+    assert fm.includes_rules == []
+    assert fm.eval_tasks == []
+
+
+# ---------------------------------------------------------------------------
+# Skill
+# ---------------------------------------------------------------------------
+
+
+def test_skill_to_prompt_deferred_to_pr6():
+    skill = Skill(
+        frontmatter={"name": "demo"},
+        body="b",
+        scripts_dir=None,
+        references_dir=None,
+        source_package="pkg",
+    )
+    with pytest.raises(NotImplementedError):
+        skill.to_prompt()
+
+
+def test_skill_dict_roundtrip():
+    skill = Skill(
+        frontmatter={"name": "demo"},
+        body="b",
+        scripts_dir=Path("skills/demo/scripts"),
+        references_dir=None,
+        source_package="pkg",
+    )
+    assert Skill.from_dict(skill.to_dict()) == skill
 
 
 def test_skill_to_dict_does_not_alias_frontmatter():
