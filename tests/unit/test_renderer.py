@@ -477,3 +477,24 @@ def test_render_for_prompt_continue_exact_output(tmp_path: Path) -> None:
         "body line 1\nbody line 2\n"
     )
     assert out == expected
+
+
+def test_render_for_prompt_continue_no_appendix_when_all_fragments_empty(
+    tmp_path: Path,
+) -> None:
+    """When includes_rules is set but every rule's applies_if evaluates false
+    (registry returns ""), no Reference rules section is emitted
+    (code-quality review M5)."""
+    registry = StubRuleRegistry({"foo": "", "bar": ""})
+    out = render_for(
+        tmp_path / "prompt.md.j2",
+        "body",
+        "prompt_continue",
+        frontmatter={
+            "name": "P",
+            "description": "D",
+            "includes_rules": ["foo", "bar"],
+        },
+        rule_registry=registry,
+    )
+    assert "## Reference rules" not in out
