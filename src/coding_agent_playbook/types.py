@@ -64,6 +64,21 @@ class RuleFrontmatter:
     priority: int = 50
     tags: list[str] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        # YAML parses 'key:' (blank value) as None; the dataclass default does
+        # not fire for an explicit None argument. Coerce so the declared field
+        # types hold and markdown round-trip stays lossless (SPEC §6.6.3).
+        if self.version is None:
+            self.version = 1
+        if self.globs is None:
+            self.globs = []
+        if self.applies_if is None:
+            self.applies_if = {}
+        if self.priority is None:
+            self.priority = 50
+        if self.tags is None:
+            self.tags = []
+
 
 @dataclass
 class Rule:
@@ -118,6 +133,21 @@ class PromptFrontmatter:
     input_variables: list[dict[str, Any]] = field(default_factory=list)
     includes_rules: list[str] = field(default_factory=list)
     eval_tasks: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        # YAML parses 'key:' (blank value) as None; the dataclass default does
+        # not fire for an explicit None argument. Coerce so the declared field
+        # types hold and markdown round-trip stays lossless (SPEC §6.6.3).
+        if self.version is None:
+            self.version = 1
+        if self.applies_if is None:
+            self.applies_if = {}
+        if self.input_variables is None:
+            self.input_variables = []
+        if self.includes_rules is None:
+            self.includes_rules = []
+        if self.eval_tasks is None:
+            self.eval_tasks = []
 
 
 @dataclass

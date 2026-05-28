@@ -219,3 +219,69 @@ def test_rule_markdown_roundtrip_with_horizontal_rule_in_description(tmp_path):
     path = tmp_path / "rule.md"
     path.write_text(rule.to_markdown(), encoding="utf-8")
     assert Rule.from_markdown(path, "pkg") == rule
+
+
+def test_rule_frontmatter_coerces_none_to_defaults():
+    """YAML 'globs:' (blank) parses as None; the dataclass must coerce that
+    back to the declared default so the field type holds (bug_001)."""
+    fm = RuleFrontmatter(
+        id="x",
+        name="x",
+        description="x",
+        scope="scoped",
+        version=None,  # type: ignore[arg-type]
+        globs=None,  # type: ignore[arg-type]
+        applies_if=None,  # type: ignore[arg-type]
+        priority=None,  # type: ignore[arg-type]
+        tags=None,  # type: ignore[arg-type]
+    )
+    assert fm.version == 1
+    assert fm.globs == []
+    assert fm.applies_if == {}
+    assert fm.priority == 50
+    assert fm.tags == []
+
+
+def test_prompt_frontmatter_coerces_none_to_defaults():
+    """Same coercion contract for PromptFrontmatter (bug_001)."""
+    fm = PromptFrontmatter(
+        id="x",
+        name="x",
+        description="x",
+        slash="x",
+        version=None,  # type: ignore[arg-type]
+        applies_if=None,  # type: ignore[arg-type]
+        input_variables=None,  # type: ignore[arg-type]
+        includes_rules=None,  # type: ignore[arg-type]
+        eval_tasks=None,  # type: ignore[arg-type]
+    )
+    assert fm.version == 1
+    assert fm.applies_if == {}
+    assert fm.input_variables == []
+    assert fm.includes_rules == []
+    assert fm.eval_tasks == []
+
+
+def test_rule_markdown_roundtrip_with_blank_optional_fields(tmp_path):
+    """A rule authored with blank 'globs:' / 'priority:' lines round-trips
+    through markdown (bug_001 — SPEC §6.6.3 contract)."""
+    text = (
+        "---\n"
+        "id: x\n"
+        "name: x\n"
+        "description: x\n"
+        "scope: scoped\n"
+        "globs:\n"
+        "priority:\n"
+        "tags:\n"
+        "---\n"
+        "body\n"
+    )
+    path = tmp_path / "rule.md"
+    path.write_text(text, encoding="utf-8")
+    rule = Rule.from_markdown(path, "pkg")
+    assert rule.frontmatter.globs == []
+    assert rule.frontmatter.priority == 50
+    assert rule.frontmatter.tags == []
+    path.write_text(rule.to_markdown(), encoding="utf-8")
+    assert Rule.from_markdown(path, "pkg") == rule
