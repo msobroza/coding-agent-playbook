@@ -266,3 +266,73 @@ def test_agents_md_finalize_uses_html_comment_sentinel(tmp_path: Path) -> None:
     assert first_line.startswith("<!--")
     assert first_line.rstrip().endswith("-->")
     assert SENTINEL in first_line
+
+
+# --- Task 8.4: cleanup_stale deletes AGENTS.md only when sentinel-tagged ---
+
+
+def test_agents_md_cleanup_returns_empty_when_no_file(tmp_path: Path) -> None:
+    adapter = AgentsMdAdapter()
+    deleted = adapter.cleanup_stale(written_paths=set(), repo_root=tmp_path)
+    assert deleted == []
+
+
+def test_agents_md_cleanup_preserves_user_authored_file(tmp_path: Path) -> None:
+    # User-authored AGENTS.md (no sentinel) must NEVER be touched, even when
+    # the buffer is empty. This protects orgs that hand-write AGENTS.md and
+    # then later opt into the engine.
+    user_authored = tmp_path / "AGENTS.md"
+    user_authored.write_text("# User-written AGENTS\n\nDo the thing.\n", encoding="utf-8")
+    adapter = AgentsMdAdapter()
+    deleted = adapter.cleanup_stale(written_paths=set(), repo_root=tmp_path)
+    assert deleted == []
+    assert user_authored.is_file()
+    assert "User-written AGENTS" in user_authored.read_text(encoding="utf-8")
+
+
+def test_agents_md_cleanup_deletes_stale_sentinel_tagged_file(tmp_path: Path) -> None:
+    # Engine-generated AGENTS.md with sentinel header but no longer backed by
+    # any rule this sync (so written_paths doesn't contain it) -> delete it.
+    stale = tmp_path / "AGENTS.md"
+    stale.write_text(f"<!-- {SENTINEL} -->\n# AGENTS.md\n\nold content.\n", encoding="utf-8")
+    adapter = AgentsMdAdapter()
+    deleted = adapter.cleanup_stale(written_paths=set(), repo_root=tmp_path)
+    assert deleted == [stale]
+    assert not stale.exists()
+
+
+def test_agents_md_cleanup_preserves_just_written_file(tmp_path: Path) -> None:
+    # The sentinel-tagged file IS in written_paths (the orchestrator just
+    # called finalize this sync), so cleanup_stale must NOT delete it.
+    adapter = AgentsMdAdapter()
+    adapter.write_rule(_make_rule(rule_id="x", priority=50, name="X rule"), tmp_path)
+    written = adapter.finalize(tmp_path)
+    written_paths = {p.resolve() for p in written}
+    deleted = adapter.cleanup_stale(written_paths=written_paths, repo_root=tmp_path)
+    assert deleted == []
+    assert (tmp_path / "AGENTS.md").is_file()
+
+
+def test_agents_md_cleanup_ignores_non_file_path(tmp_path: Path) -> None:
+    # If something else somehow created an AGENTS.md *directory* at the repo
+    # root, cleanup_stale must not crash — it just declines to touch it.
+    (tmp_path / "AGENTS.md").mkdir()
+    adapter = AgentsMdAdapter()
+    deleted = adapter.cleanup_stale(written_paths=set(), repo_root=tmp_path)
+    assert deleted == []
+    assert (tmp_path / "AGENTS.md").is_dir()
+
+
+def test_agents_md_cleanup_does_not_inherit_default_dir_walker(tmp_path: Path) -> None:
+    # The shared _default_cleanup is for directory-based adapters. AGENTS.md
+    # is a single file; the adapter must override cleanup_stale so it does
+    # NOT walk any directory. We verify by populating .continue/ with a
+    # sentinel-tagged file and asserting cleanup_stale leaves it alone.
+    rules_dir = tmp_path / ".continue" / "rules"
+    rules_dir.mkdir(parents=True)
+    stray = rules_dir / "50-x.md"
+    stray.write_text(f"<!-- {SENTINEL} -->\n", encoding="utf-8")
+    adapter = AgentsMdAdapter()
+    deleted = adapter.cleanup_stale(written_paths=set(), repo_root=tmp_path)
+    assert deleted == []
+    assert stray.is_file()

@@ -94,3 +94,25 @@ class AgentsMdAdapter(Adapter):
         agents_md.parent.mkdir(parents=True, exist_ok=True)
         agents_md.write_text(content, encoding="utf-8")
         return [agents_md]
+
+    def cleanup_stale(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
+        """Delete ``AGENTS.md`` only if (a) it exists, (b) the engine wrote
+        it (sentinel on first line), and (c) it was *not* re-written this
+        sync (absent from ``written_paths``).
+
+        AGENTS.md is a single repo-root file rather than a directory of
+        sentinel-tagged artifacts, so the shared ``_default_cleanup``
+        directory walker on the ABC does not apply. Overriding here keeps
+        the engine's cleanup behaviour conservative: user-authored files
+        and just-rendered files are both safe.
+        """
+        agents_md = repo_root / "AGENTS.md"
+        if not agents_md.is_file():
+            return []
+        if agents_md.resolve() in written_paths:
+            return []
+        first_line = agents_md.read_text(encoding="utf-8").split("\n", 1)[0]
+        if SENTINEL not in first_line:
+            return []
+        agents_md.unlink()
+        return [agents_md]
