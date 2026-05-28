@@ -13,13 +13,15 @@ Code's native layout:
 
 from __future__ import annotations
 
+import dataclasses
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-    from pathlib import Path
 
     from coding_agent_playbook.types import Prompt, Rule, Skill
 
@@ -35,7 +37,23 @@ class ClaudeCodeAdapter(Adapter):
         self._buffered_rules: list[tuple[int, str, str]] = []
 
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
-        raise NotImplementedError
+        """Buffer a rendered claude_md_section for ``finalize`` to compose.
+
+        Claude Code consumes rules through a single ``.claude/CLAUDE.md`` file
+        rather than per-rule files, so this method writes nothing immediately.
+        The buffered tuple records (priority, rule_id, rendered_section) so
+        ``finalize`` can sort by ``(priority, rule_id)`` for stable output.
+        """
+        rendered_section = render_for(
+            rule.source_path or Path("inline"),
+            rule.body,
+            "claude_md_section",
+            frontmatter=dataclasses.asdict(rule.frontmatter),
+        )
+        self._buffered_rules.append(
+            (rule.frontmatter.priority, rule.frontmatter.id, rendered_section)
+        )
+        return []
 
     def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
         raise NotImplementedError

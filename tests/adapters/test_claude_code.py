@@ -98,3 +98,28 @@ def test_claude_code_adapter_is_adapter_subclass():
 def test_claude_code_adapter_instantiates_with_empty_buffer():
     adapter = ClaudeCodeAdapter()
     assert adapter._buffered_rules == []
+
+
+def test_claude_code_write_rule_buffers_does_not_write(tmp_path):
+    rule = _make_rule(rule_id="x", priority=50, globs=["**/*.py"])
+    adapter = ClaudeCodeAdapter()
+    written = adapter.write_rule(rule, repo_root=tmp_path)
+    assert written == []
+    # No .claude/ directory or files were created.
+    assert not (tmp_path / ".claude").exists()
+    # The rule was buffered for finalize() to compose.
+    assert len(adapter._buffered_rules) == 1
+    priority, rule_id, rendered_section = adapter._buffered_rules[0]
+    assert priority == 50
+    assert rule_id == "x"
+    # Rendered section is a claude_md_section: ## heading, optional applies-to,
+    # body, separator.
+    assert "## Python typing standards" in rendered_section
+    assert "*Applies to: `**/*.py`*" in rendered_section
+
+
+def test_claude_code_write_rule_appends_to_buffer_in_call_order(tmp_path):
+    adapter = ClaudeCodeAdapter()
+    adapter.write_rule(_make_rule(rule_id="a", priority=10, name="A"), tmp_path)
+    adapter.write_rule(_make_rule(rule_id="b", priority=20, name="B"), tmp_path)
+    assert [item[:2] for item in adapter._buffered_rules] == [(10, "a"), (20, "b")]
