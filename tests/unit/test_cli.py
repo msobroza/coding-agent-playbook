@@ -158,9 +158,7 @@ def test_eval_main_uses_repo_root_without_chdir(monkeypatch, tmp_path, make_synt
     task_dir = tmp_path / "playbook" / "eval_tasks" / "demo-task"
     task_dir.mkdir(parents=True, exist_ok=True)
     (task_dir / "task.toml").write_text(
-        'id = "demo-task"\n'
-        'prompt_id = "demo"\n'
-        'description = "Demo task"\n',
+        'id = "demo-task"\nprompt_id = "demo"\ndescription = "Demo task"\n',
         encoding="utf-8",
     )
 

@@ -217,7 +217,7 @@ def test_eval_list_total_pluralizes_correctly(tmp_path, make_synthetic_repo, cap
         "files = []\n"
         'project_kind = "python-application"\n'
         'python_version = "3.12"\n'
-        'frameworks = []\n'
+        "frameworks = []\n"
         "[invocation]\n"
         'prompt_args = ""\n',
         encoding="utf-8",
@@ -319,10 +319,7 @@ def test_display_source_path_uses_package_prefix_for_engine_tasks(tmp_path):
         source_path=task_dir / "task.toml",
         source_package="coding_agent_playbook",
     )
-    assert (
-        _display_source_path(task)
-        == "coding_agent_playbook/resources/eval_tasks/task-a/"
-    )
+    assert _display_source_path(task) == "coding_agent_playbook/resources/eval_tasks/task-a/"
 
 
 def test_display_source_path_uses_package_prefix_for_overlay_tasks(tmp_path):
@@ -340,10 +337,7 @@ def test_display_source_path_uses_package_prefix_for_overlay_tasks(tmp_path):
         source_path=task_dir / "task.toml",
         source_package="playbook_rules_bnp",
     )
-    assert (
-        _display_source_path(task)
-        == "playbook_rules_bnp/resources/eval_tasks/pii-scan/"
-    )
+    assert _display_source_path(task) == "playbook_rules_bnp/resources/eval_tasks/pii-scan/"
 
 
 def test_display_source_path_falls_back_gracefully_for_unusual_paths(tmp_path):
@@ -400,9 +394,7 @@ def test_show_source_path_is_repo_relative_for_repo_local_tasks(
     assert str(tmp_path) not in out
 
 
-def test_show_falls_back_to_prompt_id_when_prompt_missing(
-    tmp_path, make_synthetic_repo, capsys
-):
+def test_show_falls_back_to_prompt_id_when_prompt_missing(tmp_path, make_synthetic_repo, capsys):
     """If a task references a prompt that isn't loaded (mid-authoring state),
     ``cap eval --show`` falls back to printing the ``prompt_id`` as the slash
     so the output is still useful."""
@@ -418,7 +410,7 @@ def test_show_falls_back_to_prompt_id_when_prompt_missing(
         "files = []\n"
         'project_kind = "python-application"\n'
         'python_version = "3.12"\n'
-        'frameworks = []\n'
+        "frameworks = []\n"
         "[invocation]\n"
         'prompt_args = ""\n',
         encoding="utf-8",
