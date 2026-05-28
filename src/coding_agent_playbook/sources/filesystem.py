@@ -188,6 +188,8 @@ def _iter_md_files(root: Path) -> Iterator[Path]:
         # artifacts, and walking them silently inflates source listings.
         if any(part.startswith(".") for part in path.relative_to(root).parts):
             continue
+        # Note: case-sensitive on Linux/macOS APFS (lowercase .md convention).
+        # Banking deployments on case-insensitive volumes may need to revisit.
         if path.name.endswith(".md") or path.name.endswith(".md.j2"):
             yield path
 
