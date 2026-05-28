@@ -174,8 +174,10 @@ def _resource_subdir(package: str, subdir: str) -> Path | None:
         resource_root = resources.files(package).joinpath("resources", subdir)
     except (ModuleNotFoundError, FileNotFoundError):
         return None
-    # ``Traversable`` doesn't expose .is_dir on every backend, but the on-disk
-    # MultiplexedPath/PosixPath used in v1 does. Stringify and check.
+    # We need a ``Path`` for ``rglob``-based walking, not just a
+    # ``Traversable``. The on-disk backend used by
+    # ``resources.files(<importable-package>)`` always materializes as a
+    # ``PosixPath``/``MultiplexedPath``, so ``Path(str(...))`` is safe.
     candidate = Path(str(resource_root))
     if not candidate.is_dir():
         return None
