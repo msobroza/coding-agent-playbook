@@ -213,10 +213,12 @@ def _render_markdown_rule_section(body: str, frontmatter: dict[str, Any]) -> str
 
 
 def _has_inline_rule_call(body: str) -> bool:
-    """True iff the (already-rendered) body has a literal ``{{ rule(`` call.
+    """Detect whether the rendered body contains the literal substring ``{{ rule(``.
 
-    SPEC §6.2.5: when an author placed the rule inclusion inline, the renderer
-    must NOT append a ``## Reference rules`` section on top of it.
+    In practice this only occurs when the author wrapped a ``rule()`` call in
+    ``{% raw %}`` to keep the literal text (e.g. to handle inclusion themselves
+    with custom formatting). When True, the auto-generated ``## Reference rules``
+    appendix is suppressed and the author owns the inclusion layout (SPEC §6.2.5).
     """
     return "{{ rule(" in body
 
