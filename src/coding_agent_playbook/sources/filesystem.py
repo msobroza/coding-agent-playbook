@@ -11,12 +11,12 @@ import tomllib
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.config import Config
+from coding_agent_playbook.lockfile import Lockfile
 from coding_agent_playbook.sources.base import ArtifactSource, StateSource
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.lockfile import Lockfile
     from coding_agent_playbook.types import Prompt, Rule, Skill
 
 # Placeholder for eval tasks until PR 11 defines the type. Listed by ID only
@@ -178,7 +178,13 @@ class FileSystemStateSource(StateSource):
         target.write_text(_dump_toml(config.to_dict()), encoding="utf-8")
 
     def load_lockfile(self) -> Lockfile | None:
-        raise NotImplementedError("load_lockfile lands in Task C.5")
+        target = self._repo_root / self._LOCKFILE_FILENAME
+        if not target.is_file():
+            return None
+        with target.open("rb") as f:
+            data = tomllib.load(f)
+        return Lockfile.from_dict(data)
 
     def save_lockfile(self, lockfile: Lockfile) -> None:
-        raise NotImplementedError("save_lockfile lands in Task C.5")
+        target = self._repo_root / self._LOCKFILE_FILENAME
+        target.write_text(_dump_toml(lockfile.to_dict()), encoding="utf-8")
