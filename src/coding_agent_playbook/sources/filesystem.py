@@ -338,6 +338,9 @@ class FileSystemStateSource(StateSource):
         )
 
     def load_lockfile(self) -> Lockfile | None:
+        """Read the lockfile. Returns ``None`` if no lockfile exists (= first
+        sync, no drift baseline yet). ``cap sync --check`` treats ``None`` as
+        'no comparison possible — emit a baseline'."""
         target = self._repo_root / self._LOCKFILE_FILENAME
         if not target.is_file():
             return None
