@@ -171,5 +171,95 @@ def test_detect_ignores_venv_when_walking_notebooks(tmp_path: Path) -> None:
     assert facts["project_kind"] == "python-library"
 
 
+def _minimal_pyproject(repo: Path) -> None:
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "x"
+        requires-python = ">=3.12"
+        dependencies = []
+        """,
+    )
+
+
+def test_detect_package_manager_uv(tmp_path: Path) -> None:
+    repo = tmp_path / "uv-repo"
+    repo.mkdir()
+    _minimal_pyproject(repo)
+    _write(repo, "uv.lock", "# uv lock\n")
+
+    facts = detect(repo)
+
+    assert facts.get("package_manager") == "uv"
+
+
+def test_detect_package_manager_poetry(tmp_path: Path) -> None:
+    repo = tmp_path / "poetry-repo"
+    repo.mkdir()
+    _minimal_pyproject(repo)
+    _write(repo, "poetry.lock", "# poetry lock\n")
+
+    facts = detect(repo)
+
+    assert facts.get("package_manager") == "poetry"
+
+
+def test_detect_package_manager_pip_tools(tmp_path: Path) -> None:
+    repo = tmp_path / "pt-repo"
+    repo.mkdir()
+    _minimal_pyproject(repo)
+    _write(repo, "requirements.in", "requests\n")
+
+    facts = detect(repo)
+
+    assert facts.get("package_manager") == "pip-tools"
+
+
+def test_detect_package_manager_pip_fallback(tmp_path: Path) -> None:
+    repo = tmp_path / "pip-repo"
+    repo.mkdir()
+    _minimal_pyproject(repo)
+    _write(repo, "requirements.txt", "requests\n")
+
+    facts = detect(repo)
+
+    assert facts.get("package_manager") == "pip"
+
+
+def test_detect_package_manager_default_pip(tmp_path: Path) -> None:
+    # No lockfile, no requirements — default to pip.
+    repo = tmp_path / "bare-repo"
+    repo.mkdir()
+    _minimal_pyproject(repo)
+
+    facts = detect(repo)
+
+    assert facts.get("package_manager") == "pip"
+
+
+def test_detect_package_manager_poetry_via_tool_section(tmp_path: Path) -> None:
+    repo = tmp_path / "tool-poetry"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "x"
+        requires-python = ">=3.12"
+        dependencies = []
+
+        [tool.poetry]
+        name = "x"
+        """,
+    )
+
+    facts = detect(repo)
+
+    assert facts.get("package_manager") == "poetry"
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])

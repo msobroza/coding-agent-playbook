@@ -149,6 +149,31 @@ def _parse_dep_spec(spec: str) -> tuple[str, str]:
     return name, tail
 
 
+def _detect_package_manager(
+    repo_root: Path, pyproject: dict[str, Any] | None
+) -> Literal["uv", "poetry", "pip-tools", "pip"] | None:
+    """Lockfile / pyproject cascade per SPEC §8.
+
+    ``uv.lock`` → ``uv``; ``poetry.lock`` → ``poetry``; ``[tool.poetry]`` in
+    pyproject → ``poetry``; ``requirements.in`` → ``pip-tools``;
+    ``requirements.txt`` → ``pip``; otherwise ``pip`` (only if a pyproject
+    exists — a totally empty directory leaves ``package_manager`` unset).
+    """
+    if (repo_root / "uv.lock").is_file():
+        return "uv"
+    if (repo_root / "poetry.lock").is_file():
+        return "poetry"
+    if pyproject is not None and "poetry" in pyproject.get("tool", {}):
+        return "poetry"
+    if (repo_root / "requirements.in").is_file():
+        return "pip-tools"
+    if (repo_root / "requirements.txt").is_file():
+        return "pip"
+    if pyproject is not None:
+        return "pip"
+    return None
+
+
 def _read_pyproject(repo_root: Path) -> dict[str, Any] | None:
     pyproject = repo_root / "pyproject.toml"
     if not pyproject.is_file():
@@ -211,6 +236,10 @@ def detect(repo_root: Path) -> Facts:
     """
     facts: Facts = {}
     pyproject = _read_pyproject(repo_root)
+
+    package_manager = _detect_package_manager(repo_root, pyproject)
+    if package_manager is not None:
+        facts["package_manager"] = package_manager
 
     if pyproject is not None:
         project = pyproject.get("project", {})
