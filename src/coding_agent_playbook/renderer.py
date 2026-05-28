@@ -157,8 +157,18 @@ def render_for(
         return _render_continue_rule(body, frontmatter)
     if resolved in ("claude_md_section", "agents_md_section"):
         return _render_markdown_rule_section(body, frontmatter)
+    if resolved == "prompt_continue":
+        return _render_prompt_continue(body, frontmatter, rule_registry)
+    if resolved == "prompt_claude_command":
+        return _render_prompt_claude_command(body, frontmatter, rule_registry)
+    if resolved == "prompt_opencode_command":
+        return _render_prompt_opencode_command(body, frontmatter, rule_registry)
 
-    raise NotImplementedError(f"render_for: format {resolved!r} not yet implemented")
+    # All BUILTIN_FORMATS are handled above; reaching here means a new format
+    # was added to the set but its branch was forgotten.
+    raise NotImplementedError(  # pragma: no cover
+        f"render_for: format {resolved!r} not yet implemented"
+    )
 
 
 # --- Format transforms ----------------------------------------------------
@@ -200,3 +210,96 @@ def _render_markdown_rule_section(body: str, frontmatter: dict[str, Any]) -> str
     parts.append("---")
     parts.append("")
     return "\n".join(parts)
+
+
+def _has_inline_rule_call(body: str) -> bool:
+    """True iff the (already-rendered) body has a literal ``{{ rule(`` call.
+
+    SPEC §6.2.5: when an author placed the rule inclusion inline, the renderer
+    must NOT append a ``## Reference rules`` section on top of it.
+    """
+    return "{{ rule(" in body
+
+
+def _build_includes_rules_appendix(
+    frontmatter: dict[str, Any], rule_registry: RuleRegistry | None
+) -> str:
+    """Render the ``## Reference rules`` appendix from ``includes_rules:``.
+
+    Returns an empty string when no appendix is needed (no rules listed, no
+    registry, or every fragment came back empty).
+    """
+    rules = frontmatter.get("includes_rules") or []
+    if not rules or rule_registry is None:
+        return ""
+    fragments: list[str] = []
+    for rule_id in rules:
+        fragment = rule_registry.render_for_inclusion(rule_id, {})
+        if fragment:
+            fragments.append(fragment.rstrip("\n"))
+    if not fragments:
+        return ""
+    return "\n## Reference rules\n\n" + "\n\n".join(fragments) + "\n"
+
+
+def _render_prompt_continue(
+    body: str,
+    frontmatter: dict[str, Any],
+    rule_registry: RuleRegistry | None,
+) -> str:
+    """Emit a Continue-shaped prompt file (SPEC §9.7)."""
+    continue_frontmatter: dict[str, Any] = {
+        "name": frontmatter["name"],
+        "description": frontmatter["description"],
+        "invokable": True,
+    }
+    fenced = yaml.safe_dump(continue_frontmatter, sort_keys=False, allow_unicode=True).rstrip("\n")
+    output = f"<!-- {SENTINEL} -->\n---\n{fenced}\n---\n{body}"
+    if not _has_inline_rule_call(body):
+        output += _build_includes_rules_appendix(frontmatter, rule_registry)
+    return output
+
+
+def _render_prompt_claude_command(
+    body: str,
+    frontmatter: dict[str, Any],
+    rule_registry: RuleRegistry | None,
+) -> str:
+    """Emit a Claude Code slash-command file (SPEC §9.7).
+
+    Claude Code commands are pure markdown. We prepend ``# {name}`` if the body
+    does not already start with a level-1 heading, then optionally append the
+    ``includes_rules`` appendix.
+    """
+    name = frontmatter["name"]
+    output = body if body.lstrip().startswith("# ") else f"# {name}\n\n{body}"
+    if not _has_inline_rule_call(body):
+        output += _build_includes_rules_appendix(frontmatter, rule_registry)
+    return output
+
+
+def _render_prompt_opencode_command(
+    body: str,
+    frontmatter: dict[str, Any],
+    rule_registry: RuleRegistry | None,
+) -> str:
+    """Emit an OpenCode slash-command file (SPEC §9.7).
+
+    OpenCode uses ``$ARGUMENTS`` for a single input variable and ``$1`` /
+    ``$2`` for multiple. Substitution is a literal ``str.replace`` on the
+    placeholder pattern ``{{ var }}`` AFTER Jinja rendering — prompt
+    authors writing for OpenCode know to use that exact spelling.
+    """
+    description = frontmatter["description"]
+    input_variables = frontmatter.get("input_variables") or []
+    rendered_body = body
+    if len(input_variables) == 1:
+        var = input_variables[0]
+        rendered_body = rendered_body.replace(f"{{{{ {var['name']} }}}}", "$ARGUMENTS")
+    else:
+        for index, var in enumerate(input_variables, start=1):
+            rendered_body = rendered_body.replace(f"{{{{ {var['name']} }}}}", f"${index}")
+    output = f"---\ndescription: {description}\n---\n{rendered_body}"
+    if not _has_inline_rule_call(body):
+        output += _build_includes_rules_appendix(frontmatter, rule_registry)
+    return output

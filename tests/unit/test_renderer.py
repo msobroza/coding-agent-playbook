@@ -237,3 +237,124 @@ def test_render_for_agents_md_section_identical_to_claude(tmp_path: Path) -> Non
         frontmatter=frontmatter,
     )
     assert claude_out == agents_out
+
+
+# --- Task B.4 step 3: prompt_continue / prompt_claude_command /
+#     prompt_opencode_command + includes_rules appendix --------------------
+
+
+def test_render_for_prompt_continue_with_includes_rules_appendix(tmp_path: Path) -> None:
+    frontmatter = {
+        "id": "review-code",
+        "name": "Review code",
+        "description": "Review a diff for safety.",
+        "slash": "/review",
+        "includes_rules": ["x"],
+    }
+    body = "Review the diff.\n"
+    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
+    out = render_for(
+        tmp_path / "prompts" / "review-code.md",
+        body,
+        "prompt_continue",
+        frontmatter=frontmatter,
+        rule_registry=registry,
+    )
+    assert "name: Review code" in out
+    assert "description: Review a diff for safety." in out
+    assert "invokable: true" in out
+    assert "Review the diff." in out
+    assert "## Reference rules" in out
+    assert "### X" in out
+    assert "rule body" in out
+    assert SENTINEL in out
+
+
+def test_render_for_prompt_continue_no_appendix_when_inline_rule_call(
+    tmp_path: Path,
+) -> None:
+    frontmatter = {
+        "id": "review-code",
+        "name": "Review code",
+        "description": "Review a diff for safety.",
+        "slash": "/review",
+        "includes_rules": ["x"],
+    }
+    # Body already references the rule inline — author placed it themselves.
+    body = 'Read this rule: {{ rule("x") }}\nThen review.\n'
+    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
+    out = render_for(
+        tmp_path / "prompts" / "review-code.md",
+        body,
+        "prompt_continue",
+        frontmatter=frontmatter,
+        rule_registry=registry,
+    )
+    assert "## Reference rules" not in out
+    assert "Then review." in out
+
+
+def test_render_for_prompt_opencode_command_single_arg_substitution(
+    tmp_path: Path,
+) -> None:
+    frontmatter = {
+        "id": "review",
+        "name": "Review",
+        "description": "Review.",
+        "slash": "/review",
+        "input_variables": [{"name": "target", "description": "what to review"}],
+    }
+    body = "Please review {{ target }} carefully.\n"
+    out = render_for(
+        tmp_path / "prompts" / "review.md",
+        body,
+        "prompt_opencode_command",
+        frontmatter=frontmatter,
+    )
+    assert "$ARGUMENTS" in out
+    assert "{{ target }}" not in out
+    assert "description: Review." in out
+
+
+def test_render_for_prompt_opencode_command_multi_arg_substitution(
+    tmp_path: Path,
+) -> None:
+    frontmatter = {
+        "id": "compare",
+        "name": "Compare",
+        "description": "Compare two things.",
+        "slash": "/compare",
+        "input_variables": [
+            {"name": "a", "description": "first"},
+            {"name": "b", "description": "second"},
+        ],
+    }
+    body = "Compare {{ a }} with {{ b }}.\n"
+    out = render_for(
+        tmp_path / "prompts" / "compare.md",
+        body,
+        "prompt_opencode_command",
+        frontmatter=frontmatter,
+    )
+    assert "$1" in out
+    assert "$2" in out
+    assert "{{ a }}" not in out
+    assert "{{ b }}" not in out
+
+
+def test_render_for_prompt_claude_command_emits_title_and_body(tmp_path: Path) -> None:
+    frontmatter = {
+        "id": "review",
+        "name": "Review",
+        "description": "Review a diff.",
+        "slash": "/review",
+    }
+    body = "Step 1: read the diff.\n"
+    out = render_for(
+        tmp_path / "prompts" / "review.md",
+        body,
+        "prompt_claude_command",
+        frontmatter=frontmatter,
+    )
+    assert "# Review" in out
+    assert "Step 1: read the diff." in out
