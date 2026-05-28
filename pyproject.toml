@@ -50,10 +50,10 @@ coding-agent-playbook = "coding_agent_playbook.cli:main"
 # Populated by overlay packages (e.g. playbook-rules-bnp). Engine ships none.
 
 [project.entry-points."coding_agent_playbook.artifact_sources"]
-# Populated by PR 5 (filesystem) and future third-party sources.
+filesystem = "coding_agent_playbook.sources.filesystem:FileSystemArtifactSource"
 
 [project.entry-points."coding_agent_playbook.state_sources"]
-# Populated by PR 5 (filesystem) and future third-party sources.
+filesystem = "coding_agent_playbook.sources.filesystem:FileSystemStateSource"
 
 [project.entry-points."coding_agent_playbook.runners"]
 # Populated in v2 — see SPEC §15.4.
