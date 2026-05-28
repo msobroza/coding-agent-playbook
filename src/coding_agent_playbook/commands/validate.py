@@ -8,11 +8,8 @@ Validates:
 - Prompts that call ``{{ rule("X") }}`` declare ``X`` in ``includes_rules:``.
 - Rule templates never call ``{{ rule(...) }}`` (rules cannot include rules,
   SPEC invariants).
-- Eval-task back-references resolve both directions:
-    * each prompt's ``eval_tasks:`` IDs match an on-disk
-      ``eval_tasks/<id>/task.toml`` (PR 11 will refactor to use the canonical
-      :class:`EvalTask`).
-    * each ``task.toml``'s ``prompt_id`` matches a real prompt.
+- Eval-task back-references resolve both directions, via the canonical
+  :func:`coding_agent_playbook.evals.validator.validate_tasks` helper.
 - Each Jinja-templated artifact compiles cleanly.
 
 All errors aggregate before a single non-zero exit; success prints one line.
@@ -21,7 +18,6 @@ All errors aggregate before a single non-zero exit; success prints one line.
 from __future__ import annotations
 
 import re
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -29,12 +25,19 @@ from typing import TYPE_CHECKING
 from jinja2 import Environment, StrictUndefined, TemplateSyntaxError
 
 from coding_agent_playbook.detector import evaluate_predicate
+from coding_agent_playbook.evals.loader import (
+    discover_eval_task_dirs,
+    load_eval_task_from_dir,
+)
+from coding_agent_playbook.evals.validator import validate_tasks
 from coding_agent_playbook.orchestrator import SyncContext
+from coding_agent_playbook.sources.filesystem import _resource_subdir
 
 if TYPE_CHECKING:
     import argparse
 
     from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.types import Prompt, Rule
 
 
@@ -149,72 +152,68 @@ def _check_jinja_compiles(rules: list[Rule], prompts: list[Prompt]) -> list[Vali
     return errors
 
 
-def _discover_eval_tasks(repo_root: Path) -> dict[str, Path]:
-    """Walk ``<repo>/playbook/eval_tasks/<id>/task.toml`` (PR 11 will widen
-    this to also walk engine + overlay packages). Returns a mapping of
-    task-id → toml-path.
-    """
-    tasks: dict[str, Path] = {}
-    base = repo_root / "playbook" / "eval_tasks"
-    if base.is_dir():
-        for entry in sorted(base.iterdir()):
-            if not entry.is_dir():
-                continue
-            task_toml = entry / "task.toml"
-            if task_toml.is_file():
-                tasks[entry.name] = task_toml
-    return tasks
+def _load_eval_tasks_for_validation(
+    ctx: SyncContext,
+) -> tuple[list[EvalTask], list[ValidationError]]:
+    """Walk every eval-task directory and load each ``task.toml`` independently,
+    aggregating per-task loader errors instead of fail-fasting.
 
-
-def _check_eval_tasks(prompts: list[Prompt], tasks: dict[str, Path]) -> list[ValidationError]:
-    """Two-way check: every prompt-declared task exists on disk, and every
-    on-disk task references an existing prompt.
+    Mirrors :meth:`FileSystemArtifactSource.list_eval_tasks` but catches the
+    per-task :exc:`FileNotFoundError` / :exc:`ValueError` raised by the loader
+    and converts them to :class:`ValidationError` entries. Malformed TOML or
+    schema violations don't abort the rest of validation — the caller still
+    runs ``validate_tasks`` against the tasks that did load.
     """
+    tasks: list[EvalTask] = []
     errors: list[ValidationError] = []
-    prompt_ids = {p.frontmatter.id for p in prompts}
-    prompt_task_decls: dict[str, list[str]] = {}
-    for prompt in prompts:
-        declared = list(prompt.frontmatter.eval_tasks or [])
-        prompt_task_decls[prompt.frontmatter.id] = declared
-        for task_id in declared:
-            if task_id not in tasks:
+    repo_root = ctx.repo_root
+    artifact_source = ctx.artifact_source
+    # Use the same package list the source uses.
+    engine_package = getattr(artifact_source, "_engine_package", "coding_agent_playbook")
+    overlay_packages = getattr(artifact_source, "_overlay_packages", [])
+    for package in (engine_package, *overlay_packages):
+        root = _resource_subdir(package, "eval_tasks")
+        if root is None:
+            continue
+        for task_dir in discover_eval_task_dirs(root):
+            try:
+                tasks.append(load_eval_task_from_dir(task_dir, source_package=package))
+            except (FileNotFoundError, ValueError) as exc:
                 errors.append(
                     ValidationError(
-                        path=str(prompt.source_path or prompt.frontmatter.id),
-                        message=(
-                            f"declares eval_task {task_id!r} but eval_tasks/{task_id}/ not found"
-                        ),
+                        path=str(task_dir / "task.toml"),
+                        message=str(exc),
                     )
                 )
-    for _task_id, toml_path in tasks.items():
+    repo_local = repo_root / "playbook" / "eval_tasks"
+    for task_dir in discover_eval_task_dirs(repo_local):
         try:
-            with toml_path.open("rb") as f:
-                data = tomllib.load(f)
-        except tomllib.TOMLDecodeError as exc:
+            tasks.append(
+                load_eval_task_from_dir(task_dir, source_package="<repo-local>")
+            )
+        except (FileNotFoundError, ValueError) as exc:
             errors.append(
                 ValidationError(
-                    path=str(toml_path),
-                    message=f"task.toml is malformed: {exc}",
+                    path=str(task_dir / "task.toml"),
+                    message=str(exc),
                 )
             )
-            continue
-        prompt_id = data.get("prompt_id")
-        if not isinstance(prompt_id, str):
-            errors.append(
-                ValidationError(
-                    path=str(toml_path),
-                    message="task.toml missing required string field 'prompt_id'",
-                )
-            )
-            continue
-        if prompt_id not in prompt_ids:
-            errors.append(
-                ValidationError(
-                    path=str(toml_path),
-                    message=f"prompt_id {prompt_id!r} does not exist",
-                )
-            )
-    return errors
+    return tasks, errors
+
+
+def _check_eval_tasks(ctx: SyncContext) -> list[ValidationError]:
+    """Run the canonical eval-task validator (SPEC §15.2 + §6.5.5).
+
+    Combines per-task loader failures (malformed TOML / missing required
+    fields) with the cross-reference rules from
+    :func:`coding_agent_playbook.evals.validator.validate_tasks`.
+    """
+    tasks, load_errors = _load_eval_tasks_for_validation(ctx)
+    cross_errors = validate_tasks(tasks, ctx.prompts_resolved)
+    return [
+        *load_errors,
+        *[ValidationError(path=str(e.path), message=e.message) for e in cross_errors],
+    ]
 
 
 def run(args: argparse.Namespace) -> int:
@@ -225,8 +224,7 @@ def run(args: argparse.Namespace) -> int:
     errors.extend(_check_prompt_rule_calls(ctx.prompts_resolved))
     errors.extend(_check_rule_bodies_do_not_include_rules(ctx.rules_resolved))
     errors.extend(_check_jinja_compiles(ctx.rules_resolved, ctx.prompts_resolved))
-    tasks = _discover_eval_tasks(repo_root)
-    errors.extend(_check_eval_tasks(ctx.prompts_resolved, tasks))
+    errors.extend(_check_eval_tasks(ctx))
 
     if errors:
         for err in errors:

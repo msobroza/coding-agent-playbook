@@ -8,11 +8,10 @@ order and exit non-zero if the list is non-empty.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.types import Prompt
 
@@ -31,15 +30,17 @@ def validate_tasks(
 ) -> list[EvalValidationError]:
     """Run the SPEC §15.2 checks against the loaded task + prompt lists.
 
-    The five rules:
+    The rules:
 
     1. Each ``task.toml`` is well-formed — enforced upstream by the loader;
        a task object reaching the validator has already passed parsing.
     2. Each task's ``setup.files`` must exist under ``<task_dir>/setup/``.
     3. Each task's ``prompt_id`` resolves to a known prompt.
     4. Each task is listed in its referenced prompt's ``eval_tasks:``
-       frontmatter (bi-directional symmetry).
-    5. Weights, if present, sum to ``1.0 ± 0.001`` — enforced upstream by
+       frontmatter (task → prompt direction of the symmetry check).
+    5. Each prompt's ``eval_tasks:`` references an on-disk task
+       (prompt → task direction, per SPEC §6.5.5 rule 1).
+    6. Weights, if present, sum to ``1.0 ± 0.001`` — enforced upstream by
        :meth:`EvalTask.from_dict` at load time; the validator does not
        re-check (locked by ``test_validate_tasks_does_not_recheck_weights``).
 
@@ -47,6 +48,7 @@ def validate_tasks(
     """
     errors: list[EvalValidationError] = []
     prompts_by_id = {p.frontmatter.id: p for p in prompts}
+    tasks_by_id = {t.id: t for t in tasks}
 
     for task in tasks:
         # Rule 2: setup.files must exist relative to <task_dir>/setup/.
@@ -89,5 +91,24 @@ def validate_tasks(
                     ),
                 )
             )
+
+    # Rule 5 (prompt → task direction): every eval_tasks: reference must
+    # resolve to an on-disk task. Catches the case where a task was renamed
+    # or deleted but its prompt still references it.
+    for prompt in prompts:
+        for declared_id in prompt.frontmatter.eval_tasks or []:
+            if declared_id not in tasks_by_id:
+                # Anchor the error at the prompt's source so users jump to
+                # the prompt frontmatter to fix the dangling reference.
+                anchor_path = prompt.source_path or Path(prompt.frontmatter.id)
+                errors.append(
+                    EvalValidationError(
+                        path=anchor_path,
+                        message=(
+                            f"declares eval_task {declared_id!r} but "
+                            f"eval_tasks/{declared_id}/ not found"
+                        ),
+                    )
+                )
 
     return errors

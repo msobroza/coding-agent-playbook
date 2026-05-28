@@ -169,6 +169,25 @@ def test_validate_tasks_does_not_recheck_weights(tmp_path: Path) -> None:
     assert all("weight" not in e.message.lower() for e in errors)
 
 
+# Rule 5 (positive): prompt's eval_tasks references all resolve.
+def test_validate_tasks_passes_when_prompt_to_task_refs_resolve(tmp_path: Path) -> None:
+    task_dir = tmp_path / "task-8"
+    task_dir.mkdir()
+    prompt = _make_prompt("demo", eval_tasks=["task-8"])
+    task = _make_task(task_id="task-8", prompt_id="demo", task_dir=task_dir)
+    errors = validate_tasks([task], [prompt])
+    assert errors == []
+
+
+# Rule 5 (negative): prompt declares an eval_task that doesn't exist on-disk.
+def test_validate_tasks_flags_prompt_referencing_missing_task(tmp_path: Path) -> None:
+    prompt = _make_prompt("demo", eval_tasks=["missing-task"])
+    errors = validate_tasks([], [prompt])
+    assert any(
+        "missing-task" in e.message and "not found" in e.message for e in errors
+    )
+
+
 def test_validate_tasks_aggregates_multiple_errors(tmp_path: Path) -> None:
     """The validator collects every violation rather than bailing on the first."""
     task_dir = tmp_path / "bad-task"
