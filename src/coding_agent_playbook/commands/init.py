@@ -279,12 +279,9 @@ def run(args: argparse.Namespace) -> int:
     print(f"Updated {pre_commit_path.name}")
 
     # Final step: invoke ``cap sync`` so the consumer's first call lands real
-    # output. Use a stub argparse.Namespace so the sync command's shape is
-    # unchanged.
-    import argparse as _argparse
-
-    sync_ns = _argparse.Namespace(repo_root=str(repo_root), check=False)
-    return _sync.run(sync_ns)
+    # output. Use the typed programmatic entry point (``sync.execute``) so
+    # we don't have to fake an argparse.Namespace.
+    return _sync.execute(repo_root=repo_root, check=False)
 
 
 # Re-export so tests can probe the parsed TOML without needing the helper

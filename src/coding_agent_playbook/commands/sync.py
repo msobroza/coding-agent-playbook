@@ -189,11 +189,16 @@ def _run_sync(ctx: SyncContext) -> tuple[list[Path], list[Path]]:
     return written, removed
 
 
-def run(args: argparse.Namespace) -> int:
-    """Dispatch to write mode or ``--check`` mode."""
-    repo_root = _resolve_repo_root(args)
+def execute(repo_root: Path, *, check: bool = False) -> int:
+    """Execute the sync pipeline.
+
+    Programmatic entry point used by ``cap init`` (to fire a sync after
+    writing the config) and by tests that want to skip the argparse
+    plumbing. The CLI's :func:`run` wrapper simply parses flags and
+    forwards to here.
+    """
     ctx = SyncContext.from_repo(repo_root)
-    if getattr(args, "check", False):
+    if check:
         return _run_check(ctx)
     written, removed = _run_sync(ctx)
 
@@ -202,6 +207,11 @@ def run(args: argparse.Namespace) -> int:
 
     print(f"Summary: {len(written)} files written, {len(removed)} removed")
     return 0
+
+
+def run(args: argparse.Namespace) -> int:
+    """Dispatch to write mode or ``--check`` mode."""
+    return execute(repo_root=_resolve_repo_root(args), check=bool(getattr(args, "check", False)))
 
 
 def _run_check(ctx: SyncContext) -> int:
