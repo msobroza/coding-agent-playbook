@@ -1,0 +1,32 @@
+id = "generate-tests-async-code"
+prompt_id = "generate-tests"
+description = "Regression target: writing tests for an async function uses @pytest.mark.asyncio rather than asyncio.run inside the test body."
+version = 1
+
+[setup]
+files = ["src/fetcher.py"]
+project_kind = "python-application"
+python_version = "3.12"
+frameworks = ["pytest", "pytest-asyncio"]
+
+[invocation]
+prompt_args = "for the fetch_payload coroutine in src/fetcher.py"
+input_variables = { target = "src/fetcher.py::fetch_payload" }
+
+[expected]
+files_created = ["tests/test_fetcher.py"]
+files_must_contain = [
+  { path = "tests/test_fetcher.py", pattern = "@pytest.mark.asyncio" },
+  { path = "tests/test_fetcher.py", pattern = "async def test_" },
+]
+files_unchanged = ["src/fetcher.py"]
+files_forbidden = ["tests/conftest.py"]
+
+[rubric]
+criteria = [
+  "Tests are marked with @pytest.mark.asyncio rather than driving the coroutine via asyncio.run",
+  "Tests use `async def` for the test body and `await` the target coroutine",
+  "Network I/O is replaced with a mock or stub — no real socket is opened from the test",
+  "Both the happy-path response and at least one error path are covered",
+]
+weights = [0.4, 0.2, 0.2, 0.2]
