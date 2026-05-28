@@ -210,7 +210,7 @@ class Skill:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "frontmatter": self.frontmatter,
+            "frontmatter": dict(self.frontmatter),
             "body": self.body,
             "scripts_dir": None if self.scripts_dir is None else str(self.scripts_dir),
             "references_dir": None if self.references_dir is None else str(self.references_dir),
@@ -222,7 +222,7 @@ class Skill:
         scripts_dir = data["scripts_dir"]
         references_dir = data["references_dir"]
         return cls(
-            data["frontmatter"],
+            dict(data["frontmatter"]),
             data["body"],
             None if scripts_dir is None else Path(scripts_dir),
             None if references_dir is None else Path(references_dir),

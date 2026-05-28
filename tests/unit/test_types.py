@@ -285,3 +285,34 @@ def test_rule_markdown_roundtrip_with_blank_optional_fields(tmp_path):
     assert rule.frontmatter.tags == []
     path.write_text(rule.to_markdown(), encoding="utf-8")
     assert Rule.from_markdown(path, "pkg") == rule
+
+
+def test_skill_to_dict_does_not_alias_frontmatter():
+    """to_dict must return a snapshot; mutating it must not mutate the Skill
+    (bug_002 — matches the Rule/Prompt detached-snapshot contract)."""
+    skill = Skill(
+        frontmatter={"name": "demo"},
+        body="b",
+        scripts_dir=None,
+        references_dir=None,
+        source_package="pkg",
+    )
+    data = skill.to_dict()
+    assert data["frontmatter"] is not skill.frontmatter
+    data["frontmatter"]["injected"] = True
+    assert "injected" not in skill.frontmatter
+
+
+def test_skill_from_dict_does_not_alias_frontmatter():
+    """from_dict must detach from its input; mutating the dict must not
+    mutate the resulting Skill (bug_002)."""
+    payload = {
+        "frontmatter": {"name": "demo"},
+        "body": "b",
+        "scripts_dir": None,
+        "references_dir": None,
+        "source_package": "pkg",
+    }
+    skill = Skill.from_dict(payload)
+    payload["frontmatter"]["injected"] = True
+    assert "injected" not in skill.frontmatter
