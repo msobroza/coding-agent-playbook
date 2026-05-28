@@ -1,0 +1,4 @@
+# .pre-commit-hooks.yaml — consumer-facing hooks. Populated by PR 12 with
+# `cap-sync-check` and `cap-validate` per SPEC §13.1. Present in PR 1 as an
+# empty list so consumers cloning early can attach the repo without error.
+[]
