@@ -359,7 +359,9 @@ def _check_python_version(constraint: str, facts: Facts) -> bool:
         raise ValueError(f"invalid python_version constraint or value: {exc}") from exc
 
 
-def evaluate_predicate(predicate: dict[str, Any], facts: Facts) -> bool:
+def evaluate_predicate(
+    predicate: dict[str, Any], facts: Facts, *, repo_root: Path | None = None
+) -> bool:
     """Evaluate an ``applies_if`` predicate against facts (SPEC §6.4).
 
     Supported keys:
@@ -371,6 +373,9 @@ def evaluate_predicate(predicate: dict[str, Any], facts: Facts) -> bool:
 
     Multiple keys are AND-ed together. Unknown keys raise ``ValueError`` so
     typos fail loudly at validate time.
+
+    ``repo_root`` is required when the predicate uses ``has_file`` (paths are
+    resolved relative to it). Other operators read only from ``facts``.
     """
     for key, value in predicate.items():
         if key == "python_version":
@@ -389,6 +394,12 @@ def evaluate_predicate(predicate: dict[str, Any], facts: Facts) -> bool:
             wanted = _coerce_string_list(value, key)
             present = set(facts.get("frameworks", {}).keys())
             if not any(name in present for name in wanted):
+                return False
+        elif key == "has_file":
+            paths = _coerce_string_list(value, key)
+            if repo_root is None:
+                raise ValueError("predicate 'has_file' requires repo_root keyword argument")
+            if not all((repo_root / rel).exists() for rel in paths):
                 return False
         else:
             raise ValueError(f"unknown predicate key: {key!r}")

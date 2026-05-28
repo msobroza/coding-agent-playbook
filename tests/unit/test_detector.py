@@ -461,5 +461,45 @@ def test_evaluate_predicate_any_framework_empty_list_false() -> None:
     assert evaluate_predicate({"any_framework": []}, facts) is False
 
 
+def test_evaluate_predicate_has_file_true(tmp_path: Path) -> None:
+    (tmp_path / "Dockerfile").write_text("FROM python:3.12-slim\n")
+    assert (
+        evaluate_predicate({"has_file": ["Dockerfile"]}, {}, repo_root=tmp_path) is True
+    )
+
+
+def test_evaluate_predicate_has_file_missing_false(tmp_path: Path) -> None:
+    assert (
+        evaluate_predicate({"has_file": ["Dockerfile"]}, {}, repo_root=tmp_path) is False
+    )
+
+
+def test_evaluate_predicate_has_file_all_must_exist(tmp_path: Path) -> None:
+    (tmp_path / "Dockerfile").write_text("FROM python:3.12-slim\n")
+    # Only one of two files exists → False.
+    assert (
+        evaluate_predicate(
+            {"has_file": ["Dockerfile", "Makefile"]}, {}, repo_root=tmp_path
+        )
+        is False
+    )
+
+
+def test_evaluate_predicate_has_file_supports_nested_paths(tmp_path: Path) -> None:
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    (tmp_path / ".github" / "workflows" / "ci.yml").write_text("name: CI\n")
+    assert (
+        evaluate_predicate(
+            {"has_file": [".github/workflows/ci.yml"]}, {}, repo_root=tmp_path
+        )
+        is True
+    )
+
+
+def test_evaluate_predicate_has_file_without_repo_root_raises() -> None:
+    with pytest.raises(ValueError, match="repo_root"):
+        evaluate_predicate({"has_file": ["Dockerfile"]}, {})
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])
