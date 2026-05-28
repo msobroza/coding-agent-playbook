@@ -168,7 +168,8 @@ def render_for(
     # All BUILTIN_FORMATS are handled above; reaching here means a new format
     # was added to the set but its branch was forgotten.
     raise NotImplementedError(  # pragma: no cover
-        f"render_for: format {resolved!r} not yet implemented"
+        f"render_for: format {resolved!r} in BUILTIN_FORMATS but has no dispatch "
+        f"branch. Add a `_render_{resolved}` helper and an elif branch above."
     )
 
 
