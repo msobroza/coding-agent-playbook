@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
+from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.types import (
     Prompt,
     PromptFrontmatter,
@@ -216,3 +217,119 @@ def test_write_prompt_overwrites_existing_file(tmp_path: Path) -> None:
     content = written[0].read_text(encoding="utf-8")
     assert "second body" in content
     assert "first body" not in content
+
+
+def _stale_sentinel_body(slug: str) -> str:
+    """A minimal markdown file that opens with the sentinel marker."""
+    return f"<!-- {SENTINEL} -->\n---\ndescription: stale {slug}\n---\nstale body for {slug}\n"
+
+
+def test_cleanup_stale_removes_sentinel_tagged_files_not_in_written_paths(
+    tmp_path: Path,
+) -> None:
+    """A stale OpenCode command (sentinel-tagged, not re-emitted) is deleted."""
+    commands = tmp_path / ".opencode" / "command"
+    commands.mkdir(parents=True)
+    current = commands / "current.md"
+    stale = commands / "stale.md"
+    current.write_text(_stale_sentinel_body("current"), encoding="utf-8")
+    stale.write_text(_stale_sentinel_body("stale"), encoding="utf-8")
+
+    adapter = OpenCodeAdapter()
+    deleted = adapter.cleanup_stale(written_paths={current.resolve()}, repo_root=tmp_path)
+
+    assert deleted == [stale]
+    assert current.is_file()
+    assert not stale.exists()
+
+
+def test_cleanup_stale_preserves_user_authored_files_without_sentinel(
+    tmp_path: Path,
+) -> None:
+    """A file without the sentinel marker is user-authored and never deleted."""
+    commands = tmp_path / ".opencode" / "command"
+    commands.mkdir(parents=True)
+    user_owned = commands / "user-command.md"
+    user_owned.write_text(
+        "---\ndescription: I wrote this myself\n---\nHand-rolled body.\n",
+        encoding="utf-8",
+    )
+
+    adapter = OpenCodeAdapter()
+    deleted = adapter.cleanup_stale(written_paths=set(), repo_root=tmp_path)
+
+    assert deleted == []
+    assert user_owned.is_file()
+
+
+def test_cleanup_stale_returns_empty_when_directory_is_missing(
+    tmp_path: Path,
+) -> None:
+    """First sync (no ``.opencode/command/`` yet) is a no-op, not an error."""
+    adapter = OpenCodeAdapter()
+    deleted = adapter.cleanup_stale(written_paths=set(), repo_root=tmp_path)
+
+    assert deleted == []
+
+
+def test_cleanup_stale_ignores_subdirectories_under_command_root(
+    tmp_path: Path,
+) -> None:
+    """``rglob('*')`` yields directories too; the scanner must skip them.
+
+    Without the ``is_file()`` guard the loop would try to read a directory
+    as text and crash. A nested subdir is unusual for OpenCode but possible
+    if the user stashes auxiliary files alongside generated commands.
+    """
+    commands = tmp_path / ".opencode" / "command"
+    nested = commands / "subdir"
+    nested.mkdir(parents=True)
+    stale = commands / "stale.md"
+    stale.write_text(_stale_sentinel_body("stale"), encoding="utf-8")
+
+    adapter = OpenCodeAdapter()
+    deleted = adapter.cleanup_stale(written_paths=set(), repo_root=tmp_path)
+
+    assert deleted == [stale]
+    assert nested.is_dir()
+
+
+def test_cleanup_stale_skips_files_that_cannot_be_read_as_text(
+    tmp_path: Path,
+) -> None:
+    """Binary or otherwise-unreadable files are left alone, not crashed on."""
+    commands = tmp_path / ".opencode" / "command"
+    commands.mkdir(parents=True)
+    # Binary content with invalid UTF-8 — read_text(encoding='utf-8') raises
+    # UnicodeDecodeError, which the cleanup loop must catch.
+    binary = commands / "blob.md"
+    binary.write_bytes(b"\xff\xfe\x00\x00not-text\n")
+    stale = commands / "stale.md"
+    stale.write_text(_stale_sentinel_body("stale"), encoding="utf-8")
+
+    adapter = OpenCodeAdapter()
+    deleted = adapter.cleanup_stale(written_paths=set(), repo_root=tmp_path)
+
+    assert deleted == [stale]
+    assert binary.is_file()  # binary preserved despite being unreadable
+
+
+def test_cleanup_stale_does_not_touch_unrelated_directories(tmp_path: Path) -> None:
+    """The OpenCode adapter must only scan ``.opencode/command/``.
+
+    Sibling adapters own ``AGENTS.md`` and ``.claude/`` — if the OpenCode
+    adapter scanned those too, it would delete files it does not own.
+    """
+    # A sentinel-tagged file outside the adapter's territory.
+    sibling = tmp_path / ".claude" / "commands" / "leave-me-alone.md"
+    sibling.parent.mkdir(parents=True)
+    sibling.write_text(_stale_sentinel_body("leave-me-alone"), encoding="utf-8")
+    agents_md = tmp_path / "AGENTS.md"
+    agents_md.write_text(_stale_sentinel_body("agents"), encoding="utf-8")
+
+    adapter = OpenCodeAdapter()
+    deleted = adapter.cleanup_stale(written_paths=set(), repo_root=tmp_path)
+
+    assert deleted == []
+    assert sibling.is_file()
+    assert agents_md.is_file()
