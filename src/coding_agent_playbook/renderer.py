@@ -175,16 +175,24 @@ def render_for(
 
 
 def _render_continue_rule(body: str, frontmatter: dict[str, Any]) -> str:
-    """Emit a Continue-shaped rule file (SPEC §9.7)."""
+    """Emit a Continue-shaped rule file (SPEC §9.7).
+
+    Continue's semantics: ``globs`` is meaningful only when
+    ``alwaysApply: false``. When ``scope == "always"`` we drop any globs
+    from the projected frontmatter so the output matches Continue's contract.
+    """
     scope = frontmatter.get("scope", "scoped")
     continue_frontmatter: dict[str, Any] = {
         "name": frontmatter["name"],
         "description": frontmatter["description"],
-        "alwaysApply": scope == "always",
     }
-    globs = frontmatter.get("globs") or []
-    if globs:
-        continue_frontmatter["globs"] = list(globs)
+    if scope == "always":
+        continue_frontmatter["alwaysApply"] = True
+    else:
+        continue_frontmatter["alwaysApply"] = False
+        globs = frontmatter.get("globs") or []
+        if globs:
+            continue_frontmatter["globs"] = list(globs)
     fenced = yaml.safe_dump(continue_frontmatter, sort_keys=False, allow_unicode=True).rstrip("\n")
     return f"<!-- {SENTINEL} -->\n---\n{fenced}\n---\n{body}"
 

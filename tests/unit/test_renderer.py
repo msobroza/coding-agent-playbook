@@ -98,7 +98,7 @@ def test_render_for_continue_rule(tmp_path: Path) -> None:
         "id": "py-typing",
         "name": "Python typing",
         "description": "Always use type hints.",
-        "scope": "always",
+        "scope": "scoped",
         "globs": ["**/*.py"],
         "version": 1,
         "priority": 50,
@@ -113,7 +113,7 @@ def test_render_for_continue_rule(tmp_path: Path) -> None:
         frontmatter=frontmatter,
     )
     assert SENTINEL in out
-    assert "alwaysApply: true" in out
+    assert "alwaysApply: false" in out
     assert "name: Python typing" in out
     assert "description: Always use type hints." in out
     assert "globs:" in out
@@ -125,6 +125,25 @@ def test_render_for_continue_rule(tmp_path: Path) -> None:
     assert "tags:" not in out
     assert "applies_if:" not in out
     assert out.endswith(body)
+
+
+def test_render_for_continue_rule_drops_globs_when_always_apply(tmp_path: Path) -> None:
+    """When scope=always, alwaysApply=true, globs is not emitted
+    (Continue semantics — globs is meaningful only with alwaysApply=false)."""
+    out = render_for(
+        tmp_path / "rule.md.j2",
+        "body",
+        "continue_rule",
+        frontmatter={
+            "id": "x",
+            "name": "X",
+            "description": "x",
+            "scope": "always",
+            "globs": ["**/*.py"],
+        },
+    )
+    assert "alwaysApply: true" in out
+    assert "globs:" not in out
 
 
 def test_render_for_continue_rule_scoped(tmp_path: Path) -> None:
