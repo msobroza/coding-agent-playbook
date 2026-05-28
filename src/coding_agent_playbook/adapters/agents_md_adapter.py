@@ -38,7 +38,7 @@ class AgentsMdAdapter(Adapter):
         # syncs regardless of the orchestrator's iteration order.
         self._buffered_rules: list[tuple[int, str, str]] = []
 
-    def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:  # noqa: ARG002
+    def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
         """Render a rule to the shared markdown-section format and buffer it.
 
         Returns ``[]``: nothing is written until ``finalize`` composes the
@@ -50,12 +50,10 @@ class AgentsMdAdapter(Adapter):
             "agents_md_section",
             frontmatter=rule.frontmatter.__dict__,
         )
-        self._buffered_rules.append(
-            (rule.frontmatter.priority, rule.frontmatter.id, rendered)
-        )
+        self._buffered_rules.append((rule.frontmatter.priority, rule.frontmatter.id, rendered))
         return []
 
-    def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:  # noqa: ARG002
+    def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
         """No-op: AGENTS.md is rules-only.
 
         Prompts are emitted by harness-specific adapters (Continue, Claude
@@ -64,7 +62,7 @@ class AgentsMdAdapter(Adapter):
         """
         return []
 
-    def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:  # noqa: ARG002
+    def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
         """No-op: AGENTS.md is rules-only.
 
         Native skill emission belongs to the Claude Code adapter; OpenCode

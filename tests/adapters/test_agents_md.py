@@ -13,8 +13,7 @@ The AGENTS.md adapter is unique among the four built-ins:
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.renderer import SENTINEL
@@ -25,6 +24,9 @@ from coding_agent_playbook.types import (
     RuleFrontmatter,
     Skill,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _make_rule(
@@ -238,15 +240,11 @@ def test_agents_md_finalize_overwrites_existing_file(tmp_path: Path) -> None:
 def test_agents_md_finalize_includes_all_rule_bodies(tmp_path: Path) -> None:
     adapter = AgentsMdAdapter()
     adapter.write_rule(
-        _make_rule(
-            rule_id="a", priority=10, name="A rule", body="First body content.\n"
-        ),
+        _make_rule(rule_id="a", priority=10, name="A rule", body="First body content.\n"),
         tmp_path,
     )
     adapter.write_rule(
-        _make_rule(
-            rule_id="b", priority=20, name="B rule", body="Second body content.\n"
-        ),
+        _make_rule(rule_id="b", priority=20, name="B rule", body="Second body content.\n"),
         tmp_path,
     )
     adapter.finalize(tmp_path)
