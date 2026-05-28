@@ -289,6 +289,15 @@ def _render_prompt_opencode_command(
     ``$2`` for multiple. Substitution is a literal ``str.replace`` on the
     placeholder pattern ``{{ var }}`` AFTER Jinja rendering — prompt
     authors writing for OpenCode know to use that exact spelling.
+
+    Contract — Jinja-context exclusion for ``input_variables`` names:
+        Substitution is a literal ``str.replace`` applied **after** Jinja
+        rendering. Callers must **not** include ``input_variables[*].name``
+        keys in the Jinja context passed to :func:`render_artifact_body`,
+        or those placeholders will be expanded prematurely by Jinja and
+        this transform will be a silent no-op. The orchestrator (PR 10)
+        ensures input-variable names are reserved for the format-time
+        substitution.
     """
     description = frontmatter["description"]
     input_variables = frontmatter.get("input_variables") or []
