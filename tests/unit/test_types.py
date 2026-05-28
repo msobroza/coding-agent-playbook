@@ -319,16 +319,65 @@ def test_prompt_markdown_roundtrip_with_blank_optional_fields(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_skill_to_prompt_deferred_to_pr6():
+def test_skill_to_prompt_returns_prompt_with_canonical_fields():
+    """Skill.to_prompt() returns a Prompt that carries the skill's body and
+    canonical fields. Scripts/references are NOT carried over — adapters with
+    native skill support write them separately (e.g. ClaudeCodeAdapter writes
+    the full skill directory). For all other adapters the degrade is lossy by
+    design (SPEC §6.3)."""
     skill = Skill(
-        frontmatter={"name": "demo"},
+        frontmatter={
+            "id": "demo-skill",
+            "name": "Demo skill",
+            "description": "A demo",
+            "slash": "demo-skill",
+        },
+        body="# Demo\n",
+        scripts_dir=Path("/skills/demo/scripts"),  # dropped on purpose
+        references_dir=Path("/skills/demo/references"),  # dropped on purpose
+        source_package="pkg",
+    )
+    prompt = skill.to_prompt()
+    assert prompt.frontmatter.id == "demo-skill"
+    assert prompt.frontmatter.name == "Demo skill"
+    assert prompt.frontmatter.description == "A demo"
+    assert prompt.frontmatter.slash == "demo-skill"
+    assert prompt.body == "# Demo\n"
+    assert prompt.template_body == "# Demo\n"
+    assert prompt.is_templated is False
+    assert prompt.source_path is None
+    assert prompt.source_package == "pkg"
+
+
+def test_skill_to_prompt_defaults_when_canonical_fields_missing():
+    """Skill frontmatter lacks the strict canonical schema — falls back to
+    safe defaults so adapters that degrade still produce a writable Prompt."""
+    skill = Skill(
+        frontmatter={"name": "bare"},
         body="b",
         scripts_dir=None,
         references_dir=None,
         source_package="pkg",
     )
-    with pytest.raises(NotImplementedError):
-        skill.to_prompt()
+    prompt = skill.to_prompt()
+    assert prompt.frontmatter.id == "skill"
+    assert prompt.frontmatter.name == "bare"
+    assert prompt.frontmatter.description == ""
+    assert prompt.frontmatter.slash == "skill"
+
+
+def test_skill_to_prompt_slash_falls_back_to_id():
+    """When slash is unset but id is present, slash falls back to id so the
+    resulting Prompt has a stable filename."""
+    skill = Skill(
+        frontmatter={"id": "demo", "name": "Demo"},
+        body="b",
+        scripts_dir=None,
+        references_dir=None,
+        source_package="pkg",
+    )
+    prompt = skill.to_prompt()
+    assert prompt.frontmatter.slash == "demo"
 
 
 def test_skill_dict_roundtrip():
