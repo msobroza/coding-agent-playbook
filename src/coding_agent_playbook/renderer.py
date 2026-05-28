@@ -8,10 +8,12 @@ rendered through Jinja2 with ``StrictUndefined`` so typos fail loudly.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # Aliases the CLI accepts as a short-form for --format. Resolved to the full
 # internal name before render_for() dispatches.
@@ -68,7 +70,15 @@ def build_environment(
     so calling it raises ``UndefinedError`` — that enforces the "rules cannot
     include other rules" invariant at the renderer level.
     """
-    raise NotImplementedError("build_environment lands with Task B.2.")
+    env = Environment(
+        loader=FileSystemLoader([str(p) for p in template_search_paths]),
+        autoescape=False,
+        keep_trailing_newline=True,
+        trim_blocks=True,
+        lstrip_blocks=True,
+        undefined=StrictUndefined,
+    )
+    return env
 
 
 def render_artifact_body(
@@ -81,14 +91,18 @@ def render_artifact_body(
     is rendered through ``env``. The body is the only part rendered;
     frontmatter must be split off by the caller first.
     """
-    raise NotImplementedError("render_artifact_body lands with Task B.2.")
+    if template_path.suffix == ".j2":
+        template = env.get_template(template_path.name)
+        return template.render(**context)
+    return template_path.read_text(encoding="utf-8")
 
 
 def render_string(body: str, context: dict[str, Any], *, env: Environment) -> str:
     """Render a literal template string through ``env``. Used by the
     rule-inclusion path and by tests that don't need the loader.
     """
-    raise NotImplementedError("render_string lands with Task B.2.")
+    template = env.from_string(body)
+    return template.render(**context)
 
 
 def render_for(
