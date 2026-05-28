@@ -216,6 +216,20 @@ def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
         )
 
 
+def _atomic_write_text(target: Path, content: str) -> None:
+    """Write ``content`` to ``target`` atomically.
+
+    Writes to ``target + ".tmp"`` first, then renames over the target. A SIGKILL
+    or power loss mid-write leaves either the old file intact or the new file
+    fully written — never a half-written one. Used for both
+    ``.coding-agent-playbook.toml`` and ``.coding-agent-playbook.lock`` so a
+    crashed ``cap sync`` can be safely retried.
+    """
+    tmp = target.with_suffix(target.suffix + ".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    tmp.replace(target)
+
+
 def _find_skill_md(skill_dir: Path) -> Path | None:
     """Return ``SKILL.md`` or ``SKILL.md.j2`` inside ``skill_dir`` if it exists."""
     for candidate_name in ("SKILL.md", "SKILL.md.j2"):
@@ -318,8 +332,10 @@ class FileSystemStateSource(StateSource):
         return Config.from_dict(data)
 
     def save_config(self, config: Config) -> None:
-        target = self._repo_root / self._CONFIG_FILENAME
-        target.write_text(_dump_toml(config.to_dict()), encoding="utf-8")
+        _atomic_write_text(
+            self._repo_root / self._CONFIG_FILENAME,
+            _dump_toml(config.to_dict()),
+        )
 
     def load_lockfile(self) -> Lockfile | None:
         target = self._repo_root / self._LOCKFILE_FILENAME
@@ -330,5 +346,7 @@ class FileSystemStateSource(StateSource):
         return Lockfile.from_dict(data)
 
     def save_lockfile(self, lockfile: Lockfile) -> None:
-        target = self._repo_root / self._LOCKFILE_FILENAME
-        target.write_text(_dump_toml(lockfile.to_dict()), encoding="utf-8")
+        _atomic_write_text(
+            self._repo_root / self._LOCKFILE_FILENAME,
+            _dump_toml(lockfile.to_dict()),
+        )
