@@ -116,3 +116,103 @@ def test_write_skill_returns_empty_list_and_creates_no_files(tmp_path: Path) -> 
     assert not (tmp_path / ".opencode").exists()
     # Nor the .claude tree — that belongs to the Claude Code adapter.
     assert not (tmp_path / ".claude").exists()
+
+
+def test_write_prompt_creates_file_with_opencode_envelope(tmp_path: Path) -> None:
+    """The prompt lands at ``.opencode/command/<slash>.md`` with the OpenCode
+    envelope: ``---\\ndescription: ...\\n---\\n<body>``.
+    """
+    prompt = _make_prompt(
+        slash="generate-tests",
+        description="Generate pytest tests for the provided code",
+        body="Task: generate tests.\n",
+    )
+    adapter = OpenCodeAdapter()
+    written = adapter.write_prompt(prompt, repo_root=tmp_path)
+
+    expected = tmp_path / ".opencode" / "command" / "generate-tests.md"
+    assert written == [expected]
+    assert expected.is_file()
+
+    content = expected.read_text(encoding="utf-8")
+    # OpenCode commands open with the YAML envelope — no sentinel HTML comment
+    # is required by the format transform (the renderer's contract).
+    assert content.startswith("---\ndescription:")
+    assert "description: Generate pytest tests for the provided code" in content
+    assert "Task: generate tests." in content
+
+
+def test_write_prompt_substitutes_single_input_variable_with_dollar_arguments(
+    tmp_path: Path,
+) -> None:
+    """One ``input_variables`` entry becomes ``$ARGUMENTS`` in the body."""
+    prompt = _make_prompt(
+        slash="generate-tests",
+        input_variables=[{"name": "target", "description": "path to module"}],
+        body="Generate tests for {{ target }} now.\n",
+    )
+    adapter = OpenCodeAdapter()
+    written = adapter.write_prompt(prompt, repo_root=tmp_path)
+
+    content = written[0].read_text(encoding="utf-8")
+    assert "$ARGUMENTS" in content
+    assert "{{ target }}" not in content
+
+
+def test_write_prompt_substitutes_multiple_input_variables_with_positional(
+    tmp_path: Path,
+) -> None:
+    """Multiple input variables become ``$1``, ``$2``, ... in order."""
+    prompt = _make_prompt(
+        slash="refactor",
+        input_variables=[
+            {"name": "src", "description": "source file"},
+            {"name": "style", "description": "style guide"},
+        ],
+        body="Refactor {{ src }} per {{ style }}.\n",
+    )
+    adapter = OpenCodeAdapter()
+    written = adapter.write_prompt(prompt, repo_root=tmp_path)
+
+    content = written[0].read_text(encoding="utf-8")
+    assert "$1" in content
+    assert "$2" in content
+    assert "{{ src }}" not in content
+    assert "{{ style }}" not in content
+
+
+def test_write_prompt_yaml_escapes_description_with_special_characters(
+    tmp_path: Path,
+) -> None:
+    """A description containing a colon must be YAML-safe in the envelope."""
+    prompt = _make_prompt(
+        slash="explain",
+        description="Explain: be careful with colons",
+        body="Body.\n",
+    )
+    adapter = OpenCodeAdapter()
+    written = adapter.write_prompt(prompt, repo_root=tmp_path)
+
+    content = written[0].read_text(encoding="utf-8")
+    # The YAML envelope must parse — i.e. the colon is properly quoted, not raw.
+    assert (
+        "'Explain: be careful with colons'" in content
+        or '"Explain: be careful with colons"' in content
+    )
+    # Sanity: the body still survives untouched.
+    assert "Body." in content
+
+
+def test_write_prompt_overwrites_existing_file(tmp_path: Path) -> None:
+    """Re-running write_prompt for the same slash replaces the previous file."""
+    prompt = _make_prompt(slash="duplicate", body="first body\n")
+    adapter = OpenCodeAdapter()
+    adapter.write_prompt(prompt, repo_root=tmp_path)
+
+    # Second write with different body re-uses the same path.
+    prompt_v2 = _make_prompt(slash="duplicate", body="second body\n")
+    written = adapter.write_prompt(prompt_v2, repo_root=tmp_path)
+
+    content = written[0].read_text(encoding="utf-8")
+    assert "second body" in content
+    assert "first body" not in content

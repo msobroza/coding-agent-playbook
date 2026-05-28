@@ -9,13 +9,14 @@ through sibling adapters (AGENTS.md and Claude Code respectively).
 
 from __future__ import annotations
 
+import dataclasses
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from coding_agent_playbook._typing import Prompt, Rule, Skill
 
 
@@ -42,8 +43,30 @@ class OpenCodeAdapter(Adapter):
         return []
 
     def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
-        """Skeleton — implementation lands with Task 9.3."""
-        raise NotImplementedError("OpenCodeAdapter.write_prompt lands with Task 9.3")
+        """Write a single OpenCode slash command to ``.opencode/command/<slash>.md``.
+
+        The body is shaped by :func:`render_for` using the
+        ``prompt_opencode_command`` format, which:
+
+        * emits the YAML envelope ``---\\ndescription: ...\\n---``,
+        * replaces ``{{ var }}`` placeholders for each ``input_variables``
+          entry with ``$ARGUMENTS`` (single variable) or ``$1`` / ``$2`` / …
+          (multiple variables), and
+        * appends an ``includes_rules`` appendix when applicable.
+
+        See SPEC §10.6.1 for the canonical OpenCode command layout and
+        SPEC §9.7 for the renderer contract.
+        """
+        target = repo_root / ".opencode" / "command" / f"{prompt.frontmatter.slash}.md"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        rendered = render_for(
+            prompt.source_path or Path("inline"),
+            prompt.body,
+            "prompt_opencode_command",
+            frontmatter=dataclasses.asdict(prompt.frontmatter),
+        )
+        target.write_text(rendered, encoding="utf-8")
+        return [target]
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
         """Return ``[]`` — OpenCode reads ``.claude/skills/`` natively.
