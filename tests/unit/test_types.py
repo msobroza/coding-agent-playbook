@@ -115,6 +115,15 @@ def test_split_frontmatter_rejects_indented_closing_fence():
     assert body == "body\n"
 
 
+def test_split_frontmatter_rejects_fence_with_trailing_space():
+    """A '---' line with trailing whitespace is not a valid fence under the
+    column-0 rstrip("\\r\\n") check; document this intentional strictness so
+    nobody "fixes" it back to .strip() thinking they're being more lenient
+    (Task 1 code-review follow-up)."""
+    with pytest.raises(ValueError, match="unterminated"):
+        split_frontmatter("---\nid: x\n---  \nbody\n")
+
+
 # ---------------------------------------------------------------------------
 # format_frontmatter round-trip
 # ---------------------------------------------------------------------------
@@ -256,7 +265,8 @@ def test_prompt_markdown_roundtrip(tmp_path):
 
 
 def test_prompt_frontmatter_coerces_none_to_defaults():
-    """Same coercion contract for PromptFrontmatter (bug_001)."""
+    """YAML 'input_variables:' (blank) parses as None; the dataclass must
+    coerce that back to [] (bug_001 — same contract as RuleFrontmatter)."""
     fm = PromptFrontmatter(
         id="x",
         name="x",
@@ -273,6 +283,34 @@ def test_prompt_frontmatter_coerces_none_to_defaults():
     assert fm.input_variables == []
     assert fm.includes_rules == []
     assert fm.eval_tasks == []
+
+
+def test_prompt_markdown_roundtrip_with_blank_optional_fields(tmp_path):
+    """A prompt authored with blank 'applies_if:' / 'input_variables:' /
+    'includes_rules:' / 'eval_tasks:' lines round-trips through markdown
+    (bug_001 — symmetric to test_rule_markdown_roundtrip_with_blank_optional_fields)."""
+    text = (
+        "---\n"
+        "id: x\n"
+        "name: x\n"
+        "description: x\n"
+        "slash: x\n"
+        "applies_if:\n"
+        "input_variables:\n"
+        "includes_rules:\n"
+        "eval_tasks:\n"
+        "---\n"
+        "body\n"
+    )
+    path = tmp_path / "prompt.md"
+    path.write_text(text, encoding="utf-8")
+    prompt = Prompt.from_markdown(path, "pkg")
+    assert prompt.frontmatter.applies_if == {}
+    assert prompt.frontmatter.input_variables == []
+    assert prompt.frontmatter.includes_rules == []
+    assert prompt.frontmatter.eval_tasks == []
+    path.write_text(prompt.to_markdown(), encoding="utf-8")
+    assert Prompt.from_markdown(path, "pkg") == prompt
 
 
 # ---------------------------------------------------------------------------
