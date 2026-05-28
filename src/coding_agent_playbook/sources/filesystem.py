@@ -57,15 +57,27 @@ def _format_toml_scalar(value: Any) -> str:
     if isinstance(value, int):
         return str(value)
     if isinstance(value, str):
-        # tomllib treats \, " and control chars specially in basic strings.
-        escaped = (
-            value.replace("\\", "\\\\")
-            .replace('"', '\\"')
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-            .replace("\t", "\\t")
-        )
-        return f'"{escaped}"'
+        # tomllib rejects unescaped control chars (U+0000–U+001F) in basic
+        # strings. Escape the special-named ones inline and fall back to
+        # \uXXXX for the rest so the emitted TOML is always parseable.
+        out: list[str] = ['"']
+        for ch in value:
+            if ch == "\\":
+                out.append("\\\\")
+            elif ch == '"':
+                out.append('\\"')
+            elif ch == "\n":
+                out.append("\\n")
+            elif ch == "\r":
+                out.append("\\r")
+            elif ch == "\t":
+                out.append("\\t")
+            elif ord(ch) < 0x20:
+                out.append(f"\\u{ord(ch):04X}")
+            else:
+                out.append(ch)
+        out.append('"')
+        return "".join(out)
     if isinstance(value, list):
         return "[" + ", ".join(_format_toml_scalar(item) for item in value) + "]"
     raise TypeError(f"_dump_toml does not support value of type {type(value).__name__}: {value!r}")

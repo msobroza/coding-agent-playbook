@@ -208,6 +208,21 @@ def test_dump_toml_rejects_mapping_deeper_than_two_levels() -> None:
         _dump_toml({"a": {"b": {"c": {"d": 1}}}})
 
 
+def test_dump_toml_escapes_control_characters(tmp_path: Path) -> None:
+    """Strings with control chars (\\x00, \\x08) must be \\uXXXX-escaped so
+    the emitted TOML is valid (code-quality review I1)."""
+    config = Config(
+        schema_version=1,
+        project=ProjectMeta(name="r", kind="x", description="weird:\x00\x08"),
+        engine_version="0.1.0a0",
+    )
+    source = FileSystemStateSource(repo_root=tmp_path)
+    source.save_config(config)
+    # Must round-trip
+    loaded = source.load_config()
+    assert loaded.project.description == "weird:\x00\x08"
+
+
 def test_save_then_load_config_roundtrip_with_nested_detector_cache(tmp_path: Path) -> None:
     """Config with a 2-level nested detector_cache.frameworks dict (the
     canonical SPEC §8.2 shape) must round-trip through TOML
