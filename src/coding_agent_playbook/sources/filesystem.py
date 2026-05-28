@@ -34,6 +34,12 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     Override wins on scalars/lists; nested dicts merge key-by-key. Used to
     let ``.coding-agent-playbook.local.toml`` layer over the committed
     ``.coding-agent-playbook.toml`` per SPEC §7.2.
+
+    On type mismatch (one side dict, the other a scalar/list), override
+    wins silently — there is no warning. This means a typo'd ``.local.toml``
+    that turns ``[user_choices]`` from a table into a scalar will overwrite
+    the entire section. Acceptable for v1; a future ``cap validate`` pass
+    should flag suspicious overrides.
     """
     result: dict[str, Any] = dict(base)
     for key, value in override.items():
