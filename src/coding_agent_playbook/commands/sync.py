@@ -34,6 +34,16 @@ if TYPE_CHECKING:
 
 _LOCKFILE_SCHEMA = 1
 
+# Filenames that are state-source-managed and must be excluded from the
+# drift diff (otherwise the lockfile written by sync would itself look
+# like drift). Keep this in sync with the constants in
+# ``sources.filesystem.FileSystemStateSource``.
+_STATE_FILES_TO_SKIP: tuple[str, ...] = (
+    ".coding-agent-playbook.toml",
+    ".coding-agent-playbook.local.toml",
+    ".coding-agent-playbook.lock",
+)
+
 
 def _build_jinja_context(ctx: SyncContext) -> dict[str, object]:
     """Per SPEC §9.4: facts + project metadata + engine metadata.
@@ -206,24 +216,27 @@ def _run_check(ctx: SyncContext) -> int:
     import shutil
     import tempfile
 
-    # Files we never want to overwrite or compare bytes for.
-    _SCRATCH_SKIP = {
-        ctx.state_source._CONFIG_FILENAME,  # type: ignore[attr-defined]
-        ctx.state_source._CONFIG_LOCAL_FILENAME,  # type: ignore[attr-defined]
-        ctx.state_source._LOCKFILE_FILENAME,  # type: ignore[attr-defined]
-    }
+    # ``_STATE_FILES_TO_SKIP`` is the module-local constant tuple of files
+    # owned by the StateSource (config + lockfile) — those are never
+    # written by adapters, so they must be excluded from the drift diff.
+    # See the constant's docstring above for the rationale.
 
     scratch_dir = Path(tempfile.mkdtemp(prefix="cap-sync-check-"))
     try:
         scratch = scratch_dir / "repo"
         shutil.copytree(ctx.repo_root, scratch, symlinks=False)
         scratch_ctx = SyncContext.from_repo(scratch)
+        # In --check mode we still run the full sync (including
+        # ``cleanup_stale``) inside the scratch tree. That's intentional:
+        # we need the cleanup pass to populate the "removed" set for
+        # comparison, and since the work happens against a copy the real
+        # repo is untouched.
         written, _ = _run_sync(scratch_ctx)
 
         drift: list[str] = []
         for path in written:
             rel = path.resolve().relative_to(scratch.resolve())
-            if rel.name in _SCRATCH_SKIP:
+            if rel.name in _STATE_FILES_TO_SKIP:
                 continue
             actual_path = ctx.repo_root / rel
             scratch_bytes = path.read_bytes()
