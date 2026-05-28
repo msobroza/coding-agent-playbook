@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+import textwrap
 import tomllib
 from typing import TYPE_CHECKING
 
@@ -163,6 +164,40 @@ def test_load_config_merges_local_overrides(tmp_path: Path) -> None:
     assert config.user_choices == {
         "banking_mode": True,
         "extra_dev_choice": "yes",
+    }
+
+
+def test_load_config_deep_merges_nested_dicts(tmp_path: Path) -> None:
+    """Primary's detector_cache.frameworks is merged with override's, not
+    replaced wholesale (code-quality review I3, coupled with C1's nested
+    support)."""
+    (tmp_path / ".coding-agent-playbook.toml").write_text(
+        textwrap.dedent("""
+            schema_version = 1
+            [project]
+            name = "r"
+            kind = "python-application"
+            [engine]
+            version = "0.1.0a0"
+            [detector_cache]
+            python_version = "3.12"
+            [detector_cache.frameworks]
+            fastapi = "0.110.0"
+            pydantic = "2.9.2"
+        """).strip()
+    )
+    (tmp_path / ".coding-agent-playbook.local.toml").write_text(
+        textwrap.dedent("""
+            [detector_cache.frameworks]
+            pydantic = "2.10.0"
+            sqlalchemy = "2.0.40"
+        """).strip()
+    )
+    config = FileSystemStateSource(repo_root=tmp_path).load_config()
+    assert config.detector_cache["frameworks"] == {
+        "fastapi": "0.110.0",  # from primary, preserved
+        "pydantic": "2.10.0",  # overridden by local
+        "sqlalchemy": "2.0.40",  # added by local
     }
 
 
