@@ -346,6 +346,26 @@ def test_list_eval_tasks_returns_empty_until_pr11(tmp_path: Path) -> None:
     assert source.list_eval_tasks() == []
 
 
+def test_entry_point_registers_filesystem_artifact_source() -> None:
+    from importlib import metadata
+
+    eps = metadata.entry_points(group="coding_agent_playbook.artifact_sources")
+    by_name = {ep.name: ep for ep in eps}
+    assert "filesystem" in by_name
+    loaded = by_name["filesystem"].load()
+    assert loaded is FileSystemArtifactSource
+
+
+def test_entry_point_registers_filesystem_state_source() -> None:
+    from importlib import metadata
+
+    eps = metadata.entry_points(group="coding_agent_playbook.state_sources")
+    by_name = {ep.name: ep for ep in eps}
+    assert "filesystem" in by_name
+    loaded = by_name["filesystem"].load()
+    assert loaded is FileSystemStateSource
+
+
 def test_save_lockfile_emits_valid_toml(tmp_path: Path) -> None:
     source = FileSystemStateSource(repo_root=tmp_path)
     lockfile = Lockfile(
