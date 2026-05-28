@@ -27,14 +27,15 @@ if TYPE_CHECKING:
 
 _DEFAULT_CONFIG = """\
 schema_version = 1
+adapters_enabled = ["continue", "claude_code", "opencode"]
+overlays_enabled = []
+
 [project]
 name = "synthetic"
 kind = "python-library"
 
 [engine]
 version = "0.1.0a0"
-
-adapters_enabled = ["continue", "claude_code", "opencode"]
 
 [storage]
 artifact_source = "filesystem"
