@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -360,7 +361,10 @@ def test_skill_to_dict_does_not_alias_frontmatter():
 def test_skill_from_dict_does_not_alias_frontmatter():
     """from_dict must detach from its input; mutating the dict must not
     mutate the resulting Skill (bug_002)."""
-    payload = {
+    # Annotate as dict[str, Any] so mypy doesn't narrow payload["frontmatter"]
+    # to the inferred union (str | dict[str, str] | None), which would block
+    # indexed assignment. Skill.from_dict's parameter is dict[str, Any] anyway.
+    payload: dict[str, Any] = {
         "frontmatter": {"name": "demo"},
         "body": "b",
         "scripts_dir": None,
