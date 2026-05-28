@@ -31,7 +31,10 @@ from coding_agent_playbook.evals.loader import (
 )
 from coding_agent_playbook.evals.validator import validate_tasks
 from coding_agent_playbook.orchestrator import SyncContext
-from coding_agent_playbook.sources.filesystem import _resource_subdir
+from coding_agent_playbook.sources.filesystem import (
+    FileSystemArtifactSource,
+    _resource_subdir,
+)
 
 if TYPE_CHECKING:
     import argparse
@@ -163,14 +166,24 @@ def _load_eval_tasks_for_validation(
     and converts them to :class:`ValidationError` entries. Malformed TOML or
     schema violations don't abort the rest of validation — the caller still
     runs ``validate_tasks`` against the tasks that did load.
+
+    Non-filesystem :class:`ArtifactSource` implementations have no per-package
+    layout to walk, so we fall back to :meth:`ArtifactSource.list_eval_tasks`
+    and accept that those sources cannot surface per-file loader errors here —
+    that's their responsibility, not ours.
     """
     tasks: list[EvalTask] = []
     errors: list[ValidationError] = []
     repo_root = ctx.repo_root
     artifact_source = ctx.artifact_source
-    # Use the same package list the source uses.
-    engine_package = getattr(artifact_source, "_engine_package", "coding_agent_playbook")
-    overlay_packages = getattr(artifact_source, "_overlay_packages", [])
+    # Reach for the source's package list via its public read-only properties.
+    # Non-filesystem sources skip the per-package loader-error aggregation and
+    # delegate to ``list_eval_tasks()`` instead, so the validator still sees
+    # the task set even when the source isn't filesystem-backed.
+    if not isinstance(artifact_source, FileSystemArtifactSource):
+        return list(artifact_source.list_eval_tasks()), errors
+    engine_package = artifact_source.engine_package
+    overlay_packages = list(artifact_source.overlay_packages)
     for package in (engine_package, *overlay_packages):
         root = _resource_subdir(package, "eval_tasks")
         if root is None:

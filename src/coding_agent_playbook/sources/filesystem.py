@@ -262,6 +262,28 @@ class FileSystemArtifactSource(ArtifactSource):
         self._engine_package = engine_package
         self._overlay_packages = overlay_packages or []
 
+    @property
+    def engine_package(self) -> str:
+        """Public read-only accessor for the engine package name.
+
+        Callers that need to walk the same package set this source walks
+        (e.g. ``commands/validate.py``'s per-task loader-error aggregator)
+        should use this and :attr:`overlay_packages` instead of reaching
+        into the private ``_engine_package`` / ``_overlay_packages``
+        attributes, so a future rename can't silently degrade them.
+        """
+        return self._engine_package
+
+    @property
+    def overlay_packages(self) -> tuple[str, ...]:
+        """Public read-only accessor for the overlay package names.
+
+        Returns a tuple (not the live list) so callers cannot mutate the
+        source's internal package list. Order matches the walk order in
+        :meth:`list_rules` / :meth:`list_prompts` / :meth:`list_eval_tasks`.
+        """
+        return tuple(self._overlay_packages)
+
     def list_rules(self) -> list[Rule]:
         return self._walk_artifacts(
             subdir="rules",
