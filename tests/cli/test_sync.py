@@ -95,3 +95,49 @@ def test_sync_no_artifacts_still_succeeds(tmp_path: Path, make_synthetic_repo) -
     assert rc == 0
     state = FileSystemStateSource(repo_root=repo)
     assert state.load_lockfile() is not None
+
+
+# --- cap sync --check (drift detection) -----------------------------------
+
+
+def test_sync_check_clean_repo_returns_zero(
+    tmp_path: Path, make_synthetic_repo, capsys
+) -> None:
+    repo = make_synthetic_repo(tmp_path, rules=[("x", "Body of x\n")])
+    # Build the on-disk artifacts first.
+    assert _sync.run(_ns(repo)) == 0
+    capsys.readouterr()  # clear
+    rc = _sync.run(_ns(repo, check=True))
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "No drift" in out
+
+
+def test_sync_check_detects_modified_file(
+    tmp_path: Path, make_synthetic_repo, capsys
+) -> None:
+    repo = make_synthetic_repo(tmp_path, rules=[("x", "Original body\n")])
+    assert _sync.run(_ns(repo)) == 0
+    # Mutate the rendered file so the next --check sees drift.
+    agents_md = repo / "AGENTS.md"
+    agents_md.write_text(agents_md.read_text() + "\nMUTATED LINE\n")
+    capsys.readouterr()
+    rc = _sync.run(_ns(repo, check=True))
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "Drift detected" in out
+    assert "AGENTS.md" in out
+
+
+def test_sync_check_detects_missing_file(
+    tmp_path: Path, make_synthetic_repo, capsys
+) -> None:
+    repo = make_synthetic_repo(tmp_path, rules=[("y", "Body y\n")])
+    assert _sync.run(_ns(repo)) == 0
+    # Delete a written file to simulate a drift-by-omission case.
+    (repo / "AGENTS.md").unlink()
+    capsys.readouterr()
+    rc = _sync.run(_ns(repo, check=True))
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "Missing" in out or "AGENTS.md" in out
