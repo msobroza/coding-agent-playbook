@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import textwrap
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from coding_agent_playbook.detector import Facts, detect, evaluate_predicate
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _write(repo: Path, rel: str, content: str) -> Path:
@@ -407,9 +410,7 @@ def test_detect_framework_includes_pytest_from_dev_deps(tmp_path: Path) -> None:
         ("~=3.12", "4.0", False),
     ],
 )
-def test_evaluate_predicate_python_version(
-    constraint: str, version: str, expected: bool
-) -> None:
+def test_evaluate_predicate_python_version(constraint: str, version: str, expected: bool) -> None:
     facts: Facts = {"python_version": version}
     assert evaluate_predicate({"python_version": constraint}, facts) is expected
 
@@ -463,24 +464,18 @@ def test_evaluate_predicate_any_framework_empty_list_false() -> None:
 
 def test_evaluate_predicate_has_file_true(tmp_path: Path) -> None:
     (tmp_path / "Dockerfile").write_text("FROM python:3.12-slim\n")
-    assert (
-        evaluate_predicate({"has_file": ["Dockerfile"]}, {}, repo_root=tmp_path) is True
-    )
+    assert evaluate_predicate({"has_file": ["Dockerfile"]}, {}, repo_root=tmp_path) is True
 
 
 def test_evaluate_predicate_has_file_missing_false(tmp_path: Path) -> None:
-    assert (
-        evaluate_predicate({"has_file": ["Dockerfile"]}, {}, repo_root=tmp_path) is False
-    )
+    assert evaluate_predicate({"has_file": ["Dockerfile"]}, {}, repo_root=tmp_path) is False
 
 
 def test_evaluate_predicate_has_file_all_must_exist(tmp_path: Path) -> None:
     (tmp_path / "Dockerfile").write_text("FROM python:3.12-slim\n")
     # Only one of two files exists → False.
     assert (
-        evaluate_predicate(
-            {"has_file": ["Dockerfile", "Makefile"]}, {}, repo_root=tmp_path
-        )
+        evaluate_predicate({"has_file": ["Dockerfile", "Makefile"]}, {}, repo_root=tmp_path)
         is False
     )
 
@@ -489,9 +484,7 @@ def test_evaluate_predicate_has_file_supports_nested_paths(tmp_path: Path) -> No
     (tmp_path / ".github" / "workflows").mkdir(parents=True)
     (tmp_path / ".github" / "workflows" / "ci.yml").write_text("name: CI\n")
     assert (
-        evaluate_predicate(
-            {"has_file": [".github/workflows/ci.yml"]}, {}, repo_root=tmp_path
-        )
+        evaluate_predicate({"has_file": [".github/workflows/ci.yml"]}, {}, repo_root=tmp_path)
         is True
     )
 
@@ -534,9 +527,7 @@ def test_evaluate_predicate_multiple_keys_anded_all_true() -> None:
         "frameworks": {"fastapi": ">=0.110"},
     }
     assert (
-        evaluate_predicate(
-            {"python_version": ">=3.11", "has_framework": ["fastapi"]}, facts
-        )
+        evaluate_predicate({"python_version": ">=3.11", "has_framework": ["fastapi"]}, facts)
         is True
     )
 
@@ -547,9 +538,7 @@ def test_evaluate_predicate_multiple_keys_anded_one_false() -> None:
         "frameworks": {"fastapi": ">=0.110"},
     }
     assert (
-        evaluate_predicate(
-            {"python_version": ">=3.11", "has_framework": ["fastapi"]}, facts
-        )
+        evaluate_predicate({"python_version": ">=3.11", "has_framework": ["fastapi"]}, facts)
         is False
     )
 
@@ -568,6 +557,111 @@ def test_evaluate_predicate_unknown_key_with_string_value_raises() -> None:
     # Strings are not boolean, not a structured operator — must raise.
     with pytest.raises(ValueError, match="unknown predicate"):
         evaluate_predicate({"frobnicate": "yes"}, {})
+
+
+def test_evaluate_predicate_python_version_with_non_string_raises() -> None:
+    with pytest.raises(ValueError, match="must be a string"):
+        evaluate_predicate({"python_version": 3}, {"python_version": "3.12"})
+
+
+def test_evaluate_predicate_python_version_invalid_value_in_facts_raises() -> None:
+    # If facts carry a syntactically-invalid version, packaging surfaces it.
+    with pytest.raises(ValueError, match="invalid python_version"):
+        evaluate_predicate({"python_version": ">=3.11"}, {"python_version": "not.a.version"})
+
+
+def test_detect_handles_missing_or_empty_requires_python(tmp_path: Path) -> None:
+    repo = tmp_path / "no-req-py"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "x"
+        dependencies = []
+        """,
+    )
+
+    facts = detect(repo)
+
+    assert "python_version" not in facts
+
+
+def test_detect_handles_unparseable_requires_python(tmp_path: Path) -> None:
+    # Bare "3.12" with no operator can't be parsed safely; we leave python_version unset.
+    repo = tmp_path / "weird-req-py"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "x"
+        requires-python = "bogus-string"
+        dependencies = []
+        """,
+    )
+
+    facts = detect(repo)
+
+    assert "python_version" not in facts
+
+
+def test_detect_dependency_with_environment_marker(tmp_path: Path) -> None:
+    repo = tmp_path / "with-env-marker"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "x"
+        requires-python = ">=3.12"
+        dependencies = [
+            "fastapi>=0.110; python_version >= '3.10'",
+        ]
+        """,
+    )
+
+    facts = detect(repo)
+
+    deps = facts.get("dependencies", {})
+    assert "fastapi" in deps
+    assert "fastapi" in facts.get("frameworks", {})
+
+
+def test_detect_skips_non_dev_optional_groups(tmp_path: Path) -> None:
+    # An "extras" group named "docs" or "performance" must NOT inflate dev_dependencies.
+    repo = tmp_path / "with-extras"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "x"
+        requires-python = ">=3.12"
+        dependencies = []
+
+        [project.optional-dependencies]
+        docs = ["sphinx>=7.0"]
+        dev = ["ruff>=0.5"]
+
+        [dependency-groups]
+        docs = ["mkdocs>=1.5"]
+        dev = ["mypy>=1.10"]
+        """,
+    )
+
+    facts = detect(repo)
+
+    dev_deps = facts.get("dev_dependencies", {})
+    assert "ruff" in dev_deps
+    assert "mypy" in dev_deps
+    # The docs-only entries must not appear as dev deps.
+    assert "sphinx" not in dev_deps
+    assert "mkdocs" not in dev_deps
 
 
 if __name__ == "__main__":  # pragma: no cover

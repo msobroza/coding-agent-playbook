@@ -9,11 +9,13 @@ mtime change or ``cap check --refresh``.
 from __future__ import annotations
 
 import tomllib
-from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _IGNORE_DIRS: frozenset[str] = frozenset(
     {".venv", "venv", "node_modules", ".git", "__pycache__", ".tox", ".mypy_cache"}
