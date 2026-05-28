@@ -177,3 +177,45 @@ def test_skill_dict_roundtrip():
         source_package="pkg",
     )
     assert Skill.from_dict(skill.to_dict()) == skill
+
+
+def test_split_frontmatter_rejects_indented_closing_fence():
+    """An indented '---' inside a YAML multi-line scalar must not be treated
+    as the closing fence (bug_006 — round-trip regression)."""
+    text = (
+        "---\n"
+        "id: x\n"
+        "name: x\n"
+        "description: 'line one\n"
+        "\n"
+        "  ---\n"
+        "\n"
+        "  line two'\n"
+        "scope: scoped\n"
+        "---\n"
+        "body\n"
+    )
+    data, body = split_frontmatter(text)
+    assert data["description"] == "line one\n---\nline two"
+    assert body == "body\n"
+
+
+def test_rule_markdown_roundtrip_with_horizontal_rule_in_description(tmp_path):
+    """Rule with a '---' line inside its description round-trips through markdown
+    (bug_006 — the round-trip contract from SPEC §6.6.3)."""
+    rule = Rule(
+        frontmatter=RuleFrontmatter(
+            id="x",
+            name="x",
+            description="line one\n---\nline two",
+            scope="scoped",
+        ),
+        body="body\n",
+        template_body="body\n",
+        is_templated=False,
+        source_path=tmp_path / "rule.md",
+        source_package="pkg",
+    )
+    path = tmp_path / "rule.md"
+    path.write_text(rule.to_markdown(), encoding="utf-8")
+    assert Rule.from_markdown(path, "pkg") == rule

@@ -25,10 +25,10 @@ _FENCE = "---"
 def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     """Split ``---\\n<yaml>\\n---\\n<body>`` into a (frontmatter mapping, body)."""
     lines = text.splitlines(keepends=True)
-    if not lines or lines[0].strip() != _FENCE:
+    if not lines or lines[0].rstrip("\r\n") != _FENCE:
         raise ValueError("artifact must start with a '---' frontmatter fence")
     for index in range(1, len(lines)):
-        if lines[index].strip() == _FENCE:
+        if lines[index].rstrip("\r\n") == _FENCE:
             data = yaml.safe_load("".join(lines[1:index])) or {}
             if not isinstance(data, dict):
                 raise ValueError("frontmatter must be a YAML mapping")
