@@ -1,0 +1,31 @@
+id = "generate-tests-happy-path"
+prompt_id = "generate-tests"
+description = "Generate tests for a simple pure function with no edge cases."
+version = 1
+
+[setup]
+files = ["src/calculator.py"]
+project_kind = "python-application"
+python_version = "3.12"
+frameworks = ["pytest"]
+
+[invocation]
+prompt_args = "for the add function in src/calculator.py"
+input_variables = { target = "src/calculator.py::add" }
+
+[expected]
+files_created = ["tests/test_calculator.py"]
+files_must_contain = [
+  { path = "tests/test_calculator.py", pattern = "def test_add" },
+  { path = "tests/test_calculator.py", pattern = "parametrize" },
+]
+files_unchanged = ["src/calculator.py"]
+
+[rubric]
+criteria = [
+  "Tests use pytest.parametrize for table-driven cases",
+  "Test file lives at tests/test_calculator.py (mirror layout)",
+  "All public branches of `add` are covered",
+  "No mocking is used (the function is pure)",
+]
+weights = [0.2, 0.2, 0.4, 0.2]
