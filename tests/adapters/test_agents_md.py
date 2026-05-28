@@ -164,3 +164,105 @@ def test_agents_md_write_rule_does_not_emit_sentinel_in_section(tmp_path: Path) 
     adapter.write_rule(rule, repo_root=tmp_path)
     _, _, rendered = adapter._buffered_rules[0]
     assert SENTINEL not in rendered
+
+
+# --- Task 8.3: finalize composes AGENTS.md at repo root --------------------
+
+
+def test_agents_md_finalize_composes_file_at_repo_root(tmp_path: Path) -> None:
+    adapter = AgentsMdAdapter()
+    adapter.write_rule(_make_rule(rule_id="x", priority=50, name="X rule"), tmp_path)
+    written = adapter.finalize(tmp_path)
+    expected = tmp_path / "AGENTS.md"
+    assert written == [expected]
+    assert expected.is_file()
+
+
+def test_agents_md_finalize_has_sentinel_on_first_line(tmp_path: Path) -> None:
+    adapter = AgentsMdAdapter()
+    adapter.write_rule(_make_rule(rule_id="x", priority=50), tmp_path)
+    adapter.finalize(tmp_path)
+    content = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    first_line = content.split("\n", 1)[0]
+    assert SENTINEL in first_line
+
+
+def test_agents_md_finalize_orders_rules_by_priority_then_id(tmp_path: Path) -> None:
+    adapter = AgentsMdAdapter()
+    # Buffer in deliberately scrambled order, including a priority tie to
+    # exercise the secondary id sort.
+    adapter.write_rule(_make_rule(rule_id="b", priority=20, name="B rule"), tmp_path)
+    adapter.write_rule(_make_rule(rule_id="a", priority=10, name="A rule"), tmp_path)
+    adapter.write_rule(_make_rule(rule_id="c2", priority=20, name="C2 rule"), tmp_path)
+    adapter.write_rule(_make_rule(rule_id="c1", priority=20, name="C1 rule"), tmp_path)
+    adapter.finalize(tmp_path)
+    content = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    # All four section headers appear.
+    assert "## A rule" in content
+    assert "## B rule" in content
+    assert "## C1 rule" in content
+    assert "## C2 rule" in content
+    # Priority-ordered: 10 (A) before 20 (B/C1/C2); within priority 20, sorted
+    # by rule id so c1 precedes c2; both come after b (alphabetical: b<c).
+    a_idx = content.index("## A rule")
+    b_idx = content.index("## B rule")
+    c1_idx = content.index("## C1 rule")
+    c2_idx = content.index("## C2 rule")
+    assert a_idx < b_idx < c1_idx < c2_idx
+
+
+def test_agents_md_finalize_returns_empty_when_no_rules(tmp_path: Path) -> None:
+    # No rules buffered = nothing to render. finalize must not create an
+    # empty AGENTS.md (cleanup will handle deleting any stale one).
+    adapter = AgentsMdAdapter()
+    written = adapter.finalize(tmp_path)
+    assert written == []
+    assert not (tmp_path / "AGENTS.md").exists()
+
+
+def test_agents_md_finalize_overwrites_existing_file(tmp_path: Path) -> None:
+    # An existing AGENTS.md (even one without the sentinel) is overwritten by
+    # finalize. Preserving user content is the cleanup_stale path's job; once
+    # finalize fires, the file's content is wholly engine-owned.
+    existing = tmp_path / "AGENTS.md"
+    existing.write_text("# I am a stale file\n", encoding="utf-8")
+    adapter = AgentsMdAdapter()
+    adapter.write_rule(_make_rule(rule_id="x", priority=50, name="X rule"), tmp_path)
+    adapter.finalize(tmp_path)
+    content = existing.read_text(encoding="utf-8")
+    assert "# I am a stale file" not in content
+    assert SENTINEL in content.split("\n", 1)[0]
+    assert "## X rule" in content
+
+
+def test_agents_md_finalize_includes_all_rule_bodies(tmp_path: Path) -> None:
+    adapter = AgentsMdAdapter()
+    adapter.write_rule(
+        _make_rule(
+            rule_id="a", priority=10, name="A rule", body="First body content.\n"
+        ),
+        tmp_path,
+    )
+    adapter.write_rule(
+        _make_rule(
+            rule_id="b", priority=20, name="B rule", body="Second body content.\n"
+        ),
+        tmp_path,
+    )
+    adapter.finalize(tmp_path)
+    content = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    assert "First body content." in content
+    assert "Second body content." in content
+
+
+def test_agents_md_finalize_uses_html_comment_sentinel(tmp_path: Path) -> None:
+    # The composite file has YAML-less markdown, so the sentinel rides on an
+    # HTML comment (<!-- ... -->) — that keeps the first line a noop in any
+    # markdown renderer while still being grep-able for cleanup_stale.
+    adapter = AgentsMdAdapter()
+    adapter.write_rule(_make_rule(rule_id="x", priority=50, name="X rule"), tmp_path)
+    adapter.finalize(tmp_path)
+    first_line = (tmp_path / "AGENTS.md").read_text(encoding="utf-8").split("\n", 1)[0]
+    assert first_line.startswith("<!--")
+    assert first_line.rstrip().endswith("-->")
+    assert SENTINEL in first_line
