@@ -79,8 +79,10 @@ def _print_list(prompts: list[Prompt], tasks: list[EvalTask]) -> int:
         tasks_by_prompt.setdefault(task.prompt_id, []).append(task)
 
     lines: list[str] = ["=== Eval tasks ==="]
+    rendered_any_prompt = False
     prompts_without_tasks = 0
     for prompt in prompts:
+        rendered_any_prompt = True
         prompt_id = prompt.frontmatter.id
         # Order tasks by the prompt's eval_tasks: frontmatter (the
         # authoring-order users expect). Tasks present on-disk but missing
@@ -117,7 +119,13 @@ def _print_list(prompts: list[Prompt], tasks: list[EvalTask]) -> int:
                 f"{criteria_count} rubric criteria, {checks_count} programmatic checks"
             )
 
-    lines.append("")
+    # Blank separator between the per-prompt blocks and the Total: line
+    # is part of the SPEC §12.8 layout. On an empty repo (zero prompts
+    # rendered), omit it so the header is immediately followed by the
+    # Total without a stray blank line — keeps ``cap eval --list`` clean
+    # on a fresh project that hasn't authored prompts yet.
+    if rendered_any_prompt:
+        lines.append("")
     # Pluralize each count so single-item totals don't read "1 prompts"
     # (SPEC §12.8 example covers both singular and plural shapes). The
     # "prompts without tasks" suffix has to be spelled out because the

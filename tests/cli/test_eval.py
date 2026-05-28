@@ -466,3 +466,32 @@ def test_eval_no_args_defaults_to_list(tmp_path, make_synthetic_repo, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "Eval tasks" in out or "generate-tests" in out
+
+
+def test_eval_list_handles_empty_repo(tmp_path, make_synthetic_repo, capsys):
+    """``cap eval --list`` on a fresh repo with zero prompts and zero tasks
+    must:
+
+    - still print the SPEC §12.8 header ``=== Eval tasks ===``
+    - print the ``Total: 0 prompts, 0 eval tasks, 0 prompts without tasks``
+      summary
+    - exit 0 (no error — an empty playbook is a legitimate state)
+    - not emit any tree characters (``├──`` / ``└──``) since there's no
+      tree to draw
+    - not emit a stray blank line between the header and the Total
+    """
+    # Bare synthetic repo: pyproject + config, no prompts, no eval tasks.
+    make_synthetic_repo(tmp_path)
+    rc = _eval.run(_ns(tmp_path, list_=True))
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "=== Eval tasks ===" in out
+    assert "Total: 0 prompts, 0 eval tasks, 0 prompts without tasks" in out
+    # No stray tree characters on an empty listing.
+    assert "├──" not in out
+    assert "└──" not in out
+    # No stray blank line between the header and the Total line.
+    assert "=== Eval tasks ===\n\nTotal:" not in out
+    # The output should be exactly two lines (header + total), plus the
+    # trailing newline from print().
+    assert out.strip().count("\n") == 1
