@@ -6,7 +6,13 @@ from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.renderer import SENTINEL
-from coding_agent_playbook.types import Prompt, PromptFrontmatter, Rule, RuleFrontmatter
+from coding_agent_playbook.types import (
+    Prompt,
+    PromptFrontmatter,
+    Rule,
+    RuleFrontmatter,
+    Skill,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -159,3 +165,34 @@ def test_continue_write_prompt_renders_includes_rules_appendix(tmp_path: Path) -
     assert "## Reference rules" in content
     assert "### X" in content
     assert "rule body" in content
+
+
+# --- Task 6.4: write_skill degrades to write_prompt -----------------------
+
+
+def test_continue_write_skill_degrades_to_prompt_path(tmp_path: Path) -> None:
+    """ContinueAdapter has no native skill support — write_skill must inherit
+    the ABC default, which calls Skill.to_prompt() and forwards to write_prompt.
+    The resulting file lands at .continue/prompts/{slash}.md."""
+    skill = Skill(
+        frontmatter={
+            "id": "demo-skill",
+            "name": "Demo skill",
+            "description": "A demo",
+            "slash": "demo-skill",
+        },
+        body="# Demo skill body\n",
+        scripts_dir=None,
+        references_dir=None,
+        source_package="coding_agent_playbook",
+    )
+    adapter = ContinueAdapter()
+    written = adapter.write_skill(skill, repo_root=tmp_path)
+    expected = tmp_path / ".continue" / "prompts" / "demo-skill.md"
+    assert written == [expected]
+    content = expected.read_text(encoding="utf-8")
+    assert SENTINEL in content.split("\n", 1)[0]
+    assert "name: Demo skill" in content
+    assert "Demo skill body" in content
+    # The Continue prompt shape ships invokable: true at the top.
+    assert "invokable: true" in content

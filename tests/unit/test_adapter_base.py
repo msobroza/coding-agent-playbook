@@ -9,7 +9,7 @@ import pytest
 
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.renderer import SENTINEL
-from coding_agent_playbook.types import Skill
+from coding_agent_playbook.types import Prompt, Skill
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -55,18 +55,30 @@ def test_finalize_defaults_to_no_output():
     assert _DummyAdapter().finalize(Path(".")) == []
 
 
-def test_write_skill_default_degradation_deferred_to_pr6():
-    # The default write_skill degrades a skill via Skill.to_prompt(), which is
-    # not implemented until Task 6.4 (this same PR — the test is updated then).
+def test_write_skill_default_degrades_to_write_prompt(tmp_path):
+    """The ABC's default write_skill calls Skill.to_prompt() and forwards the
+    resulting Prompt to the adapter's write_prompt. _DummyAdapter records the
+    prompt it received, so the test asserts on that."""
     skill = Skill(
-        frontmatter={"name": "demo"},
-        body="",
+        frontmatter={
+            "id": "demo",
+            "name": "Demo",
+            "description": "A demo",
+            "slash": "demo",
+        },
+        body="body\n",
         scripts_dir=None,
         references_dir=None,
         source_package="pkg",
     )
-    with pytest.raises(NotImplementedError):
-        _DummyAdapter().write_skill(skill, Path("."))
+    adapter = _DummyAdapter()
+    adapter.write_skill(skill, tmp_path)
+    assert len(adapter.written_prompts) == 1
+    # The forwarded artifact is the Prompt returned by Skill.to_prompt().
+    forwarded = adapter.written_prompts[0]
+    assert isinstance(forwarded, Prompt)
+    assert forwarded.frontmatter.id == "demo"
+    assert forwarded.body == "body\n"
 
 
 def test_default_output_directories_is_empty():

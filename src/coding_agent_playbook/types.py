@@ -208,8 +208,32 @@ class Skill:
     source_package: str
 
     def to_prompt(self) -> Prompt:
-        raise NotImplementedError(
-            "Skill -> Prompt degradation lands with the Continue adapter (PR 6)."
+        """Degrade this Skill to a Prompt.
+
+        ``scripts_dir`` and ``references_dir`` are intentionally *not* carried
+        into the Prompt — adapters that natively support skills (e.g.
+        :class:`ClaudeCodeAdapter`) handle those side files separately by
+        overriding ``write_skill``. For every other adapter the degrade path
+        is lossy by design (SPEC §6.3).
+
+        ``Skill.frontmatter`` is an open ``dict[str, Any]`` because the Claude
+        Code SKILL.md schema is not strict YAML the way Rule/Prompt frontmatter
+        is. We pull canonical fields out with sensible fallbacks so the
+        resulting Prompt is always writable.
+        """
+        identifier = self.frontmatter.get("id", "skill")
+        return Prompt(
+            frontmatter=PromptFrontmatter(
+                id=identifier,
+                name=self.frontmatter.get("name", "Skill"),
+                description=self.frontmatter.get("description", ""),
+                slash=self.frontmatter.get("slash") or identifier,
+            ),
+            body=self.body,
+            template_body=self.body,
+            is_templated=False,
+            source_path=None,
+            source_package=self.source_package,
         )
 
     def to_dict(self) -> dict[str, Any]:
