@@ -15,12 +15,13 @@ from typing import TYPE_CHECKING, Any
 from coding_agent_playbook.config import Config
 from coding_agent_playbook.lockfile import Lockfile
 from coding_agent_playbook.sources.base import ArtifactSource, StateSource
-from coding_agent_playbook.types import Rule
+from coding_agent_playbook.types import Prompt, Rule, Skill, split_frontmatter
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
+    from typing import TypeVar
 
-    from coding_agent_playbook.types import Prompt, Skill
+    _T = TypeVar("_T")
 
 # Placeholder for eval tasks until PR 11 defines the type. Listed by ID only
 # for now so that list_eval_tasks() can return an empty list without raising.
@@ -144,6 +145,39 @@ def _iter_md_files(root: Path) -> Iterator[Path]:
             yield path
 
 
+def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
+    """Yield one ``Skill`` per subdirectory of ``skills_root`` (SPEC §6.3.1).
+
+    Each skill directory must contain ``SKILL.md`` (or ``SKILL.md.j2``).
+    ``scripts/`` and ``references/`` sibling subdirectories are recorded on
+    the Skill if present.
+    """
+    for skill_dir in sorted(p for p in skills_root.iterdir() if p.is_dir()):
+        skill_md = _find_skill_md(skill_dir)
+        if skill_md is None:
+            continue
+        text = skill_md.read_text(encoding="utf-8")
+        frontmatter, body = split_frontmatter(text)
+        scripts_dir = skill_dir / "scripts"
+        references_dir = skill_dir / "references"
+        yield Skill(
+            frontmatter=frontmatter,
+            body=body,
+            scripts_dir=scripts_dir if scripts_dir.is_dir() else None,
+            references_dir=references_dir if references_dir.is_dir() else None,
+            source_package=source_package,
+        )
+
+
+def _find_skill_md(skill_dir: Path) -> Path | None:
+    """Return ``SKILL.md`` or ``SKILL.md.j2`` inside ``skill_dir`` if it exists."""
+    for candidate_name in ("SKILL.md", "SKILL.md.j2"):
+        candidate = skill_dir / candidate_name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 class FileSystemArtifactSource(ArtifactSource):
     """Walks importlib.resources for the engine + overlay packages, plus
     <repo>/playbook/ for repo-local artifacts (SPEC §20.3, §11)."""
@@ -162,30 +196,47 @@ class FileSystemArtifactSource(ArtifactSource):
         self._overlay_packages = overlay_packages or []
 
     def list_rules(self) -> list[Rule]:
-        rules: list[Rule] = []
-        rules.extend(self._walk_rules(self._engine_package))
-        for pkg in self._overlay_packages:
-            rules.extend(self._walk_rules(pkg))
-        playbook_rules = self._repo_root / "playbook" / "rules"
-        if playbook_rules.is_dir():
-            for md in _iter_md_files(playbook_rules):
-                rules.append(Rule.from_markdown(md, "<repo-local>"))
-        return rules
+        return self._walk_artifacts(
+            subdir="rules",
+            builder=Rule.from_markdown,
+        )
 
     def list_prompts(self) -> list[Prompt]:
-        raise NotImplementedError("list_prompts lands in Task C.7")
+        return self._walk_artifacts(
+            subdir="prompts",
+            builder=Prompt.from_markdown,
+        )
 
     def list_skills(self) -> list[Skill]:
-        raise NotImplementedError("list_skills lands in Task C.7")
+        skills: list[Skill] = []
+        for package in (self._engine_package, *self._overlay_packages):
+            root = _resource_subdir(package, "skills")
+            if root is None:
+                continue
+            skills.extend(_iter_skills(root, package))
+        repo_local_root = self._repo_root / "playbook" / "skills"
+        if repo_local_root.is_dir():
+            skills.extend(_iter_skills(repo_local_root, "<repo-local>"))
+        return skills
 
-    def _walk_rules(self, package: str) -> list[Rule]:
-        rules: list[Rule] = []
-        root = _resource_subdir(package, "rules")
-        if root is None:
-            return rules
-        for md in _iter_md_files(root):
-            rules.append(Rule.from_markdown(md, package))
-        return rules
+    def _walk_artifacts(
+        self,
+        *,
+        subdir: str,
+        builder: Callable[[Path, str], _T],
+    ) -> list[_T]:
+        items: list[_T] = []
+        for package in (self._engine_package, *self._overlay_packages):
+            root = _resource_subdir(package, subdir)
+            if root is None:
+                continue
+            for md in _iter_md_files(root):
+                items.append(builder(md, package))
+        repo_local_root = self._repo_root / "playbook" / subdir
+        if repo_local_root.is_dir():
+            for md in _iter_md_files(repo_local_root):
+                items.append(builder(md, "<repo-local>"))
+        return items
 
     def list_eval_tasks(self) -> list[EvalTask]:
         # PR 11 populates this with real EvalTask objects.

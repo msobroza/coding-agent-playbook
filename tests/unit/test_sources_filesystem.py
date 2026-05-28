@@ -35,6 +35,28 @@ globs:
 Body.
 """
 
+PROMPT_MD_TEMPLATE = """\
+---
+id: {id}
+name: {name}
+description: {description}
+slash: {id}
+---
+# {name}
+
+Prompt body.
+"""
+
+SKILL_MD_TEMPLATE = """\
+---
+name: {name}
+description: {description}
+---
+# {name}
+
+Skill body.
+"""
+
 
 def _make_temp_package(
     tmp_path: Path,
@@ -262,6 +284,61 @@ def test_list_rules_includes_repo_local_playbook(tmp_path: Path) -> None:
     assert len(rules) == 1
     assert rules[0].frontmatter.id == "bar"
     assert rules[0].source_package == "<repo-local>"
+
+
+def test_list_prompts_walks_same_layout(tmp_path: Path, temp_pkg_cleanup: None) -> None:
+    _make_temp_package(
+        tmp_path,
+        "temp_overlay_prompts",
+        prompts={
+            "gen.md": PROMPT_MD_TEMPLATE.format(
+                id="gen", name="Generate", description="Make stuff"
+            ),
+        },
+    )
+    # repo-local prompts under playbook/prompts/
+    repo_prompts = tmp_path / "playbook" / "prompts"
+    repo_prompts.mkdir(parents=True)
+    (repo_prompts / "local.md").write_text(
+        PROMPT_MD_TEMPLATE.format(id="local", name="Local", description="Repo prompt"),
+        encoding="utf-8",
+    )
+    source = FileSystemArtifactSource(
+        repo_root=tmp_path,
+        overlay_packages=["temp_overlay_prompts"],
+    )
+    prompts = source.list_prompts()
+    ids = {p.frontmatter.id for p in prompts}
+    assert ids == {"gen", "local"}
+    by_id = {p.frontmatter.id: p for p in prompts}
+    assert by_id["gen"].source_package == "temp_overlay_prompts"
+    assert by_id["local"].source_package == "<repo-local>"
+
+
+def test_list_skills_constructs_from_directory(tmp_path: Path, temp_pkg_cleanup: None) -> None:
+    _make_temp_package(
+        tmp_path,
+        "temp_overlay_skills",
+        skills={
+            "my-skill": SKILL_MD_TEMPLATE.format(name="My skill", description="Does things"),
+        },
+    )
+    # Add a `scripts/` sibling dir to verify it gets surfaced on the Skill.
+    scripts_dir = tmp_path / "temp_overlay_skills" / "resources" / "skills" / "my-skill" / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "helper.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    source = FileSystemArtifactSource(
+        repo_root=tmp_path,
+        overlay_packages=["temp_overlay_skills"],
+    )
+    skills = source.list_skills()
+    assert len(skills) == 1
+    skill = skills[0]
+    assert skill.frontmatter["name"] == "My skill"
+    assert skill.source_package == "temp_overlay_skills"
+    assert skill.scripts_dir is not None
+    assert skill.scripts_dir.name == "scripts"
+    assert skill.references_dir is None
 
 
 def test_save_lockfile_emits_valid_toml(tmp_path: Path) -> None:
