@@ -19,7 +19,7 @@ from coding_agent_playbook.commands.sync import (
     _render_rule_body,
 )
 from coding_agent_playbook.detector import evaluate_predicate
-from coding_agent_playbook.orchestrator import RuleRegistryImpl, SyncContext
+from coding_agent_playbook.orchestrator import RuleRegistryImpl, SyncContext, artifact_id_of
 from coding_agent_playbook.renderer import (
     BUILTIN_FORMATS,
     FORMAT_ALIASES,
@@ -80,7 +80,7 @@ def _show_source(artifact: _Artifact, kind: str, ctx: SyncContext) -> str:
     relevant = [
         c
         for c in ctx.overlay_collisions
-        if c.kind == kind and c.artifact_id == _artifact_id(artifact)
+        if c.kind == kind and c.artifact_id == artifact_id_of(artifact)
     ]
     if relevant:
         losers = ", ".join(relevant[0].losers)
@@ -88,13 +88,6 @@ def _show_source(artifact: _Artifact, kind: str, ctx: SyncContext) -> str:
     adapters = sorted(ctx.adapters.keys())
     lines.append(f"Adapters:  {', '.join(adapters)}")
     return "\n".join(lines)
-
-
-def _artifact_id(artifact: _Artifact) -> str:
-    frontmatter = artifact.frontmatter
-    if isinstance(frontmatter, dict):
-        return str(frontmatter.get("id", "skill"))
-    return str(frontmatter.id)
 
 
 def _show_rules(prompt: Prompt, ctx: SyncContext) -> str:

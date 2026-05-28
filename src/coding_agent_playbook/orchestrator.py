@@ -117,7 +117,7 @@ class OverlayResolver:
         layers: list[list[T]] = [engine, *overlays, repo_local]
         for layer in layers:
             for artifact in layer:
-                artifact_id = _artifact_id(artifact)
+                artifact_id = artifact_id_of(artifact)
                 if artifact_id in winners:
                     previous = winners[artifact_id]
                     loser_log.setdefault(artifact_id, []).append(_source_package(previous))
@@ -135,12 +135,15 @@ class OverlayResolver:
         return list(winners.values())
 
 
-def _artifact_id(artifact: object) -> str:
-    """Return the artifact's ID for collision tracking.
+def artifact_id_of(artifact: object) -> str:
+    """Return the artifact's ID for collision tracking and provenance lookups.
 
     Rules/Prompts carry a dataclass frontmatter (``frontmatter.id``); Skills
     carry an open dict (``frontmatter["id"]``). Skills without an explicit id
     fall back to ``"skill"`` to mirror :meth:`Skill.to_prompt`'s behaviour.
+
+    Public helper (no underscore) — ``commands/render.py`` reuses it when
+    looking up overlay collisions by ID.
     """
     frontmatter = artifact.frontmatter  # type: ignore[attr-defined]
     if hasattr(frontmatter, "id"):
