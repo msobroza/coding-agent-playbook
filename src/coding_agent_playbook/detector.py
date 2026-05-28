@@ -8,8 +8,13 @@ mtime change or ``cap check --refresh``.
 
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 from typing import Any, Literal, TypedDict
+
+_IGNORE_DIRS: frozenset[str] = frozenset(
+    {".venv", "venv", "node_modules", ".git", "__pycache__", ".tox", ".mypy_cache"}
+)
 
 
 # All entries are optional — the detector only sets keys it can determine.
@@ -86,6 +91,117 @@ KNOWN_DEV_TOOLS: frozenset[str] = frozenset(
 )
 
 
+def _parse_python_version(requires_python: str | None) -> str | None:
+    """Extract a ``"major.minor"`` python_version from ``requires-python``.
+
+    Accepts the common shapes ``">=3.12"``, ``">=3.12,<4"``, ``"~=3.12"``,
+    ``"==3.12.*"``. Returns the minimum bound's major.minor, or ``None`` if
+    no minimum can be inferred.
+    """
+    if not requires_python:
+        return None
+    # Walk comma-separated constraints, find a min-bound.
+    for raw in requires_python.split(","):
+        spec = raw.strip()
+        for op in (">=", "~=", "==", ">"):
+            if spec.startswith(op):
+                version = spec[len(op) :].strip().rstrip(".*")
+                parts = version.split(".")
+                if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+                    return f"{parts[0]}.{parts[1]}"
+    return None
+
+
+def _parse_dep_name(spec: str) -> str:
+    """Return the canonical package name from a PEP 508 dependency spec."""
+    # Strip extras and version specifiers; lower-case for case-insensitive matches.
+    name = spec.strip()
+    for sep in ("[", " ", ">", "<", "=", "!", "~", ";"):
+        idx = name.find(sep)
+        if idx >= 0:
+            name = name[:idx]
+    return name.strip().lower()
+
+
+def _parse_dep_spec(spec: str) -> tuple[str, str]:
+    """Return ``(name, version_constraint)`` for a PEP 508 dependency spec.
+
+    Version constraint preserves everything after the name (operator + value).
+    Empty string when no constraint was provided.
+    """
+    name = _parse_dep_name(spec)
+    rest = spec.strip()
+    # Find where the name ends in the original spec (case-insensitive).
+    lower = rest.lower()
+    idx = lower.find(name)
+    if idx < 0:
+        return name, ""
+    tail = rest[idx + len(name) :].strip()
+    # Drop an environment marker like "; python_version >= '3.10'".
+    semi = tail.find(";")
+    if semi >= 0:
+        tail = tail[:semi].rstrip()
+    # Drop extras block.
+    if tail.startswith("["):
+        close = tail.find("]")
+        if close >= 0:
+            tail = tail[close + 1 :].lstrip()
+    return name, tail
+
+
+def _read_pyproject(repo_root: Path) -> dict[str, Any] | None:
+    pyproject = repo_root / "pyproject.toml"
+    if not pyproject.is_file():
+        return None
+    with pyproject.open("rb") as f:
+        return tomllib.load(f)
+
+
+def _has_notebooks(repo_root: Path) -> bool:
+    for path in repo_root.rglob("*.ipynb"):
+        if any(part in _IGNORE_DIRS for part in path.relative_to(repo_root).parts):
+            continue
+        return True
+    return False
+
+
+def _has_dockerfile(repo_root: Path) -> bool:
+    return (repo_root / "Dockerfile").exists() or (repo_root / "docker").is_dir()
+
+
+def _has_ci(repo_root: Path) -> bool:
+    return (
+        (repo_root / ".github" / "workflows").is_dir()
+        or (repo_root / "Jenkinsfile").is_file()
+        or (repo_root / ".gitlab-ci.yml").is_file()
+        or (repo_root / ".circleci").is_dir()
+    )
+
+
+def _infer_kind(
+    facts: Facts, repo_root: Path
+) -> Literal[
+    "python-application",
+    "python-library",
+    "ml-research",
+    "notebook",
+    "python-unknown",
+]:
+    has_src = (repo_root / "src").is_dir()
+    notebooks = facts.get("has_notebooks", False)
+    frameworks = set(facts.get("frameworks", {}).keys())
+
+    if notebooks and not has_src:
+        return "notebook"
+    if notebooks and has_src:
+        return "ml-research"
+    if has_src and "fastapi" in frameworks:
+        return "python-application"
+    if has_src:
+        return "python-library"
+    return "python-unknown"
+
+
 def detect(repo_root: Path) -> Facts:
     """Run all detector passes against ``repo_root`` and return Facts.
 
@@ -93,7 +209,40 @@ def detect(repo_root: Path) -> Facts:
     and only sets dict keys it can determine. Never raises — a repo with no
     ``pyproject.toml`` returns ``Facts(project_kind="python-unknown")``.
     """
-    raise NotImplementedError("detector.detect not yet implemented")
+    facts: Facts = {}
+    pyproject = _read_pyproject(repo_root)
+
+    if pyproject is not None:
+        project = pyproject.get("project", {})
+
+        python_version = _parse_python_version(project.get("requires-python"))
+        if python_version is not None:
+            facts["python_version"] = python_version
+
+        dependencies: dict[str, str] = {}
+        for raw in project.get("dependencies", []) or []:
+            if not isinstance(raw, str):
+                continue
+            name, version = _parse_dep_spec(raw)
+            if name:
+                dependencies[name] = version
+        if dependencies:
+            facts["dependencies"] = dependencies
+
+        frameworks = {n: v for n, v in dependencies.items() if n in KNOWN_FRAMEWORKS}
+        if frameworks:
+            facts["frameworks"] = frameworks
+
+    has_notebooks = _has_notebooks(repo_root)
+    if has_notebooks:
+        facts["has_notebooks"] = True
+
+    facts["has_dockerfile"] = _has_dockerfile(repo_root)
+    facts["has_ci"] = _has_ci(repo_root)
+
+    facts["project_kind"] = _infer_kind(facts, repo_root)
+
+    return facts
 
 
 def evaluate_predicate(predicate: dict[str, Any], facts: Facts) -> bool:
