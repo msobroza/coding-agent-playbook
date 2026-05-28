@@ -8,13 +8,13 @@ rendered through Jinja2 with ``StrictUndefined`` so typos fail loudly.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Protocol
 
 import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
 # Aliases the CLI accepts as a short-form for --format. Resolved to the full
@@ -134,7 +134,7 @@ def render_string(body: str, context: dict[str, Any], *, env: Environment) -> st
 
 
 def render_for(
-    template_path: Path,
+    _template_path: Path,
     body: str,
     fmt: str,
     *,
@@ -145,10 +145,11 @@ def render_for(
 
     ``fmt`` is one of the formats in ``BUILTIN_FORMATS`` (or a short alias in
     ``FORMAT_ALIASES``). Behaviour per format is documented in SPEC §9.7.
+
+    ``_template_path`` is reserved for future format-specific dispatch
+    (SPEC §9.7); current transforms key off ``fmt`` and ``frontmatter`` only.
+    The leading underscore marks it as intentionally unused for now.
     """
-    # ``template_path`` is reserved for future format-specific dispatch (SPEC §9.7);
-    # current transforms key off ``fmt`` and ``frontmatter`` only.
-    del template_path
     resolved = FORMAT_ALIASES.get(fmt, fmt)
     if resolved not in BUILTIN_FORMATS:
         valid = ", ".join(sorted(BUILTIN_FORMATS))
