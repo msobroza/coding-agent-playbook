@@ -444,9 +444,10 @@ def test_list_prompts_walks_same_layout(tmp_path: Path, temp_pkg_cleanup: None) 
         overlay_packages=["temp_overlay_prompts"],
     )
     prompts = source.list_prompts()
-    ids = {p.frontmatter.id for p in prompts}
+    non_engine = [p for p in prompts if p.source_package != "coding_agent_playbook"]
+    ids = {p.frontmatter.id for p in non_engine}
     assert ids == {"gen", "local"}
-    by_id = {p.frontmatter.id: p for p in prompts}
+    by_id = {p.frontmatter.id: p for p in non_engine}
     assert by_id["gen"].source_package == "temp_overlay_prompts"
     assert by_id["local"].source_package == "<repo-local>"
 
@@ -475,14 +476,6 @@ def test_list_skills_constructs_from_directory(tmp_path: Path, temp_pkg_cleanup:
     assert skill.scripts_dir is not None
     assert skill.scripts_dir.name == "scripts"
     assert skill.references_dir is None
-
-
-def test_list_eval_tasks_returns_empty_for_engine_only(tmp_path: Path) -> None:
-    """The engine ships zero eval tasks in v1 (PR 13 adds them); confirm the
-    method returns ``[]`` without raising. The full walk (overlay + repo-local)
-    is covered in :mod:`tests.unit.test_filesystem_list_eval_tasks`."""
-    source = FileSystemArtifactSource(repo_root=tmp_path)
-    assert source.list_eval_tasks() == []
 
 
 def test_resource_subdir_returns_none_for_missing_package() -> None:

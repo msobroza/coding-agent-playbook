@@ -40,7 +40,11 @@ def _seed_eval_repo(repo: Path, make_synthetic_repo: Any) -> None:
     - refactor               (1 task)  refactor-extract-helper
     - generate-tests         (2 tasks) generate-tests-happy-path,
                                        generate-tests-edge-cases
-    - review                 (0 tasks) triggers "consider adding tasks"
+    - local-only-no-tasks    (0 tasks) triggers "consider adding tasks"
+
+    The "no-tasks" prompt uses a non-colliding id so it remains genuinely
+    task-less even after PR 13's engine content (which ships tasks for the
+    ``review``/``refactor``/``generate-tests`` prompt ids) is layered in.
     """
     make_synthetic_repo(repo)
     prompts_dir = repo / "playbook" / "prompts"
@@ -71,12 +75,12 @@ def _seed_eval_repo(repo: Path, make_synthetic_repo: Any) -> None:
         "Body.\n",
         encoding="utf-8",
     )
-    (prompts_dir / "review.md").write_text(
+    (prompts_dir / "local-only-no-tasks.md").write_text(
         "---\n"
-        "id: review\n"
-        "name: Review\n"
-        "description: Review a code change\n"
-        "slash: review\n"
+        "id: local-only-no-tasks\n"
+        "name: Local Only No Tasks\n"
+        "description: A repo-local prompt deliberately shipped without any eval tasks\n"
+        "slash: local-only-no-tasks\n"
         "---\n"
         "Body.\n",
         encoding="utf-8",
@@ -157,7 +161,7 @@ def test_eval_list_prints_tree(tmp_path, make_synthetic_repo, capsys):
     # Each prompt header appears.
     assert "generate-tests" in out
     assert "refactor" in out
-    assert "review" in out
+    assert "local-only-no-tasks" in out
     # Tree markers from SPEC §12.8.
     assert "├──" in out or "└──" in out
     # Every task name appears.
@@ -166,8 +170,17 @@ def test_eval_list_prints_tree(tmp_path, make_synthetic_repo, capsys):
     assert "refactor-extract-helper" in out
     # Task-defined marker for prompts that have tasks.
     assert "task defined" in out
-    # Warning for the review prompt which has none.
-    assert "consider adding tasks" in out
+    # Warning for the task-less prompt — scope the assertion to that prompt's
+    # tree segment so engine-shipped prompts with tasks don't crowd it out.
+    local_only_idx = out.index("local-only-no-tasks")
+    # The synthetic prompt's tree segment runs from its header to the next
+    # blank line (or the Total: footer); within that window the warning must
+    # appear.
+    segment_end = out.find("\n\n", local_only_idx)
+    if segment_end == -1:
+        segment_end = out.index("Total:")
+    segment = out[local_only_idx:segment_end]
+    assert "consider adding tasks" in segment
     # Per-task summary line shape.
     assert "rubric criteria" in out
     assert "programmatic checks" in out
@@ -185,50 +198,56 @@ def test_eval_list_groups_tasks_under_prompts(tmp_path, make_synthetic_repo, cap
     assert idx_header < idx_happy < idx_edge
 
 
-def test_eval_list_total_pluralizes_correctly(tmp_path, make_synthetic_repo, capsys):
-    """The ``Total:`` line must use singular ``prompt``/``eval task``/``prompt
-    without tasks`` when the count is exactly 1, plural otherwise. SPEC §12.8
-    shows both shapes."""
-    # Seed a repo with exactly one prompt, one task, zero prompts-without-tasks
-    # to exercise the n=1 branch on the first two counts and the n=0 branch
-    # on the third.
+def test_plural_helper_uses_singular_for_n_equals_one():
+    """Unit test for the ``_plural`` helper: it must render ``1 prompt`` (not
+    ``1 prompts``) and append ``s`` for any other count. SPEC §12.8 shows both
+    shapes.
+
+    Exercises the n=1 branch directly because integration via
+    ``cap eval --list`` can't reach n=1 on a real repo: the engine ships four
+    prompts (PR 13) so the prompt count is never 1 in practice.
+    """
+    from coding_agent_playbook.commands.eval import _plural
+
+    assert _plural(0, "prompt") == "0 prompts"
+    assert _plural(1, "prompt") == "1 prompt"
+    assert _plural(2, "prompt") == "2 prompts"
+    assert _plural(1, "eval task") == "1 eval task"
+    assert _plural(3, "eval task") == "3 eval tasks"
+
+
+def test_eval_list_total_pluralizes_prompts_without_tasks_correctly(
+    tmp_path, make_synthetic_repo, capsys
+):
+    """The ``prompts without tasks`` suffix has to be pluralised separately
+    because the head noun isn't at the tail of the phrase (naively appending
+    ``s`` would emit ``prompt without taskss``).
+
+    Singular case: seed a repo with exactly one task-less repo-local prompt.
+    The Total: line must read ``1 prompt without tasks``, never ``1 prompts
+    without tasks``. The other Total: counts include the engine's prompts and
+    tasks so we only pin the suffix here.
+    """
     make_synthetic_repo(tmp_path)
     prompts_dir = tmp_path / "playbook" / "prompts"
     prompts_dir.mkdir(parents=True, exist_ok=True)
-    (prompts_dir / "solo.md").write_text(
+    # Non-colliding id so the engine doesn't ship tasks for it.
+    (prompts_dir / "lone-no-tasks.md").write_text(
         "---\n"
-        "id: solo\n"
-        "name: Solo\n"
-        "description: Lonely prompt\n"
-        "slash: solo\n"
-        "eval_tasks:\n"
-        "  - solo-task\n"
+        "id: lone-no-tasks\n"
+        "name: Lone No Tasks\n"
+        "description: A prompt with deliberately zero eval tasks\n"
+        "slash: lone-no-tasks\n"
         "---\n"
         "Body.\n",
-        encoding="utf-8",
-    )
-    task_dir = tmp_path / "playbook" / "eval_tasks" / "solo-task"
-    task_dir.mkdir(parents=True, exist_ok=True)
-    (task_dir / "task.toml").write_text(
-        'id = "solo-task"\n'
-        'prompt_id = "solo"\n'
-        'description = "Only task"\n'
-        "[setup]\n"
-        "files = []\n"
-        'project_kind = "python-application"\n'
-        'python_version = "3.12"\n'
-        "frameworks = []\n"
-        "[invocation]\n"
-        'prompt_args = ""\n',
         encoding="utf-8",
     )
 
     _eval.run(_ns(tmp_path, list_=True))
     out = capsys.readouterr().out
-    assert "Total: 1 prompt, 1 eval task, 0 prompts without tasks" in out
-    # Negative assertions for the buggy plural-only form.
-    assert "1 prompts" not in out
-    assert "1 eval tasks" not in out
+    assert "1 prompt without tasks" in out
+    # Negative assertion for the buggy plural-only form.
+    assert "1 prompts without tasks" not in out
 
 
 def test_eval_show_existing_task_prints_details(tmp_path, make_synthetic_repo, capsys):
@@ -383,14 +402,50 @@ def test_show_source_path_is_repo_relative_for_repo_local_tasks(
     SPEC §12.8 example uses package-relative paths
     (``coding_agent_playbook/resources/eval_tasks/.../``); the repo-local
     analogue should anchor at ``playbook/`` so the output is reproducible
-    across user machines (no leak of ``$HOME``/scratch-dir layouts)."""
-    _seed_eval_repo(tmp_path, make_synthetic_repo)
-    rc = _eval.run(_ns(tmp_path, show="generate-tests-happy-path"))
+    across user machines (no leak of ``$HOME``/scratch-dir layouts).
+
+    Uses a non-colliding task id so the engine's PR 13 tasks (which include
+    ``generate-tests-happy-path``) don't shadow the repo-local copy in the
+    by-id lookup.
+    """
+    make_synthetic_repo(tmp_path)
+    # Author a prompt + task with non-colliding ids so the engine's PR 13
+    # eval tasks don't shadow the repo-local copy.
+    prompts_dir = tmp_path / "playbook" / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+    (prompts_dir / "local-only.md").write_text(
+        "---\n"
+        "id: local-only\n"
+        "name: Local Only\n"
+        "description: A repo-local-only prompt for path-display assertions\n"
+        "slash: local-only\n"
+        "eval_tasks:\n"
+        "  - local-only-unique-zzz\n"
+        "---\n"
+        "Body.\n",
+        encoding="utf-8",
+    )
+    task_dir = tmp_path / "playbook" / "eval_tasks" / "local-only-unique-zzz"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    (task_dir / "task.toml").write_text(
+        'id = "local-only-unique-zzz"\n'
+        'prompt_id = "local-only"\n'
+        'description = "Repo-local task that doesn\'t collide with engine ids"\n'
+        "[setup]\n"
+        "files = []\n"
+        'project_kind = "python-application"\n'
+        'python_version = "3.12"\n'
+        "frameworks = []\n"
+        "[invocation]\n"
+        'prompt_args = ""\n',
+        encoding="utf-8",
+    )
+    rc = _eval.run(_ns(tmp_path, show="local-only-unique-zzz"))
     assert rc == 0
     out = capsys.readouterr().out
     # The Source: line must read the repo-relative form, not the absolute
     # path under tmp_path.
-    assert "Source: playbook/eval_tasks/generate-tests-happy-path/" in out
+    assert "Source: playbook/eval_tasks/local-only-unique-zzz/" in out
     assert str(tmp_path) not in out
 
 
@@ -460,30 +515,26 @@ def test_eval_no_args_defaults_to_list(tmp_path, make_synthetic_repo, capsys):
     assert "Eval tasks" in out or "generate-tests" in out
 
 
-def test_eval_list_handles_empty_repo(tmp_path, make_synthetic_repo, capsys):
-    """``cap eval --list`` on a fresh repo with zero prompts and zero tasks
+def test_eval_list_handles_repo_with_no_local_artifacts(tmp_path, make_synthetic_repo, capsys):
+    """``cap eval --list`` on a fresh repo with no repo-local prompts or tasks
     must:
 
     - still print the SPEC §12.8 header ``=== Eval tasks ===``
-    - print the ``Total: 0 prompts, 0 eval tasks, 0 prompts without tasks``
-      summary
-    - exit 0 (no error — an empty playbook is a legitimate state)
-    - not emit any tree characters (``├──`` / ``└──``) since there's no
-      tree to draw
-    - not emit a stray blank line between the header and the Total
+    - print a ``Total: ... prompts, ... eval tasks, ... prompts without
+      tasks`` summary (with the engine-shipped totals — PR 13 ships 4
+      prompts and 8 eval tasks)
+    - exit 0 (no error — a repo with no local artifacts is a legitimate
+      state; engine content is still listed)
+    - not emit any repo-local prompts/tasks since none were authored
     """
-    # Bare synthetic repo: pyproject + config, no prompts, no eval tasks.
+    # Bare synthetic repo: pyproject + config, no repo-local prompts or tasks.
     make_synthetic_repo(tmp_path)
     rc = _eval.run(_ns(tmp_path, list_=True))
     assert rc == 0
     out = capsys.readouterr().out
     assert "=== Eval tasks ===" in out
-    assert "Total: 0 prompts, 0 eval tasks, 0 prompts without tasks" in out
-    # No stray tree characters on an empty listing.
-    assert "├──" not in out
-    assert "└──" not in out
-    # No stray blank line between the header and the Total line.
-    assert "=== Eval tasks ===\n\nTotal:" not in out
-    # The output should be exactly two lines (header + total), plus the
-    # trailing newline from print().
-    assert out.strip().count("\n") == 1
+    # Total: line present — exact counts come from the engine.
+    assert "Total:" in out
+    assert "eval task" in out
+    # No repo-local prompts or tasks since the synthetic repo authored none.
+    assert "(repo-local)" not in out
