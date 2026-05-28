@@ -8,8 +8,10 @@ import pytest
 from jinja2 import UndefinedError
 
 from coding_agent_playbook.renderer import (
+    SENTINEL,
     build_environment,
     render_artifact_body,
+    render_for,
     render_string,
 )
 
@@ -86,3 +88,83 @@ def test_rule_helper_not_registered_in_rule_env(tmp_path: Path) -> None:
 def test_rule_helper_requires_registry_in_prompt_env(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="rule_registry"):
         build_environment([tmp_path], is_prompt_context=True)
+
+
+# --- Task B.4 step 1: continue_rule + alias resolution + unknown-format ----
+
+
+def test_render_for_continue_rule(tmp_path: Path) -> None:
+    frontmatter = {
+        "id": "py-typing",
+        "name": "Python typing",
+        "description": "Always use type hints.",
+        "scope": "always",
+        "globs": ["**/*.py"],
+        "version": 1,
+        "priority": 50,
+        "tags": ["python"],
+        "applies_if": {},
+    }
+    body = "Use type hints everywhere.\n"
+    out = render_for(
+        tmp_path / "rules" / "py-typing.md",
+        body,
+        "continue_rule",
+        frontmatter=frontmatter,
+    )
+    assert SENTINEL in out
+    assert "alwaysApply: true" in out
+    assert "name: Python typing" in out
+    assert "description: Always use type hints." in out
+    assert "globs:" in out
+    # Continue-shaped frontmatter must NOT include canonical-only keys.
+    assert "id:" not in out
+    assert "version:" not in out
+    assert "scope:" not in out
+    assert "priority:" not in out
+    assert "tags:" not in out
+    assert "applies_if:" not in out
+    assert out.endswith(body)
+
+
+def test_render_for_continue_rule_scoped(tmp_path: Path) -> None:
+    frontmatter = {
+        "id": "fastapi-routers",
+        "name": "FastAPI routers",
+        "description": "Use APIRouter for grouping endpoints.",
+        "scope": "scoped",
+        "globs": ["src/**/routers/*.py"],
+    }
+    body = "Group endpoints with APIRouter.\n"
+    out = render_for(
+        tmp_path / "rules" / "fastapi-routers.md",
+        body,
+        "continue_rule",
+        frontmatter=frontmatter,
+    )
+    assert "alwaysApply: false" in out
+    assert "src/**/routers/*.py" in out
+
+
+def test_format_alias_resolution(tmp_path: Path) -> None:
+    frontmatter = {
+        "id": "x",
+        "name": "X",
+        "description": "x",
+        "scope": "always",
+        "globs": [],
+    }
+    body = "body\n"
+    via_alias = render_for(tmp_path / "x.md", body, "continue", frontmatter=frontmatter)
+    via_full = render_for(tmp_path / "x.md", body, "continue_rule", frontmatter=frontmatter)
+    assert via_alias == via_full
+
+
+def test_unknown_format_raises_value_error(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="bogus"):
+        render_for(
+            tmp_path / "x.md",
+            "body\n",
+            "bogus",
+            frontmatter={"id": "x", "name": "X", "description": "x", "scope": "always"},
+        )

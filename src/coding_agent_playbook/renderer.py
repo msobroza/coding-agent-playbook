@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol
 
+import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 if TYPE_CHECKING:
@@ -144,4 +145,33 @@ def render_for(
     ``fmt`` is one of the formats in ``BUILTIN_FORMATS`` (or a short alias in
     ``FORMAT_ALIASES``). Behaviour per format is documented in SPEC §9.7.
     """
-    raise NotImplementedError("render_for lands with Task B.4.")
+    # ``template_path`` is reserved for future format-specific dispatch (SPEC §9.7);
+    # current transforms key off ``fmt`` and ``frontmatter`` only.
+    del template_path
+    resolved = FORMAT_ALIASES.get(fmt, fmt)
+    if resolved not in BUILTIN_FORMATS:
+        valid = ", ".join(sorted(BUILTIN_FORMATS))
+        raise ValueError(f"unknown format {fmt!r}; valid formats: {valid}")
+
+    if resolved == "continue_rule":
+        return _render_continue_rule(body, frontmatter)
+
+    raise NotImplementedError(f"render_for: format {resolved!r} not yet implemented")
+
+
+# --- Format transforms ----------------------------------------------------
+
+
+def _render_continue_rule(body: str, frontmatter: dict[str, Any]) -> str:
+    """Emit a Continue-shaped rule file (SPEC §9.7)."""
+    scope = frontmatter.get("scope", "scoped")
+    continue_frontmatter: dict[str, Any] = {
+        "name": frontmatter["name"],
+        "description": frontmatter["description"],
+        "alwaysApply": scope == "always",
+    }
+    globs = frontmatter.get("globs") or []
+    if globs:
+        continue_frontmatter["globs"] = list(globs)
+    fenced = yaml.safe_dump(continue_frontmatter, sort_keys=False, allow_unicode=True).rstrip("\n")
+    return f"<!-- {SENTINEL} -->\n---\n{fenced}\n---\n{body}"
