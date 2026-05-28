@@ -70,6 +70,9 @@ def build_environment(
     so calling it raises ``UndefinedError`` — that enforces the "rules cannot
     include other rules" invariant at the renderer level.
     """
+    if is_prompt_context and rule_registry is None:
+        raise ValueError("rule_registry required when is_prompt_context=True")
+
     env = Environment(
         loader=FileSystemLoader([str(p) for p in template_search_paths]),
         autoescape=False,
@@ -78,6 +81,29 @@ def build_environment(
         lstrip_blocks=True,
         undefined=StrictUndefined,
     )
+
+    # SPEC §9.4: helpers read facts from ``env.globals["_facts"]``. Callers stash
+    # facts there before each render so helpers don't need to be re-bound.
+    def _facts() -> dict[str, Any]:
+        value = env.globals.get("_facts", {})
+        return value if isinstance(value, dict) else {}
+
+    def _has_framework(name: str) -> bool:
+        frameworks = _facts().get("frameworks", {})
+        return name in frameworks
+
+    env.globals["has_framework"] = _has_framework
+
+    if is_prompt_context:
+        # ``rule_registry`` is guaranteed non-None above; assert for the type checker.
+        assert rule_registry is not None
+        registry = rule_registry
+
+        def _rule(rule_id: str) -> str:
+            return registry.render_for_inclusion(rule_id, _facts())
+
+        env.globals["rule"] = _rule
+
     return env
 
 
