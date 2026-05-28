@@ -25,6 +25,7 @@ from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
     from coding_agent_playbook._typing import Prompt, Rule
+    from coding_agent_playbook.renderer import RuleRegistry
 
 
 class ContinueAdapter(Adapter):
@@ -34,9 +35,18 @@ class ContinueAdapter(Adapter):
     ``continue``. The orchestrator (PR 10) discovers and instantiates adapters
     through that group — never construct ``ContinueAdapter`` directly outside
     of tests.
+
+    The optional ``rule_registry`` is plumbed into :func:`render_for` so that
+    the ``includes_rules:`` appendix in prompts can be rendered. When the
+    orchestrator builds the merged-overlay registry, it passes it here; when
+    callers (or tests) omit it, prompts render with no auto-appendix —
+    ``includes_rules:`` becomes purely declarative.
     """
 
     name = "continue"
+
+    def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
+        self._rule_registry = rule_registry
 
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
         target = (
@@ -56,4 +66,14 @@ class ContinueAdapter(Adapter):
         return [target]
 
     def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
-        raise NotImplementedError("Task 6.3 wires up Continue write_prompt.")
+        target = repo_root / ".continue" / "prompts" / f"{prompt.frontmatter.slash}.md"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        rendered = render_for(
+            prompt.source_path or Path("inline"),
+            prompt.body,
+            "prompt_continue",
+            frontmatter=prompt.frontmatter.__dict__,
+            rule_registry=self._rule_registry,
+        )
+        target.write_text(rendered, encoding="utf-8")
+        return [target]
