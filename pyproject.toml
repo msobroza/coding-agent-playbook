@@ -45,6 +45,7 @@ coding-agent-playbook = "coding_agent_playbook.cli:main"
 
 [project.entry-points."coding_agent_playbook.adapters"]
 # Populated by PRs 6–9: continue, claude_code, opencode, agents_md.
+opencode = "coding_agent_playbook.adapters.opencode_adapter:OpenCodeAdapter"
 
 [project.entry-points."coding_agent_playbook.overlays"]
 # Populated by overlay packages (e.g. playbook-rules-bnp). Engine ships none.
