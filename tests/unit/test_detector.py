@@ -425,5 +425,25 @@ def test_evaluate_predicate_python_version_rejects_unknown_operator() -> None:
         evaluate_predicate({"python_version": "@3.12"}, facts)
 
 
+def test_evaluate_predicate_has_framework_all_present() -> None:
+    facts: Facts = {"frameworks": {"fastapi": ">=0.110", "pydantic": ">=2.0"}}
+    assert evaluate_predicate({"has_framework": ["fastapi", "pydantic"]}, facts) is True
+
+
+def test_evaluate_predicate_has_framework_one_missing_false() -> None:
+    facts: Facts = {"frameworks": {"fastapi": ">=0.110"}}
+    assert evaluate_predicate({"has_framework": ["fastapi", "django"]}, facts) is False
+
+
+def test_evaluate_predicate_has_framework_no_frameworks_in_facts_false() -> None:
+    assert evaluate_predicate({"has_framework": ["fastapi"]}, {}) is False
+
+
+def test_evaluate_predicate_has_framework_requires_list() -> None:
+    facts: Facts = {"frameworks": {"fastapi": ""}}
+    with pytest.raises(ValueError, match="list of strings"):
+        evaluate_predicate({"has_framework": "fastapi"}, facts)
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])

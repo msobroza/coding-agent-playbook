@@ -335,6 +335,13 @@ def detect(repo_root: Path) -> Facts:
 _SUPPORTED_OPERATORS = (">=", "<=", "==", "~=", ">", "<")
 
 
+def _coerce_string_list(value: Any, key: str) -> list[str]:
+    """Validate a predicate value is a list of strings; raise with a clear message otherwise."""
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ValueError(f"predicate {key!r} must be a list of strings; got {value!r}")
+    return value
+
+
 def _check_python_version(constraint: str, facts: Facts) -> bool:
     """Compare ``facts["python_version"]`` against a PEP 440-style constraint."""
     spec = constraint.strip()
@@ -372,6 +379,11 @@ def evaluate_predicate(predicate: dict[str, Any], facts: Facts) -> bool:
                     f"python_version constraint must be a string; got {type(value).__name__}"
                 )
             if not _check_python_version(value, facts):
+                return False
+        elif key == "has_framework":
+            wanted = _coerce_string_list(value, key)
+            present = set(facts.get("frameworks", {}).keys())
+            if not all(name in present for name in wanted):
                 return False
         else:
             raise ValueError(f"unknown predicate key: {key!r}")
