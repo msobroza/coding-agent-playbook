@@ -299,6 +299,107 @@ def test_show_uses_prompt_slash_not_id_when_they_differ(tmp_path, make_synthetic
     assert "Prompt: /generate-tests" not in out
 
 
+def test_display_source_path_uses_package_prefix_for_engine_tasks(tmp_path):
+    """The ``_display_source_path`` helper renders engine/overlay tasks as
+    ``<package>/resources/eval_tasks/<id>/`` (the canonical SPEC §12.8 form).
+
+    Unit-level test because the engine ships zero tasks in v1, so no
+    integration test through ``cap eval --show`` exercises this branch."""
+    from coding_agent_playbook.commands.eval import _display_source_path
+    from coding_agent_playbook.evals.task import EvalTask
+
+    # Synthesize a task that looks like it came from importlib.resources
+    # (typical layout: <package>/resources/eval_tasks/<id>/task.toml).
+    task_dir = tmp_path / "coding_agent_playbook" / "resources" / "eval_tasks" / "task-a"
+    task_dir.mkdir(parents=True)
+    task = EvalTask(
+        id="task-a",
+        prompt_id="some-prompt",
+        description="desc",
+        source_path=task_dir / "task.toml",
+        source_package="coding_agent_playbook",
+    )
+    assert (
+        _display_source_path(task)
+        == "coding_agent_playbook/resources/eval_tasks/task-a/"
+    )
+
+
+def test_display_source_path_uses_package_prefix_for_overlay_tasks(tmp_path):
+    """Overlay packages get the same treatment, with the overlay's name as
+    the prefix instead of the engine's."""
+    from coding_agent_playbook.commands.eval import _display_source_path
+    from coding_agent_playbook.evals.task import EvalTask
+
+    task_dir = tmp_path / "playbook_rules_bnp" / "resources" / "eval_tasks" / "pii-scan"
+    task_dir.mkdir(parents=True)
+    task = EvalTask(
+        id="pii-scan",
+        prompt_id="pii-scan",
+        description="d",
+        source_path=task_dir / "task.toml",
+        source_package="playbook_rules_bnp",
+    )
+    assert (
+        _display_source_path(task)
+        == "playbook_rules_bnp/resources/eval_tasks/pii-scan/"
+    )
+
+
+def test_display_source_path_falls_back_gracefully_for_unusual_paths(tmp_path):
+    """If the path doesn't contain the expected segment (``resources`` for
+    engine/overlay; ``playbook`` for repo-local), the helper falls back to
+    the directory basename so the line is still attributable but doesn't
+    crash."""
+    from coding_agent_playbook.commands.eval import _display_source_path
+    from coding_agent_playbook.evals.task import EvalTask
+
+    # No "resources" segment in the path.
+    weird = tmp_path / "weird_root" / "task-x"
+    weird.mkdir(parents=True)
+    task = EvalTask(
+        id="task-x",
+        prompt_id="p",
+        description="d",
+        source_path=weird / "task.toml",
+        source_package="some_overlay",
+    )
+    # Falls back to <package>/<basename>/ — still meaningful.
+    assert _display_source_path(task) == "some_overlay/task-x/"
+
+    # No "playbook" segment for repo-local — also doesn't crash.
+    weird2 = tmp_path / "no_playbook_dir" / "task-y"
+    weird2.mkdir(parents=True)
+    task2 = EvalTask(
+        id="task-y",
+        prompt_id="p",
+        description="d",
+        source_path=weird2 / "task.toml",
+        source_package="<repo-local>",
+    )
+    assert _display_source_path(task2) == "task-y/"
+
+
+def test_show_source_path_is_repo_relative_for_repo_local_tasks(
+    tmp_path, make_synthetic_repo, capsys
+):
+    """``cap eval --show``'s ``Source:`` line for a repo-local task must start
+    at ``playbook/eval_tasks/...``, not an absolute filesystem path.
+
+    SPEC §12.8 example uses package-relative paths
+    (``coding_agent_playbook/resources/eval_tasks/.../``); the repo-local
+    analogue should anchor at ``playbook/`` so the output is reproducible
+    across user machines (no leak of ``$HOME``/scratch-dir layouts)."""
+    _seed_eval_repo(tmp_path, make_synthetic_repo)
+    rc = _eval.run(_ns(tmp_path, show="generate-tests-happy-path"))
+    assert rc == 0
+    out = capsys.readouterr().out
+    # The Source: line must read the repo-relative form, not the absolute
+    # path under tmp_path.
+    assert "Source: playbook/eval_tasks/generate-tests-happy-path/" in out
+    assert str(tmp_path) not in out
+
+
 def test_show_falls_back_to_prompt_id_when_prompt_missing(
     tmp_path, make_synthetic_repo, capsys
 ):

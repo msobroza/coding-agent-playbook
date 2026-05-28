@@ -154,7 +154,7 @@ def _print_show(task_id: str, tasks: list[EvalTask], prompts: list[Prompt]) -> i
 
     lines: list[str] = []
     lines.append(f"Task: {task.id}")
-    lines.append(f"Source: {task.source_path.parent}/")
+    lines.append(f"Source: {_display_source_path(task)}")
     lines.append(f"Prompt under test: {task.prompt_id}")
     lines.append(f"Description: {task.description}")
     lines.append("Setup:")
@@ -250,6 +250,45 @@ def _short_source(source_package: str) -> str:
     if source_package == "<repo-local>":
         return "repo-local"
     return f"overlay {source_package}"
+
+
+def _display_source_path(task: EvalTask) -> str:
+    """Format ``task.source_path`` for human reading on the ``Source:`` line.
+
+    SPEC §12.8 shows the path as package-relative for engine/overlay tasks
+    (``coding_agent_playbook/resources/eval_tasks/<id>/``) and repo-relative
+    for repo-local tasks (``playbook/eval_tasks/<id>/``). Absolute
+    filesystem paths would leak the local workspace layout into the output,
+    which is both noisy and unhelpful — package-relative paths are the
+    canonical reference users grep for when jumping to the task source.
+
+    Strategy:
+
+    - For engine/overlay sources (any ``source_package`` other than
+      ``"<repo-local>"``), find the ``resources/`` segment in the path and
+      prefix the parts from there with the package name.
+    - For repo-local sources, find the ``playbook/`` segment and emit the
+      path starting from there.
+    - If the expected segment is missing (e.g. unusual layout, or the source
+      was constructed by a non-filesystem implementation), fall back to the
+      task directory's basename prefixed with the package name so the output
+      is still attributable. Never raise — ``cap eval --show`` should never
+      crash on a path-formatting issue.
+
+    The trailing ``/`` is appended so the output always reads as a directory
+    (matching the SPEC example).
+    """
+    parts = task.source_path.parent.parts
+    if task.source_package == "<repo-local>":
+        if "playbook" in parts:
+            idx = parts.index("playbook")
+            return str(Path(*parts[idx:])) + "/"
+        return task.source_path.parent.name + "/"
+    # Engine or overlay package.
+    if "resources" in parts:
+        idx = parts.index("resources")
+        return f"{task.source_package}/" + str(Path(*parts[idx:])) + "/"
+    return f"{task.source_package}/{task.source_path.parent.name}/"
 
 
 def _count_programmatic_checks(task: EvalTask) -> int:
