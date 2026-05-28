@@ -95,6 +95,13 @@ KNOWN_DEV_TOOLS: frozenset[str] = frozenset(
     }
 )
 
+# Optional-dependency / dependency-group names whose contents we count as
+# dev dependencies. Conservative but extensible — adding e.g. "docs" here
+# would extend coverage to documentation tooling.
+_DEV_GROUP_NAMES: frozenset[str] = frozenset(
+    {"dev", "test", "tests", "lint", "type", "typecheck", "dev-deps"}
+)
+
 
 def _parse_python_version(requires_python: str | None) -> str | None:
     """Extract a ``"major.minor"`` python_version from ``requires-python``.
@@ -200,29 +207,21 @@ def _read_pyproject(repo_root: Path) -> dict[str, Any] | None:
 def _collect_dev_dependencies(pyproject: dict[str, Any]) -> dict[str, str]:
     """Aggregate dev dependencies from PEP 621 optional-deps + PEP 735 groups."""
     collected: dict[str, str] = {}
-    optional = pyproject.get("project", {}).get("optional-dependencies", {}) or {}
-    for group_name, deps in optional.items():
-        if group_name not in {"dev", "test", "tests", "lint", "type", "typecheck", "dev-deps"}:
-            # Only inspect dev-shaped groups. Conservative but extensible.
-            continue
-        for raw in deps or []:
-            if not isinstance(raw, str):
+    sources: tuple[dict[str, Any], ...] = (
+        pyproject.get("project", {}).get("optional-dependencies", {}) or {},
+        pyproject.get("dependency-groups", {}) or {},
+    )
+    for source in sources:
+        for group_name, deps in source.items():
+            if group_name not in _DEV_GROUP_NAMES:
+                # Only inspect dev-shaped groups. Conservative but extensible.
                 continue
-            name, version = _parse_dep_spec(raw)
-            if name:
-                collected[name] = version
-
-    groups = pyproject.get("dependency-groups", {}) or {}
-    for group_name, deps in groups.items():
-        if group_name not in {"dev", "test", "tests", "lint", "type", "typecheck", "dev-deps"}:
-            continue
-        for raw in deps or []:
-            if not isinstance(raw, str):
-                continue
-            name, version = _parse_dep_spec(raw)
-            if name:
-                collected[name] = version
-
+            for raw in deps or []:
+                if not isinstance(raw, str):
+                    continue
+                name, version = _parse_dep_spec(raw)
+                if name:
+                    collected[name] = version
     return collected
 
 
