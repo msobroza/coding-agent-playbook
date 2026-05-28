@@ -8,16 +8,19 @@ frontmatter helpers already in types.py.
 from __future__ import annotations
 
 import tomllib
+from importlib import resources
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.config import Config
 from coding_agent_playbook.lockfile import Lockfile
 from coding_agent_playbook.sources.base import ArtifactSource, StateSource
+from coding_agent_playbook.types import Rule
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Iterator
 
-    from coding_agent_playbook.types import Prompt, Rule, Skill
+    from coding_agent_playbook.types import Prompt, Skill
 
 # Placeholder for eval tasks until PR 11 defines the type. Listed by ID only
 # for now so that list_eval_tasks() can return an empty list without raising.
@@ -115,6 +118,32 @@ def _dump_toml(data: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _resource_subdir(package: str, subdir: str) -> Path | None:
+    """Resolve ``<package>/resources/<subdir>`` via importlib.resources.
+
+    Returns ``None`` if the package is not importable, has no ``resources/``
+    directory, or has no matching subdirectory. Never raises — sources should
+    silently skip packages that ship no artifacts of a given kind (SPEC §20.3).
+    """
+    try:
+        resource_root = resources.files(package).joinpath("resources", subdir)
+    except (ModuleNotFoundError, FileNotFoundError):
+        return None
+    # ``Traversable`` doesn't expose .is_dir on every backend, but the on-disk
+    # MultiplexedPath/PosixPath used in v1 does. Stringify and check.
+    candidate = Path(str(resource_root))
+    if not candidate.is_dir():
+        return None
+    return candidate
+
+
+def _iter_md_files(root: Path) -> Iterator[Path]:
+    """Yield ``*.md`` and ``*.md.j2`` files under ``root`` in deterministic order."""
+    for path in sorted(root.rglob("*.md*")):
+        if path.name.endswith(".md") or path.name.endswith(".md.j2"):
+            yield path
+
+
 class FileSystemArtifactSource(ArtifactSource):
     """Walks importlib.resources for the engine + overlay packages, plus
     <repo>/playbook/ for repo-local artifacts (SPEC §20.3, §11)."""
@@ -133,13 +162,30 @@ class FileSystemArtifactSource(ArtifactSource):
         self._overlay_packages = overlay_packages or []
 
     def list_rules(self) -> list[Rule]:
-        raise NotImplementedError("list_rules lands in Task C.6")
+        rules: list[Rule] = []
+        rules.extend(self._walk_rules(self._engine_package))
+        for pkg in self._overlay_packages:
+            rules.extend(self._walk_rules(pkg))
+        playbook_rules = self._repo_root / "playbook" / "rules"
+        if playbook_rules.is_dir():
+            for md in _iter_md_files(playbook_rules):
+                rules.append(Rule.from_markdown(md, "<repo-local>"))
+        return rules
 
     def list_prompts(self) -> list[Prompt]:
         raise NotImplementedError("list_prompts lands in Task C.7")
 
     def list_skills(self) -> list[Skill]:
         raise NotImplementedError("list_skills lands in Task C.7")
+
+    def _walk_rules(self, package: str) -> list[Rule]:
+        rules: list[Rule] = []
+        root = _resource_subdir(package, "rules")
+        if root is None:
+            return rules
+        for md in _iter_md_files(root):
+            rules.append(Rule.from_markdown(md, package))
+        return rules
 
     def list_eval_tasks(self) -> list[EvalTask]:
         # PR 11 populates this with real EvalTask objects.
