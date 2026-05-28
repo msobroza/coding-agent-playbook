@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import platform
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -175,7 +174,7 @@ def run(args: argparse.Namespace) -> int:
     ctx = SyncContext.from_repo(repo_root)
     if getattr(args, "refresh", False):
         _refresh(ctx)
-        print("Refreshed detector_cache in .coding-agent-playbook.toml.", file=sys.stdout)
+        print("Refreshed detector_cache in .coding-agent-playbook.toml.")
     print(_format_env_section(ctx))
     print(_format_detected_section(ctx))
     print(_format_artifacts_section(ctx))
