@@ -263,9 +263,15 @@ class SyncContext:
         all_rules = artifact_source.list_rules()
         all_prompts = artifact_source.list_prompts()
         all_skills = artifact_source.list_skills()
-        # The OverlayResolver receives the already-merged lists in lieu of
-        # per-layer slices for v1 simplicity; ID collisions across the merged
-        # list still flag winners vs losers via insertion-order semantics.
+        # TODO(PR-13): the OverlayResolver supports per-layer wiring
+        # (engine, overlays, repo-local) for the three-layer merge in
+        # SPEC §11, but ``FileSystemArtifactSource`` currently returns a
+        # single flattened list across all sources.
+        # v1: source already flattened; per-layer wiring lands when first
+        # overlay pack lands. See SPEC §11 for layer order.
+        # ID collisions across the merged list still flag winners vs losers
+        # via insertion-order semantics, which is enough for the engine-only
+        # v1 we ship today.
         rules_resolved = resolver.resolve_rules(all_rules, [], [])
         prompts_resolved = resolver.resolve_prompts(all_prompts, [], [])
         skills_resolved = resolver.resolve_skills(all_skills, [], [])
