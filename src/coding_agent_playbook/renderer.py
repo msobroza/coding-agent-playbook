@@ -299,7 +299,11 @@ def _render_prompt_opencode_command(
     else:
         for index, var in enumerate(input_variables, start=1):
             rendered_body = rendered_body.replace(f"{{{{ {var['name']} }}}}", f"${index}")
-    output = f"---\ndescription: {description}\n---\n{rendered_body}"
+    # YAML-escape the description so colons/quotes/etc. don't break the envelope.
+    description_line = yaml.safe_dump(
+        {"description": description}, sort_keys=False, allow_unicode=True
+    ).rstrip("\n")
+    output = f"---\n{description_line}\n---\n{rendered_body}"
     if not _has_inline_rule_call(body):
         output += _build_includes_rules_appendix(frontmatter, rule_registry)
     return output

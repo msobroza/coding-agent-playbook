@@ -358,3 +358,22 @@ def test_render_for_prompt_claude_command_emits_title_and_body(tmp_path: Path) -
     )
     assert "# Review" in out
     assert "Step 1: read the diff." in out
+
+
+def test_render_for_prompt_opencode_command_escapes_special_description(
+    tmp_path: Path,
+) -> None:
+    """A description containing a colon or quote must produce valid YAML
+    (code-quality review I4 — was using raw f-string)."""
+    import yaml as _yaml
+
+    out = render_for(
+        tmp_path / "prompt.md.j2",
+        "hello",
+        "prompt_opencode_command",
+        frontmatter={"description": 'has: colons and "quotes"'},
+    )
+    # Reparse and check we get the original description back
+    parts = out.split("---\n", 2)
+    parsed = _yaml.safe_load(parts[1])
+    assert parsed["description"] == 'has: colons and "quotes"'
