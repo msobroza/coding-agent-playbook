@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -68,6 +69,11 @@ def _make_rule() -> Rule:
     )
 
 
+# ---------------------------------------------------------------------------
+# split_frontmatter
+# ---------------------------------------------------------------------------
+
+
 def test_split_frontmatter_parses_mapping_and_body():
     data, body = split_frontmatter(RULE_MD)
     assert data["id"] == "python-typing"
@@ -84,11 +90,56 @@ def test_split_frontmatter_requires_closing_fence():
         split_frontmatter("---\nid: x\nstill open\n")
 
 
+def test_split_frontmatter_rejects_non_mapping():
+    with pytest.raises(ValueError, match="YAML mapping"):
+        split_frontmatter("---\n- a\n- b\n---\nbody\n")
+
+
+def test_split_frontmatter_rejects_indented_closing_fence():
+    """An indented '---' inside a YAML multi-line scalar must not be treated
+    as the closing fence (bug_006 — round-trip regression)."""
+    text = (
+        "---\n"
+        "id: x\n"
+        "name: x\n"
+        "description: 'line one\n"
+        "\n"
+        "  ---\n"
+        "\n"
+        "  line two'\n"
+        "scope: scoped\n"
+        "---\n"
+        "body\n"
+    )
+    data, body = split_frontmatter(text)
+    assert data["description"] == "line one\n---\nline two"
+    assert body == "body\n"
+
+
+def test_split_frontmatter_rejects_fence_with_trailing_space():
+    """A '---' line with trailing whitespace is not a valid fence under the
+    column-0 rstrip("\\r\\n") check; document this intentional strictness so
+    nobody "fixes" it back to .strip() thinking they're being more lenient
+    (Task 1 code-review follow-up)."""
+    with pytest.raises(ValueError, match="unterminated"):
+        split_frontmatter("---\nid: x\n---  \nbody\n")
+
+
+# ---------------------------------------------------------------------------
+# format_frontmatter round-trip
+# ---------------------------------------------------------------------------
+
+
 def test_frontmatter_text_roundtrip():
     data, body = split_frontmatter(RULE_MD)
     reparsed, reparsed_body = split_frontmatter(format_frontmatter(data, body))
     assert reparsed == data
     assert reparsed_body == body
+
+
+# ---------------------------------------------------------------------------
+# Rule and RuleFrontmatter
+# ---------------------------------------------------------------------------
 
 
 def test_rule_from_markdown_reads_fields(tmp_path):
@@ -122,6 +173,69 @@ def test_rule_markdown_roundtrip(tmp_path):
     assert Rule.from_markdown(path, "pkg") == rule
 
 
+def test_rule_markdown_roundtrip_with_horizontal_rule_in_description(tmp_path):
+    """Rule with a '---' line inside its description round-trips through markdown
+    (bug_006 — the round-trip contract from SPEC §6.6.3)."""
+    rule = Rule(
+        frontmatter=RuleFrontmatter(
+            id="x",
+            name="x",
+            description="line one\n---\nline two",
+            scope="scoped",
+        ),
+        body="body\n",
+        template_body="body\n",
+        is_templated=False,
+        source_path=tmp_path / "rule.md",
+        source_package="pkg",
+    )
+    path = tmp_path / "rule.md"
+    path.write_text(rule.to_markdown(), encoding="utf-8")
+    assert Rule.from_markdown(path, "pkg") == rule
+
+
+def test_rule_frontmatter_coerces_none_to_defaults():
+    """YAML 'globs:' (blank) parses as None; the dataclass must coerce that
+    back to the declared default so the field type holds (bug_001)."""
+    fm = RuleFrontmatter(
+        id="x",
+        name="x",
+        description="x",
+        scope="scoped",
+        version=None,  # type: ignore[arg-type]
+        globs=None,  # type: ignore[arg-type]
+        applies_if=None,  # type: ignore[arg-type]
+        priority=None,  # type: ignore[arg-type]
+        tags=None,  # type: ignore[arg-type]
+    )
+    assert fm.version == 1
+    assert fm.globs == []
+    assert fm.applies_if == {}
+    assert fm.priority == 50
+    assert fm.tags == []
+
+
+def test_rule_markdown_roundtrip_with_blank_optional_fields(tmp_path):
+    """A rule authored with blank 'globs:' / 'priority:' lines round-trips
+    through markdown (bug_001 — SPEC §6.6.3 contract)."""
+    text = (
+        "---\nid: x\nname: x\ndescription: x\nscope: scoped\nglobs:\npriority:\ntags:\n---\nbody\n"
+    )
+    path = tmp_path / "rule.md"
+    path.write_text(text, encoding="utf-8")
+    rule = Rule.from_markdown(path, "pkg")
+    assert rule.frontmatter.globs == []
+    assert rule.frontmatter.priority == 50
+    assert rule.frontmatter.tags == []
+    path.write_text(rule.to_markdown(), encoding="utf-8")
+    assert Rule.from_markdown(path, "pkg") == rule
+
+
+# ---------------------------------------------------------------------------
+# Prompt and PromptFrontmatter
+# ---------------------------------------------------------------------------
+
+
 def test_prompt_dict_roundtrip():
     prompt = Prompt(
         frontmatter=PromptFrontmatter(
@@ -151,9 +265,58 @@ def test_prompt_markdown_roundtrip(tmp_path):
     assert Prompt.from_markdown(path, "pkg") == prompt
 
 
-def test_split_frontmatter_rejects_non_mapping():
-    with pytest.raises(ValueError, match="YAML mapping"):
-        split_frontmatter("---\n- a\n- b\n---\nbody\n")
+def test_prompt_frontmatter_coerces_none_to_defaults():
+    """YAML 'input_variables:' (blank) parses as None; the dataclass must
+    coerce that back to [] (bug_001 — same contract as RuleFrontmatter)."""
+    fm = PromptFrontmatter(
+        id="x",
+        name="x",
+        description="x",
+        slash="x",
+        version=None,  # type: ignore[arg-type]
+        applies_if=None,  # type: ignore[arg-type]
+        input_variables=None,  # type: ignore[arg-type]
+        includes_rules=None,  # type: ignore[arg-type]
+        eval_tasks=None,  # type: ignore[arg-type]
+    )
+    assert fm.version == 1
+    assert fm.applies_if == {}
+    assert fm.input_variables == []
+    assert fm.includes_rules == []
+    assert fm.eval_tasks == []
+
+
+def test_prompt_markdown_roundtrip_with_blank_optional_fields(tmp_path):
+    """A prompt authored with blank 'applies_if:' / 'input_variables:' /
+    'includes_rules:' / 'eval_tasks:' lines round-trips through markdown
+    (bug_001 — symmetric to test_rule_markdown_roundtrip_with_blank_optional_fields)."""
+    text = (
+        "---\n"
+        "id: x\n"
+        "name: x\n"
+        "description: x\n"
+        "slash: x\n"
+        "applies_if:\n"
+        "input_variables:\n"
+        "includes_rules:\n"
+        "eval_tasks:\n"
+        "---\n"
+        "body\n"
+    )
+    path = tmp_path / "prompt.md"
+    path.write_text(text, encoding="utf-8")
+    prompt = Prompt.from_markdown(path, "pkg")
+    assert prompt.frontmatter.applies_if == {}
+    assert prompt.frontmatter.input_variables == []
+    assert prompt.frontmatter.includes_rules == []
+    assert prompt.frontmatter.eval_tasks == []
+    path.write_text(prompt.to_markdown(), encoding="utf-8")
+    assert Prompt.from_markdown(path, "pkg") == prompt
+
+
+# ---------------------------------------------------------------------------
+# Skill
+# ---------------------------------------------------------------------------
 
 
 def test_skill_to_prompt_deferred_to_pr6():
@@ -177,3 +340,37 @@ def test_skill_dict_roundtrip():
         source_package="pkg",
     )
     assert Skill.from_dict(skill.to_dict()) == skill
+
+
+def test_skill_to_dict_does_not_alias_frontmatter():
+    """to_dict must return a snapshot; mutating it must not mutate the Skill
+    (bug_002 — matches the Rule/Prompt detached-snapshot contract)."""
+    skill = Skill(
+        frontmatter={"name": "demo"},
+        body="b",
+        scripts_dir=None,
+        references_dir=None,
+        source_package="pkg",
+    )
+    data = skill.to_dict()
+    assert data["frontmatter"] is not skill.frontmatter
+    data["frontmatter"]["injected"] = True
+    assert "injected" not in skill.frontmatter
+
+
+def test_skill_from_dict_does_not_alias_frontmatter():
+    """from_dict must detach from its input; mutating the dict must not
+    mutate the resulting Skill (bug_002)."""
+    # Annotate as dict[str, Any] so mypy doesn't narrow payload["frontmatter"]
+    # to the inferred union (str | dict[str, str] | None), which would block
+    # indexed assignment. Skill.from_dict's parameter is dict[str, Any] anyway.
+    payload: dict[str, Any] = {
+        "frontmatter": {"name": "demo"},
+        "body": "b",
+        "scripts_dir": None,
+        "references_dir": None,
+        "source_package": "pkg",
+    }
+    skill = Skill.from_dict(payload)
+    payload["frontmatter"]["injected"] = True
+    assert "injected" not in skill.frontmatter

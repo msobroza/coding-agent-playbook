@@ -25,10 +25,10 @@ _FENCE = "---"
 def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     """Split ``---\\n<yaml>\\n---\\n<body>`` into a (frontmatter mapping, body)."""
     lines = text.splitlines(keepends=True)
-    if not lines or lines[0].strip() != _FENCE:
+    if not lines or lines[0].rstrip("\r\n") != _FENCE:
         raise ValueError("artifact must start with a '---' frontmatter fence")
     for index in range(1, len(lines)):
-        if lines[index].strip() == _FENCE:
+        if lines[index].rstrip("\r\n") == _FENCE:
             data = yaml.safe_load("".join(lines[1:index])) or {}
             if not isinstance(data, dict):
                 raise ValueError("frontmatter must be a YAML mapping")
@@ -63,6 +63,23 @@ class RuleFrontmatter:
     applies_if: dict[str, Any] = field(default_factory=dict)
     priority: int = 50
     tags: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        # YAML parses 'key:' (blank value) as None; the dataclass default does
+        # not fire for an explicit None argument. Coerce so the declared field
+        # types hold and markdown round-trip stays lossless (SPEC §6.6.3).
+        # This also normalises None passed from Python code: callers should
+        # pass {} or [] for "empty/always", never None.
+        if self.version is None:
+            self.version = 1
+        if self.globs is None:
+            self.globs = []
+        if self.applies_if is None:
+            self.applies_if = {}
+        if self.priority is None:
+            self.priority = 50
+        if self.tags is None:
+            self.tags = []
 
 
 @dataclass
@@ -118,6 +135,23 @@ class PromptFrontmatter:
     input_variables: list[dict[str, Any]] = field(default_factory=list)
     includes_rules: list[str] = field(default_factory=list)
     eval_tasks: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        # YAML parses 'key:' (blank value) as None; the dataclass default does
+        # not fire for an explicit None argument. Coerce so the declared field
+        # types hold and markdown round-trip stays lossless (SPEC §6.6.3).
+        # This also normalises None passed from Python code: callers should
+        # pass {} or [] for "empty/always", never None.
+        if self.version is None:
+            self.version = 1
+        if self.applies_if is None:
+            self.applies_if = {}
+        if self.input_variables is None:
+            self.input_variables = []
+        if self.includes_rules is None:
+            self.includes_rules = []
+        if self.eval_tasks is None:
+            self.eval_tasks = []
 
 
 @dataclass
@@ -180,7 +214,7 @@ class Skill:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "frontmatter": self.frontmatter,
+            "frontmatter": dict(self.frontmatter),
             "body": self.body,
             "scripts_dir": None if self.scripts_dir is None else str(self.scripts_dir),
             "references_dir": None if self.references_dir is None else str(self.references_dir),
@@ -192,7 +226,7 @@ class Skill:
         scripts_dir = data["scripts_dir"]
         references_dir = data["references_dir"]
         return cls(
-            data["frontmatter"],
+            dict(data["frontmatter"]),
             data["body"],
             None if scripts_dir is None else Path(scripts_dir),
             None if references_dir is None else Path(references_dir),
