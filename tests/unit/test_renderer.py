@@ -396,3 +396,84 @@ def test_render_for_prompt_opencode_command_escapes_special_description(
     parts = out.split("---\n", 2)
     parsed = _yaml.safe_load(parts[1])
     assert parsed["description"] == 'has: colons and "quotes"'
+
+
+# --- Task B.6 / code-quality review I6: full-string equality tests --------
+
+
+def test_render_for_continue_rule_exact_output(tmp_path: Path) -> None:
+    """Locks the exact output shape of continue_rule to catch whitespace
+    regressions (code-quality review I6)."""
+    out = render_for(
+        tmp_path / "rule.md.j2",
+        "body line 1\nbody line 2\n",
+        "continue_rule",
+        frontmatter={
+            "id": "py-typing",
+            "name": "Py typing",
+            "description": "Type hints",
+            "scope": "scoped",
+            "globs": ["**/*.py"],
+        },
+    )
+    expected = (
+        f"<!-- {SENTINEL} -->\n"
+        "---\n"
+        "name: Py typing\n"
+        "description: Type hints\n"
+        "alwaysApply: false\n"
+        "globs:\n"
+        "- '**/*.py'\n"
+        "---\n"
+        "body line 1\nbody line 2\n"
+    )
+    assert out == expected
+
+
+def test_render_for_claude_md_section_exact_output(tmp_path: Path) -> None:
+    """Locks the exact output shape of claude_md_section to catch whitespace
+    regressions (code-quality review I6)."""
+    out = render_for(
+        tmp_path / "rule.md",
+        "body line 1\nbody line 2\n",
+        "claude_md_section",
+        frontmatter={
+            "id": "x",
+            "name": "X",
+            "description": "d",
+            "scope": "scoped",
+            "globs": ["**/*.py"],
+        },
+    )
+    expected = (
+        "## X\n"
+        "\n"
+        "*Applies to: `**/*.py`*\n"
+        "\n"
+        "body line 1\n"
+        "body line 2\n"
+        "\n"
+        "---\n"
+    )
+    assert out == expected
+
+
+def test_render_for_prompt_continue_exact_output(tmp_path: Path) -> None:
+    """Locks the exact output shape of prompt_continue (no includes_rules)
+    to catch whitespace regressions (code-quality review I6)."""
+    out = render_for(
+        tmp_path / "prompt.md.j2",
+        "body line 1\nbody line 2\n",
+        "prompt_continue",
+        frontmatter={"name": "P", "description": "D"},
+    )
+    expected = (
+        f"<!-- {SENTINEL} -->\n"
+        "---\n"
+        "name: P\n"
+        "description: D\n"
+        "invokable: true\n"
+        "---\n"
+        "body line 1\nbody line 2\n"
+    )
+    assert out == expected
