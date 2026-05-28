@@ -183,6 +183,11 @@ def _resource_subdir(package: str, subdir: str) -> Path | None:
 def _iter_md_files(root: Path) -> Iterator[Path]:
     """Yield ``*.md`` and ``*.md.j2`` files under ``root`` in deterministic order."""
     for path in sorted(root.rglob("*.md*")):
+        # Skip dotted directories (.git, .venv, node_modules-of-vendored-skills,
+        # etc.) for hygiene — these never legitimately contain canonical
+        # artifacts, and walking them silently inflates source listings.
+        if any(part.startswith(".") for part in path.relative_to(root).parts):
+            continue
         if path.name.endswith(".md") or path.name.endswith(".md.j2"):
             yield path
 

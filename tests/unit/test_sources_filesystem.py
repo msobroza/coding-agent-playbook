@@ -343,6 +343,27 @@ def test_list_rules_includes_overlay_packages(tmp_path: Path, temp_pkg_cleanup: 
     assert rules[0].source_package == "temp_overlay"
 
 
+def test_dotted_directories_skipped_in_iter_md_files(tmp_path: Path) -> None:
+    """Markdown files inside .venv/, .git/, etc. must not be picked up by
+    the artifact walker (code-quality review M2)."""
+    playbook_rules = tmp_path / "playbook" / "rules"
+    playbook_rules.mkdir(parents=True)
+    (playbook_rules / "real.md").write_text(
+        RULE_MD_TEMPLATE.format(id="real", name="Real", description="Legit"),
+        encoding="utf-8",
+    )
+    # Decoy: a markdown file inside a dotted directory that should be ignored.
+    decoy_dir = playbook_rules / ".venv" / "site-packages" / "some_pkg"
+    decoy_dir.mkdir(parents=True)
+    (decoy_dir / "decoy.md").write_text(
+        RULE_MD_TEMPLATE.format(id="decoy", name="Decoy", description="Should be skipped"),
+        encoding="utf-8",
+    )
+    source = FileSystemArtifactSource(repo_root=tmp_path)
+    rules = source.list_rules()
+    assert [r.frontmatter.id for r in rules] == ["real"]
+
+
 def test_list_rules_includes_repo_local_playbook(tmp_path: Path) -> None:
     playbook_rules = tmp_path / "playbook" / "rules"
     playbook_rules.mkdir(parents=True)
