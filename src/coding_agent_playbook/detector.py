@@ -347,6 +347,14 @@ def detect(repo_root: Path) -> Facts:
 _SUPPORTED_OPERATORS = (">=", "<=", "==", "~=", ">", "<")
 
 
+# Boolean facts that may appear in an ``applies_if`` predicate. Gating the
+# boolean dispatch branch on this set means a typo'd key (e.g. ``has_dokerfile``)
+# raises ``ValueError`` instead of silently matching by value-type alone.
+_KNOWN_BOOL_FACT_KEYS: frozenset[str] = frozenset(
+    {"has_notebooks", "has_dockerfile", "has_ci", "banking_mode"}
+)
+
+
 def _coerce_string_list(value: Any, key: str) -> list[str]:
     """Validate a predicate value is a list of strings; raise with a clear message otherwise."""
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
@@ -413,10 +421,12 @@ def evaluate_predicate(
                 raise ValueError("predicate 'has_file' requires repo_root keyword argument")
             if not all((repo_root / rel).exists() for rel in paths):
                 return False
-        elif isinstance(value, bool):
+        elif key in _KNOWN_BOOL_FACT_KEYS and isinstance(value, bool):
             # Boolean facts compared by equality. The fact must be explicitly
             # present AND equal — an absent fact never satisfies a boolean
-            # predicate (neither True nor False).
+            # predicate (neither True nor False). The ``key in _KNOWN_BOOL_FACT_KEYS``
+            # guard ensures a typo'd predicate key paired with a bool value
+            # raises ``ValueError`` rather than silently matching by value type.
             if key not in facts or facts[key] != value:  # type: ignore[literal-required]
                 return False
         else:

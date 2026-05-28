@@ -559,6 +559,16 @@ def test_evaluate_predicate_unknown_key_with_string_value_raises() -> None:
         evaluate_predicate({"frobnicate": "yes"}, {})
 
 
+def test_evaluate_predicate_unknown_key_with_bool_value_raises() -> None:
+    """A typo'd predicate key paired with a bool value must raise ValueError,
+    not silently match the boolean branch (code-quality review I1).
+    Previously the dispatch matched on value-type-only, letting typos through."""
+    with pytest.raises(ValueError, match="unknown predicate key"):
+        evaluate_predicate({"has_dokerfile": True}, {"has_dockerfile": True})
+    with pytest.raises(ValueError, match="unknown predicate key"):
+        evaluate_predicate({"banking_mode_typo": False}, {})
+
+
 def test_evaluate_predicate_python_version_with_non_string_raises() -> None:
     with pytest.raises(ValueError, match="must be a string"):
         evaluate_predicate({"python_version": 3}, {"python_version": "3.12"})
