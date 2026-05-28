@@ -141,6 +141,52 @@ docstring_style = "numpy"
     assert data.get("user_choices", {}).get("docstring_style") == "numpy"
 
 
+def test_prompt_multi_select_parses_comma_separated_indices(monkeypatch, capsys):
+    """``1,3`` selects choices at 1-based indices 1 and 3."""
+    answers = iter(["1,3"])
+    monkeypatch.setattr("builtins.input", lambda *_a, **_k: next(answers))
+    result = _init._prompt_multi_select(
+        "pick", ["alpha", "beta", "gamma", "delta"], defaults=["alpha"]
+    )
+    assert result == ["alpha", "gamma"]
+    # The choice menu should have been printed (sanity check).
+    out = capsys.readouterr().out
+    assert "alpha" in out and "gamma" in out
+
+
+def test_prompt_multi_select_falls_back_to_defaults_on_non_integer(monkeypatch):
+    """Non-integer tokens are silently skipped; with no valid tokens the
+    function falls back to ``defaults`` rather than raising."""
+    answers = iter(["nonsense,more-nonsense"])
+    monkeypatch.setattr("builtins.input", lambda *_a, **_k: next(answers))
+    result = _init._prompt_multi_select(
+        "pick", ["alpha", "beta", "gamma"], defaults=["alpha", "beta"]
+    )
+    assert result == ["alpha", "beta"]
+
+
+def test_prompt_multi_select_falls_back_to_defaults_on_out_of_range(monkeypatch):
+    """Indices outside ``1..len(choices)`` are silently skipped; an
+    all-out-of-range reply falls back to ``defaults``."""
+    answers = iter(["99,0,-1"])
+    monkeypatch.setattr("builtins.input", lambda *_a, **_k: next(answers))
+    result = _init._prompt_multi_select(
+        "pick", ["alpha", "beta", "gamma"], defaults=["gamma"]
+    )
+    assert result == ["gamma"]
+
+
+def test_prompt_multi_select_mixed_valid_and_invalid_keeps_valid(monkeypatch):
+    """If at least one index is valid, only the valid ones are returned
+    (defaults are NOT mixed in)."""
+    answers = iter(["1,nope,99,2"])
+    monkeypatch.setattr("builtins.input", lambda *_a, **_k: next(answers))
+    result = _init._prompt_multi_select(
+        "pick", ["alpha", "beta", "gamma"], defaults=["gamma"]
+    )
+    assert result == ["alpha", "beta"]
+
+
 def test_init_does_not_duplicate_pre_commit_hook(tmp_path):
     """Running init twice must not append the hook block twice."""
     (tmp_path / "pyproject.toml").write_text(
