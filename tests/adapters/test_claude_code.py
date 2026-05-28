@@ -196,3 +196,79 @@ def test_claude_code_write_prompt_prepends_h1_when_body_lacks_one(tmp_path):
     content = (tmp_path / ".claude" / "commands" / "audit.md").read_text(encoding="utf-8")
     # Renderer prepends `# {name}` when the body doesn't start with an H1.
     assert content.startswith("# Audit\n\n")
+
+
+def test_claude_code_write_skill_writes_skill_md_only(tmp_path):
+    """A skill with no scripts/references writes just SKILL.md."""
+    skill = _make_skill(
+        skill_id="demo",
+        name="Demo skill",
+        description="Demo skill description",
+        body="# Demo\n\nDo the thing.\n",
+    )
+    adapter = ClaudeCodeAdapter()
+    written = adapter.write_skill(skill, repo_root=tmp_path)
+    expected = tmp_path / ".claude" / "skills" / "demo" / "SKILL.md"
+    assert expected in written
+    assert expected.is_file()
+    content = expected.read_text(encoding="utf-8")
+    # SKILL.md preserves the skill's frontmatter + body as-is.
+    assert content.startswith("---")
+    assert "id: demo" in content
+    assert "name: Demo skill" in content
+    assert "description: Demo skill description" in content
+    assert "Do the thing." in content
+
+
+def test_claude_code_write_skill_copies_scripts_directory(tmp_path):
+    """Scripts in the source dir get mirrored to .claude/skills/<id>/scripts/."""
+    scripts_src = tmp_path / "src_scripts"
+    scripts_src.mkdir()
+    (scripts_src / "helper.sh").write_text("#!/bin/sh\necho hi\n", encoding="utf-8")
+    (scripts_src / "nested").mkdir()
+    (scripts_src / "nested" / "deep.py").write_text("print('deep')\n", encoding="utf-8")
+
+    skill = _make_skill(skill_id="with-scripts", scripts_dir=scripts_src)
+    repo_root = tmp_path / "repo"
+    adapter = ClaudeCodeAdapter()
+    written = adapter.write_skill(skill, repo_root=repo_root)
+
+    helper = repo_root / ".claude" / "skills" / "with-scripts" / "scripts" / "helper.sh"
+    deep = repo_root / ".claude" / "skills" / "with-scripts" / "scripts" / "nested" / "deep.py"
+    skill_md = repo_root / ".claude" / "skills" / "with-scripts" / "SKILL.md"
+
+    assert helper.is_file()
+    assert helper.read_text(encoding="utf-8") == "#!/bin/sh\necho hi\n"
+    assert deep.is_file()
+    assert deep.read_text(encoding="utf-8") == "print('deep')\n"
+    # All three paths are in the written list.
+    assert skill_md in written
+    assert helper in written
+    assert deep in written
+
+
+def test_claude_code_write_skill_copies_references_directory(tmp_path):
+    """References in the source dir get mirrored to .claude/skills/<id>/references/."""
+    refs_src = tmp_path / "src_refs"
+    refs_src.mkdir()
+    (refs_src / "guide.md").write_text("# Reference guide\n", encoding="utf-8")
+
+    skill = _make_skill(skill_id="with-refs", references_dir=refs_src)
+    repo_root = tmp_path / "repo"
+    adapter = ClaudeCodeAdapter()
+    written = adapter.write_skill(skill, repo_root=repo_root)
+
+    guide = repo_root / ".claude" / "skills" / "with-refs" / "references" / "guide.md"
+    assert guide.is_file()
+    assert guide.read_text(encoding="utf-8") == "# Reference guide\n"
+    assert guide in written
+
+
+def test_claude_code_write_skill_does_not_degrade_to_prompt(tmp_path):
+    """write_skill must bypass the ABC's default Skill->Prompt degrade."""
+    skill = _make_skill(skill_id="native")
+    adapter = ClaudeCodeAdapter()
+    adapter.write_skill(skill, repo_root=tmp_path)
+    # Skills land under .claude/skills/, not under .claude/commands/.
+    assert (tmp_path / ".claude" / "skills" / "native" / "SKILL.md").is_file()
+    assert not (tmp_path / ".claude" / "commands").exists()

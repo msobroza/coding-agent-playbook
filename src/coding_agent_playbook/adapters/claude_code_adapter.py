@@ -14,8 +14,11 @@ Code's native layout:
 from __future__ import annotations
 
 import dataclasses
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import yaml
 
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.renderer import SENTINEL, render_for
@@ -74,7 +77,45 @@ class ClaudeCodeAdapter(Adapter):
         return [output_path]
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
-        raise NotImplementedError
+        """Write a Claude Code native skill directory under ``.claude/skills/<id>/``.
+
+        Skills are first-class in Claude Code: the directory contains
+        ``SKILL.md`` (frontmatter + body, written as YAML), an optional
+        ``scripts/`` directory, and an optional ``references/`` directory.
+        This adapter does NOT degrade to ``Skill.to_prompt`` — siblings that
+        lack native skill support (e.g. Continue) use the ABC default.
+        """
+        skill_id = str(skill.frontmatter.get("id", "skill"))
+        skill_dir = repo_root / ".claude" / "skills" / skill_id
+        skill_dir.mkdir(parents=True, exist_ok=True)
+
+        # SKILL.md: standard frontmatter + body. We don't run a renderer here —
+        # the skill's frontmatter is dict[str, Any] (not a dataclass like
+        # Rule/Prompt) and Claude Code reads it as-is.
+        fenced = yaml.safe_dump(
+            dict(skill.frontmatter), sort_keys=False, allow_unicode=True
+        ).rstrip("\n")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(f"---\n{fenced}\n---\n{skill.body}", encoding="utf-8")
+        written: list[Path] = [skill_md]
+
+        if skill.scripts_dir is not None and skill.scripts_dir.is_dir():
+            written.extend(self._copy_tree(skill.scripts_dir, skill_dir / "scripts"))
+        if skill.references_dir is not None and skill.references_dir.is_dir():
+            written.extend(self._copy_tree(skill.references_dir, skill_dir / "references"))
+        return written
+
+    @staticmethod
+    def _copy_tree(src: Path, dst: Path) -> list[Path]:
+        """Copy ``src`` -> ``dst`` recursively and return the list of files written.
+
+        Uses :func:`shutil.copytree` with ``dirs_exist_ok=True`` so a re-sync
+        overwrites the previous output. The returned paths are the leaf files
+        actually copied (directories are excluded so the cleanup scan sees
+        files only).
+        """
+        shutil.copytree(src, dst, dirs_exist_ok=True)
+        return [path for path in dst.rglob("*") if path.is_file()]
 
     def finalize(self, repo_root: Path) -> list[Path]:
         """Compose ``.claude/CLAUDE.md`` from the buffered rule sections.
