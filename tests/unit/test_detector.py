@@ -61,5 +61,115 @@ def test_detect_fastapi_app(tmp_path: Path) -> None:
     assert facts["python_version"] == "3.12"
 
 
+def test_detect_ml_research(tmp_path: Path) -> None:
+    repo = tmp_path / "ml-repo"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "ml-thing"
+        requires-python = ">=3.12"
+        dependencies = [
+            "torch>=2.0",
+            "transformers",
+            "numpy",
+        ]
+        """,
+    )
+    _mkdir(repo, "src/ml_thing")
+    _write(repo, "notebooks/explore.ipynb", "{}\n")
+
+    facts = detect(repo)
+
+    assert facts["project_kind"] == "ml-research"
+    ml_stack = facts.get("ml_stack", {})
+    assert "torch" in ml_stack
+    assert "transformers" in ml_stack
+    assert "numpy" in ml_stack
+    assert facts.get("has_notebooks") is True
+
+
+def test_detect_notebook_only(tmp_path: Path) -> None:
+    repo = tmp_path / "nb-only"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "nb-only"
+        requires-python = ">=3.12"
+        dependencies = []
+        """,
+    )
+    _write(repo, "analysis.ipynb", "{}\n")
+
+    facts = detect(repo)
+
+    assert facts["project_kind"] == "notebook"
+    assert facts.get("has_notebooks") is True
+
+
+def test_detect_python_library(tmp_path: Path) -> None:
+    repo = tmp_path / "lib"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "my-lib"
+        requires-python = ">=3.12"
+        dependencies = [
+            "click>=8.0",
+        ]
+        """,
+    )
+    _mkdir(repo, "src/my_lib")
+
+    facts = detect(repo)
+
+    assert facts["project_kind"] == "python-library"
+    # No notebooks and no fastapi, but src/ is present.
+    assert facts.get("has_notebooks", False) is False
+
+
+def test_detect_empty_repo(tmp_path: Path) -> None:
+    repo = tmp_path / "empty"
+    repo.mkdir()
+
+    facts = detect(repo)
+
+    assert facts["project_kind"] == "python-unknown"
+    assert "python_version" not in facts
+    assert "dependencies" not in facts
+    assert "frameworks" not in facts
+
+
+def test_detect_ignores_venv_when_walking_notebooks(tmp_path: Path) -> None:
+    # Guard rail: an .ipynb inside .venv must NOT trip has_notebooks.
+    repo = tmp_path / "no-real-nb"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "no-real-nb"
+        requires-python = ">=3.12"
+        dependencies = []
+        """,
+    )
+    _write(repo, ".venv/share/notebook/template.ipynb", "{}\n")
+    _mkdir(repo, "src/no_real_nb")
+
+    facts = detect(repo)
+
+    assert facts.get("has_notebooks", False) is False
+    assert facts["project_kind"] == "python-library"
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])

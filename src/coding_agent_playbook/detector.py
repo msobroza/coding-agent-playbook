@@ -233,6 +233,10 @@ def detect(repo_root: Path) -> Facts:
         if frameworks:
             facts["frameworks"] = frameworks
 
+        ml_stack = {n: v for n, v in dependencies.items() if n in KNOWN_ML_STACK}
+        if ml_stack:
+            facts["ml_stack"] = ml_stack
+
     has_notebooks = _has_notebooks(repo_root)
     if has_notebooks:
         facts["has_notebooks"] = True
