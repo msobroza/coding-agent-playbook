@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
+from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.types import (
     Prompt,
     PromptFrontmatter,
@@ -123,3 +124,40 @@ def test_claude_code_write_rule_appends_to_buffer_in_call_order(tmp_path):
     adapter.write_rule(_make_rule(rule_id="a", priority=10, name="A"), tmp_path)
     adapter.write_rule(_make_rule(rule_id="b", priority=20, name="B"), tmp_path)
     assert [item[:2] for item in adapter._buffered_rules] == [(10, "a"), (20, "b")]
+
+
+def test_claude_code_finalize_composes_claude_md(tmp_path):
+    adapter = ClaudeCodeAdapter()
+    # Insert in non-priority order to confirm finalize sorts.
+    adapter.write_rule(_make_rule(rule_id="b", priority=20, name="B rule"), tmp_path)
+    adapter.write_rule(_make_rule(rule_id="a", priority=10, name="A rule"), tmp_path)
+    written = adapter.finalize(tmp_path)
+    expected = tmp_path / ".claude" / "CLAUDE.md"
+    assert written == [expected]
+    assert expected.is_file()
+    content = expected.read_text(encoding="utf-8")
+    # First line carries the sentinel banner.
+    assert SENTINEL in content.split("\n", 1)[0]
+    # Both rule sections rendered.
+    assert "## A rule" in content
+    assert "## B rule" in content
+    # Priority-ordered: A (10) before B (20).
+    assert content.index("## A rule") < content.index("## B rule")
+
+
+def test_claude_code_finalize_ties_break_by_rule_id(tmp_path):
+    adapter = ClaudeCodeAdapter()
+    # Same priority — tie-break by rule_id alphabetically.
+    adapter.write_rule(_make_rule(rule_id="z", priority=50, name="Z rule"), tmp_path)
+    adapter.write_rule(_make_rule(rule_id="a", priority=50, name="A rule"), tmp_path)
+    adapter.finalize(tmp_path)
+    content = (tmp_path / ".claude" / "CLAUDE.md").read_text(encoding="utf-8")
+    assert content.index("## A rule") < content.index("## Z rule")
+
+
+def test_claude_code_finalize_with_no_rules_returns_empty(tmp_path):
+    """An empty buffer must produce no file — finalize is a no-op then."""
+    adapter = ClaudeCodeAdapter()
+    written = adapter.finalize(tmp_path)
+    assert written == []
+    assert not (tmp_path / ".claude" / "CLAUDE.md").exists()
