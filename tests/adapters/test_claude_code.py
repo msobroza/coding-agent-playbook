@@ -176,8 +176,12 @@ def test_claude_code_write_prompt_creates_command_file(tmp_path):
     assert written == [expected]
     assert expected.is_file()
     content = expected.read_text(encoding="utf-8")
-    # Claude Code commands are pure markdown — no top-level frontmatter fence.
-    assert not content.startswith("---")
+    # The sentinel HTML comment is the first line so cleanup can recognise this
+    # file as engine-owned. Claude Code commands are otherwise pure markdown —
+    # no YAML frontmatter fence.
+    lines = content.splitlines()
+    assert SENTINEL in lines[0]
+    assert not lines[1].startswith("---")
     # The H1 from the body is preserved (renderer doesn't double-prepend).
     assert "# Review" in content
     # Sanity: the body content is present.
@@ -194,8 +198,89 @@ def test_claude_code_write_prompt_prepends_h1_when_body_lacks_one(tmp_path):
     adapter = ClaudeCodeAdapter()
     adapter.write_prompt(prompt, repo_root=tmp_path)
     content = (tmp_path / ".claude" / "commands" / "audit.md").read_text(encoding="utf-8")
-    # Renderer prepends `# {name}` when the body doesn't start with an H1.
-    assert content.startswith("# Audit\n\n")
+    # The sentinel comment is the first line so cleanup can recognise this as
+    # engine-owned; the renderer then prepends `# {name}` when the body lacks an H1.
+    lines = content.splitlines()
+    assert SENTINEL in lines[0]
+    assert lines[1] == "# Audit"
+
+
+def test_claude_code_write_prompt_appendix_when_rule_registry_set(tmp_path):
+    """When the adapter is constructed with a ``rule_registry`` and the prompt
+    declares ``includes_rules:``, the rendered command contains the
+    ``## Reference rules`` appendix. Without the plumbing the appendix would
+    silently be omitted (the bug Fix 2 closes).
+    """
+
+    class _StubRegistry:
+        def render_for_inclusion(self, rule_id: str, context: dict[str, object]) -> str:
+            del context
+            return f"### Rule {rule_id}\n\nrendered body.\n"
+
+    adapter = ClaudeCodeAdapter(rule_registry=_StubRegistry())
+    prompt = _make_prompt(
+        prompt_id="x",
+        name="X",
+        description="d",
+        slash="x",
+        includes_rules=["foo"],
+        body="body line\n",
+    )
+    [written_path] = adapter.write_prompt(prompt, repo_root=tmp_path)
+    content = written_path.read_text(encoding="utf-8")
+    assert "## Reference rules" in content
+    assert "### Rule foo" in content
+
+
+def test_claude_code_write_prompt_no_appendix_when_rule_registry_absent(tmp_path):
+    """Without a registry, ``includes_rules:`` is declarative-only — the
+    appendix is silently omitted. This is the documented default behaviour
+    when the orchestrator hasn't (yet) built a merged-overlay registry.
+    """
+    adapter = ClaudeCodeAdapter()  # no rule_registry
+    prompt = _make_prompt(
+        prompt_id="x",
+        name="X",
+        description="d",
+        slash="x",
+        includes_rules=["foo"],
+        body="body line\n",
+    )
+    [written_path] = adapter.write_prompt(prompt, repo_root=tmp_path)
+    content = written_path.read_text(encoding="utf-8")
+    assert "## Reference rules" not in content
+
+
+def test_claude_code_cleanup_round_trip_after_slash_rename(tmp_path):
+    """Writing prompt A then prompt B (different slash) then cleanup_stale
+    with only B in written_paths must delete A's file.
+
+    This is a round-trip test against the renderer + adapter together. Before
+    Fix 1 landed, the renderer omitted the sentinel from the Claude command
+    output, so A's file had no first-line marker and cleanup would silently
+    leave A behind on a slash rename.
+    """
+    adapter = ClaudeCodeAdapter()
+    prompt_a = _make_prompt(
+        prompt_id="a",
+        name="A",
+        description="A",
+        slash="a",
+        body="A body\n",
+    )
+    prompt_b = _make_prompt(
+        prompt_id="b",
+        name="B",
+        description="B",
+        slash="b",
+        body="B body\n",
+    )
+    a_path = adapter.write_prompt(prompt_a, tmp_path)[0]
+    b_path = adapter.write_prompt(prompt_b, tmp_path)[0]
+    deleted = adapter.cleanup_stale({b_path.resolve()}, repo_root=tmp_path)
+    assert a_path in deleted
+    assert not a_path.exists()
+    assert b_path.exists()
 
 
 def test_claude_code_write_skill_writes_skill_md_only(tmp_path):
