@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 HOOKS_PATH = Path(__file__).resolve().parents[2] / ".pre-commit-hooks.yaml"
 
 
-def _load_hooks() -> list[dict]:
+def _load_hooks() -> list[dict[str, Any]]:
     with HOOKS_PATH.open(encoding="utf-8") as f:
         data = yaml.safe_load(f)
     assert isinstance(data, list), ".pre-commit-hooks.yaml must be a YAML list of hooks"
