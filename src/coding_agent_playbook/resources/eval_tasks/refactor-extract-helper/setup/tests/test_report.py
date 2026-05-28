@@ -1,7 +1,13 @@
+# mypy: ignore-errors
 """Snapshot-style tests so a refactor that preserves behavior keeps them green.
 
 The agent should not modify this file — the refactor's contract is that the
 public output is byte-identical before and after the extraction.
+
+The ``# mypy: ignore-errors`` pragma at the top of the file silences the
+engine repo's mypy gate so this fixture can ship as an authoring artifact
+without the engine treating it as a first-class module. The eval runner copies
+the file into a scratch repo whose own mypy config will be the real check.
 """
 
 from src.report import render_report
