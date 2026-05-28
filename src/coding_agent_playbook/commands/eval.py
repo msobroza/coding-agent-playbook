@@ -118,12 +118,31 @@ def _print_list(prompts: list[Prompt], tasks: list[EvalTask]) -> int:
             )
 
     lines.append("")
+    # Pluralize each count so single-item totals don't read "1 prompts"
+    # (SPEC §12.8 example covers both singular and plural shapes). The
+    # "prompts without tasks" suffix has to be spelled out because the
+    # head noun ("prompt") is not at the tail — naively appending "s" to
+    # "prompt without tasks" would emit "prompt without taskss".
+    pwt_label = "prompt without tasks" if prompts_without_tasks == 1 else "prompts without tasks"
     lines.append(
-        f"Total: {len(prompts)} prompts, {len(tasks)} eval tasks, "
-        f"{prompts_without_tasks} prompt{'s' if prompts_without_tasks != 1 else ''} without tasks"
+        f"Total: {_plural(len(prompts), 'prompt')}, "
+        f"{_plural(len(tasks), 'eval task')}, "
+        f"{prompts_without_tasks} {pwt_label}"
     )
     print("\n".join(lines))
     return 0
+
+
+def _plural(n: int, word: str) -> str:
+    """Render ``n word`` with the English ``+s`` suffix when ``n != 1``.
+
+    Used by ``cap eval --list`` so the ``Total:`` line reads ``1 prompt``
+    instead of ``1 prompts``. Only works for words whose plural is formed
+    by appending ``s`` to the supplied lemma — compound subjects whose head
+    noun is not at the tail (e.g. ``"prompt without tasks"``) must be
+    handled at the call site.
+    """
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
 
 
 def _print_show(task_id: str, tasks: list[EvalTask], prompts: list[Prompt]) -> int:

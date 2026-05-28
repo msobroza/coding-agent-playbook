@@ -185,6 +185,52 @@ def test_eval_list_groups_tasks_under_prompts(tmp_path, make_synthetic_repo, cap
     assert idx_header < idx_happy < idx_edge
 
 
+def test_eval_list_total_pluralizes_correctly(tmp_path, make_synthetic_repo, capsys):
+    """The ``Total:`` line must use singular ``prompt``/``eval task``/``prompt
+    without tasks`` when the count is exactly 1, plural otherwise. SPEC §12.8
+    shows both shapes."""
+    # Seed a repo with exactly one prompt, one task, zero prompts-without-tasks
+    # to exercise the n=1 branch on the first two counts and the n=0 branch
+    # on the third.
+    make_synthetic_repo(tmp_path)
+    prompts_dir = tmp_path / "playbook" / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+    (prompts_dir / "solo.md").write_text(
+        "---\n"
+        "id: solo\n"
+        "name: Solo\n"
+        "description: Lonely prompt\n"
+        "slash: solo\n"
+        "eval_tasks:\n"
+        "  - solo-task\n"
+        "---\n"
+        "Body.\n",
+        encoding="utf-8",
+    )
+    task_dir = tmp_path / "playbook" / "eval_tasks" / "solo-task"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    (task_dir / "task.toml").write_text(
+        'id = "solo-task"\n'
+        'prompt_id = "solo"\n'
+        'description = "Only task"\n'
+        "[setup]\n"
+        "files = []\n"
+        'project_kind = "python-application"\n'
+        'python_version = "3.12"\n'
+        'frameworks = []\n'
+        "[invocation]\n"
+        'prompt_args = ""\n',
+        encoding="utf-8",
+    )
+
+    _eval.run(_ns(tmp_path, list_=True))
+    out = capsys.readouterr().out
+    assert "Total: 1 prompt, 1 eval task, 0 prompts without tasks" in out
+    # Negative assertions for the buggy plural-only form.
+    assert "1 prompts" not in out
+    assert "1 eval tasks" not in out
+
+
 def test_eval_show_existing_task_prints_details(tmp_path, make_synthetic_repo, capsys):
     _seed_eval_repo(tmp_path, make_synthetic_repo)
     rc = _eval.run(_ns(tmp_path, show="generate-tests-happy-path"))
