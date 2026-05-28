@@ -52,6 +52,35 @@ def _format_detected_section(ctx: SyncContext) -> str:
     return "\n".join(lines)
 
 
+def _format_skip_reason(predicate: dict[str, object], facts: dict[str, object]) -> str:
+    """Render a SPEC §12.4-style ``(skipped: ...)`` suffix for the first
+    predicate key that fails. Mirrors the canonical examples:
+
+    * boolean fact: ``(skipped: has_notebooks=False)``
+    * framework check: ``(skipped: applies_if has_framework=['great-expectations'])``
+
+    We deliberately don't try to be exhaustive — we surface the first failing
+    key in the order the predicate dict iterates (insertion order), since
+    that's what the example shows and it's the most actionable for the user.
+    """
+    for key, value in predicate.items():
+        if key == "has_framework":
+            wanted = value if isinstance(value, list) else [value]
+            return f"(skipped: applies_if has_framework={wanted!r})"
+        if key == "any_framework":
+            wanted = value if isinstance(value, list) else [value]
+            return f"(skipped: applies_if any_framework={wanted!r})"
+        if key == "has_file":
+            wanted = value if isinstance(value, list) else [value]
+            return f"(skipped: applies_if has_file={wanted!r})"
+        if key == "python_version":
+            return f"(skipped: applies_if python_version={value!r})"
+        # Boolean facts (has_notebooks, has_dockerfile, has_ci, banking_mode).
+        actual = facts.get(key, False)
+        return f"(skipped: {key}={actual})"
+    return "(skipped)"
+
+
 def _format_artifacts_section(ctx: SyncContext) -> str:
     rules = ctx.rules_resolved
     prompts = ctx.prompts_resolved
@@ -62,10 +91,14 @@ def _format_artifacts_section(ctx: SyncContext) -> str:
         applies = (
             evaluate_predicate(predicate, facts, repo_root=ctx.repo_root) if predicate else True
         )
-        marker = "[OK]" if applies else "[--]"
-        rule_lines.append(
-            f"    {marker} {rule.frontmatter.priority:02d}-{rule.frontmatter.id} "
+        marker = "[✓]" if applies else "[✗]"
+        suffix = (
             f"({rule.source_package}, scope={rule.frontmatter.scope})"
+            if applies
+            else _format_skip_reason(predicate, dict(facts))
+        )
+        rule_lines.append(
+            f"    {marker} {rule.frontmatter.priority:02d}-{rule.frontmatter.id} {suffix}"
         )
     prompt_lines = []
     for prompt in prompts:
@@ -73,13 +106,18 @@ def _format_artifacts_section(ctx: SyncContext) -> str:
         applies = (
             evaluate_predicate(predicate, facts, repo_root=ctx.repo_root) if predicate else True
         )
-        marker = "[OK]" if applies else "[--]"
-        rules_note = (
-            f" (includes_rules: {', '.join(prompt.frontmatter.includes_rules)})"
-            if prompt.frontmatter.includes_rules
-            else ""
-        )
-        prompt_lines.append(f"    {marker} {prompt.frontmatter.id}{rules_note}")
+        marker = "[✓]" if applies else "[✗]"
+        if applies:
+            rules_note = (
+                f" (includes_rules: {', '.join(prompt.frontmatter.includes_rules)})"
+                if prompt.frontmatter.includes_rules
+                else ""
+            )
+            prompt_lines.append(f"    {marker} {prompt.frontmatter.id}{rules_note}")
+        else:
+            prompt_lines.append(
+                f"    {marker} {prompt.frontmatter.id} {_format_skip_reason(predicate, dict(facts))}"
+            )
     applicable_rules = sum(
         1
         for rule in rules

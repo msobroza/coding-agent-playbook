@@ -32,6 +32,8 @@ def test_check_prints_all_sections(tmp_path, make_synthetic_repo, capsys):
     assert "=== Detected ===" in out
     assert "=== Artifacts ===" in out
     assert "=== Drift ===" in out
+    # SPEC §12.4: applicable artifacts use the unicode tick marker.
+    assert "[✓]" in out
 
 
 def test_check_artifact_section_marks_applies_if(tmp_path, make_synthetic_repo, capsys):
@@ -59,7 +61,10 @@ def test_check_artifact_section_marks_applies_if(tmp_path, make_synthetic_repo, 
     out = capsys.readouterr().out
     # The rule should appear with the not-applicable marker.
     assert "scoped" in out
-    assert "[--]" in out
+    assert "[✗]" in out
+    # Skip reason mirrors SPEC §12.4: the failing predicate key is surfaced.
+    assert "skipped: applies_if has_framework=" in out
+    assert "some-framework-that-isnt-installed" in out
 
 
 def test_check_drift_section_reports_drift(tmp_path, make_synthetic_repo, capsys):
