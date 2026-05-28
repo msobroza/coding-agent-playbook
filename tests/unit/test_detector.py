@@ -501,5 +501,32 @@ def test_evaluate_predicate_has_file_without_repo_root_raises() -> None:
         evaluate_predicate({"has_file": ["Dockerfile"]}, {})
 
 
+def test_evaluate_predicate_boolean_true_matches_true_fact() -> None:
+    facts: Facts = {"has_dockerfile": True}
+    assert evaluate_predicate({"has_dockerfile": True}, facts) is True
+
+
+def test_evaluate_predicate_boolean_true_false_when_fact_false() -> None:
+    facts: Facts = {"has_dockerfile": False}
+    assert evaluate_predicate({"has_dockerfile": True}, facts) is False
+
+
+def test_evaluate_predicate_boolean_true_false_when_fact_absent() -> None:
+    assert evaluate_predicate({"has_dockerfile": True}, {}) is False
+
+
+def test_evaluate_predicate_boolean_false_matches_false_fact() -> None:
+    # Explicit False matches an explicit False fact, but NOT absence.
+    facts: Facts = {"has_dockerfile": False}
+    assert evaluate_predicate({"has_dockerfile": False}, facts) is True
+
+
+def test_evaluate_predicate_boolean_false_does_not_match_absent_fact() -> None:
+    # The plan calls out "explicit False vs absent both fail" for True; the
+    # symmetric case here is: False predicate against absent fact is False —
+    # absence is not equivalent to False.
+    assert evaluate_predicate({"has_dockerfile": False}, {}) is False
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])

@@ -401,6 +401,12 @@ def evaluate_predicate(
                 raise ValueError("predicate 'has_file' requires repo_root keyword argument")
             if not all((repo_root / rel).exists() for rel in paths):
                 return False
+        elif isinstance(value, bool):
+            # Boolean facts compared by equality. The fact must be explicitly
+            # present AND equal — an absent fact never satisfies a boolean
+            # predicate (neither True nor False).
+            if key not in facts or facts[key] != value:  # type: ignore[literal-required]
+                return False
         else:
             raise ValueError(f"unknown predicate key: {key!r}")
     return True
