@@ -1,0 +1,30 @@
+# .pre-commit-config.yaml — engine dev loop (PR 1).
+# Consumer-facing hooks are in .pre-commit-hooks.yaml (populated by PR 12).
+default_language_version:
+  python: python3.12
+fail_fast: false
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        additional_dependencies: ["jinja2>=3.1.4", "packaging>=24.0"]
+        args: ["--config-file=pyproject.toml"]
+        files: ^(src|tests)/
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+      - id: detect-private-key

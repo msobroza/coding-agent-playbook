@@ -1,0 +1,48 @@
+name: ci
+
+# Runs the lint/type/test tools directly rather than through pre-commit, and
+# installs with pip + first-party actions only (no third-party marketplace
+# actions) so it runs in restricted/self-hosted GitHub environments too.
+# pre-commit (.pre-commit-config.yaml) remains the local dev loop.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package and dev tools
+        run: python -m pip install -e ".[dev]"
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: mypy (strict)
+        run: mypy
+
+      - name: pytest
+        run: pytest -q
+
+      - name: cap --version smoke test
+        run: cap --version
+
+      - name: coding-agent-playbook --version smoke test
+        run: coding-agent-playbook --version
