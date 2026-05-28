@@ -341,6 +341,11 @@ def test_list_skills_constructs_from_directory(tmp_path: Path, temp_pkg_cleanup:
     assert skill.references_dir is None
 
 
+def test_list_eval_tasks_returns_empty_until_pr11(tmp_path: Path) -> None:
+    source = FileSystemArtifactSource(repo_root=tmp_path)
+    assert source.list_eval_tasks() == []
+
+
 def test_save_lockfile_emits_valid_toml(tmp_path: Path) -> None:
     source = FileSystemStateSource(repo_root=tmp_path)
     lockfile = Lockfile(
