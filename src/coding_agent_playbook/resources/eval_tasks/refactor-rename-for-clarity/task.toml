@@ -1,0 +1,29 @@
+id = "refactor-rename-for-clarity"
+prompt_id = "refactor"
+description = "Edge case: ambiguous one-letter variable names hide intent; the refactor renames them without changing logic."
+version = 1
+
+[setup]
+files = ["src/billing.py"]
+project_kind = "python-application"
+python_version = "3.12"
+frameworks = ["pytest"]
+
+[invocation]
+prompt_args = "rename the variables in src/billing.py for clarity — keep behavior identical"
+input_variables = { target = "src/billing.py::compute_invoice" }
+
+[expected]
+files_must_contain = [
+  { path = "src/billing.py", pattern = "def compute_invoice" },
+]
+files_forbidden = []
+
+[rubric]
+criteria = [
+  "Every single-letter loop/temp variable (e.g. `x`, `r`, `t`) is renamed to something descriptive",
+  "The function's signature, return type, and behavior are unchanged",
+  "No comments were added to explain a name that should now be self-explanatory",
+  "The diff is small and obviously a rename — not a rewrite",
+]
+weights = [0.35, 0.35, 0.15, 0.15]
