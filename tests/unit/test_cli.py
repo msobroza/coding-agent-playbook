@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from coding_agent_playbook import __version__
-from coding_agent_playbook.cli import build_parser, main
+from coding_agent_playbook.cli import _SUBCOMMANDS, build_parser, main
 
 
 def test_version_flag_prints_name_and_version(capsys):
@@ -20,6 +20,18 @@ def test_version_flag_prints_name_and_version(capsys):
 def test_no_args_prints_help_and_exits_zero(capsys):
     assert main([]) == 0
     assert "usage" in capsys.readouterr().out.lower()
+
+
+@pytest.mark.parametrize("name", _SUBCOMMANDS)
+def test_every_subcommand_in_module_tuple_is_registered(name):
+    """Every name in :data:`_SUBCOMMANDS` resolves to an argparse subparser
+    with a default ``func``. Keeps the canonical list and the actual
+    parser surface in sync.
+    """
+    parser = build_parser()
+    args = parser.parse_args([name] if name != "render" else [name, "any-id"])
+    assert args.command == name
+    assert callable(getattr(args, "func", None))
 
 
 def test_sync_subparser_accepts_check_and_repo_root_flags():
