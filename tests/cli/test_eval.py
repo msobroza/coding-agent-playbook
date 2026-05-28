@@ -204,6 +204,85 @@ def test_eval_show_existing_task_prints_details(tmp_path, make_synthetic_repo, c
     assert "0.4" in out
 
 
+def test_show_uses_prompt_slash_not_id_when_they_differ(tmp_path, make_synthetic_repo, capsys):
+    """When ``prompt.slash`` differs from ``prompt.id`` (allowed by the
+    canonical Prompt schema), ``cap eval --show`` must print the slash in the
+    ``Prompt: /...`` line, not the id.
+
+    Regression: PR 11 originally used ``task.prompt_id`` as the slash because
+    the show-printer didn't have the prompt registry. That broke for any
+    prompt whose slash deliberately differed from its id.
+    """
+    make_synthetic_repo(tmp_path)
+    prompts_dir = tmp_path / "playbook" / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+    # Prompt id="generate-tests" but slash="gen-tests" (deliberately different).
+    (prompts_dir / "generate-tests.md").write_text(
+        "---\n"
+        "id: generate-tests\n"
+        "name: Generate Tests\n"
+        "description: Generate pytest tests\n"
+        "slash: gen-tests\n"
+        "eval_tasks:\n"
+        "  - generate-tests-happy-path\n"
+        "---\n"
+        "Body.\n",
+        encoding="utf-8",
+    )
+    task_dir = tmp_path / "playbook" / "eval_tasks" / "generate-tests-happy-path"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    (task_dir / "task.toml").write_text(
+        'id = "generate-tests-happy-path"\n'
+        'prompt_id = "generate-tests"\n'
+        'description = "Tests for a simple function"\n'
+        "[setup]\n"
+        "files = []\n"
+        'project_kind = "python-application"\n'
+        'python_version = "3.12"\n'
+        'frameworks = ["pytest"]\n'
+        "[invocation]\n"
+        'prompt_args = "target"\n',
+        encoding="utf-8",
+    )
+
+    rc = _eval.run(_ns(tmp_path, show="generate-tests-happy-path"))
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Prompt: /gen-tests" in out
+    # The line that prints the slash must NOT use the id when they differ.
+    assert "Prompt: /generate-tests" not in out
+
+
+def test_show_falls_back_to_prompt_id_when_prompt_missing(
+    tmp_path, make_synthetic_repo, capsys
+):
+    """If a task references a prompt that isn't loaded (mid-authoring state),
+    ``cap eval --show`` falls back to printing the ``prompt_id`` as the slash
+    so the output is still useful."""
+    make_synthetic_repo(tmp_path)
+    # No prompt file at all — only the task.
+    task_dir = tmp_path / "playbook" / "eval_tasks" / "orphan-task"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    (task_dir / "task.toml").write_text(
+        'id = "orphan-task"\n'
+        'prompt_id = "missing-prompt"\n'
+        'description = "Task without a prompt"\n'
+        "[setup]\n"
+        "files = []\n"
+        'project_kind = "python-application"\n'
+        'python_version = "3.12"\n'
+        'frameworks = []\n'
+        "[invocation]\n"
+        'prompt_args = ""\n',
+        encoding="utf-8",
+    )
+
+    rc = _eval.run(_ns(tmp_path, show="orphan-task"))
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Prompt: /missing-prompt" in out
+
+
 def test_eval_show_unknown_id_exits_nonzero(tmp_path, make_synthetic_repo, capsys):
     _seed_eval_repo(tmp_path, make_synthetic_repo)
     rc = _eval.run(_ns(tmp_path, show="does-not-exist"))

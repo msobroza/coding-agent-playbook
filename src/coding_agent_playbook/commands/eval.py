@@ -52,7 +52,7 @@ def run(args: argparse.Namespace) -> int:
         return _print_list(ctx.prompts_resolved, tasks)
     show_id = getattr(args, "show", None)
     if show_id:
-        return _print_show(show_id, tasks)
+        return _print_show(show_id, tasks, ctx.prompts_resolved)
     bare_id = getattr(args, "id", None)
     if bare_id:
         return _print_runner_deferral(bare_id, tasks, ctx.prompts_resolved)
@@ -126,7 +126,7 @@ def _print_list(prompts: list[Prompt], tasks: list[EvalTask]) -> int:
     return 0
 
 
-def _print_show(task_id: str, tasks: list[EvalTask]) -> int:
+def _print_show(task_id: str, tasks: list[EvalTask], prompts: list[Prompt]) -> int:
     """Detailed task dump per SPEC §12.8."""
     task = next((t for t in tasks if t.id == task_id), None)
     if task is None:
@@ -147,11 +147,14 @@ def _print_show(task_id: str, tasks: list[EvalTask]) -> int:
     files_list = ", ".join(str(p) for p in task.setup.files) or "(none)"
     lines.append(f"  Files ({len(task.setup.files)}): {files_list}")
     lines.append("Invocation:")
-    # Reach into the prompt id for the slash name; the actual slash is the
-    # prompt's own — we render the task's prompt_id as a useful surrogate when
-    # the prompt isn't loaded here (it would require looking up resolved
-    # prompts, which we don't need for the v1 dump).
-    lines.append(f"  Prompt: /{task.prompt_id}")
+    # The slash name is the prompt's own slash (which the schema allows to
+    # differ from the prompt id — e.g. id="generate-tests" + slash="gen-tests").
+    # Falling back to the prompt_id when the prompt is missing keeps --show
+    # useful in mid-authoring states where the prompt hasn't been written yet,
+    # but for any resolved prompt we honour its declared slash.
+    prompt = next((p for p in prompts if p.frontmatter.id == task.prompt_id), None)
+    slash = prompt.frontmatter.slash if prompt is not None else task.prompt_id
+    lines.append(f"  Prompt: /{slash}")
     lines.append(f'  Args: "{task.invocation.prompt_args}"')
     if task.invocation.input_variables:
         bindings = ", ".join(f"{k}={v}" for k, v in task.invocation.input_variables.items())
