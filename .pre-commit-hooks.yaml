@@ -1,4 +1,24 @@
-# .pre-commit-hooks.yaml — consumer-facing hooks. Populated by PR 12 with
-# `cap-sync-check` and `cap-validate` per SPEC §13.1. Present in PR 1 as an
-# empty list so consumers cloning early can attach the repo without error.
-[]
+# .pre-commit-hooks.yaml — engine-side hooks exposed to consumer repos.
+# Reference from a consumer's .pre-commit-config.yaml:
+#
+#   - repo: https://github.com/msobroza/coding-agent-playbook
+#     rev: v0.1.0a0          # or any released tag
+#     hooks:
+#       - id: cap-sync-check
+
+- id: cap-sync-check
+  name: coding-agent-playbook sync check
+  description: Verify .continue/, .claude/, AGENTS.md are in sync with the installed playbook
+  entry: cap sync --check
+  language: python
+  pass_filenames: false
+  always_run: true
+
+- id: cap-validate
+  name: coding-agent-playbook validate (overlay authors)
+  description: Validate canonical artifacts (only run when authoring an overlay)
+  entry: cap validate
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]
