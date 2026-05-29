@@ -177,7 +177,12 @@ class RuleRegistryImpl:
         if rule is None:
             return ""
         if rule.is_templated:
-            body = render_string(rule.template_body, dict(context), env=self._env)
+            # Merge stored facts beneath the caller-supplied context so callers
+            # can pass {} (the auto-appended-appendix path in renderer.py does)
+            # without hitting StrictUndefined on every templated rule that
+            # references a fact. Caller-supplied keys win on collision.
+            merged_context = {**self._facts, **context}
+            body = render_string(rule.template_body, merged_context, env=self._env)
         else:
             body = rule.body
         return f"### {rule.frontmatter.name}\n\n{body}"

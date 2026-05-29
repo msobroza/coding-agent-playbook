@@ -1,0 +1,84 @@
+---
+id: python-typing
+name: Python typing conventions
+description: Type hints, generic syntax, when to use Any.
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+applies_if:
+  python_version: ">=3.11"
+priority: 50
+tags: [python, typing]
+---
+
+# Python typing conventions
+
+Type hints aren't decoration — they're the cheapest documentation you can ship. Annotate every public signature; mypy or pyright keeps you honest.
+
+## Generics
+
+{% if python_version is defined and python_version >= "3.12" %}
+This project targets Python {{ python_version }}, so use **PEP 695** generic syntax. It is concise, scoped to the function/class that needs it, and removes the boilerplate `TypeVar` declarations.
+
+```python
+def first[T](items: list[T]) -> T | None:
+    return items[0] if items else None
+
+
+class Cache[K, V]:
+    def __init__(self) -> None:
+        self._store: dict[K, V] = {}
+```
+{% else %}
+This project predates PEP 695. Declare type variables explicitly and reuse them across related signatures.
+
+```python
+from typing import TypeVar
+
+T = TypeVar("T")
+
+def first(items: list[T]) -> T | None:
+    return items[0] if items else None
+```
+{% endif %}
+
+## `Any` is a fallback, not a default
+
+- Reach for a concrete type first; reach for a `Protocol` second; reach for `object` third; reach for `Any` only when the alternative is making types lie.
+- When you do use `Any`, suppress the corresponding mypy diagnostic with `# type: ignore[<code>]` and a comment that explains *why* a precise type isn't available.
+
+## Optional types
+
+- Write `X | None`, not `Optional[X]`. They mean the same thing; the `|` form is shorter and reads top-to-bottom.
+- Don't default a mutable container to `None` to dodge typing — default to an empty container:
+
+```python
+def push(items: list[int] | None = None) -> list[int]:   # avoid
+    items = items or []
+    ...
+
+def push(items: list[int] = []) -> list[int]:            # avoid (mutable default!)
+    ...
+
+def push(items: list[int] | None = None) -> list[int]:   # accept, but ...
+    items = list(items) if items is not None else []     # ... copy explicitly
+    ...
+```
+
+## Read-only parameters
+
+For function inputs, prefer the abstract read-only types from `collections.abc` over the concrete mutable ones. They communicate *"I won't mutate this"* and accept a broader set of inputs.
+
+| Use this for inputs   | Not this    |
+| --------------------- | ----------- |
+| `Sequence[T]`         | `list[T]`   |
+| `Mapping[K, V]`       | `dict[K, V]`|
+| `Iterable[T]`         | `list[T]`   |
+| `Set[T]` (from `abc`) | `set[T]`    |
+
+Outputs are the opposite: return the concrete type so callers can mutate it freely.
+
+## Tooling
+
+This project runs mypy (or pyright). When you add a deliberate `# type: ignore[...]`, the error code is mandatory — `# type: ignore` with no code silences everything and lets future bugs slip through.

@@ -63,10 +63,15 @@ def overlay_cleanup(tmp_path: Path) -> Iterator[None]:
 
 
 def test_list_eval_tasks_walks_engine_resources(tmp_path: Path) -> None:
-    """The engine ships zero eval tasks in v1 (PR 13 adds them); confirm the
-    method returns ``[]`` without raising."""
+    """The engine ships eval tasks under
+    ``coding_agent_playbook/resources/eval_tasks/`` (PR 13 onwards). Confirm
+    the walker picks them up and tags them with
+    ``source_package="coding_agent_playbook"``."""
     source = FileSystemArtifactSource(repo_root=tmp_path)
-    assert source.list_eval_tasks() == []
+    tasks = source.list_eval_tasks()
+    engine_tasks = [t for t in tasks if t.source_package == "coding_agent_playbook"]
+    assert engine_tasks, "expected at least one engine-shipped eval task"
+    assert all(t.source_package == "coding_agent_playbook" for t in engine_tasks)
 
 
 def test_list_eval_tasks_walks_overlay_packages(tmp_path: Path, overlay_cleanup: None) -> None:
@@ -76,11 +81,11 @@ def test_list_eval_tasks_walks_overlay_packages(tmp_path: Path, overlay_cleanup:
         overlay_packages=["temp_eval_overlay"],
     )
     tasks = source.list_eval_tasks()
-    assert len(tasks) == 1
-    task = tasks[0]
+    overlay_tasks = [t for t in tasks if t.source_package == "temp_eval_overlay"]
+    assert len(overlay_tasks) == 1
+    task = overlay_tasks[0]
     assert isinstance(task, EvalTask)
     assert task.id == "overlay-task-foo"
-    assert task.source_package == "temp_eval_overlay"
 
 
 def test_list_eval_tasks_walks_repo_local(tmp_path: Path) -> None:
@@ -94,9 +99,9 @@ def test_list_eval_tasks_walks_repo_local(tmp_path: Path) -> None:
     )
     source = FileSystemArtifactSource(repo_root=tmp_path)
     tasks = source.list_eval_tasks()
-    assert len(tasks) == 1
-    assert tasks[0].id == "local-task"
-    assert tasks[0].source_package == "<repo-local>"
+    repo_local_tasks = [t for t in tasks if t.source_package == "<repo-local>"]
+    assert len(repo_local_tasks) == 1
+    assert repo_local_tasks[0].id == "local-task"
 
 
 def test_list_eval_tasks_aggregates_overlay_and_repo_local(
@@ -114,8 +119,9 @@ def test_list_eval_tasks_aggregates_overlay_and_repo_local(
         overlay_packages=["temp_eval_overlay2"],
     )
     tasks = source.list_eval_tasks()
-    ids = {t.id for t in tasks}
+    non_engine = [t for t in tasks if t.source_package != "coding_agent_playbook"]
+    ids = {t.id for t in non_engine}
     assert ids == {"overlay-task-bar", "repo-task"}
-    by_id = {t.id: t for t in tasks}
+    by_id = {t.id: t for t in non_engine}
     assert by_id["overlay-task-bar"].source_package == "temp_eval_overlay2"
     assert by_id["repo-task"].source_package == "<repo-local>"

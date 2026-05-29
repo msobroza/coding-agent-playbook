@@ -1,0 +1,30 @@
+id = "refactor-extract-helper"
+prompt_id = "refactor"
+description = "Happy path: an overly long function with a self-contained chunk gets the chunk extracted into a named helper."
+version = 1
+
+[setup]
+files = ["src/report.py", "tests/test_report.py"]
+project_kind = "python-application"
+python_version = "3.12"
+frameworks = ["pytest"]
+
+[invocation]
+prompt_args = "extract the totals-formatting block in src/report.py into a helper"
+input_variables = { target = "src/report.py::render_report" }
+
+[expected]
+files_must_contain = [
+  { path = "src/report.py", pattern = "def _format_totals" },
+  { path = "src/report.py", pattern = "_format_totals" },
+]
+files_unchanged = ["tests/test_report.py"]
+
+[rubric]
+criteria = [
+  "The extracted helper has a name that says WHAT it produces (not HOW), e.g. `_format_totals`",
+  "The original function still passes the existing tests with no behavior change",
+  "The helper is private (leading underscore) since it has only one caller",
+  "The extraction does not introduce new arguments to the public function",
+]
+weights = [0.3, 0.4, 0.15, 0.15]

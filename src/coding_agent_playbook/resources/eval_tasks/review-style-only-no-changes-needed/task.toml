@@ -1,0 +1,26 @@
+id = "review-style-only-no-changes-needed"
+prompt_id = "review"
+description = "Regression target: code is correct and idiomatic; the review must NOT invent problems or rewrite working code."
+version = 1
+
+[setup]
+files = ["src/temperature.py"]
+project_kind = "python-application"
+python_version = "3.12"
+frameworks = ["pytest"]
+
+[invocation]
+prompt_args = "review src/temperature.py — be honest if there's nothing to change"
+input_variables = {}
+
+[expected]
+files_unchanged = ["src/temperature.py"]
+
+[rubric]
+criteria = [
+  "The review's verdict is 'approve' (with no comments) or 'approve with comments' (style-only, framed as suggestions)",
+  "No correctness, security, or failure-mode bugs are claimed — because none exist",
+  "Any suggestions are framed as preferences, not as required changes",
+  "The review does not propose to rewrite the function or change its signature",
+]
+weights = [0.4, 0.3, 0.15, 0.15]

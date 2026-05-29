@@ -1,0 +1,26 @@
+id = "review-spot-the-bug"
+prompt_id = "review"
+description = "Happy path: code has a real correctness bug (off-by-one); a good review catches it before style nits."
+version = 1
+
+[setup]
+files = ["src/pagination.py"]
+project_kind = "python-application"
+python_version = "3.12"
+frameworks = ["pytest"]
+
+[invocation]
+prompt_args = "review src/pagination.py"
+input_variables = {}
+
+[expected]
+files_unchanged = ["src/pagination.py"]
+
+[rubric]
+criteria = [
+  "The review identifies the off-by-one bug in `paginate` (the last item on the final page is dropped when total_items is not a multiple of page_size)",
+  "The correctness comment appears BEFORE any style or naming comments — priority order is respected",
+  "The review quotes the offending line or expression rather than describing it abstractly",
+  "The review does not propose unrelated changes (no rewriting of working code)",
+]
+weights = [0.5, 0.2, 0.15, 0.15]
