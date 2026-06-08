@@ -1,4 +1,4 @@
-"""`cap render <id>` — render a single artifact to stdout for debugging
+"""`playbook render <id>` — render a single artifact to stdout for debugging
 (SPEC §12.7).
 
 Supports ``--format <fmt>`` (defaults to the artifact's natural format),
@@ -95,7 +95,7 @@ def _show_source(artifact: _Artifact, kind: str, ctx: SyncContext) -> str:
     adapters = sorted(ctx.adapters.keys())
     lines.append(f"Adapters:  {', '.join(adapters)}")
     # Final line: SPEC §12.7 surfaces the predicate outcome under the
-    # current facts so the user can see at a glance whether `cap sync`
+    # current facts so the user can see at a glance whether `playbook sync`
     # would emit this artifact.
     frontmatter = artifact.frontmatter
     predicate: dict[str, object] = {}

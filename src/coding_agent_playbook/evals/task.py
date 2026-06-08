@@ -75,7 +75,7 @@ class EvalTask:
     ``source_path`` is the ``task.toml`` path (the parent directory holds
     ``setup/`` etc.). ``source_package`` is the importable package name
     (``"coding_agent_playbook"``, an overlay package, or ``"<repo-local>"``)
-    so ``cap eval --show`` and overlay collision reports can attribute the
+    so ``playbook eval --show`` and overlay collision reports can attribute the
     task back to its layer.
     """
 

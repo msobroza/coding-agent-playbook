@@ -1,18 +1,18 @@
-"""``cap eval`` — Tier 0 read-only enumeration (SPEC §12.8 + §15.2).
+"""``playbook eval`` — Tier 0 read-only enumeration (SPEC §12.8 + §15.2).
 
-In v1 ``cap eval`` is a read-only enumeration of the prompt-to-task graph.
-The runner ships in v2 (SPEC §15.3); bare ``cap eval <id>`` prints a
-deferral message and exits 0 (not 1) so CI pipelines that wire ``cap eval``
+In v1 ``playbook eval`` is a read-only enumeration of the prompt-to-task graph.
+The runner ships in v2 (SPEC §15.3); bare ``playbook eval <id>`` prints a
+deferral message and exits 0 (not 1) so CI pipelines that wire ``playbook eval``
 today won't break when the runner activates.
 
 Sub-modes:
 
-- ``cap eval --list`` (also the default when no arg is given): tree-shape
+- ``playbook eval --list`` (also the default when no arg is given): tree-shape
   coverage report across every prompt, with per-task summary lines.
-- ``cap eval --show <id>``: detailed dump for one task — sections from
+- ``playbook eval --show <id>``: detailed dump for one task — sections from
   SPEC §12.8 (Task / Source / Prompt under test / Description / Setup /
   Invocation / Expected / Rubric).
-- ``cap eval <id>``: runner-deferral message. Exits 0 if the task is known,
+- ``playbook eval <id>``: runner-deferral message. Exits 0 if the task is known,
   exits 1 if it isn't (so typos still surface — the deferral only applies
   to tasks that genuinely exist).
 """
@@ -35,8 +35,8 @@ if TYPE_CHECKING:
 _RUNNER_DEFERRAL_TEMPLATE = (
     "Eval runner not yet implemented (v1 ships task schema only).\n"
     "The task is well-formed and ready to run when the v2 runner lands. For now:\n"
-    "  - Use `cap eval --show {task_id}` to inspect the task.\n"
-    "  - Use `cap eval --list` to see all task coverage.\n"
+    "  - Use `playbook eval --show {task_id}` to inspect the task.\n"
+    "  - Use `playbook eval --list` to see all task coverage.\n"
     "  - To run manually: copy setup/ to a scratch repo, invoke /{slash}\n"
     "    with the documented args, and grade against the expected/rubric.\n"
     "See SPEC.md Section 15 for the v2 runner API."
@@ -122,7 +122,7 @@ def _print_list(prompts: list[Prompt], tasks: list[EvalTask]) -> int:
     # Blank separator between the per-prompt blocks and the Total: line
     # is part of the SPEC §12.8 layout. On an empty repo (zero prompts
     # rendered), omit it so the header is immediately followed by the
-    # Total without a stray blank line — keeps ``cap eval --list`` clean
+    # Total without a stray blank line — keeps ``playbook eval --list`` clean
     # on a fresh project that hasn't authored prompts yet.
     if rendered_any_prompt:
         lines.append("")
@@ -144,7 +144,7 @@ def _print_list(prompts: list[Prompt], tasks: list[EvalTask]) -> int:
 def _plural(n: int, word: str) -> str:
     """Render ``n word`` with the English ``+s`` suffix when ``n != 1``.
 
-    Used by ``cap eval --list`` so the ``Total:`` line reads ``1 prompt``
+    Used by ``playbook eval --list`` so the ``Total:`` line reads ``1 prompt``
     instead of ``1 prompts``. Only works for words whose plural is formed
     by appending ``s`` to the supplied lemma — compound subjects whose head
     noun is not at the tail (e.g. ``"prompt without tasks"``) must be
@@ -226,7 +226,7 @@ def _print_show(task_id: str, tasks: list[EvalTask], prompts: list[Prompt]) -> i
 
 
 def _print_runner_deferral(task_id: str, tasks: list[EvalTask], prompts: list[Prompt]) -> int:
-    """Bare ``cap eval <id>`` — verify task exists, then print deferral. Exit 0.
+    """Bare ``playbook eval <id>`` — verify task exists, then print deferral. Exit 0.
 
     Unknown task ids exit 1 so typos surface (the deferral promise applies
     only to tasks that genuinely exist).
@@ -242,7 +242,7 @@ def _print_runner_deferral(task_id: str, tasks: list[EvalTask], prompts: list[Pr
         if prompt.frontmatter.id == task.prompt_id:
             slash = prompt.frontmatter.slash
             break
-    print(f"cap eval {task_id}:")
+    print(f"playbook eval {task_id}:")
     print(_RUNNER_DEFERRAL_TEMPLATE.format(task_id=task_id, slash=slash))
     return 0
 
@@ -280,7 +280,7 @@ def _display_source_path(task: EvalTask) -> str:
     - If the expected segment is missing (e.g. unusual layout, or the source
       was constructed by a non-filesystem implementation), fall back to the
       task directory's basename prefixed with the package name so the output
-      is still attributable. Never raise — ``cap eval --show`` should never
+      is still attributable. Never raise — ``playbook eval --show`` should never
       crash on a path-formatting issue.
 
     The trailing ``/`` is appended so the output always reads as a directory

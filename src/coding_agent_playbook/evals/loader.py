@@ -18,7 +18,7 @@ def discover_eval_task_dirs(root: Path) -> Iterator[Path]:
     Skips dot-prefixed directories (``.git``, ``.cache``, ``__pycache__``, etc.)
     so accidentally nested infrastructure doesn't get loaded as tasks. Results
     are sorted alphabetically by directory name for deterministic ordering in
-    ``cap eval --list`` output.
+    ``playbook eval --list`` output.
 
     Returns nothing (no exception) when ``root`` does not exist — overlay
     packages can ship without an ``eval_tasks/`` directory.

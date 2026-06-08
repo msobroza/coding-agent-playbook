@@ -1,4 +1,4 @@
-"""`cap validate` — cross-reference checks (SPEC §12.6).
+"""`playbook validate` — cross-reference checks (SPEC §12.6).
 
 Validates:
 

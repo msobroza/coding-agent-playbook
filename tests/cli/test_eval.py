@@ -1,8 +1,8 @@
-"""Tests for ``cap eval --list/--show`` and the bare ``<id>`` runner-deferred
+"""Tests for ``playbook eval --list/--show`` and the bare ``<id>`` runner-deferred
 path (SPEC §12.8 / §15).
 
 PR 11 turns the PR-10 deferral stub into the real Tier 0 read-only surface.
-The runner remains absent; bare ``cap eval <id>`` exits 0 with a deferral
+The runner remains absent; bare ``playbook eval <id>`` exits 0 with a deferral
 message that references SPEC §15.
 """
 
@@ -204,7 +204,7 @@ def test_plural_helper_uses_singular_for_n_equals_one():
     shapes.
 
     Exercises the n=1 branch directly because integration via
-    ``cap eval --list`` can't reach n=1 on a real repo: the engine ships four
+    ``playbook eval --list`` can't reach n=1 on a real repo: the engine ships four
     prompts (PR 13) so the prompt count is never 1 in practice.
     """
     from coding_agent_playbook.commands.eval import _plural
@@ -271,7 +271,7 @@ def test_eval_show_existing_task_prints_details(tmp_path, make_synthetic_repo, c
 
 def test_show_uses_prompt_slash_not_id_when_they_differ(tmp_path, make_synthetic_repo, capsys):
     """When ``prompt.slash`` differs from ``prompt.id`` (allowed by the
-    canonical Prompt schema), ``cap eval --show`` must print the slash in the
+    canonical Prompt schema), ``playbook eval --show`` must print the slash in the
     ``Prompt: /...`` line, not the id.
 
     Regression: PR 11 originally used ``task.prompt_id`` as the slash because
@@ -323,7 +323,7 @@ def test_display_source_path_uses_package_prefix_for_engine_tasks(tmp_path):
     ``<package>/resources/eval_tasks/<id>/`` (the canonical SPEC §12.8 form).
 
     Unit-level test because the engine ships zero tasks in v1, so no
-    integration test through ``cap eval --show`` exercises this branch."""
+    integration test through ``playbook eval --show`` exercises this branch."""
     from coding_agent_playbook.commands.eval import _display_source_path
     from coding_agent_playbook.evals.task import EvalTask
 
@@ -396,7 +396,7 @@ def test_display_source_path_falls_back_gracefully_for_unusual_paths(tmp_path):
 def test_show_source_path_is_repo_relative_for_repo_local_tasks(
     tmp_path, make_synthetic_repo, capsys
 ):
-    """``cap eval --show``'s ``Source:`` line for a repo-local task must start
+    """``playbook eval --show``'s ``Source:`` line for a repo-local task must start
     at ``playbook/eval_tasks/...``, not an absolute filesystem path.
 
     SPEC §12.8 example uses package-relative paths
@@ -451,7 +451,7 @@ def test_show_source_path_is_repo_relative_for_repo_local_tasks(
 
 def test_show_falls_back_to_prompt_id_when_prompt_missing(tmp_path, make_synthetic_repo, capsys):
     """If a task references a prompt that isn't loaded (mid-authoring state),
-    ``cap eval --show`` falls back to printing the ``prompt_id`` as the slash
+    ``playbook eval --show`` falls back to printing the ``prompt_id`` as the slash
     so the output is still useful."""
     make_synthetic_repo(tmp_path)
     # No prompt file at all — only the task.
@@ -516,7 +516,7 @@ def test_eval_no_args_defaults_to_list(tmp_path, make_synthetic_repo, capsys):
 
 
 def test_eval_list_handles_repo_with_no_local_artifacts(tmp_path, make_synthetic_repo, capsys):
-    """``cap eval --list`` on a fresh repo with no repo-local prompts or tasks
+    """``playbook eval --list`` on a fresh repo with no repo-local prompts or tasks
     must:
 
     - still print the SPEC §12.8 header ``=== Eval tasks ===``

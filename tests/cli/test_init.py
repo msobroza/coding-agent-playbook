@@ -1,4 +1,4 @@
-"""Tests for ``cap init`` (PR 10 Task 4)."""
+"""Tests for ``playbook init`` (PR 10 Task 4)."""
 
 from __future__ import annotations
 

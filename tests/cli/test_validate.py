@@ -1,4 +1,4 @@
-"""Tests for ``cap validate`` (PR 10 Task 6).
+"""Tests for ``playbook validate`` (PR 10 Task 6).
 
 Covers each error class documented in SPEC §12.6 plus the happy path.
 """

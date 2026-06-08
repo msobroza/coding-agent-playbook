@@ -1,4 +1,4 @@
-"""``cap`` / ``coding-agent-playbook`` entry point.
+"""``playbook`` / ``coding-agent-playbook`` entry point.
 
 PR 10 wires every subcommand documented in SPEC §12 into the argparse
 dispatcher. Each subcommand lives in its own module under
@@ -36,7 +36,7 @@ _SUBCOMMANDS: tuple[str, ...] = ("init", "sync", "check", "validate", "render", 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="cap",
+        prog="playbook",
         description="coding-agent-playbook — multi-harness playbook engine.",
     )
     parser.add_argument(
@@ -46,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subcommands = parser.add_subparsers(dest="command")
 
-    # cap init
+    # playbook init
     init_p = subcommands.add_parser(_SUBCOMMANDS[0], help="bootstrap a fresh repo (SPEC §12.1)")
     init_p.add_argument("--repo-root", help="repo to initialise (defaults to cwd)")
     init_p.add_argument("--non-interactive", action="store_true")
@@ -57,7 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_p.add_argument("--overlays", help="comma-separated overlay package names")
     init_p.set_defaults(func=init_cmd.run)
 
-    # cap sync
+    # playbook sync
     sync_p = subcommands.add_parser(_SUBCOMMANDS[1], help="regenerate all artifacts (SPEC §12.2)")
     sync_p.add_argument("--repo-root", help="repo to sync (defaults to cwd)")
     sync_p.add_argument(
@@ -67,7 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sync_p.set_defaults(func=sync_cmd.run)
 
-    # cap check
+    # playbook check
     check_p = subcommands.add_parser(_SUBCOMMANDS[2], help="diagnostic dump (SPEC §12.4)")
     check_p.add_argument("--repo-root", help="repo to check (defaults to cwd)")
     check_p.add_argument(
@@ -77,12 +77,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     check_p.set_defaults(func=check_cmd.run)
 
-    # cap validate
+    # playbook validate
     validate_p = subcommands.add_parser(_SUBCOMMANDS[3], help="cross-reference checks (SPEC §12.6)")
     validate_p.add_argument("--repo-root", help="repo to validate (defaults to cwd)")
     validate_p.set_defaults(func=validate_cmd.run)
 
-    # cap render
+    # playbook render
     render_p = subcommands.add_parser(_SUBCOMMANDS[4], help="render one artifact (SPEC §12.7)")
     render_p.add_argument("id", help="artifact id to render")
     render_p.add_argument("--repo-root", help="repo to render against (defaults to cwd)")
@@ -91,7 +91,7 @@ def build_parser() -> argparse.ArgumentParser:
     render_p.add_argument("--show-rules", action="store_true")
     render_p.set_defaults(func=render_cmd.run)
 
-    # cap eval (PR 11 finishes)
+    # playbook eval (PR 11 finishes)
     eval_p = subcommands.add_parser(_SUBCOMMANDS[5], help="eval enumeration (PR 11 ships)")
     # Every other subcommand exposes ``--repo-root <path>`` for testability
     # and so users can run against a non-cwd checkout; eval gets the same

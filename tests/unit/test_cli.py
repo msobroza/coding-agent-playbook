@@ -1,4 +1,4 @@
-"""Tests for the cap / coding-agent-playbook CLI dispatcher (PR 10)."""
+"""Tests for the playbook / coding-agent-playbook CLI dispatcher (PR 10)."""
 
 from __future__ import annotations
 
@@ -114,7 +114,7 @@ def test_eval_subparser_accepts_bare_id():
 
 
 def test_eval_subparser_accepts_repo_root():
-    """``cap eval`` must accept ``--repo-root <path>`` for parity with every
+    """``playbook eval`` must accept ``--repo-root <path>`` for parity with every
     other subcommand (sync/check/validate/render). Without it, tests and
     non-cwd invocations would have to ``os.chdir`` into the target repo —
     fragile and surprising next to the other subcommands."""
@@ -131,7 +131,7 @@ def test_eval_subparser_accepts_repo_root():
 
 
 def test_eval_main_uses_repo_root_without_chdir(monkeypatch, tmp_path, make_synthetic_repo):
-    """Running ``cap eval --list --repo-root <path>`` through ``main`` must
+    """Running ``playbook eval --list --repo-root <path>`` through ``main`` must
     enumerate the *given* repo, not the process's cwd. The original
     process cwd must be unchanged after the call (no covert ``os.chdir``).
 

@@ -1,4 +1,4 @@
-"""Per-subcommand modules for the ``cap`` CLI.
+"""Per-subcommand modules for the ``playbook`` CLI.
 
 The ``cli.py`` dispatcher imports each module and binds its ``run`` function
 as the subparser's ``func``. Splitting per-command keeps the argparse glue in

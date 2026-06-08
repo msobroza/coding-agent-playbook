@@ -1,9 +1,9 @@
 """Detector subsystem: inspect a consumer repo and produce a Facts dict.
 
 See SPEC.md §8. The Facts dict feeds the renderer's context (SPEC §9.4) and the
-``applies_if`` predicate evaluator (SPEC §6.4). Detector runs at ``cap init``,
+``applies_if`` predicate evaluator (SPEC §6.4). Detector runs at ``playbook init``,
 is cached in ``.coding-agent-playbook.toml``, and refreshes on ``pyproject.toml``
-mtime change or ``cap check --refresh``.
+mtime change or ``playbook check --refresh``.
 """
 
 from __future__ import annotations

@@ -4,7 +4,7 @@ Multi-harness playbook engine
 ## Status
 
 Engine and CLI are implemented: detector, renderer, the four adapters
-(Continue, Claude Code, OpenCode, AGENTS.md), the `cap` commands
+(Continue, Claude Code, OpenCode, AGENTS.md), the `playbook` commands
 (`init` / `sync` / `check` / `validate` / `render` / `eval`), and the Tier 0
 eval schema. See `SPEC.md` for the full design.
 
@@ -13,7 +13,7 @@ Working on the engine itself:
 ```bash
 uv sync --extra dev   # install engine + dev tools
 uv run pytest         # run the test suite
-uv run cap --version  # smoke-test the CLI
+uv run playbook --version  # smoke-test the CLI
 ```
 
 ## Using the playbook in an external repo
@@ -37,24 +37,24 @@ uv add --dev playbook-rules-<org>             # optional: your org's overlay
 ### 2. Initialize
 
 ```bash
-cap init
+playbook init
 ```
 
-`cap init` detects your stack, then writes:
+`playbook init` detects your stack, then writes:
 
 - `.coding-agent-playbook.toml` — the committed project config (below);
 - `.coding-agent-playbook.local.toml` — personal per-engineer overrides
   (gitignored automatically);
 - a merged `.pre-commit-config.yaml` and installs the hooks;
-- and runs `cap sync` once to generate the initial artifacts.
+- and runs `playbook sync` once to generate the initial artifacts.
 
 ### 3. Generate
 
 ```bash
-cap sync     # regenerate .continue/, .claude/, .opencode/, AGENTS.md
+playbook sync     # regenerate .continue/, .claude/, .opencode/, AGENTS.md
 ```
 
-`cap sync` is the workhorse — re-run it (or let the pre-commit hook run it)
+`playbook sync` is the workhorse — re-run it (or let the pre-commit hook run it)
 whenever the canonical source or your dependencies change. `AGENTS.md` is always
 generated regardless of which adapters are enabled.
 
@@ -95,29 +95,29 @@ Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
 Not every resource renders everywhere: the detector inspects the repo and each
 artifact's `applies_if` predicate gates it (a FastAPI rule won't ship to a
 non-FastAPI repo; the ML serialization-security rule ships only to repos with an
-ML stack). Run `cap check` to see the detected facts and exactly which
+ML stack). Run `playbook check` to see the detected facts and exactly which
 rules/prompts are active — the fastest way to debug *"why isn't my rule
 appearing?"*
 
 ## Pre-commit integration
 
-`coding-agent-playbook` ships a `.pre-commit-hooks.yaml` so consumer repos can wire `cap sync --check` into their pre-commit pipeline directly:
+`coding-agent-playbook` ships a `.pre-commit-hooks.yaml` so consumer repos can wire `playbook sync --check` into their pre-commit pipeline directly:
 
 ```yaml
 # In your repo's .pre-commit-config.yaml:
 - repo: https://github.com/msobroza/coding-agent-playbook
   rev: v0.1.0a0     # pin to a released tag
   hooks:
-    - id: cap-sync-check
+    - id: playbook-sync-check
 ```
 
-After `pre-commit install`, every commit verifies that the generated `.continue/`, `.claude/`, `.opencode/`, and `AGENTS.md` files match what the engine would produce. Drift fails the commit with a pointer to run `cap sync` to regenerate.
+After `pre-commit install`, every commit verifies that the generated `.continue/`, `.claude/`, `.opencode/`, and `AGENTS.md` files match what the engine would produce. Drift fails the commit with a pointer to run `playbook sync` to regenerate.
 
-`cap init` writes a starter `.pre-commit-config.yaml` for you — see SPEC.md §13.2.
+`playbook init` writes a starter `.pre-commit-config.yaml` for you — see SPEC.md §13.2.
 
 ### Hooks
 
 | Hook ID | When it runs | What it does |
 | --- | --- | --- |
-| `cap-sync-check` | Every commit | Runs `cap sync --check`; fails the commit on drift. Consumer-facing. |
-| `cap-validate` | Manual only (`pre-commit run --hook-stage manual cap-validate`) | Runs `cap validate`; surfaces canonical-source mistakes (typo'd `applies_if` keys, orphan eval tasks, etc.). Overlay-author-facing. |
+| `playbook-sync-check` | Every commit | Runs `playbook sync --check`; fails the commit on drift. Consumer-facing. |
+| `playbook-validate` | Manual only (`pre-commit run --hook-stage manual playbook-validate`) | Runs `playbook validate`; surfaces canonical-source mistakes (typo'd `applies_if` keys, orphan eval tasks, etc.). Overlay-author-facing. |

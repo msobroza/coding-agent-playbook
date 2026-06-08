@@ -1,4 +1,4 @@
-"""`cap init` — interactive (or flag-driven) bootstrap for a fresh repo
+"""`playbook init` — interactive (or flag-driven) bootstrap for a fresh repo
 (SPEC §12.1)."""
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ _PRE_COMMIT_BLOCK = """\
     hooks:
       - id: coding-agent-playbook-sync
         name: coding-agent-playbook sync
-        entry: cap sync --check
+        entry: playbook sync --check
         language: system
         pass_filenames: false
         always_run: true
@@ -279,7 +279,7 @@ def run(args: argparse.Namespace) -> int:
     print(f"Updated {gitignore_path.name}")
     print(f"Updated {pre_commit_path.name}")
 
-    # Final step: invoke ``cap sync`` so the consumer's first call lands real
+    # Final step: invoke ``playbook sync`` so the consumer's first call lands real
     # output. Use the typed programmatic entry point (``sync.execute``) so
     # we don't have to fake an argparse.Namespace.
     return _sync.execute(repo_root=repo_root, check=False)

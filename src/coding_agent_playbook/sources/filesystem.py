@@ -40,7 +40,7 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     On type mismatch (one side dict, the other a scalar/list), override
     wins silently — there is no warning. This means a typo'd ``.local.toml``
     that turns ``[user_choices]`` from a table into a scalar will overwrite
-    the entire section. Acceptable for v1; a future ``cap validate`` pass
+    the entire section. Acceptable for v1; a future ``playbook validate`` pass
     should flag suspicious overrides.
     """
     result: dict[str, Any] = dict(base)
@@ -229,7 +229,7 @@ def _atomic_write_text(target: Path, content: str) -> None:
     or power loss mid-write leaves either the old file intact or the new file
     fully written — never a half-written one. Used for both
     ``.coding-agent-playbook.toml`` and ``.coding-agent-playbook.lock`` so a
-    crashed ``cap sync`` can be safely retried.
+    crashed ``playbook sync`` can be safely retried.
     """
     tmp = target.with_suffix(target.suffix + ".tmp")
     tmp.write_text(content, encoding="utf-8")
@@ -370,7 +370,7 @@ class FileSystemStateSource(StateSource):
     def load_config(self) -> Config:
         primary = self._repo_root / self._CONFIG_FILENAME
         if not primary.is_file():
-            raise FileNotFoundError(f"missing {primary.name}; run `cap init`")
+            raise FileNotFoundError(f"missing {primary.name}; run `playbook init`")
         with primary.open("rb") as f:
             data = tomllib.load(f)
         local = self._repo_root / self._CONFIG_LOCAL_FILENAME
@@ -388,7 +388,7 @@ class FileSystemStateSource(StateSource):
 
     def load_lockfile(self) -> Lockfile | None:
         """Read the lockfile. Returns ``None`` if no lockfile exists (= first
-        sync, no drift baseline yet). ``cap sync --check`` treats ``None`` as
+        sync, no drift baseline yet). ``playbook sync --check`` treats ``None`` as
         'no comparison possible — emit a baseline'."""
         target = self._repo_root / self._LOCKFILE_FILENAME
         if not target.is_file():

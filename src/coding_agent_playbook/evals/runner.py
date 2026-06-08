@@ -53,7 +53,7 @@ class TaskResult:
 
 @dataclass
 class EvalReport:
-    """The full report emitted by a v2 ``cap eval --harness <name>`` run."""
+    """The full report emitted by a v2 ``playbook eval --harness <name>`` run."""
 
     engine_version: str
     harness: str
