@@ -1,30 +1,30 @@
-# .pre-commit-config.yaml — engine dev loop (PR 1).
-# Consumer-facing hooks are in .pre-commit-hooks.yaml (populated by PR 12).
+# .pre-commit-config.yaml — engine dev loop.
+# Air-gapped-friendly: all hooks are `repo: local` + `language: system`; no
+# remote hook repos are cloned. ruff/mypy come from the `dev` extra
+# (`pip install -e ".[dev]"`) and run from PATH. This mirrors exactly what CI
+# runs (.github/workflows/ci.yml). Consumer-facing hooks are in
+# .pre-commit-hooks.yaml.
 default_language_version:
   python: python3.12
 fail_fast: false
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.0
+  - repo: local
     hooks:
       - id: ruff
-        args: [--fix]
+        name: ruff (lint + autofix)
+        entry: ruff check --fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
       - id: ruff-format
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
-    hooks:
+        name: ruff format
+        entry: ruff format
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
       - id: mypy
-        additional_dependencies: ["jinja2>=3.1.4", "packaging>=24.0"]
-        args: ["--config-file=pyproject.toml"]
-        files: ^(src|tests)/
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-      - id: check-toml
-      - id: check-added-large-files
-        args: [--maxkb=500]
-      - id: check-merge-conflict
-      - id: detect-private-key
+        name: mypy
+        entry: mypy --config-file=pyproject.toml
+        language: system
+        pass_filenames: false
+        always_run: true

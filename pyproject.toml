@@ -38,7 +38,7 @@ dev = [
 ]
 
 [project.scripts]
-cap = "coding_agent_playbook.cli:main"
+playbook = "coding_agent_playbook.cli:main"
 coding-agent-playbook = "coding_agent_playbook.cli:main"
 
 # --- Extension-point tables. PR 1 declares them empty; future PRs populate. ---

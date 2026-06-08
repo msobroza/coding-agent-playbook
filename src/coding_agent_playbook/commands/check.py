@@ -1,4 +1,4 @@
-"""`cap check` — diagnostic dump (SPEC §12.4). Includes ``--refresh`` per
+"""`playbook check` — diagnostic dump (SPEC §12.4). Includes ``--refresh`` per
 §12.5 which writes the freshly-detected facts back into the config's
 ``detector_cache`` table.
 """
@@ -140,7 +140,7 @@ def _format_artifacts_section(ctx: SyncContext) -> str:
 def _format_drift_section(ctx: SyncContext) -> str:
     lockfile = ctx.state_source.load_lockfile()
     if lockfile is None:
-        return "=== Drift ===\n  No lockfile yet — run 'cap sync' to create one."
+        return "=== Drift ===\n  No lockfile yet — run 'playbook sync' to create one."
     drift: list[str] = []
     for entry in lockfile.entries:
         path = ctx.repo_root / entry.path
@@ -157,7 +157,7 @@ def _format_drift_section(ctx: SyncContext) -> str:
 
 def _refresh(ctx: SyncContext) -> None:
     """Re-run the detector and persist the cache back into the primary
-    config file. Used by ``cap check --refresh``."""
+    config file. Used by ``playbook check --refresh``."""
     fresh = detect(ctx.repo_root)
     cache: dict[str, object] = {}
     for key, value in fresh.items():

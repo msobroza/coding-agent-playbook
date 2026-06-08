@@ -1,4 +1,4 @@
-"""`cap sync` — regenerate all artifacts (SPEC §12.2 / §12.3).
+"""`playbook sync` — regenerate all artifacts (SPEC §12.2 / §12.3).
 
 Two modes:
 - write (default): runs detector → renders → adapters write → stamps lockfile.
@@ -194,7 +194,7 @@ def _run_sync(ctx: SyncContext) -> tuple[list[Path], list[Path]]:
 def execute(repo_root: Path, *, check: bool = False) -> int:
     """Execute the sync pipeline.
 
-    Programmatic entry point used by ``cap init`` (to fire a sync after
+    Programmatic entry point used by ``playbook init`` (to fire a sync after
     writing the config) and by tests that want to skip the argparse
     plumbing. The CLI's :func:`run` wrapper simply parses flags and
     forwards to here.
@@ -217,7 +217,7 @@ def run(args: argparse.Namespace) -> int:
 
 
 def _run_check(ctx: SyncContext) -> int:
-    """``cap sync --check``: render in a parallel scratch tree, compare bytes
+    """``playbook sync --check``: render in a parallel scratch tree, compare bytes
     against the consumer repo. Exits 0 (no drift) or 1 (drift detected).
 
     Implementation choice: we run the full sync against a temporary mirror of
@@ -233,7 +233,7 @@ def _run_check(ctx: SyncContext) -> int:
     # written by adapters, so they must be excluded from the drift diff.
     # See the constant's docstring above for the rationale.
 
-    scratch_dir = Path(tempfile.mkdtemp(prefix="cap-sync-check-"))
+    scratch_dir = Path(tempfile.mkdtemp(prefix="playbook-sync-check-"))
     try:
         scratch = scratch_dir / "repo"
         shutil.copytree(ctx.repo_root, scratch, symlinks=False)
@@ -253,14 +253,16 @@ def _run_check(ctx: SyncContext) -> int:
             actual_path = ctx.repo_root / rel
             scratch_bytes = path.read_bytes()
             if not actual_path.is_file():
-                drift.append(f"  {rel.as_posix()}\n    Missing on disk; run 'cap sync' to create.")
+                drift.append(
+                    f"  {rel.as_posix()}\n    Missing on disk; run 'playbook sync' to create."
+                )
                 continue
             actual_bytes = actual_path.read_bytes()
             if actual_bytes != scratch_bytes:
                 drift.append(
                     f"  {rel.as_posix()}\n"
                     "    Generated content differs from on-disk content.\n"
-                    "    Run 'cap sync' to regenerate."
+                    "    Run 'playbook sync' to regenerate."
                 )
 
         if drift:

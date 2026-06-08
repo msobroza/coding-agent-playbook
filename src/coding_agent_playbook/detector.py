@@ -1,9 +1,9 @@
 """Detector subsystem: inspect a consumer repo and produce a Facts dict.
 
 See SPEC.md §8. The Facts dict feeds the renderer's context (SPEC §9.4) and the
-``applies_if`` predicate evaluator (SPEC §6.4). Detector runs at ``cap init``,
+``applies_if`` predicate evaluator (SPEC §6.4). Detector runs at ``playbook init``,
 is cached in ``.coding-agent-playbook.toml``, and refreshes on ``pyproject.toml``
-mtime change or ``cap check --refresh``.
+mtime change or ``playbook check --refresh``.
 """
 
 from __future__ import annotations
@@ -392,6 +392,8 @@ def evaluate_predicate(
       - ``python_version: ">=3.11"`` — semver-style comparison
       - ``has_framework: ["fastapi"]`` — ALL must be present in facts["frameworks"]
       - ``any_framework: ["pytest", "unittest"]`` — at least one present
+      - ``has_ml_stack: ["torch", "numpy"]`` — ALL must be present in facts["ml_stack"]
+      - ``any_ml_stack: ["torch", "tensorflow"]`` — at least one present in facts["ml_stack"]
       - ``has_file: ["Dockerfile"]`` — file exists in repo root (relative paths)
       - ``banking_mode: true`` — boolean facts compared by equality
 
@@ -417,6 +419,16 @@ def evaluate_predicate(
         elif key == "any_framework":
             wanted = _coerce_string_list(value, key)
             present = set(facts.get("frameworks", {}).keys())
+            if not any(name in present for name in wanted):
+                return False
+        elif key == "has_ml_stack":
+            wanted = _coerce_string_list(value, key)
+            present = set(facts.get("ml_stack", {}).keys())
+            if not all(name in present for name in wanted):
+                return False
+        elif key == "any_ml_stack":
+            wanted = _coerce_string_list(value, key)
+            present = set(facts.get("ml_stack", {}).keys())
             if not any(name in present for name in wanted):
                 return False
         elif key == "has_file":

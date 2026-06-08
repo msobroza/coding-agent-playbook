@@ -6,7 +6,7 @@ modules in ``coding_agent_playbook.commands`` consume. The pieces here:
 - :class:`SyncContext` — the bundle of (config, facts, source, adapters,
   resolved artifacts) handed to every command.
 - :class:`OverlayResolver` — three-layer merge per SPEC §11 (engine, overlays,
-  repo-local). Records collisions for ``cap check``.
+  repo-local). Records collisions for ``playbook check``.
 - :class:`RuleRegistryImpl` — concrete ``RuleRegistry`` from the renderer
   Protocol. Built once per sync from the applies_if-filtered rule list.
 - :func:`discover_adapters` — entry-point discovery + always-enable
@@ -70,7 +70,7 @@ class OverlayResolver:
       3. Repo-local artifacts under ``<repo>/playbook/``.
 
     For each ``(kind, id)`` pair the winner is kept; losers are recorded for
-    ``cap check`` and ``cap render --show-source``.
+    ``playbook check`` and ``playbook render --show-source``.
     """
 
     def __init__(self) -> None:

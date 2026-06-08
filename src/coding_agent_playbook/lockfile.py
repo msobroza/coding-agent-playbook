@@ -1,7 +1,7 @@
 """Lockfile dataclass + hash helpers (SPEC §14.4).
 
 The lockfile records ``sha256`` content hashes of every generated file plus
-the engine version that produced them. ``cap sync --check`` uses this to
+the engine version that produced them. ``playbook sync --check`` uses this to
 detect drift between canonical source and rendered output.
 """
 

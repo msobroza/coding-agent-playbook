@@ -23,28 +23,28 @@ def test_hooks_file_exists():
 
 def test_cap_sync_check_hook_is_first_and_well_formed():
     hooks = _load_hooks()
-    sync_check = next((h for h in hooks if h["id"] == "cap-sync-check"), None)
-    assert sync_check is not None, "missing cap-sync-check hook"
-    assert sync_check["entry"] == "cap sync --check"
+    sync_check = next((h for h in hooks if h["id"] == "playbook-sync-check"), None)
+    assert sync_check is not None, "missing playbook-sync-check hook"
+    assert sync_check["entry"] == "playbook sync --check"
     assert sync_check["language"] == "python"
     assert sync_check["pass_filenames"] is False
     assert sync_check["always_run"] is True
-    # cap-sync-check runs on every commit — no `stages: [manual]`
+    # playbook-sync-check runs on every commit — no `stages: [manual]`
     assert "stages" not in sync_check or "manual" not in sync_check["stages"]
 
 
 def test_cap_validate_hook_is_manual_only():
     hooks = _load_hooks()
-    validate = next((h for h in hooks if h["id"] == "cap-validate"), None)
-    assert validate is not None, "missing cap-validate hook"
-    assert validate["entry"] == "cap validate"
+    validate = next((h for h in hooks if h["id"] == "playbook-validate"), None)
+    assert validate is not None, "missing playbook-validate hook"
+    assert validate["entry"] == "playbook validate"
     assert validate["language"] == "python"
-    assert validate["stages"] == ["manual"], "cap-validate must be manual-only"
+    assert validate["stages"] == ["manual"], "playbook-validate must be manual-only"
 
 
 def test_no_unexpected_hooks():
     hooks = _load_hooks()
     ids = {h["id"] for h in hooks}
-    assert ids == {"cap-sync-check", "cap-validate"}, (
-        f"unexpected hook IDs: {ids - {'cap-sync-check', 'cap-validate'}}"
+    assert ids == {"playbook-sync-check", "playbook-validate"}, (
+        f"unexpected hook IDs: {ids - {'playbook-sync-check', 'playbook-validate'}}"
     )

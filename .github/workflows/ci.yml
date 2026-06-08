@@ -41,8 +41,8 @@ jobs:
       - name: pytest
         run: pytest -q
 
-      - name: cap --version smoke test
-        run: cap --version
+      - name: playbook --version smoke test
+        run: playbook --version
 
       - name: coding-agent-playbook --version smoke test
         run: coding-agent-playbook --version

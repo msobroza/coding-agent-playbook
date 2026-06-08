@@ -1,0 +1,27 @@
+id = "security-review-pickle-load"
+prompt_id = "security-review"
+description = "Happy path: a model loader unpickles untrusted artifacts (pickle.load of a registry file, pickle.loads of a queue payload); a good security review flags the RCE and proposes a pickle-free refactor."
+version = 1
+
+[setup]
+files = ["src/unsafe_model_loader.py"]
+project_kind = "ml-research"
+python_version = "3.12"
+frameworks = ["pytest"]
+ml_stack = ["torch", "scikit-learn"]
+
+[invocation]
+prompt_args = "security review src/unsafe_model_loader.py"
+input_variables = {}
+
+[expected]
+files_unchanged = ["src/unsafe_model_loader.py"]
+
+[rubric]
+criteria = [
+  "The review flags `pickle.load` of a model artifact the codebase did not produce as arbitrary code execution (not merely a style nit)",
+  "The review also flags `pickle.loads` of the message-queue payload — both untrusted-deserialization sites are caught",
+  "Unsafe-deserialization findings are reported BEFORE lower-priority concerns — priority order is respected",
+  "Each finding proposes a concrete safe refactor (pickle-free format such as JSON/safetensors, or verified provenance) rather than a vague warning",
+]
+weights = [0.35, 0.3, 0.15, 0.2]

@@ -1,4 +1,4 @@
-"""End-to-end tests for ``cap sync`` (PR 10 Task 2 + Task 3).
+"""End-to-end tests for ``playbook sync`` (PR 10 Task 2 + Task 3).
 
 Builds a synthetic consumer repo, runs sync programmatically, and asserts
 adapter outputs landed in the expected places plus the lockfile carries
@@ -97,7 +97,7 @@ def test_sync_no_artifacts_still_succeeds(tmp_path, make_synthetic_repo):
     assert state.load_lockfile() is not None
 
 
-# --- cap sync --check (drift detection) -----------------------------------
+# --- playbook sync --check (drift detection) -----------------------------------
 
 
 def test_sync_check_clean_repo_returns_zero(tmp_path, make_synthetic_repo, capsys):

@@ -73,6 +73,28 @@ def test_has_framework_helper_false_when_absent(tmp_path: Path) -> None:
     assert render_string(template, {}, env=env) == ""
 
 
+def test_has_ml_dep_helper_true_when_present(tmp_path: Path) -> None:
+    env = build_environment([tmp_path])
+    env.globals["_facts"] = {"ml_stack": {"torch": "2.3.0"}}
+    template = '{% if has_ml_dep("torch") %}yes{% endif %}'
+    assert render_string(template, {}, env=env) == "yes"
+
+
+def test_has_ml_dep_helper_false_when_absent(tmp_path: Path) -> None:
+    env = build_environment([tmp_path])
+    env.globals["_facts"] = {"ml_stack": {}}
+    template = '{% if has_ml_dep("torch") %}yes{% endif %}'
+    assert render_string(template, {}, env=env) == ""
+
+
+def test_has_ml_dep_helper_does_not_read_frameworks(tmp_path: Path) -> None:
+    # has_ml_dep reads facts["ml_stack"], not facts["frameworks"].
+    env = build_environment([tmp_path])
+    env.globals["_facts"] = {"frameworks": {"torch": "2.3.0"}}
+    template = '{% if has_ml_dep("torch") %}yes{% endif %}'
+    assert render_string(template, {}, env=env) == ""
+
+
 def test_rule_helper_registered_in_prompt_env(tmp_path: Path) -> None:
     registry = StubRuleRegistry({"foo": "### Foo\n\nbody of foo\n"})
     env = build_environment([tmp_path], is_prompt_context=True, rule_registry=registry)
