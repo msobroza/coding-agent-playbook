@@ -113,7 +113,7 @@ appearing?"*
 
 After `pre-commit install`, every commit verifies that the generated `.continue/`, `.claude/`, `.opencode/`, and `AGENTS.md` files match what the engine would produce. Drift fails the commit with a pointer to run `playbook sync` to regenerate.
 
-`playbook init` writes a starter `.pre-commit-config.yaml` for you — see SPEC.md §13.2.
+`playbook init` writes a starter `.pre-commit-config.yaml` for you — an **air-gapped-friendly** config whose hooks are all `repo: local` + `language: system` (the sync check plus `ruff`/`ruff-format`/`mypy`), so pre-commit never clones a remote hook repo. The flip side: those tools must already be installed in your environment, since `language: system` runs them from PATH rather than installing them. See SPEC.md §13.2 for the full template and the hooks deliberately left out.
 
 ### Hooks
 

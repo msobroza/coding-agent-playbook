@@ -11,7 +11,8 @@ from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.config import Config, ProjectMeta, StorageConfig
 from coding_agent_playbook.detector import detect
-from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from coding_agent_playbook.renderer import build_environment, render_artifact_body
+from coding_agent_playbook.sources.filesystem import FileSystemStateSource, _resource_subdir
 
 if TYPE_CHECKING:
     import argparse
@@ -52,8 +53,6 @@ _PRE_COMMIT_BLOCK = """\
         pass_filenames: false
         always_run: true
 """
-
-_PRE_COMMIT_HEADER = "repos:\n"
 
 _GITIGNORE_LINE = ".coding-agent-playbook.local.toml"
 
@@ -243,17 +242,35 @@ def _append_to_gitignore(repo_root: Path) -> Path:
     return gitignore
 
 
+def _render_fresh_pre_commit() -> str:
+    """Render the packaged starter ``.pre-commit-config.yaml`` template.
+
+    The template (``resources/precommit/config.yaml.j2``) is air-gapped: every
+    hook is ``repo: local`` + ``language: system`` so pre-commit never clones a
+    remote hook repo. It carries no Jinja variables today; we still stash an
+    empty facts dict to honour the renderer's helper contract (SPEC §9.4).
+    """
+    precommit_dir = _resource_subdir("coding_agent_playbook", "precommit")
+    assert precommit_dir is not None, "packaged resources/precommit/ is missing"
+    template_path = precommit_dir / "config.yaml.j2"
+    env = build_environment([precommit_dir])
+    env.globals["_facts"] = {}
+    return render_artifact_body(template_path, {}, env=env)
+
+
 def _write_pre_commit(repo_root: Path) -> Path:
     """Write or merge ``.pre-commit-config.yaml``.
 
-    No-op if our ``coding-agent-playbook-sync`` hook is already declared; else
-    we append the ``- repo: local`` block to the existing config or create a
-    new one. The implementation is intentionally text-merge — pulling in
-    ``ruamel.yaml`` for round-trip preservation can land later.
+    Fresh repo: render the full air-gapped starter (sync + ruff + mypy hooks).
+    Existing config: append only our ``- repo: local`` sync block, and only if
+    ``coding-agent-playbook-sync`` is not already declared — we never inject
+    ruff/mypy into a config the consumer already curates (SPEC §13.3). The
+    merge is intentionally text-based; ``ruamel.yaml`` round-tripping can land
+    later.
     """
     target = repo_root / ".pre-commit-config.yaml"
     if not target.is_file():
-        target.write_text(_PRE_COMMIT_HEADER + _PRE_COMMIT_BLOCK, encoding="utf-8")
+        target.write_text(_render_fresh_pre_commit(), encoding="utf-8")
         return target
     content = target.read_text(encoding="utf-8")
     if "coding-agent-playbook-sync" in content:

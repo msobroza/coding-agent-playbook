@@ -6,6 +6,8 @@ import argparse
 import tomllib
 from typing import TYPE_CHECKING
 
+import yaml
+
 from coding_agent_playbook.commands import init as _init
 
 if TYPE_CHECKING:
@@ -58,7 +60,20 @@ def test_init_non_interactive_writes_expected_files(tmp_path):
 
     pre_commit = tmp_path / ".pre-commit-config.yaml"
     assert pre_commit.is_file()
-    assert "coding-agent-playbook-sync" in pre_commit.read_text()
+    text = pre_commit.read_text()
+    assert "coding-agent-playbook-sync" in text
+    # Fresh repo renders the full air-gapped starter: the sync hook plus the
+    # ruff/mypy tooling hooks, all repo: local + language: system, nothing to
+    # clone (works offline).
+    assert "repo: local" in text
+    assert "language: system" in text
+    assert "ruff check --fix" in text
+    assert "ruff format" in text
+    assert "mypy --config-file=pyproject.toml" in text
+    assert "https://" not in text
+    parsed = yaml.safe_load(text)
+    assert isinstance(parsed["repos"], list)
+    assert all(entry.get("repo") == "local" for entry in parsed["repos"])
 
 
 def test_init_non_interactive_missing_name_returns_error_code(tmp_path, capsys):
@@ -200,3 +215,34 @@ def test_init_does_not_duplicate_pre_commit_hook(tmp_path):
     second = (tmp_path / ".pre-commit-config.yaml").read_text()
     assert first.count("coding-agent-playbook-sync") == 1
     assert second.count("coding-agent-playbook-sync") == 1
+    # The second run hits the existing-file path and must not re-render the
+    # tooling hooks either.
+    assert first.count("- id: ruff\n") == 1
+    assert second.count("- id: ruff\n") == 1
+
+
+def test_init_existing_config_appends_sync_block_only(tmp_path):
+    """An existing curated config gets ONLY our sync hook appended — init must
+    not inject ruff/mypy into a config the consumer already maintains."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n'
+    )
+    existing = (
+        "repos:\n"
+        "  - repo: local\n"
+        "    hooks:\n"
+        "      - id: my-own-hook\n"
+        "        name: my own hook\n"
+        "        entry: echo hi\n"
+        "        language: system\n"
+    )
+    (tmp_path / ".pre-commit-config.yaml").write_text(existing)
+
+    args = _ns(tmp_path, name="curated-repo", kind="python-library", description="")
+    assert _init.run(args) == 0
+
+    text = (tmp_path / ".pre-commit-config.yaml").read_text()
+    assert "my-own-hook" in text  # the consumer's hook is preserved
+    assert "coding-agent-playbook-sync" in text  # our sync hook is appended
+    assert "ruff check --fix" not in text  # tooling hooks are NOT injected
+    assert "mypy --config-file" not in text
