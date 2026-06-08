@@ -462,6 +462,48 @@ def test_evaluate_predicate_any_framework_empty_list_false() -> None:
     assert evaluate_predicate({"any_framework": []}, facts) is False
 
 
+def test_evaluate_predicate_has_ml_stack_all_present() -> None:
+    facts: Facts = {"ml_stack": {"torch": ">=2.0", "numpy": ">=1.26"}}
+    assert evaluate_predicate({"has_ml_stack": ["torch", "numpy"]}, facts) is True
+
+
+def test_evaluate_predicate_has_ml_stack_one_missing_false() -> None:
+    facts: Facts = {"ml_stack": {"torch": ">=2.0"}}
+    assert evaluate_predicate({"has_ml_stack": ["torch", "tensorflow"]}, facts) is False
+
+
+def test_evaluate_predicate_has_ml_stack_no_ml_stack_in_facts_false() -> None:
+    # ML-stack operators read facts["ml_stack"], never facts["frameworks"].
+    assert evaluate_predicate({"has_ml_stack": ["torch"]}, {}) is False
+
+
+def test_evaluate_predicate_has_ml_stack_does_not_read_frameworks() -> None:
+    # A framework is not an ML-stack dep — gating must not cross the two facts.
+    facts: Facts = {"frameworks": {"torch": ">=2.0"}}
+    assert evaluate_predicate({"has_ml_stack": ["torch"]}, facts) is False
+
+
+def test_evaluate_predicate_any_ml_stack_one_present() -> None:
+    facts: Facts = {"ml_stack": {"scikit-learn": ">=1.4"}}
+    assert evaluate_predicate({"any_ml_stack": ["torch", "scikit-learn"]}, facts) is True
+
+
+def test_evaluate_predicate_any_ml_stack_none_present_false() -> None:
+    facts: Facts = {"ml_stack": {"numpy": ">=1.26"}}
+    assert evaluate_predicate({"any_ml_stack": ["torch", "tensorflow"]}, facts) is False
+
+
+def test_evaluate_predicate_any_ml_stack_empty_list_false() -> None:
+    facts: Facts = {"ml_stack": {"torch": ">=2.0"}}
+    assert evaluate_predicate({"any_ml_stack": []}, facts) is False
+
+
+def test_evaluate_predicate_ml_stack_requires_list() -> None:
+    facts: Facts = {"ml_stack": {"torch": ""}}
+    with pytest.raises(ValueError, match="list of strings"):
+        evaluate_predicate({"any_ml_stack": "torch"}, facts)
+
+
 def test_evaluate_predicate_has_file_true(tmp_path: Path) -> None:
     (tmp_path / "Dockerfile").write_text("FROM python:3.12-slim\n")
     assert evaluate_predicate({"has_file": ["Dockerfile"]}, {}, repo_root=tmp_path) is True

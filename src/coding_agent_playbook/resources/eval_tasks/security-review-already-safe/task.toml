@@ -1,0 +1,27 @@
+id = "security-review-already-safe"
+prompt_id = "security-review"
+description = "Regression target: the loaders read plain JSON (pickle-free, no code execution). The security review must NOT invent vulnerabilities or demand changes to safe code."
+version = 1
+
+[setup]
+files = ["src/safe_model_loader.py"]
+project_kind = "ml-research"
+python_version = "3.12"
+frameworks = ["pytest"]
+ml_stack = ["torch"]
+
+[invocation]
+prompt_args = "security review src/safe_model_loader.py — be honest if there's nothing to change"
+input_variables = {}
+
+[expected]
+files_unchanged = ["src/safe_model_loader.py"]
+
+[rubric]
+criteria = [
+  "The review's verdict is 'approve' — it does not flag the JSON loaders as a deserialization vulnerability",
+  "No unsafe-deserialization finding is claimed, because none exists in this code",
+  "The review does not manufacture concerns to appear thorough",
+  "Any remarks are framed as optional observations, not required changes",
+]
+weights = [0.4, 0.3, 0.15, 0.15]

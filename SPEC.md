@@ -600,13 +600,16 @@ This is graceful — the user loses the auto-discovery of skills but keeps the c
 ```yaml
 applies_if:
   python_version: ">=3.11"           # comparison against detector facts
-  has_framework: ["fastapi"]         # all of these must be present
-  any_framework: ["pytest", "unittest"]  # at least one must be present
+  has_framework: ["fastapi"]         # all of these must be present in facts["frameworks"]
+  any_framework: ["pytest", "unittest"]  # at least one must be present in facts["frameworks"]
+  has_ml_stack: ["torch", "numpy"]   # all of these must be present in facts["ml_stack"]
+  any_ml_stack: ["torch", "tensorflow"]  # at least one must be present in facts["ml_stack"]
   has_file: ["Dockerfile"]           # file must exist in repo root
   banking_mode: true                 # boolean facts
 ```
 Multiple keys are ANDed together. The evaluator lives in `coding_agent_playbook.detector.evaluate_predicate(predicate, facts) -> bool`.
-Note that `has_framework` appears in two distinct places with different shapes — once as a predicate key here (taking a list of required framework names), and once as a Jinja helper in the rendering context (taking a single framework name and returning a bool, see Section 9.4). They share a name because both answer the same conceptual question — *"is framework X present?"* — but they live at different evaluation layers (frontmatter is parsed before Jinja runs). When reading or writing artifacts, the rule is: lists in `applies_if:`, callables inside `{% if %}`.
+The framework operators (`has_framework`, `any_framework`) read `facts["frameworks"]`; the ML-stack operators (`has_ml_stack`, `any_ml_stack`) read the separate `facts["ml_stack"]` fact (torch, tensorflow, scikit-learn, … — see Section 8.2). Use the ML-stack operators to gate ML-specific rules and prompts, since ML libraries never appear in `frameworks`.
+Note that `has_framework` appears in two distinct places with different shapes — once as a predicate key here (taking a list of required framework names), and once as a Jinja helper in the rendering context (taking a single framework name and returning a bool, see Section 9.4). The same split applies to the ML stack: `has_ml_stack`/`any_ml_stack` are `applies_if:` predicate keys (lists), while `has_ml_dep("torch")` is the Jinja callable (single name) used inside `{% if %}`. They share concepts but live at different evaluation layers (frontmatter is parsed before Jinja runs). When reading or writing artifacts, the rule is: lists in `applies_if:`, callables inside `{% if %}`.
 ### 6.5 Eval tasks (Tier 0: schema only, no runner)
 Eval tasks are reproducible test cases associated with prompts. Each task captures: *"given this starting state and this invocation, here's what success looks like for this prompt."* In v1 only the **schema and validation** ship — there is no `cap eval` runner, no LLM-as-judge, no scoring. Authors write tasks alongside the prompts they create; the tasks accumulate as institutional knowledge and become the input to the runner in v2.
 This is what the spec means by "forward-compatible eval abstractions" (G6). Section 15 gives the runtime-side ABCs that v2 will implement; this section defines the authoring-side artifact format that v1 ships.
@@ -1008,6 +1011,7 @@ context = {
     "rendered_at": "2026-05-20T10:30:00Z",
     # Convenience predicates
     "has_framework": lambda name: name in facts["frameworks"],
+    "has_ml_dep": lambda name: name in facts["ml_stack"],
     # Rule inclusion helper (see Section 6.2.5)
     "rule": lambda rule_id: rule_registry.render_for_inclusion(rule_id),
 }

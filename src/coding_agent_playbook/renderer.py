@@ -96,6 +96,12 @@ def build_environment(
 
     env.globals["has_framework"] = _has_framework
 
+    def _has_ml_dep(name: str) -> bool:
+        ml_stack = _facts().get("ml_stack", {})
+        return name in ml_stack
+
+    env.globals["has_ml_dep"] = _has_ml_dep
+
     if is_prompt_context:
         # ``rule_registry`` is guaranteed non-None above; assert for the type checker.
         assert rule_registry is not None
