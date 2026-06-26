@@ -306,6 +306,36 @@ def test_bad_baseline_git_ref_exits_two(tmp_path, capsys):
     assert "error" in err.lower()
 
 
+def test_malformed_config_exits_two(tmp_path, capsys):
+    """A malformed ``.coding-agent-playbook.toml`` is a usage error (exit 2),
+    not an uncaught :class:`tomllib.TOMLDecodeError` traceback."""
+    target = _write(tmp_path / "mod.py", _CLEAN_SOURCE)
+    (tmp_path / ".coding-agent-playbook.toml").write_text(
+        "[metrics]\nmode = \nthis is not = valid toml\n",
+        encoding="utf-8",
+    )
+    rc = _metrics.run(_ns(paths=[str(target)], repo_root=str(tmp_path)))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "error" in err.lower()
+    assert _metrics._CONFIG_FILENAME in err
+
+
+def test_invalid_config_mode_exits_two(tmp_path, capsys):
+    """An invalid ``[metrics] mode`` in the repo config is a usage error (exit
+    2), not an uncaught :class:`ValueError` traceback."""
+    target = _write(tmp_path / "mod.py", _CLEAN_SOURCE)
+    (tmp_path / ".coding-agent-playbook.toml").write_text(
+        '[metrics]\nmode = "nonsense"\n',
+        encoding="utf-8",
+    )
+    rc = _metrics.run(_ns(paths=[str(target)], repo_root=str(tmp_path)))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "error" in err.lower()
+    assert _metrics._CONFIG_FILENAME in err
+
+
 # --------------------------------------------------------------------------- #
 # Unparseable file handled gracefully
 # --------------------------------------------------------------------------- #
@@ -361,6 +391,52 @@ def test_git_baseline_detects_regression(tmp_path, capsys):
     assert rc == 1
     out = capsys.readouterr().out
     assert "regression" in out.lower()
+
+
+def test_git_baseline_outside_repo_root_treated_as_all_new(tmp_path, capsys):
+    """A target *outside* ``repo_root`` must not be compared against a
+    coincidental same-named file at the repo root via ``git show``.
+
+    The repo commits a clean ``mod.py``; an unrelated, worse ``mod.py`` outside
+    the repo shares the basename. With a ``git:HEAD`` baseline the outside file
+    must be treated as all-new (graded absolutely), NOT diffed against the repo's
+    committed ``mod.py``. Since the outside file is clean in absolute terms, the
+    run passes.
+    """
+    import subprocess
+
+    def _git(*cmd: str) -> None:
+        subprocess.run(["git", *cmd], cwd=tmp_path, check=True, capture_output=True)
+
+    _git("init")
+    _git("config", "user.email", "test@example.com")
+    _git("config", "user.name", "Test")
+    # The repo's committed mod.py is the simple baseline (low complexity).
+    _write(tmp_path / "mod.py", _BASELINE_SOURCE)
+    _git("add", "mod.py")
+    _git("commit", "-m", "baseline")
+
+    # An unrelated mod.py OUTSIDE repo_root, more branchy than the baseline. If
+    # the basename fallback wrongly resolved it against the repo's committed
+    # mod.py, regression mode would flag it. Treated as all-new it passes.
+    outside_dir = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside = _write(outside_dir / "mod.py", _WORSE_SOURCE)
+    try:
+        rc = _metrics.run(
+            _ns(
+                paths=[str(outside)],
+                baseline="git:HEAD",
+                mode="regression",
+                repo_root=str(tmp_path),
+            )
+        )
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "regression" not in out.lower()
+    finally:
+        import shutil
+
+        shutil.rmtree(outside_dir, ignore_errors=True)
 
 
 def test_git_baseline_new_file_treated_as_all_new(tmp_path, capsys):

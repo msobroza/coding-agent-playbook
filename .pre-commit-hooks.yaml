@@ -28,6 +28,13 @@
 # complexity, maintainability index, etc. Execution evaluators (`--run-tests`)
 # are intentionally NOT in this default hook (side effects + cost) — run those
 # in CI or a manual hook instead.
+# Caveat: the gate compares the *working-tree* file against HEAD (not the index),
+# so a partially-staged file is diffed working-tree-against-HEAD. Acceptable for
+# the common all-staged case (working tree == index).
+# `language: python` (vs `language: system` in the generated init config.yaml.j2)
+# because this hooks file is consumer-facing: pre-commit builds an isolated venv
+# and installs the playbook from this repo. The init template is air-gapped local
+# and runs the tool already on PATH instead — the two are intentionally different.
 - id: playbook-metrics
   name: coding-agent-playbook metrics (static, non-regression vs HEAD)
   description: Static code-quality gate — fail when staged Python worsens vs HEAD

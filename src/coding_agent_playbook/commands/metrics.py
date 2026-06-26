@@ -26,7 +26,12 @@ Usage::
   override it.
 
 Exit codes: ``0`` pass; ``1`` when ``report.passed`` is ``False`` and
-``fail_on_breach``; ``2`` on usage errors (bad path, bad baseline ref/dir).
+``fail_on_breach``; ``2`` on usage errors (bad path, bad baseline ref/dir,
+malformed/invalid ``[metrics]`` config).
+
+Finding levels by format: ``--format json`` includes every finding (``ok`` level
+too) for a machine audience; ``--format text`` shows only ``warn``/``fail`` for a
+human audience.
 """
 
 from __future__ import annotations
@@ -122,6 +127,19 @@ def _rel_label(path: Path, repo_root: Path) -> str:
         return path.name
 
 
+def _repo_rel_path(path: Path, repo_root: Path) -> str | None:
+    """Repo-relative POSIX path for ``path``, or ``None`` if it is outside.
+
+    Unlike :func:`_rel_label` this does *not* fall back to the basename, so a
+    ``git:`` baseline never resolves an out-of-repo target against a coincidental
+    same-named file at the repo root (it is treated as all-new instead).
+    """
+    try:
+        return path.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return None
+
+
 # --------------------------------------------------------------------------- #
 # Measurement
 # --------------------------------------------------------------------------- #
@@ -200,11 +218,15 @@ def _baseline_measurements(
         ref = baseline[len("git:") :]
         _validate_git_ref(repo_root, ref)
         for target in targets:
-            label = _rel_label(target, repo_root)
-            source = _git_show(repo_root, ref, label)
+            rel = _repo_rel_path(target, repo_root)
+            # A target outside repo_root has no git-tracked counterpart; treat it
+            # as all-new rather than guessing a coincidental same-named repo file.
+            if rel is None:
+                continue
+            source = _git_show(repo_root, ref, rel)
             if source is None:
                 continue
-            measurements.extend(_safe_measure(source, label, evaluators))
+            measurements.extend(_safe_measure(source, rel, evaluators))
         return measurements
 
     base_dir = Path(baseline)
@@ -234,13 +256,24 @@ def _safe_measure(source: str, label: str, evaluators: list[Evaluator]) -> list[
 
 
 def _load_config(repo_root: Path) -> MetricConfig:
-    """Parse ``[metrics]`` from ``.coding-agent-playbook.toml`` if present."""
+    """Parse ``[metrics]`` from ``.coding-agent-playbook.toml`` if present.
+
+    Malformed TOML (:class:`tomllib.TOMLDecodeError`) or an invalid ``[metrics]``
+    value (:class:`ValueError` from :func:`parse_metrics_config`, e.g. a bad
+    ``mode``) is re-raised as :class:`_UsageError` so the caller maps it to exit
+    code 2 instead of crashing with a traceback.
+    """
     config_path = repo_root / _CONFIG_FILENAME
     if not config_path.is_file():
         return MetricConfig()
-    with config_path.open("rb") as handle:
-        data = tomllib.load(handle)
-    return parse_metrics_config(data.get("metrics", {}))
+    try:
+        with config_path.open("rb") as handle:
+            data = tomllib.load(handle)
+        return parse_metrics_config(data.get("metrics", {}))
+    except tomllib.TOMLDecodeError as exc:
+        raise _UsageError(f"malformed {_CONFIG_FILENAME}: {exc}") from exc
+    except ValueError as exc:
+        raise _UsageError(f"invalid [metrics] config in {_CONFIG_FILENAME}: {exc}") from exc
 
 
 def _merge_flags(
@@ -368,6 +401,7 @@ def run(args: argparse.Namespace) -> int:
     evaluators = static_evaluators()
 
     try:
+        config = _load_config(repo_root)
         targets = _discover_targets(paths, repo_root)
         baseline_measurements = (
             _baseline_measurements(baseline, targets, repo_root, evaluators)
@@ -394,7 +428,6 @@ def run(args: argparse.Namespace) -> int:
         except SyntaxError as exc:
             skipped.append((label, f"unparseable ({exc.msg})"))
 
-    config = _load_config(repo_root)
     effective, note = _merge_flags(config, args, baseline=baseline)
     report = grade(candidate, baseline_measurements, effective)
 
