@@ -29,6 +29,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Optional code-quality extra (PR M): radon backs the maintainability_index
+# evaluator. Never a hard dep — imported lazily; the engine + static gate run
+# without it (the evaluator reports unavailable and is skipped).
+metrics = ["radon>=6.0"]
 dev = [
     "ruff>=0.8.0",
     "mypy>=1.13.0",
