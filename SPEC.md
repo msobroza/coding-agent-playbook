@@ -1,12 +1,16 @@
 # SPEC.md — coding-agent-playbook
 | Field | Value |
 | --- | --- |
-| Version | 0.7 (draft) |
+| Version | 0.8 (draft) |
 | Status | Proposed |
-| Last updated | 2026-05-20 |
+| Last updated | 2026-06-26 |
 | Authors | Max Pereira, with Claude |
 | Audience | Implementers, reviewers, future contributors |
 | License | Apache-2.0 (engine); organization overlays may be private |
+
+**Changelog**
+- **0.8** — Agent Harness round-trip support (PR H): the opt-in `agent_harness` output adapter (§10.7), the `playbook import-harness` / `playbook validate-harness` subcommands (§12.9, §12.10), and the `.playbook/manifest.toml` round-trip sidecar (§20.10).
+- **0.7** — Storage source abstraction (§20), ML serialization-security guideline, air-gapped pre-commit.
 ---
 ## 1. Context
 AI coding assistants — Continue, Claude Code, Codex CLI, Cursor — have each converged on their own way of loading context: rules, prompts, skills, hooks, and harness-specific config files. Teams that want a single source of truth for their conventions are forced to either (a) pick one assistant and accept lock-in, (b) maintain N copies of the same rules in N different formats, or (c) settle for `AGENTS.md` as a lowest common denominator and lose the richer features each assistant offers.
@@ -1227,6 +1231,54 @@ To make the boundaries explicit, the OpenCode adapter writes only `.opencode/com
 - **`AGENTS.md`** — owned by the AGENTS.md adapter; OpenCode reads it natively.
 - **`.claude/skills/`** — owned by the Claude Code adapter; OpenCode reads it natively as a fallback.
 This deliberate minimalism keeps the OpenCode adapter to ~150 lines and avoids stepping on user-owned config.
+### 10.7 Agent Harness adapter
+The `agent_harness` adapter renders canonical artifacts into a [Agent Harness](https://agentharnesses.io/specification) tree — a `HARNESS.md`-rooted format consumed by harness clients. Unlike the four built-in adapters it is **opt-in**: it is not in the default adapter set and is not force-enabled like `agents_md`. Enable it by listing `agent_harness` in `[adapters] enabled`. It is discovered through the same entry-point mechanism (§10.5); the engine never constructs it directly.
+```python
+class AgentHarnessAdapter(Adapter):
+    name = "agent_harness"
+    # Buffers write_rule/write_prompt/write_skill, then composes the whole
+    # tree in finalize() so HARNESS.md can index everything that was emitted.
+    # Accepts an optional rule_registry to inline a prompt's includes_rules.
+```
+#### 10.7.1 Emitted tree
+The adapter emits a harness tree under the repo root (`specs/prH-agent-harness.md` §B):
+```
+<repo-root>/
+├── HARNESS.md                  # name/description (repo-derived) + dir index +
+│                               #   "Always consult these" pointer at scope=always rules
+├── .leaf-detectors             # "skill=SKILL.md" — written only when a skill/prompt leaf exists
+├── skills/
+│   ├── SKILLS.md               #   routing file (description-only frontmatter)
+│   └── <id>/
+│       ├── SKILL.md            #   name + description + body
+│       ├── scripts/            #   ← Skill.scripts_dir, byte-copied verbatim (shutil.copy2)
+│       └── references/         #   ← Skill.references_dir, byte-copied verbatim
+├── prompts/
+│   ├── PROMPTS.md
+│   └── <slash>/SKILL.md        #   skill-shaped leaf; includes_rules inlined via rule()
+├── rules/
+│   ├── RULES.md
+│   └── <priority:02d>-<id>.md  #   scope=always rules; frontmatter = description only
+├── references/
+│   ├── REFERENCES.md
+│   └── <id>.md                 #   scope=scoped rules; frontmatter = description only
+└── .playbook/                  # round-trip sidecar (dotfile; harness clients skip it)
+    ├── manifest.toml           #   full canonical reconstruction payload (§20.10)
+    └── .harnessleaf            #   terminal marker so clients treat .playbook/ as opaque
+```
+#### 10.7.2 Canonical → harness mapping
+| Canonical type | Harness destination | Native fields on the leaf |
+| --- | --- | --- |
+| `Skill` | `skills/<id>/SKILL.md` (+ `scripts/`, `references/`) | `name`, `description`, body, copied script/reference bytes |
+| `Prompt` | `prompts/<slash>/SKILL.md` (skill-shaped leaf) | `name`, `description`, body with `includes_rules` inlined via `rule()` + an input-variables note |
+| `Rule` (scope=always) | `rules/<priority:02d>-<id>.md` | `description`, body |
+| `Rule` (scope=scoped) | `references/<id>.md` | `description`, body |
+
+`scope=always` rules go to `rules/` and `HARNESS.md` adds an "Always consult these" section instructing the agent to read them every session — keeping the root body small and spec-idiomatic. The harness rule file emits **only** `description`; the rule `name` and every other non-native field round-trip via the sidecar (§20.10).
+
+**Eval tasks are not emitted.** The `Adapter` ABC has no eval hook — `sync` only dispatches `write_rule` / `write_prompt` / `write_skill` / `finalize` — so eval tasks are authoring-only and never reach any adapter. The `agent_harness` adapter therefore never writes an `evals/` directory, exactly like the four built-in adapters. (The importer in §12.9 can still *read* a foreign `evals/` directory.)
+#### 10.7.3 Sentinel placement and cleanup
+A harness parser requires frontmatter to start on line 1 (`^---`), so the playbook `SENTINEL` cannot be line 1. The adapter writes it as the **first body line** (an HTML comment, after the closing frontmatter fence) on every generated text file. Because of this, the adapter overrides `cleanup_stale` to detect the sentinel *anywhere* in a file rather than only on line 1 (the Claude Code / AGENTS.md single-file pattern). Files without a sentinel are user-authored and never deleted. Scripts and raw assets carry no sentinel; their engine ownership is tracked through the previous `.playbook/manifest.toml`, which `cleanup_stale` reads at the start of `finalize` before overwriting it.
 ## 11. Overlay system
 ### 11.1 Three layers
 The artifact list is built by merging three sources in order:
@@ -1486,6 +1538,39 @@ See SPEC.md Section 15 for the v2 runner API.
 exit code: 0
 ```
 Note the exit code is 0, not 1 — the task is not broken, the runner is just absent. This lets users wire `playbook eval` into CI today as a no-op placeholder that won't break the pipeline when the runner activates.
+### 12.9 `playbook import-harness`
+Parse an Agent Harness tree back into canonical artifacts and write them into an overlay directory (default `./playbook/`) in the `FileSystemArtifactSource` layout, so a later `playbook sync` re-reads them. The reverse of the `agent_harness` adapter (§10.7).
+```
+$ playbook import-harness ./vendor/some-harness
+imported 6 artifact(s) into /repo/playbook (3 rules, 2 prompts, 1 skills)
+```
+Two fidelity tiers, picked automatically (`specs/prH-agent-harness.md` §C):
+- **Lossless** — when a `.playbook/manifest.toml` sidecar is present (a playbook-emitted harness): every artifact is rebuilt from the manifest's full reconstruction payload (full frontmatter incl. rule `name`, the un-rendered source body, `is_templated`, per-script `executable` bit), independent of how the leaf rendered or inlined content. Script exec bits are restored on POSIX, no-op on Windows.
+- **Best-effort** — no sidecar (a foreign harness): kinds are inferred from directory placement (`skills/*` → `Skill`, `prompts/*` → `Prompt`, `rules/*.md` → `Rule` scope=always, `references/*.md` → `Rule` scope=scoped, non-markdown → opaque asset). Non-native fields are defaulted and every lossy assumption is reported as a `warning:` on stderr — the importer never silently guesses.
+```
+$ playbook import-harness ./vendor/foreign-harness --into playbook
+warning: no .playbook/manifest.toml sidecar found; reconstructing best-effort. ...
+warning: rule 'pep8': scope inferred as 'always' from rules/ placement; globs/applies_if/priority/tags/version not recoverable without sidecar
+imported 2 artifact(s) into /repo/playbook (2 rules, 0 prompts, 0 skills)
+```
+All reconstructed rules — `scope=always` *and* `scope=scoped` — are written under `<into>/rules/<id>.md` (the only directory `FileSystemArtifactSource.list_rules()` reads); `scope` is preserved in the rule's emitted frontmatter, so a scoped rule stays scoped without needing a separate directory. Exit code is 2 on a usage error (missing/non-directory path, or no `HARNESS.md`), else 0.
+### 12.10 `playbook validate-harness`
+Run `harnesses-ref`-equivalent structural checks on an Agent Harness tree (emitted or foreign). This is the lint half of the client-runtime decision (§10.7 / decision #3): the playbook validates harness *structure*, it does not implement a harness client runtime.
+```
+$ playbook validate-harness ./build/harness
+OK harness validated (0 warning(s))
+exit code: 0
+```
+Checks:
+- **Errors** (non-zero exit): `HARNESS.md` present with non-empty `name` and `description`; every detected skill leaf carries a non-empty `name` and `description`.
+- **Warnings** (exit 0 by default; promoted to errors by `--strict`): a grouping subdirectory lacks its routing file (`<DIR>.upper() + ".md"`); a content `.md` lacks a `description`.
+```
+$ playbook validate-harness ./build/harness --strict
+warning: /build/harness/skills: grouping directory lacks its routing file 'SKILLS.md'
+validation failed with 0 error(s), 1 warning(s) (warnings promoted by --strict)
+exit code: 1
+```
+A missing or malformed `HARNESS.md` is reported as a validation **error** (exit 1) — not a usage error (exit 2) — because for a validator a malformed harness is precisely the failure it exists to report. Directories marked opaque by a `.harnessleaf` marker are terminal leaves: the validator never expects a routing file for them and does not inspect their internal content.
 ## 13. Pre-commit integration
 ### 13.1 The engine's `.pre-commit-hooks.yaml`
 Shipped at the root of `coding-agent-playbook` so consumers can reference it:
@@ -1876,6 +1961,16 @@ Two non-commercial reasons to ship this in v1:
 1. **Tests get simpler.** An `InMemoryArtifactSource` in `tests/` lets every unit test build a tiny artifact list inline, with no temp directories, no fixture files, no filesystem walks. The integration tests still use the real filesystem source for end-to-end coverage.
 2. **The engine codebase becomes more honest about its dependencies.** Right now, "load some rules" implicitly depends on `importlib.resources`, `pathlib`, the filesystem layout convention, and overlay entry-point discovery — all tangled together. After this change, those dependencies live in one named class with one clear responsibility. The rest of the engine depends on an interface, not a tangle.
 The cost is roughly 100 lines of interface code and a renaming of existing modules. No new runtime dependencies. No new operational complexity for the consumer.
+### 20.10 The `.playbook/manifest.toml` round-trip sidecar
+The Agent Harness format (§10.7) cannot represent several canonical fields — a rule's `name`/`scope`/`globs`/`priority`/`tags`, a prompt's `slash`/`includes_rules`/`input_variables`, a skill's open-dict extra frontmatter, a script's executable bit. To make the harness round-trip lossless, the `agent_harness` adapter writes a dotfile sidecar at `<harness-root>/.playbook/manifest.toml` (harness clients skip dotfiles, so it is invisible to them). It is not a `StateSource` — it is a per-harness reconstruction record co-located with the emitted tree — but it plays the same role for the harness direction that the lockfile plays for sync.
+The sidecar stores the **full canonical reconstruction payload**, not merely "non-native fields". For every emitted artifact, keyed by its harness-relative path, it records:
+- every frontmatter field the harness leaf cannot carry (notably the rule `name`, since the harness rule file emits `description` only);
+- the original, **un-rendered** canonical source `body` for every kind — the harness leaf is the client-facing *presentation* and may rewrite/inline content (a prompt's `includes_rules` are inlined into its `SKILL.md`), so the recorded body is the authoritative canonical text;
+- `is_templated` for every kind (tracks `.md` vs `.md.j2` origin);
+- for skills, a per-script `executable` boolean (git's single-bit model, not a full octal mode).
+Because each entry carries the whole payload, `import-harness` reconstructs each artifact via `from_dict` **independently of how the leaf rendered or inlined things** — the leaf files exist only for harness clients; the sidecar is the source of truth. When the sidecar is absent (a foreign harness), the importer falls back to best-effort structural inference and surfaces the lossiness (§12.9).
+### 20.11 Out of scope: the harness client runtime
+The Agent Harness spec also defines a **client runtime contract** — `load_content` / `run_script` and the four loading phases (Load → Discovery → Activation → Execution). The playbook intentionally does **not** implement that runtime. It produces harness files (the `agent_harness` adapter), consumes them (`import-harness`), and validates their structure (`validate-harness`), but it is not a harness *client*: it never injects `HARNESS.md` into a session, reads routing files at runtime, or executes scripts. Modeling the full client runtime is future work; for v1 the `validate-harness` lint is the structural stand-in for runtime conformance (decision #3 in `specs/prH-agent-harness.md` §D).
 ## Appendix A: Full worked example
 Walking through `risk-models`, a counterparty risk scoring service, going from zero to a fully synced playbook.
 ### A.1 Starting state
@@ -2072,9 +2167,16 @@ Notes on sequencing:
 - **Track 5b (Eval Tier 0)** lands after the main CLI because it adds CLI subcommands and one new validator pass. It is independent of the adapters — eval tasks are authoring-side artifacts and don't flow through any adapter.
 - The source abstraction and the canonical types together add maybe two days of work to the early tracks but pay for themselves in test simplicity from PR 6 onward, and in clean serialization boundaries when the commercial product arrives.
 ---
-*End of SPEC.md v0.7.*
+*End of SPEC.md v0.8.*
 ---
 ## Changelog
+### v0.8 (2026-06-26)
+Agent Harness round-trip support added (the [agentharnesses.io](https://agentharnesses.io/specification) format) as a fifth, opt-in output target plus a reverse importer and a structural validator. Authoring and the existing four adapters are unchanged; the new surface is purely additive (no edits to `types.py`, `renderer.py`, or `orchestrator.py`).
+- **Section 10.7 (NEW)**: the `agent_harness` output adapter. Renders canonical `Rule`/`Prompt`/`Skill` into a `HARNESS.md`-rooted tree (`skills/`, `prompts/`, `rules/`, `references/`, `.leaf-detectors`, `.playbook/`). Opt-in via `adapters_enabled`. Eval tasks are not emitted (no eval hook on the adapter ABC). Documents the sentinel-as-first-body-line nuance (frontmatter must be line 1) and the custom `cleanup_stale`.
+- **Sections 12.9 / 12.10 (NEW)**: `playbook import-harness <path> [--into]` (harness → canonical, lossless via the sidecar / best-effort otherwise) and `playbook validate-harness <path> [--strict]` (`harnesses-ref`-equivalent structural checks).
+- **Sections 20.10 / 20.11 (NEW)**: the `.playbook/manifest.toml` sidecar — full canonical reconstruction payload (rule `name`, un-rendered source body, `is_templated`, per-script `executable` flag) enabling lossless round-trip; and a future-work note that the harness client runtime (`load_content`/`run_script`) is intentionally out of scope.
+- **Implementation**: `harness/` core module (`models`, `leaf_detectors`, `parser`, `emitter`, `manifest`) + the adapter, two CLI commands, and tests. See `specs/prH-agent-harness.md`.
+
 ### v0.7 (2026-05-20)
 Canonical types formalized. Authoring stays markdown; internal pipeline becomes typed end-to-end; alternative deployments (commercial, hosted) get a stable interchange format.
 - **Section 5.1 (engine layout)**: Added `types.py` at the package root containing the `Rule`, `Prompt`, `Skill` dataclasses. Added `test_types.py` to unit tests.

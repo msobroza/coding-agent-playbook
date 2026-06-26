@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Source of truth: SPEC.md
 
-The design lives in `SPEC.md` (v0.7, draft). Read it before making structural changes — it defines the architecture, repo layout, artifact model, adapter contract, configuration, CLI surface, eval format, and rollout plan. If the spec is ambiguous, surface the question rather than guessing.
+The design lives in `SPEC.md` (v0.8, draft). Read it before making structural changes — it defines the architecture, repo layout, artifact model, adapter contract, configuration, CLI surface, eval format, and rollout plan. If the spec is ambiguous, surface the question rather than guessing.
 
 ## What this project is
 
@@ -19,7 +19,9 @@ The CLI binary is `coding-agent-playbook` with alias `playbook`. The workhorse c
 
 ## Repository status
 
-The implementation is being built track by track per `SPEC.md`'s "Implementation order" recap (14 PRs total, ~3,900 LoC Python + ~800 lines of content). Until those land, the source tree is empty apart from `SPEC.md`, `LICENSE`, `README.md`, and this file. Target layout is in SPEC §5.1.
+The core engine is **complete**: detector, renderer, filesystem sources, the CLI, the Tier 0 eval schema, and the four original adapters (Continue, Claude Code, OpenCode, AGENTS.md). The original 14-PR build-out (≈3,900 LoC Python + ≈800 lines of content) is implemented; the layout matches SPEC §5.1.
+
+**Agent Harness support (PR H)** is implemented on top of that engine: the opt-in `agent_harness` output adapter (`adapters/agent_harness_adapter.py`), the `playbook import-harness` and `playbook validate-harness` commands (`commands/import_harness.py`, `commands/validate_harness.py`), and the shared `harness/` core module (`models`, `leaf_detectors`, `parser`, `emitter`, `manifest`) with the `.playbook/manifest.toml` round-trip sidecar. Its design lives in `specs/prH-agent-harness.md`; the SPEC sections are §10.7 (adapter), §12.9/§12.10 (CLI), §20.10/§20.11 (sidecar + client-runtime scope).
 
 ## Where to read in the spec
 
@@ -32,11 +34,12 @@ The implementation is being built track by track per `SPEC.md`'s "Implementation
   - 6.6 canonical typed dataclasses + round-trip contract.
 - **§8** — detector facts inventory & project-kind inference.
 - **§9** — renderer (Jinja env, `rule()` helper, format post-processing).
-- **§10** — adapter ABC + the four built-in adapters (Continue, Claude Code, OpenCode, AGENTS.md).
+- **§10** — adapter ABC + the four built-in adapters (Continue, Claude Code, OpenCode, AGENTS.md); §10.7 the opt-in `agent_harness` adapter.
 - **§11** — three-layer overlay merge semantics.
-- **§12** — CLI contract with example output for every subcommand.
+- **§12** — CLI contract with example output for every subcommand; §12.9/§12.10 `import-harness` / `validate-harness`.
 - **§15** — eval ABCs (v2 placeholders that v1 must not break).
-- **§20** — storage source abstraction (`ArtifactSource`, `StateSource`).
+- **§20** — storage source abstraction (`ArtifactSource`, `StateSource`); §20.10 the `.playbook/manifest.toml` round-trip sidecar; §20.11 client-runtime out-of-scope note.
+- **`specs/prH-agent-harness.md`** — the authoritative Agent Harness design (artifact catalog §A, canonical→harness mapping §B, sidecar §C, locked decisions §D).
 
 ## Invariants enforced by the spec
 
@@ -49,7 +52,16 @@ The implementation is being built track by track per `SPEC.md`'s "Implementation
 - **Rules cannot include other rules.** Only prompts have `includes_rules:`; the `rule()` Jinja helper is registered only when rendering prompts.
 - **No HTTP-handler hooks by default** — the engine is air-gapped-friendly. No telemetry, ever.
 
-## Implementation tracks (status: not started)
+### Agent Harness adapter invariants (PR H)
+
+- **`agent_harness` is opt-in.** It is not in the default adapter set and is not force-enabled like `agents_md`; enable it via `[adapters] enabled`. `AGENTS.md` is still always generated regardless of which adapters are on.
+- **Sentinel as the first body line.** Harness frontmatter must stay on line 1 (`^---`) for the parser, so the `SENTINEL` cannot be line 1 — it is written as the first body line after the closing fence. `cleanup_stale` therefore detects the sentinel *anywhere* in a file, not just on line 1.
+- **`.harnessleaf` marks opaque dirs.** A directory carrying a `.harnessleaf` marker is a terminal opaque unit; the parser stops recursing into it and both the importer and validator skip its internal content (no routing-file expectation, no content inspection).
+- **Copies, not symlinks for scripts.** A skill's `scripts/` and `references/` are byte-copied (`shutil.copy2`); each script's executability is recorded as a git-style single-bit `executable` flag in `.playbook/manifest.toml` (not a full octal mode) and restored on POSIX during import, no-op on Windows.
+
+## Implementation tracks
+
+The original 14-PR engine build-out is **complete** (all rows below are landed):
 
 | PR | Track | What | LoC |
 | --- | --- | --- | --- |
@@ -68,11 +80,21 @@ The implementation is being built track by track per `SPEC.md`'s "Implementation
 | 13 | 7  | Initial Python rule pack (5 rules + 4 prompts + 8 eval tasks) | ~800 |
 | 14 | —  | SPEC.md, README, internal wiki page | — |
 
-PRs 1 and 2 are blockers for everything else. PRs 6–9 (adapters) depend on PRs 1, 2, 4. PR 13 (content) depends on the full engine.
+**PR H — Agent Harness round-trip support** (implemented; design in `specs/prH-agent-harness.md`):
+
+| Track | What | LoC |
+| --- | --- | --- |
+| H1 | `harness/` core: `models`, `leaf_detectors`, `parser`, `emitter`, `manifest` (the `.playbook/` sidecar) | ~600 |
+| H2 | `agent_harness` output adapter + `pyproject.toml` entry point (opt-in) | ~300 |
+| H3 | `playbook import-harness` (lossless via sidecar, best-effort otherwise) | ~300 |
+| H4 | `playbook validate-harness` (structural checks, `harnesses-ref`-equivalent) | ~200 |
+| H5 | Docs (SPEC §10.7/§12.9/§12.10/§20.10/§20.11, README, this file) | — |
+
+H1 is the shared substrate; H2–H4 depend on it. The harness client *runtime* (`load_content` / `run_script`, the four loading phases) is intentionally out of scope — see SPEC §20.11.
 
 ## Working in this repo
 
-There is no build, lint, or test command yet — those land with PR 1 (scaffolding). Once `pyproject.toml` exists, expect: `uv`, `ruff`, `mypy`, `pytest`. The canonical pre-commit config is in SPEC §13.2.
+Tooling is `uv` + `ruff` + `mypy` + `pytest`, all configured in `pyproject.toml`. CI (and the local gate) runs `mypy` and `pytest -q` from the repo root with **no path arguments** so they pick up the `[tool.mypy] files` / `[tool.pytest]` config (which includes `tests/`). Use `uv run python -m mypy` and `uv run python -m pytest -q` — the bare `uv run mypy` / `uv run pytest` forms can resolve the wrong interpreter. The canonical pre-commit config is in SPEC §13.2.
 
 Adapters, sources, and overlays register via `[project.entry-points]` — never instantiate them directly.
 

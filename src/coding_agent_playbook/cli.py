@@ -19,10 +19,12 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook import __version__
 from coding_agent_playbook.commands import check as check_cmd
 from coding_agent_playbook.commands import eval as eval_cmd
+from coding_agent_playbook.commands import import_harness as import_harness_cmd
 from coding_agent_playbook.commands import init as init_cmd
 from coding_agent_playbook.commands import render as render_cmd
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as validate_cmd
+from coding_agent_playbook.commands import validate_harness as validate_harness_cmd
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -31,7 +33,16 @@ if TYPE_CHECKING:
 # Canonical list of subcommand names. The argparse subparser
 # declarations below must match this tuple — keeping it as a module-level
 # constant lets tests assert the full surface in one place.
-_SUBCOMMANDS: tuple[str, ...] = ("init", "sync", "check", "validate", "render", "eval")
+_SUBCOMMANDS: tuple[str, ...] = (
+    "init",
+    "sync",
+    "check",
+    "validate",
+    "render",
+    "eval",
+    "import-harness",
+    "validate-harness",
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -105,6 +116,32 @@ def build_parser() -> argparse.ArgumentParser:
     eval_group.add_argument("--show", help="show one task by id")
     eval_p.add_argument("id", nargs="?", help="task id to run (deferred until v2)")
     eval_p.set_defaults(func=eval_cmd.run)
+
+    # playbook import-harness (PR H Track H3)
+    import_p = subcommands.add_parser(
+        _SUBCOMMANDS[6], help="import an Agent Harness tree into canonical artifacts"
+    )
+    import_p.add_argument("path", nargs="?", help="path to the harness root (contains HARNESS.md)")
+    import_p.add_argument(
+        "--into",
+        help="overlay directory to write canonical artifacts into (defaults to ./playbook)",
+    )
+    import_p.set_defaults(func=import_harness_cmd.run)
+
+    # playbook validate-harness (PR H Track H4)
+    validate_harness_p = subcommands.add_parser(
+        _SUBCOMMANDS[7],
+        help="lint an Agent Harness tree (structural checks, harnesses-ref-equivalent)",
+    )
+    validate_harness_p.add_argument(
+        "path", nargs="?", help="path to the harness root (contains HARNESS.md)"
+    )
+    validate_harness_p.add_argument(
+        "--strict",
+        action="store_true",
+        help="promote warnings (missing routing file / content description) to errors",
+    )
+    validate_harness_p.set_defaults(func=validate_harness_cmd.run)
 
     return parser
 
