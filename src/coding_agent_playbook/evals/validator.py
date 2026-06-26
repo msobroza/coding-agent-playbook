@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, get_args
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.evaluators.types import Mode
     from coding_agent_playbook.types import Prompt
 
 
@@ -43,6 +44,9 @@ def validate_tasks(
     6. Weights, if present, sum to ``1.0 ± 0.001`` — enforced upstream by
        :meth:`EvalTask.from_dict` at load time; the validator does not
        re-check (locked by ``test_validate_tasks_does_not_recheck_weights``).
+    7. The ``[metrics]`` block (SPEC prM §D), if present, is well-formed: a
+       valid ``mode``, every named evaluator is registered (static or
+       execution), and all bounds/deltas/weights are numbers.
 
     Aggregates every violation; never raises. Empty list means OK.
     """
@@ -51,6 +55,10 @@ def validate_tasks(
     tasks_by_id = {t.id: t for t in tasks}
 
     for task in tasks:
+        # Rule 7: validate the [metrics] block when present.
+        if task.metrics is not None:
+            errors.extend(_validate_metrics(task))
+
         # Rule 2: setup.files must exist relative to <task_dir>/setup/.
         task_dir = task.source_path.parent
         setup_root = task_dir / "setup"
@@ -108,5 +116,77 @@ def validate_tasks(
                         ),
                     )
                 )
+
+    return errors
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _validate_metrics(task: EvalTask) -> list[EvalValidationError]:
+    """Validate a task's ``[metrics]`` block (SPEC prM §D).
+
+    Checks the ``mode`` is one of ``regression``/``absolute``/``both``; that
+    every evaluator named in ``thresholds``/``regression``/``weights`` is a known
+    registered evaluator (static **or** execution, e.g. ``coverage`` /
+    ``test_pass_rate``); and that all bounds, regression deltas, and weights are
+    numbers. Aggregates every violation; never raises.
+    """
+    # Imported lazily so the validator module stays import-light and free of any
+    # eval ↔ evaluator import cycle at module load.
+    from coding_agent_playbook.evaluators.registry import all_evaluators
+    from coding_agent_playbook.evaluators.types import Mode
+
+    metrics = task.metrics
+    assert metrics is not None  # caller guards; narrows the type for mypy.
+    errors: list[EvalValidationError] = []
+
+    valid_modes: tuple[Mode, ...] = get_args(Mode)
+    if metrics.mode not in valid_modes:
+        errors.append(
+            EvalValidationError(
+                path=task.source_path,
+                message=(
+                    f"[metrics].mode {metrics.mode!r} is invalid; "
+                    f"must be one of {', '.join(valid_modes)}"
+                ),
+            )
+        )
+
+    known = {ev.name for ev in all_evaluators()}
+
+    def _check_name(name: str) -> None:
+        if name not in known:
+            errors.append(
+                EvalValidationError(
+                    path=task.source_path,
+                    message=f"[metrics] names unknown evaluator {name!r}",
+                )
+            )
+
+    def _check_number(name: str, label: str, value: Any) -> None:
+        if value is None:
+            return
+        if not _is_number(value):
+            errors.append(
+                EvalValidationError(
+                    path=task.source_path,
+                    message=f"[metrics] {label} for {name!r} must be numeric, got {value!r}",
+                )
+            )
+
+    for name, threshold in metrics.thresholds.items():
+        _check_name(name)
+        _check_number(name, "thresholds.warn", threshold.warn)
+        _check_number(name, "thresholds.fail", threshold.fail)
+
+    for name, policy in metrics.regression.items():
+        _check_name(name)
+        _check_number(name, "regression.max_worsening", policy.max_worsening)
+
+    for name, weight in metrics.weights.items():
+        _check_name(name)
+        _check_number(name, "weights", weight)
 
     return errors
