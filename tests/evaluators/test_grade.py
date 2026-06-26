@@ -2,15 +2,27 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
+import sys
+
+from coding_agent_playbook.evaluators import registry as registry_mod
 from coding_agent_playbook.evaluators.grade import grade
+
+grade_mod = sys.modules["coding_agent_playbook.evaluators.grade"]
+from coding_agent_playbook.evaluators.registry import Evaluator
+from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
 from coding_agent_playbook.evaluators.types import (
     AbsoluteThreshold,
     Measurement,
     MetricConfig,
     RegressionPolicy,
 )
+
+if TYPE_CHECKING:
+    from coding_agent_playbook.evaluators.types import EvalContext
 
 
 def _cc(scope: str, value: float) -> Measurement:
@@ -174,3 +186,73 @@ def test_config_threshold_override_changes_level() -> None:
     )
     report = grade(candidate, None, policy)
     assert report.findings[0].level == "ok"  # 12 now under the raised warn
+
+
+# --- evaluator lookup (plugin support + caching, fix #5) ---------------------
+
+
+class _PluginEv(Evaluator):
+    name = "_grade_plugin_ev"
+    scope = Scope.FUNCTION
+    value_kind = ValueKind.NUMERIC
+    determinism = Determinism.DETERMINISTIC
+    higher_is_worse = True
+    default_absolute = AbsoluteThreshold(warn=10, fail=20)
+    default_regression = RegressionPolicy(max_worsening=0.0)
+    default_weight = 0.0
+
+    def evaluate(self, ctx: EvalContext) -> list[Measurement]:
+        return []
+
+
+def _register_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Expose ``_PluginEv`` via the entry-point group (not the builtin registry)."""
+
+    class _FakeEntryPoint:
+        name = "_grade_plugin_ev"
+
+        def load(self) -> type[Evaluator]:
+            return _PluginEv
+
+    def _fake_entry_points(*, group: str) -> list[_FakeEntryPoint]:
+        return [_FakeEntryPoint()]
+
+    monkeypatch.setattr(
+        "coding_agent_playbook.evaluators.registry.metadata.entry_points",
+        _fake_entry_points,
+    )
+
+
+def test_grade_works_with_plugin_registered_evaluator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _register_plugin(monkeypatch)
+    assert "_grade_plugin_ev" not in registry_mod._REGISTRY  # truly a plugin
+    candidate = [Measurement(evaluator="_grade_plugin_ev", scope_key="a.py::f", value=25)]
+    report = grade(candidate, None, MetricConfig(mode="absolute"))
+    assert report.findings[0].evaluator == "_grade_plugin_ev"
+    assert report.findings[0].level == "fail"  # 25 >= fail(20)
+
+
+def test_grade_resolves_each_evaluator_name_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Distinct evaluator names are looked up once and reused across scopes."""
+    calls: list[str] = []
+    real_get = registry_mod.get_evaluator
+
+    def _counting_get(name: str) -> Evaluator:
+        calls.append(name)
+        return real_get(name)
+
+    monkeypatch.setattr(grade_mod, "get_evaluator", _counting_get)
+
+    candidate = [
+        _cc("a.py::f", 3),
+        _cc("a.py::g", 4),
+        _cc("a.py::h", 5),
+        Measurement(evaluator="dit", scope_key="a.py::C", value=2),
+    ]
+    grade(candidate, None, MetricConfig(mode="absolute"))
+    # 4 measurements, 2 distinct evaluator names => 2 lookups, not 4.
+    assert sorted(calls) == ["cyclomatic_complexity", "dit"]

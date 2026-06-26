@@ -45,8 +45,15 @@ def grade(
     findings: list[Finding] = []
     weighted_scores: list[tuple[float, float]] = []  # (weight, score)
 
+    # Resolve each distinct evaluator name once - get_evaluator() re-scans the
+    # entry points on every call, so cache by name across measurements.
+    evaluators: dict[str, Evaluator] = {}
+
     for measurement in candidate:
-        evaluator = get_evaluator(measurement.evaluator)
+        evaluator = evaluators.get(measurement.evaluator)
+        if evaluator is None:
+            evaluator = get_evaluator(measurement.evaluator)
+            evaluators[measurement.evaluator] = evaluator
         resolved = resolve_policy(evaluator, policy)
         base_value = baseline_index.get((measurement.evaluator, measurement.scope_key))
 

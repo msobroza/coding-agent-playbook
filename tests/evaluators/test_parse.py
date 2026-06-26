@@ -129,3 +129,63 @@ def test_cyclomatic_helper_is_shared_single_source() -> None:
     fn = tree.body[0]
     assert isinstance(fn, ast.FunctionDef)
     assert _cyclomatic(fn) == 2
+
+
+def _cc(src: str) -> int:
+    from coding_agent_playbook.evaluators.parse import _cyclomatic
+
+    fn = ast.parse(src).body[0]
+    assert isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef))
+    return _cyclomatic(fn)
+
+
+# --- comprehension `if` filters (fix #1) ------------------------------------
+# Convention (matches radon): one branch per comprehension `if` filter, and the
+# generator loop itself contributes nothing.
+
+
+def test_comprehension_without_filter_adds_nothing() -> None:
+    assert _cc("def f(xs):\n    return [x for x in xs]\n") == 1
+
+
+def test_comprehension_single_filter_adds_one() -> None:
+    assert _cc("def f(xs, a):\n    return [x for x in xs if a]\n") == 2
+
+
+def test_comprehension_multiple_filters_add_one_each() -> None:
+    assert _cc("def f(xs, a, b):\n    return [x for x in xs if a if b]\n") == 3
+
+
+def test_generator_expression_filter_counts() -> None:
+    assert _cc("def f(xs, a):\n    return sum(x for x in xs if a)\n") == 2
+
+
+def test_dict_comprehension_filter_counts() -> None:
+    assert _cc("def f(xs, a):\n    return {x: 1 for x in xs if a}\n") == 2
+
+
+# --- decisions inside lambda bodies (fix #2) --------------------------------
+# A lambda is not its own scope; its decision points count toward the host fn.
+
+
+def test_lambda_ternary_counts_toward_host_function() -> None:
+    assert _cc("def f():\n    g = lambda a: 1 if a else 0\n    return g\n") == 2
+
+
+def test_lambda_boolop_counts_toward_host_function() -> None:
+    assert _cc("def f():\n    g = lambda a, b: a and b\n    return g\n") == 2
+
+
+# --- signature is excluded from the function's own CC (fix #4) ---------------
+# Decorators and argument-default expressions are not part of the function's
+# control flow, so decisions inside them do not count toward its CC.
+
+
+def test_arg_default_decision_is_not_counted() -> None:
+    # The ternary lives in a default, evaluated in the enclosing scope.
+    assert _cc("def f(a, b=(1 if FLAG else 0)):\n    return a\n") == 1
+
+
+def test_decorator_decision_is_not_counted() -> None:
+    src = "@deco(1 if FLAG else 0)\ndef f(a):\n    return a\n"
+    assert _cc(src) == 1

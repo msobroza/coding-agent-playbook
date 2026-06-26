@@ -23,13 +23,22 @@ _DECISION_NODES: tuple[type[ast.AST], ...] = (
     ast.ExceptHandler,
     ast.IfExp,
     ast.Assert,
-    ast.comprehension,
     ast.match_case,
 )
 
 
 def scope_key(label: str, qualname: str | None) -> str:
-    """Build a stable scope key: ``<label>::<qualname>`` or ``<label>`` (file)."""
+    """Build a stable scope key: ``<label>::<qualname>`` or ``<label>`` (file).
+
+    The key is deliberately qualname-based and line-independent (no lineno
+    suffix) so a scope keeps the same key when its body moves up or down the
+    file - that line-stability is what lets ``grade()`` match a candidate to its
+    baseline after edits. The trade-off: sibling defs that share a qualname
+    (a redefinition, ``@overload`` stubs, or ``if TYPE_CHECKING:`` conditional
+    defs) collapse to the same key, and ``grade()``'s baseline index is
+    last-wins for such rare collisions. This is intentional - a lineno suffix
+    would fix the collision but break non-regression matching when code moves.
+    """
     return label if qualname is None else f"{label}::{qualname}"
 
 
@@ -37,12 +46,17 @@ def _cyclomatic(node: ast.AST) -> int:
     """Cyclomatic complexity of one function/method body.
 
     ``1 + decision points``. Decision points are ``If``/``For``/``AsyncFor``/
-    ``While``, comprehension ``if`` clauses, ``BoolOp`` operands - 1, each
-    ``ExceptHandler``, ``IfExp``, ``match`` ``case`` guards, and ``assert``.
-    A bare ``match_case`` with no guard contributes nothing; a guarded one adds
-    one for the guard. The walk does **not** descend into nested function or
-    class definitions so each callable is measured locally (and WMC can sum the
-    per-method values independently).
+    ``While``, each ``ExceptHandler``, ``IfExp``, ``assert``, and ``match``
+    ``case`` guards; each ``BoolOp`` adds ``len(values) - 1``. A comprehension
+    contributes **one per ``if`` filter** (``len(comp.ifs)``) - the generator
+    loop itself adds nothing, so ``[x for x in xs]`` is ``+0``,
+    ``[x for x in xs if a]`` is ``+1`` and ``[x for x in xs if a if b]`` is
+    ``+2`` (matching radon's "comprehension ``if`` clauses"). A bare
+    ``match_case`` with no guard contributes nothing; a guarded one adds one for
+    the guard. The walk descends into ``lambda`` bodies (a lambda is not its own
+    scope, so its decisions count toward the host callable) but **not** into
+    nested function or class definitions, so each ``def``/``class`` is measured
+    locally and WMC can sum the per-method values independently.
     """
     complexity = 1
     for child in _walk_local(node):
@@ -51,29 +65,46 @@ def _cyclomatic(node: ast.AST) -> int:
                 complexity += 1
         elif isinstance(child, ast.BoolOp):
             complexity += len(child.values) - 1
+        elif isinstance(child, ast.comprehension):
+            complexity += len(child.ifs)
         elif isinstance(child, _DECISION_NODES):
             complexity += 1
     return complexity
 
 
 def _walk_local(node: ast.AST) -> list[ast.AST]:
-    """Yield every descendant of ``node`` *except* the bodies of nested
-    function/class definitions (those are separate scopes)."""
+    """Collect every descendant of ``node`` that counts toward *its own* CC.
+
+    The walk starts from the function body and statements only - it deliberately
+    excludes the callable's own ``decorator_list`` and its argument-default
+    expressions, since decorators and defaults are not part of the function's
+    control flow. It descends into ``lambda`` bodies (a lambda is not its own
+    scope, so its decisions belong to the host callable) but stops at nested
+    ``def``/``class`` definitions, which are separate scopes.
+    """
     collected: list[ast.AST] = []
-    # Start from the direct children of the function body, never the def node
-    # itself, so a function does not count its own signature decorators etc.
-    stack: list[ast.AST] = list(ast.iter_child_nodes(node))
+    stack: list[ast.AST] = list(_local_roots(node))
     while stack:
         current = stack.pop()
         collected.append(current)
-        if isinstance(
-            current,
-            (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda),
-        ):
-            # Do not descend into a nested scope's body.
+        if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            # Do not descend into a nested scope's body (lambdas are not scopes).
             continue
         stack.extend(ast.iter_child_nodes(current))
     return collected
+
+
+def _local_roots(node: ast.AST) -> list[ast.AST]:
+    """Direct children of ``node`` that belong to its own body/control flow.
+
+    For a ``def``/``async def`` this is the body plus any annotation/return
+    expressions, but **not** the ``decorator_list`` or the ``arguments`` defaults
+    (which are evaluated in the enclosing scope, not part of this callable's
+    control flow). For any other node it is just its direct children.
+    """
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return list(node.body)
+    return list(ast.iter_child_nodes(node))
 
 
 @dataclass
