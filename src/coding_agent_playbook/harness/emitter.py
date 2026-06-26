@@ -49,7 +49,7 @@ def with_sentinel_body(frontmatter: str, body: str) -> str:
     is placed as the **first body line** (an HTML comment) — it cannot be line 1
     because the frontmatter fence must be — followed by a blank line and ``body``.
     """
-    return f'{frontmatter.rstrip("\n")}\n<!-- {SENTINEL} -->\n\n{body}'
+    return f"{frontmatter.rstrip('\n')}\n<!-- {SENTINEL} -->\n\n{body}"
 
 
 def routing_file(description: str, body: str) -> str:
