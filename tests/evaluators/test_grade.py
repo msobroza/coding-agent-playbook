@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING
 
 import pytest
 
-import sys
-
 from coding_agent_playbook.evaluators import registry as registry_mod
 from coding_agent_playbook.evaluators.grade import grade
-
-grade_mod = sys.modules["coding_agent_playbook.evaluators.grade"]
 from coding_agent_playbook.evaluators.registry import Evaluator
 from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
 from coding_agent_playbook.evaluators.types import (
@@ -23,6 +20,9 @@ from coding_agent_playbook.evaluators.types import (
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.types import EvalContext
+
+# Bound after imports so the module-level lookup doesn't violate E402.
+grade_mod = sys.modules["coding_agent_playbook.evaluators.grade"]
 
 
 def _cc(scope: str, value: float) -> Measurement:
