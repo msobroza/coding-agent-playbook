@@ -40,8 +40,8 @@ Engine and CLI are implemented: detector, renderer, five adapters
 (Continue, Claude Code, OpenCode, AGENTS.md, and the opt-in
 [Agent Harness](https://agentharnesses.io/specification)), the `playbook`
 commands (`init` / `sync` / `check` / `validate` / `render` / `eval` /
-`import-harness` / `validate-harness`), and the Tier 0 eval schema. See
-`SPEC.md` for the full design.
+`metrics` / `import-harness` / `validate-harness`), the Tier 0 eval schema,
+and the code-quality metrics gate. See `SPEC.md` for the full design.
 
 Working on the engine itself:
 
@@ -196,3 +196,37 @@ After `pre-commit install`, every commit verifies that the generated `.continue/
 | --- | --- | --- |
 | `playbook-sync-check` | Every commit | Runs `playbook sync --check`; fails the commit on drift. Consumer-facing. |
 | `playbook-validate` | Manual only (`pre-commit run --hook-stage manual playbook-validate`) | Runs `playbook validate`; surfaces canonical-source mistakes (typo'd `applies_if` keys, orphan eval tasks, etc.). Overlay-author-facing. |
+| `playbook-metrics` | Every commit (Python files) | Runs `playbook metrics --baseline git:HEAD`; fails the commit when staged Python worsens vs `HEAD`. **Static only** — never runs your test suite. |
+
+## Code-quality metrics gate
+
+`playbook metrics` is a standalone, **opt-in** code-quality gate. It measures Python with deterministic static metrics — cyclomatic complexity, weighted methods per class (WMC), LCOM4, depth of inheritance, an approximate coupling-between-objects, and (with the optional extra) the maintainability index — and grades the result either against absolute thresholds or, by default, as a **non-regression** check against a baseline. It is independent of `playbook sync`: nothing about your generated assistant context depends on it.
+
+```bash
+playbook metrics                              # measure src/ against absolute thresholds
+playbook metrics --baseline git:HEAD          # fail if the working tree worsens vs HEAD
+playbook metrics src tests --format json      # machine-readable findings
+playbook metrics --strict                     # promote warnings to failures (non-zero exit)
+```
+
+It exits `0` on pass, `1` on a breach, and `2` on a usage error (bad path, bad baseline, malformed `[metrics]` config). Defaults and per-evaluator thresholds live in a `[metrics]` table in `.coding-agent-playbook.toml`.
+
+### Running tests and coverage (`--run-tests`)
+
+`--run-tests` additionally runs **execution** evaluators — `test_pass_rate` and `coverage` — which shell out to your project's own `pytest` (and `pytest-cov`) and parse the standard junit/coverage XML. These have side effects and cost, so they are **opt-in and never part of the default pre-commit hook**; run them in CI or on demand:
+
+```bash
+playbook metrics --run-tests                          # also run the suite + measure coverage
+playbook metrics --run-tests --baseline git:HEAD      # fail on new test failures / coverage drop
+playbook metrics --run-tests --test-cmd "pytest -q"   # override the test command
+```
+
+The engine adds no dependency for this — your target project supplies `pytest`/`pytest-cov`.
+
+### The `metrics` optional extra (maintainability index)
+
+The core gate is **stdlib-only** and runs with nothing extra installed. The maintainability index is the one metric backed by [`radon`](https://radon.readthedocs.io/), so it ships as an optional extra; without it that single evaluator is transparently skipped:
+
+```bash
+pip install 'coding-agent-playbook[metrics]'   # adds radon for maintainability_index
+```

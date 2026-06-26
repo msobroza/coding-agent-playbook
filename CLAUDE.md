@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Source of truth: SPEC.md
 
-The design lives in `SPEC.md` (v0.8, draft). Read it before making structural changes — it defines the architecture, repo layout, artifact model, adapter contract, configuration, CLI surface, eval format, and rollout plan. If the spec is ambiguous, surface the question rather than guessing.
+The design lives in `SPEC.md` (v0.9, draft). Read it before making structural changes — it defines the architecture, repo layout, artifact model, adapter contract, configuration, CLI surface, eval format, the code-quality evaluator subsystem, and rollout plan. If the spec is ambiguous, surface the question rather than guessing.
 
 ## What this project is
 
@@ -23,6 +23,8 @@ The core engine is **complete**: detector, renderer, filesystem sources, the CLI
 
 **Agent Harness support (PR H)** is implemented on top of that engine: the opt-in `agent_harness` output adapter (`adapters/agent_harness_adapter.py`), the `playbook import-harness` and `playbook validate-harness` commands (`commands/import_harness.py`, `commands/validate_harness.py`), and the shared `harness/` core module (`models`, `leaf_detectors`, `parser`, `emitter`, `manifest`) with the `.playbook/manifest.toml` round-trip sidecar. Its design lives in `specs/prH-agent-harness.md`; the SPEC sections are §10.7 (adapter), §12.9/§12.10 (CLI), §20.10/§20.11 (sidecar + client-runtime scope).
 
+**Code-quality evaluator subsystem (PR M)** is implemented on top of that engine: the single `Evaluator` abstraction (`evaluators/registry.py`) with three families — static metrics (`evaluators/builtins/*`: CC, WMC, LCOM4, DIT, CBO≈ via `ast`; `maintainability_index` via the optional `radon` extra), execution metrics (`evaluators/execution/*`: `test_pass_rate`, `coverage`, shelling out to the target's `pytest`), and judged criteria (`evaluators/judged.py`: `JudgedCriterion`, the rubric generalized, dormant until v1.1) — plus the shared core (`scope`, `types`, `parse`, `grade`), the standalone `playbook metrics` command (`commands/metrics.py`) with a `repo: local` static pre-commit hook, and the dormant eval `[metrics]` wiring (`evals/task.py` `EvalTask.metrics` + `evaluators_for_task`, `evals/validator.py` rule 7). Its design lives in `specs/prM-code-metrics.md`; the SPEC section is §21 (and the eval `[metrics]` block in §15).
+
 ## Where to read in the spec
 
 - **§4** — architecture overview & end-to-end `playbook sync` data flow.
@@ -39,7 +41,9 @@ The core engine is **complete**: detector, renderer, filesystem sources, the CLI
 - **§12** — CLI contract with example output for every subcommand; §12.9/§12.10 `import-harness` / `validate-harness`.
 - **§15** — eval ABCs (v2 placeholders that v1 must not break).
 - **§20** — storage source abstraction (`ArtifactSource`, `StateSource`); §20.10 the `.playbook/manifest.toml` round-trip sidecar; §20.11 client-runtime out-of-scope note.
+- **§21** — code-quality evaluator subsystem (`Evaluator` ABC + three families, registry, `grade()` gate + composite, `playbook metrics` + static pre-commit hook, eval `[metrics]` wiring, the radon extra, the forward-compat `Judge.score` signature caveat in §21.2.3).
 - **`specs/prH-agent-harness.md`** — the authoritative Agent Harness design (artifact catalog §A, canonical→harness mapping §B, sidecar §C, locked decisions §D).
+- **`specs/prM-code-metrics.md`** — the authoritative code-metrics design (the `Evaluator` abstraction §A, static metrics §B, execution metrics §B2, judged §B3, grade §C, consumers §D, invariants §F, locked decisions §H).
 
 ## Invariants enforced by the spec
 
@@ -58,6 +62,14 @@ The core engine is **complete**: detector, renderer, filesystem sources, the CLI
 - **Sentinel as the first body line.** Harness frontmatter must stay on line 1 (`^---`) for the parser, so the `SENTINEL` cannot be line 1 — it is written as the first body line after the closing fence. `cleanup_stale` therefore detects the sentinel *anywhere* in a file, not just on line 1.
 - **`.harnessleaf` marks opaque dirs.** A directory carrying a `.harnessleaf` marker is a terminal opaque unit; the parser stops recursing into it and both the importer and validator skip its internal content (no routing-file expectation, no content inspection).
 - **Copies, not symlinks for scripts.** A skill's `scripts/` and `references/` are byte-copied (`shutil.copy2`); each script's executability is recorded as a git-style single-bit `executable` flag in `.playbook/manifest.toml` (not a full octal mode) and restored on POSIX during import, no-op on Windows.
+
+### Evaluator / metrics invariants (PR M)
+
+- **Stdlib-default core; radon is the only optional extra.** The evaluator core and the static `playbook metrics` gate are stdlib-only (`ast`, `subprocess`, `xml.etree`, …) and run with nothing extra installed. `maintainability_index` is the lone radon-backed evaluator (`pip install '…[metrics]'`); radon is imported **lazily inside `evaluate`** and `available()` returns `False` when it is absent, so the gate transparently skips MI. Never make radon a hard dep.
+- **Execution evaluators shell out and are opt-in.** `test_pass_rate`/`coverage` run the *target's* `pytest`/`pytest-cov` (no playbook dep) and parse junit/coverage XML with stdlib. They need `--run-tests` (or `[metrics] run_tests`), have side effects/cost, and are **excluded from the default pre-commit hook** — the `playbook-metrics` hook is static-only. The static-vs-execution discriminator is the `needs_project` flag, not the scope axis.
+- **Registry via decorator AND entry points.** Builtins self-register with `@register_evaluator`; out-of-tree evaluators use the `coding_agent_playbook.evaluators` entry-point group (in-tree builtins win on a name clash). Never hardcode the evaluator list; select via `static_evaluators()` / `deterministic_evaluators()` / `get_evaluator(name)`.
+- **Non-regression is primary.** `grade()` (gate + weighted composite) defaults to comparing a candidate against a baseline; new scopes fall back to absolute. Deterministic static/execution compare exactly (`max_worsening=0`); judged uses a tolerance band (`≈0.1`) + n-sample averaging. Gate boundaries are inclusive on the higher-is-worse side, strict on the higher-is-better side.
+- **The rubric is a judged evaluator.** `JudgedCriterion` (one per rubric line, `determinism=JUDGED`) is the rubric generalized; it is dormant in v1 (`available()` is `False` without a `ctx.judge`). Its duck-typed `ctx.judge.score(criterion, artifact, n=…)` call does **not** match the v2 `evals/judge.py` `Judge.score(rubric, transcript, scratch_dir_state)` signature — reconcile these when the v1.1 judge/runner land (see SPEC §21.2.3). The v2 runner/judge placeholders must never be imported or called from v1.
 
 ## Implementation tracks
 
@@ -91,6 +103,19 @@ The original 14-PR engine build-out is **complete** (all rows below are landed):
 | H5 | Docs (SPEC §10.7/§12.9/§12.10/§20.10/§20.11, README, this file) | — |
 
 H1 is the shared substrate; H2–H4 depend on it. The harness client *runtime* (`load_content` / `run_script`, the four loading phases) is intentionally out of scope — see SPEC §20.11.
+
+**PR M — Code-quality evaluator subsystem** (implemented; design in `specs/prM-code-metrics.md`):
+
+| Track | What | LoC |
+| --- | --- | --- |
+| M1 | Evaluator core: `evaluators/{scope,types,parse,registry,grade}.py` + static `builtins/{cyclomatic,wmc,lcom4,dit,cbo}.py` (`@register_evaluator`, gate + composite) | ~750 |
+| M2 | `builtins/maintainability.py` (radon-backed `maintainability_index`) + the `[metrics]` optional extra in `pyproject.toml` | ~150 |
+| M3 | Standalone static gate: `commands/metrics.py`, CLI wiring, `config.parse_metrics_config` (`[metrics]`), the `playbook-metrics` `repo: local` pre-commit hook | ~350 |
+| M4 | Execution evaluators: `evaluators/execution/{project,junit,coverage_xml,test_pass,coverage}.py` + `--run-tests`/`--test-cmd` (shell out to `pytest`; temp `git worktree` baseline) | ~400 |
+| M5 | Judged evaluators (`evaluators/judged.py`) + dormant eval wiring (`evals/task.py` `EvalTask.metrics` + `evaluators_for_task`, `evals/validator.py` rule 7) | ~300 |
+| M6 | Docs (SPEC §21 + §15 `[metrics]` block, README metrics section, this file) | — |
+
+M1 is the shared substrate; M2–M5 depend on it. Static metrics run by default (fast, air-gapped); execution evaluators are opt-in (`--run-tests`) and excluded from the default pre-commit; judged evaluators + eval-output scoring stay dormant until the v1.1 runner/judge — see SPEC §21.6 / §21.2.3.
 
 ## Working in this repo
 
