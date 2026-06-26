@@ -36,10 +36,12 @@ Multi-harness playbook engine
 
 ## Status
 
-Engine and CLI are implemented: detector, renderer, the four adapters
-(Continue, Claude Code, OpenCode, AGENTS.md), the `playbook` commands
-(`init` / `sync` / `check` / `validate` / `render` / `eval`), and the Tier 0
-eval schema. See `SPEC.md` for the full design.
+Engine and CLI are implemented: detector, renderer, five adapters
+(Continue, Claude Code, OpenCode, AGENTS.md, and the opt-in
+[Agent Harness](https://agentharnesses.io/specification)), the `playbook`
+commands (`init` / `sync` / `check` / `validate` / `render` / `eval` /
+`import-harness` / `validate-harness`), and the Tier 0 eval schema. See
+`SPEC.md` for the full design.
 
 Working on the engine itself:
 
@@ -113,6 +115,7 @@ Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
 
    [adapters]
    enabled = ["continue", "claude_code", "opencode"]   # AGENTS.md always emitted
+   # add "agent_harness" to also emit an Agent Harness tree (opt-in)
    ```
 
 3. **Repo-local `playbook/`** — drop in per-repo rules, prompts, or eval tasks;
@@ -131,6 +134,45 @@ non-FastAPI repo; the ML serialization-security rule ships only to repos with an
 ML stack). Run `playbook check` to see the detected facts and exactly which
 rules/prompts are active — the fastest way to debug *"why isn't my rule
 appearing?"*
+
+## Agent Harness support (opt-in)
+
+Beyond the four always-available targets, the playbook can render to and read from
+the [Agent Harness](https://agentharnesses.io/specification) format — a
+`HARNESS.md`-rooted tree of skills, prompts, rules, and references.
+
+### The `agent_harness` adapter
+
+Enable it by adding `agent_harness` to `[adapters] enabled`. It is **opt-in** —
+not part of the default adapter set — and otherwise behaves like any other
+adapter under `playbook sync`:
+
+```toml
+# .coding-agent-playbook.toml
+[adapters]
+enabled = ["continue", "claude_code", "agent_harness"]
+```
+
+`playbook sync` then emits a `HARNESS.md` plus `skills/`, `prompts/`, `rules/`,
+and `references/` directories, alongside a `.playbook/manifest.toml` sidecar that
+records everything the harness format can't represent — so the tree round-trips
+back to canonical artifacts losslessly.
+
+### Importing and validating harness trees
+
+Two commands handle the reverse direction and structural linting:
+
+```bash
+playbook import-harness <path> [--into <dir>]   # harness tree → canonical artifacts (default ./playbook/)
+playbook validate-harness <path> [--strict]     # structural checks (harnesses-ref-equivalent)
+```
+
+`import-harness` is lossless when the source carries a `.playbook/manifest.toml`
+sidecar (a playbook-emitted harness) and best-effort otherwise (a foreign
+harness), reporting every lossy assumption it makes. `validate-harness` checks
+that `HARNESS.md` and every skill leaf carry a `name`/`description`, and warns
+(or, with `--strict`, fails) on missing routing files or undescribed content
+files.
 
 ## Pre-commit integration
 
