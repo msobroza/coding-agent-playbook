@@ -42,9 +42,24 @@ def test_cap_validate_hook_is_manual_only():
     assert validate["stages"] == ["manual"], "playbook-validate must be manual-only"
 
 
+def test_cap_metrics_hook_is_static_only():
+    """PR-M Track M3: the default metrics hook runs the *static* gate against
+    HEAD and must never opt into execution evaluators (`--run-tests`)."""
+    hooks = _load_hooks()
+    metrics = next((h for h in hooks if h["id"] == "playbook-metrics"), None)
+    assert metrics is not None, "missing playbook-metrics hook"
+    assert metrics["entry"] == "playbook metrics --baseline git:HEAD"
+    assert metrics["language"] == "python"
+    # STATIC ONLY — execution evaluators (cost + side effects) stay out of the
+    # default hook.
+    assert "--run-tests" not in metrics["entry"]
+    # Runs on staged Python only (not always_run).
+    assert metrics["types_or"] == ["python", "pyi"]
+    assert metrics.get("always_run") in (None, False)
+
+
 def test_no_unexpected_hooks():
     hooks = _load_hooks()
     ids = {h["id"] for h in hooks}
-    assert ids == {"playbook-sync-check", "playbook-validate"}, (
-        f"unexpected hook IDs: {ids - {'playbook-sync-check', 'playbook-validate'}}"
-    )
+    expected = {"playbook-sync-check", "playbook-validate", "playbook-metrics"}
+    assert ids == expected, f"unexpected hook IDs: {ids - expected}"

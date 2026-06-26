@@ -22,3 +22,16 @@
   pass_filenames: false
   always_run: true
   stages: [manual]
+
+# Static code-quality gate (PR-M). STATIC ONLY — never runs the test suite.
+# Diffs staged Python against HEAD so a commit may not regress cyclomatic
+# complexity, maintainability index, etc. Execution evaluators (`--run-tests`)
+# are intentionally NOT in this default hook (side effects + cost) — run those
+# in CI or a manual hook instead.
+- id: playbook-metrics
+  name: coding-agent-playbook metrics (static, non-regression vs HEAD)
+  description: Static code-quality gate — fail when staged Python worsens vs HEAD
+  entry: playbook metrics --baseline git:HEAD
+  language: python
+  types_or: [python, pyi]
+  require_serial: true

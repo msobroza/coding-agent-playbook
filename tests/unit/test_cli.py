@@ -170,6 +170,44 @@ def test_eval_main_uses_repo_root_without_chdir(monkeypatch, tmp_path, make_synt
     assert os.getcwd() == cwd_before
 
 
+def test_metrics_subparser_accepts_paths_and_flags():
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "metrics",
+            "a.py",
+            "b.py",
+            "--baseline",
+            "git:HEAD",
+            "--mode",
+            "absolute",
+            "--strict",
+            "--format",
+            "json",
+            "--repo-root",
+            "/tmp/x",
+        ]
+    )
+    assert args.command == "metrics"
+    assert args.paths == ["a.py", "b.py"]
+    assert args.baseline == "git:HEAD"
+    assert args.mode == "absolute"
+    assert args.strict is True
+    assert args.format == "json"
+    assert args.repo_root == "/tmp/x"
+
+
+def test_metrics_subparser_defaults():
+    parser = build_parser()
+    args = parser.parse_args(["metrics"])
+    assert args.command == "metrics"
+    assert args.paths == []
+    assert args.baseline is None
+    assert args.mode is None
+    assert args.strict is False
+    assert args.format == "text"
+
+
 def test_main_returns_func_exit_code(monkeypatch, tmp_path):
     """Plumb a fake subcommand and verify main forwards its return code."""
     from coding_agent_playbook.commands import sync as sync_cmd

@@ -21,6 +21,7 @@ from coding_agent_playbook.commands import check as check_cmd
 from coding_agent_playbook.commands import eval as eval_cmd
 from coding_agent_playbook.commands import import_harness as import_harness_cmd
 from coding_agent_playbook.commands import init as init_cmd
+from coding_agent_playbook.commands import metrics as metrics_cmd
 from coding_agent_playbook.commands import render as render_cmd
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as validate_cmd
@@ -40,6 +41,7 @@ _SUBCOMMANDS: tuple[str, ...] = (
     "validate",
     "render",
     "eval",
+    "metrics",
     "import-harness",
     "validate-harness",
 )
@@ -117,9 +119,42 @@ def build_parser() -> argparse.ArgumentParser:
     eval_p.add_argument("id", nargs="?", help="task id to run (deferred until v2)")
     eval_p.set_defaults(func=eval_cmd.run)
 
+    # playbook metrics (PR-M Track M3 — standalone static code-quality gate)
+    metrics_p = subcommands.add_parser(
+        _SUBCOMMANDS[6],
+        help="static code-quality gate (cyclomatic complexity, MI, ...) (PR-M)",
+    )
+    metrics_p.add_argument(
+        "paths",
+        nargs="*",
+        help="Python files or directories to measure (default: the repo's src/ dir)",
+    )
+    metrics_p.add_argument(
+        "--baseline",
+        help="non-regression baseline: 'git:<ref>' (via git show) or a directory path",
+    )
+    metrics_p.add_argument(
+        "--mode",
+        choices=("regression", "absolute", "both"),
+        help="comparison mode (default: from [metrics] config, else 'regression')",
+    )
+    metrics_p.add_argument(
+        "--strict",
+        action="store_true",
+        help="promote warnings to gate failures (non-zero exit)",
+    )
+    metrics_p.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    metrics_p.add_argument("--repo-root", help="repo to measure against (defaults to cwd)")
+    metrics_p.set_defaults(func=metrics_cmd.run)
+
     # playbook import-harness (PR H Track H3)
     import_p = subcommands.add_parser(
-        _SUBCOMMANDS[6], help="import an Agent Harness tree into canonical artifacts"
+        _SUBCOMMANDS[7], help="import an Agent Harness tree into canonical artifacts"
     )
     import_p.add_argument("path", nargs="?", help="path to the harness root (contains HARNESS.md)")
     import_p.add_argument(
@@ -130,7 +165,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # playbook validate-harness (PR H Track H4)
     validate_harness_p = subcommands.add_parser(
-        _SUBCOMMANDS[7],
+        _SUBCOMMANDS[8],
         help="lint an Agent Harness tree (structural checks, harnesses-ref-equivalent)",
     )
     validate_harness_p.add_argument(
