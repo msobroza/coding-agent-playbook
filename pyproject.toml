@@ -66,6 +66,10 @@ filesystem = "coding_agent_playbook.sources.filesystem:FileSystemStateSource"
 [project.entry-points."coding_agent_playbook.judges"]
 # Populated in v2 — see SPEC §15.4.
 
+[project.entry-points."coding_agent_playbook.evaluators"]
+# Out-of-tree code-quality evaluators (PR M). Engine builtins self-register via
+# the @register_evaluator decorator; this group is for third-party packages.
+
 # ----------------------------------------------------------------------------
 
 [tool.hatch.build.targets.wheel]
