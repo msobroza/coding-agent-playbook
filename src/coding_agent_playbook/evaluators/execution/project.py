@@ -14,11 +14,11 @@ No playbook dependency is added: the target project supplies ``pytest`` /
 **Isolation.** :meth:`create` builds a default command that runs the target's
 pytest in a way that does *not* inherit a surrounding ``pyproject.toml``'s
 ``addopts`` (e.g. this engine's own ``--cov-fail-under`` / ``filterwarnings``):
-``-p no:cacheprovider`` and ``-o addopts=`` clear inherited options, and
-``--rootdir``/``--cov-config`` pin discovery to the target. The exit code of the
-run is *not* asserted here (a failing suite is a legitimate measurement, not a
-handle error); only a command that cannot be *launched* (e.g. pytest absent)
-raises.
+``-p no:cacheprovider`` and ``-o addopts=`` clear inherited options (the latter
+is the lever that neutralises an inherited config), and ``--cov-config`` pins
+coverage to the target. The exit code of the run is *not* asserted here (a
+failing suite is a legitimate measurement, not a handle error); only a command
+that cannot be *launched* (e.g. pytest absent) raises.
 """
 
 from __future__ import annotations

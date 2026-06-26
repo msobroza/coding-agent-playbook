@@ -75,3 +75,65 @@ def test_inverted_regression_detects_drop(coverage_like: None) -> None:
 def test_inverted_regression_pass_on_improvement(coverage_like: None) -> None:
     report = grade([_m(95)], [_m(90)], MetricConfig(mode="regression"))
     assert report.findings[0].level == "ok"
+
+
+# --- exact-boundary semantics (M4: strict < on higher-is-better) -------------
+#
+# These pin _absolute_level's boundary against the *real* builtin evaluators in
+# absolute mode (no baseline). The higher-is-better cases below would each FAIL
+# under the old inclusive ``<=`` logic (value AT the bound used to breach); the
+# higher-is-worse case stays inclusive (``>=``) and pins that side too.
+
+
+def _at(evaluator: str, scope: str, value: float) -> Measurement:
+    return Measurement(evaluator=evaluator, scope_key=scope, value=value)
+
+
+def test_boundary_cyclomatic_complexity_inclusive() -> None:
+    # higher_is_worse=True, default warn=10 fail=20 -> inclusive ``>=``.
+    candidate = [
+        _at("cyclomatic_complexity", "a.py::fl", 20),  # == fail
+        _at("cyclomatic_complexity", "a.py::wn", 10),  # == warn
+        _at("cyclomatic_complexity", "a.py::ok", 9),  # below warn
+    ]
+    report = grade(candidate, None, MetricConfig(mode="absolute"))
+    levels = {f.scope_key: f.level for f in report.findings}
+    assert levels["a.py::fl"] == "fail"
+    assert levels["a.py::wn"] == "warn"
+    assert levels["a.py::ok"] == "ok"
+
+
+def test_boundary_coverage_warn_is_strict() -> None:
+    # higher_is_better, default warn=80 -> value AT warn is ok (old <= => warn).
+    at_warn = grade([_at("coverage", "a.py", 80.0)], None, MetricConfig(mode="absolute"))
+    assert at_warn.findings[0].level == "ok"  # 80 < 80 is False
+    below_warn = grade([_at("coverage", "a.py", 79.0)], None, MetricConfig(mode="absolute"))
+    assert below_warn.findings[0].level == "warn"  # 79 < 80
+
+
+def test_boundary_test_pass_rate_fail_is_strict() -> None:
+    # higher_is_better, default fail=1.0 -> a perfect run is ok (old <= => fail).
+    perfect = grade([_at("test_pass_rate", "<project>", 1.0)], None, MetricConfig(mode="absolute"))
+    assert perfect.findings[0].level == "ok"  # 1.0 < 1.0 is False
+    imperfect = grade(
+        [_at("test_pass_rate", "<project>", 0.99)],
+        None,
+        MetricConfig(mode="absolute"),
+    )
+    assert imperfect.findings[0].level == "fail"  # 0.99 < 1.0
+
+
+def test_boundary_maintainability_index_fail_is_strict() -> None:
+    # higher_is_better, default fail=65 -> value AT fail is ok (old <= => fail).
+    at_fail = grade(
+        [_at("maintainability_index", "a.py", 65.0)],
+        None,
+        MetricConfig(mode="absolute"),
+    )
+    assert at_fail.findings[0].level == "ok"  # 65 < 65 is False
+    below_fail = grade(
+        [_at("maintainability_index", "a.py", 64.0)],
+        None,
+        MetricConfig(mode="absolute"),
+    )
+    assert below_fail.findings[0].level == "fail"  # 64 < 65
