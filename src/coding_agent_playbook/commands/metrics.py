@@ -1,15 +1,19 @@
-"""``playbook metrics`` — standalone static code-quality gate (PR-M Track M3).
+"""``playbook metrics`` — standalone code-quality gate (PR-M Tracks M3 + M4).
 
 Measures the static evaluators (cyclomatic complexity, maintainability index,
 WMC, LCOM4, DIT, CBO≈) over a set of Python files, optionally diffing against a
 baseline (a git ref or a directory), grades the result with
 :func:`~coding_agent_playbook.evaluators.grade.grade`, and exits non-zero on a
-breach — mirroring ``playbook check``'s convention.
+breach — mirroring ``playbook check``'s convention. With ``--run-tests`` it also
+runs the **execution** evaluators (``test_pass_rate``, ``coverage``), which shell
+out to the target's ``pytest``; execution is opt-in (side effects/cost) and is
+**not** in the default pre-commit hook.
 
 Usage::
 
     playbook metrics [PATHS…] [--baseline git:REF|DIR] [--mode regression|absolute|both]
-                     [--strict] [--format text|json] [--repo-root DIR]
+                     [--strict] [--run-tests] [--test-cmd "…"]
+                     [--format text|json] [--repo-root DIR]
 
 * **Default PATHS** — when none are given, the repo's ``src/`` directory if it
   exists, else the repo root (``--repo-root`` or cwd). Directories recurse for
@@ -20,6 +24,13 @@ Usage::
   <dir>`` reads the matching relative file under ``<dir>``. With no baseline (or
   ``regression``/``both`` requested without one) the gate falls back to absolute
   mode and notes it.
+* **Execution (`--run-tests`)** — builds a ``ProjectHandle`` rooted at
+  ``--repo-root`` (or cwd), runs the suite once, and merges the
+  ``test_pass_rate``/``coverage`` measurements alongside the static ones.
+  ``--test-cmd "…"`` overrides the default ``python -m pytest`` command
+  (shlex-split). With a baseline, the suite is also run against the baseline: a
+  ``git:<ref>`` baseline is materialised via a temporary ``git worktree`` (heavier
+  than the static ``git show``) and a ``<dir>`` baseline runs in that directory.
 * **Config** — a ``[metrics]`` table in ``.coding-agent-playbook.toml`` (parsed by
   :func:`coding_agent_playbook.config.parse_metrics_config`) seeds the
   :class:`~coding_agent_playbook.evaluators.types.MetricConfig`; CLI flags
@@ -37,8 +48,10 @@ human audience.
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 import sys
+import tempfile
 import tomllib
 from dataclasses import replace
 from pathlib import Path
@@ -49,10 +62,12 @@ from coding_agent_playbook.evaluators import (
     EvalContext,
     Measurement,
     MetricConfig,
+    deterministic_evaluators,
     grade,
     parse_module,
     static_evaluators,
 )
+from coding_agent_playbook.evaluators.execution.project import ProjectHandle
 
 if TYPE_CHECKING:
     import argparse
@@ -251,6 +266,110 @@ def _safe_measure(source: str, label: str, evaluators: list[Evaluator]) -> list[
 
 
 # --------------------------------------------------------------------------- #
+# Execution evaluators (--run-tests)
+# --------------------------------------------------------------------------- #
+
+#: MODULE label the execution evaluators key their suite-wide measurements on.
+_SUITE_LABEL = "suite"
+
+
+def _execution_evaluators() -> list[Evaluator]:
+    """The deterministic evaluators that need a runnable project (``--run-tests``)."""
+    return [ev for ev in deterministic_evaluators() if ev.needs_project]
+
+
+def _resolve_test_cmd(args: argparse.Namespace, config: MetricConfig) -> list[str] | None:
+    """Effective test command: ``--test-cmd`` (shlex-split) over config ``test_cmd``.
+
+    ``None`` means "use :meth:`ProjectHandle.create`'s isolated default". Raises
+    :class:`_UsageError` for an empty/unparseable ``--test-cmd``.
+    """
+    raw = getattr(args, "test_cmd", None)
+    if raw:
+        try:
+            parts = shlex.split(raw)
+        except ValueError as exc:
+            raise _UsageError(f"bad --test-cmd: {exc}") from exc
+        if not parts:
+            raise _UsageError("--test-cmd is empty")
+        return parts
+    return config.test_cmd
+
+
+def _run_execution(
+    root: Path,
+    report_dir: Path,
+    test_cmd: list[str] | None,
+) -> list[Measurement]:
+    """Build a handle, run the suite once, and collect execution measurements.
+
+    Both execution evaluators read the same :class:`ProjectHandle`, so the suite
+    runs exactly once. Raises :class:`_UsageError` when the suite cannot be run.
+    """
+    handle = ProjectHandle.create(root, report_dir, test_cmd=test_cmd)
+    ctx = EvalContext(module=None, source="", label=_SUITE_LABEL, project=handle)
+    measurements: list[Measurement] = []
+    try:
+        for evaluator in _execution_evaluators():
+            if evaluator.available(ctx):
+                measurements.extend(evaluator.evaluate(ctx))
+    except RuntimeError as exc:
+        raise _UsageError(str(exc)) from exc
+    return measurements
+
+
+def _execution_baseline(
+    baseline: str,
+    repo_root: Path,
+    test_cmd: list[str] | None,
+    work_dir: Path,
+) -> list[Measurement]:
+    """Run the execution evaluators on the baseline (a git ref or a directory).
+
+    ``git:<ref>`` materialises the ref via a temporary ``git worktree add`` under
+    ``work_dir`` (cleaned up afterwards via ``git worktree remove``); ``<dir>``
+    runs the suite directly in that directory. Raises :class:`_UsageError` on a
+    bad ref / non-git dir / missing directory or an unrunnable suite.
+    """
+    if baseline.startswith("git:"):
+        ref = baseline[len("git:") :]
+        _validate_git_ref(repo_root, ref)
+        return _execution_git_worktree(ref, repo_root, test_cmd, work_dir)
+
+    base_dir = Path(baseline)
+    if not base_dir.is_dir():
+        raise _UsageError(f"baseline directory not found: {base_dir}")
+    return _run_execution(base_dir, work_dir / "baseline-reports", test_cmd)
+
+
+def _execution_git_worktree(
+    ref: str,
+    repo_root: Path,
+    test_cmd: list[str] | None,
+    work_dir: Path,
+) -> list[Measurement]:
+    """Materialise ``ref`` in a temp git worktree, run the suite, then clean up."""
+    worktree = work_dir / "baseline-worktree"
+    add = subprocess.run(
+        ["git", "worktree", "add", "--detach", str(worktree), ref],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    if add.returncode != 0:
+        raise _UsageError(f"could not create baseline worktree for {ref!r}: {add.stderr.strip()}")
+    try:
+        return _run_execution(worktree, work_dir / "baseline-reports", test_cmd)
+    finally:
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", str(worktree)],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
+
+
+# --------------------------------------------------------------------------- #
 # Config + flag merge
 # --------------------------------------------------------------------------- #
 
@@ -402,6 +521,8 @@ def run(args: argparse.Namespace) -> int:
 
     try:
         config = _load_config(repo_root)
+        run_tests = bool(getattr(args, "run_tests", False)) or config.run_tests
+        test_cmd = _resolve_test_cmd(args, config)
         targets = _discover_targets(paths, repo_root)
         baseline_measurements = (
             _baseline_measurements(baseline, targets, repo_root, evaluators)
@@ -427,6 +548,22 @@ def run(args: argparse.Namespace) -> int:
             measured_count += 1
         except SyntaxError as exc:
             skipped.append((label, f"unparseable ({exc.msg})"))
+
+    # Execution evaluators (opt-in): run the target's suite once and, when a
+    # baseline is given, the baseline's suite too (temp git worktree / dir).
+    if run_tests:
+        try:
+            with tempfile.TemporaryDirectory(prefix="playbook-metrics-") as tmp:
+                tmp_path = Path(tmp)
+                candidate.extend(
+                    _run_execution(repo_root, tmp_path / "candidate-reports", test_cmd)
+                )
+                if baseline is not None:
+                    exec_baseline = _execution_baseline(baseline, repo_root, test_cmd, tmp_path)
+                    baseline_measurements = (baseline_measurements or []) + exec_baseline
+        except _UsageError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
 
     effective, note = _merge_flags(config, args, baseline=baseline)
     report = grade(candidate, baseline_measurements, effective)

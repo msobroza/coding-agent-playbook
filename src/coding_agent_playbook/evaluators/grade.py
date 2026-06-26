@@ -139,17 +139,27 @@ def _absolute_level(
     value: float,
     absolute: AbsoluteThreshold,
 ) -> tuple[Level, float | None]:
-    """Absolute warn/fail level + the bound that decided it."""
+    """Absolute warn/fail level + the bound that decided it.
+
+    The comparison is *inclusive at the bound* on the higher-is-worse side
+    (``value >= bound`` breaches: a CC of exactly ``20`` fails) and *strict* on
+    the higher-is-better side (``value < bound`` breaches: coverage of exactly
+    ``80`` is ``ok``, a test-pass rate of exactly ``1.0`` is ``ok`` even with
+    ``fail=1.0`` meaning "all must pass"). This keeps the gate boundary aligned
+    with :meth:`Evaluator.to_score` (which is best at/over ``warn`` on the
+    higher-is-better side) and with the spec's ``< threshold`` wording for
+    coverage / ``test_pass_rate``.
+    """
     if evaluator.higher_is_worse:
         if absolute.fail is not None and value >= absolute.fail:
             return "fail", absolute.fail
         if absolute.warn is not None and value >= absolute.warn:
             return "warn", absolute.warn
         return "ok", None
-    # higher is better: breach when the value drops *below* the bound.
-    if absolute.fail is not None and value <= absolute.fail:
+    # higher is better: breach when the value drops *strictly below* the bound.
+    if absolute.fail is not None and value < absolute.fail:
         return "fail", absolute.fail
-    if absolute.warn is not None and value <= absolute.warn:
+    if absolute.warn is not None and value < absolute.warn:
         return "warn", absolute.warn
     return "ok", None
 

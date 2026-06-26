@@ -144,6 +144,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="promote warnings to gate failures (non-zero exit)",
     )
     metrics_p.add_argument(
+        "--run-tests",
+        dest="run_tests",
+        action="store_true",
+        help="also run the execution evaluators (test_pass_rate, coverage): "
+        "shells out to the target's pytest (opt-in, has side effects)",
+    )
+    metrics_p.add_argument(
+        "--test-cmd",
+        dest="test_cmd",
+        help="override the test command used by --run-tests (a shell-style "
+        "string, split with shlex; default: python -m pytest with junit+cov XML)",
+    )
+    metrics_p.add_argument(
         "--format",
         choices=("text", "json"),
         default="text",

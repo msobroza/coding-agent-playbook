@@ -148,8 +148,29 @@ def test_get_evaluator_unknown_raises() -> None:
 def test_static_evaluators_filters_to_static() -> None:
     statics = static_evaluators()
     assert all(ev.requires is None or ev.requires == "radon" for ev in statics)
-    assert all(ev.scope is not Scope.MODULE for ev in statics)
+    assert all(not ev.needs_project for ev in statics)
     assert {"cyclomatic_complexity", "wmc"} <= {ev.name for ev in statics}
+
+
+def test_static_evaluators_excludes_execution() -> None:
+    """The execution evaluators (``needs_project=True``) are NOT static even
+    though they are DETERMINISTIC + FILE/MODULE scope (carried-forward M1 fix)."""
+    names = {ev.name for ev in static_evaluators()}
+    assert "coverage" not in names
+    assert "test_pass_rate" not in names
+
+
+def test_deterministic_evaluators_includes_execution() -> None:
+    """``deterministic_evaluators()`` spans static *and* execution metrics."""
+    dets = deterministic_evaluators()
+    assert all(ev.determinism is Determinism.DETERMINISTIC for ev in dets)
+    names = {ev.name for ev in dets}
+    assert {"coverage", "test_pass_rate"} <= names
+
+
+def test_needs_project_defaults_false() -> None:
+    """Static builtins never need a project handle."""
+    assert all(not ev.needs_project for ev in static_evaluators())
 
 
 def test_deterministic_evaluators_excludes_judged() -> None:

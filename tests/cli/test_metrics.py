@@ -71,6 +71,8 @@ def _ns(**kwargs: object) -> argparse.Namespace:
         "strict": False,
         "format": "text",
         "repo_root": None,
+        "run_tests": False,
+        "test_cmd": None,
     }
     base.update(kwargs)
     return argparse.Namespace(**base)
@@ -542,3 +544,211 @@ def test_config_fail_on_breach_false_returns_zero(tmp_path, capsys):
     )
     rc = _metrics.run(_ns(paths=[str(target)], repo_root=str(tmp_path)))
     assert rc == 0
+
+
+# --------------------------------------------------------------------------- #
+# --run-tests (execution evaluators) — PR-M Track M4
+# --------------------------------------------------------------------------- #
+
+# A tiny project whose static metrics are clean (so the static gate never breaks
+# the run) and whose suite either fully passes/covers or fails.
+_RUN_MOD = "def add(a, b):\n    return a + b\n"
+_RUN_TEST_PASS = "from mod import add\n\n\ndef test_add():\n    assert add(1, 2) == 3\n"
+_RUN_TEST_FAIL = (
+    "from mod import add\n\n\n"
+    "def test_ok():\n    assert add(1, 2) == 3\n\n\n"
+    "def test_bad():\n    assert add(1, 2) == 99\n"
+)
+
+
+def _run_project(root: Path, test_source: str) -> None:
+    _write(root / "mod.py", _RUN_MOD)
+    _write(root / "test_mod.py", test_source)
+
+
+def test_run_tests_passing_suite_exits_zero(tmp_path, capsys):
+    _run_project(tmp_path, _RUN_TEST_PASS)
+    rc = _metrics.run(
+        _ns(paths=[str(tmp_path)], mode="absolute", run_tests=True, repo_root=str(tmp_path))
+    )
+    assert rc == 0
+    out = capsys.readouterr().out
+    # The execution evaluators contributed measurements (visible in JSON below);
+    # here we just assert the suite passed overall.
+    assert "FAIL" not in out
+
+
+def test_run_tests_failing_suite_exits_one(tmp_path, capsys):
+    _run_project(tmp_path, _RUN_TEST_FAIL)
+    rc = _metrics.run(
+        _ns(paths=[str(tmp_path)], mode="absolute", run_tests=True, repo_root=str(tmp_path))
+    )
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "test_pass_rate" in out
+
+
+def test_run_tests_emits_execution_findings_in_json(tmp_path, capsys):
+    _run_project(tmp_path, _RUN_TEST_PASS)
+    rc = _metrics.run(
+        _ns(
+            paths=[str(tmp_path)],
+            mode="absolute",
+            run_tests=True,
+            format="json",
+            repo_root=str(tmp_path),
+        )
+    )
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    evaluators = {f["evaluator"] for f in payload["findings"]}
+    assert "test_pass_rate" in evaluators
+    assert "coverage" in evaluators
+
+
+def test_without_run_tests_no_execution_findings(tmp_path, capsys):
+    """Default behaviour (no --run-tests) is static-only: no execution findings."""
+    _run_project(tmp_path, _RUN_TEST_PASS)
+    rc = _metrics.run(
+        _ns(paths=[str(tmp_path)], mode="absolute", format="json", repo_root=str(tmp_path))
+    )
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    evaluators = {f["evaluator"] for f in payload["findings"]}
+    assert "test_pass_rate" not in evaluators
+    assert "coverage" not in evaluators
+
+
+def test_run_tests_bad_test_cmd_exits_two(tmp_path, capsys):
+    """A --test-cmd that cannot be launched is a usage error (exit 2)."""
+    _run_project(tmp_path, _RUN_TEST_PASS)
+    rc = _metrics.run(
+        _ns(
+            paths=[str(tmp_path)],
+            mode="absolute",
+            run_tests=True,
+            test_cmd="definitely-not-a-real-program-xyz --version",
+            repo_root=str(tmp_path),
+        )
+    )
+    assert rc == 2
+    assert "error" in capsys.readouterr().err.lower()
+
+
+def test_run_tests_regression_coverage_drop_fails(tmp_path, capsys):
+    """With --run-tests + a dir baseline, dropping coverage fails regression."""
+    baseline_dir = tmp_path / "baseline"
+    # Baseline fully covers a two-branch module.
+    _write(baseline_dir / "mod.py", "def f(x):\n    if x:\n        return 1\n    return 0\n")
+    _write(
+        baseline_dir / "test_mod.py",
+        "from mod import f\n\n\ndef test_f():\n    assert f(1) == 1\n    assert f(0) == 0\n",
+    )
+    # Candidate only covers one branch -> coverage drops.
+    cand = tmp_path / "cand"
+    _write(cand / "mod.py", "def f(x):\n    if x:\n        return 1\n    return 0\n")
+    _write(cand / "test_mod.py", "from mod import f\n\n\ndef test_f():\n    assert f(1) == 1\n")
+    rc = _metrics.run(
+        _ns(
+            paths=[str(cand)],
+            baseline=str(baseline_dir),
+            mode="regression",
+            run_tests=True,
+            repo_root=str(cand),
+        )
+    )
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "coverage" in out
+
+
+def test_run_tests_config_run_tests_true_enables_execution(tmp_path, capsys):
+    """``run_tests = true`` in config enables execution without the CLI flag."""
+    _run_project(tmp_path, _RUN_TEST_PASS)
+    (tmp_path / ".coding-agent-playbook.toml").write_text(
+        '[metrics]\nmode = "absolute"\nrun_tests = true\n',
+        encoding="utf-8",
+    )
+    rc = _metrics.run(_ns(paths=[str(tmp_path)], format="json", repo_root=str(tmp_path)))
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    evaluators = {f["evaluator"] for f in payload["findings"]}
+    assert "test_pass_rate" in evaluators
+
+
+def test_run_tests_custom_test_cmd_is_used(tmp_path, capsys):
+    """``--test-cmd`` (shlex-split) overrides the default pytest invocation."""
+    _run_project(tmp_path, _RUN_TEST_PASS)
+    cmd = (
+        "python -m pytest --junitxml=junit.xml "
+        "--cov --cov-report=xml:coverage.xml -o addopts= -p no:cacheprovider -q"
+    )
+    rc = _metrics.run(
+        _ns(
+            paths=[str(tmp_path)],
+            mode="absolute",
+            run_tests=True,
+            test_cmd=cmd,
+            format="json",
+            repo_root=str(tmp_path),
+        )
+    )
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert "test_pass_rate" in {f["evaluator"] for f in payload["findings"]}
+
+
+def test_run_tests_empty_test_cmd_after_shlex_exits_two(tmp_path, capsys):
+    """A ``--test-cmd`` that shlex-splits to nothing is a usage error."""
+    _run_project(tmp_path, _RUN_TEST_PASS)
+    rc = _metrics.run(
+        _ns(
+            paths=[str(tmp_path)],
+            mode="absolute",
+            run_tests=True,
+            test_cmd="   ",
+            repo_root=str(tmp_path),
+        )
+    )
+    assert rc == 2
+    assert "error" in capsys.readouterr().err.lower()
+
+
+def test_run_tests_git_worktree_baseline_detects_coverage_drop(tmp_path, capsys):
+    """``--run-tests --baseline git:HEAD`` materialises the ref in a temp git
+    worktree, runs its suite, and flags a coverage drop in the working tree."""
+    import subprocess
+
+    def _git(*cmd: str) -> None:
+        subprocess.run(["git", *cmd], cwd=tmp_path, check=True, capture_output=True)
+
+    _git("init")
+    _git("config", "user.email", "test@example.com")
+    _git("config", "user.name", "Test")
+    # Committed baseline: two branches, fully covered.
+    _write(tmp_path / "mod.py", "def f(x):\n    if x:\n        return 1\n    return 0\n")
+    _write(
+        tmp_path / "test_mod.py",
+        "from mod import f\n\n\ndef test_f():\n    assert f(1) == 1\n    assert f(0) == 0\n",
+    )
+    _git("add", "mod.py", "test_mod.py")
+    _git("commit", "-m", "baseline full coverage")
+
+    # Working tree: drop one branch's coverage.
+    _write(tmp_path / "test_mod.py", "from mod import f\n\n\ndef test_f():\n    assert f(1) == 1\n")
+    rc = _metrics.run(
+        _ns(
+            paths=[str(tmp_path / "mod.py"), str(tmp_path / "test_mod.py")],
+            baseline="git:HEAD",
+            mode="regression",
+            run_tests=True,
+            repo_root=str(tmp_path),
+        )
+    )
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "coverage" in out
+    # The temporary worktree must be cleaned up (no leftover under .git/worktrees
+    # pointing at a live dir, and no baseline-worktree dir left behind in tmp).
+    leftovers = list(tmp_path.glob("**/baseline-worktree"))
+    assert leftovers == []

@@ -49,6 +49,12 @@ class Evaluator(ABC):
     higher_is_worse: bool
     #: Optional importable dependency/capability; ``None`` means stdlib-only.
     requires: str | None = None
+    #: ``True`` for execution evaluators that need a runnable project
+    #: (``ctx.project``) - they shell out to the target's test suite. This is the
+    #: explicit "static vs execution" discriminator: ``static_evaluators()``
+    #: excludes any evaluator with ``needs_project=True`` (a DETERMINISTIC +
+    #: FILE/MODULE evaluator like ``coverage`` is execution, not static).
+    needs_project: bool = False
     default_absolute: AbsoluteThreshold
     default_regression: RegressionPolicy
     #: ``> 0`` => contributes to the weighted composite.
@@ -113,8 +119,14 @@ def register_evaluator(cls: type[Evaluator]) -> type[Evaluator]:
 
 
 def _load_builtins() -> None:
-    """Import the builtins package so each module's decorator fires."""
-    import coding_agent_playbook.evaluators.builtins  # noqa: F401
+    """Import the builtin packages so each module's decorator fires.
+
+    Imports both the static ``builtins`` package and the ``execution`` package so
+    the registry sees the execution evaluators (``test_pass_rate``, ``coverage``)
+    alongside the static metrics.
+    """
+    import coding_agent_playbook.evaluators.builtins
+    import coding_agent_playbook.evaluators.execution  # noqa: F401
 
 
 def _load_entry_points() -> dict[str, type[Evaluator]]:
@@ -141,11 +153,16 @@ def all_evaluators() -> list[Evaluator]:
 
 
 def static_evaluators() -> list[Evaluator]:
-    """Deterministic, non-MODULE-scope evaluators (ast/radon static metrics)."""
+    """Deterministic evaluators that need no runnable project (ast/radon).
+
+    Excludes execution evaluators (``needs_project=True``) - a DETERMINISTIC +
+    FILE-scope metric like ``coverage`` is *execution*, not static, so the scope
+    axis alone cannot tell them apart; ``needs_project`` is the discriminator.
+    """
     return [
         ev
         for ev in all_evaluators()
-        if ev.determinism is Determinism.DETERMINISTIC and ev.scope is not Scope.MODULE
+        if ev.determinism is Determinism.DETERMINISTIC and not ev.needs_project
     ]
 
 
