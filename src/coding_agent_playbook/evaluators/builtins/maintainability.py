@@ -65,7 +65,7 @@ class MaintainabilityIndex(Evaluator):
         """Emit one FILE-scope measurement (radon imported lazily here)."""
         if ctx.module is None:
             return []
-        from radon.metrics import mi_visit  # type: ignore[import-untyped]
+        from radon.metrics import mi_visit
 
         value = mi_visit(ctx.source, multi=True)
         return [

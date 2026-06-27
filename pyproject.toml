@@ -123,6 +123,14 @@ files = ["src", "tests"]
 module = "tests.*"
 disallow_untyped_defs = false
 
+# radon is an optional extra (the `metrics` group) and ships no type stubs, so it
+# is missing in the default `.[dev]` CI install. Ignore its imports unconditionally
+# — clean whether radon is present (untyped) or absent (not found), with no fragile
+# inline `# type: ignore` that flips between import-untyped/import-not-found.
+[[tool.mypy.overrides]]
+module = "radon.*"
+ignore_missing_imports = true
+
 # --- pytest ---
 
 [tool.pytest.ini_options]
