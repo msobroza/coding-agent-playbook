@@ -80,6 +80,23 @@ class Evaluator(ABC):
 
 **Registration:** in-tree `@register_evaluator` decorator (each builtin self-registers on import; `builtins/__init__` + `execution/__init__` import them); out-of-tree entry-point group `coding_agent_playbook.evaluators`. `all_evaluators()` / `static_evaluators()` / `deterministic_evaluators()` / `get_evaluator(name)` for selection. **Parse once** in `evaluators/parse.py` (`ModuleModel`, `parse_module`, the shared `_cyclomatic` helper, stable scope keys `…<label>::<qualname>` / `<label>`).
 
+### §A.1 — How the families are differentiated (no `kind` enum)
+
+The families (static metric · execution · judged/rubric · file-check) are **emergent from orthogonal axes**, not a single `type` field — the engine never switches on a "kind":
+
+| Family | `determinism` | `needs_project` | `value_kind` | `available(ctx)` needs | authoring block | examples |
+|---|---|---|---|---|---|---|
+| **static metric** (§B) | DETERMINISTIC | `False` | NUMERIC | source/AST (always) | `[metrics]` | `cyclomatic_complexity`, `maintainability_index` |
+| **execution** (§B2) | DETERMINISTIC | `True` | SCORE/NUMERIC | `ctx.project` | `[metrics]` | `test_pass_rate`, `coverage` |
+| **judged / rubric** (§B3) | JUDGED | `False` | SCORE | `ctx.judge` | `[rubric]` | `JudgedCriterion` |
+| **file check** | DETERMINISTIC | `False` | BOOL | source/files | `[expected]` | file-exists / regex |
+
+Two views of the same thing:
+- **Authoring** — you differentiate by **TOML block** (`[metrics]` / `[rubric]` / `[expected]`); `evaluators_for_task` (§D) compiles each block into `Evaluator` instances.
+- **Engine** — it reads the three axes above. Selection helpers *are* the partition: `static_evaluators()` = `DETERMINISTIC and not needs_project`; `deterministic_evaluators()` = `DETERMINISTIC` (static + execution); judged runs only when `ctx.judge` is set (so v1, with no judge, never runs it).
+
+**Why no enum:** "deterministic? needs to run code? needs a model?" are independent questions, so encoding them as separate fields keeps **one `grade()` path** (raw value → gate; `to_score()` → composite — a rubric score and a CC count flow through the same comparator), **routes by capability** (`available(ctx)`) instead of a type switch, and lets a new kind (e.g. a `needs_project` security scan) drop in by choosing axis values — no enum to extend.
+
 ---
 
 ## §B — Static metric evaluators (each owns its defaults)

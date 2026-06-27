@@ -2000,6 +2000,18 @@ class Evaluator(ABC):
 ```
 Every evaluator yields a **raw `Measurement` per scope** (feeds the threshold + non-regression *gate*) **and** a normalized **`to_score()` 0–1** (feeds the weighted *composite*). One registry, one `grade()`, one non-regression comparator — for static, execution, and judged alike. The `EvalContext` (`evaluators/types.py`) carries everything a family might need, decoupled: static reads `module`/`source`/`label`; execution reads `project`; judged reads `judge`/`artifact`/`samples`. `available(ctx)` lets each evaluator degrade gracefully when its slot or dependency is missing — the runner provides only what it can.
 **The static-vs-execution discriminator is `needs_project`, not the scope axis.** A DETERMINISTIC, FILE-scope evaluator like `coverage` is *execution*, not static, so scope alone cannot separate them; `needs_project=True` is the explicit flag. `static_evaluators()` excludes it.
+
+**How the families are differentiated — orthogonal axes, no `kind` enum.** The families below are *emergent* from three independent fields, so the engine never switches on a "type":
+
+| Family | `determinism` | `needs_project` | `value_kind` | `available(ctx)` needs | authoring block |
+|---|---|---|---|---|---|
+| static metric (§21.2.1) | DETERMINISTIC | `False` | NUMERIC | source/AST (always) | `[metrics]` |
+| execution (§21.2.2) | DETERMINISTIC | `True` | SCORE/NUMERIC | `ctx.project` | `[metrics]` |
+| judged / rubric (§21.2.3) | JUDGED | `False` | SCORE | `ctx.judge` | `[rubric]` |
+| file check | DETERMINISTIC | `False` | BOOL | source/files | `[expected]` |
+
+Authors differentiate by **TOML block** (`[metrics]` / `[rubric]` / `[expected]`), which `evaluators_for_task` compiles into evaluators (§21.6); the engine differentiates by the axes. Selection *is* the partition — `static_evaluators()` = `DETERMINISTIC and not needs_project`; `deterministic_evaluators()` = `DETERMINISTIC` (static + execution); judged runs only when `ctx.judge` is set. No `kind` enum exists because the distinctions are independent questions ("deterministic? needs to run code? needs a model?"): separate axes keep one `grade()` path, route by capability (`available(ctx)`) not a type switch, and let a new kind drop in by choosing axis values.
+
 ### 21.2 The three families
 | Authoring | Family | value kind | `determinism` / needs | primary use |
 | --- | --- | --- | --- | --- |
