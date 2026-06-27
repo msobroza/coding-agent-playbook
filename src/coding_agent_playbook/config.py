@@ -8,7 +8,10 @@ the in-memory shape.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from coding_agent_playbook.evaluators.types import MetricConfig
 
 
 @dataclass
@@ -88,3 +91,77 @@ class Config:
         if self.user_choices:
             result["user_choices"] = dict(self.user_choices)
         return result
+
+
+_VALID_METRIC_MODES = ("regression", "absolute", "both")
+
+
+def parse_metrics_config(data: dict[str, Any]) -> MetricConfig:
+    """Parse a ``[metrics]`` table (already decoded from TOML) into a
+    :class:`~coding_agent_playbook.evaluators.types.MetricConfig` (PR-M §E).
+
+    The table shape mirrors the dataclass::
+
+        [metrics]
+        mode = "regression"          # regression | absolute | both
+        fail_on_breach = true
+        strict = false
+        run_tests = false            # reserved for M4 (execution evaluators)
+        test_cmd = ["python", "-m", "pytest"]
+
+        [metrics.thresholds.cyclomatic_complexity]
+        warn = 10
+        fail = 20
+
+        [metrics.regression.coverage]
+        max_worsening = 0
+
+        [metrics.weights]
+        cyclomatic_complexity = 1.0
+
+    Unknown keys are ignored; ``thresholds``/``regression``/``weights`` are
+    per-evaluator-name dicts. The import is local to avoid a config→evaluators
+    import cycle (``evaluators.types`` is a leaf the command layer imports).
+    """
+    from coding_agent_playbook.evaluators.types import (
+        AbsoluteThreshold,
+        MetricConfig,
+        RegressionPolicy,
+    )
+
+    mode = data.get("mode", "regression")
+    if mode not in _VALID_METRIC_MODES:
+        raise ValueError(f"[metrics] mode must be one of {_VALID_METRIC_MODES!r}, got {mode!r}")
+
+    thresholds: dict[str, AbsoluteThreshold] = {}
+    for name, raw in (data.get("thresholds") or {}).items():
+        thresholds[name] = AbsoluteThreshold(
+            warn=_as_optional_float(raw.get("warn")),
+            fail=_as_optional_float(raw.get("fail")),
+        )
+
+    regression: dict[str, RegressionPolicy] = {}
+    for name, raw in (data.get("regression") or {}).items():
+        regression[name] = RegressionPolicy(max_worsening=float(raw.get("max_worsening", 0.0)))
+
+    weights: dict[str, float] = {
+        name: float(value) for name, value in (data.get("weights") or {}).items()
+    }
+
+    test_cmd_raw = data.get("test_cmd")
+    test_cmd = [str(part) for part in test_cmd_raw] if test_cmd_raw is not None else None
+
+    return MetricConfig(
+        mode=mode,
+        fail_on_breach=bool(data.get("fail_on_breach", True)),
+        strict=bool(data.get("strict", False)),
+        run_tests=bool(data.get("run_tests", False)),
+        test_cmd=test_cmd,
+        thresholds=thresholds,
+        regression=regression,
+        weights=weights,
+    )
+
+
+def _as_optional_float(value: Any) -> float | None:
+    return None if value is None else float(value)

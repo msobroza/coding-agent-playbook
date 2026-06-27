@@ -29,6 +29,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Optional code-quality extra (PR M): radon backs the maintainability_index
+# evaluator. Never a hard dep — imported lazily; the engine + static gate run
+# without it (the evaluator reports unavailable and is skipped).
+metrics = ["radon>=6.0"]
 dev = [
     "ruff>=0.8.0",
     "mypy>=1.13.0",
@@ -65,6 +69,10 @@ filesystem = "coding_agent_playbook.sources.filesystem:FileSystemStateSource"
 
 [project.entry-points."coding_agent_playbook.judges"]
 # Populated in v2 — see SPEC §15.4.
+
+[project.entry-points."coding_agent_playbook.evaluators"]
+# Out-of-tree code-quality evaluators (PR M). Engine builtins self-register via
+# the @register_evaluator decorator; this group is for third-party packages.
 
 # ----------------------------------------------------------------------------
 
@@ -114,6 +122,14 @@ files = ["src", "tests"]
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+
+# radon is an optional extra (the `metrics` group) and ships no type stubs, so it
+# is missing in the default `.[dev]` CI install. Ignore its imports unconditionally
+# — clean whether radon is present (untyped) or absent (not found), with no fragile
+# inline `# type: ignore` that flips between import-untyped/import-not-found.
+[[tool.mypy.overrides]]
+module = "radon.*"
+ignore_missing_imports = true
 
 # --- pytest ---
 

@@ -11,7 +11,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from coding_agent_playbook.evaluators.types import (
+    AbsoluteThreshold,
+    MetricConfig,
+    RegressionPolicy,
+)
+
+if TYPE_CHECKING:
+    from coding_agent_playbook.evaluators.registry import Evaluator
 
 # Tolerance for the rubric-weights sum check (SPEC §15.2 fifth rule).
 _WEIGHT_SUM_TOLERANCE = 1e-3
@@ -89,6 +98,11 @@ class EvalTask:
     invocation: TaskInvocation = field(default_factory=TaskInvocation)
     expected: ExpectedOutcome | None = None
     rubric: Rubric | None = None
+    #: Parsed top-level ``[metrics]`` block (SPEC prM §D) — a sibling of
+    #: ``expected``/``rubric``. ``None`` when the task declares no metrics. The
+    #: v1.1 runner compiles it (via :func:`evaluators_for_task`) into the static +
+    #: execution evaluators selected/policy'd here; v1 only parses + validates it.
+    metrics: MetricConfig | None = None
 
     @classmethod
     def from_dict(
@@ -102,7 +116,8 @@ class EvalTask:
 
         Required top-level fields: ``id``, ``prompt_id``, ``description``.
         Optional top-level: ``version``.
-        Optional sections: ``[setup]``, ``[invocation]``, ``[expected]``, ``[rubric]``.
+        Optional sections: ``[setup]``, ``[invocation]``, ``[expected]``,
+        ``[rubric]``, ``[metrics]``.
 
         Raises :exc:`ValueError` with a descriptive message on missing or
         malformed required fields. The loader catches these and wraps them
@@ -119,6 +134,7 @@ class EvalTask:
         invocation = _parse_invocation(data.get("invocation", {}))
         expected = _parse_expected(data["expected"]) if "expected" in data else None
         rubric = _parse_rubric(data["rubric"]) if "rubric" in data else None
+        metrics = _parse_metrics(data["metrics"]) if "metrics" in data else None
 
         return cls(
             id=task_id,
@@ -131,6 +147,7 @@ class EvalTask:
             invocation=invocation,
             expected=expected,
             rubric=rubric,
+            metrics=metrics,
         )
 
 
@@ -252,3 +269,122 @@ def _parse_rubric(raw: Any) -> Rubric:
             )
         weights = [float(w) for w in weights_raw]
     return Rubric(criteria=criteria, weights=weights)
+
+
+def _coerce_number(value: Any) -> Any:
+    """Coerce a TOML number to ``float``; pass anything else through unchanged.
+
+    Value-correctness (numeric-ness, valid ``mode``, known evaluator names) is
+    the validator's job — it aggregates violations rather than raising — so the
+    parser deliberately keeps non-numeric values intact for the validator to
+    flag, mirroring how rubric *weights* are checked at load but evaluator
+    *names* are checked at validate time.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return float(value)
+    return value
+
+
+def _parse_metrics(raw: Any) -> MetricConfig:
+    """Parse a top-level ``[metrics]`` table into a :class:`MetricConfig`.
+
+    Only the structural shape is enforced here (each block must be a table);
+    value-level checks — a valid ``mode``, numeric bounds/deltas, and known
+    evaluator names — live in the validator so every violation is aggregated
+    rather than the first one raising.
+    """
+    if not isinstance(raw, dict):
+        raise ValueError(f"[metrics] must be a table, got {type(raw).__name__}")
+
+    config = MetricConfig()
+    if "mode" in raw:
+        config.mode = raw["mode"]
+
+    thresholds_raw = raw.get("thresholds", {})
+    if not isinstance(thresholds_raw, dict):
+        raise ValueError(
+            f"[metrics.thresholds] must be a table, got {type(thresholds_raw).__name__}"
+        )
+    for name, entry in thresholds_raw.items():
+        if not isinstance(entry, dict):
+            raise ValueError(f"[metrics.thresholds.{name}] must be a table")
+        config.thresholds[str(name)] = AbsoluteThreshold(
+            warn=_coerce_number(entry.get("warn")),
+            fail=_coerce_number(entry.get("fail")),
+        )
+
+    regression_raw = raw.get("regression", {})
+    if not isinstance(regression_raw, dict):
+        raise ValueError(
+            f"[metrics.regression] must be a table, got {type(regression_raw).__name__}"
+        )
+    for name, entry in regression_raw.items():
+        if not isinstance(entry, dict):
+            raise ValueError(f"[metrics.regression.{name}] must be a table")
+        config.regression[str(name)] = RegressionPolicy(
+            max_worsening=_coerce_number(entry.get("max_worsening", 0.0)),
+        )
+
+    weights_raw = raw.get("weights", {})
+    if not isinstance(weights_raw, dict):
+        raise ValueError(f"[metrics.weights] must be a table, got {type(weights_raw).__name__}")
+    for name, value in weights_raw.items():
+        config.weights[str(name)] = _coerce_number(value)
+
+    return config
+
+
+def evaluators_for_task(
+    task: EvalTask,
+    config: MetricConfig | None,
+) -> list[Evaluator]:
+    """Compile a task's eval blocks into :class:`Evaluator` instances (SPEC prM §D).
+
+    This only **builds** the list — it runs nothing (the v1.1 ``HarnessRunner``
+    will route each evaluator by ``available(ctx)`` / ``determinism``):
+
+    - ``[metrics]`` → the registered static + execution evaluators named in the
+      config's ``thresholds``/``regression``/``weights`` (deduped, deterministic
+      order). The standalone ``playbook metrics`` gate uses the full
+      ``static_evaluators()`` set; an eval task instead opts into the specific
+      metrics it cares about, so only the named evaluators are compiled.
+    - ``[rubric]`` → one :class:`JudgedCriterion` per criterion, carrying its
+      weight (uniform ``1/len`` when ``weights`` is omitted). These are dormant
+      in v1 (``available()`` is ``False`` without a ``Judge``).
+    - ``[expected]`` → bool evaluators are intentionally **not** compiled here;
+      the existing :class:`ExpectedOutcome` file-checks remain as-is and the v1.1
+      runner keeps running them directly (left for a later track).
+
+    Importing ``JudgedCriterion`` and ``get_evaluator`` is the only coupling; the
+    v2 ``runner``/``judge`` placeholders are never imported or called.
+    """
+    from coding_agent_playbook.evaluators.judged import JudgedCriterion
+    from coding_agent_playbook.evaluators.registry import get_evaluator
+
+    evaluators: list[Evaluator] = []
+
+    if config is not None:
+        seen: set[str] = set()
+        for name in (*config.thresholds, *config.regression, *config.weights):
+            if name in seen:
+                continue
+            seen.add(name)
+            try:
+                evaluators.append(get_evaluator(name))
+            except KeyError:
+                # Unknown names are surfaced by the validator; skip here so the
+                # compiler never raises on an otherwise-loadable task.
+                continue
+
+    if task.rubric is not None and task.rubric.criteria:
+        criteria = task.rubric.criteria
+        if task.rubric.weights is not None:
+            weights = task.rubric.weights
+        else:
+            weights = [1.0 / len(criteria)] * len(criteria)
+        for criterion, weight in zip(criteria, weights, strict=True):
+            evaluators.append(JudgedCriterion(criterion, weight=weight))
+
+    return evaluators

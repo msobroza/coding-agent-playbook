@@ -16,6 +16,22 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      # The playbook — static code-quality gate (non-regression vs HEAD).
+      # STATIC ONLY: this never runs your test suite. Execution evaluators
+      # (`playbook metrics --run-tests`) are deliberately excluded from the
+      # default hook (side effects + cost) — wire them into CI instead.
+      # Caveat: it compares the *working-tree* file against HEAD (not the index),
+      # so a partially-staged file is diffed working-tree-against-HEAD. Fine for
+      # the common all-staged case (working tree == index).
+      # `language: system` (vs `language: python` in the engine's consumer-facing
+      # .pre-commit-hooks.yaml) keeps this air-gapped: it runs the `playbook`
+      # already on PATH instead of building a venv — intentionally different.
+      - id: coding-agent-playbook-metrics
+        name: coding-agent-playbook metrics (static)
+        entry: playbook metrics --baseline git:HEAD
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
       # Linting and formatting (ruff must be installed)
       - id: ruff
         name: ruff (lint + autofix)

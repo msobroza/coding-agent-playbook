@@ -1,14 +1,15 @@
 # SPEC.md — coding-agent-playbook
 | Field | Value |
 | --- | --- |
-| Version | 0.8 (draft) |
+| Version | 0.9 (draft) |
 | Status | Proposed |
-| Last updated | 2026-06-26 |
+| Last updated | 2026-06-27 |
 | Authors | Max Pereira, with Claude |
 | Audience | Implementers, reviewers, future contributors |
 | License | Apache-2.0 (engine); organization overlays may be private |
 
 **Changelog**
+- **0.9** — Code-quality evaluator subsystem (PR M): one `Evaluator` abstraction with three families — static metrics (CC/WMC/LCOM4/DIT/CBO≈ via `ast`, MI via the optional `radon` extra), execution metrics (`test_pass_rate`/`coverage`, shelling out to the target's `pytest`), and judged criteria (the rubric, generalized; dormant until v1.1) — plus the standalone `playbook metrics` gate + a `repo: local` static pre-commit hook, and dormant eval `[metrics]` wiring (§21).
 - **0.8** — Agent Harness round-trip support (PR H): the opt-in `agent_harness` output adapter (§10.7), the `playbook import-harness` / `playbook validate-harness` subcommands (§12.9, §12.10), and the `.playbook/manifest.toml` round-trip sidecar (§20.10).
 - **0.7** — Storage source abstraction (§20), ML serialization-security guideline, air-gapped pre-commit.
 ---
@@ -1971,6 +1972,116 @@ The sidecar stores the **full canonical reconstruction payload**, not merely "no
 Because each entry carries the whole payload, `import-harness` reconstructs each artifact via `from_dict` **independently of how the leaf rendered or inlined things** — the leaf files exist only for harness clients; the sidecar is the source of truth. When the sidecar is absent (a foreign harness), the importer falls back to best-effort structural inference and surfaces the lossiness (§12.9).
 ### 20.11 Out of scope: the harness client runtime
 The Agent Harness spec also defines a **client runtime contract** — `load_content` / `run_script` and the four loading phases (Load → Discovery → Activation → Execution). The playbook intentionally does **not** implement that runtime. It produces harness files (the `agent_harness` adapter), consumes them (`import-harness`), and validates their structure (`validate-harness`), but it is not a harness *client*: it never injects `HARNESS.md` into a session, reads routing files at runtime, or executes scripts. Modeling the full client runtime is future work; for v1 the `validate-harness` lint is the structural stand-in for runtime conformance (decision #3 in `specs/prH-agent-harness.md` §D).
+## 21. Code-quality evaluator subsystem
+Added in PR M. This section adds a code-quality measurement engine — static metrics, execution metrics (tests/coverage), and a generalized rubric — behind one abstraction, plus a standalone `playbook metrics` gate and a static pre-commit hook. It is purely additive: it touches none of the sync pipeline, ships no new hard dependency, and leaves the v2 eval ABCs (§15) inert. The authoritative design is `specs/prM-code-metrics.md`; the as-built lives in `src/coding_agent_playbook/evaluators/` and `commands/metrics.py`.
+### 21.1 The one abstraction: `Evaluator`
+A rubric criterion, a code metric, a coverage number, and a test-pass rate are all the same thing — a **graded measurement over a scope** — differing only in *who* produces the value, the *value kind*, and *how* it is used. The subsystem models this with a single ABC (`evaluators/registry.py`):
+```python
+class Scope(Enum):       FUNCTION; METHOD; CLASS; FILE; MODULE   # MODULE = the whole target/suite
+class ValueKind(Enum):   NUMERIC; SCORE; BOOL                     # SCORE/BOOL already 0–1 / 0|1
+class Determinism(Enum): DETERMINISTIC; JUDGED                    # regression semantics + v1/v1.1 routing
+
+class Evaluator(ABC):
+    name: str
+    scope: Scope
+    value_kind: ValueKind
+    determinism: Determinism
+    higher_is_worse: bool                 # CC/WMC/CBO/DIT/LCOM4 True; MI/coverage/test/SCORE False
+    requires: str | None = None           # optional importable dep (e.g. "radon"); None = stdlib
+    needs_project: bool = False           # True => execution evaluator (needs ctx.project)
+    default_absolute: AbsoluteThreshold
+    default_regression: RegressionPolicy
+    default_weight: float = 0.0           # > 0 => contributes to the weighted composite
+
+    def available(self, ctx: EvalContext) -> bool: ...           # deps importable AND the needed slot present
+    @abstractmethod
+    def evaluate(self, ctx: EvalContext) -> list[Measurement]: ...  # one Measurement per scope
+    def to_score(self, value: float, policy: ResolvedPolicy) -> float: ...  # raw → 0–1 (higher = better)
+```
+Every evaluator yields a **raw `Measurement` per scope** (feeds the threshold + non-regression *gate*) **and** a normalized **`to_score()` 0–1** (feeds the weighted *composite*). One registry, one `grade()`, one non-regression comparator — for static, execution, and judged alike. The `EvalContext` (`evaluators/types.py`) carries everything a family might need, decoupled: static reads `module`/`source`/`label`; execution reads `project`; judged reads `judge`/`artifact`/`samples`. `available(ctx)` lets each evaluator degrade gracefully when its slot or dependency is missing — the runner provides only what it can.
+**The static-vs-execution discriminator is `needs_project`, not the scope axis.** A DETERMINISTIC, FILE-scope evaluator like `coverage` is *execution*, not static, so scope alone cannot separate them; `needs_project=True` is the explicit flag. `static_evaluators()` excludes it.
+### 21.2 The three families
+| Authoring | Family | value kind | `determinism` / needs | primary use |
+| --- | --- | --- | --- | --- |
+| `[metrics]` CC, WMC, MI, LCOM4, DIT, CBO≈ | **static** | NUMERIC | DETERMINISTIC · `ctx.module` (`ast`/`radon`) | threshold + **non-regression** |
+| `[metrics]` `test_pass_rate`, `coverage` | **execution** | SCORE / NUMERIC | DETERMINISTIC · `ctx.project` (shells out to `pytest`) | threshold + **non-regression** |
+| `[rubric]` criteria + weights | **judged** | SCORE 0–1 | JUDGED · `ctx.judge` (LLM/human) | weighted composite + non-regression (tolerance) |
+#### 21.2.1 Static metrics (`evaluators/builtins/`)
+Source is parsed **once** into a `ModuleModel` (`evaluators/parse.py`, which also owns the shared `_cyclomatic` helper and the stable scope keys `<label>::<qualname>` / `<label>`); each available static evaluator reads that model. All are stdlib-`ast`-only except MI, which is the lone radon-backed one.
+| `name` | scope | `higher_is_worse` | `default_absolute` | `default_regression` | requires |
+| --- | --- | --- | --- | --- | --- |
+| `cyclomatic_complexity` | FUNCTION/METHOD | true | `warn=10, fail=20` | `max_worsening=0` | — |
+| `wmc` | CLASS | true | `fail=50` | `max_worsening=0` | — |
+| `lcom4` | CLASS | true | `warn=2` | `max_worsening=0` | — |
+| `dit` | CLASS | true | `warn=5` | `max_worsening=0` | — |
+| `cbo` (≈) | CLASS | true | `warn=14` | `max_worsening=0` | — |
+| `maintainability_index` | FILE | **false** | `fail=65` | `max_worsening=0` | `radon` |
+Algorithms: **CC** = 1 + decision points (`If/For/AsyncFor/While`, comprehension `if`s, `BoolOp` operands−1, `ExceptHandler`, `IfExp`, `match` guards, `assert`); **WMC** = Σ of method CC; **LCOM4** = connected components of the method graph (shared `self.x` attr or `self.m()` call); **DIT** = longest resolvable base chain (external base = depth 1); **CBO≈** = distinct external types referenced (labeled approximate — undercounts under duck typing); **MI** = `radon.metrics.mi_visit(source, multi=True)`, the SEI 0–100 variant. `maintainability_index` is the engine's only optional extra (`pip install 'coding-agent-playbook[metrics]'`): it self-registers like every builtin, but radon is imported **lazily inside `evaluate`** and `available()` returns `False` when radon is absent, so the gate transparently skips MI and the engine still loads air-gapped with nothing extra installed.
+#### 21.2.2 Execution metrics (`evaluators/execution/`)
+Deterministic, but they need to **run the target's test suite**, so they add **no playbook dependency**: a `ProjectHandle` (`execution/project.py`) runs a configurable command (default `python -m pytest --junitxml=… --cov --cov-report=xml:… -q`) in the target, and the evaluators parse the standard **junit XML** + **coverage XML** with stdlib `xml.etree.ElementTree` (`execution/junit.py`, `execution/coverage_xml.py`). The target supplies `pytest`/`pytest-cov`.
+| `name` | scope | value_kind | `higher_is_worse` | `default_absolute` | `default_regression` | needs |
+| --- | --- | --- | --- | --- | --- |
+| `test_pass_rate` | MODULE (suite) | SCORE (passed/total) | false | `fail=1.0` (all must pass) | `max_worsening=0` (no new failures) | `ctx.project` |
+| `coverage` | FILE (+MODULE total) | NUMERIC (% 0–100) | false | `warn=80` | `max_worsening=0` (must not drop) | `ctx.project` |
+- **One run, both evaluators:** `ProjectHandle.run()` executes the suite once and caches the parsed junit + coverage reports; both evaluators read that cache (no double run).
+- **Flaky tolerance:** `test_pass_rate` is DETERMINISTIC but supports an optional flaky-retry (`ProjectHandle.flaky_retries`; reruns and takes the best observed pass rate); off (`0`) by default.
+- **Non-regression needs two runs.** Standalone with `--baseline git:<ref>` materialises the ref via a temporary `git worktree add` (heavier than the static `git show`); `--baseline <dir>` runs the suite there. Absolute mode (single run on the current tree) is the lighter default.
+- **Opt-in & cost-gated:** running tests has side effects and cost, so execution evaluators are opt-in (`--run-tests`) and are **excluded from the default pre-commit hook** — it stays static-only.
+#### 21.2.3 Judged criteria — the rubric, generalized (`evaluators/judged.py`)
+A rubric criterion is just another evaluator: a graded SCORE whose value comes from a *judge* (LLM/human). `JudgedCriterion` is **parameterized**, not a registered singleton — the eval block-compiler instantiates one per rubric line, each carrying its own `criterion` text and `weight` (`name = "judged:<slug>"`, `scope=FILE`, `value_kind=SCORE`, `determinism=JUDGED`, `higher_is_worse=False`). Because judged scores are stochastic, the default `RegressionPolicy.max_worsening` is a small tolerance band (`0.1`) rather than the deterministic exact `0.0`, and `evaluate` averages over `ctx.samples` to damp LLM noise. It is **dormant in v1**: `available()` returns `True` only when `ctx.judge` is set, and no judge is wired, so the runner never runs it.
+> **Forward-compat caveat — Judge signature mismatch.** `JudgedCriterion.evaluate` duck-types its judge as `ctx.judge.score(self.criterion, ctx.artifact, n=samples) -> float` (deliberately *not* importing the v2 `Judge` placeholder, which raises `NotImplementedError`). The real v2 ABC in `evals/judge.py` declares `Judge.score(rubric: Rubric, transcript: str, scratch_dir_state: dict[str, str]) -> list[float]` — a different shape (whole-rubric vs single-criterion, list vs scalar, different positional args). These **must be reconciled when the v1.1 judge/runner land**: either the judged evaluator adopts the `Judge` ABC and the per-criterion call becomes a slice of the per-rubric result, or an adapter bridges the two. Tests exercise `JudgedCriterion` only via a stub judge matching the duck-typed shape.
+### 21.3 Registry — decorator + entry points
+In-tree builtins self-register via the `@register_evaluator` class decorator (each `builtins/*` and `execution/*` module decorates its class; `builtins/__init__` and `execution/__init__` import them so the decorators fire). Out-of-tree evaluators register through the `coding_agent_playbook.evaluators` entry-point group; **in-tree builtins win** over an entry point reusing a registered name. The list is never hardcoded. Selection helpers:
+- `all_evaluators()` — builtins + entry points, deduped by name.
+- `static_evaluators()` — DETERMINISTIC **and** `not needs_project` (the `playbook metrics` default set).
+- `deterministic_evaluators()` — every DETERMINISTIC evaluator (static + execution); `--run-tests` filters this to `needs_project` ones.
+- `get_evaluator(name)` — a fresh instance, or `KeyError`.
+### 21.4 Grade — gate + weighted composite (`evaluators/grade.py`)
+`grade(candidate, baseline | None, policy: GradePolicy) -> EvaluationReport`. `GradePolicy` is a `Protocol` (`mode`, `strict`, and per-evaluator `thresholds`/`regression`/`weights` dicts) so `grade()` never depends on a concrete config; both the standalone `MetricConfig` and the eval block-compiler satisfy it. Per candidate `Measurement`, the effective policy is resolved (`evaluator.default_*` overridden by config) and the baseline matched by `(evaluator, scope_key)`:
+- **existing scope:** `worsening = (cand − base)` if `higher_is_worse` else `(base − cand)`; `> max_worsening` ⇒ `fail`/`kind="regression"`; otherwise the absolute level.
+- **new scope:** absolute only, `kind="new"`. **removed scope:** ignored.
+**Gate-boundary semantics** are asymmetric and aligned with `to_score`: on the **higher-is-worse** side the bound is **inclusive** (`value >= bound` breaches — CC of exactly `20` fails); on the **higher-is-better** side it is **strict** (`value < bound` breaches — coverage of exactly `80` is `ok`, `test_pass_rate` of exactly `1.0` is `ok` even with `fail=1.0` meaning "all must pass").
+Two aggregates fall out of one pass: the **gate** (`passed = no fail`, and warnings fail only under `strict`) and the **composite** (weighted mean of `to_score()` over evaluators with `weight > 0`, spanning all three families uniformly; `None` when no weights are set). Modes: `regression` (default), `absolute`, `both` (regression failure takes precedence, then absolute).
+### 21.5 Standalone gate — `playbook metrics` (`commands/metrics.py`)
+```
+playbook metrics [PATHS…] [--baseline git:REF|DIR] [--mode regression|absolute|both]
+                 [--strict] [--run-tests] [--test-cmd "…"]
+                 [--format text|json] [--repo-root DIR]
+```
+- **Default targets** — the repo's `src/` if it exists, else the repo root; directories recurse for `*.py`, skipping dotdirs and common ignores (`__pycache__`, `.venv`, `venv`, `node_modules`, `build`, `dist`, `.git`, `.tox`, `.mypy_cache`).
+- **Default evaluators** — `static_evaluators()` (fast, air-gapped). `--run-tests` (or `[metrics] run_tests`) additionally builds a `ProjectHandle` and runs the execution evaluators once.
+- **Baseline** — static via `git show <ref>:<relpath>` (`git:` form) or the matching relative file under a `<dir>`; a file missing from the baseline is treated all-new. Execution baseline via temp `git worktree` (`git:`) or running in `<dir>`. `regression`/`both` without a baseline degrade to `absolute` with a note.
+- **Config** — a `[metrics]` table in `.coding-agent-playbook.toml` (parsed by `config.parse_metrics_config` into a `MetricConfig`); CLI flags override it.
+- **Exit codes** — `0` pass; `1` when `report.passed` is `False` and `fail_on_breach`; `2` on usage errors (bad path, bad baseline ref/dir, unparseable `--test-cmd`, malformed/invalid `[metrics]` config).
+- **Output** — `--format text` shows only `warn`/`fail` findings grouped by file plus a summary; `--format json` includes every finding (`ok` too) for machine consumption.
+**Pre-commit:** the engine ships a `repo: local`, `language: python` hook `playbook-metrics` running `playbook metrics --baseline git:HEAD` — **static only**, never the suite. Execution non-regression belongs in CI or a separate, off-by-default hook. (The hook diffs the working tree against `HEAD`, not the index, which is exact for the common all-staged case.)
+### 21.6 Eval `[metrics]` wiring — dormant until v1.1
+The eval task schema (§15) gains a top-level `[metrics]` block, a **sibling of `[expected]`/`[rubric]`**, parsed into `EvalTask.metrics: MetricConfig | None` (`evals/task.py`) and validated in v1 (`evals/validator.py` rule 7: a valid `mode`, every named evaluator registered — static **or** execution like `coverage`/`test_pass_rate` — and numeric bounds/deltas/weights; violations are aggregated, never raised). `evaluators_for_task(task, config)` compiles the blocks into `Evaluator` instances — `[metrics]` → the named static + execution evaluators (deduped), `[rubric]` → one `JudgedCriterion` per criterion (uniform `1/len` weights when omitted) — but it **only builds the list, runs nothing**. `[expected]` → bool evaluators is deferred; the existing `ExpectedOutcome` file-checks stay as-is.
+```toml
+# task.toml — [metrics] sibling of [expected]/[rubric]
+[metrics]
+mode = "regression"
+[metrics.regression]
+cyclomatic_complexity = { max_worsening = 0 }
+coverage              = { max_worsening = 0 }   # coverage must not drop
+test_pass_rate        = { max_worsening = 0 }   # no newly-failing tests
+[rubric]
+criteria = ["Findings prioritized correctly", "Each finding proposes a concrete fix"]
+weights  = [0.5, 0.5]
+```
+v1 parses + validates these blocks; the v1.1 `HarnessRunner` will execute them through the *same* registry and `grade()` (static + execution against `setup/`-vs-output, judged via the `Judge`), producing the gate + composite. Until then nothing calls the v2 runner/judge placeholders.
+### 21.7 Invariants
+- **Air-gapped / no new hard deps.** Core is stdlib-only (`ast`, `dataclasses`, `enum`, `subprocess`, `xml.etree`, `tempfile`, `importlib.metadata`); `radon` is the only optional extra (`[metrics]`, lazy import via `available()`); execution evaluators shell out to the *target's* `pytest` and parse XML with stdlib — no playbook dep. The engine + static `playbook metrics` run with nothing extra installed.
+- **Registry via decorator AND entry points** (`coding_agent_playbook.evaluators`); never hardcode the evaluator list; never instantiate out-of-tree evaluators directly.
+- **Non-regression is primary** (new scopes fall back to absolute). Deterministic static/execution compare exactly (`max_worsening=0`); judged uses a tolerance band (`≈0.1`) + n-sample averaging; `test_pass_rate` has an optional flaky-retry.
+- **Execution is opt-in and excluded from the default pre-commit** (side effects + cost); the static gate is the only thing that runs on every commit.
+- **No generated files** ⇒ no sentinel concerns. The v2 eval ABCs (§15) stay inert: judged/execution eval-output wiring is dormant in v1, and nothing calls the placeholder runner/judge.
+- **CI parity** — `mypy` + `pytest -q` + `ruff` from the repo root with no path args.
+### 21.8 Open caveats (documented, not blocking)
+- **CBO≈** undercounts under duck typing (rendered approximate); **DIT** cross-module bases are approximated and low-signal in idiomatic Python; **MI** variant is pinned (SEI 0–100); **RFC/NOC/Abstractness/Distance/LCOM1-2/standalone Halstead** are intentionally absent.
+- **Execution cost/flakiness:** running tests is slow and can be flaky; test non-regression is exact only modulo flaky-retry; coverage non-regression assumes a stable test set. The two-run baseline (`git worktree`) is the cost.
+- **Judged non-regression is stochastic** — meaningful only with the tolerance band + ≥N samples; single-sample judged regression is advisory.
+- **Judge signature reconciliation** (see §21.2.3) is the one known forward-compat debt for the v1.1 judge.
 ## Appendix A: Full worked example
 Walking through `risk-models`, a counterparty risk scoring service, going from zero to a fully synced playbook.
 ### A.1 Starting state
@@ -2167,9 +2278,16 @@ Notes on sequencing:
 - **Track 5b (Eval Tier 0)** lands after the main CLI because it adds CLI subcommands and one new validator pass. It is independent of the adapters — eval tasks are authoring-side artifacts and don't flow through any adapter.
 - The source abstraction and the canonical types together add maybe two days of work to the early tracks but pay for themselves in test simplicity from PR 6 onward, and in clean serialization boundaries when the commercial product arrives.
 ---
-*End of SPEC.md v0.8.*
+*End of SPEC.md v0.9.*
 ---
 ## Changelog
+### v0.9 (2026-06-27)
+Code-quality evaluator subsystem added (PR M). A single `Evaluator` abstraction unifies static metrics, execution metrics, and judged criteria; a standalone `playbook metrics` gate + static pre-commit hook ship now; eval `[metrics]` wiring is parsed/validated but dormant until v1.1. Purely additive — no new hard dependency, no edits to the sync pipeline, and the v2 eval ABCs (§15) stay inert.
+- **Section 21 (NEW)**: the evaluator subsystem. The `Evaluator` ABC + `Scope`/`ValueKind`/`Determinism` axes (21.1); the three families — static (CC/WMC/LCOM4/DIT/CBO≈ via `ast`, MI via the optional `radon` extra), execution (`test_pass_rate`/`coverage`, shelling out to the target's `pytest` and parsing junit/coverage XML with stdlib), and judged (`JudgedCriterion`, dormant) — with per-evaluator default tables (21.2); the `@register_evaluator` decorator + `coding_agent_playbook.evaluators` entry-point group + `static/deterministic_evaluators()` selection (21.3); `grade()` gate + weighted composite with the inclusive/strict gate-boundary semantics and the non-regression comparator (21.4); the `playbook metrics` command, flags, exit codes, `[metrics]` config, and the `repo: local` static pre-commit hook (21.5); the eval `[metrics]` block (sibling of `[rubric]`), `EvalTask.metrics`, `evaluators_for_task`, and validator rule 7 (21.6); invariants (21.7) and open caveats incl. the forward-compat `Judge.score` signature mismatch (21.2.3 / 21.8).
+- **Section 15 (eval)**: the eval-task schema gains a top-level `[metrics]` block parsed into `EvalTask.metrics`; validated in v1, executed by the v1.1 runner via `evaluators_for_task` against the same registry + `grade()`. The `[expected]` → bool-evaluator compilation is deferred.
+- **`pyproject.toml`**: new `[project.optional-dependencies] metrics = ["radon>=6.0"]` extra (backs `maintainability_index` only; lazy-imported) and the `coding_agent_playbook.evaluators` entry-point group (empty in-tree; for third-party evaluators).
+- **Implementation**: `evaluators/` package (`registry`, `types`, `scope`, `parse`, `grade`, `judged`, `builtins/*`, `execution/*`) + `commands/metrics.py` + `config.parse_metrics_config` + the `playbook-metrics` hook in `.pre-commit-hooks.yaml`, with tests. See `specs/prM-code-metrics.md` (tracks M1–M6).
+
 ### v0.8 (2026-06-26)
 Agent Harness round-trip support added (the [agentharnesses.io](https://agentharnesses.io/specification) format) as a fifth, opt-in output target plus a reverse importer and a structural validator. Authoring and the existing four adapters are unchanged; the new surface is purely additive (no edits to `types.py`, `renderer.py`, or `orchestrator.py`).
 - **Section 10.7 (NEW)**: the `agent_harness` output adapter. Renders canonical `Rule`/`Prompt`/`Skill` into a `HARNESS.md`-rooted tree (`skills/`, `prompts/`, `rules/`, `references/`, `.leaf-detectors`, `.playbook/`). Opt-in via `adapters_enabled`. Eval tasks are not emitted (no eval hook on the adapter ABC). Documents the sentinel-as-first-body-line nuance (frontmatter must be line 1) and the custom `cleanup_stale`.
