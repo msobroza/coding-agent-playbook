@@ -12,6 +12,7 @@ from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from coding_agent_playbook import _toml
 from coding_agent_playbook.config import Config
 from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
@@ -56,39 +57,13 @@ def _format_toml_scalar(value: Any) -> str:
     """Render a scalar Python value as a TOML literal.
 
     Supports the value shapes Config/Lockfile produce: str, bool, int, and
-    lists of those. Reject anything else with TypeError so future Config-shape
-    changes fail loudly rather than silently producing invalid TOML.
+    lists of those. Dicts are *not* supported here (the flat Config/Lockfile
+    layout never nests scalars); they fall through to ``TypeError`` like any
+    other unsupported type. Delegates to :mod:`coding_agent_playbook._toml` for
+    the shared escape ladder, preserving the historical ``_dump_toml …`` error
+    wording so callers and tests see no behaviour change.
     """
-    # bool must come before int — `isinstance(True, int)` is True in Python.
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, str):
-        # tomllib rejects unescaped control chars (U+0000 through U+001F) in
-        # basic strings. Escape the special-named ones inline and fall back to
-        # \uXXXX for the rest so the emitted TOML is always parseable.
-        out: list[str] = ['"']
-        for ch in value:
-            if ch == "\\":
-                out.append("\\\\")
-            elif ch == '"':
-                out.append('\\"')
-            elif ch == "\n":
-                out.append("\\n")
-            elif ch == "\r":
-                out.append("\\r")
-            elif ch == "\t":
-                out.append("\\t")
-            elif ord(ch) < 0x20:
-                out.append(f"\\u{ord(ch):04X}")
-            else:
-                out.append(ch)
-        out.append('"')
-        return "".join(out)
-    if isinstance(value, list):
-        return "[" + ", ".join(_format_toml_scalar(item) for item in value) + "]"
-    raise TypeError(f"_dump_toml does not support value of type {type(value).__name__}: {value!r}")
+    return _toml.format_scalar(value, type_error_prefix="_dump_toml")
 
 
 def _dump_toml(data: dict[str, Any]) -> str:
