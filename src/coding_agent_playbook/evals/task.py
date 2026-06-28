@@ -27,24 +27,6 @@ if TYPE_CHECKING:
 # Tolerance for the rubric-weights sum check (SPEC §15.2 fifth rule).
 _WEIGHT_SUM_TOLERANCE = 1e-3
 
-#: Per-metric default grading policy, ported verbatim from the ``Evaluator``
-#: builtins' ``default_absolute``/``default_regression`` class constants
-#: (``registry.resolve_policy`` read those when ``[metrics]`` omitted an
-#: override). The ``Check`` layer carries the policy on the *check*, not the
-#: metric, so :func:`rubric_for_task` falls back to these when ``config`` has no
-#: override for a metric — keeping the gate verdict identical to ``grade()``.
-#: ``(warn, fail, max_worsening)``; ``None`` means "no bound at that stage".
-_METRIC_DEFAULTS: dict[str, tuple[float | None, float | None, float]] = {
-    "cyclomatic_complexity": (10.0, 20.0, 0.0),
-    "wmc": (None, 50.0, 0.0),
-    "lcom4": (2.0, None, 0.0),
-    "dit": (5.0, None, 0.0),
-    "cbo": (14.0, None, 0.0),
-    "maintainability_index": (None, 65.0, 0.0),
-    "coverage": (80.0, None, 0.0),
-    "test_pass_rate": (None, 1.0, 0.0),
-}
-
 
 @dataclass
 class TaskSetup:
@@ -450,8 +432,10 @@ def rubric_for_task(task: EvalTask, config: MetricConfig | None) -> CheckRubric:
       metric named in ``config``'s ``thresholds``/``regression``/``weights``
       (deduped, deterministic order). The check's ``mode`` is ``config.mode``;
       its absolute/regression policy is the ``config`` override when present,
-      else the metric's ported default (:data:`_METRIC_DEFAULTS`) — so the gate
-      verdict matches ``grade()``'s ``resolve_policy`` exactly. Weight is
+      else the metric's ported default
+      (:data:`~coding_agent_playbook.evaluators.policy.METRIC_DEFAULTS`) — so the
+      gate verdict matches the retired ``grade()``'s ``resolve_policy`` exactly.
+      Weight is
       ``config.weights.get(name, 0.0)``; ``required=True`` (a metric breach
       gates). Unknown metric names are skipped (the validator surfaces them),
       mirroring :func:`evaluators_for_task`.
@@ -476,6 +460,7 @@ def rubric_for_task(task: EvalTask, config: MetricConfig | None) -> CheckRubric:
         FileUnchangedCheck,
     )
     from coding_agent_playbook.evaluators.checks.judged import JudgeCheck
+    from coding_agent_playbook.evaluators.policy import metric_check
     from coding_agent_playbook.evaluators.rubric import Rubric as CheckRubricImpl
 
     checks: list[Check] = []
@@ -486,7 +471,7 @@ def rubric_for_task(task: EvalTask, config: MetricConfig | None) -> CheckRubric:
             if name in seen:
                 continue
             seen.add(name)
-            check = _metric_check(name, config)
+            check = metric_check(name, config)
             if check is not None:
                 checks.append(check)
 
@@ -511,58 +496,3 @@ def rubric_for_task(task: EvalTask, config: MetricConfig | None) -> CheckRubric:
             checks.append(FileForbiddenCheck(rel))
 
     return CheckRubricImpl(checks, name=task.id)
-
-
-def _metric_check(name: str, config: MetricConfig) -> Check | None:
-    """Build the metric-backed :class:`Check` for ``name`` under ``config``.
-
-    Resolves the metric via :func:`get_metric` (``None`` when the name is
-    unknown, so the caller skips it like :func:`evaluators_for_task` does). The
-    absolute warn/fail bounds and regression tolerance come from ``config``'s
-    per-metric override when present, else the metric's ported default
-    (:data:`_METRIC_DEFAULTS`) so the resulting check grades exactly as
-    ``grade()``'s ``resolve_policy`` did. ``config.mode`` picks the check family:
-    ``"regression"`` → :class:`NonRegressionCheck`, ``"absolute"``/``"both"`` →
-    :class:`ThresholdCheck` (``mode="both"`` lets a regression fail before the
-    absolute bound, matching ``grade()``'s ``_decide``).
-    """
-    from coding_agent_playbook.evaluators.check import (
-        NonRegressionCheck,
-        ThresholdCheck,
-    )
-    from coding_agent_playbook.evaluators.metric import get_metric
-
-    try:
-        metric = get_metric(name)
-    except KeyError:
-        # Unknown names are surfaced by the validator; skip here so the compiler
-        # never raises on an otherwise-loadable task.
-        return None
-
-    default_warn, default_fail, default_worsening = _METRIC_DEFAULTS.get(name, (None, None, 0.0))
-    absolute = config.thresholds.get(name)
-    warn = absolute.warn if absolute is not None else default_warn
-    fail = absolute.fail if absolute is not None else default_fail
-    regression = config.regression.get(name)
-    max_worsening = regression.max_worsening if regression is not None else default_worsening
-    weight = config.weights.get(name, 0.0)
-
-    if config.mode == "regression":
-        return NonRegressionCheck(
-            metric,
-            max_worsening=max_worsening,
-            warn=warn,
-            fail=fail,
-            weight=weight,
-            required=True,
-        )
-    # "absolute" or "both": a ThresholdCheck whose mode flags whether a baseline
-    # regression also gates (only under "both").
-    return ThresholdCheck(
-        metric,
-        warn=warn,
-        fail=fail,
-        weight=weight,
-        required=True,
-        mode=config.mode,
-    )

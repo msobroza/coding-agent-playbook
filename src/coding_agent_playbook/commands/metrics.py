@@ -1,13 +1,26 @@
 """``playbook metrics`` — standalone code-quality gate (PR-M Tracks M3 + M4).
 
-Measures the static evaluators (cyclomatic complexity, maintainability index,
-WMC, LCOM4, DIT, CBO≈) over a set of Python files, optionally diffing against a
-baseline (a git ref or a directory), grades the result with
-:func:`~coding_agent_playbook.evaluators.grade.grade`, and exits non-zero on a
-breach — mirroring ``playbook check``'s convention. With ``--run-tests`` it also
-runs the **execution** evaluators (``test_pass_rate``, ``coverage``), which shell
-out to the target's ``pytest``; execution is opt-in (side effects/cost) and is
-**not** in the default pre-commit hook.
+Measures the static metrics (cyclomatic complexity, maintainability index, WMC,
+LCOM4, DIT, CBO≈) over a set of Python files, optionally diffing against a
+baseline (a git ref or a directory), grades the result through the
+:class:`~coding_agent_playbook.evaluators.metric.Metric` /
+:class:`~coding_agent_playbook.evaluators.check.Check` /
+:class:`~coding_agent_playbook.evaluators.rubric.Rubric` stack, and exits non-zero
+on a breach — mirroring ``playbook check``'s convention. With ``--run-tests`` it
+also runs the **execution** metrics (``test_pass_rate``, ``coverage``), which
+shell out to the target's ``pytest``; execution is opt-in (side effects/cost) and
+is **not** in the default pre-commit hook.
+
+The gate is one :class:`Rubric` of metric-backed checks (one per metric in the
+gated set), built through the shared
+:func:`coding_agent_playbook.evaluators.policy.metric_check` factory the eval-task
+compiler also uses — so the standalone gate and an eval task's ``[metrics]`` block
+grade with identical per-metric policy. The gated set is the full
+:func:`~coding_agent_playbook.evaluators.metric.static_metrics` set (plus
+:func:`~coding_agent_playbook.evaluators.metric.execution_metrics` under
+``--run-tests``), each check carrying ``config``'s per-metric threshold /
+regression / weight override when present, else the metric's ported default — the
+faithful successor to the retired ``grade()`` over the full measured set.
 
 Usage::
 
@@ -53,6 +66,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+from contextlib import ExitStack
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -62,17 +76,21 @@ from coding_agent_playbook.evaluators import (
     EvalContext,
     Measurement,
     MetricConfig,
-    deterministic_evaluators,
-    grade,
     parse_module,
-    static_evaluators,
 )
+from coding_agent_playbook.evaluators.check import MeasurementSet
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle
+from coding_agent_playbook.evaluators.metric import execution_metrics, static_metrics
+from coding_agent_playbook.evaluators.policy import metric_check
+from coding_agent_playbook.evaluators.rubric import Rubric
+from coding_agent_playbook.evaluators.types import ScopeDetail
 
 if TYPE_CHECKING:
     import argparse
 
-    from coding_agent_playbook.evaluators import EvaluationReport, Evaluator, Finding
+    from coding_agent_playbook.evaluators import EvaluationReport
+    from coding_agent_playbook.evaluators.check import Check
+    from coding_agent_playbook.evaluators.metric import Metric
 
 
 _CONFIG_FILENAME = ".coding-agent-playbook.toml"
@@ -84,6 +102,9 @@ _IGNORED_DIRS = frozenset(
 
 _VALID_MODES = ("regression", "absolute", "both")
 _VALID_FORMATS = ("text", "json")
+
+#: The name the Rubric carries (stable per-run; metrics has one rubric).
+_RUBRIC_NAME = "metrics"
 
 
 class _UsageError(Exception):
@@ -160,8 +181,8 @@ def _repo_rel_path(path: Path, repo_root: Path) -> str | None:
 # --------------------------------------------------------------------------- #
 
 
-def _measure_source(source: str, label: str, evaluators: list[Evaluator]) -> list[Measurement]:
-    """Parse ``source`` and run every available static evaluator over it.
+def _measure_source(source: str, label: str, metrics: list[Metric]) -> list[Measurement]:
+    """Parse ``source`` and run every available static metric over it.
 
     Raises :exc:`SyntaxError` when the source does not parse (the caller decides
     whether to skip the file).
@@ -169,9 +190,9 @@ def _measure_source(source: str, label: str, evaluators: list[Evaluator]) -> lis
     module = parse_module(source, label)
     ctx = EvalContext(module=module, source=source, label=label)
     measurements: list[Measurement] = []
-    for evaluator in evaluators:
-        if evaluator.available(ctx):
-            measurements.extend(evaluator.evaluate(ctx))
+    for metric in metrics:
+        if metric.available(ctx):
+            measurements.extend(metric.measure(ctx))
     return measurements
 
 
@@ -220,13 +241,13 @@ def _baseline_measurements(
     baseline: str,
     targets: list[Path],
     repo_root: Path,
-    evaluators: list[Evaluator],
+    metrics: list[Metric],
 ) -> list[Measurement]:
     """Measure the baseline variant of each target file.
 
     ``baseline`` is ``git:<ref>`` (read via ``git show``) or a directory path
     (read the matching relative file). A file absent from the baseline yields no
-    measurements, so :func:`grade` treats it as all-new.
+    measurements, so the regression check treats it as all-new.
     """
     measurements: list[Measurement] = []
     if baseline.startswith("git:"):
@@ -241,7 +262,7 @@ def _baseline_measurements(
             source = _git_show(repo_root, ref, rel)
             if source is None:
                 continue
-            measurements.extend(_safe_measure(source, rel, evaluators))
+            measurements.extend(_safe_measure(source, rel, metrics))
         return measurements
 
     base_dir = Path(baseline)
@@ -253,29 +274,24 @@ def _baseline_measurements(
         if not base_file.is_file():
             continue
         source = base_file.read_text(encoding="utf-8")
-        measurements.extend(_safe_measure(source, label, evaluators))
+        measurements.extend(_safe_measure(source, label, metrics))
     return measurements
 
 
-def _safe_measure(source: str, label: str, evaluators: list[Evaluator]) -> list[Measurement]:
+def _safe_measure(source: str, label: str, metrics: list[Metric]) -> list[Measurement]:
     """Measure a baseline source, swallowing parse errors (drop that file)."""
     try:
-        return _measure_source(source, label, evaluators)
+        return _measure_source(source, label, metrics)
     except SyntaxError:
         return []
 
 
 # --------------------------------------------------------------------------- #
-# Execution evaluators (--run-tests)
+# Execution metrics (--run-tests)
 # --------------------------------------------------------------------------- #
 
-#: MODULE label the execution evaluators key their suite-wide measurements on.
+#: MODULE label the execution metrics key their suite-wide measurements on.
 _SUITE_LABEL = "suite"
-
-
-def _execution_evaluators() -> list[Evaluator]:
-    """The deterministic evaluators that need a runnable project (``--run-tests``)."""
-    return [ev for ev in deterministic_evaluators() if ev.needs_project]
 
 
 def _resolve_test_cmd(args: argparse.Namespace, config: MetricConfig) -> list[str] | None:
@@ -299,20 +315,21 @@ def _resolve_test_cmd(args: argparse.Namespace, config: MetricConfig) -> list[st
 def _run_execution(
     root: Path,
     report_dir: Path,
+    metrics: list[Metric],
     test_cmd: list[str] | None,
 ) -> list[Measurement]:
     """Build a handle, run the suite once, and collect execution measurements.
 
-    Both execution evaluators read the same :class:`ProjectHandle`, so the suite
+    Both execution metrics read the same :class:`ProjectHandle`, so the suite
     runs exactly once. Raises :class:`_UsageError` when the suite cannot be run.
     """
     handle = ProjectHandle.create(root, report_dir, test_cmd=test_cmd)
     ctx = EvalContext(module=None, source="", label=_SUITE_LABEL, project=handle)
     measurements: list[Measurement] = []
     try:
-        for evaluator in _execution_evaluators():
-            if evaluator.available(ctx):
-                measurements.extend(evaluator.evaluate(ctx))
+        for metric in metrics:
+            if metric.available(ctx):
+                measurements.extend(metric.measure(ctx))
     except RuntimeError as exc:
         raise _UsageError(str(exc)) from exc
     return measurements
@@ -321,10 +338,11 @@ def _run_execution(
 def _execution_baseline(
     baseline: str,
     repo_root: Path,
+    metrics: list[Metric],
     test_cmd: list[str] | None,
     work_dir: Path,
 ) -> list[Measurement]:
-    """Run the execution evaluators on the baseline (a git ref or a directory).
+    """Run the execution metrics on the baseline (a git ref or a directory).
 
     ``git:<ref>`` materialises the ref via a temporary ``git worktree add`` under
     ``work_dir`` (cleaned up afterwards via ``git worktree remove``); ``<dir>``
@@ -334,17 +352,18 @@ def _execution_baseline(
     if baseline.startswith("git:"):
         ref = baseline[len("git:") :]
         _validate_git_ref(repo_root, ref)
-        return _execution_git_worktree(ref, repo_root, test_cmd, work_dir)
+        return _execution_git_worktree(ref, repo_root, metrics, test_cmd, work_dir)
 
     base_dir = Path(baseline)
     if not base_dir.is_dir():
         raise _UsageError(f"baseline directory not found: {base_dir}")
-    return _run_execution(base_dir, work_dir / "baseline-reports", test_cmd)
+    return _run_execution(base_dir, work_dir / "baseline-reports", metrics, test_cmd)
 
 
 def _execution_git_worktree(
     ref: str,
     repo_root: Path,
+    metrics: list[Metric],
     test_cmd: list[str] | None,
     work_dir: Path,
 ) -> list[Measurement]:
@@ -359,7 +378,7 @@ def _execution_git_worktree(
     if add.returncode != 0:
         raise _UsageError(f"could not create baseline worktree for {ref!r}: {add.stderr.strip()}")
     try:
-        return _run_execution(worktree, work_dir / "baseline-reports", test_cmd)
+        return _run_execution(worktree, work_dir / "baseline-reports", metrics, test_cmd)
     finally:
         subprocess.run(
             ["git", "worktree", "remove", "--force", str(worktree)],
@@ -367,6 +386,31 @@ def _execution_git_worktree(
             capture_output=True,
             text=True,
         )
+
+
+# --------------------------------------------------------------------------- #
+# Rubric assembly
+# --------------------------------------------------------------------------- #
+
+
+def _build_rubric(metrics: list[Metric], config: MetricConfig) -> Rubric:
+    """Assemble one metric-backed :class:`Check` per metric into a :class:`Rubric`.
+
+    Each check is built through the shared
+    :func:`~coding_agent_playbook.evaluators.policy.metric_check` factory (the
+    eval-task compiler uses the same one), so the standalone gate honours
+    ``config``'s per-metric threshold / regression / weight override when present
+    and the metric's ported default otherwise — reproducing the retired
+    ``grade()``'s ``resolve_policy`` over the full measured set. The metrics are
+    already deterministic-ordered (``static_metrics()`` then
+    ``execution_metrics()``), so the rubric's checks run in a stable order.
+    """
+    checks: list[Check] = []
+    for metric in metrics:
+        check = metric_check(metric.name, config)
+        if check is not None:
+            checks.append(check)
+    return Rubric(checks, name=_RUBRIC_NAME)
 
 
 # --------------------------------------------------------------------------- #
@@ -415,12 +459,19 @@ def _merge_flags(
 
 
 # --------------------------------------------------------------------------- #
-# Reporting
+# Reporting (Metric/Check/Rubric: iterate report.checks → subresults)
 # --------------------------------------------------------------------------- #
 
 
 def _report_to_dict(report: EvaluationReport) -> dict[str, object]:
-    """Stable JSON-serialisable view of an :class:`EvaluationReport`."""
+    """Stable JSON-serialisable view of an :class:`EvaluationReport`.
+
+    The flat ``findings`` list carries the per-scope :class:`ScopeDetail` leaves
+    the rubric's run checks produced (every level, ``ok`` too), keeping the JSON
+    contract — ``{evaluator, scope_key, value, baseline, bound, score, level,
+    kind}`` per finding — byte-compatible with the pre-cutover ``grade()`` output
+    that machine consumers read.
+    """
     return {
         "passed": report.passed,
         "warn_count": report.warn_count,
@@ -430,7 +481,7 @@ def _report_to_dict(report: EvaluationReport) -> dict[str, object]:
     }
 
 
-def _finding_to_dict(finding: Finding) -> dict[str, object]:
+def _finding_to_dict(finding: ScopeDetail) -> dict[str, object]:
     return {
         "evaluator": finding.evaluator,
         "scope_key": finding.scope_key,
@@ -450,13 +501,20 @@ def _format_text(
     note: str | None,
     measured_count: int,
 ) -> str:
-    """Human-readable findings grouped by file then scope, plus a summary."""
+    """Human-readable findings grouped by file then scope, plus a summary.
+
+    Iterates the rubric's run checks and flattens their per-scope
+    :class:`ScopeDetail` leaves, then groups by file (the ``scope_key`` prefix
+    before ``::``) — same shape the pre-cutover ``grade()`` text output had, so a
+    ``[fail] cyclomatic_complexity @ … (regression; baseline=…)`` line still reads
+    identically.
+    """
     lines: list[str] = ["=== Metrics ==="]
     if note:
         lines.append(f"  note: {note}")
 
-    by_file: dict[str, list[Finding]] = {}
-    for finding in report.findings:
+    by_file: dict[str, list[ScopeDetail]] = {}
+    for finding in _leaf_findings(report):
         if finding.level == "ok":
             continue
         file_key = finding.scope_key.split("::", 1)[0]
@@ -489,7 +547,17 @@ def _format_text(
     return "\n".join(lines)
 
 
-def _finding_detail(finding: Finding) -> str:
+def _leaf_findings(report: EvaluationReport) -> list[ScopeDetail]:
+    """The per-scope :class:`ScopeDetail` leaves of every run check.
+
+    The rubric already flattens these onto ``report.findings``; this narrows that
+    list to the concrete leaf type so the text renderer can read
+    ``.scope_key``/``.level``/... without a type ignore.
+    """
+    return [f for f in report.findings if isinstance(f, ScopeDetail)]
+
+
+def _finding_detail(finding: ScopeDetail) -> str:
     """A short suffix describing the comparison that decided the finding."""
     if finding.kind == "regression" and finding.baseline is not None:
         return f"; baseline={finding.baseline:g}"
@@ -517,15 +585,15 @@ def run(args: argparse.Namespace) -> int:
 
     paths = list(getattr(args, "paths", None) or [])
     baseline = getattr(args, "baseline", None)
-    evaluators = static_evaluators()
+    static = static_metrics()
 
     try:
         config = _load_config(repo_root)
         run_tests = bool(getattr(args, "run_tests", False)) or config.run_tests
         test_cmd = _resolve_test_cmd(args, config)
         targets = _discover_targets(paths, repo_root)
-        baseline_measurements = (
-            _baseline_measurements(baseline, targets, repo_root, evaluators)
+        baseline_measurements: list[Measurement] | None = (
+            _baseline_measurements(baseline, targets, repo_root, static)
             if baseline is not None
             else None
         )
@@ -544,29 +612,49 @@ def run(args: argparse.Namespace) -> int:
             skipped.append((label, f"unreadable ({exc})"))
             continue
         try:
-            candidate.extend(_measure_source(source, label, evaluators))
+            candidate.extend(_measure_source(source, label, static))
             measured_count += 1
         except SyntaxError as exc:
             skipped.append((label, f"unparseable ({exc.msg})"))
 
-    # Execution evaluators (opt-in): run the target's suite once and, when a
+    # The gated set: the full static metrics, plus the execution metrics when
+    # --run-tests opted in. One metric-backed check per metric.
+    gated: list[Metric] = list(static)
+    execution = execution_metrics() if run_tests else []
+    gated.extend(execution)
+
+    # Execution metrics (opt-in): run the target's suite once and, when a
     # baseline is given, the baseline's suite too (temp git worktree / dir).
     if run_tests:
         try:
             with tempfile.TemporaryDirectory(prefix="playbook-metrics-") as tmp:
                 tmp_path = Path(tmp)
                 candidate.extend(
-                    _run_execution(repo_root, tmp_path / "candidate-reports", test_cmd)
+                    _run_execution(repo_root, tmp_path / "candidate-reports", execution, test_cmd)
                 )
                 if baseline is not None:
-                    exec_baseline = _execution_baseline(baseline, repo_root, test_cmd, tmp_path)
+                    exec_baseline = _execution_baseline(
+                        baseline, repo_root, execution, test_cmd, tmp_path
+                    )
                     baseline_measurements = (baseline_measurements or []) + exec_baseline
         except _UsageError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
 
     effective, note = _merge_flags(config, args, baseline=baseline)
-    report = grade(candidate, baseline_measurements, effective)
+
+    # Build the rubric (one check per gated metric) and grade the pre-built
+    # measurements. fail_fast=False: metrics is deterministic-only and wants the
+    # COMPLETE report (every breach surfaced), not a gate short-circuit. The ctx
+    # only needs the measurement set; availability stand-ins (a parsed empty
+    # module for static checks, a lazy project handle for execution checks) flip
+    # the metric-backed checks' availability on so the pre-built scores grade —
+    # nothing is ever re-measured here.
+    rubric = _build_rubric(gated, effective)
+    ms = MeasurementSet(candidate, baseline_measurements)
+    with ExitStack() as stack:
+        ctx = _grading_ctx(static, execution, repo_root, candidate, baseline_measurements, stack)
+        report = rubric.evaluate(ctx, ms, strict=effective.strict, fail_fast=False)
 
     if fmt == "json":
         print(json.dumps(_report_to_dict(report), indent=2, sort_keys=True))
@@ -576,3 +664,48 @@ def run(args: argparse.Namespace) -> int:
     if not report.passed and effective.fail_on_breach:
         return 1
     return 0
+
+
+def _grading_ctx(
+    static: list[Metric],
+    execution: list[Metric],
+    repo_root: Path,
+    candidate: list[Measurement],
+    baseline_measurements: list[Measurement] | None,
+    stack: ExitStack,
+) -> EvalContext:
+    """An :class:`EvalContext` whose slots satisfy the metric checks' availability.
+
+    The metric-backed checks gate availability on the same ctx slot the
+    underlying metric does (``ctx.module`` for static, ``ctx.project`` for
+    execution). The measurements are already computed, so the checks only grade
+    the pre-built :class:`MeasurementSet`; this ctx flips their availability on
+    without anything being re-measured:
+
+    - a parsed empty ``module`` satisfies the static checks (when any static
+      metric is gated);
+    - a lazy candidate :class:`ProjectHandle` over ``repo_root`` satisfies the
+      execution checks (when ``--run-tests`` gated execution metrics). The handle
+      only shells out to ``pytest`` when :meth:`ProjectHandle.run` is called,
+      which the *checks* never do (they grade the pre-built measurements), so the
+      suite is never re-run; its throwaway report dir is cleaned when ``stack``
+      exits.
+
+    ``ctx.candidate_measurements`` / ``ctx.baseline_measurements`` are carried so
+    the rubric (also a Metric) could self-measure if ever nested.
+    """
+    module = parse_module("", _RUBRIC_NAME) if static else None
+    project = None
+    if execution:
+        report_dir = Path(
+            stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-metrics-avail-"))
+        )
+        project = ProjectHandle.create(repo_root, report_dir)
+    return EvalContext(
+        module=module,
+        source="",
+        label=_RUBRIC_NAME,
+        project=project,
+        candidate_measurements=candidate,
+        baseline_measurements=baseline_measurements,
+    )

@@ -5,6 +5,17 @@ over Python files, optionally diffing against a baseline, and exits non-zero on
 a breach (mirroring ``playbook check``). These tests pin the CLI surface:
 absolute vs regression mode, ``--strict``, JSON output, and the usage-error
 exit codes.
+
+T5b cut the gate over from the retired ``grade()`` to the
+:class:`~coding_agent_playbook.evaluators.rubric.Rubric` stack (one metric-backed
+:class:`~coding_agent_playbook.evaluators.check.Check` per gated metric, folded
+into one :class:`~coding_agent_playbook.evaluators.types.EvaluationReport`). The
+verdicts asserted here — gate pass/fail, which metric breaches, the ``0/1/2``
+exit codes, and the JSON ``findings`` contract — are *identical* to the
+pre-cutover output (the only sanctioned diff is the multi-scope composite value,
+now a mean-of-scope-ramps per check, so the tests assert the gate + breaching
+metric, not an exact composite). One test pins the new ``report.checks`` →
+``subresults`` internal shape directly.
 """
 
 from __future__ import annotations
@@ -241,6 +252,51 @@ def test_json_format_clean_file_passes(tmp_path, capsys):
     assert rc == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["passed"] is True
+
+
+# --------------------------------------------------------------------------- #
+# report.checks → subresults shape (the new Rubric stack)
+# --------------------------------------------------------------------------- #
+
+
+def test_report_has_per_check_subresults_shape(tmp_path):
+    """The gate is a Rubric: one metric-backed check per gated metric, each
+    carrying its per-scope ``ScopeDetail`` leaves as ``subresults``.
+
+    Drives the command's internals (not the CLI) to assert the
+    ``report.checks``/``subresults`` structure directly: the high-CC function is a
+    failing ``threshold:cyclomatic_complexity`` check whose subresult flags the
+    function scope as ``fail``.
+    """
+    from coding_agent_playbook.evaluators import MetricConfig, parse_module
+    from coding_agent_playbook.evaluators.check import MeasurementSet
+    from coding_agent_playbook.evaluators.metric import static_metrics
+    from coding_agent_playbook.evaluators.types import EvalContext, ScopeDetail
+
+    static = static_metrics()
+    source = _HIGH_CC_SOURCE
+    module = parse_module(source, "tangled.py")
+    ctx = EvalContext(module=module, source=source, label="tangled.py")
+    candidate = []
+    for metric in static:
+        if metric.available(ctx):
+            candidate.extend(metric.measure(ctx))
+
+    config = MetricConfig(mode="absolute")
+    rubric = _metrics._build_rubric(static, config)
+    grading_ctx = EvalContext(module=parse_module("", "metrics"), source="", label="metrics")
+    report = rubric.evaluate(grading_ctx, MeasurementSet(candidate, None), fail_fast=False)
+
+    assert report.passed is False
+    # One check per static metric; the gate breach lives on the CC check.
+    check_ids = {c.check_id for c in report.checks}
+    assert "threshold:cyclomatic_complexity" in check_ids
+    cc_check = next(c for c in report.checks if c.check_id == "threshold:cyclomatic_complexity")
+    assert cc_check.passed is False
+    fail_leaves = [
+        s for s in cc_check.subresults if isinstance(s, ScopeDetail) and s.level == "fail"
+    ]
+    assert fail_leaves  # the tangled function scope failed absolute
 
 
 # --------------------------------------------------------------------------- #

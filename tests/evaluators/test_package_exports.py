@@ -25,7 +25,6 @@ def test_public_exports_present() -> None:
         "EvalContext",
         "ResolvedPolicy",
         "GradePolicy",
-        "grade",
         "parse_module",
         "ModuleModel",
     }
