@@ -1,13 +1,11 @@
-"""Tests for the ``Metric`` layer + the ported builtin/execution metrics (T2).
+"""Tests for the ``Metric`` layer + the builtin/execution metrics.
 
-The ``Metric`` layer is the additive "measure" half of the
-``Metric`` -> ``Check`` -> ``Rubric`` split. It runs in parallel with the still-present
-``Evaluator`` world and shares the exact measurement compute (no duplicated
-logic): each ported builtin/execution module extracts its computation into a
-module-level ``_measure`` function that BOTH the old ``Evaluator`` and the new
-``Metric`` call. These tests cover registry membership + partition, in-tree
-precedence over an entry-point plugin, ``get_metric`` lookup, the radon-absent
-skip, and representative measured values.
+The ``Metric`` layer is the "measure" leaf of the
+``Metric`` -> ``Check`` -> ``Rubric`` stack: each builtin/execution module keeps
+its computation in a module-level ``_measure`` function the ``Metric`` calls.
+These tests cover registry membership + partition, in-tree precedence over an
+entry-point plugin, ``get_metric`` lookup, the radon-absent skip, and
+representative measured values.
 """
 
 from __future__ import annotations
@@ -169,7 +167,7 @@ def test_register_metric_decorator_adds_to_registry() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# representative measured values (compute parity with the Evaluator builtins)
+# representative measured values
 # --------------------------------------------------------------------------- #
 
 
@@ -201,7 +199,7 @@ def test_cyclomatic_metric_measures_each_function() -> None:
     m = get_metric("cyclomatic_complexity")
     assert m.scope is Scope.FUNCTION
     values = _by_scope(m.measure(_static_ctx(_HIGH_CC)))
-    # 1 + if + and + for + if + while + except = 7 (parity with the Evaluator).
+    # 1 + if + and + for + if + while + except = 7.
     assert values["t.py::hot"] == 7
 
 

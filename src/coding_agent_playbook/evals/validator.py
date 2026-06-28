@@ -128,14 +128,14 @@ def _validate_metrics(task: EvalTask) -> list[EvalValidationError]:
     """Validate a task's ``[metrics]`` block (SPEC prM §D).
 
     Checks the ``mode`` is one of ``regression``/``absolute``/``both``; that
-    every evaluator named in ``thresholds``/``regression``/``weights`` is a known
-    registered evaluator (static **or** execution, e.g. ``coverage`` /
+    every metric named in ``thresholds``/``regression``/``weights`` is a known
+    registered metric (static **or** execution, e.g. ``coverage`` /
     ``test_pass_rate``); and that all bounds, regression deltas, and weights are
     numbers. Aggregates every violation; never raises.
     """
     # Imported lazily so the validator module stays import-light and free of any
     # eval ↔ evaluator import cycle at module load.
-    from coding_agent_playbook.evaluators.registry import all_evaluators
+    from coding_agent_playbook.evaluators.metric import all_metrics
     from coding_agent_playbook.evaluators.types import Mode
 
     metrics = task.metrics
@@ -154,7 +154,7 @@ def _validate_metrics(task: EvalTask) -> list[EvalValidationError]:
             )
         )
 
-    known = {ev.name for ev in all_evaluators()}
+    known = {m.name for m in all_metrics()}
 
     def _check_name(name: str) -> None:
         if name not in known:

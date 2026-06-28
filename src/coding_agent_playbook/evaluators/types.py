@@ -1,12 +1,11 @@
-"""Evaluator dataclasses + policy types (SPEC prM §E).
+"""Metric/Check dataclasses + policy types (SPEC prM §E).
 
-These parallel the eval-side ``ExpectedOutcome``/``CheckResult`` dataclasses:
-small, mostly-frozen records that describe a *threshold* (``AbsoluteThreshold``),
-a *non-regression tolerance* (``RegressionPolicy``), a raw *measurement*, a
-graded *finding*, and the aggregate *report*. ``MetricConfig`` is the parsed
+Small, mostly-frozen records that describe a *threshold* (``AbsoluteThreshold``),
+a *non-regression tolerance* (``RegressionPolicy``), a raw *measurement*, a graded
+per-scope detail (``ScopeDetail``), a check outcome (``CheckResult``), and the
+aggregate *report* (``EvaluationReport``). ``MetricConfig`` is the parsed
 ``[metrics]`` config for the standalone gate; it satisfies the ``GradePolicy``
-``Protocol`` that ``grade()`` reads (the eval block-compiler will expose the same
-shape in a later track).
+``Protocol`` the ``Check`` policy resolution reads.
 """
 
 from __future__ import annotations
@@ -65,9 +64,9 @@ class ScopeDetail:
     decided it), ``score`` is the normalized ``0-1`` value for the composite,
     ``level`` is ``ok|warn|fail`` and ``kind`` is ``absolute|regression|new``.
 
-    In the ``Metric``/``Check``/``Rubric`` model (T1) this is the leaf per-scope
-    detail a :class:`CheckResult` carries; :data:`Finding` is a backward-compat
-    alias so existing ``grade()``/evaluator code keeps working unchanged.
+    In the ``Metric``/``Check``/``Rubric`` model this is the leaf per-scope detail
+    a :class:`CheckResult` carries, and the row type the flat
+    :attr:`EvaluationReport.findings` list holds.
     """
 
     evaluator: str
@@ -78,12 +77,6 @@ class ScopeDetail:
     score: float
     level: Level
     kind: Kind
-
-
-#: Backward-compat alias: the per-scope graded detail used to be called
-#: ``Finding``. Kept identical (``Finding is ScopeDetail``) so every existing
-#: import and ``grade()`` call site stays valid during the additive T1 track.
-Finding = ScopeDetail
 
 
 @dataclass
@@ -115,16 +108,15 @@ class CheckResult:
 
 @dataclass
 class EvaluationReport:
-    """The aggregate output of :func:`grade`: every finding + the two verdicts.
+    """The aggregate output of :meth:`Rubric.evaluate`: findings + the two verdicts.
 
     Mutable (unlike the records above) so callers can attach context as they
-    merge reports from several evaluator families. ``findings`` carries the
-    per-scope :class:`ScopeDetail` rows the deterministic ``grade()`` produces;
-    ``checks`` is the additive T1 field that carries the new
-    :class:`CheckResult` rows. Both coexist until the destructive cutover track.
+    merge reports from several check families. ``findings`` carries the flat
+    per-scope :class:`ScopeDetail` rows (the deterministic leaf details renderers
+    read); ``checks`` carries the structured :class:`CheckResult` rows.
     """
 
-    findings: list[Finding]
+    findings: list[ScopeDetail]
     warn_count: int
     fail_count: int
     composite: float | None
@@ -214,8 +206,8 @@ class EvalContext:
     ``None``/``1`` so static evaluators never touch them. ``judge`` is typed as
     the structural :class:`JudgeLike` so this package never imports ``evals``.
 
-    The ``[expected]`` evaluators
-    (:mod:`coding_agent_playbook.evaluators.expected`, R3) read ``tree`` (the
+    The ``[expected]`` file checks
+    (:mod:`coding_agent_playbook.evaluators.checks.files`) read ``tree`` (the
     candidate repo root after the agent ran) and ``baseline_tree`` (the pristine
     ``setup/`` snapshot, for the ``file_unchanged`` check). The runner sets both;
     every other family ignores them.

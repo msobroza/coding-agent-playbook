@@ -11,7 +11,6 @@ from coding_agent_playbook.evaluators.types import (
     CheckResult,
     EvalContext,
     EvaluationReport,
-    Finding,
     GradePolicy,
     Measurement,
     MetricConfig,
@@ -40,8 +39,8 @@ def test_measurement_fields_frozen() -> None:
     assert _is_frozen(Measurement)
 
 
-def test_finding_fields() -> None:
-    f = Finding(
+def test_scope_detail_fields() -> None:
+    f = ScopeDetail(
         evaluator="cc",
         scope_key="f.py::g",
         value=12.0,
@@ -53,7 +52,7 @@ def test_finding_fields() -> None:
     )
     assert f.level == "warn"
     assert f.kind == "absolute"
-    assert _is_frozen(Finding)
+    assert _is_frozen(ScopeDetail)
 
 
 def test_evaluation_report_defaults_and_mutable() -> None:
@@ -117,9 +116,7 @@ def test_cost_tier_ordering() -> None:
     ]
 
 
-def test_scope_detail_construction_and_finding_alias() -> None:
-    # ScopeDetail is the new name for the per-scope graded detail; Finding aliases it.
-    assert Finding is ScopeDetail
+def test_scope_detail_construction() -> None:
     detail = ScopeDetail(
         evaluator="cc",
         scope_key="f.py::g",
@@ -133,8 +130,6 @@ def test_scope_detail_construction_and_finding_alias() -> None:
     assert detail.level == "warn"
     assert detail.kind == "absolute"
     assert _is_frozen(ScopeDetail)
-    # The alias really is the same class, so a Finding *is* a ScopeDetail.
-    assert isinstance(detail, Finding)
 
 
 def test_check_result_defaults() -> None:

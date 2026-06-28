@@ -7,9 +7,9 @@ total. Higher is better (``higher_is_worse=False``); the absolute default
 must not drop versus baseline.
 
 Reads the **same** :meth:`ProjectHandle.run` cache the ``test_pass_rate``
-evaluator uses, so enabling both under ``--run-tests`` still runs the suite only
-once. ``needs_project=True`` ⇒ execution evaluator, excluded from
-``static_evaluators()``; :meth:`available` requires ``ctx.project``.
+metric uses, so enabling both under ``--run-tests`` still runs the suite only
+once. ``needs_project=True`` ⇒ execution metric, excluded from
+``static_metrics()``; :meth:`available` requires ``ctx.project``.
 
 Scope keys: per-file measurements key on the coverage.py ``filename`` (a path
 relative to the project root, e.g. ``pkg/a.py``) so they match across baseline
@@ -22,13 +22,8 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.metric import Metric, register_metric
 from coding_agent_playbook.evaluators.parse import scope_key
-from coding_agent_playbook.evaluators.registry import Evaluator, register_evaluator
-from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
-from coding_agent_playbook.evaluators.types import (
-    AbsoluteThreshold,
-    Measurement,
-    RegressionPolicy,
-)
+from coding_agent_playbook.evaluators.scope import Scope
+from coding_agent_playbook.evaluators.types import Measurement
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.types import EvalContext
@@ -39,9 +34,8 @@ _NAME = "coverage"
 def _measure(ctx: EvalContext) -> list[Measurement]:
     """Shared compute: one FILE coverage measurement per file + one MODULE total.
 
-    Both the Evaluator and the Metric call this; it reads
-    :meth:`ProjectHandle.run` (cached), so the suite never re-runs even when
-    ``test_pass_rate`` already triggered it. The two layers stay in lockstep.
+    Reads :meth:`ProjectHandle.run` (cached), so the suite never re-runs even when
+    ``test_pass_rate`` already triggered it.
     """
     if ctx.project is None:
         return []
@@ -64,35 +58,12 @@ def _measure(ctx: EvalContext) -> list[Measurement]:
     return measurements
 
 
-@register_evaluator
-class Coverage(Evaluator):
-    """Line coverage per file (+ a MODULE total) from one cached suite run."""
-
-    name = _NAME
-    scope = Scope.FILE
-    value_kind = ValueKind.NUMERIC
-    determinism = Determinism.DETERMINISTIC
-    higher_is_worse = False
-    requires = None
-    needs_project = True
-    default_absolute = AbsoluteThreshold(warn=80.0)
-    default_regression = RegressionPolicy(max_worsening=0.0)
-    default_weight = 0.0
-
-    def available(self, ctx: EvalContext) -> bool:
-        """True only when a runnable project handle is present."""
-        return ctx.project is not None
-
-    def evaluate(self, ctx: EvalContext) -> list[Measurement]:
-        return _measure(ctx)
-
-
 @register_metric
 class CoverageMetric(Metric):
-    """``coverage`` as a :class:`Metric` (shares :func:`_measure`).
+    """``coverage`` as a :class:`Metric` over per-file + MODULE-total coverage.
 
     ``needs_project=True`` ⇒ the inherited :meth:`Metric.available` requires
-    ``ctx.project``, matching the Evaluator's project-handle gate.
+    ``ctx.project`` (the project-handle gate).
     """
 
     name = _NAME

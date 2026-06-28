@@ -5,13 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.metric import Metric, register_metric
-from coding_agent_playbook.evaluators.registry import Evaluator, register_evaluator
-from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
-from coding_agent_playbook.evaluators.types import (
-    AbsoluteThreshold,
-    Measurement,
-    RegressionPolicy,
-)
+from coding_agent_playbook.evaluators.scope import Scope
+from coding_agent_playbook.evaluators.types import Measurement
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.types import EvalContext
@@ -23,8 +18,7 @@ def _measure(ctx: EvalContext) -> list[Measurement]:
     """Shared compute: WMC = ``sum(cyclomatic(method) for method in class)``.
 
     Reuses the same per-method complexity the shared ``_cyclomatic`` helper
-    stored on each :class:`FunctionScope`, so CC and WMC never diverge; both the
-    Evaluator and the Metric call this so the two layers stay in lockstep.
+    stored on each :class:`FunctionScope`, so CC and WMC never diverge.
     """
     if ctx.module is None:
         return []
@@ -36,24 +30,6 @@ def _measure(ctx: EvalContext) -> list[Measurement]:
         )
         for cls in ctx.module.classes
     ]
-
-
-@register_evaluator
-class WeightedMethodsPerClass(Evaluator):
-    """WMC = ``sum(cyclomatic(method) for method in class)``."""
-
-    name = _NAME
-    scope = Scope.CLASS
-    value_kind = ValueKind.NUMERIC
-    determinism = Determinism.DETERMINISTIC
-    higher_is_worse = True
-    requires = None
-    default_absolute = AbsoluteThreshold(fail=50)
-    default_regression = RegressionPolicy(max_worsening=0.0)
-    default_weight = 0.0
-
-    def evaluate(self, ctx: EvalContext) -> list[Measurement]:
-        return _measure(ctx)
 
 
 @register_metric

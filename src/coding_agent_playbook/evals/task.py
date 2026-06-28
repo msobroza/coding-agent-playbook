@@ -21,7 +21,6 @@ from coding_agent_playbook.evaluators.types import (
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.check import Check
-    from coding_agent_playbook.evaluators.registry import Evaluator
     from coding_agent_playbook.evaluators.rubric import Rubric as CheckRubric
 
 # Tolerance for the rubric-weights sum check (SPEC §15.2 fifth rule).
@@ -102,8 +101,8 @@ class EvalTask:
     rubric: Rubric | None = None
     #: Parsed top-level ``[metrics]`` block (SPEC prM §D) — a sibling of
     #: ``expected``/``rubric``. ``None`` when the task declares no metrics. The
-    #: v1.1 runner compiles it (via :func:`evaluators_for_task`) into the static +
-    #: execution evaluators selected/policy'd here; v1 only parses + validates it.
+    #: runner compiles it (via :func:`rubric_for_task`) into the static +
+    #: execution checks selected/policy'd here.
     metrics: MetricConfig | None = None
 
     @classmethod
@@ -338,93 +337,14 @@ def _parse_metrics(raw: Any) -> MetricConfig:
     return config
 
 
-def evaluators_for_task(
-    task: EvalTask,
-    config: MetricConfig | None,
-) -> list[Evaluator]:
-    """Compile a task's eval blocks into :class:`Evaluator` instances (SPEC prM §D).
-
-    This only **builds** the list — it runs nothing (the v1.1 ``HarnessRunner``
-    will route each evaluator by ``available(ctx)`` / ``determinism``):
-
-    - ``[metrics]`` → the registered static + execution evaluators named in the
-      config's ``thresholds``/``regression``/``weights`` (deduped, deterministic
-      order). The standalone ``playbook metrics`` gate uses the full
-      ``static_evaluators()`` set; an eval task instead opts into the specific
-      metrics it cares about, so only the named evaluators are compiled.
-    - ``[rubric]`` → one :class:`JudgedCriterion` per criterion, carrying its
-      weight (uniform ``1/len`` when ``weights`` is omitted). These are dormant
-      in v1 (``available()`` is ``False`` without a ``Judge``).
-    - ``[expected]`` → one BOOL deterministic evaluator per
-      :class:`ExpectedOutcome` entry (R3): ``files_created`` → ``FileExists``,
-      ``files_must_contain`` → ``FileContains`` (regex), ``files_unchanged`` →
-      ``FileUnchanged`` (vs the baseline tree), ``files_forbidden`` →
-      ``FileForbidden``. Each is parameterized by its path/pattern and reads the
-      candidate tree from ``ctx.tree`` (``available()`` is ``False`` without one),
-      so the runner routes them like every other family.
-
-    Importing the evaluator classes and ``get_evaluator`` is the only coupling;
-    the v2 ``runner``/``judge`` placeholders are never imported or called.
-    """
-    from coding_agent_playbook.evaluators.expected import (
-        FileContains,
-        FileExists,
-        FileForbidden,
-        FileUnchanged,
-    )
-    from coding_agent_playbook.evaluators.judged import JudgedCriterion
-    from coding_agent_playbook.evaluators.registry import get_evaluator
-
-    evaluators: list[Evaluator] = []
-
-    if config is not None:
-        seen: set[str] = set()
-        for name in (*config.thresholds, *config.regression, *config.weights):
-            if name in seen:
-                continue
-            seen.add(name)
-            try:
-                evaluators.append(get_evaluator(name))
-            except KeyError:
-                # Unknown names are surfaced by the validator; skip here so the
-                # compiler never raises on an otherwise-loadable task.
-                continue
-
-    if task.rubric is not None and task.rubric.criteria:
-        criteria = task.rubric.criteria
-        if task.rubric.weights is not None:
-            weights = task.rubric.weights
-        else:
-            weights = [1.0 / len(criteria)] * len(criteria)
-        for criterion, weight in zip(criteria, weights, strict=True):
-            evaluators.append(JudgedCriterion(criterion, weight=weight))
-
-    if task.expected is not None:
-        expected = task.expected
-        for rel in expected.files_created:
-            evaluators.append(FileExists(rel))
-        for entry in expected.files_must_contain:
-            evaluators.append(FileContains(entry["path"], entry["pattern"]))
-        for rel in expected.files_unchanged:
-            evaluators.append(FileUnchanged(rel))
-        for rel in expected.files_forbidden:
-            evaluators.append(FileForbidden(rel))
-
-    return evaluators
-
-
 def rubric_for_task(task: EvalTask, config: MetricConfig | None) -> CheckRubric:
     """Compile a task's eval blocks into a :class:`Rubric` of :class:`Check`\\ s.
 
-    The ``Metric``/``Check``/``Rubric`` counterpart of
-    :func:`evaluators_for_task`: instead of a flat list of ``Evaluator``
-    instances graded later by :func:`grade`, this returns one
-    :class:`~coding_agent_playbook.evaluators.rubric.Rubric` whose ordered checks
-    fold the three eval blocks into a single
+    Returns one :class:`~coding_agent_playbook.evaluators.rubric.Rubric` whose
+    ordered checks fold the three eval blocks into a single
     :class:`~coding_agent_playbook.evaluators.types.EvaluationReport` at
-    :meth:`Rubric.evaluate` time. Block ordering matches
-    :func:`evaluators_for_task` (metrics → rubric → expected) so the report's
-    findings appear in the same order the old path produced them:
+    :meth:`Rubric.evaluate` time. Block ordering is metrics → rubric → expected,
+    so the report's findings appear in a stable order:
 
     - ``[metrics]`` → one metric-backed
       :class:`~coding_agent_playbook.evaluators.check.ThresholdCheck` /
@@ -433,12 +353,10 @@ def rubric_for_task(task: EvalTask, config: MetricConfig | None) -> CheckRubric:
       (deduped, deterministic order). The check's ``mode`` is ``config.mode``;
       its absolute/regression policy is the ``config`` override when present,
       else the metric's ported default
-      (:data:`~coding_agent_playbook.evaluators.policy.METRIC_DEFAULTS`) — so the
-      gate verdict matches the retired ``grade()``'s ``resolve_policy`` exactly.
+      (:data:`~coding_agent_playbook.evaluators.policy.METRIC_DEFAULTS`).
       Weight is
       ``config.weights.get(name, 0.0)``; ``required=True`` (a metric breach
-      gates). Unknown metric names are skipped (the validator surfaces them),
-      mirroring :func:`evaluators_for_task`.
+      gates). Unknown metric names are skipped (the validator surfaces them).
     - ``[rubric]`` → one
       :class:`~coding_agent_playbook.evaluators.checks.judged.JudgeCheck` per
       criterion, carrying its weight (uniform ``1/len`` when ``weights`` is

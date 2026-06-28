@@ -6,10 +6,11 @@ per-criterion primitive :meth:`Judge.score_criterion` is canonical (returns one
 the batch :meth:`Judge.score` is a thin wrapper that maps it over a
 :class:`~coding_agent_playbook.evals.task.Rubric`'s criteria.
 
-:class:`JudgedCriterion` (``evaluators/judged.py``) calls ``score_criterion``
-directly through the structural :class:`~coding_agent_playbook.evaluators.types.JudgeLike`
-protocol, so ``evaluators`` never imports ``evals`` (no cycle). A concrete
-``Judge`` satisfies ``JudgeLike`` structurally.
+:class:`~coding_agent_playbook.evaluators.checks.judged.JudgeCheck` calls
+``score_criterion`` directly through the structural
+:class:`~coding_agent_playbook.evaluators.types.JudgeLike` protocol, so
+``evaluators`` never imports ``evals`` (no cycle). A concrete ``Judge`` satisfies
+``JudgeLike`` structurally.
 
 Two concrete judges:
 
@@ -22,7 +23,7 @@ Two concrete judges:
   judged unit test hermetically.
 
 "Deterministic-only" is simply *no judge configured* (``ctx.judge is None`` ⇒
-``JudgedCriterion.available()`` is ``False``); there is no ``ProgrammaticOnlyJudge``.
+``JudgeCheck.available()`` is ``False``); there is no ``ProgrammaticOnlyJudge``.
 """
 
 from __future__ import annotations

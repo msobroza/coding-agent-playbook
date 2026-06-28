@@ -1,22 +1,19 @@
-"""The ``Check`` ABC + the deterministic metric-backed checks (T3).
+"""The ``Check`` ABC + the deterministic metric-backed checks.
 
-The ``Check`` layer is the "grade" half of the clean-slate split that pulls
-apart the fused :class:`~coding_agent_playbook.evaluators.registry.Evaluator`
-into :class:`~coding_agent_playbook.evaluators.metric.Metric` (measure) ->
-:class:`Check` (grade) -> ``Rubric`` (aggregate). A :class:`Metric` produces raw
+The ``Check`` layer is the "grade" stage of the
+:class:`~coding_agent_playbook.evaluators.metric.Metric` (measure) ->
+:class:`Check` (grade) -> ``Rubric`` (aggregate) stack. A :class:`Metric`
+produces raw
 :class:`~coding_agent_playbook.evaluators.types.Measurement` rows; a :class:`Check`
 turns those rows (or, for file/judge checks, ``ctx``) into one
 :class:`~coding_agent_playbook.evaluators.types.CheckResult` carrying the per-scope
 :class:`~coding_agent_playbook.evaluators.types.ScopeDetail` rows.
 
-T3 adds the **deterministic, metric-backed checks** (:class:`ThresholdCheck`,
-:class:`NonRegressionCheck`); the file checks live in
-:mod:`coding_agent_playbook.evaluators.checks.files`. This track is **additive**:
-the old :func:`~coding_agent_playbook.evaluators.grade.grade`/scoring/CLI keep
-depending on the ``Evaluator`` world untouched, and the per-scope decision here
-is a **verbatim copy** of ``grade.py``'s ``to_score``/``_decide``/
-``_absolute_level``/``_regressed`` logic (NOT an import - ``grade.py`` is deleted
-only in the later cutover track) so the cutover reproduces ``grade()`` exactly.
+This module holds the **deterministic, metric-backed checks**
+(:class:`ThresholdCheck`, :class:`NonRegressionCheck`); the file checks live in
+:mod:`coding_agent_playbook.evaluators.checks.files`. The per-scope decision here
+(``to_score``/``_decide``/``_absolute_level``/``_regressed``) is the canonical
+deterministic grading logic.
 """
 
 from __future__ import annotations
@@ -53,9 +50,7 @@ def slug(text: str, *, fallback: str = "criterion") -> str:
     strips leading/trailing hyphens; returns ``fallback`` when the input slugs to
     the empty string (e.g. ``""`` or ``"???"``) so the resulting ``<prefix>:<slug>``
     id is always well-formed. This is the single home for the slug helper the
-    ``Check`` families share (the file checks and the judged check both import it),
-    superseding the per-module copies the ``Evaluator``-era ``judged.py`` /
-    ``expected.py`` carried.
+    ``Check`` families share (the file checks and the judged check both import it).
     """
     cleaned = _SLUG_NON_ALNUM.sub("-", text.lower()).strip("-")
     return cleaned or fallback
@@ -130,14 +125,13 @@ class Check(ABC):
 
 
 # --------------------------------------------------------------------------- #
-# Per-scope decision - a VERBATIM copy of grade.py's deterministic logic.
+# Per-scope decision - the canonical deterministic grading logic.
 #
-# These four module-private helpers replicate ``grade.py`` (``to_score``,
-# ``_decide``, ``_absolute_level``, ``_regressed``) so the metric-backed checks
-# reproduce ``grade()`` exactly once the cutover deletes ``grade.py``. They take
-# ``higher_is_worse`` explicitly (read from the ``Metric``) instead of an
-# ``Evaluator`` instance, but are otherwise line-for-line equivalent. If you
-# touch ``grade.py``'s boundary rules, mirror them here.
+# These four module-private helpers (``_to_score``, ``_decide``,
+# ``_absolute_level``, ``_regressed``) are the single home for the per-scope
+# verdict the metric-backed checks share. They read ``higher_is_worse`` from the
+# ``Metric``. The boundary rules (inclusive on the higher-is-worse side, strict on
+# the higher-is-better side) live only here.
 # --------------------------------------------------------------------------- #
 
 
@@ -146,14 +140,14 @@ def _to_score(
     higher_is_worse: bool,
     absolute: AbsoluteThreshold,
 ) -> float:
-    """Normalize a NUMERIC value to ``0-1`` (higher = better) - copy of ``to_score``.
+    """Normalize a NUMERIC value to ``0-1`` (higher = better).
 
     Ramps around the absolute warn/fail bounds: ``1.0`` at/under ``warn`` and
     ``0.0`` at/over ``fail`` (linear between) when ``higher_is_worse``; the ramp
     inverts when larger is better. With no bounds the score is ``1.0``. The
-    metric-backed checks only grade NUMERIC metrics, so the SCORE/BOOL identity
-    branch of the Evaluator's ``to_score`` is not reproduced here (BOOL file
-    checks set their score directly from the predicate).
+    metric-backed checks only grade NUMERIC metrics, so there is no SCORE/BOOL
+    identity branch here (BOOL file checks set their score directly from the
+    predicate).
     """
     warn = absolute.warn
     fail = absolute.fail
@@ -252,12 +246,11 @@ class _MetricCheck(Check):
 
     Holds the :class:`Metric` instance (so it reads ``metric.name`` for the
     measurement lookup and ``metric.higher_is_worse`` for the comparison
-    direction) plus the grading-side policy that used to live on the
-    ``Evaluator`` - an :class:`AbsoluteThreshold`, a :class:`RegressionPolicy`,
-    and a :attr:`mode`. One parameterized ``grade`` reproduces ``grade()``'s
-    ``_decide`` per scope, aggregating the per-scope :class:`ScopeDetail` rows
-    into one :class:`CheckResult` (``passed`` = no scope failed; ``score`` = mean
-    of the per-scope ramps; ``None``/``True`` for zero scopes).
+    direction) plus the grading-side policy - an :class:`AbsoluteThreshold`, a
+    :class:`RegressionPolicy`, and a :attr:`mode`. One parameterized ``grade``
+    runs ``_decide`` per scope, aggregating the per-scope :class:`ScopeDetail`
+    rows into one :class:`CheckResult` (``passed`` = no scope failed; ``score`` =
+    mean of the per-scope ramps; ``None``/``True`` for zero scopes).
 
     :attr:`cost` is derived from ``metric.needs_project`` (an execution metric is
     EXECUTION-tier, a static one DETERMINISTIC); :attr:`determinism` is

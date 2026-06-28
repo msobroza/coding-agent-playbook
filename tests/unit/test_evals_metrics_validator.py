@@ -123,8 +123,8 @@ def test_validator_accepts_valid_metrics_block(tmp_path: Path) -> None:
 
 
 def test_validator_accepts_execution_evaluator_names(tmp_path: Path) -> None:
-    """coverage + test_pass_rate are execution evaluators; they must be accepted
-    as known names even though they are not in ``static_evaluators()``."""
+    """coverage + test_pass_rate are execution metrics; they must be accepted
+    as known names even though they are not in ``static_metrics()``."""
     task_dir = tmp_path / "exec"
     task_dir.mkdir()
     from coding_agent_playbook.evaluators.types import RegressionPolicy

@@ -1,4 +1,4 @@
-"""Shared metric-policy defaults + the metric-backed ``Check`` builder (T5b).
+"""Shared metric-policy defaults + the metric-backed ``Check`` builder.
 
 The single home for the per-metric default grading policy and the
 :func:`metric_check` factory that turns a metric name + a
@@ -8,8 +8,7 @@ metric-backed :class:`~coding_agent_playbook.evaluators.check.Check`
 :class:`~coding_agent_playbook.evaluators.check.NonRegressionCheck`). Both
 :func:`coding_agent_playbook.evals.task.rubric_for_task` (the eval-task compiler)
 and :mod:`coding_agent_playbook.commands.metrics` (the standalone gate) build
-their checks through here, so the gate verdict is identical to the retired
-``grade()``'s ``resolve_policy`` and the two consumers never drift.
+their checks through here, so the two consumers never drift.
 
 Living in the ``evaluators`` layer keeps ``commands`` from importing ``evals``
 just for the shared default thresholds.
@@ -23,12 +22,9 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.check import Check
     from coding_agent_playbook.evaluators.types import MetricConfig
 
-#: Per-metric default grading policy, ported verbatim from the ``Evaluator``
-#: builtins' ``default_absolute``/``default_regression`` class constants
-#: (the retired ``registry.resolve_policy`` read those when ``[metrics]`` omitted
-#: an override). The ``Check`` layer carries the policy on the *check*, not the
-#: metric, so :func:`metric_check` falls back to these when ``config`` has no
-#: override for a metric — keeping the gate verdict identical to ``grade()``.
+#: Per-metric default grading policy. The ``Check`` layer carries the policy on
+#: the *check*, not the metric, so :func:`metric_check` falls back to these when
+#: ``config`` has no override for a metric.
 #: ``(warn, fail, max_worsening)``; ``None`` means "no bound at that stage".
 METRIC_DEFAULTS: dict[str, tuple[float | None, float | None, float]] = {
     "cyclomatic_complexity": (10.0, 20.0, 0.0),

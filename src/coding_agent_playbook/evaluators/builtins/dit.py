@@ -12,13 +12,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.metric import Metric, register_metric
-from coding_agent_playbook.evaluators.registry import Evaluator, register_evaluator
-from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
-from coding_agent_playbook.evaluators.types import (
-    AbsoluteThreshold,
-    Measurement,
-    RegressionPolicy,
-)
+from coding_agent_playbook.evaluators.scope import Scope
+from coding_agent_playbook.evaluators.types import Measurement
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.types import EvalContext
@@ -29,8 +24,7 @@ _NAME = "dit"
 def _measure(ctx: EvalContext) -> list[Measurement]:
     """Shared compute: one DIT (inheritance depth) measurement per class scope.
 
-    Both the Evaluator and the Metric call this; the per-class depth is resolved
-    by the module-level :func:`_dit` helper, so the two layers stay in lockstep.
+    The per-class depth is resolved by the module-level :func:`_dit` helper.
     """
     if ctx.module is None:
         return []
@@ -40,24 +34,6 @@ def _measure(ctx: EvalContext) -> list[Measurement]:
         depth = _dit(cls.qualname, bases_by_qualname, set())
         results.append(Measurement(evaluator=_NAME, scope_key=cls.scope_key, value=float(depth)))
     return results
-
-
-@register_evaluator
-class DepthOfInheritance(Evaluator):
-    """DIT - depth of the inheritance tree for each class."""
-
-    name = _NAME
-    scope = Scope.CLASS
-    value_kind = ValueKind.NUMERIC
-    determinism = Determinism.DETERMINISTIC
-    higher_is_worse = True
-    requires = None
-    default_absolute = AbsoluteThreshold(warn=5)
-    default_regression = RegressionPolicy(max_worsening=0.0)
-    default_weight = 0.0
-
-    def evaluate(self, ctx: EvalContext) -> list[Measurement]:
-        return _measure(ctx)
 
 
 @register_metric

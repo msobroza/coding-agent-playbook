@@ -1,8 +1,7 @@
 """Tests for the judged ``Check`` (T4a) - ``evaluators/checks/judged.py``.
 
-:class:`JudgeCheck` is the ``Check``-layer counterpart of the ``Evaluator``-era
-:class:`~coding_agent_playbook.evaluators.judged.JudgedCriterion`: one rubric
-criterion, scored by a structural ``JudgeLike`` on ``ctx`` into one
+:class:`JudgeCheck` holds one rubric criterion, scored by a structural
+``JudgeLike`` on ``ctx`` into one
 :class:`~coding_agent_playbook.evaluators.types.CheckResult`. These drive it with
 a :class:`~coding_agent_playbook.evals.judge.StubJudge` so no LLM/CLI is touched,
 asserting the score/pass/status/id shape, the ``available`` gate (a judge must be

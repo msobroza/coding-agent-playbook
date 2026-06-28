@@ -1,27 +1,23 @@
-"""Deterministic file checks: the ``[expected]`` predicates as ``Check`` (T3).
+"""Deterministic file checks: the ``[expected]`` predicates as ``Check``.
 
 The four ``[expected]`` file checks (``files_created``/``files_must_contain``/
-``files_unchanged``/``files_forbidden``) become first-class
-:class:`~coding_agent_playbook.evaluators.check.Check` instances here, the
-``Check``-layer counterpart of
-:mod:`coding_agent_playbook.evaluators.expected`. Unlike the metric-backed
-checks these ignore the :class:`~coding_agent_playbook.evaluators.check.MeasurementSet`
-and read the candidate tree (:attr:`EvalContext.tree`) - and, for the unchanged
-check, the baseline tree (:attr:`EvalContext.baseline_tree`) - directly.
+``files_unchanged``/``files_forbidden``) are first-class
+:class:`~coding_agent_playbook.evaluators.check.Check` instances. Unlike the
+metric-backed checks these ignore the
+:class:`~coding_agent_playbook.evaluators.check.MeasurementSet` and read the
+candidate tree (:attr:`EvalContext.tree`) - and, for the unchanged check, the
+baseline tree (:attr:`EvalContext.baseline_tree`) - directly.
 
 Each is a pure gate (``weight=0.0``, ``required=True`` by default, DETERMINISTIC,
-DETERMINISTIC-cost) whose ``passed`` comes **straight from the predicate**: there
-is no must-be-true ``fail`` floor / ``value_kind`` hack here (that was the
-``Evaluator``-era encoding of a BOOL). The result carries one
+DETERMINISTIC-cost) whose ``passed`` comes **straight from the predicate**. The
+result carries one
 :class:`~coding_agent_playbook.evaluators.types.ScopeDetail` describing the path,
 with ``score = 1.0`` when the predicate holds and ``0.0`` otherwise.
 
-The ``_file_matches``/``_files_equal`` predicates are **copied** (not imported)
-from ``expected.py`` because that module is deleted in the later cutover track;
-the Check layer must stand on its own. The ``slug`` id-sanitizer is the shared
-one defined in :mod:`coding_agent_playbook.evaluators.check` (re-exported here as
-a thin wrapper that pins the ``"path"`` fallback) so the families do not each
-carry their own copy.
+The ``slug`` id-sanitizer is the shared one defined in
+:mod:`coding_agent_playbook.evaluators.check` (re-exported here as a thin wrapper
+that pins the ``"path"`` fallback) so the families do not each carry their own
+copy.
 """
 
 from __future__ import annotations

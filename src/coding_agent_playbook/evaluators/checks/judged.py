@@ -1,8 +1,7 @@
-"""The judged ``Check``: one rubric criterion scored by a ``Judge`` (T4a).
+"""The judged ``Check``: one rubric criterion scored by a ``Judge``.
 
-:class:`JudgeCheck` is the ``Check``-layer counterpart of the ``Evaluator``-era
-:class:`~coding_agent_playbook.evaluators.judged.JudgedCriterion`. It holds a
-single criterion string and grades it by calling the structural
+:class:`JudgeCheck` holds a single criterion string (one per ``[rubric]`` line)
+and grades it by calling the structural
 :class:`~coding_agent_playbook.evaluators.types.JudgeLike` on the context
 (``ctx.judge.score_criterion(criterion, ctx.artifact, n=ctx.samples)``), so this
 module never imports ``evals`` - avoiding the ``evaluators`` <-> ``evals`` cycle -

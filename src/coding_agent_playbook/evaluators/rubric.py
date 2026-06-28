@@ -42,7 +42,7 @@ from coding_agent_playbook.evaluators.types import (
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.check import Check
-    from coding_agent_playbook.evaluators.types import CheckResult, EvalContext, Finding
+    from coding_agent_playbook.evaluators.types import CheckResult, EvalContext
 
 
 class Rubric(Metric):
@@ -193,16 +193,15 @@ class Rubric(Metric):
         return warn, fail
 
     @staticmethod
-    def _flatten_findings(results: list[CheckResult]) -> list[Finding]:
+    def _flatten_findings(results: list[CheckResult]) -> list[ScopeDetail]:
         """Flatten the leaf :class:`ScopeDetail` rows from every run check.
 
-        Transitional: the ``EvaluationReport.findings`` list still carries the flat
-        per-scope rows the deterministic ``grade()`` produced. Only direct
-        ``ScopeDetail`` leaves are collected (nested ``CheckResult`` subresults -
-        from a composing check - are not descended here; the boolean composers are
-        a later track).
+        The ``EvaluationReport.findings`` list carries the flat per-scope rows
+        renderers read. Only direct ``ScopeDetail`` leaves are collected (nested
+        ``CheckResult`` subresults - from a composing check - are not descended
+        here).
         """
-        findings: list[Finding] = []
+        findings: list[ScopeDetail] = []
         for result in results:
             if result.status != "run":
                 continue

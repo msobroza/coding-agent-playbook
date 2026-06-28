@@ -12,13 +12,8 @@ import ast
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.metric import Metric, register_metric
-from coding_agent_playbook.evaluators.registry import Evaluator, register_evaluator
-from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
-from coding_agent_playbook.evaluators.types import (
-    AbsoluteThreshold,
-    Measurement,
-    RegressionPolicy,
-)
+from coding_agent_playbook.evaluators.scope import Scope
+from coding_agent_playbook.evaluators.types import Measurement
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.parse import ClassScope
@@ -30,8 +25,7 @@ _NAME = "lcom4"
 def _measure(ctx: EvalContext) -> list[Measurement]:
     """Shared compute: one LCOM4 (connected-component count) per class scope.
 
-    Both the Evaluator and the Metric call this, delegating the graph work to the
-    module-level :func:`_lcom4` helper, so the two layers stay in lockstep.
+    Delegates the graph work to the module-level :func:`_lcom4` helper.
     """
     if ctx.module is None:
         return []
@@ -43,24 +37,6 @@ def _measure(ctx: EvalContext) -> list[Measurement]:
         )
         for cls in ctx.module.classes
     ]
-
-
-@register_evaluator
-class LackOfCohesion4(Evaluator):
-    """LCOM4 cohesion metric (number of connected method components)."""
-
-    name = _NAME
-    scope = Scope.CLASS
-    value_kind = ValueKind.NUMERIC
-    determinism = Determinism.DETERMINISTIC
-    higher_is_worse = True
-    requires = None
-    default_absolute = AbsoluteThreshold(warn=2)
-    default_regression = RegressionPolicy(max_worsening=0.0)
-    default_weight = 0.0
-
-    def evaluate(self, ctx: EvalContext) -> list[Measurement]:
-        return _measure(ctx)
 
 
 @register_metric

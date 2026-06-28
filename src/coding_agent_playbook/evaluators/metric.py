@@ -1,26 +1,20 @@
-"""The ``Metric`` ABC + the metric registry (T2 of the Metric/Check/Rubric split).
+"""The ``Metric`` ABC + the metric registry (the Metric/Check/Rubric stack).
 
-The ``Metric`` layer is the "measure" half of the clean-slate split that pulls
-apart the fused :class:`~coding_agent_playbook.evaluators.registry.Evaluator`
-into :class:`Metric` (measure) -> ``Check`` (grade) -> ``Rubric`` (aggregate). A
+The ``Metric`` layer is the "measure" leaf of the
+:class:`Metric` (measure) -> ``Check`` (grade) -> ``Rubric`` (aggregate) stack. A
 ``Metric`` produces raw
 :class:`~coding_agent_playbook.evaluators.types.Measurement` rows over a scope
 and carries *only* the measurement-side descriptors (``name``, ``scope``,
 ``higher_is_worse``, ``requires``, ``needs_project``) - the grading-side
-descriptors (thresholds, regression policy, weight) move to the ``Check`` layer.
+descriptors (thresholds, regression policy, weight) live on the ``Check`` layer.
 
-T2 runs the ``Metric`` layer **in parallel** with the still-present
-``Evaluator`` world: the old ``grade()``/scoring/CLI keep depending on the
-``Evaluator`` builtins until the cutover track, so this module adds a second
-registry without touching the first. Each ported builtin/execution module shares
-its measurement compute through a module-level ``_measure`` function that BOTH the
-``Evaluator`` and the ``Metric`` call - no duplicated logic.
+Each builtin/execution module keeps its measurement compute in a module-level
+``_measure`` function the ``Metric`` calls, so the parse-once value surfaces per
+scope with no duplicated logic.
 
 Builtins self-register via the :func:`register_metric` decorator; out-of-tree
 metrics register through the ``coding_agent_playbook.metrics`` entry-point group.
-In-tree builtins always win over an entry point that reuses their name. (The
-``pyproject.toml`` declaration of that group lands in a later track; T2 needs only
-the decorator-driven builtins.)
+In-tree builtins always win over an entry point that reuses their name.
 """
 
 from __future__ import annotations
@@ -35,7 +29,7 @@ from coding_agent_playbook.evaluators.scope import Scope
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.types import EvalContext, Measurement
 
-#: Entry-point group for out-of-tree metrics (distinct from the Evaluator group).
+#: Entry-point group for out-of-tree metrics.
 ENTRY_POINT_GROUP = "coding_agent_playbook.metrics"
 
 #: name -> Metric subclass, populated by the decorator on import.
@@ -46,18 +40,16 @@ class Metric(ABC):
     """A raw measurement producer over a scope (the "measure" layer).
 
     Subclasses set the class-level measurement descriptors and implement
-    :meth:`measure`. ``higher_is_worse`` keeps the exact name the ``Evaluator``
-    builtins use (the measurement's intrinsic direction: ``True`` for CC/WMC/CBO/
-    DIT/LCOM4 where larger is bad, ``False`` for MI/coverage/test-pass-rate where
-    larger is good) so the ported pairs stay in lockstep. Grading-side concerns
+    :meth:`measure`. ``higher_is_worse`` is the measurement's intrinsic direction:
+    ``True`` for CC/WMC/CBO/DIT/LCOM4 where larger is bad, ``False`` for
+    MI/coverage/test-pass-rate where larger is good. Grading-side concerns
     (absolute thresholds, regression tolerance, composite weight, score
     normalization) belong to the ``Check`` layer, not here.
     """
 
     name: str
     scope: Scope
-    #: The measurement's intrinsic direction (kept name-identical to the
-    #: ``Evaluator`` builtins for parity across the ported pair).
+    #: The measurement's intrinsic direction (``True`` when larger is worse).
     higher_is_worse: bool
     #: Optional importable dependency/capability; ``None`` means stdlib-only.
     requires: str | None = None
@@ -70,11 +62,10 @@ class Metric(ABC):
     def available(self, ctx: EvalContext) -> bool:
         """True when this metric can run in ``ctx``.
 
-        Mirrors :meth:`Evaluator.available`: the declared dependency (if any) must
-        be importable, and the needed context slot must be present - execution
-        metrics (``needs_project``) need ``ctx.project``; static metrics need
-        ``ctx.module``. Families that gate on a different slot (e.g. radon for MI)
-        override this.
+        The declared dependency (if any) must be importable, and the needed
+        context slot must be present - execution metrics (``needs_project``) need
+        ``ctx.project``; static metrics need ``ctx.module``. Families that gate on
+        a different slot (e.g. radon for MI) override this.
         """
         if self.requires is not None and find_spec(self.requires) is None:
             return False
@@ -98,9 +89,8 @@ def _load_metric_builtins() -> None:
 
     Imports both the static ``builtins`` package and the ``execution`` package so
     the metric registry sees the execution metrics (``test_pass_rate``,
-    ``coverage``) alongside the static metrics. Importing these modules fires
-    *both* the ``@register_evaluator`` and the ``@register_metric`` decorators -
-    the two registries are populated from the same import.
+    ``coverage``) alongside the static metrics. Importing these modules fires each
+    module's ``@register_metric`` decorator.
     """
     import coding_agent_playbook.evaluators.builtins
     import coding_agent_playbook.evaluators.execution  # noqa: F401
@@ -132,8 +122,8 @@ def all_metrics() -> list[Metric]:
 def static_metrics() -> list[Metric]:
     """Metrics that need no runnable project (ast/radon over a parsed module).
 
-    Excludes execution metrics (``needs_project=True``) - the same ``needs_project``
-    discriminator the ``Evaluator`` ``static_evaluators()`` uses, since a
+    Excludes execution metrics (``needs_project=True``): the ``needs_project``
+    flag - not the scope axis - is the static-vs-execution discriminator, since a
     FILE-scope metric like ``coverage`` is *execution*, not static.
     """
     return [m for m in all_metrics() if not m.needs_project]

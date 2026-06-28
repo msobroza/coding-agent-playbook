@@ -14,13 +14,8 @@ import builtins as _py_builtins
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.metric import Metric, register_metric
-from coding_agent_playbook.evaluators.registry import Evaluator, register_evaluator
-from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
-from coding_agent_playbook.evaluators.types import (
-    AbsoluteThreshold,
-    Measurement,
-    RegressionPolicy,
-)
+from coding_agent_playbook.evaluators.scope import Scope
+from coding_agent_playbook.evaluators.types import Measurement
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.parse import ClassScope
@@ -33,9 +28,8 @@ _NAME = "cbo"
 def _measure(ctx: EvalContext) -> list[Measurement]:
     """Shared compute: one CBO~ (distinct external types) per class scope.
 
-    Both the Evaluator and the Metric call this; the per-class coupled-type set is
-    resolved by the module-level :func:`_coupled_types` helper, so the two layers
-    stay in lockstep.
+    The per-class coupled-type set is resolved by the module-level
+    :func:`_coupled_types` helper.
     """
     if ctx.module is None:
         return []
@@ -48,24 +42,6 @@ def _measure(ctx: EvalContext) -> list[Measurement]:
         )
         for cls in ctx.module.classes
     ]
-
-
-@register_evaluator
-class CouplingBetweenObjects(Evaluator):
-    """CBO~ - distinct external types referenced by a class (approximate)."""
-
-    name = _NAME
-    scope = Scope.CLASS
-    value_kind = ValueKind.NUMERIC
-    determinism = Determinism.DETERMINISTIC
-    higher_is_worse = True
-    requires = None
-    default_absolute = AbsoluteThreshold(warn=14)
-    default_regression = RegressionPolicy(max_worsening=0.0)
-    default_weight = 0.0
-
-    def evaluate(self, ctx: EvalContext) -> list[Measurement]:
-        return _measure(ctx)
 
 
 @register_metric

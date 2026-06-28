@@ -1,9 +1,12 @@
-"""Edge-case coverage for the static builtins (SPEC prM §B/§I)."""
+"""Edge-case coverage for the static builtins (SPEC prM §B/§I).
+
+Drives each builtin through the ``Metric`` layer (``get_metric(name).measure``).
+"""
 
 from __future__ import annotations
 
+from coding_agent_playbook.evaluators.metric import get_metric
 from coding_agent_playbook.evaluators.parse import parse_module
-from coding_agent_playbook.evaluators.registry import get_evaluator
 from coding_agent_playbook.evaluators.types import EvalContext
 
 
@@ -12,14 +15,14 @@ def _ctx(source: str, label: str = "t.py") -> EvalContext:
 
 
 def _values(name: str, source: str) -> dict[str, float]:
-    ev = get_evaluator(name)
-    return {m.scope_key: m.value for m in ev.evaluate(_ctx(source))}
+    m = get_metric(name)
+    return {meas.scope_key: meas.value for meas in m.measure(_ctx(source))}
 
 
 def test_builtins_return_empty_without_module() -> None:
     empty = EvalContext(module=None, source="", label="x")
     for name in ("cyclomatic_complexity", "wmc", "lcom4", "dit", "cbo"):
-        assert get_evaluator(name).evaluate(empty) == []
+        assert get_metric(name).measure(empty) == []
 
 
 def test_cbo_counts_base_class_and_attribute_annotation() -> None:

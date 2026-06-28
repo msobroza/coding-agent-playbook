@@ -2,13 +2,15 @@
 
 This is the v1.1 activation of the former v2 placeholder (SPEC §15.3). A
 :class:`HarnessRunner` runs a single :class:`~coding_agent_playbook.evals.task.EvalTask`
-against an agent and grades the result through the **unified PR-M**
-:class:`~coding_agent_playbook.evaluators.registry.Evaluator` / :func:`grade`
-model, so the *deterministic* scoring layers (``[expected]`` file checks +
-``[metrics]`` static/execution evaluators, including non-regression vs the
-``setup/`` baseline) are live. **Judged/rubric scoring is deferred to R2**: the
-runner sets no ``Judge`` on the :class:`EvalContext`, so judged evaluators report
-``available() is False`` and are skipped.
+against an agent and grades the result through the
+:class:`~coding_agent_playbook.evaluators.metric.Metric` /
+:class:`~coding_agent_playbook.evaluators.check.Check` /
+:class:`~coding_agent_playbook.evaluators.rubric.Rubric` model, so the
+*deterministic* scoring layers (``[expected]`` file checks + ``[metrics]``
+static/execution metrics, including non-regression vs the ``setup/`` baseline)
+are live. **Judged/rubric scoring is deferred to R2**: the runner sets no
+``Judge`` on the :class:`EvalContext`, so judged checks report ``available() is
+False`` and are skipped.
 
 The class is a **template method**: :meth:`HarnessRunner.run_task` owns the fixed
 pipeline (materialize → render prompt → invoke agent → capture → score → assemble
@@ -22,8 +24,8 @@ directly.
 The result model is **Option B** (SPEC §15.3, revised by the R1 brainstorm):
 :class:`TaskResult` carries one :class:`EvaluationReport` rather than the inert
 ``programmatic_checks``/``rubric_scores`` placeholder fields, which had no
-consumers. ``CheckResult`` is retired — a programmatic check is now a BOOL
-:class:`~coding_agent_playbook.evaluators.types.Finding`.
+consumers. The old per-check placeholder is retired — a programmatic check is now
+a BOOL :class:`~coding_agent_playbook.evaluators.types.ScopeDetail` row.
 """
 
 from __future__ import annotations

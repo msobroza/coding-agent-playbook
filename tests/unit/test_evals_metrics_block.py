@@ -1,13 +1,13 @@
-"""Tests for the dormant eval-block → evaluator wiring (SPEC prM §D, M5).
+"""Tests for the eval-block → ``Check`` wiring (SPEC prM §D).
 
 Covers:
 - parsing a top-level ``[metrics]`` table into ``EvalTask.metrics`` (a sibling
   of ``expected``/``rubric``);
-- ``evaluators_for_task`` compiling ``[metrics]`` → static + execution
-  evaluators and ``[rubric]`` → one ``JudgedCriterion`` per criterion;
-- the compiled judged/execution evaluators being *dormant* (``available()``
-  False without a judge/project) and the compiler never touching the v2
-  runner/judge placeholders.
+- ``rubric_for_task`` compiling ``[metrics]`` → metric-backed Checks, ``[rubric]``
+  → one ``JudgeCheck`` per criterion, and ``[expected]`` → one file Check per
+  entry, into a single :class:`~coding_agent_playbook.evaluators.rubric.Rubric`;
+- the compiled judged Checks being *dormant* (``available()`` False without a
+  judge) and the compiler never touching the runner/judge at build time.
 """
 
 from __future__ import annotations
@@ -18,8 +18,9 @@ from typing import Any
 
 import pytest
 
-from coding_agent_playbook.evals.task import EvalTask, evaluators_for_task
-from coding_agent_playbook.evaluators.judged import JudgedCriterion
+from coding_agent_playbook.evals.task import EvalTask, rubric_for_task
+from coding_agent_playbook.evaluators.check import _MetricCheck
+from coding_agent_playbook.evaluators.checks.judged import JudgeCheck
 from coding_agent_playbook.evaluators.types import (
     AbsoluteThreshold,
     EvalContext,
@@ -58,6 +59,21 @@ def _task_with_metrics_and_rubric() -> EvalTask:
 
 def _empty_ctx() -> EvalContext:
     return EvalContext(module=None, source="", label="output")
+
+
+def _judge_checks(task: EvalTask) -> list[JudgeCheck]:
+    rubric = rubric_for_task(task, task.metrics)
+    return [c for c in rubric.checks if isinstance(c, JudgeCheck)]
+
+
+def _metric_names(task: EvalTask) -> set[str]:
+    rubric = rubric_for_task(task, task.metrics)
+    return {c.metric.name for c in rubric.checks if isinstance(c, _MetricCheck)}
+
+
+def _check_ids(task: EvalTask) -> set[str]:
+    rubric = rubric_for_task(task, task.metrics)
+    return {c.id for c in rubric.checks}
 
 
 # --- EvalTask.metrics parsing -------------------------------------------------
@@ -155,36 +171,34 @@ def test_eval_task_metrics_coerces_int_bounds_to_float() -> None:
     assert isinstance(fail, float)
 
 
-# --- evaluators_for_task ------------------------------------------------------
+# --- rubric_for_task: [metrics] + [rubric] -----------------------------------
 
 
-def test_evaluators_for_task_compiles_metrics_and_rubric() -> None:
+def test_rubric_for_task_compiles_metrics_and_rubric() -> None:
     task = _task_with_metrics_and_rubric()
-    evs = evaluators_for_task(task, task.metrics)
-    names = {ev.name for ev in evs}
+    names = _metric_names(task)
     # Static metric named in [metrics].regression is selected.
     assert "cyclomatic_complexity" in names
-    # Execution evaluators named in [metrics] are selected too.
+    # Execution metrics named in [metrics] are selected too.
     assert "coverage" in names
     assert "test_pass_rate" in names
-    # One JudgedCriterion per rubric criterion.
-    judged = [ev for ev in evs if isinstance(ev, JudgedCriterion)]
+    # One JudgeCheck per rubric criterion.
+    judged = _judge_checks(task)
     assert len(judged) == 2
-    assert {ev.criterion for ev in judged} == {
+    assert {c.criterion for c in judged} == {
         "Findings prioritized correctly",
         "Each finding proposes a concrete fix",
     }
 
 
-def test_evaluators_for_task_assigns_rubric_weights() -> None:
+def test_rubric_for_task_assigns_rubric_weights() -> None:
     task = _task_with_metrics_and_rubric()
-    evs = evaluators_for_task(task, task.metrics)
-    judged = {ev.criterion: ev for ev in evs if isinstance(ev, JudgedCriterion)}
+    judged = {c.criterion: c for c in _judge_checks(task)}
     assert judged["Findings prioritized correctly"].weight == pytest.approx(0.5)
     assert judged["Each finding proposes a concrete fix"].weight == pytest.approx(0.5)
 
 
-def test_evaluators_for_task_uniform_weights_when_omitted() -> None:
+def test_rubric_for_task_uniform_weights_when_omitted() -> None:
     data: dict[str, Any] = {
         "id": "t",
         "prompt_id": "p",
@@ -192,25 +206,21 @@ def test_evaluators_for_task_uniform_weights_when_omitted() -> None:
         "rubric": {"criteria": ["A", "B", "C", "D"]},
     }
     task = EvalTask.from_dict(data, source_path=Path("/tmp/task.toml"), source_package="<test>")
-    evs = evaluators_for_task(task, task.metrics)
-    judged = [ev for ev in evs if isinstance(ev, JudgedCriterion)]
+    judged = _judge_checks(task)
     assert len(judged) == 4
-    assert all(ev.weight == pytest.approx(0.25) for ev in judged)
+    assert all(c.weight == pytest.approx(0.25) for c in judged)
 
 
-def test_evaluators_for_task_compiled_judged_and_execution_are_dormant() -> None:
-    """With an empty ctx (no judge, no project) the judged + execution
-    evaluators report unavailable, so the v1 runner would skip them. Static
-    evaluators are unavailable too here only because there is no module."""
+def test_rubric_for_task_compiled_judged_checks_are_dormant() -> None:
+    """With an empty ctx (no judge) the judged Checks report unavailable, so the
+    runner skips them."""
     task = _task_with_metrics_and_rubric()
-    evs = evaluators_for_task(task, task.metrics)
     ctx = _empty_ctx()
-    for ev in evs:
-        if isinstance(ev, JudgedCriterion) or ev.name in {"coverage", "test_pass_rate"}:
-            assert ev.available(ctx) is False
+    for check in _judge_checks(task):
+        assert check.available(ctx) is False
 
 
-def test_evaluators_for_task_only_metrics() -> None:
+def test_rubric_for_task_only_metrics() -> None:
     data: dict[str, Any] = {
         "id": "t",
         "prompt_id": "p",
@@ -218,13 +228,11 @@ def test_evaluators_for_task_only_metrics() -> None:
         "metrics": {"mode": "regression", "regression": {"wmc": {"max_worsening": 0}}},
     }
     task = EvalTask.from_dict(data, source_path=Path("/tmp/task.toml"), source_package="<test>")
-    evs = evaluators_for_task(task, task.metrics)
-    names = {ev.name for ev in evs}
-    assert "wmc" in names
-    assert not any(isinstance(ev, JudgedCriterion) for ev in evs)
+    assert "wmc" in _metric_names(task)
+    assert _judge_checks(task) == []
 
 
-def test_evaluators_for_task_only_rubric() -> None:
+def test_rubric_for_task_only_rubric() -> None:
     data: dict[str, Any] = {
         "id": "t",
         "prompt_id": "p",
@@ -232,33 +240,33 @@ def test_evaluators_for_task_only_rubric() -> None:
         "rubric": {"criteria": ["A"], "weights": [1.0]},
     }
     task = EvalTask.from_dict(data, source_path=Path("/tmp/task.toml"), source_package="<test>")
-    evs = evaluators_for_task(task, task.metrics)
-    assert all(isinstance(ev, JudgedCriterion) for ev in evs)
-    assert len(evs) == 1
+    rubric = rubric_for_task(task, task.metrics)
+    assert all(isinstance(c, JudgeCheck) for c in rubric.checks)
+    assert len(rubric.checks) == 1
 
 
-def test_evaluators_for_task_empty_when_no_blocks() -> None:
+def test_rubric_for_task_empty_when_no_blocks() -> None:
     task = EvalTask.from_dict(
         {"id": "t", "prompt_id": "p", "description": "d"},
         source_path=Path("/tmp/task.toml"),
         source_package="<test>",
     )
-    assert evaluators_for_task(task, task.metrics) == []
+    assert rubric_for_task(task, task.metrics).checks == []
 
 
-def test_evaluators_for_task_does_not_import_v2_runner() -> None:
-    """Compiling blocks must not pull in (or call) the v2 runner/judge."""
+def test_rubric_for_task_does_not_import_runner() -> None:
+    """Compiling blocks must not pull in (or call) the runner."""
     task = _task_with_metrics_and_rubric()
     # Drop any pre-imported runner module so we can prove the compiler does not
     # import it as a side effect.
     sys.modules.pop("coding_agent_playbook.evals.runner", None)
-    evaluators_for_task(task, task.metrics)
+    rubric_for_task(task, task.metrics)
     assert "coding_agent_playbook.evals.runner" not in sys.modules
 
 
-def test_evaluators_for_task_dedupes_metric_named_in_multiple_blocks() -> None:
+def test_rubric_for_task_dedupes_metric_named_in_multiple_blocks() -> None:
     """A metric named in both thresholds and regression compiles to exactly one
-    evaluator, not two."""
+    Check, not two."""
     data: dict[str, Any] = {
         "id": "t",
         "prompt_id": "p",
@@ -270,13 +278,14 @@ def test_evaluators_for_task_dedupes_metric_named_in_multiple_blocks() -> None:
         },
     }
     task = EvalTask.from_dict(data, source_path=Path("/tmp/task.toml"), source_package="<test>")
-    evs = evaluators_for_task(task, task.metrics)
-    assert [ev.name for ev in evs] == ["coverage"]
+    rubric = rubric_for_task(task, task.metrics)
+    metric_checks = [c for c in rubric.checks if isinstance(c, _MetricCheck)]
+    assert [c.metric.name for c in metric_checks] == ["coverage"]
 
 
-def test_evaluators_for_task_skips_unknown_metric_name() -> None:
-    """An unknown evaluator name (flagged separately by the validator) is skipped
-    by the compiler rather than raising."""
+def test_rubric_for_task_skips_unknown_metric_name() -> None:
+    """An unknown metric name (flagged separately by the validator) is skipped by
+    the compiler rather than raising."""
     data: dict[str, Any] = {
         "id": "t",
         "prompt_id": "p",
@@ -286,23 +295,19 @@ def test_evaluators_for_task_skips_unknown_metric_name() -> None:
         },
     }
     task = EvalTask.from_dict(data, source_path=Path("/tmp/task.toml"), source_package="<test>")
-    evs = evaluators_for_task(task, task.metrics)
-    names = {ev.name for ev in evs}
+    names = _metric_names(task)
     assert "wmc" in names
     assert "not_a_metric" not in names
 
 
-def test_evaluators_for_task_does_not_call_judge_score() -> None:
-    """Compilation only BUILDS evaluators; it must not invoke ``Judge.score``
-    (the v2 placeholder raises ``NotImplementedError``). If it called the judge
-    during compilation this would raise."""
+def test_rubric_for_task_does_not_call_judge_score() -> None:
+    """Compilation only BUILDS Checks; it must not invoke the judge. With no judge
+    supplied, building must succeed without scoring anything."""
     task = _task_with_metrics_and_rubric()
-    # No judge supplied; building must succeed without scoring anything.
-    evs = evaluators_for_task(task, task.metrics)
-    assert any(isinstance(ev, JudgedCriterion) for ev in evs)
+    assert _judge_checks(task)  # judged checks built, but never scored
 
 
-# --- evaluators_for_task: [expected] -> BOOL evaluators (R3) ------------------
+# --- rubric_for_task: [expected] -> file Checks ------------------------------
 
 
 def _task_with_expected() -> EvalTask:
@@ -323,36 +328,48 @@ def _task_with_expected() -> EvalTask:
     return EvalTask.from_dict(data, source_path=Path("/tmp/task.toml"), source_package="<test>")
 
 
-def test_evaluators_for_task_compiles_expected_into_bool_evaluators() -> None:
-    from coding_agent_playbook.evaluators.expected import (
-        FileContains,
-        FileExists,
-        FileForbidden,
-        FileUnchanged,
+def test_rubric_for_task_compiles_expected_into_file_checks() -> None:
+    from coding_agent_playbook.evaluators.checks.files import (
+        FileContainsCheck,
+        FileExistsCheck,
+        FileForbiddenCheck,
+        FileUnchangedCheck,
     )
 
-    evs = evaluators_for_task(_task_with_expected(), None)
-    names = {ev.name for ev in evs}
-    assert names == {
-        "expected:file_exists:out.py",
-        "expected:file_exists:helper.py",
-        "expected:file_contains:out.py~/def foo/",
-        "expected:file_contains:out.py~/def bar/",
-        "expected:file_unchanged:src/m.py",
-        "expected:file_forbidden:__pycache__/",
+    rubric = rubric_for_task(_task_with_expected(), None)
+    file_checks = [
+        c
+        for c in rubric.checks
+        if isinstance(
+            c, (FileExistsCheck, FileContainsCheck, FileUnchangedCheck, FileForbiddenCheck)
+        )
+    ]
+    ids = {c.id for c in file_checks}
+    assert ids == {
+        "file_exists:out.py",
+        "file_exists:helper.py",
+        "file_contains:out.py~/def foo/",
+        "file_contains:out.py~/def bar/",
+        "file_unchanged:src/m.py",
+        "file_forbidden:__pycache__/",
     }
-    by_kind = {type(ev) for ev in evs}
-    assert by_kind == {FileExists, FileContains, FileUnchanged, FileForbidden}
+    by_kind = {type(c) for c in file_checks}
+    assert by_kind == {
+        FileExistsCheck,
+        FileContainsCheck,
+        FileUnchangedCheck,
+        FileForbiddenCheck,
+    }
 
 
-def test_evaluators_for_task_no_expected_emits_none() -> None:
-    """A task with no [expected] block emits no expected:* evaluators."""
-    evs = evaluators_for_task(_task_with_metrics_and_rubric(), None)
-    assert not any(ev.name.startswith("expected:") for ev in evs)
+def test_rubric_for_task_no_expected_emits_no_file_checks() -> None:
+    """A task with no [expected] block emits no file:* Checks."""
+    ids = _check_ids(_task_with_metrics_and_rubric())
+    assert not any(i.startswith("file_") for i in ids)
 
 
-def test_evaluators_for_task_expected_and_metrics_and_rubric_coexist() -> None:
-    """All three families compile from one task into one evaluator list."""
+def test_rubric_for_task_expected_and_metrics_and_rubric_coexist() -> None:
+    """All three families compile from one task into one Rubric."""
     data: dict[str, Any] = {
         "id": "t",
         "prompt_id": "p",
@@ -362,8 +379,7 @@ def test_evaluators_for_task_expected_and_metrics_and_rubric_coexist() -> None:
         "expected": {"files_created": ["out.py"]},
     }
     task = EvalTask.from_dict(data, source_path=Path("/tmp/task.toml"), source_package="<test>")
-    evs = evaluators_for_task(task, task.metrics)
-    names = {ev.name for ev in evs}
-    assert "wmc" in names
-    assert "judged:clarity" in names
-    assert "expected:file_exists:out.py" in names
+    ids = _check_ids(task)
+    assert "nonreg:wmc" in ids
+    assert "judge:clarity" in ids
+    assert "file_exists:out.py" in ids
