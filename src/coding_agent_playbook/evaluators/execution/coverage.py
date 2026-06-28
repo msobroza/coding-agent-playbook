@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.evaluators.metric import Metric, register_metric
 from coding_agent_playbook.evaluators.parse import scope_key
 from coding_agent_playbook.evaluators.registry import Evaluator, register_evaluator
 from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
@@ -32,12 +33,42 @@ from coding_agent_playbook.evaluators.types import (
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.types import EvalContext
 
+_NAME = "coverage"
+
+
+def _measure(ctx: EvalContext) -> list[Measurement]:
+    """Shared compute: one FILE coverage measurement per file + one MODULE total.
+
+    Both the Evaluator and the Metric call this; it reads
+    :meth:`ProjectHandle.run` (cached), so the suite never re-runs even when
+    ``test_pass_rate`` already triggered it. The two layers stay in lockstep.
+    """
+    if ctx.project is None:
+        return []
+    report = ctx.project.run().coverage
+    measurements = [
+        Measurement(
+            evaluator=_NAME,
+            scope_key=scope_key(filename, None),
+            value=float(pct),
+        )
+        for filename, pct in sorted(report.per_file.items())
+    ]
+    measurements.append(
+        Measurement(
+            evaluator=_NAME,
+            scope_key=scope_key(ctx.label, None),
+            value=float(report.total),
+        )
+    )
+    return measurements
+
 
 @register_evaluator
 class Coverage(Evaluator):
     """Line coverage per file (+ a MODULE total) from one cached suite run."""
 
-    name = "coverage"
+    name = _NAME
     scope = Scope.FILE
     value_kind = ValueKind.NUMERIC
     determinism = Determinism.DETERMINISTIC
@@ -53,27 +84,22 @@ class Coverage(Evaluator):
         return ctx.project is not None
 
     def evaluate(self, ctx: EvalContext) -> list[Measurement]:
-        """Emit one FILE measurement per covered file + one MODULE total.
+        return _measure(ctx)
 
-        Reads :meth:`ProjectHandle.run` (cached), so this never re-runs the suite
-        even when ``test_pass_rate`` already triggered it.
-        """
-        if ctx.project is None:
-            return []
-        report = ctx.project.run().coverage
-        measurements = [
-            Measurement(
-                evaluator=self.name,
-                scope_key=scope_key(filename, None),
-                value=float(pct),
-            )
-            for filename, pct in sorted(report.per_file.items())
-        ]
-        measurements.append(
-            Measurement(
-                evaluator=self.name,
-                scope_key=scope_key(ctx.label, None),
-                value=float(report.total),
-            )
-        )
-        return measurements
+
+@register_metric
+class CoverageMetric(Metric):
+    """``coverage`` as a :class:`Metric` (shares :func:`_measure`).
+
+    ``needs_project=True`` ⇒ the inherited :meth:`Metric.available` requires
+    ``ctx.project``, matching the Evaluator's project-handle gate.
+    """
+
+    name = _NAME
+    scope = Scope.FILE
+    higher_is_worse = False
+    requires = None
+    needs_project = True
+
+    def measure(self, ctx: EvalContext) -> list[Measurement]:
+        return _measure(ctx)

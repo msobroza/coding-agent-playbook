@@ -18,6 +18,7 @@ from __future__ import annotations
 import importlib.util
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.evaluators.metric import Metric, register_metric
 from coding_agent_playbook.evaluators.parse import scope_key
 from coding_agent_playbook.evaluators.registry import Evaluator, register_evaluator
 from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
@@ -30,6 +31,41 @@ from coding_agent_playbook.evaluators.types import (
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.types import EvalContext
 
+_NAME = "maintainability_index"
+
+
+def _available(ctx: EvalContext) -> bool:
+    """True only when radon is importable *and* a parsed module is present.
+
+    Shared by both the Evaluator and the Metric so the radon-absent skip behaves
+    identically on each layer. Mirrors the ABC's dependency probe (``find_spec``)
+    but also requires a parsed module, so the gate skips MI both when the optional
+    extra is missing and when there is nothing static to measure.
+    """
+    if importlib.util.find_spec("radon") is None:
+        return False
+    return ctx.module is not None
+
+
+def _measure(ctx: EvalContext) -> list[Measurement]:
+    """Shared compute: one FILE-scope MI measurement (radon imported lazily here).
+
+    Both the Evaluator and the Metric call this. ``radon`` is imported lazily so
+    importing this module never requires the optional dependency.
+    """
+    if ctx.module is None:
+        return []
+    from radon.metrics import mi_visit
+
+    value = mi_visit(ctx.source, multi=True)
+    return [
+        Measurement(
+            evaluator=_NAME,
+            scope_key=scope_key(ctx.label, None),
+            value=float(value),
+        )
+    ]
+
 
 @register_evaluator
 class MaintainabilityIndex(Evaluator):
@@ -40,7 +76,7 @@ class MaintainabilityIndex(Evaluator):
     ``higher_is_worse`` is ``False`` and the absolute bound is a ``fail`` floor.
     """
 
-    name = "maintainability_index"
+    name = _NAME
     scope = Scope.FILE
     value_kind = ValueKind.NUMERIC
     determinism = Determinism.DETERMINISTIC
@@ -51,27 +87,28 @@ class MaintainabilityIndex(Evaluator):
     default_weight = 0.0
 
     def available(self, ctx: EvalContext) -> bool:
-        """True only when radon is importable *and* source is present.
-
-        Mirrors the ABC's dependency probe (``find_spec``) but also requires a
-        parsed module, so the gate skips MI both when the optional extra is
-        missing and when there is nothing static to measure.
-        """
-        if importlib.util.find_spec("radon") is None:
-            return False
-        return ctx.module is not None
+        return _available(ctx)
 
     def evaluate(self, ctx: EvalContext) -> list[Measurement]:
-        """Emit one FILE-scope measurement (radon imported lazily here)."""
-        if ctx.module is None:
-            return []
-        from radon.metrics import mi_visit
+        return _measure(ctx)
 
-        value = mi_visit(ctx.source, multi=True)
-        return [
-            Measurement(
-                evaluator=self.name,
-                scope_key=scope_key(ctx.label, None),
-                value=float(value),
-            )
-        ]
+
+@register_metric
+class MaintainabilityIndexMetric(Metric):
+    """``maintainability_index`` as a :class:`Metric` (shares :func:`_measure`).
+
+    Keeps ``requires="radon"`` and the lazy import; :meth:`available` returns
+    ``False`` when radon is absent so the metric layer skips MI on an air-gapped
+    install exactly like the Evaluator does.
+    """
+
+    name = _NAME
+    scope = Scope.FILE
+    higher_is_worse = False
+    requires = "radon"
+
+    def available(self, ctx: EvalContext) -> bool:
+        return _available(ctx)
+
+    def measure(self, ctx: EvalContext) -> list[Measurement]:
+        return _measure(ctx)

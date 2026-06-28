@@ -13,6 +13,7 @@ import ast
 import builtins as _py_builtins
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.evaluators.metric import Metric, register_metric
 from coding_agent_playbook.evaluators.registry import Evaluator, register_evaluator
 from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
 from coding_agent_playbook.evaluators.types import (
@@ -26,13 +27,34 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.types import EvalContext
 
 _BUILTIN_NAMES = frozenset(dir(_py_builtins))
+_NAME = "cbo"
+
+
+def _measure(ctx: EvalContext) -> list[Measurement]:
+    """Shared compute: one CBO~ (distinct external types) per class scope.
+
+    Both the Evaluator and the Metric call this; the per-class coupled-type set is
+    resolved by the module-level :func:`_coupled_types` helper, so the two layers
+    stay in lockstep.
+    """
+    if ctx.module is None:
+        return []
+    own_names = {cls.qualname.rsplit(".", 1)[-1] for cls in ctx.module.classes}
+    return [
+        Measurement(
+            evaluator=_NAME,
+            scope_key=cls.scope_key,
+            value=float(len(_coupled_types(cls, own_names))),
+        )
+        for cls in ctx.module.classes
+    ]
 
 
 @register_evaluator
 class CouplingBetweenObjects(Evaluator):
     """CBO~ - distinct external types referenced by a class (approximate)."""
 
-    name = "cbo"
+    name = _NAME
     scope = Scope.CLASS
     value_kind = ValueKind.NUMERIC
     determinism = Determinism.DETERMINISTIC
@@ -43,17 +65,20 @@ class CouplingBetweenObjects(Evaluator):
     default_weight = 0.0
 
     def evaluate(self, ctx: EvalContext) -> list[Measurement]:
-        if ctx.module is None:
-            return []
-        own_names = {cls.qualname.rsplit(".", 1)[-1] for cls in ctx.module.classes}
-        return [
-            Measurement(
-                evaluator=self.name,
-                scope_key=cls.scope_key,
-                value=float(len(_coupled_types(cls, own_names))),
-            )
-            for cls in ctx.module.classes
-        ]
+        return _measure(ctx)
+
+
+@register_metric
+class CouplingBetweenObjectsMetric(Metric):
+    """``cbo`` as a :class:`Metric` (shares :func:`_measure`)."""
+
+    name = _NAME
+    scope = Scope.CLASS
+    higher_is_worse = True
+    requires = None
+
+    def measure(self, ctx: EvalContext) -> list[Measurement]:
+        return _measure(ctx)
 
 
 def _coupled_types(cls: ClassScope, own_names: set[str]) -> set[str]:

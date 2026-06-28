@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.evaluators.metric import Metric, register_metric
 from coding_agent_playbook.evaluators.parse import scope_key
 from coding_agent_playbook.evaluators.registry import Evaluator, register_evaluator
 from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
@@ -33,12 +34,33 @@ from coding_agent_playbook.evaluators.types import (
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.types import EvalContext
 
+_NAME = "test_pass_rate"
+
+
+def _measure(ctx: EvalContext) -> list[Measurement]:
+    """Shared compute: run the suite (cached) and emit one MODULE pass-rate SCORE.
+
+    Both the Evaluator and the Metric call this. Uses the handle's flaky-tolerant
+    ``best_pass_rate`` so an enabled ``flaky_retries`` is honoured; with the
+    default (``0``) it is exactly the single cached run's rate.
+    """
+    if ctx.project is None:
+        return []
+    rate = ctx.project.best_pass_rate()
+    return [
+        Measurement(
+            evaluator=_NAME,
+            scope_key=scope_key(ctx.label, None),
+            value=float(rate),
+        )
+    ]
+
 
 @register_evaluator
 class TestPassRate(Evaluator):
     """Test-pass rate over the whole suite (one MODULE measurement)."""
 
-    name = "test_pass_rate"
+    name = _NAME
     scope = Scope.MODULE
     value_kind = ValueKind.SCORE
     determinism = Determinism.DETERMINISTIC
@@ -54,19 +76,22 @@ class TestPassRate(Evaluator):
         return ctx.project is not None
 
     def evaluate(self, ctx: EvalContext) -> list[Measurement]:
-        """Run the suite (cached) and emit one MODULE-scope pass-rate SCORE.
+        return _measure(ctx)
 
-        Uses the handle's flaky-tolerant ``best_pass_rate`` so an enabled
-        ``flaky_retries`` is honoured; with the default (``0``) it is exactly the
-        single cached run's rate.
-        """
-        if ctx.project is None:
-            return []
-        rate = ctx.project.best_pass_rate()
-        return [
-            Measurement(
-                evaluator=self.name,
-                scope_key=scope_key(ctx.label, None),
-                value=float(rate),
-            )
-        ]
+
+@register_metric
+class TestPassRateMetric(Metric):
+    """``test_pass_rate`` as a :class:`Metric` (shares :func:`_measure`).
+
+    ``needs_project=True`` ⇒ the inherited :meth:`Metric.available` requires
+    ``ctx.project``, matching the Evaluator's project-handle gate.
+    """
+
+    name = _NAME
+    scope = Scope.MODULE
+    higher_is_worse = False
+    requires = None
+    needs_project = True
+
+    def measure(self, ctx: EvalContext) -> list[Measurement]:
+        return _measure(ctx)

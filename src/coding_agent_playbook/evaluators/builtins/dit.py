@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.evaluators.metric import Metric, register_metric
 from coding_agent_playbook.evaluators.registry import Evaluator, register_evaluator
 from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
 from coding_agent_playbook.evaluators.types import (
@@ -22,12 +23,30 @@ from coding_agent_playbook.evaluators.types import (
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.types import EvalContext
 
+_NAME = "dit"
+
+
+def _measure(ctx: EvalContext) -> list[Measurement]:
+    """Shared compute: one DIT (inheritance depth) measurement per class scope.
+
+    Both the Evaluator and the Metric call this; the per-class depth is resolved
+    by the module-level :func:`_dit` helper, so the two layers stay in lockstep.
+    """
+    if ctx.module is None:
+        return []
+    bases_by_qualname = {cls.qualname: cls.bases for cls in ctx.module.classes}
+    results: list[Measurement] = []
+    for cls in ctx.module.classes:
+        depth = _dit(cls.qualname, bases_by_qualname, set())
+        results.append(Measurement(evaluator=_NAME, scope_key=cls.scope_key, value=float(depth)))
+    return results
+
 
 @register_evaluator
 class DepthOfInheritance(Evaluator):
     """DIT - depth of the inheritance tree for each class."""
 
-    name = "dit"
+    name = _NAME
     scope = Scope.CLASS
     value_kind = ValueKind.NUMERIC
     determinism = Determinism.DETERMINISTIC
@@ -38,16 +57,20 @@ class DepthOfInheritance(Evaluator):
     default_weight = 0.0
 
     def evaluate(self, ctx: EvalContext) -> list[Measurement]:
-        if ctx.module is None:
-            return []
-        bases_by_qualname = {cls.qualname: cls.bases for cls in ctx.module.classes}
-        results: list[Measurement] = []
-        for cls in ctx.module.classes:
-            depth = _dit(cls.qualname, bases_by_qualname, set())
-            results.append(
-                Measurement(evaluator=self.name, scope_key=cls.scope_key, value=float(depth))
-            )
-        return results
+        return _measure(ctx)
+
+
+@register_metric
+class DepthOfInheritanceMetric(Metric):
+    """``dit`` as a :class:`Metric` (shares :func:`_measure`)."""
+
+    name = _NAME
+    scope = Scope.CLASS
+    higher_is_worse = True
+    requires = None
+
+    def measure(self, ctx: EvalContext) -> list[Measurement]:
+        return _measure(ctx)
 
 
 def _dit(qualname: str, bases_by_qualname: dict[str, list[str]], seen: set[str]) -> int:
