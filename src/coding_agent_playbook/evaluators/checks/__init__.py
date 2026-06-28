@@ -8,12 +8,15 @@ the ``Check``-layer counterpart of the ``[expected]`` predicates; the metric-bac
 parent :mod:`coding_agent_playbook.evaluators.check` module. T4a adds the judged
 check (:mod:`coding_agent_playbook.evaluators.checks.judged`) and the convenience
 execution-check factories (:mod:`coding_agent_playbook.evaluators.checks.execution`).
+T4b adds the boolean composers (:mod:`coding_agent_playbook.evaluators.checks.compose`:
+``AllOf`` / ``AnyOf`` / ``Not``).
 
 This track is additive: nothing imports these yet outside the new tests.
 """
 
 from __future__ import annotations
 
+from coding_agent_playbook.evaluators.checks.compose import AllOf, AnyOf, Not
 from coding_agent_playbook.evaluators.checks.execution import CoverageCheck, TestsPassCheck
 from coding_agent_playbook.evaluators.checks.files import (
     FileContainsCheck,
@@ -24,11 +27,14 @@ from coding_agent_playbook.evaluators.checks.files import (
 from coding_agent_playbook.evaluators.checks.judged import JudgeCheck
 
 __all__ = [
+    "AllOf",
+    "AnyOf",
     "CoverageCheck",
     "FileContainsCheck",
     "FileExistsCheck",
     "FileForbiddenCheck",
     "FileUnchangedCheck",
     "JudgeCheck",
+    "Not",
     "TestsPassCheck",
 ]

@@ -1,15 +1,18 @@
-"""The ``Rubric`` aggregator + the ``Rubric``-is-a-``Metric`` composition (T4a).
+"""The ``Rubric`` aggregator + the ``Rubric``-is-a-``Metric`` composition (T4a/T4b).
 
 :class:`Rubric` is the "aggregate" layer of the clean-slate
 :class:`~coding_agent_playbook.evaluators.metric.Metric` (measure) ->
 :class:`~coding_agent_playbook.evaluators.check.Check` (grade) -> ``Rubric``
-(aggregate) split. It holds an ordered list of checks, runs each in **authored
-order** (the concurrent short-circuit scheduler + the boolean composers are a
-separate later track, T4b), and folds their
+(aggregate) split. It holds an ordered list of checks, runs them through the
+cost-tiered :func:`~coding_agent_playbook.evaluators.scheduler.schedule` (T4b -
+cheapest tier first, results in **authored order**), and folds their
 :class:`~coding_agent_playbook.evaluators.types.CheckResult` rows into one
 :class:`~coding_agent_playbook.evaluators.types.EvaluationReport` with the same
 gate / weighted-composite / strict rules :func:`coding_agent_playbook.evaluators.grade.grade`
-uses.
+uses. :meth:`evaluate` defaults to ``fail_fast=False`` so the report stays
+complete (every available check runs - behaviour-identical to the pre-scheduler
+T4a loop); a caller may opt into ``fail_fast=True`` (gate-lost short-circuit) and
+``max_workers > 1`` (per-tier concurrency).
 
 ``Rubric`` is **also** a :class:`Metric`: a rubric nested inside a parent rubric
 exposes its composite as one MODULE-scope
@@ -29,9 +32,9 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.check import MeasurementSet
 from coding_agent_playbook.evaluators.metric import Metric
+from coding_agent_playbook.evaluators.scheduler import schedule
 from coding_agent_playbook.evaluators.scope import CostTier, Scope
 from coding_agent_playbook.evaluators.types import (
-    CheckResult,
     EvaluationReport,
     Measurement,
     ScopeDetail,
@@ -39,7 +42,7 @@ from coding_agent_playbook.evaluators.types import (
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.check import Check
-    from coding_agent_playbook.evaluators.types import EvalContext, Finding
+    from coding_agent_playbook.evaluators.types import CheckResult, EvalContext, Finding
 
 
 class Rubric(Metric):
@@ -92,24 +95,41 @@ class Rubric(Metric):
         measurements: MeasurementSet,
         *,
         strict: bool = False,
+        fail_fast: bool = False,
+        max_workers: int = 1,
     ) -> EvaluationReport:
-        """Run the checks in authored order and fold them into one report.
+        """Run the checks via the cost-tiered scheduler and fold them into one report.
 
-        Each available check is graded; an unavailable check (e.g. a
+        Delegates the run to
+        :func:`~coding_agent_playbook.evaluators.scheduler.schedule` (``op="and"``,
+        results always in authored order): checks execute cheapest-tier-first, and
+        an unavailable check (e.g. a
         :class:`~coding_agent_playbook.evaluators.checks.judged.JudgeCheck` with no
         judge) is recorded as a ``status="skipped"`` placeholder that never sinks
-        the gate. The gate is ``all`` required *run* checks passing, plus - under
-        ``strict`` - no required run check carrying a ``warn`` leaf. The composite
-        is the weight-normalized mean of the run checks' scores (``None`` when no
-        run check carries weight). ``findings`` flattens the leaf
-        :class:`ScopeDetail` rows (transitional, until the destructive cutover).
+        the gate.
+
+        ``fail_fast`` (default ``False``) toggles the scheduler's short-circuit:
+        the default leaves it **off** so the report stays complete - every
+        available check runs, identical to the pre-scheduler behaviour. Only a
+        caller opting into ``fail_fast=True`` lets a lost gate skip the remaining
+        costlier tiers (so a failing deterministic check can spare an LLM call).
+        ``max_workers > 1`` runs each tier's checks concurrently; the default
+        ``1`` is sequential/reproducible (what CI uses).
+
+        The gate is ``all`` required *run* checks passing, plus - under ``strict``
+        - no required run check carrying a ``warn`` leaf. The composite is the
+        weight-normalized mean of the run checks' scores (``None`` when no run
+        check carries weight). ``findings`` flattens the leaf :class:`ScopeDetail`
+        rows (transitional, until the destructive cutover).
         """
-        results: list[CheckResult] = []
-        for check in self.checks:
-            if check.available(ctx):
-                results.append(check.grade(ctx, measurements))
-            else:
-                results.append(self._skipped(check))
+        results = schedule(
+            self.checks,
+            ctx,
+            measurements,
+            op="and",
+            short_circuit=fail_fast,
+            max_workers=max_workers,
+        )
 
         passed = self._gate(results, strict=strict)
         composite = self._composite(results)
@@ -123,21 +143,6 @@ class Rubric(Metric):
             composite=composite,
             passed=passed,
             checks=results,
-        )
-
-    @staticmethod
-    def _skipped(check: Check) -> CheckResult:
-        """A placeholder result for a check that could not run in this ctx."""
-        return CheckResult(
-            check_id=check.id,
-            passed=False,
-            score=None,
-            weight=check.weight,
-            required=check.required,
-            determinism=check.determinism,
-            cost=check.cost,
-            status="skipped",
-            subresults=(),
         )
 
     @staticmethod
