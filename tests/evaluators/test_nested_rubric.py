@@ -22,6 +22,7 @@ import pytest
 
 from coding_agent_playbook.evaluators.check import Check, MeasurementSet, ThresholdCheck
 from coding_agent_playbook.evaluators.metric import Metric
+from coding_agent_playbook.evaluators.normalizer import Identity, PercentNormalizer, RampNormalizer
 from coding_agent_playbook.evaluators.rubric import Rubric
 from coding_agent_playbook.evaluators.scope import CostTier, Determinism, Scope
 from coding_agent_playbook.evaluators.types import CheckResult, EvalContext, Measurement
@@ -30,7 +31,7 @@ from coding_agent_playbook.evaluators.types import CheckResult, EvalContext, Mea
 class _CC(Metric):
     name = "cyclomatic_complexity"
     scope = Scope.FUNCTION
-    higher_is_worse = True
+    normalizer = RampNormalizer(good=5, bad=20)
     requires = None
 
     def available(self, ctx: EvalContext) -> bool:
@@ -43,7 +44,7 @@ class _CC(Metric):
 class _Cov(Metric):
     name = "coverage"
     scope = Scope.FILE
-    higher_is_worse = False
+    normalizer = PercentNormalizer()
     requires = None
 
     def available(self, ctx: EvalContext) -> bool:
@@ -78,11 +79,13 @@ def _cc(scope: str, value: float) -> Measurement:
 
 def test_rubric_is_a_metric() -> None:
     child = Rubric(
-        [ThresholdCheck(_Cov(), warn=80.0, fail=40.0, weight=1.0, required=False)],
+        [ThresholdCheck(_Cov(), warn=0.8, fail=0.4, weight=1.0, required=False)],
         name="child",
     )
     assert child.scope is Scope.MODULE
-    assert child.higher_is_worse is False
+    # A rubric's composite is already a 0-1 goodness ⇒ Identity normalizer.
+    assert isinstance(child.normalizer, Identity)
+    assert child.score(0.5) == 0.5
     assert child.requires is None
     assert child.name == "child"
     # No execution check ⇒ the rubric metric does not need a project.
@@ -96,36 +99,36 @@ def test_needs_project_when_a_child_check_is_execution_tier() -> None:
 
     exec_metric = _Cov()
     exec_metric.needs_project = True
-    rubric = Rubric([_ExecCheck(exec_metric, warn=80.0)])
+    rubric = Rubric([_ExecCheck(exec_metric, warn=0.8)])
     assert any(c.cost == CostTier.EXECUTION for c in rubric.checks)
     assert rubric.needs_project is True
 
 
 def test_child_measure_returns_one_composite_measurement() -> None:
     child = Rubric(
-        [ThresholdCheck(_Cov(), warn=80.0, fail=40.0, weight=1.0, required=False)],
+        [ThresholdCheck(_Cov(), warn=0.8, fail=0.4, weight=1.0, required=False)],
         name="child",
     )
-    # coverage=60 under warn=80/fail=40 ramps to (60-40)/(80-40) = 0.5.
+    # coverage=60 -> PercentNormalizer score 0.6; that is the child composite.
     ctx = _ctx(candidate=[_cov("a.py", 60.0)])
     out = child.measure(ctx)
     assert len(out) == 1
     (m,) = out
     assert m.evaluator == "child"
     assert m.scope_key == "child"
-    assert m.value == 0.5
+    assert m.value == 0.6
 
 
 def test_parent_gate_fails_when_child_composite_below_bound() -> None:
     child = Rubric(
-        [ThresholdCheck(_Cov(), warn=80.0, fail=40.0, weight=1.0, required=False)],
+        [ThresholdCheck(_Cov(), warn=0.8, fail=0.4, weight=1.0, required=False)],
         name="child",
     )
-    # Child composite = 0.5 (< 0.8).
+    # Child composite = 0.6 (< 0.8).
     child_measurement = child.measure(_ctx(candidate=[_cov("a.py", 60.0)]))
     ms = MeasurementSet(child_measurement, None)
 
-    # Parent grades the child composite higher-is-better with fail=0.8.
+    # Parent grades the child composite (Identity-normalized) with fail=0.8.
     parent = Rubric([ThresholdCheck(child, fail=0.8, required=True)])
     report = parent.evaluate(_ctx(), ms)
     assert report.passed is False
@@ -134,10 +137,10 @@ def test_parent_gate_fails_when_child_composite_below_bound() -> None:
 
 def test_parent_gate_passes_when_child_composite_at_or_above_bound() -> None:
     child = Rubric(
-        [ThresholdCheck(_Cov(), warn=80.0, fail=40.0, weight=1.0, required=False)],
+        [ThresholdCheck(_Cov(), warn=0.8, fail=0.4, weight=1.0, required=False)],
         name="child",
     )
-    # coverage=100 ramps to 1.0 (>= 0.8).
+    # coverage=100 -> score 1.0 (>= 0.8).
     child_measurement = child.measure(_ctx(candidate=[_cov("a.py", 100.0)]))
     ms = MeasurementSet(child_measurement, None)
 
@@ -150,7 +153,7 @@ def test_parent_gate_passes_when_child_composite_at_or_above_bound() -> None:
 def test_measure_uses_baseline_measurements_from_ctx() -> None:
     # A non-regression-style child reads ctx.baseline_measurements too.
     child = Rubric(
-        [ThresholdCheck(_Cov(), warn=80.0, fail=40.0, weight=1.0, required=False)],
+        [ThresholdCheck(_Cov(), warn=0.8, fail=0.4, weight=1.0, required=False)],
         name="child",
     )
     ctx = _ctx(candidate=[_cov("a.py", 100.0)], baseline=[_cov("a.py", 50.0)])
@@ -190,7 +193,7 @@ def test_measure_memoizes_per_ctx() -> None:
     class _Counting(Metric):
         name = "counting"
         scope = Scope.MODULE
-        higher_is_worse = False
+        normalizer = Identity()
         requires = None
 
         def measure(self, ctx: EvalContext) -> list[Measurement]:

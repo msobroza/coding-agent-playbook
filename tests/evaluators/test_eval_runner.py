@@ -189,11 +189,17 @@ def _make_task(
 
 
 def _cc_metrics() -> MetricConfig:
-    """A ``[metrics]`` policy that gates cyclomatic complexity on non-regression."""
+    """A ``[metrics]`` policy that gates cyclomatic complexity on non-regression.
+
+    The thresholds are ``0-1`` cutoffs on the normalized CC score
+    (``RampNormalizer(good=5, bad=20)``); a *new* scope (no baseline) falls back
+    to these absolute bounds, and the refactor's new ``_band`` (CC 3 -> score 1.0)
+    clears ``warn=0.5`` so the good refactor still passes.
+    """
     return MetricConfig(
         mode="regression",
         regression={"cyclomatic_complexity": RegressionPolicy(max_worsening=0.0)},
-        thresholds={"cyclomatic_complexity": AbsoluteThreshold(warn=8.0, fail=15.0)},
+        thresholds={"cyclomatic_complexity": AbsoluteThreshold(warn=0.5, fail=0.25)},
     )
 
 
@@ -332,9 +338,11 @@ def test_absolute_mode_new_scope_uses_absolute_kind(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
     # Threshold-only policy, absolute mode, on a fresh file the baseline lacks.
+    # 0-1 cutoffs: _WORSE's classify is CC 11 -> normalized score 0.6, which is
+    # below fail=0.7, so the new scope fails the absolute gate.
     metrics = MetricConfig(
         mode="absolute",
-        thresholds={"cyclomatic_complexity": AbsoluteThreshold(warn=2.0, fail=4.0)},
+        thresholds={"cyclomatic_complexity": AbsoluteThreshold(warn=0.9, fail=0.7)},
     )
     task = _make_task(task_dir, metrics=metrics)
 
@@ -351,7 +359,7 @@ def test_absolute_mode_new_scope_uses_absolute_kind(tmp_path: Path) -> None:
         and sub.scope_key.endswith("::classify")
     )
     assert classify.kind == "new"
-    assert classify.level == "fail"  # CC well over fail=4
+    assert classify.level == "fail"  # score 0.6 < fail=0.7
     assert result.passed is False
 
 

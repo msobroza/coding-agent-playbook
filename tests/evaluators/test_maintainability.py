@@ -62,14 +62,17 @@ def test_maintainability_descriptors() -> None:
     m = MaintainabilityIndexMetric()
     assert m.name == "maintainability_index"
     assert m.scope is Scope.FILE
-    assert m.higher_is_worse is False
+    # PercentNormalizer: 0-100 MI -> 0-1 goodness (65 -> 0.65).
+    assert m.score(100) == 1.0
+    assert m.score(65) == pytest.approx(0.65)
+    assert m.score(0) == 0.0
     assert m.requires == "radon"
 
 
 def test_maintainability_is_registered() -> None:
     m = get_metric("maintainability_index")
     assert m.name == "maintainability_index"
-    assert m.higher_is_worse is False
+    assert m.score(65) == pytest.approx(0.65)
     assert "maintainability_index" in {x.name for x in all_metrics()}
 
 

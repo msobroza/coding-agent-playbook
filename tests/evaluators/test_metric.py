@@ -24,6 +24,7 @@ from coding_agent_playbook.evaluators.metric import (
     register_metric,
     static_metrics,
 )
+from coding_agent_playbook.evaluators.normalizer import Identity
 from coding_agent_playbook.evaluators.parse import parse_module
 from coding_agent_playbook.evaluators.scope import Scope
 from coding_agent_playbook.evaluators.types import EvalContext, Measurement
@@ -102,7 +103,7 @@ def test_get_metric_unknown_raises() -> None:
 class _DummyMetric(Metric):
     name = "_dummy_metric"
     scope = Scope.FUNCTION
-    higher_is_worse = True
+    normalizer = Identity()
 
     def measure(self, ctx: EvalContext) -> list[Measurement]:
         return []

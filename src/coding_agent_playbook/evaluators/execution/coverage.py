@@ -2,9 +2,11 @@
 
 A FILE-scope NUMERIC metric (percentage ``0-100``): one measurement per source
 file coverage.py reported, plus one MODULE-scope measurement for the overall
-total. Higher is better (``higher_is_worse=False``); the absolute default
-``warn=80`` flags files under 80% coverage, and ``max_worsening=0`` means coverage
-must not drop versus baseline.
+total. Higher is better, so it normalizes through
+:class:`~coding_agent_playbook.evaluators.normalizer.PercentNormalizer`
+(``80 -> 0.8``); the absolute default ``warn=0.8`` flags files whose normalized
+score drops below ``0.8`` (under 80% coverage), and ``max_worsening=0`` means
+coverage must not drop versus baseline.
 
 Reads the **same** :meth:`ProjectHandle.run` cache the ``test_pass_rate``
 metric uses, so enabling both under ``--run-tests`` still runs the suite only
@@ -21,6 +23,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.metric import Metric, register_metric
+from coding_agent_playbook.evaluators.normalizer import PercentNormalizer
 from coding_agent_playbook.evaluators.parse import scope_key
 from coding_agent_playbook.evaluators.scope import Scope
 from coding_agent_playbook.evaluators.types import Measurement
@@ -68,7 +71,7 @@ class CoverageMetric(Metric):
 
     name = _NAME
     scope = Scope.FILE
-    higher_is_worse = False
+    normalizer = PercentNormalizer()
     requires = None
     needs_project = True
 

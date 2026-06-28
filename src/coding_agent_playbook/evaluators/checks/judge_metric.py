@@ -39,19 +39,14 @@ class JudgeMetric(Metric):
     :class:`~coding_agent_playbook.evaluators.checks.judged.JudgeCheck`'s id), the
     scope is :attr:`~coding_agent_playbook.evaluators.scope.Scope.FILE`, and the
     value is the judge's per-criterion score (a ``0-1`` goodness, hence the
-    :class:`~coding_agent_playbook.evaluators.normalizer.Identity` normalizer).
-
-    .. note::
-       ``normalizer`` is declared **only** on this subclass for now — the
-       ``Metric`` base does not carry it yet (that lands in C3). This is forward
-       wiring for the normalization cutover.
+    :class:`~coding_agent_playbook.evaluators.normalizer.Identity` normalizer the
+    ``Metric`` base now reads via :meth:`Metric.score`).
     """
 
-    higher_is_worse = False
     needs_project = False
     requires: str | None = None
-    #: Declared here only (C3 moves it onto the ``Metric`` base). A judged score is
-    #: already a ``0-1`` goodness, so the adapter passes it through unchanged.
+    #: A judged score is already a ``0-1`` goodness, so the adapter passes it
+    #: through unchanged (the ``Metric`` base owns ``normalizer`` since C3).
     normalizer: Normalizer = Identity()
 
     def __init__(self, criterion: str) -> None:

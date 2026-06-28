@@ -25,15 +25,24 @@ if TYPE_CHECKING:
 #: Per-metric default grading policy. The ``Check`` layer carries the policy on
 #: the *check*, not the metric, so :func:`metric_check` falls back to these when
 #: ``config`` has no override for a metric.
-#: ``(warn, fail, max_worsening)``; ``None`` means "no bound at that stage".
+#:
+#: ``(warn, fail, max_worsening)`` as **0-1 cutoffs on the normalized score**
+#: (higher = better): a scope ``warn``\ s when its score drops below ``warn`` and
+#: ``fail``\ s when it drops below ``fail``; ``None`` means "no bound at that
+#: stage". Because the score is already direction-normalized, the cutoffs no
+#: longer carry the metric's raw units - e.g. CC's raw ``warn=10``/``fail=20``
+#: become ``warn=0.5``/``fail=0.25`` under ``RampNormalizer(good=5, bad=20)``,
+#: while ``coverage``/``maintainability_index``/``test_pass_rate`` land exactly on
+#: their old raw boundaries under Percent/Identity (cov ``80 -> 0.8``, MI ``65 ->
+#: 0.65``, tpr ``1.0 -> 1.0``).
 METRIC_DEFAULTS: dict[str, tuple[float | None, float | None, float]] = {
-    "cyclomatic_complexity": (10.0, 20.0, 0.0),
-    "wmc": (None, 50.0, 0.0),
-    "lcom4": (2.0, None, 0.0),
-    "dit": (5.0, None, 0.0),
-    "cbo": (14.0, None, 0.0),
-    "maintainability_index": (None, 65.0, 0.0),
-    "coverage": (80.0, None, 0.0),
+    "cyclomatic_complexity": (0.5, 0.25, 0.0),
+    "wmc": (None, 0.2, 0.0),
+    "lcom4": (0.5, None, 0.0),
+    "dit": (0.5, None, 0.0),
+    "cbo": (0.5, None, 0.0),
+    "maintainability_index": (None, 0.65, 0.0),
+    "coverage": (0.8, None, 0.0),
     "test_pass_rate": (None, 1.0, 0.0),
 }
 

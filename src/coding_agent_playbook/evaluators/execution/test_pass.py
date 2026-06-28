@@ -2,9 +2,12 @@
 
 A MODULE-scope SCORE over a single suite run: ``passed / (total - skipped)``
 (skips are excluded from the denominator - a skipped test is neither a pass nor a
-failure; see :meth:`JunitSummary.pass_rate`). Higher is better, so
-``higher_is_worse=False``; the absolute default ``fail=1.0`` means *every* test
-must pass, and ``max_worsening=0`` means no newly-failing test versus baseline.
+failure; see :meth:`JunitSummary.pass_rate`). The value is already a ``0-1``
+goodness (higher is better), so its normalizer is
+:class:`~coding_agent_playbook.evaluators.normalizer.Identity`; the absolute
+default ``fail=1.0`` means *every* test must pass (anything below the ``1.0``
+normalized floor fails), and ``max_worsening=0`` means no newly-failing test
+versus baseline.
 
 ``needs_project=True`` ⇒ this is an *execution* metric, excluded from
 ``static_metrics()`` and only run under ``--run-tests``; :meth:`available`
@@ -22,6 +25,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.metric import Metric, register_metric
+from coding_agent_playbook.evaluators.normalizer import Identity
 from coding_agent_playbook.evaluators.parse import scope_key
 from coding_agent_playbook.evaluators.scope import Scope
 from coding_agent_playbook.evaluators.types import Measurement
@@ -61,7 +65,7 @@ class TestPassRateMetric(Metric):
 
     name = _NAME
     scope = Scope.MODULE
-    higher_is_worse = False
+    normalizer = Identity()
     requires = None
     needs_project = True
 

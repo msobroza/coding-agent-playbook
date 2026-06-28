@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.metric import Metric, register_metric
+from coding_agent_playbook.evaluators.normalizer import RampNormalizer
 from coding_agent_playbook.evaluators.scope import Scope
 from coding_agent_playbook.evaluators.types import Measurement
 
@@ -35,7 +36,7 @@ class CyclomaticComplexityMetric(Metric):
 
     name = _NAME
     scope = Scope.FUNCTION
-    higher_is_worse = True
+    normalizer = RampNormalizer(good=5, bad=20)
     requires = None
 
     def measure(self, ctx: EvalContext) -> list[Measurement]:

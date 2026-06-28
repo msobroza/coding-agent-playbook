@@ -10,7 +10,9 @@ transparently skips it and the engine still loads with nothing extra installed.
 ``radon`` is imported **lazily inside** :func:`_measure` - never at module
 top-level - so importing this module (which happens on every registry load)
 never requires the optional dependency. Higher MI is *better* (more
-maintainable), hence ``higher_is_worse=False`` and the ``fail=65`` floor.
+maintainable); MI is a ``0-100`` percentage, so its normalizer is
+:class:`~coding_agent_playbook.evaluators.normalizer.PercentNormalizer` (``65 ->
+0.65``) and the default check fails below the ``0.65`` normalized floor.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ import importlib.util
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.metric import Metric, register_metric
+from coding_agent_playbook.evaluators.normalizer import PercentNormalizer
 from coding_agent_playbook.evaluators.parse import scope_key
 from coding_agent_playbook.evaluators.scope import Scope
 from coding_agent_playbook.evaluators.types import Measurement
@@ -67,15 +70,16 @@ class MaintainabilityIndexMetric(Metric):
 
     FILE scope => a single measurement keyed by the bare label, via
     :func:`radon.metrics.mi_visit`. The value is the SEI 0-100 MI variant
-    (``multi=True``); larger means *more* maintainable, so ``higher_is_worse`` is
-    ``False``. Keeps ``requires="radon"`` and the lazy import; :meth:`available`
-    returns ``False`` when radon is absent so the metric layer skips MI on an
-    air-gapped install.
+    (``multi=True``); larger means *more* maintainable, so it normalizes through
+    :class:`~coding_agent_playbook.evaluators.normalizer.PercentNormalizer`
+    (``0-100 -> 0-1``). Keeps ``requires="radon"`` and the lazy import;
+    :meth:`available` returns ``False`` when radon is absent so the metric layer
+    skips MI on an air-gapped install.
     """
 
     name = _NAME
     scope = Scope.FILE
-    higher_is_worse = False
+    normalizer = PercentNormalizer()
     requires = "radon"
 
     def available(self, ctx: EvalContext) -> bool:

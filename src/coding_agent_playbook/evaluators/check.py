@@ -127,130 +127,101 @@ class Check(ABC):
 # --------------------------------------------------------------------------- #
 # Per-scope decision - the canonical deterministic grading logic.
 #
-# These four module-private helpers (``_to_score``, ``_decide``,
-# ``_absolute_level``, ``_regressed``) are the single home for the per-scope
-# verdict the metric-backed checks share. They read ``higher_is_worse`` from the
-# ``Metric``. The boundary rules (inclusive on the higher-is-worse side, strict on
-# the higher-is-better side) live only here.
+# These three module-private helpers (``_decide``, ``_absolute_level``,
+# ``_regressed``) are the single home for the per-scope verdict the metric-backed
+# checks share. Since C3 they operate **entirely on the normalized ``0-1`` score**
+# (higher = always better): the metric's :class:`Normalizer` already folded in its
+# native direction, so there is no per-direction branch and the warn/fail
+# bounds are ``0-1`` cutoffs on the score. A scope breaches a bound when its score
+# drops *strictly below* it (so a score landing exactly on a cutoff is still ok).
 # --------------------------------------------------------------------------- #
 
 
-def _to_score(
-    value: float,
-    higher_is_worse: bool,
-    absolute: AbsoluteThreshold,
-) -> float:
-    """Normalize a NUMERIC value to ``0-1`` (higher = better).
-
-    Ramps around the absolute warn/fail bounds: ``1.0`` at/under ``warn`` and
-    ``0.0`` at/over ``fail`` (linear between) when ``higher_is_worse``; the ramp
-    inverts when larger is better. With no bounds the score is ``1.0``. The
-    metric-backed checks only grade NUMERIC metrics, so there is no SCORE/BOOL
-    identity branch here (BOOL file checks set their score directly from the
-    predicate).
-    """
-    warn = absolute.warn
-    fail = absolute.fail
-    if warn is None or fail is None or warn == fail:
-        return 1.0
-
-    if higher_is_worse:
-        # warn is the good floor, fail the bad ceiling.
-        if value <= warn:
-            return 1.0
-        if value >= fail:
-            return 0.0
-        return (fail - value) / (fail - warn)
-    # higher is better: warn is the good target, fail the bad floor.
-    if value >= warn:
-        return 1.0
-    if value <= fail:
-        return 0.0
-    return (value - fail) / (warn - fail)
-
-
 def _absolute_level(
-    value: float,
-    higher_is_worse: bool,
+    score: float,
     absolute: AbsoluteThreshold,
 ) -> tuple[Level, float | None]:
-    """Absolute warn/fail level + the deciding bound - copy of ``_absolute_level``.
+    """Absolute warn/fail level + the deciding ``0-1`` cutoff for a normalized score.
 
-    Inclusive at the bound on the higher-is-worse side (``value >= bound``
-    breaches: a CC of exactly ``20`` fails) and strict on the higher-is-better
-    side (``value < bound`` breaches: coverage of exactly ``80`` is ``ok``).
+    Higher-is-better on the normalized scale: a scope ``fail``\\ s when its
+    ``score`` is *strictly below* ``absolute.fail`` and ``warn``\\ s when it is
+    *strictly below* ``absolute.warn`` (a score exactly on the cutoff is ``ok``).
+    A ``None`` bound skips that level. The returned cutoff is the ``0-1`` bound
+    that decided (``None`` for ``ok``).
     """
-    if higher_is_worse:
-        if absolute.fail is not None and value >= absolute.fail:
-            return "fail", absolute.fail
-        if absolute.warn is not None and value >= absolute.warn:
-            return "warn", absolute.warn
-        return "ok", None
-    # higher is better: breach when the value drops *strictly below* the bound.
-    if absolute.fail is not None and value < absolute.fail:
+    if absolute.fail is not None and score < absolute.fail:
         return "fail", absolute.fail
-    if absolute.warn is not None and value < absolute.warn:
+    if absolute.warn is not None and score < absolute.warn:
         return "warn", absolute.warn
     return "ok", None
 
 
 def _regressed(
-    value: float,
-    base_value: float | None,
-    higher_is_worse: bool,
+    score: float,
+    base_score: float | None,
     regression: RegressionPolicy,
 ) -> bool:
-    """Whether ``value`` worsened vs ``base_value`` beyond tolerance - copy of ``_regressed``."""
-    if base_value is None:
+    """Whether the normalized ``score`` worsened vs ``base_score`` beyond tolerance.
+
+    On the ``0-1`` goodness scale a *drop* is a worsening, so
+    ``worsening = base_score - score``; the scope regressed iff that exceeds
+    ``regression.max_worsening``.
+    """
+    if base_score is None:
         return False
-    worsening = (value - base_value) if higher_is_worse else (base_value - value)
+    worsening = base_score - score
     return worsening > regression.max_worsening
 
 
 def _decide(
-    value: float,
-    base_value: float | None,
-    higher_is_worse: bool,
+    score: float,
+    base_score: float | None,
     absolute: AbsoluteThreshold,
     regression: RegressionPolicy,
     mode: Mode,
 ) -> tuple[Level, Kind, float | None]:
-    """Decide ``(level, kind, bound)`` for one scope under ``mode`` - copy of ``_decide``.
+    """Decide ``(level, kind, cutoff)`` for one normalized scope under ``mode``.
 
     New scopes (no baseline match) always fall back to absolute (``kind="new"``).
     ``"regression"`` mode regression-grades existing scopes; ``"absolute"`` mode
     ignores the baseline; ``"both"`` lets a regression fail first, then absolute.
+    Everything is decided on the ``0-1`` score; the returned ``cutoff`` is the
+    deciding ``0-1`` absolute bound (``None`` when a regression decided it).
     """
-    is_new = base_value is None
+    is_new = base_score is None
 
     # New scopes always fall back to absolute (kind="new").
     if is_new:
-        level, bound = _absolute_level(value, higher_is_worse, absolute)
-        return level, "new", bound
+        level, cutoff = _absolute_level(score, absolute)
+        return level, "new", cutoff
 
-    reg_failed = _regressed(value, base_value, higher_is_worse, regression)
-    abs_level, abs_bound = _absolute_level(value, higher_is_worse, absolute)
+    reg_failed = _regressed(score, base_score, regression)
+    abs_level, abs_cutoff = _absolute_level(score, absolute)
 
     if mode == "regression":
         return ("fail", "regression", None) if reg_failed else ("ok", "regression", None)
     if mode == "absolute":
-        return abs_level, "absolute", abs_bound
+        return abs_level, "absolute", abs_cutoff
     # both: regression takes precedence as a failure, then absolute.
     if reg_failed:
         return "fail", "regression", None
-    return abs_level, "absolute", abs_bound
+    return abs_level, "absolute", abs_cutoff
 
 
 class _MetricCheck(Check):
     """Shared base for the deterministic, metric-backed checks (T3).
 
     Holds the :class:`Metric` instance (so it reads ``metric.name`` for the
-    measurement lookup and ``metric.higher_is_worse`` for the comparison
-    direction) plus the grading-side policy - an :class:`AbsoluteThreshold`, a
-    :class:`RegressionPolicy`, and a :attr:`mode`. One parameterized ``grade``
-    runs ``_decide`` per scope, aggregating the per-scope :class:`ScopeDetail`
-    rows into one :class:`CheckResult` (``passed`` = no scope failed; ``score`` =
-    mean of the per-scope ramps; ``None``/``True`` for zero scopes).
+    measurement lookup and ``metric.score`` to normalize each raw value to a
+    ``0-1`` goodness) plus the grading-side policy - an :class:`AbsoluteThreshold`
+    and a :class:`RegressionPolicy` now expressed as ``0-1`` cutoffs - and a
+    :attr:`mode`. One parameterized ``grade`` normalizes each scope's value (and
+    its baseline) via ``metric.score`` and runs ``_decide`` on the **normalized
+    scores**, aggregating the per-scope :class:`ScopeDetail` rows into one
+    :class:`CheckResult` (``passed`` = no scope failed; ``score`` = mean of the
+    per-scope normalized scores; ``None``/``True`` for zero scopes). Each
+    :class:`ScopeDetail` keeps the **raw** ``value``/``baseline`` and carries the
+    normalized ``score`` plus the ``0-1`` ``bound`` that decided.
 
     :attr:`cost` is derived from ``metric.needs_project`` (an execution metric is
     EXECUTION-tier, a static one DETERMINISTIC); :attr:`determinism` is
@@ -288,20 +259,26 @@ class _MetricCheck(Check):
         return self.metric.available(ctx)
 
     def grade(self, ctx: EvalContext, measurements: MeasurementSet) -> CheckResult:
-        """Grade every candidate scope of ``self.metric`` into one result."""
-        higher_is_worse = self.metric.higher_is_worse
+        """Grade every candidate scope of ``self.metric`` into one result.
+
+        For each scope the raw ``value`` (and the baseline) is normalized to a
+        ``0-1`` goodness via ``self.metric.score``; the verdict is decided on those
+        normalized scores, while the emitted :class:`ScopeDetail` keeps the **raw**
+        ``value``/``baseline`` and records the normalized ``score`` and the ``0-1``
+        ``bound`` that decided.
+        """
         details: list[ScopeDetail] = []
         scores: list[float] = []
         for scope_key, value, base_value in measurements.pairs(self.metric.name):
+            score = self.metric.score(value)
+            base_score = self.metric.score(base_value) if base_value is not None else None
             level, kind, bound = _decide(
-                value,
-                base_value,
-                higher_is_worse,
+                score,
+                base_score,
                 self._absolute,
                 self._regression,
                 self._mode,
             )
-            score = _to_score(value, higher_is_worse, self._absolute)
             scores.append(score)
             details.append(
                 ScopeDetail(
@@ -319,7 +296,8 @@ class _MetricCheck(Check):
         # passed = no scope failed; warns do NOT fail the check (strict is a
         # Rubric-level concern, applied later from the subresult levels).
         passed = not any(d.level == "fail" for d in details)
-        # Mean of the per-scope ramps; zero scopes => no score, vacuously passed.
+        # Mean of the per-scope normalized scores; zero scopes => no score,
+        # vacuously passed.
         composite = sum(scores) / len(scores) if scores else None
         return CheckResult(
             check_id=self.id,
@@ -337,10 +315,11 @@ class _MetricCheck(Check):
 class ThresholdCheck(_MetricCheck):
     """Grade a metric's scopes against absolute warn/fail bounds (``mode="absolute"``).
 
-    Holds the :class:`Metric` and its own ``warn``/``fail`` bounds (the grading
-    policy moved off the metric). ``min_score=`` is sugar for ``fail=min_score``
-    (the must-clear floor). ``mode`` defaults to ``"absolute"`` but can be
-    ``"both"`` to also fail on regression when a baseline is present.
+    Holds the :class:`Metric` and its own ``warn``/``fail`` bounds - now ``0-1``
+    cutoffs on the metric's **normalized score** (the grading policy moved off the
+    metric). ``min_score=`` is sugar for ``fail=min_score`` (the must-clear
+    normalized floor). ``mode`` defaults to ``"absolute"`` but can be ``"both"`` to
+    also fail on regression when a baseline is present.
     """
 
     _id_prefix = "threshold"
@@ -371,10 +350,11 @@ class ThresholdCheck(_MetricCheck):
 class NonRegressionCheck(_MetricCheck):
     """Grade a metric's scopes for non-regression vs baseline (``mode="regression"``).
 
-    Existing scopes are regression-graded (any worsening beyond ``max_worsening``
-    fails); **new** scopes (absent from the baseline) fall back to the absolute
-    ``warn``/``fail`` bounds, exactly like ``grade()``'s ``_decide``. The
-    deterministic default ``max_worsening=0.0`` means any worsening fails.
+    Existing scopes are regression-graded on the **normalized score** (any drop
+    beyond ``max_worsening`` fails); **new** scopes (absent from the baseline)
+    fall back to the absolute ``0-1`` ``warn``/``fail`` bounds, exactly like
+    ``_decide``. The deterministic default ``max_worsening=0.0`` means any drop in
+    normalized score fails.
     """
 
     _id_prefix = "nonreg"

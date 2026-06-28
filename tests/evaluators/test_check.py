@@ -1,13 +1,22 @@
 """Tests for the deterministic ``Check`` layer (T3) - ``evaluators/check.py``.
 
-These port the per-scope decision cases from ``test_grade.py`` /
-``test_grade_inverted.py`` (absolute warn/fail, threshold override, the
-inclusive-at-bound vs strict-below boundary rule, regression detection /
-tolerance / new-scope-absolute-fallback / removed-scope-ignored) and the file
-predicate cases from ``test_expected.py``, but assert on the **Check** shapes:
-``result.subresults[i].level``/``.score`` + ``result.passed`` rather than
-``report.findings``. The metric-backed checks read the same boundary logic
-``grade()`` does (copied, not imported), so the asserted levels match exactly.
+Since the C3 normalization cutover the per-scope decision runs **entirely on the
+metric's normalized ``0-1`` score** (higher = always better); the check's
+``warn``/``fail`` are ``0-1`` cutoffs on that score and a scope breaches a bound
+when its score is *strictly below* it.
+
+The two stand-in metrics carry the real builtin normalizers:
+
+* ``_CC`` (``cyclomatic_complexity``) ->
+  :class:`~coding_agent_playbook.evaluators.normalizer.RampNormalizer`
+  ``(good=5, bad=20)``, so ``score(raw) = clamp01((20 - raw) / 15)`` (raw 5 ->
+  1.0, raw 12.5 -> 0.5, raw 20 -> 0.0).
+* ``_Cov`` (``coverage``) ->
+  :class:`~coding_agent_playbook.evaluators.normalizer.PercentNormalizer`, so
+  ``score(raw) = clamp01(raw / 100)`` (raw 80 -> 0.8, raw 60 -> 0.6).
+
+The file predicate cases (ported from ``test_expected.py``) are unchanged: they
+set ``passed``/``score`` straight from the predicate.
 """
 
 from __future__ import annotations
@@ -28,6 +37,7 @@ from coding_agent_playbook.evaluators.checks.files import (
     FileUnchangedCheck,
 )
 from coding_agent_playbook.evaluators.metric import Metric
+from coding_agent_playbook.evaluators.normalizer import PercentNormalizer, RampNormalizer
 from coding_agent_playbook.evaluators.scope import CostTier, Determinism, Scope
 from coding_agent_playbook.evaluators.types import (
     CheckResult,
@@ -41,16 +51,17 @@ if TYPE_CHECKING:
 
 
 # --------------------------------------------------------------------------- #
-# Test metrics: one higher-is-worse (CC-like), one higher-is-better (cov-like).
-# The Check holds its own thresholds, so the metric only supplies name +
-# direction + needs_project (no thresholds live on a Metric anymore).
+# Test metrics carrying the real builtin normalizers: ``_CC`` ramps down as raw
+# CC grows (RampNormalizer(good=5, bad=20)), ``_Cov`` is a 0-100 percentage
+# (PercentNormalizer). The Check holds its own 0-1 thresholds, so the metric only
+# supplies name + normalizer + needs_project (no thresholds live on a Metric).
 # --------------------------------------------------------------------------- #
 
 
 class _CC(Metric):
     name = "cyclomatic_complexity"
     scope = Scope.FUNCTION
-    higher_is_worse = True
+    normalizer = RampNormalizer(good=5, bad=20)
     requires = None
 
     def measure(self, ctx: EvalContext) -> list[Measurement]:
@@ -60,7 +71,7 @@ class _CC(Metric):
 class _Cov(Metric):
     name = "coverage"
     scope = Scope.FILE
-    higher_is_worse = False
+    normalizer = PercentNormalizer()
     needs_project = True
     requires = None
 
@@ -99,128 +110,132 @@ def _details(result: CheckResult) -> list[ScopeDetail]:
 
 
 # --------------------------------------------------------------------------- #
-# ThresholdCheck - absolute mode (higher-is-worse), ported from test_grade.py
+# ThresholdCheck - absolute mode on normalized scores. Cutoffs warn=0.5,
+# fail=0.25 (the cyclomatic_complexity defaults). With score = (20-raw)/15:
+#   raw 5  -> 1.0   (ok)
+#   raw 12 -> 0.533 (ok,  >= 0.5)
+#   raw 14 -> 0.4   (warn, < 0.5, >= 0.25)
+#   raw 17 -> 0.2   (fail, < 0.25)
+#   raw 25 -> 0.0   (fail)
 # --------------------------------------------------------------------------- #
 
 
 def test_threshold_absolute_warn_and_fail() -> None:
-    check = ThresholdCheck(_CC(), warn=10, fail=20)
-    ms = _ms([_cc("a.py::warn", 12), _cc("a.py::fl", 25), _cc("a.py::ok", 3)])
+    check = ThresholdCheck(_CC(), warn=0.5, fail=0.25)
+    ms = _ms([_cc("a.py::warn", 14), _cc("a.py::fl", 25), _cc("a.py::ok", 3)])
     result = check.grade(_ctx(), ms)
     levels = {d.scope_key: d.level for d in _details(result)}
-    assert levels["a.py::warn"] == "warn"
-    assert levels["a.py::fl"] == "fail"
-    assert levels["a.py::ok"] == "ok"
+    assert levels["a.py::warn"] == "warn"  # score 0.4
+    assert levels["a.py::fl"] == "fail"  # score 0.0
+    assert levels["a.py::ok"] == "ok"  # score 1.0
     assert result.passed is False  # one scope failed
     assert len(result.subresults) == 3
 
 
 def test_threshold_passes_when_only_warnings() -> None:
     # A warn does NOT fail the check (strict is a Rubric-level concern).
-    check = ThresholdCheck(_CC(), warn=10, fail=20)
-    result = check.grade(_ctx(), _ms([_cc("a.py::w", 12)]))
+    check = ThresholdCheck(_CC(), warn=0.5, fail=0.25)
+    result = check.grade(_ctx(), _ms([_cc("a.py::w", 14)]))  # score 0.4 -> warn
     assert _details(result)[0].level == "warn"
     assert result.passed is True
 
 
 def test_threshold_override_changes_level() -> None:
-    # 12 is a warn under warn=10/fail=20, but ok under the raised warn=20.
-    check = ThresholdCheck(_CC(), warn=20, fail=40)
-    result = check.grade(_ctx(), _ms([_cc("a.py::f", 12)]))
+    # raw 14 -> score 0.4 is a warn under warn=0.5, but ok under the lowered
+    # warn=0.3 (0.4 >= 0.3).
+    check = ThresholdCheck(_CC(), warn=0.3, fail=0.1)
+    result = check.grade(_ctx(), _ms([_cc("a.py::f", 14)]))
     assert _details(result)[0].level == "ok"
     assert result.passed is True
 
 
 def test_threshold_kind_new_without_baseline() -> None:
     # No baseline => the scope is "new" and graded against the absolute bounds.
-    check = ThresholdCheck(_CC(), warn=10, fail=20)
-    result = check.grade(_ctx(), _ms([_cc("a.py::f", 25)]))
+    check = ThresholdCheck(_CC(), warn=0.5, fail=0.25)
+    result = check.grade(_ctx(), _ms([_cc("a.py::f", 25)]))  # score 0.0 -> fail
     assert _details(result)[0].kind == "new"
-    assert _details(result)[0].bound == 20
+    assert _details(result)[0].bound == 0.25  # the 0-1 cutoff that decided
 
 
 def test_threshold_kind_absolute_with_baseline() -> None:
     # With a baseline match, absolute mode grades kind "absolute" (mirrors _decide).
-    check = ThresholdCheck(_CC(), warn=10, fail=20)
+    check = ThresholdCheck(_CC(), warn=0.5, fail=0.25)
     result = check.grade(_ctx(), _ms([_cc("a.py::f", 25)], [_cc("a.py::f", 25)]))
     assert _details(result)[0].kind == "absolute"
-    assert _details(result)[0].bound == 20
+    assert _details(result)[0].bound == 0.25
 
 
 def test_threshold_ignores_baseline_in_absolute_mode() -> None:
     # baseline is far worse, but absolute mode ignores it entirely.
-    check = ThresholdCheck(_CC(), warn=10, fail=20)
-    ms = _ms([_cc("a.py::f", 3)], [_cc("a.py::f", 25)])
+    check = ThresholdCheck(_CC(), warn=0.5, fail=0.25)
+    ms = _ms([_cc("a.py::f", 3)], [_cc("a.py::f", 25)])  # cand score 1.0
     result = check.grade(_ctx(), ms)
     assert _details(result)[0].level == "ok"
 
 
 # --------------------------------------------------------------------------- #
-# ThresholdCheck - scores / ramps (ported from test_grade composite cases)
+# ThresholdCheck - the per-scope score is the metric's normalized goodness.
 # --------------------------------------------------------------------------- #
 
 
 def test_threshold_score_ramps_partial() -> None:
-    # CC=15 midway between warn(10)/fail(20) => ramp score 0.5.
-    check = ThresholdCheck(_CC(), warn=10, fail=20)
-    result = check.grade(_ctx(), _ms([_cc("a.py::f", 15)]))
+    # CC=12.5 -> (20-12.5)/15 = 0.5 normalized goodness.
+    check = ThresholdCheck(_CC(), warn=0.5, fail=0.25)
+    result = check.grade(_ctx(), _ms([_cc("a.py::f", 12.5)]))
     assert _details(result)[0].score == pytest.approx(0.5)
     assert result.score == pytest.approx(0.5)
 
 
-def test_threshold_score_at_or_under_warn_is_one() -> None:
-    check = ThresholdCheck(_CC(), warn=10, fail=20)
-    result = check.grade(_ctx(), _ms([_cc("a.py::f", 5)]))
+def test_threshold_score_at_good_anchor_is_one() -> None:
+    check = ThresholdCheck(_CC(), warn=0.5, fail=0.25)
+    result = check.grade(_ctx(), _ms([_cc("a.py::f", 5)]))  # at good anchor -> 1.0
     assert _details(result)[0].score == pytest.approx(1.0)
 
 
 # --------------------------------------------------------------------------- #
-# ThresholdCheck - boundary semantics (ported from test_grade_inverted.py)
+# ThresholdCheck - boundary semantics: a score landing EXACTLY on a cutoff is ok
+# (strict-below breach), and the raw value still rides on ``.value``.
 # --------------------------------------------------------------------------- #
 
 
-def test_threshold_boundary_higher_is_worse_inclusive() -> None:
-    # higher_is_worse: value AT the bound breaches (>=).
-    check = ThresholdCheck(_CC(), warn=10, fail=20)
-    ms = _ms([_cc("a.py::fl", 20), _cc("a.py::wn", 10), _cc("a.py::ok", 9)])
-    result = check.grade(_ctx(), ms)
-    levels = {d.scope_key: d.level for d in _details(result)}
-    assert levels["a.py::fl"] == "fail"  # 20 >= fail(20)
-    assert levels["a.py::wn"] == "warn"  # 10 >= warn(10)
-    assert levels["a.py::ok"] == "ok"  # 9 < warn
+def test_threshold_boundary_strict_below_warn() -> None:
+    # A score exactly AT warn is ok (strict <); just below is a warn.
+    check = ThresholdCheck(_CC(), warn=0.5, fail=0.25)
+    at_warn = check.grade(_ctx(), _ms([_cc("a.py", 12.5)]))  # score 0.5
+    assert _details(at_warn)[0].level == "ok"  # 0.5 < 0.5 is False
+    below_warn = check.grade(_ctx(), _ms([_cc("a.py", 13)]))  # score 7/15 ~ 0.467
+    assert _details(below_warn)[0].level == "warn"
 
 
-def test_threshold_boundary_higher_is_better_strict_warn() -> None:
-    # higher_is_better: value AT warn is ok (strict <), below warn is warn.
-    check = ThresholdCheck(_Cov(), warn=80, fail=60)
-    at_warn = check.grade(_ctx(), _ms([_cov("a.py", 80.0)]))
-    assert _details(at_warn)[0].level == "ok"  # 80 < 80 is False
-    below_warn = check.grade(_ctx(), _ms([_cov("a.py", 79.0)]))
-    assert _details(below_warn)[0].level == "warn"  # 79 < 80
+def test_threshold_boundary_strict_below_fail() -> None:
+    # A score exactly AT fail is a warn (it is below warn but not below fail);
+    # just below fail is a fail.
+    check = ThresholdCheck(_CC(), warn=0.5, fail=0.25)
+    at_fail = check.grade(_ctx(), _ms([_cc("a.py", 16.25)]))  # score 3.75/15 = 0.25
+    assert _details(at_fail)[0].level == "warn"  # 0.25 < 0.5 warn, 0.25 < 0.25 is False
+    below_fail = check.grade(_ctx(), _ms([_cc("a.py", 17)]))  # score 0.2
+    assert _details(below_fail)[0].level == "fail"
 
 
-def test_threshold_boundary_higher_is_better_strict_fail() -> None:
-    # higher_is_better: value AT fail is ok (strict <), below fail is fail.
-    check = ThresholdCheck(_Cov(), warn=80, fail=60)
-    at_fail = check.grade(_ctx(), _ms([_cov("a.py", 60.0)]))
-    assert _details(at_fail)[0].level == "warn"  # 60 < 80 warn, but 60 < 60 fail is False
-    below_fail = check.grade(_ctx(), _ms([_cov("a.py", 55.0)]))
-    assert _details(below_fail)[0].level == "fail"  # 55 < 60
-
-
-def test_threshold_higher_is_better_inverted_levels() -> None:
-    # Ported from test_inverted_absolute_warn_and_fail.
-    check = ThresholdCheck(_Cov(), warn=80, fail=60)
-    assert _details(check.grade(_ctx(), _ms([_cov("a.py", 70)])))[0].level == "warn"
-    assert _details(check.grade(_ctx(), _ms([_cov("a.py", 55)])))[0].level == "fail"
-    assert _details(check.grade(_ctx(), _ms([_cov("a.py", 95)])))[0].level == "ok"
+def test_threshold_coverage_percent_levels() -> None:
+    # Coverage via PercentNormalizer; cutoffs warn=0.8, fail=0.6 land on the old
+    # raw 80/60 boundaries (cov 80 -> 0.8, cov 60 -> 0.6).
+    check = ThresholdCheck(_Cov(), warn=0.8, fail=0.6)
+    assert _details(check.grade(_ctx(), _ms([_cov("a.py", 80)])))[0].level == "ok"  # 0.8
+    assert _details(check.grade(_ctx(), _ms([_cov("a.py", 70)])))[0].level == "warn"  # 0.7
+    assert _details(check.grade(_ctx(), _ms([_cov("a.py", 55)])))[0].level == "fail"  # 0.55
+    assert _details(check.grade(_ctx(), _ms([_cov("a.py", 95)])))[0].level == "ok"  # 0.95
+    # Raw value rides through unchanged on .value, score is normalized.
+    one = _details(check.grade(_ctx(), _ms([_cov("a.py", 70)])))[0]
+    assert one.value == 70
+    assert one.score == pytest.approx(0.7)
 
 
 def test_threshold_min_score_sugar_sets_fail() -> None:
-    # min_score=20 == fail=20.
-    a = ThresholdCheck(_CC(), warn=10, min_score=20)
-    b = ThresholdCheck(_CC(), warn=10, fail=20)
-    ra = a.grade(_ctx(), _ms([_cc("a.py::f", 25)]))
+    # min_score=0.25 == fail=0.25 (a 0-1 normalized floor now).
+    a = ThresholdCheck(_CC(), warn=0.5, min_score=0.25)
+    b = ThresholdCheck(_CC(), warn=0.5, fail=0.25)
+    ra = a.grade(_ctx(), _ms([_cc("a.py::f", 25)]))  # score 0.0 -> fail
     rb = b.grade(_ctx(), _ms([_cc("a.py::f", 25)]))
     assert _details(ra)[0].level == _details(rb)[0].level == "fail"
 
@@ -258,17 +273,20 @@ def test_threshold_zero_scopes_passes_with_none_score() -> None:
 
 
 def test_nonreg_detected_on_worsened_scope() -> None:
+    # cand raw 8 -> score 0.8, base raw 5 -> score 1.0: the normalized score
+    # dropped 0.2 > max_worsening(0) => regression. Raw baseline rides on .baseline.
     check = NonRegressionCheck(_CC())  # max_worsening default 0
-    ms = _ms([_cc("a.py::f", 8)], [_cc("a.py::f", 5)])  # worsened by 3
+    ms = _ms([_cc("a.py::f", 8)], [_cc("a.py::f", 5)])
     result = check.grade(_ctx(), ms)
     d = _details(result)[0]
     assert d.level == "fail"
     assert d.kind == "regression"
-    assert d.baseline == 5
+    assert d.baseline == 5  # RAW baseline preserved
     assert result.passed is False
 
 
 def test_nonreg_pass_when_improved() -> None:
+    # cand 5 -> 1.0, base 8 -> 0.8: score rose, no regression.
     check = NonRegressionCheck(_CC())
     ms = _ms([_cc("a.py::f", 5)], [_cc("a.py::f", 8)])  # improved
     result = check.grade(_ctx(), ms)
@@ -277,15 +295,17 @@ def test_nonreg_pass_when_improved() -> None:
 
 
 def test_nonreg_respects_tolerance() -> None:
-    check = NonRegressionCheck(_CC(), max_worsening=2)
-    ms = _ms([_cc("a.py::f", 6)], [_cc("a.py::f", 5)])  # worsened by 1, within band
+    # cand raw 6 -> score 14/15 ~ 0.933, base raw 5 -> 1.0: score dropped ~0.067,
+    # within the 0-1 tolerance band 0.1.
+    check = NonRegressionCheck(_CC(), max_worsening=0.1)
+    ms = _ms([_cc("a.py::f", 6)], [_cc("a.py::f", 5)])
     result = check.grade(_ctx(), ms)
     assert _details(result)[0].level == "ok"
     assert result.passed is True
 
 
-def test_nonreg_higher_is_better_detects_drop() -> None:
-    # coverage dropped 90 -> 85: worsening = base - cand = 5 > 0 => regression.
+def test_nonreg_coverage_detects_drop() -> None:
+    # coverage 90 -> 85: scores 0.9 -> 0.85, dropped 0.05 > 0 => regression.
     check = NonRegressionCheck(_Cov())
     ms = _ms([_cov("a.py", 85)], [_cov("a.py", 90)])
     result = check.grade(_ctx(), ms)
@@ -293,16 +313,16 @@ def test_nonreg_higher_is_better_detects_drop() -> None:
     assert _details(result)[0].kind == "regression"
 
 
-def test_nonreg_higher_is_better_pass_on_improvement() -> None:
+def test_nonreg_coverage_pass_on_improvement() -> None:
     check = NonRegressionCheck(_Cov())
-    ms = _ms([_cov("a.py", 95)], [_cov("a.py", 90)])
+    ms = _ms([_cov("a.py", 95)], [_cov("a.py", 90)])  # 0.95 > 0.90
     assert _details(check.grade(_ctx(), ms))[0].level == "ok"
 
 
 def test_nonreg_new_scope_falls_back_to_absolute() -> None:
-    # No baseline match => kind "new", graded against the absolute warn/fail.
-    check = NonRegressionCheck(_CC(), warn=10, fail=20)
-    ms = _ms([_cc("a.py::new", 25)], [])  # > fail(20)
+    # No baseline match => kind "new", graded against the absolute 0-1 warn/fail.
+    check = NonRegressionCheck(_CC(), warn=0.5, fail=0.25)
+    ms = _ms([_cc("a.py::new", 25)], [])  # score 0.0 < fail(0.25)
     result = check.grade(_ctx(), ms)
     d = _details(result)[0]
     assert d.kind == "new"
@@ -311,9 +331,9 @@ def test_nonreg_new_scope_falls_back_to_absolute() -> None:
     assert result.passed is False
 
 
-def test_nonreg_new_scope_ok_under_warn() -> None:
-    check = NonRegressionCheck(_CC(), warn=10, fail=20)
-    ms = _ms([_cc("a.py::new", 3)], [])
+def test_nonreg_new_scope_ok_above_warn() -> None:
+    check = NonRegressionCheck(_CC(), warn=0.5, fail=0.25)
+    ms = _ms([_cc("a.py::new", 3)], [])  # score 1.0 >= warn(0.5)
     d = _details(check.grade(_ctx(), ms))[0]
     assert d.kind == "new"
     assert d.level == "ok"

@@ -14,6 +14,7 @@ import builtins as _py_builtins
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.metric import Metric, register_metric
+from coding_agent_playbook.evaluators.normalizer import RampNormalizer
 from coding_agent_playbook.evaluators.scope import Scope
 from coding_agent_playbook.evaluators.types import Measurement
 
@@ -50,7 +51,7 @@ class CouplingBetweenObjectsMetric(Metric):
 
     name = _NAME
     scope = Scope.CLASS
-    higher_is_worse = True
+    normalizer = RampNormalizer(good=3, bad=25)
     requires = None
 
     def measure(self, ctx: EvalContext) -> list[Measurement]:

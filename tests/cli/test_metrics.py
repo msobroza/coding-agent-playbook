@@ -44,9 +44,11 @@ def add(a, b):
     return a + b
 """
 
-# A moderate function used as a regression-mode baseline. Its candidate variant
-# below adds branches (higher CC) without crossing the absolute fail bound, so
-# only regression mode flags it.
+# A moderate function used as a regression-mode baseline. CC 2 -> normalized
+# score 1.0 (at/under the RampNormalizer(good=5, bad=20) good anchor). The
+# candidate variant below climbs to CC 8 (score 0.8), a *drop* in normalized
+# goodness that regression mode flags - while staying above the absolute warn
+# cutoff (0.5), so the same file graded all-new still passes absolute.
 _BASELINE_SOURCE = """\
 def classify(value):
     if value > 0:
@@ -56,15 +58,21 @@ def classify(value):
 
 _WORSE_SOURCE = """\
 def classify(value):
-    if value > 0:
-        if value > 10:
-            return "big"
-        return "positive"
-    if value < 0:
-        if value < -10:
-            return "very-negative"
-        return "negative"
-    return "zero"
+    if value == 0:
+        return "v0"
+    if value == 1:
+        return "v1"
+    if value == 2:
+        return "v2"
+    if value == 3:
+        return "v3"
+    if value == 4:
+        return "v4"
+    if value == 5:
+        return "v5"
+    if value == 6:
+        return "v6"
+    return "other"
 """
 
 # An improvement: fewer branches than the baseline.
@@ -203,15 +211,16 @@ def test_regression_new_file_not_in_baseline_uses_absolute(tmp_path, capsys):
 
 
 def test_strict_promotes_warning_to_failure(tmp_path, capsys):
-    """A function whose CC is in the warn band (10..20) passes by default but
-    fails under ``--strict``.
+    """A function whose normalized CC score lands in the warn band (< warn=0.5,
+    >= fail=0.25) passes by default but fails under ``--strict``.
 
-    The MI floor is relaxed via config so the only finding is the CC *warn*,
-    isolating the strict behaviour from the (coupled) maintainability metric.
+    13 ifs => CC 14 => score (20-14)/15 = 0.4, a warn. The MI floor is relaxed via
+    config so the only finding is the CC *warn*, isolating the strict behaviour
+    from the (coupled) maintainability metric.
     """
     warn_source = (
         "def f(x):\n"
-        + "".join(f"    if x == {i}:\n        return {i}\n" for i in range(11))
+        + "".join(f"    if x == {i}:\n        return {i}\n" for i in range(13))
         + "    return -1\n"
     )
     target = _write(tmp_path / "warn.py", warn_source)
@@ -531,10 +540,15 @@ def test_git_baseline_new_file_treated_as_all_new(tmp_path, capsys):
 
 def test_config_threshold_override_changes_verdict(tmp_path, capsys):
     """A stricter ``[metrics]`` threshold in the repo config turns a passing file
-    into a failing one (config is read; CLI flags would override it)."""
-    src = _write(tmp_path / "warn.py", _CLEAN_SOURCE)
+    into a failing one (config is read; CLI flags would override it).
+
+    The override ``fail = 0.9`` is a ``0-1`` cutoff on the normalized score; the
+    moderate ``classify`` (CC 8 -> score 0.8) clears the default ``fail=0.25`` but
+    falls below the stricter ``0.9`` floor.
+    """
+    src = _write(tmp_path / "warn.py", _WORSE_SOURCE)  # CC 8 -> normalized 0.8
     (tmp_path / ".coding-agent-playbook.toml").write_text(
-        '[metrics]\nmode = "absolute"\n[metrics.thresholds.cyclomatic_complexity]\nfail = 1\n',
+        '[metrics]\nmode = "absolute"\n[metrics.thresholds.cyclomatic_complexity]\nfail = 0.9\n',
         encoding="utf-8",
     )
     rc = _metrics.run(_ns(paths=[str(src)], repo_root=str(tmp_path)))

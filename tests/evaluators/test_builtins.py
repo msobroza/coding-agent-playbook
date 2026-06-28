@@ -46,8 +46,11 @@ def hot(x):
 def test_cyclomatic_descriptors() -> None:
     m = get_metric("cyclomatic_complexity")
     assert m.scope is Scope.FUNCTION
-    assert m.higher_is_worse is True
     assert m.requires is None
+    # RampNormalizer(good=5, bad=20): higher raw CC -> lower goodness.
+    assert m.score(5) == 1.0
+    assert m.score(20) == 0.0
+    assert m.score(12.5) == 0.5
 
 
 def test_cyclomatic_measures_each_function() -> None:
@@ -79,8 +82,11 @@ class God:
 def test_wmc_descriptors() -> None:
     m = get_metric("wmc")
     assert m.scope is Scope.CLASS
-    assert m.higher_is_worse is True
     assert m.requires is None
+    # RampNormalizer(good=10, bad=60).
+    assert m.score(10) == 1.0
+    assert m.score(60) == 0.0
+    assert m.score(35) == 0.5
 
 
 def test_wmc_sums_method_complexity() -> None:
@@ -115,7 +121,9 @@ class Cohesive:
 def test_lcom4_descriptors() -> None:
     m = get_metric("lcom4")
     assert m.scope is Scope.CLASS
-    assert m.higher_is_worse is True
+    # RampNormalizer(good=1, bad=6).
+    assert m.score(1) == 1.0
+    assert m.score(6) == 0.0
 
 
 def test_lcom4_two_connected_components() -> None:
@@ -152,7 +160,9 @@ class C(B):
 def test_dit_descriptors() -> None:
     m = get_metric("dit")
     assert m.scope is Scope.CLASS
-    assert m.higher_is_worse is True
+    # RampNormalizer(good=1, bad=8).
+    assert m.score(1) == 1.0
+    assert m.score(8) == 0.0
 
 
 def test_dit_three_deep_chain() -> None:
@@ -182,7 +192,9 @@ class Service:
 def test_cbo_descriptors() -> None:
     m = get_metric("cbo")
     assert m.scope is Scope.CLASS
-    assert m.higher_is_worse is True
+    # RampNormalizer(good=3, bad=25).
+    assert m.score(3) == 1.0
+    assert m.score(25) == 0.0
 
 
 def test_cbo_counts_distinct_external_types() -> None:

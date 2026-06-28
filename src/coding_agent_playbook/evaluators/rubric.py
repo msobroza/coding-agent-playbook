@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.check import MeasurementSet
 from coding_agent_playbook.evaluators.metric import Metric
+from coding_agent_playbook.evaluators.normalizer import Identity
 from coding_agent_playbook.evaluators.scheduler import schedule
 from coding_agent_playbook.evaluators.scope import CostTier, Scope
 from coding_agent_playbook.evaluators.types import (
@@ -49,8 +50,9 @@ class Rubric(Metric):
     """An ordered set of checks aggregated into one report; also a :class:`Metric`.
 
     The ``Metric`` descriptors are fixed by construction: :attr:`scope` is
-    ``MODULE`` (a rubric grades a whole unit), :attr:`higher_is_worse` is ``False``
-    (its composite is a ``0-1`` SCORE where higher is better), :attr:`requires` is
+    ``MODULE`` (a rubric grades a whole unit), :attr:`normalizer` is
+    :class:`~coding_agent_playbook.evaluators.normalizer.Identity` (its composite
+    is already a ``0-1`` SCORE where higher is better), :attr:`requires` is
     ``None``, and :attr:`needs_project` is ``True`` iff any child check is
     execution-tier (so a parent rubric / scheduler knows the whole rubric needs a
     runnable project). :attr:`name` (default ``"rubric"``) is the metric name a
@@ -58,7 +60,7 @@ class Rubric(Metric):
     """
 
     scope = Scope.MODULE
-    higher_is_worse = False
+    normalizer = Identity()
     requires = None
 
     #: The code-defined criteria a subclass declares so :meth:`define` (and the

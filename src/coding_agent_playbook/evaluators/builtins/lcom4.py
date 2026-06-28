@@ -12,6 +12,7 @@ import ast
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.metric import Metric, register_metric
+from coding_agent_playbook.evaluators.normalizer import RampNormalizer
 from coding_agent_playbook.evaluators.scope import Scope
 from coding_agent_playbook.evaluators.types import Measurement
 
@@ -45,7 +46,7 @@ class LackOfCohesion4Metric(Metric):
 
     name = _NAME
     scope = Scope.CLASS
-    higher_is_worse = True
+    normalizer = RampNormalizer(good=1, bad=6)
     requires = None
 
     def measure(self, ctx: EvalContext) -> list[Measurement]:

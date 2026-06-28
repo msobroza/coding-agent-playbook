@@ -5,8 +5,15 @@ The ``Metric`` layer is the "measure" leaf of the
 ``Metric`` produces raw
 :class:`~coding_agent_playbook.evaluators.types.Measurement` rows over a scope
 and carries *only* the measurement-side descriptors (``name``, ``scope``,
-``higher_is_worse``, ``requires``, ``needs_project``) - the grading-side
+``normalizer``, ``requires``, ``needs_project``) - the grading-side
 descriptors (thresholds, regression policy, weight) live on the ``Check`` layer.
+
+Every metric owns a
+:class:`~coding_agent_playbook.evaluators.normalizer.Normalizer` that maps its
+raw value to a ``0-1`` **goodness** (higher = always better), exposed via
+:meth:`Metric.score`. Folding the metric's native direction into the normalizer
+is what let the per-metric direction flag be deleted: the ``Check`` layer grades
+on the normalized score, so it never reasons about direction.
 
 Each builtin/execution module keeps its measurement compute in a module-level
 ``_measure`` function the ``Metric`` calls, so the parse-once value surfaces per
@@ -27,6 +34,7 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook.evaluators.scope import Scope
 
 if TYPE_CHECKING:
+    from coding_agent_playbook.evaluators.normalizer import Normalizer
     from coding_agent_playbook.evaluators.types import EvalContext, Measurement
 
 #: Entry-point group for out-of-tree metrics.
@@ -40,17 +48,20 @@ class Metric(ABC):
     """A raw measurement producer over a scope (the "measure" layer).
 
     Subclasses set the class-level measurement descriptors and implement
-    :meth:`measure`. ``higher_is_worse`` is the measurement's intrinsic direction:
-    ``True`` for CC/WMC/CBO/DIT/LCOM4 where larger is bad, ``False`` for
-    MI/coverage/test-pass-rate where larger is good. Grading-side concerns
-    (absolute thresholds, regression tolerance, composite weight, score
-    normalization) belong to the ``Check`` layer, not here.
+    :meth:`measure`. Each metric owns a :attr:`normalizer` that bakes in its
+    native direction and maps a raw value to a ``0-1`` **goodness** (higher =
+    always better) via :meth:`score`: CC/WMC/CBO/DIT/LCOM4 ramp *down* as the raw
+    value grows, MI/coverage/test-pass-rate ramp *up*. Grading-side concerns
+    (absolute thresholds as ``0-1`` cutoffs, regression tolerance, composite
+    weight) belong to the ``Check`` layer, not here.
     """
 
     name: str
     scope: Scope
-    #: The measurement's intrinsic direction (``True`` when larger is worse).
-    higher_is_worse: bool
+    #: Maps this metric's raw value to a ``0-1`` goodness (higher = always
+    #: better); see :meth:`score`. Folds the metric's native direction in, which
+    #: is why no separate per-direction flag is needed.
+    normalizer: Normalizer
     #: Optional importable dependency/capability; ``None`` means stdlib-only.
     requires: str | None = None
     #: ``True`` for execution metrics that need a runnable project
@@ -72,6 +83,10 @@ class Metric(ABC):
         if self.needs_project:
             return ctx.project is not None
         return ctx.module is not None
+
+    def score(self, raw: float) -> float:
+        """Map ``raw`` to this metric's ``0-1`` goodness via its :attr:`normalizer`."""
+        return self.normalizer.normalize(raw)
 
     @abstractmethod
     def measure(self, ctx: EvalContext) -> list[Measurement]:

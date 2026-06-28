@@ -25,6 +25,7 @@ from coding_agent_playbook.evaluators.check import (
 )
 from coding_agent_playbook.evaluators.checks.judged import JudgeCheck
 from coding_agent_playbook.evaluators.metric import Metric
+from coding_agent_playbook.evaluators.normalizer import PercentNormalizer, RampNormalizer
 from coding_agent_playbook.evaluators.rubric import Rubric
 from coding_agent_playbook.evaluators.scope import CostTier, Determinism, Scope
 from coding_agent_playbook.evaluators.types import (
@@ -36,8 +37,9 @@ from coding_agent_playbook.evaluators.types import (
 
 
 class _CC(Metric):
-    """A higher-is-worse (CC-like) metric: thresholds live on the Check.
+    """A CC-like metric (``RampNormalizer(good=5, bad=20)``): thresholds live on the Check.
 
+    ``score(raw) = clamp01((20 - raw) / 15)`` (raw 5 -> 1.0, raw 12.5 -> 0.5).
     ``available`` is forced ``True`` so the Rubric never skips this check on a
     bare ``ctx`` (no ``module``); these tests exercise the *aggregation* logic,
     not the metric's ctx-slot gating (covered in ``test_metric.py``).
@@ -45,7 +47,7 @@ class _CC(Metric):
 
     name = "cyclomatic_complexity"
     scope = Scope.FUNCTION
-    higher_is_worse = True
+    normalizer = RampNormalizer(good=5, bad=20)
     requires = None
 
     def available(self, ctx: EvalContext) -> bool:
@@ -56,11 +58,11 @@ class _CC(Metric):
 
 
 class _Cov(Metric):
-    """A higher-is-better (coverage-like) metric (always available, see ``_CC``)."""
+    """A coverage-like percentage metric (``PercentNormalizer``; always available)."""
 
     name = "coverage"
     scope = Scope.FILE
-    higher_is_worse = False
+    normalizer = PercentNormalizer()
     requires = None
 
     def available(self, ctx: EvalContext) -> bool:
@@ -90,11 +92,11 @@ def _cov(scope: str, value: float) -> Measurement:
 
 
 def test_gate_passes_when_all_required_run_checks_pass() -> None:
-    # CC under fail=20 ⇒ ok; coverage at/above 80 (strict-below) ⇒ ok.
+    # CC raw 5 -> score 1.0 >= fail(0.25) ⇒ ok; coverage raw 95 -> 0.95 >= warn(0.8) ⇒ ok.
     rubric = Rubric(
         [
-            ThresholdCheck(_CC(), fail=20.0, required=True),
-            ThresholdCheck(_Cov(), warn=80.0, required=True),
+            ThresholdCheck(_CC(), fail=0.25, required=True),
+            ThresholdCheck(_Cov(), warn=0.8, required=True),
         ]
     )
     ms = MeasurementSet([_cc("f", 5.0), _cov("a.py", 95.0)], None)
@@ -106,8 +108,8 @@ def test_gate_passes_when_all_required_run_checks_pass() -> None:
 def test_gate_fails_when_a_required_check_fails() -> None:
     rubric = Rubric(
         [
-            ThresholdCheck(_CC(), fail=20.0, required=True),  # 25 ⇒ fail
-            ThresholdCheck(_Cov(), warn=80.0, required=True),
+            ThresholdCheck(_CC(), fail=0.25, required=True),  # raw 25 -> 0.0 < 0.25 ⇒ fail
+            ThresholdCheck(_Cov(), warn=0.8, required=True),
         ]
     )
     ms = MeasurementSet([_cc("f", 25.0), _cov("a.py", 95.0)], None)
@@ -120,7 +122,7 @@ def test_skipped_judged_check_does_not_fail_the_gate() -> None:
     # No judge ⇒ the JudgeCheck is unavailable and recorded skipped, not failed.
     rubric = Rubric(
         [
-            ThresholdCheck(_CC(), fail=20.0, required=True),
+            ThresholdCheck(_CC(), fail=0.25, required=True),
             JudgeCheck("well documented", required=True),
         ]
     )
@@ -147,24 +149,24 @@ def test_available_judged_check_runs_and_can_fail_the_gate() -> None:
 
 
 def test_composite_is_the_weighted_mean_of_scores() -> None:
-    # CC=5 under warn=10/fail=20 ramps to 1.0; coverage=60 under warn=80/fail=40
-    # ramps to (60-40)/(80-40) = 0.5. Weighted mean: (1*1.0 + 3*0.5)/4 = 0.625.
+    # The score IS the metric's normalized goodness: CC raw 5 -> 1.0, coverage
+    # raw 60 -> 0.6 (PercentNormalizer). Weighted mean: (1*1.0 + 3*0.6)/4 = 0.7.
     rubric = Rubric(
         [
-            ThresholdCheck(_CC(), warn=10.0, fail=20.0, weight=1.0, required=False),
-            ThresholdCheck(_Cov(), warn=80.0, fail=40.0, weight=3.0, required=False),
+            ThresholdCheck(_CC(), warn=0.5, fail=0.25, weight=1.0, required=False),
+            ThresholdCheck(_Cov(), warn=0.8, fail=0.4, weight=3.0, required=False),
         ]
     )
     ms = MeasurementSet([_cc("f", 5.0), _cov("a.py", 60.0)], None)
     report = rubric.evaluate(_ctx(), ms)
-    assert report.composite == 0.625
+    assert report.composite == 0.7
 
 
 def test_composite_none_with_no_weighted_checks() -> None:
     rubric = Rubric(
         [
-            ThresholdCheck(_CC(), fail=20.0, required=True),  # weight 0
-            ThresholdCheck(_Cov(), warn=80.0, required=True),  # weight 0
+            ThresholdCheck(_CC(), fail=0.25, required=True),  # weight 0
+            ThresholdCheck(_Cov(), warn=0.8, required=True),  # weight 0
         ]
     )
     ms = MeasurementSet([_cc("f", 5.0), _cov("a.py", 95.0)], None)
@@ -173,8 +175,8 @@ def test_composite_none_with_no_weighted_checks() -> None:
 
 
 def test_strict_promotes_a_warn_bearing_required_check_to_failure() -> None:
-    # coverage=70 under warn=80 (no fail) ⇒ warn level, check.passed True.
-    rubric = Rubric([ThresholdCheck(_Cov(), warn=80.0, required=True)])
+    # coverage raw 70 -> score 0.7 under warn=0.8 (no fail) ⇒ warn level, passed True.
+    rubric = Rubric([ThresholdCheck(_Cov(), warn=0.8, required=True)])
     ms = MeasurementSet([_cov("a.py", 70.0)], None)
 
     lenient = rubric.evaluate(_ctx(), ms, strict=False)
@@ -189,8 +191,8 @@ def test_strict_promotes_a_warn_bearing_required_check_to_failure() -> None:
 def test_findings_flatten_leaf_scope_details() -> None:
     rubric = Rubric(
         [
-            ThresholdCheck(_CC(), fail=20.0, required=True),
-            ThresholdCheck(_Cov(), warn=80.0, required=True),
+            ThresholdCheck(_CC(), fail=0.25, required=True),
+            ThresholdCheck(_Cov(), warn=0.8, required=True),
         ]
     )
     ms = MeasurementSet([_cc("f", 5.0), _cov("a.py", 95.0)], None)
@@ -204,8 +206,8 @@ def test_findings_flatten_leaf_scope_details() -> None:
 def test_warn_and_fail_counts_aggregate_across_run_checks() -> None:
     rubric = Rubric(
         [
-            ThresholdCheck(_CC(), warn=10.0, fail=20.0, required=False),  # 25 ⇒ fail
-            ThresholdCheck(_Cov(), warn=80.0, required=False),  # 70 ⇒ warn
+            ThresholdCheck(_CC(), warn=0.5, fail=0.25, required=False),  # raw 25 -> 0.0 fail
+            ThresholdCheck(_Cov(), warn=0.8, required=False),  # raw 70 -> 0.7 warn
         ]
     )
     ms = MeasurementSet([_cc("f", 25.0), _cov("a.py", 70.0)], None)

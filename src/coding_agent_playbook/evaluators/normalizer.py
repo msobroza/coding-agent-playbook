@@ -6,9 +6,9 @@ is *better*, ``test_pass_rate`` is already ``0-1``. A :class:`Normalizer` is the
 Strategy that erases those differences: it maps one raw measurement to a ``0-1``
 **goodness** where, by convention, ``1.0`` is the best possible outcome and
 ``0.0`` the worst, and **higher is always better** regardless of the metric's
-native direction. Folding direction into the normalizer is what lets the grading
-layer drop the per-metric ``higher_is_worse`` flag (a later track): a metric just
-owns the normalizer that already points the right way.
+native direction. Folding direction into the normalizer is what let the grading
+layer drop the per-metric direction flag: a metric just owns the normalizer that
+already points the right way.
 
 The primitives are deliberately tiny and direction-agnostic:
 
