@@ -43,6 +43,17 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evaluators import EvaluationReport
 
 
+class PromptResolutionError(RuntimeError):
+    """A runner that ``requires_resolved_prompt`` could not resolve its prompt.
+
+    Raised by :func:`render_prompt` when ``strict=True`` and the task's
+    ``prompt_id`` resolves to no shipped :class:`Prompt`. A *real* agent must never
+    be driven with the descriptive placeholder the hermetic
+    :class:`~coding_agent_playbook.evals.fake_runner.FakeRunner` tolerates, so the
+    strict path fails loudly instead.
+    """
+
+
 # --------------------------------------------------------------------------- #
 # Result types (Option B)
 # --------------------------------------------------------------------------- #
@@ -210,7 +221,7 @@ def materialize(task: EvalTask, scratch_dir: Path) -> Baseline:
     return Baseline(repo_root=scratch_dir, commit=commit, setup_snapshot=snapshot)
 
 
-def render_prompt(task: EvalTask) -> str:
+def render_prompt(task: EvalTask, *, strict: bool = False) -> str:
     """Resolve ``task.prompt_id`` to its :class:`Prompt` and render its body.
 
     Resolution scans the ``resources/prompts/`` directory alongside the task's
@@ -224,17 +235,28 @@ def render_prompt(task: EvalTask) -> str:
     expanded here — rendering the bare prompt body is enough to drive an agent and
     keeps prompt resolution free of the full sync/rule-registry machinery; a
     prompt that uses ``{{ rule(...) }}`` in its *body* would need that registry, but
-    none of the shipped prompts do (rules are appended, not inlined). When the
-    prompt cannot be resolved at all (e.g. an out-of-tree test task), the prompt
-    text is irrelevant to the deterministic scoring layers the
-    :class:`~coding_agent_playbook.evals.fake_runner.FakeRunner` exercises, so a
-    descriptive placeholder is returned rather than raising.
+    none of the shipped prompts do (rules are appended, not inlined).
+
+    When the prompt cannot be resolved at all (e.g. an out-of-tree test task) the
+    behaviour depends on ``strict``: the hermetic
+    :class:`~coding_agent_playbook.evals.fake_runner.FakeRunner` never reads the
+    rendered text for the deterministic scoring layers, so it tolerates a stable
+    placeholder (``strict=False``, the default). A *real* runner must never feed a
+    placeholder to a live agent, so it passes ``strict=True`` and an unresolvable
+    prompt raises :class:`PromptResolutionError` instead. ``run_task`` selects the
+    mode via :attr:`HarnessRunner.requires_resolved_prompt`.
     """
     from coding_agent_playbook.renderer import build_environment, render_string
 
     prompt = _resolve_prompt(task)
     invocation = task.invocation.input_variables
     if prompt is None:
+        if strict:
+            raise PromptResolutionError(
+                f"prompt_id {task.prompt_id!r} for task {task.id!r} resolved to no "
+                "shipped prompt; a real runner cannot be driven with a placeholder. "
+                "Check the task's prompt_id and that resources/prompts/ is reachable."
+            )
         # No resolvable prompt: the deterministic scoring layers do not read the
         # rendered text, so emit a stable placeholder rather than failing.
         args = task.invocation.prompt_args
@@ -324,9 +346,20 @@ class HarnessRunner(ABC):
     Subclasses set the class attribute :attr:`name` (the
     ``coding_agent_playbook.runners`` entry-point key) and implement the single
     abstract hook :meth:`_invoke_agent`. :meth:`run_task` is concrete and fixed.
+
+    :attr:`requires_resolved_prompt` controls prompt strictness in
+    :func:`render_prompt`: the hermetic
+    :class:`~coding_agent_playbook.evals.fake_runner.FakeRunner` leaves it ``False``
+    (it tolerates the placeholder a synthetic test task yields), while a real
+    runner like ``ClaudeCodeRunner`` sets it ``True`` so an unresolvable prompt
+    raises :class:`PromptResolutionError` rather than driving a live agent with a
+    placeholder.
     """
 
     name: str
+    #: When True, ``run_task`` resolves the prompt strictly (raises on an
+    #: unresolvable ``prompt_id``). Real runners set this; the FakeRunner does not.
+    requires_resolved_prompt: bool = False
 
     def run_task(self, task: EvalTask, scratch_dir: Path) -> TaskResult:
         """Run ``task`` in ``scratch_dir`` and return a graded :class:`TaskResult`.
@@ -338,7 +371,7 @@ class HarnessRunner(ABC):
         deterministic-only.
         """
         baseline = materialize(task, scratch_dir)
-        prompt = render_prompt(task)
+        prompt = render_prompt(task, strict=self.requires_resolved_prompt)
         started = monotonic()
         run = self._invoke_agent(prompt, scratch_dir)
         candidate = capture(scratch_dir, baseline, run.transcript)

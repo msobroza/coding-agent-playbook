@@ -65,8 +65,10 @@ filesystem = "coding_agent_playbook.sources.filesystem:FileSystemArtifactSource"
 filesystem = "coding_agent_playbook.sources.filesystem:FileSystemStateSource"
 
 [project.entry-points."coding_agent_playbook.runners"]
-# The hermetic FakeRunner ships in v1.1 (PR R1); ClaudeCodeRunner lands in R1c.
+# The hermetic FakeRunner ships in v1.1 (PR R1); ClaudeCodeRunner lands in R1c
+# (opt-in real runner, never exercised in CI).
 fake = "coding_agent_playbook.evals.fake_runner:FakeRunner"
+claude_code = "coding_agent_playbook.evals.claude_code_runner:ClaudeCodeRunner"
 
 [project.entry-points."coding_agent_playbook.judges"]
 # Populated in v2 — see SPEC §15.4.
