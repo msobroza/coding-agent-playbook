@@ -20,9 +20,11 @@ scheduler runs it after the deterministic checks.
 from __future__ import annotations
 
 from coding_agent_playbook.evaluators.check import ThresholdCheck
+from coding_agent_playbook.evaluators.checks.registry import register_check
 from coding_agent_playbook.evaluators.metric import get_metric
 
 
+@register_check("tests_pass")
 def TestsPassCheck(*, weight: float = 0.0, required: bool = True) -> ThresholdCheck:
     """A check requiring **every** test to pass (``test_pass_rate``, ``fail=1.0``).
 
@@ -39,6 +41,7 @@ def TestsPassCheck(*, weight: float = 0.0, required: bool = True) -> ThresholdCh
     )
 
 
+@register_check("coverage")
 def CoverageCheck(
     *,
     warn: float = 80.0,

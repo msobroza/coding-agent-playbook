@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.check import Check
 from coding_agent_playbook.evaluators.check import slug as _slug
+from coding_agent_playbook.evaluators.checks.registry import register_check
 from coding_agent_playbook.evaluators.scope import CostTier, Determinism
 from coding_agent_playbook.evaluators.types import CheckResult, ScopeDetail
 
@@ -109,6 +110,7 @@ class _FileCheck(Check):
         raise NotImplementedError
 
 
+@register_check("file_exists")
 class FileExistsCheck(_FileCheck):
     """``files_created`` - the path is a regular file under the candidate tree."""
 
@@ -118,6 +120,7 @@ class FileExistsCheck(_FileCheck):
         return (tree / self.path).is_file()
 
 
+@register_check("file_contains")
 class FileContainsCheck(_FileCheck):
     """``files_must_contain`` - the file exists and its text matches a regex.
 
@@ -143,6 +146,7 @@ class FileContainsCheck(_FileCheck):
         return _file_matches(tree / self.path, self.pattern)
 
 
+@register_check("file_unchanged")
 class FileUnchangedCheck(_FileCheck):
     """``files_unchanged`` - the candidate file is byte-identical to the baseline.
 
@@ -163,6 +167,7 @@ class FileUnchangedCheck(_FileCheck):
         return _files_equal(tree / self.path, baseline_tree / self.path)
 
 
+@register_check("file_forbidden")
 class FileForbiddenCheck(_FileCheck):
     """``files_forbidden`` - the path does **not** exist under the candidate tree."""
 

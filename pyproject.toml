@@ -92,6 +92,12 @@ llm = "coding_agent_playbook.evals.judge:LLMJudge"
 # tasks can share one rubric by name. The engine ships none; in-tree
 # registrations win on a name clash.
 
+[project.entry-points."coding_agent_playbook.gates"]
+# Out-of-tree composed gates; reference from a task's [gate.bind] via ref = …. A
+# code-defined factory returning a composed boolean Check (AllOf/AnyOf/Not over
+# file/threshold/judge checks) registers here so eval tasks can share one gate by
+# name. The engine ships none; in-tree registrations win on a name clash.
+
 # ----------------------------------------------------------------------------
 
 [tool.hatch.build.targets.wheel]
