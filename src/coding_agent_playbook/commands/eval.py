@@ -15,12 +15,19 @@ Sub-modes:
 - ``playbook eval <id>`` (no ``--run``): runner-deferral message. Exits 0 if the
   task is known, exits 1 if it isn't (so typos still surface — the deferral only
   applies to tasks that genuinely exist).
-- ``playbook eval <id> --run [--runner NAME] [--format text|json]``: load the
-  task, select ``NAME`` from the ``coding_agent_playbook.runners`` entry-point
-  group (default ``claude_code``), run it in a throwaway scratch dir, and render
-  ``result.report`` (reusing ``commands/metrics.py``'s text/json renderer). Exits
-  ``0`` on a passing report, ``1`` on a failing one, ``2`` on usage errors
-  (unknown task, unknown/unavailable runner, bad ``--format``).
+- ``playbook eval <id> --run [--runner NAME] [--judge NAME] [--samples N]
+  [--format text|json]``: load the task, select the runner ``NAME`` from the
+  ``coding_agent_playbook.runners`` entry-point group (default ``claude_code``),
+  run it in a throwaway scratch dir, and render ``result.report`` (reusing
+  ``commands/metrics.py``'s text/json renderer). Exits ``0`` on a passing report,
+  ``1`` on a failing one, ``2`` on usage errors (unknown task,
+  unknown/unavailable runner, unknown/unavailable judge, bad ``--format``).
+
+  ``--judge`` (R2) selects a Tier-2 judge from the
+  ``coding_agent_playbook.judges`` group (``llm`` ships, opt-in/CLI-gated) so the
+  task's ``[rubric]`` criteria are scored too; omitted ⇒ deterministic-only (no
+  judge). ``--samples N`` (default 1) is the per-criterion sample count the judge
+  averages.
 
   Unlike ``playbook metrics``, there is **no ``--run-tests`` flag**: whether the
   execution evaluators (``coverage``/``test_pass_rate``) run is declared by the
@@ -42,6 +49,7 @@ from coding_agent_playbook.orchestrator import SyncContext
 if TYPE_CHECKING:
     import argparse
 
+    from coding_agent_playbook.evals.judge import Judge
     from coding_agent_playbook.evals.runner import HarnessRunner, TaskResult
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.types import Prompt
@@ -49,6 +57,9 @@ if TYPE_CHECKING:
 
 #: Entry-point group runners self-register under (mirrors adapters/sources).
 _RUNNERS_GROUP = "coding_agent_playbook.runners"
+
+#: Entry-point group judges register under (``llm`` ships; default: no judge).
+_JUDGES_GROUP = "coding_agent_playbook.judges"
 
 #: Default runner when ``--runner`` is omitted (the one thin real runner).
 _DEFAULT_RUNNER = "claude_code"
@@ -135,9 +146,34 @@ def _run_task_cli(args: argparse.Namespace, repo_root: Path) -> int:
         )
         return 2
 
+    # --judge selects a Tier-2 judge from the judges entry-point group. Omitted =>
+    # deterministic-only (no judge); judged [rubric] criteria are skipped.
+    judge_name = getattr(args, "judge", None)
+    judge: Judge | None = None
+    if judge_name is not None:
+        judge_cls = _load_judge_class(judge_name)
+        if judge_cls is None:
+            available = ", ".join(_available_judge_names()) or "(none registered)"
+            print(
+                f"error: unknown --judge {judge_name!r}; registered judges: {available}",
+                file=sys.stderr,
+            )
+            return 2
+        if not judge_cls.available():
+            print(
+                f"error: judge {judge_name!r} is unavailable in this environment "
+                "(its CLI/SDK is not installed). Omit `--judge` for a "
+                "deterministic-only run, or install the judge's CLI.",
+                file=sys.stderr,
+            )
+            return 2
+        judge = judge_cls()
+
+    samples = getattr(args, "samples", None) or 1
+
     runner = runner_cls()
     with tempfile.TemporaryDirectory(prefix="playbook-eval-") as tmp:
-        result = runner.run_task(task, Path(tmp) / "scratch")
+        result = runner.run_task(task, Path(tmp) / "scratch", judge=judge, samples=samples)
 
     if fmt == "json":
         print(json.dumps(_result_to_dict(result), indent=2, sort_keys=True))
@@ -176,6 +212,23 @@ def _load_runner_class(name: str) -> type[HarnessRunner] | None:
 def _available_runner_names() -> list[str]:
     """Sorted names of every runner registered in the entry-point group."""
     return sorted(ep.name for ep in metadata.entry_points(group=_RUNNERS_GROUP))
+
+
+def _load_judge_class(name: str) -> type[Judge] | None:
+    """Load the judge class registered under ``name`` in the judges group.
+
+    Never instantiates the judge here (the caller does, after the availability
+    guard). Returns ``None`` when no entry point matches ``name``.
+    """
+    for ep in metadata.entry_points(group=_JUDGES_GROUP):
+        if ep.name == name:
+            return ep.load()  # type: ignore[no-any-return]
+    return None
+
+
+def _available_judge_names() -> list[str]:
+    """Sorted names of every judge registered in the entry-point group."""
+    return sorted(ep.name for ep in metadata.entry_points(group=_JUDGES_GROUP))
 
 
 def _runner_available(runner_cls: type[HarnessRunner]) -> bool:

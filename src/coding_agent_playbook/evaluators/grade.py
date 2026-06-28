@@ -39,15 +39,29 @@ def grade(
     candidate: list[Measurement],
     baseline: list[Measurement] | None,
     policy: GradePolicy,
+    *,
+    extra_evaluators: dict[str, Evaluator] | None = None,
 ) -> EvaluationReport:
-    """Grade ``candidate`` against ``baseline`` under ``policy``."""
+    """Grade ``candidate`` against ``baseline`` under ``policy``.
+
+    ``extra_evaluators`` maps evaluator name → a pre-resolved
+    :class:`Evaluator` instance for measurements whose evaluator is **not** in
+    the registry — the per-rubric-line
+    :class:`~coding_agent_playbook.evaluators.judged.JudgedCriterion` instances
+    (named ``judged:<slug>``, deliberately un-registered) are passed here so
+    judged measurements flow through the same gate + composite as everything
+    else (one model, one report). Names absent from this map fall back to
+    :func:`get_evaluator`.
+    """
     baseline_index = _index(baseline or [])
     findings: list[Finding] = []
     weighted_scores: list[tuple[float, float]] = []  # (weight, score)
 
     # Resolve each distinct evaluator name once - get_evaluator() re-scans the
-    # entry points on every call, so cache by name across measurements.
-    evaluators: dict[str, Evaluator] = {}
+    # entry points on every call, so cache by name across measurements. The
+    # caller-supplied extras seed the cache (so un-registered judged criteria
+    # resolve to their own instances rather than raising in the registry).
+    evaluators: dict[str, Evaluator] = dict(extra_evaluators or {})
 
     for measurement in candidate:
         evaluator = evaluators.get(measurement.evaluator)

@@ -38,6 +38,8 @@ def _ns(
     run: bool = False,
     runner: str | None = None,
     fmt: str | None = None,
+    judge: str | None = None,
+    samples: int | None = None,
 ) -> argparse.Namespace:
     return argparse.Namespace(
         repo_root=str(repo),
@@ -47,6 +49,8 @@ def _ns(
         run=run,
         runner=runner,
         format=fmt,
+        judge=judge,
+        samples=samples,
     )
 
 
@@ -169,6 +173,88 @@ def test_run_unknown_format_exits_2(tmp_path: Path, make_synthetic_repo: Any, ca
     err = capsys.readouterr().err
     assert rc == 2
     assert "yaml" in err
+
+
+# --------------------------------------------------------------------------- #
+# --judge selection + availability (R2)
+# --------------------------------------------------------------------------- #
+
+
+def test_run_judge_llm_unavailable_exits_2(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: Any, monkeypatch: Any
+) -> None:
+    """``--judge llm`` with the ``claude`` CLI absent exits 2 with a clear message."""
+    from coding_agent_playbook.evals.judge import LLMJudge
+
+    _seed(tmp_path, make_synthetic_repo)
+    monkeypatch.setattr(LLMJudge, "available", classmethod(lambda cls: False))
+    args = _ns(tmp_path, id_=_SHIPPED_TASK, run=True, runner="fake", judge="llm")
+    rc = _eval.run(args)
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "llm" in err
+    assert "--judge" in err or "deterministic" in err
+
+
+def test_run_unknown_judge_exits_2(tmp_path: Path, make_synthetic_repo: Any, capsys: Any) -> None:
+    _seed(tmp_path, make_synthetic_repo)
+    args = _ns(tmp_path, id_=_SHIPPED_TASK, run=True, runner="fake", judge="does-not-exist")
+    rc = _eval.run(args)
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "does-not-exist" in err
+
+
+def test_run_judge_omitted_is_deterministic_only(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: Any
+) -> None:
+    """Omitting ``--judge`` runs deterministic-only (no judge instantiated)."""
+    _seed(tmp_path, make_synthetic_repo)
+    args = _ns(tmp_path, id_=_SHIPPED_TASK, run=True, runner="fake", judge=None, fmt="json")
+    rc = _eval.run(args)
+    out = capsys.readouterr().out
+    payload = json.loads(out)
+    assert rc in (0, 1)
+    # No judged findings without a judge.
+    findings = payload["report"]["findings"]
+    assert not any(str(f.get("evaluator", "")).startswith("judged:") for f in findings)
+
+
+def test_run_judge_available_is_passed_to_runner(
+    tmp_path: Path, make_synthetic_repo: Any, monkeypatch: Any
+) -> None:
+    """An available judge is instantiated and threaded into ``run_task``.
+
+    Hermetic: we register an available stub judge under the ``llm`` name (patching
+    the loader) and assert the runner received a non-None judge + the requested
+    samples.
+    """
+    from coding_agent_playbook.evals.judge import StubJudge
+    from coding_agent_playbook.evals.runner import HarnessRunner
+
+    _seed(tmp_path, make_synthetic_repo)
+
+    class _AvailableStub(StubJudge):
+        @classmethod
+        def available(cls) -> bool:
+            return True
+
+    captured: dict[str, Any] = {}
+    real_run_task = HarnessRunner.run_task
+
+    def _spy(self: Any, task: Any, scratch: Any, *, judge: Any = None, samples: int = 1) -> Any:
+        captured["judge"] = judge
+        captured["samples"] = samples
+        return real_run_task(self, task, scratch, judge=judge, samples=samples)
+
+    monkeypatch.setattr(_eval, "_load_judge_class", lambda name: _AvailableStub)
+    monkeypatch.setattr(HarnessRunner, "run_task", _spy)
+
+    args = _ns(tmp_path, id_=_SHIPPED_TASK, run=True, runner="fake", judge="llm", samples=4)
+    _eval.run(args)
+
+    assert isinstance(captured["judge"], _AvailableStub)
+    assert captured["samples"] == 4
 
 
 # --------------------------------------------------------------------------- #

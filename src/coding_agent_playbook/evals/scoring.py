@@ -12,9 +12,16 @@ deterministic families in a single report:
   over the candidate tree, with the **baseline suite run on the pristine
   ``setup/`` snapshot** so non-regression compares against the untouched setup.
   The measurements are graded by :func:`~coding_agent_playbook.evaluators.grade.grade`.
-  Judged evaluators are present in the selection but ``available(ctx)`` is
-  ``False`` (no ``Judge`` on the context) so they are skipped — rubric scoring is
-  R2.
+
+* **``[rubric]``** — one
+  :class:`~coding_agent_playbook.evaluators.judged.JudgedCriterion` per criterion,
+  included **only when a judge is configured** (the ``judge`` argument is not
+  ``None``). Each scores the candidate's captured diff/transcript into a ``0-1``
+  SCORE measurement (averaged over ``samples``) and is graded through the same
+  :func:`grade` call — the un-registered criterion instances are passed as
+  ``extra_evaluators`` so they feed the weighted composite and gate on an
+  optional min-score ``fail``. With no judge (the default) judged evaluators are
+  skipped entirely: deterministic-only, the R1 behaviour preserved.
 
 * **``[expected]``** — the :class:`~coding_agent_playbook.evals.task.ExpectedOutcome`
   file checks compiled **directly into BOOL findings** (one per
@@ -53,7 +60,7 @@ from coding_agent_playbook.evaluators.execution.project import ProjectHandle
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.runner import Baseline, Candidate
     from coding_agent_playbook.evals.task import EvalTask, ExpectedOutcome
-    from coding_agent_playbook.evaluators import Evaluator
+    from coding_agent_playbook.evaluators import Evaluator, JudgeLike
 
 #: Directory names skipped when discovering candidate ``*.py`` source files.
 _IGNORED_DIRS = frozenset(
@@ -63,9 +70,26 @@ _IGNORED_DIRS = frozenset(
 #: MODULE label the execution evaluators key their suite-wide measurements on.
 _SUITE_LABEL = "suite"
 
+#: Label the judged criteria key their per-artifact measurements on (R2).
+_RUBRIC_LABEL = "rubric"
 
-def score(task: EvalTask, baseline: Baseline, candidate: Candidate) -> EvaluationReport:
-    """Grade ``candidate`` for ``task`` into one deterministic report (R1 §2)."""
+
+def score(
+    task: EvalTask,
+    baseline: Baseline,
+    candidate: Candidate,
+    *,
+    judge: JudgeLike | None = None,
+    samples: int = 1,
+) -> EvaluationReport:
+    """Grade ``candidate`` for ``task`` into one report (R1 deterministic + R2 judged).
+
+    With ``judge`` set, the task's ``[rubric]`` criteria are scored too (one
+    SCORE measurement each, averaged over ``samples``) and folded into the same
+    :func:`grade` call as the ``[metrics]`` measurements. With ``judge=None``
+    (the default) only the deterministic ``[metrics]`` + ``[expected]`` layers
+    run — the R1 behaviour, unchanged.
+    """
     policy = task.metrics or MetricConfig()
     evaluators = _evaluators_for_task(task, policy)
 
@@ -83,7 +107,21 @@ def score(task: EvalTask, baseline: Baseline, candidate: Candidate) -> Evaluatio
         candidate_measurements += _execution_measurements(candidate.tree, exec_evals)
         baseline_measurements += _execution_measurements(baseline.setup_snapshot, exec_evals)
 
-    metrics_report = grade(candidate_measurements, baseline_measurements or None, policy)
+    extra_evaluators: dict[str, Evaluator] = {}
+    if judge is not None:
+        judged_evals = _judged_evaluators_for_task(task)
+        if judged_evals:
+            judged_measurements, extra_evaluators = _judged_measurements(
+                judged_evals, candidate, judge, samples
+            )
+            candidate_measurements += judged_measurements
+
+    metrics_report = grade(
+        candidate_measurements,
+        baseline_measurements or None,
+        policy,
+        extra_evaluators=extra_evaluators,
+    )
 
     expected_findings = _expected_findings(task.expected, candidate, baseline)
 
@@ -116,6 +154,56 @@ def _is_deterministic(evaluator: Evaluator) -> bool:
 def _is_static(evaluator: Evaluator) -> bool:
     """Static evaluators read ``ctx.module``; they are deterministic + not project."""
     return not evaluator.needs_project
+
+
+# --------------------------------------------------------------------------- #
+# [rubric] -> judged measurements (R2; only when a judge is configured)
+# --------------------------------------------------------------------------- #
+
+
+def _judged_evaluators_for_task(task: EvalTask) -> list[Evaluator]:
+    """The task's ``[rubric]`` :class:`JudgedCriterion` instances (judged family).
+
+    Filters :func:`~coding_agent_playbook.evals.task.evaluators_for_task` down to
+    the JUDGED determinism — the complement of :func:`_evaluators_for_task`'s
+    deterministic selection.
+    """
+    from coding_agent_playbook.evals.task import evaluators_for_task
+    from coding_agent_playbook.evaluators import Determinism
+
+    return [
+        ev for ev in evaluators_for_task(task, task.metrics) if ev.determinism is Determinism.JUDGED
+    ]
+
+
+def _judged_measurements(
+    evaluators: list[Evaluator],
+    candidate: Candidate,
+    judge: JudgeLike,
+    samples: int,
+) -> tuple[list[Measurement], dict[str, Evaluator]]:
+    """Score each judged criterion over the candidate diff into SCORE measurements.
+
+    Returns the measurements plus a ``name -> evaluator`` map (the un-registered
+    ``judged:<slug>`` instances) so :func:`grade` can resolve each measurement's
+    policy without a registry lookup. The judged artifact is the candidate's
+    captured ``git diff`` (the agent's change), keyed on a stable ``rubric`` label.
+    """
+    ctx = EvalContext(
+        module=None,
+        source="",
+        label=_RUBRIC_LABEL,
+        judge=judge,
+        artifact=candidate.diff,
+        samples=samples,
+    )
+    measurements: list[Measurement] = []
+    by_name: dict[str, Evaluator] = {}
+    for evaluator in evaluators:
+        if evaluator.available(ctx):
+            measurements.extend(evaluator.evaluate(ctx))
+            by_name[evaluator.name] = evaluator
+    return measurements, by_name
 
 
 # --------------------------------------------------------------------------- #

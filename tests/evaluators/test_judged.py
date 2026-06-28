@@ -12,29 +12,30 @@ import pytest
 
 from coding_agent_playbook.evaluators.judged import JudgedCriterion, slug
 from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
-from coding_agent_playbook.evaluators.types import EvalContext
+from coding_agent_playbook.evaluators.types import EvalContext, JudgeLike
 
 
 class _StubJudge:
-    """A minimal stand-in for a v2 ``Judge``.
+    """A minimal stand-in implementing the :class:`JudgeLike` protocol.
 
-    Exposes the duck-typed ``score(criterion, artifact, n)`` shape that
-    ``JudgedCriterion.evaluate`` calls. Records how many samples it was asked for
-    so tests can assert averaging behaviour, and returns a deterministic mean.
+    Exposes the canonical ``score_criterion(criterion, artifact, n)`` shape that
+    ``JudgedCriterion.evaluate`` calls (R2 rename from ``.score``). Records how
+    many samples it was asked for so tests can assert averaging behaviour, and
+    returns a deterministic mean over the scripted per-sample scores.
     """
 
     def __init__(self, per_sample: list[float]) -> None:
         self.per_sample = per_sample
         self.calls: list[tuple[str, object, int]] = []
 
-    def score(self, criterion: str, artifact: object, n: int) -> float:
+    def score_criterion(self, criterion: str, artifact: object, n: int = 1) -> float:
         self.calls.append((criterion, artifact, n))
         # Average the first ``n`` scripted per-sample scores (cycle if short).
         sampled = [self.per_sample[i % len(self.per_sample)] for i in range(n)]
         return sum(sampled) / len(sampled)
 
 
-def _ctx(*, judge: object | None = None, samples: int = 1) -> EvalContext:
+def _ctx(*, judge: JudgeLike | None = None, samples: int = 1) -> EvalContext:
     return EvalContext(
         module=None,
         source="",

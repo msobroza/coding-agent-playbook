@@ -1,10 +1,12 @@
-"""Tests for the evals ABCs after the R1 runner activation.
+"""Tests for the evals ABCs after the R1 runner + R2 judge activation.
 
-The :class:`~coding_agent_playbook.evals.judge.Judge` ABC is still a v2
-placeholder (SPEC §15.3): abstract, and calling :meth:`Judge.score` raises
-:exc:`NotImplementedError`. The :class:`~coding_agent_playbook.evals.runner.HarnessRunner`
-is now **live** (PR R1, Option B): ``run_task`` is a concrete template method (no
-longer raises), the abstract hook is ``_invoke_agent``, and the result model is
+The :class:`~coding_agent_playbook.evals.judge.Judge` ABC is now **live** (PR R2,
+Option A): :meth:`Judge.score_criterion` is the single abstract primitive and
+:meth:`Judge.score` is a concrete batch wrapper over it (no more
+``NotImplementedError`` placeholder). The
+:class:`~coding_agent_playbook.evals.runner.HarnessRunner` is live (PR R1, Option
+B): ``run_task`` is a concrete template method, the abstract hook is
+``_invoke_agent``, and the result model is
 :class:`~coding_agent_playbook.evals.runner.TaskResult` carrying an
 :class:`~coding_agent_playbook.evaluators.types.EvaluationReport` (``CheckResult``
 and ``programmatic_checks``/``rubric_scores`` are retired).
@@ -57,21 +59,37 @@ def test_invoke_agent_is_the_only_abstract_hook(tmp_path: Path) -> None:
     assert runner.name == "test"
 
 
-def test_judge_score_raises_with_v2_pointer() -> None:
+def test_judge_score_criterion_is_the_only_abstract_hook() -> None:
+    """A subclass only has to implement ``score_criterion``; ``score`` is concrete."""
+
     class _Judge(Judge):
         name = "test"
 
-        def score(
-            self,
-            rubric: Rubric,
-            transcript: str,
-            scratch_dir_state: dict[str, str],
-        ) -> list[float]:
-            return super().score(rubric, transcript, scratch_dir_state)  # type: ignore[safe-super]
+        def score_criterion(self, criterion: str, artifact: object, n: int = 1) -> float:
+            return 0.5
+
+    judge = _Judge()  # instantiable => score_criterion is the only abstract hook
+    assert judge.score_criterion("c", "art") == 0.5
+
+
+def test_judge_score_batch_wraps_score_criterion() -> None:
+    """``Judge.score`` maps the per-criterion primitive over the rubric (Option A)."""
+
+    class _Judge(Judge):
+        name = "test"
+
+        def __init__(self) -> None:
+            self.seen: list[tuple[str, object, int]] = []
+
+        def score_criterion(self, criterion: str, artifact: object, n: int = 1) -> float:
+            self.seen.append((criterion, artifact, n))
+            return {"A": 0.2, "B": 0.8}[criterion]
 
     judge = _Judge()
-    with pytest.raises(NotImplementedError, match=r"15\.3"):
-        judge.score(Rubric(criteria=["A"]), "", {})
+    scores = judge.score(Rubric(criteria=["A", "B"]), "transcript-text", {})
+    assert scores == [0.2, 0.8]
+    # The batch wrapper passes the transcript as the artifact, n=1 each.
+    assert judge.seen == [("A", "transcript-text", 1), ("B", "transcript-text", 1)]
 
 
 def test_task_result_carries_an_evaluation_report() -> None:

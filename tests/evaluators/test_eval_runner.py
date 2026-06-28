@@ -472,6 +472,151 @@ def test_score_is_callable_directly_with_handles(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# R2 — judged [rubric] scoring (hermetic via StubJudge)
+# --------------------------------------------------------------------------- #
+
+
+def test_judged_findings_appear_when_a_judge_is_passed(tmp_path: Path) -> None:
+    """A [rubric] task run via FakeRunner + StubJudge surfaces judged findings."""
+    from coding_agent_playbook.evals.judge import StubJudge
+    from coding_agent_playbook.evals.task import Rubric
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    task = _make_task(task_dir)
+    task.rubric = Rubric(criteria=["clarity", "naming"])
+
+    runner = FakeRunner(write_files({"mod.py": _REFACTORED}))
+    result = runner.run_task(
+        task, tmp_path / "scratch", judge=StubJudge({"clarity": 0.9, "naming": 0.7})
+    )
+
+    judged = {f.scope_key: f for f in result.report.findings if f.evaluator.startswith("judged:")}
+    by_eval = {f.evaluator for f in result.report.findings if f.evaluator.startswith("judged:")}
+    assert by_eval == {"judged:clarity", "judged:naming"}
+    # SCORE findings carry the stub scores.
+    clarity = next(f for f in result.report.findings if f.evaluator == "judged:clarity")
+    assert clarity.value == pytest.approx(0.9)
+    assert clarity.scope_key == "rubric"
+    assert judged  # keyed on the rubric label
+
+
+def test_judged_findings_contribute_to_the_composite(tmp_path: Path) -> None:
+    """Judged criteria feed the weighted composite (default_weight > 0)."""
+    from coding_agent_playbook.evals.judge import StubJudge
+    from coding_agent_playbook.evals.task import Rubric
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    task = _make_task(task_dir)
+    # Uniform weights (0.5 each); scores 1.0 and 0.0 => composite 0.5.
+    task.rubric = Rubric(criteria=["good", "bad"])
+
+    runner = FakeRunner(write_files({"mod.py": _REFACTORED}))
+    result = runner.run_task(task, tmp_path / "scratch", judge=StubJudge({"good": 1.0, "bad": 0.0}))
+
+    assert result.report.composite == pytest.approx(0.5)
+    assert result.aggregate_score == pytest.approx(0.5)
+
+
+def test_low_judged_score_fails_gate_with_min_score(tmp_path: Path) -> None:
+    """A min-score ``fail`` threshold (keyed on the judged name) gates a low score."""
+    from coding_agent_playbook.evals.judge import StubJudge
+    from coding_agent_playbook.evals.task import Rubric
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    # Absolute-mode policy with a hard floor on the judged criterion: fail<0.6.
+    metrics = MetricConfig(
+        mode="absolute",
+        thresholds={"judged:clarity": AbsoluteThreshold(fail=0.6)},
+    )
+    task = _make_task(task_dir, metrics=metrics)
+    task.rubric = Rubric(criteria=["clarity"])
+
+    runner = FakeRunner(write_files({"mod.py": _REFACTORED}))
+    result = runner.run_task(task, tmp_path / "scratch", judge=StubJudge({"clarity": 0.3}))
+
+    clarity = next(f for f in result.report.findings if f.evaluator == "judged:clarity")
+    assert clarity.level == "fail"
+    assert result.passed is False
+
+
+def test_high_judged_score_passes_gate_with_min_score(tmp_path: Path) -> None:
+    """The same min-score floor passes when the judged score clears it."""
+    from coding_agent_playbook.evals.judge import StubJudge
+    from coding_agent_playbook.evals.task import Rubric
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    metrics = MetricConfig(
+        mode="absolute",
+        thresholds={"judged:clarity": AbsoluteThreshold(fail=0.6)},
+    )
+    task = _make_task(task_dir, metrics=metrics)
+    task.rubric = Rubric(criteria=["clarity"])
+
+    runner = FakeRunner(write_files({"mod.py": _REFACTORED}))
+    result = runner.run_task(task, tmp_path / "scratch", judge=StubJudge({"clarity": 0.95}))
+
+    clarity = next(f for f in result.report.findings if f.evaluator == "judged:clarity")
+    assert clarity.level == "ok"
+    assert result.passed is True
+
+
+def test_no_judge_preserves_deterministic_only_r1_behaviour(tmp_path: Path) -> None:
+    """With no judge, judged findings are absent and the report is R1-identical."""
+    from coding_agent_playbook.evals.task import Rubric
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    task = _make_task(task_dir, metrics=_cc_metrics())
+    task.rubric = Rubric(criteria=["clarity", "naming"])
+
+    # No judge argument => deterministic-only.
+    result = FakeRunner(write_files({"mod.py": _REFACTORED})).run_task(task, tmp_path / "scratch")
+
+    assert not any(f.evaluator.startswith("judged:") for f in result.report.findings)
+    assert result.passed is True
+
+
+def test_samples_threaded_through_to_the_judge(tmp_path: Path) -> None:
+    """``run_task(samples=N)`` reaches the judge as the per-criterion ``n``."""
+    from coding_agent_playbook.evals.judge import StubJudge
+    from coding_agent_playbook.evals.task import Rubric
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    task = _make_task(task_dir)
+    task.rubric = Rubric(criteria=["clarity"])
+
+    judge = StubJudge({"clarity": 0.8})
+    FakeRunner(write_files({"mod.py": _REFACTORED})).run_task(
+        task, tmp_path / "scratch", judge=judge, samples=5
+    )
+    assert judge.calls == [("clarity", judge.calls[0][1], 5)]
+
+
+def test_judge_artifact_is_the_candidate_diff(tmp_path: Path) -> None:
+    """The judged artifact is the candidate's captured git diff (the agent's change)."""
+    from coding_agent_playbook.evals.judge import StubJudge
+    from coding_agent_playbook.evals.task import Rubric
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    task = _make_task(task_dir)
+    task.rubric = Rubric(criteria=["clarity"])
+
+    judge = StubJudge({"clarity": 0.8})
+    FakeRunner(write_files({"helper.py": "answer = 42\n"})).run_task(
+        task, tmp_path / "scratch", judge=judge
+    )
+    _criterion, artifact, _n = judge.calls[0]
+    # The diff contains the newly-created file's contents.
+    assert "answer = 42" in str(artifact)
+
+
+# --------------------------------------------------------------------------- #
 # Edge cases
 # --------------------------------------------------------------------------- #
 
