@@ -86,6 +86,12 @@ llm = "coding_agent_playbook.evals.judge:LLMJudge"
 # ships none in it; this group is the third-party extension point for new
 # grading strategies beyond the built-in threshold/regression/file/judge checks.
 
+[project.entry-points."coding_agent_playbook.rubrics"]
+# Out-of-tree named rubrics; reference from task.toml via [rubric] ref = …. A
+# code-defined Rubric subclass (declaring its CRITERIA) registers here so eval
+# tasks can share one rubric by name. The engine ships none; in-tree
+# registrations win on a name clash.
+
 # ----------------------------------------------------------------------------
 
 [tool.hatch.build.targets.wheel]

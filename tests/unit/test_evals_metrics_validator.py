@@ -239,3 +239,44 @@ def test_validator_still_checks_rubric_weights_at_load_not_revalidated(tmp_path:
     task.rubric = Rubric(criteria=["A"], weights=[0.5])  # would not sum to 1.0
     errors = validate_tasks([task], [prompt])
     assert all("weight" not in e.message.lower() for e in errors)
+
+
+# --- validator: [rubric] ref = "<name>" (named-rubric registry) ---------------
+
+
+def test_validator_rejects_unknown_rubric_ref(tmp_path: Path) -> None:
+    """A ``[rubric] ref`` naming no registered rubric is a validation error."""
+    from coding_agent_playbook.evals.task import Rubric
+
+    task_dir = tmp_path / "bad-ref"
+    task_dir.mkdir()
+    prompt = _make_prompt("demo", eval_tasks=["bad-ref"])
+    task = _task_with_metrics(task_dir, None)
+    task.rubric = Rubric(ref="_not_a_registered_rubric")
+    errors = validate_tasks([task], [prompt])
+    assert any(
+        "_not_a_registered_rubric" in e.message and "not a registered rubric" in e.message
+        for e in errors
+    )
+
+
+def test_validator_accepts_registered_rubric_ref(tmp_path: Path) -> None:
+    """A ``ref`` naming a registered rubric passes validation."""
+    from coding_agent_playbook.evals.task import Rubric
+    from coding_agent_playbook.evaluators import rubrics as rubrics_mod
+    from coding_agent_playbook.evaluators.rubric import Rubric as CheckRubric
+
+    @rubrics_mod.register_rubric("_validator_known_ref")
+    class _Known(CheckRubric):
+        CRITERIA = (("crit", 1.0),)
+
+    task_dir = tmp_path / "good-ref"
+    task_dir.mkdir()
+    prompt = _make_prompt("demo", eval_tasks=["good-ref"])
+    task = _task_with_metrics(task_dir, None)
+    task.rubric = Rubric(ref="_validator_known_ref")
+    try:
+        errors = validate_tasks([task], [prompt])
+        assert [e for e in errors if "rubric" in e.message.lower()] == []
+    finally:
+        rubrics_mod._RUBRIC_REGISTRY.pop("_validator_known_ref", None)

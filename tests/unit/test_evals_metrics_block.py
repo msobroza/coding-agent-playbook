@@ -383,3 +383,62 @@ def test_rubric_for_task_expected_and_metrics_and_rubric_coexist() -> None:
     assert "nonreg:wmc" in ids
     assert "judge:clarity" in ids
     assert "file_exists:out.py" in ids
+
+
+# --- rubric_for_task: [rubric] ref = "<name>" (named-rubric registry) ---------
+
+
+def test_rubric_for_task_splices_ref_rubric_judge_checks() -> None:
+    """A registered ``ref`` splices the named rubric's JudgeChecks into the task's
+    Rubric; the task Rubric's name stays ``task.id``."""
+    from coding_agent_playbook.evaluators import rubrics as rubrics_mod
+    from coding_agent_playbook.evaluators.rubric import Rubric
+
+    @rubrics_mod.register_rubric("_ref_only")
+    class _Ref(Rubric):
+        CRITERIA = (("ref crit one", 1.0), ("ref crit two", 1.0))
+
+    data: dict[str, Any] = {
+        "id": "task-with-ref",
+        "prompt_id": "p",
+        "description": "d",
+        "rubric": {"ref": "_ref_only"},
+    }
+    task = EvalTask.from_dict(data, source_path=Path("/tmp/task.toml"), source_package="<test>")
+    try:
+        rubric = rubric_for_task(task, task.metrics)
+        assert rubric.name == "task-with-ref"
+        judged = [c for c in rubric.checks if isinstance(c, JudgeCheck)]
+        assert {c.criterion for c in judged} == {"ref crit one", "ref crit two"}
+        # define() normalizes the two equal weights to 0.5 / 0.5.
+        assert all(c.weight == pytest.approx(0.5) for c in judged)
+    finally:
+        rubrics_mod._RUBRIC_REGISTRY.pop("_ref_only", None)
+
+
+def test_rubric_for_task_ref_coexists_with_expected_and_metrics() -> None:
+    """``ref`` + ``[expected]`` + ``[metrics]`` together: the ref's JudgeChecks
+    land ALONGSIDE the file + metric Checks in one Rubric."""
+    from coding_agent_playbook.evaluators import rubrics as rubrics_mod
+    from coding_agent_playbook.evaluators.rubric import Rubric
+
+    @rubrics_mod.register_rubric("_ref_plus")
+    class _Ref(Rubric):
+        CRITERIA = (("ref criterion", 1.0),)
+
+    data: dict[str, Any] = {
+        "id": "t",
+        "prompt_id": "p",
+        "description": "d",
+        "metrics": {"regression": {"wmc": {"max_worsening": 0}}},
+        "rubric": {"ref": "_ref_plus"},
+        "expected": {"files_created": ["out.py"]},
+    }
+    task = EvalTask.from_dict(data, source_path=Path("/tmp/task.toml"), source_package="<test>")
+    try:
+        ids = _check_ids(task)
+        assert "nonreg:wmc" in ids  # [metrics]
+        assert "judge:ref-criterion" in ids  # ref rubric
+        assert "file_exists:out.py" in ids  # [expected]
+    finally:
+        rubrics_mod._RUBRIC_REGISTRY.pop("_ref_plus", None)

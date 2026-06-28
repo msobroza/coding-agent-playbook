@@ -244,3 +244,76 @@ def test_checks_run_in_authored_order() -> None:
     rubric = Rubric([_Recorder("first"), _Recorder("second"), _Recorder("third")])
     rubric.evaluate(_ctx(), MeasurementSet([], None))
     assert order == ["first", "second", "third"]
+
+
+# --------------------------------------------------------------------------- #
+# of() / define() / CRITERIA — the code-defined-rubric constructors
+# --------------------------------------------------------------------------- #
+
+
+def test_of_builds_judge_checks_with_normalized_weights() -> None:
+    rubric = Rubric.of(
+        ("Findings prioritized correctly", 1.0),
+        ("Each finding proposes a concrete fix", 3.0),
+        name="review",
+    )
+    assert isinstance(rubric, Rubric)
+    assert rubric.name == "review"
+    assert all(isinstance(c, JudgeCheck) for c in rubric.checks)
+    criteria = [c.criterion for c in rubric.checks]  # type: ignore[attr-defined]
+    assert criteria == [
+        "Findings prioritized correctly",
+        "Each finding proposes a concrete fix",
+    ]
+    # 1:3 ⇒ normalized to 0.25 / 0.75 (sum 1.0).
+    weights = [c.weight for c in rubric.checks]
+    assert weights == [0.25, 0.75]
+    assert sum(weights) == 1.0
+    # JudgeChecks built by of() are non-gating (feed the composite, don't gate).
+    assert all(c.required is False for c in rubric.checks)
+
+
+def test_of_threshold_is_threaded_to_each_check() -> None:
+    rubric = Rubric.of(("a", 1.0), ("b", 1.0), threshold=0.8)
+    assert [c.threshold for c in rubric.checks] == [0.8, 0.8]  # type: ignore[attr-defined]
+
+
+def test_of_normalize_false_keeps_raw_weights() -> None:
+    rubric = Rubric.of(("a", 1.0), ("b", 3.0), normalize=False)
+    assert [c.weight for c in rubric.checks] == [1.0, 3.0]
+
+
+def test_of_empty_is_an_empty_rubric() -> None:
+    rubric = Rubric.of(name="empty")
+    assert rubric.checks == []
+    assert rubric.name == "empty"
+
+
+def test_of_all_zero_weights_are_left_untouched() -> None:
+    # The all-zero guard must not divide by zero — weights stay 0.0.
+    rubric = Rubric.of(("a", 0.0), ("b", 0.0))
+    assert [c.weight for c in rubric.checks] == [0.0, 0.0]
+
+
+class _DemoRubric(Rubric):
+    CRITERIA = (
+        ("Tests use parametrize", 1.0),
+        ("No mocking on pure functions", 1.0),
+    )
+
+
+def test_define_uses_class_criteria_and_class_name() -> None:
+    rubric = _DemoRubric.define()
+    assert isinstance(rubric, _DemoRubric)
+    assert rubric.name == "_DemoRubric"
+    assert [c.criterion for c in rubric.checks] == [  # type: ignore[attr-defined]
+        "Tests use parametrize",
+        "No mocking on pure functions",
+    ]
+    # Two equal weights ⇒ normalized to 0.5 / 0.5.
+    assert [c.weight for c in rubric.checks] == [0.5, 0.5]
+
+
+def test_define_forwards_threshold_kwarg() -> None:
+    rubric = _DemoRubric.define(threshold=0.9)
+    assert [c.threshold for c in rubric.checks] == [0.9, 0.9]  # type: ignore[attr-defined]

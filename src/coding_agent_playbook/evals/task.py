@@ -69,13 +69,28 @@ class ExpectedOutcome:
 class Rubric:
     """Human-readable criteria for manual or LLM-as-judge (Tier 2) grading.
 
-    ``weights`` is optional: if present it must have the same length as
-    ``criteria`` and sum to ``1.0`` (within :data:`_WEIGHT_SUM_TOLERANCE`).
-    If absent the runner treats weighting as uniform.
+    Two mutually exclusive authoring modes:
+
+    - **Inline** — ``criteria`` (with optional ``weights``) spell the rubric out
+      in the ``task.toml``. ``weights``, if present, must have the same length as
+      ``criteria`` and sum to ``1.0`` (within :data:`_WEIGHT_SUM_TOLERANCE`);
+      if absent the runner treats weighting as uniform.
+    - **Named reference** — ``ref`` names a code-defined rubric registered in the
+      :mod:`coding_agent_playbook.evaluators.rubrics` registry; the referenced
+      rubric supplies the criteria + weights, so ``criteria``/``weights`` stay
+      empty and the weight-sum check is skipped.
+
+    ``ref`` and ``criteria`` are mutually exclusive, and a ``[rubric]`` block must
+    set exactly one of them (enforced in :func:`_parse_rubric`).
     """
 
     criteria: list[str] = field(default_factory=list)
     weights: list[float] | None = None
+    #: Name of a registered code-defined rubric (the named-rubric registry). When
+    #: set, ``criteria``/``weights`` are empty and the referenced rubric's checks
+    #: are spliced in by :func:`rubric_for_task`. Mutually exclusive with
+    #: ``criteria``.
+    ref: str | None = None
 
 
 @dataclass
@@ -245,6 +260,23 @@ def _parse_expected(raw: Any) -> ExpectedOutcome:
 def _parse_rubric(raw: Any) -> Rubric:
     if not isinstance(raw, dict):
         raise ValueError(f"[rubric] must be a table, got {type(raw).__name__}")
+
+    has_ref = "ref" in raw
+    has_criteria = "criteria" in raw
+    # ref and criteria are mutually exclusive, and a [rubric] block must set one.
+    if has_ref and has_criteria:
+        raise ValueError("[rubric] cannot set both 'ref' and 'criteria'")
+    if not has_ref and not has_criteria:
+        raise ValueError("[rubric] must set either 'criteria' or 'ref'")
+
+    if has_ref:
+        ref = raw["ref"]
+        if not isinstance(ref, str):
+            raise ValueError(f"[rubric].ref must be str, got {type(ref).__name__}")
+        # In ref-mode criteria/weights stay empty; the referenced rubric supplies
+        # them. The weight-sum check does not apply.
+        return Rubric(criteria=[], weights=None, ref=ref)
+
     criteria_raw = raw.get("criteria", [])
     if not isinstance(criteria_raw, list) or not all(isinstance(c, str) for c in criteria_raw):
         raise ValueError("[rubric].criteria must be a list of strings")
@@ -357,11 +389,16 @@ def rubric_for_task(task: EvalTask, config: MetricConfig | None) -> CheckRubric:
       Weight is
       ``config.weights.get(name, 0.0)``; ``required=True`` (a metric breach
       gates). Unknown metric names are skipped (the validator surfaces them).
-    - ``[rubric]`` → one
+    - ``[rubric]`` → judged checks, by one of two mutually exclusive modes.
+      *Inline* (``criteria``): one
       :class:`~coding_agent_playbook.evaluators.checks.judged.JudgeCheck` per
       criterion, carrying its weight (uniform ``1/len`` when ``weights`` is
-      omitted). ``required=False`` — judged checks feed the composite but do not
-      gate — and dormant without a ``ctx.judge`` (the check skips).
+      omitted). *Named reference* (``ref``): the registered code-defined rubric
+      (:func:`coding_agent_playbook.evaluators.rubrics.get_rubric`) is resolved
+      and its ``JudgeCheck``\\ s are spliced in alongside the ``[metrics]`` /
+      ``[expected]`` checks. Either way ``required=False`` — judged checks feed
+      the composite but do not gate — and dormant without a ``ctx.judge`` (the
+      check skips).
     - ``[expected]`` → one deterministic file check per
       :class:`ExpectedOutcome` entry
       (:class:`~coding_agent_playbook.evaluators.checks.files.FileExistsCheck` /
@@ -393,7 +430,15 @@ def rubric_for_task(task: EvalTask, config: MetricConfig | None) -> CheckRubric:
             if check is not None:
                 checks.append(check)
 
-    if task.rubric is not None and task.rubric.criteria:
+    if task.rubric is not None and task.rubric.ref:
+        # Named reference: resolve the registered code-defined rubric and splice
+        # its JudgeChecks in alongside the [metrics]/[expected] checks (so a task
+        # can carry ref + [expected] + [metrics] together). Imported lazily to
+        # keep the eval ↔ evaluator import surface narrow.
+        from coding_agent_playbook.evaluators.rubrics import get_rubric
+
+        checks.extend(get_rubric(task.rubric.ref).checks)
+    elif task.rubric is not None and task.rubric.criteria:
         criteria = task.rubric.criteria
         if task.rubric.weights is not None:
             weights = task.rubric.weights

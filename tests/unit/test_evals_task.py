@@ -194,3 +194,54 @@ def test_eval_task_rubric_weights_omitted_is_fine(tmp_path: Path) -> None:
     )
     assert isinstance(task.rubric, Rubric)
     assert task.rubric.weights is None
+
+
+# --- [rubric] ref = "<name>" (named-rubric registry) -------------------------
+
+
+def test_eval_task_rubric_ref_parses(tmp_path: Path) -> None:
+    data = _minimal_dict()
+    data["rubric"] = {"ref": "code-review"}
+    task = EvalTask.from_dict(
+        data,
+        source_path=tmp_path / "task.toml",
+        source_package="coding_agent_playbook",
+    )
+    assert isinstance(task.rubric, Rubric)
+    assert task.rubric.ref == "code-review"
+    # ref-mode keeps criteria/weights empty — the referenced rubric supplies them.
+    assert task.rubric.criteria == []
+    assert task.rubric.weights is None
+
+
+def test_eval_task_rubric_ref_and_criteria_are_mutually_exclusive(tmp_path: Path) -> None:
+    data = _minimal_dict()
+    data["rubric"] = {"ref": "code-review", "criteria": ["A"]}
+    with pytest.raises(ValueError, match="both 'ref' and 'criteria'"):
+        EvalTask.from_dict(
+            data,
+            source_path=tmp_path / "task.toml",
+            source_package="coding_agent_playbook",
+        )
+
+
+def test_eval_task_rubric_with_neither_ref_nor_criteria_raises(tmp_path: Path) -> None:
+    data = _minimal_dict()
+    data["rubric"] = {}
+    with pytest.raises(ValueError, match="either 'criteria' or 'ref'"):
+        EvalTask.from_dict(
+            data,
+            source_path=tmp_path / "task.toml",
+            source_package="coding_agent_playbook",
+        )
+
+
+def test_eval_task_rubric_ref_must_be_string(tmp_path: Path) -> None:
+    data = _minimal_dict()
+    data["rubric"] = {"ref": 42}
+    with pytest.raises(ValueError, match="ref"):
+        EvalTask.from_dict(
+            data,
+            source_path=tmp_path / "task.toml",
+            source_package="coding_agent_playbook",
+        )

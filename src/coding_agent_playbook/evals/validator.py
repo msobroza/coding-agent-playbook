@@ -47,6 +47,10 @@ def validate_tasks(
     7. The ``[metrics]`` block (SPEC prM §D), if present, is well-formed: a
        valid ``mode``, every named evaluator is registered (static or
        execution), and all bounds/deltas/weights are numbers.
+    8. The ``[rubric]`` block, if present, is well-formed: a ``ref`` resolves to
+       a registered named rubric, and ``ref``/``criteria`` are not both set (nor
+       both absent). The mutual-exclusion cases also raise at parse time; the
+       validator mirrors them so a directly-built task still surfaces them.
 
     Aggregates every violation; never raises. Empty list means OK.
     """
@@ -58,6 +62,11 @@ def validate_tasks(
         # Rule 7: validate the [metrics] block when present.
         if task.metrics is not None:
             errors.extend(_validate_metrics(task))
+
+        # Rule 8: validate the [rubric] block when present (ref resolves to a
+        # registered rubric; ref/criteria mutual-exclusion).
+        if task.rubric is not None:
+            errors.extend(_validate_rubric(task))
 
         # Rule 2: setup.files must exist relative to <task_dir>/setup/.
         task_dir = task.source_path.parent
@@ -188,5 +197,55 @@ def _validate_metrics(task: EvalTask) -> list[EvalValidationError]:
     for name, weight in metrics.weights.items():
         _check_name(name)
         _check_number(name, "weights", weight)
+
+    return errors
+
+
+def _validate_rubric(task: EvalTask) -> list[EvalValidationError]:
+    """Validate a task's ``[rubric]`` block (named-rubric registry).
+
+    When ``[rubric] ref`` is set, the named rubric must be registered (in the
+    :mod:`coding_agent_playbook.evaluators.rubrics` registry). The
+    ref/criteria mutual-exclusion and neither-set cases already raise at parse
+    time (:func:`coding_agent_playbook.evals.task._parse_rubric`); they are
+    mirrored here defensively so a task object built directly (not via
+    ``from_dict``) still surfaces the same violation rather than crashing the
+    compiler. Aggregates every violation; never raises.
+    """
+    # Imported lazily so the validator stays import-light and free of any
+    # eval ↔ evaluator import cycle at module load.
+    from coding_agent_playbook.evaluators.rubrics import all_rubric_names
+
+    rubric = task.rubric
+    assert rubric is not None  # caller guards; narrows the type for mypy.
+    errors: list[EvalValidationError] = []
+
+    if rubric.ref is not None and rubric.criteria:
+        errors.append(
+            EvalValidationError(
+                path=task.source_path,
+                message="[rubric] cannot set both 'ref' and 'criteria'",
+            )
+        )
+    if rubric.ref is None and not rubric.criteria:
+        errors.append(
+            EvalValidationError(
+                path=task.source_path,
+                message="[rubric] must set either 'criteria' or 'ref'",
+            )
+        )
+
+    if rubric.ref is not None:
+        known = all_rubric_names()
+        if rubric.ref not in known:
+            errors.append(
+                EvalValidationError(
+                    path=task.source_path,
+                    message=(
+                        f"[rubric] ref {rubric.ref!r} is not a registered rubric; "
+                        f"known: {sorted(known)}"
+                    ),
+                )
+            )
 
     return errors

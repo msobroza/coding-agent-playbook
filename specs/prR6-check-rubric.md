@@ -48,6 +48,13 @@ A weighted set of checks; `evaluate(ctx, measurements, *, strict, fail_fast, max
 ### Scheduler — `scheduler.py`
 Cost-tiered (`CostTier` DETERMINISTIC < EXECUTION < JUDGED) short-circuit evaluation with optional within-tier `concurrent.futures` concurrency. Runs checks **cheapest-tier-first**, results always in **authored order**. `op="and"` short-circuits on the first required failure (so **a failing deterministic check never invokes the LLM judge**); `op="or"` on the first pass. The runner is **fail-fast by default**; `playbook eval --run --full-scoring` forces every check to run. The composers reuse the same `schedule()` Strategy.
 
+### Named-rubric registry — `rubrics.py` (+ `Rubric.of`/`define`/`CRITERIA`)
+A code-defined rubric can be **shared across tasks by name**, bridging a Python `Rubric` subclass and the TOML authoring surface. Three additive pieces:
+
+- **`Rubric.of(*pairs, name=…, threshold=0.5, normalize=True)`** and **`Rubric.define(**kw)`** (classmethods on `Rubric`). `of` builds a `Rubric` of non-gating `JudgeCheck`s from `(criterion, weight)` pairs, normalizing the weights to sum `1.0` by default (parity with the `[rubric].weights` rule; the all-zero case is left untouched). `define()` is `cls.of(*cls.CRITERIA, name=cls.__name__, **kw)` — it builds the subclass from its class-level `CRITERIA: tuple[tuple[str, float], …]`.
+- **`evaluators/rubrics.py`** — the registry, mirroring `metric.py`: the `coding_agent_playbook.rubrics` entry-point group, `@register_rubric("name")` (a decorator **factory** keyed on an explicit string, since a rubric has no intrinsic `cls.name`), `get_rubric(name) -> Rubric` (resolves the class — in-tree registrations before entry points — and returns `cls.define()`; raises `KeyError` if unknown), and `all_rubric_names()` for validator messages. The engine ships **no** builtin rubrics — this is purely the out-of-tree extension point.
+- **TOML `ref`** — `evals/task.py`'s authoring `Rubric` gains `ref: str | None`. `ref` and `criteria` are mutually exclusive (both set / neither set → `ValueError` at parse, mirrored in the validator); when `ref` is set, `criteria`/`weights` stay empty and the weight-sum check is skipped. `rubric_for_task` resolves `get_rubric(task.rubric.ref)` and **splices its `JudgeCheck`s in alongside** the `[expected]`/`[metrics]` checks (so a task carries `ref` + `[expected]` + `[metrics]` together); the task `Rubric`'s `name` stays `task.id`. The validator adds rule 8: an unknown `ref` errors with the known-rubric list.
+
 ### Where the smells land
 | smell | fixed by |
 |---|---|

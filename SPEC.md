@@ -1709,6 +1709,7 @@ class ExpectedOutcome:
 class Rubric:
     criteria: list[str]
     weights: list[float] | None = None           # None = uniform
+    ref: str | None = None                       # named-rubric registry ref (mutually exclusive with criteria)
 @dataclass
 class EvalTask:
     id: str
@@ -1728,6 +1729,15 @@ The validator (`coding_agent_playbook.evals.validator.validate_tasks`) enforces:
 - Each task's `prompt_id` resolves to a known prompt.
 - Each task is listed in its referenced prompt's `eval_tasks:` frontmatter.
 - Weights, if present, sum to 1.0 (±0.001 tolerance).
+- A `[rubric]` block sets exactly one of `criteria` or `ref` (mutually exclusive); a `ref` resolves to a rubric registered in the `coding_agent_playbook.rubrics` group.
+
+**Named-rubric registry.** A `[rubric]` may name a *code-defined* rubric instead of inlining criteria:
+```toml
+[rubric]
+ref = "code-review"      # mutually exclusive with `criteria`
+```
+A `Rubric` subclass declares its `CRITERIA = (("criterion", weight), …)` and registers under a name via `@register_rubric("code-review")` from `coding_agent_playbook.evaluators.rubrics` (an out-of-tree extension point — the engine ships none; in-tree registrations win over an entry-point plugin of the same name). `get_rubric(name)` resolves the class and returns `cls.define()` (a built `Rubric` of `JudgeCheck`s, weights normalized to sum 1.0). A task may combine `ref` with `[expected]` and `[metrics]` — `rubric_for_task` splices the referenced rubric's `JudgeCheck`s in alongside the file + metric checks. Out-of-tree packages register named rubrics through the `coding_agent_playbook.rubrics` entry-point group.
+
 That's the entire active surface in v1.
 ### 15.3 The v1.1 runner (live — deterministic layers)
 PR R1 activates the former placeholder. `HarnessRunner` is now a concrete **template method**: `run_task` owns a fixed pipeline (materialize → render prompt → `_invoke_agent` → capture → score → assemble a `TaskResult`) and the single abstract per-assistant hook is `_invoke_agent`. Scoring runs through the `Metric` / `Check` / `Rubric` model (§21): the task's three eval blocks compile into one `Rubric` (`rubric_for_task`) whose ordered checks `Rubric.evaluate` folds into one report, so the deterministic layers — `[expected]` file checks and `[metrics]` static + execution metrics (non-regression vs the `setup/` baseline) — are live. **Judged `[rubric]` scoring landed in v1.1 R2**: `run_task(task, scratch, *, judge=None, samples=1)` takes an optional `Judge` (keyword-only, R1-compatible default) and threads it onto the `EvalContext`; with a judge set the rubric criteria score against the captured diff and fold into the same report, and with none (the default) judged checks report `available() is False` and the report is deterministic-only. The cost-tiered scheduler (§21.4) runs checks cheapest-tier-first; `run_task` is **fail-fast by default** (a lost deterministic gate skips the costlier execution/judged tiers — a failing `[expected]`/metric check never spends an LLM call), and `playbook eval --run --full-scoring` forces every check to run.
@@ -2118,7 +2128,7 @@ With no judge configured the `[rubric]` `JudgeCheck`s skip and the report is the
 ### 21.7 Invariants
 - **Single responsibility — `Metric` measures, `Check` grades, `Rubric` aggregates.** No fused `Evaluator`; no free `grade()` (it is `Rubric.evaluate`); no `value_kind`/`to_score`/`default_*`/`extra_evaluators`. A metric becomes a gateable thing only by wrapping it in a `Check` (a threshold). A `Rubric` is also a `Metric`, so check trees compose (Composite) and nest.
 - **Air-gapped / no new hard deps.** Core is stdlib-only (`ast`, `dataclasses`, `enum`, `subprocess`, `xml.etree`, `tempfile`, `importlib.metadata`); `radon` is the only optional extra (`[metrics]`, lazy import via `available()`); execution metrics shell out to the *target's* `pytest` and parse XML with stdlib — no playbook dep. The engine + static `playbook metrics` run with nothing extra installed.
-- **Registry via decorator AND entry points** — metrics under `coding_agent_playbook.metrics` (`@register_metric`), out-of-tree grader checks under `coding_agent_playbook.checks`; never hardcode the list; never instantiate out-of-tree metrics/checks directly. In-tree builtins win on a name clash.
+- **Registry via decorator AND entry points** — metrics under `coding_agent_playbook.metrics` (`@register_metric`), out-of-tree grader checks under `coding_agent_playbook.checks`, named rubrics under `coding_agent_playbook.rubrics` (`@register_rubric("name")`, referenced from a task's `[rubric] ref`); never hardcode the list; never instantiate out-of-tree metrics/checks/rubrics directly. In-tree builtins/registrations win on a name clash.
 - **Cost-tiered short-circuit.** The scheduler runs checks `DETERMINISTIC` → `EXECUTION` → `JUDGED`, so a failing deterministic gate **never invokes the LLM judge**; results stay in authored order. `--full-scoring` forces every check.
 - **Non-regression is primary** (new scopes fall back to absolute). Deterministic static/execution compare exactly (`max_worsening=0`); judged uses a `threshold` floor + n-sample averaging; `test_pass_rate` has an optional flaky-retry.
 - **Execution is opt-in and excluded from the default pre-commit** (side effects + cost); the static gate is the only thing that runs on every commit.

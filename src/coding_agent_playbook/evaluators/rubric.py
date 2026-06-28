@@ -61,6 +61,13 @@ class Rubric(Metric):
     higher_is_worse = False
     requires = None
 
+    #: The code-defined criteria a subclass declares so :meth:`define` (and the
+    #: named-rubric registry) can build it from the class alone. Each pair is
+    #: ``(criterion, weight)``; the engine ships no subclasses (named rubrics are
+    #: an out-of-tree extension point - see
+    #: :mod:`coding_agent_playbook.evaluators.rubrics`).
+    CRITERIA: tuple[tuple[str, float], ...] = ()
+
     def __init__(self, checks: list[Check], *, name: str = "rubric") -> None:
         self.checks = checks
         self.name = name
@@ -71,6 +78,56 @@ class Rubric(Metric):
         # memo keyed on id(ctx) so a rubric measured twice in one ctx is reused.
         self._measuring = False
         self._measure_cache: dict[int, list[Measurement]] = {}
+
+    # ------------------------------------------------------------------ #
+    # Code-defined constructors: of() builds from explicit pairs, define()
+    # builds from the class's CRITERIA. Both produce a JudgeCheck per criterion.
+    # ------------------------------------------------------------------ #
+
+    @classmethod
+    def of(
+        cls,
+        *criteria: tuple[str, float],
+        name: str = "rubric",
+        threshold: float = 0.5,
+        normalize: bool = True,
+    ) -> Rubric:
+        """Build a :class:`Rubric` of :class:`JudgeCheck`\\ s from ``(criterion, weight)`` pairs.
+
+        Each pair becomes a non-gating
+        :class:`~coding_agent_playbook.evaluators.checks.judged.JudgeCheck`
+        (``required=False`` - judged criteria feed the composite, they do not
+        gate) carrying ``threshold`` and its weight. When ``normalize`` (the
+        default) and there is at least one pair, the weights are scaled to sum
+        ``1.0`` - parity with the TOML ``[rubric].weights`` sum rule; the all-zero
+        case is left untouched (no divide-by-zero). The built rubric is a plain
+        :class:`Rubric` instance named ``name``.
+        """
+        from coding_agent_playbook.evaluators.checks.judged import JudgeCheck
+
+        labels = [c for c, _ in criteria]
+        weights = [w for _, w in criteria]
+        if normalize and weights:
+            total = float(sum(weights))
+            if total > 0:
+                weights = [w / total for w in weights]
+        checks: list[Check] = [
+            JudgeCheck(label, threshold=threshold, weight=weight, required=False)
+            for label, weight in zip(labels, weights, strict=True)
+        ]
+        return cls(checks, name=name)
+
+    @classmethod
+    def define(cls, **kw: object) -> Rubric:
+        """Build this subclass from its :attr:`CRITERIA`, named after the class.
+
+        A thin wrapper over :meth:`of` that supplies the class-level
+        :attr:`CRITERIA` and defaults the rubric ``name`` to ``cls.__name__``.
+        The remaining keyword arguments (``threshold``, ``normalize``) flow
+        through to :meth:`of`. This is the entry point the named-rubric registry
+        (:func:`coding_agent_playbook.evaluators.rubrics.get_rubric`) calls.
+        """
+        return cls.of(*cls.CRITERIA, name=cls.__name__, **kw)  # type: ignore[arg-type]
 
     def available(self, ctx: EvalContext) -> bool:
         """Whether this rubric can run in ``ctx`` (the :class:`Metric` half's gate).
