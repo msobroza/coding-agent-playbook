@@ -7,9 +7,9 @@
 cost-tiered :func:`~coding_agent_playbook.evaluators.scheduler.schedule` (T4b -
 cheapest tier first, results in **authored order**), and folds their
 :class:`~coding_agent_playbook.evaluators.types.CheckResult` rows into one
-:class:`~coding_agent_playbook.evaluators.types.EvaluationReport` with the same
-gate / weighted-composite / strict rules :func:`coding_agent_playbook.evaluators.grade.grade`
-uses. :meth:`evaluate` defaults to ``fail_fast=False`` so the report stays
+:class:`~coding_agent_playbook.evaluators.types.EvaluationReport` carrying the
+gate / weighted-composite / strict verdict. :meth:`evaluate` defaults to
+``fail_fast=False`` so the report stays
 complete (every available check runs - behaviour-identical to the pre-scheduler
 T4a loop); a caller may opt into ``fail_fast=True`` (gate-lost short-circuit) and
 ``max_workers > 1`` (per-tier concurrency).
@@ -219,9 +219,8 @@ class Rubric(Metric):
     def _composite(results: list[CheckResult]) -> float | None:
         """Weight-normalized mean over run checks with ``weight > 0`` and a score.
 
-        Mirrors :func:`coding_agent_playbook.evaluators.grade._composite`: the sum
-        of ``weight * score`` over the total weight, or ``None`` when no such check
-        contributes.
+        The sum of ``weight * score`` over the total weight, or ``None`` when no
+        such check contributes.
         """
         weighted = [
             (r.weight, r.score)

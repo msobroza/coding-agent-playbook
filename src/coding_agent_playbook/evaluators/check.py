@@ -61,9 +61,9 @@ class MeasurementSet:
 
     Wraps the two measurement lists a deterministic check grades over and
     provides :meth:`pairs`, which indexes both lists by
-    ``(evaluator == metric_name, scope_key)`` exactly the way
-    :func:`~coding_agent_playbook.evaluators.grade.grade` does: it iterates the
-    **candidate** scopes for one metric and attaches the matching baseline value
+    ``(evaluator == metric_name, scope_key)`` the way the deterministic checks
+    consume them: it iterates the **candidate** scopes for one metric and attaches
+    the matching baseline value
     (``None`` for a new scope), so removed baseline-only scopes are ignored.
     """
 
