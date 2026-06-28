@@ -20,10 +20,30 @@ from coding_agent_playbook.evaluators.types import (
 )
 
 if TYPE_CHECKING:
+    from coding_agent_playbook.evaluators.check import Check
     from coding_agent_playbook.evaluators.registry import Evaluator
+    from coding_agent_playbook.evaluators.rubric import Rubric as CheckRubric
 
 # Tolerance for the rubric-weights sum check (SPEC §15.2 fifth rule).
 _WEIGHT_SUM_TOLERANCE = 1e-3
+
+#: Per-metric default grading policy, ported verbatim from the ``Evaluator``
+#: builtins' ``default_absolute``/``default_regression`` class constants
+#: (``registry.resolve_policy`` read those when ``[metrics]`` omitted an
+#: override). The ``Check`` layer carries the policy on the *check*, not the
+#: metric, so :func:`rubric_for_task` falls back to these when ``config`` has no
+#: override for a metric — keeping the gate verdict identical to ``grade()``.
+#: ``(warn, fail, max_worsening)``; ``None`` means "no bound at that stage".
+_METRIC_DEFAULTS: dict[str, tuple[float | None, float | None, float]] = {
+    "cyclomatic_complexity": (10.0, 20.0, 0.0),
+    "wmc": (None, 50.0, 0.0),
+    "lcom4": (2.0, None, 0.0),
+    "dit": (5.0, None, 0.0),
+    "cbo": (14.0, None, 0.0),
+    "maintainability_index": (None, 65.0, 0.0),
+    "coverage": (80.0, None, 0.0),
+    "test_pass_rate": (None, 1.0, 0.0),
+}
 
 
 @dataclass
@@ -409,3 +429,140 @@ def evaluators_for_task(
             evaluators.append(FileForbidden(rel))
 
     return evaluators
+
+
+def rubric_for_task(task: EvalTask, config: MetricConfig | None) -> CheckRubric:
+    """Compile a task's eval blocks into a :class:`Rubric` of :class:`Check`\\ s.
+
+    The ``Metric``/``Check``/``Rubric`` counterpart of
+    :func:`evaluators_for_task`: instead of a flat list of ``Evaluator``
+    instances graded later by :func:`grade`, this returns one
+    :class:`~coding_agent_playbook.evaluators.rubric.Rubric` whose ordered checks
+    fold the three eval blocks into a single
+    :class:`~coding_agent_playbook.evaluators.types.EvaluationReport` at
+    :meth:`Rubric.evaluate` time. Block ordering matches
+    :func:`evaluators_for_task` (metrics → rubric → expected) so the report's
+    findings appear in the same order the old path produced them:
+
+    - ``[metrics]`` → one metric-backed
+      :class:`~coding_agent_playbook.evaluators.check.ThresholdCheck` /
+      :class:`~coding_agent_playbook.evaluators.check.NonRegressionCheck` per
+      metric named in ``config``'s ``thresholds``/``regression``/``weights``
+      (deduped, deterministic order). The check's ``mode`` is ``config.mode``;
+      its absolute/regression policy is the ``config`` override when present,
+      else the metric's ported default (:data:`_METRIC_DEFAULTS`) — so the gate
+      verdict matches ``grade()``'s ``resolve_policy`` exactly. Weight is
+      ``config.weights.get(name, 0.0)``; ``required=True`` (a metric breach
+      gates). Unknown metric names are skipped (the validator surfaces them),
+      mirroring :func:`evaluators_for_task`.
+    - ``[rubric]`` → one
+      :class:`~coding_agent_playbook.evaluators.checks.judged.JudgeCheck` per
+      criterion, carrying its weight (uniform ``1/len`` when ``weights`` is
+      omitted). ``required=False`` — judged checks feed the composite but do not
+      gate — and dormant without a ``ctx.judge`` (the check skips).
+    - ``[expected]`` → one deterministic file check per
+      :class:`ExpectedOutcome` entry
+      (:class:`~coding_agent_playbook.evaluators.checks.files.FileExistsCheck` /
+      ``FileContainsCheck`` / ``FileUnchangedCheck`` / ``FileForbiddenCheck``),
+      each ``required=True``, ``weight=0.0`` (a pure gate, no composite share).
+
+    The :class:`Rubric` is named ``task.id`` so its nested-metric measurement key
+    (a rubric is also a ``Metric``) is stable per task.
+    """
+    from coding_agent_playbook.evaluators.checks.files import (
+        FileContainsCheck,
+        FileExistsCheck,
+        FileForbiddenCheck,
+        FileUnchangedCheck,
+    )
+    from coding_agent_playbook.evaluators.checks.judged import JudgeCheck
+    from coding_agent_playbook.evaluators.rubric import Rubric as CheckRubricImpl
+
+    checks: list[Check] = []
+
+    if config is not None:
+        seen: set[str] = set()
+        for name in (*config.thresholds, *config.regression, *config.weights):
+            if name in seen:
+                continue
+            seen.add(name)
+            check = _metric_check(name, config)
+            if check is not None:
+                checks.append(check)
+
+    if task.rubric is not None and task.rubric.criteria:
+        criteria = task.rubric.criteria
+        if task.rubric.weights is not None:
+            weights = task.rubric.weights
+        else:
+            weights = [1.0 / len(criteria)] * len(criteria)
+        for criterion, weight in zip(criteria, weights, strict=True):
+            checks.append(JudgeCheck(criterion, weight=weight, required=False))
+
+    if task.expected is not None:
+        expected = task.expected
+        for rel in expected.files_created:
+            checks.append(FileExistsCheck(rel))
+        for entry in expected.files_must_contain:
+            checks.append(FileContainsCheck(entry["path"], entry["pattern"]))
+        for rel in expected.files_unchanged:
+            checks.append(FileUnchangedCheck(rel))
+        for rel in expected.files_forbidden:
+            checks.append(FileForbiddenCheck(rel))
+
+    return CheckRubricImpl(checks, name=task.id)
+
+
+def _metric_check(name: str, config: MetricConfig) -> Check | None:
+    """Build the metric-backed :class:`Check` for ``name`` under ``config``.
+
+    Resolves the metric via :func:`get_metric` (``None`` when the name is
+    unknown, so the caller skips it like :func:`evaluators_for_task` does). The
+    absolute warn/fail bounds and regression tolerance come from ``config``'s
+    per-metric override when present, else the metric's ported default
+    (:data:`_METRIC_DEFAULTS`) so the resulting check grades exactly as
+    ``grade()``'s ``resolve_policy`` did. ``config.mode`` picks the check family:
+    ``"regression"`` → :class:`NonRegressionCheck`, ``"absolute"``/``"both"`` →
+    :class:`ThresholdCheck` (``mode="both"`` lets a regression fail before the
+    absolute bound, matching ``grade()``'s ``_decide``).
+    """
+    from coding_agent_playbook.evaluators.check import (
+        NonRegressionCheck,
+        ThresholdCheck,
+    )
+    from coding_agent_playbook.evaluators.metric import get_metric
+
+    try:
+        metric = get_metric(name)
+    except KeyError:
+        # Unknown names are surfaced by the validator; skip here so the compiler
+        # never raises on an otherwise-loadable task.
+        return None
+
+    default_warn, default_fail, default_worsening = _METRIC_DEFAULTS.get(name, (None, None, 0.0))
+    absolute = config.thresholds.get(name)
+    warn = absolute.warn if absolute is not None else default_warn
+    fail = absolute.fail if absolute is not None else default_fail
+    regression = config.regression.get(name)
+    max_worsening = regression.max_worsening if regression is not None else default_worsening
+    weight = config.weights.get(name, 0.0)
+
+    if config.mode == "regression":
+        return NonRegressionCheck(
+            metric,
+            max_worsening=max_worsening,
+            warn=warn,
+            fail=fail,
+            weight=weight,
+            required=True,
+        )
+    # "absolute" or "both": a ThresholdCheck whose mode flags whether a baseline
+    # regression also gates (only under "both").
+    return ThresholdCheck(
+        metric,
+        warn=warn,
+        fail=fail,
+        weight=weight,
+        required=True,
+        mode=config.mode,
+    )

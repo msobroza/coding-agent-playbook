@@ -368,6 +368,7 @@ class HarnessRunner(ABC):
         *,
         judge: JudgeLike | None = None,
         samples: int = 1,
+        fail_fast: bool = True,
     ) -> TaskResult:
         """Run ``task`` in ``scratch_dir`` and return a graded :class:`TaskResult`.
 
@@ -380,13 +381,18 @@ class HarnessRunner(ABC):
         exactly as R1. With a ``judge`` set, the task's ``[rubric]`` criteria are
         scored over the captured diff (averaged over ``samples``) and folded into
         the same report.
+
+        ``fail_fast`` defaults to ``True`` — the cost-saving short-circuit: a lost
+        deterministic gate skips the remaining costlier tiers (so a failing
+        ``[expected]``/metric check spares the LLM judge). ``playbook eval``'s
+        ``--full-scoring`` flag flips it off to grade every check unconditionally.
         """
         baseline = materialize(task, scratch_dir)
         prompt = render_prompt(task, strict=self.requires_resolved_prompt)
         started = monotonic()
         run = self._invoke_agent(prompt, scratch_dir)
         candidate = capture(scratch_dir, baseline, run.transcript)
-        report = score(task, baseline, candidate, judge=judge, samples=samples)
+        report = score(task, baseline, candidate, judge=judge, samples=samples, fail_fast=fail_fast)
         return TaskResult(
             task_id=task.id,
             harness=self.name,

@@ -40,6 +40,7 @@ def _ns(
     fmt: str | None = None,
     judge: str | None = None,
     samples: int | None = None,
+    full_scoring: bool = False,
 ) -> argparse.Namespace:
     return argparse.Namespace(
         repo_root=str(repo),
@@ -51,6 +52,7 @@ def _ns(
         format=fmt,
         judge=judge,
         samples=samples,
+        full_scoring=full_scoring,
     )
 
 
@@ -242,10 +244,19 @@ def test_run_judge_available_is_passed_to_runner(
     captured: dict[str, Any] = {}
     real_run_task = HarnessRunner.run_task
 
-    def _spy(self: Any, task: Any, scratch: Any, *, judge: Any = None, samples: int = 1) -> Any:
+    def _spy(
+        self: Any,
+        task: Any,
+        scratch: Any,
+        *,
+        judge: Any = None,
+        samples: int = 1,
+        fail_fast: bool = True,
+    ) -> Any:
         captured["judge"] = judge
         captured["samples"] = samples
-        return real_run_task(self, task, scratch, judge=judge, samples=samples)
+        captured["fail_fast"] = fail_fast
+        return real_run_task(self, task, scratch, judge=judge, samples=samples, fail_fast=fail_fast)
 
     monkeypatch.setattr(_eval, "_load_judge_class", lambda name: _AvailableStub)
     monkeypatch.setattr(HarnessRunner, "run_task", _spy)

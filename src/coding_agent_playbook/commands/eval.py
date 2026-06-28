@@ -44,6 +44,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.evaluators.types import ScopeDetail
 from coding_agent_playbook.orchestrator import SyncContext
 
 if TYPE_CHECKING:
@@ -52,6 +53,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evals.judge import Judge
     from coding_agent_playbook.evals.runner import HarnessRunner, TaskResult
     from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.evaluators.types import CheckResult
     from coding_agent_playbook.types import Prompt
 
 
@@ -170,10 +172,19 @@ def _run_task_cli(args: argparse.Namespace, repo_root: Path) -> int:
         judge = judge_cls()
 
     samples = getattr(args, "samples", None) or 1
+    # Fail-fast is ON by default (a lost deterministic gate skips the costlier
+    # judge tier); --full-scoring grades every check unconditionally.
+    fail_fast = not bool(getattr(args, "full_scoring", False))
 
     runner = runner_cls()
     with tempfile.TemporaryDirectory(prefix="playbook-eval-") as tmp:
-        result = runner.run_task(task, Path(tmp) / "scratch", judge=judge, samples=samples)
+        result = runner.run_task(
+            task,
+            Path(tmp) / "scratch",
+            judge=judge,
+            samples=samples,
+            fail_fast=fail_fast,
+        )
 
     if fmt == "json":
         print(json.dumps(_result_to_dict(result), indent=2, sort_keys=True))
@@ -245,35 +256,111 @@ def _runner_available(runner_cls: type[HarnessRunner]) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Report rendering (reuses commands/metrics.py's EvaluationReport renderer)
+# Report rendering (Metric/Check/Rubric: iterate report.checks → subresults)
 # --------------------------------------------------------------------------- #
 
 
 def _result_to_dict(result: TaskResult) -> dict[str, object]:
-    """Stable JSON view of a :class:`TaskResult` (task envelope + the report)."""
-    from coding_agent_playbook.commands.metrics import _report_to_dict
+    """Stable JSON view of a :class:`TaskResult` (task envelope + the report).
 
+    The report is rendered as the list of :class:`CheckResult` rows the
+    :class:`~coding_agent_playbook.evaluators.rubric.Rubric` produced, each with
+    its flattened per-scope :class:`ScopeDetail` ``subresults``. The flat
+    ``findings`` list is kept too (transitional) so existing JSON consumers that
+    read ``report.findings`` keep working.
+    """
+    report = result.report
     return {
         "task_id": result.task_id,
         "harness": result.harness,
         "passed": result.passed,
         "aggregate_score": result.aggregate_score,
         "duration_seconds": result.duration_seconds,
-        "report": _report_to_dict(result.report),
+        "report": {
+            "passed": report.passed,
+            "warn_count": report.warn_count,
+            "fail_count": report.fail_count,
+            "composite": report.composite,
+            "checks": [_check_to_dict(c) for c in report.checks],
+            "findings": [_finding_to_dict(f) for f in report.findings],
+        },
+    }
+
+
+def _check_to_dict(check: CheckResult) -> dict[str, object]:
+    """Stable JSON view of one :class:`CheckResult` + its leaf ``subresults``."""
+    return {
+        "check_id": check.check_id,
+        "passed": check.passed,
+        "score": check.score,
+        "weight": check.weight,
+        "required": check.required,
+        "status": check.status,
+        "subresults": [
+            _finding_to_dict(sub) for sub in check.subresults if isinstance(sub, ScopeDetail)
+        ],
+    }
+
+
+def _finding_to_dict(finding: ScopeDetail) -> dict[str, object]:
+    """Stable JSON view of one per-scope :class:`ScopeDetail` leaf."""
+    return {
+        "evaluator": finding.evaluator,
+        "scope_key": finding.scope_key,
+        "value": finding.value,
+        "baseline": finding.baseline,
+        "bound": finding.bound,
+        "score": finding.score,
+        "level": finding.level,
+        "kind": finding.kind,
     }
 
 
 def _format_result_text(result: TaskResult) -> str:
-    """Human view: the metrics-style findings block + a per-task footer."""
-    from coding_agent_playbook.commands.metrics import _format_text
+    """Human view: per-check blocks (each with its scope leaves) + a footer."""
+    report = result.report
+    lines: list[str] = ["=== Eval scoring ==="]
 
-    body = _format_text(result.report, skipped=[], note=None, measured_count=0)
+    run_checks = [c for c in report.checks if c.status == "run"]
+    if not run_checks:
+        lines.append("  (no checks ran)")
+    for check in run_checks:
+        verdict = "PASS" if check.passed else "FAIL"
+        score = "n/a" if check.score is None else f"{check.score:.3f}"
+        lines.append(f"  [{verdict}] {check.check_id} (score={score})")
+        for sub in check.subresults:
+            if not isinstance(sub, ScopeDetail) or sub.level == "ok":
+                continue
+            detail = _scope_detail(sub)
+            lines.append(
+                f"      [{sub.level}] {sub.evaluator} @ {sub.scope_key} "
+                f"= {sub.value:g} ({sub.kind}{detail})"
+            )
+
+    skipped = [c for c in report.checks if c.status == "skipped"]
+    for check in skipped:
+        lines.append(f"  [skip] {check.check_id}")
+
+    composite = "n/a" if report.composite is None else f"{report.composite:.3f}"
     verdict = "PASS" if result.passed else "FAIL"
+    lines.append(
+        f"  summary: {verdict} — {report.fail_count} fail, {report.warn_count} warn, "
+        f"composite={composite}"
+    )
     footer = (
         f"  task: {result.task_id} via {result.harness} — {verdict} "
         f"(score={result.aggregate_score:.3f}, {result.duration_seconds:.2f}s)"
     )
-    return f"{body}\n{footer}"
+    return "\n".join([*lines, footer])
+
+
+def _scope_detail(sub: ScopeDetail) -> str:
+    """A short suffix describing the comparison that decided a scope leaf."""
+    if sub.kind == "regression" and sub.baseline is not None:
+        return f"; baseline={sub.baseline:g}"
+    if sub.bound is not None:
+        return f"; bound={sub.bound:g}"
+    return ""
 
 
 def _print_list(prompts: list[Prompt], tasks: list[EvalTask]) -> int:
