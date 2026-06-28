@@ -31,7 +31,7 @@ from coding_agent_playbook.evals.task import (
     ExpectedOutcome,
     TaskInvocation,
 )
-from coding_agent_playbook.evaluators import EvaluationReport, Finding, MetricConfig
+from coding_agent_playbook.evaluators import EvaluationReport, MetricConfig
 from coding_agent_playbook.evaluators.types import AbsoluteThreshold, RegressionPolicy
 
 # A long, high-complexity function: lots of branches => high cyclomatic complexity.
@@ -323,28 +323,47 @@ def test_expected_findings_pass_and_fail_merge_into_report(tmp_path: Path) -> No
     runner = FakeRunner(write_files({"mod.py": _REFACTORED, "helper.py": "x = 1\n"}))
     result = runner.run_task(task, tmp_path / "scratch")
 
-    by_eval: dict[str, list[Finding]] = {}
-    for f in result.report.findings:
-        by_eval.setdefault(f.evaluator, []).append(f)
+    # R3: [expected] checks are now real BOOL evaluators named
+    # ``expected:<kind>:<scope>`` whose finding scope_key is the same scope; index
+    # by evaluator name (one evaluator per [expected] entry).
+    by_name = {f.evaluator: f for f in result.report.findings}
 
-    created = {f.scope_key: f.level for f in by_eval["files_created"]}
-    assert created["mod.py"] == "ok"  # exists
-    assert created["helper.py"] == "ok"  # created
+    assert by_name["expected:file_exists:mod.py"].level == "ok"  # exists
+    assert by_name["expected:file_exists:helper.py"].level == "ok"  # created
 
-    contains = {f.scope_key: f.level for f in by_eval["files_must_contain"]}
-    assert any(level == "ok" for key, level in contains.items() if "_band" in key)
-    assert any(level == "fail" for key, level in contains.items() if "NOPE" in key)
+    contains = {
+        name: f.level for name, f in by_name.items() if name.startswith("expected:file_contains:")
+    }
+    assert any(level == "ok" for name, level in contains.items() if "_band" in name)
+    assert any(level == "fail" for name, level in contains.items() if "NOPE" in name)
 
-    unchanged = {f.scope_key: f.level for f in by_eval["files_unchanged"]}
-    assert unchanged["test_mod.py"] == "ok"  # untouched
-    assert unchanged["mod.py"] == "fail"  # rewritten by the refactor
+    assert by_name["expected:file_unchanged:test_mod.py"].level == "ok"  # untouched
+    assert by_name["expected:file_unchanged:mod.py"].level == "fail"  # rewritten by the refactor
 
-    forbidden = {f.scope_key: f.level for f in by_eval["files_forbidden"]}
-    assert forbidden["forbidden.py"] == "ok"  # absent => good
-    assert forbidden["test_mod.py"] == "fail"  # present => forbidden breach
+    assert by_name["expected:file_forbidden:forbidden.py"].level == "ok"  # absent => good
+    assert by_name["expected:file_forbidden:test_mod.py"].level == "fail"  # present => breach
 
     # Mixed pass/fail => report fails.
     assert result.passed is False
+
+
+def test_expected_findings_come_from_unified_evaluators(tmp_path: Path) -> None:
+    """R3: ``[expected]`` is no longer special-cased in scoring — the findings are
+    real ``expected:*`` evaluator findings produced via ``evaluators_for_task`` +
+    ``grade`` (BOOL, weight 0, so they gate but never feed the composite)."""
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    task = _make_task(task_dir, expected=_expected_all())
+
+    runner = FakeRunner(write_files({"mod.py": _REFACTORED, "helper.py": "x = 1\n"}))
+    result = runner.run_task(task, tmp_path / "scratch")
+
+    expected = [f for f in result.report.findings if f.evaluator.startswith("expected:")]
+    # One finding per [expected] entry (2 created + 2 contains + 2 unchanged + 2 forbidden).
+    assert len(expected) == 8
+    # They gate (a failure) but carry no composite weight (BOOL, default_weight 0).
+    assert any(f.level == "fail" for f in expected)
+    assert result.report.composite is None
 
 
 def test_expected_all_passing_yields_a_passing_report(tmp_path: Path) -> None:

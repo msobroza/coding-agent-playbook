@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from coding_agent_playbook.evaluators.parse import ModuleModel
 
 #: Levels a finding can carry.
@@ -164,10 +166,17 @@ class EvalContext:
     """Everything an evaluator might need, decoupled per family (SPEC prM §A).
 
     Static evaluators read ``module``/``source``/``label``. The execution field
-    (``project``) and the judged fields (``judge``/``artifact``/``samples``) are
-    consumed by the execution + judged families respectively and default to
+    (``project``), the judged fields (``judge``/``artifact``/``samples``), and the
+    expected-outcome fields (``tree``/``baseline_tree``) are consumed by the
+    execution, judged, and ``[expected]`` families respectively and default to
     ``None``/``1`` so static evaluators never touch them. ``judge`` is typed as
     the structural :class:`JudgeLike` so this package never imports ``evals``.
+
+    The ``[expected]`` evaluators
+    (:mod:`coding_agent_playbook.evaluators.expected`, R3) read ``tree`` (the
+    candidate repo root after the agent ran) and ``baseline_tree`` (the pristine
+    ``setup/`` snapshot, for the ``file_unchanged`` check). The runner sets both;
+    every other family ignores them.
     """
 
     module: ModuleModel | None
@@ -177,3 +186,5 @@ class EvalContext:
     judge: JudgeLike | None = None
     artifact: Any | None = None
     samples: int = 1
+    tree: Path | None = None
+    baseline_tree: Path | None = None
