@@ -1,9 +1,13 @@
-"""Tests for the v2 placeholder ABCs (SPEC §15.3).
+"""Tests for the evals ABCs after the R1 runner activation.
 
-These ship in v1's tree so the module layout doesn't change when v2 lands
-(SPEC §15.4). The interfaces are abstract and any attempt to actually invoke
-``run_task`` / ``score`` raises :exc:`NotImplementedError` with a pointer
-to SPEC §15.3.
+The :class:`~coding_agent_playbook.evals.judge.Judge` ABC is still a v2
+placeholder (SPEC §15.3): abstract, and calling :meth:`Judge.score` raises
+:exc:`NotImplementedError`. The :class:`~coding_agent_playbook.evals.runner.HarnessRunner`
+is now **live** (PR R1, Option B): ``run_task`` is a concrete template method (no
+longer raises), the abstract hook is ``_invoke_agent``, and the result model is
+:class:`~coding_agent_playbook.evals.runner.TaskResult` carrying an
+:class:`~coding_agent_playbook.evaluators.types.EvaluationReport` (``CheckResult``
+and ``programmatic_checks``/``rubric_scores`` are retired).
 """
 
 from __future__ import annotations
@@ -12,17 +16,18 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
 from coding_agent_playbook.evals.judge import Judge
 from coding_agent_playbook.evals.runner import (
-    CheckResult,
+    AgentRun,
     EvalReport,
     HarnessRunner,
     TaskResult,
 )
-from coding_agent_playbook.evals.task import EvalTask, Rubric
+from coding_agent_playbook.evals.task import Rubric
+from coding_agent_playbook.evaluators import EvaluationReport
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_harness_runner_is_abstract() -> None:
@@ -35,27 +40,21 @@ def test_judge_is_abstract() -> None:
         Judge()  # type: ignore[abstract]
 
 
-def test_run_task_raises_with_v2_pointer(tmp_path: Path) -> None:
-    """A concrete subclass that calls back into the abstract body must raise
-    NotImplementedError with a pointer to SPEC §15.3 so users get a
-    one-line breadcrumb when they wire a custom runner before v2."""
+def test_invoke_agent_is_the_only_abstract_hook(tmp_path: Path) -> None:
+    """A subclass only has to implement ``_invoke_agent``; ``run_task`` is concrete.
+
+    Implementing the single hook makes the class instantiable (no abstract
+    ``run_task`` left), proving the template method moved to ``_invoke_agent``.
+    """
 
     class _Runner(HarnessRunner):
         name = "test"
 
-        def run_task(self, task: EvalTask, scratch_dir: Path) -> TaskResult:
-            return super().run_task(task, scratch_dir)  # type: ignore[safe-super]
+        def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun:
+            return AgentRun(transcript="", returncode=0)
 
     runner = _Runner()
-    task = EvalTask(
-        id="x",
-        prompt_id="p",
-        description="d",
-        source_path=tmp_path / "task.toml",
-        source_package="<test>",
-    )
-    with pytest.raises(NotImplementedError, match=r"15\.3"):
-        runner.run_task(task, tmp_path)
+    assert runner.name == "test"
 
 
 def test_judge_score_raises_with_v2_pointer() -> None:
@@ -75,30 +74,40 @@ def test_judge_score_raises_with_v2_pointer() -> None:
         judge.score(Rubric(criteria=["A"]), "", {})
 
 
-def test_check_result_is_a_dataclass() -> None:
-    result = CheckResult(name="files_must_contain[0]", passed=True, detail="ok")
-    assert result.name == "files_must_contain[0]"
-    assert result.passed is True
-    assert result.detail == "ok"
-
-
-def test_task_result_and_eval_report_are_dataclasses() -> None:
-    check = CheckResult(name="files_created[0]", passed=True, detail="")
+def test_task_result_carries_an_evaluation_report() -> None:
+    """Option B: ``TaskResult.report`` is the unified :class:`EvaluationReport`."""
+    report = EvaluationReport(findings=[], warn_count=0, fail_count=0, composite=None, passed=True)
     tr = TaskResult(
         task_id="t",
-        harness="claude_code",
-        programmatic_checks=[check],
-        rubric_scores=None,
-        aggregate_score=1.0,
+        harness="fake",
+        report=report,
         passed=True,
+        aggregate_score=1.0,
         duration_seconds=0.01,
         transcript="ok",
     )
-    report = EvalReport(
-        engine_version="0.1.0",
-        harness="claude_code",
-        task_results=[tr],
-        aggregate_pass_rate=1.0,
-        timestamp="2026-01-01T00:00:00Z",
-    )
-    assert report.task_results[0].task_id == "t"
+    assert tr.report is report
+    assert tr.passed is True
+
+
+def test_eval_report_aggregate_pass_rate_reads_report_passed() -> None:
+    """``EvalReport.aggregate_pass_rate`` is the mean of ``tr.passed``."""
+
+    def _tr(passed: bool) -> TaskResult:
+        report = EvaluationReport(
+            findings=[], warn_count=0, fail_count=0, composite=None, passed=passed
+        )
+        return TaskResult(
+            task_id="t",
+            harness="fake",
+            report=report,
+            passed=report.passed,
+            aggregate_score=1.0 if passed else 0.0,
+            duration_seconds=0.0,
+            transcript="",
+        )
+
+    results = [_tr(True), _tr(False), _tr(True)]
+    rate = EvalReport.pass_rate(results)
+    assert rate == pytest.approx(2 / 3)
+    assert EvalReport.pass_rate([]) == 0.0
