@@ -1,0 +1,250 @@
+"""The ``Rubric`` aggregator + the ``Rubric``-is-a-``Metric`` composition (T4a).
+
+:class:`Rubric` is the "aggregate" layer of the clean-slate
+:class:`~coding_agent_playbook.evaluators.metric.Metric` (measure) ->
+:class:`~coding_agent_playbook.evaluators.check.Check` (grade) -> ``Rubric``
+(aggregate) split. It holds an ordered list of checks, runs each in **authored
+order** (the concurrent short-circuit scheduler + the boolean composers are a
+separate later track, T4b), and folds their
+:class:`~coding_agent_playbook.evaluators.types.CheckResult` rows into one
+:class:`~coding_agent_playbook.evaluators.types.EvaluationReport` with the same
+gate / weighted-composite / strict rules :func:`coding_agent_playbook.evaluators.grade.grade`
+uses.
+
+``Rubric`` is **also** a :class:`Metric`: a rubric nested inside a parent rubric
+exposes its composite as one MODULE-scope
+:class:`~coding_agent_playbook.evaluators.types.Measurement` (keyed on the
+rubric's ``name``), which a parent
+:class:`~coding_agent_playbook.evaluators.check.ThresholdCheck` then grades. The
+``Metric`` half (:meth:`measure`) self-builds a
+:class:`~coding_agent_playbook.evaluators.check.MeasurementSet` from the additive
+``EvalContext.candidate_measurements`` / ``baseline_measurements`` fields, guards
+against a re-entrant self-measure (raising :class:`ValueError`), and memoizes the
+result per ``ctx`` so a rubric measured twice in one context is not rebuilt.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from coding_agent_playbook.evaluators.check import MeasurementSet
+from coding_agent_playbook.evaluators.metric import Metric
+from coding_agent_playbook.evaluators.scope import CostTier, Scope
+from coding_agent_playbook.evaluators.types import (
+    CheckResult,
+    EvaluationReport,
+    Measurement,
+    ScopeDetail,
+)
+
+if TYPE_CHECKING:
+    from coding_agent_playbook.evaluators.check import Check
+    from coding_agent_playbook.evaluators.types import EvalContext, Finding
+
+
+class Rubric(Metric):
+    """An ordered set of checks aggregated into one report; also a :class:`Metric`.
+
+    The ``Metric`` descriptors are fixed by construction: :attr:`scope` is
+    ``MODULE`` (a rubric grades a whole unit), :attr:`higher_is_worse` is ``False``
+    (its composite is a ``0-1`` SCORE where higher is better), :attr:`requires` is
+    ``None``, and :attr:`needs_project` is ``True`` iff any child check is
+    execution-tier (so a parent rubric / scheduler knows the whole rubric needs a
+    runnable project). :attr:`name` (default ``"rubric"``) is the metric name a
+    parent :class:`~coding_agent_playbook.evaluators.check.ThresholdCheck` looks up.
+    """
+
+    scope = Scope.MODULE
+    higher_is_worse = False
+    requires = None
+
+    def __init__(self, checks: list[Check], *, name: str = "rubric") -> None:
+        self.checks = checks
+        self.name = name
+        # The rubric needs a runnable project exactly when one of its checks is
+        # execution-tier; a parent rubric reads this to schedule/gate correctly.
+        self.needs_project = any(c.cost == CostTier.EXECUTION for c in checks)
+        # Re-entrancy guard for measure() (a self-referential rubric) + a per-ctx
+        # memo keyed on id(ctx) so a rubric measured twice in one ctx is reused.
+        self._measuring = False
+        self._measure_cache: dict[int, list[Measurement]] = {}
+
+    def available(self, ctx: EvalContext) -> bool:
+        """Whether this rubric can run in ``ctx`` (the :class:`Metric` half's gate).
+
+        A rubric does not parse a ``module`` of its own (its checks do their own
+        ctx-slot gating), so - unlike the default :meth:`Metric.available` - it is
+        **not** gated on ``ctx.module``. The only hard requirement is a runnable
+        project when a child check is execution-tier (``needs_project``); otherwise
+        a nested rubric is always available and its child checks decide per-check.
+        """
+        if self.needs_project:
+            return ctx.project is not None
+        return True
+
+    # ------------------------------------------------------------------ #
+    # The aggregate half: run every check, fold into one report.
+    # ------------------------------------------------------------------ #
+
+    def evaluate(
+        self,
+        ctx: EvalContext,
+        measurements: MeasurementSet,
+        *,
+        strict: bool = False,
+    ) -> EvaluationReport:
+        """Run the checks in authored order and fold them into one report.
+
+        Each available check is graded; an unavailable check (e.g. a
+        :class:`~coding_agent_playbook.evaluators.checks.judged.JudgeCheck` with no
+        judge) is recorded as a ``status="skipped"`` placeholder that never sinks
+        the gate. The gate is ``all`` required *run* checks passing, plus - under
+        ``strict`` - no required run check carrying a ``warn`` leaf. The composite
+        is the weight-normalized mean of the run checks' scores (``None`` when no
+        run check carries weight). ``findings`` flattens the leaf
+        :class:`ScopeDetail` rows (transitional, until the destructive cutover).
+        """
+        results: list[CheckResult] = []
+        for check in self.checks:
+            if check.available(ctx):
+                results.append(check.grade(ctx, measurements))
+            else:
+                results.append(self._skipped(check))
+
+        passed = self._gate(results, strict=strict)
+        composite = self._composite(results)
+        warn_count, fail_count = self._level_counts(results)
+        findings = self._flatten_findings(results)
+
+        return EvaluationReport(
+            findings=findings,
+            warn_count=warn_count,
+            fail_count=fail_count,
+            composite=composite,
+            passed=passed,
+            checks=results,
+        )
+
+    @staticmethod
+    def _skipped(check: Check) -> CheckResult:
+        """A placeholder result for a check that could not run in this ctx."""
+        return CheckResult(
+            check_id=check.id,
+            passed=False,
+            score=None,
+            weight=check.weight,
+            required=check.required,
+            determinism=check.determinism,
+            cost=check.cost,
+            status="skipped",
+            subresults=(),
+        )
+
+    @staticmethod
+    def _gate(results: list[CheckResult], *, strict: bool) -> bool:
+        """Required *run* checks must pass; under ``strict`` none may carry a warn.
+
+        Skipped checks are ignored by the gate (a dormant judged check does not
+        fail it). ``strict`` additionally fails the gate when any required, run
+        check has a ``warn``-level :class:`ScopeDetail` subresult.
+        """
+        run_required = [r for r in results if r.required and r.status == "run"]
+        if not all(r.passed for r in run_required):
+            return False
+        return not (strict and any(_has_warn(r) for r in run_required))
+
+    @staticmethod
+    def _composite(results: list[CheckResult]) -> float | None:
+        """Weight-normalized mean over run checks with ``weight > 0`` and a score.
+
+        Mirrors :func:`coding_agent_playbook.evaluators.grade._composite`: the sum
+        of ``weight * score`` over the total weight, or ``None`` when no such check
+        contributes.
+        """
+        weighted = [
+            (r.weight, r.score)
+            for r in results
+            if r.status == "run" and r.weight > 0 and r.score is not None
+        ]
+        total_weight = sum(weight for weight, _ in weighted)
+        if total_weight <= 0:
+            return None
+        return sum(weight * score for weight, score in weighted if score is not None) / total_weight
+
+    @staticmethod
+    def _level_counts(results: list[CheckResult]) -> tuple[int, int]:
+        """Count ``warn``/``fail`` :class:`ScopeDetail` leaves across run checks."""
+        warn = 0
+        fail = 0
+        for result in results:
+            if result.status != "run":
+                continue
+            for sub in result.subresults:
+                if isinstance(sub, ScopeDetail):
+                    if sub.level == "warn":
+                        warn += 1
+                    elif sub.level == "fail":
+                        fail += 1
+        return warn, fail
+
+    @staticmethod
+    def _flatten_findings(results: list[CheckResult]) -> list[Finding]:
+        """Flatten the leaf :class:`ScopeDetail` rows from every run check.
+
+        Transitional: the ``EvaluationReport.findings`` list still carries the flat
+        per-scope rows the deterministic ``grade()`` produced. Only direct
+        ``ScopeDetail`` leaves are collected (nested ``CheckResult`` subresults -
+        from a composing check - are not descended here; the boolean composers are
+        a later track).
+        """
+        findings: list[Finding] = []
+        for result in results:
+            if result.status != "run":
+                continue
+            for sub in result.subresults:
+                if isinstance(sub, ScopeDetail):
+                    findings.append(sub)
+        return findings
+
+    # ------------------------------------------------------------------ #
+    # The measure half: a Rubric is a Metric (so rubrics nest).
+    # ------------------------------------------------------------------ #
+
+    def measure(self, ctx: EvalContext) -> list[Measurement]:
+        """Evaluate self and surface the composite as one MODULE measurement.
+
+        Self-builds a :class:`MeasurementSet` from ``ctx.candidate_measurements``
+        (and the optional ``ctx.baseline_measurements``), runs :meth:`evaluate`,
+        and returns a single :class:`Measurement` (``evaluator`` /``scope_key`` =
+        :attr:`name`) whose value is the report's composite - or ``float(passed)``
+        when the composite is ``None`` (no weighted checks). Guards against a
+        re-entrant self-measure (a rubric grading itself) with a
+        :class:`ValueError`, and memoizes per ``ctx`` (keyed on ``id(ctx)``).
+        """
+        key = id(ctx)
+        cached = self._measure_cache.get(key)
+        if cached is not None:
+            return cached
+        if self._measuring:
+            raise ValueError(
+                f"re-entrant measure of rubric {self.name!r}: a rubric cannot "
+                "grade itself (cycle in the rubric graph)"
+            )
+        self._measuring = True
+        try:
+            ms = MeasurementSet(ctx.candidate_measurements or [], ctx.baseline_measurements)
+            report = self.evaluate(ctx, ms)
+            value = report.composite if report.composite is not None else float(report.passed)
+            out = [Measurement(evaluator=self.name, scope_key=self.name, value=value)]
+        finally:
+            self._measuring = False
+        self._measure_cache[key] = out
+        return out
+
+
+def _has_warn(result: CheckResult) -> bool:
+    """Whether ``result`` carries any ``warn``-level :class:`ScopeDetail` leaf."""
+    return any(isinstance(s, ScopeDetail) and s.level == "warn" for s in result.subresults)
+
+
+__all__ = ["Rubric"]

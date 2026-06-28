@@ -219,6 +219,16 @@ class EvalContext:
     candidate repo root after the agent ran) and ``baseline_tree`` (the pristine
     ``setup/`` snapshot, for the ``file_unchanged`` check). The runner sets both;
     every other family ignores them.
+
+    The two ``*_measurements`` fields (T4a) let a
+    :class:`~coding_agent_playbook.evaluators.rubric.Rubric` act as a
+    :class:`~coding_agent_playbook.evaluators.metric.Metric`: when a Rubric is
+    nested inside a parent Rubric, its :meth:`measure` self-builds a
+    :class:`~coding_agent_playbook.evaluators.check.MeasurementSet` from
+    ``candidate_measurements`` (and the optional ``baseline_measurements``) so the
+    nested rubric grades its own checks without the parent threading a separate
+    measurement set through. Both default to ``None``; every non-Rubric family
+    ignores them.
     """
 
     module: ModuleModel | None
@@ -230,3 +240,5 @@ class EvalContext:
     samples: int = 1
     tree: Path | None = None
     baseline_tree: Path | None = None
+    candidate_measurements: list[Measurement] | None = None
+    baseline_measurements: list[Measurement] | None = None

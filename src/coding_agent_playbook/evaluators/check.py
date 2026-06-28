@@ -21,6 +21,7 @@ only in the later cutover track) so the cutover reproduces ``grade()`` exactly.
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -41,6 +42,23 @@ if TYPE_CHECKING:
         Measurement,
         Mode,
     )
+
+_SLUG_NON_ALNUM = re.compile(r"[^a-z0-9]+")
+
+
+def slug(text: str, *, fallback: str = "criterion") -> str:
+    """Lowercase ``text`` to a hyphen-separated slug for a stable check id.
+
+    Collapses every run of non-alphanumeric characters to a single ``-`` and
+    strips leading/trailing hyphens; returns ``fallback`` when the input slugs to
+    the empty string (e.g. ``""`` or ``"???"``) so the resulting ``<prefix>:<slug>``
+    id is always well-formed. This is the single home for the slug helper the
+    ``Check`` families share (the file checks and the judged check both import it),
+    superseding the per-module copies the ``Evaluator``-era ``judged.py`` /
+    ``expected.py`` carried.
+    """
+    cleaned = _SLUG_NON_ALNUM.sub("-", text.lower()).strip("-")
+    return cleaned or fallback
 
 
 class MeasurementSet:
@@ -393,4 +411,5 @@ __all__ = [
     "MeasurementSet",
     "NonRegressionCheck",
     "ThresholdCheck",
+    "slug",
 ]

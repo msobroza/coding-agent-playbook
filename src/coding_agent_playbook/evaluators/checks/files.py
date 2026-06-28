@@ -16,10 +16,12 @@ is no must-be-true ``fail`` floor / ``value_kind`` hack here (that was the
 :class:`~coding_agent_playbook.evaluators.types.ScopeDetail` describing the path,
 with ``score = 1.0`` when the predicate holds and ``0.0`` otherwise.
 
-The ``_file_matches``/``_files_equal`` predicates and the ``slug`` id-sanitizer
-are **copied** (not imported) from ``expected.py``/``judged.py`` because both
-source modules are deleted in the later cutover track; the Check layer must stand
-on its own.
+The ``_file_matches``/``_files_equal`` predicates are **copied** (not imported)
+from ``expected.py`` because that module is deleted in the later cutover track;
+the Check layer must stand on its own. The ``slug`` id-sanitizer is the shared
+one defined in :mod:`coding_agent_playbook.evaluators.check` (re-exported here as
+a thin wrapper that pins the ``"path"`` fallback) so the families do not each
+carry their own copy.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ import re
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.check import Check
+from coding_agent_playbook.evaluators.check import slug as _slug
 from coding_agent_playbook.evaluators.scope import CostTier, Determinism
 from coding_agent_playbook.evaluators.types import CheckResult, ScopeDetail
 
@@ -37,19 +40,16 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.check import MeasurementSet
     from coding_agent_playbook.evaluators.types import EvalContext
 
-_SLUG_NON_ALNUM = re.compile(r"[^a-z0-9]+")
-
 
 def slug(text: str) -> str:
-    """Lowercase ``text`` to a hyphen-separated slug (copy of ``judged.slug``).
+    """Slug ``text`` for a file-check id, falling back to ``"path"`` when empty.
 
-    Collapses every run of non-alphanumeric characters to a single ``-`` and
-    strips leading/trailing hyphens. Returns the literal ``"path"`` when the
-    input slugs to empty so the resulting id is always well-formed. (Copied from
-    ``judged.py`` - that module is deleted in the cutover.)
+    A thin wrapper over the shared
+    :func:`coding_agent_playbook.evaluators.check.slug` that pins the file-check
+    fallback (the shared helper defaults to ``"criterion"``). Kept as a named
+    function so existing ``files.slug`` imports keep working.
     """
-    cleaned = _SLUG_NON_ALNUM.sub("-", text.lower()).strip("-")
-    return cleaned or "path"
+    return _slug(text, fallback="path")
 
 
 class _FileCheck(Check):
