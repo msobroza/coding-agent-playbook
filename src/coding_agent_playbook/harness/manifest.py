@@ -20,6 +20,8 @@ import tomllib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
+from coding_agent_playbook import _toml
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -169,52 +171,12 @@ def _entry_from_table(table: dict[str, Any]) -> ManifestEntry:
 def _format_scalar(value: Any) -> str:
     """Render a scalar/collection as a TOML value (inline forms only).
 
-    Mirrors ``sources/filesystem.py``: bool before int (``isinstance(True, int)``),
+    Thin wrapper over :func:`coding_agent_playbook._toml.format_scalar` with
+    inline tables enabled: bool before int (``isinstance(True, int)``),
     control-char-safe basic strings, inline arrays, and inline tables for dicts.
+    Preserves the historical ``manifest TOML …`` ``TypeError`` wording.
     """
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, str):
-        return _format_string(value)
-    if isinstance(value, list):
-        return "[" + ", ".join(_format_scalar(item) for item in value) + "]"
-    if isinstance(value, dict):
-        inner = ", ".join(f"{_format_key(k)} = {_format_scalar(v)}" for k, v in value.items())
-        return "{ " + inner + " }" if inner else "{}"
-    raise TypeError(
-        f"manifest TOML does not support value of type {type(value).__name__}: {value!r}"
-    )
-
-
-def _format_string(value: str) -> str:
-    """Render ``value`` as a TOML basic string, escaping control characters."""
-    out: list[str] = ['"']
-    for ch in value:
-        if ch == "\\":
-            out.append("\\\\")
-        elif ch == '"':
-            out.append('\\"')
-        elif ch == "\n":
-            out.append("\\n")
-        elif ch == "\r":
-            out.append("\\r")
-        elif ch == "\t":
-            out.append("\\t")
-        elif ord(ch) < 0x20:
-            out.append(f"\\u{ord(ch):04X}")
-        else:
-            out.append(ch)
-    out.append('"')
-    return "".join(out)
-
-
-def _format_key(key: str) -> str:
-    """Render a TOML key — bare when it is a simple identifier, else quoted."""
-    if key and all(ch.isalnum() or ch in "-_" for ch in key):
-        return key
-    return _format_string(key)
+    return _toml.format_scalar(value, allow_inline_table=True, type_error_prefix="manifest TOML")
 
 
 def _serialize(entries: list[ManifestEntry]) -> str:
@@ -224,11 +186,11 @@ def _serialize(entries: list[ManifestEntry]) -> str:
         lines.append("")
         lines.append("[[artifact]]")
         for key, value in _entry_to_table(entry).items():
-            lines.append(f"{_format_key(key)} = {_format_scalar(value)}")
+            lines.append(f"{_toml.format_key(key)} = {_format_scalar(value)}")
         for script in entry.scripts:
             lines.append("")
             lines.append("[[artifact.script]]")
-            lines.append(f"path = {_format_string(script.path)}")
+            lines.append(f"path = {_toml.format_string(script.path)}")
             lines.append(f"executable = {'true' if script.executable else 'false'}")
     return "\n".join(lines) + "\n"
 
