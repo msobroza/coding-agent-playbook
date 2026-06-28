@@ -1,9 +1,9 @@
-"""``playbook eval`` — Tier 0 read-only enumeration (SPEC §12.8 + §15.2).
+"""``playbook eval`` — Tier 0 enumeration + the R1 live runner (SPEC §12.8, §15).
 
-In v1 ``playbook eval`` is a read-only enumeration of the prompt-to-task graph.
-The runner ships in v2 (SPEC §15.3); bare ``playbook eval <id>`` prints a
-deferral message and exits 0 (not 1) so CI pipelines that wire ``playbook eval``
-today won't break when the runner activates.
+``playbook eval`` is both a read-only enumeration of the prompt-to-task graph and
+— with ``--run`` (PR R1d) — the entry point that *executes* one task end-to-end
+through a :class:`~coding_agent_playbook.evals.runner.HarnessRunner` and grades it
+via the unified PR-M :class:`EvaluationReport`.
 
 Sub-modes:
 
@@ -12,14 +12,28 @@ Sub-modes:
 - ``playbook eval --show <id>``: detailed dump for one task — sections from
   SPEC §12.8 (Task / Source / Prompt under test / Description / Setup /
   Invocation / Expected / Rubric).
-- ``playbook eval <id>``: runner-deferral message. Exits 0 if the task is known,
-  exits 1 if it isn't (so typos still surface — the deferral only applies
-  to tasks that genuinely exist).
+- ``playbook eval <id>`` (no ``--run``): runner-deferral message. Exits 0 if the
+  task is known, exits 1 if it isn't (so typos still surface — the deferral only
+  applies to tasks that genuinely exist).
+- ``playbook eval <id> --run [--runner NAME] [--format text|json]``: load the
+  task, select ``NAME`` from the ``coding_agent_playbook.runners`` entry-point
+  group (default ``claude_code``), run it in a throwaway scratch dir, and render
+  ``result.report`` (reusing ``commands/metrics.py``'s text/json renderer). Exits
+  ``0`` on a passing report, ``1`` on a failing one, ``2`` on usage errors
+  (unknown task, unknown/unavailable runner, bad ``--format``).
+
+  Unlike ``playbook metrics``, there is **no ``--run-tests`` flag**: whether the
+  execution evaluators (``coverage``/``test_pass_rate``) run is declared by the
+  task's own ``[metrics]`` block (``run_tests``), so the eval task — not a CLI
+  flag — carries that intent.
 """
 
 from __future__ import annotations
 
+import json
 import sys
+import tempfile
+from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -28,8 +42,18 @@ from coding_agent_playbook.orchestrator import SyncContext
 if TYPE_CHECKING:
     import argparse
 
+    from coding_agent_playbook.evals.runner import HarnessRunner, TaskResult
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.types import Prompt
+
+
+#: Entry-point group runners self-register under (mirrors adapters/sources).
+_RUNNERS_GROUP = "coding_agent_playbook.runners"
+
+#: Default runner when ``--runner`` is omitted (the one thin real runner).
+_DEFAULT_RUNNER = "claude_code"
+
+_VALID_FORMATS = ("text", "json")
 
 
 _RUNNER_DEFERRAL_TEMPLATE = (
@@ -45,6 +69,13 @@ _RUNNER_DEFERRAL_TEMPLATE = (
 
 def run(args: argparse.Namespace) -> int:
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
+
+    # ``--run`` is the only path that *executes* a task; it has its own loading
+    # (one task by id) so it never pays for the full list+resolve unless the task
+    # is missing (then it falls through to the SyncContext for a helpful error).
+    if getattr(args, "run", False):
+        return _run_task_cli(args, repo_root)
+
     ctx = SyncContext.from_repo(repo_root)
     tasks = ctx.artifact_source.list_eval_tasks()
 
@@ -58,6 +89,138 @@ def run(args: argparse.Namespace) -> int:
         return _print_runner_deferral(bare_id, tasks, ctx.prompts_resolved)
     # No flag — default to --list (matches the "helpful empty invocation" rule).
     return _print_list(ctx.prompts_resolved, tasks)
+
+
+# --------------------------------------------------------------------------- #
+# --run — execute one task through a HarnessRunner and grade it (PR R1d)
+# --------------------------------------------------------------------------- #
+
+
+def _run_task_cli(args: argparse.Namespace, repo_root: Path) -> int:
+    """Load + run one task, render its report, map ``passed`` to the exit code.
+
+    Exit codes: ``0`` pass, ``1`` failing report, ``2`` usage errors (no task id,
+    unknown task, unknown/unavailable runner, bad ``--format``).
+    """
+    fmt = getattr(args, "format", None) or "text"
+    if fmt not in _VALID_FORMATS:
+        print(f"error: unknown --format {fmt!r}", file=sys.stderr)
+        return 2
+
+    task_id = getattr(args, "id", None)
+    if not task_id:
+        print("error: `playbook eval --run` requires a task id", file=sys.stderr)
+        return 2
+
+    task = _load_task(task_id, repo_root)
+    if task is None:
+        print(f"error: no eval task with id {task_id!r}", file=sys.stderr)
+        return 2
+
+    runner_name = getattr(args, "runner", None) or _DEFAULT_RUNNER
+    runner_cls = _load_runner_class(runner_name)
+    if runner_cls is None:
+        available = ", ".join(_available_runner_names()) or "(none registered)"
+        print(
+            f"error: unknown --runner {runner_name!r}; registered runners: {available}",
+            file=sys.stderr,
+        )
+        return 2
+    if not _runner_available(runner_cls):
+        print(
+            f"error: runner {runner_name!r} is unavailable in this environment "
+            "(its CLI/SDK is not installed). Try `--runner fake` for a hermetic "
+            "no-op run, or install the agent CLI.",
+            file=sys.stderr,
+        )
+        return 2
+
+    runner = runner_cls()
+    with tempfile.TemporaryDirectory(prefix="playbook-eval-") as tmp:
+        result = runner.run_task(task, Path(tmp) / "scratch")
+
+    if fmt == "json":
+        print(json.dumps(_result_to_dict(result), indent=2, sort_keys=True))
+    else:
+        print(_format_result_text(result))
+
+    return 0 if result.report.passed else 1
+
+
+def _load_task(task_id: str, repo_root: Path) -> EvalTask | None:
+    """Resolve ``task_id`` to its :class:`EvalTask`, or ``None`` if absent.
+
+    Loads via the same :class:`SyncContext` enumeration the read-only modes use
+    (engine + overlay + repo-local tasks), so ``--run`` sees exactly the task set
+    ``--list`` does.
+    """
+    ctx = SyncContext.from_repo(repo_root)
+    for task in ctx.artifact_source.list_eval_tasks():
+        if task.id == task_id:
+            return task
+    return None
+
+
+def _load_runner_class(name: str) -> type[HarnessRunner] | None:
+    """Load the runner class registered under ``name`` in the runners group.
+
+    Never instantiates the runner here (the caller does, after the availability
+    guard). Returns ``None`` when no entry point matches ``name``.
+    """
+    for ep in metadata.entry_points(group=_RUNNERS_GROUP):
+        if ep.name == name:
+            return ep.load()  # type: ignore[no-any-return]
+    return None
+
+
+def _available_runner_names() -> list[str]:
+    """Sorted names of every runner registered in the entry-point group."""
+    return sorted(ep.name for ep in metadata.entry_points(group=_RUNNERS_GROUP))
+
+
+def _runner_available(runner_cls: type[HarnessRunner]) -> bool:
+    """Whether ``runner_cls`` can run here.
+
+    Runners may expose an ``available()`` classmethod (the real
+    ``ClaudeCodeRunner`` does, guarding on its CLI being on ``PATH``). A runner
+    without one — the hermetic ``FakeRunner`` — is always available.
+    """
+    guard = getattr(runner_cls, "available", None)
+    if guard is None:
+        return True
+    return bool(guard())
+
+
+# --------------------------------------------------------------------------- #
+# Report rendering (reuses commands/metrics.py's EvaluationReport renderer)
+# --------------------------------------------------------------------------- #
+
+
+def _result_to_dict(result: TaskResult) -> dict[str, object]:
+    """Stable JSON view of a :class:`TaskResult` (task envelope + the report)."""
+    from coding_agent_playbook.commands.metrics import _report_to_dict
+
+    return {
+        "task_id": result.task_id,
+        "harness": result.harness,
+        "passed": result.passed,
+        "aggregate_score": result.aggregate_score,
+        "duration_seconds": result.duration_seconds,
+        "report": _report_to_dict(result.report),
+    }
+
+
+def _format_result_text(result: TaskResult) -> str:
+    """Human view: the metrics-style findings block + a per-task footer."""
+    from coding_agent_playbook.commands.metrics import _format_text
+
+    body = _format_text(result.report, skipped=[], note=None, measured_count=0)
+    verdict = "PASS" if result.passed else "FAIL"
+    footer = (
+        f"  task: {result.task_id} via {result.harness} — {verdict} "
+        f"(score={result.aggregate_score:.3f}, {result.duration_seconds:.2f}s)"
+    )
+    return f"{body}\n{footer}"
 
 
 def _print_list(prompts: list[Prompt], tasks: list[EvalTask]) -> int:

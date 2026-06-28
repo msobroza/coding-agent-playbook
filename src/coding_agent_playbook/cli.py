@@ -104,8 +104,10 @@ def build_parser() -> argparse.ArgumentParser:
     render_p.add_argument("--show-rules", action="store_true")
     render_p.set_defaults(func=render_cmd.run)
 
-    # playbook eval (PR 11 finishes)
-    eval_p = subcommands.add_parser(_SUBCOMMANDS[5], help="eval enumeration (PR 11 ships)")
+    # playbook eval (PR 11 enumeration; PR R1d adds --run)
+    eval_p = subcommands.add_parser(
+        _SUBCOMMANDS[5], help="eval enumeration + `--run` a task (SPEC §12.8, §15)"
+    )
     # Every other subcommand exposes ``--repo-root <path>`` for testability
     # and so users can run against a non-cwd checkout; eval gets the same
     # surface for parity. The command runner in ``commands/eval.py`` already
@@ -116,7 +118,25 @@ def build_parser() -> argparse.ArgumentParser:
     eval_group = eval_p.add_mutually_exclusive_group()
     eval_group.add_argument("--list", action="store_true")
     eval_group.add_argument("--show", help="show one task by id")
-    eval_p.add_argument("id", nargs="?", help="task id to run (deferred until v2)")
+    eval_p.add_argument("id", nargs="?", help="task id (enumerate, or run with --run)")
+    # PR R1d — execute one task end-to-end and grade it through the unified
+    # EvaluationReport. Whether execution evaluators run is the task's own
+    # [metrics] decision, so there is intentionally no --run-tests flag here.
+    eval_p.add_argument(
+        "--run",
+        action="store_true",
+        help="execute the task <id> through a runner and grade it (SPEC §15)",
+    )
+    eval_p.add_argument(
+        "--runner",
+        help="runner name from the coding_agent_playbook.runners group "
+        "(default: claude_code; use 'fake' for a hermetic no-op run)",
+    )
+    eval_p.add_argument(
+        "--format",
+        choices=("text", "json"),
+        help="--run output format (default: text)",
+    )
     eval_p.set_defaults(func=eval_cmd.run)
 
     # playbook metrics (PR-M Track M3 — standalone static code-quality gate)
