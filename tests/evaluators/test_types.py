@@ -5,8 +5,10 @@ from __future__ import annotations
 import dataclasses
 
 from coding_agent_playbook.evaluators.parse import parse_module
+from coding_agent_playbook.evaluators.scope import CostTier, Determinism
 from coding_agent_playbook.evaluators.types import (
     AbsoluteThreshold,
+    CheckResult,
     EvalContext,
     EvaluationReport,
     Finding,
@@ -15,6 +17,7 @@ from coding_agent_playbook.evaluators.types import (
     MetricConfig,
     RegressionPolicy,
     ResolvedPolicy,
+    ScopeDetail,
 )
 
 
@@ -102,6 +105,135 @@ def test_eval_context_static_fields_and_reserved() -> None:
     assert ctx.judge is None
     assert ctx.artifact is None
     assert ctx.samples == 1
+
+
+def test_cost_tier_ordering() -> None:
+    # T1: cheapest-first ordering so the scheduler can sort.
+    assert CostTier.DETERMINISTIC < CostTier.EXECUTION < CostTier.JUDGED
+    assert sorted(CostTier) == [
+        CostTier.DETERMINISTIC,
+        CostTier.EXECUTION,
+        CostTier.JUDGED,
+    ]
+
+
+def test_scope_detail_construction_and_finding_alias() -> None:
+    # ScopeDetail is the new name for the per-scope graded detail; Finding aliases it.
+    assert Finding is ScopeDetail
+    detail = ScopeDetail(
+        evaluator="cc",
+        scope_key="f.py::g",
+        value=12.0,
+        baseline=10.0,
+        bound=10.0,
+        score=0.5,
+        level="warn",
+        kind="absolute",
+    )
+    assert detail.level == "warn"
+    assert detail.kind == "absolute"
+    assert _is_frozen(ScopeDetail)
+    # The alias really is the same class, so a Finding *is* a ScopeDetail.
+    assert isinstance(detail, Finding)
+
+
+def test_check_result_defaults() -> None:
+    cr = CheckResult(
+        check_id="expected::file_exists",
+        passed=True,
+        score=1.0,
+        weight=1.0,
+        required=True,
+        determinism=Determinism.DETERMINISTIC,
+        cost=CostTier.DETERMINISTIC,
+    )
+    assert cr.status == "run"
+    assert cr.subresults == ()
+    assert cr.detail == ""
+    assert cr.score == 1.0
+
+
+def test_check_result_recursive_subresults() -> None:
+    leaf_detail = ScopeDetail(
+        evaluator="cc",
+        scope_key="f.py::g",
+        value=12.0,
+        baseline=None,
+        bound=10.0,
+        score=0.0,
+        level="fail",
+        kind="absolute",
+    )
+    child = CheckResult(
+        check_id="child",
+        passed=True,
+        score=1.0,
+        weight=0.5,
+        required=False,
+        determinism=Determinism.DETERMINISTIC,
+        cost=CostTier.DETERMINISTIC,
+    )
+    parent = CheckResult(
+        check_id="rubric::root",
+        passed=False,
+        score=None,
+        weight=1.0,
+        required=True,
+        determinism=Determinism.JUDGED,
+        cost=CostTier.JUDGED,
+        status="run",
+        subresults=(child, leaf_detail),
+        detail="composite of one child check + one scope detail",
+    )
+    assert parent.subresults == (child, leaf_detail)
+    assert isinstance(parent.subresults[0], CheckResult)
+    assert isinstance(parent.subresults[1], ScopeDetail)
+    assert parent.score is None
+
+
+def test_check_result_skipped_status() -> None:
+    cr = CheckResult(
+        check_id="judged::clarity",
+        passed=False,
+        score=None,
+        weight=1.0,
+        required=False,
+        determinism=Determinism.JUDGED,
+        cost=CostTier.JUDGED,
+        status="skipped",
+        detail="no judge configured",
+    )
+    assert cr.status == "skipped"
+
+
+def test_evaluation_report_accepts_checks() -> None:
+    # Additive: findings stays, checks is a new defaulted field.
+    empty = EvaluationReport(
+        findings=[],
+        warn_count=0,
+        fail_count=0,
+        composite=None,
+        passed=True,
+    )
+    assert empty.checks == []
+    cr = CheckResult(
+        check_id="c",
+        passed=True,
+        score=1.0,
+        weight=1.0,
+        required=True,
+        determinism=Determinism.DETERMINISTIC,
+        cost=CostTier.DETERMINISTIC,
+    )
+    report = EvaluationReport(
+        findings=[],
+        warn_count=0,
+        fail_count=0,
+        composite=1.0,
+        passed=True,
+        checks=[cr],
+    )
+    assert report.checks == [cr]
 
 
 def _is_frozen(cls: type) -> bool:

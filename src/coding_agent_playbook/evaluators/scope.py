@@ -7,7 +7,7 @@ module so every other evaluator module can import them without cycles.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import Enum, IntEnum
 
 
 class Scope(Enum):
@@ -47,3 +47,18 @@ class Determinism(Enum):
 
     DETERMINISTIC = "deterministic"
     JUDGED = "judged"
+
+
+class CostTier(IntEnum):
+    """How expensive a check is to run, ordered cheapest-first (T1).
+
+    The :class:`Metric`/:class:`Check`/:class:`Rubric` scheduler sorts checks by
+    this tier so the cheapest deterministic checks run before opt-in execution
+    checks, and judged checks (which need a ``Judge``) run last. Backed by
+    :class:`enum.IntEnum` so ``DETERMINISTIC < EXECUTION < JUDGED`` compares
+    directly and the members sort in tier order.
+    """
+
+    DETERMINISTIC = 0
+    EXECUTION = 1
+    JUDGED = 2

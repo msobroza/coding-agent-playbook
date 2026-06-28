@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.evaluators.parse import ModuleModel
+    from coding_agent_playbook.evaluators.scope import CostTier, Determinism
 
 #: Levels a finding can carry.
 Level = Literal["ok", "warn", "fail"]
@@ -56,13 +57,17 @@ class Measurement:
 
 
 @dataclass(frozen=True)
-class Finding:
-    """A graded measurement: raw value + how it compared + the verdict.
+class ScopeDetail:
+    """A graded measurement for one scope: raw value + how it compared + verdict.
 
     ``baseline`` is the matched prior value (``None`` for a new scope), ``bound``
     is the absolute bound that decided the level (``None`` when a regression
     decided it), ``score`` is the normalized ``0-1`` value for the composite,
     ``level`` is ``ok|warn|fail`` and ``kind`` is ``absolute|regression|new``.
+
+    In the ``Metric``/``Check``/``Rubric`` model (T1) this is the leaf per-scope
+    detail a :class:`CheckResult` carries; :data:`Finding` is a backward-compat
+    alias so existing ``grade()``/evaluator code keeps working unchanged.
     """
 
     evaluator: str
@@ -75,12 +80,48 @@ class Finding:
     kind: Kind
 
 
+#: Backward-compat alias: the per-scope graded detail used to be called
+#: ``Finding``. Kept identical (``Finding is ScopeDetail``) so every existing
+#: import and ``grade()`` call site stays valid during the additive T1 track.
+Finding = ScopeDetail
+
+
+@dataclass
+class CheckResult:
+    """The graded outcome of one ``Check`` (T1).
+
+    A ``Check`` is the unit a ``Rubric`` schedules. ``score`` is the normalized
+    ``0-1`` contribution (``None`` when the check was skipped or yields no
+    score), ``weight`` is its composite weight, ``required`` marks a gate check,
+    and ``determinism``/``cost`` drive routing + cheapest-first scheduling.
+    ``status`` is ``"run"`` for a check that executed and ``"skipped"`` for one
+    that could not (e.g. a judged check with no ``Judge``). ``subresults`` is
+    recursive — a composing check (a nested ``Rubric``) carries child
+    :class:`CheckResult` objects, while a leaf check carries :class:`ScopeDetail`
+    rows. Mutable, like :class:`EvaluationReport`, so callers can attach context.
+    """
+
+    check_id: str
+    passed: bool
+    score: float | None
+    weight: float
+    required: bool
+    determinism: Determinism
+    cost: CostTier
+    status: Literal["run", "skipped"] = "run"
+    subresults: tuple[ScopeDetail | CheckResult, ...] = ()
+    detail: str = ""
+
+
 @dataclass
 class EvaluationReport:
     """The aggregate output of :func:`grade`: every finding + the two verdicts.
 
     Mutable (unlike the records above) so callers can attach context as they
-    merge reports from several evaluator families.
+    merge reports from several evaluator families. ``findings`` carries the
+    per-scope :class:`ScopeDetail` rows the deterministic ``grade()`` produces;
+    ``checks`` is the additive T1 field that carries the new
+    :class:`CheckResult` rows. Both coexist until the destructive cutover track.
     """
 
     findings: list[Finding]
@@ -88,6 +129,7 @@ class EvaluationReport:
     fail_count: int
     composite: float | None
     passed: bool
+    checks: list[CheckResult] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
