@@ -132,6 +132,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="runner name from the coding_agent_playbook.runners group "
         "(default: claude_code; use 'fake' for a hermetic no-op run)",
     )
+    # PR R2 — judged [rubric] scoring. --judge selects a Tier-2 judge from the
+    # coding_agent_playbook.judges group (e.g. 'llm', opt-in/CLI-gated); omitted
+    # means deterministic-only. --samples is the per-criterion average count.
+    eval_p.add_argument(
+        "--judge",
+        help="judge name from the coding_agent_playbook.judges group to score "
+        "[rubric] criteria (e.g. 'llm'); omit for a deterministic-only run",
+    )
+    eval_p.add_argument(
+        "--samples",
+        type=int,
+        help="per-criterion judge samples to average (default: 1)",
+    )
     eval_p.add_argument(
         "--format",
         choices=("text", "json"),

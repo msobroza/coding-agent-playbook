@@ -7,11 +7,13 @@ block-compiler instantiates once per rubric line — it is deliberately **not** 
 registered singleton (no ``@register_evaluator``), since each instance carries
 its own criterion text and weight.
 
-Dormancy in v1: :meth:`available` is ``True`` only when a ``Judge`` is supplied
-on the context, so with no judge configured (the v1 reality) the runner never
-runs it. The judge is duck-typed (``ctx.judge.score(criterion, artifact, n)``)
-so this module never imports the v2 ``Judge`` placeholder — which raises
-``NotImplementedError`` — and is exercised in tests only via a stub judge.
+Dormancy without a judge: :meth:`available` is ``True`` only when a judge is
+supplied on the context, so with no judge configured the runner never runs it.
+The judge is the structural :class:`~coding_agent_playbook.evaluators.types.JudgeLike`
+protocol (``ctx.judge.score_criterion(criterion, artifact, n)``), so this module
+never imports ``evals`` — avoiding the ``evaluators`` ↔ ``evals`` cycle — and the
+concrete :class:`~coding_agent_playbook.evals.judge.Judge` satisfies it
+structurally.
 
 Non-regression is stochastic for judged criteria, so the default tolerance band
 is a small ``max_worsening`` (``0.1``) rather than the deterministic exact ``0.0``,
@@ -89,8 +91,8 @@ class JudgedCriterion(Evaluator):
     def evaluate(self, ctx: EvalContext) -> list[Measurement]:
         """Score the criterion via the judge, averaged over ``ctx.samples``.
 
-        Calls ``ctx.judge.score(self.criterion, ctx.artifact, n=samples)`` once
-        with ``n = max(1, ctx.samples)`` (the judge owns the per-sample
+        Calls ``ctx.judge.score_criterion(self.criterion, ctx.artifact, n=samples)``
+        once with ``n = max(1, ctx.samples)`` (the judge owns the per-sample
         averaging) and surfaces the result as one SCORE measurement keyed on
         ``ctx.label``. Returns ``[]`` when no judge is present so a stray call in
         a judge-less context is a no-op rather than a crash.
@@ -98,7 +100,7 @@ class JudgedCriterion(Evaluator):
         if ctx.judge is None:
             return []
         samples = max(1, ctx.samples)
-        value = ctx.judge.score(self.criterion, ctx.artifact, n=samples)
+        value = ctx.judge.score_criterion(self.criterion, ctx.artifact, n=samples)
         return [
             Measurement(
                 evaluator=self.name,

@@ -40,7 +40,7 @@ from coding_agent_playbook.evals.scoring import score
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.evaluators import EvaluationReport
+    from coding_agent_playbook.evaluators import EvaluationReport, JudgeLike
 
 
 class PromptResolutionError(RuntimeError):
@@ -361,21 +361,32 @@ class HarnessRunner(ABC):
     #: unresolvable ``prompt_id``). Real runners set this; the FakeRunner does not.
     requires_resolved_prompt: bool = False
 
-    def run_task(self, task: EvalTask, scratch_dir: Path) -> TaskResult:
+    def run_task(
+        self,
+        task: EvalTask,
+        scratch_dir: Path,
+        *,
+        judge: JudgeLike | None = None,
+        samples: int = 1,
+    ) -> TaskResult:
         """Run ``task`` in ``scratch_dir`` and return a graded :class:`TaskResult`.
 
         Pipeline: :func:`materialize` the ``setup/`` baseline → :func:`render_prompt`
         → :meth:`_invoke_agent` (the only per-assistant step) → :func:`capture`
-        the candidate → :func:`~coding_agent_playbook.evals.scoring.score`. Judged
-        evaluators are skipped (no ``Judge`` configured); the report is
-        deterministic-only.
+        the candidate → :func:`~coding_agent_playbook.evals.scoring.score`.
+
+        ``judge``/``samples`` are keyword-only with R1-compatible defaults: with no
+        ``judge`` the report is deterministic-only (judged evaluators are skipped),
+        exactly as R1. With a ``judge`` set, the task's ``[rubric]`` criteria are
+        scored over the captured diff (averaged over ``samples``) and folded into
+        the same report.
         """
         baseline = materialize(task, scratch_dir)
         prompt = render_prompt(task, strict=self.requires_resolved_prompt)
         started = monotonic()
         run = self._invoke_agent(prompt, scratch_dir)
         candidate = capture(scratch_dir, baseline, run.transcript)
-        report = score(task, baseline, candidate)
+        report = score(task, baseline, candidate, judge=judge, samples=samples)
         return TaskResult(
             task_id=task.id,
             harness=self.name,

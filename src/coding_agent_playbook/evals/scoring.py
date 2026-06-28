@@ -2,8 +2,9 @@
 
 :func:`score` turns a materialized :class:`~coding_agent_playbook.evals.runner.Baseline`
 and the captured :class:`~coding_agent_playbook.evals.runner.Candidate` into one
-:class:`~coding_agent_playbook.evaluators.types.EvaluationReport`, covering two
-deterministic families in a single report:
+:class:`~coding_agent_playbook.evaluators.types.EvaluationReport`. Every scoring
+layer flows through the **single** :func:`~coding_agent_playbook.evaluators.grade.grade`
+call (one model, one report):
 
 * **``[metrics]``** — the static + execution evaluators selected by
   :func:`~coding_agent_playbook.evals.task.evaluators_for_task` for the task's
@@ -11,30 +12,33 @@ deterministic families in a single report:
   evaluators run a :class:`~coding_agent_playbook.evaluators.execution.project.ProjectHandle`
   over the candidate tree, with the **baseline suite run on the pristine
   ``setup/`` snapshot** so non-regression compares against the untouched setup.
-  The measurements are graded by :func:`~coding_agent_playbook.evaluators.grade.grade`.
-  Judged evaluators are present in the selection but ``available(ctx)`` is
-  ``False`` (no ``Judge`` on the context) so they are skipped — rubric scoring is
-  R2.
 
-* **``[expected]``** — the :class:`~coding_agent_playbook.evals.task.ExpectedOutcome`
-  file checks compiled **directly into BOOL findings** (one per
-  ``files_created`` / ``files_must_contain`` / ``files_unchanged`` /
-  ``files_forbidden`` entry). These are *not* routed through
-  :func:`grade` — there is no registered evaluator for them in R1 — but are
-  emitted as :class:`~coding_agent_playbook.evaluators.types.Finding`\\ s
-  (``kind="absolute"``, ``level="ok"|"fail"``, ``score=1.0|0.0``, weight 0) so the
-  single report shape stays coherent. The full registered-evaluator ``[expected]``
-  compile inside ``evaluators_for_task`` is R3.
+* **``[expected]``** — the four BOOL deterministic evaluators
+  (:mod:`coding_agent_playbook.evaluators.expected`, R3) compiled by
+  ``evaluators_for_task`` from the task's
+  :class:`~coding_agent_playbook.evals.task.ExpectedOutcome`. Each reads the
+  candidate tree (``ctx.tree``) — and the baseline ``setup/`` snapshot
+  (``ctx.baseline_tree``) for ``file_unchanged`` — and yields one BOOL
+  measurement with a must-be-true ``fail`` floor. Their un-registered instances
+  are passed to :func:`grade` as ``extra_evaluators`` (the same mechanism the
+  judged criteria use), so a failed check gates the report. This **replaces** the
+  R1 interim inline compile that built BOOL findings outside ``grade``.
 
-The two finding sets are merged into one report: ``warn_count``/``fail_count`` are
-recomputed, ``composite`` comes from the metrics report (the BOOL findings carry
-no weight), and ``passed`` is ``metrics_report.passed and`` every expected finding
-passing.
+* **``[rubric]``** — one
+  :class:`~coding_agent_playbook.evaluators.judged.JudgedCriterion` per criterion,
+  included **only when a judge is configured** (the ``judge`` argument is not
+  ``None``). Each scores the candidate's captured diff/transcript into a ``0-1``
+  SCORE measurement (averaged over ``samples``) and is graded through the same
+  :func:`grade` call. With no judge (the default) judged evaluators are skipped
+  entirely: deterministic-only, the R1 behaviour preserved.
+
+The un-registered ``[expected]`` + judged criterion instances are passed as
+``extra_evaluators`` so :func:`grade` resolves each measurement's policy without a
+registry lookup; the result is the single :class:`EvaluationReport`.
 """
 
 from __future__ import annotations
 
-import re
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -42,18 +46,18 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook.evaluators import (
     EvalContext,
     EvaluationReport,
-    Finding,
     Measurement,
     MetricConfig,
     grade,
     parse_module,
 )
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle
+from coding_agent_playbook.evaluators.expected import _ExpectedEvaluator
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.runner import Baseline, Candidate
-    from coding_agent_playbook.evals.task import EvalTask, ExpectedOutcome
-    from coding_agent_playbook.evaluators import Evaluator
+    from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.evaluators import Evaluator, JudgeLike
 
 #: Directory names skipped when discovering candidate ``*.py`` source files.
 _IGNORED_DIRS = frozenset(
@@ -63,17 +67,39 @@ _IGNORED_DIRS = frozenset(
 #: MODULE label the execution evaluators key their suite-wide measurements on.
 _SUITE_LABEL = "suite"
 
+#: Label the judged criteria key their per-artifact measurements on (R2).
+_RUBRIC_LABEL = "rubric"
 
-def score(task: EvalTask, baseline: Baseline, candidate: Candidate) -> EvaluationReport:
-    """Grade ``candidate`` for ``task`` into one deterministic report (R1 §2)."""
+#: Label the expected-outcome evaluators key their per-file context on (R3). The
+#: BOOL evaluators key their *measurements* on their own path scope, not this.
+_EXPECTED_LABEL = "expected"
+
+
+def score(
+    task: EvalTask,
+    baseline: Baseline,
+    candidate: Candidate,
+    *,
+    judge: JudgeLike | None = None,
+    samples: int = 1,
+) -> EvaluationReport:
+    """Grade ``candidate`` for ``task`` into one report (deterministic + judged).
+
+    The ``[metrics]`` static/execution measurements, the ``[expected]`` BOOL
+    checks, and (with a ``judge``) the ``[rubric]`` judged criteria all feed the
+    same :func:`grade` call. With ``judge=None`` (the default) only the
+    deterministic ``[metrics]`` + ``[expected]`` layers run — the R1 behaviour,
+    unchanged.
+    """
     policy = task.metrics or MetricConfig()
-    evaluators = _evaluators_for_task(task, policy)
+    evaluators = _metric_evaluators_for_task(task, policy)
 
-    static_evals = [ev for ev in evaluators if not ev.needs_project and _is_static(ev)]
+    static_evals = [ev for ev in evaluators if not ev.needs_project]
     exec_evals = [ev for ev in evaluators if ev.needs_project]
 
     candidate_measurements: list[Measurement] = []
     baseline_measurements: list[Measurement] = []
+    extra_evaluators: dict[str, Evaluator] = {}
 
     if static_evals:
         candidate_measurements += _static_measurements(candidate.tree, static_evals)
@@ -83,11 +109,29 @@ def score(task: EvalTask, baseline: Baseline, candidate: Candidate) -> Evaluatio
         candidate_measurements += _execution_measurements(candidate.tree, exec_evals)
         baseline_measurements += _execution_measurements(baseline.setup_snapshot, exec_evals)
 
-    metrics_report = grade(candidate_measurements, baseline_measurements or None, policy)
+    expected_evals = _expected_evaluators_for_task(task)
+    if expected_evals:
+        expected_measurements, expected_by_name = _expected_measurements(
+            expected_evals, candidate, baseline
+        )
+        candidate_measurements += expected_measurements
+        extra_evaluators.update(expected_by_name)
 
-    expected_findings = _expected_findings(task.expected, candidate, baseline)
+    if judge is not None:
+        judged_evals = _judged_evaluators_for_task(task)
+        if judged_evals:
+            judged_measurements, judged_by_name = _judged_measurements(
+                judged_evals, candidate, judge, samples
+            )
+            candidate_measurements += judged_measurements
+            extra_evaluators.update(judged_by_name)
 
-    return _merge(metrics_report, expected_findings)
+    return grade(
+        candidate_measurements,
+        baseline_measurements or None,
+        policy,
+        extra_evaluators=extra_evaluators,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -95,16 +139,22 @@ def score(task: EvalTask, baseline: Baseline, candidate: Candidate) -> Evaluatio
 # --------------------------------------------------------------------------- #
 
 
-def _evaluators_for_task(task: EvalTask, policy: MetricConfig) -> list[Evaluator]:
-    """The evaluators selected by the task's ``[metrics]`` config (deterministic).
+def _metric_evaluators_for_task(task: EvalTask, policy: MetricConfig) -> list[Evaluator]:
+    """The deterministic ``[metrics]`` evaluators selected by the task's config.
 
-    Wraps :func:`~coding_agent_playbook.evals.task.evaluators_for_task` so the
-    judged ``[rubric]`` criteria it also returns are filtered out here — R1 scores
-    only the deterministic families.
+    Wraps :func:`~coding_agent_playbook.evals.task.evaluators_for_task` and keeps
+    only the deterministic static/execution metrics — the judged ``[rubric]``
+    criteria (handled by :func:`_judged_evaluators_for_task`) and the
+    ``[expected]`` BOOL evaluators (handled by
+    :func:`_expected_evaluators_for_task`) are filtered out.
     """
     from coding_agent_playbook.evals.task import evaluators_for_task
 
-    return [ev for ev in evaluators_for_task(task, policy) if _is_deterministic(ev)]
+    return [
+        ev
+        for ev in evaluators_for_task(task, policy)
+        if _is_deterministic(ev) and not isinstance(ev, _ExpectedEvaluator)
+    ]
 
 
 def _is_deterministic(evaluator: Evaluator) -> bool:
@@ -113,9 +163,103 @@ def _is_deterministic(evaluator: Evaluator) -> bool:
     return evaluator.determinism is Determinism.DETERMINISTIC
 
 
-def _is_static(evaluator: Evaluator) -> bool:
-    """Static evaluators read ``ctx.module``; they are deterministic + not project."""
-    return not evaluator.needs_project
+# --------------------------------------------------------------------------- #
+# [expected] -> BOOL measurements (R3; routed through grade like every family)
+# --------------------------------------------------------------------------- #
+
+
+def _expected_evaluators_for_task(task: EvalTask) -> list[_ExpectedEvaluator]:
+    """The task's ``[expected]`` BOOL evaluator instances (the expected family).
+
+    Filters :func:`~coding_agent_playbook.evals.task.evaluators_for_task` down to
+    the :class:`~coding_agent_playbook.evaluators.expected._ExpectedEvaluator`
+    subclasses, the complement of :func:`_metric_evaluators_for_task`'s metric
+    selection.
+    """
+    from coding_agent_playbook.evals.task import evaluators_for_task
+
+    return [
+        ev for ev in evaluators_for_task(task, task.metrics) if isinstance(ev, _ExpectedEvaluator)
+    ]
+
+
+def _expected_measurements(
+    evaluators: list[_ExpectedEvaluator],
+    candidate: Candidate,
+    baseline: Baseline,
+) -> tuple[list[Measurement], dict[str, Evaluator]]:
+    """Run each ``[expected]`` evaluator over the candidate tree.
+
+    Returns the BOOL measurements plus a ``name -> evaluator`` map (the
+    un-registered ``expected:<kind>:<path>`` instances) so :func:`grade` can
+    resolve each measurement's must-be-true policy without a registry lookup. The
+    candidate tree is the post-agent scratch repo; the baseline tree is the
+    pristine ``setup/`` snapshot (the ``file_unchanged`` reference).
+    """
+    ctx = EvalContext(
+        module=None,
+        source="",
+        label=_EXPECTED_LABEL,
+        tree=candidate.tree,
+        baseline_tree=baseline.setup_snapshot,
+    )
+    measurements: list[Measurement] = []
+    by_name: dict[str, Evaluator] = {}
+    for evaluator in evaluators:
+        if evaluator.available(ctx):
+            measurements.extend(evaluator.evaluate(ctx))
+            by_name[evaluator.name] = evaluator
+    return measurements, by_name
+
+
+# --------------------------------------------------------------------------- #
+# [rubric] -> judged measurements (R2; only when a judge is configured)
+# --------------------------------------------------------------------------- #
+
+
+def _judged_evaluators_for_task(task: EvalTask) -> list[Evaluator]:
+    """The task's ``[rubric]`` :class:`JudgedCriterion` instances (judged family).
+
+    Filters :func:`~coding_agent_playbook.evals.task.evaluators_for_task` down to
+    the JUDGED determinism — the complement of :func:`_metric_evaluators_for_task`'s
+    deterministic selection.
+    """
+    from coding_agent_playbook.evals.task import evaluators_for_task
+    from coding_agent_playbook.evaluators import Determinism
+
+    return [
+        ev for ev in evaluators_for_task(task, task.metrics) if ev.determinism is Determinism.JUDGED
+    ]
+
+
+def _judged_measurements(
+    evaluators: list[Evaluator],
+    candidate: Candidate,
+    judge: JudgeLike,
+    samples: int,
+) -> tuple[list[Measurement], dict[str, Evaluator]]:
+    """Score each judged criterion over the candidate diff into SCORE measurements.
+
+    Returns the measurements plus a ``name -> evaluator`` map (the un-registered
+    ``judged:<slug>`` instances) so :func:`grade` can resolve each measurement's
+    policy without a registry lookup. The judged artifact is the candidate's
+    captured ``git diff`` (the agent's change), keyed on a stable ``rubric`` label.
+    """
+    ctx = EvalContext(
+        module=None,
+        source="",
+        label=_RUBRIC_LABEL,
+        judge=judge,
+        artifact=candidate.diff,
+        samples=samples,
+    )
+    measurements: list[Measurement] = []
+    by_name: dict[str, Evaluator] = {}
+    for evaluator in evaluators:
+        if evaluator.available(ctx):
+            measurements.extend(evaluator.evaluate(ctx))
+            by_name[evaluator.name] = evaluator
+    return measurements, by_name
 
 
 # --------------------------------------------------------------------------- #
@@ -187,98 +331,3 @@ def _execution_measurements(tree: Path, evaluators: list[Evaluator]) -> list[Mea
         except RuntimeError:
             return []
     return measurements
-
-
-# --------------------------------------------------------------------------- #
-# [expected] -> BOOL findings (interim; R3 moves this into evaluators_for_task)
-# --------------------------------------------------------------------------- #
-
-
-def _expected_findings(
-    expected: ExpectedOutcome | None,
-    candidate: Candidate,
-    baseline: Baseline,
-) -> list[Finding]:
-    """Compile ``[expected]`` file checks into BOOL findings over the candidate.
-
-    One finding per entry; ``score`` is ``1.0`` when the check holds and ``0.0``
-    otherwise, ``level`` is ``ok``/``fail`` and ``kind`` is ``absolute`` (weight 0
-    — these gate but never feed the composite). ``files_unchanged`` compares the
-    candidate file's bytes against the baseline ``setup/`` snapshot.
-    """
-    if expected is None:
-        return []
-    tree = candidate.tree
-    findings: list[Finding] = []
-
-    for rel in expected.files_created:
-        ok = (tree / rel).is_file()
-        findings.append(_bool_finding("files_created", rel, ok))
-
-    for entry in expected.files_must_contain:
-        rel = entry["path"]
-        pattern = entry["pattern"]
-        ok = _file_matches(tree / rel, pattern)
-        findings.append(_bool_finding("files_must_contain", f"{rel}~/{pattern}/", ok))
-
-    for rel in expected.files_unchanged:
-        ok = _files_equal(tree / rel, baseline.setup_snapshot / rel)
-        findings.append(_bool_finding("files_unchanged", rel, ok))
-
-    for rel in expected.files_forbidden:
-        ok = not (tree / rel).exists()
-        findings.append(_bool_finding("files_forbidden", rel, ok))
-
-    return findings
-
-
-def _bool_finding(evaluator: str, scope_key: str, ok: bool) -> Finding:
-    """One BOOL :class:`Finding`: ``ok`` -> level ``ok`` score ``1.0``, else fail."""
-    return Finding(
-        evaluator=evaluator,
-        scope_key=scope_key,
-        value=1.0 if ok else 0.0,
-        baseline=None,
-        bound=None,
-        score=1.0 if ok else 0.0,
-        level="ok" if ok else "fail",
-        kind="absolute",
-    )
-
-
-def _file_matches(path: Path, pattern: str) -> bool:
-    """True when ``path`` exists and its text matches the regex ``pattern``."""
-    if not path.is_file():
-        return False
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:  # pragma: no cover - unreadable file is rare
-        return False
-    return re.search(pattern, text) is not None
-
-
-def _files_equal(a: Path, b: Path) -> bool:
-    """True when both files exist and have byte-identical contents."""
-    if not a.is_file() or not b.is_file():
-        return False
-    return a.read_bytes() == b.read_bytes()
-
-
-# --------------------------------------------------------------------------- #
-# Merge
-# --------------------------------------------------------------------------- #
-
-
-def _merge(metrics_report: EvaluationReport, expected_findings: list[Finding]) -> EvaluationReport:
-    """Merge the metrics report + the ``[expected]`` BOOL findings into one report."""
-    findings = list(metrics_report.findings) + expected_findings
-    warn_count = sum(1 for f in findings if f.level == "warn")
-    fail_count = sum(1 for f in findings if f.level == "fail")
-    expected_passed = all(f.level != "fail" for f in expected_findings)
-    return EvaluationReport(
-        findings=findings,
-        warn_count=warn_count,
-        fail_count=fail_count,
-        composite=metrics_report.composite,
-        passed=metrics_report.passed and expected_passed,
-    )

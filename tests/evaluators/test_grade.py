@@ -234,6 +234,37 @@ def test_grade_works_with_plugin_registered_evaluator(
     assert report.findings[0].level == "fail"  # 25 >= fail(20)
 
 
+def test_grade_extra_evaluators_resolves_unregistered_judged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``extra_evaluators`` lets an un-registered ``judged:<slug>`` flow through grade().
+
+    The :class:`JudgedCriterion` is not in the registry, so a judged measurement
+    would raise in :func:`get_evaluator`; passing the instance via
+    ``extra_evaluators`` resolves it (gate + composite) without any registry hit.
+    """
+    from coding_agent_playbook.evaluators.judged import JudgedCriterion
+
+    # If grade ever falls through to the registry for this name, fail loudly.
+    def _boom(name: str) -> Evaluator:
+        raise AssertionError(f"unexpected registry lookup for {name!r}")
+
+    monkeypatch.setattr(grade_mod, "get_evaluator", _boom)
+
+    crit = JudgedCriterion("clarity", weight=1.0)
+    candidate = [Measurement(evaluator=crit.name, scope_key="rubric", value=0.8)]
+    report = grade(
+        candidate,
+        None,
+        MetricConfig(mode="absolute"),
+        extra_evaluators={crit.name: crit},
+    )
+    assert report.findings[0].evaluator == "judged:clarity"
+    # SCORE value is normalized identity => composite reflects it (weight 1.0).
+    assert report.composite == pytest.approx(0.8)
+    assert report.passed is True
+
+
 def test_grade_resolves_each_evaluator_name_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

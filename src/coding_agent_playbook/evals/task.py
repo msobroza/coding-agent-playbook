@@ -353,13 +353,23 @@ def evaluators_for_task(
     - ``[rubric]`` → one :class:`JudgedCriterion` per criterion, carrying its
       weight (uniform ``1/len`` when ``weights`` is omitted). These are dormant
       in v1 (``available()`` is ``False`` without a ``Judge``).
-    - ``[expected]`` → bool evaluators are intentionally **not** compiled here;
-      the existing :class:`ExpectedOutcome` file-checks remain as-is and the v1.1
-      runner keeps running them directly (left for a later track).
+    - ``[expected]`` → one BOOL deterministic evaluator per
+      :class:`ExpectedOutcome` entry (R3): ``files_created`` → ``FileExists``,
+      ``files_must_contain`` → ``FileContains`` (regex), ``files_unchanged`` →
+      ``FileUnchanged`` (vs the baseline tree), ``files_forbidden`` →
+      ``FileForbidden``. Each is parameterized by its path/pattern and reads the
+      candidate tree from ``ctx.tree`` (``available()`` is ``False`` without one),
+      so the runner routes them like every other family.
 
-    Importing ``JudgedCriterion`` and ``get_evaluator`` is the only coupling; the
-    v2 ``runner``/``judge`` placeholders are never imported or called.
+    Importing the evaluator classes and ``get_evaluator`` is the only coupling;
+    the v2 ``runner``/``judge`` placeholders are never imported or called.
     """
+    from coding_agent_playbook.evaluators.expected import (
+        FileContains,
+        FileExists,
+        FileForbidden,
+        FileUnchanged,
+    )
     from coding_agent_playbook.evaluators.judged import JudgedCriterion
     from coding_agent_playbook.evaluators.registry import get_evaluator
 
@@ -386,5 +396,16 @@ def evaluators_for_task(
             weights = [1.0 / len(criteria)] * len(criteria)
         for criterion, weight in zip(criteria, weights, strict=True):
             evaluators.append(JudgedCriterion(criterion, weight=weight))
+
+    if task.expected is not None:
+        expected = task.expected
+        for rel in expected.files_created:
+            evaluators.append(FileExists(rel))
+        for entry in expected.files_must_contain:
+            evaluators.append(FileContains(entry["path"], entry["pattern"]))
+        for rel in expected.files_unchanged:
+            evaluators.append(FileUnchanged(rel))
+        for rel in expected.files_forbidden:
+            evaluators.append(FileForbidden(rel))
 
     return evaluators

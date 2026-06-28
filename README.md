@@ -41,8 +41,8 @@ Engine and CLI are implemented: detector, renderer, five adapters
 [Agent Harness](https://agentharnesses.io/specification)), the `playbook`
 commands (`init` / `sync` / `check` / `validate` / `render` / `eval` /
 `metrics` / `import-harness` / `validate-harness`), the Tier 0 eval schema
-plus the v1.1 eval runner (`playbook eval --run`, deterministic layers live —
-judged rubric scoring lands in R2), and the code-quality metrics gate. See
+plus the v1.1 eval runner (`playbook eval --run`, deterministic layers live;
+judged rubric scoring live via `--judge`), and the code-quality metrics gate. See
 `SPEC.md` for the full design.
 
 Working on the engine itself:
@@ -239,8 +239,10 @@ pip install 'coding-agent-playbook[metrics]'   # adds radon for maintainability_
 
 ```bash
 playbook eval refactor-extract-helper --run --runner claude_code   # real: drive the Claude Code CLI
+playbook eval refactor-extract-helper --run --runner opencode       # real: drive the OpenCode CLI
 playbook eval refactor-extract-helper --run --runner fake          # hermetic demo / CI: no network, no CLI
+playbook eval refactor-extract-helper --run --judge llm --samples 3 # also score [rubric] via an LLM judge
 playbook eval refactor-extract-helper --run --format json          # machine-readable report
 ```
 
-The task's `[expected]` file checks and `[metrics]` static/execution evaluators are scored **deterministically** (non-regression vs the `setup/` baseline) into one report, rendered like `playbook metrics`. The default runner is `claude_code`; `--runner fake` is the hermetic driver for demos and CI. There is no `--run-tests` flag — an eval task declares execution intent in its own `[metrics]` block. Exit `0` on a passing report, `1` on a failing one, `2` on a usage error (unknown task/runner, or `claude_code` with no `claude` CLI on `PATH`). Judged `[rubric]` scoring lands in v1.1 R2.
+The task's `[expected]` file checks and `[metrics]` static/execution evaluators are scored **deterministically** (non-regression vs the `setup/` baseline) into one report, rendered like `playbook metrics`. Two opt-in real runners ship — `claude_code` (the default, drives the `claude` CLI) and `opencode` (drives the `opencode` CLI) — both `available()`-gated on their binary and never exercised in CI; `--runner fake` is the hermetic driver for demos and CI. There is no `--run-tests` flag — an eval task declares execution intent in its own `[metrics]` block. Exit `0` on a passing report, `1` on a failing one, `2` on a usage error (unknown task/runner, or a real runner whose CLI is not on `PATH`). Judged `[rubric]` scoring (v1.1 R2) is **opt-in via `--judge`**: pick a judge from the `coding_agent_playbook.judges` group (the shipped `llm` shells out to the `claude` CLI, `available()`-gated), and `--samples N` averages N gradings per criterion. Omit `--judge` for a deterministic-only run.

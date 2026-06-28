@@ -300,3 +300,70 @@ def test_evaluators_for_task_does_not_call_judge_score() -> None:
     # No judge supplied; building must succeed without scoring anything.
     evs = evaluators_for_task(task, task.metrics)
     assert any(isinstance(ev, JudgedCriterion) for ev in evs)
+
+
+# --- evaluators_for_task: [expected] -> BOOL evaluators (R3) ------------------
+
+
+def _task_with_expected() -> EvalTask:
+    data: dict[str, Any] = {
+        "id": "t",
+        "prompt_id": "p",
+        "description": "d",
+        "expected": {
+            "files_created": ["out.py", "helper.py"],
+            "files_must_contain": [
+                {"path": "out.py", "pattern": "def foo"},
+                {"path": "out.py", "pattern": "def bar"},
+            ],
+            "files_unchanged": ["src/m.py"],
+            "files_forbidden": ["__pycache__/"],
+        },
+    }
+    return EvalTask.from_dict(data, source_path=Path("/tmp/task.toml"), source_package="<test>")
+
+
+def test_evaluators_for_task_compiles_expected_into_bool_evaluators() -> None:
+    from coding_agent_playbook.evaluators.expected import (
+        FileContains,
+        FileExists,
+        FileForbidden,
+        FileUnchanged,
+    )
+
+    evs = evaluators_for_task(_task_with_expected(), None)
+    names = {ev.name for ev in evs}
+    assert names == {
+        "expected:file_exists:out.py",
+        "expected:file_exists:helper.py",
+        "expected:file_contains:out.py~/def foo/",
+        "expected:file_contains:out.py~/def bar/",
+        "expected:file_unchanged:src/m.py",
+        "expected:file_forbidden:__pycache__/",
+    }
+    by_kind = {type(ev) for ev in evs}
+    assert by_kind == {FileExists, FileContains, FileUnchanged, FileForbidden}
+
+
+def test_evaluators_for_task_no_expected_emits_none() -> None:
+    """A task with no [expected] block emits no expected:* evaluators."""
+    evs = evaluators_for_task(_task_with_metrics_and_rubric(), None)
+    assert not any(ev.name.startswith("expected:") for ev in evs)
+
+
+def test_evaluators_for_task_expected_and_metrics_and_rubric_coexist() -> None:
+    """All three families compile from one task into one evaluator list."""
+    data: dict[str, Any] = {
+        "id": "t",
+        "prompt_id": "p",
+        "description": "d",
+        "metrics": {"regression": {"wmc": {"max_worsening": 0}}},
+        "rubric": {"criteria": ["clarity"], "weights": [1.0]},
+        "expected": {"files_created": ["out.py"]},
+    }
+    task = EvalTask.from_dict(data, source_path=Path("/tmp/task.toml"), source_package="<test>")
+    evs = evaluators_for_task(task, task.metrics)
+    names = {ev.name for ev in evs}
+    assert "wmc" in names
+    assert "judged:clarity" in names
+    assert "expected:file_exists:out.py" in names

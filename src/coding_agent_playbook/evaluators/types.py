@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from coding_agent_playbook.evaluators.parse import ModuleModel
 
 #: Levels a finding can carry.
@@ -102,6 +104,22 @@ class ResolvedPolicy:
 
 
 @runtime_checkable
+class JudgeLike(Protocol):
+    """The slice of a judge an :class:`EvalContext` needs (SPEC prR2 Track J).
+
+    Defined in ``evaluators`` (not ``evals``) so the evaluator package never
+    imports ``evals`` — that would create a cycle, since ``evals`` imports
+    ``evaluators``. The concrete
+    :class:`~coding_agent_playbook.evals.judge.Judge` satisfies this structurally
+    via its canonical per-criterion primitive.
+    """
+
+    def score_criterion(self, criterion: str, artifact: Any, n: int = 1) -> float:
+        """Score ``criterion`` against ``artifact`` as a ``0-1`` float (``n``-sample avg)."""
+        ...
+
+
+@runtime_checkable
 class GradePolicy(Protocol):
     """The slice of config :func:`grade` reads.
 
@@ -147,16 +165,26 @@ class MetricConfig:
 class EvalContext:
     """Everything an evaluator might need, decoupled per family (SPEC prM §A).
 
-    Static evaluators read ``module``/``source``/``label``. The execution and
-    judged fields (``project``/``judge``/``artifact``/``samples``) are reserved
-    for later tracks and default to ``None``/``1`` so v1 static evaluators never
-    touch them.
+    Static evaluators read ``module``/``source``/``label``. The execution field
+    (``project``), the judged fields (``judge``/``artifact``/``samples``), and the
+    expected-outcome fields (``tree``/``baseline_tree``) are consumed by the
+    execution, judged, and ``[expected]`` families respectively and default to
+    ``None``/``1`` so static evaluators never touch them. ``judge`` is typed as
+    the structural :class:`JudgeLike` so this package never imports ``evals``.
+
+    The ``[expected]`` evaluators
+    (:mod:`coding_agent_playbook.evaluators.expected`, R3) read ``tree`` (the
+    candidate repo root after the agent ran) and ``baseline_tree`` (the pristine
+    ``setup/`` snapshot, for the ``file_unchanged`` check). The runner sets both;
+    every other family ignores them.
     """
 
     module: ModuleModel | None
     source: str
     label: str
     project: Any | None = None
-    judge: Any | None = None
+    judge: JudgeLike | None = None
     artifact: Any | None = None
     samples: int = 1
+    tree: Path | None = None
+    baseline_tree: Path | None = None
