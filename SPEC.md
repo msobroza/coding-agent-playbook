@@ -1,14 +1,15 @@
 # SPEC.md — coding-agent-playbook
 | Field | Value |
 | --- | --- |
-| Version | 0.9 (draft) |
+| Version | 0.10 (draft) |
 | Status | Proposed |
-| Last updated | 2026-06-27 |
+| Last updated | 2026-06-28 |
 | Authors | Max Pereira, with Claude |
 | Audience | Implementers, reviewers, future contributors |
 | License | Apache-2.0 (engine); organization overlays may be private |
 
 **Changelog**
+- **0.10** — Eval runner activation (PR R1): `HarnessRunner` becomes a concrete **template method** (materialize → render_prompt → `_invoke_agent` → capture → score) so an eval task runs end-to-end and is scored through the unified PR-M `Evaluator`/`grade()` model — the deterministic layers (`[expected]` file checks + `[metrics]` static/execution non-regression vs the `setup/` baseline) are **live**. Concrete runners: hermetic `FakeRunner` (default test driver) + opt-in `ClaudeCodeRunner` (`available()`-gated, never in CI), via the `coding_agent_playbook.runners` entry-point group. Result model evolved to **Option B** (`TaskResult.report: EvaluationReport`; `programmatic_checks`/`rubric_scores`/`CheckResult` retired). New `playbook eval <id> --run [--runner …] [--format …]` (no `--run-tests` — intent is in the task's `[metrics]`). Judged `[rubric]` scoring stays deferred to R2 (§15).
 - **0.9** — Code-quality evaluator subsystem (PR M): one `Evaluator` abstraction with three families — static metrics (CC/WMC/LCOM4/DIT/CBO≈ via `ast`, MI via the optional `radon` extra), execution metrics (`test_pass_rate`/`coverage`, shelling out to the target's `pytest`), and judged criteria (the rubric, generalized; dormant until v1.1) — plus the standalone `playbook metrics` gate + a `repo: local` static pre-commit hook, and dormant eval `[metrics]` wiring (§21).
 - **0.8** — Agent Harness round-trip support (PR H): the opt-in `agent_harness` output adapter (§10.7), the `playbook import-harness` / `playbook validate-harness` subcommands (§12.9, §12.10), and the `.playbook/manifest.toml` round-trip sidecar (§20.10).
 - **0.7** — Storage source abstraction (§20), ML serialization-security guideline, air-gapped pre-commit.
@@ -1481,8 +1482,8 @@ includes_rules:
   - python-style        (engine, applies_if=False → OMITTED)
 Inclusion mode: explicit ({{ rule() }} calls in body)
 ```
-### 12.8 `playbook eval` (Tier 0: list-only in v1)
-In v1, `playbook eval` is a read-only enumeration of the prompt-to-task graph. The runner ships in v2.
+### 12.8 `playbook eval` (Tier 0 enumeration + the v1.1 `--run` runner)
+`playbook eval` is a read-only enumeration of the prompt-to-task graph and — with `--run` (v1.1 PR R1) — the entry point that *executes* one task end-to-end through a `HarnessRunner` and grades it (§15.3). Without `--run`, the bare `playbook eval <id>` still prints the deferral message below (exit 0).
 ```
 $ playbook eval --list
 === Eval tasks ===
@@ -1538,7 +1539,14 @@ The task is well-formed and ready to run when the v2 runner lands. For now:
 See SPEC.md Section 15 for the v2 runner API.
 exit code: 0
 ```
-Note the exit code is 0, not 1 — the task is not broken, the runner is just absent. This lets users wire `playbook eval` into CI today as a no-op placeholder that won't break the pipeline when the runner activates.
+Note the exit code is 0, not 1 — the task is not broken, the runner is just absent on the bare path. This lets users wire `playbook eval` into CI today as a no-op placeholder. To actually execute a task, add `--run`:
+```
+$ playbook eval refactor-extract-helper --run --runner fake [--format text|json]
+```
+- **`--runner NAME`** selects a runner from the `coding_agent_playbook.runners` entry-point group; the default is **`claude_code`** (the real runner). Use `--runner fake` for a hermetic, no-network demo/CI run.
+- The task's `[expected]` + `[metrics]` blocks are scored deterministically into one `EvaluationReport`, rendered with the same text/json renderer as `playbook metrics`; the judged `[rubric]` layer is skipped (v1.1 R2).
+- **There is no `--run-tests` flag.** Unlike `playbook metrics`, an eval task declares its execution intent in its own `[metrics]` block (`run_tests`), so the task — not a CLI flag — decides whether the execution evaluators (`coverage`/`test_pass_rate`) run.
+- **Exit codes:** `0` on a passing report (gate clean), `1` on a failing report, `2` on usage errors — unknown task id, unknown `--runner`, a runner that is unavailable in this environment (e.g. `claude_code` with no `claude` CLI on `PATH` — the error suggests `--runner fake`), or a bad `--format`.
 ### 12.9 `playbook import-harness`
 Parse an Agent Harness tree back into canonical artifacts and write them into an overlay directory (default `./playbook/`) in the `FileSystemArtifactSource` layout, so a later `playbook sync` re-reads them. The reverse of the `agent_harness` adapter (§10.7).
 ```
@@ -1662,13 +1670,13 @@ playbook_rules_bnp = "0.2.0"
 ```
 `playbook sync --check` recomputes the hashes and compares. Mismatch → drift → exit 1.
 ## 15. Eval abstractions (forward-compatible)
-v1 ships **Tier 0**: the task authoring format (Section 6.5), the loader, the validator, and a read-only CLI. No runner. This section describes the v2 abstractions that will plug in behind that surface.
+v1 shipped **Tier 0**: the task authoring format (Section 6.5), the loader, the validator, and a read-only CLI. **v1.1 (PR R1) makes the deterministic layers of Tier 1 live**: `HarnessRunner` now executes one task end-to-end against an agent and scores it through the unified PR-M `Evaluator` / `grade()` model (§21). The `[expected]` file checks and the `[metrics]` static + execution evaluators (including non-regression vs the `setup/` baseline) are computable today; only the judged `[rubric]` layer is still deferred (to v1.1 R2 — no `Judge` ⇒ those evaluators report `available() is False` and are skipped). §15.3 describes the as-built v1.1 runner; the design doc is `specs/prR-eval-runner.md`.
 ### 15.1 The Tier 0 / Tier 1 / Tier 2 ladder
-| Tier | Capability | v1 status |
+| Tier | Capability | status |
 | --- | --- | --- |
-| 0 | Task schema, loader, validator, `playbook eval --list/--show` | **shipped** |
-| 1 | Programmatic check runner (regex, file existence, files-unchanged) + per-harness agent invocation | deferred to v1.1 |
-| 2 | Rubric judging (LLM-as-judge) with calibration | deferred to v2 |
+| 0 | Task schema, loader, validator, `playbook eval --list/--show` | **shipped (v1)** |
+| 1 | Per-harness agent invocation + deterministic scoring (`[expected]` file checks + `[metrics]` static/execution non-regression) | **shipped (v1.1 R1)** — judged `[rubric]` deferred to R2 |
+| 2 | Rubric judging (LLM-as-judge) with calibration | deferred to v1.1 R2 / v2 |
 The ladder is deliberate: Tier 0 produces value (documentation, validation) immediately. Tier 1 makes the value computable. Tier 2 closes the loop on subjective quality. Each tier is independently shippable.
 ### 15.2 v1 abstractions (active)
 These ship in v1 and back the `playbook eval --list` / `playbook eval --show` CLI.
@@ -1718,75 +1726,75 @@ The validator (`coding_agent_playbook.evals.validator.validate_tasks`) enforces:
 - Each task is listed in its referenced prompt's `eval_tasks:` frontmatter.
 - Weights, if present, sum to 1.0 (±0.001 tolerance).
 That's the entire active surface in v1.
-### 15.3 v2 abstractions (placeholders)
-These are reserved in the module structure but not implemented in v1. The interfaces are sketched here so that prompt and task authors can write toward them.
+### 15.3 The v1.1 runner (live — deterministic layers)
+PR R1 activates the former placeholder. `HarnessRunner` is now a concrete **template method**: `run_task` owns a fixed pipeline (materialize → render prompt → `_invoke_agent` → capture → score → assemble a `TaskResult`) and the single abstract per-assistant hook is `_invoke_agent`. Scoring runs through the unified PR-M `Evaluator` / `grade()` model (§21), so the deterministic layers — `[expected]` file checks and `[metrics]` static + execution evaluators (non-regression vs the `setup/` baseline) — are live. **Judged `[rubric]` scoring is deferred to v1.1 R2**: the runner sets no `Judge` on the `EvalContext`, so judged evaluators report `available() is False` and are skipped; the report is deterministic-only.
 ```python
-# coding_agent_playbook/evals/runner.py     (v2)
+# coding_agent_playbook/evals/runner.py     (v1.1, live)
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 @dataclass
-class CheckResult:
-    name: str                                    # e.g. "files_must_contain[0]"
-    passed: bool
-    detail: str
+class AgentRun:
+    transcript: str
+    returncode: int                              # 0 = the agent loop completed
 @dataclass
 class TaskResult:
     task_id: str
-    harness: str                                 # "claude_code", "continue", "opencode"
-    programmatic_checks: list[CheckResult]
-    rubric_scores: list[float] | None            # None until Tier 2
-    aggregate_score: float                       # 0.0 to 1.0
-    passed: bool
+    harness: str                                 # the runner's entry-point name, e.g. "fake", "claude_code"
+    report: EvaluationReport                      # the unified PR-M report ([expected] BOOL + [metrics] findings)
+    passed: bool                                  # mirrors report.passed
+    aggregate_score: float                        # report.composite, or 1.0/0.0 from passed when no weighted evaluator contributed
     duration_seconds: float
     transcript: str                              # full agent transcript for debugging
 @dataclass
-class EvalReport:
+class EvalReport:                                 # aggregate over several tasks for one harness
     engine_version: str
     harness: str
     task_results: list[TaskResult]
-    aggregate_pass_rate: float
+    aggregate_pass_rate: float                    # mean of tr.passed across task_results
     timestamp: str
+    @staticmethod
+    def pass_rate(task_results: list[TaskResult]) -> float: ...   # mean(tr.passed), 0.0 when empty
+class PromptResolutionError(RuntimeError):
+    """A runner that requires_resolved_prompt could not resolve its prompt."""
 class HarnessRunner(ABC):
-    """Invokes an agent for a single task against a specific harness."""
-    name: str                                    # "claude_code", "continue", "opencode"
+    """Invoke an agent for one task and grade the result (template method)."""
+    name: str                                    # the coding_agent_playbook.runners entry-point key
+    requires_resolved_prompt: bool = False       # real runners set True (strict render_prompt)
+    def run_task(self, task: EvalTask, scratch_dir: Path) -> TaskResult:   # CONCRETE template
+        baseline = materialize(task, scratch_dir)            # copy setup/ + git-init baseline commit + pristine snapshot
+        prompt   = render_prompt(task, strict=self.requires_resolved_prompt)
+        run      = self._invoke_agent(prompt, scratch_dir)   # ← the ONLY per-assistant step
+        candidate = capture(scratch_dir, baseline, run.transcript)   # post-agent tree + git diff + transcript
+        report   = score(task, baseline, candidate)          # [expected]→BOOL + [metrics] via grade() (§15.3.1)
+        return TaskResult(task_id=task.id, harness=self.name, report=report, ...)
     @abstractmethod
-    def run_task(self, task: EvalTask, scratch_dir: Path) -> TaskResult:
-        """
-        1. Copy task.setup.files into scratch_dir
-        2. Mock detector facts using task.setup
-        3. Render the prompt referenced by task.prompt_id
-        4. Invoke the agent loop with that prompt + task.invocation
-        5. Run programmatic checks against scratch_dir state
-        6. (Tier 2) Score the rubric via LLM-as-judge
-        7. Return TaskResult
-        """
-        ...
-class Judge(ABC):
-    """Scores a rubric. Tier 2."""
-    name: str
-    @abstractmethod
-    def score(
-        self,
-        rubric: Rubric,
-        transcript: str,
-        scratch_dir_state: dict[str, str],
-    ) -> list[float]:
-        """Return a score in [0, 1] for each criterion in rubric.criteria."""
+    def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun:
+        """Drive the agent against scratch_dir and return its raw outcome. The only per-assistant step."""
         ...
 ```
-Concrete `HarnessRunner` implementations expected in v2:
-- `ClaudeCodeRunner` — uses the Claude Code SDK with a working-dir-bound session
-- `ContinueCLIRunner` — invokes `cn -p --prompt` with the task's args
-- `OpenCodeRunner` — invokes `opencode` CLI
-Concrete `Judge` implementations expected in v2:
-- `LLMJudge` — uses a strong model (Sonnet or Opus) with a fixed grading prompt and calibration set
-- `ProgrammaticOnlyJudge` — Tier 1 fallback; rubric_scores stays None, aggregate is computed from programmatic_checks only
-### 15.4 Why the v2 abstractions live in v1's tree
-The `coding_agent_playbook/evals/` package ships in v1 with `task.py` (active), `loader.py` (active), `validator.py` (active), and `runner.py` / `judge.py` (placeholders that raise `NotImplementedError` with a pointer to this section). This means:
-- Overlay authors writing v1 tasks can already import `EvalTask`, `TaskSetup`, etc. for type hints in their own tooling.
-- The module layout doesn't change between v1 and v2, only `runner.py` and `judge.py` get filled in.
-- v1 users running `playbook eval <task-id>` get a clear deferred-implementation message rather than a "no such command" error.
-The `[project.entry-points."coding_agent_playbook.runners"]` and `coding_agent_playbook.judges` extension points are declared in v1's pyproject.toml so third-party packages can already register custom runners — v1 just doesn't have a CLI surface that consumes them.
+**Result model evolved (Option B).** `TaskResult` now carries one `report: EvaluationReport` covering both the `[expected]` BOOL findings and the `[metrics]` static/execution findings, plus the convenience aggregates `passed` / `aggregate_score` / `duration_seconds` / `transcript`. The old `programmatic_checks` / `rubric_scores` lists and the `CheckResult` dataclass are **retired** — a programmatic check is now a BOOL `Finding`. `EvalReport.pass_rate` is the mean of `tr.passed`. This is the **sanctioned v2-activation revision** of the §15.3 placeholder shape (the retired fields had no consumers): v1.1 *is* the activation milestone, so evolving the eval *result* types here is in-bounds while the rest of the v1 public surface (the `Evaluator` / `grade` / `evaluators_for_task` API and the `[metrics]` / `[rubric]` / `[expected]` task schema) stays stable.
+
+Concrete runners (discovered via the `coding_agent_playbook.runners` entry-point group — never instantiated directly):
+- **`FakeRunner`** (`name="fake"`, `evals/fake_runner.py`) — the **hermetic default + test driver**. Its `_invoke_agent` applies a caller-supplied deterministic mutation (`Callable[[Path], None]`; default a no-op) to the scratch tree and returns a canned transcript. No network, no CLI; every unit test uses it. It leaves `requires_resolved_prompt=False`, so it tolerates the placeholder `render_prompt` emits for a synthetic test task.
+- **`ClaudeCodeRunner`** (`name="claude_code"`, `evals/claude_code_runner.py`) — the one **thin, opt-in real runner**. Its `_invoke_agent` drives the Claude Code CLI via a plain `subprocess` arg-list (default `claude -p <prompt>`) bound to the scratch repo and captures stdout/stderr as the transcript. Lazy — no top-level CLI import; `available()` returns `False` when the `claude` binary is not on `PATH` (mirroring the `radon` lazy-availability pattern), so it is cleanly skippable and **never exercised in CI**. It sets `requires_resolved_prompt=True`.
+
+`ContinueCLIRunner` and `OpenCodeRunner` remain future work (not yet implemented).
+
+**`render_prompt` strictness.** `render_prompt(task, strict=…)` resolves `task.prompt_id` to its `Prompt` (scanning `resources/prompts/` alongside the task tree) and renders the body through the renderer under `StrictUndefined`. When the prompt cannot be resolved: a *real* runner (`requires_resolved_prompt=True`) raises `PromptResolutionError` — a live agent must never be driven with a placeholder; the hermetic `FakeRunner` (`strict=False`) tolerates a stable placeholder because the deterministic scoring layers never read the rendered text.
+
+#### 15.3.1 Scoring bridge (`evals/scoring.py`)
+`score(task, baseline, candidate) -> EvaluationReport` produces one report across two deterministic families:
+- **`[metrics]`** — `evaluators_for_task(task, task.metrics)` selects the static + execution evaluators (the judged `[rubric]` criteria are filtered out; they are R2). Static evaluators run per candidate `*.py` file (label = tree-relative path so a candidate matches its baseline counterpart); execution evaluators run a `ProjectHandle` over the candidate tree, with the baseline suite run on the **pristine `setup/` snapshot** so non-regression compares against the untouched setup, not the post-agent tree. Graded by `grade()` (deterministic exact, `max_worsening=0`; new scopes fall back to absolute).
+- **`[expected]`** — `ExpectedOutcome` file checks are compiled **directly into BOOL findings** (one per `files_created` / `files_must_contain` regex / `files_unchanged` / `files_forbidden` entry; `kind="absolute"`, weight 0 — they gate but never feed the composite). `files_unchanged` compares candidate bytes against the `setup/` snapshot. This is the **R1 interim**: the full registered-evaluator `[expected]` compile inside `evaluators_for_task` is R3.
+
+The two finding sets merge into one report — `composite` comes from the metrics report, `passed` is `metrics_report.passed and` every expected finding passing.
+
+### 15.4 Why the eval abstractions live in one tree
+The `coding_agent_playbook/evals/` package ships `task.py`, `loader.py`, `validator.py` (active since v1), `runner.py` + `fake_runner.py` + `claude_code_runner.py` + `scoring.py` (live since v1.1 R1), and `judge.py` (still a v2 placeholder that raises `NotImplementedError` with a pointer to §15.3 — the judge lands in R2). This means:
+- Overlay authors writing tasks can import `EvalTask`, `TaskSetup`, etc. for type hints in their own tooling.
+- The module layout is stable across the v1 → v1.1 → v2 progression; only the placeholder bodies get filled in.
+- The `[project.entry-points."coding_agent_playbook.runners"]` group is now populated (`fake`, `claude_code`); the `coding_agent_playbook.judges` group is still reserved for the R2 judge so third-party packages can already register against it.
 ## 16. Testing strategy
 ### 16.1 Unit tests
 - `test_detector.py` — synthetic `pyproject.toml` files in `tests/fixtures/repos/`; assert facts dict matches expected.
@@ -2290,9 +2298,16 @@ Notes on sequencing:
 - **Track 5b (Eval Tier 0)** lands after the main CLI because it adds CLI subcommands and one new validator pass. It is independent of the adapters — eval tasks are authoring-side artifacts and don't flow through any adapter.
 - The source abstraction and the canonical types together add maybe two days of work to the early tracks but pay for themselves in test simplicity from PR 6 onward, and in clean serialization boundaries when the commercial product arrives.
 ---
-*End of SPEC.md v0.9.*
+*End of SPEC.md v0.10.*
 ---
 ## Changelog
+### v0.10 (2026-06-28)
+Eval runner activated (PR R1). The former v2 placeholder is now a live, hermetic-by-default runner that executes one task end-to-end and scores it through the unified PR-M `Evaluator`/`grade()` model. The deterministic layers (`[expected]` file checks + `[metrics]` static/execution non-regression) are computable today; judged `[rubric]` scoring stays deferred to R2. The v1 public surface (the `Evaluator`/`grade`/`evaluators_for_task` API and the `[metrics]`/`[rubric]`/`[expected]` task schema) is unchanged — only the eval *result* types evolve, which is the sanctioned v2-activation revision.
+- **Section 15 (rewritten 15.1 / 15.3 / 15.4)**: the Tier ladder now marks Tier 1's deterministic layers **shipped (v1.1 R1)**. `HarnessRunner` documented as a concrete **template method** (`run_task` = materialize → `render_prompt` → `_invoke_agent` → `capture` → `score`; `_invoke_agent` the only per-assistant hook) with `render_prompt` strictness (`requires_resolved_prompt` ⇒ `PromptResolutionError` for real runners). Result model evolved to **Option B** — `TaskResult.report: EvaluationReport` (+ `passed`/`aggregate_score`/`duration_seconds`/`transcript`); `programmatic_checks`/`rubric_scores`/`CheckResult` retired; `EvalReport.pass_rate` = mean of `tr.passed`. Concrete runners: hermetic `FakeRunner` (`name="fake"`, default test driver, no-op default mutation) + opt-in `ClaudeCodeRunner` (`name="claude_code"`, lazy, `available()`-gated on the `claude` CLI, never in CI), via the `coding_agent_playbook.runners` group. New 15.3.1 documents the `evals/scoring.py` bridge ([metrics] via `evaluators_for_task` + non-regression vs the pristine `setup/` snapshot; `[expected]` compiled to BOOL findings — the R1 interim, full compile is R3).
+- **Section 12.8 (`playbook eval`)**: documents `playbook eval <id> --run [--runner fake|claude_code] [--format text|json]` — default runner `claude_code`, **no `--run-tests`** (execution intent lives in the task's `[metrics]` block), exit `0` pass / `1` fail / `2` usage or runner-unavailable. The bare `playbook eval <id>` (no `--run`) deferral path is unchanged.
+- **`pyproject.toml`**: the `coding_agent_playbook.runners` entry-point group is now populated (`fake`, `claude_code`); the `coding_agent_playbook.judges` group stays reserved for the R2 judge.
+- **Implementation**: `evals/runner.py` (template + result types + orchestration helpers `materialize`/`render_prompt`/`capture` + `PromptResolutionError`), `evals/scoring.py`, `evals/fake_runner.py`, `evals/claude_code_runner.py`, and the `--run` path in `commands/eval.py`, with tests. See `specs/prR-eval-runner.md` (tracks R1a–R1e) and the roadmap `specs/v1.1-eval-execution.md`.
+
 ### v0.9 (2026-06-27)
 Code-quality evaluator subsystem added (PR M). A single `Evaluator` abstraction unifies static metrics, execution metrics, and judged criteria; a standalone `playbook metrics` gate + static pre-commit hook ship now; eval `[metrics]` wiring is parsed/validated but dormant until v1.1. Purely additive — no new hard dependency, no edits to the sync pipeline, and the v2 eval ABCs (§15) stay inert.
 - **Section 21 (NEW)**: the evaluator subsystem. The `Evaluator` ABC + `Scope`/`ValueKind`/`Determinism` axes (21.1); the three families — static (CC/WMC/LCOM4/DIT/CBO≈ via `ast`, MI via the optional `radon` extra), execution (`test_pass_rate`/`coverage`, shelling out to the target's `pytest` and parsing junit/coverage XML with stdlib), and judged (`JudgedCriterion`, dormant) — with per-evaluator default tables (21.2); the `@register_evaluator` decorator + `coding_agent_playbook.evaluators` entry-point group + `static/deterministic_evaluators()` selection (21.3); `grade()` gate + weighted composite with the inclusive/strict gate-boundary semantics and the non-regression comparator (21.4); the `playbook metrics` command, flags, exit codes, `[metrics]` config, and the `repo: local` static pre-commit hook (21.5); the eval `[metrics]` block (sibling of `[rubric]`), `EvalTask.metrics`, `evaluators_for_task`, and validator rule 7 (21.6); invariants (21.7) and open caveats incl. the forward-compat `Judge.score` signature mismatch (21.2.3 / 21.8).
