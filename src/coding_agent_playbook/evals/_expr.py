@@ -317,6 +317,30 @@ def _build(node: Node, handles: Mapping[str, Check], *, id: str) -> Check:
     return AnyOf(*(_build(c, handles, id=id) for c in node.children), id=id)
 
 
+def eval_bool(node: Node, env: Mapping[str, bool]) -> bool:
+    """Evaluate the AST ``node`` over a ``name -> bool`` environment.
+
+    The boolean dual of :func:`compile_expr`: where ``compile_expr`` folds names
+    into a ``compose.py`` :class:`Check` tree, this folds them into a single
+    ``bool`` over an already-decided environment - a :class:`Name` resolves to
+    ``env[name]`` (an absent name raises :class:`ExprError`), :class:`And` is
+    ``all(...)``, :class:`Or` is ``any(...)``, :class:`Not` is ``not ...``. The
+    task compiler uses it to derive the per-trial verdict from the two layers'
+    ``passed`` results without re-running them.
+    """
+    if isinstance(node, Name):
+        try:
+            return env[node.value]
+        except KeyError:
+            raise ExprError(f"unknown handle {node.value!r}; known: {sorted(env)}") from None
+    if isinstance(node, Not):
+        return not eval_bool(node.child, env)
+    if isinstance(node, And):
+        return all(eval_bool(child, env) for child in node.children)
+    # Or
+    return any(eval_bool(child, env) for child in node.children)
+
+
 def compile_expr(expr: str, handles: Mapping[str, Check], *, id: str) -> Check:
     """Compile ``expr`` into a ``compose.py`` check tree over ``handles``.
 
@@ -346,6 +370,7 @@ __all__ = [
     "Or",
     "Token",
     "compile_expr",
+    "eval_bool",
     "names",
     "parse",
 ]

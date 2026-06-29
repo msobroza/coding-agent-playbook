@@ -19,6 +19,7 @@ from coding_agent_playbook.evals._expr import (
     Not,
     Or,
     compile_expr,
+    eval_bool,
     names,
     parse,
 )
@@ -196,6 +197,43 @@ def test_names_single() -> None:
 
 def test_names_dedupes() -> None:
     assert names("a and a or a") == {"a"}
+
+
+# --------------------------------------------------------------------------- #
+# eval_bool: evaluate the AST over a name -> bool environment
+# --------------------------------------------------------------------------- #
+
+
+def test_eval_bool_single_name() -> None:
+    assert eval_bool(parse("a"), {"a": True}) is True
+    assert eval_bool(parse("a"), {"a": False}) is False
+
+
+def test_eval_bool_and_or_not() -> None:
+    env = {"a": True, "b": False, "c": True}
+    assert eval_bool(parse("a and c"), env) is True
+    assert eval_bool(parse("a and b"), env) is False
+    assert eval_bool(parse("a or b"), env) is True
+    assert eval_bool(parse("b or not b"), env) is True
+    assert eval_bool(parse("not a"), env) is False
+
+
+def test_eval_bool_precedence_over_bool_env() -> None:
+    # "not" > "and" > "or": "a or b and c" with a=False, b=True, c=False is
+    # a or (b and c) = False or (True and False) = False.
+    env = {"a": False, "b": True, "c": False}
+    assert eval_bool(parse("a or b and c"), env) is False
+    # flip c to True: a or (b and c) = False or (True and True) = True.
+    assert eval_bool(parse("a or b and c"), {**env, "c": True}) is True
+    # parens override: "(a or b) and c" = (False or True) and False = False.
+    assert eval_bool(parse("(a or b) and c"), env) is False
+
+
+def test_eval_bool_unknown_name_raises() -> None:
+    with pytest.raises(ExprError) as exc:
+        eval_bool(parse("a and missing"), {"a": True})
+    assert "unknown handle" in str(exc.value)
+    assert "'missing'" in str(exc.value)
 
 
 # --------------------------------------------------------------------------- #
