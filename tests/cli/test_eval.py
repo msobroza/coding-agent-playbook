@@ -146,8 +146,6 @@ def _seed_eval_repo(repo: Path, make_synthetic_repo: Any) -> None:
             "[setup]\n"
             "files = []\n"
             'project_kind = "python-application"\n'
-            'python_version = "3.12"\n'
-            'frameworks = ["pytest"]\n'
             "\n"
             "[invocation]\n"
             'prompt_args = "for some target"\n'
@@ -315,8 +313,6 @@ def test_show_uses_prompt_slash_not_id_when_they_differ(tmp_path, make_synthetic
         "[setup]\n"
         "files = []\n"
         'project_kind = "python-application"\n'
-        'python_version = "3.12"\n'
-        'frameworks = ["pytest"]\n'
         "[invocation]\n"
         'prompt_args = "target"\n',
         encoding="utf-8",
@@ -446,8 +442,6 @@ def test_show_source_path_is_repo_relative_for_repo_local_tasks(
         "[setup]\n"
         "files = []\n"
         'project_kind = "python-application"\n'
-        'python_version = "3.12"\n'
-        "frameworks = []\n"
         "[invocation]\n"
         'prompt_args = ""\n',
         encoding="utf-8",
@@ -476,8 +470,6 @@ def test_show_falls_back_to_prompt_id_when_prompt_missing(tmp_path, make_synthet
         "[setup]\n"
         "files = []\n"
         'project_kind = "python-application"\n'
-        'python_version = "3.12"\n'
-        "frameworks = []\n"
         "[invocation]\n"
         'prompt_args = ""\n',
         encoding="utf-8",

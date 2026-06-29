@@ -492,11 +492,13 @@ def _print_show(task_id: str, tasks: list[EvalTask], prompts: list[Prompt]) -> i
     lines.append(f"Prompt under test: {task.prompt_id}")
     lines.append(f"Description: {task.description}")
     lines.append("Setup:")
-    facts = (
-        f"python_version={task.setup.python_version}, "
-        f"frameworks=[{', '.join(task.setup.frameworks)}]"
-    )
-    lines.append(f"  Mock facts: {facts}")
+    # ``project_kind`` is the lone mock-detector fact carried by [setup] (the
+    # other facts — python version, deps — live in setup/pyproject.toml since
+    # C11). Any extras (e.g. ``ml_stack``) print alongside it.
+    fact_bits = [f"project_kind={task.setup.project_kind}"]
+    for key, value in sorted(task.setup.extra_facts.items()):
+        fact_bits.append(f"{key}={value!r}")
+    lines.append(f"  Mock facts: {', '.join(fact_bits)}")
     files_list = ", ".join(str(p) for p in task.setup.files) or "(none)"
     lines.append(f"  Files ({len(task.setup.files)}): {files_list}")
     lines.append("Invocation:")

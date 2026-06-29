@@ -328,7 +328,6 @@ def test_run_failing_gate_exits_1(
 
             [setup]
             files = ["mod.py"]
-            python_version = "3.12"
 
             [gate]
             expr = "unchanged and cc"

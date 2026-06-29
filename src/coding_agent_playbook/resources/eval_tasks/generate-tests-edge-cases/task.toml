@@ -6,8 +6,6 @@ version = 1
 [setup]
 files = ["src/quotient.py"]
 project_kind = "python-application"
-python_version = "3.12"
-frameworks = ["pytest"]
 
 [invocation]
 prompt_args = "for the quotient function in src/quotient.py — make sure every branch is covered"

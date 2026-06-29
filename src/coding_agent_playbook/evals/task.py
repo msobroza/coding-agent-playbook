@@ -47,12 +47,16 @@ class TaskSetup:
     ``files`` lists the entries under ``<task_dir>/setup/`` (relative paths);
     the runner walks ``setup/`` itself and copies into the scratch repo, so
     this list is documentation that the validator can cross-check.
+
+    ``frameworks`` and ``python_version`` are no longer authored here — the
+    runner installs the fixture's dependencies via ``uv sync`` on
+    ``setup/pyproject.toml`` (which is the single source of truth for the
+    project's Python version and packages), and the detector reads the same
+    file directly from the materialized scratch tree.
     """
 
     files: list[Path] = field(default_factory=list)
     project_kind: str = "python-unknown"
-    python_version: str = "3.12"
-    frameworks: list[str] = field(default_factory=list)
     extra_facts: dict[str, Any] = field(default_factory=dict)
 
 
@@ -248,25 +252,28 @@ def _require_str(data: dict[str, Any], key: str) -> str:
 
 
 def _parse_setup(raw: Any) -> TaskSetup:
+    """Parse a ``[setup]`` block into a :class:`TaskSetup`.
+
+    Authored keys: ``files`` (list of relpaths under ``<task_dir>/setup/``),
+    ``project_kind`` (mock detector fact), plus any extra detector-fact keys
+    (preserved in ``extra_facts``). ``frameworks`` / ``python_version`` are
+    no longer accepted — the runner installs deps from
+    ``setup/pyproject.toml`` via ``uv sync`` and the detector reads that file
+    directly, so duplicating those facts in the TOML is dead authoring.
+    """
     if not isinstance(raw, dict):
         raise ValueError(f"[setup] must be a table, got {type(raw).__name__}")
     files = [Path(p) for p in raw.get("files", [])]
     project_kind = raw.get("project_kind", "python-unknown")
-    python_version = raw.get("python_version", "3.12")
-    frameworks = list(raw.get("frameworks", []))
     # Anything outside the typed slots is preserved in extra_facts so overlays
     # can mock new detector keys without changing this dataclass.
-    known = {"files", "project_kind", "python_version", "frameworks"}
+    known = {"files", "project_kind"}
     extra_facts = {k: v for k, v in raw.items() if k not in known}
     if not isinstance(project_kind, str):
         raise ValueError(f"[setup].project_kind must be str, got {type(project_kind).__name__}")
-    if not isinstance(python_version, str):
-        raise ValueError(f"[setup].python_version must be str, got {type(python_version).__name__}")
     return TaskSetup(
         files=files,
         project_kind=project_kind,
-        python_version=python_version,
-        frameworks=frameworks,
         extra_facts=extra_facts,
     )
 

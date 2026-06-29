@@ -24,8 +24,6 @@ version = 1
 [setup]
 files = ["src/calculator.py"]
 project_kind = "python-application"
-python_version = "3.12"
-frameworks = ["pytest", "pytest-asyncio"]
 
 [invocation]
 prompt_args = "for the add function in src/calculator.py"

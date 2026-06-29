@@ -12,12 +12,14 @@ an :class:`EvalValidationError`. The compiler already validates: at-least-one
 layer present, unknown check ids / metric names / gate-refs / rubric-refs,
 malformed handle bindings, expression identifiers ⊄ bind keys, the rubric
 weight-sum, and verdict identifiers ⊄ present layers. The non-schema rules
-(setup.files exist, prompt_id resolves, prompt↔task back-reference symmetry) and a
-light ``[aggregate]`` shape check are kept here.
+(setup.files exist, an authored ``setup/pyproject.toml`` parses, prompt_id
+resolves, prompt↔task back-reference symmetry) and a light ``[aggregate]``
+shape check are kept here.
 """
 
 from __future__ import annotations
 
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -59,6 +61,8 @@ def validate_tasks(
        ``metric``, an integer ``k >= 1``, and an ``over`` axis); the multi-trial
        grading itself runs in the runner.
     4. Each task's ``setup.files`` must exist under ``<task_dir>/setup/``.
+       When ``setup/pyproject.toml`` is present it must parse as TOML; dep
+       installability is the runner's concern (``uv sync``), not the validator's.
     5. Each task's ``prompt_id`` resolves to a known prompt.
     6. Each task is listed in its referenced prompt's ``eval_tasks:`` frontmatter
        (task → prompt direction of the symmetry check).
@@ -79,7 +83,9 @@ def validate_tasks(
         if task.aggregate is not None:
             errors.extend(_validate_aggregate(task))
 
-        # Rule 4: setup.files must exist relative to <task_dir>/setup/.
+        # Rule 4: setup.files must exist relative to <task_dir>/setup/, and an
+        # authored setup/pyproject.toml must parse as TOML. The runner installs
+        # its deps via ``uv sync``; installability is not validated here.
         task_dir = task.source_path.parent
         setup_root = task_dir / "setup"
         for declared in task.setup.files:
@@ -89,6 +95,17 @@ def validate_tasks(
                     EvalValidationError(
                         path=task.source_path,
                         message=(f"setup.files declares {declared} but {absolute} not found"),
+                    )
+                )
+        pyproject = setup_root / "pyproject.toml"
+        if pyproject.is_file():
+            try:
+                tomllib.loads(pyproject.read_text(encoding="utf-8"))
+            except (OSError, tomllib.TOMLDecodeError) as exc:
+                errors.append(
+                    EvalValidationError(
+                        path=task.source_path,
+                        message=f"setup/pyproject.toml is not valid TOML: {exc}",
                     )
                 )
 

@@ -10,12 +10,19 @@ contributes and a high stub score keeps it passing).
 This is the destructive-cutover guard: if a migrated ``task.toml`` regresses (an
 unknown check, a malformed binding, a bad expr, a weight-sum drift), the validate
 step fails here.
+
+Since C11 the shipped fixtures carry a ``setup/pyproject.toml`` (so the runner
+``uv sync``'s their deps); the integration suite must stay hermetic, so the
+fixtures that exercise :func:`~coding_agent_playbook.evals.runner.materialize`
+monkeypatch ``subprocess.run`` to treat ``uv`` invocations as no-ops (returning
+a success ``CompletedProcess``) — git calls pass through unchanged.
 """
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -33,6 +40,30 @@ from coding_agent_playbook.types import Prompt
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.task import EvalTask
+
+
+@pytest.fixture
+def stub_uv_sync(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hermetic ``uv sync`` stub: never actually shells out, treats every call as OK.
+
+    C11 wires ``materialize`` to ``uv sync`` the scratch tree when it contains a
+    ``pyproject.toml`` (the shipped fixtures do). The integration suite must
+    stay air-gapped, so this fixture monkeypatches ``subprocess.run`` to
+    short-circuit ``uv`` invocations to a success result and pretends ``uv`` is
+    on PATH; git calls pass through unchanged.
+    """
+    real_run = subprocess.run
+
+    def _stub_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if args and args[0] == "uv":
+            return subprocess.CompletedProcess(args, 0, "", "")
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr("coding_agent_playbook.evals.runner.subprocess.run", _stub_run)
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.runner.shutil.which", lambda _binary: "/fake/uv"
+    )
+
 
 _SRC_ROOT = Path(__file__).resolve().parents[2] / "src" / "coding_agent_playbook"
 _TASKS_ROOT = _SRC_ROOT / "resources" / "eval_tasks"
@@ -76,7 +107,9 @@ def test_shipped_tasks_validate_clean() -> None:
 
 
 @pytest.mark.parametrize("task", _shipped_tasks(), ids=lambda t: t.id)
-def test_shipped_task_runs_deterministic_only(task: EvalTask, tmp_path: Path) -> None:
+def test_shipped_task_runs_deterministic_only(
+    task: EvalTask, tmp_path: Path, stub_uv_sync: None
+) -> None:
     """No judge ⇒ the rubric layer's judged content skips; the verdict = gate."""
     scratch = tmp_path / "scratch"
     baseline = materialize(task, scratch)
@@ -91,7 +124,7 @@ def test_shipped_task_runs_deterministic_only(task: EvalTask, tmp_path: Path) ->
 
 
 @pytest.mark.parametrize("task", _shipped_tasks(), ids=lambda t: t.id)
-def test_shipped_task_runs_with_a_judge(task: EvalTask, tmp_path: Path) -> None:
+def test_shipped_task_runs_with_a_judge(task: EvalTask, tmp_path: Path, stub_uv_sync: None) -> None:
     """With a high StubJudge the rubric layer contributes and runs (not skipped)."""
     scratch = tmp_path / "scratch"
     baseline = materialize(task, scratch)
@@ -104,7 +137,7 @@ def test_shipped_task_runs_with_a_judge(task: EvalTask, tmp_path: Path) -> None:
     assert rubric.passed is True  # composite 0.9 >= 0.5 floor
 
 
-def test_judge_verdict_can_diverge_from_gate(tmp_path: Path) -> None:
+def test_judge_verdict_can_diverge_from_gate(tmp_path: Path, stub_uv_sync: None) -> None:
     """A low judge fails the rubric layer, so a passing-gate task's verdict flips.
 
     Picks a task whose deterministic gate the no-op agent satisfies (a

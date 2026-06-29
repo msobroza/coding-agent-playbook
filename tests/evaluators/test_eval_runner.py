@@ -22,6 +22,7 @@ slower.
 
 from __future__ import annotations
 
+import subprocess
 import textwrap
 from pathlib import Path
 from typing import Any
@@ -859,3 +860,159 @@ def test_boolean_verdict_leaves_verdict_score_none(tmp_path: Path) -> None:
     result = FakeRunner(write_files({"mod.py": _REFACTORED})).run_task(task, tmp_path / "scratch")
     assert result.report.verdict_score is None
     assert result.passed is True
+
+
+# --------------------------------------------------------------------------- #
+# C11: setup/pyproject.toml is uv-sync'd before the agent runs
+# --------------------------------------------------------------------------- #
+
+
+def test_uv_sync_skipped_when_no_pyproject(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A deps-less fixture (no ``pyproject.toml``) never shells out to ``uv``.
+
+    ``uv`` is only required when the scratch tree carries a ``pyproject.toml``;
+    a fixture with no Python deps must stay uv-free (the existing 1190+ tests
+    that lay down a bare ``setup/`` directory work unchanged).
+    """
+    calls: list[list[str]] = []
+
+    def _capture_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        calls.append(list(args))
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr("coding_agent_playbook.evals.runner.subprocess.run", _capture_run)
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)  # lays down mod.py + test_mod.py; NO pyproject.toml.
+    task = _make_task(task_dir, gate=_cc_gate())
+
+    materialize(task, tmp_path / "scratch")
+
+    # The only ``subprocess.run`` calls were the git invocations; none were uv.
+    assert not any(a and a[0] == "uv" for a in calls)
+
+
+def test_uv_sync_invoked_when_pyproject_present(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A scratch tree with a ``pyproject.toml`` triggers one ``uv sync`` per tree.
+
+    The fake ``subprocess.run`` captures both invocations (the scratch repo and
+    the pristine ``setup/`` snapshot — the execution baseline) so we can assert
+    each one ran from the right cwd.
+    """
+    uv_calls: list[tuple[list[str], Path]] = []
+    real_run = subprocess.run
+
+    def _capture_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if args and args[0] == "uv":
+            uv_calls.append((list(args), Path(kwargs.get("cwd", "."))))
+            return subprocess.CompletedProcess(args, 0, "", "")
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr("coding_agent_playbook.evals.runner.subprocess.run", _capture_run)
+    # Pretend ``uv`` is on PATH (we never actually shell out to it).
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.runner.shutil.which", lambda _binary: "/fake/uv"
+    )
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    (task_dir / "setup" / "pyproject.toml").write_text(
+        '[project]\nname = "fx"\nversion = "0"\nrequires-python = ">=3.12"\ndependencies = []\n',
+        encoding="utf-8",
+    )
+    task = _make_task(task_dir, gate=_cc_gate())
+
+    baseline = materialize(task, tmp_path / "scratch")
+
+    # Two ``uv sync`` calls: one in the scratch repo, one in the pristine snapshot.
+    assert len(uv_calls) == 2
+    cwds = {call[1] for call in uv_calls}
+    assert baseline.repo_root in cwds
+    assert baseline.setup_snapshot in cwds
+    # Without a uv.lock the runner falls back to the non-frozen form (it
+    # resolves + locks on the fly — the right default for a fresh fixture).
+    for args, _cwd in uv_calls:
+        assert args[:2] == ["uv", "sync"]
+        assert "--frozen" not in args
+
+
+def test_uv_sync_uses_frozen_when_lock_present(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """When ``uv.lock`` exists the runner passes ``--frozen`` for reproducibility."""
+    uv_args: list[list[str]] = []
+    real_run = subprocess.run
+
+    def _capture_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if args and args[0] == "uv":
+            uv_args.append(list(args))
+            return subprocess.CompletedProcess(args, 0, "", "")
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr("coding_agent_playbook.evals.runner.subprocess.run", _capture_run)
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.runner.shutil.which", lambda _binary: "/fake/uv"
+    )
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    (task_dir / "setup" / "pyproject.toml").write_text(
+        '[project]\nname = "fx"\nversion = "0"\nrequires-python = ">=3.12"\ndependencies = []\n',
+        encoding="utf-8",
+    )
+    (task_dir / "setup" / "uv.lock").write_text("# stub\n", encoding="utf-8")
+    task = _make_task(task_dir, gate=_cc_gate())
+
+    materialize(task, tmp_path / "scratch")
+
+    assert uv_args, "expected uv sync to run"
+    for args in uv_args:
+        assert args == ["uv", "sync", "--frozen"]
+
+
+def test_uv_sync_raises_clear_error_when_uv_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A fixture with a ``pyproject.toml`` but no ``uv`` on PATH raises a clear error."""
+    monkeypatch.setattr("coding_agent_playbook.evals.runner.shutil.which", lambda _binary: None)
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    (task_dir / "setup" / "pyproject.toml").write_text(
+        '[project]\nname = "fx"\nversion = "0"\nrequires-python = ">=3.12"\ndependencies = []\n',
+        encoding="utf-8",
+    )
+    task = _make_task(task_dir, gate=_cc_gate())
+
+    with pytest.raises(RuntimeError, match="uv binary required"):
+        materialize(task, tmp_path / "scratch")
+
+
+def test_uv_sync_raises_clear_error_when_sync_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A nonzero ``uv sync`` is surfaced as a clear RuntimeError carrying stderr."""
+    real_run = subprocess.run
+
+    def _capture_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if args and args[0] == "uv":
+            return subprocess.CompletedProcess(args, 1, "", "lockfile out of sync")
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr("coding_agent_playbook.evals.runner.subprocess.run", _capture_run)
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.runner.shutil.which", lambda _binary: "/fake/uv"
+    )
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    (task_dir / "setup" / "pyproject.toml").write_text(
+        '[project]\nname = "fx"\nversion = "0"\nrequires-python = ">=3.12"\ndependencies = []\n',
+        encoding="utf-8",
+    )
+    task = _make_task(task_dir, gate=_cc_gate())
+
+    with pytest.raises(RuntimeError, match=r"uv sync failed.*lockfile out of sync"):
+        materialize(task, tmp_path / "scratch")

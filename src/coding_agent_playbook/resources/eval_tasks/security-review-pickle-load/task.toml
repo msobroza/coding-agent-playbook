@@ -6,8 +6,6 @@ version = 1
 [setup]
 files = ["src/unsafe_model_loader.py"]
 project_kind = "ml-research"
-python_version = "3.12"
-frameworks = ["pytest"]
 ml_stack = ["torch", "scikit-learn"]
 
 [invocation]

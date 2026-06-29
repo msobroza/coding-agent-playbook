@@ -206,19 +206,25 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 
 def materialize(task: EvalTask, scratch_dir: Path) -> Baseline:
-    """Copy the task's ``setup/`` into ``scratch_dir`` and commit it as baseline.
+    """Copy the task's ``setup/`` into ``scratch_dir``, install deps, commit baseline.
 
     The ``setup/`` tree (sibling of the task's ``task.toml``) is byte-copied into
-    ``scratch_dir`` (which becomes the agent's working tree). The scratch repo is
-    ``git init``'d and the initial state committed so :func:`capture` can ``git
-    diff`` against it and the ``[expected]`` ``files_unchanged`` check has a
-    reference. A *second*, pristine copy of ``setup/`` is kept alongside the
-    scratch repo as the execution-evaluator baseline (run on the untouched setup,
-    never on the post-agent tree).
+    ``scratch_dir`` (which becomes the agent's working tree). When that tree
+    carries a ``pyproject.toml`` :func:`_uv_sync_scratch` shells out to ``uv
+    sync`` (``--frozen`` if a ``uv.lock`` is present) so the agent and the
+    execution evaluators see a real installed environment — the canonical Python
+    project metadata lives in ``setup/pyproject.toml``, not in ``task.toml``.
+    The scratch repo is then ``git init``'d and the initial state committed so
+    :func:`capture` can ``git diff`` against it and the ``file_unchanged`` check
+    has a reference. A *second*, pristine copy of ``setup/`` is kept alongside
+    the scratch repo as the execution-evaluator baseline (also ``uv sync``'d, so
+    the baseline suite runs against the same installed deps as the candidate).
 
     A task whose ``setup/`` directory is missing yields an empty baseline repo —
     the runner still works, the static/execution layers simply have nothing to
-    measure.
+    measure. A ``setup/`` with no ``pyproject.toml`` (a deps-less fixture) skips
+    the ``uv sync`` step entirely; ``uv`` is only required when a pyproject is
+    present.
     """
     scratch_dir = Path(scratch_dir)
     scratch_dir.mkdir(parents=True, exist_ok=True)
@@ -226,6 +232,8 @@ def materialize(task: EvalTask, scratch_dir: Path) -> Baseline:
     setup_dir = task.source_path.parent / "setup"
     if setup_dir.is_dir():
         shutil.copytree(setup_dir, scratch_dir, dirs_exist_ok=True)
+
+    _uv_sync_scratch(scratch_dir)
 
     _git(scratch_dir, "init", "-q")
     _git(scratch_dir, "add", "-A")
@@ -241,8 +249,39 @@ def materialize(task: EvalTask, scratch_dir: Path) -> Baseline:
         shutil.copytree(setup_dir, snapshot)
     else:
         snapshot.mkdir(parents=True, exist_ok=True)
+    # The baseline tree is what the execution evaluators run against, so it
+    # needs its own ``uv sync`` (same pyproject => same install).
+    _uv_sync_scratch(snapshot)
 
     return Baseline(repo_root=scratch_dir, commit=commit, setup_snapshot=snapshot)
+
+
+def _uv_sync_scratch(scratch_dir: Path) -> None:
+    """Install the scratch tree's ``pyproject.toml`` deps via ``uv sync``.
+
+    No-op when the tree has no ``pyproject.toml`` (a deps-less fixture; the
+    ``uv`` binary is not required in that case). When a pyproject exists,
+    ``uv`` must be on ``PATH`` — raises a clear :exc:`RuntimeError` otherwise.
+    Uses ``uv sync --frozen`` if a ``uv.lock`` is present; falls back to
+    ``uv sync`` to resolve and lock on the fly when it is not (the default for
+    fixtures that ship without a lockfile).
+
+    Stdlib only (``subprocess`` / ``shutil``) — ``uv`` stays a shell-out, the
+    same shape as the existing ``claude`` / ``opencode`` CLI runners. The
+    caller decides where to invoke this (the scratch repo and the baseline
+    snapshot both need it; see :func:`materialize`).
+    """
+    pyproject = scratch_dir / "pyproject.toml"
+    if not pyproject.is_file():
+        return
+    if shutil.which("uv") is None:
+        raise RuntimeError(
+            "uv binary required to materialize setup/pyproject.toml; install uv on PATH"
+        )
+    args = ["uv", "sync", "--frozen"] if (scratch_dir / "uv.lock").is_file() else ["uv", "sync"]
+    result = subprocess.run(args, cwd=scratch_dir, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise RuntimeError(f"uv sync failed in {scratch_dir}: {result.stderr}")
 
 
 def render_prompt(task: EvalTask, *, strict: bool = False) -> str:

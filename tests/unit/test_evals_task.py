@@ -35,8 +35,6 @@ def _full_dict() -> dict[str, Any]:
         "setup": {
             "files": ["src/calculator.py"],
             "project_kind": "python-application",
-            "python_version": "3.12",
-            "frameworks": ["pytest", "pytest-asyncio"],
         },
         "invocation": {
             "prompt_args": "for the add function in src/calculator.py",
@@ -108,7 +106,6 @@ def test_eval_task_from_dict_parses_full_task(tmp_path: Path) -> None:
 
     assert task.setup.files == [Path("src/calculator.py")]
     assert task.setup.project_kind == "python-application"
-    assert task.setup.frameworks == ["pytest", "pytest-asyncio"]
 
     assert task.invocation.prompt_args.startswith("for the add function")
     assert task.invocation.input_variables == {"target": "src/calculator.py::add"}
@@ -152,6 +149,56 @@ def test_eval_task_from_dict_rejects_non_string_id(tmp_path: Path) -> None:
     data["id"] = 42
     with pytest.raises(ValueError, match="id"):
         _make(data, tmp_path)
+
+
+def test_setup_drops_frameworks_and_python_version_from_typed_slots(tmp_path: Path) -> None:
+    """C11: ``frameworks`` / ``python_version`` are no longer typed on TaskSetup.
+
+    The dataclass exposes only the typed slots (``files`` / ``project_kind`` /
+    ``extra_facts``). The runner installs deps via ``uv sync`` over
+    ``setup/pyproject.toml`` instead of reading these dead fields.
+    """
+    data = _minimal_dict()
+    data["setup"] = {
+        "files": ["src/x.py"],
+        "project_kind": "python-application",
+    }
+    task = _make(data, tmp_path)
+    assert task.setup.files == [Path("src/x.py")]
+    assert task.setup.project_kind == "python-application"
+    # The typed slots are exactly these two; no ``frameworks``/``python_version`` on
+    # the dataclass.
+    assert not hasattr(task.setup, "frameworks")
+    assert not hasattr(task.setup, "python_version")
+    assert task.setup.extra_facts == {}
+
+
+def test_setup_preserves_unknown_keys_in_extra_facts(tmp_path: Path) -> None:
+    """The parser tolerates unknown keys (preserved in ``extra_facts``).
+
+    Overlays mock new detector keys this way (e.g. ``ml_stack`` on the
+    shipped ``security-review-*`` tasks); the parser keeps that escape hatch
+    rather than going strict. Any leftover legacy ``python_version`` /
+    ``frameworks`` in an unmigrated fixture lands here too — it is not load-
+    bearing (the runner ignores it) but a strict-reject would break the
+    overlay extension pattern.
+    """
+    data = _minimal_dict()
+    data["setup"] = {
+        "files": ["src/x.py"],
+        "project_kind": "ml-research",
+        "ml_stack": ["torch"],
+        # Stale fields a half-migrated overlay might still carry: harmless,
+        # land in extra_facts, do NOT raise.
+        "python_version": "3.12",
+        "frameworks": ["pytest"],
+    }
+    task = _make(data, tmp_path)
+    assert task.setup.extra_facts == {
+        "ml_stack": ["torch"],
+        "python_version": "3.12",
+        "frameworks": ["pytest"],
+    }
 
 
 # --- block shape parsing (structural only; semantics is the compiler's job) ---
