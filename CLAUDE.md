@@ -168,7 +168,7 @@ If a commit has already been made with a trailer or wrong author by mistake on a
 
 When the controller dispatches subagents via the Agent tool to implement plans in this repo:
 
-- **Default model is `opus`** (Claude Opus 4.8, `claude-opus-4-8`) for every role — implementer, spec-compliance reviewer, code-quality reviewer, final reviewer. Cheaper models have produced structural mistakes here (e.g. inserting `__post_init__` between `@classmethod` and the decorated method); opus is the floor, not the ceiling.
+- **Default model is `opus`** (Claude Opus 4.7, `claude-opus-4-7`) for every role — implementer, spec-compliance reviewer, code-quality reviewer, final reviewer. Cheaper models have produced structural mistakes here (e.g. inserting `__post_init__` between `@classmethod` and the decorated method); opus is the floor, not the ceiling.
 - **Every dispatch prompt MUST start with an explicit `cd <worktree-path>`** as the subagent's first tool call. Without this, the Agent tool can inherit the original session's CWD (the main checkout), causing commits to land on `main` instead of the feature branch.
 - **Every dispatch prompt MUST forbid `git push` and `gh pr create`** until the user-gate review has approved the diff. The dispatcher (this session) handles push + PR after the gate, not the subagent.
 - **Local verification commands MUST match what CI runs.** CI runs `mypy` and `pytest -q` from the repo root with no path arguments — those pick up the `[tool.mypy] files` and `[tool.pytest]` config in `pyproject.toml`, which includes `tests/`. Running `uv run mypy src` (source only) skips test-file checks and lets type errors slip past the local gate. Always run the no-args form locally before claiming a green gate.
