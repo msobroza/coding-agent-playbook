@@ -114,6 +114,13 @@ class EvaluationReport:
     merge reports from several check families. ``findings`` carries the flat
     per-scope :class:`ScopeDetail` rows (the deterministic leaf details renderers
     read); ``checks`` carries the structured :class:`CheckResult` rows.
+
+    ``verdict_score`` (C10) is the per-trial weighted-composite verdict score
+    over the gate/rubric layers when the task authored a weighted ``[verdict]``
+    (``weights``/``fail``); ``None`` for a boolean-mode verdict (the legacy
+    ``[verdict].trial`` form), and ``None`` for a weighted verdict whose
+    referenced layers were *all* skipped (vacuously passing). ``passed`` still
+    carries the trial verdict in both modes.
     """
 
     findings: list[ScopeDetail]
@@ -122,6 +129,7 @@ class EvaluationReport:
     composite: float | None
     passed: bool
     checks: list[CheckResult] = field(default_factory=list)
+    verdict_score: float | None = None
 
 
 @dataclass(frozen=True)

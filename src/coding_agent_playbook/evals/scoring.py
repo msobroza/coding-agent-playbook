@@ -104,7 +104,7 @@ def score(
     failing ``[gate]`` check spares the LLM judge. The runner passes ``True`` by
     default (cost-saving); ``--full-scoring`` flips it off.
     """
-    from coding_agent_playbook.evals._compile import verdict_passed
+    from coding_agent_playbook.evals._compile import verdict_passed, weighted_verdict
     from coding_agent_playbook.evals.task import compile_eval_task
 
     compiled = compile_eval_task(task)
@@ -149,10 +149,22 @@ def score(
         ms = MeasurementSet(candidate_measurements, baseline_measurements or None)
         report = rubric.evaluate(ctx, ms, strict=False, fail_fast=fail_fast)
 
-    # Derive the trial verdict from the gate/rubric layer results (skipped-neutral)
-    # and make it the report's pass/fail. The gate/rubric CheckResults stay in
-    # report.checks for reporting (and the aggregate ``over`` selector).
-    report.passed = verdict_passed(report, compiled.verdict_ast)
+    # Derive the trial verdict and make it the report's pass/fail. The
+    # gate/rubric CheckResults stay in report.checks for reporting (and the
+    # aggregate ``over`` selector).
+    #
+    # Two modes (C10): boolean (the legacy ``[verdict].trial`` expression,
+    # skipped-neutral over the layers' ``passed`` results) or weighted (a
+    # composite over the layers' 0-1 scores with renormalization for skipped
+    # layers). The boolean path is byte-identical to today.
+    spec = compiled.verdict_spec
+    if spec.mode == "boolean":
+        report.passed = verdict_passed(report, spec.ast)
+        report.verdict_score = None
+    else:
+        verdict_score, passed = weighted_verdict(report, spec)
+        report.verdict_score = verdict_score
+        report.passed = passed
     return report
 
 

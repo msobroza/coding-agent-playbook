@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from coding_agent_playbook.evals.task import EvalTask, Layer, TaskSetup
+from coding_agent_playbook.evals.task import EvalTask, Layer, TaskSetup, Verdict
 from coding_agent_playbook.evals.validator import (
     EvalValidationError,
     validate_tasks,
@@ -60,7 +60,7 @@ def _make_task(
         setup=TaskSetup(files=[Path(p) for p in (setup_files or [])]),
         gate=gate if gate is not None else _gate(),
         rubric=rubric,
-        verdict=verdict,
+        verdict=Verdict(mode="boolean", trial=verdict),
         aggregate=aggregate,
     )
 
@@ -143,6 +143,30 @@ def test_validate_tasks_flags_rubric_weight_sum(tmp_path: Path) -> None:
     assert any("weight" in e.message.lower() and "sum" in e.message.lower() for e in errors)
 
 
+# Rule 2 (negative): weighted [verdict] referencing an absent layer is a compile error (C10).
+def test_validate_tasks_flags_weighted_verdict_unknown_layer(tmp_path: Path) -> None:
+    task_dir = tmp_path / "bad-weighted"
+    task_dir.mkdir()
+    prompt = _make_prompt("demo", eval_tasks=["bad-weighted"])
+    task = EvalTask(
+        id="bad-weighted",
+        prompt_id="demo",
+        description="d",
+        source_path=task_dir / "task.toml",
+        source_package="<test>",
+        setup=TaskSetup(),
+        gate=_gate(),
+        # No [rubric] block, yet weights name it.
+        verdict=Verdict(
+            mode="weighted",
+            weights={"gate": 0.4, "rubric": 0.6},
+            fail=0.5,
+        ),
+    )
+    errors = validate_tasks([task], [prompt])
+    assert any("unknown layer" in e.message for e in errors)
+
+
 # Rule 2 (negative): a task with no layer at all cannot compile.
 def test_validate_tasks_flags_no_layer(tmp_path: Path) -> None:
     task_dir = tmp_path / "no-layer"
@@ -157,7 +181,7 @@ def test_validate_tasks_flags_no_layer(tmp_path: Path) -> None:
         setup=TaskSetup(),
         gate=None,
         rubric=None,
-        verdict="gate",
+        verdict=Verdict(mode="boolean", trial="gate"),
     )
     errors = validate_tasks([task], [prompt])
     assert any("at least one" in e.message for e in errors)

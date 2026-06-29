@@ -194,13 +194,16 @@ def _make_task(
     gate: dict[str, Any] | None = None,
     rubric: dict[str, Any] | None = None,
     verdict: str | None = None,
+    verdict_block: dict[str, Any] | None = None,
     invocation: TaskInvocation | None = None,
     prompt_id: str = "refactor",
 ) -> EvalTask:
     """Build an :class:`EvalTask` from the new-schema ``[gate]``/``[rubric]`` dicts.
 
     ``verdict`` defaults sensibly: ``"gate and rubric"`` when both blocks are
-    present, ``"gate"`` for gate-only, ``"rubric"`` for rubric-only.
+    present, ``"gate"`` for gate-only, ``"rubric"`` for rubric-only. To author
+    the weighted form (C10) pass ``verdict_block`` (the raw ``[verdict]`` dict)
+    instead — mutually exclusive with ``verdict``.
     """
     data: dict[str, Any] = {
         "id": "t-fixture",
@@ -211,14 +214,18 @@ def _make_task(
         data["gate"] = gate
     if rubric is not None:
         data["rubric"] = rubric
-    if verdict is None:
-        if gate is not None and rubric is not None:
-            verdict = "gate and rubric"
-        elif gate is not None:
-            verdict = "gate"
-        else:
-            verdict = "rubric"
-    data["verdict"] = {"trial": verdict}
+    if verdict_block is not None:
+        assert verdict is None, "pass either `verdict` (boolean) or `verdict_block` (raw)"
+        data["verdict"] = verdict_block
+    else:
+        if verdict is None:
+            if gate is not None and rubric is not None:
+                verdict = "gate and rubric"
+            elif gate is not None:
+                verdict = "gate"
+            else:
+                verdict = "rubric"
+        data["verdict"] = {"trial": verdict}
     task = EvalTask.from_dict(data, source_path=task_dir / "task.toml", source_package="<test>")
     if invocation is not None:
         task.invocation = invocation
@@ -772,3 +779,83 @@ def test_render_prompt_skips_non_matching_prompts() -> None:
     prompt = render_prompt(task)
     assert prompt
     assert "[prompt:explain]" not in prompt  # i.e. not the placeholder fallback
+
+
+# --------------------------------------------------------------------------- #
+# Weighted-composite verdict (C10) — end-to-end through the runner + scoring
+# --------------------------------------------------------------------------- #
+
+
+def test_weighted_verdict_e2e_threads_composite_into_report(tmp_path: Path) -> None:
+    """End-to-end: weighted ``[verdict]`` populates ``report.verdict_score`` + ``passed``."""
+    from coding_agent_playbook.evals.judge import StubJudge
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    task = _make_task(
+        task_dir,
+        gate=_cc_gate(),
+        rubric=_judged_rubric("clarity"),
+        verdict_block={"weights": {"gate": 0.4, "rubric": 0.6}, "fail": 0.7},
+    )
+
+    runner = FakeRunner(write_files({"mod.py": _REFACTORED}))
+    # gate's CC clears -> layer mean 1.0; judge gives rubric composite 0.9.
+    # verdict_score = 0.4*1.0 + 0.6*0.9 = 0.94 >= 0.7 -> pass.
+    result = runner.run_task(task, tmp_path / "scratch", judge=StubJudge({"clarity": 0.9}))
+    assert result.report.verdict_score is not None
+    assert result.report.verdict_score == pytest.approx(0.94)
+    assert result.passed is True
+
+
+def test_weighted_verdict_e2e_below_threshold_fails(tmp_path: Path) -> None:
+    """A weighted composite landing below ``fail`` fails the trial."""
+    from coding_agent_playbook.evals.judge import StubJudge
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    task = _make_task(
+        task_dir,
+        gate=_cc_gate(),
+        rubric=_judged_rubric("clarity"),
+        verdict_block={"weights": {"gate": 0.4, "rubric": 0.6}, "fail": 0.7},
+    )
+
+    runner = FakeRunner(write_files({"mod.py": _REFACTORED}))
+    # gate ok -> 1.0; judge gives rubric composite 0.2.
+    # verdict_score = 0.4*1.0 + 0.6*0.2 = 0.52 < 0.7 -> fail.
+    result = runner.run_task(task, tmp_path / "scratch", judge=StubJudge({"clarity": 0.2}))
+    assert result.report.verdict_score == pytest.approx(0.52)
+    assert result.passed is False
+
+
+def test_weighted_verdict_deterministic_only_renormalizes_skipped_rubric(
+    tmp_path: Path,
+) -> None:
+    """With no judge, the rubric layer skips and gate's weight renormalizes to 1.0."""
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    task = _make_task(
+        task_dir,
+        gate=_cc_gate(),
+        rubric=_judged_rubric("clarity"),
+        verdict_block={"weights": {"gate": 0.4, "rubric": 0.6}, "fail": 0.7},
+    )
+
+    # No judge -> rubric layer skipped. gate score is 1.0 (CC cleared).
+    # Renormalized: only gate contributes -> verdict_score = 1.0 -> pass.
+    runner = FakeRunner(write_files({"mod.py": _REFACTORED}))
+    result = runner.run_task(task, tmp_path / "scratch")
+    assert result.report.verdict_score == pytest.approx(1.0)
+    assert result.passed is True
+
+
+def test_boolean_verdict_leaves_verdict_score_none(tmp_path: Path) -> None:
+    """Boolean-mode verdict (today): ``report.verdict_score`` stays ``None``."""
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    task = _make_task(task_dir, gate=_cc_gate())
+
+    result = FakeRunner(write_files({"mod.py": _REFACTORED})).run_task(task, tmp_path / "scratch")
+    assert result.report.verdict_score is None
+    assert result.passed is True

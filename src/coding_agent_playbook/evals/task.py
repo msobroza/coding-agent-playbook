@@ -30,10 +30,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals._compile import CompiledTask
+
+#: Tolerance for the weighted-verdict ``weights`` sum check (parity with the
+#: rubric-group sum rule in :mod:`coding_agent_playbook.evals._handles`).
+_WEIGHT_SUM_TOLERANCE = 1e-3
 
 
 @dataclass
@@ -79,6 +83,27 @@ class Layer:
 _DEFAULT_VERDICT = "gate and rubric"
 
 
+@dataclass(frozen=True)
+class Verdict:
+    """Parsed ``[verdict]`` block: a boolean ``trial`` expr OR a weighted composite.
+
+    Mutually exclusive: a task authors **either** the boolean form
+    (``trial = "gate and rubric"``, the legacy and default mode) **or** the
+    weighted-composite form (``weights = {gate = 0.4, rubric = 0.6}, fail = 0.7``);
+    setting both is a :exc:`ValueError`. In the boolean form ``trial`` is the
+    expression string and ``weights`` / ``fail`` / ``warn`` are ``None``; in the
+    weighted form ``weights`` is non-empty and sums to ``1.0`` (±1e-3), ``fail``
+    is a ``0-1`` cutoff on the composite, ``warn`` is optional, and ``trial`` is
+    ``None``.
+    """
+
+    mode: Literal["boolean", "weighted"]
+    trial: str | None = None
+    weights: dict[str, float] | None = None
+    fail: float | None = None
+    warn: float | None = None
+
+
 @dataclass
 class EvalTask:
     """A single eval task. Mirrors the on-disk ``eval_tasks/<id>/task.toml``.
@@ -90,8 +115,10 @@ class EvalTask:
     task back to its layer.
 
     ``gate``/``rubric``/``aggregate`` are the parsed :class:`Layer` blocks (``None``
-    when absent); ``verdict`` is the ``[verdict].trial`` expression. A task must
-    carry at least one of ``[gate]`` / ``[rubric]`` (enforced at compile time).
+    when absent); ``verdict`` is the parsed :class:`Verdict` (the boolean
+    ``trial`` expression - the default - or the weighted-composite
+    ``weights`` / ``fail`` form). A task must carry at least one of
+    ``[gate]`` / ``[rubric]`` (enforced at compile time).
     """
 
     id: str
@@ -104,7 +131,9 @@ class EvalTask:
     invocation: TaskInvocation = field(default_factory=TaskInvocation)
     gate: Layer | None = None
     rubric: Layer | None = None
-    verdict: str = _DEFAULT_VERDICT
+    verdict: Verdict = field(
+        default_factory=lambda: Verdict(mode="boolean", trial=_DEFAULT_VERDICT)
+    )
     aggregate: Layer | None = None
 
     @classmethod
@@ -199,7 +228,10 @@ def compile_eval_task(task: EvalTask) -> CompiledTask:
         gate_expr=task.gate.expr if task.gate is not None else None,
         rubric_bind=task.rubric.bind if task.rubric is not None else None,
         rubric_expr=task.rubric.expr if task.rubric is not None else None,
-        verdict_trial=task.verdict,
+        verdict_trial=task.verdict.trial,
+        verdict_weights=task.verdict.weights,
+        verdict_fail=task.verdict.fail,
+        verdict_warn=task.verdict.warn,
         aggregate_bind=task.aggregate.bind if task.aggregate is not None else None,
         aggregate_expr=task.aggregate.expr if task.aggregate is not None else None,
         name=task.id,
@@ -288,19 +320,88 @@ def _parse_layer(raw: Any, *, block: str) -> Layer:
     return Layer(bind=bind, expr=expr_raw)
 
 
-def _parse_verdict(raw: Any) -> str:
-    """Parse the ``[verdict]`` block into the trial expression string.
+def _parse_verdict(raw: Any) -> Verdict:
+    """Parse the ``[verdict]`` block into a :class:`Verdict` (boolean or weighted).
 
-    ``[verdict].trial`` defaults to ``"gate and rubric"`` when the block (or its
-    ``trial`` key) is absent. Only the type is enforced here; the compiler checks
-    that the expression's identifiers name present layers.
+    Two mutually-exclusive forms:
+
+    * **Boolean** (the legacy/default): ``trial = "<expr>"`` over the layer names
+      (default ``"gate and rubric"`` when ``raw`` is empty or only ``trial`` is
+      present). ``weights`` / ``fail`` / ``warn`` must be absent.
+    * **Weighted** (C10): ``weights = {gate = …, rubric = …}, fail = 0.7``
+      (``warn`` optional). ``weights`` must be a non-empty ``{str: number}`` dict
+      summing to ``1.0`` (±1e-3); ``fail`` (and ``warn``) must be ``0-1``
+      floats; ``trial`` must be absent.
+
+    Authoring both ``trial`` and ``weights`` is a :exc:`ValueError`. Only
+    structural shape is enforced here - the compiler validates that ``weights``
+    keys name *present* layers.
     """
     if not isinstance(raw, dict):
         raise ValueError(f"[verdict] must be a table, got {type(raw).__name__}")
+
+    has_trial = "trial" in raw
+    has_weights = "weights" in raw
+    if has_trial and has_weights:
+        raise ValueError("[verdict] cannot set both 'trial' and 'weights'")
+
+    if has_weights:
+        return _parse_weighted_verdict(raw)
+    # Boolean form (default / explicit `trial = …`).
     trial = raw.get("trial", _DEFAULT_VERDICT)
     if not isinstance(trial, str):
         raise ValueError(f"[verdict].trial must be str, got {type(trial).__name__}")
-    return trial
+    return Verdict(mode="boolean", trial=trial)
+
+
+def _parse_weighted_verdict(raw: dict[str, Any]) -> Verdict:
+    """Parse the weighted-composite form of ``[verdict]`` into a :class:`Verdict`.
+
+    Enforces: ``weights`` is a non-empty ``{str: number}`` dict, the values sum
+    to ``1.0`` within ``_WEIGHT_SUM_TOLERANCE``; ``fail`` is required and is a
+    ``0-1`` float; ``warn`` is optional and a ``0-1`` float. Compile-time
+    validates that the keys are a subset of the present layers.
+    """
+    weights_raw = raw["weights"]
+    if not isinstance(weights_raw, dict):
+        raise ValueError(f"[verdict].weights must be a table, got {type(weights_raw).__name__}")
+    if not weights_raw:
+        raise ValueError("[verdict].weights must be non-empty")
+    weights: dict[str, float] = {}
+    for key, value in weights_raw.items():
+        if not isinstance(key, str):
+            raise ValueError(f"[verdict].weights keys must be str, got {type(key).__name__}")
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(
+                f"[verdict].weights[{key!r}] must be a number, got {type(value).__name__}"
+            )
+        weights[key] = float(value)
+
+    total = sum(weights.values())
+    if abs(total - 1.0) > _WEIGHT_SUM_TOLERANCE:
+        raise ValueError(
+            f"[verdict].weights must sum to 1.0 (got {total!r}; tolerance ±{_WEIGHT_SUM_TOLERANCE})"
+        )
+
+    if "fail" not in raw:
+        raise ValueError("[verdict] weighted form requires 'fail'")
+    fail = _parse_zero_one(raw["fail"], field_name="[verdict].fail")
+
+    warn: float | None = None
+    if "warn" in raw:
+        warn = _parse_zero_one(raw["warn"], field_name="[verdict].warn")
+
+    return Verdict(mode="weighted", weights=weights, fail=fail, warn=warn)
+
+
+def _parse_zero_one(value: Any, *, field_name: str) -> float:
+    """Coerce ``value`` to a ``0-1`` float (raises :exc:`ValueError` otherwise)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field_name} must be a number, got {type(value).__name__}")
+    out = float(value)
+    if not (0.0 <= out <= 1.0):
+        raise ValueError(f"{field_name} must be in [0.0, 1.0], got {out!r}")
+    return out
 
 
 __all__ = [
@@ -308,5 +409,6 @@ __all__ = [
     "Layer",
     "TaskInvocation",
     "TaskSetup",
+    "Verdict",
     "compile_eval_task",
 ]

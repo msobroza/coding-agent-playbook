@@ -38,7 +38,7 @@ multi-trial ``[aggregate]`` layer (the ``over`` selector flows through
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from coding_agent_playbook.evals._expr import (
     And,
@@ -57,13 +57,41 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from coding_agent_playbook.evaluators.check import Check
-    from coding_agent_playbook.evaluators.types import EvaluationReport
+    from coding_agent_playbook.evaluators.types import CheckResult, EvaluationReport
 
 #: The default ``[verdict].trial`` expression: both layers must pass.
 _DEFAULT_VERDICT = "gate and rubric"
 
 #: The two layer ids a compiled task may expose (verdict names are a subset).
 _LAYER_IDS = ("gate", "rubric")
+
+#: Tolerance for the weighted-verdict ``weights`` sum check (parity with the
+#: rubric-group sum rule + ``[verdict].weights`` parser).
+_WEIGHT_SUM_TOLERANCE = 1e-3
+
+
+@dataclass(frozen=True)
+class VerdictSpec:
+    """The compiled ``[verdict]``: a boolean expr OR a weighted composite (C10).
+
+    Mutually exclusive forms (mirrors :class:`~coding_agent_playbook.evals.task.Verdict`):
+
+    * ``mode == "boolean"`` — :attr:`ast` is the parsed ``[verdict].trial``
+      expression and is folded by :func:`verdict_passed` over the layer
+      :class:`~coding_agent_playbook.evaluators.types.CheckResult` results
+      (skipped-neutral); :attr:`weights` / :attr:`fail` / :attr:`warn` are
+      ``None``.
+    * ``mode == "weighted"`` — :attr:`weights` is the validated layer-name to
+      weight map (subset of present layers, sums to ``1.0`` ±1e-3), :attr:`fail`
+      is the ``0-1`` composite cutoff (``passed = score >= fail``), :attr:`warn`
+      is optional, and :attr:`ast` is unused (a placeholder for the dataclass).
+    """
+
+    mode: Literal["boolean", "weighted"]
+    ast: Node
+    weights: dict[str, float] | None = None
+    fail: float | None = None
+    warn: float | None = None
 
 
 @dataclass(frozen=True)
@@ -73,10 +101,13 @@ class CompiledTask:
     :attr:`per_trial` is the :class:`~coding_agent_playbook.evaluators.rubric.Rubric`
     carrying the present layer checks (``id="gate"`` and/or ``id="rubric"``, in
     that order); a single ``Rubric.evaluate`` runs each layer once.
-    :attr:`verdict_ast` is the parsed ``[verdict].trial`` expression, evaluated
-    by :func:`verdict_passed` over the two layers' ``passed`` results into the
-    single trial verdict. :attr:`layers` is the frozenset of present layer ids
-    (a subset of ``{"gate", "rubric"}``).
+    :attr:`verdict_spec` is the compiled :class:`VerdictSpec` - either the
+    boolean ``[verdict].trial`` (folded by :func:`verdict_passed` over the two
+    layers' ``passed`` results) or a weighted composite (folded by
+    :func:`weighted_verdict` over the layers' 0-1 scores). :attr:`verdict_ast`
+    is a convenience alias for ``verdict_spec.ast`` (the boolean-mode AST).
+    :attr:`layers` is the frozenset of present layer ids (a subset of
+    ``{"gate", "rubric"}``).
 
     :attr:`aggregate` is the compiled ``[aggregate]`` layer - one composed
     :class:`~coding_agent_playbook.evaluators.check.Check` over the
@@ -88,10 +119,15 @@ class CompiledTask:
     """
 
     per_trial: Rubric
-    verdict_ast: Node
+    verdict_spec: VerdictSpec
     layers: frozenset[str]
     aggregate: Check | None = None
     trials_needed: int = 1
+
+    @property
+    def verdict_ast(self) -> Node:
+        """The boolean-mode verdict AST (convenience alias for ``verdict_spec.ast``)."""
+        return self.verdict_spec.ast
 
 
 def _compile_layer(
@@ -140,7 +176,10 @@ def compile_task(
     gate_expr: str | None = None,
     rubric_bind: Mapping[str, Mapping[str, Any]] | None = None,
     rubric_expr: str | None = None,
-    verdict_trial: str = _DEFAULT_VERDICT,
+    verdict_trial: str | None = None,
+    verdict_weights: Mapping[str, float] | None = None,
+    verdict_fail: float | None = None,
+    verdict_warn: float | None = None,
     aggregate_bind: Mapping[str, Mapping[str, Any]] | None = None,
     aggregate_expr: str | None = None,
     name: str = "task",
@@ -151,9 +190,17 @@ def compile_task(
     ``None`` when its block is absent), assembles the present ones - in
     ``gate, rubric`` order - into the per-trial
     :class:`~coding_agent_playbook.evaluators.rubric.Rubric` named ``name``, and
-    parses ``verdict_trial`` into the verdict AST. Raises :exc:`ValueError` when
-    **no** layer is present, or when ``verdict_trial`` references a layer that is
-    absent (e.g. the default ``"gate and rubric"`` on a gate-only task).
+    compiles the verdict spec (boolean ``verdict_trial`` OR weighted
+    ``verdict_weights`` / ``verdict_fail`` / ``verdict_warn`` - mutually
+    exclusive). Raises :exc:`ValueError` when **no** layer is present, when the
+    boolean ``verdict_trial`` references a layer that is absent (e.g. the default
+    ``"gate and rubric"`` on a gate-only task), or when the weighted
+    ``verdict_weights`` keys are not a subset of the present layers / fail to sum
+    to ``1.0`` / no ``verdict_fail`` cutoff is provided.
+
+    Passing **both** ``verdict_trial`` (or its default) and ``verdict_weights``
+    is a :exc:`ValueError` (the two modes are mutually exclusive); passing
+    neither defaults to the boolean ``"gate and rubric"``.
 
     The ``[aggregate]`` layer is compiled the same way as gate/rubric - its bind
     table builds
@@ -176,26 +223,88 @@ def compile_task(
     if not checks:
         raise ValueError("a task must have at least one of [gate] / [rubric]")
 
-    verdict_ast = parse(verdict_trial)
-    referenced = names(verdict_trial)
-    unknown = referenced - present
-    if unknown:
-        missing = sorted(unknown)[0]
-        raise ValueError(
-            f"[verdict].trial references {missing!r} but there is no "
-            f"[{missing}] block (present layers: {sorted(present)})"
-        )
+    verdict_spec = _compile_verdict(
+        verdict_trial=verdict_trial,
+        verdict_weights=verdict_weights,
+        verdict_fail=verdict_fail,
+        verdict_warn=verdict_warn,
+        present=present,
+    )
 
     aggregate, trials_needed = _compile_aggregate(aggregate_bind, aggregate_expr)
 
     per_trial = Rubric(checks, name=name)
     return CompiledTask(
         per_trial=per_trial,
-        verdict_ast=verdict_ast,
+        verdict_spec=verdict_spec,
         layers=present,
         aggregate=aggregate,
         trials_needed=trials_needed,
     )
+
+
+def _compile_verdict(
+    *,
+    verdict_trial: str | None,
+    verdict_weights: Mapping[str, float] | None,
+    verdict_fail: float | None,
+    verdict_warn: float | None,
+    present: frozenset[str],
+) -> VerdictSpec:
+    """Compile the verdict knobs into a :class:`VerdictSpec` (validated).
+
+    Mutual exclusion: ``verdict_trial`` (or its absence -> default) and
+    ``verdict_weights`` are the two modes; passing both is a :exc:`ValueError`.
+    The weighted form additionally validates: ``verdict_weights`` is non-empty,
+    its keys ⊆ ``present`` layers, the values sum to ``1.0`` (±1e-3), and
+    ``verdict_fail`` is provided.
+    """
+    has_trial = verdict_trial is not None
+    has_weights = verdict_weights is not None
+    if has_trial and has_weights:
+        raise ValueError("[verdict] cannot set both 'trial' and 'weights'")
+
+    if has_weights:
+        assert verdict_weights is not None
+        if not verdict_weights:
+            raise ValueError("[verdict].weights must be non-empty")
+        weights = {str(k): float(v) for k, v in verdict_weights.items()}
+        total = sum(weights.values())
+        if abs(total - 1.0) > _WEIGHT_SUM_TOLERANCE:
+            raise ValueError(
+                f"[verdict].weights must sum to 1.0 (got {total!r}; "
+                f"tolerance ±{_WEIGHT_SUM_TOLERANCE})"
+            )
+        unknown = set(weights) - present
+        if unknown:
+            raise ValueError(
+                f"[verdict].weights references unknown layer(s) "
+                f"{sorted(unknown)!r}; present: {sorted(present)}"
+            )
+        if verdict_fail is None:
+            raise ValueError("[verdict] weighted form requires 'fail'")
+        # Parse() needs *some* AST so the dataclass field is non-None; the
+        # weighted-mode resolver never reads it.
+        return VerdictSpec(
+            mode="weighted",
+            ast=parse(_DEFAULT_VERDICT),
+            weights=weights,
+            fail=float(verdict_fail),
+            warn=float(verdict_warn) if verdict_warn is not None else None,
+        )
+
+    # Boolean form (default / explicit `trial = …`).
+    trial = verdict_trial if verdict_trial is not None else _DEFAULT_VERDICT
+    verdict_ast = parse(trial)
+    referenced = names(trial)
+    unknown_idents = referenced - present
+    if unknown_idents:
+        missing = sorted(unknown_idents)[0]
+        raise ValueError(
+            f"[verdict].trial references {missing!r} but there is no "
+            f"[{missing}] block (present layers: {sorted(present)})"
+        )
+    return VerdictSpec(mode="boolean", ast=verdict_ast)
 
 
 def _compile_aggregate(
@@ -307,6 +416,133 @@ def _eval_neutral(node: Node, env: Mapping[str, bool | None]) -> bool | None:
     return any(voting)
 
 
+def weighted_verdict(
+    report: EvaluationReport,
+    spec: VerdictSpec,
+) -> tuple[float | None, bool]:
+    """Derive the weighted-composite verdict (score, passed) from ``report``.
+
+    Walks ``report.checks`` for each layer in ``spec.weights``, dropping any
+    that the per-trial rubric recorded as ``status="skipped"`` (or are missing
+    from the report entirely - should not happen since the compiler validated
+    layer presence). The remaining layers' weights are *renormalized* to sum to
+    ``1.0``, each layer's ``0-1`` score is derived via :func:`_layer_score`, and
+    the composite is the weighted sum ``Σ(w_i · score_i)``. ``passed`` is
+    ``composite >= spec.fail`` (strict-below the cutoff fails - parity with the
+    higher-is-better convention everywhere else).
+
+    If **every** referenced layer is skipped the composite cannot be computed:
+    returns ``(None, True)`` (vacuously passing, mirroring the skipped-neutral
+    semantics of :func:`verdict_passed`).
+    """
+    if spec.mode != "weighted":
+        raise ValueError(f"weighted_verdict called on a {spec.mode!r}-mode VerdictSpec")
+    assert spec.weights is not None  # narrowed by the mode check above.
+    assert spec.fail is not None
+
+    layer_results: dict[str, CheckResult] = {c.check_id: c for c in report.checks}
+    contributions: list[tuple[float, float]] = []  # (weight, score)
+    for layer_id, weight in spec.weights.items():
+        result = layer_results.get(layer_id)
+        if result is None or result.status != "run":
+            continue  # skipped or missing -> renormalize over the rest.
+        score = _layer_score(result)
+        if score is None:
+            # The layer ran (as a wrapping composer) but produced no real score
+            # — e.g. its only inner check skipped (a dormant judged rubric layer).
+            # Treat as effectively skipped: exclude + renormalize.
+            continue
+        contributions.append((weight, score))
+
+    if not contributions:
+        return (None, True)  # all referenced layers skipped -> vacuous pass.
+
+    total_weight = sum(w for w, _ in contributions)
+    if total_weight <= 0:
+        return (None, True)  # defensive: no positive weight contributes.
+    composite = sum(w * s for w, s in contributions) / total_weight
+    passed = composite >= spec.fail
+    return (composite, passed)
+
+
+def _layer_score(layer_result: CheckResult) -> float | None:
+    """A single ``0-1`` score for one verdict layer's :class:`CheckResult`.
+
+    Two paths, in order:
+
+    1. ``layer_result.score`` itself when it is a finite ``0-1`` float and the
+       result is a *true* leaf (subresults are scope-details, not nested
+       CheckResults) - the rubric layer's path when its inner ThresholdCheck is
+       the layer's "score" leaf already. Boolean composers like :class:`AllOf`
+       set ``score=1.0/0.0`` from ``passed``; those don't qualify and reduce to
+       the mean-of-leaves path below.
+    2. Mean of leaf-:class:`CheckResult` scores under ``layer_result.subresults``,
+       recursing through nested composing checks. A "leaf" is a CheckResult whose
+       ``subresults`` are all :class:`~coding_agent_playbook.evaluators.types.ScopeDetail`
+       rows (or empty). Skipped leaves contribute nothing.
+
+    Returns ``None`` when no leaf contributed a score - the layer ran (as a
+    composer) but has no real score (e.g. a rubric layer whose inner judged
+    threshold was skipped). :func:`weighted_verdict` treats ``None`` as
+    effectively-skipped and renormalizes over the rest.
+    """
+    own_score = layer_result.score
+    if own_score is not None and 0.0 <= own_score <= 1.0 and not _is_boolean_score(layer_result):
+        return own_score
+    return _mean_leaf_scores(layer_result)
+
+
+def _is_boolean_score(result: CheckResult) -> bool:
+    """Whether ``result.score`` is a pure boolean-collapsed ``1.0``/``0.0``.
+
+    The boolean composers (:class:`AllOf` / :class:`AnyOf` / :class:`Not`) set
+    ``score = 1.0 if passed else 0.0`` from their verdict - the score does not
+    carry partial-credit information. A leaf metric check (``ThresholdCheck`` /
+    ``NonRegressionCheck``) sets ``score`` to the mean per-scope normalized
+    score, which is rarely *exactly* ``0.0``/``1.0`` but may legitimately be -
+    so we also peek at the structure: a composer has nested
+    :class:`CheckResult` subresults, a leaf has :class:`ScopeDetail` (or empty).
+    """
+    from coding_agent_playbook.evaluators.types import CheckResult as _CR
+
+    if not result.subresults:
+        return False
+    return all(isinstance(sub, _CR) for sub in result.subresults)
+
+
+def _mean_leaf_scores(layer_result: CheckResult) -> float | None:
+    """Equal-weight mean of leaf-CheckResult scores recursed under ``layer_result``.
+
+    A "leaf" is a CheckResult whose subresults are all :class:`ScopeDetail` rows
+    (or empty) - the deterministic file/threshold checks and judge checks. A
+    composer (``AllOf`` / ``AnyOf`` / ``Not`` / nested ``Rubric``) is descended
+    via its ``CheckResult`` subresults. Skipped leaves are dropped. Returns
+    ``None`` when no leaf contributed - the caller (:func:`_layer_score` /
+    :func:`weighted_verdict`) treats that as effectively-skipped.
+    """
+    from coding_agent_playbook.evaluators.types import CheckResult as _CR
+
+    scores: list[float] = []
+
+    def _walk(result: CheckResult) -> None:
+        if result.status != "run":
+            return
+        nested = [sub for sub in result.subresults if isinstance(sub, _CR)]
+        if nested:
+            # A composing check (boolean composer or a nested rubric); descend.
+            for child in nested:
+                _walk(child)
+            return
+        # A leaf: collect its own score if any.
+        if result.score is not None:
+            scores.append(result.score)
+
+    _walk(layer_result)
+    if not scores:
+        return None
+    return sum(scores) / len(scores)
+
+
 def over_boolean(over: str, report: EvaluationReport, verdict: bool) -> bool:
     """Select the boolean an aggregate ``over`` axis reduces, for one trial.
 
@@ -331,7 +567,9 @@ def over_boolean(over: str, report: EvaluationReport, verdict: bool) -> bool:
 
 __all__ = [
     "CompiledTask",
+    "VerdictSpec",
     "compile_task",
     "over_boolean",
     "verdict_passed",
+    "weighted_verdict",
 ]

@@ -23,6 +23,7 @@ import pytest
 
 from coding_agent_playbook.evals._compile import (
     CompiledTask,
+    VerdictSpec,
     compile_task,
     over_boolean,
     verdict_passed,
@@ -102,6 +103,7 @@ def test_compile_task_default_verdict_is_gate_and_rubric() -> None:
         rubric_expr="quality",
     )
     # default verdict "gate and rubric" => both layers required for the trial.
+    assert compiled.verdict_spec.mode == "boolean"
     assert (
         verdict_passed(
             _report(_result("gate", passed=True), _result("rubric", passed=True)),
@@ -116,6 +118,87 @@ def test_compile_task_default_verdict_is_gate_and_rubric() -> None:
         )
         is False
     )
+
+
+# --------------------------------------------------------------------------- #
+# compile_task: weighted-verdict spec (C10)
+# --------------------------------------------------------------------------- #
+
+
+def test_compile_task_with_weighted_verdict_builds_a_weighted_spec() -> None:
+    compiled = compile_task(
+        gate_bind=_GATE_BIND,
+        gate_expr="build",
+        rubric_bind=_RUBRIC_BIND,
+        rubric_expr="quality",
+        verdict_weights={"gate": 0.4, "rubric": 0.6},
+        verdict_fail=0.7,
+        verdict_warn=0.85,
+    )
+    assert isinstance(compiled.verdict_spec, VerdictSpec)
+    assert compiled.verdict_spec.mode == "weighted"
+    assert compiled.verdict_spec.weights == {"gate": 0.4, "rubric": 0.6}
+    assert compiled.verdict_spec.fail == 0.7
+    assert compiled.verdict_spec.warn == 0.85
+
+
+def test_compile_task_boolean_verdict_spec_keeps_today_shape() -> None:
+    compiled = compile_task(
+        gate_bind=_GATE_BIND,
+        gate_expr="build",
+        verdict_trial="gate",
+    )
+    assert compiled.verdict_spec.mode == "boolean"
+    assert compiled.verdict_spec.weights is None
+    assert compiled.verdict_spec.fail is None
+
+
+def test_compile_task_rejects_both_trial_and_weights() -> None:
+    with pytest.raises(ValueError, match="cannot set both"):
+        compile_task(
+            gate_bind=_GATE_BIND,
+            gate_expr="build",
+            rubric_bind=_RUBRIC_BIND,
+            rubric_expr="quality",
+            verdict_trial="gate and rubric",
+            verdict_weights={"gate": 0.4, "rubric": 0.6},
+            verdict_fail=0.5,
+        )
+
+
+def test_compile_task_rejects_unknown_layer_in_weights() -> None:
+    """Weighted weights must be a subset of the present layers."""
+    with pytest.raises(ValueError, match="unknown layer"):
+        compile_task(
+            gate_bind=_GATE_BIND,
+            gate_expr="build",
+            # No [rubric], yet weights mention it.
+            verdict_weights={"gate": 0.4, "rubric": 0.6},
+            verdict_fail=0.5,
+        )
+
+
+def test_compile_task_rejects_weights_not_summing_to_one() -> None:
+    with pytest.raises(ValueError, match=r"sum to 1\.0"):
+        compile_task(
+            gate_bind=_GATE_BIND,
+            gate_expr="build",
+            rubric_bind=_RUBRIC_BIND,
+            rubric_expr="quality",
+            verdict_weights={"gate": 0.3, "rubric": 0.5},
+            verdict_fail=0.5,
+        )
+
+
+def test_compile_task_rejects_weighted_without_fail() -> None:
+    with pytest.raises(ValueError, match="requires 'fail'"):
+        compile_task(
+            gate_bind=_GATE_BIND,
+            gate_expr="build",
+            rubric_bind=_RUBRIC_BIND,
+            rubric_expr="quality",
+            verdict_weights={"gate": 0.4, "rubric": 0.6},
+        )
 
 
 # --------------------------------------------------------------------------- #

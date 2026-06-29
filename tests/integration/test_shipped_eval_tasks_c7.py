@@ -27,6 +27,7 @@ from coding_agent_playbook.evals.loader import (
 )
 from coding_agent_playbook.evals.runner import capture, materialize
 from coding_agent_playbook.evals.scoring import score
+from coding_agent_playbook.evals.task import Verdict
 from coding_agent_playbook.evals.validator import validate_tasks
 from coding_agent_playbook.types import Prompt
 
@@ -64,7 +65,7 @@ def test_every_shipped_task_compiles_to_gate_and_rubric_layers() -> None:
         # Every shipped task migrated to a gate + rubric pair, verdict gate and rubric.
         assert compiled.layers == frozenset({"gate", "rubric"})
         assert [c.id for c in compiled.per_trial.checks] == ["gate", "rubric"]
-        assert task.verdict == "gate and rubric"
+        assert task.verdict == Verdict(mode="boolean", trial="gate and rubric")
 
 
 def test_shipped_tasks_validate_clean() -> None:

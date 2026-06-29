@@ -10,7 +10,7 @@ from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
 )
-from coding_agent_playbook.evals.task import EvalTask
+from coding_agent_playbook.evals.task import EvalTask, Verdict
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -69,7 +69,7 @@ def test_load_eval_task_from_dir_parses_well_formed_task(tmp_path: Path) -> None
     assert task.gate is not None
     assert task.rubric is not None
     assert set(task.gate.bind) == {"created", "contains", "unchanged"}
-    assert task.verdict == "gate and rubric"
+    assert task.verdict == Verdict(mode="boolean", trial="gate and rubric")
     # The loaded task compiles cleanly into the two named layer checks.
     compiled = task.compiled()
     assert [c.id for c in compiled.per_trial.checks] == ["gate", "rubric"]

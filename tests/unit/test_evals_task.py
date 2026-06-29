@@ -12,6 +12,7 @@ from coding_agent_playbook.evals.task import (
     Layer,
     TaskInvocation,
     TaskSetup,
+    Verdict,
     compile_eval_task,
 )
 
@@ -96,7 +97,7 @@ def test_eval_task_from_dict_parses_minimal_task(tmp_path: Path) -> None:
     assert task.gate is None
     assert task.rubric is None
     assert task.aggregate is None
-    assert task.verdict == "gate and rubric"
+    assert task.verdict == Verdict(mode="boolean", trial="gate and rubric")
 
 
 def test_eval_task_from_dict_parses_full_task(tmp_path: Path) -> None:
@@ -122,7 +123,7 @@ def test_eval_task_from_dict_parses_full_task(tmp_path: Path) -> None:
     assert task.rubric.bind["quality"]["fail"] == 0.5
     assert len(task.rubric.bind["quality"]["rubric"]) == 4
 
-    assert task.verdict == "gate and rubric"
+    assert task.verdict == Verdict(mode="boolean", trial="gate and rubric")
 
 
 def test_eval_task_from_dict_rejects_missing_id(tmp_path: Path) -> None:
@@ -182,7 +183,7 @@ def test_verdict_trial_parses(tmp_path: Path) -> None:
     data["gate"] = {"bind": {"a": {"check": "file_exists", "path": "x.py"}}}
     data["verdict"] = {"trial": "gate"}
     task = _make(data, tmp_path)
-    assert task.verdict == "gate"
+    assert task.verdict == Verdict(mode="boolean", trial="gate")
 
 
 def test_aggregate_parses_bind_and_expr(tmp_path: Path) -> None:
@@ -264,4 +265,94 @@ def test_compile_raises_on_unknown_check(tmp_path: Path) -> None:
     data["verdict"] = {"trial": "gate"}
     task = _make(data, tmp_path)
     with pytest.raises(KeyError):
+        compile_eval_task(task)
+
+
+# --- C10: weighted-composite verdict parsing + compile-time guards -----------
+
+
+def _weighted_layers_data() -> dict[str, Any]:
+    """A task with both layers present so a weighted-verdict tests have a valid base."""
+    data = _minimal_dict()
+    data["gate"] = {"bind": {"a": {"check": "file_exists", "path": "x.py"}}}
+    data["rubric"] = {
+        "bind": {
+            "q": {
+                "fail": 0.5,
+                "rubric": [{"judge": "c", "weight": 1.0}],
+            }
+        }
+    }
+    return data
+
+
+def test_verdict_weighted_form_parses(tmp_path: Path) -> None:
+    data = _weighted_layers_data()
+    data["verdict"] = {"weights": {"gate": 0.4, "rubric": 0.6}, "fail": 0.7}
+    task = _make(data, tmp_path)
+    assert task.verdict.mode == "weighted"
+    assert task.verdict.trial is None
+    assert task.verdict.weights == {"gate": 0.4, "rubric": 0.6}
+    assert task.verdict.fail == 0.7
+    assert task.verdict.warn is None
+
+
+def test_verdict_weighted_form_with_warn_parses(tmp_path: Path) -> None:
+    data = _weighted_layers_data()
+    data["verdict"] = {
+        "weights": {"gate": 0.4, "rubric": 0.6},
+        "fail": 0.5,
+        "warn": 0.8,
+    }
+    task = _make(data, tmp_path)
+    assert task.verdict.warn == 0.8
+
+
+def test_verdict_weighted_form_rejects_trial_alongside_weights(tmp_path: Path) -> None:
+    data = _weighted_layers_data()
+    data["verdict"] = {
+        "trial": "gate and rubric",
+        "weights": {"gate": 0.4, "rubric": 0.6},
+        "fail": 0.5,
+    }
+    with pytest.raises(ValueError, match="cannot set both"):
+        _make(data, tmp_path)
+
+
+def test_verdict_weighted_form_rejects_weights_not_summing_to_one(tmp_path: Path) -> None:
+    data = _weighted_layers_data()
+    data["verdict"] = {"weights": {"gate": 0.3, "rubric": 0.5}, "fail": 0.5}
+    with pytest.raises(ValueError, match=r"sum to 1\.0"):
+        _make(data, tmp_path)
+
+
+def test_verdict_weighted_form_requires_fail(tmp_path: Path) -> None:
+    data = _weighted_layers_data()
+    data["verdict"] = {"weights": {"gate": 0.4, "rubric": 0.6}}
+    with pytest.raises(ValueError, match="requires 'fail'"):
+        _make(data, tmp_path)
+
+
+def test_verdict_weighted_form_rejects_empty_weights(tmp_path: Path) -> None:
+    data = _weighted_layers_data()
+    data["verdict"] = {"weights": {}, "fail": 0.5}
+    with pytest.raises(ValueError, match="non-empty"):
+        _make(data, tmp_path)
+
+
+def test_verdict_weighted_form_rejects_fail_out_of_range(tmp_path: Path) -> None:
+    data = _weighted_layers_data()
+    data["verdict"] = {"weights": {"gate": 0.4, "rubric": 0.6}, "fail": 1.5}
+    with pytest.raises(ValueError, match=r"\[0.0, 1.0\]"):
+        _make(data, tmp_path)
+
+
+def test_compile_raises_on_unknown_layer_in_weights(tmp_path: Path) -> None:
+    """Weights referencing a non-present layer is caught at compile time."""
+    data = _minimal_dict()
+    data["gate"] = {"bind": {"a": {"check": "file_exists", "path": "x.py"}}}
+    # No [rubric], yet weights mention it.
+    data["verdict"] = {"weights": {"gate": 0.4, "rubric": 0.6}, "fail": 0.5}
+    task = _make(data, tmp_path)
+    with pytest.raises(ValueError, match="unknown layer"):
         compile_eval_task(task)
