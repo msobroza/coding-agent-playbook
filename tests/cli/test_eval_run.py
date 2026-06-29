@@ -330,17 +330,15 @@ def test_run_failing_gate_exits_1(
             files = ["mod.py"]
             python_version = "3.12"
 
-            [expected]
-            files_unchanged = ["mod.py"]
+            [gate]
+            expr = "unchanged and cc"
 
-            [metrics]
-            mode = "regression"
+            [gate.bind]
+            unchanged = { check = "file_unchanged", path = "mod.py" }
+            cc = { check = "non_regression", metric = "cyclomatic_complexity", warn = 0.5, fail = 0.25 }
 
-            [metrics.regression]
-            cyclomatic_complexity = { max_worsening = 0.0 }
-
-            [metrics.thresholds]
-            cyclomatic_complexity = { warn = 3.0, fail = 5.0 }
+            [verdict]
+            trial = "gate"
             """
         ),
         encoding="utf-8",

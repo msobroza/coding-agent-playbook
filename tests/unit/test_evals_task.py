@@ -1,4 +1,4 @@
-"""Tests for ``coding_agent_playbook.evals.task`` dataclasses (SPEC §15.2)."""
+"""Tests for ``coding_agent_playbook.evals.task`` dataclasses (C7 schema)."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ import pytest
 
 from coding_agent_playbook.evals.task import (
     EvalTask,
-    ExpectedOutcome,
-    Rubric,
+    Layer,
     TaskInvocation,
     TaskSetup,
+    compile_eval_task,
 )
 
 
@@ -25,7 +25,7 @@ def _minimal_dict() -> dict[str, Any]:
 
 
 def _full_dict() -> dict[str, Any]:
-    """The SPEC §6.5.3 example, top-level table form (already parsed by tomllib)."""
+    """A representative task in the C7 ``[gate]``/``[rubric]``/``[verdict]`` shape."""
     return {
         "id": "generate-tests-happy-path",
         "prompt_id": "generate-tests",
@@ -41,33 +41,49 @@ def _full_dict() -> dict[str, Any]:
             "prompt_args": "for the add function in src/calculator.py",
             "input_variables": {"target": "src/calculator.py::add"},
         },
-        "expected": {
-            "files_created": ["tests/test_calculator.py"],
-            "files_must_contain": [
-                {"path": "tests/test_calculator.py", "pattern": "def test_add"},
-                {"path": "tests/test_calculator.py", "pattern": "parametrize"},
-            ],
-            "files_unchanged": ["src/calculator.py"],
-            "files_forbidden": ["__pycache__/", "tests/conftest.py"],
+        "gate": {
+            "expr": "created and contains and unchanged",
+            "bind": {
+                "created": {"check": "file_exists", "path": "tests/test_calculator.py"},
+                "contains": {
+                    "check": "file_contains",
+                    "path": "tests/test_calculator.py",
+                    "pattern": "def test_add",
+                },
+                "unchanged": {"check": "file_unchanged", "path": "src/calculator.py"},
+            },
         },
         "rubric": {
-            "criteria": [
-                "Tests use pytest.parametrize for table-driven cases",
-                "Test file lives at tests/test_calculator.py (mirror layout)",
-                "All public branches of `add` are covered",
-                "No mocking is used (function is pure)",
-            ],
-            "weights": [0.2, 0.2, 0.4, 0.2],
+            "expr": "quality",
+            "bind": {
+                "quality": {
+                    "fail": 0.5,
+                    "rubric": [
+                        {"judge": "Tests use pytest.parametrize", "weight": 0.4},
+                        {"judge": "Test file mirrors layout", "weight": 0.2},
+                        {"judge": "All branches covered", "weight": 0.2},
+                        {"judge": "No mocking is used", "weight": 0.2},
+                    ],
+                },
+            },
         },
+        "verdict": {"trial": "gate and rubric"},
     }
 
 
-def test_eval_task_from_dict_parses_minimal_task(tmp_path: Path) -> None:
-    task = EvalTask.from_dict(
-        _minimal_dict(),
+def _make(data: dict[str, Any], tmp_path: Path) -> EvalTask:
+    return EvalTask.from_dict(
+        data,
         source_path=tmp_path / "task.toml",
         source_package="coding_agent_playbook",
     )
+
+
+# --- minimal / required-field parsing ----------------------------------------
+
+
+def test_eval_task_from_dict_parses_minimal_task(tmp_path: Path) -> None:
+    task = _make(_minimal_dict(), tmp_path)
     assert task.id == "demo-happy-path"
     assert task.prompt_id == "demo"
     assert task.description == "A demo task"
@@ -76,172 +92,176 @@ def test_eval_task_from_dict_parses_minimal_task(tmp_path: Path) -> None:
     assert task.source_package == "coding_agent_playbook"
     assert isinstance(task.setup, TaskSetup)
     assert isinstance(task.invocation, TaskInvocation)
-    assert task.expected is None
+    # No eval blocks => all None, verdict defaults.
+    assert task.gate is None
     assert task.rubric is None
+    assert task.aggregate is None
+    assert task.verdict == "gate and rubric"
 
 
 def test_eval_task_from_dict_parses_full_task(tmp_path: Path) -> None:
-    task = EvalTask.from_dict(
-        _full_dict(),
-        source_path=tmp_path / "task.toml",
-        source_package="coding_agent_playbook",
-    )
+    task = _make(_full_dict(), tmp_path)
     assert task.id == "generate-tests-happy-path"
     assert task.prompt_id == "generate-tests"
     assert task.version == 1
 
     assert task.setup.files == [Path("src/calculator.py")]
     assert task.setup.project_kind == "python-application"
-    assert task.setup.python_version == "3.12"
     assert task.setup.frameworks == ["pytest", "pytest-asyncio"]
 
     assert task.invocation.prompt_args.startswith("for the add function")
     assert task.invocation.input_variables == {"target": "src/calculator.py::add"}
 
-    assert isinstance(task.expected, ExpectedOutcome)
-    assert task.expected.files_created == ["tests/test_calculator.py"]
-    assert task.expected.files_must_contain == [
-        {"path": "tests/test_calculator.py", "pattern": "def test_add"},
-        {"path": "tests/test_calculator.py", "pattern": "parametrize"},
-    ]
-    assert task.expected.files_unchanged == ["src/calculator.py"]
-    assert task.expected.files_forbidden == ["__pycache__/", "tests/conftest.py"]
+    assert isinstance(task.gate, Layer)
+    assert task.gate.expr == "created and contains and unchanged"
+    assert set(task.gate.bind) == {"created", "contains", "unchanged"}
+    assert task.gate.bind["created"] == {"check": "file_exists", "path": "tests/test_calculator.py"}
 
-    assert isinstance(task.rubric, Rubric)
-    assert len(task.rubric.criteria) == 4
-    assert task.rubric.weights == [0.2, 0.2, 0.4, 0.2]
+    assert isinstance(task.rubric, Layer)
+    assert task.rubric.expr == "quality"
+    assert task.rubric.bind["quality"]["fail"] == 0.5
+    assert len(task.rubric.bind["quality"]["rubric"]) == 4
+
+    assert task.verdict == "gate and rubric"
 
 
 def test_eval_task_from_dict_rejects_missing_id(tmp_path: Path) -> None:
     data = _minimal_dict()
     del data["id"]
     with pytest.raises(ValueError, match="id"):
-        EvalTask.from_dict(
-            data,
-            source_path=tmp_path / "task.toml",
-            source_package="coding_agent_playbook",
-        )
+        _make(data, tmp_path)
 
 
 def test_eval_task_from_dict_rejects_missing_prompt_id(tmp_path: Path) -> None:
     data = _minimal_dict()
     del data["prompt_id"]
     with pytest.raises(ValueError, match="prompt_id"):
-        EvalTask.from_dict(
-            data,
-            source_path=tmp_path / "task.toml",
-            source_package="coding_agent_playbook",
-        )
+        _make(data, tmp_path)
 
 
 def test_eval_task_from_dict_rejects_missing_description(tmp_path: Path) -> None:
     data = _minimal_dict()
     del data["description"]
     with pytest.raises(ValueError, match="description"):
-        EvalTask.from_dict(
-            data,
-            source_path=tmp_path / "task.toml",
-            source_package="coding_agent_playbook",
-        )
+        _make(data, tmp_path)
 
 
 def test_eval_task_from_dict_rejects_non_string_id(tmp_path: Path) -> None:
     data = _minimal_dict()
     data["id"] = 42
     with pytest.raises(ValueError, match="id"):
-        EvalTask.from_dict(
-            data,
-            source_path=tmp_path / "task.toml",
-            source_package="coding_agent_playbook",
-        )
+        _make(data, tmp_path)
 
 
-def test_eval_task_rubric_weights_must_sum_to_one(tmp_path: Path) -> None:
+# --- block shape parsing (structural only; semantics is the compiler's job) ---
+
+
+def test_gate_parses_bind_and_expr(tmp_path: Path) -> None:
     data = _minimal_dict()
-    data["rubric"] = {
-        "criteria": ["A", "B"],
-        "weights": [0.3, 0.3],  # sums to 0.6
+    data["gate"] = {
+        "expr": "a",
+        "bind": {"a": {"check": "file_exists", "path": "x.py"}},
     }
-    with pytest.raises(ValueError, match="weights"):
-        EvalTask.from_dict(
-            data,
-            source_path=tmp_path / "task.toml",
-            source_package="coding_agent_playbook",
-        )
+    task = _make(data, tmp_path)
+    assert isinstance(task.gate, Layer)
+    assert task.gate.expr == "a"
+    assert task.gate.bind == {"a": {"check": "file_exists", "path": "x.py"}}
 
 
-def test_eval_task_rubric_weights_length_must_match_criteria(tmp_path: Path) -> None:
+def test_gate_expr_optional(tmp_path: Path) -> None:
+    """A single-handle gate may omit ``expr`` (the compiler defaults it)."""
     data = _minimal_dict()
-    data["rubric"] = {
-        "criteria": ["A", "B", "C"],
-        "weights": [0.5, 0.5],  # length mismatch
+    data["gate"] = {"bind": {"a": {"check": "file_exists", "path": "x.py"}}}
+    task = _make(data, tmp_path)
+    assert task.gate is not None
+    assert task.gate.expr is None
+
+
+def test_verdict_trial_parses(tmp_path: Path) -> None:
+    data = _minimal_dict()
+    data["gate"] = {"bind": {"a": {"check": "file_exists", "path": "x.py"}}}
+    data["verdict"] = {"trial": "gate"}
+    task = _make(data, tmp_path)
+    assert task.verdict == "gate"
+
+
+def test_aggregate_parses_bind_and_expr(tmp_path: Path) -> None:
+    data = _minimal_dict()
+    data["gate"] = {"bind": {"a": {"check": "file_exists", "path": "x.py"}}}
+    data["verdict"] = {"trial": "gate"}
+    data["aggregate"] = {
+        "expr": "pass_rate",
+        "bind": {"pass_rate": {"metric": "pass_at_k", "k": 3, "over": "verdict"}},
     }
-    with pytest.raises(ValueError, match="weights"):
-        EvalTask.from_dict(
-            data,
-            source_path=tmp_path / "task.toml",
-            source_package="coding_agent_playbook",
-        )
+    task = _make(data, tmp_path)
+    assert isinstance(task.aggregate, Layer)
+    assert task.aggregate.expr == "pass_rate"
+    assert task.aggregate.bind["pass_rate"] == {"metric": "pass_at_k", "k": 3, "over": "verdict"}
 
 
-def test_eval_task_rubric_weights_omitted_is_fine(tmp_path: Path) -> None:
+def test_gate_must_be_table(tmp_path: Path) -> None:
     data = _minimal_dict()
-    data["rubric"] = {"criteria": ["A", "B"]}
-    task = EvalTask.from_dict(
-        data,
-        source_path=tmp_path / "task.toml",
-        source_package="coding_agent_playbook",
-    )
-    assert isinstance(task.rubric, Rubric)
-    assert task.rubric.weights is None
+    data["gate"] = []
+    with pytest.raises(ValueError, match="gate"):
+        _make(data, tmp_path)
 
 
-# --- [rubric] ref = "<name>" (named-rubric registry) -------------------------
-
-
-def test_eval_task_rubric_ref_parses(tmp_path: Path) -> None:
+def test_gate_bind_must_be_table(tmp_path: Path) -> None:
     data = _minimal_dict()
-    data["rubric"] = {"ref": "code-review"}
-    task = EvalTask.from_dict(
-        data,
-        source_path=tmp_path / "task.toml",
-        source_package="coding_agent_playbook",
-    )
-    assert isinstance(task.rubric, Rubric)
-    assert task.rubric.ref == "code-review"
-    # ref-mode keeps criteria/weights empty — the referenced rubric supplies them.
-    assert task.rubric.criteria == []
-    assert task.rubric.weights is None
+    data["gate"] = {"bind": "nope"}
+    with pytest.raises(ValueError, match="bind"):
+        _make(data, tmp_path)
 
 
-def test_eval_task_rubric_ref_and_criteria_are_mutually_exclusive(tmp_path: Path) -> None:
+def test_gate_bind_handle_must_be_table(tmp_path: Path) -> None:
     data = _minimal_dict()
-    data["rubric"] = {"ref": "code-review", "criteria": ["A"]}
-    with pytest.raises(ValueError, match="both 'ref' and 'criteria'"):
-        EvalTask.from_dict(
-            data,
-            source_path=tmp_path / "task.toml",
-            source_package="coding_agent_playbook",
-        )
+    data["gate"] = {"bind": {"a": "nope"}}
+    with pytest.raises(ValueError, match=r"bind\.a"):
+        _make(data, tmp_path)
 
 
-def test_eval_task_rubric_with_neither_ref_nor_criteria_raises(tmp_path: Path) -> None:
+def test_gate_expr_must_be_string(tmp_path: Path) -> None:
     data = _minimal_dict()
-    data["rubric"] = {}
-    with pytest.raises(ValueError, match="either 'criteria' or 'ref'"):
-        EvalTask.from_dict(
-            data,
-            source_path=tmp_path / "task.toml",
-            source_package="coding_agent_playbook",
-        )
+    data["gate"] = {"expr": 42, "bind": {"a": {"check": "file_exists", "path": "x"}}}
+    with pytest.raises(ValueError, match="expr"):
+        _make(data, tmp_path)
 
 
-def test_eval_task_rubric_ref_must_be_string(tmp_path: Path) -> None:
+def test_verdict_trial_must_be_string(tmp_path: Path) -> None:
     data = _minimal_dict()
-    data["rubric"] = {"ref": 42}
-    with pytest.raises(ValueError, match="ref"):
-        EvalTask.from_dict(
-            data,
-            source_path=tmp_path / "task.toml",
-            source_package="coding_agent_playbook",
-        )
+    data["verdict"] = {"trial": 1}
+    with pytest.raises(ValueError, match="trial"):
+        _make(data, tmp_path)
+
+
+# --- compile_eval_task / EvalTask.compiled -----------------------------------
+
+
+def test_compiled_builds_layer_checks(tmp_path: Path) -> None:
+    task = _make(_full_dict(), tmp_path)
+    compiled = compile_eval_task(task)
+    assert [c.id for c in compiled.per_trial.checks] == ["gate", "rubric"]
+    assert compiled.layers == frozenset({"gate", "rubric"})
+
+
+def test_compiled_method_matches_free_function(tmp_path: Path) -> None:
+    task = _make(_full_dict(), tmp_path)
+    via_method = task.compiled()
+    assert via_method.layers == frozenset({"gate", "rubric"})
+    assert [c.id for c in via_method.per_trial.checks] == ["gate", "rubric"]
+
+
+def test_compile_raises_on_no_layer(tmp_path: Path) -> None:
+    """A task with no [gate] and no [rubric] cannot compile (at-least-one rule)."""
+    task = _make(_minimal_dict(), tmp_path)
+    with pytest.raises(ValueError, match="at least one"):
+        compile_eval_task(task)
+
+
+def test_compile_raises_on_unknown_check(tmp_path: Path) -> None:
+    data = _minimal_dict()
+    data["gate"] = {"bind": {"a": {"check": "not_a_real_check", "path": "x"}}}
+    data["verdict"] = {"trial": "gate"}
+    task = _make(data, tmp_path)
+    with pytest.raises(KeyError):
+        compile_eval_task(task)

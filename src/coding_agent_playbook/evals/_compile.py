@@ -36,7 +36,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.evals._expr import Node, compile_expr, eval_bool, names, parse
+from coding_agent_playbook.evals._expr import (
+    And,
+    Name,
+    Node,
+    Not,
+    compile_expr,
+    names,
+    parse,
+)
 from coding_agent_playbook.evals._handles import build_handles
 from coding_agent_playbook.evaluators.checks.compose import AllOf
 from coding_agent_playbook.evaluators.rubric import Rubric
@@ -160,14 +168,49 @@ def compile_task(
 def verdict_passed(report: EvaluationReport, verdict_ast: Node) -> bool:
     """Derive the trial verdict from an evaluated report's layer results.
 
-    Builds a ``check_id -> passed`` environment from ``report.checks`` and
-    evaluates ``verdict_ast`` over it
-    (:func:`~coding_agent_playbook.evals._expr.eval_bool`). The two layers
-    (``gate``/``rubric``) ran once inside ``report``; this never re-runs them, so
-    the judge / test suite is not double-invoked.
+    Builds a ``check_id -> tri-state`` environment from ``report.checks`` (``True``/
+    ``False`` for a layer that **ran**, ``None`` for a layer that was **skipped** —
+    e.g. the rubric layer with no judge configured) and folds ``verdict_ast`` over
+    it with **skipped-neutral** semantics: a skipped layer is neutral, exactly like
+    an unavailable child in :class:`~coding_agent_playbook.evaluators.checks.compose.AllOf`
+    / :class:`~coding_agent_playbook.evaluators.checks.compose.AnyOf` (only *run*
+    layers vote). So ``gate and rubric`` with ``{gate=True, rubric=skipped}`` is
+    ``True`` (the gate-only deterministic path), ``gate or rubric`` with
+    ``{gate=False, rubric=skipped}`` is ``False``, and an all-skipped expression is
+    vacuously ``True``.
+
+    The two layers (``gate``/``rubric``) ran once inside ``report``; this never
+    re-runs them, so the judge / test suite is not double-invoked.
     """
-    env = {c.check_id: c.passed for c in report.checks}
-    return eval_bool(verdict_ast, env)
+    env: dict[str, bool | None] = {}
+    for check in report.checks:
+        env[check.check_id] = check.passed if check.status == "run" else None
+    return _eval_neutral(verdict_ast, env) is not False
+
+
+def _eval_neutral(node: Node, env: Mapping[str, bool | None]) -> bool | None:
+    """Tri-state fold of ``node`` over ``env``: ``True``/``False``/``None`` (neutral).
+
+    A :class:`~coding_agent_playbook.evals._expr.Name` resolves to its tri-state in
+    ``env`` (an absent name is neutral ``None``). ``And``/``Or`` drop neutral
+    children and vote over the rest — an all-neutral ``And`` is ``None`` (vacuously
+    fine), an all-neutral ``Or`` is ``None`` (nothing passed yet). ``Not`` over a
+    neutral child stays neutral. :func:`verdict_passed` collapses a top-level
+    neutral to ``True`` (a bare-AND / all-skipped trial passes).
+    """
+    if isinstance(node, Name):
+        return env.get(node.value)
+    if isinstance(node, Not):
+        child = _eval_neutral(node.child, env)
+        return None if child is None else not child
+    children = [_eval_neutral(c, env) for c in node.children]
+    voting = [c for c in children if c is not None]
+    if not voting:
+        return None
+    if isinstance(node, And):
+        return all(voting)
+    # Or
+    return any(voting)
 
 
 def over_boolean(over: str, report: EvaluationReport, verdict: bool) -> bool:

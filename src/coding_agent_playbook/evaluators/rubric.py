@@ -34,7 +34,7 @@ from coding_agent_playbook.evaluators.check import MeasurementSet
 from coding_agent_playbook.evaluators.metric import Metric
 from coding_agent_playbook.evaluators.normalizer import Identity
 from coding_agent_playbook.evaluators.scheduler import schedule
-from coding_agent_playbook.evaluators.scope import CostTier, Scope
+from coding_agent_playbook.evaluators.scope import CostTier, Determinism, Scope
 from coding_agent_playbook.evaluators.types import (
     EvaluationReport,
     Measurement,
@@ -76,6 +76,14 @@ class Rubric(Metric):
         # The rubric needs a runnable project exactly when one of its checks is
         # execution-tier; a parent rubric reads this to schedule/gate correctly.
         self.needs_project = any(c.cost == CostTier.EXECUTION for c in checks)
+        # A rubric that carries any judged check (directly, or via a composer whose
+        # ``determinism`` folds up to JUDGED) is **dormant without a judge**: as a
+        # nested ``Metric`` it reports ``available() is False`` when ``ctx.judge is
+        # None`` (so the whole rubric layer skips deterministically), and a parent
+        # metric-backed check schedules it JUDGED-tier + measures it lazily (so the
+        # cost-tiered scheduler can short-circuit it). Mirrors ``JudgeCheck`` /
+        # ``JudgeMetric``.
+        self.needs_judge = any(c.determinism is Determinism.JUDGED for c in checks)
         # Re-entrancy guard for measure() (a self-referential rubric) + a per-ctx
         # memo keyed on id(ctx) so a rubric measured twice in one ctx is reused.
         self._measuring = False
@@ -136,13 +144,23 @@ class Rubric(Metric):
 
         A rubric does not parse a ``module`` of its own (its checks do their own
         ctx-slot gating), so - unlike the default :meth:`Metric.available` - it is
-        **not** gated on ``ctx.module``. The only hard requirement is a runnable
-        project when a child check is execution-tier (``needs_project``); otherwise
-        a nested rubric is always available and its child checks decide per-check.
+        **not** gated on ``ctx.module``. Two hard requirements:
+
+        * a runnable project when a child check is execution-tier
+          (``needs_project``);
+        * a configured judge when a child check is judged (``needs_judge``) — a
+          rubric carrying ``JudgeCheck``\\ s is dormant without ``ctx.judge``, so as
+          a nested :class:`Metric` its wrapping
+          :class:`~coding_agent_playbook.evaluators.check.ThresholdCheck` reports
+          unavailable and the whole rubric layer skips (matching
+          :meth:`~coding_agent_playbook.evaluators.checks.judged.JudgeCheck.available`).
+
+        Otherwise a nested rubric is always available and its child checks decide
+        per-check.
         """
-        if self.needs_project:
-            return ctx.project is not None
-        return True
+        if self.needs_project and ctx.project is None:
+            return False
+        return not (self.needs_judge and ctx.judge is None)
 
     # ------------------------------------------------------------------ #
     # The aggregate half: run every check, fold into one report.

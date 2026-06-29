@@ -13,17 +13,22 @@ frameworks = ["pytest"]
 prompt_args = "rename the variables in src/billing.py for clarity — keep behavior identical"
 input_variables = { target = "src/billing.py::compute_invoice" }
 
-[expected]
-files_must_contain = [
-  { path = "src/billing.py", pattern = "def compute_invoice" },
-]
-files_forbidden = []
+[gate]
+expr = "keeps_signature"
+
+[gate.bind]
+keeps_signature = { check = "file_contains", path = "src/billing.py", pattern = "def compute_invoice" }
 
 [rubric]
-criteria = [
-  "Every single-letter loop/temp variable (e.g. `x`, `r`, `t`) is renamed to something descriptive",
-  "The function's signature, return type, and behavior are unchanged",
-  "No comments were added to explain a name that should now be self-explanatory",
-  "The diff is small and obviously a rename — not a rewrite",
-]
-weights = [0.35, 0.35, 0.15, 0.15]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "Every single-letter loop/temp variable (e.g. `x`, `r`, `t`) is renamed to something descriptive", weight = 0.35 },
+  { judge = "The function's signature, return type, and behavior are unchanged", weight = 0.35 },
+  { judge = "No comments were added to explain a name that should now be self-explanatory", weight = 0.15 },
+  { judge = "The diff is small and obviously a rename — not a rewrite", weight = 0.15 },
+] }
+
+[verdict]
+trial = "gate and rubric"

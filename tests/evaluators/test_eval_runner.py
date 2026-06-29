@@ -1,28 +1,30 @@
-"""End-to-end tests for the eval runner + scoring bridge (hermetic, T5a).
+"""End-to-end tests for the eval runner + scoring bridge (hermetic, C7).
 
 Everything runs through :class:`~coding_agent_playbook.evals.fake_runner.FakeRunner`
 so there is no network or agent CLI: a fixture lays down a ``setup/`` tree (a long
 function + a passing test), then different fake mutations stand in for an agent's
 edits and we assert the resulting :class:`EvaluationReport`.
 
-T5a cuts ``score()`` over from the old ``grade(..., extra_evaluators=…)`` path to
-the :class:`~coding_agent_playbook.evaluators.rubric.Rubric` returned by
-:func:`~coding_agent_playbook.evals.task.rubric_for_task`. The report now carries
-:attr:`EvaluationReport.checks` — one
-:class:`~coding_agent_playbook.evaluators.types.CheckResult` per compiled check,
-each with its per-scope :class:`~coding_agent_playbook.evaluators.types.ScopeDetail`
-``subresults``. Tests assert through ``report.checks`` (the new shape) rather than
-the flat ``report.findings`` list. Gate verdicts and which checks fail are
-identical to the pre-cutover behaviour.
+C7 sources the checks from the **C6 compiler**: a task's ``[gate]``/``[rubric]``
+blocks compile into one per-trial
+:class:`~coding_agent_playbook.evaluators.rubric.Rubric` carrying the two named
+layer checks (``id="gate"`` / ``id="rubric"``); the per-trial **verdict** is then
+derived from the layer results (skipped-neutral) onto ``report.passed``. Metric
+gates (CC, coverage, test_pass_rate) enter via ``threshold``/``non_regression``
+*checks* inside the gate bind; the deterministic file predicates are the
+``file_*`` checks; the judged criteria live in a ``rubric`` group inside the
+``[rubric]`` bind.
 
-The static-only tests are fast; the execution-non-regression tests actually run an
-inner pytest and are slower.
+These tests build the new-schema task dicts directly. The static-only tests are
+fast; the execution-non-regression tests actually run an inner pytest and are
+slower.
 """
 
 from __future__ import annotations
 
 import textwrap
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -35,18 +37,9 @@ from coding_agent_playbook.evals.runner import (
     render_prompt,
 )
 from coding_agent_playbook.evals.scoring import score
-from coding_agent_playbook.evals.task import (
-    EvalTask,
-    ExpectedOutcome,
-    TaskInvocation,
-)
-from coding_agent_playbook.evaluators import EvaluationReport, MetricConfig
-from coding_agent_playbook.evaluators.types import (
-    AbsoluteThreshold,
-    CheckResult,
-    RegressionPolicy,
-    ScopeDetail,
-)
+from coding_agent_playbook.evals.task import EvalTask, TaskInvocation
+from coding_agent_playbook.evaluators import EvaluationReport
+from coding_agent_playbook.evaluators.types import CheckResult, ScopeDetail
 
 # A long, high-complexity function: lots of branches => high cyclomatic complexity.
 _LONG_FN = textwrap.dedent(
@@ -70,8 +63,7 @@ _LONG_FN = textwrap.dedent(
     """
 )
 
-# A refactor that *lowers* CC of ``classify`` by extracting the band lookup into a
-# small helper — the public function keeps the same behaviour but fewer branches.
+# A refactor that *lowers* CC of ``classify`` by extracting the band lookup.
 _REFACTORED = textwrap.dedent(
     """\
     _BANDS = (
@@ -136,17 +128,25 @@ _TEST_OK = textwrap.dedent(
 
 
 # --------------------------------------------------------------------------- #
-# Report helpers — walk the new report.checks → subresults shape
+# Report helpers — walk the report.checks → subresults shape (recursive)
 # --------------------------------------------------------------------------- #
 
 
 def _scope_details(report: EvaluationReport) -> list[ScopeDetail]:
-    """Every per-scope :class:`ScopeDetail` leaf across the run checks."""
+    """Every per-scope :class:`ScopeDetail` leaf anywhere under the run checks."""
     out: list[ScopeDetail] = []
+
+    def _walk(result: CheckResult) -> None:
+        if result.status != "run":
+            return
+        for sub in result.subresults:
+            if isinstance(sub, ScopeDetail):
+                out.append(sub)
+            elif isinstance(sub, CheckResult):
+                _walk(sub)
+
     for check in report.checks:
-        if check.status != "run":
-            continue
-        out.extend(sub for sub in check.subresults if isinstance(sub, ScopeDetail))
+        _walk(check)
     return out
 
 
@@ -155,9 +155,29 @@ def _scopes_for_evaluator(report: EvaluationReport, evaluator: str) -> list[Scop
     return [d for d in _scope_details(report) if d.evaluator == evaluator]
 
 
+def _checks_by_id(report: EvaluationReport) -> dict[str, CheckResult]:
+    """Flatten every :class:`CheckResult` (layers + their children) by id."""
+    out: dict[str, CheckResult] = {}
+
+    def _walk(result: CheckResult) -> None:
+        out[result.check_id] = result
+        for sub in result.subresults:
+            if isinstance(sub, CheckResult):
+                _walk(sub)
+
+    for check in report.checks:
+        _walk(check)
+    return out
+
+
 def _check(report: EvaluationReport, check_id: str) -> CheckResult:
-    """The single run :class:`CheckResult` with ``check_id`` (raises if absent)."""
-    return next(c for c in report.checks if c.check_id == check_id)
+    """The single :class:`CheckResult` with ``check_id`` anywhere in the tree."""
+    return _checks_by_id(report)[check_id]
+
+
+# --------------------------------------------------------------------------- #
+# Setup / task fixtures (new C7 schema)
+# --------------------------------------------------------------------------- #
 
 
 def _make_setup(task_dir: Path, *, mod_source: str = _LONG_FN, test_source: str = _TEST_OK) -> None:
@@ -171,36 +191,72 @@ def _make_setup(task_dir: Path, *, mod_source: str = _LONG_FN, test_source: str 
 def _make_task(
     task_dir: Path,
     *,
-    metrics: MetricConfig | None = None,
-    expected: ExpectedOutcome | None = None,
+    gate: dict[str, Any] | None = None,
+    rubric: dict[str, Any] | None = None,
+    verdict: str | None = None,
     invocation: TaskInvocation | None = None,
     prompt_id: str = "refactor",
 ) -> EvalTask:
-    return EvalTask(
-        id="t-fixture",
-        prompt_id=prompt_id,
-        description="fixture task",
-        source_path=task_dir / "task.toml",
-        source_package="<test>",
-        metrics=metrics,
-        expected=expected,
-        invocation=invocation or TaskInvocation(),
-    )
+    """Build an :class:`EvalTask` from the new-schema ``[gate]``/``[rubric]`` dicts.
 
-
-def _cc_metrics() -> MetricConfig:
-    """A ``[metrics]`` policy that gates cyclomatic complexity on non-regression.
-
-    The thresholds are ``0-1`` cutoffs on the normalized CC score
-    (``RampNormalizer(good=5, bad=20)``); a *new* scope (no baseline) falls back
-    to these absolute bounds, and the refactor's new ``_band`` (CC 3 -> score 1.0)
-    clears ``warn=0.5`` so the good refactor still passes.
+    ``verdict`` defaults sensibly: ``"gate and rubric"`` when both blocks are
+    present, ``"gate"`` for gate-only, ``"rubric"`` for rubric-only.
     """
-    return MetricConfig(
-        mode="regression",
-        regression={"cyclomatic_complexity": RegressionPolicy(max_worsening=0.0)},
-        thresholds={"cyclomatic_complexity": AbsoluteThreshold(warn=0.5, fail=0.25)},
-    )
+    data: dict[str, Any] = {
+        "id": "t-fixture",
+        "prompt_id": prompt_id,
+        "description": "fixture task",
+    }
+    if gate is not None:
+        data["gate"] = gate
+    if rubric is not None:
+        data["rubric"] = rubric
+    if verdict is None:
+        if gate is not None and rubric is not None:
+            verdict = "gate and rubric"
+        elif gate is not None:
+            verdict = "gate"
+        else:
+            verdict = "rubric"
+    data["verdict"] = {"trial": verdict}
+    task = EvalTask.from_dict(data, source_path=task_dir / "task.toml", source_package="<test>")
+    if invocation is not None:
+        task.invocation = invocation
+    return task
+
+
+def _cc_gate() -> dict[str, Any]:
+    """A gate gating cyclomatic complexity on non-regression (0-1 cutoffs).
+
+    The refactor's new ``_band`` (CC 3 -> score 1.0) clears ``warn=0.5`` so the good
+    refactor still passes; a worsening edit fails on regression vs the baseline.
+    """
+    return {
+        "expr": "cc",
+        "bind": {
+            "cc": {
+                "check": "non_regression",
+                "metric": "cyclomatic_complexity",
+                "warn": 0.5,
+                "fail": 0.25,
+            }
+        },
+    }
+
+
+def _judged_rubric(*criteria: str, fail: float = 0.5) -> dict[str, Any]:
+    """A rubric group with uniform-weighted judged ``criteria``."""
+    n = len(criteria)
+    weight = 1.0 / n if n else 0.0
+    return {
+        "expr": "quality",
+        "bind": {
+            "quality": {
+                "fail": fail,
+                "rubric": [{"judge": c, "weight": weight} for c in criteria],
+            }
+        },
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -211,7 +267,7 @@ def _cc_metrics() -> MetricConfig:
 def test_materialize_copies_setup_and_commits_baseline(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir)
+    task = _make_task(task_dir, gate=_cc_gate())
     scratch = tmp_path / "scratch"
 
     baseline = materialize(task, scratch)
@@ -219,7 +275,6 @@ def test_materialize_copies_setup_and_commits_baseline(tmp_path: Path) -> None:
     assert (scratch / "mod.py").is_file()
     assert (scratch / ".git").is_dir()
     assert baseline.commit  # a real SHA
-    # The pristine snapshot is a separate tree the agent cannot reach.
     assert baseline.setup_snapshot != scratch
     assert (baseline.setup_snapshot / "mod.py").read_text() == _LONG_FN
 
@@ -227,7 +282,7 @@ def test_materialize_copies_setup_and_commits_baseline(tmp_path: Path) -> None:
 def test_capture_includes_new_files_in_diff_and_changed(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir)
+    task = _make_task(task_dir, gate=_cc_gate())
     scratch = tmp_path / "scratch"
     baseline = materialize(task, scratch)
 
@@ -245,6 +300,7 @@ def test_render_prompt_falls_back_for_unresolvable_prompt(tmp_path: Path) -> Non
     _make_setup(task_dir)
     task = _make_task(
         task_dir,
+        gate=_cc_gate(),
         invocation=TaskInvocation(prompt_args="do the thing"),
         prompt_id="nonexistent",
     )
@@ -254,12 +310,7 @@ def test_render_prompt_falls_back_for_unresolvable_prompt(tmp_path: Path) -> Non
 
 
 def test_render_prompt_resolves_a_real_shipped_prompt() -> None:
-    """A task pointing at a shipped prompt renders that prompt's real body.
-
-    Resolution reads ``resources/prompts/`` directly (no SyncContext/config), so
-    it works for the engine's own resources, which carry no
-    ``.coding-agent-playbook.toml``.
-    """
+    """A task pointing at a shipped (non-templated) prompt renders its real body."""
     repo_root = Path(__file__).resolve().parents[2]
     src_root = repo_root / "src" / "coding_agent_playbook"
     task_dir = src_root / "resources" / "eval_tasks" / "refactor-extract-helper"
@@ -274,20 +325,19 @@ def test_render_prompt_resolves_a_real_shipped_prompt() -> None:
         invocation=TaskInvocation(prompt_args="extract the totals block"),
     )
     prompt = render_prompt(task)
-    # The refactor prompt's distinctive prose + the appended args.
     assert "refactoring existing code" in prompt
     assert "extract the totals block" in prompt
 
 
 # --------------------------------------------------------------------------- #
-# FakeRunner round-trips (static, fast)
+# FakeRunner round-trips (static metric gate, fast)
 # --------------------------------------------------------------------------- #
 
 
 def test_good_refactor_passes_and_cc_drops(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir, metrics=_cc_metrics())
+    task = _make_task(task_dir, gate=_cc_gate())
 
     runner = FakeRunner(write_files({"mod.py": _REFACTORED}))
     result = runner.run_task(task, tmp_path / "scratch")
@@ -297,8 +347,6 @@ def test_good_refactor_passes_and_cc_drops(tmp_path: Path) -> None:
     assert result.harness == "fake"
     assert result.task_id == "t-fixture"
 
-    # The CC metric compiled to a non-regression check; its scope leaves carry
-    # the per-function complexity.
     cc_check = _check(result.report, "nonreg:cyclomatic_complexity")
     assert cc_check.passed is True
     classify = next(
@@ -306,7 +354,6 @@ def test_good_refactor_passes_and_cc_drops(tmp_path: Path) -> None:
         for sub in cc_check.subresults
         if isinstance(sub, ScopeDetail) and sub.scope_key.endswith("::classify")
     )
-    # CC of classify dropped vs the baseline (non-regression improvement).
     assert classify.baseline is not None
     assert classify.value < classify.baseline
     assert classify.level == "ok"
@@ -315,7 +362,7 @@ def test_good_refactor_passes_and_cc_drops(tmp_path: Path) -> None:
 def test_worsening_refactor_fails_with_regression_finding(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir, metrics=_cc_metrics())
+    task = _make_task(task_dir, gate=_cc_gate())
 
     runner = FakeRunner(write_files({"mod.py": _WORSE}))
     result = runner.run_task(task, tmp_path / "scratch")
@@ -337,19 +384,24 @@ def test_absolute_mode_new_scope_uses_absolute_kind(tmp_path: Path) -> None:
     """A brand-new file (no baseline counterpart) grades absolute (kind=new)."""
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    # Threshold-only policy, absolute mode, on a fresh file the baseline lacks.
-    # 0-1 cutoffs: _WORSE's classify is CC 11 -> normalized score 0.6, which is
-    # below fail=0.7, so the new scope fails the absolute gate.
-    metrics = MetricConfig(
-        mode="absolute",
-        thresholds={"cyclomatic_complexity": AbsoluteThreshold(warn=0.9, fail=0.7)},
-    )
-    task = _make_task(task_dir, metrics=metrics)
+    # Threshold-only check (absolute mode) on a fresh file the baseline lacks.
+    # 0-1 cutoffs: _WORSE's classify is CC 11 -> normalized score 0.6 < fail=0.7.
+    gate = {
+        "expr": "cc",
+        "bind": {
+            "cc": {
+                "check": "threshold",
+                "metric": "cyclomatic_complexity",
+                "warn": 0.9,
+                "fail": 0.7,
+            }
+        },
+    }
+    task = _make_task(task_dir, gate=gate)
 
     runner = FakeRunner(write_files({"extra.py": _WORSE}))
     result = runner.run_task(task, tmp_path / "scratch")
 
-    # absolute mode compiles to a ThresholdCheck.
     cc_check = _check(result.report, "threshold:cyclomatic_complexity")
     classify = next(
         sub
@@ -364,95 +416,63 @@ def test_absolute_mode_new_scope_uses_absolute_kind(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# [expected] file checks
+# Gate file checks
 # --------------------------------------------------------------------------- #
 
 
-def _expected_all() -> ExpectedOutcome:
-    return ExpectedOutcome(
-        files_created=["mod.py", "helper.py"],
-        files_must_contain=[
-            {"path": "mod.py", "pattern": r"def _band"},
-            {"path": "mod.py", "pattern": r"NOPE_not_present"},
-        ],
-        files_unchanged=["test_mod.py", "mod.py"],
-        files_forbidden=["forbidden.py", "test_mod.py"],
-    )
+def _file_gate() -> dict[str, Any]:
+    """A gate ANDing one of each file predicate (some will fail under a refactor)."""
+    return {
+        "expr": "mod_exists and helper_exists and has_band and src_unchanged and not_forbidden",
+        "bind": {
+            "mod_exists": {"check": "file_exists", "path": "mod.py"},
+            "helper_exists": {"check": "file_exists", "path": "helper.py"},
+            "has_band": {"check": "file_contains", "path": "mod.py", "pattern": r"def _band"},
+            "src_unchanged": {"check": "file_unchanged", "path": "mod.py"},
+            "not_forbidden": {"check": "file_forbidden", "path": "test_mod.py"},
+        },
+    }
 
 
-def test_expected_checks_pass_and_fail_merge_into_report(tmp_path: Path) -> None:
+def test_gate_file_checks_merge_into_report(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir, expected=_expected_all())
+    task = _make_task(task_dir, gate=_file_gate())
 
-    # Agent: refactor mod.py (so it changes, contains _band) and add helper.py.
+    # Agent: refactor mod.py (so it changes + contains _band) and add helper.py.
     runner = FakeRunner(write_files({"mod.py": _REFACTORED, "helper.py": "x = 1\n"}))
     result = runner.run_task(task, tmp_path / "scratch")
 
-    # Each [expected] entry is its own Check, keyed by a stable check id.
-    by_id = {c.check_id: c for c in result.report.checks}
-
+    by_id = _checks_by_id(result.report)
     assert by_id["file_exists:mod.py"].passed is True  # exists
     assert by_id["file_exists:helper.py"].passed is True  # created
-
-    contains = {cid: c.passed for cid, c in by_id.items() if cid.startswith("file_contains:")}
-    assert any(passed for cid, passed in contains.items() if "_band" in cid)
-    assert any(not passed for cid, passed in contains.items() if "NOPE" in cid)
-
-    assert by_id["file_unchanged:test_mod.py"].passed is True  # untouched
+    assert by_id["file_contains:mod.py~/def _band/"].passed is True  # contains _band
     assert by_id["file_unchanged:mod.py"].passed is False  # rewritten by the refactor
-
-    assert by_id["file_forbidden:forbidden.py"].passed is True  # absent => good
     assert by_id["file_forbidden:test_mod.py"].passed is False  # present => breach
 
-    # Mixed pass/fail => report fails.
+    # The gate ANDs them, so a single breach fails the gate (and the verdict).
     assert result.passed is False
 
 
-def test_expected_checks_come_from_the_rubric(tmp_path: Path) -> None:
-    """[expected] is compiled into deterministic file Checks via ``rubric_for_task``;
-    each is a pure gate (weight 0, so it gates but never feeds the composite)."""
+def test_gate_all_passing_yields_a_passing_report(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir, expected=_expected_all())
-
-    runner = FakeRunner(write_files({"mod.py": _REFACTORED, "helper.py": "x = 1\n"}))
-    result = runner.run_task(task, tmp_path / "scratch")
-
-    file_checks = [
-        c
-        for c in result.report.checks
-        if c.status == "run"
-        and (
-            c.check_id.startswith("file_exists:")
-            or c.check_id.startswith("file_contains:")
-            or c.check_id.startswith("file_unchanged:")
-            or c.check_id.startswith("file_forbidden:")
-        )
-    ]
-    # One check per [expected] entry (2 created + 2 contains + 2 unchanged + 2 forbidden).
-    assert len(file_checks) == 8
-    # They gate (a failure) but carry no composite weight (weight 0).
-    assert any(not c.passed for c in file_checks)
-    assert all(c.weight == 0.0 for c in file_checks)
-    assert result.report.composite is None
-
-
-def test_expected_all_passing_yields_a_passing_report(tmp_path: Path) -> None:
-    task_dir = tmp_path / "task"
-    _make_setup(task_dir)
-    expected = ExpectedOutcome(
-        files_created=["helper.py"],
-        files_must_contain=[{"path": "helper.py", "pattern": r"answer = 42"}],
-        files_unchanged=["test_mod.py", "mod.py"],
-        files_forbidden=["nope.py"],
-    )
-    task = _make_task(task_dir, expected=expected)
+    gate = {
+        "expr": "helper_exists and answer and src_unchanged and no_nope",
+        "bind": {
+            "helper_exists": {"check": "file_exists", "path": "helper.py"},
+            "answer": {"check": "file_contains", "path": "helper.py", "pattern": r"answer = 42"},
+            "src_unchanged": {"check": "file_unchanged", "path": "mod.py"},
+            "no_nope": {"check": "file_forbidden", "path": "nope.py"},
+        },
+    }
+    task = _make_task(task_dir, gate=gate)
 
     runner = FakeRunner(write_files({"helper.py": "answer = 42\n"}))
     result = runner.run_task(task, tmp_path / "scratch")
 
-    assert all(c.passed for c in result.report.checks if c.status == "run")
+    gate_check = _check(result.report, "gate")
+    assert gate_check.passed is True
     assert result.passed is True
 
 
@@ -461,21 +481,21 @@ def test_expected_all_passing_yields_a_passing_report(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def _exec_metrics() -> MetricConfig:
-    return MetricConfig(
-        mode="regression",
-        run_tests=True,
-        regression={
-            "test_pass_rate": RegressionPolicy(max_worsening=0.0),
-            "coverage": RegressionPolicy(max_worsening=0.0),
+def _exec_gate() -> dict[str, Any]:
+    """A gate gating test_pass_rate + coverage on non-regression (execution metrics)."""
+    return {
+        "expr": "tpr and cov",
+        "bind": {
+            "tpr": {"check": "non_regression", "metric": "test_pass_rate"},
+            "cov": {"check": "non_regression", "metric": "coverage"},
         },
-    )
+    }
 
 
 def test_execution_non_regression_passes_when_tests_stay_green(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir, metrics=_exec_metrics())
+    task = _make_task(task_dir, gate=_exec_gate())
 
     # A behaviour-preserving refactor: tests still pass.
     runner = FakeRunner(write_files({"mod.py": _REFACTORED}))
@@ -490,9 +510,8 @@ def test_execution_non_regression_passes_when_tests_stay_green(tmp_path: Path) -
 def test_execution_non_regression_fails_when_a_test_breaks(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir, metrics=_exec_metrics())
+    task = _make_task(task_dir, gate=_exec_gate())
 
-    # Break behaviour: classify(5) now returns "WRONG", so the test fails.
     broken = textwrap.dedent(
         """\
         def classify(n):
@@ -503,7 +522,6 @@ def test_execution_non_regression_fails_when_a_test_breaks(tmp_path: Path) -> No
     result = runner.run_task(task, tmp_path / "scratch")
 
     tpr = next(d for d in _scope_details(result.report) if d.evaluator == "test_pass_rate")
-    # Baseline had a passing suite (rate 1.0); candidate drops below => regression.
     assert tpr.baseline == pytest.approx(1.0)
     assert tpr.value < 1.0
     assert tpr.level == "fail"
@@ -511,52 +529,47 @@ def test_execution_non_regression_fails_when_a_test_breaks(tmp_path: Path) -> No
 
 
 # --------------------------------------------------------------------------- #
-# Result model + no-judge invariant
+# Verdict + no-judge invariant
 # --------------------------------------------------------------------------- #
 
 
-def test_run_task_with_no_blocks_passes_trivially(tmp_path: Path) -> None:
-    """A task with no [metrics] and no [expected] still produces a passing report."""
+def test_gate_only_verdict_equals_the_gate(tmp_path: Path) -> None:
+    """A gate-only task's verdict is the gate layer's pass/fail."""
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir)
+    task = _make_task(task_dir, gate=_cc_gate())
 
-    result = FakeRunner().run_task(task, tmp_path / "scratch")
-    assert isinstance(result.report, EvaluationReport)
+    result = FakeRunner(write_files({"mod.py": _REFACTORED})).run_task(task, tmp_path / "scratch")
+    gate = _check(result.report, "gate")
+    assert result.passed == gate.passed
+
+
+def test_deterministic_only_verdict_is_the_gate_when_rubric_skips(tmp_path: Path) -> None:
+    """With no judge, the rubric layer's judged content skips; the verdict = gate.
+
+    The rubric layer is present (``gate and rubric``) but its judged ThresholdCheck
+    is unavailable without ``ctx.judge`` — so the verdict reduces to the gate
+    (skipped-neutral): a passing gate => a passing trial.
+    """
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    task = _make_task(task_dir, gate=_cc_gate(), rubric=_judged_rubric("clarity", "naming"))
+
+    result = FakeRunner(write_files({"mod.py": _REFACTORED})).run_task(task, tmp_path / "scratch")
+
+    # The inner judged checks never ran (no judge).
+    assert not any(d.evaluator.startswith("judge:") for d in _scope_details(result.report))
+    gate = _check(result.report, "gate")
+    assert gate.passed is True
+    # Verdict == gate (rubric layer is skipped-neutral).
     assert result.passed is True
-    assert result.report.composite is None
-    assert result.aggregate_score == 1.0
-    # No checks compiled from an empty task.
-    assert result.report.checks == []
-
-
-def test_scoring_skips_judged_checks_without_a_judge(tmp_path: Path) -> None:
-    """The score() bridge must never grade judged checks (no ctx.judge)."""
-    task_dir = tmp_path / "task"
-    # A rubric is present on the task, but with no judge it does not score.
-    from coding_agent_playbook.evals.task import Rubric
-
-    _make_setup(task_dir)
-    task = _make_task(task_dir, metrics=_cc_metrics())
-    task.rubric = Rubric(criteria=["clarity", "naming"])
-
-    baseline = materialize(task, tmp_path / "scratch")
-    write_files({"mod.py": _REFACTORED})(baseline.repo_root)
-    candidate = capture(baseline.repo_root, baseline, "t")
-    report = score(task, baseline, candidate)
-
-    # The judged checks are present but skipped (never produced a run finding).
-    judge_checks = [c for c in report.checks if c.check_id.startswith("judge:")]
-    assert judge_checks  # they were compiled
-    assert all(c.status == "skipped" for c in judge_checks)
-    assert not any(d.evaluator.startswith("judge:") for d in _scope_details(report))
 
 
 def test_score_is_callable_directly_with_handles(tmp_path: Path) -> None:
     """``score(task, baseline, candidate)`` works without going through run_task."""
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir, metrics=_cc_metrics())
+    task = _make_task(task_dir, gate=_cc_gate())
 
     baseline = materialize(task, tmp_path / "scratch")
     write_files({"mod.py": _REFACTORED})(baseline.repo_root)
@@ -573,112 +586,56 @@ def test_score_is_callable_directly_with_handles(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_judged_checks_appear_when_a_judge_is_passed(tmp_path: Path) -> None:
-    """A [rubric] task run via FakeRunner + StubJudge surfaces judged scope leaves."""
+def test_judged_rubric_passes_with_a_high_judge(tmp_path: Path) -> None:
+    """A [rubric] task run via FakeRunner + a high StubJudge passes the rubric layer."""
     from coding_agent_playbook.evals.judge import StubJudge
-    from coding_agent_playbook.evals.task import Rubric
 
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir)
-    task.rubric = Rubric(criteria=["clarity", "naming"])
+    task = _make_task(task_dir, gate=_cc_gate(), rubric=_judged_rubric("clarity", "naming"))
 
     runner = FakeRunner(write_files({"mod.py": _REFACTORED}))
     result = runner.run_task(
         task, tmp_path / "scratch", judge=StubJudge({"clarity": 0.9, "naming": 0.7})
     )
 
-    judge_ids = {c.check_id for c in result.report.checks if c.check_id.startswith("judge:")}
-    assert judge_ids == {"judge:clarity", "judge:naming"}
-    # The clarity check ran and carries the stub score on its scope leaf.
-    clarity = _check(result.report, "judge:clarity")
-    assert clarity.status == "run"
-    leaf = clarity.subresults[0]
-    assert isinstance(leaf, ScopeDetail)
-    assert leaf.value == pytest.approx(0.9)
-    assert leaf.scope_key == "rubric"
+    rubric = _check(result.report, "rubric")
+    assert rubric.status == "run"
+    assert rubric.passed is True  # composite 0.8 >= 0.5 floor
+    # The rubric layer wraps a ThresholdCheck over the judged rubric group; its
+    # threshold leaf carries the rubric composite (mean of 0.9 and 0.7 == 0.8).
+    threshold = _check(result.report, "threshold:quality")
+    assert threshold.score == pytest.approx(0.8)
+    assert result.passed is True
 
 
-def test_judged_checks_contribute_to_the_composite(tmp_path: Path) -> None:
-    """Judged criteria feed the weighted composite (weight > 0)."""
+def test_low_judged_score_fails_the_rubric_layer_and_verdict(tmp_path: Path) -> None:
+    """A rubric composite below the floor fails the rubric layer => verdict False."""
     from coding_agent_playbook.evals.judge import StubJudge
-    from coding_agent_playbook.evals.task import Rubric
 
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir)
-    # Uniform weights (0.5 each); scores 1.0 and 0.0 => composite 0.5.
-    task.rubric = Rubric(criteria=["good", "bad"])
+    task = _make_task(task_dir, gate=_cc_gate(), rubric=_judged_rubric("clarity"))
 
     runner = FakeRunner(write_files({"mod.py": _REFACTORED}))
-    result = runner.run_task(task, tmp_path / "scratch", judge=StubJudge({"good": 1.0, "bad": 0.0}))
-
-    assert result.report.composite == pytest.approx(0.5)
-    assert result.aggregate_score == pytest.approx(0.5)
-
-
-def test_low_judged_score_does_not_gate_but_lands_a_fail_leaf(tmp_path: Path) -> None:
-    """A judged score below the check threshold fails the leaf but does not gate.
-
-    ``JudgeCheck`` is ``required=False`` (judged criteria score the composite, not
-    the gate), so a low score yields a failing leaf without sinking ``passed``.
-    """
-    from coding_agent_playbook.evals.judge import StubJudge
-    from coding_agent_playbook.evals.task import Rubric
-
-    task_dir = tmp_path / "task"
-    _make_setup(task_dir)
-    task = _make_task(task_dir)
-    task.rubric = Rubric(criteria=["clarity"])
-
-    runner = FakeRunner(write_files({"mod.py": _REFACTORED}))
-    # threshold defaults to 0.5; 0.3 < 0.5 => the leaf fails.
+    # composite 0.3 < 0.5 floor => rubric layer fails.
     result = runner.run_task(task, tmp_path / "scratch", judge=StubJudge({"clarity": 0.3}))
 
-    clarity = _check(result.report, "judge:clarity")
-    assert clarity.passed is False
-    leaf = clarity.subresults[0]
-    assert isinstance(leaf, ScopeDetail)
-    assert leaf.level == "fail"
-    # required=False => the failing judged leaf does not gate.
-    assert result.passed is True
-
-
-def test_high_judged_score_passes_its_check(tmp_path: Path) -> None:
-    """A judged score clearing the threshold passes the check's leaf."""
-    from coding_agent_playbook.evals.judge import StubJudge
-    from coding_agent_playbook.evals.task import Rubric
-
-    task_dir = tmp_path / "task"
-    _make_setup(task_dir)
-    task = _make_task(task_dir)
-    task.rubric = Rubric(criteria=["clarity"])
-
-    runner = FakeRunner(write_files({"mod.py": _REFACTORED}))
-    result = runner.run_task(task, tmp_path / "scratch", judge=StubJudge({"clarity": 0.95}))
-
-    clarity = _check(result.report, "judge:clarity")
-    assert clarity.passed is True
-    leaf = clarity.subresults[0]
-    assert isinstance(leaf, ScopeDetail)
-    assert leaf.level == "ok"
-    assert result.passed is True
+    rubric = _check(result.report, "rubric")
+    assert rubric.passed is False
+    # gate passes but rubric fails => "gate and rubric" verdict is False.
+    assert _check(result.report, "gate").passed is True
+    assert result.passed is False
 
 
 def test_no_judge_preserves_deterministic_only_behaviour(tmp_path: Path) -> None:
-    """With no judge, judged checks skip and the deterministic report is unchanged."""
-    from coding_agent_playbook.evals.task import Rubric
-
+    """With no judge, the rubric's judged content skips; the verdict = gate."""
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir, metrics=_cc_metrics())
-    task.rubric = Rubric(criteria=["clarity", "naming"])
+    task = _make_task(task_dir, gate=_cc_gate(), rubric=_judged_rubric("clarity", "naming"))
 
-    # No judge argument => deterministic-only.
     result = FakeRunner(write_files({"mod.py": _REFACTORED})).run_task(task, tmp_path / "scratch")
 
-    judge_checks = [c for c in result.report.checks if c.check_id.startswith("judge:")]
-    assert all(c.status == "skipped" for c in judge_checks)
     assert not any(d.evaluator.startswith("judge:") for d in _scope_details(result.report))
     assert result.passed is True
 
@@ -686,12 +643,10 @@ def test_no_judge_preserves_deterministic_only_behaviour(tmp_path: Path) -> None
 def test_samples_threaded_through_to_the_judge(tmp_path: Path) -> None:
     """``run_task(samples=N)`` reaches the judge as the per-criterion ``n``."""
     from coding_agent_playbook.evals.judge import StubJudge
-    from coding_agent_playbook.evals.task import Rubric
 
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir)
-    task.rubric = Rubric(criteria=["clarity"])
+    task = _make_task(task_dir, rubric=_judged_rubric("clarity"), verdict="rubric")
 
     judge = StubJudge({"clarity": 0.8})
     FakeRunner(write_files({"mod.py": _REFACTORED})).run_task(
@@ -703,19 +658,16 @@ def test_samples_threaded_through_to_the_judge(tmp_path: Path) -> None:
 def test_judge_artifact_is_the_candidate_diff(tmp_path: Path) -> None:
     """The judged artifact is the candidate's captured git diff (the agent's change)."""
     from coding_agent_playbook.evals.judge import StubJudge
-    from coding_agent_playbook.evals.task import Rubric
 
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir)
-    task.rubric = Rubric(criteria=["clarity"])
+    task = _make_task(task_dir, rubric=_judged_rubric("clarity"), verdict="rubric")
 
     judge = StubJudge({"clarity": 0.8})
     FakeRunner(write_files({"helper.py": "answer = 42\n"})).run_task(
         task, tmp_path / "scratch", judge=judge
     )
     _criterion, artifact, _n = judge.calls[0]
-    # The diff contains the newly-created file's contents.
     assert "answer = 42" in str(artifact)
 
 
@@ -724,45 +676,40 @@ def test_judge_artifact_is_the_candidate_diff(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_fail_fast_skips_the_judge_when_an_expected_check_fails(tmp_path: Path) -> None:
-    """fail_fast (the runner default) skips the judge tier once the gate is lost.
-
-    A failing required ``[expected]`` check (DETERMINISTIC tier) settles the gate,
-    so the cost-tiered scheduler short-circuits the JUDGED tier — the judge's
-    ``score_criterion`` is never called (no LLM call wasted).
-    """
+def test_fail_fast_skips_the_judge_when_a_gate_check_fails(tmp_path: Path) -> None:
+    """fail_fast (the runner default) skips the judge tier once the gate is lost."""
     from coding_agent_playbook.evals.judge import StubJudge
-    from coding_agent_playbook.evals.task import Rubric
 
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    # An [expected] check the no-op agent will violate (the file is never created).
-    expected = ExpectedOutcome(files_created=["never_created.py"])
-    task = _make_task(task_dir, expected=expected)
-    task.rubric = Rubric(criteria=["clarity"])
+    # A gate check the no-op agent will violate (the file is never created).
+    gate = {
+        "expr": "made",
+        "bind": {"made": {"check": "file_exists", "path": "never_created.py"}},
+    }
+    task = _make_task(task_dir, gate=gate, rubric=_judged_rubric("clarity"))
 
     judge = StubJudge({"clarity": 0.9})
-    # FakeRunner's default no-op mutation: never creates never_created.py.
     result = FakeRunner().run_task(task, tmp_path / "scratch", judge=judge)
 
     assert result.passed is False
     # The judge was never invoked.
     assert judge.calls == []
-    # And its check is recorded skipped, not run.
-    clarity = _check(result.report, "judge:clarity")
-    assert clarity.status == "skipped"
+    # The rubric layer is recorded skipped, not run.
+    assert _check(result.report, "rubric").status == "skipped"
 
 
 def test_full_scoring_runs_the_judge_even_after_a_failed_gate(tmp_path: Path) -> None:
     """fail_fast=False (``--full-scoring``) grades the judge tier regardless."""
     from coding_agent_playbook.evals.judge import StubJudge
-    from coding_agent_playbook.evals.task import Rubric
 
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    expected = ExpectedOutcome(files_created=["never_created.py"])
-    task = _make_task(task_dir, expected=expected)
-    task.rubric = Rubric(criteria=["clarity"])
+    gate = {
+        "expr": "made",
+        "bind": {"made": {"check": "file_exists", "path": "never_created.py"}},
+    }
+    task = _make_task(task_dir, gate=gate, rubric=_judged_rubric("clarity"))
 
     judge = StubJudge({"clarity": 0.9})
     result = FakeRunner().run_task(task, tmp_path / "scratch", judge=judge, fail_fast=False)
@@ -771,11 +718,7 @@ def test_full_scoring_runs_the_judge_even_after_a_failed_gate(tmp_path: Path) ->
     assert result.passed is False
     # ...but full scoring graded the judge anyway.
     assert judge.calls == [("clarity", judge.calls[0][1], 1)]
-    clarity = _check(result.report, "judge:clarity")
-    assert clarity.status == "run"
-    leaf = clarity.subresults[0]
-    assert isinstance(leaf, ScopeDetail)
-    assert leaf.value == pytest.approx(0.9)
+    assert _check(result.report, "rubric").status == "run"
 
 
 # --------------------------------------------------------------------------- #
@@ -787,7 +730,7 @@ def test_materialize_with_no_setup_dir_yields_empty_baseline(tmp_path: Path) -> 
     """A task whose ``setup/`` is missing still produces a committed empty repo."""
     task_dir = tmp_path / "task"  # no setup/ created
     task_dir.mkdir()
-    task = _make_task(task_dir)
+    task = _make_task(task_dir, gate=_cc_gate())
 
     baseline = materialize(task, tmp_path / "scratch")
     assert baseline.commit
@@ -799,7 +742,7 @@ def test_static_measurements_recurse_subdirs_and_skip_unparseable(tmp_path: Path
     """Static metrics recurse into subpackages and skip files that don't parse."""
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
-    task = _make_task(task_dir, metrics=_cc_metrics())
+    task = _make_task(task_dir, gate=_cc_gate())
 
     def _mutate(scratch: Path) -> None:
         pkg = scratch / "pkg"
@@ -809,9 +752,7 @@ def test_static_measurements_recurse_subdirs_and_skip_unparseable(tmp_path: Path
 
     result = FakeRunner(_mutate).run_task(task, tmp_path / "scratch")
     keys = {d.scope_key for d in _scopes_for_evaluator(result.report, "cyclomatic_complexity")}
-    # The nested file was measured...
     assert any(k.startswith("pkg/deep.py") for k in keys)
-    # ...and the unparseable file produced no findings (skipped, not crashed).
     assert not any(k.startswith("broken.py") for k in keys)
 
 
@@ -829,6 +770,5 @@ def test_render_prompt_skips_non_matching_prompts() -> None:
         source_package="coding_agent_playbook",
     )
     prompt = render_prompt(task)
-    # The explain prompt resolved (not the refactor/review/etc. siblings).
     assert prompt
     assert "[prompt:explain]" not in prompt  # i.e. not the placeholder fallback

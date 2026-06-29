@@ -23,7 +23,6 @@ from coding_agent_playbook.evals.judge import (
     StubJudge,
     parse_score,
 )
-from coding_agent_playbook.evals.task import Rubric
 
 # --------------------------------------------------------------------------- #
 # Judge ABC — batch wrapper + n-sample averaging
@@ -42,18 +41,18 @@ def test_default_available_is_true() -> None:
 
 def test_batch_score_maps_over_score_criterion() -> None:
     judge = StubJudge({"A": 0.1, "B": 0.9})
-    scores = judge.score(Rubric(criteria=["A", "B"]), "the transcript", {})
+    scores = judge.score(["A", "B"], "the transcript", {})
     assert scores == [pytest.approx(0.1), pytest.approx(0.9)]
 
 
 def test_batch_score_passes_transcript_as_artifact_n_one() -> None:
     judge = StubJudge()
-    judge.score(Rubric(criteria=["A", "B"]), "TX", {})
+    judge.score(["A", "B"], "TX", {})
     assert judge.calls == [("A", "TX", 1), ("B", "TX", 1)]
 
 
-def test_batch_score_empty_rubric_is_empty_list() -> None:
-    assert StubJudge().score(Rubric(criteria=[]), "tx", {}) == []
+def test_batch_score_empty_criteria_is_empty_list() -> None:
+    assert StubJudge().score([], "tx", {}) == []
 
 
 def test_n_sample_averaging() -> None:

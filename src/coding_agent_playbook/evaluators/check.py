@@ -250,9 +250,17 @@ class _MetricCheck(Check):
         self.weight = weight
         self.required = required
         self.id = f"{self._id_prefix}:{metric.name}"
-        # An execution metric (needs a runnable project) is EXECUTION-tier; a
-        # static one is DETERMINISTIC. Mirrors ``static_metrics()``'s discriminator.
-        self.cost = CostTier.EXECUTION if metric.needs_project else CostTier.DETERMINISTIC
+        # Tier the check by its metric's cost: a judge-backed metric is JUDGED, an
+        # execution metric (needs a runnable project) is EXECUTION, a static one is
+        # DETERMINISTIC. The JUDGED tier lets the cost-tiered scheduler short-circuit
+        # a judged rubric check when a cheaper required gate already failed.
+        if metric.needs_judge:
+            self.cost = CostTier.JUDGED
+            self.determinism = Determinism.JUDGED
+        elif metric.needs_project:
+            self.cost = CostTier.EXECUTION
+        else:
+            self.cost = CostTier.DETERMINISTIC
 
     def available(self, ctx: EvalContext) -> bool:
         """Delegate to the underlying metric (dependency + ctx-slot gating)."""
@@ -266,7 +274,16 @@ class _MetricCheck(Check):
         normalized scores, while the emitted :class:`ScopeDetail` keeps the **raw**
         ``value``/``baseline`` and records the normalized ``score`` and the ``0-1``
         ``bound`` that decided.
+
+        A **judge-backed** metric (``needs_judge``) is measured **lazily here** when
+        the :class:`MeasurementSet` carries no pre-computed candidate measurement
+        for it: the static/execution metrics are pre-measured up front (so this
+        fallback never fires for them), but a judged metric's measurement is the
+        judge call itself, which must be deferred until the cost-tiered scheduler
+        actually grades this JUDGED-tier check — so a cheaper required gate that
+        already failed short-circuits it and the judge is never invoked.
         """
+        measurements = self._lazily_measure(ctx, measurements)
         details: list[ScopeDetail] = []
         scores: list[float] = []
         for scope_key, value, base_value in measurements.pairs(self.metric.name):
@@ -293,6 +310,31 @@ class _MetricCheck(Check):
                 )
             )
 
+        return self._build_result(details, scores)
+
+    def _lazily_measure(self, ctx: EvalContext, measurements: MeasurementSet) -> MeasurementSet:
+        """For a judge-backed metric with no pre-computed value, measure it now.
+
+        Returns ``measurements`` unchanged for static/execution metrics (always
+        pre-measured) and for a judge-backed metric that already has a candidate
+        measurement. Otherwise (a judged metric whose value is the judge call) it
+        runs ``self.metric.measure(ctx)`` and returns a fresh
+        :class:`MeasurementSet` with those values added to the candidate side — so
+        the grade below has a scope to decide. ``available`` guarantees the judge
+        is present when this fires.
+        """
+        if not self.metric.needs_judge:
+            return measurements
+        if any(m.evaluator == self.metric.name for m in measurements.candidate):
+            return measurements
+        fresh = list(self.metric.measure(ctx))
+        return MeasurementSet([*measurements.candidate, *fresh], measurements.baseline)
+
+    def _build_result(self, details: list[ScopeDetail], scores: list[float]) -> CheckResult:
+        """Fold per-scope ``details`` + normalized ``scores`` into one result.
+
+        Split out of :meth:`grade` so the lazy-measure path reads cleanly.
+        """
         # passed = no scope failed; warns do NOT fail the check (strict is a
         # Rubric-level concern, applied later from the subresult levels).
         passed = not any(d.level == "fail" for d in details)

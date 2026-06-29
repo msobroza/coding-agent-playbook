@@ -415,11 +415,10 @@ def _print_list(prompts: list[Prompt], tasks: list[EvalTask]) -> int:
             sub_connector = "    " if is_last else "│   "
             id_padded = f"{task.id:<36}"
             lines.append(f"  {connector} {id_padded}✓ task defined")
-            criteria_count = len(task.rubric.criteria) if task.rubric else 0
-            checks_count = _count_programmatic_checks(task)
+            criteria_count = _count_rubric_criteria(task)
+            checks_count = _count_gate_checks(task)
             lines.append(
-                f"  {sub_connector}└── "
-                f"{criteria_count} rubric criteria, {checks_count} programmatic checks"
+                f"  {sub_connector}└── {criteria_count} rubric criteria, {checks_count} gate checks"
             )
 
     # Blank separator between the per-prompt blocks and the Total: line
@@ -490,39 +489,25 @@ def _print_show(task_id: str, tasks: list[EvalTask], prompts: list[Prompt]) -> i
         bindings = ", ".join(f"{k}={v}" for k, v in task.invocation.input_variables.items())
         lines.append(f"  Variables: {bindings}")
 
-    if task.expected is None:
-        lines.append("Expected: (none)")
+    if task.gate is None:
+        lines.append("Gate: (none)")
     else:
-        checks_count = _count_programmatic_checks(task)
-        lines.append(f"Expected (programmatic, {checks_count} checks):")
-        for created in task.expected.files_created:
-            lines.append(f"  - File created: {created}")
-        for entry in task.expected.files_must_contain:
-            lines.append(f"  - {entry['path']} contains: {entry['pattern']}")
-        for unchanged in task.expected.files_unchanged:
-            lines.append(f"  - File unchanged: {unchanged}")
-        for forbidden in task.expected.files_forbidden:
-            lines.append(f"  - File forbidden: {forbidden}")
+        gate_checks = _gate_check_descriptions(task)
+        expr = task.gate.expr or " and ".join(task.gate.bind) or "(empty)"
+        lines.append(f"Gate (deterministic, {len(gate_checks)} checks, expr: {expr}):")
+        for desc in gate_checks:
+            lines.append(f"  - {desc}")
 
     if task.rubric is None:
         lines.append("Rubric: (none)")
     else:
-        if task.rubric.weights is not None:
-            total = sum(task.rubric.weights)
-            header = (
-                f"Rubric (manual / LLM-judge, {len(task.rubric.criteria)} criteria, "
-                f"weights sum={total:.1f}):"
-            )
-            lines.append(header)
-            for weight, criterion in zip(task.rubric.weights, task.rubric.criteria, strict=True):
-                lines.append(f"  - {weight}: {criterion}")
-        else:
-            lines.append(
-                f"Rubric (manual / LLM-judge, {len(task.rubric.criteria)} criteria, "
-                "weights=uniform):"
-            )
-            for criterion in task.rubric.criteria:
-                lines.append(f"  - {criterion}")
+        criteria = _rubric_criteria_with_weights(task)
+        lines.append(f"Rubric (manual / LLM-judge, {len(criteria)} criteria):")
+        for weight, criterion in criteria:
+            prefix = "" if weight is None else f"{weight}: "
+            lines.append(f"  - {prefix}{criterion}")
+
+    lines.append(f"Verdict: {task.verdict}")
 
     print("\n".join(lines))
     return 0
@@ -602,13 +587,79 @@ def _display_source_path(task: EvalTask) -> str:
     return f"{task.source_package}/{task.source_path.parent.name}/"
 
 
-def _count_programmatic_checks(task: EvalTask) -> int:
-    """Sum every entry across the four ``ExpectedOutcome`` lists."""
-    if task.expected is None:
+def _count_gate_checks(task: EvalTask) -> int:
+    """Number of top-level ``[gate.bind]`` handles (the deterministic gate checks).
+
+    A composed handle (an ``all_of``/``any_of`` group) counts as one — the summary
+    line is a coarse handle count, not a deep leaf count.
+    """
+    if task.gate is None:
         return 0
-    return (
-        len(task.expected.files_created)
-        + len(task.expected.files_must_contain)
-        + len(task.expected.files_unchanged)
-        + len(task.expected.files_forbidden)
-    )
+    return len(task.gate.bind)
+
+
+def _count_rubric_criteria(task: EvalTask) -> int:
+    """Number of judged criteria the ``[rubric.bind]`` rubric groups declare."""
+    return len(_rubric_criteria_with_weights(task))
+
+
+def _gate_check_descriptions(task: EvalTask) -> list[str]:
+    """A one-line description of each ``[gate.bind]`` handle for ``--show``.
+
+    Renders the handle name + a short shape summary (the ``check`` kind +
+    path/pattern for a standalone file/threshold check, or the boolean-group /
+    ref shape). Reads the raw binding tables — no compilation — so ``--show`` works
+    even on a task that would fail to compile.
+    """
+    if task.gate is None:
+        return []
+    out: list[str] = []
+    for name, binding in task.gate.bind.items():
+        out.append(f"{name}: {_describe_binding(binding)}")
+    return out
+
+
+def _describe_binding(binding: dict[str, object]) -> str:
+    """Short human description of one handle binding (its shape + key fields)."""
+    if "check" in binding:
+        kind = binding["check"]
+        path = binding.get("path")
+        pattern = binding.get("pattern")
+        detail = f" {path}" if path else ""
+        detail += f" ~/{pattern}/" if pattern else ""
+        return f"check {kind}{detail}"
+    if "ref" in binding:
+        return f"ref {binding['ref']}"
+    if "rubric" in binding:
+        criteria = binding["rubric"]
+        n = len(criteria) if isinstance(criteria, list) else 0
+        return f"rubric ({n} criteria)"
+    for group in ("all_of", "any_of", "not"):
+        if group in binding:
+            return f"{group} group"
+    return "(unknown)"
+
+
+def _rubric_criteria_with_weights(task: EvalTask) -> list[tuple[float | None, str]]:
+    """The ``(weight, criterion)`` pairs across every ``[rubric.bind]`` rubric group.
+
+    Reads the raw binding tables (no compilation): each ``rubric`` group's entries
+    are ``{judge=…, weight=…}``, flattened across all rubric-group handles. A
+    non-``rubric`` handle (a ref or composed boolean) contributes nothing here.
+    """
+    if task.rubric is None:
+        return []
+    out: list[tuple[float | None, str]] = []
+    for binding in task.rubric.bind.values():
+        criteria = binding.get("rubric")
+        if not isinstance(criteria, list):
+            continue
+        for entry in criteria:
+            if not isinstance(entry, dict):
+                continue
+            judge = entry.get("judge")
+            weight = entry.get("weight")
+            if isinstance(judge, str):
+                w = float(weight) if isinstance(weight, (int, float)) else None
+                out.append((w, judge))
+    return out

@@ -1,6 +1,6 @@
 """Smoke test for the ``coding_agent_playbook.evals`` package surface.
 
-Confirms the Tier 0 public API (everything overlay authors should import)
+Confirms the public API (everything overlay authors should import)
 re-exports cleanly from the package root and refers to the same classes as
 the submodules.
 """
@@ -15,8 +15,7 @@ def test_eval_task_public_re_export_matches_module() -> None:
     assert pkg.EvalTask is task_mod.EvalTask
     assert pkg.TaskSetup is task_mod.TaskSetup
     assert pkg.TaskInvocation is task_mod.TaskInvocation
-    assert pkg.ExpectedOutcome is task_mod.ExpectedOutcome
-    assert pkg.Rubric is task_mod.Rubric
+    assert pkg.Layer is task_mod.Layer
 
 
 def test_loader_and_validator_re_exports() -> None:
@@ -36,8 +35,7 @@ def test_all_lists_every_public_name() -> None:
     expected = {
         "EvalTask",
         "EvalValidationError",
-        "ExpectedOutcome",
-        "Rubric",
+        "Layer",
         "TaskInvocation",
         "TaskSetup",
         "discover_eval_task_dirs",

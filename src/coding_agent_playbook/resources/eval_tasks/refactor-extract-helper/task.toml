@@ -13,18 +13,24 @@ frameworks = ["pytest"]
 prompt_args = "extract the totals-formatting block in src/report.py into a helper"
 input_variables = { target = "src/report.py::render_report" }
 
-[expected]
-files_must_contain = [
-  { path = "src/report.py", pattern = "def _format_totals" },
-  { path = "src/report.py", pattern = "_format_totals" },
-]
-files_unchanged = ["tests/test_report.py"]
+[gate]
+expr = "defines_helper and calls_helper and tests_unchanged"
+
+[gate.bind]
+defines_helper = { check = "file_contains", path = "src/report.py", pattern = "def _format_totals" }
+calls_helper = { check = "file_contains", path = "src/report.py", pattern = "_format_totals" }
+tests_unchanged = { check = "file_unchanged", path = "tests/test_report.py" }
 
 [rubric]
-criteria = [
-  "The extracted helper has a name that says WHAT it produces (not HOW), e.g. `_format_totals`",
-  "The original function still passes the existing tests with no behavior change",
-  "The helper is private (leading underscore) since it has only one caller",
-  "The extraction does not introduce new arguments to the public function",
-]
-weights = [0.3, 0.4, 0.15, 0.15]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The extracted helper has a name that says WHAT it produces (not HOW), e.g. `_format_totals`", weight = 0.3 },
+  { judge = "The original function still passes the existing tests with no behavior change", weight = 0.4 },
+  { judge = "The helper is private (leading underscore) since it has only one caller", weight = 0.15 },
+  { judge = "The extraction does not introduce new arguments to the public function", weight = 0.15 },
+] }
+
+[verdict]
+trial = "gate and rubric"

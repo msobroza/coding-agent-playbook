@@ -25,7 +25,6 @@ from coding_agent_playbook.evals.runner import (
     HarnessRunner,
     TaskResult,
 )
-from coding_agent_playbook.evals.task import Rubric
 from coding_agent_playbook.evaluators import EvaluationReport
 
 if TYPE_CHECKING:
@@ -73,7 +72,7 @@ def test_judge_score_criterion_is_the_only_abstract_hook() -> None:
 
 
 def test_judge_score_batch_wraps_score_criterion() -> None:
-    """``Judge.score`` maps the per-criterion primitive over the rubric (Option A)."""
+    """``Judge.score`` maps the per-criterion primitive over a criteria list (Option A)."""
 
     class _Judge(Judge):
         name = "test"
@@ -86,7 +85,7 @@ def test_judge_score_batch_wraps_score_criterion() -> None:
             return {"A": 0.2, "B": 0.8}[criterion]
 
     judge = _Judge()
-    scores = judge.score(Rubric(criteria=["A", "B"]), "transcript-text", {})
+    scores = judge.score(["A", "B"], "transcript-text", {})
     assert scores == [0.2, 0.8]
     # The batch wrapper passes the transcript as the artifact, n=1 each.
     assert judge.seen == [("A", "transcript-text", 1), ("B", "transcript-text", 1)]

@@ -1,10 +1,27 @@
-"""Eval-task data types (SPEC §15.2). Tier 0 — authoring-side only.
+"""Eval-task data types (SPEC §15.2) — the C7 ``[gate]``/``[rubric]``/``[verdict]`` schema.
 
 These are the canonical Python representations of ``eval_tasks/<id>/task.toml``.
 The loader (:mod:`coding_agent_playbook.evals.loader`) parses the TOML; the
 validator (:mod:`coding_agent_playbook.evals.validator`) enforces structural
-correctness. The runner that executes tasks against an agent ships in v2;
-see SPEC §15.3 for the placeholder ABCs.
+correctness by trial-compiling the blocks; the runner
+(:mod:`coding_agent_playbook.evals.runner`) materializes + scores the task.
+
+**C7 cutover.** The old fused ``[expected]``/``[metrics]``/``[rubric]`` blocks (each
+a typed dataclass) are gone. A task now declares its evaluation as up to four raw
+blocks the C6 compiler turns into a per-trial structure:
+
+* ``[gate]`` — ``{"bind": <handle table>, "expr": <bool expr | None>}``. The
+  deterministic layer (file predicates, metric thresholds, composed gates). Every
+  handle is a boolean :class:`~coding_agent_playbook.evaluators.check.Check`.
+* ``[rubric]`` — same shape; the judged layer (a ``rubric`` group of weighted
+  ``JudgeCheck``\\ s, thresholded to a boolean).
+* ``[verdict].trial`` — a boolean expression over ``gate``/``rubric`` (default
+  ``"gate and rubric"``) deriving the per-trial verdict from the two layers.
+* ``[aggregate]`` — ``{"bind": <table>, "expr": <str | None>}``. Parsed but **not
+  executed** in C7 (single-trial); the C8 multi-trial layer consumes it.
+
+``run_tests``/``strict`` are no longer authored — they are *inferred*: a task runs
+tests iff it references an execution metric, and ``strict`` defaults ``False``.
 """
 
 from __future__ import annotations
@@ -13,18 +30,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.evaluators.types import (
-    AbsoluteThreshold,
-    MetricConfig,
-    RegressionPolicy,
-)
-
 if TYPE_CHECKING:
-    from coding_agent_playbook.evaluators.check import Check
-    from coding_agent_playbook.evaluators.rubric import Rubric as CheckRubric
-
-# Tolerance for the rubric-weights sum check (SPEC §15.2 fifth rule).
-_WEIGHT_SUM_TOLERANCE = 1e-3
+    from coding_agent_playbook.evals._compile import CompiledTask
 
 
 @dataclass
@@ -32,7 +39,7 @@ class TaskSetup:
     """Mock-detector facts + files in the ``setup/`` subdirectory.
 
     ``files`` lists the entries under ``<task_dir>/setup/`` (relative paths);
-    the v2 runner walks ``setup/`` itself and copies into the scratch repo, so
+    the runner walks ``setup/`` itself and copies into the scratch repo, so
     this list is documentation that the validator can cross-check.
     """
 
@@ -52,45 +59,22 @@ class TaskInvocation:
 
 
 @dataclass
-class ExpectedOutcome:
-    """Programmatic checks the runner (v2) will execute against agent output.
+class Layer:
+    """One ``[gate]`` / ``[rubric]`` / ``[aggregate]`` block: a bind table + an expr.
 
-    All sub-lists are ANDed: every entry must hold for the task to pass.
-    ``files_must_contain`` entries are ``{"path": <str>, "pattern": <regex>}``.
+    ``bind`` is the raw ``[<layer>.bind]`` handle table (one entry per handle, the
+    value a binding the C5 :func:`~coding_agent_playbook.evals._handles.build_handles`
+    factory turns into a :class:`~coding_agent_playbook.evaluators.check.Check`).
+    ``expr`` is the optional boolean/aggregate expression over those handle names
+    (``None`` defaults to the sole handle's name for a single-handle layer).
     """
 
-    files_created: list[str] = field(default_factory=list)
-    files_must_contain: list[dict[str, str]] = field(default_factory=list)
-    files_unchanged: list[str] = field(default_factory=list)
-    files_forbidden: list[str] = field(default_factory=list)
+    bind: dict[str, dict[str, Any]] = field(default_factory=dict)
+    expr: str | None = None
 
 
-@dataclass
-class Rubric:
-    """Human-readable criteria for manual or LLM-as-judge (Tier 2) grading.
-
-    Two mutually exclusive authoring modes:
-
-    - **Inline** — ``criteria`` (with optional ``weights``) spell the rubric out
-      in the ``task.toml``. ``weights``, if present, must have the same length as
-      ``criteria`` and sum to ``1.0`` (within :data:`_WEIGHT_SUM_TOLERANCE`);
-      if absent the runner treats weighting as uniform.
-    - **Named reference** — ``ref`` names a code-defined rubric registered in the
-      :mod:`coding_agent_playbook.evaluators.rubrics` registry; the referenced
-      rubric supplies the criteria + weights, so ``criteria``/``weights`` stay
-      empty and the weight-sum check is skipped.
-
-    ``ref`` and ``criteria`` are mutually exclusive, and a ``[rubric]`` block must
-    set exactly one of them (enforced in :func:`_parse_rubric`).
-    """
-
-    criteria: list[str] = field(default_factory=list)
-    weights: list[float] | None = None
-    #: Name of a registered code-defined rubric (the named-rubric registry). When
-    #: set, ``criteria``/``weights`` are empty and the referenced rubric's checks
-    #: are spliced in by :func:`rubric_for_task`. Mutually exclusive with
-    #: ``criteria``.
-    ref: str | None = None
+#: The default ``[verdict].trial`` expression: both layers must pass.
+_DEFAULT_VERDICT = "gate and rubric"
 
 
 @dataclass
@@ -102,6 +86,10 @@ class EvalTask:
     (``"coding_agent_playbook"``, an overlay package, or ``"<repo-local>"``)
     so ``playbook eval --show`` and overlay collision reports can attribute the
     task back to its layer.
+
+    ``gate``/``rubric``/``aggregate`` are the parsed :class:`Layer` blocks (``None``
+    when absent); ``verdict`` is the ``[verdict].trial`` expression. A task must
+    carry at least one of ``[gate]`` / ``[rubric]`` (enforced at compile time).
     """
 
     id: str
@@ -112,13 +100,10 @@ class EvalTask:
     version: int = 1
     setup: TaskSetup = field(default_factory=TaskSetup)
     invocation: TaskInvocation = field(default_factory=TaskInvocation)
-    expected: ExpectedOutcome | None = None
-    rubric: Rubric | None = None
-    #: Parsed top-level ``[metrics]`` block (SPEC prM §D) — a sibling of
-    #: ``expected``/``rubric``. ``None`` when the task declares no metrics. The
-    #: runner compiles it (via :func:`rubric_for_task`) into the static +
-    #: execution checks selected/policy'd here.
-    metrics: MetricConfig | None = None
+    gate: Layer | None = None
+    rubric: Layer | None = None
+    verdict: str = _DEFAULT_VERDICT
+    aggregate: Layer | None = None
 
     @classmethod
     def from_dict(
@@ -132,8 +117,14 @@ class EvalTask:
 
         Required top-level fields: ``id``, ``prompt_id``, ``description``.
         Optional top-level: ``version``.
-        Optional sections: ``[setup]``, ``[invocation]``, ``[expected]``,
-        ``[rubric]``, ``[metrics]``.
+        Optional sections: ``[setup]``, ``[invocation]``, ``[gate]``, ``[rubric]``,
+        ``[verdict]``, ``[aggregate]``.
+
+        Only the *structural* shape is enforced here (each block is a table; the
+        bind/expr split is well-formed). Semantic correctness — unknown check ids,
+        malformed handle bindings, expression identifiers ⊄ bind keys, rubric
+        weight-sum, verdict idents ⊄ present layers — is the compiler's job and is
+        surfaced by the validator via :func:`compile_eval_task`.
 
         Raises :exc:`ValueError` with a descriptive message on missing or
         malformed required fields. The loader catches these and wraps them
@@ -148,9 +139,12 @@ class EvalTask:
 
         setup = _parse_setup(data.get("setup", {}))
         invocation = _parse_invocation(data.get("invocation", {}))
-        expected = _parse_expected(data["expected"]) if "expected" in data else None
-        rubric = _parse_rubric(data["rubric"]) if "rubric" in data else None
-        metrics = _parse_metrics(data["metrics"]) if "metrics" in data else None
+        gate = _parse_layer(data["gate"], block="gate") if "gate" in data else None
+        rubric = _parse_layer(data["rubric"], block="rubric") if "rubric" in data else None
+        aggregate = (
+            _parse_layer(data["aggregate"], block="aggregate") if "aggregate" in data else None
+        )
+        verdict = _parse_verdict(data.get("verdict", {}))
 
         return cls(
             id=task_id,
@@ -161,10 +155,49 @@ class EvalTask:
             version=version,
             setup=setup,
             invocation=invocation,
-            expected=expected,
+            gate=gate,
             rubric=rubric,
-            metrics=metrics,
+            verdict=verdict,
+            aggregate=aggregate,
         )
+
+    def compiled(self) -> CompiledTask:
+        """Compile this task's blocks into a :class:`CompiledTask` (single-trial).
+
+        A thin wrapper over :func:`compile_eval_task`.
+        """
+        return compile_eval_task(self)
+
+
+def compile_eval_task(task: EvalTask) -> CompiledTask:
+    """Compile ``task``'s ``[gate]``/``[rubric]``/``[verdict]`` into a :class:`CompiledTask`.
+
+    Delegates to :func:`coding_agent_playbook.evals._compile.compile_task` with the
+    task's gate/rubric bind tables + exprs and the verdict trial expression. The
+    returned :class:`~coding_agent_playbook.evals._compile.CompiledTask` carries the
+    per-trial :class:`~coding_agent_playbook.evaluators.rubric.Rubric` (the gate +
+    rubric layer checks) and the parsed verdict AST.
+
+    Raises :exc:`ValueError` (incl. :exc:`~coding_agent_playbook.evals._expr.ExprError`)
+    /:exc:`KeyError` on any structural fault the compiler catches: no layer present,
+    unknown check id/metric/gate-ref/rubric-ref, malformed binding, an expression
+    identifier ⊄ its bind keys, a rubric weight-sum ≠ 1.0, or a verdict identifier
+    naming an absent layer. The validator turns these into validation errors.
+
+    The compiler is imported lazily so the ``task`` module stays import-light; the
+    ``_compile`` module imports only from ``evaluators`` (never back from ``task``),
+    so this is acyclic regardless.
+    """
+    from coding_agent_playbook.evals._compile import compile_task
+
+    return compile_task(
+        gate_bind=task.gate.bind if task.gate is not None else None,
+        gate_expr=task.gate.expr if task.gate is not None else None,
+        rubric_bind=task.rubric.bind if task.rubric is not None else None,
+        rubric_expr=task.rubric.expr if task.rubric is not None else None,
+        verdict_trial=task.verdict,
+        name=task.id,
+    )
 
 
 def _require_str(data: dict[str, Any], key: str) -> str:
@@ -222,240 +255,52 @@ def _parse_invocation(raw: Any) -> TaskInvocation:
     return TaskInvocation(prompt_args=prompt_args, input_variables=input_variables)
 
 
-def _parse_expected(raw: Any) -> ExpectedOutcome:
-    if not isinstance(raw, dict):
-        raise ValueError(f"[expected] must be a table, got {type(raw).__name__}")
-    files_must_contain_raw = raw.get("files_must_contain", [])
-    if not isinstance(files_must_contain_raw, list):
-        raise ValueError(
-            f"[expected].files_must_contain must be a list, got "
-            f"{type(files_must_contain_raw).__name__}"
-        )
-    files_must_contain: list[dict[str, str]] = []
-    for index, entry in enumerate(files_must_contain_raw):
-        if not isinstance(entry, dict):
-            raise ValueError(
-                f"[expected].files_must_contain[{index}] must be a table, "
-                f"got {type(entry).__name__}"
-            )
-        if "path" not in entry or "pattern" not in entry:
-            raise ValueError(
-                f"[expected].files_must_contain[{index}] must have 'path' and 'pattern'"
-            )
-        path = entry["path"]
-        pattern = entry["pattern"]
-        if not isinstance(path, str) or not isinstance(pattern, str):
-            raise ValueError(
-                f"[expected].files_must_contain[{index}] 'path' and 'pattern' must be strings"
-            )
-        files_must_contain.append({"path": path, "pattern": pattern})
-    return ExpectedOutcome(
-        files_created=list(raw.get("files_created", [])),
-        files_must_contain=files_must_contain,
-        files_unchanged=list(raw.get("files_unchanged", [])),
-        files_forbidden=list(raw.get("files_forbidden", [])),
-    )
+def _parse_layer(raw: Any, *, block: str) -> Layer:
+    """Parse a ``[gate]`` / ``[rubric]`` / ``[aggregate]`` block into a :class:`Layer`.
 
-
-def _parse_rubric(raw: Any) -> Rubric:
-    if not isinstance(raw, dict):
-        raise ValueError(f"[rubric] must be a table, got {type(raw).__name__}")
-
-    has_ref = "ref" in raw
-    has_criteria = "criteria" in raw
-    # ref and criteria are mutually exclusive, and a [rubric] block must set one.
-    if has_ref and has_criteria:
-        raise ValueError("[rubric] cannot set both 'ref' and 'criteria'")
-    if not has_ref and not has_criteria:
-        raise ValueError("[rubric] must set either 'criteria' or 'ref'")
-
-    if has_ref:
-        ref = raw["ref"]
-        if not isinstance(ref, str):
-            raise ValueError(f"[rubric].ref must be str, got {type(ref).__name__}")
-        # In ref-mode criteria/weights stay empty; the referenced rubric supplies
-        # them. The weight-sum check does not apply.
-        return Rubric(criteria=[], weights=None, ref=ref)
-
-    criteria_raw = raw.get("criteria", [])
-    if not isinstance(criteria_raw, list) or not all(isinstance(c, str) for c in criteria_raw):
-        raise ValueError("[rubric].criteria must be a list of strings")
-    criteria: list[str] = list(criteria_raw)
-    weights_raw = raw.get("weights")
-    weights: list[float] | None
-    if weights_raw is None:
-        weights = None
-    else:
-        if not isinstance(weights_raw, list) or not all(
-            isinstance(w, (int, float)) and not isinstance(w, bool) for w in weights_raw
-        ):
-            raise ValueError("[rubric].weights must be a list of numbers")
-        if len(weights_raw) != len(criteria):
-            raise ValueError(
-                f"[rubric].weights length {len(weights_raw)} does not match "
-                f"criteria length {len(criteria)}"
-            )
-        total = float(sum(weights_raw))
-        if abs(total - 1.0) > _WEIGHT_SUM_TOLERANCE:
-            raise ValueError(
-                f"[rubric].weights must sum to 1.0 (±{_WEIGHT_SUM_TOLERANCE}), got {total}"
-            )
-        weights = [float(w) for w in weights_raw]
-    return Rubric(criteria=criteria, weights=weights)
-
-
-def _coerce_number(value: Any) -> Any:
-    """Coerce a TOML number to ``float``; pass anything else through unchanged.
-
-    Value-correctness (numeric-ness, valid ``mode``, known evaluator names) is
-    the validator's job — it aggregates violations rather than raising — so the
-    parser deliberately keeps non-numeric values intact for the validator to
-    flag, mirroring how rubric *weights* are checked at load but evaluator
-    *names* are checked at validate time.
-    """
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return float(value)
-    return value
-
-
-def _parse_metrics(raw: Any) -> MetricConfig:
-    """Parse a top-level ``[metrics]`` table into a :class:`MetricConfig`.
-
-    Only the structural shape is enforced here (each block must be a table);
-    value-level checks — a valid ``mode``, numeric bounds/deltas, and known
-    evaluator names — live in the validator so every violation is aggregated
-    rather than the first one raising.
+    The block is a table with a ``bind`` sub-table (one entry per handle) and an
+    optional ``expr`` string. Only the structural shape is enforced (``bind`` is a
+    table of tables; ``expr`` is a string when present) — the handle bindings and
+    the expression are validated by the compiler.
     """
     if not isinstance(raw, dict):
-        raise ValueError(f"[metrics] must be a table, got {type(raw).__name__}")
+        raise ValueError(f"[{block}] must be a table, got {type(raw).__name__}")
 
-    config = MetricConfig()
-    if "mode" in raw:
-        config.mode = raw["mode"]
+    bind_raw = raw.get("bind", {})
+    if not isinstance(bind_raw, dict):
+        raise ValueError(f"[{block}.bind] must be a table, got {type(bind_raw).__name__}")
+    bind: dict[str, dict[str, Any]] = {}
+    for name, binding in bind_raw.items():
+        if not isinstance(binding, dict):
+            raise ValueError(f"[{block}.bind.{name}] must be a table, got {type(binding).__name__}")
+        bind[str(name)] = binding
 
-    thresholds_raw = raw.get("thresholds", {})
-    if not isinstance(thresholds_raw, dict):
-        raise ValueError(
-            f"[metrics.thresholds] must be a table, got {type(thresholds_raw).__name__}"
-        )
-    for name, entry in thresholds_raw.items():
-        if not isinstance(entry, dict):
-            raise ValueError(f"[metrics.thresholds.{name}] must be a table")
-        config.thresholds[str(name)] = AbsoluteThreshold(
-            warn=_coerce_number(entry.get("warn")),
-            fail=_coerce_number(entry.get("fail")),
-        )
+    expr_raw = raw.get("expr")
+    if expr_raw is not None and not isinstance(expr_raw, str):
+        raise ValueError(f"[{block}].expr must be str, got {type(expr_raw).__name__}")
 
-    regression_raw = raw.get("regression", {})
-    if not isinstance(regression_raw, dict):
-        raise ValueError(
-            f"[metrics.regression] must be a table, got {type(regression_raw).__name__}"
-        )
-    for name, entry in regression_raw.items():
-        if not isinstance(entry, dict):
-            raise ValueError(f"[metrics.regression.{name}] must be a table")
-        config.regression[str(name)] = RegressionPolicy(
-            max_worsening=_coerce_number(entry.get("max_worsening", 0.0)),
-        )
-
-    weights_raw = raw.get("weights", {})
-    if not isinstance(weights_raw, dict):
-        raise ValueError(f"[metrics.weights] must be a table, got {type(weights_raw).__name__}")
-    for name, value in weights_raw.items():
-        config.weights[str(name)] = _coerce_number(value)
-
-    return config
+    return Layer(bind=bind, expr=expr_raw)
 
 
-def rubric_for_task(task: EvalTask, config: MetricConfig | None) -> CheckRubric:
-    """Compile a task's eval blocks into a :class:`Rubric` of :class:`Check`\\ s.
+def _parse_verdict(raw: Any) -> str:
+    """Parse the ``[verdict]`` block into the trial expression string.
 
-    Returns one :class:`~coding_agent_playbook.evaluators.rubric.Rubric` whose
-    ordered checks fold the three eval blocks into a single
-    :class:`~coding_agent_playbook.evaluators.types.EvaluationReport` at
-    :meth:`Rubric.evaluate` time. Block ordering is metrics → rubric → expected,
-    so the report's findings appear in a stable order:
-
-    - ``[metrics]`` → one metric-backed
-      :class:`~coding_agent_playbook.evaluators.check.ThresholdCheck` /
-      :class:`~coding_agent_playbook.evaluators.check.NonRegressionCheck` per
-      metric named in ``config``'s ``thresholds``/``regression``/``weights``
-      (deduped, deterministic order). The check's ``mode`` is ``config.mode``;
-      its absolute/regression policy is the ``config`` override when present,
-      else the metric's ported default
-      (:data:`~coding_agent_playbook.evaluators.policy.METRIC_DEFAULTS`).
-      Weight is
-      ``config.weights.get(name, 0.0)``; ``required=True`` (a metric breach
-      gates). Unknown metric names are skipped (the validator surfaces them).
-    - ``[rubric]`` → judged checks, by one of two mutually exclusive modes.
-      *Inline* (``criteria``): one
-      :class:`~coding_agent_playbook.evaluators.checks.judged.JudgeCheck` per
-      criterion, carrying its weight (uniform ``1/len`` when ``weights`` is
-      omitted). *Named reference* (``ref``): the registered code-defined rubric
-      (:func:`coding_agent_playbook.evaluators.rubrics.get_rubric`) is resolved
-      and its ``JudgeCheck``\\ s are spliced in alongside the ``[metrics]`` /
-      ``[expected]`` checks. Either way ``required=False`` — judged checks feed
-      the composite but do not gate — and dormant without a ``ctx.judge`` (the
-      check skips).
-    - ``[expected]`` → one deterministic file check per
-      :class:`ExpectedOutcome` entry
-      (:class:`~coding_agent_playbook.evaluators.checks.files.FileExistsCheck` /
-      ``FileContainsCheck`` / ``FileUnchangedCheck`` / ``FileForbiddenCheck``),
-      each ``required=True``, ``weight=0.0`` (a pure gate, no composite share).
-
-    The :class:`Rubric` is named ``task.id`` so its nested-metric measurement key
-    (a rubric is also a ``Metric``) is stable per task.
+    ``[verdict].trial`` defaults to ``"gate and rubric"`` when the block (or its
+    ``trial`` key) is absent. Only the type is enforced here; the compiler checks
+    that the expression's identifiers name present layers.
     """
-    from coding_agent_playbook.evaluators.checks.files import (
-        FileContainsCheck,
-        FileExistsCheck,
-        FileForbiddenCheck,
-        FileUnchangedCheck,
-    )
-    from coding_agent_playbook.evaluators.checks.judged import JudgeCheck
-    from coding_agent_playbook.evaluators.policy import metric_check
-    from coding_agent_playbook.evaluators.rubric import Rubric as CheckRubricImpl
+    if not isinstance(raw, dict):
+        raise ValueError(f"[verdict] must be a table, got {type(raw).__name__}")
+    trial = raw.get("trial", _DEFAULT_VERDICT)
+    if not isinstance(trial, str):
+        raise ValueError(f"[verdict].trial must be str, got {type(trial).__name__}")
+    return trial
 
-    checks: list[Check] = []
 
-    if config is not None:
-        seen: set[str] = set()
-        for name in (*config.thresholds, *config.regression, *config.weights):
-            if name in seen:
-                continue
-            seen.add(name)
-            check = metric_check(name, config)
-            if check is not None:
-                checks.append(check)
-
-    if task.rubric is not None and task.rubric.ref:
-        # Named reference: resolve the registered code-defined rubric and splice
-        # its JudgeChecks in alongside the [metrics]/[expected] checks (so a task
-        # can carry ref + [expected] + [metrics] together). Imported lazily to
-        # keep the eval ↔ evaluator import surface narrow.
-        from coding_agent_playbook.evaluators.rubrics import get_rubric
-
-        checks.extend(get_rubric(task.rubric.ref).checks)
-    elif task.rubric is not None and task.rubric.criteria:
-        criteria = task.rubric.criteria
-        if task.rubric.weights is not None:
-            weights = task.rubric.weights
-        else:
-            weights = [1.0 / len(criteria)] * len(criteria)
-        for criterion, weight in zip(criteria, weights, strict=True):
-            checks.append(JudgeCheck(criterion, weight=weight, required=False))
-
-    if task.expected is not None:
-        expected = task.expected
-        for rel in expected.files_created:
-            checks.append(FileExistsCheck(rel))
-        for entry in expected.files_must_contain:
-            checks.append(FileContainsCheck(entry["path"], entry["pattern"]))
-        for rel in expected.files_unchanged:
-            checks.append(FileUnchangedCheck(rel))
-        for rel in expected.files_forbidden:
-            checks.append(FileForbiddenCheck(rel))
-
-    return CheckRubricImpl(checks, name=task.id)
+__all__ = [
+    "EvalTask",
+    "Layer",
+    "TaskInvocation",
+    "TaskSetup",
+    "compile_eval_task",
+]

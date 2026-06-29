@@ -88,22 +88,32 @@ def _seed_eval_repo(repo: Path, make_synthetic_repo: Any) -> None:
 
     tasks_root = repo / "playbook" / "eval_tasks"
     rubric_happy = (
-        "criteria = [\n"
-        '  "Tests use pytest.parametrize",\n'
-        '  "Test file mirrors layout",\n'
-        '  "All branches covered",\n'
-        '  "No mocking is used",\n'
-        "]\n"
-        "weights = [0.2, 0.2, 0.4, 0.2]\n"
+        "[rubric]\n"
+        'expr = "quality"\n'
+        "[rubric.bind]\n"
+        "quality = { fail = 0.5, rubric = [\n"
+        '  { judge = "Tests use pytest.parametrize", weight = 0.2 },\n'
+        '  { judge = "Test file mirrors layout", weight = 0.2 },\n'
+        '  { judge = "All branches covered", weight = 0.4 },\n'
+        '  { judge = "No mocking is used", weight = 0.2 },\n'
+        "] }\n"
     )
     rubric_edge = (
-        "criteria = [\n"
-        '  "Empty input is tested",\n'
-        '  "Negative numbers handled",\n'
-        '  "Boundary values listed",\n'
-        "]\n"
+        "[rubric]\n"
+        'expr = "quality"\n'
+        "[rubric.bind]\n"
+        "quality = { fail = 0.5, rubric = [\n"
+        '  { judge = "Empty input is tested", weight = 0.34 },\n'
+        '  { judge = "Negative numbers handled", weight = 0.33 },\n'
+        '  { judge = "Boundary values listed", weight = 0.33 },\n'
+        "] }\n"
     )
-    rubric_refactor = 'criteria = ["Helper has tests"]\nweights = [1.0]\n'
+    rubric_refactor = (
+        "[rubric]\n"
+        'expr = "quality"\n'
+        "[rubric.bind]\n"
+        'quality = { fail = 0.5, rubric = [{ judge = "Helper has tests", weight = 1.0 }] }\n'
+    )
 
     for task_id, prompt_id, description, rubric_block in [
         (
@@ -142,13 +152,14 @@ def _seed_eval_repo(repo: Path, make_synthetic_repo: Any) -> None:
             "[invocation]\n"
             'prompt_args = "for some target"\n'
             "\n"
-            "[expected]\n"
-            'files_created = ["tests/test_x.py"]\n'
-            "files_must_contain = [\n"
-            '  { path = "tests/test_x.py", pattern = "def test_" },\n'
-            "]\n"
-            "\n"
-            "[rubric]\n" + rubric_block,
+            "[gate]\n"
+            'expr = "created and contains"\n'
+            "[gate.bind]\n"
+            'created = { check = "file_exists", path = "tests/test_x.py" }\n'
+            'contains = { check = "file_contains", path = "tests/test_x.py", pattern = "def test_" }\n'
+            "\n" + rubric_block + "\n"
+            "[verdict]\n"
+            'trial = "gate and rubric"\n',
             encoding="utf-8",
         )
 
@@ -183,7 +194,7 @@ def test_eval_list_prints_tree(tmp_path, make_synthetic_repo, capsys):
     assert "consider adding tasks" in segment
     # Per-task summary line shape.
     assert "rubric criteria" in out
-    assert "programmatic checks" in out
+    assert "gate checks" in out
     # Final tally.
     assert "Total" in out
 
@@ -261,8 +272,9 @@ def test_eval_show_existing_task_prints_details(tmp_path, make_synthetic_repo, c
     assert "Description:" in out
     assert "Setup:" in out
     assert "Invocation:" in out
-    assert "Expected" in out
+    assert "Gate" in out
     assert "Rubric" in out
+    assert "Verdict:" in out
     # Numeric metadata exposed.
     assert "4 criteria" in out
     # Per-criterion weighted listing.

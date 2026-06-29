@@ -81,6 +81,16 @@ class _Composer(Check):
         self.cost = _max_cost(children)
         self.determinism = _any_judged(children)
 
+    @property
+    def children(self) -> tuple[Check, ...]:
+        """This composer's child checks (read-only), for tree traversal.
+
+        A consumer that walks the compiled check tree (e.g. the scoring bridge
+        collecting the metrics a rubric references) descends ``AllOf``/``AnyOf``
+        through this and ``Not`` through :attr:`Not.children`.
+        """
+        return self._children
+
     def grade(self, ctx: EvalContext, measurements: MeasurementSet) -> CheckResult:
         """Schedule the children under ``self._op`` and fold them into one result.
 
@@ -185,6 +195,11 @@ class Not(Check):
         self.required = required
         self.cost = child.cost
         self.determinism = child.determinism
+
+    @property
+    def children(self) -> tuple[Check, ...]:
+        """The single negated child, as a one-tuple (uniform traversal API)."""
+        return (self._child,)
 
     def grade(self, ctx: EvalContext, measurements: MeasurementSet) -> CheckResult:
         """Run the one child via the scheduler and invert its verdict.

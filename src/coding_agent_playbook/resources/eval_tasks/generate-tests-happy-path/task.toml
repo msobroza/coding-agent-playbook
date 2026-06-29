@@ -13,19 +13,25 @@ frameworks = ["pytest"]
 prompt_args = "for the add function in src/calculator.py"
 input_variables = { target = "src/calculator.py::add" }
 
-[expected]
-files_created = ["tests/test_calculator.py"]
-files_must_contain = [
-  { path = "tests/test_calculator.py", pattern = "def test_add" },
-  { path = "tests/test_calculator.py", pattern = "parametrize" },
-]
-files_unchanged = ["src/calculator.py"]
+[gate]
+expr = "test_created and names_test and parametrized and src_unchanged"
+
+[gate.bind]
+test_created = { check = "file_exists", path = "tests/test_calculator.py" }
+names_test = { check = "file_contains", path = "tests/test_calculator.py", pattern = "def test_add" }
+parametrized = { check = "file_contains", path = "tests/test_calculator.py", pattern = "parametrize" }
+src_unchanged = { check = "file_unchanged", path = "src/calculator.py" }
 
 [rubric]
-criteria = [
-  "Tests use pytest.parametrize for table-driven cases",
-  "Test file lives at tests/test_calculator.py (mirror layout)",
-  "All public branches of `add` are covered",
-  "No mocking is used (the function is pure)",
-]
-weights = [0.2, 0.2, 0.4, 0.2]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "Tests use pytest.parametrize for table-driven cases", weight = 0.2 },
+  { judge = "Test file lives at tests/test_calculator.py (mirror layout)", weight = 0.2 },
+  { judge = "All public branches of `add` are covered", weight = 0.4 },
+  { judge = "No mocking is used (the function is pure)", weight = 0.2 },
+] }
+
+[verdict]
+trial = "gate and rubric"

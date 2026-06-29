@@ -69,6 +69,14 @@ class Metric(ABC):
     #: discriminator: :func:`static_metrics` excludes any metric with
     #: ``needs_project=True``.
     needs_project: bool = False
+    #: ``True`` for judge-backed metrics that need a configured judge
+    #: (``ctx.judge``) to measure — a
+    #: :class:`~coding_agent_playbook.evaluators.checks.judge_metric.JudgeMetric`
+    #: or a :class:`~coding_agent_playbook.evaluators.rubric.Rubric` carrying judged
+    #: checks. A metric-backed :class:`~coding_agent_playbook.evaluators.check.Check`
+    #: reads this to schedule the check in the JUDGED tier and to measure it lazily
+    #: at grade time (so the cost-tiered scheduler can short-circuit it).
+    needs_judge: bool = False
 
     def available(self, ctx: EvalContext) -> bool:
         """True when this metric can run in ``ctx``.

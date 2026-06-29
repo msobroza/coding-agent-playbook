@@ -5,10 +5,10 @@ The single home for the per-metric default grading policy and the
 :class:`~coding_agent_playbook.evaluators.types.MetricConfig` into the
 metric-backed :class:`~coding_agent_playbook.evaluators.check.Check`
 (:class:`~coding_agent_playbook.evaluators.check.ThresholdCheck` /
-:class:`~coding_agent_playbook.evaluators.check.NonRegressionCheck`). Both
-:func:`coding_agent_playbook.evals.task.rubric_for_task` (the eval-task compiler)
-and :mod:`coding_agent_playbook.commands.metrics` (the standalone gate) build
-their checks through here, so the two consumers never drift.
+:class:`~coding_agent_playbook.evaluators.check.NonRegressionCheck`).
+:mod:`coding_agent_playbook.commands.metrics` (the standalone static gate) builds
+its checks through here from its ``[metrics]`` engine config, so the metric-policy
+defaults live in exactly one place.
 
 Living in the ``evaluators`` layer keeps ``commands`` from importing ``evals``
 just for the shared default thresholds.

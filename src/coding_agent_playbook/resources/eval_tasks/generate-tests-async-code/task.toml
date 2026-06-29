@@ -13,20 +13,26 @@ frameworks = ["pytest", "pytest-asyncio"]
 prompt_args = "for the fetch_payload coroutine in src/fetcher.py"
 input_variables = { target = "src/fetcher.py::fetch_payload" }
 
-[expected]
-files_created = ["tests/test_fetcher.py"]
-files_must_contain = [
-  { path = "tests/test_fetcher.py", pattern = "@pytest.mark.asyncio" },
-  { path = "tests/test_fetcher.py", pattern = "async def test_" },
-]
-files_unchanged = ["src/fetcher.py"]
-files_forbidden = ["tests/conftest.py"]
+[gate]
+expr = "test_created and marks_asyncio and async_test and src_unchanged and no_conftest"
+
+[gate.bind]
+test_created = { check = "file_exists", path = "tests/test_fetcher.py" }
+marks_asyncio = { check = "file_contains", path = "tests/test_fetcher.py", pattern = "@pytest.mark.asyncio" }
+async_test = { check = "file_contains", path = "tests/test_fetcher.py", pattern = "async def test_" }
+src_unchanged = { check = "file_unchanged", path = "src/fetcher.py" }
+no_conftest = { check = "file_forbidden", path = "tests/conftest.py" }
 
 [rubric]
-criteria = [
-  "Tests are marked with @pytest.mark.asyncio rather than driving the coroutine via asyncio.run",
-  "Tests use `async def` for the test body and `await` the target coroutine",
-  "Network I/O is replaced with a mock or stub — no real socket is opened from the test",
-  "Both the happy-path response and at least one error path are covered",
-]
-weights = [0.4, 0.2, 0.2, 0.2]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "Tests are marked with @pytest.mark.asyncio rather than driving the coroutine via asyncio.run", weight = 0.4 },
+  { judge = "Tests use `async def` for the test body and `await` the target coroutine", weight = 0.2 },
+  { judge = "Network I/O is replaced with a mock or stub — no real socket is opened from the test", weight = 0.2 },
+  { judge = "Both the happy-path response and at least one error path are covered", weight = 0.2 },
+] }
+
+[verdict]
+trial = "gate and rubric"

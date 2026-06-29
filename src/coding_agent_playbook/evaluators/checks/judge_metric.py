@@ -44,6 +44,9 @@ class JudgeMetric(Metric):
     """
 
     needs_project = False
+    #: A judged criterion needs ``ctx.judge`` to measure (so a metric-backed check
+    #: schedules it JUDGED-tier and measures it lazily — short-circuitable).
+    needs_judge = True
     requires: str | None = None
     #: A judged score is already a ``0-1`` goodness, so the adapter passes it
     #: through unchanged (the ``Metric`` base owns ``normalizer`` since C3).
