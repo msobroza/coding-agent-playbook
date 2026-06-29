@@ -107,10 +107,11 @@ def test_spec_section_21_body_drops_deleted_symbols(symbol: str) -> None:
         )
 
 
-def test_spec_version_bumped_to_0_12() -> None:
+def test_spec_version_bumped_to_0_13() -> None:
     spec = _read("SPEC.md")
-    assert "| Version | 0.12 (draft) |" in spec
-    assert "### v0.12" in spec  # the changelog appendix entry
+    assert "| Version | 0.13 (draft) |" in spec
+    assert "### v0.13" in spec  # the changelog appendix entry for the task-config redesign
+    assert "### v0.12" in spec  # the prior changelog appendix entry is preserved
 
 
 def test_spec_section_21_documents_the_three_abstractions() -> None:

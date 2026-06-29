@@ -1,14 +1,15 @@
 # SPEC.md — coding-agent-playbook
 | Field | Value |
 | --- | --- |
-| Version | 0.12 (draft) |
+| Version | 0.13 (draft) |
 | Status | Proposed |
-| Last updated | 2026-06-28 |
+| Last updated | 2026-06-29 |
 | Authors | Max Pereira, with Claude |
 | Audience | Implementers, reviewers, future contributors |
 | License | Apache-2.0 (engine); organization overlays may be private |
 
 **Changelog**
+- **0.13** — Eval task-config redesign ("2b refined", Tracks C1–C8): the `[expected]`/`[metrics]`/`[rubric]` triple is replaced by a **layered** task config. Three layers share one `[<layer>.bind]` + `[<layer>].expr` shape — **`[gate]`** (deterministic boolean), **`[rubric]`** (llm-judge weighted), and an optional cross-trial **`[aggregate]`** — composed by a tiny boolean-expression DSL; `[verdict].trial` is a boolean expression over the layers, and the **verdict is *derived*** from the layer results (not re-run). There is **no `[expected]` block** — file predicates are gate `check`s (`file_exists`/`file_contains`/`file_unchanged`/`file_forbidden`). Thresholds are now **0–1 normalized**: every `Metric` owns a `Normalizer` (`evaluators/normalizer.py`: `RampNormalizer`/`PercentNormalizer`/`Identity`) mapping raw→0–1 goodness (higher = better), and `higher_is_worse` is **deleted** — `warn`/`fail`/`max_worsening` are 0–1 cutoffs. A check is `(type) × (metric|judge) × kwargs`: `check = "threshold"|"non_regression"` over a registered `metric=` **or** a `judge=` criterion (a `JudgeMetric` — an llm-judge criterion **is a metric**). New registries: checks via `@register_check` + `coding_agent_playbook.checks`, gates via `@register_gate` + the new **`coding_agent_playbook.gates`**; `{ref="name"}` resolves a registered composed **gate** or **rubric**. The `[aggregate]` layer is the same bind+expr shape over `pass_at_k`/`pass_pow_k` (`k` kwarg, `over ∈ {gate,rubric,verdict}`); the runner runs `N=max(k)` trials. Deleted from the prior model: the `[expected]`/`[metrics]`-triple authoring, `higher_is_worse`, `rubric_for_task`, `ExpectedOutcome`. Authoritative design: `specs/pr2b-task-config.md`; migration: `MIGRATION.md` (§6.5, §15.2/§15.3/§15.3.1, §21).
 - **0.12** — Evaluator subsystem refactor (PR R6 — clean-slate): the fused `Evaluator` ABC + free `grade()` are replaced by three single-responsibility abstractions — **`Metric`** (`measure(ctx) -> list[Measurement]`), **`Check`** (`grade(ctx, measurements) -> CheckResult`, a boolean gate + optional partial-credit score), and **`Rubric`** (a weighted set of checks; `evaluate(ctx, measurements) -> EvaluationReport`). `Rubric` **is also a `Metric`** (it surfaces its composite via `measure()`), so a rubric thresholds into a check and nests into a Composite tree. A cost-tiered (`CostTier` DETERMINISTIC < EXECUTION < JUDGED) `scheduler` runs checks cheapest-tier-first with short-circuit, so a failing deterministic check **never invokes the LLM judge** (`playbook eval --run --full-scoring` forces every check). Entry-point groups are renamed/split: out-of-tree metrics register under **`coding_agent_playbook.metrics`** (was `…​.evaluators`), custom graders under the new **`coding_agent_playbook.checks`**. `grade()` is replaced by `Rubric.evaluate`; the `extra_evaluators` side-channel, `value_kind`/`to_score`, the weight-0/fail-floor `[expected]` hack, and `evaluators_for_task` are deleted. The authored `[expected]`/`[metrics]`/`[rubric]` task TOML is **unchanged** (zero authoring migration). Authoritative design: `specs/prR6-check-rubric.md`; migration guide: `MIGRATION.md` (§15.3/§15.3.1, §21).
 - **0.11** — Judged scoring + `[expected]` unification + a second real runner (PR R2/R3): the judge is **live**. `Judge.score_criterion(criterion, artifact, n)` is the canonical per-criterion primitive (Option A; batch `score()` wraps it), with the opt-in `LLMJudge` (`name="llm"`, shells out to the `claude` CLI, `available()`-gated, never in CI) via the `coding_agent_playbook.judges` group. There is **no `ProgrammaticOnlyJudge`** — deterministic-only is simply no judge configured (`ctx.judge is None`). `[expected]` file checks are now **unified** into `evaluators_for_task` as real BOOL deterministic `Evaluator`s (`evaluators/expected.py`); the R1 interim inline compile is removed, so `[expected]` + `[metrics]` + (with a judge) `[rubric]` all flow through one `grade(…, extra_evaluators=…)` call. New opt-in **`OpenCodeRunner`** (`name="opencode"`, `available()`-gated, never in CI) joins `FakeRunner`/`ClaudeCodeRunner`. CLI: `playbook eval <id> --run [--judge llm] [--samples N]` (default no judge ⇒ deterministic-only). The §21.2.3 `Judge.score` signature debt is closed (§15.3/§15.3.1, §12.8, §21.2.3).
 - **0.10** — Eval runner activation (PR R1): `HarnessRunner` becomes a concrete **template method** (materialize → render_prompt → `_invoke_agent` → capture → score) so an eval task runs end-to-end and is scored through the unified PR-M `Evaluator`/`grade()` model — the deterministic layers (`[expected]` file checks + `[metrics]` static/execution non-regression vs the `setup/` baseline) are **live**. Concrete runners: hermetic `FakeRunner` (default test driver) + opt-in `ClaudeCodeRunner` (`available()`-gated, never in CI), via the `coding_agent_playbook.runners` entry-point group. Result model evolved to **Option B** (`TaskResult.report: EvaluationReport`; `programmatic_checks`/`rubric_scores`/`CheckResult` retired). New `playbook eval <id> --run [--runner …] [--format …]` (no `--run-tests` — intent is in the task's `[metrics]`). Judged `[rubric]` scoring stays deferred to R2 (§15).
@@ -634,17 +635,15 @@ src/coding_agent_playbook/resources/
 ├── prompts/
 └── eval_tasks/
     ├── generate-tests-happy-path/
-    │   ├── task.toml                 # task metadata + expected outcomes
-    │   ├── setup/                    # files written to scratch repo before invocation
-    │   │   └── src/calculator.py
-    │   └── expected/                 # optional: golden files or fragments
-    │       └── tests/test_calculator.py.contains
+    │   ├── task.toml                 # task metadata + the gate/rubric/verdict layers
+    │   └── setup/                    # files written to scratch repo before invocation
+    │       └── src/calculator.py
     ├── generate-tests-edge-cases/
     │   └── ...
     └── refactor-extract-helper/
         └── ...
 ```
-Each task is a directory, not a single file, because tasks need fixture files (the `setup/` tree) and optionally expected output fragments. Mirrors the skills pattern (Section 6.3).
+Each task is a directory, not a single file, because tasks need fixture files (the `setup/` tree). The success criteria live inline in `task.toml` (the `[gate]`/`[rubric]` layers), not as separate golden-file fragments. Mirrors the skills pattern (Section 6.3).
 Overlay packages can ship their own `eval_tasks/` directory and the merge semantics are the same as for rules and prompts — later layers override earlier ones by task ID. A BNP overlay can override `generate-tests-happy-path` with a banking-flavored variant that includes the BNP rule pack.
 #### 6.5.3 The `task.toml` schema
 ```toml
@@ -668,30 +667,45 @@ frameworks = ["pytest", "pytest-asyncio"]
 prompt_args = "for the add function in src/calculator.py"
 # Values for the prompt's declared input_variables.
 input_variables = { target = "src/calculator.py::add" }
-[expected]
-# Files the agent must create (relative to repo root).
-files_created = ["tests/test_calculator.py"]
-# Regex patterns that must appear in created or modified files.
-# Each entry: { path = "...", pattern = "..." }.
-files_must_contain = [
-  { path = "tests/test_calculator.py", pattern = "def test_add" },
-  { path = "tests/test_calculator.py", pattern = "parametrize" },
-]
-# Files that must NOT be modified by the agent.
-files_unchanged = ["src/calculator.py"]
-# Files that, if created, are a failure (regression guards).
-files_forbidden = ["__pycache__/", "tests/conftest.py"]
+
+# --- The DETERMINISTIC layer: a boolean expression over named handles. ---
+[gate]
+expr = "test_created and names_test and parametrized and src_unchanged"
+[gate.bind]
+# A handle is a group | a standalone check | a {ref="<gate>"}. File predicates,
+# metric thresholds, and non-regression checks all live here. Thresholds are 0-1.
+test_created  = { check = "file_exists",    path = "tests/test_calculator.py" }
+names_test    = { check = "file_contains",  path = "tests/test_calculator.py", pattern = "def test_add" }
+parametrized  = { check = "file_contains",  path = "tests/test_calculator.py", pattern = "parametrize" }
+src_unchanged = { check = "file_unchanged", path = "src/calculator.py" }
+# A metric threshold/non-regression handle (0-1 normalized cutoffs):
+#   cc  = { check = "threshold",      metric = "cyclomatic_complexity", fail = 0.5 }
+#   cov = { check = "non_regression", metric = "coverage",              max_worsening = 0.0 }
+
+# --- The LLM-JUDGE layer: a weighted rubric, thresholded to a boolean. ---
 [rubric]
-# Human-readable criteria, for v1 manual grading and v2 LLM-as-judge.
-# Each criterion is one sentence describing a quality dimension.
-criteria = [
-  "Tests use pytest.parametrize for table-driven cases",
-  "Test file lives at tests/test_calculator.py (mirror layout)",
-  "All public branches of `add` are covered",
-  "No mocking is used (function is pure)",
-]
-# Optional weights per criterion (must sum to 1.0). Default: uniform.
-weights = [0.2, 0.2, 0.4, 0.2]
+expr = "quality"
+[rubric.bind]
+# A `rubric` group is a weighted set of judge criteria (weights sum to 1.0),
+# thresholded into a boolean by `fail` (a 0-1 cutoff on the rubric composite).
+quality = { fail = 0.5, rubric = [
+  { judge = "Tests use pytest.parametrize for table-driven cases", weight = 0.2 },
+  { judge = "Test file lives at tests/test_calculator.py (mirror layout)", weight = 0.2 },
+  { judge = "All public branches of `add` are covered", weight = 0.4 },
+  { judge = "No mocking is used (the function is pure)", weight = 0.2 },
+] }
+# A standalone judged non-regression handle is also valid (a judge criterion IS a metric):
+#   no_drop = { check = "non_regression", judge = "overall quality", max_worsening = 0.1 }
+
+# --- The trial verdict: a boolean expression over the two layers (default below). ---
+[verdict]
+trial = "gate and rubric"
+
+# --- OPTIONAL cross-trial reliability layer; omit ⇒ a single trial. ---
+# [aggregate]
+# expr = "reliable"
+# [aggregate.bind]
+# reliable = { metric = "pass_at_k", k = 5, over = "verdict", fail = 0.9 }
 ```
 Field-by-field:
 | Field | Required | Purpose |
@@ -699,35 +713,37 @@ Field-by-field:
 | `id` | yes | Unique across all overlays. |
 | `prompt_id` | yes | Back-reference to the prompt this task tests. Must appear in that prompt's `eval_tasks:` list. |
 | `description` | yes | One-sentence summary, shown in `playbook eval --list`. |
-| `version` | no | Bump on breaking changes to setup/expected. |
+| `version` | no | Bump on breaking changes to setup/checks. |
 | `[setup]` | yes | Mock facts and `setup/` directory listing. |
 | `[invocation]` | yes | What the user "types" — prompt arguments and variable bindings. |
-| `[expected]` | no | Programmatic checks. Multiple keys, all ANDed. |
-| `[rubric]` | no | Text-based criteria for human or LLM-as-judge grading. |
-A task is valid in v1 even with no `[expected]` and no `[rubric]` — it documents the test case without committing to how success is measured. The validator only enforces structural correctness.
+| `[gate]` | no¹ | Deterministic boolean layer: `bind` (named handles) + `expr` (a boolean expression over them). Handles are file/metric `check`s, composed boolean groups, or a `{ref="<gate>"}`. |
+| `[rubric]` | no¹ | LLM-judge weighted layer: same `bind`+`expr` shape; a `rubric` group is a weighted set of judge criteria thresholded to a boolean. |
+| `[verdict]` | no | `trial` is a boolean expression over `gate`/`rubric` (default `"gate and rubric"`) deriving the per-trial verdict. |
+| `[aggregate]` | no | Cross-trial reliability: same `bind`+`expr` shape over `pass_at_k`/`pass_pow_k`. Omit ⇒ a single trial. |
+
+¹ A task must declare **at least one** of `[gate]` / `[rubric]` (a task with neither does not measure anything). All thresholds are **0–1 normalized** (every metric owns a `Normalizer`, §21); there is **no `[expected]` block** — file predicates are gate `check`s (`file_exists`/`file_contains`/`file_unchanged`/`file_forbidden`). The compiler (`evals/_compile.py`) turns the layer blocks into one per-trial `Rubric` of checks + a derived-verdict AST; the validator only enforces structural correctness (it trial-compiles the blocks).
 #### 6.5.4 Authoring discipline
 Recommended (not enforced, since this is conventions over rules):
 - **Three tasks per prompt minimum.** One happy-path, one edge-case, one regression target. Adding a fourth means the prompt is genuinely complex; if you can't find a fourth, the prompt is probably fine.
 - **Task IDs follow `<prompt-id>-<scenario>`.** Predictable, sortable, makes `playbook eval --list` readable.
-- **Programmatic checks are cheap, rubric criteria are precious.** Every regex or file check is free to run forever. Rubric criteria are slow (humans in v1, LLM tokens in v2), so reserve them for things that genuinely can't be checked programmatically. *"Tests use parametrize"* → programmatic. *"Tests cover all public branches"* → rubric.
+- **Gate checks are cheap, rubric criteria are precious.** Every `[gate]` file/metric check is deterministic and free to run forever. `[rubric]` judge criteria cost LLM tokens, so reserve them for things that genuinely can't be checked deterministically. *"Tests use parametrize"* → a `[gate]` `file_contains` check. *"Tests cover all public branches"* → a `[rubric]` judge criterion.
 - **Don't test the model; test the prompt.** If a task fails because Claude 4.6 is dumber than Claude 4.7, that's not your prompt regressing. Tasks should target things the prompt itself controls: layout, conventions, what gets imported, what doesn't.
 #### 6.5.5 `eval_tasks:` validation in `playbook validate`
 Two new validation rules ship in v1:
 1. **Every `eval_tasks:` reference resolves to a real task.** If a prompt declares `eval_tasks: [foo, bar]` but `eval_tasks/bar/` doesn't exist, error.
 2. **Every task's `prompt_id` points back to a prompt that lists it.** Bi-directional check, same shape as `includes_rules` / `{{ rule() }}` symmetry. Catches orphan tasks where someone deleted the prompt but left the task behind, or where a task was renamed and a prompt's frontmatter wasn't updated.
-There is no v1 check that `[expected]` programmatic patterns actually work — that requires running the agent, which is v2.
-#### 6.5.6 What runs in v1 vs v2
-| Capability | v1 | v2 |
+`playbook validate` does **not** run the agent — it only trial-compiles the layer blocks and checks cross-references, so a malformed `[gate]`/`[rubric]` handle or an `expr` referencing an unknown handle is caught at commit time, but whether the gate checks *hold* against real agent output requires `playbook eval --run`.
+#### 6.5.6 What runs at validate-time vs run-time
+| Capability | `playbook validate` | `playbook eval --run` |
 | --- | --- | --- |
 | Author `eval_tasks/` directories | yes | yes |
-| `task.toml` schema + validation | yes | yes |
-| `playbook validate` cross-reference checks | yes | yes |
+| `task.toml` schema + trial-compile validation | yes | yes |
+| `playbook validate` cross-reference checks | yes | — |
 | `playbook eval --list` (read-only enumeration) | yes | yes |
-| `playbook eval` actually runs the agent | **no — stub prints message** | yes |
-| Programmatic checks against agent output | no | yes |
-| LLM-as-judge for rubric | no | yes (Tier 2) |
-| Per-harness eval (`--harness claude_code`) | no | yes |
-This is what makes Tier 0 cheap: most of the surface ships as schema + validator + read-only CLI, with the actual execution deferred. Section 15 carries the matching execution abstractions (`HarnessRunner`, `EvaluationReport`, and the `Metric`/`Check`/`Rubric` scoring model of §21), live since v1.1.
+| Run the agent + grade the `[gate]` checks against its output | no | yes |
+| LLM-as-judge for the `[rubric]` layer | no | yes (opt-in via `--judge`) |
+| Per-runner eval (`--runner claude_code` / `opencode`) | no | yes |
+Validation stays cheap: it ships as schema + trial-compile + cross-reference checks, with the actual execution behind `--run`. Section 15 carries the matching execution abstractions (`HarnessRunner`, `EvaluationReport`, and the `Metric`/`Check`/`Rubric` scoring model of §21), live since v1.1.
 ### 6.6 Canonical types and serialization
 This section codifies a distinction that has been implicit throughout the spec and makes it explicit: there are **two** formats in this system, and they serve different audiences.
 **The authoring format** is markdown + YAML frontmatter (`.md` or `.md.j2`). It is what humans write, what gets reviewed in PRs, what lives in `resources/` directories. It never changes. Authors at every level — engine maintainers, overlay authors, repo-local customizers — write exclusively in this format.
@@ -1491,19 +1507,19 @@ $ playbook eval --list
 === Eval tasks ===
 generate-tests (engine)
   ├── generate-tests-happy-path        ✓ task defined
-  │   └── 4 rubric criteria, 3 programmatic checks
+  │   └── 4 rubric criteria, 4 gate checks
   ├── generate-tests-edge-cases        ✓ task defined
-  │   └── 5 rubric criteria, 4 programmatic checks
+  │   └── 5 rubric criteria, 4 gate checks
   └── generate-tests-async-code        ✓ task defined
-      └── 3 rubric criteria, 2 programmatic checks
+      └── 3 rubric criteria, 2 gate checks
 refactor (engine)
   └── refactor-extract-helper          ✓ task defined
-      └── 3 rubric criteria, 2 programmatic checks
+      └── 3 rubric criteria, 2 gate checks
 review (engine)
   └── (no eval tasks declared)         ⚠ consider adding tasks
 pii-scan (overlay bnp)
   └── pii-scan-detects-iban            ✓ task defined
-      └── 2 rubric criteria, 1 programmatic check
+      └── 2 rubric criteria, 1 gate checks
 Total: 5 prompts, 5 eval tasks, 1 prompt without tasks
 ```
 `playbook eval --list` walks the prompt registry, reads each prompt's `eval_tasks:`, and reports coverage. The "no eval tasks declared" warning is informational, not a `playbook validate` failure — eval tasks are recommended, not required.
@@ -1520,15 +1536,17 @@ Invocation:
   Prompt: /generate-tests
   Args: "for the add function in src/calculator.py"
   Variables: target=src/calculator.py::add
-Expected (programmatic, 3 checks):
-  - File created: tests/test_calculator.py
-  - tests/test_calculator.py contains: def test_add
-  - tests/test_calculator.py contains: parametrize
-Rubric (manual / LLM-judge, 4 criteria, weights sum=1.0):
+Gate (deterministic, 4 checks, expr: test_created and names_test and parametrized and src_unchanged):
+  - test_created: check file_exists tests/test_calculator.py
+  - names_test: check file_contains tests/test_calculator.py ~/def test_add/
+  - parametrized: check file_contains tests/test_calculator.py ~/parametrize/
+  - src_unchanged: check file_unchanged src/calculator.py
+Rubric (manual / LLM-judge, 4 criteria):
   - 0.2: Tests use pytest.parametrize for table-driven cases
   - 0.2: Test file lives at tests/test_calculator.py (mirror layout)
   - 0.4: All public branches of `add` are covered
-  - 0.2: No mocking is used (function is pure)
+  - 0.2: No mocking is used (the function is pure)
+Verdict: gate and rubric
 ```
 ```
 $ playbook eval generate-tests-happy-path
@@ -1537,19 +1555,20 @@ The task is well-formed and ready to run when the v2 runner lands. For now:
   - Use `playbook eval --show generate-tests-happy-path` to inspect the task.
   - Use `playbook eval --list` to see all task coverage.
   - To run manually: copy setup/ to a scratch repo, invoke /generate-tests
-    with the documented args, and grade against the expected/rubric.
-See SPEC.md Section 15 for the v2 runner API.
+    with the documented args, and grade against the [gate]/[rubric] layers.
+See SPEC.md Section 15 for the runner API.
 exit code: 0
 ```
-Note the exit code is 0, not 1 — the task is not broken, the runner is just absent on the bare path. This lets users wire `playbook eval` into CI today as a no-op placeholder. To actually execute a task, add `--run`:
+(The bare `playbook eval <id>` path still prints this runner-deferral message and exits 0 — the task is well-formed, the runner is just not invoked without `--run`, so `playbook eval` can be wired into CI as a no-op placeholder.) To actually execute a task, add `--run`:
 ```
 $ playbook eval refactor-extract-helper --run --runner fake [--judge llm] [--samples N] [--format text|json]
 ```
 - **`--runner NAME`** selects a runner from the `coding_agent_playbook.runners` entry-point group; the default is **`claude_code`** (the real runner). Use `--runner fake` for a hermetic, no-network demo/CI run.
-- **`--judge NAME`** (v1.1 R2) selects a judge from the `coding_agent_playbook.judges` group to score the task's `[rubric]` criteria too. The shipped judge is **`llm`** (`LLMJudge`, shells out to the `claude` CLI, `available()`-gated, never in CI). **Omitting `--judge` is deterministic-only** — no `ProgrammaticOnlyJudge`, just no judge configured ⇒ judged criteria skipped. **`--samples N`** (default 1) is the per-criterion sample count the judge averages.
-- The task's `[expected]` + `[metrics]` blocks are scored deterministically into one `EvaluationReport`, rendered with the same text/json renderer as `playbook metrics`. With `--judge` set, the `[rubric]` SCORE findings are folded into the same report (feeding the composite, gating on an optional min-score).
-- **There is no `--run-tests` flag.** Unlike `playbook metrics`, an eval task declares its execution intent in its own `[metrics]` block (`run_tests`), so the task — not a CLI flag — decides whether the execution evaluators (`coverage`/`test_pass_rate`) run.
-- **Exit codes:** `0` on a passing report (gate clean), `1` on a failing report, `2` on usage errors — unknown task id, unknown `--runner`, a runner that is unavailable in this environment (e.g. `claude_code` with no `claude` CLI on `PATH` — the error suggests `--runner fake`), an unknown or unavailable `--judge` (e.g. `llm` with no `claude` CLI), or a bad `--format`.
+- **`--judge NAME`** selects a judge from the `coding_agent_playbook.judges` group to score the task's `[rubric]` layer too. The shipped judge is **`llm`** (`LLMJudge`, shells out to the `claude` CLI, `available()`-gated, never in CI). **Omitting `--judge` is deterministic-only** — no `ProgrammaticOnlyJudge`, just no judge configured ⇒ the `[rubric]` layer skips (a skipped layer is neutral in the derived verdict). **`--samples N`** (default 1) is the per-criterion sample count the judge averages.
+- The task's `[gate]` layer (file checks + static/execution metric checks, 0–1 normalized non-regression) is scored deterministically into one `EvaluationReport`, rendered with the same text/json renderer as `playbook metrics`. With `--judge` set, the `[rubric]` layer's judged scores fold into the same report; the per-trial verdict is then derived from the two layers' results via `[verdict].trial`.
+- **`--full-scoring`** forces every check to run (no short-circuit), for a complete report even when a cheap gate check has already failed.
+- **There is no `--run-tests` flag.** Unlike `playbook metrics`, execution intent is *inferred*: a task runs the suite iff its `[gate]` references an execution metric (`coverage` / `test_pass_rate`), so the task — not a CLI flag — decides whether the execution checks run.
+- **Exit codes:** `0` on a passing report (the task verdict holds), `1` on a failing report, `2` on usage errors — unknown task id, unknown `--runner`, a runner that is unavailable in this environment (e.g. `claude_code` with no `claude` CLI on `PATH` — the error suggests `--runner fake`), an unknown or unavailable `--judge` (e.g. `llm` with no `claude` CLI), or a bad `--format`.
 ### 12.9 `playbook import-harness`
 Parse an Agent Harness tree back into canonical artifacts and write them into an overlay directory (default `./playbook/`) in the `FileSystemArtifactSource` layout, so a later `playbook sync` re-reads them. The reverse of the `agent_harness` adapter (§10.7).
 ```
@@ -1672,14 +1691,14 @@ playbook_rules_bnp = "0.2.0"
 "AGENTS.md" = "sha256:..."
 ```
 `playbook sync --check` recomputes the hashes and compares. Mismatch → drift → exit 1.
-## 15. Eval abstractions (forward-compatible)
-v1 shipped **Tier 0**: the task authoring format (Section 6.5), the loader, the validator, and a read-only CLI. **v1.1 makes Tier 1 live**: `HarnessRunner` (PR R1) executes one task end-to-end against an agent and scores it through the `Metric` / `Check` / `Rubric` model (§21). The `[expected]` file checks and the `[metrics]` static + execution metrics (including non-regression vs the `setup/` baseline) are computable today; the judged `[rubric]` layer is **live as of PR R2** — pass `--judge llm` (or any `coding_agent_playbook.judges` entry) and the `JudgeCheck`s score against the captured diff. With **no judge configured** the runner is deterministic-only (judged checks report `available() is False` and are skipped) — the default. §15.3 describes the as-built v1.1 runner; the design docs are `specs/prR-eval-runner.md` (R1), `specs/prR2-judge-r3-opencode.md` (R2), and `specs/prR6-check-rubric.md` (the R6 clean-slate refactor that replaced the fused `Evaluator`/`grade()` with `Metric`/`Check`/`Rubric`).
+## 15. Eval abstractions
+v1 shipped **Tier 0**: the task authoring format (Section 6.5), the loader, the validator, and a read-only CLI. **v1.1 makes Tier 1 live**: `HarnessRunner` executes one task end-to-end against an agent and scores it through the `Metric` / `Check` / `Rubric` model (§21). The **task-config redesign (v0.13, Tracks C1–C8)** then reshaped the *authored* format into the layered `[gate]` / `[rubric]` / `[verdict]` / `[aggregate]` model (§6.5.3): a task compiles into one per-trial `Rubric` of checks whose deterministic `[gate]` layer (file/metric checks, 0–1 normalized thresholds + non-regression vs the `setup/` baseline) is computable today, and whose judged `[rubric]` layer scores against the captured diff when a judge is configured (`--judge llm`, or any `coding_agent_playbook.judges` entry). With **no judge configured** the runner is deterministic-only (the rubric layer reports `available() is False` and is skipped — the verdict treats a skipped layer as neutral). §15.3 describes the as-built v1.1 runner; the design docs are `specs/prR-eval-runner.md` (R1), `specs/prR2-judge-r3-opencode.md` (R2), `specs/prR6-check-rubric.md` (the R6 `Metric`/`Check`/`Rubric` refactor), and **`specs/pr2b-task-config.md`** (the task-config redesign).
 ### 15.1 The Tier 0 / Tier 1 / Tier 2 ladder
 | Tier | Capability | status |
 | --- | --- | --- |
 | 0 | Task schema, loader, validator, `playbook eval --list/--show` | **shipped (v1)** |
-| 1 | Per-harness agent invocation + deterministic scoring (`[expected]` file checks + `[metrics]` static/execution non-regression) via the `Metric`/`Check`/`Rubric` model | **shipped (v1.1 R1)** |
-| 2 | Rubric judging (LLM-as-judge) | **shipped (v1.1 R2)** — opt-in `LLMJudge` via `--judge llm`; calibration is future work |
+| 1 | Per-runner agent invocation + deterministic scoring (the `[gate]` layer: file + metric checks, 0–1 normalized non-regression) via the `Metric`/`Check`/`Rubric` model | **shipped (v1.1 R1)** |
+| 2 | The `[rubric]` llm-judge layer (LLM-as-judge) | **shipped (v1.1 R2)** — opt-in `LLMJudge` via `--judge llm`; calibration is future work |
 The ladder is deliberate: Tier 0 produces value (documentation, validation) immediately. Tier 1 makes the value computable. Tier 2 closes the loop on subjective quality. Each tier is independently shippable.
 ### 15.2 v1 abstractions (active)
 These ship in v1 and back the `playbook eval --list` / `playbook eval --show` CLI.
@@ -1700,47 +1719,38 @@ class TaskInvocation:
     prompt_args: str                             # what the user "types" after the slash command
     input_variables: dict[str, str] = field(default_factory=dict)
 @dataclass
-class ExpectedOutcome:
-    files_created: list[str] = field(default_factory=list)
-    files_must_contain: list[dict] = field(default_factory=list)  # [{path, pattern}]
-    files_unchanged: list[str] = field(default_factory=list)
-    files_forbidden: list[str] = field(default_factory=list)
-@dataclass
-class Rubric:
-    criteria: list[str]
-    weights: list[float] | None = None           # None = uniform
-    ref: str | None = None                       # named-rubric registry ref (mutually exclusive with criteria)
+class Layer:                                      # one [gate] / [rubric] / [aggregate] block
+    bind: dict[str, dict] = field(default_factory=dict)   # name -> raw handle binding
+    expr: str | None = None                      # boolean/aggregate expr over the handle names
 @dataclass
 class EvalTask:
     id: str
     prompt_id: str
     description: str
-    version: int
     source_path: Path                            # where the task.toml lives
-    setup: TaskSetup
-    invocation: TaskInvocation
-    expected: ExpectedOutcome | None = None
-    rubric: Rubric | None = None
+    source_package: str
+    version: int = 1
+    setup: TaskSetup = field(default_factory=TaskSetup)
+    invocation: TaskInvocation = field(default_factory=TaskInvocation)
+    gate: Layer | None = None                    # the deterministic boolean layer
+    rubric: Layer | None = None                  # the llm-judge weighted layer
+    verdict: str = "gate and rubric"             # [verdict].trial — boolean expr over the layers
+    aggregate: Layer | None = None               # optional cross-trial pass@k / pass^k layer
 ```
-The loader (`coding_agent_playbook.evals.loader.load_tasks`) walks `resources/eval_tasks/`, parses `task.toml` per directory, and produces a `list[EvalTask]`. Overlays add their tasks via the same entry-point mechanism as rules and prompts.
+The loader (`coding_agent_playbook.evals.loader.load_tasks`) walks `resources/eval_tasks/`, parses `task.toml` per directory, and produces a `list[EvalTask]`. Overlays add their tasks via the same entry-point mechanism as rules and prompts. `EvalTask.compiled()` (a thin wrapper over `evals._compile.compile_task`) turns the raw layer blocks into a `CompiledTask` — one per-trial `Rubric` (the present `gate`/`rubric` layer checks, ids `"gate"` / `"rubric"`), the parsed `[verdict].trial` AST, and the optional compiled `[aggregate]` layer + `trials_needed`.
+
 The validator (`coding_agent_playbook.evals.validator.validate_tasks`) enforces:
-- Each `task.toml` is well-formed.
+- Each `task.toml` is well-formed (the loader parses it; a task reaching the validator already parsed).
+- The `[gate]`/`[rubric]`/`[verdict]` schema **trial-compiles cleanly** — unknown `check`/`metric`/gate-`ref`/rubric-`ref`, a malformed handle binding, an `expr` identifier not in its `bind` keys, a rubric group's weights ≠ 1.0, a `[verdict].trial` naming an absent layer, or no layer at all.
+- A light `[aggregate]` shape check (each handle names `pass_at_k`/`pass_pow_k`, an integer `k ≥ 1`, and an `over ∈ {gate, rubric, verdict}`).
 - Each task's `setup.files` list matches files actually present in `setup/`.
-- Each task's `prompt_id` resolves to a known prompt.
-- Each task is listed in its referenced prompt's `eval_tasks:` frontmatter.
-- Weights, if present, sum to 1.0 (±0.001 tolerance).
-- A `[rubric]` block sets exactly one of `criteria` or `ref` (mutually exclusive); a `ref` resolves to a rubric registered in the `coding_agent_playbook.rubrics` group.
+- Each task's `prompt_id` resolves to a known prompt, and the prompt↔task back-reference is symmetric.
 
-**Named-rubric registry.** A `[rubric]` may name a *code-defined* rubric instead of inlining criteria:
-```toml
-[rubric]
-ref = "code-review"      # mutually exclusive with `criteria`
-```
-A `Rubric` subclass declares its `CRITERIA = (("criterion", weight), …)` and registers under a name via `@register_rubric("code-review")` from `coding_agent_playbook.evaluators.rubrics` (an out-of-tree extension point — the engine ships none; in-tree registrations win over an entry-point plugin of the same name). `get_rubric(name)` resolves the class and returns `cls.define()` (a built `Rubric` of `JudgeCheck`s, weights normalized to sum 1.0). A task may combine `ref` with `[expected]` and `[metrics]` — `rubric_for_task` splices the referenced rubric's `JudgeCheck`s in alongside the file + metric checks. Out-of-tree packages register named rubrics through the `coding_agent_playbook.rubrics` entry-point group.
+**Named-rubric / named-gate refs.** A handle may `{ref = "name"}` instead of inlining a check: in the **rubric** layer it resolves a *code-defined* rubric registered under `@register_rubric("code-review")` (`coding_agent_playbook.evaluators.rubrics` + the `coding_agent_playbook.rubrics` entry-point group), wrapped in a `ThresholdCheck` on its 0–1 composite; in the **gate** layer it resolves a *code-defined* composed gate registered under `@register_gate("name")` (`coding_agent_playbook.evaluators.gates` + the new `coding_agent_playbook.gates` group). A `Rubric` subclass declares its `CRITERIA = (("criterion", weight), …)`; `get_rubric(name)` returns `cls.define()` (a built `Rubric` of `JudgeCheck`s). The engine ships **no** builtin gates or rubrics — both are purely third-party extension points; in-tree registrations win on a name clash.
 
-That's the entire active surface in v1.
+That's the entire active task surface.
 ### 15.3 The v1.1 runner (live — deterministic layers)
-PR R1 activates the former placeholder. `HarnessRunner` is now a concrete **template method**: `run_task` owns a fixed pipeline (materialize → render prompt → `_invoke_agent` → capture → score → assemble a `TaskResult`) and the single abstract per-assistant hook is `_invoke_agent`. Scoring runs through the `Metric` / `Check` / `Rubric` model (§21): the task's three eval blocks compile into one `Rubric` (`rubric_for_task`) whose ordered checks `Rubric.evaluate` folds into one report, so the deterministic layers — `[expected]` file checks and `[metrics]` static + execution metrics (non-regression vs the `setup/` baseline) — are live. **Judged `[rubric]` scoring landed in v1.1 R2**: `run_task(task, scratch, *, judge=None, samples=1)` takes an optional `Judge` (keyword-only, R1-compatible default) and threads it onto the `EvalContext`; with a judge set the rubric criteria score against the captured diff and fold into the same report, and with none (the default) judged checks report `available() is False` and the report is deterministic-only. The cost-tiered scheduler (§21.4) runs checks cheapest-tier-first; `run_task` is **fail-fast by default** (a lost deterministic gate skips the costlier execution/judged tiers — a failing `[expected]`/metric check never spends an LLM call), and `playbook eval --run --full-scoring` forces every check to run.
+`HarnessRunner` is a concrete **template method**: `run_task` owns a fixed pipeline (materialize → render prompt → `_invoke_agent` → capture → score → assemble a `TaskResult`) and the single abstract per-assistant hook is `_invoke_agent`. Scoring runs through the `Metric` / `Check` / `Rubric` model (§21): the task's layer blocks compile (via `evals._compile.compile_task`) into one per-trial `Rubric` carrying the two named layer checks (ids `"gate"` / `"rubric"`), and a single `Rubric.evaluate` folds them into one report — so the deterministic `[gate]` layer (file checks + static/execution metric checks, 0–1 normalized non-regression vs the `setup/` baseline) is live. **The judged `[rubric]` layer is opt-in**: `run_task(task, scratch_dir, *, judge=None, samples=1, fail_fast=True)` takes an optional `Judge` (keyword-only) and threads it onto the `EvalContext`; with a judge set the rubric criteria score against the captured diff and fold into the same report, and with none (the default) the rubric layer reports `available() is False` and the report is deterministic-only. The per-trial **verdict** is then *derived* from the gate/rubric layer results (a skipped layer is neutral) via `[verdict].trial` — not re-run, so the judge / test-suite is never double-invoked. The cost-tiered scheduler (§21.4) runs checks cheapest-tier-first; `run_task` is **fail-fast by default** (a lost deterministic gate skips the costlier execution/judged tiers — a failing gate check never spends an LLM call), and `playbook eval --run --full-scoring` forces every check to run. When the task carries an `[aggregate]` block the runner runs `N = max(k)` trials and the aggregate `pass@k` / `pass^k` checks reduce them into the task verdict (§21.2.5); omit it ⇒ a single trial.
 ```python
 # coding_agent_playbook/evals/runner.py     (v1.1, live)
 from abc import ABC, abstractmethod
@@ -1754,11 +1764,13 @@ class AgentRun:
 class TaskResult:
     task_id: str
     harness: str                                 # the runner's entry-point name, e.g. "fake", "claude_code"
-    report: EvaluationReport                      # the Rubric.evaluate report ([expected] + [metrics] + optional [rubric] checks)
-    passed: bool                                  # mirrors report.passed
-    aggregate_score: float                        # report.composite, or 1.0/0.0 from passed when no weighted evaluator contributed
+    report: EvaluationReport                      # the per-trial Rubric.evaluate report (the gate + rubric layer checks)
+    passed: bool                                  # the TASK verdict (derived [verdict].trial, or the [aggregate] pass/fail)
+    aggregate_score: float                        # report.composite (single-trial), or the aggregate reliability score
     duration_seconds: float
     transcript: str                              # full agent transcript for debugging
+    trials: list[TrialResult] = field(default_factory=list)   # one per trial (one for N=1)
+    aggregate: CheckResult | None = None          # the graded [aggregate] check, when present
 @dataclass
 class EvalReport:                                 # aggregate over several tasks for one harness
     engine_version: str
@@ -1786,30 +1798,30 @@ class HarnessRunner(ABC):
         """Drive the agent against scratch_dir and return its raw outcome. The only per-assistant step."""
         ...
 ```
-**Result model evolved (Option B).** `TaskResult` now carries one `report: EvaluationReport` covering the `[expected]` file checks, the `[metrics]` static/execution checks, and (with a judge) the `[rubric]` judged checks, plus the convenience aggregates `passed` / `aggregate_score` / `duration_seconds` / `transcript`. The old `programmatic_checks` / `rubric_scores` lists are **retired**; an `[expected]` predicate is now a deterministic `Check` whose result rides on `report.checks`. (The R6 refactor later repurposed the *name* `CheckResult` for the per-check outcome of `Check.grade` — distinct from the retired placeholder field.) `EvalReport.pass_rate` is the mean of `tr.passed`. This is the **sanctioned v2-activation revision** of the §15.3 placeholder shape (the retired fields had no consumers): v1.1 *is* the activation milestone, so evolving the eval *result* types here is in-bounds while the authored `[metrics]` / `[rubric]` / `[expected]` task schema stays stable.
+**Result model (Option B).** `TaskResult` carries one representative `report: EvaluationReport` (the first trial's, covering the `[gate]` / `[rubric]` layer checks) plus the convenience aggregates `passed` / `aggregate_score` / `duration_seconds` / `transcript`, and — for a multi-trial `[aggregate]` task — `trials` (every per-trial `TrialResult`) and `aggregate` (the graded aggregate `CheckResult`). `passed` is the **task** verdict: the single trial's derived `[verdict].trial` for a non-aggregate task, or the `[aggregate]` layer's pass/fail when the task aggregates across trials. A gate predicate is a deterministic `Check` whose result rides on `report.checks`; `CheckResult` is the per-check outcome of `Check.grade`. `EvalReport.pass_rate` is the mean of `tr.passed`.
 
 Concrete runners (discovered via the `coding_agent_playbook.runners` entry-point group — never instantiated directly):
 - **`FakeRunner`** (`name="fake"`, `evals/fake_runner.py`) — the **hermetic default + test driver**. Its `_invoke_agent` applies a caller-supplied deterministic mutation (`Callable[[Path], None]`; default a no-op) to the scratch tree and returns a canned transcript. No network, no CLI; every unit test uses it. It leaves `requires_resolved_prompt=False`, so it tolerates the placeholder `render_prompt` emits for a synthetic test task.
 - **`ClaudeCodeRunner`** (`name="claude_code"`, `evals/claude_code_runner.py`) — a **thin, opt-in real runner**. Its `_invoke_agent` drives the Claude Code CLI via a plain `subprocess` arg-list (default `claude -p <prompt>`) bound to the scratch repo and captures stdout/stderr as the transcript. Lazy — no top-level CLI import; `available()` returns `False` when the `claude` binary is not on `PATH` (mirroring the `radon` lazy-availability pattern), so it is cleanly skippable and **never exercised in CI**. It sets `requires_resolved_prompt=True`.
-- **`OpenCodeRunner`** (`name="opencode"`, `evals/opencode_runner.py`, **PR R3 Track O**) — a second thin, opt-in real runner, the same shape as `ClaudeCodeRunner`. Its `_invoke_agent` drives the OpenCode CLI via a plain `subprocess` arg-list (default `opencode run <prompt>`) with `cwd=scratch_dir` and merges stdout/stderr into the transcript. Lazy — no top-level CLI import; `available()` returns `False` when the `opencode` binary is not on `PATH`, so it is cleanly skippable and **never exercised in CI**. It sets `requires_resolved_prompt=True`. The `command`/`timeout` are configurable (a `{prompt}` token is interpolated, else the prompt is appended).
+- **`OpenCodeRunner`** (`name="opencode"`, `evals/opencode_runner.py`) — a second thin, opt-in real runner, the same shape as `ClaudeCodeRunner`. Its `_invoke_agent` drives the OpenCode CLI via a plain `subprocess` arg-list (default `opencode run <prompt>`) with `cwd=scratch_dir` and merges stdout/stderr into the transcript. Lazy — no top-level CLI import; `available()` returns `False` when the `opencode` binary is not on `PATH`, so it is cleanly skippable and **never exercised in CI**. It sets `requires_resolved_prompt=True`. The `command`/`timeout` are configurable (a `{prompt}` token is interpolated, else the prompt is appended).
 
 `ContinueCLIRunner` remains future work (not yet implemented).
 
 **`render_prompt` strictness.** `render_prompt(task, strict=…)` resolves `task.prompt_id` to its `Prompt` (scanning `resources/prompts/` alongside the task tree) and renders the body through the renderer under `StrictUndefined`. When the prompt cannot be resolved: a *real* runner (`requires_resolved_prompt=True`) raises `PromptResolutionError` — a live agent must never be driven with a placeholder; the hermetic `FakeRunner` (`strict=False`) tolerates a stable placeholder because the deterministic scoring layers never read the rendered text.
 
 #### 15.3.1 Scoring bridge (`evals/scoring.py`)
-`score(task, baseline, candidate, *, judge=None, samples=1, fail_fast=False) -> EvaluationReport` produces one report across the deterministic families and — with a `judge` set — the judged family. It compiles the task's three eval blocks into **one `Rubric`** (`rubric_for_task(task, task.metrics)`; §21.6), pre-measures the metrics that rubric's metric-checks reference into a `MeasurementSet`, and runs `Rubric.evaluate`:
-- **`[metrics]`** — the metric-backed checks (`ThresholdCheck` / `NonRegressionCheck`) grade a `MeasurementSet` the bridge builds up front: **static** metrics measured per candidate `*.py` file (label = tree-relative path so a candidate matches its baseline counterpart), **execution** metrics run a `ProjectHandle` over the candidate tree — both with the baseline measured on the **pristine `setup/` snapshot** so non-regression compares against the untouched setup, not the post-agent tree. The checks grade exactly (`max_worsening=0`; new scopes fall back to absolute).
-- **`[rubric]` (R2)** — the `JudgeCheck`s (one per criterion) score the candidate's captured `git diff` (`ctx.artifact`) into a `0-1` SCORE leaf (averaged over `samples`), feeding the weighted composite and gating on the criterion's `threshold` floor. They are JUDGED-cost so the scheduler runs them last, and **`available()` is `True` only when `ctx.judge is not None`** — with no judge (the default) every `JudgeCheck` records `status="skipped"` and never sinks the gate. "Deterministic-only" is **simply no judge configured**; there is no `ProgrammaticOnlyJudge`.
-- **`[expected]`** — the four deterministic file checks (`evaluators/checks/files.py`: `FileExistsCheck`, `FileContainsCheck`, `FileUnchangedCheck`, `FileForbiddenCheck`) ignore the `MeasurementSet` and read the candidate tree from `ctx.tree` (`available()` is `False` without one); `FileUnchangedCheck` compares candidate bytes against the `setup/` snapshot via `ctx.baseline_tree`. Each is a pure gate (`required=True`, `weight=0.0`): a check that does not hold gates the report but never feeds the composite.
+`score(task, baseline, candidate, *, judge=None, samples=1, fail_fast=False) -> EvaluationReport` produces one report covering both layers. It compiles the task's layer blocks into the per-trial `Rubric` (`task.compiled().per_trial`; §6.5.3), **walks the compiled check tree** to discover which metrics the gate/rubric checks reference, pre-measures them into a `MeasurementSet`, and runs `Rubric.evaluate`. The two named layer checks (`id="gate"` / `id="rubric"`) draw on the checks compiled from the handle tables:
+- **`[gate]` metric checks** — `ThresholdCheck` / `NonRegressionCheck` over a registered `metric=` grade a `MeasurementSet` the bridge builds up front: **static** metrics measured per candidate `*.py` file (label = tree-relative path so a candidate matches its baseline counterpart), **execution** metrics run a `ProjectHandle` over the candidate tree (only when an execution metric is referenced — `run_tests` is *inferred*) — both with the baseline measured on the **pristine `setup/` snapshot** so non-regression compares against the untouched setup, not the post-agent tree. Thresholds and `max_worsening` are **0–1 cutoffs on the metric's normalized score** (every metric owns a `Normalizer`; §21).
+- **`[gate]` file checks** — `FileExistsCheck` / `FileContainsCheck` / `FileUnchangedCheck` / `FileForbiddenCheck` (`evaluators/checks/files.py`) ignore the `MeasurementSet` and read the candidate tree from `ctx.tree` (`available()` is `False` without one); `FileUnchangedCheck` compares candidate bytes against the `setup/` snapshot via `ctx.baseline_tree`. Each is a pure gate (`required=True`, `weight=0.0`).
+- **`[rubric]` judge checks** — the `JudgeCheck`s in a `rubric` group (and standalone `judge=` checks) score the candidate's captured `git diff` (`ctx.artifact`) into a `0-1` leaf (averaged over `samples`), feeding the rubric-group composite and gating on the group's `fail` (or the criterion's `threshold`). They are JUDGED-cost so the scheduler runs them last, and **`available()` is `True` only when `ctx.judge is not None`** — with no judge (the default) the whole rubric layer reports `status="skipped"`. "Deterministic-only" is **simply no judge configured**; there is no `ProgrammaticOnlyJudge`.
 
-All three families flow through one `Rubric.evaluate(ctx, measurements, *, strict, fail_fast)` into a single `EvaluationReport`: `composite` is the weight-normalized mean over the run checks' scores, `passed` is the gate verdict (every required, run check must pass — a failed `[expected]` check or a regressed `[metrics]` scope gates it; skipped checks are neutral). `fail_fast` (the runner's default; `--full-scoring` flips it off) lets the cost-tiered scheduler short-circuit once the gate is lost, so a failing deterministic check spares the execution/judged tiers.
+Both layer checks flow through one `Rubric.evaluate(ctx, measurements, *, strict, fail_fast)` into a single `EvaluationReport` whose `report.checks` carry the gate/rubric `CheckResult`s. The bridge then **derives** the per-trial verdict from those results (`evals._compile.verdict_passed` over `[verdict].trial`, skipped-neutral) and writes it onto `report.passed` — the layers ran once; the verdict is a boolean fold, not a third check. `fail_fast` (the runner's default; `--full-scoring` flips it off) lets the cost-tiered scheduler short-circuit once a required gate check fails, so a failing deterministic gate spares the execution/judged tiers (the LLM judge is never invoked).
 
 ### 15.4 Why the eval abstractions live in one tree
-The `coding_agent_playbook/evals/` package ships `task.py`, `loader.py`, `validator.py` (active since v1), `runner.py` + `fake_runner.py` + `claude_code_runner.py` + `scoring.py` (live since v1.1 R1), and `judge.py` (**live since v1.1 R2**). `judge.py` defines the concrete-able `Judge` ABC — **Option A**: the per-criterion primitive `score_criterion(criterion, artifact, n=1) -> float` (0–1, n-sample average) is canonical, and the batch `score(rubric, transcript, scratch_dir_state) -> list[float]` is a thin wrapper that maps it over the rubric — plus the opt-in `LLMJudge` (`name="llm"`, shells out to the `claude` CLI, `available()`-gated, never in CI) and the test-only `StubJudge`. This means:
+The `coding_agent_playbook/evals/` package ships `task.py`, `loader.py`, `validator.py` (active since v1), the task-config compiler trio `_expr.py` (the boolean-expression DSL) + `_handles.py` (the handle Factory/Composite builder) + `_compile.py` (the layer compiler + derived verdict), `runner.py` + `fake_runner.py` + `claude_code_runner.py` + `opencode_runner.py` + `scoring.py` (live since v1.1 R1), and `judge.py` (**live since v1.1 R2**). `judge.py` defines the concrete-able `Judge` ABC — **Option A**: the per-criterion primitive `score_criterion(criterion, artifact, n=1) -> float` (0–1, n-sample average) is canonical, and the batch `score(rubric, transcript, scratch_dir_state) -> list[float]` is a thin wrapper that maps it over the rubric — plus the opt-in `LLMJudge` (`name="llm"`, shells out to the `claude` CLI, `available()`-gated, never in CI) and the test-only `StubJudge`. This means:
 - Overlay authors writing tasks can import `EvalTask`, `TaskSetup`, etc. for type hints in their own tooling.
 - The module layout is stable across the v1 → v1.1 progression; only the placeholder bodies get filled in.
-- The `[project.entry-points."coding_agent_playbook.runners"]` group is populated (`fake`, `claude_code`, `opencode`); the `coding_agent_playbook.judges` group is now populated with `llm` (third-party packages can register additional runners/judges against either group).
+- The `[project.entry-points."coding_agent_playbook.runners"]` group is populated (`fake`, `claude_code`, `opencode`); the `coding_agent_playbook.judges` group is populated with `llm`; the engine ships no builtin `coding_agent_playbook.gates` / `coding_agent_playbook.rubrics` / `coding_agent_playbook.checks` entries — those are the third-party extension points a task references by `ref`/`check` name.
 ## 16. Testing strategy
 ### 16.1 Unit tests
 - `test_detector.py` — synthetic `pyproject.toml` files in `tests/fixtures/repos/`; assert facts dict matches expected.
@@ -2007,10 +2019,12 @@ class CostTier(IntEnum): DETERMINISTIC < EXECUTION < JUDGED       # cheapest-fir
 class Metric(ABC):                       # the "measure" leaf  (evaluators/metric.py)
     name: str
     scope: Scope
-    higher_is_worse: bool                 # CC/WMC/CBO/DIT/LCOM4 True; MI/coverage/test False
+    normalizer: Normalizer                # maps raw -> 0-1 GOODNESS (higher = always better)
     requires: str | None = None           # optional importable dep (e.g. "radon"); None = stdlib
     needs_project: bool = False           # True => execution metric (needs ctx.project)
+    needs_judge: bool = False             # True => judge-backed metric (needs ctx.judge)
     def available(self, ctx: EvalContext) -> bool: ...
+    def score(self, raw: float) -> float: ...                      # raw -> 0-1 via self.normalizer
     @abstractmethod
     def measure(self, ctx: EvalContext) -> list[Measurement]: ...  # one Measurement per scope
 
@@ -2029,68 +2043,84 @@ class Rubric(Metric):                    # the "aggregate" stage  (evaluators/ru
                  fail_fast=False, max_workers=1) -> EvaluationReport: ...
     def measure(self, ctx) -> list[Measurement]: ...   # a Rubric is ALSO a Metric (composite as one MODULE measurement)
 ```
-The split: a **`Metric`** carries only the measurement-side descriptors (`name`, `scope`, `higher_is_worse`, `requires`, `needs_project`) and produces a raw `Measurement` per scope; a **`Check`** carries the grading-side policy (thresholds, regression tolerance, `weight`, `required`) and turns measurements (or `ctx` directly, for file/judge checks) into one `CheckResult` — a boolean `passed` gate **plus** an optional `0-1` `score` for partial credit; a **`Rubric`** holds an ordered set of checks and folds their results into one `EvaluationReport` (gate = all `required` checks pass; composite = `Σ(weight·score)/Σweight`). The `EvalContext` (`evaluators/types.py`) carries everything a family might need, decoupled: static reads `module`/`source`/`label`; execution reads `project`; judged reads `judge`/`artifact`/`samples`; file checks read `tree`/`baseline_tree`. `available(ctx)` lets each piece degrade gracefully when its slot or dependency is missing.
+The split: a **`Metric`** carries only the measurement-side descriptors (`name`, `scope`, `normalizer`, `requires`, `needs_project`/`needs_judge`) and produces a raw `Measurement` per scope; a **`Check`** carries the grading-side policy (thresholds, regression tolerance, `weight`, `required`) and turns measurements (or `ctx` directly, for file/judge checks) into one `CheckResult` — a boolean `passed` gate **plus** an optional `0-1` `score` for partial credit; a **`Rubric`** holds an ordered set of checks and folds their results into one `EvaluationReport` (gate = all `required` checks pass; composite = `Σ(weight·score)/Σweight`). The `EvalContext` (`evaluators/types.py`) carries everything a family might need, decoupled: static reads `module`/`source`/`label`; execution reads `project`; judged reads `judge`/`artifact`/`samples`; file checks read `tree`/`baseline_tree`. `available(ctx)` lets each piece degrade gracefully when its slot or dependency is missing.
+
+**Normalization lives on the `Metric` — `higher_is_worse` is gone.** Every metric owns a `Normalizer` (`evaluators/normalizer.py`: `RampNormalizer(good, bad)` / `PercentNormalizer` / `Identity`) mapping its raw value to a `0-1` **goodness** where `1.0` is best and **higher is always better**, regardless of the metric's native direction (`cyclomatic_complexity` ramps *down* as it grows, `coverage` ramps *up*). `Metric.score(raw)` applies it. Folding direction into the normalizer is what let the per-metric `higher_is_worse` flag be **deleted**: the `Check` grades on the normalized score, so it never reasons about direction, and every threshold (`warn` / `fail` / `max_worsening`) is a `0-1` cutoff on that goodness.
 
 **A `Rubric` is also a `Metric` — the Composite.** `Rubric` subclasses `Metric` and exposes its composite as one MODULE-scope `Measurement` via `measure()`, so a rubric thresholds into a parent `ThresholdCheck` and **nests** into a Composite tree (a rubric-of-rubrics). `measure()` self-builds its `MeasurementSet` from the additive `EvalContext.candidate_measurements`/`baseline_measurements`, guards against a re-entrant self-measure (`ValueError`), and memoizes per `ctx`. This replaces the old fused `Evaluator` with a composable algebra: any check tree (booleans via `AllOf`/`AnyOf`/`Not`, §21.2.4) is itself a check.
 
-**The static-vs-execution discriminator is `needs_project`, not the scope axis.** A FILE-scope metric like `coverage` is *execution*, not static, so scope alone cannot separate them; `needs_project=True` is the explicit flag. `static_metrics()` excludes it; a metric-backed check derives its `cost` (EXECUTION vs DETERMINISTIC) from the metric's `needs_project`.
+**The static / execution / judged discriminator is `needs_project` / `needs_judge`, not the scope axis.** A FILE-scope metric like `coverage` is *execution*, not static, so scope alone cannot separate them; `needs_project=True` (execution) / `needs_judge=True` (judge-backed) are the explicit flags. `static_metrics()` excludes `needs_project`; a metric-backed check derives its `cost` (DETERMINISTIC / EXECUTION / JUDGED) from these flags.
 
-**How the families are differentiated — orthogonal axes, no `kind` enum.** The families are *emergent* from independent fields, so the engine never switches on a "type":
+**How the families are differentiated — orthogonal axes, no `kind` enum.** The families are *emergent* from independent fields, so the engine never switches on a "type". A task `check` is `(type) × (metric|judge) × kwargs` — `check = "threshold"|"non_regression"` over a registered `metric=` or a `judge=` criterion (a `JudgeMetric`, §21.2.3) — plus the standalone file checks and rubric groups:
 
-| Family | check class | `determinism` | `cost` | `available(ctx)` needs | authoring block |
+| Family | check class / id | `determinism` | `cost` | `available(ctx)` needs | task layer |
 |---|---|---|---|---|---|
-| static metric (§21.2.1) | `ThresholdCheck`/`NonRegressionCheck` | DETERMINISTIC | DETERMINISTIC | `ctx.module` (source/AST) | `[metrics]` |
-| execution (§21.2.2) | `ThresholdCheck` (+`TestsPassCheck`/`CoverageCheck`) | DETERMINISTIC | EXECUTION | `ctx.project` | `[metrics]` |
-| judged / rubric (§21.2.3) | `JudgeCheck` | JUDGED | JUDGED | `ctx.judge` | `[rubric]` |
-| file check (§21.2.4) | `FileExists`/`FileContains`/`FileUnchanged`/`FileForbidden` | DETERMINISTIC | DETERMINISTIC | `ctx.tree` | `[expected]` |
+| static metric (§21.2.1) | `threshold` / `non_regression` over a static `metric=` | DETERMINISTIC | DETERMINISTIC | `ctx.module` (source/AST) | `[gate]` |
+| execution (§21.2.2) | `threshold` / `non_regression` over an execution `metric=` | DETERMINISTIC | EXECUTION | `ctx.project` | `[gate]` |
+| judged metric (§21.2.3) | `threshold` / `non_regression` over a `judge=` (a `JudgeMetric`), or a `rubric` group of `JudgeCheck`s | JUDGED | JUDGED | `ctx.judge` | `[rubric]` |
+| file check (§21.2.4) | `file_exists` / `file_contains` / `file_unchanged` / `file_forbidden` | DETERMINISTIC | DETERMINISTIC | `ctx.tree` | `[gate]` |
+| aggregate (§21.2.5) | `pass_at_k` / `pass_pow_k` over the runner's trials | DETERMINISTIC | DETERMINISTIC | `ctx.trials` | `[aggregate]` |
 
-Authors differentiate by **TOML block** (`[metrics]` / `[rubric]` / `[expected]`), which `rubric_for_task` compiles into a `Rubric` of checks (§21.6); the engine differentiates by the axes and the cost-tiered scheduler routes by capability (`available(ctx)`) + tier, not a type switch — so a new kind drops in by choosing axis values, with no second `grade()` path.
+Authors differentiate by **task layer + handle shape** (a `[gate.bind]` / `[rubric.bind]` / `[aggregate.bind]` handle), which the compiler turns into a `Rubric` of checks (§21.6); the engine differentiates by the axes and the cost-tiered scheduler routes by capability (`available(ctx)`) + tier, not a type switch — so a new kind drops in by choosing axis values, with no second `grade()` path.
 
 ### 21.2 The check families
-| Authoring | Family | Metric / Check | `determinism` · `cost` / needs | primary use |
+| Task handle | Family | Metric / Check | `determinism` · `cost` / needs | primary use |
 | --- | --- | --- | --- | --- |
-| `[metrics]` CC, WMC, MI, LCOM4, DIT, CBO≈ | **static** | static `Metric` → `ThresholdCheck`/`NonRegressionCheck` | DETERMINISTIC · DETERMINISTIC · `ctx.module` (`ast`/`radon`) | threshold + **non-regression** |
-| `[metrics]` `test_pass_rate`, `coverage` | **execution** | execution `Metric` → `ThresholdCheck` (`TestsPassCheck`/`CoverageCheck`) | DETERMINISTIC · EXECUTION · `ctx.project` (shells out to `pytest`) | threshold + **non-regression** |
-| `[rubric]` criteria + weights | **judged** | `JudgeCheck` (one per criterion) | JUDGED · JUDGED · `ctx.judge` (LLM/human) | weighted composite + threshold |
-| `[expected]` file checks | **file** | `FileExists`/`FileContains`/`FileUnchanged`/`FileForbidden` | DETERMINISTIC · DETERMINISTIC · `ctx.tree` | must-be-true gate |
+| `[gate]` `{check="threshold"|…, metric="cyclomatic_complexity"|…}` | **static** | static `Metric` → `ThresholdCheck`/`NonRegressionCheck` | DETERMINISTIC · DETERMINISTIC · `ctx.module` (`ast`/`radon`) | 0–1 threshold + **non-regression** |
+| `[gate]` `{check=…, metric="test_pass_rate"|"coverage"}` | **execution** | execution `Metric` → `ThresholdCheck`/`NonRegressionCheck` | DETERMINISTIC · EXECUTION · `ctx.project` (shells out to `pytest`) | 0–1 threshold + **non-regression** |
+| `[rubric]` `{rubric=[{judge,weight},…]}` or `{check=…, judge="…"}` | **judged** | `JudgeCheck` (rubric group) or a `JudgeMetric`-backed check | JUDGED · JUDGED · `ctx.judge` (LLM) | weighted composite + threshold |
+| `[gate]` `{check="file_exists"|…}` | **file** | `FileExists`/`FileContains`/`FileUnchanged`/`FileForbidden` | DETERMINISTIC · DETERMINISTIC · `ctx.tree` | must-be-true gate |
+| `[aggregate]` `{metric="pass_at_k"|"pass_pow_k", k, over}` | **aggregate** | `PassAtK`/`PassPowK` over the runner's trials | DETERMINISTIC · DETERMINISTIC · `ctx.trials` | cross-trial reliability |
 #### 21.2.1 Static metrics (`evaluators/builtins/`)
-Source is parsed **once** into a `ModuleModel` (`evaluators/parse.py`, which also owns the shared `_cyclomatic` helper and the stable scope keys `<label>::<qualname>` / `<label>`); each available static `Metric` reads that model via its module-level `_measure` helper. All are stdlib-`ast`-only except MI, which is the lone radon-backed one. The grading-side policy (the warn/fail bounds + regression tolerance below) lives on the *check*, not the metric: the shared per-metric defaults are `evaluators/policy.py::METRIC_DEFAULTS`, applied by `metric_check()` when a `[metrics]` config has no override.
-| `name` | scope | `higher_is_worse` | default warn/fail | default `max_worsening` | requires |
+Source is parsed **once** into a `ModuleModel` (`evaluators/parse.py`, which also owns the shared `_cyclomatic` helper and the stable scope keys `<label>::<qualname>` / `<label>`); each available static `Metric` reads that model via its module-level `_measure` helper. All are stdlib-`ast`-only except MI, which is the lone radon-backed one. Each metric owns a `Normalizer` that folds its native direction into a 0–1 goodness (higher = better). The grading-side policy (the warn/fail bounds + regression tolerance below) lives on the *check*, not the metric, as **0–1 cutoffs on the normalized score**: the shared per-metric defaults are `evaluators/policy.py::METRIC_DEFAULTS`, applied by `metric_check()` when an override is absent.
+| `name` | scope | `normalizer` (raw→0–1) | default warn/fail (0–1) | default `max_worsening` | requires |
 | --- | --- | --- | --- | --- | --- |
-| `cyclomatic_complexity` | FUNCTION/METHOD | true | `warn=10, fail=20` | `max_worsening=0` | — |
-| `wmc` | CLASS | true | `fail=50` | `max_worsening=0` | — |
-| `lcom4` | CLASS | true | `warn=2` | `max_worsening=0` | — |
-| `dit` | CLASS | true | `warn=5` | `max_worsening=0` | — |
-| `cbo` (≈) | CLASS | true | `warn=14` | `max_worsening=0` | — |
-| `maintainability_index` | FILE | **false** | `fail=65` | `max_worsening=0` | `radon` |
-Algorithms: **CC** = 1 + decision points (`If/For/AsyncFor/While`, comprehension `if`s, `BoolOp` operands−1, `ExceptHandler`, `IfExp`, `match` guards, `assert`); **WMC** = Σ of method CC; **LCOM4** = connected components of the method graph (shared `self.x` attr or `self.m()` call); **DIT** = longest resolvable base chain (external base = depth 1); **CBO≈** = distinct external types referenced (labeled approximate — undercounts under duck typing); **MI** = `radon.metrics.mi_visit(source, multi=True)`, the SEI 0–100 variant. `maintainability_index` is the engine's only optional extra (`pip install 'coding-agent-playbook[metrics]'`): it self-registers like every builtin, but radon is imported **lazily inside `measure`** and `available()` returns `False` when radon is absent, so the gate transparently skips MI and the engine still loads air-gapped with nothing extra installed.
+| `cyclomatic_complexity` | FUNCTION/METHOD | `Ramp(good=5, bad=20)` | `warn=0.5, fail=0.25` | `0` | — |
+| `wmc` | CLASS | `Ramp(good=10, bad=60)` | `fail=0.2` | `0` | — |
+| `lcom4` | CLASS | `Ramp(good=1, bad=6)` | `warn=0.5` | `0` | — |
+| `dit` | CLASS | `Ramp(good=1, bad=8)` | `warn=0.5` | `0` | — |
+| `cbo` (≈) | CLASS | `Ramp(good=3, bad=25)` | `warn=0.5` | `0` | — |
+| `maintainability_index` | FILE | `Percent` (0–100→0–1) | `fail=0.65` | `0` | `radon` |
+A `Ramp(good, bad)` scores `good`→`1.0`, `bad`→`0.0` and interpolates between (clamped); the single direction-free formula handles a worse-when-larger metric (`good < bad`) and a better-when-larger one alike. Algorithms: **CC** = 1 + decision points (`If/For/AsyncFor/While`, comprehension `if`s, `BoolOp` operands−1, `ExceptHandler`, `IfExp`, `match` guards, `assert`); **WMC** = Σ of method CC; **LCOM4** = connected components of the method graph (shared `self.x` attr or `self.m()` call); **DIT** = longest resolvable base chain (external base = depth 1); **CBO≈** = distinct external types referenced (labeled approximate — undercounts under duck typing); **MI** = `radon.metrics.mi_visit(source, multi=True)`, the SEI 0–100 variant. `maintainability_index` is the engine's only optional extra (`pip install 'coding-agent-playbook[metrics]'`): it self-registers like every builtin, but radon is imported **lazily inside `measure`** and `available()` returns `False` when radon is absent, so the gate transparently skips MI and the engine still loads air-gapped with nothing extra installed.
 #### 21.2.2 Execution metrics (`evaluators/execution/`)
 Deterministic, but they need to **run the target's test suite**, so they add **no playbook dependency**: a `ProjectHandle` (`execution/project.py`) runs a configurable command (default `python -m pytest --junitxml=… --cov --cov-report=xml:… -q`) in the target, and the metrics parse the standard **junit XML** + **coverage XML** with stdlib `xml.etree.ElementTree` (`execution/junit.py`, `execution/coverage_xml.py`). The target supplies `pytest`/`pytest-cov`. The convenience check factories `TestsPassCheck()`/`CoverageCheck()` (`evaluators/checks/execution.py`) are thin `ThresholdCheck` wrappers bound to these metrics with the conventional default bounds.
-| `name` | scope | `higher_is_worse` | default warn/fail | default `max_worsening` | needs |
+| `name` | scope | `normalizer` (raw→0–1) | default warn/fail (0–1) | default `max_worsening` | needs |
 | --- | --- | --- | --- | --- | --- |
-| `test_pass_rate` | MODULE (suite) | false | `fail=1.0` (all must pass) | `0` (no new failures) | `ctx.project` |
-| `coverage` | FILE (+MODULE total) | false | `warn=80` | `0` (must not drop) | `ctx.project` |
+| `test_pass_rate` | MODULE (suite) | `Identity` (already 0–1) | `fail=1.0` (all must pass) | `0` (no new failures) | `ctx.project` |
+| `coverage` | FILE (+MODULE total) | `Percent` (0–100→0–1) | `warn=0.8` | `0` (must not drop) | `ctx.project` |
 - **One run, both metrics:** `ProjectHandle.run()` executes the suite once and caches the parsed junit + coverage reports; both metrics read that cache (no double run).
 - **Flaky tolerance:** `test_pass_rate` is DETERMINISTIC but supports an optional flaky-retry (`ProjectHandle.flaky_retries`; reruns and takes the best observed pass rate); off (`0`) by default.
 - **Non-regression needs two runs.** Standalone with `--baseline git:<ref>` materialises the ref via a temporary `git worktree add` (heavier than the static `git show`); `--baseline <dir>` runs the suite there. Absolute mode (single run on the current tree) is the lighter default.
-- **Opt-in & cost-gated:** running tests has side effects and cost, so execution metrics are opt-in (`--run-tests`); their checks are EXECUTION-tier (the scheduler runs them after the deterministic tier) and are **excluded from the default pre-commit hook** — it stays static-only.
-#### 21.2.3 Judged criteria — the rubric, as checks (`evaluators/checks/judged.py`)
-A rubric criterion is a `JudgeCheck`: a graded SCORE whose value comes from a *judge* (LLM/human). It is **parameterized**, not a registered singleton — `rubric_for_task` instantiates one per rubric line, each carrying its own `criterion` text, `weight`, and a `0-1` `threshold` floor (id `judge:<slug>`, `determinism=JUDGED`, `cost=JUDGED`). `grade` calls `ctx.judge.score_criterion(self.criterion, ctx.artifact, n=ctx.samples) -> float` and averages over `ctx.samples` to damp LLM noise; the score feeds the composite and the `passed` gate is `score >= threshold`. It is **dormant without a judge**: `available()` returns `True` only when `ctx.judge` is set, so a `Rubric` evaluated with no judge records each `JudgeCheck` as `status="skipped"` (never sinking the gate). Because `JudgeCheck` is JUDGED-cost, the cost-tiered scheduler (§21.4) runs it **last** — a failing deterministic gate short-circuits it away, so a failed `[expected]`/metric check never spends an LLM call.
+- **Opt-in & cost-gated:** running tests has side effects and cost, so execution metrics are opt-in — `--run-tests` on the standalone `playbook metrics` gate, *inferred* (a `[gate]` referencing an execution metric) on `playbook eval --run`. Their checks are EXECUTION-tier (the scheduler runs them after the deterministic tier) and are **excluded from the default pre-commit hook** — it stays static-only.
+#### 21.2.3 Judged criteria — the rubric, as checks (`evaluators/checks/judged.py`, `judge_metric.py`)
+A rubric criterion is a `JudgeCheck`: a graded SCORE whose value comes from a *judge* (LLM/human). It is **parameterized**, not a registered singleton — a `[rubric.bind]` `rubric` group instantiates one per criterion line (via `Rubric.of`), each carrying its own `criterion` text, `weight`, and a `0-1` `threshold` floor (id `judge:<slug>`, `determinism=JUDGED`, `cost=JUDGED`). `grade` calls `ctx.judge.score_criterion(self.criterion, ctx.artifact, n=ctx.samples) -> float` and averages over `ctx.samples` to damp LLM noise; the score feeds the composite and the `passed` gate is `score >= threshold`. It is **dormant without a judge**: `available()` returns `True` only when `ctx.judge` is set, so a `Rubric` evaluated with no judge records each `JudgeCheck` as `status="skipped"` (never sinking the gate). Because `JudgeCheck` is JUDGED-cost, the cost-tiered scheduler (§21.4) runs it **last** — a failing deterministic gate short-circuits it away, so a failed gate check never spends an LLM call.
+
+**`JudgeMetric` — a judged criterion *as a metric* (`evaluators/checks/judge_metric.py`).** A weighted rubric group is the *one* shape that builds `JudgeCheck`s directly. The *other* shape — a standalone `{check = "threshold"|"non_regression", judge = "<criterion>"}` handle — needs a judged criterion that an ordinary metric-backed `ThresholdCheck`/`NonRegressionCheck` can grade, so `JudgeMetric` is an **Adapter** that presents the judge as a `Metric`: `needs_judge=True`, `normalizer=Identity` (a judge score is already a 0–1 goodness), and `measure(ctx)` returns one `Measurement` = `ctx.judge.score_criterion(criterion, ctx.artifact, n=max(1, ctx.samples))`. This is what makes **non-regression on a judged criterion** work (`{check="non_regression", judge="overall quality", max_worsening=0.1}`) — the same regression machinery as any metric, no special-casing. Like `JudgeCheck`, it never imports `evals` (it consumes only the `JudgeLike` protocol) and is `available()`-gated on `ctx.judge`.
 > **Judge signature — reconciled (R2), still closed.** `JudgeCheck.grade` calls `ctx.judge.score_criterion(criterion, artifact, n) -> float` — the **canonical per-criterion primitive** (Option A). The `Judge` ABC's batch `score(rubric, transcript, scratch_dir_state) -> list[float]` is a thin wrapper that maps `score_criterion` over the rubric, so the two shapes are the *same* operation at different granularities. `ctx.judge` is typed as the structural `JudgeLike` protocol **defined in `evaluators/types.py`** (not `evals`) so `evaluators` never imports `evals` — avoiding the `evaluators` ↔ `evals` cycle; the concrete `Judge` satisfies it structurally. Tests exercise `JudgeCheck` via the deterministic `StubJudge`.
 #### 21.2.4 File checks + boolean composers (`evaluators/checks/`)
-The four `[expected]` predicates are first-class deterministic `Check`s (`evaluators/checks/files.py`): `FileExistsCheck` (`files_created`), `FileContainsCheck` (`files_must_contain`, path + regex), `FileUnchangedCheck` (`files_unchanged`, byte-identical to the `setup/` snapshot via `ctx.baseline_tree`), and `FileForbiddenCheck` (`files_forbidden`). Each ignores the `MeasurementSet` and reads `ctx.tree` directly, is a pure gate (`required=True`, `weight=0.0`), and its `passed` comes straight from the predicate (`available()` is `False` without a candidate tree). The boolean composers `AllOf`/`AnyOf`/`Not` (`evaluators/checks/compose.py`) are themselves checks that fold child checks through the scheduler (an unavailable child is *neutral*, not a failure), so any check tree nests freely inside a `Rubric`.
+The four file predicates are first-class deterministic `Check`s (`evaluators/checks/files.py`), authored as `[gate.bind]` handles (`{check = "file_exists"|"file_contains"|"file_unchanged"|"file_forbidden", path = …, pattern = …}`): `FileExistsCheck`, `FileContainsCheck` (path + regex), `FileUnchangedCheck` (byte-identical to the `setup/` snapshot via `ctx.baseline_tree`), and `FileForbiddenCheck`. Each ignores the `MeasurementSet` and reads `ctx.tree` directly, is a pure gate (`required=True`, `weight=0.0`), and its `passed` comes straight from the predicate (`available()` is `False` without a candidate tree). The boolean composers `AllOf`/`AnyOf`/`Not` (`evaluators/checks/compose.py`) are themselves checks that fold child checks through the scheduler (an unavailable child is *neutral*, not a failure), so any check tree nests freely inside a `Rubric` — and they back both the `{all_of=[…]}`/`{any_of=[…]}`/`{not=…}` handle groups and the compiled `[<layer>].expr`/`[verdict].trial` boolean expressions (§21.2.6).
+#### 21.2.5 Aggregate checks — `pass@k` / `pass^k` across trials (`evaluators/checks/aggregate.py`)
+The `[aggregate]` layer grades **reliability across `k` runner trials**, a dimension orthogonal to the per-trial gate/rubric. A handle is `{metric = "pass_at_k"|"pass_pow_k", k = <int>, over = "gate"|"rubric"|"verdict", warn?, fail?}`; the runner runs `N = max(k)` trials and the `AggregateCheck` reduces the selected `over` axis (each trial's `gate`/`rubric` `CheckResult.passed`, or its derived `verdict`) to `c` successes over `n` trials, then estimates: **pass@k** = the probability a random `k`-subset of the trials contains ≥1 success (`1 - C(n-c,k)/C(n,k)`, or `1.0` when fewer than `k` failed); **pass^k** = the probability a random `k`-subset is all successes (`C(c,k)/C(n,k)`, or `0.0` when fewer than `k` succeeded). The 0–1 estimate is graded against an absolute `warn`/`fail` floor (same higher-is-better strict-below rule the metric checks use). An aggregate check does no agent work — it reads the already-run `ctx.trials` — so it is `DETERMINISTIC` on both axes; `available()` is `True` only once the runner has populated `ctx.trials`. (`max_worsening` vs baseline trials is accepted by the validator but not yet supported — the absolute path executes.)
+#### 21.2.6 Expression DSL + derived verdict (`evals/_expr.py`, `evals/_compile.py`)
+A task's `[<layer>].expr` and `[verdict].trial` are tiny boolean expressions (`and`/`or`/`not`/parens) over handle names. `evals/_expr.py` is a self-contained **Interpreter** — a hand-rolled tokenizer + recursive-descent parser (precedence `not > and > or`, chained operators flattened to n-ary nodes) to a small immutable AST — with no `eval`/`exec`/`ast` and no third-party dep. `compile_expr` folds the AST into a `compose.py` `AllOf`/`AnyOf`/`Not` check tree over the layer's `name -> Check` handle map (built by `evals/_handles.py`, the **Factory + Composite** that turns each binding into a check). The **verdict is derived, not re-run**: the per-trial `Rubric` evaluates the `gate` and `rubric` layer checks *once*, and `[verdict].trial` is a boolean fold (`eval_bool`/`verdict_passed`) over their already-decided results with **skipped-neutral** semantics (a layer that did not run — e.g. the rubric layer with no judge — is neutral, exactly like an unavailable child of `AllOf`/`AnyOf`). Folding the verdict from the layer results instead of compiling it as a third check is what keeps the judge / test-suite single-shot.
 ### 21.3 Registry — decorator + entry points
-In-tree metric builtins self-register via the `@register_metric` class decorator (each `builtins/*` and `execution/*` module decorates its class; `builtins/__init__` and `execution/__init__` import them so the decorators fire). Out-of-tree **metrics** register through the `coding_agent_playbook.metrics` entry-point group (renamed from the old `…​.evaluators`); out-of-tree **custom grader checks** register through the new `coding_agent_playbook.checks` group. **In-tree builtins win** over an entry point reusing a registered name. The list is never hardcoded. Metric selection helpers (`evaluators/metric.py`):
+In-tree metric builtins self-register via the `@register_metric` class decorator (each `builtins/*` and `execution/*` module decorates its class; `builtins/__init__` and `execution/__init__` import them so the decorators fire). The extension surface is four entry-point groups, each with an in-tree-wins dedup:
+- **`coding_agent_playbook.metrics`** — out-of-tree `Metric`s (renamed from the old `…​.evaluators`); `@register_metric`. An out-of-tree metric **must** declare a `normalizer`.
+- **`coding_agent_playbook.checks`** — out-of-tree custom grader `Check` factories, resolved by `get_check(id, **kwargs)` from a task's `{check = "<id>", …}` handle; `@register_check`. The in-tree `threshold`/`non_regression`/`file_*`/`pass_at_k`/`pass_pow_k` ids register here too.
+- **`coding_agent_playbook.gates`** (new) — out-of-tree composed boolean gates, resolved by `get_gate(name)` from a gate-layer `{ref = "<name>"}`; `@register_gate("name")`. The engine ships none.
+- **`coding_agent_playbook.rubrics`** — out-of-tree named rubrics, resolved by `get_rubric(name)` from a rubric-layer `{ref = "<name>"}`; `@register_rubric("name")`. The engine ships none.
+
+The list is never hardcoded; **in-tree builtins win** over an entry point reusing a name. Metric selection helpers (`evaluators/metric.py`):
 - `all_metrics()` — builtins + entry points, deduped by name.
 - `static_metrics()` — every metric with `not needs_project` (the `playbook metrics` default set).
 - `execution_metrics()` — every metric with `needs_project` (`coverage`, `test_pass_rate`); `--run-tests` adds these.
 - `get_metric(name)` — a fresh instance, or `KeyError`.
 ### 21.4 Aggregation — `Rubric.evaluate` + the cost-tiered scheduler
-`Rubric.evaluate(ctx, measurements, *, strict=False, fail_fast=False, max_workers=1) -> EvaluationReport` replaces the old free `grade()`. It runs its ordered checks through the cost-tiered scheduler (`evaluators/scheduler.py`) and folds the `CheckResult`s into one report. Each metric-backed check (`_MetricCheck`) decides per scope, matching the baseline by `(metric.name, scope_key)`:
-- **existing scope:** `worsening = (cand − base)` if `higher_is_worse` else `(base − cand)`; `> max_worsening` ⇒ `fail`/`kind="regression"`; otherwise the absolute level. The per-scope `score` is the normalized `0-1` ramp around the warn/fail bounds.
+`Rubric.evaluate(ctx, measurements, *, strict=False, fail_fast=False, max_workers=1) -> EvaluationReport` replaces the old free `grade()`. It runs its ordered checks through the cost-tiered scheduler (`evaluators/scheduler.py`) and folds the `CheckResult`s into one report. Each metric-backed check (`_MetricCheck`) grades on the metric's **normalized 0–1 score** (every metric owns a `Normalizer`, so direction is already baked in — higher is always better), per scope, matching the baseline by `(metric.name, scope_key)`:
+- **existing scope:** `worsening = base_score − cand_score` (a *drop* in goodness); `> max_worsening` ⇒ `fail`/`kind="regression"`; otherwise the absolute level. The per-scope `score` is the normalized `0-1` goodness.
 - **new scope:** absolute only, `kind="new"`. **removed scope:** ignored.
-**Gate-boundary semantics** are asymmetric: on the **higher-is-worse** side the bound is **inclusive** (`value >= bound` breaches — CC of exactly `20` fails); on the **higher-is-better** side it is **strict** (`value < bound` breaches — coverage of exactly `80` is `ok`, `test_pass_rate` of exactly `1.0` is `ok` even with `fail=1.0`).
-Two aggregates fall out: the **gate** (`passed` = every *required, run* check passes; under `strict` no required run check may carry a `warn` leaf; skipped checks are neutral) and the **composite** (weight-normalized mean of the run checks' `score` over checks with `weight > 0`, spanning all families uniformly; `None` when no weights are set). The metric-backed check `mode` is `regression` (default), `absolute`, or `both` (regression failure takes precedence, then absolute), resolved by `metric_check()` from the `[metrics]` config.
+**Gate-boundary semantics** on the normalized score are higher-is-better and strict-below: a score *strictly below* `fail` fails, *strictly below* `warn` warns, exactly-on is `ok` (so coverage of exactly `0.8` with `warn=0.8` is `ok`, `test_pass_rate` of exactly `1.0` with `fail=1.0` is `ok`). Because direction lives in the normalizer, a worse-when-larger raw metric (`cyclomatic_complexity`) and a better-when-larger one (`coverage`) share the one rule.
+Two aggregates fall out: the **gate** (`passed` = every *required, run* check passes; under `strict` no required run check may carry a `warn` leaf; skipped checks are neutral) and the **composite** (weight-normalized mean of the run checks' `score` over checks with `weight > 0`, spanning all families uniformly; `None` when no weights are set). The metric-backed check `mode` is `regression` (default), `absolute`, or `both` (regression failure takes precedence, then absolute), set when the check is built.
 
 **The scheduler (`evaluators/scheduler.schedule`)** is the Strategy a `Rubric` (and the composers) use to run checks: **cheapest-tier-first** (`DETERMINISTIC` → `EXECUTION` → `JUDGED`), results always returned in **authored order**, with an optional **short-circuit** (`op="and"` stops descending into costlier tiers the moment a required check fails; `op="or"` stops on the first pass) and optional within-tier `concurrent.futures` concurrency (`max_workers > 1`; the default `1` is the deterministic path CI uses). The headline guarantee: a lost deterministic gate **never grades the JUDGED tier** — the LLM judge is never invoked. `Rubric.evaluate` defaults to `fail_fast=False` (complete report); the runner passes `fail_fast=True` for cost-saving, which `playbook eval --run --full-scoring` flips off.
 ### 21.5 Standalone gate — `playbook metrics` (`commands/metrics.py`)
@@ -2106,31 +2136,41 @@ playbook metrics [PATHS…] [--baseline git:REF|DIR] [--mode regression|absolute
 - **Exit codes** — `0` pass; `1` when `report.passed` is `False` and `fail_on_breach`; `2` on usage errors (bad path, bad baseline ref/dir, unparseable `--test-cmd`, malformed/invalid `[metrics]` config).
 - **Output** — `--format text` shows only `warn`/`fail` findings grouped by file plus a summary; `--format json` includes every finding (`ok` too) for machine consumption.
 **Pre-commit:** the engine ships a `repo: local`, `language: python` hook `playbook-metrics` running `playbook metrics --baseline git:HEAD` — **static only**, never the suite. Execution non-regression belongs in CI or a separate, off-by-default hook. (The hook diffs the working tree against `HEAD`, not the index, which is exact for the common all-staged case.)
-### 21.6 Eval `[metrics]`/`[rubric]`/`[expected]` wiring — live (v1.1)
-The eval task schema (§15) carries a top-level `[metrics]` block, a **sibling of `[expected]`/`[rubric]`**, parsed into `EvalTask.metrics: MetricConfig | None` (`evals/task.py`) and validated (`evals/validator.py` rule 7: a valid `mode`, every named metric registered — static **or** execution like `coverage`/`test_pass_rate` — and numeric bounds/deltas/weights; violations are aggregated, never raised). `rubric_for_task(task, config)` compiles **all three blocks into one `Rubric` of checks** (block order metrics → rubric → expected, for a stable findings order):
-- `[metrics]` → one metric-backed `ThresholdCheck`/`NonRegressionCheck` per metric named in `thresholds`/`regression`/`weights` (deduped), via the shared `metric_check()` factory.
-- `[rubric]` → one `JudgeCheck` per criterion (uniform `1/len` weights when omitted; `required=False`, dormant without a `ctx.judge`).
-- `[expected]` → one deterministic file check per `ExpectedOutcome` entry (`FileExistsCheck`/`FileContainsCheck`/`FileUnchangedCheck`/`FileForbiddenCheck`, each `required=True`, `weight=0.0`).
-The `Rubric` is named `task.id`. The scoring bridge (§15.3.1) measures the referenced metrics over the candidate (vs the pristine `setup/` snapshot) and runs `Rubric.evaluate` — so all three families flow through **one report**, gate + composite.
+### 21.6 Eval `[gate]`/`[rubric]`/`[verdict]`/`[aggregate]` wiring — live (v1.1)
+The eval task schema (§6.5.3, §15.2) declares its evaluation as layer blocks, each a `[<layer>.bind]` handle table + an `expr`. `evals/task.py::compile_eval_task` → `evals/_compile.py::compile_task` turns them into one `CompiledTask`:
+- `[gate]` / `[rubric]` → `evals/_handles.py::build_handles` turns each handle binding into a `Check` (a `{check=…}` via `get_check`, a `{ref=…}` via `get_gate`/`get_rubric`, a `{rubric=[…]}` group via `Rubric.of` + a `ThresholdCheck`, or a boolean `{all_of/any_of/not=…}` group), then `compile_expr` folds the layer `expr` into a `compose.py` check tree labeled with the layer id. Each present layer is one named check (`id="gate"` / `id="rubric"`) inside the per-trial `Rubric` (named `task.id`).
+- `[verdict].trial` → parsed to an AST; the verdict is **derived** from the gate/rubric results (skipped-neutral), not re-run (§21.2.6).
+- `[aggregate]` → the same handle/expr machinery over `pass_at_k`/`pass_pow_k` handles, plus `trials_needed = max(k)`.
+
+The validator (`evals/validator.py`) **trial-compiles** the blocks (surfacing any unknown check/metric/ref, malformed binding, expr ident ⊄ bind keys, rubric weight-sum ≠ 1.0, or verdict ident ⊄ present layers) and does a light `[aggregate]` shape check. The scoring bridge (§15.3.1) walks the compiled check tree to find the referenced metrics, measures them over the candidate (vs the pristine `setup/` snapshot), and runs `Rubric.evaluate` — so both layers flow through **one report**, gate + composite, and the verdict is derived from it.
 ```toml
-# task.toml — [metrics] sibling of [expected]/[rubric]  (UNCHANGED — zero authoring migration)
-[metrics]
-mode = "regression"
-[metrics.regression]
-cyclomatic_complexity = { max_worsening = 0 }
-coverage              = { max_worsening = 0 }   # coverage must not drop
-test_pass_rate        = { max_worsening = 0 }   # no newly-failing tests
+# task.toml — the layered model (replaces the [expected]/[metrics]/[rubric] triple)
+[gate]
+expr = "build and no_regress and src_unchanged"
+[gate.bind]
+build         = { check = "threshold",      metric = "cyclomatic_complexity", fail = 0.5 }
+no_regress    = { check = "non_regression", metric = "coverage",              max_worsening = 0.0 }  # coverage must not drop
+src_unchanged = { check = "file_unchanged", path = "src/pagination.py" }
 [rubric]
-criteria = ["Findings prioritized correctly", "Each finding proposes a concrete fix"]
-weights  = [0.5, 0.5]
+expr = "quality"
+[rubric.bind]
+quality = { fail = 0.8, rubric = [
+  { judge = "Findings are prioritized correctly", weight = 0.5 },
+  { judge = "Each finding proposes a concrete fix", weight = 0.5 },
+] }
+[verdict]
+trial = "gate and rubric"
 ```
-With no judge configured the `[rubric]` `JudgeCheck`s skip and the report is the deterministic `[metrics]` + `[expected]` layers only; with `--judge llm` they score against the captured diff and fold in. The authored TOML is identical to PR M — the R6 refactor changed only the engine internals, not the task format.
+With no judge configured the `[rubric]` layer reports `available() is False` and skips; the report is the deterministic `[gate]` layer only, and the derived verdict treats the skipped rubric layer as neutral. With `--judge llm` the rubric criteria score against the captured diff and fold in. All thresholds are 0–1 normalized (every metric owns a `Normalizer`, §21.1).
 ### 21.7 Invariants
 - **Single responsibility — `Metric` measures, `Check` grades, `Rubric` aggregates.** No fused `Evaluator`; no free `grade()` (it is `Rubric.evaluate`); no `value_kind`/`to_score`/`default_*`/`extra_evaluators`. A metric becomes a gateable thing only by wrapping it in a `Check` (a threshold). A `Rubric` is also a `Metric`, so check trees compose (Composite) and nest.
 - **Air-gapped / no new hard deps.** Core is stdlib-only (`ast`, `dataclasses`, `enum`, `subprocess`, `xml.etree`, `tempfile`, `importlib.metadata`); `radon` is the only optional extra (`[metrics]`, lazy import via `available()`); execution metrics shell out to the *target's* `pytest` and parse XML with stdlib — no playbook dep. The engine + static `playbook metrics` run with nothing extra installed.
-- **Registry via decorator AND entry points** — metrics under `coding_agent_playbook.metrics` (`@register_metric`), out-of-tree grader checks under `coding_agent_playbook.checks`, named rubrics under `coding_agent_playbook.rubrics` (`@register_rubric("name")`, referenced from a task's `[rubric] ref`); never hardcode the list; never instantiate out-of-tree metrics/checks/rubrics directly. In-tree builtins/registrations win on a name clash.
+- **Normalization lives on the `Metric`; `higher_is_worse` is gone.** Every metric owns a `Normalizer` (`Ramp`/`Percent`/`Identity`) mapping raw→0–1 goodness (higher = better); the `Check` grades on that score and never reasons about direction. All thresholds (`warn`/`fail`/`max_worsening`) are 0–1 cutoffs. Out-of-tree metrics **must** declare a `normalizer`.
+- **Registry via decorator AND entry points** — metrics under `coding_agent_playbook.metrics` (`@register_metric`), grader checks under `coding_agent_playbook.checks` (`@register_check`, resolved by a task `{check=…}`), composed gates under the new `coding_agent_playbook.gates` (`@register_gate("name")`, resolved by a gate-layer `{ref=…}`), named rubrics under `coding_agent_playbook.rubrics` (`@register_rubric("name")`, resolved by a rubric-layer `{ref=…}`); never hardcode the list; never instantiate out-of-tree metrics/checks/gates/rubrics directly. In-tree builtins/registrations win on a name clash.
+- **A check is `(type) × (metric|judge) × kwargs`.** `check = "threshold"|"non_regression"` over a registered `metric=` (a `Metric`) or a `judge=` criterion (a `JudgeMetric` — an llm-judge criterion *is* a metric); non-regression works on any metric incl. judged. Weights live only inside a `rubric` group (sum to 1.0).
+- **The verdict is derived, not re-run.** `[<layer>].expr` / `[verdict].trial` are a tiny boolean DSL (`evals/_expr.py`) over handle names; the per-trial `Rubric` evaluates each layer once and the verdict is a boolean fold over the results (skipped layer = neutral), so the judge / test-suite is never double-invoked.
 - **Cost-tiered short-circuit.** The scheduler runs checks `DETERMINISTIC` → `EXECUTION` → `JUDGED`, so a failing deterministic gate **never invokes the LLM judge**; results stay in authored order. `--full-scoring` forces every check.
-- **Non-regression is primary** (new scopes fall back to absolute). Deterministic static/execution compare exactly (`max_worsening=0`); judged uses a `threshold` floor + n-sample averaging; `test_pass_rate` has an optional flaky-retry.
+- **Non-regression is primary** (new scopes fall back to absolute); it compares the normalized goodness (`worsening = base_score − cand_score`). Deterministic static/execution use `max_worsening=0`; judged uses a `threshold` floor + n-sample averaging; `test_pass_rate` has an optional flaky-retry.
 - **Execution is opt-in and excluded from the default pre-commit** (side effects + cost); the static gate is the only thing that runs on every commit.
 - **CI parity** — `mypy` + `pytest -q` + `ruff` from the repo root with no path args.
 ### 21.8 Open caveats (documented, not blocking)
@@ -2333,9 +2373,18 @@ Notes on sequencing:
 - **Track 5b (Eval Tier 0)** lands after the main CLI because it adds CLI subcommands and one new validator pass. It is independent of the adapters — eval tasks are authoring-side artifacts and don't flow through any adapter.
 - The source abstraction and the canonical types together add maybe two days of work to the early tracks but pay for themselves in test simplicity from PR 6 onward, and in clean serialization boundaries when the commercial product arrives.
 ---
-*End of SPEC.md v0.12.*
+*End of SPEC.md v0.13.*
 ---
 ## Changelog
+### v0.13 (2026-06-29)
+Eval **task-config redesign** ("2b refined", Tracks C1–C8): the `[expected]`/`[metrics]`/`[rubric]` triple is replaced by a layered, expression-composed task config. This is a **destructive cutover** of the *authored* task format (no backward compat); the `Metric`/`Check`/`Rubric` engine (v0.12) is reused underneath. Authoritative design: `specs/pr2b-task-config.md`.
+- **Sections 6.5.3 / 15.2 (task schema)**: a task now declares up to four layer blocks sharing one `[<layer>.bind]` + `[<layer>].expr` shape — `[gate]` (deterministic boolean), `[rubric]` (llm-judge weighted), `[verdict]` (boolean expr over the two), and an optional `[aggregate]` (cross-trial `pass@k`/`pass^k`). **There is no `[expected]` block** — file predicates are gate `check`s. `ExpectedOutcome`/`Rubric`(`criteria`/`weights`) dataclasses are deleted; `EvalTask` carries `gate`/`rubric`/`verdict`/`aggregate` `Layer`s.
+- **0–1 normalization**: every `Metric` owns a `Normalizer` (`evaluators/normalizer.py`: `RampNormalizer`/`PercentNormalizer`/`Identity`) folding the metric's native direction into a 0–1 goodness (higher = better). `higher_is_worse` is **deleted**; `warn`/`fail`/`max_worsening` are 0–1 cutoffs on the normalized score.
+- **A check is `(type) × (metric|judge) × kwargs`**: `check = "threshold"|"non_regression"` over a registered `metric=` **or** a `judge=` criterion (a `JudgeMetric` — an llm-judge criterion *is* a metric, normalized `Identity`). Non-regression works on any metric including judged.
+- **Registries**: checks via `@register_check` + `coding_agent_playbook.checks`; gates via `@register_gate` + the new **`coding_agent_playbook.gates`**; rubrics via `@register_rubric` + `coding_agent_playbook.rubrics`. A handle `{ref="name"}` resolves a registered composed **gate** (gate layer) or **rubric** (rubric layer).
+- **Expression DSL + derived verdict**: `[<layer>].expr` and `[verdict].trial` are tiny boolean expressions (`and`/`or`/`not`/parens) over handle names (`evals/_expr.py` → `compose.py` tree). The verdict is **derived** from the already-run gate/rubric layer results (a skipped layer is neutral), so the judge / test-suite is never double-invoked.
+- **Aggregate / pass@k**: `[aggregate]` is the same bind+expr shape over `pass_at_k`/`pass_pow_k` (`k`, `over ∈ {gate,rubric,verdict}`, 0–1 `warn`/`fail`); the runner runs `N=max(k)` trials and the aggregate composes them into a reliability score. Omit ⇒ single trial.
+- **Implementation**: `evaluators/{normalizer,gates,rubrics}.py`, `evaluators/checks/{registry,judge_metric,aggregate}.py`, and `evals/{_expr,_handles,_compile}.py` (the expression DSL, handle Factory+Composite, and task compiler), with the parser/validator/scoring/runner cut over and all 10 authored tasks migrated. `rubric_for_task`/`ExpectedOutcome`/`higher_is_worse` are removed. Out-of-tree migration: `MIGRATION.md`.
 ### v0.12 (2026-06-28)
 Evaluator subsystem refactored to the `Metric`/`Check`/`Rubric` model (PR R6 — clean-slate). The fused `Evaluator` ABC + free `grade()` are replaced by three single-responsibility abstractions; a cost-tiered scheduler short-circuits so a failing deterministic check never invokes the LLM judge. The authored `[expected]`/`[metrics]`/`[rubric]` task TOML is **unchanged** — zero authoring migration; only the engine internals and the out-of-tree extension surface change.
 - **Section 21 (rewritten 21.1–21.8)**: `Metric` (measure) / `Check` (grade — a boolean gate + optional partial-credit score) / `Rubric` (aggregate — gate + weighted composite). A `Rubric` is also a `Metric` (Composite — it surfaces its composite via `measure()`, so checks compose + nest). Builtins: static metrics + execution `coverage`/`test_pass_rate`; checks: `ThresholdCheck`/`NonRegressionCheck`, `FileExists`/`FileContains`/`FileUnchanged`/`FileForbidden`, `JudgeCheck`, `TestsPassCheck`/`CoverageCheck`, and the boolean composers `AllOf`/`AnyOf`/`Not`. The cost-tiered (`CostTier` DETERMINISTIC < EXECUTION < JUDGED) scheduler with short-circuit + optional concurrency (21.4). Entry-point groups renamed/split: metrics under `coding_agent_playbook.metrics` (was `…​.evaluators`), custom grader checks under the new `coding_agent_playbook.checks` (21.3). `grade()`/`value_kind`/`to_score`/`default_*`/`extra_evaluators`/`JudgedCriterion`/`evaluators_for_task`/the `Evaluator` ABC are **deleted** (21.7).

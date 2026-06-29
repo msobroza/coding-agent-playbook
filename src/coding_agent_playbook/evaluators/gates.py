@@ -3,8 +3,10 @@
 A *gate* is a code-defined, composed boolean
 :class:`~coding_agent_playbook.evaluators.check.Check` (typically an
 ``AllOf``/``AnyOf``/``Not`` tree over file/threshold/judge checks) that an
-out-of-tree package ships and a task references by name (a later track wires a
-task's ``[gate.bind] ref = "<name>"`` to :func:`get_gate`). This module is to a
+out-of-tree package ships and a task references by name: the handle builder
+(:mod:`coding_agent_playbook.evals._handles`) resolves a gate-layer
+``[gate.bind] <handle> = { ref = "<name>" }`` through :func:`get_gate`. This
+module is to a
 composed gate what :mod:`coding_agent_playbook.evaluators.rubrics` is to a named
 rubric: a verbatim mirror of that registry idiom.
 
@@ -14,8 +16,6 @@ rubric: a verbatim mirror of that registry idiom.
 In-tree registrations win over an entry-point plugin of the same name. The engine
 ships **no** builtin gates — this group is purely the third-party extension point
 (like overlays, out-of-tree checks, and named rubrics).
-
-Additive (Track C2): nothing in the eval/task pipeline consumes this registry yet.
 """
 
 from __future__ import annotations

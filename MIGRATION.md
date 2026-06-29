@@ -1,5 +1,152 @@
 # Migration guide
 
+> **Heads-up:** the **v0.13 task-config redesign** (below) supersedes parts of the
+> v0.12 guide. The authored `[expected]`/`[metrics]`/`[rubric]` task TOML that v0.12
+> called "unchanged" is **gone** — replaced by the `[gate]`/`[rubric]`/`[verdict]`/
+> `[aggregate]` layers — and `higher_is_worse` is replaced by a per-`Metric`
+> `Normalizer`. Read the v0.13 section first; the v0.12 section still applies to the
+> engine `Metric`/`Check`/`Rubric` API and the entry-point group renames.
+
+## v0.13 — Task config v2 (gate / rubric / verdict / aggregate)
+
+The eval **task config** is redesigned (Tracks C1–C8). The old
+`[expected]`/`[metrics]`/`[rubric]` triple is replaced by a **layered**,
+expression-composed format; this is a destructive cutover with **no backward
+compat**. Authoritative design: `specs/pr2b-task-config.md`.
+
+### TL;DR — who needs to do anything
+
+| You are… | Migration |
+|---|---|
+| An **eval-task author** (`task.toml`) | **Rewrite** the `[expected]`/`[metrics]`/`[rubric]` blocks into `[gate]`/`[rubric]`/`[verdict]`. See the mapping below. |
+| A **`playbook eval --run` user** | **Nothing** (same CLI; `--full-scoring` unchanged). |
+| A **`playbook metrics` user** | **Nothing.** The standalone gate + its `[metrics]` engine config in `.coding-agent-playbook.toml` are unchanged. |
+| An **out-of-tree `Metric` author** | Add a `normalizer` (`higher_is_worse` is gone). See below. |
+| An **out-of-tree check / gate author** | Register under the new `coding_agent_playbook.checks` / `coding_agent_playbook.gates` groups. |
+
+### 1. Block mapping (`[expected]`/`[metrics]`/`[rubric]` → `[gate]`/`[rubric]`)
+
+There is **no `[expected]` block** and **no top-level `[metrics]` task block**.
+File predicates and metric thresholds are all `[gate.bind]` *handles* (a handle is
+a named entry the `[gate].expr` boolean expression references). Thresholds are now
+**0–1 normalized** cutoffs, not raw units.
+
+| Old | New (`[gate.bind]` handle) |
+|---|---|
+| `[expected] files_created = ["t.py"]` | `made = { check = "file_exists", path = "t.py" }` |
+| `[expected] files_must_contain = [{path="t.py", pattern="def test"}]` | `has = { check = "file_contains", path = "t.py", pattern = "def test" }` |
+| `[expected] files_unchanged = ["src/a.py"]` | `keep = { check = "file_unchanged", path = "src/a.py" }` |
+| `[expected] files_forbidden = ["x/"]` | `nox = { check = "file_forbidden", path = "x/" }` |
+| `[metrics.thresholds] cyclomatic_complexity = {fail=20}` | `cc = { check = "threshold", metric = "cyclomatic_complexity", fail = 0.5 }` *(0–1, normalized)* |
+| `[metrics.regression] coverage = {max_worsening=0}` | `cov = { check = "non_regression", metric = "coverage", max_worsening = 0.0 }` |
+
+Then compose the handles with a `[gate].expr` and (when omitted on a single-handle
+layer) it defaults to that handle's name:
+
+```toml
+# OLD
+[expected]
+files_created = ["tests/test_calc.py"]
+files_unchanged = ["src/calc.py"]
+[metrics.regression]
+coverage = { max_worsening = 0 }
+[rubric]
+criteria = ["Covers all branches", "No mocking"]
+weights  = [0.6, 0.4]
+
+# NEW
+[gate]
+expr = "made and keep and cov"
+[gate.bind]
+made = { check = "file_exists",    path = "tests/test_calc.py" }
+keep = { check = "file_unchanged", path = "src/calc.py" }
+cov  = { check = "non_regression", metric = "coverage", max_worsening = 0.0 }
+[rubric]
+expr = "quality"
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "Covers all branches", weight = 0.6 },
+  { judge = "No mocking",          weight = 0.4 },
+] }
+[verdict]
+trial = "gate and rubric"   # the default; may be omitted
+```
+
+A `[rubric] ref = "name"` (named rubric) becomes a `[rubric.bind]` handle
+`{ ref = "name" }`; a `[rubric] criteria/weights` becomes a `{ rubric = [{judge,weight},…] }`
+group (weights still sum to 1.0), thresholded to a boolean by `fail`.
+
+### 2. `higher_is_worse` → a per-`Metric` `Normalizer`; thresholds are 0–1
+
+`higher_is_worse` is **deleted**. Every `Metric` now owns a `Normalizer`
+(`evaluators/normalizer.py`) mapping its raw value to a **0–1 goodness** where
+higher is always better, folding the metric's native direction in:
+
+```python
+# before
+class MyMetric(Metric):
+    higher_is_worse = True            # larger raw = worse
+
+# after
+from coding_agent_playbook.evaluators.normalizer import RampNormalizer
+class MyMetric(Metric):
+    normalizer = RampNormalizer(good=5, bad=20)   # 5 -> 1.0, 20 -> 0.0 (worse-when-larger)
+```
+
+Use `RampNormalizer(good, bad)` for an unbounded metric (the same class serves
+both directions — pick `good < bad` for worse-when-larger, `good > bad` for
+better-when-larger), `PercentNormalizer()` for a 0–100 metric (coverage, MI), or
+`Identity()` for one already on 0–1 (test pass rate, judge scores). Because grading
+is on the normalized score, **every threshold** (`warn`, `fail`, `max_worsening`)
+is now a **0–1 cutoff**, not a raw value: a CC `fail=20` becomes `fail≈0.25`,
+coverage `warn=80` becomes `warn=0.8`.
+
+### 3. New entry-point groups: `coding_agent_playbook.checks` / `.gates`
+
+A task `{ check = "<id>", … }` handle resolves through the **checks** registry; a
+gate-layer `{ ref = "<name>" }` resolves through the new **gates** registry:
+
+```toml
+# pyproject.toml
+[project.entry-points."coding_agent_playbook.checks"]
+my_check = "my_pkg.checks:MyCheck"          # a Check factory; @register_check("my_check")
+[project.entry-points."coding_agent_playbook.gates"]
+must_touch_tests = "my_pkg.gates:must_touch_tests"   # a () -> Check factory; @register_gate("must_touch_tests")
+```
+
+The `coding_agent_playbook.rubrics` group (named rubrics, `@register_rubric`) is
+unchanged. In-tree builtins win on a name clash; the engine ships no builtin
+gates or rubrics.
+
+### 4. A judged criterion is a metric (`JudgeMetric`)
+
+You can now run `threshold` / `non_regression` over a **judge criterion**, not just
+a registered metric: `{ check = "non_regression", judge = "overall quality", max_worsening = 0.1 }`
+adapts the judge as a `JudgeMetric` (0–1, `Identity`-normalized) so the same
+regression machinery applies. (The weighted `{ rubric = [...] }` group is the other
+judged shape and is unchanged.)
+
+### 5. Cross-trial reliability (`[aggregate]`, optional)
+
+A new optional `[aggregate]` layer grades `pass@k` / `pass^k` across trials; omit
+it and a task runs a single trial exactly as before:
+
+```toml
+[aggregate]
+expr = "reliable"
+[aggregate.bind]
+reliable = { metric = "pass_at_k", k = 5, over = "verdict", fail = 0.9 }
+```
+
+The runner runs `N = max(k)` trials and the aggregate composes them.
+
+### Not changed (v0.13)
+
+- The `playbook metrics` CLI + its `[metrics]` engine config in `.coding-agent-playbook.toml`.
+- The metric algorithms (CC/WMC/LCOM4/DIT/CBO≈/MI, `coverage`/`test_pass_rate`) and the non-regression semantics (now on the normalized score).
+- The `radon` optional extra, still backing `maintainability_index` only.
+- The `coding_agent_playbook.metrics` / `coding_agent_playbook.rubrics` / `coding_agent_playbook.judges` / `coding_agent_playbook.runners` entry-point groups.
+
 ## v0.12 — `Evaluator` → `Metric` / `Check` / `Rubric` (PR R6)
 
 The code-quality evaluator subsystem (SPEC §21) was refactored from one fused
@@ -30,7 +177,8 @@ Drop the grading-side and value-shape fields; keep (and rename) the measurement:
 | `value_kind = ValueKind.NUMERIC` | **deleted** — a metric is always a raw measurement |
 | `to_score(self, value, policy)` | **deleted** — normalization is the `Check`'s job |
 | `default_absolute` / `default_regression` / `default_weight` | **deleted** — grading policy lives on the `Check`, not the metric |
-| `name`, `scope`, `higher_is_worse`, `requires`, `needs_project` | **kept, unchanged** |
+| `name`, `scope`, `requires`, `needs_project` | **kept, unchanged** |
+| `higher_is_worse` | **kept in v0.12; deleted in v0.13** → a `Normalizer` (see the v0.13 section above) |
 | `available(self, ctx)` | **kept** (default still gates on deps + the needed ctx slot) |
 
 ```python
@@ -58,9 +206,12 @@ from coding_agent_playbook.evaluators.scope import Scope
 class MyMetric(Metric):
     name = "my_metric"
     scope = Scope.FUNCTION
-    higher_is_worse = True            # the only direction field; the Check reads it
+    higher_is_worse = True            # v0.12 only — v0.13 replaces this with a Normalizer
     def measure(self, ctx): ...        # was evaluate(); same body
 ```
+
+> **v0.13 update:** drop `higher_is_worse` and declare a `normalizer` instead (see
+> the v0.13 section, step 2).
 
 The default warn/fail bounds and regression tolerance that used to live on the
 metric now live in `evaluators/policy.py::METRIC_DEFAULTS` (for the builtins) and,
@@ -132,9 +283,15 @@ replacements: the file checks live in `evaluators/checks/files.py`, the judged
 check in `evaluators/checks/judged.py` (`JudgeCheck`), and the task compiler is
 `evals/task.py::rubric_for_task` (returns a `Rubric`).
 
-### Not changed
+### Not changed (in v0.12)
 
-- The authored `[expected]` / `[metrics]` / `[rubric]` task TOML — byte-identical.
+> **Superseded by v0.13:** the authored task TOML *was* byte-identical through
+> v0.12, but **v0.13 replaces the `[expected]`/`[metrics]`/`[rubric]` triple with
+> the `[gate]`/`[rubric]`/`[verdict]`/`[aggregate]` layers** — see the v0.13
+> section above. The points below are v0.12-accurate; the first is no longer true
+> as of v0.13.
+
+- ~~The authored `[expected]` / `[metrics]` / `[rubric]` task TOML — byte-identical.~~ (redesigned in v0.13.)
 - The `playbook metrics` and `playbook eval` CLI surface (the only addition is
   `playbook eval --run --full-scoring`, which forces every check to run instead
   of short-circuiting once the deterministic gate is lost).

@@ -126,7 +126,7 @@ class EvaluationReport:
 
 @dataclass(frozen=True)
 class TrialResult:
-    """One runner trial's per-trial report + its derived pass/fail verdict (C8).
+    """One runner trial's per-trial report + its derived pass/fail verdict.
 
     The across-trial aggregate layer (``[aggregate]``: ``pass@k`` / ``pass^k``)
     reduces a list of these. ``report`` is the per-trial
@@ -239,7 +239,7 @@ class EvalContext:
     measurement set through. Both default to ``None``; every non-Rubric family
     ignores them.
 
-    ``trials`` (C8) carries the across-trial run results the
+    ``trials`` carries the across-trial run results the
     :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
     family reduces (``pass@k`` / ``pass^k``). The runner runs ``N = max(k)``
     trials, collects one :class:`TrialResult` per trial, and grades the compiled

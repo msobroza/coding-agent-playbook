@@ -193,7 +193,7 @@ def _run_task_cli(args: argparse.Namespace, repo_root: Path) -> int:
 
     # The task verdict is ``result.passed`` — the single trial's verdict for a
     # non-aggregate task (== report.passed), or the [aggregate] layer's pass/fail
-    # when the task aggregates across trials (C8). ``report.passed`` alone would be
+    # when the task aggregates across trials. ``report.passed`` alone would be
     # only the *first* trial's verdict, so map the exit code off ``result.passed``.
     return 0 if result.passed else 1
 
@@ -289,7 +289,7 @@ def _result_to_dict(result: TaskResult) -> dict[str, object]:
             "findings": [_finding_to_dict(f) for f in report.findings],
         },
     }
-    # Across-trial aggregate (C8): present only when the task authored an
+    # Across-trial aggregate: present only when the task authored an
     # [aggregate] block. ``trials`` is the per-trial pass/fail sequence.
     if result.aggregate is not None:
         out["trials"] = len(result.trials)
@@ -359,7 +359,7 @@ def _format_result_text(result: TaskResult) -> str:
         f"composite={composite}"
     )
 
-    # Across-trial aggregate (C8): pass@k / pass^k over N trials, when present.
+    # Across-trial aggregate: pass@k / pass^k over N trials, when present.
     if result.aggregate is not None:
         agg = result.aggregate
         agg_verdict = "PASS" if agg.passed else "FAIL"

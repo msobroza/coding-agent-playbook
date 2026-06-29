@@ -1,4 +1,4 @@
-"""Eval-task validator (C7 schema). Enforces the SPEC §15.2 structural rules.
+"""Eval-task validator. Enforces the SPEC §15.2 structural rules.
 
 Run by :mod:`coding_agent_playbook.commands.validate` to catch authoring mistakes
 at commit time. Each violation is aggregated; callers print them in order and exit
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.types import Prompt
 
-#: The aggregate handle ``metric`` axis the C8 multi-trial layer recognizes.
+#: The aggregate handle ``metric`` axis the multi-trial layer recognizes.
 _AGGREGATE_METRICS = frozenset({"pass_at_k", "pass_pow_k"})
 
 #: The aggregate ``over`` axis a handle may reduce.
@@ -56,8 +56,8 @@ def validate_tasks(
        (unknown check/metric/ref, malformed binding, expr idents ⊄ bind keys,
        rubric weight-sum, verdict idents ⊄ present layers, no layer at all).
     3. A light ``[aggregate]`` shape check (each handle names a known aggregate
-       ``metric``, an integer ``k >= 1``, and an ``over`` axis) — full execution is
-       C8.
+       ``metric``, an integer ``k >= 1``, and an ``over`` axis); the multi-trial
+       grading itself runs in the runner.
     4. Each task's ``setup.files`` must exist under ``<task_dir>/setup/``.
     5. Each task's ``prompt_id`` resolves to a known prompt.
     6. Each task is listed in its referenced prompt's ``eval_tasks:`` frontmatter
@@ -75,7 +75,7 @@ def validate_tasks(
         # Rule 2: the gate/rubric/verdict schema must compile.
         errors.extend(_validate_schema(task))
 
-        # Rule 3: light [aggregate] shape checks (full execution is C8).
+        # Rule 3: light [aggregate] shape checks (multi-trial grading runs in the runner).
         if task.aggregate is not None:
             errors.extend(_validate_aggregate(task))
 
@@ -161,7 +161,7 @@ def _validate_schema(task: EvalTask) -> list[EvalValidationError]:
 
 
 def _validate_aggregate(task: EvalTask) -> list[EvalValidationError]:
-    """Light shape check of the ``[aggregate.bind]`` handles (full execution is C8).
+    """Light shape check of the ``[aggregate.bind]`` handles (grading runs in the runner).
 
     Each aggregate handle must name a known ``metric`` (``pass_at_k`` /
     ``pass_pow_k``), an integer ``k >= 1``, and an ``over`` axis in

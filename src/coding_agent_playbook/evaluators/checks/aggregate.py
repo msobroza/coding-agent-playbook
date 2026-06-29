@@ -1,4 +1,4 @@
-"""The across-trial aggregate checks: ``pass@k`` / ``pass^k`` (Track C8).
+"""The across-trial aggregate checks: ``pass@k`` / ``pass^k``.
 
 The first three layers of the eval model grade **one** agent run: ``[gate]``
 (deterministic), ``[rubric]`` (judged), and the derived ``[verdict]``. The
@@ -38,9 +38,10 @@ ok. ``passed`` is ``score >= fail`` (no ``fail`` floor ⇒ a pure ``warn`` gate
 still passes - a warn never fails a check; strict promotion is a ``Rubric``-level
 concern).
 
-``max_worsening`` (a regression tolerance vs *baseline* trials) is out of scope
-for C8 - the absolute ``warn``/``fail`` path is what executes. A ``max_worsening``
-present on the binding is ignored here (see the ``# NOTE`` in
+``max_worsening`` (a regression tolerance vs *baseline* trials) is **not yet
+supported** for the aggregate layer - only the absolute ``warn``/``fail`` path
+executes. A ``max_worsening`` present on the binding is accepted by the validator
+but ignored here (see the ``# NOTE`` in
 :func:`~coding_agent_playbook.evaluators.checks.aggregate._pass_at_k` callers).
 """
 
@@ -132,7 +133,7 @@ class AggregateCheck(Check):
         self.id = f"{self._metric}:{over}@{k}"
 
     def available(self, ctx: EvalContext) -> bool:
-        """True only once the runner has populated ``ctx.trials`` (C8 multi-trial)."""
+        """True only once the runner has populated ``ctx.trials`` (multi-trial run)."""
         return ctx.trials is not None
 
     def grade(self, ctx: EvalContext, measurements: MeasurementSet) -> CheckResult:
@@ -244,11 +245,11 @@ def _pass_at_k(
     weight: float = 0.0,
     required: bool = True,
     # NOTE: max_worsening (regression vs baseline trials) is accepted by the
-    # validator but OUT OF SCOPE for C8 - the absolute warn/fail path executes.
+    # validator but NOT YET SUPPORTED here - the absolute warn/fail path executes.
     # Swallow it here so an authored binding carrying it still builds.
     max_worsening: float | None = None,
 ) -> Check:
-    """Build a :class:`PassAtK` over the runner's trials (C8 aggregate factory)."""
+    """Build a :class:`PassAtK` over the runner's trials (the aggregate factory)."""
     return PassAtK(k=k, over=over, warn=warn, fail=fail, weight=weight, required=required)
 
 
@@ -261,10 +262,10 @@ def _pass_pow_k(
     fail: float | None = None,
     weight: float = 0.0,
     required: bool = True,
-    # NOTE: max_worsening is OUT OF SCOPE for C8 (see _pass_at_k). Swallowed.
+    # NOTE: max_worsening is NOT YET SUPPORTED here (see _pass_at_k). Swallowed.
     max_worsening: float | None = None,
 ) -> Check:
-    """Build a :class:`PassPowK` over the runner's trials (C8 aggregate factory)."""
+    """Build a :class:`PassPowK` over the runner's trials (the aggregate factory)."""
     return PassPowK(k=k, over=over, warn=warn, fail=fail, weight=weight, required=required)
 
 

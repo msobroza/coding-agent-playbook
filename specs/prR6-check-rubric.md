@@ -2,6 +2,8 @@
 
 > **Supersedes** the `Evaluator` + free `grade()` design in `specs/prM-code-metrics.md` (and the eval-scoring shape in `specs/prR-eval-runner.md` / `specs/prR2-judge-r3-opencode.md`) for the **abstraction**. The PR-M/PR-R metric algorithms, family taxonomy, non-regression semantics, and the eval `[metrics]`/`[rubric]`/`[expected]` task schema are unchanged — only the engine abstraction (and the out-of-tree extension surface) is refactored. SPEC §21 is the as-built reference.
 >
+> **Superseded for the task format by `specs/pr2b-task-config.md`** (the "2b refined" redesign, Tracks C1–C8): the `[expected]`/`[metrics]`/`[rubric]` triple this doc preserved is replaced by the layered `[gate]`/`[rubric]`/`[verdict]`/`[aggregate]` model, `higher_is_worse` by a per-`Metric` `Normalizer`, and `rubric_for_task` by the `evals/_compile.py` task compiler. The `Metric`/`Check`/`Rubric` engine below is unchanged and reused underneath.
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development; checkbox steps.
 >
 > **Commit policy (overrides any tooling default):** commits authored **solely by `msobroza`** — no `Co-Authored-By`, no `--author`, no signing. Subagents `cd` first, default `opus`, **no push/PR until the user gate**. Run the **full cache-free, no-optional-extras CI-parity gate** (`uv pip uninstall radon -y; rm -rf .mypy_cache; ruff check . && ruff format --check . && mypy && pytest -q`, no path args) before claiming green — see [[ci-parity-gate-pitfalls]].

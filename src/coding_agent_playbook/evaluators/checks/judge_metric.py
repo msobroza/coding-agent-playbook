@@ -2,7 +2,7 @@
 
 The weighted rubric-criterion path is a
 :class:`~coding_agent_playbook.evaluators.checks.judged.JudgeCheck` built via
-``Rubric.of`` and is untouched here. This Adapter (Track C2) serves the *other*
+``Rubric.of`` and is untouched here. This Adapter serves the *other*
 shape: a judged criterion graded by an ordinary metric-backed
 :class:`~coding_agent_playbook.evaluators.check.ThresholdCheck` /
 :class:`~coding_agent_playbook.evaluators.check.NonRegressionCheck`. It wraps the

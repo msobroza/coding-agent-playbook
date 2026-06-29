@@ -1,15 +1,18 @@
-"""The handle builder (Track C5): a ``[<layer>.bind]`` table -> ``name -> Check``.
+"""The handle builder: a ``[<layer>.bind]`` table -> ``name -> Check``.
 
-The new task config declares its named *handles* in a ``[gate.bind]`` /
-``[rubric.bind]`` table - one entry per handle, the value a *binding* that the
-:func:`~coding_agent_playbook.evals._expr.compile_expr` interpreter later
-references by name. This module is the **Factory** that turns each binding into a
-concrete :class:`~coding_agent_playbook.evaluators.check.Check`, and (because the
+The task config declares its named *handles* in a ``[gate.bind]`` /
+``[rubric.bind]`` / ``[aggregate.bind]`` table - one entry per handle, the value a
+*binding* that the :func:`~coding_agent_playbook.evals._expr.compile_expr`
+interpreter later references by name. This module is the **Factory** that turns
+each binding into a concrete
+:class:`~coding_agent_playbook.evaluators.check.Check`, and (because the
 boolean-group bindings recurse) a **Composite** builder over the
-:mod:`coding_agent_playbook.evaluators.checks.compose` tree.
+:mod:`coding_agent_playbook.evaluators.checks.compose` tree. The task compiler
+(:mod:`coding_agent_playbook.evals._compile`) calls it once per present layer.
 
-A binding (and any nested child) is exactly one of five mutually exclusive
-shape-keys:
+A binding (and any nested child) carries exactly one of six mutually exclusive
+shape-keys (plus the aggregate ``metric``-alone fallback described in
+:func:`_build_one`):
 
 * **boolean group** - ``{all_of = [<binding>, …]}`` / ``{any_of = […]}`` /
   ``{not = <binding>}`` -> :class:`~coding_agent_playbook.evaluators.checks.compose.AllOf`
@@ -36,8 +39,9 @@ already in effect, so ``fail=0.5`` is a normalized-score cutoff.
 
 Acyclic by construction: this module imports from :mod:`coding_agent_playbook.evaluators`
 only (the registries, ``compose``, ``Rubric``, ``ThresholdCheck``) - never the
-reverse. It is purely additive (Track C5) - nothing in the task pipeline consumes
-it yet (Track C7 wires it into the parser).
+reverse. It is wired into the task pipeline by
+:mod:`coding_agent_playbook.evals._compile`, which builds each layer's handle map
+from this factory before compiling its ``expr``.
 """
 
 from __future__ import annotations
@@ -56,7 +60,9 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.evaluators.check import Check
 
-#: The five mutually-exclusive shape-keys a binding may carry, in dispatch order.
+#: The six mutually-exclusive shape-keys a binding may carry, in dispatch order.
+#: (The aggregate ``metric``-alone fallback in :func:`_build_one` is *not* one of
+#: these — it is the binding that carries *none* of them.)
 _SHAPE_KEYS = ("all_of", "any_of", "not", "rubric", "check", "ref")
 
 #: Tolerance for the rubric-group weight-sum check (parity with the
@@ -97,8 +103,8 @@ def _build_one(binding: Mapping[str, Any], *, layer: str, id: str) -> Check:
     :class:`ThresholdCheck`; ``check`` routes through the check registry; ``ref``
     resolves via the gate or rubric registry per ``layer``.
 
-    The one **fallback** shape (C8) is the *aggregate handle*: a binding carrying
-    a ``metric`` key and **none** of :data:`_SHAPE_KEYS` (so it is not a ``check``
+    The one **fallback** shape is the *aggregate handle*: a binding carrying a
+    ``metric`` key and **none** of :data:`_SHAPE_KEYS` (so it is not a ``check``
     whose ``metric`` is a kwarg). It routes the whole binding through the check
     registry under its ``metric`` name (``{metric="pass_at_k", k=5, over="verdict",
     fail=0.9}`` -> ``get_check("pass_at_k", k=5, over="verdict", fail=0.9)``). A

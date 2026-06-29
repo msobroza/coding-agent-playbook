@@ -1,9 +1,9 @@
-"""Scoring bridge — grade an agent's output through the compiled task (C7).
+"""Scoring bridge — grade an agent's output through the compiled task.
 
 :func:`score` turns a materialized :class:`~coding_agent_playbook.evals.runner.Baseline`
 and the captured :class:`~coding_agent_playbook.evals.runner.Candidate` into one
-:class:`~coding_agent_playbook.evaluators.types.EvaluationReport`. C7 sources the
-checks from the **C6 compiler** (the retired per-task evaluator compile is gone):
+:class:`~coding_agent_playbook.evaluators.types.EvaluationReport`. It sources the
+checks from the task compiler (:mod:`coding_agent_playbook.evals._compile`):
 the task's ``[gate]``/``[rubric]`` blocks compile (via
 :func:`~coding_agent_playbook.evals.task.compile_eval_task`) into one per-trial
 :class:`~coding_agent_playbook.evaluators.rubric.Rubric` carrying the two named
@@ -151,7 +151,7 @@ def score(
 
     # Derive the trial verdict from the gate/rubric layer results (skipped-neutral)
     # and make it the report's pass/fail. The gate/rubric CheckResults stay in
-    # report.checks for reporting (and the C8 aggregate ``over`` selector).
+    # report.checks for reporting (and the aggregate ``over`` selector).
     report.passed = verdict_passed(report, compiled.verdict_ast)
     return report
 

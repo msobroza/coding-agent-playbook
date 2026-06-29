@@ -1,4 +1,4 @@
-"""Eval-task data types (SPEC §15.2) — the C7 ``[gate]``/``[rubric]``/``[verdict]`` schema.
+"""Eval-task data types (SPEC §15.2) — the ``[gate]``/``[rubric]``/``[verdict]``/``[aggregate]`` schema.
 
 These are the canonical Python representations of ``eval_tasks/<id>/task.toml``.
 The loader (:mod:`coding_agent_playbook.evals.loader`) parses the TOML; the
@@ -6,19 +6,21 @@ validator (:mod:`coding_agent_playbook.evals.validator`) enforces structural
 correctness by trial-compiling the blocks; the runner
 (:mod:`coding_agent_playbook.evals.runner`) materializes + scores the task.
 
-**C7 cutover.** The old fused ``[expected]``/``[metrics]``/``[rubric]`` blocks (each
-a typed dataclass) are gone. A task now declares its evaluation as up to four raw
-blocks the C6 compiler turns into a per-trial structure:
+There is **no** ``[expected]``/``[metrics]``/``[rubric]`` triple — a task declares
+its evaluation as up to four raw blocks the compiler
+(:mod:`coding_agent_playbook.evals._compile`) turns into a per-trial structure:
 
 * ``[gate]`` — ``{"bind": <handle table>, "expr": <bool expr | None>}``. The
   deterministic layer (file predicates, metric thresholds, composed gates). Every
   handle is a boolean :class:`~coding_agent_playbook.evaluators.check.Check`.
-* ``[rubric]`` — same shape; the judged layer (a ``rubric`` group of weighted
-  ``JudgeCheck``\\ s, thresholded to a boolean).
+* ``[rubric]`` — same shape; the judged llm-judge layer (a ``rubric`` group of
+  weighted ``JudgeCheck``\\ s, thresholded to a boolean).
 * ``[verdict].trial`` — a boolean expression over ``gate``/``rubric`` (default
   ``"gate and rubric"``) deriving the per-trial verdict from the two layers.
-* ``[aggregate]`` — ``{"bind": <table>, "expr": <str | None>}``. Parsed but **not
-  executed** in C7 (single-trial); the C8 multi-trial layer consumes it.
+* ``[aggregate]`` — ``{"bind": <table>, "expr": <str | None>}``. The optional
+  across-trial reliability layer (``pass@k`` / ``pass^k``); omitting it runs a
+  single trial. The runner runs ``N = max(k)`` trials and the aggregate composes
+  them.
 
 ``run_tests``/``strict`` are no longer authored — they are *inferred*: a task runs
 tests iff it references an execution metric, and ``strict`` defaults ``False``.
@@ -63,7 +65,7 @@ class Layer:
     """One ``[gate]`` / ``[rubric]`` / ``[aggregate]`` block: a bind table + an expr.
 
     ``bind`` is the raw ``[<layer>.bind]`` handle table (one entry per handle, the
-    value a binding the C5 :func:`~coding_agent_playbook.evals._handles.build_handles`
+    value a binding the :func:`~coding_agent_playbook.evals._handles.build_handles`
     factory turns into a :class:`~coding_agent_playbook.evaluators.check.Check`).
     ``expr`` is the optional boolean/aggregate expression over those handle names
     (``None`` defaults to the sole handle's name for a single-handle layer).
@@ -178,7 +180,7 @@ def compile_eval_task(task: EvalTask) -> CompiledTask:
     :class:`~coding_agent_playbook.evals._compile.CompiledTask` carries the
     per-trial :class:`~coding_agent_playbook.evaluators.rubric.Rubric` (the gate +
     rubric layer checks), the parsed verdict AST, and the compiled ``[aggregate]``
-    layer + ``trials_needed`` (C8; ``None``/``1`` when no ``[aggregate]`` block).
+    layer + ``trials_needed`` (``None``/``1`` when no ``[aggregate]`` block).
 
     Raises :exc:`ValueError` (incl. :exc:`~coding_agent_playbook.evals._expr.ExprError`)
     /:exc:`KeyError` on any structural fault the compiler catches: no layer present,

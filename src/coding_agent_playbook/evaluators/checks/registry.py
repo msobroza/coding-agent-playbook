@@ -22,7 +22,9 @@ Acyclic by construction: :func:`register_check` and the registry dict are define
 import *back* only :func:`register_check` (no class-level dependency on the
 factories), so there is no import cycle.
 
-Additive (Track C2): nothing in the eval/task pipeline consumes this registry yet.
+The task pipeline consumes this registry: the handle builder
+(:mod:`coding_agent_playbook.evals._handles`) routes a ``{check = "…"}`` (or
+aggregate ``{metric = "…"}``) binding through :func:`get_check`.
 """
 
 from __future__ import annotations

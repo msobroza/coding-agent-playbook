@@ -1,4 +1,4 @@
-"""The task compiler (Track C6): parsed ``[gate]``/``[rubric]``/``[verdict]`` -> a per-trial structure.
+"""The task compiler: parsed ``[gate]``/``[rubric]``/``[verdict]``/``[aggregate]`` -> a per-trial structure.
 
 This module turns the three new task blocks into one
 :class:`CompiledTask`: a :class:`~coding_agent_playbook.evaluators.rubric.Rubric`
@@ -26,8 +26,12 @@ verdict). A layer with exactly one handle and no ``expr`` defaults the expr to
 that handle's name (the common single-handle case); a layer with multiple handles
 and no ``expr`` is an error - the author must compose them.
 
-It is purely additive (Track C6): nothing in the task pipeline consumes it yet
-(C7 swaps the parser; C8 wires the aggregate ``over`` selector through
+This compiler is what the task pipeline runs:
+:func:`coding_agent_playbook.evals.task.compile_eval_task` calls
+:func:`compile_task` for the validator (trial-compile) and the scoring bridge
+(:mod:`coding_agent_playbook.evals.scoring`), and the runner reads
+:attr:`CompiledTask.trials_needed` + :attr:`CompiledTask.aggregate` to drive the
+multi-trial ``[aggregate]`` layer (the ``over`` selector flows through
 :func:`over_boolean`).
 """
 
@@ -64,7 +68,7 @@ _LAYER_IDS = ("gate", "rubric")
 
 @dataclass(frozen=True)
 class CompiledTask:
-    """The per-trial evaluation structure for one task (+ the C8 aggregate layer).
+    """The per-trial evaluation structure for one task (+ the aggregate layer).
 
     :attr:`per_trial` is the :class:`~coding_agent_playbook.evaluators.rubric.Rubric`
     carrying the present layer checks (``id="gate"`` and/or ``id="rubric"``, in
@@ -74,13 +78,13 @@ class CompiledTask:
     single trial verdict. :attr:`layers` is the frozenset of present layer ids
     (a subset of ``{"gate", "rubric"}``).
 
-    :attr:`aggregate` (C8) is the compiled ``[aggregate]`` layer - one composed
+    :attr:`aggregate` is the compiled ``[aggregate]`` layer - one composed
     :class:`~coding_agent_playbook.evaluators.check.Check` over the
     :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
     handles - or ``None`` when the task authored no ``[aggregate]`` block.
     :attr:`trials_needed` is the number of runner trials the aggregate layer needs
     (``max`` of every aggregate handle's ``k``), defaulting to **1** with no
-    aggregate so the single-trial path is byte-identical to C7.
+    aggregate so the task runs a single trial.
     """
 
     per_trial: Rubric
@@ -151,14 +155,14 @@ def compile_task(
     **no** layer is present, or when ``verdict_trial`` references a layer that is
     absent (e.g. the default ``"gate and rubric"`` on a gate-only task).
 
-    The ``[aggregate]`` layer (C8) is compiled the same way as gate/rubric - its
-    bind table builds
+    The ``[aggregate]`` layer is compiled the same way as gate/rubric - its bind
+    table builds
     :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
     handles (via the ``metric``-alone fallback in
     :func:`~coding_agent_playbook.evals._handles._build_one`), and its ``expr``
     composes them - into :attr:`CompiledTask.aggregate` (``None`` when absent).
     :attr:`CompiledTask.trials_needed` is the ``max`` ``k`` over those handles,
-    defaulting to **1** with no aggregate so the single-trial path matches C7.
+    defaulting to **1** with no aggregate so the task runs a single trial.
     """
     gate_check = _compile_layer(gate_bind, gate_expr, layer="gate")
     rubric_check = _compile_layer(rubric_bind, rubric_expr, layer="rubric")
@@ -201,7 +205,7 @@ def _compile_aggregate(
     """Compile the ``[aggregate]`` layer into ``(check | None, trials_needed)``.
 
     Returns ``(None, 1)`` when ``bind_table`` is absent/empty (no aggregate ⇒ the
-    runner runs a single trial, matching C7). Otherwise builds the
+    runner runs a single trial). Otherwise builds the
     :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
     handle map (the ``metric``-alone fallback in
     :func:`~coding_agent_playbook.evals._handles._build_one`), compiles ``expr``
@@ -310,7 +314,7 @@ def over_boolean(over: str, report: EvaluationReport, verdict: bool) -> bool:
     :func:`verdict_passed`); ``over`` in ``{"gate", "rubric"}`` returns that
     layer's ``CheckResult.passed`` from ``report.checks``. Raises
     :exc:`ValueError` when ``over`` is neither ``"verdict"`` nor a present layer
-    id (an unknown axis, or a layer the task does not have). Used by C8's
+    id (an unknown axis, or a layer the task does not have). Used by the
     aggregate ``over`` selector.
     """
     if over == "verdict":

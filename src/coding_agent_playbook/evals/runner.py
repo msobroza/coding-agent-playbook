@@ -93,13 +93,12 @@ class TaskResult:
 
     ``report`` is a **representative** :class:`EvaluationReport` (the first trial's)
     covering the ``[gate]`` / ``[rubric]`` layers. ``passed`` is the **task**
-    verdict: the single trial's verdict for a non-aggregate task (the C7 default,
-    ``N=1``), or the ``[aggregate]`` layer's pass/fail when the task aggregates
-    across trials (C8). ``aggregate_score`` mirrors ``report.composite`` for a
-    single-trial task, and the aggregate check's ``0-1`` reliability score when
-    aggregating.
+    verdict: the single trial's verdict for a non-aggregate task (``N=1``), or the
+    ``[aggregate]`` layer's pass/fail when the task aggregates across trials.
+    ``aggregate_score`` mirrors ``report.composite`` for a single-trial task, and
+    the aggregate check's ``0-1`` reliability score when aggregating.
 
-    ``trials`` (C8) carries every per-trial
+    ``trials`` carries every per-trial
     :class:`~coding_agent_playbook.evaluators.types.TrialResult` (one for ``N=1``);
     ``aggregate`` is the graded ``[aggregate]`` :class:`CheckResult` (``None`` when
     the task has no ``[aggregate]`` block).
@@ -398,9 +397,9 @@ class HarnessRunner(ABC):
         """Run ``task`` over ``N`` trials in ``scratch_dir`` and grade a :class:`TaskResult`.
 
         ``N`` is :attr:`~coding_agent_playbook.evals._compile.CompiledTask.trials_needed`
-        — **1** for a task with no ``[aggregate]`` block (the C7 default; this path
-        is behaviour-identical to a single ``materialize → render → invoke → capture
-        → score``), and ``max(k)`` over the aggregate handles otherwise.
+        — **1** for a task with no ``[aggregate]`` block (the single-trial default;
+        this path is one ``materialize → render → invoke → capture → score``), and
+        ``max(k)`` over the aggregate handles otherwise.
 
         Each trial runs the fixed per-trial pipeline in its **own** scratch subdir
         (a fresh ``setup/`` materialization, so the agent never inherits a prior
@@ -411,13 +410,13 @@ class HarnessRunner(ABC):
         report + its derived verdict). The prompt is resolved **once** up front
         (identical across trials) via :func:`render_prompt` — so a real runner's
         strict resolution still raises :class:`PromptResolutionError` before any
-        trial runs, exactly as in C7.
+        trial runs.
 
         With an ``[aggregate]`` layer the task verdict is that layer's pass/fail —
         the :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`\\ s
         reduce the trials' selected ``over`` axis (``gate`` / ``rubric`` /
         ``verdict``) into a ``pass@k`` / ``pass^k`` reliability score. Without one
-        the task verdict is the single trial's verdict (C7).
+        the task verdict is the single trial's verdict.
 
         ``judge``/``samples`` are keyword-only with R1-compatible defaults: with no
         ``judge`` each trial's report is deterministic-only (judged evaluators are
@@ -429,7 +428,7 @@ class HarnessRunner(ABC):
         scratch_dir = Path(scratch_dir)
         started = monotonic()
         # Resolve the prompt first (identical across trials) so a real runner's
-        # strict resolution raises before any trial — matching the C7 ordering.
+        # strict resolution raises before any trial.
         prompt = render_prompt(task, strict=self.requires_resolved_prompt)
         compiled = compile_eval_task(task)
         n = compiled.trials_needed
@@ -439,7 +438,7 @@ class HarnessRunner(ABC):
         for i in range(n):
             # Each trial gets its own scratch subdir so a fresh setup/ is
             # materialized per trial (the N=1 case reuses ``scratch_dir`` exactly,
-            # so its on-disk layout is byte-identical to C7).
+            # so the single-trial on-disk layout is unchanged).
             trial_dir = scratch_dir if n == 1 else scratch_dir / f"trial-{i}"
             trial = self._run_trial(
                 task, prompt, trial_dir, judge=judge, samples=samples, fail_fast=fail_fast
@@ -489,7 +488,7 @@ class HarnessRunner(ABC):
     ) -> TaskResult:
         """Fold the trials (+ optional aggregate) into one :class:`TaskResult`.
 
-        With ``aggregate is None`` (the C7 single-trial default) the task verdict
+        With ``aggregate is None`` (the single-trial default) the task verdict
         is ``trials[0].verdict`` and the score is the representative report's
         composite (falling back to ``0.0``/``1.0``). With an ``[aggregate]`` layer
         the compiled check grades over an :class:`EvalContext` carrying the trials,

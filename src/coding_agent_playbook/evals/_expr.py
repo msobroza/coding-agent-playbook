@@ -1,9 +1,10 @@
-"""A tiny boolean-expression interpreter over check *handle names* (Track C4).
+"""A tiny boolean-expression interpreter over check *handle names*.
 
-The new task config expresses a few wiring decisions as miniature boolean
-expressions over *handle names* - ``[gate].expr``, ``[rubric].expr``, and
-``[verdict].trial`` are strings like ``"build and (fast or sec)"`` or
-``"gate and rubric"``. This module compiles such a string into a
+The task config expresses a few wiring decisions as miniature boolean
+expressions over *handle names* - ``[gate].expr``, ``[rubric].expr``,
+``[aggregate].expr``, and ``[verdict].trial`` are strings like
+``"build and (fast or sec)"`` or ``"gate and rubric"``. This module compiles such
+a string into a
 :mod:`coding_agent_playbook.evaluators.checks.compose` check tree over a
 caller-provided ``name -> Check`` map.
 
@@ -32,9 +33,11 @@ identifiers, so a validator can check ``idents <= bind keys`` without building
 any checks.
 
 The interpreter is deliberately self-contained: it does **not** use ``eval`` /
-``exec`` / ``ast``, and it pulls in no third-party dependency. It is purely
-additive - nothing consumes it yet (Track C5/C6 wire it into the handle builder
-and task compiler).
+``exec`` / ``ast``, and it pulls in no third-party dependency. The handle builder
+(:mod:`coding_agent_playbook.evals._handles`) and the task compiler
+(:mod:`coding_agent_playbook.evals._compile`) consume it: the compiler builds each
+layer's ``name -> Check`` map, then folds the layer ``expr`` over it via
+:func:`compile_expr` (and derives the verdict via :func:`eval_bool`).
 """
 
 from __future__ import annotations
