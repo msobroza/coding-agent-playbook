@@ -43,6 +43,8 @@ from coding_agent_playbook.evals.scoring import score
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.evaluators import EvaluationReport, JudgeLike
+    from coding_agent_playbook.evaluators.check import Check
+    from coding_agent_playbook.evaluators.types import CheckResult, TrialResult
 
 
 class PromptResolutionError(RuntimeError):
@@ -74,14 +76,33 @@ class AgentRun:
 
 
 @dataclass
+class _Trial:
+    """One trial's graded :class:`TrialResult` + its raw transcript (internal).
+
+    The runner collects these per trial; only the first trial's ``transcript``
+    surfaces on the assembled :class:`TaskResult` (a representative log).
+    """
+
+    result: TrialResult
+    transcript: str
+
+
+@dataclass
 class TaskResult:
     """Per-task outcome: the unified evaluation report + convenience aggregates.
 
-    ``report`` is the single :class:`EvaluationReport` covering both the
-    ``[expected]`` BOOL findings and the ``[metrics]`` static/execution findings.
-    ``passed`` mirrors ``report.passed`` and ``aggregate_score`` mirrors
-    ``report.composite`` (falling back to ``1.0``/``0.0`` from ``passed`` when no
-    weighted evaluator contributed a composite).
+    ``report`` is a **representative** :class:`EvaluationReport` (the first trial's)
+    covering the ``[gate]`` / ``[rubric]`` layers. ``passed`` is the **task**
+    verdict: the single trial's verdict for a non-aggregate task (the C7 default,
+    ``N=1``), or the ``[aggregate]`` layer's pass/fail when the task aggregates
+    across trials (C8). ``aggregate_score`` mirrors ``report.composite`` for a
+    single-trial task, and the aggregate check's ``0-1`` reliability score when
+    aggregating.
+
+    ``trials`` (C8) carries every per-trial
+    :class:`~coding_agent_playbook.evaluators.types.TrialResult` (one for ``N=1``);
+    ``aggregate`` is the graded ``[aggregate]`` :class:`CheckResult` (``None`` when
+    the task has no ``[aggregate]`` block).
     """
 
     task_id: str
@@ -91,6 +112,8 @@ class TaskResult:
     aggregate_score: float
     duration_seconds: float
     transcript: str
+    trials: list[TrialResult] = field(default_factory=list)
+    aggregate: CheckResult | None = None
 
 
 @dataclass
@@ -372,39 +395,130 @@ class HarnessRunner(ABC):
         samples: int = 1,
         fail_fast: bool = True,
     ) -> TaskResult:
-        """Run ``task`` in ``scratch_dir`` and return a graded :class:`TaskResult`.
+        """Run ``task`` over ``N`` trials in ``scratch_dir`` and grade a :class:`TaskResult`.
 
-        Pipeline: :func:`materialize` the ``setup/`` baseline → :func:`render_prompt`
-        → :meth:`_invoke_agent` (the only per-assistant step) → :func:`capture`
-        the candidate → :func:`~coding_agent_playbook.evals.scoring.score`.
+        ``N`` is :attr:`~coding_agent_playbook.evals._compile.CompiledTask.trials_needed`
+        — **1** for a task with no ``[aggregate]`` block (the C7 default; this path
+        is behaviour-identical to a single ``materialize → render → invoke → capture
+        → score``), and ``max(k)`` over the aggregate handles otherwise.
+
+        Each trial runs the fixed per-trial pipeline in its **own** scratch subdir
+        (a fresh ``setup/`` materialization, so the agent never inherits a prior
+        trial's edits): :func:`materialize` → :meth:`_invoke_agent` (the only
+        per-assistant step) → :func:`capture` →
+        :func:`~coding_agent_playbook.evals.scoring.score`. Each yields a
+        :class:`~coding_agent_playbook.evaluators.types.TrialResult` (the per-trial
+        report + its derived verdict). The prompt is resolved **once** up front
+        (identical across trials) via :func:`render_prompt` — so a real runner's
+        strict resolution still raises :class:`PromptResolutionError` before any
+        trial runs, exactly as in C7.
+
+        With an ``[aggregate]`` layer the task verdict is that layer's pass/fail —
+        the :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`\\ s
+        reduce the trials' selected ``over`` axis (``gate`` / ``rubric`` /
+        ``verdict``) into a ``pass@k`` / ``pass^k`` reliability score. Without one
+        the task verdict is the single trial's verdict (C7).
 
         ``judge``/``samples`` are keyword-only with R1-compatible defaults: with no
-        ``judge`` the report is deterministic-only (judged evaluators are skipped),
-        exactly as R1. With a ``judge`` set, the task's ``[rubric]`` criteria are
-        scored over the captured diff (averaged over ``samples``) and folded into
-        the same report.
-
-        ``fail_fast`` defaults to ``True`` — the cost-saving short-circuit: a lost
-        deterministic gate skips the remaining costlier tiers (so a failing
-        ``[expected]``/metric check spares the LLM judge). ``playbook eval``'s
-        ``--full-scoring`` flag flips it off to grade every check unconditionally.
+        ``judge`` each trial's report is deterministic-only (judged evaluators are
+        skipped). ``fail_fast`` defaults to ``True`` — the per-trial scheduler's
+        cost-saving short-circuit; ``--full-scoring`` flips it off.
         """
-        baseline = materialize(task, scratch_dir)
-        prompt = render_prompt(task, strict=self.requires_resolved_prompt)
+        from coding_agent_playbook.evals.task import compile_eval_task
+
+        scratch_dir = Path(scratch_dir)
         started = monotonic()
-        run = self._invoke_agent(prompt, scratch_dir)
-        candidate = capture(scratch_dir, baseline, run.transcript)
+        # Resolve the prompt first (identical across trials) so a real runner's
+        # strict resolution raises before any trial — matching the C7 ordering.
+        prompt = render_prompt(task, strict=self.requires_resolved_prompt)
+        compiled = compile_eval_task(task)
+        n = compiled.trials_needed
+
+        trials: list[TrialResult] = []
+        first_transcript = ""
+        for i in range(n):
+            # Each trial gets its own scratch subdir so a fresh setup/ is
+            # materialized per trial (the N=1 case reuses ``scratch_dir`` exactly,
+            # so its on-disk layout is byte-identical to C7).
+            trial_dir = scratch_dir if n == 1 else scratch_dir / f"trial-{i}"
+            trial = self._run_trial(
+                task, prompt, trial_dir, judge=judge, samples=samples, fail_fast=fail_fast
+            )
+            trials.append(trial.result)
+            if i == 0:
+                first_transcript = trial.transcript
+
+        return self._assemble(task, compiled.aggregate, trials, first_transcript, started)
+
+    def _run_trial(
+        self,
+        task: EvalTask,
+        prompt: str,
+        trial_dir: Path,
+        *,
+        judge: JudgeLike | None,
+        samples: int,
+        fail_fast: bool,
+    ) -> _Trial:
+        """Run one trial's fixed pipeline and grade it into a :class:`_Trial`.
+
+        :func:`materialize` the ``setup/`` baseline → :meth:`_invoke_agent` (with
+        the pre-resolved ``prompt``) → :func:`capture` → :func:`score`, then derive
+        the per-trial :class:`~coding_agent_playbook.evaluators.types.TrialResult`
+        (``verdict = report.passed``, the skipped-neutral gate/rubric verdict the
+        scorer already wrote).
+        """
+        from coding_agent_playbook.evaluators.types import TrialResult
+
+        baseline = materialize(task, trial_dir)
+        run = self._invoke_agent(prompt, trial_dir)
+        candidate = capture(trial_dir, baseline, run.transcript)
         report = score(task, baseline, candidate, judge=judge, samples=samples, fail_fast=fail_fast)
+        return _Trial(
+            result=TrialResult(report=report, verdict=report.passed),
+            transcript=run.transcript,
+        )
+
+    def _assemble(
+        self,
+        task: EvalTask,
+        aggregate: Check | None,
+        trials: list[TrialResult],
+        transcript: str,
+        started: float,
+    ) -> TaskResult:
+        """Fold the trials (+ optional aggregate) into one :class:`TaskResult`.
+
+        With ``aggregate is None`` (the C7 single-trial default) the task verdict
+        is ``trials[0].verdict`` and the score is the representative report's
+        composite (falling back to ``0.0``/``1.0``). With an ``[aggregate]`` layer
+        the compiled check grades over an :class:`EvalContext` carrying the trials,
+        and its ``passed``/``score`` become the task verdict / aggregate score.
+        """
+        from coding_agent_playbook.evaluators.check import MeasurementSet
+        from coding_agent_playbook.evaluators.types import EvalContext
+
+        report = trials[0].report
+        agg_result: CheckResult | None = None
+        if aggregate is None:
+            passed = trials[0].verdict
+            aggregate_score = report.composite if report.composite is not None else float(passed)
+        else:
+            agg_ctx = EvalContext(module=None, source="", label="aggregate", trials=trials)
+            agg_result = aggregate.grade(agg_ctx, MeasurementSet([], None))
+            passed = agg_result.passed
+            aggregate_score = agg_result.score if agg_result.score is not None else float(passed)
+
         return TaskResult(
             task_id=task.id,
             harness=self.name,
             report=report,
-            passed=report.passed,
-            aggregate_score=(
-                report.composite if report.composite is not None else float(report.passed)
-            ),
+            passed=passed,
+            aggregate_score=aggregate_score,
             duration_seconds=monotonic() - started,
-            transcript=run.transcript,
+            transcript=transcript,
+            trials=trials,
+            aggregate=agg_result,
         )
 
     @abstractmethod

@@ -22,6 +22,7 @@ This track is additive: nothing in the eval/task pipeline imports these yet.
 
 from __future__ import annotations
 
+from coding_agent_playbook.evaluators.checks.aggregate import AggregateCheck, PassAtK, PassPowK
 from coding_agent_playbook.evaluators.checks.compose import AllOf, AnyOf, Not
 from coding_agent_playbook.evaluators.checks.execution import CoverageCheck, TestsPassCheck
 from coding_agent_playbook.evaluators.checks.files import (
@@ -44,6 +45,7 @@ from coding_agent_playbook.evaluators.checks.registry import (
 )
 
 __all__ = [
+    "AggregateCheck",
     "AllOf",
     "AnyOf",
     "CoverageCheck",
@@ -54,6 +56,8 @@ __all__ = [
     "JudgeCheck",
     "JudgeMetric",
     "Not",
+    "PassAtK",
+    "PassPowK",
     "TestsPassCheck",
     "all_check_ids",
     "get_check",

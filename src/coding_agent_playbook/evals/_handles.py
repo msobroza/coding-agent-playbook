@@ -97,11 +97,23 @@ def _build_one(binding: Mapping[str, Any], *, layer: str, id: str) -> Check:
     :class:`ThresholdCheck`; ``check`` routes through the check registry; ``ref``
     resolves via the gate or rubric registry per ``layer``.
 
+    The one **fallback** shape (C8) is the *aggregate handle*: a binding carrying
+    a ``metric`` key and **none** of :data:`_SHAPE_KEYS` (so it is not a ``check``
+    whose ``metric`` is a kwarg). It routes the whole binding through the check
+    registry under its ``metric`` name (``{metric="pass_at_k", k=5, over="verdict",
+    fail=0.9}`` -> ``get_check("pass_at_k", k=5, over="verdict", fail=0.9)``). A
+    binding carrying both ``check`` and ``metric`` is still a ``check`` shape -
+    ``metric`` is its kwarg, handled by the ``check`` branch below.
+
     All branches return a boolean :class:`Check` except a rubric-layer ``ref``,
     which returns the bare named :class:`Rubric` (a :class:`Metric`) - that one
     value is widened from ``Check`` via the ``# type: ignore`` on the return, the
     single sanctioned spot where a handle is not yet a boolean.
     """
+    if "metric" in binding and not any(key in binding for key in _SHAPE_KEYS):
+        kwargs = {k: v for k, v in binding.items() if k != "metric"}
+        return get_check(binding["metric"], **kwargs)
+
     shape = _shape_key(binding)
 
     if shape == "all_of":

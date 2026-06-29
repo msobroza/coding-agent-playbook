@@ -50,7 +50,7 @@ from coding_agent_playbook.evaluators.checks.compose import AllOf
 from coding_agent_playbook.evaluators.rubric import Rubric
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     from coding_agent_playbook.evaluators.check import Check
     from coding_agent_playbook.evaluators.types import EvaluationReport
@@ -64,7 +64,7 @@ _LAYER_IDS = ("gate", "rubric")
 
 @dataclass(frozen=True)
 class CompiledTask:
-    """The per-trial evaluation structure for one task.
+    """The per-trial evaluation structure for one task (+ the C8 aggregate layer).
 
     :attr:`per_trial` is the :class:`~coding_agent_playbook.evaluators.rubric.Rubric`
     carrying the present layer checks (``id="gate"`` and/or ``id="rubric"``, in
@@ -73,11 +73,21 @@ class CompiledTask:
     by :func:`verdict_passed` over the two layers' ``passed`` results into the
     single trial verdict. :attr:`layers` is the frozenset of present layer ids
     (a subset of ``{"gate", "rubric"}``).
+
+    :attr:`aggregate` (C8) is the compiled ``[aggregate]`` layer - one composed
+    :class:`~coding_agent_playbook.evaluators.check.Check` over the
+    :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
+    handles - or ``None`` when the task authored no ``[aggregate]`` block.
+    :attr:`trials_needed` is the number of runner trials the aggregate layer needs
+    (``max`` of every aggregate handle's ``k``), defaulting to **1** with no
+    aggregate so the single-trial path is byte-identical to C7.
     """
 
     per_trial: Rubric
     verdict_ast: Node
     layers: frozenset[str]
+    aggregate: Check | None = None
+    trials_needed: int = 1
 
 
 def _compile_layer(
@@ -127,6 +137,8 @@ def compile_task(
     rubric_bind: Mapping[str, Mapping[str, Any]] | None = None,
     rubric_expr: str | None = None,
     verdict_trial: str = _DEFAULT_VERDICT,
+    aggregate_bind: Mapping[str, Mapping[str, Any]] | None = None,
+    aggregate_expr: str | None = None,
     name: str = "task",
 ) -> CompiledTask:
     """Compile the parsed task blocks into a :class:`CompiledTask`.
@@ -138,6 +150,15 @@ def compile_task(
     parses ``verdict_trial`` into the verdict AST. Raises :exc:`ValueError` when
     **no** layer is present, or when ``verdict_trial`` references a layer that is
     absent (e.g. the default ``"gate and rubric"`` on a gate-only task).
+
+    The ``[aggregate]`` layer (C8) is compiled the same way as gate/rubric - its
+    bind table builds
+    :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
+    handles (via the ``metric``-alone fallback in
+    :func:`~coding_agent_playbook.evals._handles._build_one`), and its ``expr``
+    composes them - into :attr:`CompiledTask.aggregate` (``None`` when absent).
+    :attr:`CompiledTask.trials_needed` is the ``max`` ``k`` over those handles,
+    defaulting to **1** with no aggregate so the single-trial path matches C7.
     """
     gate_check = _compile_layer(gate_bind, gate_expr, layer="gate")
     rubric_check = _compile_layer(rubric_bind, rubric_expr, layer="rubric")
@@ -161,8 +182,77 @@ def compile_task(
             f"[{missing}] block (present layers: {sorted(present)})"
         )
 
+    aggregate, trials_needed = _compile_aggregate(aggregate_bind, aggregate_expr)
+
     per_trial = Rubric(checks, name=name)
-    return CompiledTask(per_trial=per_trial, verdict_ast=verdict_ast, layers=present)
+    return CompiledTask(
+        per_trial=per_trial,
+        verdict_ast=verdict_ast,
+        layers=present,
+        aggregate=aggregate,
+        trials_needed=trials_needed,
+    )
+
+
+def _compile_aggregate(
+    bind_table: Mapping[str, Mapping[str, Any]] | None,
+    expr: str | None,
+) -> tuple[Check | None, int]:
+    """Compile the ``[aggregate]`` layer into ``(check | None, trials_needed)``.
+
+    Returns ``(None, 1)`` when ``bind_table`` is absent/empty (no aggregate ⇒ the
+    runner runs a single trial, matching C7). Otherwise builds the
+    :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
+    handle map (the ``metric``-alone fallback in
+    :func:`~coding_agent_playbook.evals._handles._build_one`), compiles ``expr``
+    over it (defaulting to the sole handle's name for a single-handle layer; a
+    multi-handle layer with no ``expr`` is a :exc:`ValueError`), and computes
+    ``trials_needed`` as the ``max`` ``k`` over every
+    :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
+    reachable in the compiled tree.
+    """
+    if not bind_table:
+        return None, 1
+    handles = build_handles(bind_table, layer="aggregate")
+    resolved_expr = expr
+    if resolved_expr is None:
+        if len(handles) == 1:
+            resolved_expr = next(iter(handles))
+        else:
+            raise ValueError(
+                f"[aggregate] has {len(handles)} handles and no expr; "
+                "the author must compose them with an explicit expr"
+            )
+    compiled = compile_expr(resolved_expr, handles, id="aggregate")
+    trials_needed = max((k for k in _aggregate_ks(handles.values())), default=1)
+    return compiled, trials_needed
+
+
+def _aggregate_ks(checks: Iterable[Check]) -> list[int]:
+    """Every :class:`AggregateCheck`'s ``k`` reachable under ``checks``.
+
+    Descends the boolean composers (``AllOf``/``AnyOf``/``Not`` via ``children``)
+    and reads ``.k`` off each
+    :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
+    leaf, so ``trials_needed`` is the ``max`` over a possibly-composed aggregate
+    expression (e.g. ``pass_at_k(k=5) and pass_pow_k(k=3)`` ⇒ ``[5, 3]``).
+    """
+    from coding_agent_playbook.evaluators.checks.aggregate import AggregateCheck
+    from coding_agent_playbook.evaluators.checks.compose import AllOf, AnyOf, Not
+
+    out: list[int] = []
+
+    def _walk(check: Check) -> None:
+        if isinstance(check, AggregateCheck):
+            out.append(check.k)
+            return
+        if isinstance(check, (AllOf, AnyOf, Not)):
+            for child in check.children:
+                _walk(child)
+
+    for check in checks:
+        _walk(check)
+    return out
 
 
 def verdict_passed(report: EvaluationReport, verdict_ast: Node) -> bool:

@@ -191,7 +191,11 @@ def _run_task_cli(args: argparse.Namespace, repo_root: Path) -> int:
     else:
         print(_format_result_text(result))
 
-    return 0 if result.report.passed else 1
+    # The task verdict is ``result.passed`` — the single trial's verdict for a
+    # non-aggregate task (== report.passed), or the [aggregate] layer's pass/fail
+    # when the task aggregates across trials (C8). ``report.passed`` alone would be
+    # only the *first* trial's verdict, so map the exit code off ``result.passed``.
+    return 0 if result.passed else 1
 
 
 def _load_task(task_id: str, repo_root: Path) -> EvalTask | None:
@@ -270,7 +274,7 @@ def _result_to_dict(result: TaskResult) -> dict[str, object]:
     read ``report.findings`` keep working.
     """
     report = result.report
-    return {
+    out: dict[str, object] = {
         "task_id": result.task_id,
         "harness": result.harness,
         "passed": result.passed,
@@ -285,6 +289,13 @@ def _result_to_dict(result: TaskResult) -> dict[str, object]:
             "findings": [_finding_to_dict(f) for f in report.findings],
         },
     }
+    # Across-trial aggregate (C8): present only when the task authored an
+    # [aggregate] block. ``trials`` is the per-trial pass/fail sequence.
+    if result.aggregate is not None:
+        out["trials"] = len(result.trials)
+        out["aggregate"] = _check_to_dict(result.aggregate)
+        out["trial_verdicts"] = [t.verdict for t in result.trials]
+    return out
 
 
 def _check_to_dict(check: CheckResult) -> dict[str, object]:
@@ -347,6 +358,19 @@ def _format_result_text(result: TaskResult) -> str:
         f"  summary: {verdict} — {report.fail_count} fail, {report.warn_count} warn, "
         f"composite={composite}"
     )
+
+    # Across-trial aggregate (C8): pass@k / pass^k over N trials, when present.
+    if result.aggregate is not None:
+        agg = result.aggregate
+        agg_verdict = "PASS" if agg.passed else "FAIL"
+        score = "n/a" if agg.score is None else f"{agg.score:.3f}"
+        n_pass = sum(1 for t in result.trials if t.verdict)
+        n = len(result.trials)
+        lines.append(
+            f"  aggregate: {agg.check_id} = {score} ({agg_verdict}), "
+            f"{n} trials ({n_pass}/{n} passed)"
+        )
+
     footer = (
         f"  task: {result.task_id} via {result.harness} — {verdict} "
         f"(score={result.aggregate_score:.3f}, {result.duration_seconds:.2f}s)"

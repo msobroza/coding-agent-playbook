@@ -38,6 +38,7 @@ from coding_agent_playbook.evaluators.types import (
     MetricConfig,
     RegressionPolicy,
     ResolvedPolicy,
+    TrialResult,
 )
 
 __all__ = [
@@ -55,6 +56,7 @@ __all__ = [
     "ResolvedPolicy",
     "Rubric",
     "Scope",
+    "TrialResult",
     "all_metrics",
     "all_rubric_names",
     "execution_metrics",

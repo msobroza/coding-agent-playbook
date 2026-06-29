@@ -125,6 +125,23 @@ class EvaluationReport:
 
 
 @dataclass(frozen=True)
+class TrialResult:
+    """One runner trial's per-trial report + its derived pass/fail verdict (C8).
+
+    The across-trial aggregate layer (``[aggregate]``: ``pass@k`` / ``pass^k``)
+    reduces a list of these. ``report`` is the per-trial
+    :class:`EvaluationReport` (its ``checks`` expose the ``gate`` / ``rubric``
+    layers); ``verdict`` is the per-trial verdict already derived from those
+    layers (skipped-neutral). An :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
+    reads the per-trial boolean off each via
+    :func:`~coding_agent_playbook.evals._compile.over_boolean`.
+    """
+
+    report: EvaluationReport
+    verdict: bool
+
+
+@dataclass(frozen=True)
 class ResolvedPolicy:
     """The *effective* policy for one evaluator after config overrides defaults.
 
@@ -221,6 +238,13 @@ class EvalContext:
     nested rubric grades its own checks without the parent threading a separate
     measurement set through. Both default to ``None``; every non-Rubric family
     ignores them.
+
+    ``trials`` (C8) carries the across-trial run results the
+    :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
+    family reduces (``pass@k`` / ``pass^k``). The runner runs ``N = max(k)``
+    trials, collects one :class:`TrialResult` per trial, and grades the compiled
+    aggregate layer over a context carrying them; every other family ignores it
+    and it defaults to ``None`` (a single-trial run sets no aggregate context).
     """
 
     module: ModuleModel | None
@@ -234,3 +258,4 @@ class EvalContext:
     baseline_tree: Path | None = None
     candidate_measurements: list[Measurement] | None = None
     baseline_measurements: list[Measurement] | None = None
+    trials: list[TrialResult] | None = None

@@ -173,10 +173,12 @@ def compile_eval_task(task: EvalTask) -> CompiledTask:
     """Compile ``task``'s ``[gate]``/``[rubric]``/``[verdict]`` into a :class:`CompiledTask`.
 
     Delegates to :func:`coding_agent_playbook.evals._compile.compile_task` with the
-    task's gate/rubric bind tables + exprs and the verdict trial expression. The
-    returned :class:`~coding_agent_playbook.evals._compile.CompiledTask` carries the
+    task's gate/rubric/aggregate bind tables + exprs and the verdict trial
+    expression. The returned
+    :class:`~coding_agent_playbook.evals._compile.CompiledTask` carries the
     per-trial :class:`~coding_agent_playbook.evaluators.rubric.Rubric` (the gate +
-    rubric layer checks) and the parsed verdict AST.
+    rubric layer checks), the parsed verdict AST, and the compiled ``[aggregate]``
+    layer + ``trials_needed`` (C8; ``None``/``1`` when no ``[aggregate]`` block).
 
     Raises :exc:`ValueError` (incl. :exc:`~coding_agent_playbook.evals._expr.ExprError`)
     /:exc:`KeyError` on any structural fault the compiler catches: no layer present,
@@ -196,6 +198,8 @@ def compile_eval_task(task: EvalTask) -> CompiledTask:
         rubric_bind=task.rubric.bind if task.rubric is not None else None,
         rubric_expr=task.rubric.expr if task.rubric is not None else None,
         verdict_trial=task.verdict,
+        aggregate_bind=task.aggregate.bind if task.aggregate is not None else None,
+        aggregate_expr=task.aggregate.expr if task.aggregate is not None else None,
         name=task.id,
     )
 
