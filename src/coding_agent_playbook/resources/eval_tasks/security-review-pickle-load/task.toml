@@ -6,22 +6,28 @@ version = 1
 [setup]
 files = ["src/unsafe_model_loader.py"]
 project_kind = "ml-research"
-python_version = "3.12"
-frameworks = ["pytest"]
 ml_stack = ["torch", "scikit-learn"]
 
 [invocation]
 prompt_args = "security review src/unsafe_model_loader.py"
 input_variables = {}
 
-[expected]
-files_unchanged = ["src/unsafe_model_loader.py"]
+[gate]
+expr = "untouched"
+
+[gate.bind]
+untouched = { check = "file_unchanged", path = "src/unsafe_model_loader.py" }
 
 [rubric]
-criteria = [
-  "The review flags `pickle.load` of a model artifact the codebase did not produce as arbitrary code execution (not merely a style nit)",
-  "The review also flags `pickle.loads` of the message-queue payload — both untrusted-deserialization sites are caught",
-  "Unsafe-deserialization findings are reported BEFORE lower-priority concerns — priority order is respected",
-  "Each finding proposes a concrete safe refactor (pickle-free format such as JSON/safetensors, or verified provenance) rather than a vague warning",
-]
-weights = [0.35, 0.3, 0.15, 0.2]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The review flags `pickle.load` of a model artifact the codebase did not produce as arbitrary code execution (not merely a style nit)", weight = 0.35 },
+  { judge = "The review also flags `pickle.loads` of the message-queue payload — both untrusted-deserialization sites are caught", weight = 0.3 },
+  { judge = "Unsafe-deserialization findings are reported BEFORE lower-priority concerns — priority order is respected", weight = 0.15 },
+  { judge = "Each finding proposes a concrete safe refactor (pickle-free format such as JSON/safetensors, or verified provenance) rather than a vague warning", weight = 0.2 },
+] }
+
+[verdict]
+trial = "gate and rubric"

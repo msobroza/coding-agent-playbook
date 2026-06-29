@@ -76,9 +76,27 @@ opencode = "coding_agent_playbook.evals.opencode_runner:OpenCodeRunner"
 # never exercised in CI). Omitting `--judge` means deterministic-only (no judge).
 llm = "coding_agent_playbook.evals.judge:LLMJudge"
 
-[project.entry-points."coding_agent_playbook.evaluators"]
-# Out-of-tree code-quality evaluators (PR M). Engine builtins self-register via
-# the @register_evaluator decorator; this group is for third-party packages.
+[project.entry-points."coding_agent_playbook.metrics"]
+# Out-of-tree code-quality Metrics. Engine builtins self-register via the
+# @register_metric decorator; this group is the third-party extension point
+# (the engine ships none in it). In-tree builtins win on a name clash.
+
+[project.entry-points."coding_agent_playbook.checks"]
+# Out-of-tree custom grader Checks (Metric -> Check -> Rubric stack). The engine
+# ships none in it; this group is the third-party extension point for new
+# grading strategies beyond the built-in threshold/regression/file/judge checks.
+
+[project.entry-points."coding_agent_playbook.rubrics"]
+# Out-of-tree named rubrics; reference from task.toml via [rubric] ref = …. A
+# code-defined Rubric subclass (declaring its CRITERIA) registers here so eval
+# tasks can share one rubric by name. The engine ships none; in-tree
+# registrations win on a name clash.
+
+[project.entry-points."coding_agent_playbook.gates"]
+# Out-of-tree composed gates; reference from a task's [gate.bind] via ref = …. A
+# code-defined factory returning a composed boolean Check (AllOf/AnyOf/Not over
+# file/threshold/judge checks) registers here so eval tasks can share one gate by
+# name. The engine ships none; in-tree registrations win on a name clash.
 
 # ----------------------------------------------------------------------------
 

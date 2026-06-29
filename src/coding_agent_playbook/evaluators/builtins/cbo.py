@@ -13,47 +13,49 @@ import ast
 import builtins as _py_builtins
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evaluators.registry import Evaluator, register_evaluator
-from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
-from coding_agent_playbook.evaluators.types import (
-    AbsoluteThreshold,
-    Measurement,
-    RegressionPolicy,
-)
+from coding_agent_playbook.evaluators.metric import Metric, register_metric
+from coding_agent_playbook.evaluators.normalizer import RampNormalizer
+from coding_agent_playbook.evaluators.scope import Scope
+from coding_agent_playbook.evaluators.types import Measurement
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.parse import ClassScope
     from coding_agent_playbook.evaluators.types import EvalContext
 
 _BUILTIN_NAMES = frozenset(dir(_py_builtins))
+_NAME = "cbo"
 
 
-@register_evaluator
-class CouplingBetweenObjects(Evaluator):
-    """CBO~ - distinct external types referenced by a class (approximate)."""
+def _measure(ctx: EvalContext) -> list[Measurement]:
+    """Shared compute: one CBO~ (distinct external types) per class scope.
 
-    name = "cbo"
+    The per-class coupled-type set is resolved by the module-level
+    :func:`_coupled_types` helper.
+    """
+    if ctx.module is None:
+        return []
+    own_names = {cls.qualname.rsplit(".", 1)[-1] for cls in ctx.module.classes}
+    return [
+        Measurement(
+            evaluator=_NAME,
+            scope_key=cls.scope_key,
+            value=float(len(_coupled_types(cls, own_names))),
+        )
+        for cls in ctx.module.classes
+    ]
+
+
+@register_metric
+class CouplingBetweenObjectsMetric(Metric):
+    """``cbo`` as a :class:`Metric` (shares :func:`_measure`)."""
+
+    name = _NAME
     scope = Scope.CLASS
-    value_kind = ValueKind.NUMERIC
-    determinism = Determinism.DETERMINISTIC
-    higher_is_worse = True
+    normalizer = RampNormalizer(good=3, bad=25)
     requires = None
-    default_absolute = AbsoluteThreshold(warn=14)
-    default_regression = RegressionPolicy(max_worsening=0.0)
-    default_weight = 0.0
 
-    def evaluate(self, ctx: EvalContext) -> list[Measurement]:
-        if ctx.module is None:
-            return []
-        own_names = {cls.qualname.rsplit(".", 1)[-1] for cls in ctx.module.classes}
-        return [
-            Measurement(
-                evaluator=self.name,
-                scope_key=cls.scope_key,
-                value=float(len(_coupled_types(cls, own_names))),
-            )
-            for cls in ctx.module.classes
-        ]
+    def measure(self, ctx: EvalContext) -> list[Measurement]:
+        return _measure(ctx)
 
 
 def _coupled_types(cls: ClassScope, own_names: set[str]) -> set[str]:

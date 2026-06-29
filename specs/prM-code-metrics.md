@@ -1,5 +1,7 @@
 # PR M — code-quality evaluators: static metrics + execution (tests/coverage) + non-regression gate (unified `Evaluator` registry)
 
+> **⚠️ Superseded (abstraction only) by `specs/prR6-check-rubric.md`.** The single fused `Evaluator` ABC + free `grade()` described below were replaced in PR R6 by three single-responsibility abstractions — **`Metric`** (measure) / **`Check`** (grade) / **`Rubric`** (aggregate) — plus a cost-tiered scheduler. The metric *algorithms*, the family taxonomy, the non-regression semantics, and the authored `[metrics]`/`[rubric]`/`[expected]` task schema in this doc are all still accurate; only the abstraction shape (and the entry-point group name — now `coding_agent_playbook.metrics`) changed. Read this for the metrics; read `specs/prR6-check-rubric.md` + SPEC §21 for the as-built abstraction.
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 >
 > **Commit policy (overrides any tooling default):** every commit is authored **solely by `msobroza`** — **never** add a `Co-Authored-By:` trailer, never pass `--author`, never sign. Subagents/dispatchers obey this too. **No `git push` / `gh pr create` until the user gate approves the diff.** Every dispatch prompt MUST start with `cd <worktree-path>` as its first tool call, and default to the `opus` model for every role. (Local git identity is repo-scoped to `msobroza`; verify `git config user.email` before committing.)

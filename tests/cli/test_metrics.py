@@ -5,6 +5,17 @@ over Python files, optionally diffing against a baseline, and exits non-zero on
 a breach (mirroring ``playbook check``). These tests pin the CLI surface:
 absolute vs regression mode, ``--strict``, JSON output, and the usage-error
 exit codes.
+
+T5b cut the gate over from the retired ``grade()`` to the
+:class:`~coding_agent_playbook.evaluators.rubric.Rubric` stack (one metric-backed
+:class:`~coding_agent_playbook.evaluators.check.Check` per gated metric, folded
+into one :class:`~coding_agent_playbook.evaluators.types.EvaluationReport`). The
+verdicts asserted here — gate pass/fail, which metric breaches, the ``0/1/2``
+exit codes, and the JSON ``findings`` contract — are *identical* to the
+pre-cutover output (the only sanctioned diff is the multi-scope composite value,
+now a mean-of-scope-ramps per check, so the tests assert the gate + breaching
+metric, not an exact composite). One test pins the new ``report.checks`` →
+``subresults`` internal shape directly.
 """
 
 from __future__ import annotations
@@ -33,9 +44,11 @@ def add(a, b):
     return a + b
 """
 
-# A moderate function used as a regression-mode baseline. Its candidate variant
-# below adds branches (higher CC) without crossing the absolute fail bound, so
-# only regression mode flags it.
+# A moderate function used as a regression-mode baseline. CC 2 -> normalized
+# score 1.0 (at/under the RampNormalizer(good=5, bad=20) good anchor). The
+# candidate variant below climbs to CC 8 (score 0.8), a *drop* in normalized
+# goodness that regression mode flags - while staying above the absolute warn
+# cutoff (0.5), so the same file graded all-new still passes absolute.
 _BASELINE_SOURCE = """\
 def classify(value):
     if value > 0:
@@ -45,15 +58,21 @@ def classify(value):
 
 _WORSE_SOURCE = """\
 def classify(value):
-    if value > 0:
-        if value > 10:
-            return "big"
-        return "positive"
-    if value < 0:
-        if value < -10:
-            return "very-negative"
-        return "negative"
-    return "zero"
+    if value == 0:
+        return "v0"
+    if value == 1:
+        return "v1"
+    if value == 2:
+        return "v2"
+    if value == 3:
+        return "v3"
+    if value == 4:
+        return "v4"
+    if value == 5:
+        return "v5"
+    if value == 6:
+        return "v6"
+    return "other"
 """
 
 # An improvement: fewer branches than the baseline.
@@ -192,15 +211,16 @@ def test_regression_new_file_not_in_baseline_uses_absolute(tmp_path, capsys):
 
 
 def test_strict_promotes_warning_to_failure(tmp_path, capsys):
-    """A function whose CC is in the warn band (10..20) passes by default but
-    fails under ``--strict``.
+    """A function whose normalized CC score lands in the warn band (< warn=0.5,
+    >= fail=0.25) passes by default but fails under ``--strict``.
 
-    The MI floor is relaxed via config so the only finding is the CC *warn*,
-    isolating the strict behaviour from the (coupled) maintainability metric.
+    13 ifs => CC 14 => score (20-14)/15 = 0.4, a warn. The MI floor is relaxed via
+    config so the only finding is the CC *warn*, isolating the strict behaviour
+    from the (coupled) maintainability metric.
     """
     warn_source = (
         "def f(x):\n"
-        + "".join(f"    if x == {i}:\n        return {i}\n" for i in range(11))
+        + "".join(f"    if x == {i}:\n        return {i}\n" for i in range(13))
         + "    return -1\n"
     )
     target = _write(tmp_path / "warn.py", warn_source)
@@ -241,6 +261,51 @@ def test_json_format_clean_file_passes(tmp_path, capsys):
     assert rc == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["passed"] is True
+
+
+# --------------------------------------------------------------------------- #
+# report.checks → subresults shape (the new Rubric stack)
+# --------------------------------------------------------------------------- #
+
+
+def test_report_has_per_check_subresults_shape(tmp_path):
+    """The gate is a Rubric: one metric-backed check per gated metric, each
+    carrying its per-scope ``ScopeDetail`` leaves as ``subresults``.
+
+    Drives the command's internals (not the CLI) to assert the
+    ``report.checks``/``subresults`` structure directly: the high-CC function is a
+    failing ``threshold:cyclomatic_complexity`` check whose subresult flags the
+    function scope as ``fail``.
+    """
+    from coding_agent_playbook.evaluators import MetricConfig, parse_module
+    from coding_agent_playbook.evaluators.check import MeasurementSet
+    from coding_agent_playbook.evaluators.metric import static_metrics
+    from coding_agent_playbook.evaluators.types import EvalContext, ScopeDetail
+
+    static = static_metrics()
+    source = _HIGH_CC_SOURCE
+    module = parse_module(source, "tangled.py")
+    ctx = EvalContext(module=module, source=source, label="tangled.py")
+    candidate = []
+    for metric in static:
+        if metric.available(ctx):
+            candidate.extend(metric.measure(ctx))
+
+    config = MetricConfig(mode="absolute")
+    rubric = _metrics._build_rubric(static, config)
+    grading_ctx = EvalContext(module=parse_module("", "metrics"), source="", label="metrics")
+    report = rubric.evaluate(grading_ctx, MeasurementSet(candidate, None), fail_fast=False)
+
+    assert report.passed is False
+    # One check per static metric; the gate breach lives on the CC check.
+    check_ids = {c.check_id for c in report.checks}
+    assert "threshold:cyclomatic_complexity" in check_ids
+    cc_check = next(c for c in report.checks if c.check_id == "threshold:cyclomatic_complexity")
+    assert cc_check.passed is False
+    fail_leaves = [
+        s for s in cc_check.subresults if isinstance(s, ScopeDetail) and s.level == "fail"
+    ]
+    assert fail_leaves  # the tangled function scope failed absolute
 
 
 # --------------------------------------------------------------------------- #
@@ -475,10 +540,15 @@ def test_git_baseline_new_file_treated_as_all_new(tmp_path, capsys):
 
 def test_config_threshold_override_changes_verdict(tmp_path, capsys):
     """A stricter ``[metrics]`` threshold in the repo config turns a passing file
-    into a failing one (config is read; CLI flags would override it)."""
-    src = _write(tmp_path / "warn.py", _CLEAN_SOURCE)
+    into a failing one (config is read; CLI flags would override it).
+
+    The override ``fail = 0.9`` is a ``0-1`` cutoff on the normalized score; the
+    moderate ``classify`` (CC 8 -> score 0.8) clears the default ``fail=0.25`` but
+    falls below the stricter ``0.9`` floor.
+    """
+    src = _write(tmp_path / "warn.py", _WORSE_SOURCE)  # CC 8 -> normalized 0.8
     (tmp_path / ".coding-agent-playbook.toml").write_text(
-        '[metrics]\nmode = "absolute"\n[metrics.thresholds.cyclomatic_complexity]\nfail = 1\n',
+        '[metrics]\nmode = "absolute"\n[metrics.thresholds.cyclomatic_complexity]\nfail = 0.9\n',
         encoding="utf-8",
     )
     rc = _metrics.run(_ns(paths=[str(src)], repo_root=str(tmp_path)))

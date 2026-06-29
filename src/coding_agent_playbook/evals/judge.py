@@ -3,13 +3,14 @@
 R2 activation of the former v2 placeholder. The interface is **Option A**: the
 per-criterion primitive :meth:`Judge.score_criterion` is canonical (returns one
 ``0-1`` score for a criterion against an artifact, averaging ``n`` samples) and
-the batch :meth:`Judge.score` is a thin wrapper that maps it over a
-:class:`~coding_agent_playbook.evals.task.Rubric`'s criteria.
+the batch :meth:`Judge.score` is a thin wrapper that maps it over a sequence of
+criterion strings.
 
-:class:`JudgedCriterion` (``evaluators/judged.py``) calls ``score_criterion``
-directly through the structural :class:`~coding_agent_playbook.evaluators.types.JudgeLike`
-protocol, so ``evaluators`` never imports ``evals`` (no cycle). A concrete
-``Judge`` satisfies ``JudgeLike`` structurally.
+:class:`~coding_agent_playbook.evaluators.checks.judged.JudgeCheck` calls
+``score_criterion`` directly through the structural
+:class:`~coding_agent_playbook.evaluators.types.JudgeLike` protocol, so
+``evaluators`` never imports ``evals`` (no cycle). A concrete ``Judge`` satisfies
+``JudgeLike`` structurally.
 
 Two concrete judges:
 
@@ -22,7 +23,7 @@ Two concrete judges:
   judged unit test hermetically.
 
 "Deterministic-only" is simply *no judge configured* (``ctx.judge is None`` ⇒
-``JudgedCriterion.available()`` is ``False``); there is no ``ProgrammaticOnlyJudge``.
+``JudgeCheck.available()`` is ``False``); there is no ``ProgrammaticOnlyJudge``.
 """
 
 from __future__ import annotations
@@ -35,8 +36,6 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    from coding_agent_playbook.evals.task import Rubric
 
 
 class Judge(ABC):
@@ -68,17 +67,17 @@ class Judge(ABC):
 
     def score(
         self,
-        rubric: Rubric,
+        criteria: Sequence[str],
         transcript: str,
         scratch_dir_state: dict[str, Any],
     ) -> list[float]:
         """Batch sugar: one :meth:`score_criterion` per criterion (``n=1``).
 
-        Returns a score per criterion in :attr:`Rubric.criteria`, matching order.
+        Returns a score per criterion in ``criteria``, matching order.
         ``scratch_dir_state`` is accepted for the v2-shaped signature but the
         artifact handed to the per-criterion primitive is ``transcript``.
         """
-        return [self.score_criterion(c, transcript, n=1) for c in rubric.criteria]
+        return [self.score_criterion(c, transcript, n=1) for c in criteria]
 
 
 #: Name of the Claude executable looked up on ``PATH`` by :class:`LLMJudge`.

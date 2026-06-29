@@ -10,7 +10,7 @@ from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
 )
-from coding_agent_playbook.evals.task import EvalTask
+from coding_agent_playbook.evals.task import EvalTask, Verdict
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -24,30 +24,32 @@ version = 1
 [setup]
 files = ["src/calculator.py"]
 project_kind = "python-application"
-python_version = "3.12"
-frameworks = ["pytest", "pytest-asyncio"]
 
 [invocation]
 prompt_args = "for the add function in src/calculator.py"
 input_variables = { target = "src/calculator.py::add" }
 
-[expected]
-files_created = ["tests/test_calculator.py"]
-files_must_contain = [
-  { path = "tests/test_calculator.py", pattern = "def test_add" },
-  { path = "tests/test_calculator.py", pattern = "parametrize" },
-]
-files_unchanged = ["src/calculator.py"]
-files_forbidden = ["__pycache__/", "tests/conftest.py"]
+[gate]
+expr = "created and contains and unchanged"
+
+[gate.bind]
+created = { check = "file_exists", path = "tests/test_calculator.py" }
+contains = { check = "file_contains", path = "tests/test_calculator.py", pattern = "def test_add" }
+unchanged = { check = "file_unchanged", path = "src/calculator.py" }
 
 [rubric]
-criteria = [
-  "Tests use pytest.parametrize for table-driven cases",
-  "Test file lives at tests/test_calculator.py (mirror layout)",
-  "All public branches of `add` are covered",
-  "No mocking is used (function is pure)",
-]
-weights = [0.2, 0.2, 0.4, 0.2]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "Tests use pytest.parametrize for table-driven cases", weight = 0.2 },
+  { judge = "Test file lives at tests/test_calculator.py (mirror layout)", weight = 0.2 },
+  { judge = "All public branches of `add` are covered", weight = 0.4 },
+  { judge = "No mocking is used (function is pure)", weight = 0.2 },
+] }
+
+[verdict]
+trial = "gate and rubric"
 """
 
 
@@ -62,9 +64,13 @@ def test_load_eval_task_from_dir_parses_well_formed_task(tmp_path: Path) -> None
     assert task.prompt_id == "generate-tests"
     assert task.source_path == task_dir / "task.toml"
     assert task.source_package == "coding_agent_playbook"
-    assert task.expected is not None
+    assert task.gate is not None
     assert task.rubric is not None
-    assert task.rubric.weights == [0.2, 0.2, 0.4, 0.2]
+    assert set(task.gate.bind) == {"created", "contains", "unchanged"}
+    assert task.verdict == Verdict(mode="boolean", trial="gate and rubric")
+    # The loaded task compiles cleanly into the two named layer checks.
+    compiled = task.compiled()
+    assert [c.id for c in compiled.per_trial.checks] == ["gate", "rubric"]
 
 
 def test_load_eval_task_from_dir_raises_when_task_toml_missing(tmp_path: Path) -> None:

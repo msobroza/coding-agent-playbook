@@ -4,40 +4,40 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evaluators.registry import Evaluator, register_evaluator
-from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
-from coding_agent_playbook.evaluators.types import (
-    AbsoluteThreshold,
-    Measurement,
-    RegressionPolicy,
-)
+from coding_agent_playbook.evaluators.metric import Metric, register_metric
+from coding_agent_playbook.evaluators.normalizer import RampNormalizer
+from coding_agent_playbook.evaluators.scope import Scope
+from coding_agent_playbook.evaluators.types import Measurement
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.types import EvalContext
 
+_NAME = "cyclomatic_complexity"
 
-@register_evaluator
-class CyclomaticComplexity(Evaluator):
-    """McCabe cyclomatic complexity, one measurement per function/method.
 
-    The value is computed once in :func:`parse_module` via the shared
-    ``_cyclomatic`` helper; this evaluator just surfaces it per scope.
+def _measure(ctx: EvalContext) -> list[Measurement]:
+    """Shared compute: one CC measurement per function/method scope.
+
+    :class:`CyclomaticComplexityMetric` calls this; the value is computed once in
+    :func:`parse_module` via the shared ``_cyclomatic`` helper, so this just
+    surfaces it per scope.
     """
+    if ctx.module is None:
+        return []
+    return [
+        Measurement(evaluator=_NAME, scope_key=fn.scope_key, value=float(fn.complexity))
+        for fn in ctx.module.functions
+    ]
 
-    name = "cyclomatic_complexity"
+
+@register_metric
+class CyclomaticComplexityMetric(Metric):
+    """``cyclomatic_complexity`` as a :class:`Metric` (shares :func:`_measure`)."""
+
+    name = _NAME
     scope = Scope.FUNCTION
-    value_kind = ValueKind.NUMERIC
-    determinism = Determinism.DETERMINISTIC
-    higher_is_worse = True
+    normalizer = RampNormalizer(good=5, bad=20)
     requires = None
-    default_absolute = AbsoluteThreshold(warn=10, fail=20)
-    default_regression = RegressionPolicy(max_worsening=0.0)
-    default_weight = 0.0
 
-    def evaluate(self, ctx: EvalContext) -> list[Measurement]:
-        if ctx.module is None:
-            return []
-        return [
-            Measurement(evaluator=self.name, scope_key=fn.scope_key, value=float(fn.complexity))
-            for fn in ctx.module.functions
-        ]
+    def measure(self, ctx: EvalContext) -> list[Measurement]:
+        return _measure(ctx)

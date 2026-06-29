@@ -6,28 +6,32 @@ version = 1
 [setup]
 files = ["src/quotient.py"]
 project_kind = "python-application"
-python_version = "3.12"
-frameworks = ["pytest"]
 
 [invocation]
 prompt_args = "for the quotient function in src/quotient.py — make sure every branch is covered"
 input_variables = { target = "src/quotient.py::quotient" }
 
-[expected]
-files_created = ["tests/test_quotient.py"]
-files_must_contain = [
-  { path = "tests/test_quotient.py", pattern = "def test_quotient" },
-  { path = "tests/test_quotient.py", pattern = "parametrize" },
-  { path = "tests/test_quotient.py", pattern = "ZeroDivisionError" },
-]
-files_unchanged = ["src/quotient.py"]
-files_forbidden = ["src/quotient_fixed.py"]
+[gate]
+expr = "test_created and names_test and parametrized and raises_zerodiv and src_unchanged and no_fixed_copy"
+
+[gate.bind]
+test_created = { check = "file_exists", path = "tests/test_quotient.py" }
+names_test = { check = "file_contains", path = "tests/test_quotient.py", pattern = "def test_quotient" }
+parametrized = { check = "file_contains", path = "tests/test_quotient.py", pattern = "parametrize" }
+raises_zerodiv = { check = "file_contains", path = "tests/test_quotient.py", pattern = "ZeroDivisionError" }
+src_unchanged = { check = "file_unchanged", path = "src/quotient.py" }
+no_fixed_copy = { check = "file_forbidden", path = "src/quotient_fixed.py" }
 
 [rubric]
-criteria = [
-  "Each branch of `quotient` (positive, negative, zero divisor, non-integer input) is exercised by at least one test",
-  "Boundary inputs (zero numerator, very large values) are included",
-  "The zero-divisor case asserts the expected exception type, not just that an exception was raised",
-  "Tests are organised with parametrize where the cases share a shape",
-]
-weights = [0.4, 0.2, 0.2, 0.2]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "Each branch of `quotient` (positive, negative, zero divisor, non-integer input) is exercised by at least one test", weight = 0.4 },
+  { judge = "Boundary inputs (zero numerator, very large values) are included", weight = 0.2 },
+  { judge = "The zero-divisor case asserts the expected exception type, not just that an exception was raised", weight = 0.2 },
+  { judge = "Tests are organised with parametrize where the cases share a shape", weight = 0.2 },
+] }
+
+[verdict]
+trial = "gate and rubric"

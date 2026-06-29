@@ -6,21 +6,27 @@ version = 1
 [setup]
 files = ["src/temperature.py"]
 project_kind = "python-application"
-python_version = "3.12"
-frameworks = ["pytest"]
 
 [invocation]
 prompt_args = "review src/temperature.py — be honest if there's nothing to change"
 input_variables = {}
 
-[expected]
-files_unchanged = ["src/temperature.py"]
+[gate]
+expr = "untouched"
+
+[gate.bind]
+untouched = { check = "file_unchanged", path = "src/temperature.py" }
 
 [rubric]
-criteria = [
-  "The review's verdict is 'approve' (with no comments) or 'approve with comments' (style-only, framed as suggestions)",
-  "No correctness, security, or failure-mode bugs are claimed — because none exist",
-  "Any suggestions are framed as preferences, not as required changes",
-  "The review does not propose to rewrite the function or change its signature",
-]
-weights = [0.4, 0.3, 0.15, 0.15]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The review's verdict is 'approve' (with no comments) or 'approve with comments' (style-only, framed as suggestions)", weight = 0.4 },
+  { judge = "No correctness, security, or failure-mode bugs are claimed — because none exist", weight = 0.3 },
+  { judge = "Any suggestions are framed as preferences, not as required changes", weight = 0.15 },
+  { judge = "The review does not propose to rewrite the function or change its signature", weight = 0.15 },
+] }
+
+[verdict]
+trial = "gate and rubric"

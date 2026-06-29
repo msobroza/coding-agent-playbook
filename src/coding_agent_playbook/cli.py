@@ -145,6 +145,14 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         help="per-criterion judge samples to average (default: 1)",
     )
+    # By default --run is fail-fast: a lost deterministic gate skips the costlier
+    # judge tier (saving an LLM call). --full-scoring grades every check.
+    eval_p.add_argument(
+        "--full-scoring",
+        action="store_true",
+        help="grade every check even after the gate is lost (disables fail-fast; "
+        "scores the judge tier regardless of a failing deterministic check)",
+    )
     eval_p.add_argument(
         "--format",
         choices=("text", "json"),

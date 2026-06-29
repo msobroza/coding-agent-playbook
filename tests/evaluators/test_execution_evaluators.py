@@ -1,9 +1,16 @@
-"""Tests for the execution evaluators ``test_pass_rate`` + ``coverage`` (M4).
+"""Tests for the execution metrics ``test_pass_rate`` + ``coverage`` (M4).
 
-These exercise the evaluators through their public ``available``/``evaluate``
+These exercise the metrics through their public ``available``/``measure``
 surface against a real fixture project (inner pytest in a subprocess), plus the
-grade-level gate/regression behaviour and the one-run caching guarantee when both
-evaluators read the same handle.
+gate/regression behaviour and the one-run caching guarantee when both metrics
+read the same handle.
+
+The gate-level cases grade the execution measurements through the
+:class:`~coding_agent_playbook.evaluators.rubric.Rubric` stack, assembling the two
+execution checks via the shared
+:func:`~coding_agent_playbook.evaluators.policy.metric_check` factory — the same
+per-metric default policy the standalone ``playbook metrics --run-tests`` gate
+applies.
 """
 
 from __future__ import annotations
@@ -13,13 +20,16 @@ from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.evaluators import (
     EvalContext,
+    EvaluationReport,
     Measurement,
     MetricConfig,
-    grade,
 )
-from coding_agent_playbook.evaluators.execution.coverage import Coverage
+from coding_agent_playbook.evaluators.check import MeasurementSet
+from coding_agent_playbook.evaluators.execution.coverage import CoverageMetric
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle
-from coding_agent_playbook.evaluators.execution.test_pass import TestPassRate
+from coding_agent_playbook.evaluators.execution.test_pass import TestPassRateMetric
+from coding_agent_playbook.evaluators.policy import metric_check
+from coding_agent_playbook.evaluators.rubric import Rubric
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -82,20 +92,20 @@ def _ctx(handle: ProjectHandle | None, label: str = "suite") -> EvalContext:
 # --------------------------------------------------------------------------- #
 
 
-def test_evaluators_unavailable_without_project() -> None:
+def test_metrics_unavailable_without_project() -> None:
     ctx = _ctx(None)
-    assert TestPassRate().available(ctx) is False
-    assert Coverage().available(ctx) is False
-    # evaluate() degrades to [] rather than raising.
-    assert TestPassRate().evaluate(ctx) == []
-    assert Coverage().evaluate(ctx) == []
+    assert TestPassRateMetric().available(ctx) is False
+    assert CoverageMetric().available(ctx) is False
+    # measure() degrades to [] rather than raising.
+    assert TestPassRateMetric().measure(ctx) == []
+    assert CoverageMetric().measure(ctx) == []
 
 
-def test_evaluators_available_with_project(tmp_path: Path) -> None:
+def test_metrics_available_with_project(tmp_path: Path) -> None:
     handle = _project(tmp_path / "proj", tmp_path / "rep", _TEST_PASS)
     ctx = _ctx(handle)
-    assert TestPassRate().available(ctx) is True
-    assert Coverage().available(ctx) is True
+    assert TestPassRateMetric().available(ctx) is True
+    assert CoverageMetric().available(ctx) is True
 
 
 # --------------------------------------------------------------------------- #
@@ -105,7 +115,7 @@ def test_evaluators_available_with_project(tmp_path: Path) -> None:
 
 def test_test_pass_rate_all_pass_is_one(tmp_path: Path) -> None:
     handle = _project(tmp_path / "proj", tmp_path / "rep", _TEST_PASS)
-    ms = TestPassRate().evaluate(_ctx(handle))
+    ms = TestPassRateMetric().measure(_ctx(handle))
     assert len(ms) == 1
     assert ms[0].value == 1.0
     assert ms[0].scope_key == "suite"
@@ -113,13 +123,13 @@ def test_test_pass_rate_all_pass_is_one(tmp_path: Path) -> None:
 
 def test_test_pass_rate_with_failure_below_one(tmp_path: Path) -> None:
     handle = _project(tmp_path / "proj", tmp_path / "rep", _TEST_FAIL)
-    ms = TestPassRate().evaluate(_ctx(handle))
+    ms = TestPassRateMetric().measure(_ctx(handle))
     assert ms[0].value == 0.5
 
 
 def test_coverage_emits_per_file_and_module_total(tmp_path: Path) -> None:
     handle = _project(tmp_path / "proj", tmp_path / "rep", _TEST_PASS)
-    ms = Coverage().evaluate(_ctx(handle, label="suite"))
+    ms = CoverageMetric().measure(_ctx(handle, label="suite"))
     # one MODULE total (keyed "suite") + at least the mod.py file.
     keys = {m.scope_key for m in ms}
     assert "suite" in keys
@@ -134,8 +144,8 @@ def test_coverage_emits_per_file_and_module_total(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_both_evaluators_share_one_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Running both evaluators against one handle runs the suite exactly once."""
+def test_both_metrics_share_one_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Running both metrics against one handle runs the suite exactly once."""
     handle = _project(tmp_path / "proj", tmp_path / "rep", _TEST_PASS)
 
     import subprocess as _subprocess
@@ -152,24 +162,57 @@ def test_both_evaluators_share_one_run(tmp_path: Path, monkeypatch: pytest.Monke
         _counting,
     )
     ctx = _ctx(handle)
-    TestPassRate().evaluate(ctx)
-    Coverage().evaluate(ctx)
+    TestPassRateMetric().measure(ctx)
+    CoverageMetric().measure(ctx)
     assert calls["n"] == 1
 
 
 # --------------------------------------------------------------------------- #
-# grade-level gate + regression
+# gate + regression (through the Rubric stack)
 # --------------------------------------------------------------------------- #
 
 
 def _measure(handle: ProjectHandle, label: str = "suite") -> list[Measurement]:
     ctx = _ctx(handle, label=label)
-    return TestPassRate().evaluate(ctx) + Coverage().evaluate(ctx)
+    return TestPassRateMetric().measure(ctx) + CoverageMetric().measure(ctx)
+
+
+def _grade(
+    candidate: list[Measurement],
+    baseline: list[Measurement] | None,
+    config: MetricConfig,
+    *,
+    project: ProjectHandle,
+) -> EvaluationReport:
+    """Grade execution measurements through the ``Rubric`` of the two execution checks.
+
+    Mirrors what ``playbook metrics --run-tests`` does: assemble one metric-backed
+    check per execution metric via the shared :func:`metric_check` factory (so the
+    ported default policy — ``coverage`` warn=80, ``test_pass_rate`` fail=1.0 —
+    applies), then fold them into one report. ``project`` is passed on the ctx so
+    the execution checks report ``available`` (the suite is already run/cached, so
+    nothing re-executes); ``fail_fast=False`` keeps the report complete.
+    """
+    checks = []
+    for name in ("test_pass_rate", "coverage"):
+        check = metric_check(name, config)
+        assert check is not None
+        checks.append(check)
+    rubric = Rubric(checks, name="exec")
+    ctx = EvalContext(
+        module=None,
+        source="",
+        label="suite",
+        project=project,
+        candidate_measurements=candidate,
+        baseline_measurements=baseline,
+    )
+    return rubric.evaluate(ctx, MeasurementSet(candidate, baseline), fail_fast=False)
 
 
 def test_failing_suite_fails_absolute_gate(tmp_path: Path) -> None:
     handle = _project(tmp_path / "proj", tmp_path / "rep", _TEST_FAIL)
-    report = grade(_measure(handle), None, MetricConfig(mode="absolute"))
+    report = _grade(_measure(handle), None, MetricConfig(mode="absolute"), project=handle)
     assert report.passed is False
     failing = [f for f in report.findings if f.evaluator == "test_pass_rate"]
     assert failing and failing[0].level == "fail"
@@ -187,7 +230,7 @@ def test_low_coverage_warns(tmp_path: Path) -> None:
         """
     )
     handle = _project(tmp_path / "proj", tmp_path / "rep", partial)
-    report = grade(_measure(handle), None, MetricConfig(mode="absolute"))
+    report = _grade(_measure(handle), None, MetricConfig(mode="absolute"), project=handle)
     cov_file = [
         f for f in report.findings if f.evaluator == "coverage" and f.scope_key.endswith("mod.py")
     ]
@@ -214,7 +257,7 @@ def test_coverage_regression_drop_fails(tmp_path: Path) -> None:
     cand = _project(tmp_path / "cand", tmp_path / "cand_rep", partial)
     cand_ms = _measure(cand, label="suite")
 
-    report = grade(cand_ms, baseline_ms, MetricConfig(mode="regression"))
+    report = _grade(cand_ms, baseline_ms, MetricConfig(mode="regression"), project=cand)
     assert report.passed is False
     cov_reg = [
         f
@@ -229,7 +272,7 @@ def test_coverage_unchanged_passes_regression(tmp_path: Path) -> None:
     baseline_ms = _measure(base, label="suite")
     cand = _project(tmp_path / "cand", tmp_path / "cand_rep", _TEST_PASS)
     cand_ms = _measure(cand, label="suite")
-    report = grade(cand_ms, baseline_ms, MetricConfig(mode="regression"))
+    report = _grade(cand_ms, baseline_ms, MetricConfig(mode="regression"), project=cand)
     assert report.passed is True
 
 
@@ -238,7 +281,7 @@ def test_new_failing_test_fails_regression(tmp_path: Path) -> None:
     baseline_ms = _measure(base, label="suite")
     cand = _project(tmp_path / "cand", tmp_path / "cand_rep", _TEST_FAIL)
     cand_ms = _measure(cand, label="suite")
-    report = grade(cand_ms, baseline_ms, MetricConfig(mode="regression"))
+    report = _grade(cand_ms, baseline_ms, MetricConfig(mode="regression"), project=cand)
     assert report.passed is False
     tpr = [f for f in report.findings if f.evaluator == "test_pass_rate"]
     assert tpr and tpr[0].level == "fail"

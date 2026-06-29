@@ -4,44 +4,43 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evaluators.registry import Evaluator, register_evaluator
-from coding_agent_playbook.evaluators.scope import Determinism, Scope, ValueKind
-from coding_agent_playbook.evaluators.types import (
-    AbsoluteThreshold,
-    Measurement,
-    RegressionPolicy,
-)
+from coding_agent_playbook.evaluators.metric import Metric, register_metric
+from coding_agent_playbook.evaluators.normalizer import RampNormalizer
+from coding_agent_playbook.evaluators.scope import Scope
+from coding_agent_playbook.evaluators.types import Measurement
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.types import EvalContext
 
+_NAME = "wmc"
 
-@register_evaluator
-class WeightedMethodsPerClass(Evaluator):
-    """WMC = ``sum(cyclomatic(method) for method in class)``.
+
+def _measure(ctx: EvalContext) -> list[Measurement]:
+    """Shared compute: WMC = ``sum(cyclomatic(method) for method in class)``.
 
     Reuses the same per-method complexity the shared ``_cyclomatic`` helper
     stored on each :class:`FunctionScope`, so CC and WMC never diverge.
     """
+    if ctx.module is None:
+        return []
+    return [
+        Measurement(
+            evaluator=_NAME,
+            scope_key=cls.scope_key,
+            value=float(sum(m.complexity for m in cls.methods)),
+        )
+        for cls in ctx.module.classes
+    ]
 
-    name = "wmc"
+
+@register_metric
+class WeightedMethodsPerClassMetric(Metric):
+    """``wmc`` as a :class:`Metric` (shares :func:`_measure`)."""
+
+    name = _NAME
     scope = Scope.CLASS
-    value_kind = ValueKind.NUMERIC
-    determinism = Determinism.DETERMINISTIC
-    higher_is_worse = True
+    normalizer = RampNormalizer(good=10, bad=60)
     requires = None
-    default_absolute = AbsoluteThreshold(fail=50)
-    default_regression = RegressionPolicy(max_worsening=0.0)
-    default_weight = 0.0
 
-    def evaluate(self, ctx: EvalContext) -> list[Measurement]:
-        if ctx.module is None:
-            return []
-        return [
-            Measurement(
-                evaluator=self.name,
-                scope_key=cls.scope_key,
-                value=float(sum(m.complexity for m in cls.methods)),
-            )
-            for cls in ctx.module.classes
-        ]
+    def measure(self, ctx: EvalContext) -> list[Measurement]:
+        return _measure(ctx)

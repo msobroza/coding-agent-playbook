@@ -1,45 +1,46 @@
-"""Scoring bridge — grade an agent's output through the PR-M model (PR R1 §2).
+"""Scoring bridge — grade an agent's output through the compiled task.
 
 :func:`score` turns a materialized :class:`~coding_agent_playbook.evals.runner.Baseline`
 and the captured :class:`~coding_agent_playbook.evals.runner.Candidate` into one
-:class:`~coding_agent_playbook.evaluators.types.EvaluationReport`. Every scoring
-layer flows through the **single** :func:`~coding_agent_playbook.evaluators.grade.grade`
-call (one model, one report):
+:class:`~coding_agent_playbook.evaluators.types.EvaluationReport`. It sources the
+checks from the task compiler (:mod:`coding_agent_playbook.evals._compile`):
+the task's ``[gate]``/``[rubric]`` blocks compile (via
+:func:`~coding_agent_playbook.evals.task.compile_eval_task`) into one per-trial
+:class:`~coding_agent_playbook.evaluators.rubric.Rubric` carrying the two named
+layer checks (``id="gate"`` / ``id="rubric"``), and a single
+:meth:`Rubric.evaluate` folds them into the report. The per-trial **verdict** is
+then *derived* from the layer results with skipped-neutral semantics
+(:func:`~coding_agent_playbook.evals._compile.verdict_passed`) and written onto
+``report.passed``.
 
-* **``[metrics]``** — the static + execution evaluators selected by
-  :func:`~coding_agent_playbook.evals.task.evaluators_for_task` for the task's
-  ``[metrics]`` policy. Static evaluators run per candidate source file; execution
-  evaluators run a :class:`~coding_agent_playbook.evaluators.execution.project.ProjectHandle`
-  over the candidate tree, with the **baseline suite run on the pristine
-  ``setup/`` snapshot** so non-regression compares against the untouched setup.
+The measurement layer still pre-computes the metric values the metric-backed
+checks read, but now discovers which metrics to measure by **walking the compiled
+check tree** (the gate/rubric layer checks → their composers → the metric leaves)
+rather than from a flat ``[metrics]`` block:
 
-* **``[expected]``** — the four BOOL deterministic evaluators
-  (:mod:`coding_agent_playbook.evaluators.expected`, R3) compiled by
-  ``evaluators_for_task`` from the task's
-  :class:`~coding_agent_playbook.evals.task.ExpectedOutcome`. Each reads the
-  candidate tree (``ctx.tree``) — and the baseline ``setup/`` snapshot
-  (``ctx.baseline_tree``) for ``file_unchanged`` — and yields one BOOL
-  measurement with a must-be-true ``fail`` floor. Their un-registered instances
-  are passed to :func:`grade` as ``extra_evaluators`` (the same mechanism the
-  judged criteria use), so a failed check gates the report. This **replaces** the
-  R1 interim inline compile that built BOOL findings outside ``grade``.
+* **static** metrics (``not needs_project``) are measured per candidate ``*.py``
+  file (and over the pristine ``setup/`` snapshot for the baseline);
+* **execution** metrics (``needs_project``) run a
+  :class:`~coding_agent_playbook.evaluators.execution.project.ProjectHandle` over
+  the candidate tree (and the snapshot for the baseline) — but **only when** an
+  execution metric is actually referenced (``run_tests`` is *inferred*, not
+  authored);
+* **judge-backed** metrics (a
+  :class:`~coding_agent_playbook.evaluators.checks.judge_metric.JudgeMetric`, or a
+  rubric-group :class:`~coding_agent_playbook.evaluators.rubric.Rubric` containing
+  ``JudgeCheck``\\ s) are measured only when a ``judge`` is configured; with no
+  judge they are left unmeasured and their wrapping check / rubric layer reports
+  ``available() is False`` and skips (the deterministic-only path).
 
-* **``[rubric]``** — one
-  :class:`~coding_agent_playbook.evaluators.judged.JudgedCriterion` per criterion,
-  included **only when a judge is configured** (the ``judge`` argument is not
-  ``None``). Each scores the candidate's captured diff/transcript into a ``0-1``
-  SCORE measurement (averaged over ``samples``) and is graded through the same
-  :func:`grade` call. With no judge (the default) judged evaluators are skipped
-  entirely: deterministic-only, the R1 behaviour preserved.
-
-The un-registered ``[expected]`` + judged criterion instances are passed as
-``extra_evaluators`` so :func:`grade` resolves each measurement's policy without a
-registry lookup; the result is the single :class:`EvaluationReport`.
+The file checks (``[gate]`` predicates) ignore the
+:class:`~coding_agent_playbook.evaluators.check.MeasurementSet` and read
+``ctx.tree`` / ``ctx.baseline_tree`` directly.
 """
 
 from __future__ import annotations
 
 import tempfile
+from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -47,32 +48,30 @@ from coding_agent_playbook.evaluators import (
     EvalContext,
     EvaluationReport,
     Measurement,
-    MetricConfig,
-    grade,
     parse_module,
 )
+from coding_agent_playbook.evaluators.check import MeasurementSet, _MetricCheck
+from coding_agent_playbook.evaluators.checks.compose import AllOf, AnyOf, Not
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle
-from coding_agent_playbook.evaluators.expected import _ExpectedEvaluator
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.runner import Baseline, Candidate
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.evaluators import Evaluator, JudgeLike
+    from coding_agent_playbook.evaluators import JudgeLike, ModuleModel
+    from coding_agent_playbook.evaluators.check import Check
+    from coding_agent_playbook.evaluators.metric import Metric
 
 #: Directory names skipped when discovering candidate ``*.py`` source files.
 _IGNORED_DIRS = frozenset(
     {"__pycache__", ".venv", "venv", "node_modules", "build", "dist", ".git", ".tox", ".mypy_cache"}
 )
 
-#: MODULE label the execution evaluators key their suite-wide measurements on.
+#: MODULE label the execution metrics key their suite-wide measurements on.
 _SUITE_LABEL = "suite"
 
-#: Label the judged criteria key their per-artifact measurements on (R2).
+#: Label the candidate ``EvalContext`` carries — the artifact/rubric scope key
+#: judged checks key their per-artifact measurements on.
 _RUBRIC_LABEL = "rubric"
-
-#: Label the expected-outcome evaluators key their per-file context on (R3). The
-#: BOOL evaluators key their *measurements* on their own path scope, not this.
-_EXPECTED_LABEL = "expected"
 
 
 def score(
@@ -82,184 +81,165 @@ def score(
     *,
     judge: JudgeLike | None = None,
     samples: int = 1,
+    fail_fast: bool = False,
 ) -> EvaluationReport:
-    """Grade ``candidate`` for ``task`` into one report (deterministic + judged).
+    """Grade ``candidate`` for ``task`` into one report + derive the trial verdict.
 
-    The ``[metrics]`` static/execution measurements, the ``[expected]`` BOOL
-    checks, and (with a ``judge``) the ``[rubric]`` judged criteria all feed the
-    same :func:`grade` call. With ``judge=None`` (the default) only the
-    deterministic ``[metrics]`` + ``[expected]`` layers run — the R1 behaviour,
-    unchanged.
+    Compiles the task's ``[gate]``/``[rubric]`` blocks into one per-trial
+    :class:`~coding_agent_playbook.evaluators.rubric.Rubric`
+    (:func:`~coding_agent_playbook.evals.task.compile_eval_task`), pre-computes the
+    metrics that rubric's checks reference over the candidate (and, for
+    regression/execution, the pristine ``setup/`` baseline snapshot), runs
+    :meth:`Rubric.evaluate`, then derives the per-trial verdict from the gate/rubric
+    layer results (**skipped-neutral**) and writes it onto ``report.passed``.
+
+    With ``judge=None`` (the default) the judged ``[rubric]`` layer reports
+    unavailable and is skipped — the deterministic ``[gate]`` layer only, and the
+    verdict is the gate's pass/fail (skipped rubric is neutral). With a ``judge``
+    set, the rubric layer's ``JudgeCheck``\\ s score the candidate's captured diff
+    and fold into the same report.
+
+    ``fail_fast`` (default ``False``) toggles the scheduler's short-circuit: when
+    ``True`` a lost deterministic gate skips the remaining costlier tiers, so a
+    failing ``[gate]`` check spares the LLM judge. The runner passes ``True`` by
+    default (cost-saving); ``--full-scoring`` flips it off.
     """
-    policy = task.metrics or MetricConfig()
-    evaluators = _metric_evaluators_for_task(task, policy)
+    from coding_agent_playbook.evals._compile import verdict_passed, weighted_verdict
+    from coding_agent_playbook.evals.task import compile_eval_task
 
-    static_evals = [ev for ev in evaluators if not ev.needs_project]
-    exec_evals = [ev for ev in evaluators if ev.needs_project]
+    compiled = compile_eval_task(task)
+    rubric = compiled.per_trial
+
+    metrics = _referenced_metrics(rubric.checks)
+    static_metrics = [m for m in metrics if not m.needs_judge and not m.needs_project]
+    exec_metrics = [m for m in metrics if not m.needs_judge and m.needs_project]
 
     candidate_measurements: list[Measurement] = []
     baseline_measurements: list[Measurement] = []
-    extra_evaluators: dict[str, Evaluator] = {}
 
-    if static_evals:
-        candidate_measurements += _static_measurements(candidate.tree, static_evals)
-        baseline_measurements += _static_measurements(baseline.setup_snapshot, static_evals)
+    if static_metrics:
+        candidate_measurements += _static_measurements(candidate.tree, static_metrics)
+        baseline_measurements += _static_measurements(baseline.setup_snapshot, static_metrics)
 
-    if exec_evals and policy.run_tests:
-        candidate_measurements += _execution_measurements(candidate.tree, exec_evals)
-        baseline_measurements += _execution_measurements(baseline.setup_snapshot, exec_evals)
+    # ``run_tests`` is inferred: execution metrics run iff one is referenced.
+    run_exec = bool(exec_metrics)
+    if run_exec:
+        candidate_measurements += _execution_measurements(candidate.tree, exec_metrics)
+        baseline_measurements += _execution_measurements(baseline.setup_snapshot, exec_metrics)
 
-    expected_evals = _expected_evaluators_for_task(task)
-    if expected_evals:
-        expected_measurements, expected_by_name = _expected_measurements(
-            expected_evals, candidate, baseline
+    # Judge-backed metrics are NOT pre-measured here: a metric-backed check whose
+    # metric ``needs_judge`` is JUDGED-tier and measures itself lazily at grade time
+    # (``_MetricCheck._lazily_measure``), so the cost-tiered scheduler can
+    # short-circuit it when a cheaper required gate already failed (no wasted judge
+    # call). With no judge configured its rubric layer reports unavailable -> skipped.
+    with ExitStack() as stack:
+        ctx = EvalContext(
+            module=_availability_module(static_metrics),
+            source="",
+            label=_RUBRIC_LABEL,
+            project=_availability_project(candidate.tree, stack) if run_exec else None,
+            tree=candidate.tree,
+            baseline_tree=baseline.setup_snapshot,
+            artifact=candidate.diff,
+            samples=samples,
+            judge=judge,
+            candidate_measurements=candidate_measurements,
+            baseline_measurements=baseline_measurements,
         )
-        candidate_measurements += expected_measurements
-        extra_evaluators.update(expected_by_name)
+        ms = MeasurementSet(candidate_measurements, baseline_measurements or None)
+        report = rubric.evaluate(ctx, ms, strict=False, fail_fast=fail_fast)
 
-    if judge is not None:
-        judged_evals = _judged_evaluators_for_task(task)
-        if judged_evals:
-            judged_measurements, judged_by_name = _judged_measurements(
-                judged_evals, candidate, judge, samples
-            )
-            candidate_measurements += judged_measurements
-            extra_evaluators.update(judged_by_name)
+    # Derive the trial verdict and make it the report's pass/fail. The
+    # gate/rubric CheckResults stay in report.checks for reporting (and the
+    # aggregate ``over`` selector).
+    #
+    # Two modes (C10): boolean (the legacy ``[verdict].trial`` expression,
+    # skipped-neutral over the layers' ``passed`` results) or weighted (a
+    # composite over the layers' 0-1 scores with renormalization for skipped
+    # layers). The boolean path is byte-identical to today.
+    spec = compiled.verdict_spec
+    if spec.mode == "boolean":
+        report.passed = verdict_passed(report, spec.ast)
+        report.verdict_score = None
+    else:
+        verdict_score, passed = weighted_verdict(report, spec)
+        report.verdict_score = verdict_score
+        report.passed = passed
+    return report
 
-    return grade(
-        candidate_measurements,
-        baseline_measurements or None,
-        policy,
-        extra_evaluators=extra_evaluators,
+
+# --------------------------------------------------------------------------- #
+# Metric discovery — walk the compiled check tree
+# --------------------------------------------------------------------------- #
+
+
+def _referenced_metrics(checks: list[Check]) -> list[Metric]:
+    """Every :class:`Metric` the compiled check tree references, deduped by name.
+
+    Walks ``checks`` (the per-trial rubric's layer checks), descending the boolean
+    composers (:class:`AllOf`/:class:`AnyOf`/:class:`Not` via their ``children``)
+    and pulling the underlying
+    :class:`~coding_agent_playbook.evaluators.metric.Metric` off every
+    :class:`~coding_agent_playbook.evaluators.check._MetricCheck` leaf
+    (``ThresholdCheck`` / ``NonRegressionCheck``). A metric that is itself a
+    :class:`~coding_agent_playbook.evaluators.rubric.Rubric` (a rubric-group wrapped
+    in a ``ThresholdCheck``) is collected as one judge-backed metric — its own
+    ``JudgeCheck``\\ s are measured by its :meth:`Rubric.measure`, so we do not
+    descend into them here. File / judge-only checks carry no metric and contribute
+    nothing. Deduped by ``metric.name`` (a metric named by two checks measures once).
+    """
+    out: list[Metric] = []
+    seen: set[str] = set()
+
+    def _walk(check: Check) -> None:
+        if isinstance(check, _MetricCheck):
+            metric = check.metric
+            if metric.name not in seen:
+                seen.add(metric.name)
+                out.append(metric)
+            return
+        if isinstance(check, (AllOf, AnyOf, Not)):
+            for child in check.children:
+                _walk(child)
+
+    for check in checks:
+        _walk(check)
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# Availability stand-ins — satisfy the metric checks' ctx-slot gate
+# --------------------------------------------------------------------------- #
+
+
+def _availability_module(static_metrics: list[Metric]) -> ModuleModel | None:
+    """A parsed empty module so static metric checks report ``available``.
+
+    A static metric's ``available(ctx)`` requires ``ctx.module is not None`` — the
+    measurement-time gate. In the scoring bridge the static measurements are
+    *already* computed (per candidate file), so the metric checks only need to
+    grade the pre-built :class:`MeasurementSet`; this stand-in module flips their
+    availability on without being measured. ``None`` when there are no static
+    metric checks (nothing to satisfy).
+    """
+    if not static_metrics:
+        return None
+    return parse_module("", _RUBRIC_LABEL)
+
+
+def _availability_project(tree: Path, stack: ExitStack) -> ProjectHandle:
+    """A lazy candidate :class:`ProjectHandle` so execution checks report available.
+
+    An execution metric's ``available(ctx)`` requires ``ctx.project is not None``.
+    The handle is constructed lazily (it only shells out to ``pytest`` when
+    :meth:`ProjectHandle.run` is called, which the *checks* never do — they grade
+    the pre-built measurements), so this never re-runs the suite. The throwaway
+    report dir is cleaned when the enclosing :class:`ExitStack` exits.
+    """
+    report_dir = Path(
+        stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-eval-avail-"))
     )
-
-
-# --------------------------------------------------------------------------- #
-# [metrics] evaluator selection
-# --------------------------------------------------------------------------- #
-
-
-def _metric_evaluators_for_task(task: EvalTask, policy: MetricConfig) -> list[Evaluator]:
-    """The deterministic ``[metrics]`` evaluators selected by the task's config.
-
-    Wraps :func:`~coding_agent_playbook.evals.task.evaluators_for_task` and keeps
-    only the deterministic static/execution metrics — the judged ``[rubric]``
-    criteria (handled by :func:`_judged_evaluators_for_task`) and the
-    ``[expected]`` BOOL evaluators (handled by
-    :func:`_expected_evaluators_for_task`) are filtered out.
-    """
-    from coding_agent_playbook.evals.task import evaluators_for_task
-
-    return [
-        ev
-        for ev in evaluators_for_task(task, policy)
-        if _is_deterministic(ev) and not isinstance(ev, _ExpectedEvaluator)
-    ]
-
-
-def _is_deterministic(evaluator: Evaluator) -> bool:
-    from coding_agent_playbook.evaluators import Determinism
-
-    return evaluator.determinism is Determinism.DETERMINISTIC
-
-
-# --------------------------------------------------------------------------- #
-# [expected] -> BOOL measurements (R3; routed through grade like every family)
-# --------------------------------------------------------------------------- #
-
-
-def _expected_evaluators_for_task(task: EvalTask) -> list[_ExpectedEvaluator]:
-    """The task's ``[expected]`` BOOL evaluator instances (the expected family).
-
-    Filters :func:`~coding_agent_playbook.evals.task.evaluators_for_task` down to
-    the :class:`~coding_agent_playbook.evaluators.expected._ExpectedEvaluator`
-    subclasses, the complement of :func:`_metric_evaluators_for_task`'s metric
-    selection.
-    """
-    from coding_agent_playbook.evals.task import evaluators_for_task
-
-    return [
-        ev for ev in evaluators_for_task(task, task.metrics) if isinstance(ev, _ExpectedEvaluator)
-    ]
-
-
-def _expected_measurements(
-    evaluators: list[_ExpectedEvaluator],
-    candidate: Candidate,
-    baseline: Baseline,
-) -> tuple[list[Measurement], dict[str, Evaluator]]:
-    """Run each ``[expected]`` evaluator over the candidate tree.
-
-    Returns the BOOL measurements plus a ``name -> evaluator`` map (the
-    un-registered ``expected:<kind>:<path>`` instances) so :func:`grade` can
-    resolve each measurement's must-be-true policy without a registry lookup. The
-    candidate tree is the post-agent scratch repo; the baseline tree is the
-    pristine ``setup/`` snapshot (the ``file_unchanged`` reference).
-    """
-    ctx = EvalContext(
-        module=None,
-        source="",
-        label=_EXPECTED_LABEL,
-        tree=candidate.tree,
-        baseline_tree=baseline.setup_snapshot,
-    )
-    measurements: list[Measurement] = []
-    by_name: dict[str, Evaluator] = {}
-    for evaluator in evaluators:
-        if evaluator.available(ctx):
-            measurements.extend(evaluator.evaluate(ctx))
-            by_name[evaluator.name] = evaluator
-    return measurements, by_name
-
-
-# --------------------------------------------------------------------------- #
-# [rubric] -> judged measurements (R2; only when a judge is configured)
-# --------------------------------------------------------------------------- #
-
-
-def _judged_evaluators_for_task(task: EvalTask) -> list[Evaluator]:
-    """The task's ``[rubric]`` :class:`JudgedCriterion` instances (judged family).
-
-    Filters :func:`~coding_agent_playbook.evals.task.evaluators_for_task` down to
-    the JUDGED determinism — the complement of :func:`_metric_evaluators_for_task`'s
-    deterministic selection.
-    """
-    from coding_agent_playbook.evals.task import evaluators_for_task
-    from coding_agent_playbook.evaluators import Determinism
-
-    return [
-        ev for ev in evaluators_for_task(task, task.metrics) if ev.determinism is Determinism.JUDGED
-    ]
-
-
-def _judged_measurements(
-    evaluators: list[Evaluator],
-    candidate: Candidate,
-    judge: JudgeLike,
-    samples: int,
-) -> tuple[list[Measurement], dict[str, Evaluator]]:
-    """Score each judged criterion over the candidate diff into SCORE measurements.
-
-    Returns the measurements plus a ``name -> evaluator`` map (the un-registered
-    ``judged:<slug>`` instances) so :func:`grade` can resolve each measurement's
-    policy without a registry lookup. The judged artifact is the candidate's
-    captured ``git diff`` (the agent's change), keyed on a stable ``rubric`` label.
-    """
-    ctx = EvalContext(
-        module=None,
-        source="",
-        label=_RUBRIC_LABEL,
-        judge=judge,
-        artifact=candidate.diff,
-        samples=samples,
-    )
-    measurements: list[Measurement] = []
-    by_name: dict[str, Evaluator] = {}
-    for evaluator in evaluators:
-        if evaluator.available(ctx):
-            measurements.extend(evaluator.evaluate(ctx))
-            by_name[evaluator.name] = evaluator
-    return measurements, by_name
+    return ProjectHandle.create(tree, report_dir)
 
 
 # --------------------------------------------------------------------------- #
@@ -267,12 +247,13 @@ def _judged_measurements(
 # --------------------------------------------------------------------------- #
 
 
-def _static_measurements(tree: Path, evaluators: list[Evaluator]) -> list[Measurement]:
-    """Run static evaluators over every ``*.py`` file under ``tree``.
+def _static_measurements(tree: Path, metrics: list[Metric]) -> list[Measurement]:
+    """Run static metrics over every ``*.py`` file under ``tree``.
 
     The label is the tree-relative POSIX path so a candidate file matches its
-    ``setup/`` baseline counterpart in :func:`grade` (same scope keys).
-    Unparseable files are skipped.
+    ``setup/`` baseline counterpart in the
+    :class:`~coding_agent_playbook.evaluators.check.MeasurementSet` (same scope
+    keys). Unparseable files are skipped.
     """
     measurements: list[Measurement] = []
     for path in _iter_py_files(tree):
@@ -286,9 +267,9 @@ def _static_measurements(tree: Path, evaluators: list[Evaluator]) -> list[Measur
         except SyntaxError:
             continue
         ctx = EvalContext(module=module, source=source, label=label)
-        for evaluator in evaluators:
-            if evaluator.available(ctx):
-                measurements.extend(evaluator.evaluate(ctx))
+        for metric in metrics:
+            if metric.available(ctx):
+                measurements.extend(metric.measure(ctx))
     return measurements
 
 
@@ -312,22 +293,23 @@ def _iter_py_files(root: Path) -> list[Path]:
 # --------------------------------------------------------------------------- #
 
 
-def _execution_measurements(tree: Path, evaluators: list[Evaluator]) -> list[Measurement]:
+def _execution_measurements(tree: Path, metrics: list[Metric]) -> list[Measurement]:
     """Run the suite once under ``tree`` and collect execution measurements.
 
-    Both execution evaluators read the same :class:`ProjectHandle`, so the suite
-    runs exactly once. The report dir is a throwaway temp dir. A suite that cannot
-    be launched (no pytest in the target env) yields no measurements rather than
-    failing the whole score — the deterministic ``[expected]`` layer still grades.
+    Both execution metrics read the same :class:`ProjectHandle`, so the suite
+    runs exactly once. The report dir is a throwaway temp dir. A suite that
+    cannot be launched (no pytest in the target env) yields no measurements
+    rather than failing the whole score — the deterministic ``[gate]`` layer
+    still grades.
     """
     measurements: list[Measurement] = []
     with tempfile.TemporaryDirectory(prefix="playbook-eval-reports-") as report_dir:
         handle = ProjectHandle.create(tree, Path(report_dir))
         ctx = EvalContext(module=None, source="", label=_SUITE_LABEL, project=handle)
         try:
-            for evaluator in evaluators:
-                if evaluator.available(ctx):
-                    measurements.extend(evaluator.evaluate(ctx))
+            for metric in metrics:
+                if metric.available(ctx):
+                    measurements.extend(metric.measure(ctx))
         except RuntimeError:
             return []
     return measurements

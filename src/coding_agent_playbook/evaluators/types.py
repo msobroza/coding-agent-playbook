@@ -1,12 +1,11 @@
-"""Evaluator dataclasses + policy types (SPEC prM §E).
+"""Metric/Check dataclasses + policy types (SPEC prM §E).
 
-These parallel the eval-side ``ExpectedOutcome``/``CheckResult`` dataclasses:
-small, mostly-frozen records that describe a *threshold* (``AbsoluteThreshold``),
-a *non-regression tolerance* (``RegressionPolicy``), a raw *measurement*, a
-graded *finding*, and the aggregate *report*. ``MetricConfig`` is the parsed
+Small, mostly-frozen records that describe a *threshold* (``AbsoluteThreshold``),
+a *non-regression tolerance* (``RegressionPolicy``), a raw *measurement*, a graded
+per-scope detail (``ScopeDetail``), a check outcome (``CheckResult``), and the
+aggregate *report* (``EvaluationReport``). ``MetricConfig`` is the parsed
 ``[metrics]`` config for the standalone gate; it satisfies the ``GradePolicy``
-``Protocol`` that ``grade()`` reads (the eval block-compiler will expose the same
-shape in a later track).
+``Protocol`` the ``Check`` policy resolution reads.
 """
 
 from __future__ import annotations
@@ -18,6 +17,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.evaluators.parse import ModuleModel
+    from coding_agent_playbook.evaluators.scope import CostTier, Determinism
 
 #: Levels a finding can carry.
 Level = Literal["ok", "warn", "fail"]
@@ -56,13 +56,17 @@ class Measurement:
 
 
 @dataclass(frozen=True)
-class Finding:
-    """A graded measurement: raw value + how it compared + the verdict.
+class ScopeDetail:
+    """A graded measurement for one scope: raw value + how it compared + verdict.
 
     ``baseline`` is the matched prior value (``None`` for a new scope), ``bound``
     is the absolute bound that decided the level (``None`` when a regression
     decided it), ``score`` is the normalized ``0-1`` value for the composite,
     ``level`` is ``ok|warn|fail`` and ``kind`` is ``absolute|regression|new``.
+
+    In the ``Metric``/``Check``/``Rubric`` model this is the leaf per-scope detail
+    a :class:`CheckResult` carries, and the row type the flat
+    :attr:`EvaluationReport.findings` list holds.
     """
 
     evaluator: str
@@ -76,18 +80,73 @@ class Finding:
 
 
 @dataclass
-class EvaluationReport:
-    """The aggregate output of :func:`grade`: every finding + the two verdicts.
+class CheckResult:
+    """The graded outcome of one ``Check`` (T1).
 
-    Mutable (unlike the records above) so callers can attach context as they
-    merge reports from several evaluator families.
+    A ``Check`` is the unit a ``Rubric`` schedules. ``score`` is the normalized
+    ``0-1`` contribution (``None`` when the check was skipped or yields no
+    score), ``weight`` is its composite weight, ``required`` marks a gate check,
+    and ``determinism``/``cost`` drive routing + cheapest-first scheduling.
+    ``status`` is ``"run"`` for a check that executed and ``"skipped"`` for one
+    that could not (e.g. a judged check with no ``Judge``). ``subresults`` is
+    recursive — a composing check (a nested ``Rubric``) carries child
+    :class:`CheckResult` objects, while a leaf check carries :class:`ScopeDetail`
+    rows. Mutable, like :class:`EvaluationReport`, so callers can attach context.
     """
 
-    findings: list[Finding]
+    check_id: str
+    passed: bool
+    score: float | None
+    weight: float
+    required: bool
+    determinism: Determinism
+    cost: CostTier
+    status: Literal["run", "skipped"] = "run"
+    subresults: tuple[ScopeDetail | CheckResult, ...] = ()
+    detail: str = ""
+
+
+@dataclass
+class EvaluationReport:
+    """The aggregate output of :meth:`Rubric.evaluate`: findings + the two verdicts.
+
+    Mutable (unlike the records above) so callers can attach context as they
+    merge reports from several check families. ``findings`` carries the flat
+    per-scope :class:`ScopeDetail` rows (the deterministic leaf details renderers
+    read); ``checks`` carries the structured :class:`CheckResult` rows.
+
+    ``verdict_score`` (C10) is the per-trial weighted-composite verdict score
+    over the gate/rubric layers when the task authored a weighted ``[verdict]``
+    (``weights``/``fail``); ``None`` for a boolean-mode verdict (the legacy
+    ``[verdict].trial`` form), and ``None`` for a weighted verdict whose
+    referenced layers were *all* skipped (vacuously passing). ``passed`` still
+    carries the trial verdict in both modes.
+    """
+
+    findings: list[ScopeDetail]
     warn_count: int
     fail_count: int
     composite: float | None
     passed: bool
+    checks: list[CheckResult] = field(default_factory=list)
+    verdict_score: float | None = None
+
+
+@dataclass(frozen=True)
+class TrialResult:
+    """One runner trial's per-trial report + its derived pass/fail verdict.
+
+    The across-trial aggregate layer (``[aggregate]``: ``pass@k`` / ``pass^k``)
+    reduces a list of these. ``report`` is the per-trial
+    :class:`EvaluationReport` (its ``checks`` expose the ``gate`` / ``rubric``
+    layers); ``verdict`` is the per-trial verdict already derived from those
+    layers (skipped-neutral). An :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
+    reads the per-trial boolean off each via
+    :func:`~coding_agent_playbook.evals._compile.over_boolean`.
+    """
+
+    report: EvaluationReport
+    verdict: bool
 
 
 @dataclass(frozen=True)
@@ -172,11 +231,28 @@ class EvalContext:
     ``None``/``1`` so static evaluators never touch them. ``judge`` is typed as
     the structural :class:`JudgeLike` so this package never imports ``evals``.
 
-    The ``[expected]`` evaluators
-    (:mod:`coding_agent_playbook.evaluators.expected`, R3) read ``tree`` (the
+    The ``[expected]`` file checks
+    (:mod:`coding_agent_playbook.evaluators.checks.files`) read ``tree`` (the
     candidate repo root after the agent ran) and ``baseline_tree`` (the pristine
     ``setup/`` snapshot, for the ``file_unchanged`` check). The runner sets both;
     every other family ignores them.
+
+    The two ``*_measurements`` fields (T4a) let a
+    :class:`~coding_agent_playbook.evaluators.rubric.Rubric` act as a
+    :class:`~coding_agent_playbook.evaluators.metric.Metric`: when a Rubric is
+    nested inside a parent Rubric, its :meth:`measure` self-builds a
+    :class:`~coding_agent_playbook.evaluators.check.MeasurementSet` from
+    ``candidate_measurements`` (and the optional ``baseline_measurements``) so the
+    nested rubric grades its own checks without the parent threading a separate
+    measurement set through. Both default to ``None``; every non-Rubric family
+    ignores them.
+
+    ``trials`` carries the across-trial run results the
+    :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
+    family reduces (``pass@k`` / ``pass^k``). The runner runs ``N = max(k)``
+    trials, collects one :class:`TrialResult` per trial, and grades the compiled
+    aggregate layer over a context carrying them; every other family ignores it
+    and it defaults to ``None`` (a single-trial run sets no aggregate context).
     """
 
     module: ModuleModel | None
@@ -188,3 +264,6 @@ class EvalContext:
     samples: int = 1
     tree: Path | None = None
     baseline_tree: Path | None = None
+    candidate_measurements: list[Measurement] | None = None
+    baseline_measurements: list[Measurement] | None = None
+    trials: list[TrialResult] | None = None

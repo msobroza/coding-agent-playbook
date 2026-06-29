@@ -1,20 +1,38 @@
-"""Eval-task validator. Enforces the five rules in SPEC §15.2.
+"""Eval-task validator. Enforces the SPEC §15.2 structural rules.
 
-Run by :mod:`coding_agent_playbook.commands.validate` to catch authoring
-mistakes at commit time. Each violation is aggregated; callers print them in
-order and exit non-zero if the list is non-empty.
+Run by :mod:`coding_agent_playbook.commands.validate` to catch authoring mistakes
+at commit time. Each violation is aggregated; callers print them in order and exit
+non-zero if the list is non-empty.
+
+The schema rules (``[gate]``/``[rubric]``/``[verdict]``) are checked by **trial-
+compiling** the task via :func:`~coding_agent_playbook.evals.task.compile_eval_task`
+and turning any :exc:`ValueError` / :exc:`KeyError` (incl.
+:exc:`~coding_agent_playbook.evals._expr.ExprError`, a ``ValueError`` subclass) into
+an :class:`EvalValidationError`. The compiler already validates: at-least-one
+layer present, unknown check ids / metric names / gate-refs / rubric-refs,
+malformed handle bindings, expression identifiers ⊄ bind keys, the rubric
+weight-sum, and verdict identifiers ⊄ present layers. The non-schema rules
+(setup.files exist, an authored ``setup/pyproject.toml`` parses, prompt_id
+resolves, prompt↔task back-reference symmetry) and a light ``[aggregate]``
+shape check are kept here.
 """
 
 from __future__ import annotations
 
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, get_args
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.evaluators.types import Mode
     from coding_agent_playbook.types import Prompt
+
+#: The aggregate handle ``metric`` axis the multi-trial layer recognizes.
+_AGGREGATE_METRICS = frozenset({"pass_at_k", "pass_pow_k"})
+
+#: The aggregate ``over`` axis a handle may reduce.
+_AGGREGATE_OVER = frozenset({"gate", "rubric", "verdict"})
 
 
 @dataclass(frozen=True)
@@ -35,18 +53,21 @@ def validate_tasks(
 
     1. Each ``task.toml`` is well-formed — enforced upstream by the loader;
        a task object reaching the validator has already passed parsing.
-    2. Each task's ``setup.files`` must exist under ``<task_dir>/setup/``.
-    3. Each task's ``prompt_id`` resolves to a known prompt.
-    4. Each task is listed in its referenced prompt's ``eval_tasks:``
-       frontmatter (task → prompt direction of the symmetry check).
-    5. Each prompt's ``eval_tasks:`` references an on-disk task
-       (prompt → task direction, per SPEC §6.5.5 rule 1).
-    6. Weights, if present, sum to ``1.0 ± 0.001`` — enforced upstream by
-       :meth:`EvalTask.from_dict` at load time; the validator does not
-       re-check (locked by ``test_validate_tasks_does_not_recheck_weights``).
-    7. The ``[metrics]`` block (SPEC prM §D), if present, is well-formed: a
-       valid ``mode``, every named evaluator is registered (static or
-       execution), and all bounds/deltas/weights are numbers.
+    2. The ``[gate]``/``[rubric]``/``[verdict]`` schema compiles cleanly —
+       trial-compile via :func:`compile_eval_task`, surfacing any compiler fault
+       (unknown check/metric/ref, malformed binding, expr idents ⊄ bind keys,
+       rubric weight-sum, verdict idents ⊄ present layers, no layer at all).
+    3. A light ``[aggregate]`` shape check (each handle names a known aggregate
+       ``metric``, an integer ``k >= 1``, and an ``over`` axis); the multi-trial
+       grading itself runs in the runner.
+    4. Each task's ``setup.files`` must exist under ``<task_dir>/setup/``.
+       When ``setup/pyproject.toml`` is present it must parse as TOML; dep
+       installability is the runner's concern (``uv sync``), not the validator's.
+    5. Each task's ``prompt_id`` resolves to a known prompt.
+    6. Each task is listed in its referenced prompt's ``eval_tasks:`` frontmatter
+       (task → prompt direction of the symmetry check).
+    7. Each prompt's ``eval_tasks:`` references an on-disk task (prompt → task
+       direction, per SPEC §6.5.5 rule 1).
 
     Aggregates every violation; never raises. Empty list means OK.
     """
@@ -55,11 +76,16 @@ def validate_tasks(
     tasks_by_id = {t.id: t for t in tasks}
 
     for task in tasks:
-        # Rule 7: validate the [metrics] block when present.
-        if task.metrics is not None:
-            errors.extend(_validate_metrics(task))
+        # Rule 2: the gate/rubric/verdict schema must compile.
+        errors.extend(_validate_schema(task))
 
-        # Rule 2: setup.files must exist relative to <task_dir>/setup/.
+        # Rule 3: light [aggregate] shape checks (multi-trial grading runs in the runner).
+        if task.aggregate is not None:
+            errors.extend(_validate_aggregate(task))
+
+        # Rule 4: setup.files must exist relative to <task_dir>/setup/, and an
+        # authored setup/pyproject.toml must parse as TOML. The runner installs
+        # its deps via ``uv sync``; installability is not validated here.
         task_dir = task.source_path.parent
         setup_root = task_dir / "setup"
         for declared in task.setup.files:
@@ -71,8 +97,19 @@ def validate_tasks(
                         message=(f"setup.files declares {declared} but {absolute} not found"),
                     )
                 )
+        pyproject = setup_root / "pyproject.toml"
+        if pyproject.is_file():
+            try:
+                tomllib.loads(pyproject.read_text(encoding="utf-8"))
+            except (OSError, tomllib.TOMLDecodeError) as exc:
+                errors.append(
+                    EvalValidationError(
+                        path=task.source_path,
+                        message=f"setup/pyproject.toml is not valid TOML: {exc}",
+                    )
+                )
 
-        # Rule 3: prompt_id must resolve to a known prompt.
+        # Rule 5: prompt_id must resolve to a known prompt.
         prompt = prompts_by_id.get(task.prompt_id)
         if prompt is None:
             errors.append(
@@ -81,11 +118,11 @@ def validate_tasks(
                     message=f"prompt_id {task.prompt_id!r} does not exist",
                 )
             )
-            # Rule 4 only meaningful when the prompt exists — skip the
+            # Rule 6 only meaningful when the prompt exists — skip the
             # back-reference check to avoid a confusing follow-on error.
             continue
 
-        # Rule 4: the prompt's eval_tasks: frontmatter must list this task.
+        # Rule 6: the prompt's eval_tasks: frontmatter must list this task.
         prompt_eval_tasks = prompt.frontmatter.eval_tasks or []
         if task.id not in prompt_eval_tasks:
             errors.append(
@@ -98,7 +135,7 @@ def validate_tasks(
                 )
             )
 
-    # Rule 5 (prompt → task direction): every eval_tasks: reference must
+    # Rule 7 (prompt → task direction): every eval_tasks: reference must
     # resolve to an on-disk task. Catches the case where a task was renamed
     # or deleted but its prompt still references it.
     for prompt in prompts:
@@ -120,73 +157,67 @@ def validate_tasks(
     return errors
 
 
-def _is_number(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+def _validate_schema(task: EvalTask) -> list[EvalValidationError]:
+    """Trial-compile the task; turn any compiler fault into a validation error.
 
-
-def _validate_metrics(task: EvalTask) -> list[EvalValidationError]:
-    """Validate a task's ``[metrics]`` block (SPEC prM §D).
-
-    Checks the ``mode`` is one of ``regression``/``absolute``/``both``; that
-    every evaluator named in ``thresholds``/``regression``/``weights`` is a known
-    registered evaluator (static **or** execution, e.g. ``coverage`` /
-    ``test_pass_rate``); and that all bounds, regression deltas, and weights are
-    numbers. Aggregates every violation; never raises.
+    :func:`compile_eval_task` raises :exc:`ValueError` (incl.
+    :exc:`~coding_agent_playbook.evals._expr.ExprError`) or :exc:`KeyError` on any
+    structural fault. A clean compile means the gate/rubric/verdict schema is
+    well-formed. Imported lazily so the validator module stays import-light and
+    free of any eval ↔ evaluator import cycle at module load.
     """
-    # Imported lazily so the validator module stays import-light and free of any
-    # eval ↔ evaluator import cycle at module load.
-    from coding_agent_playbook.evaluators.registry import all_evaluators
-    from coding_agent_playbook.evaluators.types import Mode
+    from coding_agent_playbook.evals.task import compile_eval_task
 
-    metrics = task.metrics
-    assert metrics is not None  # caller guards; narrows the type for mypy.
+    try:
+        compile_eval_task(task)
+    except (ValueError, KeyError) as exc:
+        # KeyError's str() carries surrounding quotes; strip them for a clean message.
+        detail = str(exc).strip("'\"") if isinstance(exc, KeyError) else str(exc)
+        return [EvalValidationError(path=task.source_path, message=detail)]
+    return []
+
+
+def _validate_aggregate(task: EvalTask) -> list[EvalValidationError]:
+    """Light shape check of the ``[aggregate.bind]`` handles (grading runs in the runner).
+
+    Each aggregate handle must name a known ``metric`` (``pass_at_k`` /
+    ``pass_pow_k``), an integer ``k >= 1``, and an ``over`` axis in
+    ``{"gate", "rubric", "verdict"}``. Aggregates every violation; never raises.
+    """
+    aggregate = task.aggregate
+    assert aggregate is not None  # caller guards; narrows for mypy.
     errors: list[EvalValidationError] = []
 
-    valid_modes: tuple[Mode, ...] = get_args(Mode)
-    if metrics.mode not in valid_modes:
-        errors.append(
-            EvalValidationError(
-                path=task.source_path,
-                message=(
-                    f"[metrics].mode {metrics.mode!r} is invalid; "
-                    f"must be one of {', '.join(valid_modes)}"
-                ),
-            )
-        )
-
-    known = {ev.name for ev in all_evaluators()}
-
-    def _check_name(name: str) -> None:
-        if name not in known:
+    for name, handle in aggregate.bind.items():
+        metric = handle.get("metric")
+        if metric not in _AGGREGATE_METRICS:
             errors.append(
                 EvalValidationError(
                     path=task.source_path,
-                    message=f"[metrics] names unknown evaluator {name!r}",
+                    message=(
+                        f"[aggregate.bind.{name}] metric {metric!r} is invalid; "
+                        f"must be one of {', '.join(sorted(_AGGREGATE_METRICS))}"
+                    ),
                 )
             )
-
-    def _check_number(name: str, label: str, value: Any) -> None:
-        if value is None:
-            return
-        if not _is_number(value):
+        k = handle.get("k")
+        if not isinstance(k, int) or isinstance(k, bool) or k < 1:
             errors.append(
                 EvalValidationError(
                     path=task.source_path,
-                    message=f"[metrics] {label} for {name!r} must be numeric, got {value!r}",
+                    message=f"[aggregate.bind.{name}] k must be an integer >= 1, got {k!r}",
                 )
             )
-
-    for name, threshold in metrics.thresholds.items():
-        _check_name(name)
-        _check_number(name, "thresholds.warn", threshold.warn)
-        _check_number(name, "thresholds.fail", threshold.fail)
-
-    for name, policy in metrics.regression.items():
-        _check_name(name)
-        _check_number(name, "regression.max_worsening", policy.max_worsening)
-
-    for name, weight in metrics.weights.items():
-        _check_name(name)
-        _check_number(name, "weights", weight)
+        over = handle.get("over")
+        if over not in _AGGREGATE_OVER:
+            errors.append(
+                EvalValidationError(
+                    path=task.source_path,
+                    message=(
+                        f"[aggregate.bind.{name}] over {over!r} is invalid; "
+                        f"must be one of {', '.join(sorted(_AGGREGATE_OVER))}"
+                    ),
+                )
+            )
 
     return errors

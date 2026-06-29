@@ -31,8 +31,9 @@ Multi-harness playbook engine
   produced each artifact, so regenerations are reproducible and reviewable in a
   diff.
 - **Quality is measurable.** Prompts can declare paired eval tasks (positive +
-  false-positive guards), so prompt behavior is testable rather than vibes
-  (Tier 0 schema today; runner in v2).
+  false-positive guards), so prompt behavior is testable rather than vibes —
+  authored as `[gate]` / `[rubric]` layers and run end-to-end with
+  `playbook eval --run`.
 
 ## Status
 
@@ -211,11 +212,11 @@ playbook metrics src tests --format json      # machine-readable findings
 playbook metrics --strict                     # promote warnings to failures (non-zero exit)
 ```
 
-It exits `0` on pass, `1` on a breach, and `2` on a usage error (bad path, bad baseline, malformed `[metrics]` config). Defaults and per-evaluator thresholds live in a `[metrics]` table in `.coding-agent-playbook.toml`.
+It exits `0` on pass, `1` on a breach, and `2` on a usage error (bad path, bad baseline, malformed `[metrics]` config). Defaults and per-metric thresholds live in a `[metrics]` table in `.coding-agent-playbook.toml`. Under the hood each metric is wrapped in a **check** (a threshold or non-regression grader) and the checks are folded into one **rubric** report — the `Metric` / `Check` / `Rubric` model (see SPEC §21).
 
 ### Running tests and coverage (`--run-tests`)
 
-`--run-tests` additionally runs **execution** evaluators — `test_pass_rate` and `coverage` — which shell out to your project's own `pytest` (and `pytest-cov`) and parse the standard junit/coverage XML. These have side effects and cost, so they are **opt-in and never part of the default pre-commit hook**; run them in CI or on demand:
+`--run-tests` additionally runs the **execution** metrics — `test_pass_rate` and `coverage` — which shell out to your project's own `pytest` (and `pytest-cov`) and parse the standard junit/coverage XML. These have side effects and cost, so they are **opt-in and never part of the default pre-commit hook**; run them in CI or on demand:
 
 ```bash
 playbook metrics --run-tests                          # also run the suite + measure coverage
@@ -227,7 +228,7 @@ The engine adds no dependency for this — your target project supplies `pytest`
 
 ### The `metrics` optional extra (maintainability index)
 
-The core gate is **stdlib-only** and runs with nothing extra installed. The maintainability index is the one metric backed by [`radon`](https://radon.readthedocs.io/), so it ships as an optional extra; without it that single evaluator is transparently skipped:
+The core gate is **stdlib-only** and runs with nothing extra installed. The maintainability index is the one metric backed by [`radon`](https://radon.readthedocs.io/), so it ships as an optional extra; without it that single metric is transparently skipped:
 
 ```bash
 pip install 'coding-agent-playbook[metrics]'   # adds radon for maintainability_index
@@ -242,7 +243,10 @@ playbook eval refactor-extract-helper --run --runner claude_code   # real: drive
 playbook eval refactor-extract-helper --run --runner opencode       # real: drive the OpenCode CLI
 playbook eval refactor-extract-helper --run --runner fake          # hermetic demo / CI: no network, no CLI
 playbook eval refactor-extract-helper --run --judge llm --samples 3 # also score [rubric] via an LLM judge
+playbook eval refactor-extract-helper --run --full-scoring          # run every check (no short-circuit)
 playbook eval refactor-extract-helper --run --format json          # machine-readable report
 ```
 
-The task's `[expected]` file checks and `[metrics]` static/execution evaluators are scored **deterministically** (non-regression vs the `setup/` baseline) into one report, rendered like `playbook metrics`. Two opt-in real runners ship — `claude_code` (the default, drives the `claude` CLI) and `opencode` (drives the `opencode` CLI) — both `available()`-gated on their binary and never exercised in CI; `--runner fake` is the hermetic driver for demos and CI. There is no `--run-tests` flag — an eval task declares execution intent in its own `[metrics]` block. Exit `0` on a passing report, `1` on a failing one, `2` on a usage error (unknown task/runner, or a real runner whose CLI is not on `PATH`). Judged `[rubric]` scoring (v1.1 R2) is **opt-in via `--judge`**: pick a judge from the `coding_agent_playbook.judges` group (the shipped `llm` shells out to the `claude` CLI, `available()`-gated), and `--samples N` averages N gradings per criterion. Omit `--judge` for a deterministic-only run.
+A task declares its success criteria as **layers** (SPEC §6.5.3): a deterministic `[gate]` (file + metric checks composed by a tiny boolean `expr`), an optional llm-judge `[rubric]` (weighted criteria), a `[verdict]` (a boolean expression over the two layers), and an optional cross-trial `[aggregate]` (`pass@k` / `pass^k`). They compile into one **rubric** of checks (the `Metric` / `Check` / `Rubric` model, SPEC §21): the `[gate]` layer — file predicates (`file_exists` / `file_contains` / `file_unchanged` / `file_forbidden`) and static/execution metric checks (0–1 normalized thresholds, non-regression vs the `setup/` baseline) — is scored **deterministically** into one report, rendered like `playbook metrics`, and the per-trial verdict is **derived** from the layer results. Two opt-in real runners ship — `claude_code` (the default, drives the `claude` CLI) and `opencode` (drives the `opencode` CLI) — both `available()`-gated on their binary and never exercised in CI; `--runner fake` is the hermetic driver for demos and CI. There is no `--run-tests` flag — a task runs the suite iff its `[gate]` references an execution metric (`coverage` / `test_pass_rate`). Exit `0` on a passing report, `1` on a failing one, `2` on a usage error (unknown task/runner, or a real runner whose CLI is not on `PATH`). Judged `[rubric]` scoring (v1.1 R2) is **opt-in via `--judge`**: pick a judge from the `coding_agent_playbook.judges` group (the shipped `llm` shells out to the `claude` CLI, `available()`-gated), and `--samples N` averages N gradings per criterion. Omit `--judge` for a deterministic-only run (the rubric layer skips; a skipped layer is neutral in the verdict). A cost-tiered scheduler runs the cheap deterministic checks first and **short-circuits once the gate is lost** — so a failing file/metric check never spends an LLM call; `--full-scoring` forces every check to run for a complete report.
+
+A handle can also `{ref = "name"}` a **named gate or rubric** instead of inlining: in the `[gate]` layer it resolves a composed boolean gate registered via `@register_gate` (the `coding_agent_playbook.gates` group), in the `[rubric]` layer a code-defined `Rubric` subclass registered via `@register_rubric` (the `coding_agent_playbook.rubrics` group) — so several tasks share one gate/rubric by name. The engine ships no builtin gates or rubrics; both are third-party extension points.

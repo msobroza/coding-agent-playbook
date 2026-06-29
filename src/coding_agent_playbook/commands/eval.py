@@ -44,6 +44,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.evaluators.types import ScopeDetail
 from coding_agent_playbook.orchestrator import SyncContext
 
 if TYPE_CHECKING:
@@ -52,6 +53,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evals.judge import Judge
     from coding_agent_playbook.evals.runner import HarnessRunner, TaskResult
     from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.evaluators.types import CheckResult
     from coding_agent_playbook.types import Prompt
 
 
@@ -170,17 +172,30 @@ def _run_task_cli(args: argparse.Namespace, repo_root: Path) -> int:
         judge = judge_cls()
 
     samples = getattr(args, "samples", None) or 1
+    # Fail-fast is ON by default (a lost deterministic gate skips the costlier
+    # judge tier); --full-scoring grades every check unconditionally.
+    fail_fast = not bool(getattr(args, "full_scoring", False))
 
     runner = runner_cls()
     with tempfile.TemporaryDirectory(prefix="playbook-eval-") as tmp:
-        result = runner.run_task(task, Path(tmp) / "scratch", judge=judge, samples=samples)
+        result = runner.run_task(
+            task,
+            Path(tmp) / "scratch",
+            judge=judge,
+            samples=samples,
+            fail_fast=fail_fast,
+        )
 
     if fmt == "json":
         print(json.dumps(_result_to_dict(result), indent=2, sort_keys=True))
     else:
         print(_format_result_text(result))
 
-    return 0 if result.report.passed else 1
+    # The task verdict is ``result.passed`` — the single trial's verdict for a
+    # non-aggregate task (== report.passed), or the [aggregate] layer's pass/fail
+    # when the task aggregates across trials. ``report.passed`` alone would be
+    # only the *first* trial's verdict, so map the exit code off ``result.passed``.
+    return 0 if result.passed else 1
 
 
 def _load_task(task_id: str, repo_root: Path) -> EvalTask | None:
@@ -245,35 +260,131 @@ def _runner_available(runner_cls: type[HarnessRunner]) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Report rendering (reuses commands/metrics.py's EvaluationReport renderer)
+# Report rendering (Metric/Check/Rubric: iterate report.checks → subresults)
 # --------------------------------------------------------------------------- #
 
 
 def _result_to_dict(result: TaskResult) -> dict[str, object]:
-    """Stable JSON view of a :class:`TaskResult` (task envelope + the report)."""
-    from coding_agent_playbook.commands.metrics import _report_to_dict
+    """Stable JSON view of a :class:`TaskResult` (task envelope + the report).
 
-    return {
+    The report is rendered as the list of :class:`CheckResult` rows the
+    :class:`~coding_agent_playbook.evaluators.rubric.Rubric` produced, each with
+    its flattened per-scope :class:`ScopeDetail` ``subresults``. The flat
+    ``findings`` list is kept too (transitional) so existing JSON consumers that
+    read ``report.findings`` keep working.
+    """
+    report = result.report
+    out: dict[str, object] = {
         "task_id": result.task_id,
         "harness": result.harness,
         "passed": result.passed,
         "aggregate_score": result.aggregate_score,
         "duration_seconds": result.duration_seconds,
-        "report": _report_to_dict(result.report),
+        "report": {
+            "passed": report.passed,
+            "warn_count": report.warn_count,
+            "fail_count": report.fail_count,
+            "composite": report.composite,
+            "checks": [_check_to_dict(c) for c in report.checks],
+            "findings": [_finding_to_dict(f) for f in report.findings],
+        },
+    }
+    # Across-trial aggregate: present only when the task authored an
+    # [aggregate] block. ``trials`` is the per-trial pass/fail sequence.
+    if result.aggregate is not None:
+        out["trials"] = len(result.trials)
+        out["aggregate"] = _check_to_dict(result.aggregate)
+        out["trial_verdicts"] = [t.verdict for t in result.trials]
+    return out
+
+
+def _check_to_dict(check: CheckResult) -> dict[str, object]:
+    """Stable JSON view of one :class:`CheckResult` + its leaf ``subresults``."""
+    return {
+        "check_id": check.check_id,
+        "passed": check.passed,
+        "score": check.score,
+        "weight": check.weight,
+        "required": check.required,
+        "status": check.status,
+        "subresults": [
+            _finding_to_dict(sub) for sub in check.subresults if isinstance(sub, ScopeDetail)
+        ],
+    }
+
+
+def _finding_to_dict(finding: ScopeDetail) -> dict[str, object]:
+    """Stable JSON view of one per-scope :class:`ScopeDetail` leaf."""
+    return {
+        "evaluator": finding.evaluator,
+        "scope_key": finding.scope_key,
+        "value": finding.value,
+        "baseline": finding.baseline,
+        "bound": finding.bound,
+        "score": finding.score,
+        "level": finding.level,
+        "kind": finding.kind,
     }
 
 
 def _format_result_text(result: TaskResult) -> str:
-    """Human view: the metrics-style findings block + a per-task footer."""
-    from coding_agent_playbook.commands.metrics import _format_text
+    """Human view: per-check blocks (each with its scope leaves) + a footer."""
+    report = result.report
+    lines: list[str] = ["=== Eval scoring ==="]
 
-    body = _format_text(result.report, skipped=[], note=None, measured_count=0)
+    run_checks = [c for c in report.checks if c.status == "run"]
+    if not run_checks:
+        lines.append("  (no checks ran)")
+    for check in run_checks:
+        verdict = "PASS" if check.passed else "FAIL"
+        score = "n/a" if check.score is None else f"{check.score:.3f}"
+        lines.append(f"  [{verdict}] {check.check_id} (score={score})")
+        for sub in check.subresults:
+            if not isinstance(sub, ScopeDetail) or sub.level == "ok":
+                continue
+            detail = _scope_detail(sub)
+            lines.append(
+                f"      [{sub.level}] {sub.evaluator} @ {sub.scope_key} "
+                f"= {sub.value:g} ({sub.kind}{detail})"
+            )
+
+    skipped = [c for c in report.checks if c.status == "skipped"]
+    for check in skipped:
+        lines.append(f"  [skip] {check.check_id}")
+
+    composite = "n/a" if report.composite is None else f"{report.composite:.3f}"
     verdict = "PASS" if result.passed else "FAIL"
+    lines.append(
+        f"  summary: {verdict} — {report.fail_count} fail, {report.warn_count} warn, "
+        f"composite={composite}"
+    )
+
+    # Across-trial aggregate: pass@k / pass^k over N trials, when present.
+    if result.aggregate is not None:
+        agg = result.aggregate
+        agg_verdict = "PASS" if agg.passed else "FAIL"
+        score = "n/a" if agg.score is None else f"{agg.score:.3f}"
+        n_pass = sum(1 for t in result.trials if t.verdict)
+        n = len(result.trials)
+        lines.append(
+            f"  aggregate: {agg.check_id} = {score} ({agg_verdict}), "
+            f"{n} trials ({n_pass}/{n} passed)"
+        )
+
     footer = (
         f"  task: {result.task_id} via {result.harness} — {verdict} "
         f"(score={result.aggregate_score:.3f}, {result.duration_seconds:.2f}s)"
     )
-    return f"{body}\n{footer}"
+    return "\n".join([*lines, footer])
+
+
+def _scope_detail(sub: ScopeDetail) -> str:
+    """A short suffix describing the comparison that decided a scope leaf."""
+    if sub.kind == "regression" and sub.baseline is not None:
+        return f"; baseline={sub.baseline:g}"
+    if sub.bound is not None:
+        return f"; bound={sub.bound:g}"
+    return ""
 
 
 def _print_list(prompts: list[Prompt], tasks: list[EvalTask]) -> int:
@@ -328,11 +439,10 @@ def _print_list(prompts: list[Prompt], tasks: list[EvalTask]) -> int:
             sub_connector = "    " if is_last else "│   "
             id_padded = f"{task.id:<36}"
             lines.append(f"  {connector} {id_padded}✓ task defined")
-            criteria_count = len(task.rubric.criteria) if task.rubric else 0
-            checks_count = _count_programmatic_checks(task)
+            criteria_count = _count_rubric_criteria(task)
+            checks_count = _count_gate_checks(task)
             lines.append(
-                f"  {sub_connector}└── "
-                f"{criteria_count} rubric criteria, {checks_count} programmatic checks"
+                f"  {sub_connector}└── {criteria_count} rubric criteria, {checks_count} gate checks"
             )
 
     # Blank separator between the per-prompt blocks and the Total: line
@@ -382,11 +492,13 @@ def _print_show(task_id: str, tasks: list[EvalTask], prompts: list[Prompt]) -> i
     lines.append(f"Prompt under test: {task.prompt_id}")
     lines.append(f"Description: {task.description}")
     lines.append("Setup:")
-    facts = (
-        f"python_version={task.setup.python_version}, "
-        f"frameworks=[{', '.join(task.setup.frameworks)}]"
-    )
-    lines.append(f"  Mock facts: {facts}")
+    # ``project_kind`` is the lone mock-detector fact carried by [setup] (the
+    # other facts — python version, deps — live in setup/pyproject.toml since
+    # C11). Any extras (e.g. ``ml_stack``) print alongside it.
+    fact_bits = [f"project_kind={task.setup.project_kind}"]
+    for key, value in sorted(task.setup.extra_facts.items()):
+        fact_bits.append(f"{key}={value!r}")
+    lines.append(f"  Mock facts: {', '.join(fact_bits)}")
     files_list = ", ".join(str(p) for p in task.setup.files) or "(none)"
     lines.append(f"  Files ({len(task.setup.files)}): {files_list}")
     lines.append("Invocation:")
@@ -403,39 +515,25 @@ def _print_show(task_id: str, tasks: list[EvalTask], prompts: list[Prompt]) -> i
         bindings = ", ".join(f"{k}={v}" for k, v in task.invocation.input_variables.items())
         lines.append(f"  Variables: {bindings}")
 
-    if task.expected is None:
-        lines.append("Expected: (none)")
+    if task.gate is None:
+        lines.append("Gate: (none)")
     else:
-        checks_count = _count_programmatic_checks(task)
-        lines.append(f"Expected (programmatic, {checks_count} checks):")
-        for created in task.expected.files_created:
-            lines.append(f"  - File created: {created}")
-        for entry in task.expected.files_must_contain:
-            lines.append(f"  - {entry['path']} contains: {entry['pattern']}")
-        for unchanged in task.expected.files_unchanged:
-            lines.append(f"  - File unchanged: {unchanged}")
-        for forbidden in task.expected.files_forbidden:
-            lines.append(f"  - File forbidden: {forbidden}")
+        gate_checks = _gate_check_descriptions(task)
+        expr = task.gate.expr or " and ".join(task.gate.bind) or "(empty)"
+        lines.append(f"Gate (deterministic, {len(gate_checks)} checks, expr: {expr}):")
+        for desc in gate_checks:
+            lines.append(f"  - {desc}")
 
     if task.rubric is None:
         lines.append("Rubric: (none)")
     else:
-        if task.rubric.weights is not None:
-            total = sum(task.rubric.weights)
-            header = (
-                f"Rubric (manual / LLM-judge, {len(task.rubric.criteria)} criteria, "
-                f"weights sum={total:.1f}):"
-            )
-            lines.append(header)
-            for weight, criterion in zip(task.rubric.weights, task.rubric.criteria, strict=True):
-                lines.append(f"  - {weight}: {criterion}")
-        else:
-            lines.append(
-                f"Rubric (manual / LLM-judge, {len(task.rubric.criteria)} criteria, "
-                "weights=uniform):"
-            )
-            for criterion in task.rubric.criteria:
-                lines.append(f"  - {criterion}")
+        criteria = _rubric_criteria_with_weights(task)
+        lines.append(f"Rubric (manual / LLM-judge, {len(criteria)} criteria):")
+        for weight, criterion in criteria:
+            prefix = "" if weight is None else f"{weight}: "
+            lines.append(f"  - {prefix}{criterion}")
+
+    lines.append(f"Verdict: {task.verdict}")
 
     print("\n".join(lines))
     return 0
@@ -515,13 +613,79 @@ def _display_source_path(task: EvalTask) -> str:
     return f"{task.source_package}/{task.source_path.parent.name}/"
 
 
-def _count_programmatic_checks(task: EvalTask) -> int:
-    """Sum every entry across the four ``ExpectedOutcome`` lists."""
-    if task.expected is None:
+def _count_gate_checks(task: EvalTask) -> int:
+    """Number of top-level ``[gate.bind]`` handles (the deterministic gate checks).
+
+    A composed handle (an ``all_of``/``any_of`` group) counts as one — the summary
+    line is a coarse handle count, not a deep leaf count.
+    """
+    if task.gate is None:
         return 0
-    return (
-        len(task.expected.files_created)
-        + len(task.expected.files_must_contain)
-        + len(task.expected.files_unchanged)
-        + len(task.expected.files_forbidden)
-    )
+    return len(task.gate.bind)
+
+
+def _count_rubric_criteria(task: EvalTask) -> int:
+    """Number of judged criteria the ``[rubric.bind]`` rubric groups declare."""
+    return len(_rubric_criteria_with_weights(task))
+
+
+def _gate_check_descriptions(task: EvalTask) -> list[str]:
+    """A one-line description of each ``[gate.bind]`` handle for ``--show``.
+
+    Renders the handle name + a short shape summary (the ``check`` kind +
+    path/pattern for a standalone file/threshold check, or the boolean-group /
+    ref shape). Reads the raw binding tables — no compilation — so ``--show`` works
+    even on a task that would fail to compile.
+    """
+    if task.gate is None:
+        return []
+    out: list[str] = []
+    for name, binding in task.gate.bind.items():
+        out.append(f"{name}: {_describe_binding(binding)}")
+    return out
+
+
+def _describe_binding(binding: dict[str, object]) -> str:
+    """Short human description of one handle binding (its shape + key fields)."""
+    if "check" in binding:
+        kind = binding["check"]
+        path = binding.get("path")
+        pattern = binding.get("pattern")
+        detail = f" {path}" if path else ""
+        detail += f" ~/{pattern}/" if pattern else ""
+        return f"check {kind}{detail}"
+    if "ref" in binding:
+        return f"ref {binding['ref']}"
+    if "rubric" in binding:
+        criteria = binding["rubric"]
+        n = len(criteria) if isinstance(criteria, list) else 0
+        return f"rubric ({n} criteria)"
+    for group in ("all_of", "any_of", "not"):
+        if group in binding:
+            return f"{group} group"
+    return "(unknown)"
+
+
+def _rubric_criteria_with_weights(task: EvalTask) -> list[tuple[float | None, str]]:
+    """The ``(weight, criterion)`` pairs across every ``[rubric.bind]`` rubric group.
+
+    Reads the raw binding tables (no compilation): each ``rubric`` group's entries
+    are ``{judge=…, weight=…}``, flattened across all rubric-group handles. A
+    non-``rubric`` handle (a ref or composed boolean) contributes nothing here.
+    """
+    if task.rubric is None:
+        return []
+    out: list[tuple[float | None, str]] = []
+    for binding in task.rubric.bind.values():
+        criteria = binding.get("rubric")
+        if not isinstance(criteria, list):
+            continue
+        for entry in criteria:
+            if not isinstance(entry, dict):
+                continue
+            judge = entry.get("judge")
+            weight = entry.get("weight")
+            if isinstance(judge, str):
+                w = float(weight) if isinstance(weight, (int, float)) else None
+                out.append((w, judge))
+    return out
