@@ -72,6 +72,7 @@ Design: `specs/prR2-judge-r3-opencode.md` (Tracks E + O), with Track E refactore
 - **`AGENTS.md` is always generated**, regardless of which adapters are enabled.
 - **Rules cannot include other rules.** Only prompts have `includes_rules:`; the `rule()` Jinja helper is registered only when rendering prompts.
 - **No HTTP-handler hooks by default** — the engine is air-gapped-friendly. No telemetry, ever.
+- **Markdown links in artifacts are self-contained (PR L).** Every link in a rule/prompt/skill body (incl. skill `references/*.md`) must resolve to a file inside its source layer (package `resources/` or repo-local `playbook/`); `http(s)` links pass only via `[links] allowed_domains` in `.coding-agent-playbook.toml` (default empty), all other schemes and absolute paths are violations. Deterministic (stdlib, no network): `links.py` + the `playbook validate` rule; the engine's own artifacts are CI-gated by `tests/cli/test_validate_links.py`. Design: `specs/prL-markdown-links.md`; SPEC §12.6/§7.1.
 
 ### Agent Harness adapter invariants (PR H)
 

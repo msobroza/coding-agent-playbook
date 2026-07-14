@@ -1,14 +1,15 @@
 # SPEC.md — coding-agent-playbook
 | Field | Value |
 | --- | --- |
-| Version | 0.13 (draft) |
+| Version | 0.14 (draft) |
 | Status | Proposed |
-| Last updated | 2026-06-29 |
+| Last updated | 2026-07-14 |
 | Authors | Max Pereira, with Claude |
 | Audience | Implementers, reviewers, future contributors |
 | License | Apache-2.0 (engine); organization overlays may be private |
 
 **Changelog**
+- **0.14** — Self-contained markdown links (PR L): every markdown link in every canonical artifact (rules, prompts, skills incl. `references/`) must be **self-contained** — relative targets resolve to a file inside the artifact's source layer (the package `resources/` or repo-local `playbook/`; `..`-escapes, absolute paths, and non-`http(s)` schemes are violations), and `http(s)` links pass only through the new `[links] allowed_domains` allowlist (default empty = fully strict). Deterministic (stdlib-only, no network), extraction masks frontmatter/code fences/inline code. New `links.py` + `config.parse_links_config` + a `playbook validate` rule (§12.6, §7.1); the engine's own artifacts are gated on CI by a pytest integration test. Design: `specs/prL-markdown-links.md`.
 - **0.13** — Eval task-config redesign ("2b refined", Tracks C1–C8): the `[expected]`/`[metrics]`/`[rubric]` triple is replaced by a **layered** task config. Three layers share one `[<layer>.bind]` + `[<layer>].expr` shape — **`[gate]`** (deterministic boolean), **`[rubric]`** (llm-judge weighted), and an optional cross-trial **`[aggregate]`** — composed by a tiny boolean-expression DSL; `[verdict].trial` is a boolean expression over the layers, and the **verdict is *derived*** from the layer results (not re-run). There is **no `[expected]` block** — file predicates are gate `check`s (`file_exists`/`file_contains`/`file_unchanged`/`file_forbidden`). Thresholds are now **0–1 normalized**: every `Metric` owns a `Normalizer` (`evaluators/normalizer.py`: `RampNormalizer`/`PercentNormalizer`/`Identity`) mapping raw→0–1 goodness (higher = better), and `higher_is_worse` is **deleted** — `warn`/`fail`/`max_worsening` are 0–1 cutoffs. A check is `(type) × (metric|judge) × kwargs`: `check = "threshold"|"non_regression"` over a registered `metric=` **or** a `judge=` criterion (a `JudgeMetric` — an llm-judge criterion **is a metric**). New registries: checks via `@register_check` + `coding_agent_playbook.checks`, gates via `@register_gate` + the new **`coding_agent_playbook.gates`**; `{ref="name"}` resolves a registered composed **gate** or **rubric**. The `[aggregate]` layer is the same bind+expr shape over `pass_at_k`/`pass_pow_k` (`k` kwarg, `over ∈ {gate,rubric,verdict}`); the runner runs `N=max(k)` trials. Deleted from the prior model: the `[expected]`/`[metrics]`-triple authoring, `higher_is_worse`, `rubric_for_task`, `ExpectedOutcome`. Authoritative design: `specs/pr2b-task-config.md`; migration: `MIGRATION.md` (§6.5, §15.2/§15.3/§15.3.1, §21).
 - **0.12** — Evaluator subsystem refactor (PR R6 — clean-slate): the fused `Evaluator` ABC + free `grade()` are replaced by three single-responsibility abstractions — **`Metric`** (`measure(ctx) -> list[Measurement]`), **`Check`** (`grade(ctx, measurements) -> CheckResult`, a boolean gate + optional partial-credit score), and **`Rubric`** (a weighted set of checks; `evaluate(ctx, measurements) -> EvaluationReport`). `Rubric` **is also a `Metric`** (it surfaces its composite via `measure()`), so a rubric thresholds into a check and nests into a Composite tree. A cost-tiered (`CostTier` DETERMINISTIC < EXECUTION < JUDGED) `scheduler` runs checks cheapest-tier-first with short-circuit, so a failing deterministic check **never invokes the LLM judge** (`playbook eval --run --full-scoring` forces every check). Entry-point groups are renamed/split: out-of-tree metrics register under **`coding_agent_playbook.metrics`** (was `…​.evaluators`), custom graders under the new **`coding_agent_playbook.checks`**. `grade()` is replaced by `Rubric.evaluate`; the `extra_evaluators` side-channel, `value_kind`/`to_score`, the weight-0/fail-floor `[expected]` hack, and `evaluators_for_task` are deleted. The authored `[expected]`/`[metrics]`/`[rubric]` task TOML is **unchanged** (zero authoring migration). Authoritative design: `specs/prR6-check-rubric.md`; migration guide: `MIGRATION.md` (§15.3/§15.3.1, §21).
 - **0.11** — Judged scoring + `[expected]` unification + a second real runner (PR R2/R3): the judge is **live**. `Judge.score_criterion(criterion, artifact, n)` is the canonical per-criterion primitive (Option A; batch `score()` wraps it), with the opt-in `LLMJudge` (`name="llm"`, shells out to the `claude` CLI, `available()`-gated, never in CI) via the `coding_agent_playbook.judges` group. There is **no `ProgrammaticOnlyJudge`** — deterministic-only is simply no judge configured (`ctx.judge is None`). `[expected]` file checks are now **unified** into `evaluators_for_task` as real BOOL deterministic `Evaluator`s (`evaluators/expected.py`); the R1 interim inline compile is removed, so `[expected]` + `[metrics]` + (with a judge) `[rubric]` all flow through one `grade(…, extra_evaluators=…)` call. New opt-in **`OpenCodeRunner`** (`name="opencode"`, `available()`-gated, never in CI) joins `FakeRunner`/`ClaudeCodeRunner`. CLI: `playbook eval <id> --run [--judge llm] [--samples N]` (default no judge ⇒ deterministic-only). The §21.2.3 `Judge.score` signature debt is closed (§15.3/§15.3.1, §12.8, §21.2.3).
@@ -874,6 +875,11 @@ enabled = ["continue", "claude_code", "opencode"]
 # v1 ships only "filesystem"; future deployments can add others.
 artifact_source = "filesystem"
 state_source = "filesystem"
+[links]
+# External-link allowlist for the self-contained-markdown-links rule
+# (Section 12.6). Default: [] — no external links in artifacts at all.
+# Subdomains of an entry are allowed too.
+allowed_domains = ["agentharnesses.io"]
 [detector.cache]
 # Cached detector output. Refreshed on pyproject.toml change or `playbook check --refresh`.
 python_version = "3.12"
@@ -1471,13 +1477,18 @@ $ playbook validate
 ✓ All `{{ rule() }}` calls match `includes_rules:` declarations
 ✓ All `eval_tasks:` references resolve to existing tasks
 ✓ All task `prompt_id` back-references match a prompt's `eval_tasks:` list
+✓ All markdown links self-contained (relative targets resolve; externals allowlisted)
 ✗ rules/frameworks/sqlalchemy-v2.md.j2: applies_if references unknown fact 'orm_version'
 ✗ prompts/refactor.md.j2: body calls `{{ rule("python-style") }}` but rule not in includes_rules
 ✗ rules/languages/python/typing.md.j2: body calls `{{ rule(...) }}` — rules cannot include other rules
 ✗ eval_tasks/orphan-task/task.toml: prompt_id 'deleted-prompt' does not exist
 ✗ prompts/generate-tests.md.j2: declares eval_task 'foo-bar' but eval_tasks/foo-bar/ not found
+✗ rules/languages/python/typing.md.j2: markdown link 'style.md' (line 12): target 'style.md' does not exist in the artifact set
+✗ prompts/review.md.j2: markdown link 'https://blog.example.com/x' (line 4): external link to host 'blog.example.com' is not in [links] allowed_domains
 exit code: 1
 ```
+
+The self-contained-links rule (PR L, design in `specs/prL-markdown-links.md`) covers rule bodies, prompt bodies, and skills (`SKILL.md` + every markdown file under `references/`) across all three source layers. Extraction masks frontmatter, fenced code blocks, and inline code spans (code examples like `def first[T](items: list[T])` are not links); Jinja-bearing targets are skipped as not statically checkable. Relative targets must resolve — `other.md` is satisfied by a canonical `other.md.j2` since rendering drops the suffix — and must stay inside the artifact's source layer; `http(s)` targets pass only via `[links] allowed_domains` (§7.1); every other scheme and absolute paths are violations. Deterministic by construction: stdlib only, no network. The engine's own shipped artifacts are enforced on CI by a pytest integration test (`tests/cli/test_validate_links.py`); consumer repos and overlays inherit the rule through `playbook validate`.
 ### 12.7 `playbook render` (debug)
 Render a single artifact to stdout for debugging. Does not write.
 ```
@@ -2376,6 +2387,12 @@ Notes on sequencing:
 *End of SPEC.md v0.13.*
 ---
 ## Changelog
+### v0.14 (2026-07-14)
+Self-contained markdown links in canonical artifacts (PR L). A deterministic, CI-enforced rule: every markdown link in every artifact must stay inside the shipped bundle. Purely additive — no rendering changes, no new dependency. Authoritative design: `specs/prL-markdown-links.md`.
+- **Section 12.6 (`playbook validate`)**: new rule — links extracted from rule/prompt/skill bodies (plus skill `references/*.md`), after masking frontmatter, fenced code blocks, and inline code spans. Relative targets must resolve inside the artifact's source layer (package `resources/` or repo-local `playbook/`; `.j2`-suffixed sources satisfy their rendered names); absolute paths, `..`-escapes, and non-`http(s)` schemes are violations; `http(s)` hosts pass only via the allowlist. Jinja-bearing targets are skipped.
+- **Section 7.1 (config)**: new `[links]` table — `allowed_domains` (list of hostnames, subdomains included; default `[]` = fully strict), parsed by `config.parse_links_config`.
+- **CI**: the engine's own shipped artifacts are gated by `tests/cli/test_validate_links.py::test_shipped_engine_artifacts_have_self_contained_links` under the existing `pytest` step (a bare `playbook validate` step needs a consumer config, which the engine repo has none of).
+- **Implementation**: `links.py` (`MarkdownLink`, `LinksConfig`, `extract_markdown_links`, `classify_link`; stdlib-only), `config.parse_links_config`, `commands/validate.py::_check_markdown_links`, with tests.
 ### v0.13 (2026-06-29)
 Eval **task-config redesign** ("2b refined", Tracks C1–C8): the `[expected]`/`[metrics]`/`[rubric]` triple is replaced by a layered, expression-composed task config. This is a **destructive cutover** of the *authored* task format (no backward compat); the `Metric`/`Check`/`Rubric` engine (v0.12) is reused underneath. Authoritative design: `specs/pr2b-task-config.md`.
 - **Sections 6.5.3 / 15.2 (task schema)**: a task now declares up to four layer blocks sharing one `[<layer>.bind]` + `[<layer>].expr` shape — `[gate]` (deterministic boolean), `[rubric]` (llm-judge weighted), `[verdict]` (boolean expr over the two), and an optional `[aggregate]` (cross-trial `pass@k`/`pass^k`). **There is no `[expected]` block** — file predicates are gate `check`s. `ExpectedOutcome`/`Rubric`(`criteria`/`weights`) dataclasses are deleted; `EvalTask` carries `gate`/`rubric`/`verdict`/`aggregate` `Layer`s.

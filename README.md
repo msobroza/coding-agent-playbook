@@ -30,6 +30,10 @@ Multi-harness playbook engine
   typo'd predicate keys), and a lockfile records the engine version that
   produced each artifact, so regenerations are reproducible and reviewable in a
   diff.
+- **Self-contained artifacts.** Every markdown link in every artifact must
+  resolve inside the shipped bundle; external links pass only through the
+  `[links] allowed_domains` allowlist (default: none). Deterministic — no
+  network — and enforced on CI for the engine's own artifacts (SPEC §12.6).
 - **Quality is measurable.** Prompts can declare paired eval tasks (positive +
   false-positive guards), so prompt behavior is testable rather than vibes —
   authored as `[gate]` / `[rubric]` layers and run end-to-end with
