@@ -140,3 +140,31 @@ def test_parse_metrics_config_full_table():
 def test_parse_metrics_config_rejects_unknown_mode():
     with pytest.raises(ValueError, match="mode must be one of"):
         parse_metrics_config({"mode": "nonsense"})
+
+
+def test_parse_links_config_empty_uses_strict_default():
+    from coding_agent_playbook.config import parse_links_config
+
+    cfg = parse_links_config({})
+    assert cfg.allowed_domains == ()
+
+
+def test_parse_links_config_lowercases_domains():
+    from coding_agent_playbook.config import parse_links_config
+
+    cfg = parse_links_config({"allowed_domains": ["AgentHarnesses.IO", "example.com"]})
+    assert cfg.allowed_domains == ("agentharnesses.io", "example.com")
+
+
+def test_parse_links_config_rejects_non_list():
+    from coding_agent_playbook.config import parse_links_config
+
+    with pytest.raises(ValueError, match="allowed_domains must be a list of strings"):
+        parse_links_config({"allowed_domains": "example.com"})
+
+
+def test_parse_links_config_rejects_non_string_entry():
+    from coding_agent_playbook.config import parse_links_config
+
+    with pytest.raises(ValueError, match="allowed_domains must be a list of strings"):
+        parse_links_config({"allowed_domains": ["ok.com", 42]})

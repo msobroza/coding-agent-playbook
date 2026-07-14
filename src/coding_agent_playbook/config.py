@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.types import MetricConfig
+    from coding_agent_playbook.links import LinksConfig
 
 
 @dataclass
@@ -161,6 +162,27 @@ def parse_metrics_config(data: dict[str, Any]) -> MetricConfig:
         regression=regression,
         weights=weights,
     )
+
+
+def parse_links_config(data: dict[str, Any]) -> LinksConfig:
+    """Parse a ``[links]`` table (already decoded from TOML) into a
+    :class:`~coding_agent_playbook.links.LinksConfig` (SPEC §7.1, PR L).
+
+    The table shape::
+
+        [links]
+        allowed_domains = ["agentharnesses.io"]   # default: [] (fully strict)
+
+    Domains are lowercased; subdomain matching happens at check time
+    (:func:`coding_agent_playbook.links.classify_link`). The import is local to
+    mirror :func:`parse_metrics_config` — this module stays a pure data shape.
+    """
+    from coding_agent_playbook.links import LinksConfig
+
+    raw = data.get("allowed_domains", [])
+    if not isinstance(raw, list) or not all(isinstance(entry, str) for entry in raw):
+        raise ValueError(f"[links] allowed_domains must be a list of strings, got {raw!r}")
+    return LinksConfig(allowed_domains=tuple(entry.lower() for entry in raw))
 
 
 def _as_optional_float(value: Any) -> float | None:
