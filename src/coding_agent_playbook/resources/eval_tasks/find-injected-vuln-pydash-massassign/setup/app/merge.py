@@ -11,9 +11,9 @@ def set_path(obj: object, path: str, value: object) -> None:
     """Walk ``path`` (dot-separated) from ``obj`` and set the final attribute.
 
     Each segment is resolved with getattr and the last is written with setattr.
-    No segment is checked against a denylist, so a path such as
-    '__class__.__init__.__globals__' traverses into interpreter internals and
-    the final setattr can overwrite attributes that were never meant to be
+    No segment is checked against a denylist, so this unrestricted attribute-path
+    walk can pollute arbitrary object and class attributes -- reaching internals
+    such as ``__class__`` -- and overwrite attributes that were never meant to be
     writable through this API.
     """
     target = obj

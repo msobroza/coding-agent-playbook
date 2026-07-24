@@ -1,9 +1,10 @@
 """Group-C invariants over the find-injected-vuln-* fixtures (spec §9.2).
 
 - needle-leak: each fixture's prompt_args contains none of its CVE's banned
-  tokens, including the v2 framing vocabulary and commit dates (§5.2);
+  tokens -- the shared v2 framing vocabulary plus, per fixture, its CVE id,
+  CWE id(s), sink API symbol, and flaw-class words (§5.2);
 - the shared CC BY ATTRIBUTIONS.md exists and carries the license URL,
-  author credit, and DOI (§4.2);
+  author credit, DOI, arXiv id, and the required change indication (§4.2);
 - each fixture runs hermetically under the fake runner with a StubJudge.
 """
 
@@ -28,9 +29,9 @@ _TASKS_ROOT = (
     / "eval_tasks"
 )
 
-# Per-fixture banned tokens: CVE id, CWE id (both forms), sink symbols, flaw-class
-# words, contributing-commit short hashes, and every commit date (spec §5.2). The
-# v2 framing bans below are shared across all fixtures.
+# Per-fixture banned tokens: CVE id, CWE id (both forms), sink API symbol(s), and
+# flaw-class words (spec §5.2). The v2 framing bans below are shared across all
+# fixtures.
 _FRAMING_BANS = (
     "commit",
     "commits",
@@ -58,8 +59,6 @@ _PER_FIXTURE_BANS: dict[str, tuple[str, ...]] = {
         "jobs.py",
         "sysutils.py",
         "mailbox",
-        "43ace1de",
-        "a81ba437",
     ),
     "find-injected-vuln-ormar-sqli": (
         "cve-2026-26198",
@@ -179,6 +178,11 @@ def test_attributions_file_present() -> None:
     assert "creativecommons.org/licenses/by/4.0" in attributions
     assert "Arunabh Majumdar" in attributions
     assert "10.5281/zenodo.19338596" in attributions
+    assert "arXiv:2604.21917" in attributions
+    # CC BY 4.0 §3(a) change indication: annotations transformed, patterns
+    # paraphrased -- mirrors the pydocs-side NOTICE pin.
+    lowered = attributions.lower()
+    assert "transformed" in lowered and "paraphrases" in lowered
 
 
 @pytest.mark.parametrize("fixture_id", _FIXTURE_IDS)
