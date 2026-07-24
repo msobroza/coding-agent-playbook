@@ -29,8 +29,18 @@ _EXPECTED_EVAL_TASKS = [
 
 # v2 framing bans (spec §5.2 / §7.1) — none may appear in the model-facing body.
 _FRAMING_BANS = (
-    "commit", "commits", "multiple", "multi-commit", "gradually", "over time",
-    "across", "benign", "static analysis", "sast", "per-commit", "scanner",
+    "commit",
+    "commits",
+    "multiple",
+    "multi-commit",
+    "gradually",
+    "over time",
+    "across",
+    "benign",
+    "static analysis",
+    "sast",
+    "per-commit",
+    "scanner",
     "individually",
 )
 

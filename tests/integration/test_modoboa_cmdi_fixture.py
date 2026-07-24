@@ -16,7 +16,10 @@ from coding_agent_playbook.evals.task import Verdict
 
 _TASKS_ROOT = (
     Path(__file__).resolve().parents[2]
-    / "src" / "coding_agent_playbook" / "resources" / "eval_tasks"
+    / "src"
+    / "coding_agent_playbook"
+    / "resources"
+    / "eval_tasks"
 )
 _FIXTURE = _TASKS_ROOT / "find-injected-vuln-modoboa-cmdi"
 
@@ -31,9 +34,7 @@ def stub_uv_sync(monkeypatch: pytest.MonkeyPatch) -> None:
         return real_run(args, **kwargs)
 
     monkeypatch.setattr("coding_agent_playbook.evals.runner.subprocess.run", _stub_run)
-    monkeypatch.setattr(
-        "coding_agent_playbook.evals.runner.shutil.which", lambda _b: "/fake/uv"
-    )
+    monkeypatch.setattr("coding_agent_playbook.evals.runner.shutil.which", lambda _b: "/fake/uv")
 
 
 def _task() -> Any:
@@ -54,6 +55,6 @@ def test_fixture_runs_with_stub_judge(tmp_path: Path, stub_uv_sync: None) -> Non
     report = score(task, baseline, candidate, judge=StubJudge(default=0.9))
     gate = next(c for c in report.checks if c.check_id == "gate")
     rubric = next(c for c in report.checks if c.check_id == "rubric")
-    assert gate.passed is True          # no-op fake runner leaves files unchanged
+    assert gate.passed is True  # no-op fake runner leaves files unchanged
     assert rubric.status == "run"
-    assert rubric.passed is True        # composite 0.9 >= 0.5 fail floor
+    assert rubric.passed is True  # composite 0.9 >= 0.5 fail floor

@@ -1,4 +1,4 @@
-"""Integration test: the 10 shipped eval tasks under the C7 schema.
+"""Integration test: the 20 shipped eval tasks under the C7 schema.
 
 Loads every ``resources/eval_tasks/<id>/task.toml`` the engine ships, asserts the
 whole set validates clean (compile-based rules), and runs each task end-to-end
@@ -85,9 +85,10 @@ def _shipped_prompts() -> list[Prompt]:
     return prompts
 
 
-def test_ships_ten_tasks() -> None:
+def test_ships_twenty_tasks() -> None:
     tasks = _shipped_tasks()
-    assert len(tasks) == 10
+    # 10 original fixtures + 10 find-injected-vuln-* crosscommitvuln fixtures (C1-C3).
+    assert len(tasks) == 20
 
 
 def test_every_shipped_task_compiles_to_gate_and_rubric_layers() -> None:
