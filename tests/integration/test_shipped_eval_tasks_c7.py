@@ -16,6 +16,14 @@ Since C11 the shipped fixtures carry a ``setup/pyproject.toml`` (so the runner
 fixtures that exercise :func:`~coding_agent_playbook.evals.runner.materialize`
 monkeypatch ``subprocess.run`` to treat ``uv`` invocations as no-ops (returning
 a success ``CompletedProcess``) — git calls pass through unchanged.
+
+The captured transcript is
+:data:`~tests.integration.ccv_answers.ALL_CLASSES_ANSWER` rather than a
+placeholder: the ``find-injected-vuln-*`` fixtures gate deterministically on the
+agent's *answer* (an ``answer_matches`` CWE-class handle), so a placeholder would
+lose their gate and quietly reduce these runs to asserting a failure. The
+per-fixture behaviour of that gate is covered in
+``test_crosscommitvuln_fixtures.py``.
 """
 
 from __future__ import annotations
@@ -37,6 +45,7 @@ from coding_agent_playbook.evals.scoring import score
 from coding_agent_playbook.evals.task import Verdict
 from coding_agent_playbook.evals.validator import validate_tasks
 from coding_agent_playbook.types import Prompt
+from tests.integration.ccv_answers import ALL_CLASSES_ANSWER
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.task import EvalTask
@@ -114,7 +123,7 @@ def test_shipped_task_runs_deterministic_only(
     """No judge ⇒ the rubric layer's judged content skips; the verdict = gate."""
     scratch = tmp_path / "scratch"
     baseline = materialize(task, scratch)
-    candidate = capture(baseline.repo_root, baseline, "transcript")
+    candidate = capture(baseline.repo_root, baseline, ALL_CLASSES_ANSWER)
 
     report = score(task, baseline, candidate)  # no judge
     # No judged scope leaves were produced (deterministic-only).
@@ -129,7 +138,7 @@ def test_shipped_task_runs_with_a_judge(task: EvalTask, tmp_path: Path, stub_uv_
     """With a high StubJudge the rubric layer contributes and runs (not skipped)."""
     scratch = tmp_path / "scratch"
     baseline = materialize(task, scratch)
-    candidate = capture(baseline.repo_root, baseline, "transcript")
+    candidate = capture(baseline.repo_root, baseline, ALL_CLASSES_ANSWER)
 
     # A high default keeps every judged criterion above its 0.5 floor.
     report = score(task, baseline, candidate, judge=StubJudge(default=0.9))
@@ -152,7 +161,7 @@ def test_judge_verdict_can_diverge_from_gate(tmp_path: Path, stub_uv_sync: None)
     baseline = materialize(task, scratch)
     # No-op agent: the reviewed file stays unchanged => the gate passes.
     write_files({})(baseline.repo_root)
-    candidate = capture(baseline.repo_root, baseline, "transcript")
+    candidate = capture(baseline.repo_root, baseline, ALL_CLASSES_ANSWER)
 
     high = score(task, baseline, candidate, judge=StubJudge(default=0.9))
     low = score(task, baseline, candidate, judge=StubJudge(default=0.1))

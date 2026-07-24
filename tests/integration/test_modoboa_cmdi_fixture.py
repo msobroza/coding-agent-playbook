@@ -13,6 +13,7 @@ from coding_agent_playbook.evals.loader import load_eval_task_from_dir
 from coding_agent_playbook.evals.runner import capture, materialize
 from coding_agent_playbook.evals.scoring import score
 from coding_agent_playbook.evals.task import Verdict
+from tests.integration.ccv_answers import CORRECT_ANSWER
 
 _TASKS_ROOT = (
     Path(__file__).resolve().parents[2]
@@ -51,10 +52,11 @@ def test_fixture_compiles_gate_and_rubric() -> None:
 def test_fixture_runs_with_stub_judge(tmp_path: Path, stub_uv_sync: None) -> None:
     task = _task()
     baseline = materialize(task, tmp_path / "scratch")
-    candidate = capture(baseline.repo_root, baseline, "transcript")
+    candidate = capture(baseline.repo_root, baseline, CORRECT_ANSWER[_FIXTURE.name])
     report = score(task, baseline, candidate, judge=StubJudge(default=0.9))
     gate = next(c for c in report.checks if c.check_id == "gate")
     rubric = next(c for c in report.checks if c.check_id == "rubric")
-    assert gate.passed is True  # no-op fake runner leaves files unchanged
+    # The no-op fake runner leaves the files unchanged and the answer names CWE-78.
+    assert gate.passed is True
     assert rubric.status == "run"
     assert rubric.passed is True  # composite 0.9 >= 0.5 fail floor

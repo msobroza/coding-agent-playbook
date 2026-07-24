@@ -5,7 +5,12 @@
   CWE id(s), sink API symbol, and flaw-class words (§5.2);
 - the shared CC BY ATTRIBUTIONS.md exists and carries the license URL,
   author credit, DOI, arXiv id, and the required change indication (§4.2);
-- each fixture runs hermetically under the fake runner with a StubJudge.
+- each fixture runs hermetically under the fake runner with a StubJudge;
+- the deterministic CWE-class gate (`answer_matches`) accepts a correct answer,
+  rejects a wrong-class one, and short-circuits the judge when it rejects.
+
+These are review-only tasks: the agent must not edit, so it is graded on its
+*answer* (the transcript). The stand-in answers live in `ccv_answers.py`.
 """
 
 from __future__ import annotations
@@ -20,6 +25,7 @@ from coding_agent_playbook.evals.judge import StubJudge
 from coding_agent_playbook.evals.loader import load_eval_task_from_dir
 from coding_agent_playbook.evals.runner import capture, materialize
 from coding_agent_playbook.evals.scoring import score
+from tests.integration.ccv_answers import CORRECT_ANSWER, WRONG_CLASS_ANSWER
 
 _TASKS_ROOT = (
     Path(__file__).resolve().parents[2]
@@ -189,10 +195,94 @@ def test_attributions_file_present() -> None:
 def test_fixture_runs_hermetically(fixture_id: str, tmp_path: Path, stub_uv_sync: None) -> None:
     task = _task(fixture_id)
     baseline = materialize(task, tmp_path / "scratch")
-    candidate = capture(baseline.repo_root, baseline, "transcript")
+    candidate = capture(baseline.repo_root, baseline, CORRECT_ANSWER[fixture_id])
     report = score(task, baseline, candidate, judge=StubJudge(default=0.9))
     gate = next(c for c in report.checks if c.check_id == "gate")
     rubric = next(c for c in report.checks if c.check_id == "rubric")
-    assert gate.passed is True  # review-only gate: no-op fake runner => unchanged
+    # Review-only gate: the no-op fake runner leaves the files unchanged, and the
+    # answer names the right CWE class.
+    assert gate.passed is True
     assert rubric.status == "run"
     assert rubric.passed is True  # composite 0.9 >= 0.5 fail floor
+
+
+# --------------------------------------------------------------------------- #
+# The deterministic CWE-class gate (`answer_matches`)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize("fixture_id", _FIXTURE_IDS)
+def test_wrong_class_answer_loses_the_gate(
+    fixture_id: str, tmp_path: Path, stub_uv_sync: None
+) -> None:
+    """An answer naming the wrong vulnerability class fails the deterministic gate.
+
+    The counterpart to :func:`test_fixture_runs_hermetically`: same untouched
+    files, only the answer differs — so this isolates the class gate from the
+    ``file_unchanged`` handles.
+    """
+    task = _task(fixture_id)
+    baseline = materialize(task, tmp_path / "scratch")
+    candidate = capture(baseline.repo_root, baseline, WRONG_CLASS_ANSWER)
+
+    report = score(task, baseline, candidate, judge=StubJudge(default=0.9))
+
+    gate = next(c for c in report.checks if c.check_id == "gate")
+    assert gate.passed is False
+    assert report.passed is False  # the verdict is "gate and rubric"
+
+
+@pytest.mark.parametrize("fixture_id", _FIXTURE_IDS)
+def test_wrong_class_answer_never_reaches_the_judge(
+    fixture_id: str, tmp_path: Path, stub_uv_sync: None
+) -> None:
+    """A lost class gate short-circuits the JUDGED tier — a wrong answer costs 0 tokens.
+
+    ``fail_fast=True`` is what the runner (and ``playbook eval --run``) pass, so
+    this exercises the real cost-saving path rather than a synthetic one.
+    """
+    task = _task(fixture_id)
+    baseline = materialize(task, tmp_path / "scratch")
+    candidate = capture(baseline.repo_root, baseline, WRONG_CLASS_ANSWER)
+
+    judge = StubJudge(default=0.9)
+    score(task, baseline, candidate, judge=judge, fail_fast=True)
+
+    assert judge.calls == []
+
+
+@pytest.mark.parametrize("fixture_id", _FIXTURE_IDS)
+def test_correct_class_answer_does_reach_the_judge(
+    fixture_id: str, tmp_path: Path, stub_uv_sync: None
+) -> None:
+    """Control for the short-circuit test: a passing gate still invokes the judge.
+
+    Without this, the ``judge.calls == []`` assertion above would also hold if the
+    judge had simply never been wired up.
+    """
+    task = _task(fixture_id)
+    baseline = materialize(task, tmp_path / "scratch")
+    candidate = capture(baseline.repo_root, baseline, CORRECT_ANSWER[fixture_id])
+
+    judge = StubJudge(default=0.9)
+    score(task, baseline, candidate, judge=judge, fail_fast=True)
+
+    assert judge.calls != []
+
+
+@pytest.mark.parametrize("fixture_id", _FIXTURE_IDS)
+def test_judge_grades_the_answer_not_an_empty_diff(
+    fixture_id: str, tmp_path: Path, stub_uv_sync: None
+) -> None:
+    """The judged artifact is the agent's answer — these tasks produce no diff."""
+    task = _task(fixture_id)
+    baseline = materialize(task, tmp_path / "scratch")
+    answer = CORRECT_ANSWER[fixture_id]
+    candidate = capture(baseline.repo_root, baseline, answer)
+
+    judge = StubJudge(default=0.9)
+    score(task, baseline, candidate, judge=judge)
+
+    assert candidate.diff.strip() == ""  # review-only: nothing was edited
+    _criterion, artifact, _n = judge.calls[0]
+    assert str(artifact) == answer

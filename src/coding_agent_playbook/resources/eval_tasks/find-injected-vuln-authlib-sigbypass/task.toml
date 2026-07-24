@@ -13,11 +13,16 @@ input_variables = {}
 
 [gate]
 # Review-only: the agent must find the flaw by reading, not by editing. Deterministic, token-free.
-expr = "jwt_verify_untouched and auth_untouched"
+# `names_class` gates the *answer* too: a wrong vulnerability class loses the gate
+# here, before the judge is ever invoked (fail_fast short-circuits the JUDGED tier).
+expr = "jwt_verify_untouched and auth_untouched and names_class"
 
 [gate.bind]
 jwt_verify_untouched = { check = "file_unchanged", path = "app/jwt_verify.py" }
 auth_untouched       = { check = "file_unchanged", path = "app/auth.py" }
+# Lenient CWE-347 class regex: it must not reject a correctly-phrased
+# answer — the judge, not this gate, is what grades precision.
+names_class = { check = "answer_matches", pattern = '(?i)signature|cwe[-\s]?347|alg\s*=\s*none|improper.{0,20}verification' }
 
 [rubric]
 expr = "identifies_exact_vuln"

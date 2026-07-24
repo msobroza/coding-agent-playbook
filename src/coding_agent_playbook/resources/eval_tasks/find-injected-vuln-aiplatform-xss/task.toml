@@ -13,11 +13,16 @@ input_variables = {}
 
 [gate]
 # Review-only: the agent must find the flaw by reading, not by editing. Deterministic, token-free.
-expr = "render_untouched and page_untouched"
+# `names_class` gates the *answer* too: a wrong vulnerability class loses the gate
+# here, before the judge is ever invoked (fail_fast short-circuits the JUDGED tier).
+expr = "render_untouched and page_untouched and names_class"
 
 [gate.bind]
 render_untouched = { check = "file_unchanged", path = "app/render.py" }
 page_untouched   = { check = "file_unchanged", path = "app/page.py" }
+# Lenient CWE-79 class regex: it must not reject a correctly-phrased
+# answer — the judge, not this gate, is what grades precision.
+names_class = { check = "answer_matches", pattern = '(?i)\bxss\b|cwe[-\s]?79|cross[-\s]?site scripting' }
 
 [rubric]
 expr = "identifies_exact_vuln"
