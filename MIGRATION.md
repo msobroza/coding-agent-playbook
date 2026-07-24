@@ -85,12 +85,15 @@ higher is always better, folding the metric's native direction in:
 ```python
 # before
 class MyMetric(Metric):
-    higher_is_worse = True            # larger raw = worse
+    higher_is_worse = True  # larger raw = worse
+
 
 # after
 from coding_agent_playbook.evaluators.normalizer import RampNormalizer
+
+
 class MyMetric(Metric):
-    normalizer = RampNormalizer(good=5, bad=20)   # 5 -> 1.0, 20 -> 0.0 (worse-when-larger)
+    normalizer = RampNormalizer(good=5, bad=20)  # 5 -> 1.0, 20 -> 0.0 (worse-when-larger)
 ```
 
 Use `RampNormalizer(good, bad)` for an unbounded metric (the same class serves
@@ -186,6 +189,7 @@ Drop the grading-side and value-shape fields; keep (and rename) the measurement:
 from coding_agent_playbook.evaluators.registry import Evaluator, register_evaluator
 from coding_agent_playbook.evaluators.scope import Scope, ValueKind, Determinism
 
+
 @register_evaluator
 class MyMetric(Evaluator):
     name = "my_metric"
@@ -195,19 +199,23 @@ class MyMetric(Evaluator):
     higher_is_worse = True
     default_absolute = AbsoluteThreshold(warn=10, fail=20)
     default_regression = RegressionPolicy(max_worsening=0)
+
     def evaluate(self, ctx): ...
     def to_score(self, value, policy): ...
+
 
 # after
 from coding_agent_playbook.evaluators.metric import Metric, register_metric
 from coding_agent_playbook.evaluators.scope import Scope
 
+
 @register_metric
 class MyMetric(Metric):
     name = "my_metric"
     scope = Scope.FUNCTION
-    higher_is_worse = True            # v0.12 only — v0.13 replaces this with a Normalizer
-    def measure(self, ctx): ...        # was evaluate(); same body
+    higher_is_worse = True  # v0.12 only — v0.13 replaces this with a Normalizer
+
+    def measure(self, ctx): ...  # was evaluate(); same body
 ```
 
 > **v0.13 update:** drop `higher_is_worse` and declare a `normalizer` instead (see
@@ -258,12 +266,14 @@ check list:
 ```python
 # before
 from coding_agent_playbook.evaluators.grade import grade
+
 report = grade(candidate, baseline, policy, extra_evaluators={name: inst})
 
 # after
 from coding_agent_playbook.evaluators.rubric import Rubric
 from coding_agent_playbook.evaluators.check import MeasurementSet
-rubric = Rubric([check1, check2, ...])              # ordered list of Checks
+
+rubric = Rubric([check1, check2, ...])  # ordered list of Checks
 report = rubric.evaluate(ctx, MeasurementSet(candidate, baseline))
 ```
 

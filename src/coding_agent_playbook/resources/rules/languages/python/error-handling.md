@@ -45,8 +45,8 @@ except json.JSONDecodeError as exc:
 ```python
 def withdraw(account: Account, amount: int) -> None:
     if amount < 0:
-        raise ValueError("amount must be non-negative")     # good
-    assert amount >= 0, "amount must be non-negative"        # never; -O removes it
+        raise ValueError("amount must be non-negative")  # good
+    assert amount >= 0, "amount must be non-negative"  # never; -O removes it
     ...
 ```
 

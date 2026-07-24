@@ -279,7 +279,9 @@ class ClaudeCodeAdapter(Adapter):
     name = "claude_code"
 
     def __init__(self) -> None:
-        self._buffered_rules: list[tuple[int, str, str]] = []  # (priority, rule_id, rendered_section)
+        self._buffered_rules: list[
+            tuple[int, str, str]
+        ] = []  # (priority, rule_id, rendered_section)
 ```
 
 Add entry-point line to `pyproject.toml`.

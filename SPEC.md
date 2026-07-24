@@ -407,8 +407,9 @@ def parse_response(payload: dict[str, object]) -> Response | None:
 ❌ Bad:
 ```python
 from typing import Dict, Optional
-def parse_response(payload: Dict) -> Optional["Response"]:
-    ...
+
+
+def parse_response(payload: Dict) -> Optional["Response"]: ...
 ```
 ```
 #### 6.1.3 Rendered output for Continue: `.continue/rules/50-python-typing.md`
@@ -760,6 +761,8 @@ Three reasons to make the canonical types a first-class concern, even though v1'
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
+
+
 @dataclass
 class RuleFrontmatter:
     id: str
@@ -771,20 +774,25 @@ class RuleFrontmatter:
     applies_if: dict[str, Any] = field(default_factory=dict)
     priority: int = 50
     tags: list[str] = field(default_factory=list)
+
+
 @dataclass
 class Rule:
     frontmatter: RuleFrontmatter
-    body: str                          # post-Jinja markdown body
-    template_body: str                 # pre-Jinja source, if needed for re-render
-    is_templated: bool                 # True if source was .md.j2
-    source_path: Path | None           # filesystem origin; None for non-filesystem sources
-    source_package: str                # e.g. "coding_agent_playbook", "playbook_rules_bnp"
+    body: str  # post-Jinja markdown body
+    template_body: str  # pre-Jinja source, if needed for re-render
+    is_templated: bool  # True if source was .md.j2
+    source_path: Path | None  # filesystem origin; None for non-filesystem sources
+    source_package: str  # e.g. "coding_agent_playbook", "playbook_rules_bnp"
+
     @classmethod
     def from_markdown(cls, path: Path, context: dict, source_package: str) -> "Rule": ...
     def to_markdown(self) -> str: ...
-    def to_dict(self) -> dict: ...     # JSON-serializable
+    def to_dict(self) -> dict: ...  # JSON-serializable
     @classmethod
     def from_dict(cls, data: dict) -> "Rule": ...
+
+
 @dataclass
 class PromptFrontmatter:
     id: str
@@ -796,6 +804,8 @@ class PromptFrontmatter:
     input_variables: list[dict] = field(default_factory=list)
     includes_rules: list[str] = field(default_factory=list)
     eval_tasks: list[str] = field(default_factory=list)
+
+
 @dataclass
 class Prompt:
     frontmatter: PromptFrontmatter
@@ -806,15 +816,19 @@ class Prompt:
     source_package: str
     # Same from_markdown / to_markdown / to_dict / from_dict shape as Rule.
     ...
+
+
 @dataclass
 class Skill:
     # Claude Code-only artifact, see Section 6.3
-    frontmatter: dict                  # Claude's SKILL.md frontmatter shape
+    frontmatter: dict  # Claude's SKILL.md frontmatter shape
     body: str
-    scripts_dir: Path | None           # if the skill bundles scripts
+    scripts_dir: Path | None  # if the skill bundles scripts
     references_dir: Path | None
     source_package: str
     ...
+
+
 # EvalTask is already defined in Section 15.2 with the same to_dict / from_dict pattern.
 ```
 The fields capture three things every artifact needs:
@@ -979,6 +993,8 @@ For Max's `risk-models` repo with FastAPI + Pydantic + pytest, the detector retu
 # coding_agent_playbook/detector.py
 from pathlib import Path
 from typing import TypedDict
+
+
 class Facts(TypedDict, total=False):
     python_version: str
     package_manager: str
@@ -991,6 +1007,8 @@ class Facts(TypedDict, total=False):
     has_dockerfile: bool
     has_ci: bool
     dev_tools: set[str]
+
+
 def detect(repo_root: Path) -> Facts: ...
 def evaluate_predicate(predicate: dict, facts: Facts) -> bool: ...
 ```
@@ -1009,13 +1027,14 @@ Frontmatter parsing is done by the engine before this call and is always treated
 ### 9.3 Jinja environment
 ```python
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
+
 env = Environment(
-    loader=FileSystemLoader([...]),        # engine resources + overlay resources
-    autoescape=False,                      # markdown, not HTML
+    loader=FileSystemLoader([...]),  # engine resources + overlay resources
+    autoescape=False,  # markdown, not HTML
     keep_trailing_newline=True,
     trim_blocks=True,
     lstrip_blocks=True,
-    undefined=StrictUndefined,             # fail loudly on undefined vars
+    undefined=StrictUndefined,  # fail loudly on undefined vars
 )
 ```
 `StrictUndefined` is important: a typo'd `{{ python_versoin }}` should raise, not silently render as empty. Renders are cheap; failure modes should be loud.
@@ -1081,28 +1100,35 @@ def render_for(template_path: str, context: dict, fmt: str) -> str: ...
 from abc import ABC, abstractmethod
 from pathlib import Path
 from coding_agent_playbook.types import Rule, Prompt, Skill
+
+
 class Adapter(ABC):
-    name: str                                # e.g. "continue"
+    name: str  # e.g. "continue"
+
     @abstractmethod
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
         """Write a rendered rule to the harness-specific location(s).
         Return the paths actually written. Adapters that route rules
         through another adapter (e.g. OpenCode → AGENTS.md) return []."""
+
     @abstractmethod
     def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
         """Write a rendered prompt."""
+
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
         """Default: degrade to prompt. Subclasses override if native skill support
         (or if a sibling adapter already covers the harness — e.g. OpenCode reads
         .claude/skills/ natively, so its adapter overrides this to return [])."""
         prompt = skill.to_prompt()
         return self.write_prompt(prompt, repo_root)
+
     def finalize(self, repo_root: Path) -> list[Path]:
         """Optional lifecycle hook called after all write_* calls for this adapter.
         Used by adapters that buffer artifacts and emit a composite file at the
         end (e.g. Claude Code concatenates rules into a single CLAUDE.md).
         Default: no-op."""
         return []
+
     def cleanup_stale(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
         """Delete generated files no longer corresponding to a current artifact.
         Default: scan the adapter's known output directories and remove files
@@ -1116,11 +1142,13 @@ Adapters return the paths they wrote. The CLI uses these for the lockfile and fo
 # coding_agent_playbook/adapters/continue_adapter.py
 class ContinueAdapter(Adapter):
     name = "continue"
+
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
         target = repo_root / ".continue" / "rules" / f"{rule.priority:02d}-{rule.id}.md"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(self._render(rule), encoding="utf-8")
         return [target]
+
     def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
         target = repo_root / ".continue" / "prompts" / f"{prompt.slash}.md"
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -1143,16 +1171,19 @@ Continue loads rules in lexicographical order, so the file name controls priorit
 ```python
 class ClaudeCodeAdapter(Adapter):
     name = "claude_code"
+
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
         # Rules are concatenated into CLAUDE.md, not written individually.
         # The adapter buffers rules and writes once in finalize().
         self._buffered_rules.append(rule)
         return []  # actual path returned by finalize()
+
     def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
         target = repo_root / ".claude" / "commands" / f"{prompt.slash}.md"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(self._render_command(prompt), encoding="utf-8")
         return [target]
+
     def finalize(self, repo_root: Path) -> list[Path]:
         target = repo_root / ".claude" / "CLAUDE.md"
         body = self._compose_claude_md(self._buffered_rules)
@@ -1201,15 +1232,18 @@ Skills are also covered without duplication: OpenCode reads `.claude/skills/<nam
 ```python
 class OpenCodeAdapter(Adapter):
     name = "opencode"
+
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
         # OpenCode reads AGENTS.md natively. Rules are routed through
         # the AgentsMdAdapter, not duplicated here.
         return []
+
     def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
         target = repo_root / ".opencode" / "command" / f"{prompt.slash}.md"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(self._render_command(prompt), encoding="utf-8")
         return [target]
+
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
         # OpenCode reads .claude/skills/ natively as a fallback. The
         # ClaudeCodeAdapter already writes there — no duplication needed.
@@ -1332,6 +1366,7 @@ A minimal overlay package:
 # src/playbook_rules_bnp/__init__.py
 from importlib.resources import files
 from coding_agent_playbook.overlays import Overlay
+
 OVERLAY = Overlay(
     name="bnp",
     version="0.2.0",
@@ -1706,36 +1741,44 @@ These ship in v1 and back the `playbook eval --list` / `playbook eval --show` CL
 # coding_agent_playbook/evals/task.py
 from dataclasses import dataclass, field
 from pathlib import Path
+
+
 @dataclass
 class TaskSetup:
-    files: list[Path]                            # files in setup/ subdir, relative to task dir
+    files: list[Path]  # files in setup/ subdir, relative to task dir
     project_kind: str
     python_version: str
     frameworks: list[str]
     # Free-form facts the task wants the detector to mock.
     extra_facts: dict[str, object] = field(default_factory=dict)
+
+
 @dataclass
 class TaskInvocation:
-    prompt_args: str                             # what the user "types" after the slash command
+    prompt_args: str  # what the user "types" after the slash command
     input_variables: dict[str, str] = field(default_factory=dict)
+
+
 @dataclass
-class Layer:                                      # one [gate] / [rubric] / [aggregate] block
-    bind: dict[str, dict] = field(default_factory=dict)   # name -> raw handle binding
-    expr: str | None = None                      # boolean/aggregate expr over the handle names
+class Layer:  # one [gate] / [rubric] / [aggregate] block
+    bind: dict[str, dict] = field(default_factory=dict)  # name -> raw handle binding
+    expr: str | None = None  # boolean/aggregate expr over the handle names
+
+
 @dataclass
 class EvalTask:
     id: str
     prompt_id: str
     description: str
-    source_path: Path                            # where the task.toml lives
+    source_path: Path  # where the task.toml lives
     source_package: str
     version: int = 1
     setup: TaskSetup = field(default_factory=TaskSetup)
     invocation: TaskInvocation = field(default_factory=TaskInvocation)
-    gate: Layer | None = None                    # the deterministic boolean layer
-    rubric: Layer | None = None                  # the llm-judge weighted layer
-    verdict: str = "gate and rubric"             # [verdict].trial — boolean expr over the layers
-    aggregate: Layer | None = None               # optional cross-trial pass@k / pass^k layer
+    gate: Layer | None = None  # the deterministic boolean layer
+    rubric: Layer | None = None  # the llm-judge weighted layer
+    verdict: str = "gate and rubric"  # [verdict].trial — boolean expr over the layers
+    aggregate: Layer | None = None  # optional cross-trial pass@k / pass^k layer
 ```
 The loader (`coding_agent_playbook.evals.loader.load_tasks`) walks `resources/eval_tasks/`, parses `task.toml` per directory, and produces a `list[EvalTask]`. Overlays add their tasks via the same entry-point mechanism as rules and prompts. `EvalTask.compiled()` (a thin wrapper over `evals._compile.compile_task`) turns the raw layer blocks into a `CompiledTask` — one per-trial `Rubric` (the present `gate`/`rubric` layer checks, ids `"gate"` / `"rubric"`), the parsed `[verdict].trial` AST, and the optional compiled `[aggregate]` layer + `trials_needed`.
 
@@ -1916,9 +1959,13 @@ from abc import ABC, abstractmethod
 from coding_agent_playbook.types import Rule, Prompt, Skill, EvalTask
 from coding_agent_playbook.config import Config
 from coding_agent_playbook.lockfile import Lockfile
+
+
 class ArtifactSource(ABC):
     """Where rules, prompts, skills, and eval tasks come from."""
+
     name: str
+
     @abstractmethod
     def list_rules(self) -> list[Rule]: ...
     @abstractmethod
@@ -1927,9 +1974,13 @@ class ArtifactSource(ABC):
     def list_skills(self) -> list[Skill]: ...
     @abstractmethod
     def list_eval_tasks(self) -> list[EvalTask]: ...
+
+
 class StateSource(ABC):
     """Where config and lockfile are read from and written to."""
+
     name: str
+
     @abstractmethod
     def load_config(self) -> Config: ...
     @abstractmethod
@@ -1947,12 +1998,16 @@ Two concrete implementations, both already implied by the rest of the spec:
 class FileSystemArtifactSource(ArtifactSource):
     """Walks importlib.resources for the engine + overlay packages,
     plus <repo>/playbook/ for repo-local artifacts."""
+
     name = "filesystem"
     # Implementation = the current loader logic, just renamed.
+
+
 class FileSystemStateSource(StateSource):
     """Reads and writes TOML files in the consumer repo:
     .coding-agent-playbook.toml, .coding-agent-playbook.local.toml,
     .coding-agent-playbook.lock."""
+
     name = "filesystem"
     # Implementation = the current config + lockfile logic, just renamed.
 ```
@@ -2015,36 +2070,56 @@ Added in PR M; **refactored to the `Metric` / `Check` / `Rubric` model in PR R6*
 ### 21.1 Three abstractions: `Metric` → `Check` → `Rubric`
 A rubric criterion, a code metric, a coverage number, and a test-pass rate are all the same thing — a **graded measurement over a scope** — but *measuring* a value, *grading* it pass/fail, and *aggregating* graded results into a verdict are three distinct responsibilities. PR M originally fused them into one `Evaluator` ABC + a free `grade()`; PR R6 split them along the grain (the realization of the Anthropic "Demystifying Evals for AI Agents" framing — a Check ≈ a grader's pass/fail assertion, a Rubric = a weighting of checks, and a metric becomes a check via a threshold):
 ```python
-class Scope(Enum):       FUNCTION; METHOD; CLASS; FILE; MODULE   # MODULE = the whole target/suite
-class Determinism(Enum): DETERMINISTIC; JUDGED                    # who produces the value (routing)
-class CostTier(IntEnum): DETERMINISTIC < EXECUTION < JUDGED       # cheapest-first scheduling
+class Scope(Enum):
+    FUNCTION
+    METHOD
+    CLASS
+    FILE
+    MODULE  # MODULE = the whole target/suite
 
-class Metric(ABC):                       # the "measure" leaf  (evaluators/metric.py)
+
+class Determinism(Enum):
+    DETERMINISTIC
+    JUDGED  # who produces the value (routing)
+
+
+class CostTier(IntEnum):
+    DETERMINISTIC < EXECUTION < JUDGED  # cheapest-first scheduling
+
+
+class Metric(ABC):  # the "measure" leaf  (evaluators/metric.py)
     name: str
     scope: Scope
-    normalizer: Normalizer                # maps raw -> 0-1 GOODNESS (higher = always better)
-    requires: str | None = None           # optional importable dep (e.g. "radon"); None = stdlib
-    needs_project: bool = False           # True => execution metric (needs ctx.project)
-    needs_judge: bool = False             # True => judge-backed metric (needs ctx.judge)
+    normalizer: Normalizer  # maps raw -> 0-1 GOODNESS (higher = always better)
+    requires: str | None = None  # optional importable dep (e.g. "radon"); None = stdlib
+    needs_project: bool = False  # True => execution metric (needs ctx.project)
+    needs_judge: bool = False  # True => judge-backed metric (needs ctx.judge)
+
     def available(self, ctx: EvalContext) -> bool: ...
-    def score(self, raw: float) -> float: ...                      # raw -> 0-1 via self.normalizer
+    def score(self, raw: float) -> float: ...  # raw -> 0-1 via self.normalizer
     @abstractmethod
     def measure(self, ctx: EvalContext) -> list[Measurement]: ...  # one Measurement per scope
 
-class Check(ABC):                        # the "grade" stage  (evaluators/check.py)
+
+class Check(ABC):  # the "grade" stage  (evaluators/check.py)
     id: str
-    weight: float                         # > 0 => contributes to the weighted composite
-    required: bool                        # a gate check
-    determinism: Determinism              # routing axis
-    cost: CostTier                        # scheduling tier
+    weight: float  # > 0 => contributes to the weighted composite
+    required: bool  # a gate check
+    determinism: Determinism  # routing axis
+    cost: CostTier  # scheduling tier
+
     def available(self, ctx: EvalContext) -> bool: ...
     @abstractmethod
     def grade(self, ctx: EvalContext, measurements: MeasurementSet) -> CheckResult: ...
 
-class Rubric(Metric):                    # the "aggregate" stage  (evaluators/rubric.py)
-    def evaluate(self, ctx, measurements, *, strict=False,
-                 fail_fast=False, max_workers=1) -> EvaluationReport: ...
-    def measure(self, ctx) -> list[Measurement]: ...   # a Rubric is ALSO a Metric (composite as one MODULE measurement)
+
+class Rubric(Metric):  # the "aggregate" stage  (evaluators/rubric.py)
+    def evaluate(
+        self, ctx, measurements, *, strict=False, fail_fast=False, max_workers=1
+    ) -> EvaluationReport: ...
+    def measure(
+        self, ctx
+    ) -> list[Measurement]: ...  # a Rubric is ALSO a Metric (composite as one MODULE measurement)
 ```
 The split: a **`Metric`** carries only the measurement-side descriptors (`name`, `scope`, `normalizer`, `requires`, `needs_project`/`needs_judge`) and produces a raw `Measurement` per scope; a **`Check`** carries the grading-side policy (thresholds, regression tolerance, `weight`, `required`) and turns measurements (or `ctx` directly, for file/judge checks) into one `CheckResult` — a boolean `passed` gate **plus** an optional `0-1` `score` for partial credit; a **`Rubric`** holds an ordered set of checks and folds their results into one `EvaluationReport` (gate = all `required` checks pass; composite = `Σ(weight·score)/Σweight`). The `EvalContext` (`evaluators/types.py`) carries everything a family might need, decoupled: static reads `module`/`source`/`label`; execution reads `project`; judged reads `judge`/`artifact`/`samples`; file checks read `tree`/`baseline_tree`. `available(ctx)` lets each piece degrade gracefully when its slot or dependency is missing.
 
