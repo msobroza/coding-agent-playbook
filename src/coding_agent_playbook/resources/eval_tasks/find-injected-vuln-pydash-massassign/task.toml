@@ -22,7 +22,7 @@ merge_untouched = { check = "file_unchanged", path = "app/merge.py" }
 model_untouched = { check = "file_unchanged", path = "app/model.py" }
 # Lenient CWE-915 class regex: it must not reject a correctly-phrased
 # answer — the judge, not this gate, is what grades precision.
-names_class = { check = "answer_matches", pattern = '(?i)mass assignment|cwe[-\s]?915|prototype pollution|object injection' }
+names_class = { check = "answer_matches", pattern = '(?i)mass assignment|cwe[-\s]?915\b|prototype pollution|object injection' }
 
 [rubric]
 expr = "identifies_exact_vuln"

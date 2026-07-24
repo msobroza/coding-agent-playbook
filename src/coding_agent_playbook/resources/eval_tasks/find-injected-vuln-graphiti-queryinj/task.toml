@@ -22,7 +22,7 @@ graph_untouched  = { check = "file_unchanged", path = "app/graph.py" }
 search_untouched = { check = "file_unchanged", path = "app/search.py" }
 # Lenient CWE-943 class regex: it must not reject a correctly-phrased
 # answer — the judge, not this gate, is what grades precision.
-names_class = { check = "answer_matches", pattern = '(?i)query injection|cwe[-\s]?943|cypher injection|nosql injection' }
+names_class = { check = "answer_matches", pattern = '(?i)query injection|cwe[-\s]?943\b|cypher injection|nosql injection' }
 
 [rubric]
 expr = "identifies_exact_vuln"

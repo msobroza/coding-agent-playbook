@@ -22,7 +22,7 @@ storage_untouched = { check = "file_unchanged", path = "app/storage.py" }
 views_untouched   = { check = "file_unchanged", path = "app/views.py" }
 # Lenient CWE-22 class regex: it must not reject a correctly-phrased
 # answer — the judge, not this gate, is what grades precision.
-names_class = { check = "answer_matches", pattern = '(?i)path traversal|directory traversal|cwe[-\s]?22|\.\./' }
+names_class = { check = "answer_matches", pattern = '(?i)path traversal|directory traversal|cwe[-\s]?22\b|\.\./' }
 
 [rubric]
 expr = "identifies_exact_vuln"

@@ -22,7 +22,7 @@ queries_untouched = { check = "file_unchanged", path = "app/queries.py" }
 db_untouched      = { check = "file_unchanged", path = "app/db.py" }
 # Lenient CWE-89 class regex: it must not reject a correctly-phrased
 # answer — the judge, not this gate, is what grades precision.
-names_class = { check = "answer_matches", pattern = '(?i)sql\s*injection|cwe[-\s]?89|\bsqli\b' }
+names_class = { check = "answer_matches", pattern = '(?i)sql\s*injection|cwe[-\s]?89\b|\bsqli\b' }
 
 [rubric]
 expr = "identifies_exact_vuln"

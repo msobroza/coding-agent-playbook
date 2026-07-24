@@ -22,7 +22,7 @@ tools_untouched  = { check = "file_unchanged", path = "app/tools.py" }
 runner_untouched = { check = "file_unchanged", path = "app/runner.py" }
 # Lenient CWE-94 class regex: it must not reject a correctly-phrased
 # answer — the judge, not this gate, is what grades precision.
-names_class = { check = "answer_matches", pattern = '(?i)code injection|cwe[-\s]?94|arbitrary code execution|eval injection' }
+names_class = { check = "answer_matches", pattern = '(?i)code injection|cwe[-\s]?94\b|arbitrary code execution|eval injection' }
 
 [rubric]
 expr = "identifies_exact_vuln"

@@ -22,7 +22,7 @@ loader_untouched   = { check = "file_unchanged", path = "app/loader.py" }
 registry_untouched = { check = "file_unchanged", path = "app/registry.py" }
 # Lenient CWE-502 class regex: it must not reject a correctly-phrased
 # answer — the judge, not this gate, is what grades precision.
-names_class = { check = "answer_matches", pattern = '(?i)deserializ|cwe[-\s]?502|unsafe.{0,12}pickle|untrusted.{0,12}pickle' }
+names_class = { check = "answer_matches", pattern = '(?i)deserializ|cwe[-\s]?502\b|unsafe.{0,12}pickle|untrusted.{0,12}pickle' }
 
 [rubric]
 expr = "identifies_exact_vuln"

@@ -22,7 +22,7 @@ jobs_untouched     = { check = "file_unchanged", path = "app/jobs.py" }
 sysutils_untouched = { check = "file_unchanged", path = "app/sysutils.py" }
 # Lenient CWE-78 class regex: it must not reject a correctly-phrased
 # answer — the judge, not this gate, is what grades precision.
-names_class = { check = "answer_matches", pattern = '(?i)command injection|cwe[-\s]?78|os command|shell injection' }
+names_class = { check = "answer_matches", pattern = '(?i)command injection|cwe[-\s]?78\b|os command|shell injection' }
 
 [rubric]
 expr = "identifies_exact_vuln"

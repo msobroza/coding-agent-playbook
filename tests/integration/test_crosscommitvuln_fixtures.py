@@ -15,6 +15,7 @@ These are review-only tasks: the agent must not edit, so it is graded on its
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -171,6 +172,13 @@ def _task(fixture_id: str) -> Any:
     return load_eval_task_from_dir(_TASKS_ROOT / fixture_id, source_package="coding_agent_playbook")
 
 
+def _class_gate_pattern(fixture_id: str) -> str:
+    """The raw ``names_class`` regex a fixture authors in its ``[gate.bind]``."""
+    binding = _task(fixture_id).gate.bind["names_class"]
+    assert binding["check"] == "answer_matches", binding
+    return str(binding["pattern"])
+
+
 @pytest.mark.parametrize("fixture_id", _FIXTURE_IDS)
 def test_prompt_args_leak_no_needle(fixture_id: str) -> None:
     query = _task(fixture_id).invocation.prompt_args.lower()
@@ -268,6 +276,27 @@ def test_correct_class_answer_does_reach_the_judge(
     score(task, baseline, candidate, judge=judge, fail_fast=True)
 
     assert judge.calls != []
+
+
+@pytest.mark.parametrize("fixture_id", _FIXTURE_IDS)
+def test_class_gate_rejects_every_other_fixtures_answer(fixture_id: str) -> None:
+    """No fixture's class gate accepts another fixture's (correct) answer.
+
+    The gates are deliberately lenient, and leniency is exactly what can go too
+    far — a bare ``cwe[-\\s]?94`` prefix-matches ``CWE-943``, so the code-injection
+    gate would accept a query-injection answer. This pins the whole 10x10 matrix
+    rather than each pattern in isolation, since that is where such a collision
+    shows up.
+    """
+    pattern = _class_gate_pattern(fixture_id)
+    accepted = [
+        other
+        for other in _FIXTURE_IDS
+        if other != fixture_id and re.search(pattern, CORRECT_ANSWER[other])
+    ]
+    assert accepted == [], (
+        f"{fixture_id}: gate /{pattern}/ also accepts the answer(s) for {accepted}"
+    )
 
 
 @pytest.mark.parametrize("fixture_id", _FIXTURE_IDS)
