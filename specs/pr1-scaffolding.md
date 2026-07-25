@@ -254,9 +254,7 @@ class Adapter(ABC):
         """
         return self._default_cleanup(written_paths, repo_root)
 
-    def _default_cleanup(
-        self, written_paths: set[Path], repo_root: Path
-    ) -> list[Path]:
+    def _default_cleanup(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
         # PR 1 ships only the interface. The default scan/remove
         # implementation lands with the first concrete adapter (PR 6).
         raise NotImplementedError(

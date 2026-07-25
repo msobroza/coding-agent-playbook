@@ -41,12 +41,12 @@ Group in this order, separated by a blank line:
 3. First-party (this repo's packages)
 
 ```python
-import json                       # stdlib
+import json  # stdlib
 from pathlib import Path
 
-import httpx                      # third-party
+import httpx  # third-party
 
-from myapp.config import settings # first-party
+from myapp.config import settings  # first-party
 ```
 
 ## Small but persistent annoyances
@@ -62,6 +62,7 @@ Good:
 ```python
 from pathlib import Path
 
+
 def load_config(path: Path) -> dict[str, str]:
     return json.loads(path.read_text(encoding="utf-8"))
 ```
@@ -69,6 +70,6 @@ def load_config(path: Path) -> dict[str, str]:
 Avoid:
 
 ```python
-def load_config(path):                       # missing type hints
-    return json.loads(open(path).read())     # no encoding, no Path, leaked file handle
+def load_config(path):  # missing type hints
+    return json.loads(open(path).read())  # no encoding, no Path, leaked file handle
 ```

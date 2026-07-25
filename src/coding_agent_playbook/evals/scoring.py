@@ -140,7 +140,7 @@ def score(
             project=_availability_project(candidate.tree, stack) if run_exec else None,
             tree=candidate.tree,
             baseline_tree=baseline.setup_snapshot,
-            artifact=candidate.diff,
+            artifact=_graded_artifact(candidate),
             samples=samples,
             judge=judge,
             candidate_measurements=candidate_measurements,
@@ -166,6 +166,27 @@ def score(
         report.verdict_score = verdict_score
         report.passed = passed
     return report
+
+
+def _graded_artifact(candidate: Candidate) -> str:
+    """The text the artifact-side checks grade: the diff, else the transcript.
+
+    An **edit** task is graded on what the agent *did*, so its captured ``git
+    diff`` is the artifact — unchanged, and the only case that existed before.
+
+    A **review** task is graded on what the agent *said*. Such a task forbids
+    edits (its ``[gate]`` is ``file_unchanged``), so a well-behaved agent leaves
+    ``diff`` empty and its whole contribution lives in the transcript. Handing the
+    judge that empty diff scored every review task against nothing at all, so an
+    empty diff falls back to the transcript. The shipped ``security-review-*`` and
+    ``find-injected-vuln-*`` fixtures are all review tasks.
+
+    The discriminator is the diff rather than anything declared on the task: a
+    task does not announce which kind it is, and an edit task whose agent did
+    nothing has no diff to grade either — its transcript is then strictly more
+    informative than the empty string it would otherwise be graded on.
+    """
+    return candidate.diff if candidate.diff.strip() else candidate.transcript
 
 
 # --------------------------------------------------------------------------- #

@@ -22,12 +22,19 @@
 ```python
 class Judge(ABC):
     name: str
+
     @classmethod
-    def available(cls) -> bool: return True          # real judges override (e.g. shutil.which)
+    def available(cls) -> bool:
+        return True  # real judges override (e.g. shutil.which)
+
     @abstractmethod
-    def score_criterion(self, criterion: str, artifact: Any, n: int = 1) -> float: ...  # 0–1, n-sample avg
-    def score(self, rubric: Rubric, transcript: str, scratch_dir_state: dict[str, Any]) -> list[float]:
-        return [self.score_criterion(c, transcript, n=1) for c in rubric.criteria]       # batch = sugar
+    def score_criterion(
+        self, criterion: str, artifact: Any, n: int = 1
+    ) -> float: ...  # 0–1, n-sample avg
+    def score(
+        self, rubric: Rubric, transcript: str, scratch_dir_state: dict[str, Any]
+    ) -> list[float]:
+        return [self.score_criterion(c, transcript, n=1) for c in rubric.criteria]  # batch = sugar
 ```
 - **`LLMJudge`** (`name="llm"`): `score_criterion` shells out to the `claude` CLI (arg-list, no shell, configurable command) with a fixed grading prompt embedding the criterion + `artifact` (the candidate diff/transcript), parses a 0–1 score from stdout; averages `n` invocations. `available()` ⇒ `shutil.which("claude") is not None`. Lazy/stdlib only; **never run in CI** (its real test is env-gated like the `ClaudeCodeRunner` smoke test). Registered via the `coding_agent_playbook.judges` entry-point group (reserved).
 - **`StubJudge`** (tests only, not registered): deterministic `score_criterion` from a dict — drives all judged unit tests hermetically.

@@ -89,6 +89,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
+
 # All entries are optional — the detector only sets keys it can determine.
 class Facts(TypedDict, total=False):
     python_version: str
@@ -111,23 +112,56 @@ class Facts(TypedDict, total=False):
 
 
 # Frameworks the detector recognises (subset of dependencies treated as frameworks).
-KNOWN_FRAMEWORKS: frozenset[str] = frozenset({
-    "fastapi", "flask", "django", "starlette",
-    "pydantic", "sqlalchemy", "alembic",
-    "pytest", "pytest-asyncio", "pytest-mock", "unittest",
-    "httpx", "requests", "aiohttp",
-    "click", "typer",
-})
+KNOWN_FRAMEWORKS: frozenset[str] = frozenset(
+    {
+        "fastapi",
+        "flask",
+        "django",
+        "starlette",
+        "pydantic",
+        "sqlalchemy",
+        "alembic",
+        "pytest",
+        "pytest-asyncio",
+        "pytest-mock",
+        "unittest",
+        "httpx",
+        "requests",
+        "aiohttp",
+        "click",
+        "typer",
+    }
+)
 
-KNOWN_ML_STACK: frozenset[str] = frozenset({
-    "torch", "tensorflow", "jax", "transformers",
-    "scikit-learn", "xgboost", "lightgbm", "numpy", "pandas",
-    "matplotlib", "seaborn", "polars", "duckdb",
-})
+KNOWN_ML_STACK: frozenset[str] = frozenset(
+    {
+        "torch",
+        "tensorflow",
+        "jax",
+        "transformers",
+        "scikit-learn",
+        "xgboost",
+        "lightgbm",
+        "numpy",
+        "pandas",
+        "matplotlib",
+        "seaborn",
+        "polars",
+        "duckdb",
+    }
+)
 
-KNOWN_DEV_TOOLS: frozenset[str] = frozenset({
-    "ruff", "black", "flake8", "isort", "mypy", "pyright", "pylint",
-})
+KNOWN_DEV_TOOLS: frozenset[str] = frozenset(
+    {
+        "ruff",
+        "black",
+        "flake8",
+        "isort",
+        "mypy",
+        "pyright",
+        "pylint",
+    }
+)
 
 
 def detect(repo_root: Path) -> Facts:
@@ -305,14 +339,16 @@ FORMAT_ALIASES: dict[str, str] = {
 
 # All built-in formats. Adapters may register more via the renderer registry
 # (future work — v1 just has the built-ins inline here).
-BUILTIN_FORMATS: frozenset[str] = frozenset({
-    "continue_rule",
-    "claude_md_section",
-    "agents_md_section",
-    "prompt_continue",
-    "prompt_claude_command",
-    "prompt_opencode_command",
-})
+BUILTIN_FORMATS: frozenset[str] = frozenset(
+    {
+        "continue_rule",
+        "claude_md_section",
+        "agents_md_section",
+        "prompt_continue",
+        "prompt_claude_command",
+        "prompt_opencode_command",
+    }
+)
 
 
 class RuleRegistry(Protocol):
@@ -392,10 +428,14 @@ def render_for(
       env.globals["rule"] = lambda rule_id: rule_registry.render_for_inclusion(
           rule_id, env.globals.get("_facts", {})
       )
+
+
   # has_framework helper (SPEC §9.4)
   def _has_framework(name: str) -> bool:
       facts = env.globals.get("_facts", {})
       return name in facts.get("frameworks", {})
+
+
   env.globals["has_framework"] = _has_framework
   return env
   ```
@@ -603,7 +643,7 @@ def compute_hash(content: bytes) -> str:
 
 @dataclass
 class LockEntry:
-    path: str               # relative to repo root, posix forward slashes
+    path: str  # relative to repo root, posix forward slashes
     sha256: str
     bytes: int
 
@@ -612,7 +652,7 @@ class LockEntry:
 class Lockfile:
     schema_version: int
     engine_version: str
-    rendered_at: str        # ISO-8601 UTC timestamp from when sync ran
+    rendered_at: str  # ISO-8601 UTC timestamp from when sync ran
     entries: list[LockEntry] = field(default_factory=list)
 
     @classmethod
@@ -711,6 +751,7 @@ def list_rules(self) -> list[Rule]:
             rules.append(Rule.from_markdown(md, "<repo-local>"))
     return rules
 
+
 def _walk_rules(self, package: str) -> list[Rule]:
     rules: list[Rule] = []
     try:
@@ -722,6 +763,7 @@ def _walk_rules(self, package: str) -> list[Rule]:
     for md in self._iter_md_files(Path(str(resources_root))):
         rules.append(Rule.from_markdown(md, package))
     return rules
+
 
 def _iter_md_files(self, root: Path) -> Iterator[Path]:
     for path in sorted(root.rglob("*.md*")):

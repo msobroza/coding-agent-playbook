@@ -1,0 +1,38 @@
+id = "find-injected-vuln-modoboa-cmdi"
+prompt_id = "find-injected-vulnerability"
+description = "OS command injection paraphrase; derived from CVE-2026-27602 (CrossCommitVuln-Bench, CC BY 4.0, A. Majumdar). See resources/eval_tasks/ATTRIBUTIONS.md."
+version = 1
+
+[setup]
+files = ["app/jobs.py", "app/sysutils.py", "pyproject.toml"]
+project_kind = "library"
+
+[invocation]
+prompt_args = "This project contains a security vulnerability. Find where untrusted input reaches a dangerous operation and classify the exploit."
+input_variables = {}
+
+[gate]
+# Review-only: the agent must find the flaw by reading, not by editing. Deterministic, token-free.
+# `names_class` gates the *answer* too: a wrong vulnerability class loses the gate
+# here, before the judge is ever invoked (fail_fast short-circuits the JUDGED tier).
+expr = "jobs_untouched and sysutils_untouched and names_class"
+
+[gate.bind]
+jobs_untouched     = { check = "file_unchanged", path = "app/jobs.py" }
+sysutils_untouched = { check = "file_unchanged", path = "app/sysutils.py" }
+# Lenient CWE-78 class regex: it must not reject a correctly-phrased
+# answer — the judge, not this gate, is what grades precision.
+names_class = { check = "answer_matches", pattern = '(?i)command injection|cwe[-\s]?78\b|os command|shell injection' }
+
+[rubric]
+expr = "identifies_exact_vuln"
+
+[rubric.bind]
+identifies_exact_vuln = { fail = 0.5, rubric = [
+  { judge = "The answer names OS command injection (CWE-78) as the vulnerability class.", weight = 0.34 },
+  { judge = "The answer traces the untrusted source (a user-controlled mailbox path / email address) to the shell-executing sink that runs it via subprocess with shell=True.", weight = 0.33 },
+  { judge = "The answer cites the specific fixture files where the source and the sink live (app/jobs.py and app/sysutils.py).", weight = 0.33 },
+] }
+
+[verdict]
+trial = "gate and rubric"

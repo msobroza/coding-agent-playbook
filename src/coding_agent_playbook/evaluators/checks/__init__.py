@@ -16,9 +16,12 @@ adapter, the across-trial aggregate checks
 (:mod:`coding_agent_playbook.evaluators.checks.aggregate`: ``PassAtK`` /
 ``PassPowK``), and the Check **registry**
 (:mod:`coding_agent_playbook.evaluators.checks.registry`: ``register_check`` /
-``get_check`` / ``all_check_ids``). Importing this package fires each module's
-``@register_check`` decorator (the file + execution + aggregate checks) and the
-``threshold`` / ``non_regression`` factories defined in ``registry``.
+``get_check`` / ``all_check_ids``), and the artifact-side gate
+(:mod:`coding_agent_playbook.evaluators.checks.answer`: ``AnswerMatchesCheck`` —
+the file checks' counterpart for what the agent *said* rather than what it *did*).
+Importing this package fires each module's ``@register_check`` decorator (the
+file + answer + execution + aggregate checks) and the ``threshold`` /
+``non_regression`` factories defined in ``registry``.
 
 The eval task pipeline consumes the registry: the handle builder
 (:mod:`coding_agent_playbook.evals._handles`) resolves a task's ``[gate.bind]`` /
@@ -28,6 +31,7 @@ The eval task pipeline consumes the registry: the handle builder
 from __future__ import annotations
 
 from coding_agent_playbook.evaluators.checks.aggregate import AggregateCheck, PassAtK, PassPowK
+from coding_agent_playbook.evaluators.checks.answer import AnswerMatchesCheck
 from coding_agent_playbook.evaluators.checks.compose import AllOf, AnyOf, Not
 from coding_agent_playbook.evaluators.checks.execution import CoverageCheck, TestsPassCheck
 from coding_agent_playbook.evaluators.checks.files import (
@@ -52,6 +56,7 @@ from coding_agent_playbook.evaluators.checks.registry import (
 __all__ = [
     "AggregateCheck",
     "AllOf",
+    "AnswerMatchesCheck",
     "AnyOf",
     "CoverageCheck",
     "FileContainsCheck",

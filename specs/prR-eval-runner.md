@@ -33,23 +33,35 @@
 @dataclass
 class AgentRun:
     transcript: str
-    returncode: int                     # 0 = the agent loop completed
+    returncode: int  # 0 = the agent loop completed
+
 
 class HarnessRunner(ABC):
-    name: str                            # entry-point key; group coding_agent_playbook.runners
-    def run_task(self, task: EvalTask, scratch_dir: Path) -> TaskResult:   # CONCRETE template
-        baseline = materialize(task, scratch_dir)         # copy setup/ + mock facts; git init + commit baseline
-        prompt   = render_prompt(task)                    # render prompt_id body + invocation (StrictUndefined)
-        started  = monotonic()
-        run      = self._invoke_agent(prompt, scratch_dir)   # ← ONLY per-assistant step
-        candidate = capture(scratch_dir, baseline)        # post-agent tree + diff vs setup/ + run.transcript
-        report   = score(task, baseline, candidate)       # [expected]→BOOL + [metrics] via grade() (§2)
+    name: str  # entry-point key; group coding_agent_playbook.runners
+
+    def run_task(self, task: EvalTask, scratch_dir: Path) -> TaskResult:  # CONCRETE template
+        baseline = materialize(
+            task, scratch_dir
+        )  # copy setup/ + mock facts; git init + commit baseline
+        prompt = render_prompt(task)  # render prompt_id body + invocation (StrictUndefined)
+        started = monotonic()
+        run = self._invoke_agent(prompt, scratch_dir)  # ← ONLY per-assistant step
+        candidate = capture(
+            scratch_dir, baseline
+        )  # post-agent tree + diff vs setup/ + run.transcript
+        report = score(task, baseline, candidate)  # [expected]→BOOL + [metrics] via grade() (§2)
         return TaskResult(
-            task_id=task.id, harness=self.name, report=report,
+            task_id=task.id,
+            harness=self.name,
+            report=report,
             passed=report.passed,
-            aggregate_score=report.composite if report.composite is not None else float(report.passed),
-            duration_seconds=monotonic() - started, transcript=run.transcript,
+            aggregate_score=report.composite
+            if report.composite is not None
+            else float(report.passed),
+            duration_seconds=monotonic() - started,
+            transcript=run.transcript,
         )
+
     @abstractmethod
     def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun: ...
 ```
@@ -74,17 +86,19 @@ class HarnessRunner(ABC):
 class TaskResult:
     task_id: str
     harness: str
-    report: EvaluationReport          # findings (score/level/kind), composite, passed  ← REPLACES checks/rubric_scores
-    passed: bool                      # = report.passed (convenience)
-    aggregate_score: float            # = report.composite (or 1.0/0.0 fallback)
+    report: EvaluationReport  # findings (score/level/kind), composite, passed  ← REPLACES checks/rubric_scores
+    passed: bool  # = report.passed (convenience)
+    aggregate_score: float  # = report.composite (or 1.0/0.0 fallback)
     duration_seconds: float
     transcript: str
 
+
 @dataclass
-class EvalReport:                     # aggregate over tasks; now reads report.passed
-    engine_version: str; harness: str
+class EvalReport:  # aggregate over tasks; now reads report.passed
+    engine_version: str
+    harness: str
     task_results: list[TaskResult]
-    aggregate_pass_rate: float        # mean(tr.passed for tr in task_results)
+    aggregate_pass_rate: float  # mean(tr.passed for tr in task_results)
     timestamp: str
 ```
 `CheckResult` may be retired (its role is now a BOOL `Finding`) or kept only if a consumer needs it — prefer retiring for one model.

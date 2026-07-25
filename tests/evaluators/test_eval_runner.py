@@ -679,6 +679,50 @@ def test_judge_artifact_is_the_candidate_diff(tmp_path: Path) -> None:
     assert "answer = 42" in str(artifact)
 
 
+def test_judge_artifact_prefers_the_diff_over_the_transcript(tmp_path: Path) -> None:
+    """Back-compat: an edit task grades the diff, never the transcript."""
+    from coding_agent_playbook.evals.judge import StubJudge
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    task = _make_task(task_dir, rubric=_judged_rubric("clarity"), verdict="rubric")
+
+    judge = StubJudge({"clarity": 0.8})
+    FakeRunner(
+        write_files({"helper.py": "answer = 42\n"}), transcript="TRANSCRIPT-SENTINEL"
+    ).run_task(task, tmp_path / "scratch", judge=judge)
+
+    _criterion, artifact, _n = judge.calls[0]
+    assert "answer = 42" in str(artifact)
+    assert "TRANSCRIPT-SENTINEL" not in str(artifact)
+
+
+def test_judge_artifact_falls_back_to_the_transcript_when_the_diff_is_empty(
+    tmp_path: Path,
+) -> None:
+    """A review-only task produces no diff, so the agent's *answer* is graded.
+
+    Regression guard: review tasks (a ``file_unchanged`` gate) are graded on what
+    the agent *said*, and a no-op agent leaves ``candidate.diff`` empty. Grading
+    the diff unconditionally handed every such task an empty artifact, so the
+    judge scored nothing at all.
+    """
+    from coding_agent_playbook.evals.judge import StubJudge
+
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    task = _make_task(task_dir, rubric=_judged_rubric("clarity"), verdict="rubric")
+
+    judge = StubJudge({"clarity": 0.8})
+    # Default no-op mutation => the agent edited nothing => empty diff.
+    FakeRunner(transcript="I found an OS command injection in app/jobs.py.").run_task(
+        task, tmp_path / "scratch", judge=judge
+    )
+
+    _criterion, artifact, _n = judge.calls[0]
+    assert "OS command injection" in str(artifact)
+
+
 # --------------------------------------------------------------------------- #
 # Fail-fast: a lost deterministic gate skips the judge tier
 # --------------------------------------------------------------------------- #

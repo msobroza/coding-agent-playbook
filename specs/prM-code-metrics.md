@@ -50,24 +50,40 @@ Engine complete; eval **runner + judge are v2 placeholders raising `NotImplement
 Source is parsed **once** into a `ModuleModel`; each registered + available evaluator gets an `EvalContext` and emits **one `Measurement` per scope**.
 
 ```python
-class Scope(Enum):       FUNCTION; METHOD; CLASS; FILE; MODULE     # MODULE = whole target/suite
-class ValueKind(Enum):   NUMERIC; SCORE; BOOL                       # SCORE/BOOL already 0–1 / 0|1
-class Determinism(Enum): DETERMINISTIC; JUDGED                      # regression semantics + v1/v1.1 routing
+class Scope(Enum):
+    FUNCTION
+    METHOD
+    CLASS
+    FILE
+    MODULE  # MODULE = whole target/suite
+
+
+class ValueKind(Enum):
+    NUMERIC
+    SCORE
+    BOOL  # SCORE/BOOL already 0–1 / 0|1
+
+
+class Determinism(Enum):
+    DETERMINISTIC
+    JUDGED  # regression semantics + v1/v1.1 routing
+
 
 class Evaluator(ABC):
     name: str
     scope: Scope
     value_kind: ValueKind
     determinism: Determinism
-    higher_is_worse: bool                 # CC/WMC/CBO/DIT/LCOM4 True; MI/coverage/test/SCORE False
-    requires: str | None = None           # optional dep/capability (e.g. "radon"); None = stdlib
+    higher_is_worse: bool  # CC/WMC/CBO/DIT/LCOM4 True; MI/coverage/test/SCORE False
+    requires: str | None = None  # optional dep/capability (e.g. "radon"); None = stdlib
     default_absolute: AbsoluteThreshold
     default_regression: RegressionPolicy  # max_worsening: 0 deterministic-static/exec; >0 judged
-    default_weight: float = 0.0           # >0 ⇒ contributes to the weighted composite
+    default_weight: float = 0.0  # >0 ⇒ contributes to the weighted composite
 
     def available(self, ctx: EvalContext) -> bool:
         """True if computable here: deps importable AND the needed context is present
         (module for static, ctx.project for execution, ctx.judge for judged)."""
+
     @abstractmethod
     def evaluate(self, ctx: EvalContext) -> list[Measurement]: ...  # one per scope
     def to_score(self, value: float, policy: ResolvedPolicy) -> float:

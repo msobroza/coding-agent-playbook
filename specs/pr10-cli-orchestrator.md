@@ -86,8 +86,8 @@ class SyncContext:
     facts: Facts
     artifact_source: ArtifactSource
     state_source: StateSource
-    adapters: dict[str, Adapter]      # name → instance, only the enabled ones
-    rules_resolved: list[Rule]         # post-overlay-merge, NOT filtered by applies_if yet
+    adapters: dict[str, Adapter]  # name → instance, only the enabled ones
+    rules_resolved: list[Rule]  # post-overlay-merge, NOT filtered by applies_if yet
     prompts_resolved: list[Prompt]
     skills_resolved: list[Skill]
 ```
@@ -211,18 +211,30 @@ def run(args) -> int:
     ctx = SyncContext.from_repo(repo_root)
 
     # Filter applies_if
-    rules = [r for r in ctx.rules_resolved if evaluate_predicate(r.frontmatter.applies_if, ctx.facts, repo_root=repo_root)]
-    prompts = [p for p in ctx.prompts_resolved if evaluate_predicate(p.frontmatter.applies_if, ctx.facts, repo_root=repo_root)]
+    rules = [
+        r
+        for r in ctx.rules_resolved
+        if evaluate_predicate(r.frontmatter.applies_if, ctx.facts, repo_root=repo_root)
+    ]
+    prompts = [
+        p
+        for p in ctx.prompts_resolved
+        if evaluate_predicate(p.frontmatter.applies_if, ctx.facts, repo_root=repo_root)
+    ]
     skills = list(ctx.skills_resolved)  # skills are unconditional in v1
 
     # Build the renderer env + rule registry
     env = build_environment([], is_prompt_context=False)  # for rule re-render
-    prompt_env = build_environment([], is_prompt_context=True, rule_registry=RuleRegistryImpl(rules, ctx.facts, env))
+    prompt_env = build_environment(
+        [], is_prompt_context=True, rule_registry=RuleRegistryImpl(rules, ctx.facts, env)
+    )
 
     # Render each artifact's body
     for rule in rules:
         if rule.is_templated:
-            rule = dataclasses.replace(rule, body=render_string(rule.template_body, _build_context(ctx, env), env=env))
+            rule = dataclasses.replace(
+                rule, body=render_string(rule.template_body, _build_context(ctx, env), env=env)
+            )
     # ... same for prompts and skills ...
 
     # Write via each enabled adapter
