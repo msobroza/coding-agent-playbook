@@ -1,20 +1,31 @@
 """OpenCode adapter. See SPEC.md §10.6.
 
 OpenCode reads ``AGENTS.md`` natively for rules (walking up the directory
-tree, with ``CLAUDE.md`` as fallback) and ``.claude/skills/<id>/SKILL.md``
-natively for skills. The OpenCode adapter therefore writes only
-``.opencode/command/`` files for prompts — rules and skills are routed
-through sibling adapters (AGENTS.md and Claude Code respectively).
+tree, with ``CLAUDE.md`` as fallback), so rules are routed through the AGENTS.md
+adapter. This adapter writes OpenCode's own native outputs:
+
+- prompts -> ``.opencode/command/<slash>.md`` slash commands;
+- skills  -> ``.opencode/skills/<id>/`` (``SKILL.md`` + ``scripts/`` +
+  ``references/``) through the shared
+  :class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter`, so OpenCode
+  no longer depends on the ``claude_code`` adapter being enabled for skills.
+
+OpenCode *also* scans ``.claude/skills/`` (Claude-compatibility discovery), so
+with ``claude_code`` enabled the same skill is found twice. That is safe:
+OpenCode stores discovered skills in a ``Map`` keyed by skill name, last write
+wins (anomalyco/opencode ``packages/core/src/config/plugin/compatibility.ts:53``
+and ``skill.ts:155``), and both copies are byte-identical.
 """
 
 from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
+from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters.base import Adapter
-from coding_agent_playbook.renderer import SENTINEL, render_for
+from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -24,12 +35,11 @@ if TYPE_CHECKING:
 
 
 class OpenCodeAdapter(Adapter):
-    """Translate canonical prompts into OpenCode slash-command files.
+    """Translate canonical prompts and skills into OpenCode's native layout.
 
-    Rules and skills are intentional no-ops on this adapter: OpenCode picks
-    them up from the AGENTS.md adapter's output (``AGENTS.md`` at repo root)
-    and the Claude Code adapter's output (``.claude/skills/``). See
-    SPEC.md §10.6 and §10.6.4 for the OpenCode-touches/does-not-touch matrix.
+    Rules are an intentional no-op on this adapter: OpenCode picks them up from
+    the AGENTS.md adapter's output (``AGENTS.md`` at repo root). See SPEC.md
+    §10.6 and §10.6.4 for the OpenCode-touches/does-not-touch matrix.
 
     The optional ``rule_registry`` is plumbed into :func:`render_for` so the
     ``includes_rules:`` appendix in prompts can be rendered. When the
@@ -40,6 +50,9 @@ class OpenCodeAdapter(Adapter):
     """
 
     name = "opencode"
+
+    #: Native skills root; OpenCode discovers ``.opencode/skills/<name>/SKILL.md``.
+    _SKILL_WRITER: ClassVar[SkillWriter] = SkillWriter(Path(".opencode") / "skills")
 
     def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
         self._rule_registry = rule_registry
@@ -83,19 +96,19 @@ class OpenCodeAdapter(Adapter):
         return [target]
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
-        """Return ``[]`` — OpenCode reads ``.claude/skills/`` natively.
+        """Write a native skill directory under ``.opencode/skills/<id>/``.
 
-        The Claude Code adapter writes the canonical ``.claude/skills/<id>/``
-        directory; OpenCode reads it as a fallback per SPEC.md §10.6. Writing
-        a parallel copy from this adapter would duplicate content and risk
-        the two going out of sync.
+        Delegates to the shared :class:`SkillWriter`, so the bytes are
+        identical to the ``.claude/skills/`` and ``shared_skills/`` copies.
+        Duplicate discovery via ``.claude/skills/`` is safe (see the module
+        docstring: OpenCode keys skills by name, last wins).
         """
-        del skill, repo_root
-        return []
+        return self._SKILL_WRITER.write(skill, repo_root)
 
     def _output_directories(self, repo_root: Path) -> Iterable[Path]:
-        """Only ``.opencode/command/`` is owned by this adapter.
+        """``.opencode/command/`` is scanned by the ABC's first-line sentinel cleanup.
 
+        ``.opencode/skills/`` is cleaned by :meth:`SkillWriter.cleanup` instead.
         Per SPEC.md §10.6.4, the OpenCode adapter must not touch
         ``.opencode/agent/``, ``.opencode/plugin/``, ``opencode.json``,
         ``AGENTS.md``, or ``.claude/`` — those belong to the user or to
@@ -103,29 +116,12 @@ class OpenCodeAdapter(Adapter):
         """
         return [repo_root / ".opencode" / "command"]
 
-    def _default_cleanup(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
-        """Scan each ``_output_directories(repo_root)`` entry and delete any
-        sentinel-tagged file whose absolute path is not in ``written_paths``.
+    def cleanup_stale(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
+        """Remove stale ``.opencode/command/`` files and stale engine-owned skills.
 
-        This matches the algorithm Track 6 lands on the ABC; the override is
-        kept on the OpenCode adapter so this track can self-verify cleanly
-        before Track 6 merges. After integration the inherited behaviour is
-        byte-identical, so the override is a safe no-op.
+        Commands use the ABC's first-line sentinel scan; ``.opencode/skills/``
+        uses :meth:`SkillWriter.cleanup` (user-authored skill dirs are kept).
         """
-        deleted: list[Path] = []
-        for output_dir in self._output_directories(repo_root):
-            if not output_dir.is_dir():
-                continue
-            for path in output_dir.rglob("*"):
-                if not path.is_file():
-                    continue
-                if path.resolve() in written_paths:
-                    continue
-                try:
-                    first_line = path.read_text(encoding="utf-8").split("\n", 1)[0]
-                except (UnicodeDecodeError, OSError):
-                    continue
-                if SENTINEL in first_line:
-                    path.unlink()
-                    deleted.append(path)
+        deleted = self._default_cleanup(written_paths, repo_root)
+        deleted.extend(self._SKILL_WRITER.cleanup(written_paths, repo_root))
         return deleted

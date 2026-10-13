@@ -17,7 +17,7 @@ Layout (§B):
 - ``.playbook/manifest.toml`` (round-trip sidecar) + ``.playbook/.harnessleaf``.
 
 Eval tasks are authoring-only and never dispatched to adapters, so this adapter
-never emits an ``evals/`` directory — consistent with the four built-in adapters.
+never emits an ``evals/`` directory — consistent with the five built-in adapters.
 
 The playbook :data:`SENTINEL` is written as the **first body line** of every
 generated text file (frontmatter must stay on line 1 for the harness parser).

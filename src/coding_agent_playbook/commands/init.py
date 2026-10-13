@@ -34,7 +34,9 @@ class _Answers(TypedDict):
     overlays: list[str]
 
 
-_DEFAULT_ADAPTERS = ("continue", "claude_code", "opencode")
+# ``shared_skills`` (the cross-agent skills hub, SPEC §10.8) is on by default but,
+# unlike ``agents_md``, not force-enabled: users may drop it from [adapters] enabled.
+_DEFAULT_ADAPTERS = ("continue", "claude_code", "opencode", "shared_skills")
 _VALID_KINDS = (
     "python-application",
     "python-library",

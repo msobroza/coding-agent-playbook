@@ -1,14 +1,15 @@
 # SPEC.md — coding-agent-playbook
 | Field | Value |
 | --- | --- |
-| Version | 0.14 (draft) |
+| Version | 0.15 (draft) |
 | Status | Proposed |
-| Last updated | 2026-07-14 |
+| Last updated | 2026-10-14 |
 | Authors | Max Pereira, with Claude |
 | Audience | Implementers, reviewers, future contributors |
 | License | Apache-2.0 (engine); organization overlays may be private |
 
 **Changelog**
+- **0.15** — Native skills for every Agent-Skills harness + the `shared_skills/` hub: a new shared `SkillWriter` (`adapters/_skill_writer.py`) is the single source of truth for a native skill directory (`<root>/<id>/SKILL.md` + byte-copied `scripts/`/`references/`), byte-identical across roots. `claude_code` writes `.claude/skills/`, `opencode` now writes **`.opencode/skills/`** natively (no longer relying on `claude_code`), and the new **`shared_skills`** adapter (on by default, not force-enabled) writes the cross-agent hub `shared_skills/`. Two bug fixes: `SKILL.md` frontmatter `name` is now the skill id (= directory name, the Agent Skills rule OpenCode enforces), and `SKILL.md` carries the sentinel as its first body line so `playbook sync` finally removes a deleted skill's directory (user-authored skill dirs are never touched). New `playbook validate` rule for the Agent Skills `id`/`name`/`description` constraints (id-less skills included). Ownership is decided before writing: a colliding hand-written skill dir is skipped with a warning, never overwritten (§6.3, §10.3, §10.6, §10.8, §12.6).
 - **0.14** — Self-contained markdown links (PR L): every markdown link in every canonical artifact (rules, prompts, skills incl. `references/`) must be **self-contained** — relative targets resolve to a file inside the artifact's source layer (the package `resources/` or repo-local `playbook/`; `..`-escapes, absolute paths, and non-`http(s)` schemes are violations), and `http(s)` links pass only through the new `[links] allowed_domains` allowlist (default empty = fully strict). Deterministic (stdlib-only, no network), extraction masks frontmatter/code fences/inline code. New `links.py` + `config.parse_links_config` + a `playbook validate` rule (§12.6, §7.1); the engine's own artifacts are gated on CI by a pytest integration test. Design: `specs/prL-markdown-links.md`.
 - **0.13** — Eval task-config redesign ("2b refined", Tracks C1–C8): the `[expected]`/`[metrics]`/`[rubric]` triple is replaced by a **layered** task config. Three layers share one `[<layer>.bind]` + `[<layer>].expr` shape — **`[gate]`** (deterministic boolean), **`[rubric]`** (llm-judge weighted), and an optional cross-trial **`[aggregate]`** — composed by a tiny boolean-expression DSL; `[verdict].trial` is a boolean expression over the layers, and the **verdict is *derived*** from the layer results (not re-run). There is **no `[expected]` block** — file predicates are gate `check`s (`file_exists`/`file_contains`/`file_unchanged`/`file_forbidden`). Thresholds are now **0–1 normalized**: every `Metric` owns a `Normalizer` (`evaluators/normalizer.py`: `RampNormalizer`/`PercentNormalizer`/`Identity`) mapping raw→0–1 goodness (higher = better), and `higher_is_worse` is **deleted** — `warn`/`fail`/`max_worsening` are 0–1 cutoffs. A check is `(type) × (metric|judge) × kwargs`: `check = "threshold"|"non_regression"` over a registered `metric=` **or** a `judge=` criterion (a `JudgeMetric` — an llm-judge criterion **is a metric**). New registries: checks via `@register_check` + `coding_agent_playbook.checks`, gates via `@register_gate` + the new **`coding_agent_playbook.gates`**; `{ref="name"}` resolves a registered composed **gate** or **rubric**. The `[aggregate]` layer is the same bind+expr shape over `pass_at_k`/`pass_pow_k` (`k` kwarg, `over ∈ {gate,rubric,verdict}`); the runner runs `N=max(k)` trials. Deleted from the prior model: the `[expected]`/`[metrics]`-triple authoring, `higher_is_worse`, `rubric_for_task`, `ExpectedOutcome`. Authoritative design: `specs/pr2b-task-config.md`; migration: `MIGRATION.md` (§6.5, §15.2/§15.3/§15.3.1, §21).
 - **0.12** — Evaluator subsystem refactor (PR R6 — clean-slate): the fused `Evaluator` ABC + free `grade()` are replaced by three single-responsibility abstractions — **`Metric`** (`measure(ctx) -> list[Measurement]`), **`Check`** (`grade(ctx, measurements) -> CheckResult`, a boolean gate + optional partial-credit score), and **`Rubric`** (a weighted set of checks; `evaluate(ctx, measurements) -> EvaluationReport`). `Rubric` **is also a `Metric`** (it surfaces its composite via `measure()`), so a rubric thresholds into a check and nests into a Composite tree. A cost-tiered (`CostTier` DETERMINISTIC < EXECUTION < JUDGED) `scheduler` runs checks cheapest-tier-first with short-circuit, so a failing deterministic check **never invokes the LLM judge** (`playbook eval --run --full-scoring` forces every check). Entry-point groups are renamed/split: out-of-tree metrics register under **`coding_agent_playbook.metrics`** (was `…​.evaluators`), custom graders under the new **`coding_agent_playbook.checks`**. `grade()` is replaced by `Rubric.evaluate`; the `extra_evaluators` side-channel, `value_kind`/`to_score`, the weight-0/fail-floor `[expected]` hack, and `evaluators_for_task` are deleted. The authored `[expected]`/`[metrics]`/`[rubric]` task TOML is **unchanged** (zero authoring migration). Authoritative design: `specs/prR6-check-rubric.md`; migration guide: `MIGRATION.md` (§15.3/§15.3.1, §21).
@@ -36,7 +37,7 @@ Prior art that shaped this design:
 **G5 — Air-gapped friendly.** No required network calls at sync time. Internal PyPI distribution. No HTTP-based hooks shipped by default. No telemetry.
 **G6 — Eval task authoring (Tier 0).** v1 ships the schema, loader, validator, and read-only CLI for prompt-associated eval tasks (Section 6.5). The runner, programmatic checks, and LLM-as-judge are deferred to v1.1 (Tier 1) and v2 (Tier 2) respectively. Authors write tasks alongside prompts from day one; the corpus accumulates as documentation and is ready when the runner lands.
 ### 2.2 v1 non-goals (named so people stop asking)
-- Skills are not first-class for non-Claude-Code harnesses; they degrade to prompts. (Exception: OpenCode reads `.claude/skills/` natively, so skills work there without a separate adapter path.)
+- Skills are first-class only for harnesses that implement the Agent Skills layout (`<root>/<name>/SKILL.md`): Claude Code (`.claude/skills/`) and OpenCode (`.opencode/skills/`), plus the agent-neutral `shared_skills/` hub (§10.8) — and, in its own tree, the opt-in `agent_harness` adapter (`skills/<id>/SKILL.md`, §10.7). Adapters that keep the ABC default (Continue) degrade skills to prompts; the rules-only `agents_md` adapter does not emit skills at all.
 - No MCP server configuration management. (v2.)
 - No Cursor dedicated adapter beyond the universal AGENTS.md fallback. (v2.)
 - No Codex CLI dedicated adapter — Codex reads AGENTS.md natively, so the universal adapter is sufficient.
@@ -60,7 +61,7 @@ Prior art that shaped this design:
 ## 3. Glossary
 - **Rule** — a unit of always-on or context-scoped guidance loaded into the assistant's system prompt. Example: *"Use ruff for linting, never black or flake8."* Rendered as `.continue/rules/*.md`, or as sections of `CLAUDE.md` / `AGENTS.md`. OpenCode reads `AGENTS.md` natively, so rules reach OpenCode via the AGENTS.md adapter rather than a dedicated path.
 - **Prompt** — a reusable, named instruction the user invokes explicitly. Example: `/refactor` or `/generate-tests`. Rendered as `.continue/prompts/*.md` with `invokable: true`, `.claude/commands/*.md`, or `.opencode/command/*.md`.
-- **Skill** — a Claude Code-specific richer prompt with bundled scripts and progressive disclosure. Degrades to a prompt for harnesses that lack the concept. OpenCode reads `.claude/skills/<name>/SKILL.md` natively, so skills authored for Claude Code work in OpenCode without duplication.
+- **Skill** — a richer prompt with bundled scripts and progressive disclosure, in the Agent Skills layout (`<name>/SKILL.md` + `scripts/` + `references/`). Written natively to `.claude/skills/` (Claude Code), `.opencode/skills/` (OpenCode) and the cross-agent `shared_skills/` hub by one shared `SkillWriter`, so every copy is byte-identical (the opt-in `agent_harness` adapter also writes it natively, in its own `skills/` tree). Degraded to a prompt only by adapters that keep the ABC default (Continue); not emitted by the rules-only `agents_md` adapter.
 - **Hook** — overloaded term. Two distinct meanings:
   - **Git pre-commit hook**: a shell command run before a commit lands (via pre-commit.com framework).
   - **Assistant lifecycle hook**: PreToolUse / PostToolUse / SessionStart etc., supported by Claude Code and Continue CLI. The engine ships configuration for both kinds and keeps them visually separate in source.
@@ -99,6 +100,7 @@ Prior art that shaped this design:
                                     │  │   ├── continue             │  │
                                     │  │   ├── claude_code          │  │
                                     │  │   ├── opencode             │  │
+                                    │  │   ├── shared_skills        │  │
                                     │  │   └── agents_md            │  │
                                     │  └────────────────────────────┘  │
                                     └──────────────────────────────────┘
@@ -116,7 +118,10 @@ Prior art that shaped this design:
               │   - LiteLLM-aware config     │         │   .continue/prompts/*.md     │
               │                              │         │   .claude/CLAUDE.md          │
               └──────────────┬───────────────┘         │   .claude/commands/*.md      │
+                             │                         │   .claude/skills/*/          │
                              │                         │   .opencode/command/*.md     │
+                             │                         │   .opencode/skills/*/        │
+                             │                         │   shared_skills/*/           │
                              │                         │   AGENTS.md                  │
                              └─────── merges ─────────►│   .pre-commit-config.yaml    │
                                                        │                              │
@@ -132,7 +137,7 @@ The end-to-end flow of `playbook sync` in a consumer repo:
 3. **Resolve overlays.** Query the configured `ArtifactSource` (filesystem in v1; see Section 20) for rules, prompts, skills, and eval tasks across the engine package, each declared overlay package, and the consumer's `playbook/` directory. Build a unified artifact list, with later layers overriding earlier ones by ID.
 4. **Filter.** For each artifact, evaluate its `applies_if` predicate against the facts dictionary. Drop non-matching artifacts.
 5. **Render.** Apply Jinja2 to each surviving artifact's template with `facts | config` as context.
-6. **Dispatch to adapters.** For each enabled adapter (`continue`, `claude_code`, `opencode`, `agents_md`), pass the rendered artifacts; the adapter writes to its harness-specific locations.
+6. **Dispatch to adapters.** For each enabled adapter (`continue`, `claude_code`, `opencode`, `shared_skills`, `agents_md`), pass the rendered artifacts; the adapter writes to its harness-specific locations.
 7. **Write `AGENTS.md`** as the universal fallback regardless of which adapters are enabled.
 8. **Stamp.** Write a `.coding-agent-playbook.lock` file containing the rendered file hashes via the configured `StateSource`; used by `playbook sync --check` to detect drift.
 Eval tasks (Section 6.5) are intentionally **not** part of the sync flow. They live in engine and overlay packages, are read at validation time (`playbook validate`) and enumeration time (`playbook eval --list`), and v2 will read them at runner time — but they never produce files in the consumer repo. They are authoring-side artifacts, not deliverables.
@@ -163,9 +168,11 @@ coding-agent-playbook/
 │   ├── adapters/
 │   │   ├── __init__.py
 │   │   ├── base.py                         # Adapter ABC
+│   │   ├── _skill_writer.py                # shared native SkillWriter (Section 10.8)
 │   │   ├── continue_adapter.py
 │   │   ├── claude_code_adapter.py
 │   │   ├── opencode_adapter.py
+│   │   ├── shared_skills_adapter.py        # cross-agent shared_skills/ hub
 │   │   └── agents_md_adapter.py
 │   ├── sources/                            # storage abstraction (see Section 20)
 │   │   ├── __init__.py
@@ -205,7 +212,7 @@ coding-agent-playbook/
 │       │   ├── explain.md                      # plain markdown
 │       │   └── spec.md                         # plain markdown
 │       ├── skills/
-│       │   └── (empty in v1; Claude Code only)
+│       │   └── (empty in v1; native via the skill adapters)
 │       ├── eval_tasks/
 │       │   ├── generate-tests-happy-path/
 │       │   │   ├── task.toml
@@ -298,25 +305,35 @@ risk-models/                                # the user's project
 │       └── explain.md
 ├── .claude/
 │   ├── CLAUDE.md                           # AUTOGENERATED
-│   └── commands/
-│       ├── refactor.md
-│       ├── generate-tests.md
-│       ├── review.md
-│       └── explain.md
+│   ├── commands/
+│   │   ├── refactor.md
+│   │   ├── generate-tests.md
+│   │   ├── review.md
+│   │   └── explain.md
+│   └── skills/                             # AUTOGENERATED — Claude Code native skills
+│       └── query-db/
+│           ├── SKILL.md
+│           └── scripts/run.py
 ├── .opencode/
-│   └── command/                            # AUTOGENERATED — OpenCode slash commands
-│       ├── refactor.md
-│       ├── generate-tests.md
-│       ├── review.md
-│       └── explain.md
+│   ├── command/                            # AUTOGENERATED — OpenCode slash commands
+│   │   ├── refactor.md
+│   │   ├── generate-tests.md
+│   │   ├── review.md
+│   │   └── explain.md
+│   └── skills/                             # AUTOGENERATED — OpenCode native skills
+│       └── query-db/                       #   (byte-identical to .claude/skills/query-db/)
+├── shared_skills/                          # AUTOGENERATED — cross-agent skills hub (Section 10.8)
+│   └── query-db/                           #   (byte-identical to .claude/skills/query-db/)
 └── playbook/                               # OPTIONAL: per-repo customizations
-    └── rules/
-        └── risk-models-specific.md.j2
+    ├── rules/
+    │   └── risk-models-specific.md.j2
+    └── skills/
+        └── query-db/                       # canonical skill source (SKILL.md with `id: query-db` + scripts/)
 ```
-Everything marked AUTOGENERATED has a sentinel header and is owned by `playbook sync`. The user owns `.coding-agent-playbook.toml`, `.coding-agent-playbook.local.toml`, anything under `playbook/`, and their own source code.
-Note two deliberate non-duplications for OpenCode:
+Everything marked AUTOGENERATED carries the sentinel and is owned by `playbook sync` (a `SKILL.md` carries it as its first body line, since its frontmatter must stay on line 1; the rest of a skill directory is owned through that `SKILL.md`). The user owns `.coding-agent-playbook.toml`, `.coding-agent-playbook.local.toml`, anything under `playbook/`, their own source code, and any hand-written skill directory (no sentinel) under the three skill roots — a canonical skill whose `id` collides with one is skipped for that root with a warning (Section 10.8). The output directory name is the skill's `id:` frontmatter value, not the source folder name (Section 6.3).
+Note one deliberate non-duplication for OpenCode, and one deliberate duplication:
 - **No `.opencode/rules/` directory.** OpenCode reads `AGENTS.md` natively as its primary rules source, walking up the directory tree. The universal AGENTS.md adapter is OpenCode's rule-delivery path. Writing a separate `.opencode/rules/` would just duplicate content OpenCode is already reading from `AGENTS.md`.
-- **No `.opencode/skills/` directory.** OpenCode reads `.claude/skills/<name>/SKILL.md` natively as a fallback. Skills written by the Claude Code adapter are automatically picked up by OpenCode without copying.
+- **`.opencode/skills/` is written natively.** The OpenCode adapter emits its own skill tree so OpenCode works without the Claude Code adapter enabled. OpenCode also scans `.claude/skills/`; the duplicate is harmless because OpenCode keys discovered skills by name in a map (last wins) and both copies are byte-identical (§10.6).
 The user's own `.opencode/agent/` (custom agents) and `.opencode/plugin/` (lifecycle hooks) directories, plus `opencode.json` (MCP servers, permissions, model selection), are owned by the user and not touched by the engine. See Section 10.6 for the OpenCode adapter's boundaries.
 ## 6. Canonical artifact model
 ### 6.0 File formats: `.md` and `.md.j2`
@@ -588,13 +605,21 @@ A rule cannot itself reference other rules via `includes_rules:`. Only prompts h
 - `playbook validate` errors if `{{ rule("X") }}` references a rule not in `includes_rules:`, or if `includes_rules:` lists a rule never referenced via `{{ rule() }}` (only in `.md.j2` files — plain `.md` prompts don't need to call `{{ rule() }}`).
 **Why not let rules be included by globs too?**
 A natural follow-on idea: a prompt declares `includes_rules_matching: { tags: ["python", "testing"] }` and the engine picks up all matching rules. Rejected for v1 because it makes the rendered prompt non-deterministic from a glance at the source — you need to mentally execute the matcher against the current rule registry. Explicit lists are uglier but trivially readable. Revisit in v2 if the explicit lists become unwieldy.
-### 6.3 Skills (Claude Code only in v1)
-Skills are Claude Code-specific. The engine ships none in v1; the abstraction exists so v2 can add them without breaking the artifact model. Overlay packages may ship skills already in v1 if they want Claude Code-only richer prompts; they degrade gracefully.
+### 6.3 Skills
+Skills follow the **Agent Skills** layout that Claude Code and OpenCode both read natively. The engine ships none in v1; overlay packages and repo-local `playbook/skills/<id>/` may ship them today. They are written natively by the `claude_code` (`.claude/skills/`), `opencode` (`.opencode/skills/`) and `shared_skills` (`shared_skills/`) adapters through one shared `SkillWriter` (§10.8), so every copy is byte-identical; the opt-in `agent_harness` adapter writes them natively in its own tree (`skills/<id>/SKILL.md`, §10.7). Adapters that keep the ABC default `write_skill` (Continue) degrade a skill to a prompt (§6.3.2); the rules-only `agents_md` adapter does not emit skills at all.
+
+**Every canonical skill must declare `id:` in its `SKILL.md` frontmatter.** The `id` — not the source folder name — is the overlay merge key (§11), the output directory name (`<root>/<id>/`) and the emitted `name`. A skill without `id:` falls back to the id `skill`, so several id-less skills collapse into one and all but the last are silently dropped; `playbook validate` reports every id-less (or non-string-id) skill (§12.6).
+
+Emitted `SKILL.md` contract (enforced by the `SkillWriter`):
+- **`name` = the skill id = the output directory name.** The Agent Skills standard requires `name` to equal the directory name and match `^[a-z0-9]+(-[a-z0-9]+)*$` (1–64 chars); OpenCode silently drops a skill that fails it. The writer always sets `name` to the canonical `id` (an authored display `name` is replaced); every other frontmatter key, including `id`, is kept. A `description` of 1–1024 chars is required. `playbook validate` flags ids that break the pattern and skills without a description (§12.6).
+- **Path-safe ids only.** An id containing a path separator, `..`/`.`, NUL, or a drive/absolute prefix is rejected with a `ValueError` naming it — the writer never writes outside its root (and never writes through a symlink that escapes it).
+- **Sentinel as the first body line.** Frontmatter must start on line 1 (`^---`) for agent parsers, so the `SENTINEL` is an HTML comment right after the closing fence (the §10.7.3 pattern). A skill directory is engine-owned iff its `SKILL.md` carries the sentinel; `playbook sync` deletes stale files (and then empty directories) only inside engine-owned skill directories.
+- **Ownership is decided before writing.** If `<root>/<id>/` already exists and is not engine-owned — a hand-written skill dir with a colliding id, a symlink, or a plain file — the writer leaves it untouched and prints a warning instead of overwriting `SKILL.md` (which would turn the user's other files into "stale" ones). Exceptions: an empty directory, and a sentinel-less directory whose `SKILL.md` the previous sync's lockfile lists (the pre-v0.15 `.claude/skills/` output had no sentinel), are claimed.
 #### 6.3.1 Schema
 A skill is a directory:
 ```
-skill-name/
-├── SKILL.md.j2                      # the prompt body, with frontmatter
+any-folder-name/                     # the output dir comes from `id:`, not this name
+├── SKILL.md.j2                      # the prompt body, with frontmatter (must declare `id:`)
 ├── scripts/                         # optional, bundled scripts the skill can call
 │   └── helper.py
 └── references/                      # optional, additional context
@@ -821,8 +846,8 @@ class Prompt:
 
 @dataclass
 class Skill:
-    # Claude Code-only artifact, see Section 6.3
-    frontmatter: dict  # Claude's SKILL.md frontmatter shape
+    # Agent Skills directory, see Section 6.3
+    frontmatter: dict  # SKILL.md frontmatter (open mapping)
     body: str
     scripts_dir: Path | None  # if the skill bundles scripts
     references_dir: Path | None
@@ -883,7 +908,8 @@ version = "0.4.0"                    # engine version this config was generated 
 enabled = ["playbook_rules_bnp"]
 [adapters]
 # Which adapters render output. AGENTS.md is always generated.
-enabled = ["continue", "claude_code", "opencode"]
+# shared_skills (the cross-agent skills hub, Section 10.8) is on by default; drop it to opt out.
+enabled = ["continue", "claude_code", "opencode", "shared_skills"]
 [storage]
 # Where artifacts and state come from / go to. See Section 20.
 # v1 ships only "filesystem"; future deployments can add others.
@@ -1122,9 +1148,9 @@ class Adapter(ABC):
         """Write a rendered prompt."""
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
-        """Default: degrade to prompt. Subclasses override if native skill support
-        (or if a sibling adapter already covers the harness — e.g. OpenCode reads
-        .claude/skills/ natively, so its adapter overrides this to return [])."""
+        """Default: degrade to prompt. Subclasses with native skill support
+        (claude_code, opencode, shared_skills) override this and delegate to the
+        shared SkillWriter (Section 10.8); rules-only adapters return []."""
         prompt = skill.to_prompt()
         return self.write_prompt(prompt, repo_root)
 
@@ -1142,7 +1168,7 @@ class Adapter(ABC):
         only if they need custom cleanup semantics."""
         return self._default_cleanup(written_paths, repo_root)
 ```
-Adapters return the paths they wrote. The CLI uses these for the lockfile and for `cleanup_stale`. Of the four built-in adapters, only ClaudeCodeAdapter overrides `finalize()` (to compose CLAUDE.md); the rest write immediately in `write_rule` / `write_prompt`.
+Adapters return the paths they wrote. The CLI uses these for the lockfile and for `cleanup_stale`. Of the five built-in adapters (Continue, Claude Code, OpenCode, AGENTS.md, shared_skills), only ClaudeCodeAdapter overrides `finalize()` (to compose CLAUDE.md); the rest write immediately in `write_rule` / `write_prompt` / `write_skill`.
 ### 10.2 Continue adapter
 ```python
 # coding_agent_playbook/adapters/continue_adapter.py
@@ -1190,12 +1216,17 @@ class ClaudeCodeAdapter(Adapter):
         target.write_text(self._render_command(prompt), encoding="utf-8")
         return [target]
 
+    def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
+        # .claude/skills/<id>/ via the shared SkillWriter (Section 10.8).
+        return SkillWriter(Path(".claude") / "skills").write(skill, repo_root)
+
     def finalize(self, repo_root: Path) -> list[Path]:
         target = repo_root / ".claude" / "CLAUDE.md"
         body = self._compose_claude_md(self._buffered_rules)
         target.write_text(body, encoding="utf-8")
         return [target]
 ```
+Skills are written natively to `.claude/skills/<id>/` (`SKILL.md` + byte-copied `scripts/` and `references/`) by the shared `SkillWriter`, with `name` = id and the sentinel as the first body line (§6.3). `cleanup_stale` combines three passes: the first-line sentinel scan over `.claude/commands/`, the `SkillWriter` cleanup over `.claude/skills/` (stale files inside engine-owned skill dirs; user-authored skill dirs are never touched), and the single-file `.claude/CLAUDE.md` branch.
 #### 10.3.1 CLAUDE.md composition
 ```markdown
 <!-- AUTOGENERATED by coding-agent-playbook v0.4.0 — edit in source, run 'playbook sync' -->
@@ -1230,11 +1261,13 @@ Adapters are registered via entry points so overlay packages can ship their own 
 continue = "coding_agent_playbook.adapters.continue_adapter:ContinueAdapter"
 claude_code = "coding_agent_playbook.adapters.claude_code_adapter:ClaudeCodeAdapter"
 opencode = "coding_agent_playbook.adapters.opencode_adapter:OpenCodeAdapter"
+shared_skills = "coding_agent_playbook.adapters.shared_skills_adapter:SharedSkillsAdapter"
 agents_md = "coding_agent_playbook.adapters.agents_md_adapter:AgentsMdAdapter"
+agent_harness = "coding_agent_playbook.adapters.agent_harness_adapter:AgentHarnessAdapter"
 ```
 ### 10.6 OpenCode adapter
-OpenCode is structurally close to Claude Code but with one architectural twist: rules are not in a dedicated directory. OpenCode reads `AGENTS.md` at the repo root as its primary rules source, walking up the directory tree, with `CLAUDE.md` accepted as a fallback. This means the AGENTS.md adapter already delivers rules to OpenCode — the OpenCode adapter's job is limited to prompts.
-Skills are also covered without duplication: OpenCode reads `.claude/skills/<name>/SKILL.md` natively as a fallback, so the Claude Code adapter's skill output is automatically picked up by OpenCode. The OpenCode adapter does not write skills.
+OpenCode is structurally close to Claude Code but with one architectural twist: rules are not in a dedicated directory. OpenCode reads `AGENTS.md` at the repo root as its primary rules source, walking up the directory tree, with `CLAUDE.md` accepted as a fallback. This means the AGENTS.md adapter already delivers rules to OpenCode — the OpenCode adapter's job is prompts and skills.
+Skills are written natively to `.opencode/skills/<id>/SKILL.md` (+ `scripts/`, `references/`) through the shared `SkillWriter` (§10.8), so OpenCode no longer depends on the Claude Code adapter being enabled. OpenCode *also* scans `.claude/skills/` (its Claude-compatibility discovery), so with both adapters on the same skill is discovered twice. That is safe: OpenCode stores discovered skills in a `Map` keyed by skill name, last write wins (verified in anomalyco/opencode `packages/core/src/config/plugin/compatibility.ts:53` and `skill.ts:155`), and the two copies are byte-identical.
 ```python
 class OpenCodeAdapter(Adapter):
     name = "opencode"
@@ -1251,9 +1284,9 @@ class OpenCodeAdapter(Adapter):
         return [target]
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
-        # OpenCode reads .claude/skills/ natively as a fallback. The
-        # ClaudeCodeAdapter already writes there — no duplication needed.
-        return []
+        # .opencode/skills/<id>/ via the shared SkillWriter (Section 10.8);
+        # byte-identical to the .claude/skills/ copy.
+        return SkillWriter(Path(".opencode") / "skills").write(skill, repo_root)
 ```
 #### 10.6.1 Prompt → OpenCode command format
 OpenCode commands are markdown with YAML frontmatter. Required field is `description`; optional fields include `agent`, `model`, `subtask`. Placeholders supported in the body: `$ARGUMENTS`, `$1`, `$2`, …, `@path/to/file`, ``!`shell command` ``.
@@ -1284,15 +1317,15 @@ OpenCode does not support declarative lifecycle hooks. Equivalent behavior requi
 #### 10.6.3 Agents gap (out of scope for v1)
 OpenCode supports named agents (`build`, `plan`, custom modes) with their own model and permission overrides, defined in `.opencode/agent/<name>.md`. The canonical artifact model has no concept of named agents in v1. Users wanting custom OpenCode agents write them by hand. See open question 9.
 #### 10.6.4 What the OpenCode adapter does NOT touch
-To make the boundaries explicit, the OpenCode adapter writes only `.opencode/command/`. It does **not** write or modify:
+To make the boundaries explicit, the OpenCode adapter writes only `.opencode/command/` and `.opencode/skills/` (and cleans only those two trees; in `.opencode/skills/` it writes and cleans only engine-owned skill dirs — a hand-written skill dir whose name collides with a canonical skill id is skipped with a warning, never overwritten). It does **not** write or modify:
 - **`.opencode/agent/`** — out of scope; users own custom agents.
 - **`.opencode/plugin/`** — out of scope (hook equivalent); users own plugins.
 - **`opencode.json`** — out of scope; users own MCP server config, permissions, model selection, and the `instructions` array.
 - **`AGENTS.md`** — owned by the AGENTS.md adapter; OpenCode reads it natively.
-- **`.claude/skills/`** — owned by the Claude Code adapter; OpenCode reads it natively as a fallback.
-This deliberate minimalism keeps the OpenCode adapter to ~150 lines and avoids stepping on user-owned config.
+- **`.claude/` (incl. `.claude/skills/`)** — owned by the Claude Code adapter. OpenCode may also discover skills there; duplicates are safe (see above).
+This deliberate minimalism keeps the OpenCode adapter small and avoids stepping on user-owned config.
 ### 10.7 Agent Harness adapter
-The `agent_harness` adapter renders canonical artifacts into a [Agent Harness](https://agentharnesses.io/specification) tree — a `HARNESS.md`-rooted format consumed by harness clients. Unlike the four built-in adapters it is **opt-in**: it is not in the default adapter set and is not force-enabled like `agents_md`. Enable it by listing `agent_harness` in `[adapters] enabled`. It is discovered through the same entry-point mechanism (§10.5); the engine never constructs it directly.
+The `agent_harness` adapter renders canonical artifacts into a [Agent Harness](https://agentharnesses.io/specification) tree — a `HARNESS.md`-rooted format consumed by harness clients. Unlike the five built-in adapters it is **opt-in**: it is not in the default adapter set and is not force-enabled like `agents_md`. Enable it by listing `agent_harness` in `[adapters] enabled`. It is discovered through the same entry-point mechanism (§10.5); the engine never constructs it directly.
 ```python
 class AgentHarnessAdapter(Adapter):
     name = "agent_harness"
@@ -1336,9 +1369,31 @@ The adapter emits a harness tree under the repo root (`specs/prH-agent-harness.m
 
 `scope=always` rules go to `rules/` and `HARNESS.md` adds an "Always consult these" section instructing the agent to read them every session — keeping the root body small and spec-idiomatic. The harness rule file emits **only** `description`; the rule `name` and every other non-native field round-trip via the sidecar (§20.10).
 
-**Eval tasks are not emitted.** The `Adapter` ABC has no eval hook — `sync` only dispatches `write_rule` / `write_prompt` / `write_skill` / `finalize` — so eval tasks are authoring-only and never reach any adapter. The `agent_harness` adapter therefore never writes an `evals/` directory, exactly like the four built-in adapters. (The importer in §12.9 can still *read* a foreign `evals/` directory.)
+**Eval tasks are not emitted.** The `Adapter` ABC has no eval hook — `sync` only dispatches `write_rule` / `write_prompt` / `write_skill` / `finalize` — so eval tasks are authoring-only and never reach any adapter. The `agent_harness` adapter therefore never writes an `evals/` directory, exactly like the five built-in adapters. (The importer in §12.9 can still *read* a foreign `evals/` directory.)
 #### 10.7.3 Sentinel placement and cleanup
 A harness parser requires frontmatter to start on line 1 (`^---`), so the playbook `SENTINEL` cannot be line 1. The adapter writes it as the **first body line** (an HTML comment, after the closing frontmatter fence) on every generated text file. Because of this, the adapter overrides `cleanup_stale` to detect the sentinel *anywhere* in a file rather than only on line 1 (the Claude Code / AGENTS.md single-file pattern). Files without a sentinel are user-authored and never deleted. Scripts and raw assets carry no sentinel; their engine ownership is tracked through the previous `.playbook/manifest.toml`, which `cleanup_stale` reads at the start of `finalize` before overwriting it.
+### 10.8 Shared-skills adapter and the `SkillWriter`
+The `shared_skills` adapter writes every canonical skill to `<repo>/shared_skills/<id>/` — the **cross-agent skills hub**: one agent-neutral, committed copy of the skills that any Agent-Skills-aware tool (or a human) can be pointed at, independent of which harness adapters are enabled. It is **on by default** (`playbook init` lists it in `adapters_enabled`) but, unlike `agents_md`, **not force-enabled** — remove it from `[adapters] enabled` to opt out. `write_rule` / `write_prompt` return `[]` (rules reach every assistant through `AGENTS.md`; prompts through the harness adapters). It takes no `rule_registry`, so `discover_adapters` constructs it with no arguments, like `agents_md`.
+```python
+class SharedSkillsAdapter(Adapter):
+    name = "shared_skills"
+
+    def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
+        return []  # rules -> AGENTS.md
+
+    def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
+        return []  # prompts -> harness adapters
+
+    def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
+        return SkillWriter(Path("shared_skills")).write(skill, repo_root)
+```
+**The `SkillWriter`** (`adapters/_skill_writer.py`) is the single source of truth for a native skill directory; `claude_code` (`.claude/skills`), `opencode` (`.opencode/skills`) and `shared_skills` (`shared_skills`) each hold one, differing only in the repo-relative root, so a skill is **byte-identical in every root**.
+- **Write.** `<root>/<id>/SKILL.md` (frontmatter on line 1 with `name` = id, the sentinel HTML comment as the first body line, then the body) plus byte-copies (`shutil.copy2`, copies not symlinks — source symlinks are dereferenced, exec bits preserved) of the canonical `scripts/` and `references/` subtrees. Returns every file written.
+- **Path safety.** Non-path-safe ids (separators, `.`/`..`, NUL, drive/absolute) raise `ValueError` with the offending value; a destination whose directory resolves outside the root (via a symlink) is refused before anything is created, and a symlink sitting at a destination file is replaced, never written through.
+- **Ownership before writing.** `write` claims `<root>/<id>/` only if it is absent, an empty directory, engine-owned (sentinel), or a real directory whose `SKILL.md` the previous sync's lockfile lists (pre-v0.15 output). Anything else — a hand-written skill dir with a colliding id, a symlinked dir or `SKILL.md`, a plain file — is skipped with a stderr warning and returns `[]`, so its files are never overwritten and cleanup never sees it as engine-owned. Inside a claimed dir, whatever blocks a write is cleared first: a file (or symlink) where a parent directory must go, a real directory where a file must go, and any existing destination file (unlinked, so a read-only copy from an earlier sync cannot fail the rewrite). Only files are ever recorded as written.
+- **Case-only id renames.** On a case-insensitive filesystem (default macOS APFS, Windows), an engine-owned `<root>/<Old>/` that *is* `<root>/<old>/` is renamed to the new spelling before writing, so the directory keeps matching the emitted `name`.
+- **Cleanup.** `<root>/<id>/` is engine-owned iff it is a real directory whose `SKILL.md` (a regular file) contains the sentinel anywhere — searched as bytes, so binary or undecodable files never crash it. In an engine-owned dir every regular file that is not one of `written_paths` is deleted (stale scripts/references too) and emptied directories are pruned, including the skill dir itself. "Is one of" compares file identity (`st_dev`/`st_ino`), not path spelling, so a relative or symlinked `--repo-root` or a case-insensitive filesystem never deletes a file written this sync. Directories without the sentinel are user-authored and **never touched**; symlinks are never followed nor deleted.
+- **Upgrade note.** `.claude/skills/<id>/` directories written before v0.15 carry no sentinel. A skill still present after upgrading is re-claimed through the lockfile (its `SKILL.md` is listed there), gains the sentinel, and is cleaned normally from then on. A skill deleted *before* upgrading is never written again, so it is left in place (treated as user-authored); delete it by hand once.
 ## 11. Overlay system
 ### 11.1 Three layers
 The artifact list is built by merging three sources in order:
@@ -1411,6 +1466,7 @@ coding-agent-playbook v0.4.0
    ◉ Continue
    ◉ Claude Code
    ◉ OpenCode
+   ◉ Shared skills hub (shared_skills/)
    ◯ Codex CLI (AGENTS.md only)
 ? Enable overlay packages? (detected: playbook-rules-bnp)
    ◉ playbook-rules-bnp
@@ -1513,6 +1569,7 @@ $ playbook validate
 ✓ All `eval_tasks:` references resolve to existing tasks
 ✓ All task `prompt_id` back-references match a prompt's `eval_tasks:` list
 ✓ All markdown links self-contained (relative targets resolve; externals allowlisted)
+✓ All skills are valid Agent Skills (string id declared, id/name matches ^[a-z0-9]+(-[a-z0-9]+)*$, description present)
 ✗ rules/frameworks/sqlalchemy-v2.md.j2: applies_if references unknown fact 'orm_version'
 ✗ prompts/refactor.md.j2: body calls `{{ rule("python-style") }}` but rule not in includes_rules
 ✗ rules/languages/python/typing.md.j2: body calls `{{ rule(...) }}` — rules cannot include other rules
@@ -1520,10 +1577,15 @@ $ playbook validate
 ✗ prompts/generate-tests.md.j2: declares eval_task 'foo-bar' but eval_tasks/foo-bar/ not found
 ✗ rules/languages/python/typing.md.j2: markdown link 'style.md' (line 12): target 'style.md' does not exist in the artifact set
 ✗ prompts/review.md.j2: markdown link 'https://blog.example.com/x' (line 4): external link to host 'blog.example.com' is not in [links] allowed_domains
+✗ skills/My_Skill (<repo-local>): skill id 'My_Skill' is not a valid Agent Skills name (must match ^[a-z0-9]+(-[a-z0-9]+)*$); OpenCode silently skips it
+✗ skills/query-db (<repo-local>): skill has no 'description'; Agent Skills requires a non-empty description
+✗ skills/<no id; name 'pdf-tools', at playbook/skills/pdf-tools> (<repo-local>): skill has no 'id'; it is emitted as 'skill' and collides with every other id-less skill (declare 'id:' in its SKILL.md frontmatter)
 exit code: 1
 ```
 
 The self-contained-links rule (PR L, design in `specs/prL-markdown-links.md`) covers rule bodies, prompt bodies, and skills (`SKILL.md` + every markdown file under `references/`) across all three source layers. Extraction masks frontmatter, fenced code blocks, and inline code spans (code examples like `def first[T](items: list[T])` are not links); Jinja-bearing targets are skipped as not statically checkable. Relative targets must resolve — `other.md` is satisfied by a canonical `other.md.j2` since rendering drops the suffix — and must stay inside the artifact's source layer; `http(s)` targets pass only via `[links] allowed_domains` (§7.1); every other scheme and absolute paths are violations. Deterministic by construction: stdlib only, no network. The engine's own shipped artifacts are enforced on CI by a pytest integration test (`tests/cli/test_validate_links.py`); consumer repos and overlays inherit the rule through `playbook validate`.
+
+The Agent Skills rule (v0.15) checks every resolved skill: it must declare a string `id` (§6.3), its id — emitted as the `SKILL.md` `name` and the output directory — must match `^[a-z0-9]+(-[a-z0-9]+)*$` and be at most 64 chars, and it must carry a `description` of 1–1024 chars. OpenCode silently drops a skill that breaks either name/description constraint, so authors learn here instead of at runtime. Id-less skills all merge under the fallback id `skill` (all but one silently dropped), so they are checked from the **pre-merge** list and each one is reported. Skills carry no source path, so errors are reported as `skills/<id> (<source package>)`, or — for an id-less skill — by its authored `name` plus, when it has `scripts/`/`references/`, its source directory.
 ### 12.7 `playbook render` (debug)
 Render a single artifact to stdout for debugging. Does not write.
 ```
@@ -2466,9 +2528,18 @@ Notes on sequencing:
 - **Track 5b (Eval Tier 0)** lands after the main CLI because it adds CLI subcommands and one new validator pass. It is independent of the adapters — eval tasks are authoring-side artifacts and don't flow through any adapter.
 - The source abstraction and the canonical types together add maybe two days of work to the early tracks but pay for themselves in test simplicity from PR 6 onward, and in clean serialization boundaries when the commercial product arrives.
 ---
-*End of SPEC.md v0.13.*
+*End of SPEC.md v0.15.*
 ---
 ## Changelog
+### v0.15 (2026-10-14)
+Native skills for every Agent-Skills harness plus the cross-agent `shared_skills/` hub, and two skill-output bug fixes. Additive for authors — the canonical skill format is unchanged.
+- **Section 10.8 (NEW)**: the `shared_skills` adapter (`shared_skills/<id>/`, on by default, not force-enabled; rules/prompts are no-ops) and the shared `SkillWriter` (`adapters/_skill_writer.py`) — the single source of truth for a native skill directory, byte-identical across roots, path-safe, with sentinel-based per-directory cleanup.
+- **Sections 10.3 / 10.6 / 10.6.4**: `claude_code` and `opencode` delegate `write_skill` to the `SkillWriter`; OpenCode now writes `.opencode/skills/` natively instead of relying on `.claude/skills/` (duplicate discovery is safe: OpenCode keys skills by name, last wins).
+- **Section 6.3 (bug fixes)**: emitted `SKILL.md` sets `name` = the skill id (= directory name), as the Agent Skills standard requires — previously the authored display name was copied verbatim and OpenCode dropped the skill. `SKILL.md` now carries the sentinel as its first body line, so `playbook sync` removes a deleted skill's whole directory (previously skill output was never cleaned); user-authored skill dirs (no sentinel) are never touched.
+- **Section 12.6 (`playbook validate`)**: new rule flagging skill ids that break `^[a-z0-9]+(-[a-z0-9]+)*$` / 64 chars, skills without a 1–1024 char `description`, and every skill with no (or a non-string) `id` — id-less skills all merge under `skill`, so they are checked from the pre-merge list.
+- **Section 10.8 (cleanup safety)**: ownership is decided before writing (a colliding hand-written skill dir is skipped with a warning, never overwritten; pre-v0.15 output is re-claimed via the lockfile); cleanup matches written files by identity, not path spelling; case-only id renames, file↔folder flips in `scripts/`/`references/`, and read-only copies from an earlier sync no longer delete fresh output or crash `sync` / `sync --check`.
+- **Sections 2.2 / 3 / 4 / 5.1 / 5.3 / 7.1 / 12.1**: skills are no longer described as Claude-Code-only; the consumer layout gains `.claude/skills/`, `.opencode/skills/` and `shared_skills/`; `shared_skills` joins the default adapter list.
+- **Implementation**: `adapters/_skill_writer.py`, `adapters/shared_skills_adapter.py` (+ the `shared_skills` entry point), `commands/init.py` default adapters, `commands/validate.py::_check_agent_skills`, with tests (`tests/adapters/test_skill_writer.py`, `tests/adapters/test_shared_skills.py`, `tests/cli/test_sync_skills.py`).
 ### v0.14 (2026-07-14)
 Self-contained markdown links in canonical artifacts (PR L). A deterministic, CI-enforced rule: every markdown link in every artifact must stay inside the shipped bundle. Purely additive — no rendering changes, no new dependency. Authoritative design: `specs/prL-markdown-links.md`.
 - **Section 12.6 (`playbook validate`)**: new rule — links extracted from rule/prompt/skill bodies (plus skill `references/*.md`), after masking frontmatter, fenced code blocks, and inline code spans. Relative targets must resolve inside the artifact's source layer (package `resources/` or repo-local `playbook/`; `.j2`-suffixed sources satisfy their rendered names); absolute paths, `..`-escapes, and non-`http(s)` schemes are violations; `http(s)` hosts pass only via the allowlist. Jinja-bearing targets are skipped.

@@ -26,8 +26,8 @@ class AgentsMdAdapter(Adapter):
     """Translate canonical rules into a single ``AGENTS.md`` at repo root.
 
     Rules-only by design: prompts and skills route through other adapters
-    (Continue / Claude Code) — AGENTS.md is the universal "rules" surface
-    every coding assistant agrees to read.
+    (Continue / Claude Code / OpenCode / shared_skills) — AGENTS.md is the
+    universal "rules" surface every coding assistant agrees to read.
     """
 
     name = "agents_md"
@@ -65,10 +65,10 @@ class AgentsMdAdapter(Adapter):
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
         """No-op: AGENTS.md is rules-only.
 
-        Native skill emission belongs to the Claude Code adapter; OpenCode
-        reads ``.claude/skills/`` directly. This adapter never degrades a
-        skill to a prompt either (the default Adapter degrade path), since
-        prompts are also no-ops here.
+        Native skill emission belongs to the skill adapters (``claude_code``,
+        ``opencode``, ``shared_skills``), which share one ``SkillWriter``. This
+        adapter never degrades a skill to a prompt either (the default Adapter
+        degrade path), since prompts are also no-ops here.
         """
         return []
 

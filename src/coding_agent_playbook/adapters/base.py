@@ -40,9 +40,9 @@ class Adapter(ABC):
         """Degrade a skill to a prompt.
 
         The default treats a skill as a prompt. Subclasses with native skill
-        support override this, as do adapters whose harness reads another
-        adapter's output (e.g. OpenCode reads ``.claude/skills/`` natively and
-        returns an empty list).
+        support (``claude_code``, ``opencode``, ``shared_skills``) override this
+        and delegate to the shared ``SkillWriter``; rules-only adapters (e.g.
+        ``agents_md``) override it to return an empty list.
         """
         return self.write_prompt(skill.to_prompt(), repo_root)
 

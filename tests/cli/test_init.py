@@ -76,6 +76,31 @@ def test_init_non_interactive_writes_expected_files(tmp_path):
     assert all(entry.get("repo") == "local" for entry in parsed["repos"])
 
 
+def test_init_default_adapters_include_shared_skills(tmp_path):
+    """The cross-agent skills hub (SPEC §10.8) is on by default, after the
+    three harness adapters; ``agents_md`` stays implicit (force-enabled)."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n'
+    )
+    assert _init._DEFAULT_ADAPTERS == ("continue", "claude_code", "opencode", "shared_skills")
+    assert _init.run(_ns(tmp_path, name="r", kind="python-library")) == 0
+    with (tmp_path / ".coding-agent-playbook.toml").open("rb") as f:
+        data = tomllib.load(f)
+    assert data["adapters_enabled"] == list(_init._DEFAULT_ADAPTERS)
+
+
+def test_init_adapters_flag_can_opt_out_of_shared_skills(tmp_path):
+    """``shared_skills`` is not force-enabled: an explicit list without it wins."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n'
+    )
+    rc = _init.run(_ns(tmp_path, name="r", kind="python-library", adapters="claude_code"))
+    assert rc == 0
+    with (tmp_path / ".coding-agent-playbook.toml").open("rb") as f:
+        data = tomllib.load(f)
+    assert data["adapters_enabled"] == ["claude_code"]
+
+
 def test_init_non_interactive_missing_name_returns_error_code(tmp_path, capsys):
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n'

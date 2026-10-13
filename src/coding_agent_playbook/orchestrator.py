@@ -198,8 +198,8 @@ def discover_adapters(
 
     The returned mapping is ``name -> instance``. ``agents_md`` is always
     included (SPEC §4.3). Adapters that accept ``rule_registry`` get it; those
-    that don't (currently only ``agents_md``) are constructed with no
-    arguments. The ``TypeError`` fallback is the canonical idiom for handling
+    that don't (currently ``agents_md`` and ``shared_skills``) are constructed
+    with no arguments. The ``TypeError`` fallback is the canonical idiom for handling
     the two adapter signatures uniformly.
     """
     eps = metadata.entry_points(group="coding_agent_playbook.adapters")

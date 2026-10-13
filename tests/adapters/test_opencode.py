@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.types import (
@@ -107,16 +108,43 @@ def test_write_rule_returns_empty_list_and_creates_no_files(tmp_path: Path) -> N
     assert not (tmp_path / "AGENTS.md").exists()
 
 
-def test_write_skill_returns_empty_list_and_creates_no_files(tmp_path: Path) -> None:
-    """OpenCode reads .claude/skills/ natively, so the adapter does not write skills."""
-    skill = _make_skill()
+def test_write_skill_writes_native_opencode_skill_dir(tmp_path: Path) -> None:
+    """Skills land in OpenCode's native ``.opencode/skills/<id>/SKILL.md`` with
+    ``name`` = id, so OpenCode no longer depends on the claude_code adapter."""
     adapter = OpenCodeAdapter()
-    written = adapter.write_skill(skill, repo_root=tmp_path)
-    assert written == []
-    # The adapter must not touch the .opencode tree just because a skill was offered.
-    assert not (tmp_path / ".opencode").exists()
-    # Nor the .claude tree — that belongs to the Claude Code adapter.
+    written = adapter.write_skill(_make_skill(skill_id="demo-skill"), repo_root=tmp_path)
+    skill_md = tmp_path / ".opencode" / "skills" / "demo-skill" / "SKILL.md"
+    assert written == [skill_md]
+    content = skill_md.read_text(encoding="utf-8")
+    assert content.startswith("---\nname: demo-skill\n")
+    assert f"---\n<!-- {SENTINEL} -->" in content
+    # The .claude tree belongs to the Claude Code adapter.
     assert not (tmp_path / ".claude").exists()
+
+
+def test_write_skill_is_byte_identical_to_claude_code_output(tmp_path: Path) -> None:
+    """Both roots come from one SkillWriter; duplicates discovered by OpenCode
+    via .claude/skills/ are therefore identical (and OpenCode keys by name)."""
+    skill = _make_skill(skill_id="demo-skill")
+    [opencode_md] = OpenCodeAdapter().write_skill(skill, repo_root=tmp_path)
+    [claude_md] = ClaudeCodeAdapter().write_skill(skill, repo_root=tmp_path)
+    assert opencode_md.read_bytes() == claude_md.read_bytes()
+
+
+def test_cleanup_stale_removes_deleted_skill_and_keeps_user_skills(tmp_path: Path) -> None:
+    adapter = OpenCodeAdapter()
+    adapter.write_skill(_make_skill(skill_id="gone"), repo_root=tmp_path)
+    kept = adapter.write_skill(_make_skill(skill_id="kept"), repo_root=tmp_path)
+    user_md = tmp_path / ".opencode" / "skills" / "mine" / "SKILL.md"
+    user_md.parent.mkdir(parents=True)
+    user_md.write_text("---\nname: mine\ndescription: d\n---\nmine\n", encoding="utf-8")
+
+    deleted = adapter.cleanup_stale({p.resolve() for p in kept}, repo_root=tmp_path)
+
+    assert deleted == [tmp_path / ".opencode" / "skills" / "gone" / "SKILL.md"]
+    assert not (tmp_path / ".opencode" / "skills" / "gone").exists()
+    assert kept[0].is_file()
+    assert user_md.is_file()
 
 
 def test_write_prompt_creates_file_with_opencode_envelope(tmp_path: Path) -> None:
@@ -410,6 +438,17 @@ def test_cleanup_stale_does_not_touch_unrelated_directories(tmp_path: Path) -> N
     sibling.write_text(_stale_sentinel_body("leave-me-alone"), encoding="utf-8")
     agents_md = tmp_path / "AGENTS.md"
     agents_md.write_text(_stale_sentinel_body("agents"), encoding="utf-8")
+    # A stale engine-owned Claude skill belongs to the Claude Code adapter.
+    ClaudeCodeAdapter().write_skill(_make_skill(skill_id="claude-only"), repo_root=tmp_path)
+    # User-owned OpenCode config (SPEC §10.6.4).
+    user_owned = [
+        tmp_path / ".opencode" / "agent" / "reviewer.md",
+        tmp_path / ".opencode" / "plugin" / "hook.ts",
+        tmp_path / "opencode.json",
+    ]
+    for path in user_owned:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(_stale_sentinel_body(path.name), encoding="utf-8")
 
     adapter = OpenCodeAdapter()
     deleted = adapter.cleanup_stale(written_paths=set(), repo_root=tmp_path)
@@ -417,3 +456,5 @@ def test_cleanup_stale_does_not_touch_unrelated_directories(tmp_path: Path) -> N
     assert deleted == []
     assert sibling.is_file()
     assert agents_md.is_file()
+    assert (tmp_path / ".claude" / "skills" / "claude-only" / "SKILL.md").is_file()
+    assert all(path.is_file() for path in user_owned)
