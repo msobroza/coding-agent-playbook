@@ -8,8 +8,6 @@ directory and the platform injected so the tables are hermetic.
 
 from __future__ import annotations
 
-import ast
-import subprocess
 import sys
 
 import pytest
@@ -20,9 +18,9 @@ from coding_agent_playbook.security.patterns import (
     SECRET_PATH_EXEMPT,
     SECRET_PATH_GLOBS,
 )
+from tests.import_probe import new_modules_after
 
 _HOME = "/home/dev"
-_SUBPROCESS_TIMEOUT_S = 60
 
 #: SPEC §17.3's original four globs; the catalog must keep every one of them.
 _SPEC_17_3_GLOBS = (".env*", "*.pem", "*.key", "*credentials*")
@@ -205,30 +203,13 @@ def test_scoped_exemptions_name_catalog_globs() -> None:
     assert not any("credentials" in glob for glob in SECRET_PATH_EXEMPT)
 
 
-def _new_modules_after(import_stmt: str) -> list[str]:
-    """Modules ``import_stmt`` loads in a fresh interpreter, beyond the package root."""
-    code = (
-        "import sys, coding_agent_playbook; before = set(sys.modules); "
-        f"{import_stmt}; print(sorted(set(sys.modules) - before))"
-    )
-    completed = subprocess.run(
-        [sys.executable, "-c", code],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=_SUBPROCESS_TIMEOUT_S,
-    )
-    loaded: list[str] = ast.literal_eval(completed.stdout.strip())
-    return loaded
-
-
 def test_patterns_module_imports_nothing_at_runtime() -> None:
-    loaded = _new_modules_after("import coding_agent_playbook.security.patterns")
+    loaded = new_modules_after("import coding_agent_playbook.security.patterns")
     assert loaded == ["coding_agent_playbook.security", "coding_agent_playbook.security.patterns"]
 
 
 def test_paths_module_imports_only_the_stdlib() -> None:
-    loaded = _new_modules_after("import coding_agent_playbook.security.paths")
+    loaded = new_modules_after("import coding_agent_playbook.security.paths")
     foreign = [
         name
         for name in loaded
