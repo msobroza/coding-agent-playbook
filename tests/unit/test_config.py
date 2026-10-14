@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import copy
+import tomllib
+from typing import Any
+
 import pytest
 
 from coding_agent_playbook.config import (
@@ -235,3 +239,77 @@ def test_output_round_trips_through_toml_dump(tmp_path):
     assert "[output]\ncommit = false" in text
     assert tomllib.loads(text)["output"] == {"commit": False}
     assert state.load_config().output == OutputConfig(commit=False)
+
+
+# --------------------------------------------------------------------------- #
+# extra_tables: unmodelled top-level keys survive a save (P6)
+# --------------------------------------------------------------------------- #
+
+_EXTRA_TABLES: dict[str, Any] = {
+    "hooks": {
+        "disabled": ["stop-ci-parity-gate"],
+        "some-hook": {"enabled": False, "timeout": 2.5, "config": {"paths": ["src/"]}},
+    },
+    "guardrails": {"secrets": {"extra_globs": ["*.vault"]}, "unattended_ask": "deny"},
+    "links": {"allowed_domains": ["agentharnesses.io"]},
+    "team_note": "kept verbatim",
+}
+
+
+def test_extra_tables_roundtrip():
+    storage = {"artifact_source": "filesystem", "state_source": "filesystem"}
+    data = {**_MINIMAL, "storage": storage, **copy.deepcopy(_EXTRA_TABLES)}
+    config = Config.from_dict(data)
+    assert config.extra_tables == _EXTRA_TABLES
+    assert config.to_dict() == data
+    # Deep copies in and out: neither side aliases the other's nested tables.
+    data["hooks"]["some-hook"]["enabled"] = True
+    assert config.extra_tables["hooks"]["some-hook"]["enabled"] is False
+    config.to_dict()["hooks"]["disabled"].append("x")
+    assert config.extra_tables["hooks"]["disabled"] == ["stop-ci-parity-gate"]
+
+
+def test_extra_tables_follow_the_modelled_keys():
+    data = {"team_note": "n", **_MINIMAL, "hooks": {"x": {}}, "user_choices": {"a": 1}}
+    keys = list(Config.from_dict(data).to_dict())
+    assert keys[-2:] == ["team_note", "hooks"]
+
+
+_METRICS_TABLE: dict[str, Any] = {
+    "mode": "both",
+    "fail_on_breach": True,
+    "test_cmd": ["python", "-m", "pytest", "-q"],
+    "thresholds": {
+        "cyclomatic_complexity": {"warn": 10, "fail": 20},
+        "maintainability_index": {"warn": 0.65, "fail": 0.5},
+    },
+    "regression": {"coverage": {"max_worsening": 0.5}},
+    "weights": {"x": 1.0, "cyclomatic_complexity": 2.25},
+}
+
+
+def test_metrics_table_roundtrip():
+    """A realistic ``[metrics]`` (floats, per-metric tables) survives
+    ``Config.to_dict`` → ``_dump_toml`` → ``tomllib`` unchanged."""
+    from coding_agent_playbook.sources.filesystem import _dump_toml
+
+    config = Config.from_dict({**_MINIMAL, "metrics": copy.deepcopy(_METRICS_TABLE)})
+    reread = tomllib.loads(_dump_toml(config.to_dict()))
+    assert reread["metrics"] == _METRICS_TABLE
+    assert isinstance(reread["metrics"]["weights"]["x"], float)
+    assert parse_metrics_config(reread["metrics"]) == parse_metrics_config(_METRICS_TABLE)
+
+
+def test_extra_tables_never_shadow_modelled_keys():
+    data = {**_MINIMAL, "hooks": {"a": 1}}
+    assert set(Config.from_dict(data).extra_tables) == {"hooks"}
+    config = Config(
+        schema_version=1,
+        project=ProjectMeta(name="x", kind="python-library"),
+        engine_version="0.1.0a0",
+        extra_tables={"project": {"name": "evil"}, "engine": {}, "hooks": {"a": 1}},
+    )
+    result = config.to_dict()
+    assert result["project"] == {"name": "x", "kind": "python-library"}
+    assert result["engine"] == {"version": "0.1.0a0"}
+    assert result["hooks"] == {"a": 1}

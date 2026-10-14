@@ -1,14 +1,16 @@
 """Tests for the shared TOML writer primitives (``coding_agent_playbook._toml``).
 
-These pin the behaviour the two call sites (``sources/filesystem.py`` flat
-Config/Lockfile path and ``harness/manifest.py`` inline-table path) share, so a
-future change to the escape ladder, ``bool``-before-``int`` ordering, key
-quoting, or the ``TypeError`` semantics breaks here rather than silently in a
-round-trip elsewhere.
+These pin the behaviour the two call sites (the ``sources/filesystem.py``
+Config/Lockfile writer and ``harness/manifest.py``) share, so a future change to
+the escape ladder, ``bool``-before-``int`` ordering, key quoting, the float and
+date/time forms (P6), or the ``TypeError`` semantics breaks here rather than
+silently in a round-trip elsewhere.
 """
 
 from __future__ import annotations
 
+import datetime
+import math
 import tomllib
 
 import pytest
@@ -40,12 +42,72 @@ def test_format_scalar_str_simple() -> None:
     assert _toml.format_scalar("hello") == '"hello"'
 
 
-def test_format_scalar_float_raises() -> None:
-    """Neither historical call site supported floats — they fall through to the
-    ``TypeError``. Pinned so the DRY refactor doesn't silently add float support.
-    """
-    with pytest.raises(TypeError, match=r"does not support value of type float"):
-        _toml.format_scalar(1.5)
+@pytest.mark.parametrize("value", [0.5, 1.0, -0.0, 1e-05, 1e300, 123456.789])
+def test_format_scalar_float(value: float) -> None:
+    """Floats render as ``repr`` (P6): a preserved ``[metrics]`` table holds
+    ``max_worsening = 0.5`` and ``weights`` like ``x = 1.0``, so a re-run of
+    ``playbook init`` must write them back rather than raise."""
+    out = _toml.format_scalar(value)
+    assert out == repr(value)
+    parsed = tomllib.loads(f"x = {out}")["x"]
+    assert isinstance(parsed, float)
+    assert repr(parsed) == repr(value)  # -0.0 keeps its sign
+
+
+@pytest.mark.parametrize("value", [math.inf, -math.inf, math.nan])
+def test_format_scalar_rejects_nan_inf(value: float) -> None:
+    with pytest.raises(TypeError, match=r"non-finite float") as exc:
+        _toml.format_scalar(value, type_error_prefix="_dump_toml")
+    assert repr(value) in str(exc.value)
+    assert str(exc.value).startswith("_dump_toml ")
+
+
+def test_format_scalar_date() -> None:
+    out = _toml.format_scalar(datetime.date(2026, 10, 14))
+    assert out == "2026-10-14"
+    assert tomllib.loads(f"x = {out}")["x"] == datetime.date(2026, 10, 14)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        datetime.datetime(2026, 10, 14, 16, 4, 5, tzinfo=datetime.UTC),
+        datetime.datetime(
+            2026, 10, 14, 16, 4, 5, 250000, tzinfo=datetime.timezone(datetime.timedelta(hours=2))
+        ),
+        datetime.datetime(2026, 10, 14, 16, 4, 5),
+    ],
+    ids=["offset-utc", "offset-plus-two-fraction", "local"],
+)
+def test_format_scalar_datetime_offset_and_local(value: datetime.datetime) -> None:
+    out = _toml.format_scalar(value)
+    assert out == value.isoformat()
+    assert tomllib.loads(f"x = {out}")["x"] == value
+
+
+@pytest.mark.parametrize(
+    "value", [datetime.time(7, 30), datetime.time(7, 30, 15, 500)], ids=["whole", "fraction"]
+)
+def test_format_scalar_time(value: datetime.time) -> None:
+    out = _toml.format_scalar(value)
+    assert out == value.isoformat()
+    assert tomllib.loads(f"x = {out}")["x"] == value
+
+
+def test_format_scalar_rejects_time_with_offset() -> None:
+    """TOML has no offset time; ``isoformat`` would emit ``07:30:00+00:00``,
+    which ``tomllib`` refuses, so it must fail loudly instead."""
+    value = datetime.time(7, 30, tzinfo=datetime.UTC)
+    with pytest.raises(TypeError, match=r"offset") as exc:
+        _toml.format_scalar(value)
+    assert repr(value) in str(exc.value)
+
+
+def test_format_scalar_datetime_checked_before_date() -> None:
+    """``datetime`` subclasses ``date``: it must keep its time part."""
+    value = datetime.datetime(2026, 10, 14, 9, 0)
+    assert _toml.format_scalar(value) == "2026-10-14T09:00:00"
+    assert _toml.format_scalar([value.date(), value]) == "[2026-10-14, 2026-10-14T09:00:00]"
 
 
 # --- string escaping -------------------------------------------------------
@@ -101,6 +163,15 @@ def test_format_key_quotes_empty_key() -> None:
     assert _toml.format_key("") == '""'
 
 
+@pytest.mark.parametrize("key", ["café", "π", "x²"])
+def test_format_key_quotes_non_ascii(key: str) -> None:
+    """TOML bare keys are ASCII ``A-Za-z0-9_-`` only, but ``str.isalnum`` is
+    True for ``é``/``π``/``²``: a preserved user key must still parse back."""
+    out = _toml.format_key(key)
+    assert out == f'"{key}"'
+    assert tomllib.loads(f"{out} = 1") == {key: 1}
+
+
 # --- lists -----------------------------------------------------------------
 
 
@@ -150,12 +221,12 @@ def test_format_scalar_inline_table_output_is_valid_toml() -> None:
     assert parsed["x"] == {"note": 'a "quoted" value', "n": 3}
 
 
-# --- dict rejection (flat Config/Lockfile path) ----------------------------
+# --- dict rejection (inline tables off, the default) -----------------------
 
 
 def test_format_scalar_dict_rejected_when_inline_tables_disabled() -> None:
-    """The flat Config/Lockfile path must keep rejecting dicts exactly as the
-    original ``_format_toml_scalar`` did."""
+    """Inline tables are opt-in: without ``allow_inline_table`` a dict is
+    refused exactly as the original ``_format_toml_scalar`` did."""
     with pytest.raises(TypeError, match=r"does not support value of type dict"):
         _toml.format_scalar({"a": 1})
 

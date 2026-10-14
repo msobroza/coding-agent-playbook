@@ -4,10 +4,13 @@ The FileSystemStateSource (sources/filesystem.py) is responsible for loading
 and writing TOML files; this module defines the in-memory shape plus the
 schema checks that turn a config the engine would misread into a
 :class:`ConfigError` (:func:`check_enabled_keys`, :func:`parse_output_config`).
+Top-level keys ``Config`` does not model (``[hooks]``, ``[guardrails]``,
+``[links]``, ``[metrics]``…) are kept verbatim in ``Config.extra_tables``.
 """
 
 from __future__ import annotations
 
+import copy
 import difflib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeGuard
@@ -65,6 +68,22 @@ _MISSPELLING_SIMILARITY = 0.8
 
 #: A table path: ``()`` for the top level, ``("detector_cache", "frameworks")``…
 _TablePath = tuple[str, ...]
+
+#: The top-level keys ``Config`` reads into its own fields. Every other key goes
+#: to ``Config.extra_tables`` (P6): before, a save silently deleted it.
+_MODELLED_KEYS: frozenset[str] = frozenset(
+    {
+        "schema_version",
+        "project",
+        "engine",
+        "overlays_enabled",
+        "adapters_enabled",
+        "storage",
+        "detector_cache",
+        "user_choices",
+        "output",
+    }
+)
 
 
 def check_enabled_keys(data: Mapping[str, object], *, source: str) -> None:
@@ -237,6 +256,12 @@ class OutputConfig:
 
 @dataclass
 class Config:
+    """``.coding-agent-playbook.toml`` in memory (SPEC §7.1).
+
+    ``extra_tables`` holds every top-level key the engine does not model, deep
+    copied, so a save writes ``[hooks]``, ``[links]``, ``[metrics]``… back (P6).
+    """
+
     schema_version: int
     project: ProjectMeta
     engine_version: str
@@ -249,6 +274,7 @@ class Config:
     # explicit ``OutputConfig()`` so ``to_dict`` round-trips sparsely while
     # ``playbook init`` can still write ``commit = false`` for discoverability.
     output: OutputConfig | None = None
+    extra_tables: dict[str, Any] = field(default_factory=dict)
 
     @property
     def commit_output(self) -> bool:
@@ -267,7 +293,8 @@ class Config:
 
         ``source`` names where ``data`` came from in a :class:`ConfigError`
         (:func:`check_enabled_keys`). ``FileSystemStateSource`` checks each file
-        before merging them, so this re-check matters for other callers.
+        before merging them, so this re-check matters for other callers. Every
+        top-level key outside ``_MODELLED_KEYS`` is deep-copied into ``extra_tables``.
 
         Example::
 
@@ -300,9 +327,22 @@ class Config:
             detector_cache=dict(data.get("detector_cache", {})),
             user_choices=dict(data.get("user_choices", {})),
             output=parse_output_config(data["output"]) if "output" in data else None,
+            extra_tables={
+                key: copy.deepcopy(value)
+                for key, value in data.items()
+                if key not in _MODELLED_KEYS
+            },
         )
 
     def to_dict(self) -> dict[str, Any]:
+        """The TOML table to save: modelled keys (empty optional ones omitted),
+        then ``extra_tables`` — a modelled field wins over an extra of its name.
+
+        Example::
+
+            >>> Config(1, ProjectMeta("x", "python-library"), "0.1").to_dict()["engine"]
+            {'version': '0.1'}
+        """
         project: dict[str, Any] = {
             "name": self.project.name,
             "kind": self.project.kind,
@@ -329,6 +369,9 @@ class Config:
             result["detector_cache"] = dict(self.detector_cache)
         if self.user_choices:
             result["user_choices"] = dict(self.user_choices)
+        for key, value in self.extra_tables.items():
+            if key not in _MODELLED_KEYS:
+                result[key] = copy.deepcopy(value)
         return result
 
 

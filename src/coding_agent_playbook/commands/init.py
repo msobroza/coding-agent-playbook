@@ -152,20 +152,24 @@ def _write_config(repo_root: Path, answers: _Answers) -> Config:
     freshly-asked defaults, but new defaults (e.g. for a freshly-added
     adapter) are added in.
 
-    ``[output] commit`` is always written explicitly (``false`` unless the
-    user already chose otherwise) so the output policy is discoverable.
+    Only the committed file is read, never ``.coding-agent-playbook.local.toml``
+    (P6), so the returned config — and the ``[output]`` policy ``run`` picks the
+    pre-commit hooks by — is the committed one. ``[output] commit`` is always
+    written explicitly (``false`` unless the user already chose otherwise) so
+    the output policy is discoverable.
     """
     primary = repo_root / FileSystemStateSource._CONFIG_FILENAME
+    state = FileSystemStateSource(repo_root=repo_root)
 
     facts = detect(repo_root)
     detector_cache = _facts_to_cache(facts)
 
     if primary.is_file():
-        # Existing config: load it through the state source, then surgically
-        # update the fields we know about. Anything the user added that we
-        # don't know about is preserved.
-        state = FileSystemStateSource(repo_root=repo_root)
-        existing = state.load_config()
+        # Existing config: surgically update the fields we know about. Load the
+        # committed file alone — the merged view would bake personal local
+        # overrides into it. Top-level tables Config does not model ([hooks],
+        # [links], [metrics]…) ride along in ``extra_tables``, so they are kept.
+        existing = state.load_primary_config()
         existing.project = ProjectMeta(
             name=answers["name"],
             kind=answers["kind"],
@@ -198,7 +202,6 @@ def _write_config(repo_root: Path, answers: _Answers) -> Config:
             output=OutputConfig(commit=False),
         )
 
-    state = FileSystemStateSource(repo_root=repo_root)
     state.save_config(config)
     return config
 

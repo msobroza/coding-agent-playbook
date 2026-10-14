@@ -48,6 +48,23 @@ class StateSource(ABC):
     @abstractmethod
     def load_config(self) -> Config: ...
 
+    def load_primary_config(self) -> Config:
+        """The config to modify and save back: the committed file alone.
+
+        ``playbook init`` and ``playbook check --refresh`` load with this
+        before :meth:`save_config`, so personal local overrides are never
+        written into the committed file (P6). Concrete, defaulting to
+        :meth:`load_config`, so a third-party source that predates it still
+        instantiates; such a source keeps saving whatever it loads.
+
+        Example::
+
+            config = state_source.load_primary_config()
+            config.detector_cache = fresh_cache
+            state_source.save_config(config)
+        """
+        return self.load_config()
+
     @abstractmethod
     def save_config(self, config: Config) -> None: ...
 

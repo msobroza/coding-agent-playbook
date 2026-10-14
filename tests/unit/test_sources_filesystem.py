@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.config import Config, ProjectMeta
+from coding_agent_playbook.config import Config, ConfigError, ProjectMeta
 from coding_agent_playbook.lockfile import LockEntry, Lockfile
 from coding_agent_playbook.sources.filesystem import (
     FileSystemArtifactSource,
@@ -207,6 +207,33 @@ def test_load_config_missing_raises_fnf(tmp_path: Path) -> None:
         source.load_config()
 
 
+def test_load_primary_config_ignores_local_overrides(tmp_path: Path) -> None:
+    """``init``/``check --refresh`` save what this loads, so ``.local.toml``
+    values must never reach it (P6); unmodelled tables do."""
+    (tmp_path / ".coding-agent-playbook.toml").write_text(
+        CONFIG_PRIMARY + '\n[links]\nallowed_domains = ["example.com"]\n'
+    )
+    (tmp_path / ".coding-agent-playbook.local.toml").write_text(
+        CONFIG_LOCAL_OVERRIDE + '\n[links]\nallowed_domains = ["personal.dev"]\n'
+    )
+    source = FileSystemStateSource(repo_root=tmp_path)
+    primary = source.load_primary_config()
+    assert primary.user_choices == {"banking_mode": False}
+    assert primary.extra_tables == {"links": {"allowed_domains": ["example.com"]}}
+    assert source.load_config().user_choices["banking_mode"] is True
+
+
+def test_load_primary_config_checks_the_committed_file(tmp_path: Path) -> None:
+    source = FileSystemStateSource(repo_root=tmp_path)
+    with pytest.raises(FileNotFoundError, match=r"\.coding-agent-playbook\.toml"):
+        source.load_primary_config()
+    (tmp_path / ".coding-agent-playbook.toml").write_text(
+        CONFIG_PRIMARY + '\n[adapters]\nenabled = ["claude_code"]\n'
+    )
+    with pytest.raises(ConfigError, match=r"^\.coding-agent-playbook\.toml: the \[adapters\]"):
+        source.load_primary_config()
+
+
 def test_save_config_emits_valid_toml(tmp_path: Path) -> None:
     source = FileSystemStateSource(repo_root=tmp_path)
     config = Config(
@@ -231,16 +258,6 @@ def test_dump_toml_rejects_unsupported_scalar() -> None:
 
     with pytest.raises(TypeError, match=r"does not support value of type"):
         _dump_toml({"weird": object()})
-
-
-def test_dump_toml_rejects_mapping_deeper_than_two_levels() -> None:
-    """Two levels of nesting (e.g. ``[detector_cache.frameworks]``) are
-    accepted; deeper nesting must raise so a deeper schema fails loudly
-    rather than silently producing ambiguous TOML."""
-    from coding_agent_playbook.sources.filesystem import _dump_toml
-
-    with pytest.raises(TypeError, match=r"at most 2-level nested mappings"):
-        _dump_toml({"a": {"b": {"c": {"d": 1}}}})
 
 
 def test_dump_toml_escapes_control_characters(tmp_path: Path) -> None:
@@ -532,13 +549,6 @@ def test_list_skills_includes_repo_local_playbook_skills(tmp_path: Path) -> None
     skills = source.list_skills()
     assert len(skills) == 1
     assert skills[0].source_package == "<repo-local>"
-
-
-def test_dump_toml_rejects_nested_dict_in_list_of_tables() -> None:
-    from coding_agent_playbook.sources.filesystem import _dump_toml
-
-    with pytest.raises(TypeError, match=r"single-level mappings"):
-        _dump_toml({"items": [{"key": {"deeper": 1}}]})
 
 
 def test_entry_point_registers_filesystem_artifact_source() -> None:

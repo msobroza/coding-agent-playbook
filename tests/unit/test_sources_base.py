@@ -51,3 +51,15 @@ def test_artifact_source_subclass_can_be_instantiated():
 
 def test_state_source_subclass_can_be_instantiated():
     assert isinstance(_DummyStateSource(), StateSource)
+
+
+def test_state_source_load_primary_config_defaults_to_load_config():
+    """A third-party source written before ``load_primary_config`` existed
+    keeps working: the concrete default returns whatever ``load_config`` does."""
+    loaded = object()
+
+    class _OldStyleStateSource(_DummyStateSource):
+        def load_config(self):
+            return loaded
+
+    assert _OldStyleStateSource().load_primary_config() is loaded

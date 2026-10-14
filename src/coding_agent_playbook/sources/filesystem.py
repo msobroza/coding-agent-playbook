@@ -53,87 +53,100 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     return result
 
 
-def _format_toml_scalar(value: Any) -> str:
-    """Render a scalar Python value as a TOML literal.
+#: Table-header depth the writer emits (``[detector_cache.frameworks]``, SPEC
+#: §8.2). A table nested deeper is an inline table under its parent header, so
+#: the engine's own Config/Lockfile shapes serialize exactly as before P6 while
+#: any table a user writes in ``extra_tables`` still round-trips.
+_MAX_HEADER_DEPTH = 2
 
-    Supports the value shapes Config/Lockfile produce: str, bool, int, and
-    lists of those. Dicts are *not* supported here (the flat Config/Lockfile
-    layout never nests scalars); they fall through to ``TypeError`` like any
-    other unsupported type. Delegates to :mod:`coding_agent_playbook._toml` for
-    the shared escape ladder, preserving the historical ``_dump_toml …`` error
-    wording so callers and tests see no behaviour change.
+
+def _format_toml_scalar(value: Any) -> str:
+    """Render a value as a TOML literal: a scalar, an array or an inline table.
+
+    Delegates to :mod:`coding_agent_playbook._toml` for the shared escape
+    ladder, preserving the historical ``_dump_toml …`` error wording. Dicts are
+    inline tables (P6): they only reach here below :data:`_MAX_HEADER_DEPTH`,
+    inside an array or inside a ``[[x]]`` entry.
     """
-    return _toml.format_scalar(value, type_error_prefix="_dump_toml")
+    return _toml.format_scalar(value, allow_inline_table=True, type_error_prefix="_dump_toml")
 
 
 def _dump_toml(data: dict[str, Any]) -> str:
     """Serialize ``data`` to a TOML document.
 
-    Handles the shapes produced by ``Config.to_dict()`` and
-    ``Lockfile.to_dict()``: top-level scalars/lists, single-level mappings
-    used as ``[section]`` headers, two-level nested mappings emitted as
-    ``[parent.child]`` dotted-table headers (e.g. ``detector_cache.frameworks``
-    per SPEC §8.2), and a single list-of-tables case used for lockfile
-    entries. Mappings nested deeper than two levels raise ``TypeError``.
+    Top-level scalars and arrays come first, then each mapping as a
+    ``[section]`` (sub-mappings as ``[parent.child]`` headers, deeper ones as
+    inline tables, see :func:`_emit_table`) and each non-empty list of mappings
+    as ``[[key]]`` entries (the lockfile's ``entries``). Every key and header
+    segment goes through :func:`_toml.format_key`, so ``[hooks."a.b"]`` and
+    non-ASCII keys parse back.
+
+    Example::
+
+        >>> print(_dump_toml({"v": 1, "a": {"x": 2, "b": {"c": {"d": 0.5}}}}), end="")
+        v = 1
+        <BLANKLINE>
+        [a]
+        x = 2
+        <BLANKLINE>
+        [a.b]
+        c = { d = 0.5 }
     """
     lines: list[str] = []
-    section_keys: list[str] = []
+    sections: list[tuple[str, Any]] = []
     # Emit scalars before section headers — TOML requires top-level keys to
     # appear above any [section] headers, otherwise the parser puts them
     # under the previous section.
     for key, value in data.items():
-        if isinstance(value, dict):
-            section_keys.append(key)
-        elif isinstance(value, list) and value and all(isinstance(item, dict) for item in value):
-            # Reserve list-of-tables for the lockfile entries case.
-            section_keys.append(key)
+        if isinstance(value, dict) or _is_array_of_tables(value):
+            sections.append((key, value))
         else:
-            lines.append(f"{key} = {_format_toml_scalar(value)}")
-
-    for key in section_keys:
-        value = data[key]
+            lines.append(_key_value_line(key, value))
+    for key, value in sections:
         if isinstance(value, dict):
             _emit_table(lines, [key], value)
         else:
-            # list-of-tables — TOML [[key]] syntax
-            for entry in value:
-                if lines:
-                    lines.append("")
-                lines.append(f"[[{key}]]")
-                for subkey, subvalue in entry.items():
-                    if isinstance(subvalue, dict):
-                        raise TypeError(
-                            f"_dump_toml supports only single-level mappings; nested mapping "
-                            f"at [[{key}]].{subkey}"
-                        )
-                    lines.append(f"{subkey} = {_format_toml_scalar(subvalue)}")
+            _emit_array_of_tables(lines, key, value)
     return "\n".join(lines) + "\n"
 
 
+def _is_array_of_tables(value: object) -> bool:
+    """True for a non-empty list whose every item is a mapping (``[[key]]`` form)."""
+    return isinstance(value, list) and bool(value) and all(isinstance(v, dict) for v in value)
+
+
+def _key_value_line(key: str, value: Any) -> str:
+    """``key = value`` with the key quoted when it is not a bare TOML key."""
+    return f"{_toml.format_key(key)} = {_format_toml_scalar(value)}"
+
+
+def _emit_array_of_tables(lines: list[str], key: str, entries: list[dict[str, Any]]) -> None:
+    """Emit one ``[[key]]`` table per entry; nested values are inline."""
+    for entry in entries:
+        if lines:
+            lines.append("")
+        lines.append(f"[[{_toml.format_key(key)}]]")
+        lines.extend(_key_value_line(subkey, subvalue) for subkey, subvalue in entry.items())
+
+
 def _emit_table(lines: list[str], path: list[str], table: dict[str, Any]) -> None:
-    """Emit a TOML ``[a.b]`` table header plus its scalar children, then
+    """Emit a TOML ``[a.b]`` table header plus its key/value lines, then
     recurse into any dict-valued children as ``[a.b.subkey]`` sub-tables.
 
-    Only two levels of nesting are allowed: a top-level ``[section]`` plus at
-    most one nested ``[section.child]``. Inside a ``[section.child]`` table,
-    encountering another dict value raises ``TypeError`` because Config/Lockfile
-    don't need deeper structure, and a deeper schema should fail loudly rather
-    than silently produce ambiguous TOML.
+    Headers go at most :data:`_MAX_HEADER_DEPTH` levels deep: inside a
+    ``[section.child]`` table a dict value is written as an inline table on its
+    key's line, never as an error (P6 — a preserved ``[metrics.thresholds]``
+    holds one table per metric).
     """
     if lines:
         lines.append("")
-    lines.append(f"[{'.'.join(path)}]")
+    lines.append(f"[{'.'.join(_toml.format_key(part) for part in path)}]")
     nested: list[tuple[str, dict[str, Any]]] = []
     for subkey, subvalue in table.items():
-        if isinstance(subvalue, dict):
-            if len(path) >= 2:
-                raise TypeError(
-                    f"_dump_toml supports at most 2-level nested mappings; nested mapping "
-                    f"at [{'.'.join([*path, subkey])}]"
-                )
+        if isinstance(subvalue, dict) and len(path) < _MAX_HEADER_DEPTH:
             nested.append((subkey, subvalue))
         else:
-            lines.append(f"{subkey} = {_format_toml_scalar(subvalue)}")
+            lines.append(_key_value_line(subkey, subvalue))
     for subkey, subtable in nested:
         _emit_table(lines, [*path, subkey], subtable)
 
@@ -367,11 +380,33 @@ class FileSystemStateSource(StateSource):
         :class:`~coding_agent_playbook.config.ConfigError` (naming the file) for
         a shape ``Config`` would misread — before anything else runs.
         """
+        primary = self._primary_config_path()
+        data = _deep_merge(_read_config_file(primary), self.load_local_overrides())
+        return Config.from_dict(data, source=primary.name)
+
+    def load_primary_config(self) -> Config:
+        """Read the committed config alone, never merging ``.local.toml`` (P6).
+
+        What ``playbook init`` and ``playbook check --refresh`` modify and save:
+        the merged view would bake personal overrides into the committed file.
+        Raises like :meth:`load_config` for a missing or misread committed file.
+
+        Example::
+
+            >>> FileSystemStateSource(repo_root=Path("/no/such/repo")).load_primary_config()
+            Traceback (most recent call last):
+            ...
+            FileNotFoundError: missing .coding-agent-playbook.toml; run `playbook init`
+        """
+        primary = self._primary_config_path()
+        return Config.from_dict(_read_config_file(primary), source=primary.name)
+
+    def _primary_config_path(self) -> Path:
+        """The committed config's path; :class:`FileNotFoundError` when it is absent."""
         primary = self._repo_root / self._CONFIG_FILENAME
         if not primary.is_file():
             raise FileNotFoundError(f"missing {primary.name}; run `playbook init`")
-        data = _deep_merge(_read_config_file(primary), self.load_local_overrides())
-        return Config.from_dict(data, source=primary.name)
+        return primary
 
     def load_local_overrides(self) -> dict[str, Any]:
         """The checked ``.coding-agent-playbook.local.toml`` table, ``{}`` when absent.

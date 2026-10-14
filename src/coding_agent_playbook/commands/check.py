@@ -194,7 +194,13 @@ def _lockfile_drift(ctx: SyncContext, lockfile: Lockfile) -> list[str]:
 
 def _refresh(ctx: SyncContext) -> None:
     """Re-run the detector and persist the cache back into the primary
-    config file. Used by ``playbook check --refresh``."""
+    config file. Used by ``playbook check --refresh``.
+
+    Saves the committed config alone (``load_primary_config``), never the
+    merged ``ctx.config``: that would bake ``.local.toml`` overrides into the
+    committed file (P6). ``ctx.config`` gets the same cache, as before, so the
+    in-memory config the rest of the report reads matches what was written.
+    """
     fresh = detect(ctx.repo_root)
     cache: dict[str, object] = {}
     for key, value in fresh.items():
@@ -202,8 +208,10 @@ def _refresh(ctx: SyncContext) -> None:
             cache[key] = sorted(value)
         else:
             cache[key] = value
-    ctx.config.detector_cache = cache
-    ctx.state_source.save_config(ctx.config)
+    primary = ctx.state_source.load_primary_config()
+    primary.detector_cache = cache
+    ctx.state_source.save_config(primary)
+    ctx.config.detector_cache = dict(cache)
 
 
 def run(args: argparse.Namespace) -> int:

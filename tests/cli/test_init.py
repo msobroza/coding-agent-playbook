@@ -392,3 +392,101 @@ def test_init_warns_about_a_hand_edited_legacy_hook(tmp_path, capsys):
     (tmp_path / ".pre-commit-config.yaml").write_text(edited)
     assert _init.run(_ns(tmp_path, name="x", kind="python-library")) == 0
     assert "legacy 'coding-agent-playbook-sync' hook" in capsys.readouterr().err
+
+
+# --- P6: re-runs keep unmodelled tables and never persist .local.toml ---------
+
+_PLAIN_CONFIG = """\
+schema_version = 1
+adapters_enabled = ["continue"]
+
+[project]
+name = "x"
+kind = "python-library"
+
+[engine]
+version = "0.1.0a0"
+
+[user_choices]
+docstring_style = "numpy"
+"""
+
+_EXTENSION_TABLES = """\
+
+[hooks]
+disabled = ["stop-ci-parity-gate"]
+
+[hooks.some-hook]
+enabled = false
+timeout = 2.5
+
+[hooks."a.b"]
+config = { paths = ["src/"], depth = { max = 3 } }
+
+[guardrails.secrets]
+extra_globs = ["*.vault"]
+
+[links]
+allowed_domains = ["agentharnesses.io"]
+
+[metrics]
+mode = "both"
+test_cmd = ["python", "-m", "pytest"]
+
+[metrics.thresholds.maintainability_index]
+warn = 0.65
+fail = 0.5
+
+[metrics.regression.coverage]
+max_worsening = 0.5
+
+[metrics.weights]
+x = 1.0
+"""
+
+
+def _committed_config(tmp_path: Path) -> dict[str, object]:
+    with (tmp_path / ".coding-agent-playbook.toml").open("rb") as f:
+        return tomllib.load(f)
+
+
+def test_init_rerun_preserves_hooks_guardrails_links_metrics(tmp_path):
+    _pyproject(tmp_path)
+    (tmp_path / ".coding-agent-playbook.toml").write_text(_PLAIN_CONFIG + _EXTENSION_TABLES)
+    expected = tomllib.loads(_EXTENSION_TABLES)
+    args = _ns(tmp_path, name="x", kind="python-library")
+    for _ in range(2):  # the second run re-reads the first run's inline tables
+        assert _init.run(args) == 0
+        data = _committed_config(tmp_path)
+        assert {key: data[key] for key in expected} == expected
+    metrics = data["metrics"]
+    assert isinstance(metrics, dict)
+    assert repr(metrics["regression"]["coverage"]["max_worsening"]) == "0.5"
+    assert repr(metrics["weights"]["x"]) == "1.0"
+    assert data["user_choices"] == {"docstring_style": "numpy"}
+
+
+def test_init_rerun_never_persists_local_overrides(tmp_path):
+    _pyproject(tmp_path)
+    (tmp_path / ".coding-agent-playbook.toml").write_text(_PLAIN_CONFIG)
+    local = '[user_choices]\npersonal = "mine"\n\n[metrics]\nmode = "absolute"\n'
+    (tmp_path / ".coding-agent-playbook.local.toml").write_text(local)
+    assert _init.run(_ns(tmp_path, name="x", kind="python-library")) == 0
+    data = _committed_config(tmp_path)
+    assert data["user_choices"] == {"docstring_style": "numpy"}
+    assert "metrics" not in data
+    assert (tmp_path / ".coding-agent-playbook.local.toml").read_text() == local
+
+
+def test_init_output_policy_comes_from_committed_config(tmp_path):
+    """Behaviour change (P6): a local ``[output] commit = true`` no longer
+    leaks into the committed file, so it no longer selects the committed
+    ``.pre-commit-config.yaml`` hook set either."""
+    _pyproject(tmp_path)
+    (tmp_path / ".coding-agent-playbook.toml").write_text(_PLAIN_CONFIG)
+    (tmp_path / ".coding-agent-playbook.local.toml").write_text("[output]\ncommit = true\n")
+    assert _init.run(_ns(tmp_path, name="x", kind="python-library")) == 0
+    assert _committed_config(tmp_path)["output"] == {"commit": False}
+    text = (tmp_path / ".pre-commit-config.yaml").read_text()
+    assert "--check-staged" in text
+    assert "entry: playbook sync --check\n" not in text

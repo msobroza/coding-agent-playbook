@@ -97,3 +97,46 @@ def test_check_refresh_updates_detector_cache(tmp_path, make_synthetic_repo):
     assert "fastapi" in (cache.get("dependencies") or {}) or "fastapi" in (
         cache.get("frameworks") or {}
     )
+
+
+_COMMITTED_WITH_TABLES = """\
+schema_version = 1
+adapters_enabled = ["continue"]
+
+[project]
+name = "synthetic"
+kind = "python-library"
+
+[engine]
+version = "0.1.0a0"
+
+[user_choices]
+docstring_style = "numpy"
+
+[hooks.some-hook]
+enabled = false
+timeout = 2.5
+
+[links]
+allowed_domains = ["agentharnesses.io"]
+
+[metrics.regression.coverage]
+max_worsening = 0.5
+
+[metrics.weights]
+x = 1.0
+"""
+
+
+def test_refresh_preserves_tables_and_never_persists_local_overrides(tmp_path, make_synthetic_repo):
+    repo = make_synthetic_repo(tmp_path, config_text=_COMMITTED_WITH_TABLES)
+    (repo / ".coding-agent-playbook.local.toml").write_text(
+        '[user_choices]\npersonal = "mine"\n\n[metrics]\nmode = "absolute"\n'
+    )
+    assert _check.run(_ns(repo, refresh=True)) == 0
+    with (repo / ".coding-agent-playbook.toml").open("rb") as f:
+        data = tomllib.load(f)
+    committed = tomllib.loads(_COMMITTED_WITH_TABLES)
+    for key in ("hooks", "links", "metrics", "user_choices"):
+        assert data[key] == committed[key], key
+    assert "python_version" in data["detector_cache"]
