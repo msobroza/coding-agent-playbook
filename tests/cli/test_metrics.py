@@ -25,6 +25,7 @@ import json
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.commands import metrics as _metrics
+from coding_agent_playbook.evaluators.metrics_gate import CONFIG_FILENAME, build_rubric
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -292,7 +293,7 @@ def test_report_has_per_check_subresults_shape(tmp_path):
             candidate.extend(metric.measure(ctx))
 
     config = MetricConfig(mode="absolute")
-    rubric = _metrics._build_rubric(static, config)
+    rubric = build_rubric(static, config)
     grading_ctx = EvalContext(module=parse_module("", "metrics"), source="", label="metrics")
     report = rubric.evaluate(grading_ctx, MeasurementSet(candidate, None), fail_fast=False)
 
@@ -385,7 +386,7 @@ def test_malformed_config_exits_two(tmp_path, capsys):
     assert rc == 2
     err = capsys.readouterr().err
     assert "error" in err.lower()
-    assert _metrics._CONFIG_FILENAME in err
+    assert CONFIG_FILENAME in err
 
 
 def test_invalid_config_mode_exits_two(tmp_path, capsys):
@@ -400,7 +401,7 @@ def test_invalid_config_mode_exits_two(tmp_path, capsys):
     assert rc == 2
     err = capsys.readouterr().err
     assert "error" in err.lower()
-    assert _metrics._CONFIG_FILENAME in err
+    assert CONFIG_FILENAME in err
 
 
 # --------------------------------------------------------------------------- #

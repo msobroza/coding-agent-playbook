@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
     from coding_agent_playbook.evaluators.parse import ModuleModel
@@ -253,6 +254,12 @@ class EvalContext:
     trials, collects one :class:`TrialResult` per trial, and grades the compiled
     aggregate layer over a context carrying them; every other family ignores it
     and it defaults to ``None`` (a single-trial run sets no aggregate context).
+
+    ``tool_paths`` maps a consumer-toolchain binary name (``"ruff"``) to the
+    executable a subprocess-backed metric must run (prK §F.0.3 item 1). The
+    metrics gate fills it from its request: ``machine.json`` pins inside hooks,
+    ``shutil.which`` for the CLI. It defaults to empty; no in-tree metric reads it
+    yet.
     """
 
     module: ModuleModel | None
@@ -267,3 +274,4 @@ class EvalContext:
     candidate_measurements: list[Measurement] | None = None
     baseline_measurements: list[Measurement] | None = None
     trials: list[TrialResult] | None = None
+    tool_paths: Mapping[str, str] = field(default_factory=dict)
