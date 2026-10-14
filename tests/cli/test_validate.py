@@ -155,3 +155,69 @@ def test_validate_flags_missing_eval_task_for_prompt(tmp_path, make_synthetic_re
     out = capsys.readouterr().out
     assert "foo-bar" in out
     assert "not found" in out
+
+
+def _write_skill(repo: Path, dirname: str, frontmatter: str) -> None:
+    skill_dir = repo / "playbook" / "skills" / dirname
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    (skill_dir / "SKILL.md").write_text(f"---\n{frontmatter}---\nSkill body\n", encoding="utf-8")
+
+
+def test_validate_accepts_valid_agent_skill(tmp_path, make_synthetic_repo, capsys):
+    repo = make_synthetic_repo(tmp_path)
+    _write_skill(repo, "query-db", "id: query-db\ndescription: Run a query\n")
+    rc = _validate.run(_ns(repo))
+    assert rc == 0
+    assert "OK" in capsys.readouterr().out
+
+
+def test_validate_flags_skill_id_breaking_agent_skills_name_rule(
+    tmp_path, make_synthetic_repo, capsys
+):
+    """OpenCode silently drops a skill whose name (= its id) fails
+    ``^[a-z0-9]+(-[a-z0-9]+)*$``; validate surfaces it first."""
+    repo = make_synthetic_repo(tmp_path)
+    _write_skill(repo, "bad", "id: My_Skill\ndescription: Bad name\n")
+    rc = _validate.run(_ns(repo))
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "skills/My_Skill (<repo-local>)" in out
+    assert "'My_Skill' is not a valid Agent Skills name" in out
+
+
+def test_validate_flags_skill_without_description(tmp_path, make_synthetic_repo, capsys):
+    repo = make_synthetic_repo(tmp_path)
+    _write_skill(repo, "no-desc", "id: no-desc\n")
+    rc = _validate.run(_ns(repo))
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "skills/no-desc" in out
+    assert "no 'description'" in out
+
+
+def test_validate_flags_every_id_less_skill(tmp_path, make_synthetic_repo, capsys):
+    """Id-less skills all merge under ``skill`` (all but one silently dropped, the
+    survivor renamed); validate must name each one, not print ``OK``."""
+    repo = make_synthetic_repo(tmp_path)
+    _write_skill(repo, "pdf-tools", "name: pdf-tools\ndescription: PDF helpers\n")
+    _write_skill(repo, "xlsx-tools", "name: xlsx-tools\ndescription: XLSX helpers\n")
+    (repo / "playbook" / "skills" / "xlsx-tools" / "scripts").mkdir()
+
+    rc = _validate.run(_ns(repo))
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    fail_lines = [line for line in out.splitlines() if line.startswith("FAIL")]
+    assert len(fail_lines) == 2
+    assert all("has no 'id'" in line for line in fail_lines)
+    assert any("name 'pdf-tools'" in line for line in fail_lines)
+    xlsx_dir = repo / "playbook" / "skills" / "xlsx-tools"
+    assert any(f"name 'xlsx-tools', at {xlsx_dir}" in line for line in fail_lines)
+
+
+def test_validate_flags_non_string_skill_id(tmp_path, make_synthetic_repo, capsys):
+    repo = make_synthetic_repo(tmp_path)
+    _write_skill(repo, "numeric", "id: 123\ndescription: Numeric id\n")
+    rc = _validate.run(_ns(repo))
+    assert rc == 1
+    assert "skill 'id' must be a string, got int 123" in capsys.readouterr().out

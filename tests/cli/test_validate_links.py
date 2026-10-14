@@ -12,9 +12,11 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.links import LinksConfig
+from coding_agent_playbook.packs.superpowers import PACK_NAME
 from coding_agent_playbook.sources.base import ArtifactSource
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
+from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, _resource_subdir
 from coding_agent_playbook.types import Prompt, PromptFrontmatter
+from tests.packs.superpowers_expectations import SKILLS_ROOT
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -185,5 +187,19 @@ def test_shipped_engine_artifacts_have_self_contained_links(tmp_path):
     """The CI gate: every markdown link in every shipped engine artifact must
     be self-contained under the strict default (empty allowlist)."""
     source = FileSystemArtifactSource(repo_root=tmp_path)
+    errors = _validate._check_markdown_links(source, tmp_path, LinksConfig())
+    assert errors == [], "\n".join(f"{e.path}: {e.message}" for e in errors)
+
+
+def test_superpowers_pack_has_self_contained_links(tmp_path: Path) -> None:
+    """The same CI gate over the opt-in superpowers pack (SPEC §11.5): it is
+    walked only when enabled, so the engine-only gate above never sees it."""
+    # The validator silently skips a package whose skills/ does not resolve, so
+    # pin that it resolves to the shipped tree: otherwise this gate is vacuous.
+    walked = _resource_subdir(PACK_NAME, "skills")
+    assert walked is not None
+    assert walked.resolve() == SKILLS_ROOT.resolve()
+    assert any(walked.glob("*/SKILL.md"))
+    source = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PACK_NAME])
     errors = _validate._check_markdown_links(source, tmp_path, LinksConfig())
     assert errors == [], "\n".join(f"{e.path}: {e.message}" for e in errors)

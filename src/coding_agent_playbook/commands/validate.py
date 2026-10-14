@@ -14,6 +14,16 @@ Validates:
 - Every markdown link in every artifact is self-contained (PR L): relative
   targets resolve inside the artifact's source layer, external links only
   pass through the ``[links] allowed_domains`` allowlist.
+- Every package in ``overlays_enabled`` is usable here: it imports without error
+  and ships a ``resources/`` directory — the same check ``playbook sync`` refuses
+  to run without (``_sync_preflight.unusable_overlays``), so a misspelled pack
+  fails here too instead of validating the engine layer alone.
+- Every skill is a valid Agent Skill (SPEC §6.3): it declares an ``id`` string
+  (id-less skills all collapse into one skill named ``skill``), its id — emitted
+  as the ``SKILL.md`` ``name`` and the output directory — matches
+  ``^[a-z0-9]+(-[a-z0-9]+)*$`` (1-64 chars), and it has a 1-1024 char
+  ``description``. OpenCode silently drops a skill that fails these, so authors
+  learn here instead.
 
 All errors aggregate before a single non-zero exit; success prints one line.
 """
@@ -28,6 +38,12 @@ from typing import TYPE_CHECKING
 
 from jinja2 import Environment, StrictUndefined, TemplateSyntaxError
 
+from coding_agent_playbook.adapters._skill_writer import (
+    agent_skill_issues,
+    has_declared_id,
+    skill_id_of,
+)
+from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.config import parse_links_config
 from coding_agent_playbook.detector import evaluate_predicate
 from coding_agent_playbook.evals.loader import (
@@ -45,11 +61,12 @@ from coding_agent_playbook.sources.filesystem import (
 
 if TYPE_CHECKING:
     import argparse
+    from collections.abc import Sequence
 
     from coding_agent_playbook.detector import Facts
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.sources.base import ArtifactSource
-    from coding_agent_playbook.types import Prompt, Rule
+    from coding_agent_playbook.types import Prompt, Rule, Skill
 
 
 @dataclass(frozen=True)
@@ -59,6 +76,18 @@ class ValidationError:
 
 
 _RULE_CALL_RE = re.compile(r"\{\{\s*rule\(\s*['\"]([^'\"]+)['\"]\s*\)\s*\}\}")
+
+
+def _check_overlays_usable(overlays: Sequence[str]) -> list[ValidationError]:
+    """One error per ``overlays_enabled`` entry that ``playbook sync`` would refuse.
+
+    Without it an unimportable overlay was skipped silently (its artifacts are
+    simply absent), so ``validate`` passed a config every sync mode rejects.
+    """
+    return [
+        ValidationError(path="overlays_enabled", message=str(problem))
+        for problem in _sync_preflight.unusable_overlays(overlays)
+    ]
 
 
 def _check_applies_if(
@@ -372,10 +401,42 @@ def _check_markdown_links(
     return errors
 
 
+def _check_agent_skills(resolved: list[Skill], loaded: list[Skill]) -> list[ValidationError]:
+    """Flag skills that break the Agent Skills ``id``/``name``/``description`` rules.
+
+    Checks the emitted (``resolved``) skills that declare an id, plus every
+    id-less skill from the pre-merge ``loaded`` list: id-less skills all merge
+    under ``"skill"``, so the merge silently drops all but one of them and only
+    ``loaded`` still holds each one (and each is reported exactly once).
+    """
+    with_id = [skill for skill in resolved if has_declared_id(skill)]
+    without_id = [skill for skill in loaded if not has_declared_id(skill)]
+    return [
+        ValidationError(path=_skill_label(skill), message=issue)
+        for skill in [*with_id, *without_id]
+        for issue in agent_skill_issues(skill)
+    ]
+
+
+def _skill_label(skill: Skill) -> str:
+    """Locate ``skill`` for an error line (a canonical :class:`Skill` has no source path).
+
+    Example: ``skills/query-db (<repo-local>)``; an id-less skill is named by its
+    authored ``name`` and, when it has one, its ``scripts/``/``references/`` parent dir.
+    """
+    if has_declared_id(skill):
+        return f"skills/{skill_id_of(skill)} ({skill.source_package})"
+    source_dir = skill.scripts_dir or skill.references_dir
+    where = f", at {source_dir.parent}" if source_dir is not None else ""
+    name = skill.frontmatter.get("name", "?")
+    return f"skills/<no id; name {name!r}{where}> ({skill.source_package})"
+
+
 def run(args: argparse.Namespace) -> int:
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     ctx = SyncContext.from_repo(repo_root)
     errors: list[ValidationError] = []
+    errors.extend(_check_overlays_usable(ctx.config.overlays_enabled))
     errors.extend(_check_applies_if(ctx.rules_resolved, ctx.prompts_resolved, ctx.facts, repo_root))
     errors.extend(_check_prompt_rule_calls(ctx.prompts_resolved))
     errors.extend(_check_rule_bodies_do_not_include_rules(ctx.rules_resolved))
@@ -384,6 +445,7 @@ def run(args: argparse.Namespace) -> int:
     links_config, links_errors = _load_links_config(repo_root)
     errors.extend(links_errors)
     errors.extend(_check_markdown_links(ctx.artifact_source, repo_root, links_config))
+    errors.extend(_check_agent_skills(ctx.skills_resolved, ctx.artifact_source.list_skills()))
 
     if errors:
         for err in errors:

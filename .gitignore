@@ -216,3 +216,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Coding-agent harness files — kept local only, never published.
+# Root-anchored so test fixtures and packaged resources are unaffected.
+/CLAUDE.md
+/CLAUDE.local.md
+/.claude/
+/.mcp.json
+/AGENTS.md
+/.agents/
+/.opencode/
+/opencode.json
+/.continue/
+/shared_skills/

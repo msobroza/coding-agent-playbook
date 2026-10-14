@@ -18,7 +18,7 @@ without the sentinel header are user-authored and never touched.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.renderer import render_for
@@ -46,6 +46,8 @@ class ContinueAdapter(Adapter):
     """
 
     name = "continue"
+
+    output_locations: ClassVar[tuple[str, ...]] = (".continue/rules/", ".continue/prompts/")
 
     def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
         self._rule_registry = rule_registry

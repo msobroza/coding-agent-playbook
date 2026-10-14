@@ -51,7 +51,7 @@ The `ids=` argument is optional but pays off the moment a failure happens — th
 - Default to the narrowest scope (`function`) that works. Promote to `module` or `session` only when teardown is expensive — and then weigh test isolation carefully.
 - Conftest fixtures live as close to the tests that use them as possible. A `conftest.py` for a single test file is fine.
 
-{% if dev_dependencies is defined and "pytest-asyncio" in dev_dependencies %}
+{% if has_framework("pytest-asyncio") %}
 ## Async tests
 
 This project has `pytest-asyncio` installed, so mark coroutine tests explicitly:

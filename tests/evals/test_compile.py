@@ -286,6 +286,13 @@ def test_over_boolean_reads_named_layer() -> None:
     assert over_boolean("rubric", report, verdict=False) is False
 
 
+def test_over_boolean_is_none_for_a_skipped_layer() -> None:
+    skipped = _result("rubric", passed=False)
+    skipped.status = "skipped"
+    report = _report(_result("gate", passed=True), skipped)
+    assert over_boolean("rubric", report, verdict=True) is None
+
+
 def test_over_boolean_verdict_reads_passed_in_bool() -> None:
     report = _report(_result("gate", passed=False))
     assert over_boolean("verdict", report, verdict=True) is True
