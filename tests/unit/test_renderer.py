@@ -11,9 +11,12 @@ from jinja2.sandbox import ImmutableSandboxedEnvironment, SandboxedEnvironment
 
 from coding_agent_playbook.renderer import (
     SENTINEL,
+    TemplateSecurityError,
+    appendix_rule_ids,
     build_environment,
     render_artifact_body,
     render_for,
+    render_sandboxed,
     render_string,
 )
 
@@ -555,3 +558,22 @@ def test_sandbox_allows_in_template_list_mutation(tmp_path: Path) -> None:
     env = build_environment([tmp_path])
     template = "{% set seen = [] %}{{ seen.append('a') or seen | join(',') }}"
     assert render_string(template, {}, env=env) == "a"
+
+
+def test_render_sandboxed_names_the_source_on_a_violation(tmp_path: Path) -> None:
+    """jinja2's bare ``SecurityError`` becomes ``TemplateSecurityError`` naming the file."""
+    env = build_environment([tmp_path])
+    with pytest.raises(TemplateSecurityError) as caught:
+        render_sandboxed(
+            '{{ lipsum.__globals__["os"] }}', {}, env=env, source="playbook/rules/x.md.j2"
+        )
+    assert caught.value.source == "playbook/rules/x.md.j2"
+    assert "unsafe" in caught.value.detail
+    assert str(caught.value).startswith("playbook/rules/x.md.j2: template rejected")
+    assert render_sandboxed("{{ x }}", {"x": "ok"}, env=env, source="s") == "ok"
+
+
+def test_appendix_rule_ids_follow_includes_rules_unless_body_inlines_them() -> None:
+    assert appendix_rule_ids(["a", "b"], "Refactor.\n") == ["a", "b"]
+    assert appendix_rule_ids(["a"], "{{ rule('a') }}\n") == []
+    assert appendix_rule_ids([], "body") == []

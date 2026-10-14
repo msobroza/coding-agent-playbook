@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2.exceptions import SecurityError
 from jinja2.sandbox import SandboxedEnvironment
 
 # Re-exported (``as SENTINEL``) so existing ``renderer.SENTINEL`` imports keep
@@ -155,6 +156,44 @@ def render_string(body: str, context: dict[str, Any], *, env: Environment) -> st
     return template.render(**context)
 
 
+class TemplateSecurityError(Exception):
+    """An artifact template reached for Python internals the Jinja sandbox blocks.
+
+    Raised in place of jinja2's bare ``SecurityError`` so ``playbook sync`` and
+    ``playbook render`` name the offending file instead of printing a traceback
+    (specs/prK-lifecycle-hooks.md §P1). ``source`` is the artifact's source path
+    (its id when it has none); ``detail`` is jinja2's reason.
+
+    Example::
+
+        TemplateSecurityError("playbook/rules/x.md.j2", "access to attribute "
+                              "'__globals__' of 'function' object is unsafe.")
+    """
+
+    def __init__(self, source: str, detail: str) -> None:
+        super().__init__(f"{source}: template rejected by the Jinja sandbox: {detail}")
+        self.source = source
+        self.detail = detail
+
+
+def render_sandboxed(body: str, context: dict[str, Any], *, env: Environment, source: str) -> str:
+    """Render ``body`` like :func:`render_string`, naming ``source`` on a sandbox violation.
+
+    jinja2's ``SecurityError`` becomes :class:`TemplateSecurityError` carrying
+    ``source`` (the artifact's file, or its id). A ``TemplateSecurityError``
+    raised by a nested render (a ``rule()`` inclusion) propagates unchanged, so
+    the error always names the template that actually escaped.
+
+    Example::
+
+        body = render_sandboxed(rule.template_body, ctx, env=env, source="playbook/rules/x.md.j2")
+    """
+    try:
+        return render_string(body, context, env=env)
+    except SecurityError as exc:
+        raise TemplateSecurityError(source, str(exc)) from exc
+
+
 def render_for(
     _template_path: Path,
     body: str,
@@ -254,6 +293,19 @@ def _has_inline_rule_call(body: str) -> bool:
     appendix is suppressed and the author owns the inclusion layout (SPEC §6.2.5).
     """
     return "{{ rule(" in body
+
+
+def appendix_rule_ids(includes_rules: Sequence[str], body: str) -> list[str]:
+    """The rule ids the ``## Reference rules`` appendix renders for one prompt.
+
+    ``includes_rules`` in order, or none when the rendered ``body`` inlines
+    ``rule()`` itself (the author owns the layout, SPEC §6.2.5). ``playbook
+    sync`` pre-renders exactly these before any adapter writes, so a template
+    error in an included rule aborts the sync before the first file lands.
+
+    Example: ``appendix_rule_ids(["style"], "Refactor.\\n")`` -> ``["style"]``.
+    """
+    return [] if _has_inline_rule_call(body) else list(includes_rules)
 
 
 def _build_includes_rules_appendix(

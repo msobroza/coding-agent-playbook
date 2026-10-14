@@ -11,7 +11,7 @@ and finalizes the file).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters.base import Adapter
@@ -27,11 +27,13 @@ class AgentsMdAdapter(Adapter):
     """Translate canonical rules into a single ``AGENTS.md`` at repo root.
 
     Rules-only by design: prompts and skills route through other adapters
-    (Continue / Claude Code) — AGENTS.md is the universal "rules" surface
-    every coding assistant agrees to read.
+    (Continue / Claude Code / OpenCode / shared_skills) — AGENTS.md is the
+    universal "rules" surface every coding assistant agrees to read.
     """
 
     name = "agents_md"
+
+    output_locations: ClassVar[tuple[str, ...]] = ("AGENTS.md",)
 
     def __init__(self) -> None:
         # (priority, rule_id, rendered_section). Buffered now, sorted and
@@ -66,10 +68,10 @@ class AgentsMdAdapter(Adapter):
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
         """No-op: AGENTS.md is rules-only.
 
-        Native skill emission belongs to the Claude Code adapter; OpenCode
-        reads ``.claude/skills/`` directly. This adapter never degrades a
-        skill to a prompt either (the default Adapter degrade path), since
-        prompts are also no-ops here.
+        Native skill emission belongs to the skill adapters (``claude_code``,
+        ``opencode``, ``shared_skills``), which share one ``SkillWriter``. This
+        adapter never degrades a skill to a prompt either (the default Adapter
+        degrade path), since prompts are also no-ops here.
         """
         return []
 
@@ -94,23 +96,18 @@ class AgentsMdAdapter(Adapter):
         agents_md.write_text(content, encoding="utf-8")
         return [agents_md]
 
-    def cleanup_stale(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
-        """Delete ``AGENTS.md`` only if (a) it exists, (b) the engine wrote
-        it (sentinel-tagged per :meth:`Adapter._carries_sentinel`), and (c) it
-        was *not* re-written this sync (absent from ``written_paths``).
+    def stale_outputs(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
+        """Report ``AGENTS.md`` as stale only if (a) it exists, (b) the engine
+        wrote it (sentinel-tagged per :meth:`Adapter._carries_sentinel`), and (c)
+        it was *not* re-written this sync (absent from ``written_paths``).
 
         AGENTS.md is a single repo-root file rather than a directory of
-        sentinel-tagged artifacts, so the shared ``_default_cleanup``
-        directory walker on the ABC does not apply. Overriding here keeps
-        the engine's cleanup behaviour conservative: user-authored files
-        and just-rendered files are both safe.
+        sentinel-tagged artifacts, so the shared directory scan on the ABC does
+        not apply. The ABC's ``cleanup_stale`` deletes what this returns, which
+        keeps cleanup conservative: user-authored files and just-rendered files
+        are both safe.
         """
         agents_md = repo_root / "AGENTS.md"
-        if not agents_md.is_file():
+        if not agents_md.is_file() or agents_md.resolve() in written_paths:
             return []
-        if agents_md.resolve() in written_paths:
-            return []
-        if not self._carries_sentinel(agents_md):
-            return []
-        agents_md.unlink()
-        return [agents_md]
+        return [agents_md] if self._carries_sentinel(agents_md) else []

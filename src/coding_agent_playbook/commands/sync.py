@@ -1,318 +1,73 @@
 """`playbook sync` — regenerate all artifacts (SPEC §12.2 / §12.3).
 
-Two modes:
-- write (default): runs detector → renders → adapters write → stamps lockfile.
-- ``--check``: re-renders into a hygienic scratch copy of the repo and compares
-  against the on-disk files; exits 1 if any differ or are missing, or if any
-  generated file is orphaned (specs/prK-lifecycle-hooks.md §P P2).
+Three modes:
+- write (default): runs detector → renders → adapters write → settles output
+  an earlier sync left behind (``_sync_orphans``, both ``[output] commit``
+  settings — the only deletion policy for stale skill output) → stamps the
+  schema-2 lockfile with each entry's provenance (``_sync_lockfile``), then
+  applies the ``[output] commit`` policy: ``commit = false`` (default) keeps
+  the managed ``.gitignore`` block current and warns about generated paths git
+  still tracks; ``commit = true`` removes the block.
+- ``--check``: re-renders into an empty scratch dir and compares against the
+  on-disk files (plus, for ``commit = false``, the managed block); exits 1 on
+  drift, including every **orphan** write mode would delete
+  (specs/prK-lifecycle-hooks.md §P P2).
+- ``--check-staged``: re-renders into an empty scratch dir and exits 1 if any
+  staged path is generated output (the ``commit = false`` pre-commit guard).
 
-A template the Jinja sandbox rejects aborts either mode with exit 1, naming the
-source file, before any adapter writes (specs/prK-lifecycle-hooks.md §P P1).
+Both check modes decide skill-dir ownership against the real tree, so they skip
+exactly the skill dirs write mode skips. Write mode installs the leftover policy
+around its render, so a file/folder swap inside a skill dir displaces only what
+that policy would delete (``_prior_output.judging_leftovers_with``).
+
+Every mode first refuses to run when a configured overlay package is not
+importable (``_sync_preflight``) — rendering without it would silently drop
+the org rules and un-ignore their output. A template the Jinja sandbox rejects
+aborts every mode with exit 1, naming the source file, before any adapter
+writes (specs/prK-lifecycle-hooks.md §P P1).
 """
 
 from __future__ import annotations
 
-import dataclasses
-import datetime as _dt
+import contextlib
 import shutil
 import sys
 import tempfile
-import tomllib
-from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Final
+from pathlib import Path
+from typing import TYPE_CHECKING
 
-from jinja2.exceptions import SecurityError
-
-from coding_agent_playbook import __version__ as _engine_version
-from coding_agent_playbook.commands._sync_scratch import ScratchCopyPolicy
-from coding_agent_playbook.detector import evaluate_predicate
-from coding_agent_playbook.lockfile import LockEntry, Lockfile, Provenance, compute_hash
-from coding_agent_playbook.orchestrator import (
-    RuleRegistryImpl,
-    SyncContext,
-    artifact_id_of,
-    discover_adapters,
+from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
+from coding_agent_playbook.adapters._skill_writer import deciding_ownership_against
+from coding_agent_playbook.commands import _sync_orphans, _sync_output, _sync_preflight
+from coding_agent_playbook.commands._output_locations import OutputLocations
+from coding_agent_playbook.commands._sync_lockfile import (
+    ProvenanceRecorder,
+    SyncResult,
+    build_lockfile,
+    dispatch_to_adapters,
 )
-from coding_agent_playbook.renderer import build_environment, render_string
+from coding_agent_playbook.commands._sync_render import render_artifacts, report_sandbox_violation
+from coding_agent_playbook.git_client import SubprocessGitClient
+from coding_agent_playbook.gitignore import LOCKFILE_NAME, ignore_entries
+from coding_agent_playbook.orchestrator import (
+    SyncContext,
+    discover_adapters,
+    installed_output_locations,
+)
+from coding_agent_playbook.renderer import TemplateSecurityError
 
 if TYPE_CHECKING:
     import argparse
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Iterator, Sequence
 
-    from jinja2 import Environment
+    from coding_agent_playbook.git_client import GitClient
+    from coding_agent_playbook.lockfile import Lockfile
 
-    from coding_agent_playbook.adapters.base import Adapter
-    from coding_agent_playbook.detector import Facts
-    from coding_agent_playbook.lockfile import ProvenanceKind
-    from coding_agent_playbook.types import Prompt, Rule, Skill
+# What "the lockfile cannot be read" looks like: tomllib.TOMLDecodeError and
+# lockfile.LockfileFormatError are ValueErrors; the rest guard third-party sources.
+_UNREADABLE_LOCKFILE: tuple[type[Exception], ...] = (OSError, ValueError, KeyError, TypeError)
 
-
-# 2 = provenance on every entry (specs/prK-lifecycle-hooks.md §P P4, §B.6).
-_LOCKFILE_SCHEMA = 2
-
-_LOCKFILE_FILENAME: Final = ".coding-agent-playbook.lock"
-
-# Filenames that are state-source-managed and must be excluded from the
-# drift diff (otherwise the lockfile written by sync would itself look
-# like drift). Keep this in sync with the constants in
-# ``sources.filesystem.FileSystemStateSource``.
-_STATE_FILES_TO_SKIP: tuple[str, ...] = (
-    ".coding-agent-playbook.toml",
-    ".coding-agent-playbook.local.toml",
-    _LOCKFILE_FILENAME,
-)
-
-# ``sync --check`` wording for an orphan (specs/prK-lifecycle-hooks.md §P P2).
-_ORPHAN_HINT: Final = "    Orphaned generated file; run 'playbook sync' to remove."
-
-
-def _build_jinja_context(ctx: SyncContext) -> dict[str, object]:
-    """Per SPEC §9.4: facts + project metadata + engine metadata.
-
-    Helpers (``has_framework``, ``rule``) are registered on the env globals by
-    :func:`build_environment`; the context dict carries only data fields.
-    """
-    context: dict[str, object] = dict(ctx.facts)
-    context["project_name"] = ctx.config.project.name
-    context["project_description"] = ctx.config.project.description
-    context.update(dict(ctx.config.user_choices))
-    context["engine_version"] = ctx.config.engine_version or _engine_version
-    return context
-
-
-class TemplateSecurityError(Exception):
-    """An artifact template reached for Python internals the Jinja sandbox blocks.
-
-    Raised in place of jinja2's bare ``SecurityError`` so ``playbook sync``
-    names the offending file instead of printing a traceback (prK §P1).
-    ``source`` is the artifact's source path (its id when it has none);
-    ``detail`` is jinja2's reason.
-
-    Example::
-
-        TemplateSecurityError("playbook/rules/x.md.j2", "access to attribute "
-                              "'__globals__' of 'function' object is unsafe.")
-    """
-
-    def __init__(self, source: str, detail: str) -> None:
-        super().__init__(f"{source}: template rejected by the Jinja sandbox: {detail}")
-        self.source = source
-        self.detail = detail
-
-
-def _render_template(artifact: Rule | Prompt, context: dict[str, object], env: Environment) -> str:
-    """Render ``artifact.template_body``; a sandbox violation becomes a
-    :class:`TemplateSecurityError` naming the artifact's source file."""
-    try:
-        return render_string(artifact.template_body, context, env=env)
-    except SecurityError as exc:
-        path = artifact.source_path
-        source = str(path) if path is not None else artifact_id_of(artifact)
-        raise TemplateSecurityError(source, str(exc)) from exc
-
-
-def _render_rule_body(rule: Rule, context: dict[str, object], env: Environment) -> Rule:
-    """Re-emit a Rule with ``body`` set to the Jinja-rendered output.
-
-    Non-templated rules pass through verbatim. The template/body split lets
-    callers re-render from ``template_body`` again (e.g. for inline
-    inclusion from a prompt with a different context).
-    """
-    if rule.is_templated:
-        rendered = _render_template(rule, dict(context), env)
-        return dataclasses.replace(rule, body=rendered)
-    return rule
-
-
-def _render_prompt_body(prompt: Prompt, context: dict[str, object], env: Environment) -> Prompt:
-    """Render a prompt's body through Jinja, masking ``input_variables`` so
-    the opencode placeholder substitution can still find them (SPEC §9.7 +
-    the ``prompt_opencode_command`` contract in renderer.py)."""
-    if not prompt.is_templated:
-        return prompt
-    safe_context = dict(context)
-    # Per SPEC §9.7 / renderer's opencode contract: input_variables names
-    # must not appear in the Jinja context, or {{ var }} placeholders get
-    # expanded before the format-time substitution maps them to $ARGUMENTS.
-    for var in prompt.frontmatter.input_variables or []:
-        name = var.get("name") if isinstance(var, dict) else None
-        if name and name in safe_context:
-            del safe_context[name]
-    rendered = _render_template(prompt, safe_context, env)
-    return dataclasses.replace(prompt, body=rendered)
-
-
-@dataclasses.dataclass(frozen=True)
-class SyncResult:
-    """Everything one :func:`_run_sync` pass produced.
-
-    ``written`` keeps every adapter-returned path in dispatch order
-    (duplicates included, so the summary count is unchanged); ``provenance``
-    maps each *resolved* written path to its origin; ``removed`` lists the
-    stale files ``cleanup_stale`` deleted; ``managed`` holds the scoped
-    (per-JSON-element) lock entries hook-capable adapters contribute (§C.1.4),
-    empty until those adapters exist.
-
-    Example::
-
-        result = _run_sync(ctx)
-        lockfile = _build_lockfile(result.written, ctx.repo_root, "0.2.0",
-                                   result.provenance, result.managed)
-    """
-
-    written: tuple[Path, ...]
-    removed: tuple[Path, ...]
-    provenance: Mapping[Path, Provenance]
-    managed: tuple[LockEntry, ...]
-
-
-class _ProvenanceRecorder:
-    """Collect adapter-returned paths in dispatch order plus their provenance.
-
-    The first writer of a path owns it. A second, *different* provenance for
-    the same path (another artifact, another adapter, or a ``finalize``
-    result) makes it ``kind="composite"`` (§P P4).
-    """
-
-    def __init__(self) -> None:
-        self.written: list[Path] = []
-        self.provenance: dict[Path, Provenance] = {}
-
-    def record(self, paths: Iterable[Path], provenance: Provenance) -> None:
-        for path in paths:
-            self.written.append(path)
-            key = path.resolve()
-            previous = self.provenance.get(key)
-            if previous is None or previous == provenance:
-                self.provenance[key] = provenance
-            else:
-                self.provenance[key] = _composite_of(previous, provenance)
-
-
-def _composite_of(first: Provenance, second: Provenance) -> Provenance:
-    """Provenance of a path with two different writers: the adapter survives
-    only when both writers agree on it."""
-    adapter = first.adapter if first.adapter == second.adapter else ""
-    return Provenance(kind="composite", adapter=adapter)
-
-
-def _artifact_provenance(
-    kind: ProvenanceKind, artifact: Rule | Prompt | Skill, adapter_name: str
-) -> Provenance:
-    return Provenance(
-        kind=kind,
-        artifact_id=artifact_id_of(artifact),
-        source=artifact.source_package,
-        adapter=adapter_name,
-    )
-
-
-def _dispatch_to_adapters(
-    adapters: Mapping[str, Adapter],
-    rules: Sequence[Rule],
-    prompts: Sequence[Prompt],
-    skills: Sequence[Skill],
-    repo_root: Path,
-) -> _ProvenanceRecorder:
-    """Run every adapter's ``write_*`` calls then ``finalize``, tagging each
-    returned path with the artifact (or composite output) that produced it.
-
-    Provenance is recorded by wrapping the calls, so the adapter return type
-    (``list[Path]``) is unchanged. ``adapters`` maps the entry-point name to
-    the instance, e.g. ``{"continue": ContinueAdapter()}``.
-    """
-    recorder = _ProvenanceRecorder()
-    for name, adapter in adapters.items():
-        for rule in rules:
-            recorder.record(
-                adapter.write_rule(rule, repo_root), _artifact_provenance("rule", rule, name)
-            )
-        for prompt in prompts:
-            recorder.record(
-                adapter.write_prompt(prompt, repo_root),
-                _artifact_provenance("prompt", prompt, name),
-            )
-        for skill in skills:
-            recorder.record(
-                adapter.write_skill(skill, repo_root), _artifact_provenance("skill", skill, name)
-            )
-        recorder.record(adapter.finalize(repo_root), Provenance(kind="composite", adapter=name))
-    return recorder
-
-
-def _repo_relative(path: Path, repo_root: Path) -> str:
-    """Posix path of resolved ``path`` relative to ``repo_root`` (absolute if outside)."""
-    try:
-        return path.relative_to(repo_root.resolve()).as_posix()
-    except ValueError:
-        return path.as_posix()
-
-
-def _whole_file_entry(path: Path, repo_root: Path, origin: Provenance | None) -> LockEntry | None:
-    """Whole-file entry for resolved ``path``; ``None`` if it is unreadable.
-    A path with no recorded origin gets the v1 unknown provenance (``kind=""``)."""
-    try:
-        content = path.read_bytes()
-    except OSError:
-        return None
-    rel = _repo_relative(path, repo_root)
-    if origin is None:
-        return LockEntry(path=rel, sha256=compute_hash(content), bytes=len(content))
-    return LockEntry.from_provenance(rel, content, origin)
-
-
-def _build_lockfile(
-    written: Sequence[Path],
-    repo_root: Path,
-    engine_version: str,
-    provenance: Mapping[Path, Provenance],
-    managed: Sequence[LockEntry],
-) -> Lockfile:
-    """Stamp a schema-2 lockfile: one provenance-bearing whole-file entry per
-    written path, sorted by path; a path owned element-wise by ``managed``
-    scoped entries gets no whole-file entry, and those entries are appended
-    instead (§B.6, §C.1.4). ``provenance`` is keyed by resolved path.
-
-    Example: ``_build_lockfile(r.written, root, "0.2.0", r.provenance, r.managed)``.
-    """
-    scoped_paths = {entry.path for entry in managed}
-    entries: list[LockEntry] = []
-    for path in sorted({p.resolve() for p in written}):
-        entry = _whole_file_entry(path, repo_root, provenance.get(path))
-        if entry is not None and entry.path not in scoped_paths:
-            entries.append(entry)
-    entries.extend(managed)
-    # RFC 3339 Zulu timestamp for the lockfile per SPEC §14.4
-    rendered_at = _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    return Lockfile(
-        schema_version=_LOCKFILE_SCHEMA,
-        engine_version=engine_version,
-        rendered_at=rendered_at,
-        entries=entries,
-    )
-
-
-def _filter_applies_if[T: "Rule | Prompt"](
-    artifacts: list[T],
-    facts: Facts,
-    repo_root: Path,
-) -> list[T]:
-    """Apply :func:`evaluate_predicate` to each artifact and drop the ones
-    whose ``applies_if`` evaluates to False. Empty predicate → always pass.
-    """
-    kept: list[T] = []
-    for artifact in artifacts:
-        predicate = artifact.frontmatter.applies_if or {}
-        if not predicate or evaluate_predicate(predicate, facts, repo_root=repo_root):
-            kept.append(artifact)
-    return kept
-
-
-def _filter_skills(skills: list[Skill]) -> list[Skill]:
-    """Skills are unconditional in v1 (no ``applies_if`` in the SKILL.md
-    schema). Returned unchanged; kept as a hook for v2 to filter on a
-    ``conditions:`` extension without churning the call site."""
-    return list(skills)
+_SANDBOX_OUTCOME = "playbook sync aborted; no files were written."
 
 
 def _resolve_repo_root(args: argparse.Namespace) -> Path:
@@ -322,142 +77,268 @@ def _resolve_repo_root(args: argparse.Namespace) -> Path:
     return Path(raw)
 
 
-def _cleanup_stale(
-    adapters: Mapping[str, Adapter], written: Sequence[Path], repo_root: Path
-) -> tuple[Path, ...]:
-    """Run every adapter's ``cleanup_stale`` after *all* adapters finalized."""
-    resolved_written: set[Path] = {p.resolve() for p in written}
-    removed: list[Path] = []
-    for adapter in adapters.values():
-        removed.extend(adapter.cleanup_stale(resolved_written, repo_root))
-    return tuple(removed)
+def _render_into(ctx: SyncContext, output_root: Path) -> ProvenanceRecorder:
+    """Render every applicable artifact through the enabled adapters into ``output_root``.
 
-
-def _run_sync(ctx: SyncContext, *, predicate_root: Path | None = None) -> SyncResult:
-    """Internal helper: render + dispatch + cleanup, returning one
-    :class:`SyncResult`. Used by both write mode and ``--check`` (the latter
-    compares ``written`` with on-disk content and reports ``removed`` as orphans).
-
-    ``predicate_root`` is where ``applies_if: has_file`` paths are looked up
-    (default ``ctx.repo_root``). ``--check`` passes the real repo so a path its
-    scratch copy leaves out (``.env``, ``build/``) never changes the rule set.
+    Inputs — ``applies_if`` file checks, skill sources, config — are read from
+    the real repo through ``ctx``; only the adapters' writes go to
+    ``output_root``. So ``--check`` modes render into an empty scratch dir
+    without copying the working tree. Every template runs before the first
+    write (``_sync_render``). Returns the written paths with their provenance.
     """
-    root = ctx.repo_root if predicate_root is None else predicate_root
-    rules = _filter_applies_if(ctx.rules_resolved, ctx.facts, root)
-    prompts = _filter_applies_if(ctx.prompts_resolved, ctx.facts, root)
-    skills = _filter_skills(ctx.skills_resolved)
-
-    base_env = build_environment([], is_prompt_context=False)
-    base_env.globals["_facts"] = dict(ctx.facts)
-    base_context = _build_jinja_context(ctx)
-
-    # Render rule bodies first (their template_body may also be re-rendered
-    # by the registry when a prompt asks to inline them).
-    rendered_rules = [_render_rule_body(rule, base_context, base_env) for rule in rules]
-
-    registry = RuleRegistryImpl(rendered_rules, ctx.facts, base_env)
-    prompt_env = build_environment([], is_prompt_context=True, rule_registry=registry)
-    prompt_env.globals["_facts"] = dict(ctx.facts)
-    rendered_prompts = [_render_prompt_body(p, base_context, prompt_env) for p in prompts]
-
+    rendered = render_artifacts(ctx)
     # Re-discover adapters with the rule_registry plumbed in so the
     # includes_rules appendix can resolve through the registry.
-    adapters = discover_adapters(ctx.config, rule_registry=registry)
+    adapters = discover_adapters(ctx.config, rule_registry=rendered.registry)
     ctx.adapters = adapters
-
-    recorder = _dispatch_to_adapters(
-        adapters, rendered_rules, rendered_prompts, skills, ctx.repo_root
+    return dispatch_to_adapters(
+        adapters, rendered.rules, rendered.prompts, rendered.skills, output_root
     )
-    removed = _cleanup_stale(adapters, recorder.written, ctx.repo_root)
+
+
+def _run_sync(ctx: SyncContext, policy: _sync_orphans.LeftoverPolicy) -> SyncResult:
+    """Write mode's render: write into the repo, then let each adapter remove its
+    own stale files (pruning directories that leaves empty).
+
+    The render runs under ``policy``, so a skill-dir file/folder swap displaces
+    only what the leftover policy itself would delete; ``removed`` includes
+    those displaced files.
+    """
+    with judging_leftovers_with(policy.may_delete):
+        recorder = _render_into(ctx, ctx.repo_root)
+    resolved_written: set[Path] = {p.resolve() for p in recorder.written}
+    removed: list[Path] = []
+    for adapter in ctx.adapters.values():
+        removed.extend(adapter.cleanup_stale(resolved_written, ctx.repo_root))
+    policy.locations.prune_emptied(removed, ctx.repo_root)
     return SyncResult(
         written=tuple(recorder.written),
-        removed=removed,
+        removed=(*removed, *policy.displaced),
         provenance=dict(recorder.provenance),
-        managed=(),
     )
 
 
-def execute(repo_root: Path, *, check: bool = False) -> int:
-    """Execute the sync pipeline.
+def execute(
+    repo_root: Path,
+    *,
+    check: bool = False,
+    check_staged: bool = False,
+    git: GitClient | None = None,
+) -> int:
+    """Execute the sync pipeline in write, ``--check`` or ``--check-staged`` mode.
 
     Programmatic entry point used by ``playbook init`` (to fire a sync after
-    writing the config) and by tests that want to skip the argparse
-    plumbing. The CLI's :func:`run` wrapper simply parses flags and
-    forwards to here. Returns 1, having written nothing, when a template is
-    rejected by the Jinja sandbox.
+    writing the config) and by tests that want to skip the argparse plumbing.
+    ``git`` defaults to :class:`SubprocessGitClient`; tests inject a fake.
+    Returns 1, having written nothing, when a template is rejected by the
+    Jinja sandbox.
+
+    Example::
+
+        >>> execute(Path("."), check=True)  # doctest: +SKIP
+        0
     """
+    if check and check_staged:
+        raise ValueError("execute(): check and check_staged are mutually exclusive, got both True")
+    git_client = git if git is not None else SubprocessGitClient()
     ctx = SyncContext.from_repo(repo_root)
-    if check:
-        return _run_check(ctx)
+    if check_staged and ctx.config.commit_output:
+        return 0  # the staged-output guard is a no-op under committed output
+    if not _environment_ready(ctx):
+        return 1
     try:
-        result = _run_sync(ctx)
+        if check_staged:
+            return _run_check_staged(ctx, git_client)
+        if check:
+            return _run_check(ctx, git_client)
+        return _run_write(ctx, git_client)
     except TemplateSecurityError as exc:
-        return _report_sandbox_violation(exc, ctx.repo_root)
-
-    lockfile = _build_lockfile(
-        result.written,
-        ctx.repo_root,
-        ctx.config.engine_version,
-        result.provenance,
-        result.managed,
-    )
-    ctx.state_source.save_lockfile(lockfile)
-
-    print(f"Summary: {len(result.written)} files written, {len(result.removed)} removed")
-    return 0
+        return report_sandbox_violation(exc, ctx.repo_root, outcome=_SANDBOX_OUTCOME)
 
 
 def run(args: argparse.Namespace) -> int:
-    """Dispatch to write mode or ``--check`` mode."""
-    return execute(repo_root=_resolve_repo_root(args), check=bool(getattr(args, "check", False)))
+    """Dispatch the parsed ``playbook sync`` flags to :func:`execute`."""
+    return execute(
+        repo_root=_resolve_repo_root(args),
+        check=bool(getattr(args, "check", False)),
+        check_staged=bool(getattr(args, "check_staged", False)),
+    )
 
 
-def _run_check(ctx: SyncContext) -> int:
-    """``playbook sync --check``: render into a scratch copy, then report drift.
+def _environment_ready(ctx: SyncContext) -> bool:
+    """Refuse (``False``) when an overlay is unimportable; warn on missing adapters."""
+    missing = _sync_preflight.missing_overlays(ctx.config.overlays_enabled)
+    if missing:
+        _sync_preflight.report_missing_overlays(missing)
+        return False
+    absent = _missing_adapters(ctx)
+    if absent:
+        _sync_preflight.warn_missing_adapters(absent)
+    return True
 
-    Exits 0 (no drift) or 1. Drift is a generated file that differs from, or is
-    missing in, the real repo, plus every orphan (:func:`_orphan_drift`). The
-    full sync runs against the copy so adapters write freely and the real tree
-    is never touched. The copy is hygienic (:class:`ScratchCopyPolicy`): no VCS,
-    environments, caches, build outputs, secrets or links leaving the repo.
-    Because those are detector inputs, facts and ``has_file`` predicates come
-    from the real repo, so the scratch run renders the same artifact set.
+
+def _missing_adapters(ctx: SyncContext) -> list[str]:
+    """Enabled adapter names with no installed entry point."""
+    return _sync_preflight.missing_adapters(ctx.config.adapters_enabled, ctx.adapters)
+
+
+def _run_write(ctx: SyncContext, git: GitClient) -> int:
+    """Write mode: render + write + settle leftovers + lockfile, then the ``[output]`` policy.
+
+    Under either ``commit`` setting, earlier output this render did not rewrite
+    (orphans) is settled first: pristine, untracked ones are deleted, the rest
+    stay owned — carried in the lockfile (and, for ``commit = false``, kept in
+    the managed block, so they never become committable). ``.gitignore`` is a
+    user file: never in ``written``, hashed, or cleaned up.
+    """
+    commit = ctx.config.commit_output
+    policy = _leftover_policy(ctx, git, _previous_lockfile(ctx))
+    result = _run_sync(ctx, policy)
+    written = list(result.written)
+    plan = policy.plan(written)
+    removed = [*result.removed, *policy.delete(plan.delete)]
+    policy.prune_vanished()
+    lockfile = build_lockfile(
+        written,
+        ctx.repo_root,
+        ctx.config.engine_version,
+        provenance=result.provenance,
+        managed=result.managed,
+        carried=plan.keep,
+    )
+    ctx.state_source.save_lockfile(lockfile)
+    kept = _sync_orphans.entry_paths(plan.keep, ctx.repo_root)
+    try:
+        status = _sync_output.update_gitignore(ctx.repo_root, [*written, *kept], commit=commit)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    if status:
+        print(status)
+    if commit:
+        _sync_output.report_kept_leftovers(ctx.repo_root, kept)
+    else:
+        _sync_output.warn_tracked_output(ctx.repo_root, [*written, *kept], git)
+    print(f"Summary: {len(written)} files written, {len(removed)} removed")
+    return 0
+
+
+def _previous_lockfile(ctx: SyncContext) -> Lockfile | None:
+    """The last sync's lockfile (the ownership record), ``None`` if absent or unreadable."""
+    try:
+        return ctx.state_source.load_lockfile()
+    except _UNREADABLE_LOCKFILE as exc:
+        print(f"warning: ignoring unreadable {LOCKFILE_NAME}: {exc}", file=sys.stderr)
+        return None
+
+
+def _leftover_policy(
+    ctx: SyncContext, git: GitClient, previous: Lockfile | None
+) -> _sync_orphans.LeftoverPolicy:
+    """The leftover policy for this run: ``previous`` (the last sync's lockfile),
+    bounded by every installed adapter's declared output locations.
+
+    With an enabled adapter missing, its output cannot be judged stale: keep all.
+    """
+    locations = OutputLocations.declared(installed_output_locations(), ctx.repo_root)
+    return _sync_orphans.LeftoverPolicy(
+        previous=previous,
+        repo_root=ctx.repo_root,
+        git=git,
+        keep_all=bool(_missing_adapters(ctx)),
+        locations=locations,
+    )
+
+
+@contextlib.contextmanager
+def _rendered_scratch(ctx: SyncContext) -> Iterator[tuple[Path, list[Path]]]:
+    """Render into an empty throwaway directory; yield ``(scratch_root, written)``.
+
+    Nothing from the working tree is copied (inputs are read in place through
+    ``ctx``), so a dangling symlink, an unreadable data directory, a socket, a
+    secret file or a large ``.venv`` can neither crash, slow nor leak into the
+    pre-commit guard, and the real tree is never written. The scratch root
+    carries the repo's directory name so name-derived content (``HARNESS.md``)
+    renders identically, and skill-dir ownership is decided against the real
+    tree (write-mode parity).
     """
     scratch_dir = Path(tempfile.mkdtemp(prefix="playbook-sync-check-"))
     try:
-        return _check_in_scratch(ctx, scratch_dir / "repo")
+        scratch = scratch_dir / (ctx.repo_root.resolve().name or "repo")
+        scratch.mkdir()
+        # Skill-dir ownership is a property of the real tree, not the empty
+        # scratch: skip exactly the dirs write mode would skip (SPEC §12.3).
+        with deciding_ownership_against(ctx.repo_root):
+            written = _render_into(ctx, scratch).written
+        yield scratch, written
     finally:
         shutil.rmtree(scratch_dir, ignore_errors=True)
 
 
-def _check_in_scratch(ctx: SyncContext, scratch: Path) -> int:
-    """Copy the repo to ``scratch``, sync the copy and report drift (exit code)."""
-    policy = ScratchCopyPolicy(ctx.repo_root)
-    shutil.copytree(ctx.repo_root, scratch, symlinks=False, ignore=policy)
-    scratch_ctx = SyncContext.from_repo(scratch, facts=ctx.facts)
-    try:
-        # ``cleanup_stale`` runs inside the copy: ``removed`` is exactly the set
-        # of stale generated files a real sync would delete, i.e. orphans.
-        result = _run_sync(scratch_ctx, predicate_root=ctx.repo_root)
-    except TemplateSecurityError as exc:
-        return _report_sandbox_violation(exc, scratch)
-    drift = _content_drift(result.written, scratch, ctx.repo_root)
-    drift += _orphan_drift(result, scratch, ctx, policy)
+def _on_real_tree(written: Sequence[Path], scratch: Path, repo_root: Path) -> list[Path]:
+    """Map scratch-rendered paths onto the real tree.
+
+    Ignore entries and orphans are then computed exactly as in write mode —
+    resolved through the repo's own symlinks (a symlinked ``.claude/skills``,
+    say) — so the check modes and write mode always agree.
+    """
+    root = scratch.resolve()
+    return [repo_root / path.resolve().relative_to(root) for path in written]
+
+
+def _run_check(ctx: SyncContext, git: GitClient) -> int:
+    """``playbook sync --check``: compare a scratch render against the repo.
+
+    Exits 0 (no drift) or 1 (drift). Drift is a generated file that differs or
+    is missing, every orphan write mode would delete (:func:`_orphans_sync_removes`),
+    an unreadable lockfile, and — under ``[output] commit = false`` — a stale,
+    missing or malformed managed ``.gitignore`` block. Never writes to the repo.
+    """
+    previous, lockfile_drift = _check_lockfile(ctx)
+    with _rendered_scratch(ctx) as (scratch, written):
+        drift = _sync_output.file_drift(written, scratch, ctx.repo_root)
+        real_written = _on_real_tree(written, scratch, ctx.repo_root)
+    stale = _stale_outputs(ctx, real_written)
+    # Settled as in write mode, where cleanup_stale has already deleted ``stale``.
+    plan = _leftover_policy(ctx, git, previous).plan([*real_written, *stale])
+    drift.extend(_orphans_sync_removes(stale, plan, ctx.repo_root))
+    drift.extend(lockfile_drift)
+    if not ctx.config.commit_output:
+        drift.extend(_block_drift(ctx, real_written, plan))
     return _report_drift(drift)
 
 
-def _report_sandbox_violation(exc: TemplateSecurityError, root: Path) -> int:
-    """Print ``exc`` to stderr naming its file relative to ``root`` and return 1.
+def _check_lockfile(ctx: SyncContext) -> tuple[Lockfile | None, list[str]]:
+    """``--check``: the previous lockfile, or ``None`` plus a drift line if unreadable."""
+    try:
+        return ctx.state_source.load_lockfile(), []
+    except _UNREADABLE_LOCKFILE as exc:
+        return None, _sync_output.unreadable_lockfile_drift(exc)
 
-    ``root`` is the repo, or the ``--check`` scratch copy (which mirrors the
-    repo's layout, so the relative path names the real file). Rendering runs
-    before any adapter writes, so nothing was written.
+
+def _stale_outputs(ctx: SyncContext, real_written: Sequence[Path]) -> list[Path]:
+    """Files the enabled adapters' ``cleanup_stale`` would delete on the real tree (read-only)."""
+    resolved = {path.resolve() for path in real_written}
+    return [
+        path
+        for adapter in ctx.adapters.values()
+        for path in adapter.stale_outputs(resolved, ctx.repo_root)
+    ]
+
+
+def _orphans_sync_removes(
+    stale: Sequence[Path], plan: _sync_orphans.OrphanPlan, repo_root: Path
+) -> list[str]:
+    """Drift lines for every orphan ``playbook sync`` would delete, each once, sorted.
+
+    Those are the sentinel-tagged files ``cleanup_stale`` removes and the
+    lockfile orphans the leftover policy deletes (pristine, untracked, in a
+    declared location) — notably a removed skill's ``SKILL.md`` and copied
+    scripts. Leftovers the policy keeps (edited, tracked, an adapter missing)
+    stay owned by design and are not drift, so the hint is always true.
     """
-    source = Path(exc.source)
-    shown = _repo_relative(source.resolve(), root) if source.is_absolute() else exc.source
-    print(f"error: {TemplateSecurityError(shown, exc.detail)}", file=sys.stderr)
-    print("error: playbook sync aborted; no files were written.", file=sys.stderr)
-    return 1
+    removable = [*stale, *_sync_orphans.entry_paths(plan.delete, repo_root)]
+    return _sync_output.orphan_drift(removable, repo_root)
 
 
 def _report_drift(drift: Sequence[str]) -> int:
@@ -471,98 +352,31 @@ def _report_drift(drift: Sequence[str]) -> int:
     return 1
 
 
-def _scratch_relative(path: Path, scratch_real: Path) -> Path:
-    """``path`` (inside the scratch copy) relative to the resolved scratch root."""
-    return path.resolve().relative_to(scratch_real)
-
-
-def _content_drift(written: Sequence[Path], scratch: Path, repo_root: Path) -> list[str]:
-    """Drift lines for scratch-generated files that differ from, or are missing
-    in, ``repo_root``; state-source files (config, lockfile) are skipped."""
-    scratch_real = scratch.resolve()
-    drift: list[str] = []
-    for path in written:
-        rel = _scratch_relative(path, scratch_real)
-        if rel.name in _STATE_FILES_TO_SKIP:
-            continue
-        line = _compare_generated(path, repo_root / rel, rel.as_posix())
-        if line is not None:
-            drift.append(line)
-    return drift
-
-
-def _compare_generated(generated: Path, actual: Path, rel: str) -> str | None:
-    """One drift line when ``actual`` is missing or differs from ``generated``."""
-    if not actual.is_file():
-        return f"  {rel}\n    Missing on disk; run 'playbook sync' to create."
-    if actual.read_bytes() != generated.read_bytes():
-        return (
-            f"  {rel}\n"
-            "    Generated content differs from on-disk content.\n"
-            "    Run 'playbook sync' to regenerate."
-        )
-    return None
-
-
-def _orphan_drift(
-    result: SyncResult, scratch: Path, ctx: SyncContext, policy: ScratchCopyPolicy
+def _block_drift(
+    ctx: SyncContext, real_written: list[Path], plan: _sync_orphans.OrphanPlan
 ) -> list[str]:
-    """Drift lines for orphans, each path once, sorted.
+    """``--check``: the managed block vs. what write mode would write (incl. kept orphans)."""
+    owned = [*real_written, *_sync_orphans.entry_paths(plan.keep, ctx.repo_root)]
+    return _sync_output.gitignore_drift(ctx.repo_root, ignore_entries(owned, ctx.repo_root))
 
-    An orphan is a generated file the scratch sync's ``cleanup_stale`` removed
-    (sentinel-tagged, no longer produced), or a lockfile orphan
-    (:func:`_lockfile_orphans`) — the only record for files that cannot carry a
-    sentinel (``SKILL.md``, copied skill scripts). An unreadable lockfile (e.g.
-    merge-conflict markers) is reported as drift instead of a traceback.
+
+def _run_check_staged(ctx: SyncContext, git: GitClient) -> int:
+    """``playbook sync --check-staged``: fail when generated output is staged.
+
+    Exit 0 outside a git repo or with nothing staged (fast path: no render).
+    Otherwise render into a scratch dir and exit 1 listing every staged path
+    covered by an entry for this render's output *or* any earlier output still
+    on disk (every orphan in the previous lockfile, pristine or not).
     """
-    scratch_real = scratch.resolve()
-    orphans = {_scratch_relative(p, scratch_real).as_posix() for p in result.removed}
-    try:
-        lockfile = ctx.state_source.load_lockfile()
-    except (tomllib.TOMLDecodeError, KeyError) as exc:
-        unreadable = (
-            f"  {_LOCKFILE_FILENAME}\n    Unreadable lockfile ({type(exc).__name__}: {exc}); "
-            "run 'playbook sync' to rewrite it."
-        )
-        return [*_orphan_lines(orphans), unreadable]
-    regenerated = {_scratch_relative(p, scratch_real).as_posix() for p in result.written}
-    orphans |= _lockfile_orphans(lockfile, regenerated, ctx.repo_root, policy)
-    return _orphan_lines(orphans)
-
-
-def _orphan_lines(orphans: Iterable[str]) -> list[str]:
-    return [f"  {rel}\n{_ORPHAN_HINT}" for rel in sorted(orphans)]
-
-
-def _lockfile_orphans(
-    lockfile: Lockfile | None,
-    regenerated: set[str],
-    repo_root: Path,
-    policy: ScratchCopyPolicy,
-) -> set[str]:
-    """Paths of prior whole-file lock entries the scratch sync did not
-    regenerate whose file still exists in ``repo_root``.
-
-    Scoped entries (``json:<pointer>``) are skipped: their file is shared with
-    the user and never deleted (§B.6). So are paths the scratch copy left out
-    (``policy.covers``), which the scratch run could not judge.
-    """
-    if lockfile is None:
-        return set()
-    return {
-        entry.path
-        for entry in lockfile.entries
-        if not entry.scope
-        and entry.path not in regenerated
-        and not policy.covers(entry.path)
-        and _is_repo_file(repo_root, entry.path)
-    }
-
-
-def _is_repo_file(repo_root: Path, rel: str) -> bool:
-    """Whether lockfile path ``rel`` names an existing file inside ``repo_root``
-    (absolute and ``..`` paths never do)."""
-    pure = PurePosixPath(rel)
-    if pure.is_absolute() or ".." in pure.parts:
-        return False
-    return (repo_root / pure).is_file()
+    staged = git.staged_paths(ctx.repo_root)
+    if not staged:
+        return 0
+    with _rendered_scratch(ctx) as (scratch, written):
+        real_written = _on_real_tree(written, scratch, ctx.repo_root)
+    orphans = _sync_orphans.find_orphans(_previous_lockfile(ctx), real_written, ctx.repo_root)
+    owned = [*real_written, *_sync_orphans.entry_paths(orphans, ctx.repo_root)]
+    offenders = _sync_output.staged_generated_paths(staged, ignore_entries(owned, ctx.repo_root))
+    if not offenders:
+        return 0
+    _sync_output.report_staged_output(offenders, ctx.repo_root)
+    return 1

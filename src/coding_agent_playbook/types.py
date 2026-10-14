@@ -198,8 +198,10 @@ class Prompt:
 
 @dataclass
 class Skill:
-    """Claude Code-only artifact (SPEC §6.3). Skill directory loading and the
-    degrade-to-prompt conversion land with the adapters (PR 6+)."""
+    """A skill directory (SPEC §6.3): ``SKILL.md`` + optional ``scripts/`` and
+    ``references/``. Written natively (Agent Skills layout) by the
+    ``claude_code`` / ``opencode`` / ``shared_skills`` adapters through the shared
+    ``SkillWriter``; other adapters degrade it via :meth:`to_prompt`."""
 
     frontmatter: dict[str, Any]
     body: str

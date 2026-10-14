@@ -252,3 +252,216 @@ def test_composed_aggregate_fails_when_one_check_fails(tmp_path: Path) -> None:
     assert result.passed is False
     assert result.aggregate is not None
     assert result.aggregate.passed is False
+
+
+# --------------------------------------------------------------------------- #
+# Aggregate over a layer that never ran (no judge)
+# --------------------------------------------------------------------------- #
+
+
+def _judged_rubric() -> dict[str, Any]:
+    return {
+        "expr": "quality",
+        "bind": {"quality": {"fail": 0.5, "rubric": [{"judge": "clear", "weight": 1.0}]}},
+    }
+
+
+@pytest.mark.parametrize(("passes", "expected"), [([True, True], True), ([True, False], False)])
+def test_aggregate_over_skipped_rubric_falls_back_to_every_trial_verdict(
+    tmp_path: Path, passes: list[bool], expected: bool
+) -> None:
+    """``over = "rubric"`` with no judge: the aggregate skips, every trial must pass.
+
+    Regression guard: once a judge-less rubric layer reports *skipped* (instead of
+    a vacuous pass) the aggregate would otherwise count every trial as a failure.
+    """
+    data: dict[str, Any] = {
+        "id": "t-agg-rubric",
+        "prompt_id": "refactor",
+        "description": "aggregate over a judge-less rubric",
+        "gate": _gate(),
+        "rubric": _judged_rubric(),
+        "aggregate": _aggregate("pass_at_k", k=2, over="rubric", fail=0.5),
+    }
+    task = EvalTask.from_dict(
+        data, source_path=tmp_path / "task" / "task.toml", source_package="<test>"
+    )
+
+    result = _SequenceRunner(passes).run_task(task, tmp_path / "scratch")
+
+    assert len(result.trials) == 2
+    assert result.aggregate is not None
+    assert result.aggregate.status == "skipped"
+    assert result.passed is expected
+    # The fallback score is the trial pass rate.
+    assert result.aggregate_score == pytest.approx(1.0 if expected else 0.5)
+
+
+class _MadeFileJudge:
+    """A judge that scores 1.0 only when the graded artifact mentions the target.
+
+    Content-dependent on purpose: a trial whose agent did nothing gets 0.0, so the
+    rubric layer genuinely differs per trial.
+    """
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def score_criterion(self, criterion: str, artifact: Any, n: int = 1) -> float:
+        self.calls += 1
+        return 1.0 if _TARGET in str(artifact) else 0.0
+
+
+@pytest.mark.parametrize("fail_fast", [True, False])
+def test_aggregate_over_a_layer_does_not_depend_on_the_short_circuit(
+    tmp_path: Path, fail_fast: bool
+) -> None:
+    """``pass^3`` over the rubric must not change with ``fail_fast``.
+
+    Regression: with the default short-circuit, the two trials whose gate failed
+    skipped their rubric; those trials then did not vote, ``k`` clamped from 3 to
+    1, and the task *passed* although 2 of 3 trials failed (``--full-scoring``
+    failed it). An aggregate over a layer now forces full scoring per trial.
+    """
+    data: dict[str, Any] = {
+        "id": "t-agg-ff",
+        "prompt_id": "refactor",
+        "description": "aggregate over the rubric, judge configured",
+        "gate": _gate(),
+        "rubric": _judged_rubric(),
+        "aggregate": _aggregate("pass_pow_k", k=3, over="rubric", fail=1.0),
+    }
+    task = EvalTask.from_dict(
+        data, source_path=tmp_path / "task" / "task.toml", source_package="<test>"
+    )
+    judge = _MadeFileJudge()
+
+    result = _SequenceRunner([True, False, False]).run_task(
+        task, tmp_path / "scratch", judge=judge, fail_fast=fail_fast
+    )
+
+    assert [t.verdict for t in result.trials] == [True, False, False]
+    assert judge.calls == 3  # the rubric was graded in every trial
+    assert result.aggregate is not None
+    assert result.aggregate.status == "run"
+    assert result.passed is False
+    assert result.aggregate_score == pytest.approx(0.0)
+
+
+def test_aggregate_over_the_verdict_keeps_the_short_circuit(tmp_path: Path) -> None:
+    """Over ``verdict`` the short-circuit cannot change the result, so it stays on."""
+    data: dict[str, Any] = {
+        "id": "t-agg-verdict",
+        "prompt_id": "refactor",
+        "description": "aggregate over the verdict",
+        "gate": _gate(),
+        "rubric": _judged_rubric(),
+        "verdict": {"trial": "gate and rubric"},
+        "aggregate": _aggregate("pass_at_k", k=3, over="verdict", fail=0.5),
+    }
+    task = EvalTask.from_dict(
+        data, source_path=tmp_path / "task" / "task.toml", source_package="<test>"
+    )
+    judge = _MadeFileJudge()
+
+    result = _SequenceRunner([True, False, False]).run_task(task, tmp_path / "scratch", judge=judge)
+
+    assert judge.calls == 1  # the failing trials' rubric was short-circuited
+    assert result.passed is True  # pass@3 with one success
+
+
+def test_aggregate_over_a_cheapest_tier_gate_keeps_sparing_the_judge(tmp_path: Path) -> None:
+    """``over = "gate"`` with a deterministic gate: the gate always runs, so the
+    short-circuit stays on and a failing gate never invokes the judge."""
+    data: dict[str, Any] = {
+        "id": "t-agg-gate",
+        "prompt_id": "refactor",
+        "description": "aggregate over a deterministic gate",
+        "gate": _gate(),
+        "rubric": _judged_rubric(),
+        "aggregate": _aggregate("pass_at_k", k=3, over="gate", fail=0.5),
+    }
+    task = EvalTask.from_dict(
+        data, source_path=tmp_path / "task" / "task.toml", source_package="<test>"
+    )
+    judge = _MadeFileJudge()
+
+    result = _SequenceRunner([False, False, False]).run_task(
+        task, tmp_path / "scratch", judge=judge
+    )
+
+    assert judge.calls == 0
+    assert result.passed is False
+
+
+@pytest.mark.parametrize("fail_fast", [True, False])
+def test_aggregate_over_a_costlier_gate_is_graded_in_every_trial(
+    tmp_path: Path, fail_fast: bool
+) -> None:
+    """Inverted layout: a judged gate behind a deterministic rubric layer.
+
+    A failing rubric would short-circuit the (costlier) gate, so an aggregate
+    over the gate must force full scoring to see the gate in every trial.
+    """
+    data: dict[str, Any] = {
+        "id": "t-agg-inverted",
+        "prompt_id": "refactor",
+        "description": "aggregate over a judged gate",
+        "gate": {
+            "expr": "q",
+            "bind": {"q": {"fail": 0.5, "rubric": [{"judge": "clear", "weight": 1.0}]}},
+        },
+        "rubric": {"expr": "made", "bind": {"made": {"check": "file_exists", "path": _TARGET}}},
+        "aggregate": _aggregate("pass_at_k", k=2, over="gate", fail=0.5),
+    }
+    task = EvalTask.from_dict(
+        data, source_path=tmp_path / "task" / "task.toml", source_package="<test>"
+    )
+    judge = _MadeFileJudge()
+
+    result = _SequenceRunner([True, False]).run_task(
+        task, tmp_path / "scratch", judge=judge, fail_fast=fail_fast
+    )
+
+    assert judge.calls == 2
+    assert result.aggregate is not None
+    assert result.aggregate.status == "run"
+    assert result.passed is True
+    assert result.aggregate_score == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize(
+    ("verdict", "judge_score", "expected"),
+    [("gate or rubric", 1.0, True), ("rubric", 0.0, False)],
+    ids=["or-verdict", "rubric-only-verdict"],
+)
+@pytest.mark.parametrize("fail_fast", [True, False])
+def test_short_circuit_never_changes_a_non_conjunctive_verdict(
+    tmp_path: Path, verdict: str, judge_score: float, expected: bool, fail_fast: bool
+) -> None:
+    """A failing gate must not decide a verdict that does not require the gate.
+
+    Regression: under the default short-circuit the failing gate skipped the
+    rubric, the skipped rubric was neutral, and ``trial = "rubric"`` *passed*
+    with a judge scoring 0.0 (``gate or rubric`` failed with a judge at 1.0).
+    """
+    from coding_agent_playbook.evals.judge import StubJudge
+
+    task = EvalTask.from_dict(
+        {
+            "id": "t-verdict",
+            "prompt_id": "refactor",
+            "description": "non-conjunctive verdict",
+            "gate": _gate(),
+            "rubric": _judged_rubric(),
+            "verdict": {"trial": verdict},
+        },
+        source_path=tmp_path / "task" / "task.toml",
+        source_package="<test>",
+    )
+
+    result = FakeRunner().run_task(
+        task, tmp_path / "scratch", judge=StubJudge(default=judge_score), fail_fast=fail_fast
+    )
+
+    assert result.passed is expected

@@ -114,6 +114,14 @@ def test_has_sentinel_positions(text: str) -> None:
         pytest.param(f"---\nname: demo\n{_HTML}\n", id="unterminated-frontmatter"),
         pytest.param("---\nname: demo\n---", id="frontmatter-without-body"),
         pytest.param(f"--- \nname: demo\n---\n{_HTML}\n", id="line-1-is-not-a-fence"),
+        # The whole anchored line must be a sentinel line: prose quoting it is the user's.
+        pytest.param(
+            f"Files whose first line is `{_HTML}` are generated; never edit them.\n\nMy notes.\n",
+            id="line-1-prose-quoting-it",
+        ),
+        pytest.param(f"{_FRONTMATTER}Note: {_HTML}\n", id="first-body-line-prose-quoting-it"),
+        pytest.param(f"<!-- {_SHIPPED_SENTINEL} v0.4.0 -->\n", id="line-1-other-wording"),
+        pytest.param(f"  {_HTML}\n", id="line-1-indented"),
     ],
 )
 def test_has_sentinel_rejects_unanchored_positions(text: str) -> None:

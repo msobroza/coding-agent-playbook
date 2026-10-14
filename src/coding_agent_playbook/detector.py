@@ -12,6 +12,7 @@ The detector never opens a secret path (SPEC §17.3): its only file read is
 
 from __future__ import annotations
 
+import os
 import tomllib
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
@@ -246,20 +247,31 @@ def _dev_tools_from_config_sections(pyproject: dict[str, Any]) -> set[str]:
     return found
 
 
-def _walk_skips(path: Path, repo_root: Path) -> bool:
+def _walk_skips(path: Path, repo_root: Path, *, home: str) -> bool:
     """Whether a detector walk must skip ``path`` (found under ``repo_root``).
 
     Skips anything inside an ``_IGNORE_DIRS`` directory and every secret path
     (SPEC §17.3; the one catalog lives in ``security/patterns.py``), so the
-    detector never opens, or counts, a credential file.
+    detector never opens, or counts, a credential file. ``home`` anchors the
+    catalog's ``~/`` globs.
     """
     if any(part in _IGNORE_DIRS for part in path.relative_to(repo_root).parts):
         return True
-    return is_secret_path(path)
+    return is_secret_path(path, home=home)
+
+
+def _user_home() -> str:
+    """The current user's home directory (``"~"`` when it cannot be determined).
+
+    ``os.path.expanduser`` never raises, unlike ``Path.home()``, so an odd
+    environment (no ``HOME``, no passwd entry) cannot crash detection.
+    """
+    return os.path.expanduser("~")
 
 
 def _has_notebooks(repo_root: Path) -> bool:
-    return any(not _walk_skips(path, repo_root) for path in repo_root.rglob("*.ipynb"))
+    home = _user_home()
+    return any(not _walk_skips(path, repo_root, home=home) for path in repo_root.rglob("*.ipynb"))
 
 
 def _has_dockerfile(repo_root: Path) -> bool:

@@ -8,7 +8,7 @@ Covers the three load-bearing pieces:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import dataclasses
 
 import pytest
 
@@ -18,8 +18,9 @@ from coding_agent_playbook.orchestrator import (
     RuleRegistryImpl,
     SyncContext,
     discover_adapters,
+    template_source,
 )
-from coding_agent_playbook.renderer import build_environment
+from coding_agent_playbook.renderer import TemplateSecurityError, build_environment
 from coding_agent_playbook.types import (
     Prompt,
     PromptFrontmatter,
@@ -27,9 +28,6 @@ from coding_agent_playbook.types import (
     RuleFrontmatter,
     Skill,
 )
-
-if TYPE_CHECKING:
-    from coding_agent_playbook.detector import Facts
 
 
 def _make_rule(rule_id: str, source: str, name: str = "Rule", body: str = "body\n") -> Rule:
@@ -140,6 +138,25 @@ def test_rule_registry_returns_formatted_body_for_known_rule(tmp_path):
     assert registry.render_for_inclusion("style", {}) == "### Style\n\nBody of style\n"
 
 
+def test_rule_registry_names_the_rule_file_on_a_sandbox_violation(tmp_path):
+    """The ``includes_rules`` render runs inside adapters; a sandbox violation there
+    must name the rule's source file, never surface as a bare ``SecurityError``."""
+    source = tmp_path / "playbook" / "rules" / "gated.md.j2"
+    rule = dataclasses.replace(
+        _make_rule("gated", "<repo-local>"),
+        template_body='{{ lipsum.__globals__["os"] }}',
+        is_templated=True,
+        source_path=source,
+    )
+    env = build_environment([])
+    env.globals["_facts"] = {}
+    registry = RuleRegistryImpl([rule], {}, env)
+    with pytest.raises(TemplateSecurityError) as caught:
+        registry.render_for_inclusion("gated", {})
+    assert caught.value.source == str(source)
+    assert template_source(dataclasses.replace(rule, source_path=None)) == "gated"
+
+
 def test_rule_registry_returns_empty_string_for_unknown_rule():
     env = build_environment([])
     env.globals["_facts"] = {}
@@ -245,20 +262,6 @@ def test_sync_context_from_repo_loads_synthetic_repo(tmp_path, make_synthetic_re
     assert "agents_md" in ctx.adapters
     # facts include something — at minimum project_kind
     assert "project_kind" in ctx.facts
-
-
-def test_sync_context_from_repo_uses_injected_facts(tmp_path, make_synthetic_repo, monkeypatch):
-    """``facts=`` skips detection entirely (the ``sync --check`` scratch run
-    reuses the real repo's facts, specs/prK-lifecycle-hooks.md §P P2)."""
-    repo = make_synthetic_repo(tmp_path)
-
-    def _no_detect(root: object) -> None:
-        raise AssertionError(f"detect() must not run when facts are injected: {root}")
-
-    monkeypatch.setattr("coding_agent_playbook.orchestrator.detect", _no_detect)
-    facts: Facts = {"project_kind": "notebook", "has_notebooks": True}
-    ctx = SyncContext.from_repo(repo, facts=facts)
-    assert ctx.facts == {"project_kind": "notebook", "has_notebooks": True}
 
 
 def test_sync_context_from_repo_missing_config_raises(tmp_path):

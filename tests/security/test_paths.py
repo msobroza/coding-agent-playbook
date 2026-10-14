@@ -38,10 +38,13 @@ def test_bare_tilde_is_classified_as_the_home_path_itself() -> None:
     assert is_secret_path("~", home="/srv/.env", platform="linux") is True
 
 
-def test_defaults_home_to_the_user_home(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HOME", "/home/alt")
-    assert is_secret_path("/home/alt/.docker/config.json", platform="linux") is True
-    assert is_secret_path(f"{_HOME}/.docker/config.json", platform="linux") is False
+def test_home_is_a_required_keyword() -> None:
+    """P7 contract ``is_secret_path(path, *, home)``: no implicit ``$HOME`` default,
+    so every caller states whose home anchors the ``~/`` globs."""
+    with pytest.raises(TypeError, match="home"):
+        is_secret_path("/home/alt/.docker/config.json", platform="linux")  # type: ignore[call-arg]
+    assert is_secret_path("/home/alt/.docker/config.json", home="/home/alt") is True
+    assert is_secret_path(f"{_HOME}/.docker/config.json", home="/home/alt") is False
 
 
 def test_home_at_filesystem_root_anchors_every_absolute_path() -> None:

@@ -15,7 +15,11 @@ import sys
 import pytest
 
 from coding_agent_playbook.security.paths import is_secret_path
-from coding_agent_playbook.security.patterns import SECRET_PATH_EXEMPT, SECRET_PATH_GLOBS
+from coding_agent_playbook.security.patterns import (
+    SECRET_GLOB_EXEMPT,
+    SECRET_PATH_EXEMPT,
+    SECRET_PATH_GLOBS,
+)
 
 _HOME = "/home/dev"
 _SUBPROCESS_TIMEOUT_S = 60
@@ -40,6 +44,9 @@ _SECRET = [
     "id_rsa",
     "deploy/id_rsa_github",
     "id_ed25519",
+    "id_ecdsa",
+    "id_ecdsa_sk",
+    "id_dsa",
     # *credentials* outside source code (notebooks keep their cell outputs)
     "credentials",
     "credentials.json",
@@ -57,7 +64,12 @@ _SECRET = [
     "krb5cc_1000",
     # infrastructure state and password vaults
     "infra/terraform.tfstate",
+    "infra/terraform.tfstate.backup",
     "prod.tfvars",
+    "prod.tfvars.json",
+    # the code-suffix exemption spares *credentials* only, never another glob
+    ".env.credentials.py",
+    "id_rsa_credentials.sh",
     "team.kdbx",
     # the per-user credential directories and files under ~/
     f"{_HOME}/.aws/credentials",
@@ -90,6 +102,8 @@ _NOT_SECRET = [
     # public keys
     "id_rsa.pub",
     "deploy/id_ed25519_ci.pub",
+    "id_ecdsa.pub",
+    "id_dsa.pub",
     f"{_HOME}/.ssh/id_rsa.pub",
     # look-alikes
     "README.md",
@@ -177,9 +191,18 @@ def test_glob_grammar_is_basename_or_home_anchored(glob: str) -> None:
     assert is_home_anchored or ("/" not in glob and "~" not in glob), glob
 
 
-@pytest.mark.parametrize("glob", SECRET_PATH_EXEMPT)
+@pytest.mark.parametrize(
+    "glob", [*SECRET_PATH_EXEMPT, *(g for scoped in SECRET_GLOB_EXEMPT.values() for g in scoped)]
+)
 def test_exemptions_are_basename_globs(glob: str) -> None:
     assert "/" not in glob and "~" not in glob, glob
+
+
+def test_scoped_exemptions_name_catalog_globs() -> None:
+    """A scoped exemption only cancels its own glob, so that glob must exist."""
+    assert set(SECRET_GLOB_EXEMPT) <= set(SECRET_PATH_GLOBS)
+    assert "*credentials*.py" in SECRET_GLOB_EXEMPT["*credentials*"]
+    assert not any("credentials" in glob for glob in SECRET_PATH_EXEMPT)
 
 
 def _new_modules_after(import_stmt: str) -> list[str]:

@@ -27,7 +27,7 @@ from importlib import metadata
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.detector import detect
-from coding_agent_playbook.renderer import render_string
+from coding_agent_playbook.renderer import render_sandboxed
 from coding_agent_playbook.sources.filesystem import (
     FileSystemArtifactSource,
     FileSystemStateSource,
@@ -158,6 +158,15 @@ def _source_package(artifact: object) -> str:
     return str(package) if package is not None else "<unknown>"
 
 
+def template_source(artifact: Rule | Prompt) -> str:
+    """Name ``artifact``'s template in error messages: its source path, else its id.
+
+    Example: ``template_source(rule)`` -> ``"/repo/playbook/rules/x.md.j2"``.
+    """
+    path = artifact.source_path
+    return str(path) if path is not None else artifact_id_of(artifact)
+
+
 class RuleRegistryImpl:
     """Concrete :class:`RuleRegistry` used by the orchestrator.
 
@@ -173,6 +182,11 @@ class RuleRegistryImpl:
         self._env = env
 
     def render_for_inclusion(self, rule_id: str, context: dict[str, object]) -> str:
+        """Render ``rule_id`` for inline placement in a prompt (``""`` if filtered out).
+
+        A sandbox violation raises :class:`TemplateSecurityError` naming the
+        rule's source file (specs/prK-lifecycle-hooks.md §P1).
+        """
         rule = self._by_id.get(rule_id)
         if rule is None:
             return ""
@@ -182,7 +196,9 @@ class RuleRegistryImpl:
             # without hitting StrictUndefined on every templated rule that
             # references a fact. Caller-supplied keys win on collision.
             merged_context = {**self._facts, **context}
-            body = render_string(rule.template_body, merged_context, env=self._env)
+            body = render_sandboxed(
+                rule.template_body, merged_context, env=self._env, source=template_source(rule)
+            )
         else:
             body = rule.body
         return f"### {rule.frontmatter.name}\n\n{body}"
@@ -198,8 +214,8 @@ def discover_adapters(
 
     The returned mapping is ``name -> instance``. ``agents_md`` is always
     included (SPEC §4.3). Adapters that accept ``rule_registry`` get it; those
-    that don't (currently only ``agents_md``) are constructed with no
-    arguments. The ``TypeError`` fallback is the canonical idiom for handling
+    that don't (currently ``agents_md`` and ``shared_skills``) are constructed
+    with no arguments. The ``TypeError`` fallback is the canonical idiom for handling
     the two adapter signatures uniformly.
     """
     eps = metadata.entry_points(group="coding_agent_playbook.adapters")
@@ -214,6 +230,28 @@ def discover_adapters(
         except TypeError:
             discovered[ep.name] = cls()
     return discovered
+
+
+def installed_output_locations() -> tuple[str, ...]:
+    """Every ``output_locations`` entry declared by an installed adapter, enabled or not.
+
+    Disabled adapters count: their earlier output is exactly what ``playbook
+    sync`` must still be able to clean up (SPEC §4.2 step 9). An adapter whose
+    entry point fails to load declares nothing, so its output is never deleted.
+
+    Example::
+
+        >>> ".claude/skills/" in installed_output_locations()  # doctest: +SKIP
+        True
+    """
+    locations: list[str] = []
+    for ep in metadata.entry_points(group="coding_agent_playbook.adapters"):
+        try:
+            cls = ep.load()
+        except (ImportError, AttributeError):
+            continue
+        locations.extend(getattr(cls, "output_locations", ()))
+    return tuple(locations)
 
 
 @dataclass
@@ -242,7 +280,6 @@ class SyncContext:
         repo_root: Path,
         *,
         rule_registry: RuleRegistry | None = None,
-        facts: Facts | None = None,
     ) -> SyncContext:
         """Discovery: load config → detect facts → instantiate sources → resolve overlays.
 
@@ -251,21 +288,10 @@ class SyncContext:
         facts. Callers that want the full pipeline build the context once
         without a registry, then re-build the adapters via
         :func:`discover_adapters` after the registry exists.
-
-        ``facts`` skips detection and is used verbatim. ``sync --check`` passes
-        the real repo's facts into its scratch-copy context, because the scratch
-        copy omits detector inputs (``build/``, secret files) and must never
-        select a different rule set (specs/prK-lifecycle-hooks.md §P P2).
-
-        Example::
-
-            ctx = SyncContext.from_repo(repo)
-            scratch_ctx = SyncContext.from_repo(scratch, facts=ctx.facts)
         """
         state_source = FileSystemStateSource(repo_root=repo_root)
         config = state_source.load_config()
-        if facts is None:
-            facts = detect(repo_root)
+        facts = detect(repo_root)
 
         artifact_source = FileSystemArtifactSource(
             repo_root=repo_root,

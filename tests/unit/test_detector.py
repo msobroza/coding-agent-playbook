@@ -216,7 +216,7 @@ def test_detector_never_opens_secret_paths(tmp_path: Path, monkeypatch: pytest.M
     detect(repo)
 
     assert repo / "pyproject.toml" in opened  # the spy saw the detector's real read
-    assert [p for p in opened if is_secret_path(p)] == []
+    assert [p for p in opened if is_secret_path(p, home=str(tmp_path / "home"))] == []
 
 
 def test_detect_skips_secret_notebooks(tmp_path: Path) -> None:

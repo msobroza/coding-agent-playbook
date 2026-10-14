@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import re
 import tomllib
 from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.lockfile import LockEntry, Lockfile, Provenance, compute_hash
+from coding_agent_playbook.lockfile import (
+    LockEntry,
+    Lockfile,
+    LockfileFormatError,
+    Provenance,
+    compute_hash,
+)
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 
 if TYPE_CHECKING:
@@ -193,3 +200,63 @@ def test_lock_entry_from_provenance_copies_fields() -> None:
         source="<repo-local>",
         adapter="opencode",
     )
+
+
+_HEADER = {"schema_version": 2, "engine_version": "0.2.0", "rendered_at": "2026-10-14T10:00:00Z"}
+_ENTRY = {"path": "AGENTS.md", "sha256": "ab", "bytes": 2}
+
+
+@pytest.mark.parametrize(
+    ("data", "message"),
+    [
+        pytest.param(
+            {**_HEADER, "entries": "oops"}, "entries: expected list, got str", id="entries"
+        ),
+        pytest.param({**_HEADER, "entries": ["x"]}, "entries[0]: expected a table", id="entry"),
+        pytest.param(
+            {**_HEADER, "entries": [{**_ENTRY, "path": 3}]},
+            "entries[0].path: expected str, got int 3",
+            id="path",
+        ),
+        pytest.param(
+            {**_HEADER, "entries": [{**_ENTRY, "bytes": True}]},
+            "entries[0].bytes: expected int, got bool True",
+            id="bytes-bool",
+        ),
+        pytest.param(
+            {**_HEADER, "entries": [{"path": "a", "bytes": 1}]},
+            "entries[0].sha256: missing",
+            id="missing-sha256",
+        ),
+        pytest.param(
+            {**_HEADER, "entries": [{**_ENTRY, "kind": 1}]},
+            "entries[0].kind: expected str, got int 1",
+            id="kind",
+        ),
+        pytest.param(
+            {**_HEADER, "entries": [{**_ENTRY, "executable": "yes"}]},
+            "entries[0].executable: expected bool",
+            id="executable",
+        ),
+        pytest.param(
+            {**_HEADER, "schema_version": "2"}, "schema_version: expected int", id="schema"
+        ),
+        pytest.param(
+            {"engine_version": "x", "rendered_at": "t"}, "schema_version: missing", id="no-schema"
+        ),
+    ],
+)
+def test_from_dict_rejects_wrong_shape_naming_key_and_value(
+    data: dict[str, object], message: str
+) -> None:
+    """A valid-TOML lockfile of the wrong shape raises ``LockfileFormatError`` (a
+    ``ValueError``) naming the key and value — never a bare ``TypeError``."""
+    with pytest.raises(LockfileFormatError, match=re.escape(message)):
+        Lockfile.from_dict(data)
+    assert issubclass(LockfileFormatError, ValueError)
+
+
+def test_lock_entry_is_whole_file_unless_scoped() -> None:
+    assert LockEntry(path="AGENTS.md", sha256="a", bytes=1).is_whole_file
+    scoped = LockEntry(path=".claude/settings.json", sha256="a", bytes=1, scope="json:/hooks/X")
+    assert not scoped.is_whole_file

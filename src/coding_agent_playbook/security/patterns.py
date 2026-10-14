@@ -17,8 +17,11 @@ Glob grammar, as matched by :func:`coding_agent_playbook.security.paths.is_secre
 - a glob starting with ``~/`` is anchored at the user's home directory, and a
   trailing ``/**`` matches everything below that directory.
 
-A path is secret when it matches a :data:`SECRET_PATH_GLOBS` entry and no
-:data:`SECRET_PATH_EXEMPT` entry. Exemptions are final-component globs.
+A path is secret when it matches a :data:`SECRET_PATH_GLOBS` entry that is not
+cancelled for it: :data:`SECRET_PATH_EXEMPT` cancels every glob, while a
+:data:`SECRET_GLOB_EXEMPT` exemption cancels only its own glob (so the
+source-code exemption of ``*credentials*`` never spares ``.env.credentials.py``
+or ``id_rsa_credentials.sh``). Exemptions are final-component globs.
 """
 
 # A local constant instead of ``typing.TYPE_CHECKING`` keeps the module free of
@@ -40,6 +43,8 @@ SECRET_PATH_GLOBS: "Final[tuple[str, ...]]" = (
     "*.keystore",
     "id_rsa*",
     "id_ed25519*",
+    "id_ecdsa*",
+    "id_dsa*",
     # package-manager, VCS and secret-store credential files
     ".netrc",
     ".pypirc",
@@ -51,7 +56,9 @@ SECRET_PATH_GLOBS: "Final[tuple[str, ...]]" = (
     "krb5cc_*",
     # infrastructure state/variables and password vaults
     "*.tfstate",
+    "*.tfstate.*",
     "*.tfvars",
+    "*.tfvars.json",
     "*.kdbx",
     # per-user credential stores
     "~/.aws/**",
@@ -107,5 +114,13 @@ SECRET_PATH_EXEMPT: "Final[tuple[str, ...]]" = (
     # public halves of SSH key pairs
     "id_rsa*.pub",
     "id_ed25519*.pub",
-    *(f"*credentials*.{suffix}" for suffix in _CREDENTIALS_CODE_SUFFIXES),
+    "id_ecdsa*.pub",
+    "id_dsa*.pub",
 )
+
+#: Exemptions scoped to one glob (glob -> the globs that cancel it, and only
+#: it): ``*credentials*`` spares source code, yet a path that also matches
+#: another glob (``.env.credentials.py``) stays secret. Never mutated.
+SECRET_GLOB_EXEMPT: "Final[dict[str, tuple[str, ...]]]" = {
+    "*credentials*": tuple(f"*credentials*.{suffix}" for suffix in _CREDENTIALS_CODE_SUFFIXES),
+}

@@ -28,6 +28,11 @@ _STYLE_DELIMITERS: dict[str, tuple[str, str]] = {
     "slash": ("// ", ""),
 }
 
+#: Every exact line the engine writes to mark a file (one per style).
+_SENTINEL_LINES: frozenset[str] = frozenset(
+    f"{opener}{SENTINEL}{closer}" for opener, closer in _STYLE_DELIMITERS.values()
+)
+
 _FRONTMATTER_FENCE = "---"
 
 
@@ -49,13 +54,15 @@ def sentinel_line(style: "SentinelStyle") -> str:
 
 
 def has_sentinel(text: str) -> bool:
-    """Whether ``text`` carries :data:`SENTINEL` at one of its two anchored positions.
+    """Whether ``text`` carries a sentinel line at one of its two anchored positions.
 
     The positions are line 1, or — for files that must open with a YAML
-    frontmatter fence (agent_harness output, SPEC §10.7.3) — the first body line
-    right after the closing ``---``. A sentinel anywhere else is ordinary prose
-    (``SPEC.md`` and test fixtures quote it), so it never marks a file as
-    engine-generated.
+    frontmatter fence (agent_harness output and native ``SKILL.md``, SPEC
+    §10.7.3/§10.8) — the first body line right after the closing ``---``. The
+    whole line must be exactly a :func:`sentinel_line` (any style, a trailing
+    ``\\r`` ignored), which is all the engine ever writes. A sentinel anywhere
+    else, or quoted inside prose on one of those lines, is user text (``SPEC.md``
+    and test fixtures quote it), so it never marks a file as engine-generated.
 
     Example::
 
@@ -65,12 +72,19 @@ def has_sentinel(text: str) -> bool:
         True
         >>> has_sentinel("# Notes\\n" + sentinel_line("html") + "\\n")
         False
+        >>> has_sentinel("Lines like `" + sentinel_line("html") + "` are generated.\\n")
+        False
     """
     lines = text.split("\n")
-    if SENTINEL in lines[0]:
+    if _is_sentinel_line(lines[0]):
         return True
     body_line = _first_body_line(lines)
-    return body_line is not None and SENTINEL in body_line
+    return body_line is not None and _is_sentinel_line(body_line)
+
+
+def _is_sentinel_line(line: str) -> bool:
+    """Whether ``line`` (its ``\\r`` stripped) is exactly one of the engine's sentinel lines."""
+    return line.rstrip("\r") in _SENTINEL_LINES
 
 
 def _first_body_line(lines: list[str]) -> str | None:

@@ -17,7 +17,7 @@ cleanly, mirroring the ``radon`` lazy-availability pattern.
 Because it feeds a real agent, it sets
 :attr:`~coding_agent_playbook.evals.runner.HarnessRunner.requires_resolved_prompt`
 ``True``: an unresolvable ``prompt_id`` raises
-:class:`~coding_agent_playbook.evals.runner.PromptResolutionError` rather than
+:class:`~coding_agent_playbook.evals.prompting.PromptResolutionError` rather than
 driving the agent with the FakeRunner's placeholder.
 
 The exact CLI contract is **configurable**, not hard-locked: ``command`` is an

@@ -15,7 +15,11 @@ import os
 import posixpath
 import sys
 
-from coding_agent_playbook.security.patterns import SECRET_PATH_EXEMPT, SECRET_PATH_GLOBS
+from coding_agent_playbook.security.patterns import (
+    SECRET_GLOB_EXEMPT,
+    SECRET_PATH_EXEMPT,
+    SECRET_PATH_GLOBS,
+)
 
 #: Platforms whose default filesystems compare names case-insensitively.
 _CASE_FOLDING_PLATFORMS: frozenset[str] = frozenset({"darwin", "win32"})
@@ -26,17 +30,20 @@ _HOME_PREFIX = "~/"
 def is_secret_path(
     path: str | os.PathLike[str],
     *,
-    home: str | os.PathLike[str] | None = None,
+    home: str | os.PathLike[str],
     platform: str = sys.platform,
 ) -> bool:
     """Whether ``path`` names a credential file the engine must never read.
 
-    A path is secret when it matches a ``SECRET_PATH_GLOBS`` entry and no
-    ``SECRET_PATH_EXEMPT`` entry (``security/patterns.py`` documents the glob
-    grammar). ``home`` anchors the ``~/`` globs and expands a leading ``~`` in
-    ``path``; it defaults to the current user's home. ``platform`` selects
-    case folding (darwin, win32) and ``\\`` separators (win32); it defaults to
-    ``sys.platform`` and is injectable for tests.
+    A path is secret when it matches a ``SECRET_PATH_GLOBS`` entry not
+    cancelled for it — by a ``SECRET_PATH_EXEMPT`` entry (any glob) or by that
+    glob's own ``SECRET_GLOB_EXEMPT`` entries (``security/patterns.py``
+    documents the glob grammar). ``home`` is required: it anchors the ``~/``
+    globs and expands a leading ``~`` in ``path``, and each caller states
+    whose home that is (the current user's for the detector; the hook
+    runtime passes its own). ``platform`` selects case folding (darwin,
+    win32) and ``\\`` separators (win32); it defaults to ``sys.platform``
+    and is injectable for tests.
 
     Example::
 
@@ -48,12 +55,18 @@ def is_secret_path(
         True
         >>> is_secret_path("src/app/credentials.py", home="/home/dev")
         False
+        >>> is_secret_path(".env.credentials.py", home="/home/dev")
+        True
     """
     fold = platform in _CASE_FOLDING_PLATFORMS
-    home_key = _path_key(os.path.expanduser("~") if home is None else home, platform, fold)
+    home_key = _path_key(home, platform, fold)
     key = _expand_home(_path_key(path, platform, fold), home_key)
-    return _matches_any(key, SECRET_PATH_GLOBS, home_key, fold) and not _matches_any(
-        key, SECRET_PATH_EXEMPT, home_key, fold
+    if _matches_any(key, SECRET_PATH_EXEMPT, home_key, fold):
+        return False
+    return any(
+        _glob_matches(key, _folded(glob, fold), home_key)
+        and not _matches_any(key, SECRET_GLOB_EXEMPT.get(glob, ()), home_key, fold)
+        for glob in SECRET_PATH_GLOBS
     )
 
 
@@ -77,7 +90,12 @@ def _expand_home(key: str, home_key: str) -> str:
 
 def _matches_any(key: str, globs: tuple[str, ...], home_key: str, fold: bool) -> bool:
     """Whether ``key`` matches at least one of ``globs``."""
-    return any(_glob_matches(key, glob.casefold() if fold else glob, home_key) for glob in globs)
+    return any(_glob_matches(key, _folded(glob, fold), home_key) for glob in globs)
+
+
+def _folded(glob: str, fold: bool) -> str:
+    """``glob`` case-folded on a case-insensitive platform, else unchanged."""
+    return glob.casefold() if fold else glob
 
 
 def _glob_matches(key: str, glob: str, home_key: str) -> bool:
