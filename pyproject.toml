@@ -101,6 +101,12 @@ llm = "coding_agent_playbook.evals.judge:LLMJudge"
 # file/threshold/judge checks) registers here so eval tasks can share one gate by
 # name. The engine ships none; in-tree registrations win on a name clash.
 
+[project.entry-points."coding_agent_playbook.hook_handlers"]
+# Out-of-tree lifecycle-hook handlers (specs/prK-lifecycle-hooks.md §D.1, P-D5).
+# The engine's own handlers are builtins and ship none here. Entries are resolved
+# at `playbook sync`, never scanned by the hook runtime, and run only when their
+# package is in allow_code_from. The `playbook-hook` script lands with its module.
+
 # ----------------------------------------------------------------------------
 
 [tool.hatch.build.targets.wheel]
