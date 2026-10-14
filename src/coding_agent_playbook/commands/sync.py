@@ -260,7 +260,9 @@ def _rendered_scratch(ctx: SyncContext) -> Iterator[tuple[Path, list[Path]]]:
     Nothing from the working tree is copied (inputs are read in place through
     ``ctx``), so a dangling symlink, an unreadable data directory, a socket, a
     secret file or a large ``.venv`` can neither crash, slow nor leak into the
-    pre-commit guard, and the real tree is never written. The scratch root
+    pre-commit guard, and the real tree is never written. The only source bytes
+    the render copies are skills' ``scripts/``/``references/``, which refuse
+    secret paths and links leaving the skill (``_skill_sources``). The scratch root
     carries the repo's directory name so name-derived content (``HARNESS.md``)
     renders identically, and skill-dir ownership is decided against the real
     tree (write-mode parity).

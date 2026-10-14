@@ -11,8 +11,9 @@ are not drift (``test_sync_orphans.py``).
 
 The check renders into an *empty* scratch directory and reads every input in
 place, so nothing from the working tree — VCS, environments, secrets, links
-leaving the repo — is ever copied (P2(b)); the orphan scan never opens a secret
-path or follows a file symlink.
+leaving the repo — is ever copied (P2(b)); a skill's secret files and links
+leaving its source dir are never copied into any tree, and the orphan scan
+never opens a secret path or follows a file symlink.
 """
 
 from __future__ import annotations
@@ -620,3 +621,55 @@ def test_check_never_opens_a_secret_path(
         path for path in opened if is_secret_file(path, relative_to=repo, home=str(home))
     ]
     assert secret_reads == []
+
+
+def _write_skill_with_secrets(repo: Path, home: Path, outside: Path) -> Path:
+    """A skill whose ``scripts/`` holds a ``.env``, links out of the skill, and an
+    in-skill link (the only link that may be copied)."""
+    skill_dir = _write_skill(repo, "demo")
+    scripts = skill_dir / "scripts"
+    (scripts / ".env").write_text("DB_PASSWORD=hunter2\n", encoding="utf-8")
+    (home / ".ssh").mkdir(parents=True)
+    (home / ".ssh" / "config").write_text("Host *\n", encoding="utf-8")
+    (scripts / "ssh-notes.txt").symlink_to(home / ".ssh" / "config")
+    outside.mkdir(parents=True)
+    (outside / "helper.sh").write_text("echo outside\n", encoding="utf-8")
+    (scripts / "helper.sh").symlink_to(outside / "helper.sh")
+    (scripts / "alias.sh").symlink_to("run.sh")
+    return skill_dir
+
+
+_REFUSED_SCRIPTS = (".env", "ssh-notes.txt", "helper.sh")
+
+
+@posix_only
+def test_skill_secrets_and_escaping_links_are_never_copied(
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: a skill's ``scripts/.env`` and ``scripts/notes.txt -> ~/.ssh/...``
+    were copied into ``.claude/skills/``, ``shared_skills/`` and the ``--check``
+    scratch tree, and hashed into the lockfile, under innocent names."""
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    repo = make_synthetic_repo(repo_dir, config_text=_CLAUDE_ONLY_CONFIG)
+    _write_skill_with_secrets(repo, home, tmp_path / "outside")
+    _sync_repo(repo)
+    err = capsys.readouterr().err
+    copied = repo / ".claude" / "skills" / "demo" / "scripts"
+    assert sorted(p.name for p in copied.iterdir()) == ["alias.sh", "run.sh"]
+    for name in _REFUSED_SCRIPTS:
+        assert f"scripts/{name} into" in err, name
+    lockfile = FileSystemStateSource(repo_root=repo).load_lockfile()
+    assert lockfile is not None
+    listed = {entry.path for entry in lockfile.entries}
+    assert not any(path.endswith(_REFUSED_SCRIPTS) for path in listed), listed
+    trees = _spy_scratch_trees(monkeypatch)
+    rc, out = _check(repo, capsys)
+    assert rc == 0, out
+    [tree] = trees
+    assert not any(path.endswith(_REFUSED_SCRIPTS) for path in tree), tree

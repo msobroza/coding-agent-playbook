@@ -702,3 +702,45 @@ def test_entry_point_not_in_defaults():
     # agent_harness to the default set.
     eps = metadata.entry_points(group="coding_agent_playbook.adapters")
     assert "agent_harness" in {ep.name for ep in eps}
+
+
+# --- secrets in skill sources ----------------------------------------------
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX symlinks")
+def test_skill_secrets_and_escaping_links_are_never_copied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression: ``_copy_scripts``/``_copy_references`` copied a skill's ``.env``
+    and a ``references/`` link out of the skill into the harness tree."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    skill_src = tmp_path / "src_skill"
+    scripts_src = skill_src / "scripts"
+    scripts_src.mkdir(parents=True)
+    (scripts_src / "run.py").write_text("print('x')\n", encoding="utf-8")
+    (scripts_src / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
+    refs_src = skill_src / "references"
+    refs_src.mkdir()
+    (refs_src / "api.md").write_text("# API\n", encoding="utf-8")
+    outside = tmp_path / "outside.md"
+    outside.write_text("not the skill's\n", encoding="utf-8")
+    (refs_src / "notes.md").symlink_to(outside)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    adapter = AgentHarnessAdapter()
+    skill = _make_skill(skill_id="s1", scripts_dir=scripts_src, references_dir=refs_src)
+
+    _populate(adapter, skill, repo_root=repo)
+    written = adapter.finalize(repo)
+
+    skill_out = repo / "skills" / "s1"
+    assert sorted(p.name for p in (skill_out / "scripts").iterdir()) == ["run.py"]
+    assert sorted(p.name for p in (skill_out / "references").iterdir()) == ["api.md"]
+    assert not any(p.name in {".env", "notes.md"} for p in written)
+    manifest = read_manifest(repo)
+    assert manifest is not None
+    [entry] = [e for e in manifest.entries if e.kind == "skill"]
+    assert [s.path for s in entry.scripts] == ["skills/s1/scripts/run.py"]
+    err = capsys.readouterr().err
+    assert ".env" in err
+    assert "notes.md" in err

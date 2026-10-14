@@ -49,6 +49,7 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook._sentinel import has_sentinel
 from coding_agent_playbook.adapters._prior_output import PriorOutput
+from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.harness.emitter import with_sentinel_body
 from coding_agent_playbook.types import format_frontmatter
 
@@ -484,17 +485,19 @@ def _remove_existing(dst: Path) -> None:
 def _copy_subtree(
     src: Path | None, dst_root: Path, skill_dir: Path, prior: PriorOutput
 ) -> list[Path]:
-    """Byte-copy every file under ``src`` into ``dst_root`` (``shutil.copy2``).
+    """Byte-copy every publishable file under ``src`` into ``dst_root`` (``shutil.copy2``).
 
     Returns the destination files in sorted source order; ``[]`` when ``src``
-    is absent. Source symlinks are dereferenced (copies, not symlinks). Each
+    is absent. Source symlinks inside the skill are dereferenced (copies, not
+    symlinks); a secret path or a link leaving the skill's source dir is never
+    copied (:func:`_skill_sources.copyable_skill_files` warns instead). Each
     recorded path is the file ``copy2`` actually wrote, never a directory; a
     destination blocked by user files is skipped (see :func:`_prepare_destination`).
     """
-    if src is None or not src.is_dir():
+    if src is None:
         return []
     written: list[Path] = []
-    for source_file in sorted(path for path in src.rglob("*") if path.is_file()):
+    for source_file in copyable_skill_files(src, dst_root):
         dst = dst_root / source_file.relative_to(src)
         if _prepare_destination(dst, skill_dir, prior):
             written.append(Path(shutil.copy2(source_file, dst)))

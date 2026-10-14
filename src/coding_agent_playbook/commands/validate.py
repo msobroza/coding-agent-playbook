@@ -26,11 +26,15 @@ Validates:
   learn here instead.
 
 All errors aggregate before a single non-zero exit; success prints one line.
+Skill files no sync will ever copy — a secret path, or a link leaving the
+skill's source dir (SPEC §10.8, §17.3) — are reported as ``warning:`` lines on
+stderr and never fail validation.
 """
 
 from __future__ import annotations
 
 import re
+import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +43,7 @@ from typing import TYPE_CHECKING
 from jinja2 import StrictUndefined, TemplateSyntaxError
 from jinja2.sandbox import SandboxedEnvironment
 
+from coding_agent_playbook.adapters._skill_sources import refused_skill_files
 from coding_agent_playbook.adapters._skill_writer import (
     agent_skill_issues,
     has_declared_id,
@@ -434,6 +439,23 @@ def _skill_label(skill: Skill) -> str:
     return f"skills/<no id; name {name!r}{where}> ({skill.source_package})"
 
 
+def _warn_refused_skill_files(skills: list[Skill]) -> list[str]:
+    """Warn on stderr about skill files ``playbook sync`` never copies; return the lines.
+
+    Example::
+
+        _warn_refused_skill_files(ctx.skills_resolved)  # [] for a clean skill set
+    """
+    lines = [
+        f"warning: {_skill_label(skill)}: {item.path} is never copied: {item.reason}"
+        for skill in skills
+        for item in refused_skill_files(skill)
+    ]
+    for line in lines:
+        print(line, file=sys.stderr)
+    return lines
+
+
 def run(args: argparse.Namespace) -> int:
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     ctx = SyncContext.from_repo(repo_root)
@@ -448,6 +470,7 @@ def run(args: argparse.Namespace) -> int:
     errors.extend(links_errors)
     errors.extend(_check_markdown_links(ctx.artifact_source, repo_root, links_config))
     errors.extend(_check_agent_skills(ctx.skills_resolved, ctx.artifact_source.list_skills()))
+    _warn_refused_skill_files(ctx.skills_resolved)
 
     if errors:
         for err in errors:

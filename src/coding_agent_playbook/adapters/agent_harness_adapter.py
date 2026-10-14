@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._file_identity import FileSet
 from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.harness import emitter, manifest
 from coding_agent_playbook.renderer import render_for
@@ -186,14 +187,13 @@ class AgentHarnessAdapter(Adapter):
     def _copy_scripts(
         self, skill: Skill, skill_dir: Path, repo_root: Path
     ) -> tuple[list[manifest.ScriptEntry], list[Path]]:
-        if skill.scripts_dir is None or not skill.scripts_dir.is_dir():
+        """Copy the skill's publishable scripts (never a secret or an escaping link)."""
+        if skill.scripts_dir is None:
             return [], []
         scripts: list[manifest.ScriptEntry] = []
         paths: list[Path] = []
         dst_root = skill_dir / "scripts"
-        for src in sorted(skill.scripts_dir.rglob("*")):
-            if not src.is_file():
-                continue
+        for src in copyable_skill_files(skill.scripts_dir, dst_root):
             dst = dst_root / src.relative_to(skill.scripts_dir)
             executable = emitter.copy_script(src, dst)
             scripts.append(
@@ -204,13 +204,12 @@ class AgentHarnessAdapter(Adapter):
 
     @staticmethod
     def _copy_references(skill: Skill, skill_dir: Path) -> list[Path]:
-        if skill.references_dir is None or not skill.references_dir.is_dir():
+        """Copy the skill's publishable references (never a secret or an escaping link)."""
+        if skill.references_dir is None:
             return []
         dst_root = skill_dir / "references"
         paths: list[Path] = []
-        for src in sorted(skill.references_dir.rglob("*")):
-            if not src.is_file():
-                continue
+        for src in copyable_skill_files(skill.references_dir, dst_root):
             dst = dst_root / src.relative_to(skill.references_dir)
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_bytes(src.read_bytes())
