@@ -1,0 +1,173 @@
+"""``playbook validate``'s self-contained-markdown-links rule (SPEC §12.6, PR L).
+
+Every markdown link in every rule, prompt and skill (``references/`` included)
+must be self-contained: a relative target resolves inside the artifact's own
+source layer, and an external link passes only through the consumer's
+``[links] allowed_domains`` allowlist. Split out of ``commands/validate.py`` to
+keep that module under the 500-line budget.
+"""
+
+from __future__ import annotations
+
+import tomllib
+from typing import TYPE_CHECKING
+
+from coding_agent_playbook.commands._validation import ValidationError
+from coding_agent_playbook.config import parse_links_config
+from coding_agent_playbook.links import LinksConfig, classify_link, extract_markdown_links
+from coding_agent_playbook.sources.filesystem import (
+    FileSystemArtifactSource,
+    _iter_md_files,
+    _resource_subdir,
+)
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from coding_agent_playbook.sources.base import ArtifactSource
+
+# Artifact kinds whose markdown bodies (and, for skills, references/) are
+# link-checked. Eval-task setup/ trees are task *inputs*, not rendered
+# artifacts, so they stay out of scope (specs/prL-markdown-links.md).
+_LINK_CHECKED_SUBDIRS = ("rules", "prompts", "skills")
+
+_CONFIG_FILENAME = ".coding-agent-playbook.toml"
+
+
+def load_links_config(repo_root: Path) -> tuple[LinksConfig, list[ValidationError]]:
+    """Parse the ``[links]`` table of ``.coding-agent-playbook.toml``.
+
+    A malformed table degrades to the strict default plus one
+    :class:`ValidationError` — the rest of validation still runs.
+
+    Example::
+
+        >>> load_links_config(Path("/no/such/repo"))
+        (LinksConfig(allowed_domains=()), [])
+    """
+    config_path = repo_root / _CONFIG_FILENAME
+    if not config_path.is_file():
+        return LinksConfig(), []
+    try:
+        with config_path.open("rb") as handle:
+            data = tomllib.load(handle)
+        return parse_links_config(data.get("links", {})), []
+    except (tomllib.TOMLDecodeError, ValueError) as exc:
+        return LinksConfig(), [ValidationError(path=str(config_path), message=f"[links]: {exc}")]
+
+
+def _scan_markdown_text(
+    text: str,
+    *,
+    path: str,
+    base_dir: Path | None,
+    root_dir: Path | None,
+    links_config: LinksConfig,
+) -> list[ValidationError]:
+    return [
+        ValidationError(
+            path=path,
+            message=f"markdown link {link.target!r} (line {link.line}): {verdict}",
+        )
+        for link in extract_markdown_links(text)
+        if (
+            verdict := classify_link(
+                link.target,
+                base_dir=base_dir,
+                root_dir=root_dir,
+                allowed_domains=links_config.allowed_domains,
+            )
+        )
+        is not None
+    ]
+
+
+def _scan_markdown_file(
+    md: Path, *, root_dir: Path, links_config: LinksConfig
+) -> list[ValidationError]:
+    return _scan_markdown_text(
+        md.read_text(encoding="utf-8"),
+        path=str(md),
+        base_dir=md.parent,
+        root_dir=root_dir,
+        links_config=links_config,
+    )
+
+
+def check_markdown_links(
+    artifact_source: ArtifactSource,
+    repo_root: Path,
+    links_config: LinksConfig,
+) -> list[ValidationError]:
+    """Every markdown link in every artifact must be self-contained (PR L).
+
+    Filesystem sources are walked per package — the same pattern as
+    ``validate._load_eval_tasks_for_validation`` — because skill ``references/``
+    files are not carried as paths on the canonical :class:`Skill` type. The
+    walk covers rules, prompts, and skills across the engine package, overlay
+    packages, and repo-local ``playbook/``; the containment root is the
+    package's ``resources/`` (respectively ``playbook/``) so links may cross
+    artifact kinds within their layer but never leave the shipped bundle.
+
+    Non-filesystem sources have no on-disk layout to resolve relative targets
+    against, so only the external-link policy applies to their bodies.
+
+    Example::
+
+        >>> check_markdown_links(source, repo_root, LinksConfig())  # doctest: +SKIP
+        []
+    """
+    errors: list[ValidationError] = []
+    if not isinstance(artifact_source, FileSystemArtifactSource):
+        for rule in artifact_source.list_rules():
+            errors.extend(
+                _scan_markdown_text(
+                    rule.template_body,
+                    path=str(rule.source_path or rule.frontmatter.id),
+                    base_dir=None,
+                    root_dir=None,
+                    links_config=links_config,
+                )
+            )
+        for prompt in artifact_source.list_prompts():
+            errors.extend(
+                _scan_markdown_text(
+                    prompt.template_body,
+                    path=str(prompt.source_path or prompt.frontmatter.id),
+                    base_dir=None,
+                    root_dir=None,
+                    links_config=links_config,
+                )
+            )
+        for skill in artifact_source.list_skills():
+            errors.extend(
+                _scan_markdown_text(
+                    skill.body,
+                    path=str(skill.frontmatter.get("name", "skill")),
+                    base_dir=None,
+                    root_dir=None,
+                    links_config=links_config,
+                )
+            )
+        return errors
+
+    packages = (artifact_source.engine_package, *artifact_source.overlay_packages)
+    for package in packages:
+        for subdir in _LINK_CHECKED_SUBDIRS:
+            root = _resource_subdir(package, subdir)
+            if root is None:
+                continue
+            for md in _iter_md_files(root):
+                errors.extend(
+                    _scan_markdown_file(md, root_dir=root.parent, links_config=links_config)
+                )
+    repo_local_root = repo_root / "playbook"
+    for subdir in _LINK_CHECKED_SUBDIRS:
+        subdir_path = repo_local_root / subdir
+        if not subdir_path.is_dir():
+            continue
+        for md in _iter_md_files(subdir_path):
+            errors.extend(
+                _scan_markdown_file(md, root_dir=repo_local_root, links_config=links_config)
+            )
+    return errors

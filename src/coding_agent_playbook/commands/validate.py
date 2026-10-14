@@ -13,7 +13,7 @@ Validates:
 - Each Jinja-templated artifact compiles cleanly.
 - Every markdown link in every artifact is self-contained (PR L): relative
   targets resolve inside the artifact's source layer, external links only
-  pass through the ``[links] allowed_domains`` allowlist.
+  pass through the ``[links] allowed_domains`` allowlist (``_validate_links``).
 - Every package in ``overlays_enabled`` is usable here: it imports without error
   and ships a ``resources/`` directory — the same check ``playbook sync`` refuses
   to run without (``_sync_preflight.unusable_overlays``), so a misspelled pack
@@ -35,8 +35,6 @@ from __future__ import annotations
 
 import re
 import sys
-import tomllib
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -50,20 +48,16 @@ from coding_agent_playbook.adapters._skill_writer import (
     skill_id_of,
 )
 from coding_agent_playbook.commands import _sync_preflight
-from coding_agent_playbook.config import parse_links_config
+from coding_agent_playbook.commands._validate_links import check_markdown_links, load_links_config
+from coding_agent_playbook.commands._validation import ValidationError
 from coding_agent_playbook.detector import evaluate_predicate
 from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
 )
 from coding_agent_playbook.evals.validator import validate_tasks
-from coding_agent_playbook.links import LinksConfig, classify_link, extract_markdown_links
 from coding_agent_playbook.orchestrator import SyncContext
-from coding_agent_playbook.sources.filesystem import (
-    FileSystemArtifactSource,
-    _iter_md_files,
-    _resource_subdir,
-)
+from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, _resource_subdir
 
 if TYPE_CHECKING:
     import argparse
@@ -71,14 +65,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.detector import Facts
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.sources.base import ArtifactSource
     from coding_agent_playbook.types import Prompt, Rule, Skill
-
-
-@dataclass(frozen=True)
-class ValidationError:
-    path: str
-    message: str
 
 
 _RULE_CALL_RE = re.compile(r"\{\{\s*rule\(\s*['\"]([^'\"]+)['\"]\s*\)\s*\}\}")
@@ -271,143 +258,6 @@ def _check_eval_tasks(ctx: SyncContext) -> list[ValidationError]:
     ]
 
 
-# Artifact kinds whose markdown bodies (and, for skills, references/) are
-# link-checked. Eval-task setup/ trees are task *inputs*, not rendered
-# artifacts, so they stay out of scope (specs/prL-markdown-links.md).
-_LINK_CHECKED_SUBDIRS = ("rules", "prompts", "skills")
-
-_CONFIG_FILENAME = ".coding-agent-playbook.toml"
-
-
-def _load_links_config(repo_root: Path) -> tuple[LinksConfig, list[ValidationError]]:
-    """Parse the ``[links]`` table of ``.coding-agent-playbook.toml``.
-
-    A malformed table degrades to the strict default plus one
-    :class:`ValidationError` — the rest of validation still runs.
-    """
-    config_path = repo_root / _CONFIG_FILENAME
-    if not config_path.is_file():
-        return LinksConfig(), []
-    try:
-        with config_path.open("rb") as handle:
-            data = tomllib.load(handle)
-        return parse_links_config(data.get("links", {})), []
-    except (tomllib.TOMLDecodeError, ValueError) as exc:
-        return LinksConfig(), [ValidationError(path=str(config_path), message=f"[links]: {exc}")]
-
-
-def _scan_markdown_text(
-    text: str,
-    *,
-    path: str,
-    base_dir: Path | None,
-    root_dir: Path | None,
-    links_config: LinksConfig,
-) -> list[ValidationError]:
-    return [
-        ValidationError(
-            path=path,
-            message=f"markdown link {link.target!r} (line {link.line}): {verdict}",
-        )
-        for link in extract_markdown_links(text)
-        if (
-            verdict := classify_link(
-                link.target,
-                base_dir=base_dir,
-                root_dir=root_dir,
-                allowed_domains=links_config.allowed_domains,
-            )
-        )
-        is not None
-    ]
-
-
-def _scan_markdown_file(
-    md: Path, *, root_dir: Path, links_config: LinksConfig
-) -> list[ValidationError]:
-    return _scan_markdown_text(
-        md.read_text(encoding="utf-8"),
-        path=str(md),
-        base_dir=md.parent,
-        root_dir=root_dir,
-        links_config=links_config,
-    )
-
-
-def _check_markdown_links(
-    artifact_source: ArtifactSource,
-    repo_root: Path,
-    links_config: LinksConfig,
-) -> list[ValidationError]:
-    """Every markdown link in every artifact must be self-contained (PR L).
-
-    Filesystem sources are walked per package — the same pattern as
-    :func:`_load_eval_tasks_for_validation` — because skill ``references/``
-    files are not carried as paths on the canonical :class:`Skill` type. The
-    walk covers rules, prompts, and skills across the engine package, overlay
-    packages, and repo-local ``playbook/``; the containment root is the
-    package's ``resources/`` (respectively ``playbook/``) so links may cross
-    artifact kinds within their layer but never leave the shipped bundle.
-
-    Non-filesystem sources have no on-disk layout to resolve relative targets
-    against, so only the external-link policy applies to their bodies.
-    """
-    errors: list[ValidationError] = []
-    if not isinstance(artifact_source, FileSystemArtifactSource):
-        for rule in artifact_source.list_rules():
-            errors.extend(
-                _scan_markdown_text(
-                    rule.template_body,
-                    path=str(rule.source_path or rule.frontmatter.id),
-                    base_dir=None,
-                    root_dir=None,
-                    links_config=links_config,
-                )
-            )
-        for prompt in artifact_source.list_prompts():
-            errors.extend(
-                _scan_markdown_text(
-                    prompt.template_body,
-                    path=str(prompt.source_path or prompt.frontmatter.id),
-                    base_dir=None,
-                    root_dir=None,
-                    links_config=links_config,
-                )
-            )
-        for skill in artifact_source.list_skills():
-            errors.extend(
-                _scan_markdown_text(
-                    skill.body,
-                    path=str(skill.frontmatter.get("name", "skill")),
-                    base_dir=None,
-                    root_dir=None,
-                    links_config=links_config,
-                )
-            )
-        return errors
-
-    packages = (artifact_source.engine_package, *artifact_source.overlay_packages)
-    for package in packages:
-        for subdir in _LINK_CHECKED_SUBDIRS:
-            root = _resource_subdir(package, subdir)
-            if root is None:
-                continue
-            for md in _iter_md_files(root):
-                errors.extend(
-                    _scan_markdown_file(md, root_dir=root.parent, links_config=links_config)
-                )
-    repo_local_root = repo_root / "playbook"
-    for subdir in _LINK_CHECKED_SUBDIRS:
-        subdir_path = repo_local_root / subdir
-        if not subdir_path.is_dir():
-            continue
-        for md in _iter_md_files(subdir_path):
-            errors.extend(
-                _scan_markdown_file(md, root_dir=repo_local_root, links_config=links_config)
-            )
-    return errors
-
-
 def _check_agent_skills(resolved: list[Skill], loaded: list[Skill]) -> list[ValidationError]:
     """Flag skills that break the Agent Skills ``id``/``name``/``description`` rules.
 
@@ -466,9 +316,9 @@ def run(args: argparse.Namespace) -> int:
     errors.extend(_check_rule_bodies_do_not_include_rules(ctx.rules_resolved))
     errors.extend(_check_jinja_compiles(ctx.rules_resolved, ctx.prompts_resolved))
     errors.extend(_check_eval_tasks(ctx))
-    links_config, links_errors = _load_links_config(repo_root)
+    links_config, links_errors = load_links_config(repo_root)
     errors.extend(links_errors)
-    errors.extend(_check_markdown_links(ctx.artifact_source, repo_root, links_config))
+    errors.extend(check_markdown_links(ctx.artifact_source, repo_root, links_config))
     errors.extend(_check_agent_skills(ctx.skills_resolved, ctx.artifact_source.list_skills()))
     _warn_refused_skill_files(ctx.skills_resolved)
 

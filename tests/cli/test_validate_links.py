@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.commands import _validate_links
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.links import LinksConfig
 from coding_agent_playbook.packs.superpowers import PACK_NAME
@@ -173,21 +174,21 @@ def _prompt(body: str) -> Prompt:
 
 def test_non_filesystem_source_still_applies_external_policy(tmp_path):
     source = _InMemorySource([_prompt("Bad [x](https://example.com/x).\n")])
-    errors = _validate._check_markdown_links(source, tmp_path, LinksConfig())
+    errors = _validate_links.check_markdown_links(source, tmp_path, LinksConfig())
     assert len(errors) == 1
     assert "example.com" in errors[0].message
 
 
 def test_non_filesystem_source_skips_relative_targets(tmp_path):
     source = _InMemorySource([_prompt("Rel [x](unresolvable.md).\n")])
-    assert _validate._check_markdown_links(source, tmp_path, LinksConfig()) == []
+    assert _validate_links.check_markdown_links(source, tmp_path, LinksConfig()) == []
 
 
 def test_shipped_engine_artifacts_have_self_contained_links(tmp_path):
     """The CI gate: every markdown link in every shipped engine artifact must
     be self-contained under the strict default (empty allowlist)."""
     source = FileSystemArtifactSource(repo_root=tmp_path)
-    errors = _validate._check_markdown_links(source, tmp_path, LinksConfig())
+    errors = _validate_links.check_markdown_links(source, tmp_path, LinksConfig())
     assert errors == [], "\n".join(f"{e.path}: {e.message}" for e in errors)
 
 
@@ -201,5 +202,5 @@ def test_superpowers_pack_has_self_contained_links(tmp_path: Path) -> None:
     assert walked.resolve() == SKILLS_ROOT.resolve()
     assert any(walked.glob("*/SKILL.md"))
     source = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PACK_NAME])
-    errors = _validate._check_markdown_links(source, tmp_path, LinksConfig())
+    errors = _validate_links.check_markdown_links(source, tmp_path, LinksConfig())
     assert errors == [], "\n".join(f"{e.path}: {e.message}" for e in errors)
