@@ -8,14 +8,23 @@ the right entries.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 from typing import TYPE_CHECKING
 
+import pytest
+
+from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.commands import sync as _sync
-from coding_agent_playbook.lockfile import Lockfile
+from coding_agent_playbook.lockfile import LockEntry, Lockfile, Provenance, compute_hash
+from coding_agent_playbook.orchestrator import SyncContext
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from coding_agent_playbook.types import Prompt, PromptFrontmatter, Rule, RuleFrontmatter
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
+
+    SyntheticRepoFactory = Callable[..., Path]
 
 
 def _ns(repo: Path, **kwargs: object) -> argparse.Namespace:
@@ -59,7 +68,7 @@ def test_sync_stamps_lockfile(tmp_path, make_synthetic_repo):
     state = FileSystemStateSource(repo_root=repo)
     lockfile = state.load_lockfile()
     assert isinstance(lockfile, Lockfile)
-    assert lockfile.schema_version == 1
+    assert lockfile.schema_version == 2
     # Lockfile should reference at least the AGENTS.md and continue rule outputs.
     paths = [entry.path for entry in lockfile.entries]
     assert "AGENTS.md" in paths
@@ -135,3 +144,207 @@ def test_sync_check_detects_missing_file(tmp_path, make_synthetic_repo, capsys):
     assert rc == 1
     out = capsys.readouterr().out
     assert "Missing" in out or "AGENTS.md" in out
+
+
+# --- lockfile schema v2: provenance (specs/prK-lifecycle-hooks.md §P P4) -------
+
+
+def _sync_and_load_lockfile(repo: Path) -> Lockfile:
+    assert _sync.run(_ns(repo)) == 0
+    lockfile = FileSystemStateSource(repo_root=repo).load_lockfile()
+    assert lockfile is not None
+    return lockfile
+
+
+def _entry(lockfile: Lockfile, path: str) -> LockEntry:
+    entry = lockfile.find(path)
+    assert entry is not None, f"no lockfile entry for {path!r}"
+    return entry
+
+
+def _provenance_of(entry: LockEntry) -> tuple[str, str, str, str]:
+    return (entry.kind, entry.artifact_id, entry.source, entry.adapter)
+
+
+def test_lockfile_records_rule_provenance(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory
+) -> None:
+    """Each per-rule output names its rule, its source package and its adapter."""
+    repo = make_synthetic_repo(tmp_path, rules=[("a-rule", "A rule body\n")])
+    lockfile = _sync_and_load_lockfile(repo)
+    engine_rule = _entry(lockfile, ".continue/rules/10-python-house-style.md")
+    assert _provenance_of(engine_rule) == (
+        "rule",
+        "python-house-style",
+        "coding_agent_playbook",
+        "continue",
+    )
+    local_rule = _entry(lockfile, ".continue/rules/50-a-rule.md")
+    assert _provenance_of(local_rule) == ("rule", "a-rule", "<repo-local>", "continue")
+    assert (engine_rule.scope, engine_rule.executable) == ("", False)
+
+
+def test_lockfile_records_prompt_provenance(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory
+) -> None:
+    repo = make_synthetic_repo(
+        tmp_path, prompts=[("tidy", {"slash": "tidy", "body": "Tidy up.\n"})]
+    )
+    lockfile = _sync_and_load_lockfile(repo)
+    for path, adapter in (
+        (".claude/commands/tidy.md", "claude_code"),
+        (".opencode/command/tidy.md", "opencode"),
+        (".continue/prompts/tidy.md", "continue"),
+    ):
+        entry = _entry(lockfile, path)
+        assert _provenance_of(entry) == ("prompt", "tidy", "<repo-local>", adapter)
+
+
+def test_lockfile_records_skill_provenance(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory
+) -> None:
+    """``SKILL.md`` and copied scripts carry no sentinel; the lockfile owns them."""
+    repo = make_synthetic_repo(tmp_path)
+    skill_dir = repo / "playbook" / "skills" / "query-db"
+    (skill_dir / "scripts").mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nid: query-db\nname: Query DB\ndescription: Query it.\n---\nRun it.\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "scripts" / "run.sh").write_text("echo hi\n", encoding="utf-8")
+    lockfile = _sync_and_load_lockfile(repo)
+    for path in (".claude/skills/query-db/SKILL.md", ".claude/skills/query-db/scripts/run.sh"):
+        entry = _entry(lockfile, path)
+        assert _provenance_of(entry) == ("skill", "query-db", "<repo-local>", "claude_code")
+
+
+def test_claude_md_is_composite(tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory) -> None:
+    """Multi-artifact outputs composed in ``finalize`` are ``kind="composite"``."""
+    repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
+    lockfile = _sync_and_load_lockfile(repo)
+    claude_md = _entry(lockfile, ".claude/CLAUDE.md")
+    assert _provenance_of(claude_md) == ("composite", "", "", "claude_code")
+    agents_md = _entry(lockfile, "AGENTS.md")
+    assert _provenance_of(agents_md) == ("composite", "", "", "agents_md")
+    text = (repo / ".coding-agent-playbook.lock").read_text(encoding="utf-8")
+    assert 'artifact_id = ""' not in text
+
+
+def test_sync_rewrites_v1_lockfile_as_v2(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory
+) -> None:
+    """A v1 lockfile on disk loads, and the first sync rewrites it as schema 2."""
+    repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
+    (repo / ".coding-agent-playbook.lock").write_text(
+        'schema_version = 1\nengine_version = "0.1.0a0"\n'
+        'rendered_at = "2026-05-28T12:00:00Z"\n\n'
+        '[[entries]]\npath = "AGENTS.md"\nsha256 = "abc"\nbytes = 3\n',
+        encoding="utf-8",
+    )
+    state = FileSystemStateSource(repo_root=repo)
+    v1 = state.load_lockfile()
+    assert v1 is not None
+    assert _provenance_of(_entry(v1, "AGENTS.md")) == ("", "", "", "")
+    lockfile = _sync_and_load_lockfile(repo)
+    assert lockfile.schema_version == 2
+    assert _entry(lockfile, "AGENTS.md").kind == "composite"
+
+
+def test_run_sync_returns_frozen_sync_result(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory
+) -> None:
+    """``_run_sync`` returns one frozen ``SyncResult``; ``managed`` is empty
+    until hook-capable adapters contribute scoped entries."""
+    repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
+    result = _sync._run_sync(SyncContext.from_repo(repo))
+    assert isinstance(result, _sync.SyncResult)
+    assert result.managed == ()
+    assert result.removed == ()
+    assert result.written
+    assert {p.resolve() for p in result.written} == set(result.provenance)
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        result.written = ()  # type: ignore[misc]
+
+
+class FakeSharedPathAdapter(Adapter):
+    """Writes every rule into one shared file and finalizes a second file."""
+
+    name = "fake_shared"
+
+    def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
+        target = repo_root / "shared.md"
+        with target.open("a", encoding="utf-8") as fh:
+            fh.write(rule.body)
+        return [target]
+
+    def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
+        target = repo_root / f"{prompt.frontmatter.id}.md"
+        target.write_text(prompt.body, encoding="utf-8")
+        return [target]
+
+    def finalize(self, repo_root: Path) -> list[Path]:
+        target = repo_root / "index.md"
+        target.write_text("index\n", encoding="utf-8")
+        return [target]
+
+
+def _rule(rule_id: str, source: str) -> Rule:
+    frontmatter = RuleFrontmatter(id=rule_id, name=rule_id, description="d", scope="always")
+    return Rule(frontmatter, "body\n", "body\n", False, None, source)
+
+
+def test_dispatch_marks_multi_artifact_path_composite(tmp_path: Path) -> None:
+    """A path written by two different artifacts, or by ``finalize``, is composite;
+    a path written by one artifact keeps that artifact's provenance."""
+    adapters = {"fake_shared": FakeSharedPathAdapter()}
+    rules = [_rule("one", "<repo-local>"), _rule("two", "pkg")]
+    solo = PromptFrontmatter(id="solo", name="solo", description="d", slash="solo")
+    prompt = Prompt(solo, "p\n", "p\n", False, None, "pkg")
+    recorder = _sync._dispatch_to_adapters(adapters, rules, [prompt], [], tmp_path)
+    provenance = recorder.provenance
+    shared = (tmp_path / "shared.md").resolve()
+    assert provenance[shared] == Provenance(kind="composite", adapter="fake_shared")
+    assert provenance[(tmp_path / "index.md").resolve()] == Provenance(
+        kind="composite", adapter="fake_shared"
+    )
+    assert provenance[(tmp_path / "solo.md").resolve()] == Provenance(
+        kind="prompt", artifact_id="solo", source="pkg", adapter="fake_shared"
+    )
+    assert len(recorder.written) == 4  # duplicates kept: the summary count is unchanged
+
+
+def test_build_lockfile_scoped_entries_replace_whole_file_entry(tmp_path: Path) -> None:
+    """A path with any ``managed`` (scoped) entry gets no whole-file entry."""
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text('{"hooks": {}}\n', encoding="utf-8")
+    agents = tmp_path / "AGENTS.md"
+    agents.write_text("agents\n", encoding="utf-8")
+    scoped = LockEntry(
+        path=".claude/settings.json",
+        sha256="41ab",
+        bytes=212,
+        kind="runtime",
+        artifact_id="registration:pre_tool_use",
+        adapter="claude_code",
+        scope="json:/hooks/PreToolUse",
+    )
+    composite = Provenance(kind="composite", adapter="agents_md")
+    lockfile = _sync._build_lockfile(
+        [settings, agents],
+        tmp_path,
+        "0.2.0",
+        {agents.resolve(): composite, settings.resolve(): composite},
+        (scoped,),
+    )
+    assert lockfile.schema_version == 2
+    assert lockfile.entries == [
+        LockEntry(
+            path="AGENTS.md",
+            sha256=compute_hash(b"agents\n"),
+            bytes=7,
+            kind="composite",
+            adapter="agents_md",
+        ),
+        scoped,
+    ]

@@ -15,24 +15,29 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.detector import evaluate_predicate
-from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
+from coding_agent_playbook.lockfile import LockEntry, Lockfile, Provenance, compute_hash
 from coding_agent_playbook.orchestrator import (
     RuleRegistryImpl,
     SyncContext,
+    artifact_id_of,
     discover_adapters,
 )
 from coding_agent_playbook.renderer import build_environment, render_string
 
 if TYPE_CHECKING:
     import argparse
+    from collections.abc import Iterable, Mapping, Sequence
 
     from jinja2 import Environment
 
+    from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.lockfile import ProvenanceKind
     from coding_agent_playbook.types import Prompt, Rule, Skill
 
 
-_LOCKFILE_SCHEMA = 1
+# 2 = provenance on every entry (specs/prK-lifecycle-hooks.md §P P4, §B.6).
+_LOCKFILE_SCHEMA = 2
 
 # Filenames that are state-source-managed and must be excluded from the
 # drift diff (otherwise the lockfile written by sync would itself look
@@ -90,24 +95,146 @@ def _render_prompt_body(prompt: Prompt, context: dict[str, object], env: Environ
     return dataclasses.replace(prompt, body=rendered)
 
 
-def _build_lockfile(written_paths: list[Path], repo_root: Path, engine_version: str) -> Lockfile:
-    entries: list[LockEntry] = []
-    for path in sorted({p.resolve() for p in written_paths}):
-        try:
-            content = path.read_bytes()
-        except OSError:
-            continue
-        try:
-            rel = path.resolve().relative_to(repo_root.resolve())
-        except ValueError:
-            rel = path
-        entries.append(
-            LockEntry(
-                path=rel.as_posix(),
-                sha256=compute_hash(content),
-                bytes=len(content),
+@dataclasses.dataclass(frozen=True)
+class SyncResult:
+    """Everything one :func:`_run_sync` pass produced.
+
+    ``written`` keeps every adapter-returned path in dispatch order
+    (duplicates included, so the summary count is unchanged); ``provenance``
+    maps each *resolved* written path to its origin; ``removed`` lists the
+    stale files ``cleanup_stale`` deleted; ``managed`` holds the scoped
+    (per-JSON-element) lock entries hook-capable adapters contribute (§C.1.4),
+    empty until those adapters exist.
+
+    Example::
+
+        result = _run_sync(ctx)
+        lockfile = _build_lockfile(result.written, ctx.repo_root, "0.2.0",
+                                   result.provenance, result.managed)
+    """
+
+    written: tuple[Path, ...]
+    removed: tuple[Path, ...]
+    provenance: Mapping[Path, Provenance]
+    managed: tuple[LockEntry, ...]
+
+
+class _ProvenanceRecorder:
+    """Collect adapter-returned paths in dispatch order plus their provenance.
+
+    The first writer of a path owns it. A second, *different* provenance for
+    the same path (another artifact, another adapter, or a ``finalize``
+    result) makes it ``kind="composite"`` (§P P4).
+    """
+
+    def __init__(self) -> None:
+        self.written: list[Path] = []
+        self.provenance: dict[Path, Provenance] = {}
+
+    def record(self, paths: Iterable[Path], provenance: Provenance) -> None:
+        for path in paths:
+            self.written.append(path)
+            key = path.resolve()
+            previous = self.provenance.get(key)
+            if previous is None or previous == provenance:
+                self.provenance[key] = provenance
+            else:
+                self.provenance[key] = _composite_of(previous, provenance)
+
+
+def _composite_of(first: Provenance, second: Provenance) -> Provenance:
+    """Provenance of a path with two different writers: the adapter survives
+    only when both writers agree on it."""
+    adapter = first.adapter if first.adapter == second.adapter else ""
+    return Provenance(kind="composite", adapter=adapter)
+
+
+def _artifact_provenance(
+    kind: ProvenanceKind, artifact: Rule | Prompt | Skill, adapter_name: str
+) -> Provenance:
+    return Provenance(
+        kind=kind,
+        artifact_id=artifact_id_of(artifact),
+        source=artifact.source_package,
+        adapter=adapter_name,
+    )
+
+
+def _dispatch_to_adapters(
+    adapters: Mapping[str, Adapter],
+    rules: Sequence[Rule],
+    prompts: Sequence[Prompt],
+    skills: Sequence[Skill],
+    repo_root: Path,
+) -> _ProvenanceRecorder:
+    """Run every adapter's ``write_*`` calls then ``finalize``, tagging each
+    returned path with the artifact (or composite output) that produced it.
+
+    Provenance is recorded by wrapping the calls, so the adapter return type
+    (``list[Path]``) is unchanged. ``adapters`` maps the entry-point name to
+    the instance, e.g. ``{"continue": ContinueAdapter()}``.
+    """
+    recorder = _ProvenanceRecorder()
+    for name, adapter in adapters.items():
+        for rule in rules:
+            recorder.record(
+                adapter.write_rule(rule, repo_root), _artifact_provenance("rule", rule, name)
             )
-        )
+        for prompt in prompts:
+            recorder.record(
+                adapter.write_prompt(prompt, repo_root),
+                _artifact_provenance("prompt", prompt, name),
+            )
+        for skill in skills:
+            recorder.record(
+                adapter.write_skill(skill, repo_root), _artifact_provenance("skill", skill, name)
+            )
+        recorder.record(adapter.finalize(repo_root), Provenance(kind="composite", adapter=name))
+    return recorder
+
+
+def _repo_relative(path: Path, repo_root: Path) -> str:
+    """Posix path of resolved ``path`` relative to ``repo_root`` (absolute if outside)."""
+    try:
+        return path.relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _whole_file_entry(path: Path, repo_root: Path, origin: Provenance | None) -> LockEntry | None:
+    """Whole-file entry for resolved ``path``; ``None`` if it is unreadable.
+    A path with no recorded origin gets the v1 unknown provenance (``kind=""``)."""
+    try:
+        content = path.read_bytes()
+    except OSError:
+        return None
+    rel = _repo_relative(path, repo_root)
+    if origin is None:
+        return LockEntry(path=rel, sha256=compute_hash(content), bytes=len(content))
+    return LockEntry.from_provenance(rel, content, origin)
+
+
+def _build_lockfile(
+    written: Sequence[Path],
+    repo_root: Path,
+    engine_version: str,
+    provenance: Mapping[Path, Provenance],
+    managed: Sequence[LockEntry],
+) -> Lockfile:
+    """Stamp a schema-2 lockfile: one provenance-bearing whole-file entry per
+    written path, sorted by path; a path owned element-wise by ``managed``
+    scoped entries gets no whole-file entry, and those entries are appended
+    instead (§B.6, §C.1.4). ``provenance`` is keyed by resolved path.
+
+    Example: ``_build_lockfile(r.written, root, "0.2.0", r.provenance, r.managed)``.
+    """
+    scoped_paths = {entry.path for entry in managed}
+    entries: list[LockEntry] = []
+    for path in sorted({p.resolve() for p in written}):
+        entry = _whole_file_entry(path, repo_root, provenance.get(path))
+        if entry is not None and entry.path not in scoped_paths:
+            entries.append(entry)
+    entries.extend(managed)
     # RFC 3339 Zulu timestamp for the lockfile per SPEC §14.4
     rendered_at = _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     return Lockfile(
@@ -148,10 +275,21 @@ def _resolve_repo_root(args: argparse.Namespace) -> Path:
     return Path(raw)
 
 
-def _run_sync(ctx: SyncContext) -> tuple[list[Path], list[Path]]:
-    """Internal helper: render + dispatch + cleanup. Returns ``(written,
-    removed)``. Used by both write mode and ``--check`` (the latter only
-    inspects ``written`` against on-disk content)."""
+def _cleanup_stale(
+    adapters: Mapping[str, Adapter], written: Sequence[Path], repo_root: Path
+) -> tuple[Path, ...]:
+    """Run every adapter's ``cleanup_stale`` after *all* adapters finalized."""
+    resolved_written: set[Path] = {p.resolve() for p in written}
+    removed: list[Path] = []
+    for adapter in adapters.values():
+        removed.extend(adapter.cleanup_stale(resolved_written, repo_root))
+    return tuple(removed)
+
+
+def _run_sync(ctx: SyncContext) -> SyncResult:
+    """Internal helper: render + dispatch + cleanup, returning one
+    :class:`SyncResult`. Used by both write mode and ``--check`` (the latter
+    only inspects ``written`` against on-disk content)."""
     rules = _filter_applies_if(ctx.rules_resolved, ctx.facts, ctx.repo_root)
     prompts = _filter_applies_if(ctx.prompts_resolved, ctx.facts, ctx.repo_root)
     skills = _filter_skills(ctx.skills_resolved)
@@ -174,21 +312,16 @@ def _run_sync(ctx: SyncContext) -> tuple[list[Path], list[Path]]:
     adapters = discover_adapters(ctx.config, rule_registry=registry)
     ctx.adapters = adapters
 
-    written: list[Path] = []
-    for adapter in adapters.values():
-        for rule in rendered_rules:
-            written.extend(adapter.write_rule(rule, ctx.repo_root))
-        for prompt in rendered_prompts:
-            written.extend(adapter.write_prompt(prompt, ctx.repo_root))
-        for skill in skills:
-            written.extend(adapter.write_skill(skill, ctx.repo_root))
-        written.extend(adapter.finalize(ctx.repo_root))
-
-    resolved_written: set[Path] = {p.resolve() for p in written}
-    removed: list[Path] = []
-    for adapter in adapters.values():
-        removed.extend(adapter.cleanup_stale(resolved_written, ctx.repo_root))
-    return written, removed
+    recorder = _dispatch_to_adapters(
+        adapters, rendered_rules, rendered_prompts, skills, ctx.repo_root
+    )
+    removed = _cleanup_stale(adapters, recorder.written, ctx.repo_root)
+    return SyncResult(
+        written=tuple(recorder.written),
+        removed=removed,
+        provenance=dict(recorder.provenance),
+        managed=(),
+    )
 
 
 def execute(repo_root: Path, *, check: bool = False) -> int:
@@ -202,12 +335,18 @@ def execute(repo_root: Path, *, check: bool = False) -> int:
     ctx = SyncContext.from_repo(repo_root)
     if check:
         return _run_check(ctx)
-    written, removed = _run_sync(ctx)
+    result = _run_sync(ctx)
 
-    lockfile = _build_lockfile(written, ctx.repo_root, ctx.config.engine_version)
+    lockfile = _build_lockfile(
+        result.written,
+        ctx.repo_root,
+        ctx.config.engine_version,
+        result.provenance,
+        result.managed,
+    )
     ctx.state_source.save_lockfile(lockfile)
 
-    print(f"Summary: {len(written)} files written, {len(removed)} removed")
+    print(f"Summary: {len(result.written)} files written, {len(result.removed)} removed")
     return 0
 
 
@@ -243,7 +382,7 @@ def _run_check(ctx: SyncContext) -> int:
         # we need the cleanup pass to populate the "removed" set for
         # comparison, and since the work happens against a copy the real
         # repo is untouched.
-        written, _ = _run_sync(scratch_ctx)
+        written = _run_sync(scratch_ctx).written
 
         drift: list[str] = []
         for path in written:

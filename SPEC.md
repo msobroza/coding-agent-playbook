@@ -1724,19 +1724,53 @@ SemVer applied to the **rendered output format**, not the Python API:
 ### 14.3 Pinning policy
 Consumers pin to a minor range: `coding-agent-playbook>=0.4.0,<0.5.0`. Overlays pin to the engine's minor range. Dependabot / Renovate bumps trigger a `playbook sync` and the diff lands in a PR for review.
 ### 14.4 Lockfile
-`.coding-agent-playbook.lock` is a TOML file with:
+`.coding-agent-playbook.lock` is a committed TOML file written by `playbook sync` (write mode) through the configured `StateSource`. Schema 2 (`commands/sync.py` `_LOCKFILE_SCHEMA`; `lockfile.py` `Lockfile` / `LockEntry` / `Provenance`) records three top-level keys and one `[[entries]]` table per generated file, sorted by path, each carrying the file's **provenance** — which artifact produced it and which adapter wrote it:
 ```toml
-schema_version = 1
-engine_version = "0.4.0"
-[overlay_versions]
-playbook_rules_bnp = "0.2.0"
-[file_hashes]
-".continue/rules/00-project-context.md" = "sha256:abc123..."
-".continue/rules/10-python-house-style.md" = "sha256:def456..."
-# ... one entry per generated file
-"AGENTS.md" = "sha256:..."
+schema_version = 2
+engine_version = "0.1.0a0"            # [engine] version from the consumer config
+rendered_at = "2026-10-14T10:00:00Z"  # RFC 3339 UTC, when sync ran
+
+[[entries]]
+path = ".claude/CLAUDE.md"
+sha256 = "fed44cc5…"
+bytes = 7855
+kind = "composite"
+adapter = "claude_code"
+
+[[entries]]
+path = ".claude/skills/query-db/SKILL.md"
+sha256 = "fc20ff82…"
+bytes = 67
+kind = "skill"
+artifact_id = "query-db"
+source = "<repo-local>"
+adapter = "claude_code"
+
+[[entries]]
+path = ".continue/rules/10-python-house-style.md"
+sha256 = "9c1e…"
+bytes = 1834
+kind = "rule"
+artifact_id = "python-house-style"
+source = "coding_agent_playbook"
+adapter = "continue"
 ```
-`playbook sync --check` recomputes the hashes and compares. Mismatch → drift → exit 1.
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `path` | `str` | — | Repo-relative, forward slashes. |
+| `sha256` / `bytes` | `str` / `int` | — | Hex digest and size of the file's bytes as written. |
+| `kind` | `str` | `""` | `rule` / `prompt` / `skill` = the output of one artifact's `write_rule` / `write_prompt` / `write_skill` (a skill degraded to a prompt by an adapter stays `skill`); `composite` = a multi-source output: every path returned by `finalize` (`.claude/CLAUDE.md`, `AGENTS.md`, the `agent_harness` tree) and any path returned for two different artifacts. `hook` and `runtime` are reserved for the lifecycle-hook tracks (`specs/prK-lifecycle-hooks.md` §B.6). `""` = unknown provenance (an entry read from a schema-1 lockfile). |
+| `artifact_id` | `str` | `""` | Canonical artifact id (frontmatter `id`); `""` for `composite`. |
+| `source` | `str` | `""` | The artifact's `source_package`: `coding_agent_playbook`, an overlay package name, or `<repo-local>`; `""` for `composite`. |
+| `adapter` | `str` | `""` | Entry-point name of the adapter that wrote the path; `""` when two different adapters returned the same path. |
+| `scope` | `str` | `""` | `""` = the entry covers the whole file. Reserved for scoped (`json:<pointer>`) entries covering one managed element of a shared JSON file; a path with scoped entries then gets no whole-file entry. No adapter writes one yet. |
+| `executable` | `bool` | `false` | Reserved: git-style exec bit for copied hook scripts. Not populated yet. |
+
+Every field after `bytes` is **omitted from the TOML when it holds its default**, so a composite entry carries no `artifact_id`/`source` keys and `scope`/`executable` never appear today. Provenance is recorded by `_run_sync` wrapping each adapter's `write_rule`/`write_prompt`/`write_skill`/`finalize` call; the adapter return type (`list[Path]`) is unchanged. The lockfile is the ownership record for generated files that cannot carry a sentinel (§4.3 exceptions: `SKILL.md`, copied skill scripts and references). There is no `[overlay_versions]` or `[file_hashes]` table.
+
+**Drift.** `playbook sync --check` re-renders into a scratch copy of the repo and byte-compares every generated file against the working tree (missing or different → exit 1); it does not read the lockfile. `playbook check` reports drift from the lockfile: each entry's path is re-hashed and compared with `sha256` (`missing:` / `hash mismatch:`).
+
+**Compatibility.** A schema-1 lockfile (`path`/`sha256`/`bytes` only) loads with every new field at its default, and the next `playbook sync` rewrites it as schema 2. An older engine reading a schema-2 file still loads it: its reader picks only `path`, `sha256` and `bytes` and ignores the other keys.
 ## 15. Eval abstractions
 v1 shipped **Tier 0**: the task authoring format (Section 6.5), the loader, the validator, and a read-only CLI. **v1.1 makes Tier 1 live**: `HarnessRunner` executes one task end-to-end against an agent and scores it through the `Metric` / `Check` / `Rubric` model (§21). The **task-config redesign (v0.13, Tracks C1–C8)** then reshaped the *authored* format into the layered `[gate]` / `[rubric]` / `[verdict]` / `[aggregate]` model (§6.5.3): a task compiles into one per-trial `Rubric` of checks whose deterministic `[gate]` layer (file/metric checks, 0–1 normalized thresholds + non-regression vs the `setup/` baseline) is computable today, and whose judged `[rubric]` layer scores against the captured diff when a judge is configured (`--judge llm`, or any `coding_agent_playbook.judges` entry). With **no judge configured** the runner is deterministic-only (the rubric layer reports `available() is False` and is skipped — the verdict treats a skipped layer as neutral). §15.3 describes the as-built v1.1 runner; the design docs are `specs/prR-eval-runner.md` (R1), `specs/prR2-judge-r3-opencode.md` (R2), `specs/prR6-check-rubric.md` (the R6 `Metric`/`Check`/`Rubric` refactor), and **`specs/pr2b-task-config.md`** (the task-config redesign).
 ### 15.1 The Tier 0 / Tier 1 / Tier 2 ladder

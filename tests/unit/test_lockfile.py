@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
+import tomllib
+from typing import TYPE_CHECKING
+
+import pytest
+
+from coding_agent_playbook.lockfile import LockEntry, Lockfile, Provenance, compute_hash
+from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_compute_hash_stable():
@@ -53,3 +62,134 @@ def test_find_returns_entry():
     assert found is not None
     assert found.sha256 == "abc"
     assert lockfile.find("missing") is None
+
+
+# --- schema v2: provenance fields (specs/prK-lifecycle-hooks.md §P P4, §B.6) ---
+
+_V1_LOCKFILE_TOML = """\
+schema_version = 1
+engine_version = "0.1.0a0"
+rendered_at = "2026-05-28T12:00:00Z"
+
+[[entries]]
+path = ".continue/rules/50-a.md"
+sha256 = "abc123"
+bytes = 42
+"""
+
+
+def _all_fields_entry() -> LockEntry:
+    return LockEntry(
+        path=".claude/settings.json",
+        sha256="41ab",
+        bytes=212,
+        kind="runtime",
+        artifact_id="registration:pre_tool_use",
+        source="coding_agent_playbook",
+        adapter="claude_code",
+        scope="json:/hooks/PreToolUse",
+        executable=True,
+    )
+
+
+def test_v1_lockfile_loads_with_defaults() -> None:
+    """A v1 lockfile (path/sha256/bytes only) loads; every v2 field defaults."""
+    restored = Lockfile.from_dict(tomllib.loads(_V1_LOCKFILE_TOML))
+    assert restored.schema_version == 1
+    assert restored.entries == [
+        LockEntry(path=".continue/rules/50-a.md", sha256="abc123", bytes=42)
+    ]
+    entry = restored.entries[0]
+    assert (entry.kind, entry.artifact_id, entry.source, entry.adapter, entry.scope) == (
+        "",
+        "",
+        "",
+        "",
+        "",
+    )
+    assert entry.executable is False
+
+
+def test_v2_roundtrip_all_fields(tmp_path: Path) -> None:
+    """Every v2 field survives to_dict -> TOML on disk -> tomllib -> from_dict."""
+    original = Lockfile(
+        schema_version=2,
+        engine_version="0.2.0",
+        rendered_at="2026-10-14T10:00:00Z",
+        entries=[
+            LockEntry(
+                path=".continue/rules/50-python-typing.md",
+                sha256="9c1e",
+                bytes=1834,
+                kind="rule",
+                artifact_id="python-typing",
+                source="coding_agent_playbook",
+                adapter="continue",
+            ),
+            _all_fields_entry(),
+        ],
+    )
+    state = FileSystemStateSource(repo_root=tmp_path)
+    state.save_lockfile(original)
+    assert state.load_lockfile() == original
+
+
+def test_default_valued_fields_omitted_from_toml(tmp_path: Path) -> None:
+    """New fields at their default are not serialized: v1-shaped entries stay
+    compact, and a rule entry carries no ``scope``/``executable`` keys."""
+    rule_entry = LockEntry(
+        path=".continue/rules/50-x.md",
+        sha256="aa",
+        bytes=1,
+        kind="rule",
+        artifact_id="x",
+        source="<repo-local>",
+        adapter="continue",
+    )
+    bare_entry = LockEntry(path="AGENTS.md", sha256="bb", bytes=2)
+    assert bare_entry.to_dict() == {"path": "AGENTS.md", "sha256": "bb", "bytes": 2}
+    assert list(rule_entry.to_dict()) == [
+        "path",
+        "sha256",
+        "bytes",
+        "kind",
+        "artifact_id",
+        "source",
+        "adapter",
+    ]
+    assert _all_fields_entry().to_dict()["executable"] is True
+
+    lockfile = Lockfile(
+        schema_version=2,
+        engine_version="0.2.0",
+        rendered_at="2026-10-14T10:00:00Z",
+        entries=[rule_entry, bare_entry],
+    )
+    FileSystemStateSource(repo_root=tmp_path).save_lockfile(lockfile)
+    text = (tmp_path / ".coding-agent-playbook.lock").read_text(encoding="utf-8")
+    assert "scope" not in text
+    assert "executable" not in text
+    assert text.count("kind = ") == 1
+
+
+def test_provenance_rejects_unknown_kind() -> None:
+    """A typo'd provenance kind fails loudly, naming the value and the choices."""
+    with pytest.raises(ValueError, match=r"'rules'.*composite"):
+        Provenance(kind="rules")  # type: ignore[arg-type]
+
+
+def test_lock_entry_from_provenance_copies_fields() -> None:
+    """``LockEntry.from_provenance`` stamps the four provenance fields."""
+    provenance = Provenance(
+        kind="prompt", artifact_id="refactor", source="<repo-local>", adapter="opencode"
+    )
+    entry = LockEntry.from_provenance(".opencode/command/refactor.md", b"body", provenance)
+    assert entry == LockEntry(
+        path=".opencode/command/refactor.md",
+        sha256=compute_hash(b"body"),
+        bytes=4,
+        kind="prompt",
+        artifact_id="refactor",
+        source="<repo-local>",
+        adapter="opencode",
+    )
