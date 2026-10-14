@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import pathlib
 import textwrap
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from coding_agent_playbook.detector import Facts, detect, evaluate_predicate
+from coding_agent_playbook.security.paths import is_secret_path
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -167,6 +169,64 @@ def test_detect_ignores_venv_when_walking_notebooks(tmp_path: Path) -> None:
     )
     _write(repo, ".venv/share/notebook/template.ipynb", "{}\n")
     _mkdir(repo, "src/no_real_nb")
+
+    facts = detect(repo)
+
+    assert facts.get("has_notebooks", False) is False
+    assert facts["project_kind"] == "python-library"
+
+
+#: Secret files the detector must never open (SPEC §17.3; security/patterns.py).
+_SECRET_FIXTURES = (
+    ".env",
+    "deploy/.env.production",
+    "certs/server.pem",
+    "tls/private.key",
+    "config/credentials.json",
+    "notebooks/aws_credentials.ipynb",
+    ".npmrc",
+    ".pypirc",
+    "pip.conf",
+    "uv.toml",
+    "id_rsa",
+    "infra/prod.tfvars",
+)
+
+
+def test_detector_never_opens_secret_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = tmp_path / "secret-repo"
+    repo.mkdir()
+    _minimal_pyproject(repo)
+    for rel in _SECRET_FIXTURES:
+        _write(repo, rel, "TOKEN=hunter2\n")
+    opened: list[Path] = []
+
+    def _spy(name: str) -> Any:
+        original = getattr(pathlib.Path, name)
+
+        def _recording(self: pathlib.Path, *args: Any, **kwargs: Any) -> Any:
+            opened.append(self)
+            return original(self, *args, **kwargs)
+
+        return _recording
+
+    for name in ("open", "read_text", "read_bytes"):
+        monkeypatch.setattr(pathlib.Path, name, _spy(name))
+
+    detect(repo)
+
+    assert repo / "pyproject.toml" in opened  # the spy saw the detector's real read
+    assert [p for p in opened if is_secret_path(p)] == []
+
+
+def test_detect_skips_secret_notebooks(tmp_path: Path) -> None:
+    # A notebook keeps its cell outputs, so one named like a credential store is a
+    # secret path; the notebook walk skips it instead of counting it.
+    repo = tmp_path / "secret-nb"
+    repo.mkdir()
+    _minimal_pyproject(repo)
+    _write(repo, "notebooks/aws_credentials.ipynb", "{}\n")
+    _mkdir(repo, "src/secret_nb")
 
     facts = detect(repo)
 

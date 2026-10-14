@@ -1947,7 +1947,8 @@ A `tests/compatibility/` directory contains a frozen consumer repo from v0.3 wit
 ### 17.2 Dependency allowlist
 For BNP, the overlay package ships a rule (`30-bnp-banking-dependencies`) that lists approved third-party packages. The rule appears in every harness's context, so the assistant won't suggest unapproved libraries. This is enforcement-by-convention; actual enforcement happens at CI time via a separate package-check step.
 ### 17.3 Secrets
-- The engine never reads files matching `.env*`, `*.pem`, `*.key`, `*credentials*`. Detector explicitly skips these paths.
+- Secret paths are defined once, in `coding_agent_playbook/security/patterns.py`: a path is secret when it matches a `SECRET_PATH_GLOBS` entry (`.env*`, `*.pem`, `*.key`, `*credentials*`; key stores and SSH private keys; `.netrc`, `.pypirc`, `.npmrc`, `pip.conf`, `uv.toml`, `.git-credentials`, `.vault-token`, `krb5cc_*`; `*.tfstate`, `*.tfvars`, `*.kdbx`; per-user stores under `~/` such as `~/.aws/**` and `~/.ssh/**`) and no `SECRET_PATH_EXEMPT` entry (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`, SSH public keys, and source files such as `credentials.py`). `security/paths.py`'s `is_secret_path` decides from the path string alone and never opens the file; matching is case-insensitive on macOS and Windows.
+- The detector never opens a secret path: it reads only `pyproject.toml`, and its filesystem walks skip every secret path. `playbook sync --check` is not covered yet: its scratch copy still byte-copies the whole repository, secret files included.
 - The pre-commit baseline includes `gitleaks` and `detect-private-key`.
 - No log statement in the engine ever logs config values; only structural facts (counts, paths).
 ### 17.4 Audit log

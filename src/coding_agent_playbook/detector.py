@@ -4,6 +4,10 @@ See SPEC.md §8. The Facts dict feeds the renderer's context (SPEC §9.4) and th
 ``applies_if`` predicate evaluator (SPEC §6.4). Detector runs at ``playbook init``,
 is cached in ``.coding-agent-playbook.toml``, and refreshes on ``pyproject.toml``
 mtime change or ``playbook check --refresh``.
+
+The detector never opens a secret path (SPEC §17.3): its only file read is
+``pyproject.toml``, and its filesystem walks skip every
+``security.paths.is_secret_path`` match.
 """
 
 from __future__ import annotations
@@ -13,6 +17,8 @@ from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
+
+from coding_agent_playbook.security.paths import is_secret_path
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -240,12 +246,20 @@ def _dev_tools_from_config_sections(pyproject: dict[str, Any]) -> set[str]:
     return found
 
 
-def _has_notebooks(repo_root: Path) -> bool:
-    for path in repo_root.rglob("*.ipynb"):
-        if any(part in _IGNORE_DIRS for part in path.relative_to(repo_root).parts):
-            continue
+def _walk_skips(path: Path, repo_root: Path) -> bool:
+    """Whether a detector walk must skip ``path`` (found under ``repo_root``).
+
+    Skips anything inside an ``_IGNORE_DIRS`` directory and every secret path
+    (SPEC §17.3; the one catalog lives in ``security/patterns.py``), so the
+    detector never opens, or counts, a credential file.
+    """
+    if any(part in _IGNORE_DIRS for part in path.relative_to(repo_root).parts):
         return True
-    return False
+    return is_secret_path(path)
+
+
+def _has_notebooks(repo_root: Path) -> bool:
+    return any(not _walk_skips(path, repo_root) for path in repo_root.rglob("*.ipynb"))
 
 
 def _has_dockerfile(repo_root: Path) -> bool:
