@@ -9,6 +9,7 @@ is pinned byte for byte by ``tests/cli/test_metrics_golden.py``.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -16,6 +17,7 @@ import pytest
 from coding_agent_playbook.evaluators.metric import Metric, static_metrics
 from coding_agent_playbook.evaluators.metrics_gate import (
     CONFIG_FILENAME,
+    MAX_FILE_BYTES,
     MetricsGateDeps,
     MetricsGateRequest,
     MetricsGateUsageError,
@@ -31,7 +33,6 @@ from tests.import_probe import new_modules_after
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
-    from pathlib import Path
 
 _HIGH_CC_SOURCE = (
     "def tangled(x):\n"
@@ -330,6 +331,144 @@ def test_undecodable_git_baseline_is_treated_as_all_new(tmp_path: Path) -> None:
 
     assert result.breached is False
     assert {f.kind for f in result.report.findings} == {"new"}
+
+
+# --------------------------------------------------------------------------- #
+# Bad input is skipped with a note, never a traceback (prK §F.0.3 item 7)
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class FakeRaisingMetric(Metric):
+    """A static metric that raises ``error`` on any source containing ``trigger``.
+
+    It stands in for a builtin walker that a hostile source drives into
+    ``RecursionError`` or ``ValueError``; every other source measures as empty.
+    """
+
+    name = "fake_raising"
+    scope = Scope.MODULE
+    normalizer = Identity()
+    error: Exception = field(default_factory=lambda: ValueError("bad literal"))
+    trigger: str = "# HOSTILE"
+
+    def measure(self, ctx: EvalContext) -> list[Measurement]:
+        if self.trigger in ctx.source:
+            raise self.error
+        return []
+
+
+def _with_raising_metric(error: Exception) -> MetricsGateDeps:
+    return MetricsGateDeps(
+        load_static_metrics=lambda: [*static_metrics(), FakeRaisingMetric(error=error)]
+    )
+
+
+_HOSTILE_CLEAN = _CLEAN_SOURCE + "# HOSTILE\n"
+
+
+@pytest.mark.parametrize(
+    ("hostile", "deps", "cap", "reason"),
+    [
+        (
+            _HOSTILE_CLEAN,
+            _with_raising_metric(RecursionError("deep")),
+            MAX_FILE_BYTES,
+            "too deeply nested to measure",
+        ),
+        (
+            _HOSTILE_CLEAN,
+            _with_raising_metric(ValueError("bad literal")),
+            MAX_FILE_BYTES,
+            "unmeasurable (bad literal)",
+        ),
+        (
+            "x = 1\0\n",
+            None,
+            MAX_FILE_BYTES,
+            "unparseable (source code string cannot contain null bytes)",
+        ),
+        ("#" * 65, None, 64, "too large (65 bytes, over the 64-byte cap)"),
+        ("-" * 200_000 + "1\n", None, MAX_FILE_BYTES, "unparseable ("),
+    ],
+    ids=["recursion-error", "value-error", "nul-byte", "over-cap", "parser-overflow"],
+)
+def test_candidate_parse_errors_are_skipped_not_raised(
+    tmp_path: Path, hostile: str, deps: MetricsGateDeps | None, cap: int, reason: str
+) -> None:
+    _write(tmp_path / "hostile.py", hostile)
+    _write(tmp_path / "clean.py", _CLEAN_SOURCE)
+
+    result = run_metrics_gate(
+        _request(tmp_path, paths=(str(tmp_path),), max_file_bytes=cap), deps=deps
+    )
+
+    [(label, note)] = result.skipped
+    assert (label, note[: len(reason)]) == ("hostile.py", reason)
+    assert result.measured_count == 1
+    assert result.breached is False
+
+
+def test_undecodable_candidate_is_skipped_as_unreadable(tmp_path: Path) -> None:
+    (tmp_path / "latin1.py").write_bytes(b"x = '\xff'\n")
+
+    result = run_metrics_gate(_request(tmp_path, paths=(str(tmp_path),)))
+
+    [(label, note)] = result.skipped
+    assert label == "latin1.py"
+    assert note.startswith("unreadable (")
+
+
+@pytest.mark.parametrize(
+    ("baseline", "deps"),
+    [
+        (b"x = 1\0\n", None),
+        (b"x = '\xff'\n", None),
+        (b"x = 1\n" + b"#" * 64, None),
+        (_HOSTILE_CLEAN.encode(), _with_raising_metric(RecursionError("deep"))),
+        (_HOSTILE_CLEAN.encode(), _with_raising_metric(ValueError("bad literal"))),
+    ],
+    ids=["nul-byte", "not-utf8", "over-cap", "recursion-error", "value-error"],
+)
+def test_bad_baseline_file_is_dropped_as_all_new(
+    tmp_path: Path, baseline: bytes, deps: MetricsGateDeps | None
+) -> None:
+    _write(tmp_path / "mod.py", _CLEAN_SOURCE)
+    (tmp_path / "base").mkdir()
+    (tmp_path / "base" / "mod.py").write_bytes(baseline)
+
+    result = run_metrics_gate(
+        _request(
+            tmp_path,
+            config=MetricConfig(mode="regression"),
+            baseline=str(tmp_path / "base"),
+            max_file_bytes=64,
+        ),
+        deps=deps,
+    )
+
+    assert {f.kind for f in result.report.findings} == {"new"}
+
+
+def test_oversized_git_baseline_blob_is_dropped_as_all_new(tmp_path: Path) -> None:
+    _write(tmp_path / "mod.py", _CLEAN_SOURCE)
+    fake = FakeBaselineGit(blobs={("HEAD", "mod.py"): _CLEAN_SOURCE + "#" * 64})
+
+    result = run_metrics_gate(
+        _request(
+            tmp_path, config=MetricConfig(mode="regression"), baseline="git:HEAD", max_file_bytes=64
+        ),
+        deps=MetricsGateDeps(git_factory=_git_factory(fake)),
+    )
+
+    assert {f.kind for f in result.report.findings} == {"new"}
+
+
+def test_default_file_cap_is_one_megabyte() -> None:
+    assert MAX_FILE_BYTES == 1_000_000
+    assert MetricsGateRequest(repo_root=Path("."), config=MetricConfig()).max_file_bytes == (
+        MAX_FILE_BYTES
+    )
 
 
 # --------------------------------------------------------------------------- #

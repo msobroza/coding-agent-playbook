@@ -1,18 +1,18 @@
-"""What the metrics gate measures: targets, candidate and baseline sources, suite runs.
+"""What the metrics gate measures statically: targets, candidate and baseline sources.
 
 These are the helpers behind
 :func:`~coding_agent_playbook.evaluators.metrics_gate.run_metrics_gate`
-(prK §F.0.3 item 1), moved out of ``commands/metrics.py``. Import the public
-names from ``metrics_gate``. Every input the gate cannot use raises
-:class:`MetricsGateUsageError`, whose message ``playbook metrics`` prints
-verbatim before exiting 2.
+(prK §F.0.3 items 1 and 7), moved out of ``commands/metrics.py``; the suite runs
+live in ``_metrics_suite``. Import the public names from ``metrics_gate``. Every
+input the gate cannot use raises :class:`MetricsGateUsageError`, whose message
+``playbook metrics`` prints verbatim before exiting 2.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, GitTimeoutError
 from coding_agent_playbook.evaluators.parse import parse_module
@@ -22,7 +22,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from coding_agent_playbook.evaluators.baseline_git import BaselineGit
-    from coding_agent_playbook.evaluators.execution.project import ProjectHandle
     from coding_agent_playbook.evaluators.metric import Metric
     from coding_agent_playbook.evaluators.types import Measurement
 
@@ -31,10 +30,19 @@ IGNORED_DIRS = frozenset(
     {"__pycache__", ".venv", "venv", "node_modules", "build", "dist", ".git", ".tox", ".mypy_cache"}
 )
 
-#: MODULE label the execution metrics key their suite-wide measurements on.
-SUITE_LABEL = "suite"
+#: The ``--baseline`` prefix that names a git ref instead of a directory.
+GIT_PREFIX = "git:"
 
-_GIT_PREFIX = "git:"
+#: Default ``MetricsGateRequest.max_file_bytes``: a larger candidate or baseline
+#: file is never parsed. A module that size is generated or vendored, and parsing
+#: it would blow the Stop stage budget.
+MAX_FILE_BYTES = 1_000_000
+
+#: What a hostile or broken source can raise while it is parsed and measured
+#: (prK §F.0.3 item 7). CPython reports a parser stack overflow on a deeply
+#: nested source as MemoryError ("too complex to parse"), not RecursionError.
+#: UnicodeDecodeError is a ValueError.
+_BAD_SOURCE_ERRORS = (SyntaxError, RecursionError, MemoryError, ValueError)
 
 
 class MetricsGateUsageError(Exception):
@@ -50,12 +58,8 @@ class MetricsGateUsageError(Exception):
     """
 
 
-class ProjectFactory(Protocol):
-    """Builds the :class:`ProjectHandle` a suite run measures (``ProjectHandle.create``)."""
-
-    def __call__(
-        self, root: Path, report_dir: Path, test_cmd: list[str] | None = None
-    ) -> ProjectHandle: ...
+class _SkippedSource(Exception):
+    """Why one source file is not measured: the text after ``skipped <label>: ``."""
 
 
 # --------------------------------------------------------------------------- #
@@ -135,16 +139,20 @@ def _repo_rel_path(path: Path, repo_root: Path) -> str | None:
 
 @dataclass(frozen=True)
 class SourceMeter:
-    """Measures one Python source with the gate's static metrics."""
+    """Reads and measures Python sources with the gate's static metrics.
+
+    A file over ``max_file_bytes`` is never read into the parser.
+    """
 
     metrics: Sequence[Metric]
     tool_paths: Mapping[str, str]
+    max_file_bytes: int = MAX_FILE_BYTES
 
     def measure(self, source: str, label: str) -> list[Measurement]:
         """Parse ``source`` and run every available metric over it.
 
-        Raises :exc:`SyntaxError` when the source does not parse (the caller
-        decides whether to skip the file).
+        Raises what a broken source makes the parser or a metric raise
+        (:data:`_BAD_SOURCE_ERRORS`); the caller skips or drops the file.
         """
         module = parse_module(source, label)
         ctx = EvalContext(module=module, source=source, label=label, tool_paths=self.tool_paths)
@@ -155,11 +163,38 @@ class SourceMeter:
         return measurements
 
     def measure_or_drop(self, source: str, label: str) -> list[Measurement]:
-        """Measure a baseline source; one that does not parse yields nothing (all-new)."""
+        """Measure a baseline source; one that breaks the parser or a metric yields nothing (all-new)."""
         try:
             return self.measure(source, label)
-        except SyntaxError:
+        except _BAD_SOURCE_ERRORS:
             return []
+
+    def read(self, path: Path) -> str:
+        """``path`` as UTF-8 text; raises :class:`_SkippedSource` when unreadable or too large."""
+        try:
+            size = path.stat().st_size
+            source = None if size > self.max_file_bytes else path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            raise _SkippedSource(f"unreadable ({exc})") from exc
+        if source is None:
+            raise _SkippedSource(
+                f"too large ({size} bytes, over the {self.max_file_bytes}-byte cap)"
+            )
+        return source
+
+    def decode_blob(self, raw: bytes) -> str | None:
+        """A git baseline blob as text, like ``git show`` under ``text=True``: UTF-8, universal newlines.
+
+        ``None`` (the file counts as all-new, like one that does not parse) when
+        the blob is over the cap or not UTF-8.
+        """
+        if len(raw) > self.max_file_bytes:
+            return None
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+        return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
 @dataclass
@@ -174,21 +209,43 @@ class CandidateMeasurements:
 def measure_candidates(
     targets: Sequence[Path], repo_root: Path, meter: SourceMeter
 ) -> CandidateMeasurements:
-    """Measure every target; a file that cannot be read or parsed is skipped with a reason."""
+    """Measure every target; one that cannot be read, parsed or measured is skipped with a reason.
+
+    A hostile file costs a note, never a traceback: the gate runs inside hooks.
+    """
     out = CandidateMeasurements()
     for target in targets:
         label = rel_label(target, repo_root)
-        try:
-            source = target.read_text(encoding="utf-8")
-        except OSError as exc:  # pragma: no cover - unreadable file is rare
-            out.skipped.append((label, f"unreadable ({exc})"))
-            continue
-        try:
-            out.measurements.extend(meter.measure(source, label))
+        reason = _measure_candidate(target, label, meter, out.measurements)
+        if reason is None:
             out.measured_count += 1
-        except SyntaxError as exc:
-            out.skipped.append((label, f"unparseable ({exc.msg})"))
+        else:
+            out.skipped.append((label, reason))
     return out
+
+
+def _measure_candidate(
+    target: Path, label: str, meter: SourceMeter, into: list[Measurement]
+) -> str | None:
+    """Measure one candidate into ``into``; the skip reason, or ``None`` once measured."""
+    try:
+        into.extend(meter.measure(meter.read(target), label))
+    except _SkippedSource as exc:
+        return str(exc)
+    except _BAD_SOURCE_ERRORS as exc:
+        return _skip_reason(exc)
+    return None
+
+
+def _skip_reason(exc: Exception) -> str:
+    """The note for a source that broke the parser or a metric."""
+    if isinstance(exc, SyntaxError):
+        return f"unparseable ({exc.msg})"
+    if isinstance(exc, MemoryError):
+        return "unparseable (too complex to parse)"
+    if isinstance(exc, RecursionError):
+        return "too deeply nested to measure"
+    return f"unmeasurable ({exc})"
 
 
 # --------------------------------------------------------------------------- #
@@ -205,8 +262,8 @@ def static_baseline(
     directory path (read the matching relative file). A file absent from the
     baseline yields no measurements, so the regression check treats it as all-new.
     """
-    if baseline.startswith(_GIT_PREFIX):
-        return _git_baseline(baseline[len(_GIT_PREFIX) :], targets, repo_root, meter, git)
+    if baseline.startswith(GIT_PREFIX):
+        return _git_baseline(baseline[len(GIT_PREFIX) :], targets, repo_root, meter, git)
     base_dir = Path(baseline)
     if not base_dir.is_dir():
         raise MetricsGateUsageError(f"baseline directory not found: {base_dir}")
@@ -215,9 +272,17 @@ def static_baseline(
         label = rel_label(target, repo_root)
         base_file = base_dir / label
         if base_file.is_file():
-            source = base_file.read_text(encoding="utf-8")
-            measurements.extend(meter.measure_or_drop(source, label))
+            measurements.extend(_measure_baseline_file(base_file, label, meter))
     return measurements
+
+
+def _measure_baseline_file(path: Path, label: str, meter: SourceMeter) -> list[Measurement]:
+    """A baseline file that cannot be read or is too large counts as all-new."""
+    try:
+        source = meter.read(path)
+    except _SkippedSource:
+        return []
+    return meter.measure_or_drop(source, label)
 
 
 def _git_baseline(
@@ -230,25 +295,13 @@ def _git_baseline(
     try:
         blobs = git.read_sources(repo_root, ref, rels)
     except BaselineGitError as exc:
-        raise _usage_error(exc, f"bad --baseline git ref {ref!r}") from exc
+        raise git_usage_error(exc, f"bad --baseline git ref {ref!r}") from exc
     measurements: list[Measurement] = []
     for rel in rels:
-        source = _decode_blob(blobs[rel]) if rel in blobs else None
+        source = meter.decode_blob(blobs[rel]) if rel in blobs else None
         if source is not None:
             measurements.extend(meter.measure_or_drop(source, rel))
     return measurements
-
-
-def _decode_blob(raw: bytes) -> str | None:
-    """Decode a baseline blob as ``git show`` under ``text=True`` did: UTF-8, universal newlines.
-
-    A blob that is not UTF-8 is dropped (all-new), like one that does not parse.
-    """
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        return None
-    return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def verify_git_ref(git: BaselineGit, repo_root: Path, ref: str) -> None:
@@ -256,86 +309,13 @@ def verify_git_ref(git: BaselineGit, repo_root: Path, ref: str) -> None:
     try:
         is_commit = git.is_commit(repo_root, ref)
     except BaselineGitError as exc:
-        raise _usage_error(exc, f"bad --baseline git ref {ref!r}") from exc
+        raise git_usage_error(exc, f"bad --baseline git ref {ref!r}") from exc
     if not is_commit:
         raise MetricsGateUsageError(f"bad --baseline git ref {ref!r} (not a valid revision)")
 
 
-def _usage_error(exc: BaselineGitError, context: str) -> MetricsGateUsageError:
+def git_usage_error(exc: BaselineGitError, context: str) -> MetricsGateUsageError:
     """A git failure as the CLI's exit-2 error; a timeout keeps its own message."""
     if isinstance(exc, GitTimeoutError):
         return MetricsGateUsageError(str(exc))
     return MetricsGateUsageError(f"{context}: {exc}")
-
-
-# --------------------------------------------------------------------------- #
-# Execution metrics (run_tests)
-# --------------------------------------------------------------------------- #
-
-
-@dataclass(frozen=True)
-class SuiteRun:
-    """Runs the execution metrics over one project root: one suite run per root.
-
-    ``test_cmd`` is exactly what runs (``None`` = the handle's isolated pytest
-    default); it is never read from ``[metrics] test_cmd``.
-    """
-
-    metrics: Sequence[Metric]
-    test_cmd: list[str] | None
-    project_factory: ProjectFactory
-    tool_paths: Mapping[str, str]
-
-    def measure(self, root: Path, report_dir: Path) -> list[Measurement]:
-        """Build a handle, run the suite once, and collect execution measurements.
-
-        Every execution metric reads the same handle, so the suite runs exactly
-        once. Raises :class:`MetricsGateUsageError` when the suite cannot be run.
-        """
-        handle = self.project_factory(root, report_dir, test_cmd=self.test_cmd)
-        ctx = EvalContext(
-            module=None, source="", label=SUITE_LABEL, project=handle, tool_paths=self.tool_paths
-        )
-        measurements: list[Measurement] = []
-        try:
-            for metric in self.metrics:
-                if metric.available(ctx):
-                    measurements.extend(metric.measure(ctx))
-        except RuntimeError as exc:
-            raise MetricsGateUsageError(str(exc)) from exc
-        return measurements
-
-
-def suite_baseline(
-    baseline: str, repo_root: Path, suite: SuiteRun, work_dir: Path, git: BaselineGit
-) -> list[Measurement]:
-    """Run the execution metrics on the baseline (a git ref or a directory).
-
-    ``git:<ref>`` materialises the ref via a temporary worktree under
-    ``work_dir`` (removed afterwards); ``<dir>`` runs the suite directly in that
-    directory. Raises :class:`MetricsGateUsageError` on a bad ref, a non-git dir,
-    a missing directory, a git timeout or an unrunnable suite.
-    """
-    if baseline.startswith(_GIT_PREFIX):
-        ref = baseline[len(_GIT_PREFIX) :]
-        verify_git_ref(git, repo_root, ref)
-        return _suite_in_worktree(ref, repo_root, suite, work_dir, git)
-    base_dir = Path(baseline)
-    if not base_dir.is_dir():
-        raise MetricsGateUsageError(f"baseline directory not found: {base_dir}")
-    return suite.measure(base_dir, work_dir / "baseline-reports")
-
-
-def _suite_in_worktree(
-    ref: str, repo_root: Path, suite: SuiteRun, work_dir: Path, git: BaselineGit
-) -> list[Measurement]:
-    """Materialise ``ref`` in a temp git worktree, run the suite, then clean up."""
-    worktree = work_dir / "baseline-worktree"
-    try:
-        git.add_worktree(repo_root, worktree, ref)
-    except BaselineGitError as exc:
-        raise _usage_error(exc, f"could not create baseline worktree for {ref!r}") from exc
-    try:
-        return suite.measure(worktree, work_dir / "baseline-reports")
-    finally:
-        git.remove_worktree(repo_root, worktree)

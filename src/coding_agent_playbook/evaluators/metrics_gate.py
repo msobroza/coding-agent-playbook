@@ -33,15 +33,14 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.config import parse_metrics_config
 from coding_agent_playbook.evaluators._metrics_inputs import (
+    MAX_FILE_BYTES,
     MetricsGateUsageError,
-    ProjectFactory,
     SourceMeter,
-    SuiteRun,
     discover_targets,
     measure_candidates,
     static_baseline,
-    suite_baseline,
 )
+from coding_agent_playbook.evaluators._metrics_suite import ProjectFactory, SuiteRun, suite_baseline
 from coding_agent_playbook.evaluators.baseline_git import SubprocessBaselineGit
 from coding_agent_playbook.evaluators.check import MeasurementSet
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle
@@ -67,6 +66,7 @@ _RUBRIC_NAME = "metrics"
 
 __all__ = [
     "CONFIG_FILENAME",
+    "MAX_FILE_BYTES",
     "MetricsGateDeps",
     "MetricsGateRequest",
     "MetricsGateResult",
@@ -85,7 +85,9 @@ class MetricsGateRequest:
     and ``strict`` is OR-ed with ``config.strict``. ``paths`` resolve against the
     process cwd (empty = ``<repo_root>/src``, else ``repo_root``). ``baseline`` is
     ``git:<ref>`` or a directory. ``tool_paths`` fills
-    :attr:`EvalContext.tool_paths` for every measurement context.
+    :attr:`EvalContext.tool_paths` for every measurement context. A candidate or
+    baseline file over ``max_file_bytes`` is never parsed (a skip note for a
+    candidate, all-new for a baseline).
 
     Example::
 
@@ -102,6 +104,7 @@ class MetricsGateRequest:
     run_tests: bool = False
     test_cmd: tuple[str, ...] | None = None
     tool_paths: Mapping[str, str] = field(default_factory=dict)
+    max_file_bytes: int = MAX_FILE_BYTES
 
 
 @dataclass(frozen=True)
@@ -214,7 +217,7 @@ def _measure(request: MetricsGateRequest, deps: MetricsGateDeps) -> _Measured:
     """Static candidate + baseline measurements, then the suite when requested."""
     git = deps.git_factory(request.config.git_timeout_s)
     static = deps.load_static_metrics()
-    meter = SourceMeter(static, request.tool_paths)
+    meter = SourceMeter(static, request.tool_paths, request.max_file_bytes)
     targets = discover_targets(request.paths, request.repo_root)
     baseline = (
         None

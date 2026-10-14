@@ -428,6 +428,25 @@ def test_unparseable_file_is_skipped_not_crashed(tmp_path, capsys):
     assert "skip" in out.lower()
 
 
+def test_hostile_candidates_are_skipped_with_exit_zero(tmp_path, capsys):
+    """A NUL byte, a non-UTF-8 file, a file over the 1 MB cap and a parser-overflowing
+    nest are each skipped with a note; the clean sibling still passes (exit 0)."""
+    _write(tmp_path / "nul.py", "x = 1\0\n")
+    (tmp_path / "latin1.py").write_bytes(b"x = '\xff'\n")
+    _write(tmp_path / "huge.py", "#\n" * 500_001)
+    _write(tmp_path / "deep.py", "-" * 200_000 + "1\n")
+    _write(tmp_path / "clean.py", _CLEAN_SOURCE)
+
+    rc = _metrics.run(_ns(paths=[str(tmp_path)], mode="absolute", repo_root=str(tmp_path)))
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "  skipped huge.py: too large (1000002 bytes, over the 1000000-byte cap)" in out
+    for label in ("nul.py", "latin1.py", "deep.py"):
+        assert f"  skipped {label}: " in out
+    assert "OK — 1 file(s) measured" in out
+
+
 # --------------------------------------------------------------------------- #
 # git: baseline (happy path)
 # --------------------------------------------------------------------------- #
