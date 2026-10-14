@@ -236,7 +236,8 @@ def test_a_string_overlays_enabled_is_refused(
 def test_a_non_boolean_output_commit_is_a_clean_error(
     tmp_path: Path, make_synthetic_repo: Callable[..., Path], capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Was a traceback; every config error now shares the ``error:`` + exit 2 path."""
+    """Was a traceback; every config error now shares the ``error:`` + exit 2 path,
+    and names the file that holds it, like the other config errors (v0.18)."""
     repo = make_synthetic_repo(
         tmp_path, config_text=_DEFAULT_CONFIG + '\n[output]\ncommit = "no"\n'
     )
@@ -244,7 +245,9 @@ def test_a_non_boolean_output_commit_is_a_clean_error(
     assert _run(["sync"], repo) == 2
 
     err = capsys.readouterr().err
-    assert err == "error: [output] commit must be a boolean (true or false), got 'no'\n"
+    assert err == (
+        f"error: {_PRIMARY}: [output] commit must be a boolean (true or false), got 'no'\n"
+    )
 
 
 def _init_argv(repo: Path) -> list[str]:

@@ -225,3 +225,25 @@ def make_package(
     yield _make
     for name in built:
         sys.modules.pop(name, None)
+
+
+#: CPython's default int-to-str digit limit (``sys.int_info.default_max_str_digits``).
+DEFAULT_INT_MAX_STR_DIGITS = 4300
+
+
+@pytest.fixture
+def default_int_max_str_digits() -> Iterator[int]:
+    """Pin ``sys.set_int_max_str_digits`` to CPython's default for one test; yield it.
+
+    The big-integer writer tests exercise the path past that limit, which
+    ``PYTHONINTMAXSTRDIGITS`` (``0`` disables it) or another test can move, so
+    each pins it and restores the old value afterwards (F.I.R.S.T.: repeatable).
+    """
+    import sys
+
+    previous = sys.get_int_max_str_digits()
+    sys.set_int_max_str_digits(DEFAULT_INT_MAX_STR_DIGITS)
+    try:
+        yield DEFAULT_INT_MAX_STR_DIGITS
+    finally:
+        sys.set_int_max_str_digits(previous)

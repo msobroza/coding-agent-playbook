@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
@@ -10,6 +11,12 @@ from typing import TYPE_CHECKING, Any, TypedDict
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands import sync as _sync
+from coding_agent_playbook.commands._committed_config import (
+    ConfigRewrite,
+    detector_cache_table,
+    plan_committed_update,
+    plan_first_config,
+)
 from coding_agent_playbook.commands._precommit_merge import merge_pre_commit
 from coding_agent_playbook.config import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.detector import detect
@@ -20,11 +27,9 @@ if TYPE_CHECKING:
     import argparse
     from collections.abc import Mapping
 
-    from coding_agent_playbook.detector import Facts
-
 
 class _Answers(TypedDict):
-    """Shape of the user-collected answers handed to ``_write_config``.
+    """Shape of the user-collected answers handed to ``_plan_config``.
 
     Keeping this in a TypedDict lets mypy verify each field is the right
     type without sprinkling ``cast`` / ``type: ignore`` at every key access.
@@ -145,80 +150,105 @@ def _collect_answers(args: argparse.Namespace) -> _Answers:
     )
 
 
-def _write_config(repo_root: Path, answers: _Answers) -> Config:
-    """Write or update ``.coding-agent-playbook.toml`` with the user's
-    answers and return the written :class:`Config`. Idempotent: an existing
-    config is *merged* with the new answers — user-edited fields win over
-    freshly-asked defaults, but new defaults (e.g. for a freshly-added
-    adapter) are added in.
+def _plan_config(state: FileSystemStateSource, repo_root: Path, answers: _Answers) -> ConfigRewrite:
+    """What ``init`` will write to ``.coding-agent-playbook.toml``, checked; nothing written.
 
-    ``[output] commit`` is always written explicitly (``false`` unless the
-    user already chose otherwise) so the output policy is discoverable.
+    An existing file is rewritten from **itself alone**: never from
+    ``load_config``, whose merge with the gitignored
+    ``.coding-agent-playbook.local.toml`` (SPEC §7.2) would commit one engineer's
+    personal overrides — adapters, overlays, ``[user_choices]``, ``[output]`` —
+    for the whole team. On a re-run:
+
+    * the keys ``Config`` owns are replaced, not merged, by the updated committed
+      ``Config`` (:func:`_apply_answers`), so an emptied or omitted ``--overlays``
+      (both mean no overlays), a dropped description or a stale
+      ``[detector_cache]`` entry stays dropped. Owned: every top-level key in
+      ``config_entries.CONFIG_MANAGED_KEYS``, ``[detector_cache]`` and ``[user_choices]``
+      whole, and the keys ``Config`` reads inside ``[project]``/``[engine]``/
+      ``[storage]``/``[output]`` (``config_entries.CONFIG_MANAGED_TABLE_KEYS``);
+    * everything else is written back as parsed: other top-level keys
+      (``[links]``, ``[metrics]``, future tables, which their commands read from
+      the raw TOML) and unknown keys inside those four tables (``[project] homepage``).
+
+    Values survive; comments and layout do not (the file is re-serialized).
+    ``[output] commit`` is always written explicitly (``false`` unless the file
+    already chose otherwise) so the output policy is discoverable.
+
+    Raises ``ConfigError`` (exit 2) for a committed file ``Config`` would misread
+    — including one missing a required key (``[engine] version``…) that only the
+    local file supplies: init neither copies that personal value into the
+    committed file nor guesses a team-wide one. Last, the planned config with
+    the local file merged on top must load (``FileSystemStateSource.preview_config``):
+    only init's final sync would otherwise load it, after the committed files
+    were rewritten. Both paths are ``_committed_config``'s, which ``check
+    --refresh`` shares.
     """
-    primary = repo_root / FileSystemStateSource._CONFIG_FILENAME
-
-    facts = detect(repo_root)
-    detector_cache = _facts_to_cache(facts)
-
-    if primary.is_file():
-        # Existing config: load it through the state source, then surgically
-        # update the fields we know about. Anything the user added that we
-        # don't know about is preserved.
-        state = FileSystemStateSource(repo_root=repo_root)
-        existing = state.load_config()
-        existing.project = ProjectMeta(
-            name=answers["name"],
-            kind=answers["kind"],
-            description=answers["description"],
-        )
-        # Adapters: union of existing and new defaults, preserving order.
-        existing_adapters = list(existing.adapters_enabled)
-        for adapter in answers["adapters"]:
-            if adapter not in existing_adapters:
-                existing_adapters.append(adapter)
-        existing.adapters_enabled = existing_adapters
-        existing.overlays_enabled = list(answers["overlays"])
-        existing.detector_cache = detector_cache
-        if existing.output is None:
-            existing.output = OutputConfig(commit=False)
-        config = existing
-    else:
-        config = Config(
-            schema_version=1,
-            project=ProjectMeta(
-                name=answers["name"],
-                kind=answers["kind"],
-                description=answers["description"],
-            ),
-            engine_version=_engine_version,
-            overlays_enabled=list(answers["overlays"]),
-            adapters_enabled=list(answers["adapters"]),
-            storage=StorageConfig(),
-            detector_cache=detector_cache,
-            output=OutputConfig(commit=False),
-        )
-
-    state = FileSystemStateSource(repo_root=repo_root)
-    state.save_config(config)
-    return config
+    detector_cache = detector_cache_table(detect(repo_root))
+    if not state.has_committed_config():
+        return plan_first_config(state, _fresh_config(answers, detector_cache))
+    return plan_committed_update(
+        state, lambda committed: _apply_answers(committed, answers, detector_cache)
+    )
 
 
-def _facts_to_cache(facts: Facts) -> dict[str, object]:
-    """Project ``Facts`` into a TOML-serializable shape for the
-    ``detector_cache`` table.
+def _project_meta(answers: _Answers) -> ProjectMeta:
+    """The ``[project]`` table init writes, straight from the answers."""
+    return ProjectMeta(
+        name=answers["name"], kind=answers["kind"], description=answers["description"]
+    )
 
-    ``Facts`` is a ``TypedDict`` with ``total=False``; we treat it as an
-    open mapping at this seam since we only inspect values, not keys.
 
-    Sets are not TOML; lists are. Booleans/strings/ints pass through.
+def _fresh_config(answers: _Answers, detector_cache: dict[str, object]) -> Config:
+    """The config for a repo with no committed file yet (``[output] commit = false``)."""
+    return Config(
+        schema_version=1,
+        project=_project_meta(answers),
+        engine_version=_engine_version,
+        overlays_enabled=list(answers["overlays"]),
+        adapters_enabled=list(answers["adapters"]),
+        storage=StorageConfig(),
+        detector_cache=detector_cache,
+        output=OutputConfig(commit=False),
+    )
+
+
+def _apply_answers(
+    committed: Config, answers: _Answers, detector_cache: dict[str, object]
+) -> Config:
+    """``committed`` updated by a re-run: what each managed field becomes.
+
+    ``[project]`` and ``overlays_enabled`` come from the answers, the adapters are
+    :func:`_adapters_union`, ``[detector_cache]`` is fresh, ``[output]`` is kept
+    (else ``commit = false``); ``[engine]``, ``[storage]`` and the committed
+    ``[user_choices]`` are kept as they are.
+
+    Example::
+
+        >>> _apply_answers(committed, answers, {}).overlays_enabled  # doctest: +SKIP
+        []
     """
-    cache: dict[str, object] = {}
-    for key, value in facts.items():
-        if isinstance(value, set):
-            cache[key] = sorted(value)
-        else:
-            cache[key] = value
-    return cache
+    return dataclasses.replace(
+        committed,
+        project=_project_meta(answers),
+        adapters_enabled=_adapters_union(committed.adapters_enabled, answers["adapters"]),
+        overlays_enabled=list(answers["overlays"]),
+        detector_cache=detector_cache,
+        output=committed.output if committed.output is not None else OutputConfig(commit=False),
+    )
+
+
+def _adapters_union(committed: list[str], answered: list[str]) -> list[str]:
+    """The committed adapters in their order, then each answered one not listed yet.
+
+    A re-run never drops an adapter the team enabled by hand, and adds the
+    answered (default) ones it lacks — e.g. a newly shipped default adapter.
+
+    Example::
+
+        >>> _adapters_union(["continue", "custom"], ["claude_code", "continue"])
+        ['continue', 'custom', 'claude_code']
+    """
+    return [*committed, *(name for name in dict.fromkeys(answered) if name not in committed)]
 
 
 def _write_local_config(repo_root: Path) -> Path:
@@ -294,22 +324,28 @@ def _write_pre_commit(
     return target, merged.messages
 
 
-def _effective_overlays(answers: _Answers, local: Mapping[str, Any]) -> tuple[list[str], str]:
-    """The overlays init's final sync will use, and the setting that lists them.
+def _overlay_lists_to_check(
+    answers: _Answers, local: Mapping[str, Any]
+) -> list[tuple[list[str], str]]:
+    """Each overlay list init must check before writing, with the setting that lists it.
 
-    A local ``overlays_enabled`` replaces the committed list (SPEC §7.2), so when
-    ``.coding-agent-playbook.local.toml`` sets one, that list — not ``--overlays``
-    — is what the sync runs with, and what must be checked.
+    ``--overlays`` always: it is what the committed file gets, so every teammate
+    without a local file syncs with it. And a local ``overlays_enabled`` when
+    ``.coding-agent-playbook.local.toml`` sets one: it replaces the committed
+    list (SPEC §7.2), so it is what init's own final sync runs with. Checking
+    only that one let an unusable ``--overlays`` reach the committed file, where
+    it broke every teammate's ``playbook sync``.
 
     Example::
 
-        >>> _effective_overlays({"overlays": ["a"]}, {"overlays_enabled": ["b"]})  # doctest: +SKIP
-        (['b'], 'overlays_enabled in .coding-agent-playbook.local.toml')
+        >>> _overlay_lists_to_check({"overlays": ["a"]}, {"overlays_enabled": ["b"]})  # doctest: +SKIP
+        [(['a'], '--overlays'), (['b'], 'overlays_enabled in .coding-agent-playbook.local.toml')]
     """
+    lists = [(list(answers["overlays"]), "--overlays")]
     if "overlays_enabled" in local:
         origin = f"overlays_enabled in {FileSystemStateSource._CONFIG_LOCAL_FILENAME}"
-        return list(local["overlays_enabled"]), origin
-    return list(answers["overlays"]), "--overlays"
+        lists.append((list(local["overlays_enabled"]), origin))
+    return lists
 
 
 def _refuse_unusable_overlays(overlays: list[str], origin: str) -> bool:
@@ -335,18 +371,27 @@ def run(args: argparse.Namespace) -> int:
     """Bootstrap the repo: write the config files and pre-commit hooks, then sync.
 
     Exit 2, before writing anything, on a usage error: missing flags, an unusable
-    overlay among those the final sync would use (``--overlays``, or the local
-    file's ``overlays_enabled`` that replaces it), or (raised as ``ConfigError``)
-    a config file the engine would misread — the local one is loaded here, the
-    committed one by ``_write_config`` before its first write.
+    overlay in ``--overlays`` (what the committed file gets) or in the local
+    file's ``overlays_enabled`` (what the final sync uses), or (raised as
+    ``ConfigError``) a config file the engine would misread. Both files are read
+    and checked here — the local one on its own, the committed one on its own,
+    then the config the final sync will load (:func:`_plan_config`) — so a broken
+    file of either kind leaves the repo untouched.
     """
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     answers = _collect_answers(args)
-    local = FileSystemStateSource(repo_root=repo_root).load_local_overrides()
-    if _refuse_unusable_overlays(*_effective_overlays(answers, local)):
+    state = FileSystemStateSource(repo_root=repo_root)
+    local = state.load_local_overrides()
+    refused = [
+        _refuse_unusable_overlays(overlays, origin)
+        for overlays, origin in _overlay_lists_to_check(answers, local)
+    ]
+    if any(refused):
         return 2
+    plan = _plan_config(state, repo_root, answers)
 
-    config = _write_config(repo_root, answers)
+    # Nothing is written above this line.
+    config = plan.save(state)
     local_path = _write_local_config(repo_root)
     gitignore_path = _append_to_gitignore(repo_root)
     pre_commit_path, pre_commit_messages = _write_pre_commit(

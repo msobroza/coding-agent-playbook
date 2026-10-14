@@ -167,7 +167,12 @@ Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
    ```
 
    (`playbook init` writes this file for you, plus `[storage]` and
-   `[detector_cache]` tables; keep its `[engine]` table.)
+   `[detector_cache]` tables; keep its `[engine]` table. Re-running
+   `playbook init`, or `playbook check --refresh` after adding a dependency,
+   rewrites it from the committed file alone: init's answers and the fresh
+   `[detector_cache]` replace their keys, every other value is kept (tables
+   the engine does not manage, such as `[links]` and `[metrics]`, included),
+   but comments and layout are not.)
 
    The enabled lists are top-level keys only, so they go **above the first
    `[table]` header**. Every command that loads the config (`sync`, `check`,
@@ -179,7 +184,9 @@ Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
    appended to the end of the file); a misspelled key such as
    `overlay_enabled`; or a value that is not a list of non-empty strings. A
    personal `.coding-agent-playbook.local.toml` can set `adapters_enabled` too,
-   above its `[user_choices]` header; its list replaces the committed one.
+   above its `[user_choices]` header; its list replaces the committed one for
+   your checkout only — no command writes the local file into the committed
+   config.
 
 3. **Repo-local `playbook/`** — drop in per-repo rules, prompts, skills, or eval
    tasks; anything here wins on `id` collision:
