@@ -46,6 +46,12 @@ class ClaudeCodeAdapter(Adapter):
     #: Native skills root; Claude Code discovers ``.claude/skills/<name>/SKILL.md``.
     _SKILL_WRITER: ClassVar[SkillWriter] = SkillWriter(Path(".claude") / "skills")
 
+    output_locations: ClassVar[tuple[str, ...]] = (
+        ".claude/CLAUDE.md",
+        ".claude/commands/",
+        _SKILL_WRITER.location,
+    )
+
     def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
         # Buffer of (priority, rule_id, rendered_section) tuples populated by
         # ``write_rule``. ``finalize`` sorts by (priority, rule_id) and joins.
@@ -128,27 +134,25 @@ class ClaudeCodeAdapter(Adapter):
     def _output_directories(self, repo_root: Path) -> Iterable[Path]:
         """Only ``.claude/commands/`` uses the first-line sentinel scan.
 
-        ``.claude/skills/`` is cleaned per skill directory by the shared
-        :class:`SkillWriter` (its sentinel is not on line 1).
+        ``.claude/skills/`` is never scanned: stale skill output is settled by
+        ``playbook sync``'s lockfile leftover policy (SPEC §4.2 step 9, §10.8).
         """
         return [repo_root / ".claude" / "commands"]
 
     def cleanup_stale(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
         """Remove generated files that no longer back a current artifact.
 
-        Three output kinds need cleanup:
-
         - ``.claude/commands/``: every first-line-sentinel file not in
           ``written_paths`` is deleted (the ABC's default scan).
-        - ``.claude/skills/``: :meth:`SkillWriter.cleanup` — stale files in
-          engine-owned skill dirs (``SKILL.md`` carries the sentinel) are
-          deleted and emptied dirs removed; user-authored skill dirs are kept.
         - ``.claude/CLAUDE.md``: deleted only if it carries the sentinel and
           was not re-written this sync (``finalize`` skipped it), so a
           user-authored CLAUDE.md is preserved.
+
+        ``.claude/skills/`` is deliberately left alone here: a skill dir mixes
+        engine output with files a user may have edited or added, so only the
+        lockfile leftover policy (pristine + untracked + listed) may delete there.
         """
         deleted = self._default_cleanup(written_paths, repo_root)
-        deleted.extend(self._SKILL_WRITER.cleanup(written_paths, repo_root))
         deleted.extend(self._cleanup_claude_md(written_paths, repo_root))
         return deleted
 

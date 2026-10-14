@@ -54,6 +54,8 @@ class OpenCodeAdapter(Adapter):
     #: Native skills root; OpenCode discovers ``.opencode/skills/<name>/SKILL.md``.
     _SKILL_WRITER: ClassVar[SkillWriter] = SkillWriter(Path(".opencode") / "skills")
 
+    output_locations: ClassVar[tuple[str, ...]] = (".opencode/command/", _SKILL_WRITER.location)
+
     def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
         self._rule_registry = rule_registry
 
@@ -108,20 +110,11 @@ class OpenCodeAdapter(Adapter):
     def _output_directories(self, repo_root: Path) -> Iterable[Path]:
         """``.opencode/command/`` is scanned by the ABC's first-line sentinel cleanup.
 
-        ``.opencode/skills/`` is cleaned by :meth:`SkillWriter.cleanup` instead.
+        ``.opencode/skills/`` is never scanned: stale skill output is settled by
+        ``playbook sync``'s lockfile leftover policy (SPEC §4.2 step 9, §10.8).
         Per SPEC.md §10.6.4, the OpenCode adapter must not touch
         ``.opencode/agent/``, ``.opencode/plugin/``, ``opencode.json``,
         ``AGENTS.md``, or ``.claude/`` — those belong to the user or to
         sibling adapters.
         """
         return [repo_root / ".opencode" / "command"]
-
-    def cleanup_stale(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
-        """Remove stale ``.opencode/command/`` files and stale engine-owned skills.
-
-        Commands use the ABC's first-line sentinel scan; ``.opencode/skills/``
-        uses :meth:`SkillWriter.cleanup` (user-authored skill dirs are kept).
-        """
-        deleted = self._default_cleanup(written_paths, repo_root)
-        deleted.extend(self._SKILL_WRITER.cleanup(written_paths, repo_root))
-        return deleted

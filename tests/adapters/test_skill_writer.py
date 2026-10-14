@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import stat
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from coding_agent_playbook.adapters import _skill_writer
+from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
 from coding_agent_playbook.adapters._skill_writer import (
     SKILL_FILENAME,
     SkillWriter,
@@ -21,10 +23,17 @@ from coding_agent_playbook.adapters._skill_writer import (
     render_skill_md,
     skill_id_of,
 )
-from coding_agent_playbook.lockfile import LockEntry, Lockfile
+from coding_agent_playbook.commands._output_locations import OutputLocations
+from coding_agent_playbook.commands._sync_orphans import LeftoverPolicy
+from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
+from coding_agent_playbook.orchestrator import installed_output_locations
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from coding_agent_playbook.types import Skill, split_frontmatter
+from tests.fakes import FakeGitClient
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 _ROOTS = (Path(".claude") / "skills", Path(".opencode") / "skills", Path("shared_skills"))
 
@@ -309,7 +318,36 @@ def test_write_skips_symlinked_skill_dir_inside_root(
     assert str(alias) in capsys.readouterr().err
 
 
-# --- ownership + cleanup ---------------------------------------------------
+@needs_symlinks
+def test_write_skips_a_dangling_symlinked_skills_root(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``.claude/skills -> ../.agents/skills`` whose target is gone: warn and skip
+    (regression: ``mkdir`` crashed every later sync with ``FileExistsError``)."""
+    (tmp_path / ".claude").mkdir()
+    root = tmp_path / ".claude" / "skills"
+    root.symlink_to("../.agents/skills", target_is_directory=True)
+
+    writer = SkillWriter(Path(".claude") / "skills")
+    assert writer.write(_make_skill(skill_id="demo"), tmp_path) == []
+
+    assert root.is_symlink()
+    assert not (tmp_path / ".agents").exists()
+    assert f"not writing skills under {root}" in capsys.readouterr().err
+    with _skill_writer.deciding_ownership_against(tmp_path):  # check modes skip it too
+        assert writer.write(_make_skill(skill_id="demo"), tmp_path / "scratch") == []
+
+
+def test_write_skips_a_skills_root_that_is_a_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "shared_skills").write_bytes(b"not a dir\n")
+    assert SkillWriter(Path("shared_skills")).write(_make_skill(skill_id="demo"), tmp_path) == []
+    assert (tmp_path / "shared_skills").read_bytes() == b"not a dir\n"
+    assert "dangling symlink or a file" in capsys.readouterr().err
+
+
+# --- ownership (the writer never deletes) ---------------------------------
 
 
 def test_is_engine_owned_skill_dir(tmp_path: Path) -> None:
@@ -323,86 +361,39 @@ def test_is_engine_owned_skill_dir(tmp_path: Path) -> None:
     assert not is_engine_owned_skill_dir(tmp_path / "s" / "missing")
 
 
-def test_cleanup_missing_root_returns_empty(tmp_path: Path) -> None:
-    assert SkillWriter(Path("shared_skills")).cleanup(set(), tmp_path) == []
-
-
-def test_cleanup_removes_stale_engine_owned_skill_dir(tmp_path: Path) -> None:
-    writer = SkillWriter(Path("shared_skills"))
-    scripts = _seed_tree(tmp_path / "src" / "scripts", {"a.py": b"a\n"})
-    stale_paths = writer.write(_make_skill(skill_id="old", scripts_dir=scripts), tmp_path)
-    current = writer.write(_make_skill(skill_id="new"), tmp_path)
-
-    deleted = writer.cleanup({p.resolve() for p in current}, tmp_path)
-
-    assert sorted(deleted) == sorted(stale_paths)
-    assert not (tmp_path / "shared_skills" / "old").exists()
-    assert (tmp_path / "shared_skills" / "new" / SKILL_FILENAME).is_file()
-
-
-def test_cleanup_removes_stale_files_inside_current_skill(tmp_path: Path) -> None:
-    writer = SkillWriter(Path("shared_skills"))
-    v1 = _seed_tree(tmp_path / "v1", {"keep.py": b"k\n", "old/gone.py": b"g\n"})
-    writer.write(_make_skill(skill_id="demo", scripts_dir=v1), tmp_path)
-    v2 = _seed_tree(tmp_path / "v2", {"keep.py": b"k2\n"})
-    current = writer.write(_make_skill(skill_id="demo", scripts_dir=v2), tmp_path)
-
-    deleted = writer.cleanup({p.resolve() for p in current}, tmp_path)
-
-    scripts_out = tmp_path / "shared_skills" / "demo" / "scripts"
-    assert deleted == [scripts_out / "old" / "gone.py"]
-    assert not (scripts_out / "old").exists()  # emptied dir pruned
-    assert (scripts_out / "keep.py").read_bytes() == b"k2\n"
-
-
-def test_cleanup_preserves_user_authored_skill_dirs(tmp_path: Path) -> None:
-    user_dir = _seed_tree(
-        tmp_path / "shared_skills" / "mine",
-        {"SKILL.md": b"---\nname: mine\ndescription: d\n---\nbody\n", "scripts/x.py": b"x\n"},
-    )
-    no_md = _seed_tree(tmp_path / "shared_skills" / "bare", {"note.md": f"{SENTINEL}\n".encode()})
-    before = {**_tree_bytes(user_dir), **_tree_bytes(no_md)}
-
-    deleted = SkillWriter(Path("shared_skills")).cleanup(set(), tmp_path)
-
-    assert deleted == []
-    assert {**_tree_bytes(user_dir), **_tree_bytes(no_md)} == before
-
-
-def test_cleanup_tolerates_binary_files(tmp_path: Path) -> None:
-    writer = SkillWriter(Path("shared_skills"))
-    writer.write(_make_skill(skill_id="ours"), tmp_path)
-    stale_binary = tmp_path / "shared_skills" / "ours" / "blob.bin"
-    stale_binary.write_bytes(b"\x80\x81\xff\xfe")
-    user_dir = _seed_tree(tmp_path / "shared_skills" / "theirs", {"SKILL.md": b"\x80\x81\xff"})
-
-    deleted = writer.cleanup(set(), tmp_path)
-
-    assert stale_binary in deleted
-    assert not (tmp_path / "shared_skills" / "ours").exists()
-    assert (user_dir / "SKILL.md").read_bytes() == b"\x80\x81\xff"
+def test_is_engine_owned_skill_dir_tolerates_binary_skill_md(tmp_path: Path) -> None:
+    theirs = _seed_tree(tmp_path / "s" / "theirs", {"SKILL.md": b"\x80\x81\xff"})
+    assert not is_engine_owned_skill_dir(theirs)
 
 
 @needs_symlinks
-def test_cleanup_never_follows_or_deletes_symlinks(tmp_path: Path) -> None:
-    outside = _seed_tree(tmp_path / "outside", {"precious.txt": b"p\n"})
+def test_is_engine_owned_skill_dir_rejects_symlinks(tmp_path: Path) -> None:
     foreign = _seed_tree(
-        tmp_path / "foreign-skill", {"SKILL.md": f"---\nname: f\n---\n{SENTINEL}\n".encode()}
+        tmp_path / "foreign", {"SKILL.md": f"---\nname: f\n---\n{SENTINEL}\n".encode()}
     )
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "alias").symlink_to(foreign, target_is_directory=True)
+    assert not is_engine_owned_skill_dir(tmp_path / "s" / "alias")
+
+
+def test_writer_never_deletes_stale_files(tmp_path: Path) -> None:
+    """Superseded A-era cleanup: stale output is settled by sync's lockfile leftover
+    policy (SPEC §4.2 step 9), never by the writer — rewriting a skill without a
+    script leaves the old copy (and any user file) where it is."""
     writer = SkillWriter(Path("shared_skills"))
-    writer.write(_make_skill(skill_id="ours"), tmp_path)
-    ours = tmp_path / "shared_skills" / "ours"
-    (ours / "linked-dir").symlink_to(outside, target_is_directory=True)
-    (ours / "linked-file").symlink_to(outside / "precious.txt")
-    (tmp_path / "shared_skills" / "foreign").symlink_to(foreign, target_is_directory=True)
+    v1 = _seed_tree(tmp_path / "v1", {"keep.py": b"k\n", "gone.py": b"g\n"})
+    writer.write(_make_skill(skill_id="demo", scripts_dir=v1), tmp_path)
+    user_file = tmp_path / "shared_skills" / "demo" / "notes.md"
+    user_file.write_bytes(b"mine\n")
+    v2 = _seed_tree(tmp_path / "v2", {"keep.py": b"k2\n"})
 
-    deleted = writer.cleanup(set(), tmp_path)
+    written = writer.write(_make_skill(skill_id="demo", scripts_dir=v2), tmp_path)
 
-    assert deleted == [ours / SKILL_FILENAME]
-    assert (outside / "precious.txt").read_bytes() == b"p\n"
-    assert (foreign / "SKILL.md").is_file()
-    assert (ours / "linked-dir").is_symlink()
-    assert (ours / "linked-file").is_symlink()
+    scripts_out = tmp_path / "shared_skills" / "demo" / "scripts"
+    assert scripts_out / "gone.py" not in written
+    assert (scripts_out / "gone.py").read_bytes() == b"g\n"
+    assert user_file.read_bytes() == b"mine\n"
+    assert not hasattr(writer, "cleanup")
 
 
 # --- ownership is decided before writing (review finding: data loss) --------
@@ -418,15 +409,35 @@ def _fs_is_case_insensitive(probe_dir: Path) -> bool:
 
 
 def _save_lockfile(repo: Path, *rel_paths: str) -> None:
-    entries = [LockEntry(path=rel, sha256="0" * 64, bytes=0) for rel in rel_paths]
+    """Record ``rel_paths`` with their current bytes, as ``playbook sync`` would."""
+    entries = []
+    for rel in rel_paths:
+        content = (repo / rel).read_bytes()
+        entries.append(LockEntry(path=rel, sha256=compute_hash(content), bytes=len(content)))
     lockfile = Lockfile(schema_version=1, engine_version="0", rendered_at="t", entries=entries)
     FileSystemStateSource(repo_root=repo).save_lockfile(lockfile)
+
+
+@contextlib.contextmanager
+def _under_sync_policy(
+    repo: Path, git: FakeGitClient | None = None, *, keep_all: bool = False
+) -> Iterator[LeftoverPolicy]:
+    """Run writes under the leftover policy write-mode ``playbook sync`` installs."""
+    policy = LeftoverPolicy(
+        previous=FileSystemStateSource(repo_root=repo).load_lockfile(),
+        repo_root=repo,
+        git=git or FakeGitClient(),
+        keep_all=keep_all,
+        locations=OutputLocations.declared(installed_output_locations(), repo),
+    )
+    with judging_leftovers_with(policy.may_delete):
+        yield policy
 
 
 def test_write_skips_user_authored_dir_with_colliding_id(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A hand-written ``<root>/<id>/`` (no sentinel) keeps every file, before and after cleanup."""
+    """A hand-written ``<root>/<id>/`` (no sentinel) keeps every file."""
     user_dir = _seed_tree(
         tmp_path / "shared_skills" / "deploy",
         {
@@ -439,10 +450,8 @@ def test_write_skips_user_authored_dir_with_colliding_id(
     writer = SkillWriter(Path("shared_skills"))
 
     written = writer.write(_make_skill(skill_id="deploy"), tmp_path)
-    deleted = writer.cleanup({p.resolve() for p in written}, tmp_path)
 
     assert written == []
-    assert deleted == []
     assert _tree_bytes(user_dir) == before
     err = capsys.readouterr().err
     assert str(user_dir) in err
@@ -470,7 +479,8 @@ def test_write_claims_empty_existing_dir(tmp_path: Path) -> None:
 
 def test_write_claims_legacy_sentinel_less_dir_listed_in_prior_lockfile(tmp_path: Path) -> None:
     """Pre-sentinel engines wrote ``.claude/skills/<id>/`` without a sentinel; the lockfile
-    proves ownership, so an upgrade takes the dir over and cleans its stale files."""
+    proves ownership, so an upgrade takes the dir over. Its stale files are left to
+    sync's lockfile leftover policy, never deleted by the writer."""
     legacy = _seed_tree(
         tmp_path / ".claude" / "skills" / "demo",
         {"SKILL.md": b"---\nid: demo\n---\nold\n", "scripts/old.py": b"o\n"},
@@ -479,11 +489,32 @@ def test_write_claims_legacy_sentinel_less_dir_listed_in_prior_lockfile(tmp_path
     writer = SkillWriter(Path(".claude") / "skills")
 
     written = writer.write(_make_skill(skill_id="demo"), tmp_path)
-    deleted = writer.cleanup({p.resolve() for p in written}, tmp_path)
 
     assert written == [legacy / SKILL_FILENAME]
     assert SENTINEL in (legacy / SKILL_FILENAME).read_text(encoding="utf-8")
-    assert deleted == [legacy / "scripts" / "old.py"]
+    assert (legacy / "scripts" / "old.py").read_bytes() == b"o\n"
+
+
+def test_write_skips_listed_sentinel_less_dir_whose_skill_md_changed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression: the lockfile also carries kept (edited) leftovers, so "listed" alone
+    would let the engine re-claim a dir the user adopted (rewrote ``SKILL.md`` without
+    the sentinel) and silently overwrite their files. Only unchanged bytes prove it."""
+    adopted = _seed_tree(
+        tmp_path / ".claude" / "skills" / "demo",
+        {"SKILL.md": b"---\nid: demo\n---\nold\n", "scripts/run.sh": b"echo 1\n"},
+    )
+    _save_lockfile(tmp_path, ".claude/skills/demo/SKILL.md", ".claude/skills/demo/scripts/run.sh")
+    (adopted / "SKILL.md").write_bytes(b"MY OWN INSTRUCTIONS\n")
+    (adopted / "scripts" / "run.sh").write_bytes(b"echo mine\n")
+    before = _tree_bytes(adopted)
+
+    written = SkillWriter(Path(".claude") / "skills").write(_make_skill(skill_id="demo"), tmp_path)
+
+    assert written == []
+    assert _tree_bytes(adopted) == before
+    assert "not playbook-managed" in capsys.readouterr().err
 
 
 def test_write_skips_sentinel_less_dir_when_lockfile_is_unreadable(tmp_path: Path) -> None:
@@ -497,34 +528,172 @@ def test_write_skips_sentinel_less_dir_when_lockfile_is_unreadable(tmp_path: Pat
 # --- rewrites over changed on-disk shapes (review findings) -----------------
 
 
+def _sync_like_write(writer: SkillWriter, skill: Skill, repo: Path) -> list[Path]:
+    """Write ``skill`` and record it in the lockfile, as ``playbook sync`` would."""
+    written = writer.write(skill, repo)
+    _save_lockfile(repo, *(path.relative_to(repo).as_posix() for path in written))
+    return written
+
+
 def test_rewrite_handles_reference_file_becoming_a_folder(tmp_path: Path) -> None:
     writer = SkillWriter(Path("shared_skills"))
     v1 = _seed_tree(tmp_path / "v1", {"api": b"flat\n"})
-    writer.write(_make_skill(skill_id="demo", references_dir=v1), tmp_path)
+    _sync_like_write(writer, _make_skill(skill_id="demo", references_dir=v1), tmp_path)
     v2 = _seed_tree(tmp_path / "v2", {"api/v1.md": b"nested\n"})
 
-    written = writer.write(_make_skill(skill_id="demo", references_dir=v2), tmp_path)
-    deleted = writer.cleanup({p.resolve() for p in written}, tmp_path)
+    with _under_sync_policy(tmp_path) as policy:
+        written = writer.write(_make_skill(skill_id="demo", references_dir=v2), tmp_path)
 
     refs = tmp_path / "shared_skills" / "demo" / "references"
     assert (refs / "api" / "v1.md").read_bytes() == b"nested\n"
     assert refs / "api" / "v1.md" in written
-    assert deleted == []
+    assert policy.displaced == [refs / "api"]  # counted as removed by sync
 
 
 def test_rewrite_handles_reference_folder_becoming_a_file(tmp_path: Path) -> None:
     writer = SkillWriter(Path("shared_skills"))
-    v1 = _seed_tree(tmp_path / "v1", {"api/v1.md": b"nested\n"})
-    writer.write(_make_skill(skill_id="demo", references_dir=v1), tmp_path)
+    v1 = _seed_tree(tmp_path / "v1", {"api/v1.md": b"nested\n", "api/deep/x.md": b"x\n"})
+    _sync_like_write(writer, _make_skill(skill_id="demo", references_dir=v1), tmp_path)
     v2 = _seed_tree(tmp_path / "v2", {"api": b"flat\n"})
 
-    written = writer.write(_make_skill(skill_id="demo", references_dir=v2), tmp_path)
-    writer.cleanup({p.resolve() for p in written}, tmp_path)
+    with _under_sync_policy(tmp_path) as policy:
+        written = writer.write(_make_skill(skill_id="demo", references_dir=v2), tmp_path)
 
     api = tmp_path / "shared_skills" / "demo" / "references" / "api"
     assert api.is_file()
     assert api.read_bytes() == b"flat\n"
     assert all(path.is_file() for path in written)  # never records a directory
+    assert sorted(policy.displaced) == [api / "deep" / "x.md", api / "v1.md"]
+
+
+# --- a swap displaces only what the leftover policy would delete (U1) ----------
+
+
+def _flip_reference_folder_to_file(
+    tmp_path: Path, *, edit: bool = False
+) -> tuple[SkillWriter, Skill, Path]:
+    """Sync ``references/api/v1.md``; return the writer, a skill whose ``api`` is a file,
+    and the old (optionally user-edited) ``v1.md``."""
+    writer = SkillWriter(Path("shared_skills"))
+    v1 = _seed_tree(tmp_path / "v1", {"api/v1.md": b"nested\n"})
+    _sync_like_write(writer, _make_skill(skill_id="demo", references_dir=v1), tmp_path)
+    old = tmp_path / "shared_skills" / "demo" / "references" / "api" / "v1.md"
+    if edit:
+        old.write_bytes(b"MY IMPORTANT EDITS\n")
+    v2 = _seed_tree(tmp_path / "v2", {"api": b"flat\n"})
+    return writer, _make_skill(skill_id="demo", references_dir=v2), old
+
+
+def test_swap_never_displaces_an_edited_leftover(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    writer, skill, old = _flip_reference_folder_to_file(tmp_path, edit=True)
+
+    with _under_sync_policy(tmp_path) as policy:
+        written = writer.write(skill, tmp_path)
+
+    assert old.read_bytes() == b"MY IMPORTANT EDITS\n"
+    assert old.parent not in written
+    assert policy.displaced == []
+    assert f"not writing {old.parent}" in capsys.readouterr().err
+
+
+def test_swap_never_displaces_a_tracked_leftover(tmp_path: Path) -> None:
+    writer, skill, old = _flip_reference_folder_to_file(tmp_path)
+    git = FakeGitClient(tracked={"shared_skills/demo/references/api/v1.md"})
+
+    with _under_sync_policy(tmp_path, git):
+        writer.write(skill, tmp_path)
+
+    assert old.read_bytes() == b"nested\n"
+
+
+def test_swap_with_a_missing_adapter_displaces_nothing(tmp_path: Path) -> None:
+    writer, skill, old = _flip_reference_folder_to_file(tmp_path)
+
+    with _under_sync_policy(tmp_path, keep_all=True):
+        writer.write(skill, tmp_path)
+
+    assert old.read_bytes() == b"nested\n"
+
+
+def test_swap_outside_a_sync_displaces_nothing(tmp_path: Path) -> None:
+    """No leftover policy installed (the writer used on its own): fail safe."""
+    writer, skill, old = _flip_reference_folder_to_file(tmp_path)
+
+    writer.write(skill, tmp_path)
+
+    assert old.read_bytes() == b"nested\n"
+
+
+def test_file_becoming_a_folder_never_displaces_an_edited_leftover(tmp_path: Path) -> None:
+    writer = SkillWriter(Path("shared_skills"))
+    v1 = _seed_tree(tmp_path / "v1", {"tool": b"#!/bin/sh\n"})
+    _sync_like_write(writer, _make_skill(skill_id="demo", scripts_dir=v1), tmp_path)
+    tool = tmp_path / "shared_skills" / "demo" / "scripts" / "tool"
+    tool.write_bytes(b"# my important local edits\n")
+    v2 = _seed_tree(tmp_path / "v2", {"tool/main.sh": b"#!/bin/sh\n"})
+
+    with _under_sync_policy(tmp_path):
+        writer.write(_make_skill(skill_id="demo", scripts_dir=v2), tmp_path)
+
+    assert tool.read_bytes() == b"# my important local edits\n"
+
+
+# --- a file/folder swap never deletes a file the engine did not write -----------
+
+
+def test_folder_becoming_a_file_never_deletes_a_user_file_inside_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    writer = SkillWriter(Path("shared_skills"))
+    v1 = _seed_tree(tmp_path / "v1", {"api/v1.md": b"nested\n"})
+    _sync_like_write(writer, _make_skill(skill_id="demo", references_dir=v1), tmp_path)
+    api = tmp_path / "shared_skills" / "demo" / "references" / "api"
+    (api / "mine.md").write_bytes(b"user notes\n")
+    v2 = _seed_tree(tmp_path / "v2", {"api": b"flat\n", "other.md": b"o\n"})
+
+    with _under_sync_policy(tmp_path):
+        written = writer.write(_make_skill(skill_id="demo", references_dir=v2), tmp_path)
+
+    assert (api / "mine.md").read_bytes() == b"user notes\n"
+    assert (api / "v1.md").read_bytes() == b"nested\n"  # nothing partially removed
+    assert api not in written
+    assert api.parent / "other.md" in written  # the rest of the skill is still written
+    assert f"not writing {api}" in capsys.readouterr().err
+
+
+def test_file_becoming_a_folder_never_deletes_a_user_file_in_the_way(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    writer = SkillWriter(Path("shared_skills"))
+    _sync_like_write(writer, _make_skill(skill_id="demo"), tmp_path)
+    user_file = tmp_path / "shared_skills" / "demo" / "references"
+    user_file.write_bytes(b"not ours\n")  # never in the lockfile
+    v2 = _seed_tree(tmp_path / "v2", {"api.md": b"a\n"})
+
+    with _under_sync_policy(tmp_path):
+        written = writer.write(_make_skill(skill_id="demo", references_dir=v2), tmp_path)
+
+    assert user_file.read_bytes() == b"not ours\n"
+    assert written == [tmp_path / "shared_skills" / "demo" / SKILL_FILENAME]
+    assert "is in the way" in capsys.readouterr().err
+
+
+@needs_symlinks
+def test_folder_with_a_symlink_inside_is_never_displaced(tmp_path: Path) -> None:
+    writer = SkillWriter(Path("shared_skills"))
+    v1 = _seed_tree(tmp_path / "v1", {"api/v1.md": b"nested\n"})
+    _sync_like_write(writer, _make_skill(skill_id="demo", references_dir=v1), tmp_path)
+    api = tmp_path / "shared_skills" / "demo" / "references" / "api"
+    (api / "link").symlink_to(tmp_path / "v1", target_is_directory=True)
+    v2 = _seed_tree(tmp_path / "v2", {"api": b"flat\n"})
+
+    with _under_sync_policy(tmp_path):
+        writer.write(_make_skill(skill_id="demo", references_dir=v2), tmp_path)
+
+    assert (api / "link").is_symlink()
+    assert (tmp_path / "v1" / "api" / "v1.md").is_file()
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
@@ -543,94 +712,75 @@ def test_rewrite_over_read_only_copy_from_earlier_sync(tmp_path: Path) -> None:
     assert out.read_bytes() == b"#!/bin/sh\necho 2\n"
 
 
-# --- cleanup matches written files by identity, not path spelling -----------
-
-
-def test_cleanup_keeps_written_files_under_a_relative_repo_root(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """``playbook sync --repo-root rel`` walks relative paths while ``written_paths``
-    holds resolved ones; nothing written this sync may be deleted."""
-    monkeypatch.chdir(tmp_path)
-    scripts = _seed_tree(tmp_path / "src" / "scripts", {"a.py": b"a\n"})
-    writer = SkillWriter(Path("shared_skills"))
-    writer.write(_make_skill(skill_id="old"), Path("repo"))
-    written = writer.write(_make_skill(skill_id="demo", scripts_dir=scripts), Path("repo"))
-
-    deleted = writer.cleanup({p.resolve() for p in written}, Path("repo"))
-
-    assert deleted == [Path("repo") / "shared_skills" / "old" / SKILL_FILENAME]
-    assert all(path.is_file() for path in written)
-
-
-@needs_symlinks
-def test_cleanup_keeps_written_files_under_a_symlinked_repo_root(tmp_path: Path) -> None:
-    real = tmp_path / "real"
-    real.mkdir()
-    link = tmp_path / "link"
-    link.symlink_to(real, target_is_directory=True)
-    writer = SkillWriter(Path("shared_skills"))
-    written = writer.write(_make_skill(skill_id="demo"), link)
-
-    assert writer.cleanup({p.resolve() for p in written}, link) == []
-    assert (real / "shared_skills" / "demo" / SKILL_FILENAME).is_file()
-
-
-@needs_symlinks
-def test_cleanup_compares_file_identity_not_path_spelling(tmp_path: Path) -> None:
-    writer = SkillWriter(Path("shared_skills"))
-    [skill_md] = writer.write(_make_skill(skill_id="demo"), tmp_path)
-    alias = tmp_path / "hardlink-to-skill-md"
-    os.link(skill_md, alias)
-
-    assert writer.cleanup({alias}, tmp_path) == []
-    assert skill_md.is_file()
+# --- case-only id renames ----------------------------------------------------
 
 
 def test_case_only_id_rename_keeps_skill_on_case_insensitive_fs(tmp_path: Path) -> None:
-    """Default macOS APFS / Windows: ``QueryDB`` -> ``querydb`` must not delete the skill."""
+    """Default macOS APFS / Windows: ``QueryDB`` -> ``querydb`` renames the dir in place."""
     if not _fs_is_case_insensitive(tmp_path):
         pytest.skip("needs a case-insensitive filesystem")
     writer = SkillWriter(Path("shared_skills"))
     writer.write(_make_skill(skill_id="QueryDB"), tmp_path)
 
     written = writer.write(_make_skill(skill_id="querydb"), tmp_path)
-    deleted = writer.cleanup({p.resolve() for p in written}, tmp_path)
 
-    assert deleted == []
+    assert written == [tmp_path / "shared_skills" / "querydb" / SKILL_FILENAME]
     assert [entry.name for entry in (tmp_path / "shared_skills").iterdir()] == ["querydb"]
     text = (tmp_path / "shared_skills" / "querydb" / SKILL_FILENAME).read_text(encoding="utf-8")
     assert text.startswith("---\nname: querydb\n")
 
 
-def test_case_only_id_rename_cleans_old_dir_on_case_sensitive_fs(tmp_path: Path) -> None:
+def test_case_only_id_rename_writes_a_new_dir_on_case_sensitive_fs(tmp_path: Path) -> None:
+    """The old dir is a separate leftover there; sync's leftover policy removes it."""
     if _fs_is_case_insensitive(tmp_path):
         pytest.skip("needs a case-sensitive filesystem")
     writer = SkillWriter(Path("shared_skills"))
     writer.write(_make_skill(skill_id="QueryDB"), tmp_path)
 
-    written = writer.write(_make_skill(skill_id="querydb"), tmp_path)
-    deleted = writer.cleanup({p.resolve() for p in written}, tmp_path)
+    writer.write(_make_skill(skill_id="querydb"), tmp_path)
 
-    assert deleted == [tmp_path / "shared_skills" / "QueryDB" / SKILL_FILENAME]
-    assert [entry.name for entry in (tmp_path / "shared_skills").iterdir()] == ["querydb"]
+    names = sorted(entry.name for entry in (tmp_path / "shared_skills").iterdir())
+    assert names == ["QueryDB", "querydb"]
 
 
-def test_file_identities_skip_missing_paths(tmp_path: Path) -> None:
+def test_is_same_file_is_false_for_missing_paths(tmp_path: Path) -> None:
     present = tmp_path / "present.txt"
     present.write_bytes(b"x")
-    missing = tmp_path / "missing.txt"
-
-    assert _skill_writer._file_identity(missing) is None
-    assert _skill_writer._file_identities([present, missing]) == {
-        (present.stat().st_dev, present.stat().st_ino)
-    }
-    assert not _skill_writer._is_same_file(present, missing)
+    assert _skill_writer._is_same_file(present, present)
+    assert not _skill_writer._is_same_file(present, tmp_path / "missing.txt")
 
 
-def test_cleanup_tolerates_written_paths_that_no_longer_exist(tmp_path: Path) -> None:
+# --- check modes decide ownership against the real tree (SPEC §12.3) ---------
+
+
+def test_ownership_is_decided_against_the_real_tree_when_rendering_elsewhere(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--check`` renders into an empty scratch dir; a user-owned dir in the real
+    repo must be skipped there too, else the check reports false drift."""
+    real, scratch = tmp_path / "real", tmp_path / "scratch"
+    user_dir = _seed_tree(real / "shared_skills" / "deploy", {"SKILL.md": b"---\nname: x\n---\n"})
     writer = SkillWriter(Path("shared_skills"))
-    written = writer.write(_make_skill(skill_id="demo"), tmp_path)
-    gone = tmp_path / "removed-by-another-adapter.md"
 
-    assert writer.cleanup({*(p.resolve() for p in written), gone}, tmp_path) == []
+    with _skill_writer.deciding_ownership_against(real):
+        assert writer.write(_make_skill(skill_id="deploy"), scratch) == []
+        written = writer.write(_make_skill(skill_id="fresh"), scratch)
+
+    assert written == [scratch / "shared_skills" / "fresh" / SKILL_FILENAME]
+    assert not (scratch / "shared_skills" / "deploy").exists()
+    assert str(user_dir) in capsys.readouterr().err  # names the real dir, not scratch
+    # Outside the context the scratch tree decides again (nothing there to collide).
+    assert writer.write(_make_skill(skill_id="deploy"), scratch) != []
+
+
+def test_check_mode_ownership_honours_the_real_lockfile_legacy_claim(tmp_path: Path) -> None:
+    real, scratch = tmp_path / "real", tmp_path / "scratch"
+    _seed_tree(real / ".claude" / "skills" / "demo", {"SKILL.md": b"---\nid: demo\n---\nold\n"})
+    _save_lockfile(real, ".claude/skills/demo/SKILL.md")
+    writer = SkillWriter(Path(".claude") / "skills")
+
+    with _skill_writer.deciding_ownership_against(real):
+        written = writer.write(_make_skill(skill_id="demo"), scratch)
+
+    assert written == [scratch / ".claude" / "skills" / "demo" / SKILL_FILENAME]
+    assert b"old" in (real / ".claude" / "skills" / "demo" / SKILL_FILENAME).read_bytes()

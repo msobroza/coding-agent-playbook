@@ -16,6 +16,8 @@ import stat
 from importlib import metadata
 from typing import TYPE_CHECKING
 
+import pytest
+
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.harness.manifest import read_manifest
@@ -272,6 +274,25 @@ def test_harness_md_indexes_top_level_dirs(tmp_path):
         assert top in content
 
 
+def test_harness_md_indexes_what_it_emits_not_what_is_on_disk(tmp_path):
+    """Regression: the index listed any top-level dir present on disk, so a leftover
+    (or the user's own) ``skills/`` changed HARNESS.md, and ``sync --check`` — which
+    renders into an empty scratch dir — reported drift forever."""
+    rendered = []
+    for repo in (tmp_path / "with-dirs", tmp_path / "empty"):
+        repo.mkdir()
+        adapter = AgentHarnessAdapter()
+        _populate(adapter, _make_rule(scope="always"), repo_root=repo)
+        if repo.name == "with-dirs":
+            for leftover in ("skills/old/scripts", "prompts", "references"):
+                (repo / leftover).mkdir(parents=True)
+        adapter.finalize(repo)
+        rendered.append((repo / "HARNESS.md").read_text(encoding="utf-8").replace(repo.name, "R"))
+    assert rendered[0] == rendered[1]
+    assert "`rules/`" in rendered[0]
+    assert "`skills/`" not in rendered[0]
+
+
 # --- routing files ---------------------------------------------------------
 
 
@@ -520,7 +541,12 @@ def test_cleanup_deletes_stale_sentinel_file_preserves_user_file(tmp_path):
     assert user_file.exists()
 
 
-def test_cleanup_deletes_stale_script_via_prior_manifest(tmp_path):
+def test_cleanup_never_deletes_inside_a_skill_dir(tmp_path):
+    """Superseded: cleanup used to delete a removed skill's ``SKILL.md`` and (via the
+    prior manifest) its scripts — even a user-edited script. A skill dir mixes engine
+    output with user edits, so only ``playbook sync``'s lockfile leftover policy
+    (pristine + untracked + listed, SPEC §4.2 step 9) deletes there; the routing
+    file ``skills/SKILLS.md`` (not inside a skill dir) is still cleaned here."""
     scripts_src = tmp_path / "src_scripts"
     scripts_src.mkdir()
     (scripts_src / "run.py").write_text("print('x')\n", encoding="utf-8")
@@ -528,23 +554,42 @@ def test_cleanup_deletes_stale_script_via_prior_manifest(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     adapter = AgentHarnessAdapter()
-    _populate(
-        adapter,
-        _make_skill(skill_id="s1", scripts_dir=scripts_src),
-        repo_root=repo,
-    )
+    _populate(adapter, _make_skill(skill_id="s1", scripts_dir=scripts_src), repo_root=repo)
     adapter.finalize(repo)
     script = repo / "skills" / "s1" / "scripts" / "run.py"
-    assert script.is_file()
+    script.write_text("print('edited by hand')\n", encoding="utf-8")
 
-    # Re-sync without the skill: the script (non-sentinel) must be cleaned via
-    # the PRIOR manifest, which finalize reads at its start before overwriting.
     adapter2 = AgentHarnessAdapter()
+    _populate(adapter2, _make_rule(scope="always"), repo_root=repo)
     written2 = adapter2.finalize(repo)
-    resolved = {p.resolve() for p in written2}
-    deleted = adapter2.cleanup_stale(resolved, repo)
-    assert script.resolve() in {p.resolve() for p in deleted}
-    assert not script.exists()
+    deleted = adapter2.cleanup_stale({p.resolve() for p in written2}, repo)
+
+    assert script.read_text(encoding="utf-8") == "print('edited by hand')\n"
+    assert (repo / "skills" / "s1" / "SKILL.md").is_file()
+    assert deleted == [repo / "skills" / "SKILLS.md"]
+
+
+def test_cleanup_keeps_fresh_output_after_a_case_only_rename(tmp_path):
+    """Case-insensitive FS: ``skills/Demo/SKILL.md`` *is* the just-written
+    ``skills/demo/SKILL.md`` — comparing spellings deleted it on every sync."""
+    probe = tmp_path / "CaseProbe"
+    probe.mkdir()
+    insensitive = (tmp_path / "caseprobe").exists()
+    probe.rmdir()
+    if not insensitive:
+        pytest.skip("needs a case-insensitive filesystem")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    first = AgentHarnessAdapter()
+    _populate(first, _make_prompt(slash="Review"), repo_root=repo)
+    first.finalize(repo)
+
+    second = AgentHarnessAdapter()
+    _populate(second, _make_prompt(slash="review"), repo_root=repo)
+    written = second.finalize(repo)
+
+    assert second.cleanup_stale({p.resolve() for p in written}, repo) == []
+    assert (repo / "prompts" / "review" / "SKILL.md").is_file()
 
 
 def test_cleanup_preserves_user_authored_non_sentinel_script_not_in_manifest(tmp_path):

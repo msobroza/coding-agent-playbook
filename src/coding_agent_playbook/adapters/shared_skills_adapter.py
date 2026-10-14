@@ -48,6 +48,8 @@ class SharedSkillsAdapter(Adapter):
 
     _SKILL_WRITER: ClassVar[SkillWriter] = SkillWriter(SHARED_SKILLS_ROOT)
 
+    output_locations: ClassVar[tuple[str, ...]] = (_SKILL_WRITER.location,)
+
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
         """Return ``[]`` — rules reach every assistant through ``AGENTS.md``."""
         del rule, repo_root
@@ -59,12 +61,9 @@ class SharedSkillsAdapter(Adapter):
         return []
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
-        """Write ``shared_skills/<id>/`` via the shared :class:`SkillWriter`."""
-        return self._SKILL_WRITER.write(skill, repo_root)
+        """Write ``shared_skills/<id>/`` via the shared :class:`SkillWriter`.
 
-    def cleanup_stale(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
-        """Remove stale files from engine-owned ``shared_skills/<id>/`` dirs.
-
-        User-authored skill dirs (no sentinel in ``SKILL.md``) are never touched.
+        No ``cleanup_stale`` override (the ABC default scans nothing): a removed
+        skill's dir is settled by ``playbook sync``'s lockfile leftover policy.
         """
-        return self._SKILL_WRITER.cleanup(written_paths, repo_root)
+        return self._SKILL_WRITER.write(skill, repo_root)

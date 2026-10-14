@@ -216,6 +216,28 @@ def discover_adapters(
     return discovered
 
 
+def installed_output_locations() -> tuple[str, ...]:
+    """Every ``output_locations`` entry declared by an installed adapter, enabled or not.
+
+    Disabled adapters count: their earlier output is exactly what ``playbook
+    sync`` must still be able to clean up (SPEC §4.2 step 9). An adapter whose
+    entry point fails to load declares nothing, so its output is never deleted.
+
+    Example::
+
+        >>> ".claude/skills/" in installed_output_locations()  # doctest: +SKIP
+        True
+    """
+    locations: list[str] = []
+    for ep in metadata.entry_points(group="coding_agent_playbook.adapters"):
+        try:
+            cls = ep.load()
+        except (ImportError, AttributeError):
+            continue
+        locations.extend(getattr(cls, "output_locations", ()))
+    return tuple(locations)
+
+
 @dataclass
 class SyncContext:
     """Bundle of state every CLI command needs after reading the config.

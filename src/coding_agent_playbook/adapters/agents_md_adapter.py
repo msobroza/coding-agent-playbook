@@ -11,7 +11,7 @@ and finalizes the file).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.renderer import SENTINEL, render_for
@@ -31,6 +31,8 @@ class AgentsMdAdapter(Adapter):
     """
 
     name = "agents_md"
+
+    output_locations: ClassVar[tuple[str, ...]] = ("AGENTS.md",)
 
     def __init__(self) -> None:
         # (priority, rule_id, rendered_section). Buffered now, sorted and

@@ -100,9 +100,10 @@ def test_write_skill_is_byte_identical_to_claude_code(tmp_path: Path) -> None:
     assert shared_md.read_bytes() == claude_md.read_bytes()
 
 
-def test_cleanup_stale_removes_deleted_skill_and_keeps_user_skill(tmp_path: Path) -> None:
+def test_cleanup_stale_never_deletes_skill_files(tmp_path: Path) -> None:
+    """Stale skill dirs are settled by sync's lockfile leftover policy, not here."""
     adapter = SharedSkillsAdapter()
-    adapter.write_skill(_make_skill(skill_id="gone"), tmp_path)
+    [gone_md] = adapter.write_skill(_make_skill(skill_id="gone"), tmp_path)
     kept = adapter.write_skill(_make_skill(skill_id="kept"), tmp_path)
     user_md = tmp_path / "shared_skills" / "hand-written" / "SKILL.md"
     user_md.parent.mkdir(parents=True)
@@ -110,8 +111,8 @@ def test_cleanup_stale_removes_deleted_skill_and_keeps_user_skill(tmp_path: Path
 
     deleted = adapter.cleanup_stale({p.resolve() for p in kept}, tmp_path)
 
-    assert deleted == [tmp_path / "shared_skills" / "gone" / "SKILL.md"]
-    assert not (tmp_path / "shared_skills" / "gone").exists()
+    assert deleted == []
+    assert gone_md.is_file()
     assert kept[0].is_file()
     assert user_md.is_file()
 

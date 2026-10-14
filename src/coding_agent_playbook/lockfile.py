@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def compute_hash(content: bytes) -> str:
@@ -22,6 +25,22 @@ class LockEntry:
     path: str  # relative to repo root, posix forward slashes
     sha256: str
     bytes: int
+
+    def matches_file(self, path: Path) -> bool:
+        """True when ``path``'s bytes still hash to this entry (unchanged engine output).
+
+        The single "pristine" test of the leftover policy (SPEC §4.2 step 9): an
+        unreadable or missing file is never pristine, so it is never deleted.
+
+        Example::
+
+            >>> LockEntry("a.md", compute_hash(b"x"), 1).matches_file(Path("/no/such"))  # doctest: +SKIP
+            False
+        """
+        try:
+            return compute_hash(path.read_bytes()) == self.sha256
+        except OSError:
+            return False
 
 
 @dataclass

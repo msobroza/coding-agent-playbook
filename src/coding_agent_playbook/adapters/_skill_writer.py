@@ -20,9 +20,17 @@ closing fence — the same placement as the ``agent_harness`` adapter (§10.7.3)
 
 Ownership is decided **before** any write: ``<root>/<id>/`` is engine-owned iff
 its ``SKILL.md`` carries the sentinel anywhere (or the previous sync's lockfile
-lists it — pre-sentinel engines wrote ``.claude/skills/`` without one). A
-user-authored directory with a colliding id is skipped with a warning, never
-overwritten, and cleanup never touches it.
+lists it with unchanged bytes — pre-sentinel engines wrote ``.claude/skills/``
+without one). A user-authored directory with a colliding id is skipped with a
+warning, never overwritten; so is a skills root that cannot hold directories (a
+dangling symlink or a plain file where it should be). ``playbook sync --check``/``--check-staged`` render into an empty
+scratch dir but decide ownership against the real tree
+(:func:`deciding_ownership_against`), so they skip exactly what write mode skips.
+
+The writer never deletes stale files. Output an earlier sync left behind in a
+skill dir is settled by the one lockfile-based leftover policy
+(``commands/_sync_orphans.py``, SPEC §4.2 step 9): a file the engine never
+wrote is never deleted, even inside an engine-owned dir.
 """
 
 from __future__ import annotations
@@ -32,16 +40,18 @@ import os
 import re
 import shutil
 import sys
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.adapters._prior_output import PriorOutput
 from coding_agent_playbook.harness.emitter import with_sentinel_body
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.types import format_frontmatter
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Iterator
 
     from coding_agent_playbook.types import Skill
 
@@ -61,8 +71,31 @@ _DEFAULT_SKILL_ID = "skill"
 
 _SENTINEL_BYTES = SENTINEL.encode("utf-8")
 
-#: ``(st_dev, st_ino)`` — a file's identity, independent of path spelling.
-_FileIdentity = tuple[int, int]
+#: The real repo root ownership is decided against while rendering elsewhere
+#: (``--check`` renders into an empty scratch dir); ``None`` = the output root.
+_OWNERSHIP_ROOT: ContextVar[Path | None] = ContextVar("playbook_skill_ownership_root", default=None)
+
+
+@contextlib.contextmanager
+def deciding_ownership_against(repo_root: Path) -> Iterator[None]:
+    """Decide skill-dir ownership against ``repo_root`` while writing elsewhere.
+
+    ``playbook sync --check``/``--check-staged`` render into an empty scratch
+    dir, where every ``<root>/<id>/`` is claimable. Inside this context a
+    :class:`SkillWriter` asks the *real* tree instead, so a skill dir write mode
+    would skip (hand-written, symlinked, a plain file) is skipped in the scratch
+    render too — no false drift, and a user's own files are never "generated".
+
+    Example::
+
+        with deciding_ownership_against(repo_root):
+            written = writer.write(skill, scratch_root)  # [] if repo's dir is user-owned
+    """
+    token = _OWNERSHIP_ROOT.set(repo_root)
+    try:
+        yield
+    finally:
+        _OWNERSHIP_ROOT.reset(token)
 
 
 def skill_id_of(skill: Skill) -> str:
@@ -176,16 +209,23 @@ def render_skill_md(skill: Skill) -> str:
 
 @dataclass(frozen=True)
 class SkillWriter:
-    """Write and clean one native skills root (``root`` is repo-relative).
+    """Write one native skills root (``root`` is repo-relative).
+
+    It never deletes stale output: files an earlier sync left in a skill dir
+    are settled by ``playbook sync``'s lockfile leftover policy (§4.2 step 9).
 
     Example::
 
         writer = SkillWriter(Path(".claude") / "skills")
-        written = writer.write(skill, repo_root)        # SKILL.md + scripts/ + references/
-        removed = writer.cleanup({p.resolve() for p in written}, repo_root)
+        written = writer.write(skill, repo_root)  # SKILL.md + scripts/ + references/
     """
 
     root: Path
+
+    @property
+    def location(self) -> str:
+        """The root as an adapter ``output_locations`` directory entry (``".claude/skills/"``)."""
+        return f"{self.root.as_posix()}/"
 
     def skills_root(self, repo_root: Path) -> Path:
         """Return the absolute skills root under ``repo_root``."""
@@ -195,19 +235,34 @@ class SkillWriter:
         """Write ``<root>/<id>/`` for ``skill`` and return every file written.
 
         Returns ``[]`` (and warns on stderr) when ``<root>/<id>/`` already
-        exists and is not engine-owned: a user-authored skill dir is never
-        overwritten. Raises ``ValueError`` for a non-path-safe id or a
-        destination that would resolve outside the skills root (e.g. through
-        a symlink).
+        exists and is not engine-owned — a user-authored skill dir is never
+        overwritten — or when the skills root is unusable (a dangling symlink,
+        a plain file). Ownership is judged under :func:`deciding_ownership_against`'s
+        root when one is active (``--check`` modes), else under ``repo_root``.
+        Raises ``ValueError`` for a non-path-safe id or a destination that
+        would resolve outside the skills root (e.g. through a symlink).
         """
         skill_md_text = render_skill_md(skill)  # validates the id before any I/O
-        skill_dir = self._skill_dir(repo_root, skill_id_of(skill))
-        if not _may_claim(skill_dir, repo_root):
-            _warn_not_engine_owned(skill_dir)
+        skill_id = skill_id_of(skill)
+        owner_root = _OWNERSHIP_ROOT.get() or repo_root
+        unusable = _unusable_component(self.skills_root(owner_root), owner_root)
+        if unusable is not None:
+            _warn_unusable_root(unusable)
             return []
-        return _write_skill_files(skill, skill_md_text, skill_dir)
+        skill_dir = self._skill_dir(repo_root, skill_id)
+        owner_dir = skill_dir if owner_root == repo_root else self._contained(owner_root, skill_id)
+        if not _may_claim(owner_dir, owner_root):
+            _warn_not_engine_owned(owner_dir)
+            return []
+        return _write_skill_files(skill, skill_md_text, skill_dir, PriorOutput(repo_root))
 
     def _skill_dir(self, repo_root: Path, skill_id: str) -> Path:
+        skill_dir = self._contained(repo_root, skill_id)
+        _adopt_case_variant(skill_dir)
+        return skill_dir
+
+    def _contained(self, repo_root: Path, skill_id: str) -> Path:
+        """``<root>/<id>`` under ``repo_root``; ``ValueError`` if it resolves outside the root."""
         root = self.skills_root(repo_root)
         skill_dir = root / ensure_path_safe_skill_id(skill_id)
         if not skill_dir.resolve().is_relative_to(root.resolve()):
@@ -215,32 +270,7 @@ class SkillWriter:
                 f"skill directory {skill_dir} resolves to {skill_dir.resolve()}, "
                 f"outside the skills root {root.resolve()}"
             )
-        _adopt_case_variant(skill_dir)
         return skill_dir
-
-    def cleanup(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
-        """Delete stale files from engine-owned skill dirs; return the deleted paths.
-
-        A ``<root>/<id>/`` is engine-owned iff its ``SKILL.md`` (a regular file,
-        not a symlink) contains the sentinel. In such a dir every regular file
-        that is not one of ``written_paths`` is deleted, then empty directories
-        are pruned (including the skill dir itself). "Is one of" compares file
-        identity (``st_dev``/``st_ino``), not path spelling, so a relative or
-        symlinked ``repo_root`` or a case-insensitive filesystem never deletes a
-        file written this sync. Directories without the sentinel are
-        user-authored and never touched; symlinks are never followed nor deleted.
-        """
-        root = self.skills_root(repo_root)
-        if not root.is_dir():
-            return []
-        written_ids = _file_identities(written_paths)
-        deleted: list[Path] = []
-        for skill_dir in sorted(root.iterdir()):
-            if not is_engine_owned_skill_dir(skill_dir):
-                continue
-            deleted.extend(_delete_unwritten_files(skill_dir, written_ids))
-            _prune_empty_dirs(skill_dir)
-        return deleted
 
 
 def is_engine_owned_skill_dir(skill_dir: Path) -> bool:
@@ -266,10 +296,12 @@ def _may_claim(skill_dir: Path, repo_root: Path) -> bool:
     """Return whether the engine may write into ``skill_dir``.
 
     Claimable: absent, an empty real directory, engine-owned (sentinel), or a
-    real directory whose ``SKILL.md`` the previous sync's lockfile lists (the
-    pre-sentinel ``.claude/skills/`` output). Anything else — a user-authored
-    skill dir, a symlink, a plain file — is left alone, because writing the
-    sentinel ``SKILL.md`` would make cleanup treat the user's files as stale.
+    real directory whose ``SKILL.md`` the previous sync's lockfile lists with
+    unchanged bytes (the pre-sentinel ``.claude/skills/`` output). Anything else
+    — a user-authored skill dir, a symlink, a plain file, a listed ``SKILL.md``
+    the user has since rewritten (an adopted leftover, a stripped sentinel) — is
+    left alone: writing the sentinel ``SKILL.md`` would turn the user's
+    directory into engine output.
     """
     if skill_dir.is_symlink():
         return False
@@ -277,29 +309,11 @@ def _may_claim(skill_dir: Path, repo_root: Path) -> bool:
         return True
     if is_engine_owned_skill_dir(skill_dir) or _is_empty_dir(skill_dir):
         return True
-    return skill_dir.is_dir() and _listed_in_prior_lockfile(skill_dir / SKILL_FILENAME, repo_root)
+    return skill_dir.is_dir() and PriorOutput(repo_root).wrote_unchanged(skill_dir / SKILL_FILENAME)
 
 
 def _is_empty_dir(path: Path) -> bool:
     return path.is_dir() and next(path.iterdir(), None) is None
-
-
-def _listed_in_prior_lockfile(path: Path, repo_root: Path) -> bool:
-    """Return whether the last sync's lockfile records ``path`` as engine-written.
-
-    Any lockfile read/parse failure answers ``False`` — the fail-safe choice,
-    since ``False`` only ever means "leave the directory alone".
-    """
-    # Lazy import: only this rare sentinel-less path needs the lockfile, and
-    # sources.filesystem pulls in the whole eval-loader stack at import time.
-    from coding_agent_playbook.sources.filesystem import FileSystemStateSource
-
-    try:
-        lockfile = FileSystemStateSource(repo_root=repo_root).load_lockfile()
-    except (OSError, ValueError, KeyError, TypeError):  # TOMLDecodeError is a ValueError
-        return False
-    rel = path.relative_to(repo_root).as_posix()
-    return lockfile is not None and lockfile.find(rel) is not None
 
 
 def _warn_not_engine_owned(skill_dir: Path) -> None:
@@ -309,6 +323,34 @@ def _warn_not_engine_owned(skill_dir: Path) -> None:
         f"warning: not writing {skill_dir}: it exists but is not playbook-managed "
         f"(its {SKILL_FILENAME} has no playbook sentinel); rename or remove it to "
         "let 'playbook sync' manage this skill",
+        file=sys.stderr,
+    )
+
+
+def _unusable_component(skills_root: Path, repo_root: Path) -> Path | None:
+    """The first path from ``repo_root`` to ``skills_root`` that cannot be a directory.
+
+    A dangling symlink (e.g. ``.claude/skills -> ../.agents/skills`` after its
+    target was removed) or a plain file: ``mkdir`` would crash through it.
+    """
+    try:
+        parts = skills_root.relative_to(repo_root).parts
+    except ValueError:
+        return None
+    current = repo_root
+    for part in parts:
+        current = current / part
+        if current.is_symlink() and not current.exists():
+            return current
+        if current.exists() and not current.is_dir():
+            return current
+    return None
+
+
+def _warn_unusable_root(blocker: Path) -> None:
+    print(
+        f"warning: not writing skills under {blocker}: it is a dangling symlink or a "
+        "file, not a directory; fix or remove it, then re-run 'playbook sync'",
         file=sys.stderr,
     )
 
@@ -350,27 +392,33 @@ def _is_same_file(first: Path, second: Path) -> bool:
 # --- writing ----------------------------------------------------------------
 
 
-def _write_skill_files(skill: Skill, skill_md_text: str, skill_dir: Path) -> list[Path]:
+def _write_skill_files(
+    skill: Skill, skill_md_text: str, skill_dir: Path, prior: PriorOutput
+) -> list[Path]:
     """Write ``SKILL.md`` plus the copied subtrees into the claimed ``skill_dir``."""
     skill_dir.mkdir(parents=True, exist_ok=True)
     skill_md = skill_dir / SKILL_FILENAME
-    _prepare_destination(skill_md, skill_dir)
+    if not _prepare_destination(skill_md, skill_dir, prior):
+        return []
     skill_md.write_text(skill_md_text, encoding="utf-8")
     written = [skill_md]
-    written.extend(_copy_subtree(skill.scripts_dir, skill_dir / "scripts", skill_dir))
-    written.extend(_copy_subtree(skill.references_dir, skill_dir / "references", skill_dir))
+    written.extend(_copy_subtree(skill.scripts_dir, skill_dir / "scripts", skill_dir, prior))
+    written.extend(_copy_subtree(skill.references_dir, skill_dir / "references", skill_dir, prior))
     return written
 
 
-def _prepare_destination(dst: Path, skill_dir: Path) -> None:
+def _prepare_destination(dst: Path, skill_dir: Path, prior: PriorOutput) -> bool:
     """Make ``dst`` a fresh path for a regular file inside engine-owned ``skill_dir``.
 
     Refuses a parent that resolves outside ``skill_dir`` (an escaping symlink).
-    Otherwise clears whatever is in the way: a file or symlink where a parent
-    directory must go (a file became a folder), a real directory at ``dst`` (a
-    folder became a file), and any existing file or symlink at ``dst`` —
-    unlinked, never written through, so a read-only copy from an earlier sync
-    cannot block the rewrite and the engine never writes outside the root.
+    Otherwise clears whatever is in the way: a symlink where a parent directory
+    must go, and any existing file or symlink at ``dst`` — unlinked, never
+    written through, so a read-only copy from an earlier sync cannot block the
+    rewrite and the engine never writes outside the root. A regular file where
+    a parent directory must go (a file became a folder) or a real directory at
+    ``dst`` (a folder became a file) is displaced only if it holds nothing but
+    files the previous lockfile lists; otherwise ``dst`` is skipped with a
+    warning and ``False`` is returned, so a user file is never deleted.
     """
     # Check before mkdir: resolve() follows any existing symlinked component,
     # so an escaping intermediate directory is refused before anything is created.
@@ -379,9 +427,35 @@ def _prepare_destination(dst: Path, skill_dir: Path) -> None:
             f"refusing to write {dst}: its directory resolves to "
             f"{dst.parent.resolve()}, outside {skill_dir.resolve()}"
         )
+    blocker = _blocker_of(dst, skill_dir)
+    if blocker is not None and not prior.may_displace(blocker):
+        _warn_blocked(dst, blocker)
+        return False
     _clear_non_dir_ancestors(dst, skill_dir)
     dst.parent.mkdir(parents=True, exist_ok=True)
     _remove_existing(dst)
+    return True
+
+
+def _blocker_of(dst: Path, skill_dir: Path) -> Path | None:
+    """The real file where a parent dir of ``dst`` must go, or a real dir at ``dst``.
+
+    Symlinks never block (unlinking one loses no data).
+    """
+    current = skill_dir
+    for part in dst.parent.relative_to(skill_dir).parts:
+        current = current / part
+        if not current.is_symlink() and current.exists() and not current.is_dir():
+            return current
+    return dst if dst.is_dir() and not dst.is_symlink() else None
+
+
+def _warn_blocked(dst: Path, blocker: Path) -> None:
+    print(
+        f"warning: not writing {dst}: {blocker} is in the way and holds files "
+        "'playbook sync' did not write; move them, then re-run 'playbook sync'",
+        file=sys.stderr,
+    )
 
 
 def _clear_non_dir_ancestors(dst: Path, skill_dir: Path) -> None:
@@ -401,62 +475,21 @@ def _remove_existing(dst: Path) -> None:
     dst.unlink(missing_ok=True)
 
 
-def _copy_subtree(src: Path | None, dst_root: Path, skill_dir: Path) -> list[Path]:
+def _copy_subtree(
+    src: Path | None, dst_root: Path, skill_dir: Path, prior: PriorOutput
+) -> list[Path]:
     """Byte-copy every file under ``src`` into ``dst_root`` (``shutil.copy2``).
 
     Returns the destination files in sorted source order; ``[]`` when ``src``
     is absent. Source symlinks are dereferenced (copies, not symlinks). Each
-    recorded path is the file ``copy2`` actually wrote, never a directory.
+    recorded path is the file ``copy2`` actually wrote, never a directory; a
+    destination blocked by user files is skipped (see :func:`_prepare_destination`).
     """
     if src is None or not src.is_dir():
         return []
     written: list[Path] = []
     for source_file in sorted(path for path in src.rglob("*") if path.is_file()):
         dst = dst_root / source_file.relative_to(src)
-        _prepare_destination(dst, skill_dir)
-        written.append(Path(shutil.copy2(source_file, dst)))
+        if _prepare_destination(dst, skill_dir, prior):
+            written.append(Path(shutil.copy2(source_file, dst)))
     return written
-
-
-# --- cleanup ----------------------------------------------------------------
-
-
-def _file_identity(path: Path) -> _FileIdentity | None:
-    """Return ``(st_dev, st_ino)`` of ``path`` (not following symlinks), or ``None``."""
-    try:
-        status = path.stat(follow_symlinks=False)
-    except OSError:
-        return None
-    return (status.st_dev, status.st_ino)
-
-
-def _file_identities(paths: Iterable[Path]) -> set[_FileIdentity]:
-    identities = (_file_identity(path) for path in paths)
-    return {identity for identity in identities if identity is not None}
-
-
-def _iter_regular_files(top: Path) -> Iterator[Path]:
-    """Yield regular (non-symlink) files under ``top`` without following symlinks."""
-    for dirpath, _dirnames, filenames in os.walk(top, followlinks=False):
-        for filename in filenames:
-            path = Path(dirpath) / filename
-            if not path.is_symlink():
-                yield path
-
-
-def _delete_unwritten_files(skill_dir: Path, written_ids: set[_FileIdentity]) -> list[Path]:
-    deleted: list[Path] = []
-    for path in sorted(_iter_regular_files(skill_dir)):
-        identity = _file_identity(path)
-        if identity is None or identity in written_ids:
-            continue
-        path.unlink()
-        deleted.append(path)
-    return deleted
-
-
-def _prune_empty_dirs(top: Path) -> None:
-    """Remove now-empty directories under (and including) ``top``, bottom-up."""
-    for dirpath, _dirnames, _filenames in os.walk(top, topdown=False, followlinks=False):
-        with contextlib.suppress(OSError):
-            Path(dirpath).rmdir()

@@ -131,9 +131,11 @@ def test_write_skill_is_byte_identical_to_claude_code_output(tmp_path: Path) -> 
     assert opencode_md.read_bytes() == claude_md.read_bytes()
 
 
-def test_cleanup_stale_removes_deleted_skill_and_keeps_user_skills(tmp_path: Path) -> None:
+def test_cleanup_stale_never_deletes_skill_files(tmp_path: Path) -> None:
+    """Stale ``.opencode/skills/`` dirs are settled by sync's lockfile leftover
+    policy (SPEC §4.2 step 9), never by the adapter's own cleanup."""
     adapter = OpenCodeAdapter()
-    adapter.write_skill(_make_skill(skill_id="gone"), repo_root=tmp_path)
+    [gone_md] = adapter.write_skill(_make_skill(skill_id="gone"), repo_root=tmp_path)
     kept = adapter.write_skill(_make_skill(skill_id="kept"), repo_root=tmp_path)
     user_md = tmp_path / ".opencode" / "skills" / "mine" / "SKILL.md"
     user_md.parent.mkdir(parents=True)
@@ -141,8 +143,8 @@ def test_cleanup_stale_removes_deleted_skill_and_keeps_user_skills(tmp_path: Pat
 
     deleted = adapter.cleanup_stale({p.resolve() for p in kept}, repo_root=tmp_path)
 
-    assert deleted == [tmp_path / ".opencode" / "skills" / "gone" / "SKILL.md"]
-    assert not (tmp_path / ".opencode" / "skills" / "gone").exists()
+    assert deleted == []
+    assert gone_md.is_file()
     assert kept[0].is_file()
     assert user_md.is_file()
 

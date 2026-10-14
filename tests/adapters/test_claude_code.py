@@ -385,8 +385,8 @@ def test_claude_code_output_directories(tmp_path):
     """Output directories advertise where cleanup can scan for stale files."""
     adapter = ClaudeCodeAdapter()
     dirs = list(adapter._output_directories(tmp_path))
-    # .claude/skills/ is cleaned per skill dir by the shared SkillWriter, not
-    # by the first-line sentinel scan.
+    # .claude/skills/ is never scanned: stale skill output is settled by sync's
+    # lockfile leftover policy (SPEC §4.2 step 9).
     assert dirs == [tmp_path / ".claude" / "commands"]
 
 
@@ -421,23 +421,23 @@ def test_claude_code_cleanup_stale_preserves_user_authored_files(tmp_path):
     assert user_file.is_file()
 
 
-def test_claude_code_cleanup_stale_removes_deleted_skill_dir(tmp_path):
-    """Bug #1 regression: a skill removed from the canonical source must have
-    its whole ``.claude/skills/<id>/`` dir (SKILL.md + scripts) cleaned up."""
+def test_claude_code_cleanup_stale_never_deletes_skill_files(tmp_path):
+    """A removed skill's ``.claude/skills/<id>/`` is NOT cleaned here: stale skill
+    output is settled by ``playbook sync``'s lockfile leftover policy (pristine +
+    untracked + listed), which also protects user-edited and user-added files
+    (SPEC §4.2 step 9, §10.8). The end-to-end removal is in tests/cli/."""
     scripts = tmp_path / "src_scripts"
     scripts.mkdir()
     (scripts / "helper.sh").write_text("echo hi\n", encoding="utf-8")
     repo_root = tmp_path / "repo"
     adapter = ClaudeCodeAdapter()
-    adapter.write_skill(_make_skill(skill_id="gone", scripts_dir=scripts), repo_root)
+    gone = adapter.write_skill(_make_skill(skill_id="gone", scripts_dir=scripts), repo_root)
     kept = adapter.write_skill(_make_skill(skill_id="kept"), repo_root)
 
     deleted = adapter.cleanup_stale({p.resolve() for p in kept}, repo_root=repo_root)
 
-    gone_dir = repo_root / ".claude" / "skills" / "gone"
-    assert {gone_dir / "SKILL.md", gone_dir / "scripts" / "helper.sh"} <= set(deleted)
-    assert not gone_dir.exists()
-    assert (repo_root / ".claude" / "skills" / "kept" / "SKILL.md").is_file()
+    assert deleted == []
+    assert all(path.is_file() for path in [*gone, *kept])
 
 
 def test_claude_code_cleanup_stale_preserves_user_authored_skill_dir(tmp_path):

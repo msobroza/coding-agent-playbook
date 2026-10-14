@@ -73,10 +73,19 @@ def build_parser() -> argparse.ArgumentParser:
     # playbook sync
     sync_p = subcommands.add_parser(_SUBCOMMANDS[1], help="regenerate all artifacts (SPEC §12.2)")
     sync_p.add_argument("--repo-root", help="repo to sync (defaults to cwd)")
-    sync_p.add_argument(
+    sync_mode = sync_p.add_mutually_exclusive_group()
+    sync_mode.add_argument(
         "--check",
         action="store_true",
         help="verify against the lockfile without writing (SPEC §12.3)",
+    )
+    # [output] commit = false pre-commit guard: generated output is local-only,
+    # so a commit that stages any of it fails. A no-op under commit = true.
+    sync_mode.add_argument(
+        "--check-staged",
+        dest="check_staged",
+        action="store_true",
+        help="fail if any staged path is generated output; never writes (SPEC §12.3)",
     )
     sync_p.set_defaults(func=sync_cmd.run)
 

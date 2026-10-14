@@ -6,9 +6,11 @@ import pytest
 
 from coding_agent_playbook.config import (
     Config,
+    OutputConfig,
     ProjectMeta,
     StorageConfig,
     parse_metrics_config,
+    parse_output_config,
 )
 from coding_agent_playbook.evaluators.types import (
     AbsoluteThreshold,
@@ -168,3 +170,68 @@ def test_parse_links_config_rejects_non_string_entry():
 
     with pytest.raises(ValueError, match="allowed_domains must be a list of strings"):
         parse_links_config({"allowed_domains": ["ok.com", 42]})
+
+
+# --------------------------------------------------------------------------- #
+# [output] commit (generated output is gitignored by default)
+# --------------------------------------------------------------------------- #
+
+_MINIMAL = {
+    "schema_version": 1,
+    "project": {"name": "x", "kind": "python-library"},
+    "engine": {"version": "0.1.0a0"},
+}
+
+
+def test_output_absent_defaults_to_local_only():
+    config = Config.from_dict(dict(_MINIMAL))
+    assert config.output is None
+    assert config.commit_output is False
+    assert "output" not in config.to_dict()
+
+
+@pytest.mark.parametrize("commit", [True, False])
+def test_output_commit_round_trips(commit):
+    data = {**_MINIMAL, "output": {"commit": commit}}
+    config = Config.from_dict(data)
+    assert config.output == OutputConfig(commit=commit)
+    assert config.commit_output is commit
+    assert config.to_dict()["output"] == {"commit": commit}
+
+
+def test_output_table_without_commit_key_defaults_false():
+    config = Config.from_dict({**_MINIMAL, "output": {}})
+    assert config.output == OutputConfig(commit=False)
+    assert config.to_dict()["output"] == {"commit": False}
+
+
+@pytest.mark.parametrize("bad", ["false", "no", 0, 1, None, ["true"]])
+def test_output_commit_rejects_non_bool_with_value(bad):
+    with pytest.raises(ValueError, match="commit must be a boolean") as exc:
+        parse_output_config({"commit": bad})
+    assert repr(bad) in str(exc.value)
+
+
+def test_output_rejects_non_table():
+    with pytest.raises(ValueError, match="must be a table") as exc:
+        Config.from_dict({**_MINIMAL, "output": True})
+    assert "True" in str(exc.value)
+
+
+def test_output_round_trips_through_toml_dump(tmp_path):
+    import tomllib
+
+    from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+
+    config = Config(
+        schema_version=1,
+        project=ProjectMeta(name="x", kind="python-library"),
+        engine_version="0.1.0a0",
+        output=OutputConfig(commit=False),
+    )
+    state = FileSystemStateSource(repo_root=tmp_path)
+    state.save_config(config)
+    text = (tmp_path / ".coding-agent-playbook.toml").read_text()
+    assert "[output]\ncommit = false" in text
+    assert tomllib.loads(text)["output"] == {"commit": False}
+    assert state.load_config().output == OutputConfig(commit=False)
