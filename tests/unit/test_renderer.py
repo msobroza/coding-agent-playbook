@@ -10,6 +10,7 @@ from jinja2 import UndefinedError
 from coding_agent_playbook.renderer import (
     SENTINEL,
     build_environment,
+    includes_rules_appendix,
     render_artifact_body,
     render_for,
     render_string,
@@ -511,3 +512,68 @@ def test_render_for_prompt_continue_no_appendix_when_all_fragments_empty(
         rule_registry=registry,
     )
     assert "## Reference rules" not in out
+
+
+# --- includes_rules appendix is decided on the template body (SPEC §6.2.5) ---
+
+_PROMPT_FORMATS = ["prompt_continue", "prompt_claude_command", "prompt_opencode_command"]
+_INLINE_FRONTMATTER = {"name": "P", "description": "D", "includes_rules": ["x"]}
+
+
+@pytest.mark.parametrize("fmt", _PROMPT_FORMATS)
+def test_render_for_no_appendix_when_template_inlines_an_already_rendered_rule(
+    tmp_path: Path, fmt: str
+) -> None:
+    """Regression: sync hands render_for the RENDERED body, where the ``rule()``
+    call is already expanded. Deciding on it emitted every inlined rule twice."""
+    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
+    out = render_for(
+        tmp_path / "p.md.j2",
+        "Intro\n### X\n\nrule body\n",
+        fmt,
+        frontmatter=_INLINE_FRONTMATTER,
+        rule_registry=registry,
+        template_body='Intro\n{{ rule("x") }}\n',
+    )
+    assert out.count("rule body") == 1
+    assert "## Reference rules" not in out
+
+
+@pytest.mark.parametrize("fmt", _PROMPT_FORMATS)
+def test_render_for_appends_appendix_when_template_has_no_rule_call(
+    tmp_path: Path, fmt: str
+) -> None:
+    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
+    out = render_for(
+        tmp_path / "p.md",
+        "Plain body\n",
+        fmt,
+        frontmatter=_INLINE_FRONTMATTER,
+        rule_registry=registry,
+        template_body="Plain body\n",
+    )
+    assert out.count("rule body") == 1
+    assert "## Reference rules" in out
+
+
+@pytest.mark.parametrize(
+    "template_body",
+    [
+        '{{rule("x")}}',
+        "{{- rule('x') }}",
+        '{{  rule ( "x" ) }}',
+        '{% raw %}{{ rule("x") }}{% endraw %}',
+    ],
+)
+def test_includes_rules_appendix_suppressed_for_any_rule_call_spelling(template_body: str) -> None:
+    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
+
+    assert includes_rules_appendix(template_body, _INLINE_FRONTMATTER, registry) == ""
+
+
+def test_includes_rules_appendix_lists_rules_for_a_template_without_calls() -> None:
+    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
+
+    appendix = includes_rules_appendix("no calls here", _INLINE_FRONTMATTER, registry)
+
+    assert appendix == "\n## Reference rules\n\n### X\n\nrule body\n"

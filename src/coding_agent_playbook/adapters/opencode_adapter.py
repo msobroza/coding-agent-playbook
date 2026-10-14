@@ -78,6 +78,7 @@ class OpenCodeAdapter(Adapter):
             "prompt_opencode_command",
             frontmatter=dataclasses.asdict(prompt.frontmatter),
             rule_registry=self._rule_registry,
+            template_body=prompt.template_body,
         )
         target.write_text(rendered, encoding="utf-8")
         return [target]

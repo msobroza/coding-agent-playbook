@@ -152,11 +152,18 @@ def render_for(
     *,
     frontmatter: dict[str, Any],
     rule_registry: RuleRegistry | None = None,
+    template_body: str | None = None,
 ) -> str:
     """Apply per-format post-processing to a Jinja-rendered body.
 
     ``fmt`` is one of the formats in ``BUILTIN_FORMATS`` (or a short alias in
     ``FORMAT_ALIASES``). Behaviour per format is documented in SPEC §9.7.
+
+    For prompt formats, pass the prompt's un-rendered ``template_body``: whether
+    the ``includes_rules:`` appendix is generated depends on the template, since
+    a rendered ``body`` no longer shows the ``rule()`` calls Jinja expanded (see
+    :func:`includes_rules_appendix`). It defaults to ``body`` for callers that
+    pass an un-rendered body.
 
     ``_template_path`` is reserved for future format-specific dispatch
     (SPEC §9.7); current transforms key off ``fmt`` and ``frontmatter`` only.
@@ -171,12 +178,15 @@ def render_for(
         return _render_continue_rule(body, frontmatter)
     if resolved in ("claude_md_section", "agents_md_section"):
         return _render_markdown_rule_section(body, frontmatter)
+    appendix = includes_rules_appendix(
+        body if template_body is None else template_body, frontmatter, rule_registry
+    )
     if resolved == "prompt_continue":
-        return _render_prompt_continue(body, frontmatter, rule_registry)
+        return _render_prompt_continue(body, frontmatter, appendix)
     if resolved == "prompt_claude_command":
-        return _render_prompt_claude_command(body, frontmatter, rule_registry)
+        return _render_prompt_claude_command(body, frontmatter, appendix)
     if resolved == "prompt_opencode_command":
-        return _render_prompt_opencode_command(body, frontmatter, rule_registry)
+        return _render_prompt_opencode_command(body, frontmatter, appendix)
 
     # All BUILTIN_FORMATS are handled above; reaching here means a new format
     # was added to the set but its branch was forgotten.
@@ -235,17 +245,6 @@ def _render_markdown_rule_section(body: str, frontmatter: dict[str, Any]) -> str
     return "\n".join(parts)
 
 
-def _has_inline_rule_call(body: str) -> bool:
-    """Detect whether the rendered body contains the literal substring ``{{ rule(``.
-
-    In practice this only occurs when the author wrapped a ``rule()`` call in
-    ``{% raw %}`` to keep the literal text (e.g. to handle inclusion themselves
-    with custom formatting). When True, the auto-generated ``## Reference rules``
-    appendix is suppressed and the author owns the inclusion layout (SPEC §6.2.5).
-    """
-    return "{{ rule(" in body
-
-
 def includes_rules_appendix(
     template_body: str,
     frontmatter: dict[str, Any],
@@ -292,7 +291,7 @@ def _build_includes_rules_appendix(
 def _render_prompt_continue(
     body: str,
     frontmatter: dict[str, Any],
-    rule_registry: RuleRegistry | None,
+    appendix: str,
 ) -> str:
     """Emit a Continue-shaped prompt file (SPEC §9.7)."""
     continue_frontmatter: dict[str, Any] = {
@@ -301,16 +300,13 @@ def _render_prompt_continue(
         "invokable": True,
     }
     fenced = yaml.safe_dump(continue_frontmatter, sort_keys=False, allow_unicode=True).rstrip("\n")
-    output = f"<!-- {SENTINEL} -->\n---\n{fenced}\n---\n{body}"
-    if not _has_inline_rule_call(body):
-        output += _build_includes_rules_appendix(frontmatter, rule_registry)
-    return output
+    return f"<!-- {SENTINEL} -->\n---\n{fenced}\n---\n{body}{appendix}"
 
 
 def _render_prompt_claude_command(
     body: str,
     frontmatter: dict[str, Any],
-    rule_registry: RuleRegistry | None,
+    appendix: str,
 ) -> str:
     """Emit a Claude Code slash-command file (SPEC §9.7).
 
@@ -322,15 +318,13 @@ def _render_prompt_claude_command(
     """
     name = frontmatter["name"]
     output = body if body.lstrip().startswith("# ") else f"# {name}\n\n{body}"
-    if not _has_inline_rule_call(body):
-        output += _build_includes_rules_appendix(frontmatter, rule_registry)
-    return f"<!-- {SENTINEL} -->\n{output}"
+    return f"<!-- {SENTINEL} -->\n{output}{appendix}"
 
 
 def _render_prompt_opencode_command(
     body: str,
     frontmatter: dict[str, Any],
-    rule_registry: RuleRegistry | None,
+    appendix: str,
 ) -> str:
     """Emit an OpenCode slash-command file (SPEC §9.7).
 
@@ -363,7 +357,4 @@ def _render_prompt_opencode_command(
     ).rstrip("\n")
     # The sentinel comment goes BEFORE the YAML envelope so adapter cleanup
     # can recognise the file as engine-owned by reading the first line.
-    output = f"<!-- {SENTINEL} -->\n---\n{description_line}\n---\n{rendered_body}"
-    if not _has_inline_rule_call(body):
-        output += _build_includes_rules_appendix(frontmatter, rule_registry)
-    return output
+    return f"<!-- {SENTINEL} -->\n---\n{description_line}\n---\n{rendered_body}{appendix}"

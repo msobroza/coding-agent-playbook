@@ -166,6 +166,7 @@ def _render_prompt(ctx: SyncContext, prompt: Prompt, resolved_format: str) -> st
         resolved_format,
         frontmatter=dataclasses.asdict(rendered_prompt.frontmatter),
         rule_registry=registry,
+        template_body=rendered_prompt.template_body,
     )
 
 

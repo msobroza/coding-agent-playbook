@@ -1092,7 +1092,7 @@ The renderer exposes per-format transforms applied after Jinja substitution:
 | `continue_rule` | Pass-through; frontmatter is already in Continue's shape. |
 | `claude_md_section` | Strip frontmatter, convert title to `##`, append `---` separator. |
 | `agents_md_section` | Same as `claude_md_section`. |
-| `prompt_continue` | Pass-through. If `includes_rules:` is set and body has no `{{ rule() }}` calls, append the auto-generated "Reference rules" section. |
+| `prompt_continue` | Pass-through. If `includes_rules:` is set and the prompt's *template* body has no `{{ rule() }}` calls, append the auto-generated "Reference rules" section. Callers pass `template_body=` to `render_for`, because the rendered body no longer shows the calls Jinja expanded; deciding on it re-appended every inlined rule. |
 | `prompt_claude_command` | Strip frontmatter; prepend a title line if not present. Same `includes_rules:` appendix logic. |
 | `prompt_opencode_command` | Strip canonical frontmatter; emit a new minimal frontmatter with `description:` only (OpenCode's required field). Map `input_variables` to `$ARGUMENTS` / `$1` / `$2`. Same `includes_rules:` appendix logic. |
 The CLI accepts both the full internal name and a short alias (e.g., `--format continue` is shorthand for `continue_rule`; `--format claude` for `claude_md_section`; `--format opencode` for `prompt_opencode_command`). The full names appear in `playbook render --show-source` output for precision; the short aliases are the daily UX.
