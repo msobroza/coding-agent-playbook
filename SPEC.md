@@ -1,14 +1,16 @@
 # SPEC.md — coding-agent-playbook
 | Field | Value |
 | --- | --- |
-| Version | 0.14 (draft) |
+| Version | 0.16 (draft) |
 | Status | Proposed |
-| Last updated | 2026-07-14 |
+| Last updated | 2026-10-14 |
 | Authors | Max Pereira, with Claude |
 | Audience | Implementers, reviewers, future contributors |
 | License | Apache-2.0 (engine); organization overlays may be private |
 
 **Changelog**
+- **0.16** — Generated output is **local-only by default**: everything `playbook sync` renders into a consumer repo (`AGENTS.md`, `.claude/`, `.continue/`, `.opencode/`, skill directories, the lockfile) is gitignored and never committed. New `[output] commit = <bool>` toggle in `.coding-agent-playbook.toml` (default `false`; `playbook init` writes it explicitly; `true` restores the legacy committed-output policy). With `commit = false`, write-mode `sync` keeps an engine-owned **managed block** in the consumer's `.gitignore` current (root-anchored, escaped entries — one per generated file, skill directories collapsed to `/<dir>/`; byte-preserving, atomic, idempotent; malformed markers fail loudly) and warns on stderr about generated paths git still tracks, printing the exact `git rm -r --cached -- …` to run (it never changes git state). Leftovers of an earlier sync stay owned through the previous lockfile: deleted only when pristine, untracked and every enabled adapter is installed, else kept (and, for `commit = false`, kept ignored). This **lockfile leftover policy is the one deletion policy for stale native-skill output**, under both `commit` settings: adapters' `cleanup_stale` never deletes inside a skill directory, and a file the engine never wrote — even one dropped into an engine-owned skill dir — is never deleted (it replaces the v0.15 `SkillWriter` cleanup, which deleted every unwritten file in an engine-owned dir). It deletes only inside the `output_locations` installed adapters declare (§10.1) — never under `.git/`, never through a symlink the user put on the path — prunes emptied directories no higher than the skills root (never a symlinked root's target), and fails closed when git cannot say whether a leftover is tracked (asked case-insensitively, matched in NFC or by file identity); a file/folder swap inside a skill dir displaces only what the same policy would delete, and the pre-v0.15 lockfile claim needs unchanged `SKILL.md` bytes. Stale-vs-written comparisons use file identity (the `agent_harness` cleanup too), so a case-only skill-id rename on a case-insensitive filesystem never deletes fresh output; `sync --check`/`--check-staged` render into an empty scratch dir but decide skill-dir ownership against the real tree, so they skip exactly the skill dirs write mode skips. A missing overlay package makes every `sync` mode refuse to run. `sync --check` reports a stale/missing block as drift; the new **`sync --check-staged`** fails a commit that stages generated output. New hooks: `playbook-sync` (`post-checkout`/`post-merge` auto-sync) and `playbook-no-generated-output` (pre-commit guard); `playbook-sync-check` is kept as the legacy hook for `commit = true`. New stdlib modules `gitignore.py` + `git_client.py` (an injectable read-only `GitClient`) and `commands/_sync_output.py` (§4.2, §5.3, §6.3, §7.1, §10.8, §12.1–§12.3, §13, §14.4).
+- **0.15** — Native skills for every Agent-Skills harness + the `shared_skills/` hub: a new shared `SkillWriter` (`adapters/_skill_writer.py`) is the single source of truth for a native skill directory (`<root>/<id>/SKILL.md` + byte-copied `scripts/`/`references/`), byte-identical across roots. `claude_code` writes `.claude/skills/`, `opencode` now writes **`.opencode/skills/`** natively (no longer relying on `claude_code`), and the new **`shared_skills`** adapter (on by default, not force-enabled) writes the cross-agent hub `shared_skills/`. Two bug fixes: `SKILL.md` frontmatter `name` is now the skill id (= directory name, the Agent Skills rule OpenCode enforces), and `SKILL.md` carries the sentinel as its first body line, so a skill directory is recognisably engine-owned (user-authored skill dirs are never touched; since v0.16 a deleted skill's unchanged, untracked files are removed by the lockfile leftover policy, §4.2 step 9, and edited or user-added files are kept). New `playbook validate` rule for the Agent Skills `id`/`name`/`description` constraints (id-less skills included). Ownership is decided before writing: a colliding hand-written skill dir is skipped with a warning, never overwritten (§6.3, §10.3, §10.6, §10.8, §12.6).
 - **0.14** — Self-contained markdown links (PR L): every markdown link in every canonical artifact (rules, prompts, skills incl. `references/`) must be **self-contained** — relative targets resolve to a file inside the artifact's source layer (the package `resources/` or repo-local `playbook/`; `..`-escapes, absolute paths, and non-`http(s)` schemes are violations), and `http(s)` links pass only through the new `[links] allowed_domains` allowlist (default empty = fully strict). Deterministic (stdlib-only, no network), extraction masks frontmatter/code fences/inline code. New `links.py` + `config.parse_links_config` + a `playbook validate` rule (§12.6, §7.1); the engine's own artifacts are gated on CI by a pytest integration test. Design: `specs/prL-markdown-links.md`.
 - **0.13** — Eval task-config redesign ("2b refined", Tracks C1–C8): the `[expected]`/`[metrics]`/`[rubric]` triple is replaced by a **layered** task config. Three layers share one `[<layer>.bind]` + `[<layer>].expr` shape — **`[gate]`** (deterministic boolean), **`[rubric]`** (llm-judge weighted), and an optional cross-trial **`[aggregate]`** — composed by a tiny boolean-expression DSL; `[verdict].trial` is a boolean expression over the layers, and the **verdict is *derived*** from the layer results (not re-run). There is **no `[expected]` block** — file predicates are gate `check`s (`file_exists`/`file_contains`/`file_unchanged`/`file_forbidden`). Thresholds are now **0–1 normalized**: every `Metric` owns a `Normalizer` (`evaluators/normalizer.py`: `RampNormalizer`/`PercentNormalizer`/`Identity`) mapping raw→0–1 goodness (higher = better), and `higher_is_worse` is **deleted** — `warn`/`fail`/`max_worsening` are 0–1 cutoffs. A check is `(type) × (metric|judge) × kwargs`: `check = "threshold"|"non_regression"` over a registered `metric=` **or** a `judge=` criterion (a `JudgeMetric` — an llm-judge criterion **is a metric**). New registries: checks via `@register_check` + `coding_agent_playbook.checks`, gates via `@register_gate` + the new **`coding_agent_playbook.gates`**; `{ref="name"}` resolves a registered composed **gate** or **rubric**. The `[aggregate]` layer is the same bind+expr shape over `pass_at_k`/`pass_pow_k` (`k` kwarg, `over ∈ {gate,rubric,verdict}`); the runner runs `N=max(k)` trials. Deleted from the prior model: the `[expected]`/`[metrics]`-triple authoring, `higher_is_worse`, `rubric_for_task`, `ExpectedOutcome`. Authoritative design: `specs/pr2b-task-config.md`; migration: `MIGRATION.md` (§6.5, §15.2/§15.3/§15.3.1, §21).
 - **0.12** — Evaluator subsystem refactor (PR R6 — clean-slate): the fused `Evaluator` ABC + free `grade()` are replaced by three single-responsibility abstractions — **`Metric`** (`measure(ctx) -> list[Measurement]`), **`Check`** (`grade(ctx, measurements) -> CheckResult`, a boolean gate + optional partial-credit score), and **`Rubric`** (a weighted set of checks; `evaluate(ctx, measurements) -> EvaluationReport`). `Rubric` **is also a `Metric`** (it surfaces its composite via `measure()`), so a rubric thresholds into a check and nests into a Composite tree. A cost-tiered (`CostTier` DETERMINISTIC < EXECUTION < JUDGED) `scheduler` runs checks cheapest-tier-first with short-circuit, so a failing deterministic check **never invokes the LLM judge** (`playbook eval --run --full-scoring` forces every check). Entry-point groups are renamed/split: out-of-tree metrics register under **`coding_agent_playbook.metrics`** (was `…​.evaluators`), custom graders under the new **`coding_agent_playbook.checks`**. `grade()` is replaced by `Rubric.evaluate`; the `extra_evaluators` side-channel, `value_kind`/`to_score`, the weight-0/fail-floor `[expected]` hack, and `evaluators_for_task` are deleted. The authored `[expected]`/`[metrics]`/`[rubric]` task TOML is **unchanged** (zero authoring migration). Authoritative design: `specs/prR6-check-rubric.md`; migration guide: `MIGRATION.md` (§15.3/§15.3.1, §21).
@@ -32,11 +34,11 @@ Prior art that shaped this design:
 **G1 — One canonical source, multi-harness output.** A team writes a rule once. The tool renders it to `.continue/rules/`, `CLAUDE.md`, `.opencode/command/`, and `AGENTS.md` automatically, using each harness's native features (frontmatter, globs, sections). v1 primary adapters: Continue, Claude Code, OpenCode. Universal fallback: AGENTS.md.
 **G2 — Detect-and-condition.** Rules and prompts are gated by what's actually in the repo: Python version, installed frameworks, presence of notebooks, etc. A FastAPI rule does not ship to a non-FastAPI repo.
 **G3 — Three-layer overlay model.** Engine package ships generic content. Organization-specific packages (e.g. `playbook-rules-bnp`) ship overlay content. Consumer repos can override locally.
-**G4 — Pre-commit-native distribution.** Installation produces a pre-commit-managed sync hook. Drift between the canonical source and what is checked into the repo fails CI.
+**G4 — Pre-commit-native distribution.** Installation produces pre-commit-managed sync hooks. By default (`[output] commit = false`, §7.1) generated output is **local-only**: it is gitignored, re-rendered automatically after every checkout and merge, and a commit that stages any of it fails. Repos that opt into committed output (`commit = true`) keep the legacy guarantee instead: drift between the canonical source and what is checked into the repo fails the commit and CI.
 **G5 — Air-gapped friendly.** No required network calls at sync time. Internal PyPI distribution. No HTTP-based hooks shipped by default. No telemetry.
 **G6 — Eval task authoring (Tier 0).** v1 ships the schema, loader, validator, and read-only CLI for prompt-associated eval tasks (Section 6.5). The runner, programmatic checks, and LLM-as-judge are deferred to v1.1 (Tier 1) and v2 (Tier 2) respectively. Authors write tasks alongside prompts from day one; the corpus accumulates as documentation and is ready when the runner lands.
 ### 2.2 v1 non-goals (named so people stop asking)
-- Skills are not first-class for non-Claude-Code harnesses; they degrade to prompts. (Exception: OpenCode reads `.claude/skills/` natively, so skills work there without a separate adapter path.)
+- Skills are first-class only for harnesses that implement the Agent Skills layout (`<root>/<name>/SKILL.md`): Claude Code (`.claude/skills/`) and OpenCode (`.opencode/skills/`), plus the agent-neutral `shared_skills/` hub (§10.8) — and, in its own tree, the opt-in `agent_harness` adapter (`skills/<id>/SKILL.md`, §10.7). Adapters that keep the ABC default (Continue) degrade skills to prompts; the rules-only `agents_md` adapter does not emit skills at all.
 - No MCP server configuration management. (v2.)
 - No Cursor dedicated adapter beyond the universal AGENTS.md fallback. (v2.)
 - No Codex CLI dedicated adapter — Codex reads AGENTS.md natively, so the universal adapter is sufficient.
@@ -60,7 +62,7 @@ Prior art that shaped this design:
 ## 3. Glossary
 - **Rule** — a unit of always-on or context-scoped guidance loaded into the assistant's system prompt. Example: *"Use ruff for linting, never black or flake8."* Rendered as `.continue/rules/*.md`, or as sections of `CLAUDE.md` / `AGENTS.md`. OpenCode reads `AGENTS.md` natively, so rules reach OpenCode via the AGENTS.md adapter rather than a dedicated path.
 - **Prompt** — a reusable, named instruction the user invokes explicitly. Example: `/refactor` or `/generate-tests`. Rendered as `.continue/prompts/*.md` with `invokable: true`, `.claude/commands/*.md`, or `.opencode/command/*.md`.
-- **Skill** — a Claude Code-specific richer prompt with bundled scripts and progressive disclosure. Degrades to a prompt for harnesses that lack the concept. OpenCode reads `.claude/skills/<name>/SKILL.md` natively, so skills authored for Claude Code work in OpenCode without duplication.
+- **Skill** — a richer prompt with bundled scripts and progressive disclosure, in the Agent Skills layout (`<name>/SKILL.md` + `scripts/` + `references/`). Written natively to `.claude/skills/` (Claude Code), `.opencode/skills/` (OpenCode) and the cross-agent `shared_skills/` hub by one shared `SkillWriter`, so every copy is byte-identical (the opt-in `agent_harness` adapter also writes it natively, in its own `skills/` tree). Degraded to a prompt only by adapters that keep the ABC default (Continue); not emitted by the rules-only `agents_md` adapter.
 - **Hook** — overloaded term. Two distinct meanings:
   - **Git pre-commit hook**: a shell command run before a commit lands (via pre-commit.com framework).
   - **Assistant lifecycle hook**: PreToolUse / PostToolUse / SessionStart etc., supported by Claude Code and Continue CLI. The engine ships configuration for both kinds and keeps them visually separate in source.
@@ -99,6 +101,7 @@ Prior art that shaped this design:
                                     │  │   ├── continue             │  │
                                     │  │   ├── claude_code          │  │
                                     │  │   ├── opencode             │  │
+                                    │  │   ├── shared_skills        │  │
                                     │  │   └── agents_md            │  │
                                     │  └────────────────────────────┘  │
                                     └──────────────────────────────────┘
@@ -111,13 +114,18 @@ Prior art that shaped this design:
               │     (overlay)                │         │                              │
               │                              │         │  .coding-agent-playbook.toml │
               │  Adds:                       │         │                              │
-              │   - banking-security rules   │         │  Generated files:            │
+              │   - banking-security rules   │         │  Generated (gitignored):     │
               │   - PII redaction prompts    │         │   .continue/rules/*.md       │
               │   - LiteLLM-aware config     │         │   .continue/prompts/*.md     │
               │                              │         │   .claude/CLAUDE.md          │
               └──────────────┬───────────────┘         │   .claude/commands/*.md      │
+                             │                         │   .claude/skills/*/          │
                              │                         │   .opencode/command/*.md     │
+                             │                         │   .opencode/skills/*/        │
+                             │                         │   shared_skills/*/           │
                              │                         │   AGENTS.md                  │
+                             │                         │                              │
+                             │                         │  Merged by init (committed): │
                              └─────── merges ─────────►│   .pre-commit-config.yaml    │
                                                        │                              │
                                                        │  Personal overrides:         │
@@ -127,14 +135,15 @@ Prior art that shaped this design:
 ```
 ### 4.2 Data flow
 The end-to-end flow of `playbook sync` in a consumer repo:
-1. **Load configuration.** Read `.coding-agent-playbook.toml` (committed), merge `.coding-agent-playbook.local.toml` (gitignored, personal overrides) on top. The read goes through the configured `StateSource` (filesystem in v1; see Section 20).
+1. **Load configuration.** Read `.coding-agent-playbook.toml` (committed), merge `.coding-agent-playbook.local.toml` (gitignored, personal overrides) on top. The read goes through the configured `StateSource` (filesystem in v1; see Section 20). **Preflight:** every package in `overlays_enabled` must be importable in the running environment, else `sync` (every mode) exits 1 naming it and writes nothing — rendering without an overlay would silently drop its rules and un-ignore its output (the classic case is a pre-commit hook venv, §13.1). An enabled adapter with no installed entry point is only warned about (its earlier output is kept, step 9).
 2. **Run detector.** Inspect `pyproject.toml`, lockfiles, filesystem. Produce a facts dictionary.
 3. **Resolve overlays.** Query the configured `ArtifactSource` (filesystem in v1; see Section 20) for rules, prompts, skills, and eval tasks across the engine package, each declared overlay package, and the consumer's `playbook/` directory. Build a unified artifact list, with later layers overriding earlier ones by ID.
 4. **Filter.** For each artifact, evaluate its `applies_if` predicate against the facts dictionary. Drop non-matching artifacts.
 5. **Render.** Apply Jinja2 to each surviving artifact's template with `facts | config` as context.
-6. **Dispatch to adapters.** For each enabled adapter (`continue`, `claude_code`, `opencode`, `agents_md`), pass the rendered artifacts; the adapter writes to its harness-specific locations.
+6. **Dispatch to adapters.** For each enabled adapter (`continue`, `claude_code`, `opencode`, `shared_skills`, `agents_md`), pass the rendered artifacts; the adapter writes to its harness-specific locations.
 7. **Write `AGENTS.md`** as the universal fallback regardless of which adapters are enabled.
 8. **Stamp.** Write a `.coding-agent-playbook.lock` file containing the rendered file hashes via the configured `StateSource`; used by `playbook sync --check` to detect drift.
+9. **Settle leftovers, then apply the output policy** (`[output] commit`, §7.1). Under **both** `commit` settings, first settle **orphans** — paths the *previous* lockfile lists that this run did not rewrite but that are still on disk (a removed skill's `SKILL.md` + scripts, a script dropped from a skill that still exists, everything a since-disabled adapter wrote). "Did not rewrite" compares file identity (`st_dev`/`st_ino`), not path spelling: after a case-only skill-id rename on a case-insensitive filesystem the old entry names the very file just written, so it is no orphan (and two entries naming one file yield one orphan, so no duplicate block entries). This is the **only** deletion policy for stale native-skill output — adapters' `cleanup_stale` never deletes inside a skill directory (`agent_harness`'s `skills/<id>/` included), and a file/folder swap inside a skill dir displaces only files this same policy would delete (§10.8) — and a path the previous lockfile does not list is a user file, never an orphan, even inside an engine-owned skill directory (with no readable previous lockfile nothing there is deleted). An entry is **released** — never deleted, no longer owned — when it leaves the repo, names a user/state file, has a `.git` segment, or reaches its file through a symlink (lockfile paths are recorded resolved, so a symlink on the way means the user re-pointed the path since — e.g. moved a skill dir into their own tree and linked it back — and git cannot see through it either), and, unless an adapter is missing, when it lies outside every installed adapter's declared `output_locations` (§10.1), so a hand-edited or merged lockfile can never aim `sync` at `.git/HEAD` or a source file. An orphan inside a declared location whose bytes still hash to its old lockfile entry and that git does not track is deleted, and the directories it leaves empty are pruned bottom-up: never above the declared directory that holds it, the declared directory itself (an emptied skills root such as `.claude/skills/`) only when it is a real directory as spelled — so the target of a symlinked root (`.claude/skills -> ../.agents/skills`) is never removed — never the repo root, never a directory with anything left in it. Directories emptied by `cleanup_stale`, or by a kept leftover the user later deleted, are pruned within the same bounds. If an enabled adapter is missing from the environment, all orphans are kept. "Git does not track it" is asked with case-insensitive literal pathspecs (`:(literal,icase)`; plain pathspecs are case-sensitive even under `core.ignorecase`) and a match is confirmed by NFC spelling (git on macOS reports precomposed names) or file identity (the index's `Demo/x` *is* `demo/x` on a case-insensitive filesystem); when git cannot answer (missing, timeout, "dubious ownership", non-zero exit) inside a git work tree (a `.git` at or above the repo root) every orphan is kept — the check fails closed. Every other orphan stays engine-owned: carried into the lockfile stamped in step 8 (orphans are settled just before stamping). With `commit = false` (the default) kept orphans are also listed in the managed block until they are gone, so leftover output never becomes committable: write the root-anchored paths of everything rendered plus the kept orphans into the managed block of the consumer's `.gitignore`, and ask git (read-only) whether any of them is still tracked and, if so, warn with the exact `git rm -r --cached -- …` to run. With `commit = true` remove the managed block and list the kept orphans on stderr — committed output is normally tracked, so a removed skill's committed files stay until the user deletes them (`git rm`). `.gitignore` is a user file: it is never hashed into the lockfile and never part of the written set.
 Eval tasks (Section 6.5) are intentionally **not** part of the sync flow. They live in engine and overlay packages, are read at validation time (`playbook validate`) and enumeration time (`playbook eval --list`), and v2 will read them at runner time — but they never produce files in the consumer repo. They are authoring-side artifacts, not deliverables.
 ### 4.3 Key design choices, recapped
 - **Copies, not symlinks.** Cross-platform, banking-friendly, git-friendly.
@@ -142,6 +151,7 @@ Eval tasks (Section 6.5) are intentionally **not** part of the sync flow. They l
 - **Sentinel headers.** Every generated file begins with `# AUTOGENERATED — edit in coding-agent-playbook, run 'playbook sync'`.
 - **Detector facts are cached.** Written into `.coding-agent-playbook.toml` at init. Refreshed automatically when `pyproject.toml` mtime changes, or manually via `playbook check --refresh`.
 - **`AGENTS.md` is always generated.** Even if no adapters are enabled. It is the lowest-common-denominator output and costs nothing.
+- **Generated output is local-only by default.** Rendered files are build products of the installed engine + overlays + `playbook/`, so (with `[output] commit = false`) they are gitignored through an engine-owned managed block and regenerated on each machine by the `post-checkout`/`post-merge` hook — the committed source of truth is the config and `playbook/`, not the rendered copies.
 ## 5. Repository layout
 ### 5.1 The engine repo (`coding-agent-playbook`)
 ```
@@ -160,12 +170,18 @@ coding-agent-playbook/
 │   ├── renderer.py                         # Jinja2 environment
 │   ├── overlays.py                         # overlay resolution
 │   ├── lockfile.py                         # .coding-agent-playbook.lock
+│   ├── gitignore.py                        # managed .gitignore block ([output] commit = false)
+│   ├── git_client.py                       # GitClient protocol: read-only tracked/staged queries
+│   ├── _file_identity.py                   # FileSet: stale-vs-written by file identity (§4.2 step 9)
 │   ├── adapters/
 │   │   ├── __init__.py
 │   │   ├── base.py                         # Adapter ABC
+│   │   ├── _skill_writer.py                # shared native SkillWriter (Section 10.8)
+│   │   ├── _prior_output.py                # previous lockfile as proof of engine-written files
 │   │   ├── continue_adapter.py
 │   │   ├── claude_code_adapter.py
 │   │   ├── opencode_adapter.py
+│   │   ├── shared_skills_adapter.py        # cross-agent shared_skills/ hub
 │   │   └── agents_md_adapter.py
 │   ├── sources/                            # storage abstraction (see Section 20)
 │   │   ├── __init__.py
@@ -205,7 +221,7 @@ coding-agent-playbook/
 │       │   ├── explain.md                      # plain markdown
 │       │   └── spec.md                         # plain markdown
 │       ├── skills/
-│       │   └── (empty in v1; Claude Code only)
+│       │   └── (empty in v1; native via the skill adapters)
 │       ├── eval_tasks/
 │       │   ├── generate-tests-happy-path/
 │       │   │   ├── task.toml
@@ -276,12 +292,12 @@ The engine discovers all installed overlays via `importlib.metadata.entry_points
 ```
 risk-models/                                # the user's project
 ├── pyproject.toml                          # already there; deps added by init
-├── .coding-agent-playbook.toml             # committed
+├── .coding-agent-playbook.toml             # committed ([output] commit = false)
 ├── .coding-agent-playbook.local.toml       # gitignored
-├── .coding-agent-playbook.lock             # committed; drift detection
-├── .pre-commit-config.yaml                 # committed; references engine
-├── .gitignore                              # init appends .local.toml
-├── AGENTS.md                               # AUTOGENERATED
+├── .coding-agent-playbook.lock             # gitignored (managed block); drift detection
+├── .pre-commit-config.yaml                 # committed; auto-sync + staged-output guard
+├── .gitignore                              # committed; .local.toml + the managed block
+├── AGENTS.md                               # AUTOGENERATED, gitignored
 ├── .continue/
 │   ├── rules/
 │   │   ├── 00-project-context.md           # AUTOGENERATED
@@ -298,25 +314,51 @@ risk-models/                                # the user's project
 │       └── explain.md
 ├── .claude/
 │   ├── CLAUDE.md                           # AUTOGENERATED
-│   └── commands/
-│       ├── refactor.md
-│       ├── generate-tests.md
-│       ├── review.md
-│       └── explain.md
+│   ├── commands/
+│   │   ├── refactor.md
+│   │   ├── generate-tests.md
+│   │   ├── review.md
+│   │   └── explain.md
+│   └── skills/                             # AUTOGENERATED — Claude Code native skills
+│       └── query-db/
+│           ├── SKILL.md
+│           └── scripts/run.py
 ├── .opencode/
-│   └── command/                            # AUTOGENERATED — OpenCode slash commands
-│       ├── refactor.md
-│       ├── generate-tests.md
-│       ├── review.md
-│       └── explain.md
+│   ├── command/                            # AUTOGENERATED — OpenCode slash commands
+│   │   ├── refactor.md
+│   │   ├── generate-tests.md
+│   │   ├── review.md
+│   │   └── explain.md
+│   └── skills/                             # AUTOGENERATED — OpenCode native skills
+│       └── query-db/                       #   (byte-identical to .claude/skills/query-db/)
+├── shared_skills/                          # AUTOGENERATED — cross-agent skills hub (Section 10.8)
+│   └── query-db/                           #   (byte-identical to .claude/skills/query-db/)
 └── playbook/                               # OPTIONAL: per-repo customizations
-    └── rules/
-        └── risk-models-specific.md.j2
+    ├── rules/
+    │   └── risk-models-specific.md.j2
+    └── skills/
+        └── query-db/                       # canonical skill source (SKILL.md with `id: query-db` + scripts/)
 ```
-Everything marked AUTOGENERATED has a sentinel header and is owned by `playbook sync`. The user owns `.coding-agent-playbook.toml`, `.coding-agent-playbook.local.toml`, anything under `playbook/`, and their own source code.
-Note two deliberate non-duplications for OpenCode:
+Everything marked AUTOGENERATED carries the sentinel and is owned by `playbook sync` (a `SKILL.md` carries it as its first body line, since its frontmatter must stay on line 1; the files the engine writes into a skill directory are owned through that `SKILL.md` and the lockfile — a file a user adds to a generated skill directory stays the user's and is never deleted, §4.2 step 9). The user owns `.coding-agent-playbook.toml`, `.coding-agent-playbook.local.toml`, anything under `playbook/`, their own source code, and any hand-written skill directory (no sentinel) under the three skill roots — a canonical skill whose `id` collides with one is skipped for that root with a warning (Section 10.8). The output directory name is the skill's `id:` frontmatter value, not the source folder name (Section 6.3).
+**Generated output is local-only (default `[output] commit = false`, §7.1).** `AGENTS.md`, `.continue/`, `.claude/CLAUDE.md`, `.claude/commands/`, `.claude/skills/<id>/`, `.opencode/command/`, `.opencode/skills/<id>/`, `shared_skills/<id>/` and the lockfile are **not committed**: `playbook sync` lists them in an engine-owned block of the repo's `.gitignore`, and every clone regenerates them locally (the `post-checkout`/`post-merge` hook runs `playbook sync`; run it once by hand right after cloning). The `.gitignore` itself, including that block, *is* committed so every checkout ignores the same paths:
+```gitignore
+.coding-agent-playbook.local.toml
+
+# >>> coding-agent-playbook (managed — do not edit) >>>
+/.claude/CLAUDE.md
+/.claude/commands/refactor.md
+/.claude/skills/review/
+/.coding-agent-playbook.lock
+/.continue/rules/50-python-typing.md
+/.opencode/skills/review/
+/AGENTS.md
+/shared_skills/review/
+# <<< coding-agent-playbook <<<
+```
+Block rules: entries are root-anchored (relative to the playbook repo root, where the `.gitignore` lives), sorted and de-duplicated, one per generated **file** — except that every file inside a generated skill directory (any directory holding a written `SKILL.md`, whatever adapter root it sits under) collapses to one `/<dir>/` entry. Glob metacharacters (`*`, `?`, `[`, `!`, `#`, `\`, leading/trailing spaces) are backslash-escaped so names match literally. Entries are Unicode-NFC-normalised (git on macOS reports precomposed paths and never normalises patterns); a name written in another form (NFD) gets a second entry in that form for Linux checkouts. Leftover output from an earlier sync that is still engine-owned (§4.2 step 9) stays in the block. The block is replaced in place (or appended after one blank line, creating `.gitignore` if needed); every byte outside it — CRLF endings, a missing final newline, a UTF-8 BOM before a first-line block — is preserved, the write is atomic (a uniquely named temp file + `os.replace`, never a fixed name that could clobber a user file), and re-running is a no-op. A start marker without an end marker, an orphan end marker, or a duplicated block is an error naming the file and line; the engine never guesses and never clobbers. With `[output] commit = true` the block is removed and the generated files are committed as before v0.16.
+Note one deliberate non-duplication for OpenCode, and one deliberate duplication:
 - **No `.opencode/rules/` directory.** OpenCode reads `AGENTS.md` natively as its primary rules source, walking up the directory tree. The universal AGENTS.md adapter is OpenCode's rule-delivery path. Writing a separate `.opencode/rules/` would just duplicate content OpenCode is already reading from `AGENTS.md`.
-- **No `.opencode/skills/` directory.** OpenCode reads `.claude/skills/<name>/SKILL.md` natively as a fallback. Skills written by the Claude Code adapter are automatically picked up by OpenCode without copying.
+- **`.opencode/skills/` is written natively.** The OpenCode adapter emits its own skill tree so OpenCode works without the Claude Code adapter enabled. OpenCode also scans `.claude/skills/`; the duplicate is harmless because OpenCode keys discovered skills by name in a map (last wins) and both copies are byte-identical (§10.6).
 The user's own `.opencode/agent/` (custom agents) and `.opencode/plugin/` (lifecycle hooks) directories, plus `opencode.json` (MCP servers, permissions, model selection), are owned by the user and not touched by the engine. See Section 10.6 for the OpenCode adapter's boundaries.
 ## 6. Canonical artifact model
 ### 6.0 File formats: `.md` and `.md.j2`
@@ -588,13 +630,21 @@ A rule cannot itself reference other rules via `includes_rules:`. Only prompts h
 - `playbook validate` errors if `{{ rule("X") }}` references a rule not in `includes_rules:`, or if `includes_rules:` lists a rule never referenced via `{{ rule() }}` (only in `.md.j2` files — plain `.md` prompts don't need to call `{{ rule() }}`).
 **Why not let rules be included by globs too?**
 A natural follow-on idea: a prompt declares `includes_rules_matching: { tags: ["python", "testing"] }` and the engine picks up all matching rules. Rejected for v1 because it makes the rendered prompt non-deterministic from a glance at the source — you need to mentally execute the matcher against the current rule registry. Explicit lists are uglier but trivially readable. Revisit in v2 if the explicit lists become unwieldy.
-### 6.3 Skills (Claude Code only in v1)
-Skills are Claude Code-specific. The engine ships none in v1; the abstraction exists so v2 can add them without breaking the artifact model. Overlay packages may ship skills already in v1 if they want Claude Code-only richer prompts; they degrade gracefully.
+### 6.3 Skills
+Skills follow the **Agent Skills** layout that Claude Code and OpenCode both read natively. The engine ships none in v1; overlay packages and repo-local `playbook/skills/<id>/` may ship them today. They are written natively by the `claude_code` (`.claude/skills/`), `opencode` (`.opencode/skills/`) and `shared_skills` (`shared_skills/`) adapters through one shared `SkillWriter` (§10.8), so every copy is byte-identical; the opt-in `agent_harness` adapter writes them natively in its own tree (`skills/<id>/SKILL.md`, §10.7). Adapters that keep the ABC default `write_skill` (Continue) degrade a skill to a prompt (§6.3.2); the rules-only `agents_md` adapter does not emit skills at all.
+
+**Every canonical skill must declare `id:` in its `SKILL.md` frontmatter.** The `id` — not the source folder name — is the overlay merge key (§11), the output directory name (`<root>/<id>/`) and the emitted `name`. A skill without `id:` falls back to the id `skill`, so several id-less skills collapse into one and all but the last are silently dropped; `playbook validate` reports every id-less (or non-string-id) skill (§12.6).
+
+Emitted `SKILL.md` contract (enforced by the `SkillWriter`):
+- **`name` = the skill id = the output directory name.** The Agent Skills standard requires `name` to equal the directory name and match `^[a-z0-9]+(-[a-z0-9]+)*$` (1–64 chars); OpenCode silently drops a skill that fails it. The writer always sets `name` to the canonical `id` (an authored display `name` is replaced); every other frontmatter key, including `id`, is kept. A `description` of 1–1024 chars is required. `playbook validate` flags ids that break the pattern and skills without a description (§12.6).
+- **Path-safe ids only.** An id containing a path separator, `..`/`.`, NUL, or a drive/absolute prefix is rejected with a `ValueError` naming it — the writer never writes outside its root (and never writes through a symlink that escapes it).
+- **Sentinel as the first body line.** Frontmatter must start on line 1 (`^---`) for agent parsers, so the `SENTINEL` is an HTML comment right after the closing fence (the §10.7.3 pattern). A skill directory is engine-owned iff its `SKILL.md` carries the sentinel. Stale files in it are removed only by the lockfile leftover policy (§4.2 step 9) — a file the previous sync wrote that is still pristine and untracked; an edited copy, a tracked file, or a file the user added is kept.
+- **Ownership is decided before writing.** If `<root>/<id>/` already exists and is not engine-owned — a hand-written skill dir with a colliding id, a symlink, or a plain file — the writer leaves it untouched and prints a warning instead of overwriting `SKILL.md` (which would turn the user's directory into engine output). Exceptions: an empty directory, and a sentinel-less directory whose `SKILL.md` the previous sync's lockfile lists (the pre-v0.15 `.claude/skills/` output had no sentinel), are claimed.
 #### 6.3.1 Schema
 A skill is a directory:
 ```
-skill-name/
-├── SKILL.md.j2                      # the prompt body, with frontmatter
+any-folder-name/                     # the output dir comes from `id:`, not this name
+├── SKILL.md.j2                      # the prompt body, with frontmatter (must declare `id:`)
 ├── scripts/                         # optional, bundled scripts the skill can call
 │   └── helper.py
 └── references/                      # optional, additional context
@@ -821,8 +871,8 @@ class Prompt:
 
 @dataclass
 class Skill:
-    # Claude Code-only artifact, see Section 6.3
-    frontmatter: dict  # Claude's SKILL.md frontmatter shape
+    # Agent Skills directory, see Section 6.3
+    frontmatter: dict  # SKILL.md frontmatter (open mapping)
     body: str
     scripts_dir: Path | None  # if the skill bundles scripts
     references_dir: Path | None
@@ -883,7 +933,8 @@ version = "0.4.0"                    # engine version this config was generated 
 enabled = ["playbook_rules_bnp"]
 [adapters]
 # Which adapters render output. AGENTS.md is always generated.
-enabled = ["continue", "claude_code", "opencode"]
+# shared_skills (the cross-agent skills hub, Section 10.8) is on by default; drop it to opt out.
+enabled = ["continue", "claude_code", "opencode", "shared_skills"]
 [storage]
 # Where artifacts and state come from / go to. See Section 20.
 # v1 ships only "filesystem"; future deployments can add others.
@@ -894,6 +945,12 @@ state_source = "filesystem"
 # (Section 12.6). Default: [] — no external links in artifacts at all.
 # Subdomains of an entry are allowed too.
 allowed_domains = ["agentharnesses.io"]
+[output]
+# Is generated output committed? Default false: everything `playbook sync`
+# renders is local-only — gitignored via a managed .gitignore block and
+# refused at commit time by `playbook sync --check-staged`. true = legacy:
+# output is committed and `playbook sync --check` fails a commit on drift.
+commit = false
 [detector.cache]
 # Cached detector output. Refreshed on pyproject.toml change or `playbook check --refresh`.
 python_version = "3.12"
@@ -910,6 +967,17 @@ pytest = "8.3.3"
 docstring_style = "numpy"            # numpy | google | none
 test_layout = "tests-mirror"         # tests-mirror | tests-flat | inline
 ```
+**`[output] commit`** (`config.OutputConfig`, parsed by `config.parse_output_config`) selects the output policy. An absent table means `false`; `playbook init` always writes the table explicitly so the policy is discoverable, and preserves an existing value. The value must be a TOML boolean — `commit = "false"` is rejected with a `ValueError` carrying the offending value rather than coerced. What each value implies:
+
+| | `commit = false` (default) | `commit = true` (legacy) |
+| --- | --- | --- |
+| Generated files + lockfile | gitignored (managed block, §5.3) | committed |
+| Write-mode `playbook sync` | applies the managed block; warns about still-tracked output (§12.2) | removes the managed block |
+| `playbook sync --check` | file drift **and** a stale/missing block — only meaningful in a working copy that has run `playbook sync` (a fresh clone, e.g. CI, has no output: every file is "missing") | file drift only; suitable for CI |
+| `playbook sync --check-staged` | fails when generated output is staged (§12.3.1) | no-op (exit 0) |
+| Hooks (§13) | `post-checkout`/`post-merge` auto-sync + staged-output guard | `playbook sync --check` drift check |
+
+The managed block lists what *this* checkout renders (plus still-owned leftovers, §4.2 step 9). A `.local.toml` that narrows `adapters_enabled` (§7.2) therefore narrows the block too — the dropped adapter's pristine output is deleted — and that `.gitignore` change is personal and should not be committed.
 ### 7.2 `.coding-agent-playbook.local.toml` (gitignored)
 Personal, per-engineer overrides. Merged on top of the committed config but never checked in. `playbook init` appends it to `.gitignore`.
 ```toml
@@ -1110,6 +1178,11 @@ from coding_agent_playbook.types import Rule, Prompt, Skill
 
 class Adapter(ABC):
     name: str  # e.g. "continue"
+    # Repo-relative POSIX locations the adapter writes ("dir/" = everything
+    # beneath it, else one file), e.g. (".claude/CLAUDE.md", ".claude/commands/",
+    # ".claude/skills/"). The leftover policy (Section 4.2 step 9) deletes only
+    # inside a declared location and never prunes above one.
+    output_locations: ClassVar[tuple[str, ...]] = ()
 
     @abstractmethod
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
@@ -1122,9 +1195,9 @@ class Adapter(ABC):
         """Write a rendered prompt."""
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
-        """Default: degrade to prompt. Subclasses override if native skill support
-        (or if a sibling adapter already covers the harness — e.g. OpenCode reads
-        .claude/skills/ natively, so its adapter overrides this to return [])."""
+        """Default: degrade to prompt. Subclasses with native skill support
+        (claude_code, opencode, shared_skills) override this and delegate to the
+        shared SkillWriter (Section 10.8); rules-only adapters return []."""
         prompt = skill.to_prompt()
         return self.write_prompt(prompt, repo_root)
 
@@ -1138,11 +1211,13 @@ class Adapter(ABC):
     def cleanup_stale(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
         """Delete generated files no longer corresponding to a current artifact.
         Default: scan the adapter's known output directories and remove files
-        under sentinel headers that are not in written_paths. Subclasses override
-        only if they need custom cleanup semantics."""
+        under sentinel headers that are not in written_paths (compared by file
+        identity too, so a case-only rename never deletes fresh output).
+        Subclasses override only if they need custom cleanup semantics; native
+        skill directories are never cleaned here (Section 4.2 step 9)."""
         return self._default_cleanup(written_paths, repo_root)
 ```
-Adapters return the paths they wrote. The CLI uses these for the lockfile and for `cleanup_stale`. Of the four built-in adapters, only ClaudeCodeAdapter overrides `finalize()` (to compose CLAUDE.md); the rest write immediately in `write_rule` / `write_prompt`.
+Adapters return the paths they wrote. The CLI uses these for the lockfile and for `cleanup_stale`. `output_locations` is read from **every installed** adapter class, enabled or not (`orchestrator.installed_output_locations()`), so a since-disabled adapter's leftovers can still be settled; a third-party adapter that declares none never has a leftover deleted by the policy (its own `cleanup_stale` still runs while enabled). Of the five built-in adapters (Continue, Claude Code, OpenCode, AGENTS.md, shared_skills), only ClaudeCodeAdapter overrides `finalize()` (to compose CLAUDE.md); the rest write immediately in `write_rule` / `write_prompt` / `write_skill`.
 ### 10.2 Continue adapter
 ```python
 # coding_agent_playbook/adapters/continue_adapter.py
@@ -1190,12 +1265,17 @@ class ClaudeCodeAdapter(Adapter):
         target.write_text(self._render_command(prompt), encoding="utf-8")
         return [target]
 
+    def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
+        # .claude/skills/<id>/ via the shared SkillWriter (Section 10.8).
+        return SkillWriter(Path(".claude") / "skills").write(skill, repo_root)
+
     def finalize(self, repo_root: Path) -> list[Path]:
         target = repo_root / ".claude" / "CLAUDE.md"
         body = self._compose_claude_md(self._buffered_rules)
         target.write_text(body, encoding="utf-8")
         return [target]
 ```
+Skills are written natively to `.claude/skills/<id>/` (`SKILL.md` + byte-copied `scripts/` and `references/`) by the shared `SkillWriter`, with `name` = id and the sentinel as the first body line (§6.3). `cleanup_stale` combines two passes: the first-line sentinel scan over `.claude/commands/` and the single-file `.claude/CLAUDE.md` branch. It never deletes inside `.claude/skills/`: stale skill output is settled by the lockfile leftover policy (§4.2 step 9, §10.8).
 #### 10.3.1 CLAUDE.md composition
 ```markdown
 <!-- AUTOGENERATED by coding-agent-playbook v0.4.0 — edit in source, run 'playbook sync' -->
@@ -1230,11 +1310,13 @@ Adapters are registered via entry points so overlay packages can ship their own 
 continue = "coding_agent_playbook.adapters.continue_adapter:ContinueAdapter"
 claude_code = "coding_agent_playbook.adapters.claude_code_adapter:ClaudeCodeAdapter"
 opencode = "coding_agent_playbook.adapters.opencode_adapter:OpenCodeAdapter"
+shared_skills = "coding_agent_playbook.adapters.shared_skills_adapter:SharedSkillsAdapter"
 agents_md = "coding_agent_playbook.adapters.agents_md_adapter:AgentsMdAdapter"
+agent_harness = "coding_agent_playbook.adapters.agent_harness_adapter:AgentHarnessAdapter"
 ```
 ### 10.6 OpenCode adapter
-OpenCode is structurally close to Claude Code but with one architectural twist: rules are not in a dedicated directory. OpenCode reads `AGENTS.md` at the repo root as its primary rules source, walking up the directory tree, with `CLAUDE.md` accepted as a fallback. This means the AGENTS.md adapter already delivers rules to OpenCode — the OpenCode adapter's job is limited to prompts.
-Skills are also covered without duplication: OpenCode reads `.claude/skills/<name>/SKILL.md` natively as a fallback, so the Claude Code adapter's skill output is automatically picked up by OpenCode. The OpenCode adapter does not write skills.
+OpenCode is structurally close to Claude Code but with one architectural twist: rules are not in a dedicated directory. OpenCode reads `AGENTS.md` at the repo root as its primary rules source, walking up the directory tree, with `CLAUDE.md` accepted as a fallback. This means the AGENTS.md adapter already delivers rules to OpenCode — the OpenCode adapter's job is prompts and skills.
+Skills are written natively to `.opencode/skills/<id>/SKILL.md` (+ `scripts/`, `references/`) through the shared `SkillWriter` (§10.8), so OpenCode no longer depends on the Claude Code adapter being enabled. OpenCode *also* scans `.claude/skills/` (its Claude-compatibility discovery), so with both adapters on the same skill is discovered twice. That is safe: OpenCode stores discovered skills in a `Map` keyed by skill name, last write wins (verified in anomalyco/opencode `packages/core/src/config/plugin/compatibility.ts:53` and `skill.ts:155`), and the two copies are byte-identical.
 ```python
 class OpenCodeAdapter(Adapter):
     name = "opencode"
@@ -1251,9 +1333,9 @@ class OpenCodeAdapter(Adapter):
         return [target]
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
-        # OpenCode reads .claude/skills/ natively as a fallback. The
-        # ClaudeCodeAdapter already writes there — no duplication needed.
-        return []
+        # .opencode/skills/<id>/ via the shared SkillWriter (Section 10.8);
+        # byte-identical to the .claude/skills/ copy.
+        return SkillWriter(Path(".opencode") / "skills").write(skill, repo_root)
 ```
 #### 10.6.1 Prompt → OpenCode command format
 OpenCode commands are markdown with YAML frontmatter. Required field is `description`; optional fields include `agent`, `model`, `subtask`. Placeholders supported in the body: `$ARGUMENTS`, `$1`, `$2`, …, `@path/to/file`, ``!`shell command` ``.
@@ -1284,15 +1366,15 @@ OpenCode does not support declarative lifecycle hooks. Equivalent behavior requi
 #### 10.6.3 Agents gap (out of scope for v1)
 OpenCode supports named agents (`build`, `plan`, custom modes) with their own model and permission overrides, defined in `.opencode/agent/<name>.md`. The canonical artifact model has no concept of named agents in v1. Users wanting custom OpenCode agents write them by hand. See open question 9.
 #### 10.6.4 What the OpenCode adapter does NOT touch
-To make the boundaries explicit, the OpenCode adapter writes only `.opencode/command/`. It does **not** write or modify:
+To make the boundaries explicit, the OpenCode adapter writes only `.opencode/command/` and `.opencode/skills/`, and its own `cleanup_stale` scans only `.opencode/command/` (stale `.opencode/skills/` output is settled by the lockfile leftover policy, §4.2 step 9). In `.opencode/skills/` it writes only engine-owned skill dirs — a hand-written skill dir whose name collides with a canonical skill id is skipped with a warning, never overwritten. It does **not** write or modify:
 - **`.opencode/agent/`** — out of scope; users own custom agents.
 - **`.opencode/plugin/`** — out of scope (hook equivalent); users own plugins.
 - **`opencode.json`** — out of scope; users own MCP server config, permissions, model selection, and the `instructions` array.
 - **`AGENTS.md`** — owned by the AGENTS.md adapter; OpenCode reads it natively.
-- **`.claude/skills/`** — owned by the Claude Code adapter; OpenCode reads it natively as a fallback.
-This deliberate minimalism keeps the OpenCode adapter to ~150 lines and avoids stepping on user-owned config.
+- **`.claude/` (incl. `.claude/skills/`)** — owned by the Claude Code adapter. OpenCode may also discover skills there; duplicates are safe (see above).
+This deliberate minimalism keeps the OpenCode adapter small and avoids stepping on user-owned config.
 ### 10.7 Agent Harness adapter
-The `agent_harness` adapter renders canonical artifacts into a [Agent Harness](https://agentharnesses.io/specification) tree — a `HARNESS.md`-rooted format consumed by harness clients. Unlike the four built-in adapters it is **opt-in**: it is not in the default adapter set and is not force-enabled like `agents_md`. Enable it by listing `agent_harness` in `[adapters] enabled`. It is discovered through the same entry-point mechanism (§10.5); the engine never constructs it directly.
+The `agent_harness` adapter renders canonical artifacts into a [Agent Harness](https://agentharnesses.io/specification) tree — a `HARNESS.md`-rooted format consumed by harness clients. Unlike the five built-in adapters it is **opt-in**: it is not in the default adapter set and is not force-enabled like `agents_md`. Enable it by listing `agent_harness` in `[adapters] enabled`. It is discovered through the same entry-point mechanism (§10.5); the engine never constructs it directly.
 ```python
 class AgentHarnessAdapter(Adapter):
     name = "agent_harness"
@@ -1336,9 +1418,32 @@ The adapter emits a harness tree under the repo root (`specs/prH-agent-harness.m
 
 `scope=always` rules go to `rules/` and `HARNESS.md` adds an "Always consult these" section instructing the agent to read them every session — keeping the root body small and spec-idiomatic. The harness rule file emits **only** `description`; the rule `name` and every other non-native field round-trip via the sidecar (§20.10).
 
-**Eval tasks are not emitted.** The `Adapter` ABC has no eval hook — `sync` only dispatches `write_rule` / `write_prompt` / `write_skill` / `finalize` — so eval tasks are authoring-only and never reach any adapter. The `agent_harness` adapter therefore never writes an `evals/` directory, exactly like the four built-in adapters. (The importer in §12.9 can still *read* a foreign `evals/` directory.)
+**Eval tasks are not emitted.** The `Adapter` ABC has no eval hook — `sync` only dispatches `write_rule` / `write_prompt` / `write_skill` / `finalize` — so eval tasks are authoring-only and never reach any adapter. The `agent_harness` adapter therefore never writes an `evals/` directory, exactly like the five built-in adapters. (The importer in §12.9 can still *read* a foreign `evals/` directory.)
 #### 10.7.3 Sentinel placement and cleanup
-A harness parser requires frontmatter to start on line 1 (`^---`), so the playbook `SENTINEL` cannot be line 1. The adapter writes it as the **first body line** (an HTML comment, after the closing frontmatter fence) on every generated text file. Because of this, the adapter overrides `cleanup_stale` to detect the sentinel *anywhere* in a file rather than only on line 1 (the Claude Code / AGENTS.md single-file pattern). Files without a sentinel are user-authored and never deleted. Scripts and raw assets carry no sentinel; their engine ownership is tracked through the previous `.playbook/manifest.toml`, which `cleanup_stale` reads at the start of `finalize` before overwriting it.
+A harness parser requires frontmatter to start on line 1 (`^---`), so the playbook `SENTINEL` cannot be line 1. The adapter writes it as the **first body line** (an HTML comment, after the closing frontmatter fence) on every generated text file. Because of this, the adapter overrides `cleanup_stale` to detect the sentinel *anywhere* in a file rather than only on line 1 (the Claude Code / AGENTS.md single-file pattern), comparing against the written set by file identity (a case-only id rename on a case-insensitive filesystem never deletes the file just written). Files without a sentinel are user-authored and never deleted. `cleanup_stale` never deletes inside a skill directory (`skills/<id>/` — its `SKILL.md`, scripts and references): like every native skill root, stale skill output there is settled only by the lockfile leftover policy (§4.2 step 9), so a user-edited script is kept; `skills/SKILLS.md` and the `prompts/`, `rules/`, `references/` and root files are still cleaned here. The `HARNESS.md` directory index lists what this render emits, never what happens to be on disk (a leftover or user-owned top-level `skills/` would otherwise change its bytes, and `sync --check`, rendering into an empty scratch dir, would drift forever).
+### 10.8 Shared-skills adapter and the `SkillWriter`
+The `shared_skills` adapter writes every canonical skill to `<repo>/shared_skills/<id>/` — the **cross-agent skills hub**: one agent-neutral copy of the skills that any Agent-Skills-aware tool (or a human) can be pointed at, independent of which harness adapters are enabled. Like all generated output it is gitignored and regenerated on each machine by default; it is committed only with `[output] commit = true` (§5.3, §7.1). It is **on by default** (`playbook init` lists it in `adapters_enabled`) but, unlike `agents_md`, **not force-enabled** — remove it from `[adapters] enabled` to opt out. `write_rule` / `write_prompt` return `[]` (rules reach every assistant through `AGENTS.md`; prompts through the harness adapters). It takes no `rule_registry`, so `discover_adapters` constructs it with no arguments, like `agents_md`.
+```python
+class SharedSkillsAdapter(Adapter):
+    name = "shared_skills"
+
+    def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
+        return []  # rules -> AGENTS.md
+
+    def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
+        return []  # prompts -> harness adapters
+
+    def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
+        return SkillWriter(Path("shared_skills")).write(skill, repo_root)
+```
+**The `SkillWriter`** (`adapters/_skill_writer.py`) is the single source of truth for a native skill directory; `claude_code` (`.claude/skills`), `opencode` (`.opencode/skills`) and `shared_skills` (`shared_skills`) each hold one, differing only in the repo-relative root, so a skill is **byte-identical in every root**.
+- **Write.** `<root>/<id>/SKILL.md` (frontmatter on line 1 with `name` = id, the sentinel HTML comment as the first body line, then the body) plus byte-copies (`shutil.copy2`, copies not symlinks — source symlinks are dereferenced, exec bits preserved) of the canonical `scripts/` and `references/` subtrees. Returns every file written.
+- **Path safety.** Non-path-safe ids (separators, `.`/`..`, NUL, drive/absolute) raise `ValueError` with the offending value; a destination whose directory resolves outside the root (via a symlink) is refused before anything is created, and a symlink sitting at a destination file is replaced, never written through.
+- **Ownership before writing.** `write` claims `<root>/<id>/` only if it is absent, an empty directory, engine-owned (sentinel), or a real directory whose `SKILL.md` the previous sync's lockfile lists **with unchanged bytes** (pre-v0.15 output). Anything else — a hand-written skill dir with a colliding id, a symlinked dir or `SKILL.md`, a plain file, a listed `SKILL.md` the user has since rewritten (an adopted leftover, which the lockfile keeps listing as a kept orphan, or a stripped sentinel) — is skipped with a stderr warning and returns `[]`, so its files are never overwritten. A skills root that cannot hold directories (a dangling symlink, a plain file) is skipped with a warning too, never a crash. Inside a claimed dir an existing destination file or symlink is unlinked before writing (never written through, so a read-only copy from an earlier sync cannot fail the rewrite), as is a symlink where a parent directory must go. A file/folder swap — a regular file where a parent directory must go, or a real directory where a file must go — is displaced only if every file it holds is one the §4.2 step 9 leftover policy would delete (listed in the previous lockfile, bytes unchanged, untracked by git, inside a declared output location, every adapter installed): write-mode `sync` installs that very policy around its render (`_prior_output.judging_leftovers_with`), displaced files count as `removed`, and outside `sync` nothing is displaced. Anything else (a user file, an edited or tracked copy, a symlink) vetoes it, and that one destination is skipped with a stderr warning (`--check` then reports it missing, naming the blocker, until the user moves those files). Only files are ever recorded as written.
+- **Check modes decide ownership against the real tree.** `playbook sync --check`/`--check-staged` render into an empty scratch dir, but inside `deciding_ownership_against(repo_root)` the writer judges `<root>/<id>/` (and the legacy lockfile claim) on the real repo, so the render skips exactly the dirs write mode skips: a colliding hand-written dir is neither false drift nor "generated output" to the staged-output guard.
+- **Case-only id renames.** On a case-insensitive filesystem (default macOS APFS, Windows), an engine-owned `<root>/<Old>/` that *is* `<root>/<old>/` is renamed to the new spelling before writing, so the directory keeps matching the emitted `name`.
+- **No cleanup in the writer.** `<root>/<id>/` is engine-owned iff it is a real directory whose `SKILL.md` (a regular file) contains the sentinel anywhere — searched as bytes, so binary or undecodable files never crash it. The writer and the adapters' `cleanup_stale` never delete stale skill files: a skill dir mixes engine output with files a user may have edited or added, so stale output there is settled only by the lockfile leftover policy (§4.2 step 9) — deleted only if the previous lockfile lists it, its bytes still match, git does not track it, it lies in a declared output location and every enabled adapter is installed; directories left empty are pruned (the skill dir, then an emptied skills root — never above it, and never the target of a symlinked root). A file the engine never wrote is never deleted, even inside an engine-owned dir, and directories without the sentinel are user-authored and **never touched**.
+- **Upgrade note.** `.claude/skills/<id>/` directories written before v0.15 carry no sentinel. A skill still present after upgrading is re-claimed through the lockfile (its `SKILL.md` is listed there with the bytes the old engine wrote; one edited since stays the user's), gains the sentinel, and its stale engine-written files are settled by the leftover policy from then on. A skill deleted *before* upgrading is never written again, so it is left in place (treated as user-authored); delete it by hand once.
 ## 11. Overlay system
 ### 11.1 Three layers
 The artifact list is built by merging three sources in order:
@@ -1411,6 +1516,7 @@ coding-agent-playbook v0.4.0
    ◉ Continue
    ◉ Claude Code
    ◉ OpenCode
+   ◉ Shared skills hub (shared_skills/)
    ◯ Codex CLI (AGENTS.md only)
 ? Enable overlay packages? (detected: playbook-rules-bnp)
    ◉ playbook-rules-bnp
@@ -1422,19 +1528,20 @@ coding-agent-playbook v0.4.0
                  inline (test_*.py next to source)
 ✓ Detected Python 3.12 with uv
 ✓ Detected frameworks: fastapi, pydantic, sqlalchemy, pytest
-✓ Wrote .coding-agent-playbook.toml
+✓ Wrote .coding-agent-playbook.toml ([output] commit = false)
 ✓ Wrote .coding-agent-playbook.local.toml (gitignored)
 ✓ Appended .coding-agent-playbook.local.toml to .gitignore
 ✓ Wrote .pre-commit-config.yaml (merged with existing)
-✓ Installed pre-commit hooks
-✓ Ran playbook sync — generated 12 files
+Install the git hooks with: pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge
+✓ Ran playbook sync — generated 12 files, gitignored via the managed block
 Next steps:
-  - Review generated AGENTS.md, .continue/, .claude/, .opencode/
-  - Commit .coding-agent-playbook.toml, .pre-commit-config.yaml, and generated files
+  - Review generated AGENTS.md, .continue/, .claude/, .opencode/ (local-only)
+  - Commit .coding-agent-playbook.toml, .pre-commit-config.yaml, and .gitignore
   - Open VS Code; Continue will pick up rules automatically
 ```
+`playbook init` writes `[output] commit = false` explicitly (an existing value is preserved) and picks the playbook hooks for that policy (§13.2/§13.3). It **does not run pre-commit itself**: under `commit = false` it prints the hook-install command, since the auto-sync hook only fires once the `post-checkout`/`post-merge` git hooks are installed: `pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge` (a plain `pre-commit install` does the same when the config carries `default_install_hook_types`, as the fresh starter does). Merging into an existing config can also print a `warning:` (a hand-edited legacy drift hook to delete) or a `note:` (no `default_stages`) on stderr — §13.3.
 ### 12.2 `playbook sync`
-Regenerate all artifacts. The workhorse command. Run automatically by pre-commit; can also be run manually.
+Regenerate all artifacts. The workhorse command. Run automatically by the `post-checkout`/`post-merge` hook under the default `[output] commit = false` (and **once by hand after cloning** — the rendered output is not in the repository); can also be run manually any time.
 ```
 $ playbook sync
 ✓ Loaded config (engine 0.4.0, overlay bnp 0.2.0)
@@ -1448,18 +1555,45 @@ $ playbook sync
 ✓ Wrote 1 file via agents_md adapter
 ✓ Removed 0 stale files
 ✓ Updated .coding-agent-playbook.lock
+Updated the managed block in .gitignore
 Summary: 23 files written, 0 unchanged, 0 removed
 ```
+After the lockfile is stamped, write mode applies the output policy (§4.2 step 9). With `commit = false` it rewrites the managed `.gitignore` block (§5.3) from this run's written paths — printing `Updated the managed block in .gitignore` only when the file actually changed — and then asks git, read-only, whether any generated path (or the lockfile) is **still tracked**, e.g. in a repo migrating from committed output. If so it warns on stderr and prints the exact command to stop tracking them; the exit code stays 0 and the engine never runs it itself:
+```
+warning: generated output is still tracked by git, but [output] commit = false
+keeps it local-only (gitignored). Tracked paths:
+  .claude/CLAUDE.md
+  AGENTS.md
+Stop tracking them (the files stay on disk) with:
+  git rm -r --cached -- .claude/CLAUDE.md AGENTS.md
+```
+The query is `git --literal-pathspecs ls-files -z -- <paths>` (arg-list, no shell, `cwd` = repo root, 10 s timeout) behind the injectable `GitClient` protocol (`git_client.py`; tests use a `FakeGitClient`). Not a git repository, git missing, or a timeout → the warning is skipped silently. Deciding whether a *leftover* is tracked is stricter (§4.2 step 9): it asks with `:(literal,icase)` pathspecs, confirms each match by NFC spelling or file identity, and when git cannot answer inside a git work tree it keeps every leftover — it never reads "unknown" as "untracked". The paths are relative to the repo root, so when that is not the current directory (`playbook sync --repo-root packages/foo` from a monorepo root) the printed command is `git -C <repo-root> rm -r --cached -- …`. Before the block is written, leftovers of an earlier sync are settled from the previous lockfile (§4.2 step 9): pristine, untracked orphans are deleted and counted in `removed`; the rest are carried forward in the lockfile and kept in the block. If a package in `overlays_enabled` is not importable, `sync` prints `error: overlay package(s) … are not importable` with the fix (§13.1) and exits 1 before writing anything; a missing adapter is a `warning:` and the run continues. With `commit = true` write mode removes the managed block instead (`Removed the managed block from .gitignore`); it settles leftovers by the same policy (asking git only when there are leftovers to judge) and lists every kept one on stderr (`note: kept output an earlier sync wrote …`), since a committed — tracked — leftover is never deleted. A malformed block (unmatched or duplicated markers) makes `sync` print `error: <file>:<line>: …` and exit 1 after the outputs and lockfile are written, without touching `.gitignore`.
 ### 12.3 `playbook sync --check`
-Verify, don't write. Used by pre-commit and CI. Exits non-zero on drift.
+Verify, don't write. Exits non-zero on drift. Under `[output] commit = true` it is the CI and legacy pre-commit check: the output is committed, so a fresh checkout has everything to compare. Under the default `commit = false` the output is **not in the repository**, so `--check` only makes sense in a working copy where `playbook sync` has already run (it then also reports a stale, missing, or malformed managed `.gitignore` block, and a not-yet-settled leftover, as drift; `--check` never writes `.gitignore`). Do not run it on a fresh CI clone under `commit = false` — every generated file reports "Missing on disk"; running `playbook sync` first would make it vacuous. CI for such repos validates the source instead (`playbook validate`).
 ```
 $ playbook sync --check
 ✗ Drift detected:
   .continue/rules/50-python-typing.md
     Generated content differs from on-disk content.
     Run 'playbook sync' to regenerate.
+  .gitignore
+    Managed block is missing or stale ([output] commit = false).
+    Run 'playbook sync' to regenerate.
 exit code: 1
 ```
+Implementation: the render reads its inputs (config, detector facts, artifacts, `applies_if` file checks) from the real repo but the adapters write into an **empty** scratch directory named like the repo — nothing from the working tree is copied, so a dangling symlink, an unreadable data directory, a socket/FIFO, or a large `.venv` can neither crash nor slow the check, and the real tree is never written. Skill-dir ownership is decided against the real tree, not the empty scratch (§10.8), so a skill dir write mode skips — hand-written with a colliding id, a symlink, a plain file, an unusable skills root — is skipped in the render too, and nothing the adapters render depends on what else is on disk (the `agent_harness` `HARNESS.md` index lists what it emits, §10.7.3). So after a successful `playbook sync`, `--check` exits 0 — with one documented exception: a file/folder swap inside a skill dir that `sync` refused because files it may not delete are in the way (a user file, an edited or tracked copy, §10.8). That destination stays missing, and `--check` reports it as `Missing on disk: <blocker> is in the way …`, telling the user to move those files rather than to re-run `playbook sync` (which cannot fix it); under `commit = true` the legacy `playbook-sync-check` hook fails until they do. Scratch paths are mapped back onto the real tree before ignore entries are computed, so a symlinked output directory (e.g. `.claude/skills -> ../.agents/skills`) yields exactly the entries write mode writes. The scratch output is then diffed against the repo.
+#### 12.3.1 `playbook sync --check-staged`
+The `[output] commit = false` commit guard (pre-commit stage). It renders into an empty scratch directory exactly like `--check` (no writes, no working-tree copy; skill-dir ownership judged on the real tree, so files in a hand-written skill dir are never flagged), asks git for the staged paths — `git diff --cached --name-only -z --relative --no-renames --diff-filter=d`, so staged *deletions* (the `git rm --cached` migration) never trip it — and exits 1 listing every staged path covered by an entry for this render's output **or for any leftover of an earlier sync still on disk** (every orphan in the previous lockfile, pristine or not), including files under a collapsed skill directory. Paths are matched in Unicode NFC on both sides:
+```
+$ playbook sync --check-staged
+Generated output is staged for commit ([output] commit = false keeps it local-only):
+  AGENTS.md
+  .claude/skills/review/scripts/run.sh
+Unstage it (the files stay on disk) with:
+  git rm -r --cached -- AGENTS.md .claude/skills/review/scripts/run.sh
+exit code: 1
+```
+Exit 0 when nothing generated is staged, when nothing is staged at all (fast path: no render), when the directory is not a git repository (or git is unavailable), and always under `commit = true` (no-op). Exit 1 with an `error:` (not a staged-path list) when an overlay package is not importable (§4.2 step 1). `--check` and `--check-staged` are mutually exclusive.
 ### 12.4 `playbook check`
 Diagnostic dump. No writes. Used to debug "why isn't my rule appearing?"
 ```
@@ -1513,6 +1647,7 @@ $ playbook validate
 ✓ All `eval_tasks:` references resolve to existing tasks
 ✓ All task `prompt_id` back-references match a prompt's `eval_tasks:` list
 ✓ All markdown links self-contained (relative targets resolve; externals allowlisted)
+✓ All skills are valid Agent Skills (string id declared, id/name matches ^[a-z0-9]+(-[a-z0-9]+)*$, description present)
 ✗ rules/frameworks/sqlalchemy-v2.md.j2: applies_if references unknown fact 'orm_version'
 ✗ prompts/refactor.md.j2: body calls `{{ rule("python-style") }}` but rule not in includes_rules
 ✗ rules/languages/python/typing.md.j2: body calls `{{ rule(...) }}` — rules cannot include other rules
@@ -1520,10 +1655,15 @@ $ playbook validate
 ✗ prompts/generate-tests.md.j2: declares eval_task 'foo-bar' but eval_tasks/foo-bar/ not found
 ✗ rules/languages/python/typing.md.j2: markdown link 'style.md' (line 12): target 'style.md' does not exist in the artifact set
 ✗ prompts/review.md.j2: markdown link 'https://blog.example.com/x' (line 4): external link to host 'blog.example.com' is not in [links] allowed_domains
+✗ skills/My_Skill (<repo-local>): skill id 'My_Skill' is not a valid Agent Skills name (must match ^[a-z0-9]+(-[a-z0-9]+)*$); OpenCode silently skips it
+✗ skills/query-db (<repo-local>): skill has no 'description'; Agent Skills requires a non-empty description
+✗ skills/<no id; name 'pdf-tools', at playbook/skills/pdf-tools> (<repo-local>): skill has no 'id'; it is emitted as 'skill' and collides with every other id-less skill (declare 'id:' in its SKILL.md frontmatter)
 exit code: 1
 ```
 
 The self-contained-links rule (PR L, design in `specs/prL-markdown-links.md`) covers rule bodies, prompt bodies, and skills (`SKILL.md` + every markdown file under `references/`) across all three source layers. Extraction masks frontmatter, fenced code blocks, and inline code spans (code examples like `def first[T](items: list[T])` are not links); Jinja-bearing targets are skipped as not statically checkable. Relative targets must resolve — `other.md` is satisfied by a canonical `other.md.j2` since rendering drops the suffix — and must stay inside the artifact's source layer; `http(s)` targets pass only via `[links] allowed_domains` (§7.1); every other scheme and absolute paths are violations. Deterministic by construction: stdlib only, no network. The engine's own shipped artifacts are enforced on CI by a pytest integration test (`tests/cli/test_validate_links.py`); consumer repos and overlays inherit the rule through `playbook validate`.
+
+The Agent Skills rule (v0.15) checks every resolved skill: it must declare a string `id` (§6.3), its id — emitted as the `SKILL.md` `name` and the output directory — must match `^[a-z0-9]+(-[a-z0-9]+)*$` and be at most 64 chars, and it must carry a `description` of 1–1024 chars. OpenCode silently drops a skill that breaks either name/description constraint, so authors learn here instead of at runtime. Id-less skills all merge under the fallback id `skill` (all but one silently dropped), so they are checked from the **pre-merge** list and each one is reported. Skills carry no source path, so errors are reported as `skills/<id> (<source package>)`, or — for an id-less skill — by its authored `name` plus, when it has `scripts/`/`references/`, its source directory.
 ### 12.7 `playbook render` (debug)
 Render a single artifact to stdout for debugging. Does not write.
 ```
@@ -1651,12 +1791,31 @@ exit code: 1
 A missing or malformed `HARNESS.md` is reported as a validation **error** (exit 1) — not a usage error (exit 2) — because for a validator a malformed harness is precisely the failure it exists to report. Directories marked opaque by a `.harnessleaf` marker are terminal leaves: the validator never expects a routing file for them and does not inspect their internal content.
 ## 13. Pre-commit integration
 ### 13.1 The engine's `.pre-commit-hooks.yaml`
-Shipped at the root of `coding-agent-playbook` so consumers can reference it:
+Shipped at the root of `coding-agent-playbook` so consumers can reference it. The first two hooks implement the default `[output] commit = false` policy; `playbook-sync-check` is the **legacy** hook, only for repos that set `commit = true`:
 ```yaml
 # .pre-commit-hooks.yaml (inside the engine repo)
+- id: playbook-sync
+  name: coding-agent-playbook sync (regenerate local output)
+  description: Re-render the gitignored AGENTS.md/.claude/.continue/.opencode output after checkout or merge
+  entry: playbook sync
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [post-checkout, post-merge]
+  minimum_pre_commit_version: "3.2.0"
+- id: playbook-no-generated-output
+  name: coding-agent-playbook guard (no generated output staged)
+  description: Fail the commit when any staged path is gitignored generated output ([output] commit = false)
+  entry: playbook sync --check-staged
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]
+  minimum_pre_commit_version: "3.2.0"
+# LEGACY — only for [output] commit = true (generated output is committed).
 - id: playbook-sync-check
-  name: coding-agent-playbook sync check
-  description: Verify .continue/, .claude/, AGENTS.md are in sync with the installed playbook
+  name: coding-agent-playbook sync check (legacy, [output] commit = true)
+  description: Verify committed .continue/, .claude/, AGENTS.md are in sync with the installed playbook
   entry: playbook sync --check
   language: python
   pass_filenames: false
@@ -1670,25 +1829,59 @@ Shipped at the root of `coding-agent-playbook` so consumers can reference it:
   always_run: true
   stages: [manual]
 ```
+(`playbook-metrics`, the static code-quality gate, is listed in §21.5.) Stage names are pre-commit's hook-type names (`pre-commit`, `post-checkout`, `post-merge`, …; verified against pre-commit 4.7.0's `clientlib.STAGES`), introduced in pre-commit 3.2.0 — hence `minimum_pre_commit_version`. `post-checkout`/`post-merge` hooks receive no filenames, so `always_run: true` is required for them to run at all. A consumer wiring the default policy installs all three hook types (`pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge`; explicit `--hook-type` flags *replace* `default_install_hook_types`, so all three must be named):
+```yaml
+# consumer .pre-commit-config.yaml
+default_install_hook_types: [pre-commit, post-checkout, post-merge]
+default_stages: [pre-commit]     # keep other always_run hooks off checkout/merge
+repos:
+  - repo: https://github.com/msobroza/coding-agent-playbook
+    rev: v0.1.0a0                # the engine version the project pins
+    hooks:
+      - id: playbook-sync
+        additional_dependencies: [playbook-rules-bnp]   # every overlay / out-of-tree adapter
+      - id: playbook-no-generated-output
+        additional_dependencies: [playbook-rules-bnp]
+```
+**These hooks run in pre-commit's own venv.** `language: python` means pre-commit builds an isolated environment holding only the engine at `rev:` — not the project's environment. An overlay package or out-of-tree adapter must therefore be listed under `additional_dependencies` (and `rev` kept on the engine version the project pins, or hook runs and manual runs render with different engines). Without it the sync refuses to run (missing overlay, §4.2 step 1) or skips the adapter with a warning — it never silently re-renders without the org rules. Overlay users (and anyone pinning the engine in their project environment) should prefer the `repo: local` + `language: system` hooks `playbook init` writes (§13.2), which run the project's own `playbook`.
 ### 13.2 Template `.pre-commit-config.yaml` (written by `playbook init`)
-`playbook init` renders this starter from the packaged template `resources/precommit/config.yaml.j2`. It is **air-gapped-friendly**: every hook is `repo: local` + `language: system`, so pre-commit never clones a remote hook repo (it would otherwise fetch each `repo:` URL into `~/.cache/pre-commit` on first run — impossible offline, which also satisfies the engine's "air-gapped-friendly" invariant). The tradeoff is that the consumer must have `ruff` and `mypy` installed in their environment; `language: system` runs the tools on PATH, it does not install them.
+`playbook init` renders this starter from the packaged template `resources/precommit/config.yaml.j2`. It is **air-gapped-friendly**: every hook is `repo: local` + `language: system`, so pre-commit never clones a remote hook repo (it would otherwise fetch each `repo:` URL into `~/.cache/pre-commit` on first run — impossible offline, which also satisfies the engine's "air-gapped-friendly" invariant). The tradeoff is that the consumer must have `ruff` and `mypy` installed in their environment; `language: system` runs the tools on PATH, it does not install them. The template is rendered with one variable, `output_commit` (the `[output] commit` policy), which selects the playbook hooks — the default `commit = false` variant is shown:
 ```yaml
 # AUTOGENERATED starter by coding-agent-playbook `playbook init`.
 # Air-gapped-friendly: all hooks are `repo: local` + `language: system`.
 # Requires ruff and mypy installed in your environment.
+minimum_pre_commit_version: "3.2.0"
+default_install_hook_types: [pre-commit, post-checkout, post-merge]
+default_stages: [pre-commit]
 default_language_version:
   python: python3.12
 fail_fast: false
 repos:
   - repo: local
     hooks:
-      # The playbook — sync drift check
-      - id: coding-agent-playbook-sync
-        name: coding-agent-playbook sync
-        entry: playbook sync --check
+      # The playbook — re-render the local-only output after checkout / merge
+      - id: coding-agent-playbook-autosync
+        name: coding-agent-playbook sync (regenerate local output)
+        entry: playbook sync
         language: system
         pass_filenames: false
         always_run: true
+        stages: [post-checkout, post-merge]
+      # The playbook — refuse commits that stage generated output
+      - id: coding-agent-playbook-no-generated-output
+        name: coding-agent-playbook guard (no generated output staged)
+        entry: playbook sync --check-staged
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+      # The playbook — static code-quality gate (§21.5)
+      - id: coding-agent-playbook-metrics
+        name: coding-agent-playbook metrics (static)
+        entry: playbook metrics --baseline git:HEAD
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
       # Linting and formatting (ruff must be installed)
       - id: ruff
         name: ruff (lint + autofix)
@@ -1710,9 +1903,11 @@ repos:
         pass_filenames: false
         always_run: true
 ```
+`default_install_hook_types` makes a plain `pre-commit install` install the `post-checkout`/`post-merge` git hooks the auto-sync needs; `default_stages: [pre-commit]` keeps every hook without an explicit `stages` (notably the `always_run` mypy hook) from also running after each checkout/merge — pre-commit's default is *all* stages. With `[output] commit = true` the template instead renders the legacy `coding-agent-playbook-sync` hook (`entry: playbook sync --check`, every commit) and omits those three top-level keys.
+
 Intentionally **not** shipped in the starter: generic-hygiene hooks (trailing-whitespace, end-of-file-fixer, check-yaml/-toml, detect-private-key, check-merge-conflict, check-added-large-files), secret scanning (gitleaks), and notebook hooks (nbstripout/nbqa) — all of which require cloning a remote repo. `ruff format` already covers Python whitespace/EOF; a pre-push `pytest` hook can be added by the consumer as a `repo: local` entry if desired.
 ### 13.3 Merge with existing `.pre-commit-config.yaml`
-If the consumer already has a config, `playbook init` appends only our `coding-agent-playbook-sync` local hook block, and only when it is not already present — it never injects ruff/mypy into a config the consumer already curates. The current implementation is a text-based append; round-trip merging with `ruamel.yaml` (to preserve comments/ordering and surface version conflicts, e.g. a different ruff pin) can land later.
+If the consumer already has a config, `playbook init` appends only our playbook `- repo: local` hook block for the configured policy — the `coding-agent-playbook-autosync` + `coding-agent-playbook-no-generated-output` pair for `commit = false` (deduplicated on the guard's id), the legacy `coding-agent-playbook-sync` drift check for `commit = true` — and only when it is not already present. It never injects ruff/mypy into a config the consumer already curates, and it does not add top-level keys (`default_install_hook_types`, `default_stages`) to a file it does not own: the consumer installs the extra hook types with `pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge` (which `init` prints) and should confine their own `always_run` hooks with `stages:`/`default_stages`. A legacy `coding-agent-playbook-sync` hook (`playbook sync --check`) left over from before v0.16 is **swapped in place** for the `commit = false` pair when it is still byte-for-byte what `init` wrote (in the old starter or the old appended block) — it would otherwise report drift after every checkout/merge, since the output is no longer committed. A hand-edited one is left alone and `init` prints a `warning:` telling the user to delete it. When the merged config has no `default_stages`, `init` also prints a `note:` that the consumer's own `always_run` hooks need `stages: [pre-commit]` (or `default_stages: [pre-commit]`) before the `post-checkout`/`post-merge` hook types are installed. The current implementation is a text-based append; round-trip merging with `ruamel.yaml` (to preserve comments/ordering and surface version conflicts, e.g. a different ruff pin) can land later.
 ## 14. Distribution and versioning
 ### 14.1 Channels
 - **Engine and overlays**: distributed via internal PyPI (Artifactory). No public PyPI for v1.
@@ -1720,10 +1915,10 @@ If the consumer already has a config, `playbook init` appends only our `coding-a
 ### 14.2 Versioning contract
 SemVer applied to the **rendered output format**, not the Python API:
 - **Patch** (`0.4.0 → 0.4.1`): rule wording improvements, bug fixes, no consumer action needed.
-- **Minor** (`0.4.0 → 0.5.0`): new rules or prompts added, new optional features. Consumer re-runs `playbook sync` and reviews the diff.
+- **Minor** (`0.4.0 → 0.5.0`): new rules or prompts added, new optional features. Consumer re-runs `playbook sync`. Under `[output] commit = true` they review the regenerated diff; under the default `commit = false` the output is local-only, so the review happens on the engine/overlay release (its changelog and diff), or by comparing a local `playbook sync` before and after the bump.
 - **Major** (`0.4.0 → 1.0.0`): breaking changes to artifact schema, adapter contract, or CLI surface. Consumer follows a migration guide.
 ### 14.3 Pinning policy
-Consumers pin to a minor range: `coding-agent-playbook>=0.4.0,<0.5.0`. Overlays pin to the engine's minor range. Dependabot / Renovate bumps trigger a `playbook sync` and the diff lands in a PR for review.
+Consumers pin to a minor range: `coding-agent-playbook>=0.4.0,<0.5.0`. Overlays pin to the engine's minor range. Under `[output] commit = true`, Dependabot / Renovate bumps trigger a `playbook sync` and the regenerated diff lands in the PR for review. Under the default `commit = false` the PR only carries the dependency bump (rendered output is gitignored): reviewers read the engine/overlay release notes, or render locally before and after the bump.
 ### 14.4 Lockfile
 `.coding-agent-playbook.lock` is a TOML file with:
 ```toml
@@ -1737,7 +1932,7 @@ playbook_rules_bnp = "0.2.0"
 # ... one entry per generated file
 "AGENTS.md" = "sha256:..."
 ```
-`playbook sync --check` recomputes the hashes and compares. Mismatch → drift → exit 1.
+`playbook sync --check` recomputes the hashes and compares. Mismatch → drift → exit 1. Under the default `[output] commit = false` the lockfile is local state like the output it describes: it is always listed in the managed `.gitignore` block (`/.coding-agent-playbook.lock`) and never committed. The consumer's `.gitignore` is never a lockfile entry — it is a user file the engine only edits inside its managed block.
 ## 15. Eval abstractions
 v1 shipped **Tier 0**: the task authoring format (Section 6.5), the loader, the validator, and a read-only CLI. **v1.1 makes Tier 1 live**: `HarnessRunner` executes one task end-to-end against an agent and scores it through the `Metric` / `Check` / `Rubric` model (§21). The **task-config redesign (v0.13, Tracks C1–C8)** then reshaped the *authored* format into the layered `[gate]` / `[rubric]` / `[verdict]` / `[aggregate]` model (§6.5.3): a task compiles into one per-trial `Rubric` of checks whose deterministic `[gate]` layer (file/metric checks, 0–1 normalized thresholds + non-regression vs the `setup/` baseline) is computable today, and whose judged `[rubric]` layer scores against the captured diff when a judge is configured (`--judge llm`, or any `coding_agent_playbook.judges` entry). With **no judge configured** the runner is deterministic-only (the rubric layer reports `available() is False` and is skipped — the verdict treats a skipped layer as neutral). §15.3 describes the as-built v1.1 runner; the design docs are `specs/prR-eval-runner.md` (R1), `specs/prR2-judge-r3-opencode.md` (R2), `specs/prR6-check-rubric.md` (the R6 `Metric`/`Check`/`Rubric` refactor), and **`specs/pr2b-task-config.md`** (the task-config redesign).
 ### 15.1 The Tier 0 / Tier 1 / Tier 2 ladder
@@ -1886,6 +2081,8 @@ The `coding_agent_playbook/evals/` package ships `task.py`, `loader.py`, `valida
 - `test_renderer.py` — render templates with hand-crafted context; assert exact output.
 - `test_overlays.py` — registration, ordering, override resolution.
 - `test_lockfile.py` — hash compute, drift detection.
+- `test_gitignore.py` — managed-block entries (skill-dir collapse under any root, escaping verified against real git), append/replace/idempotence, CRLF and missing-final-newline preservation, malformed markers, removal.
+- `test_git_client.py` — `SubprocessGitClient` against throwaway repos (guarded on git being on PATH, hermetic git env) plus its silent failure modes; `playbook sync` tests inject `tests/fakes.py::FakeGitClient` instead of patching `subprocess`.
 ### 16.2 Adapter tests (golden file)
 Each adapter has a directory of input/output pairs:
 ```
@@ -2321,14 +2518,14 @@ $ uv add --dev coding-agent-playbook playbook-rules-bnp
 $ playbook init
 ```
 User answers the prompts. The tool writes:
-- `.coding-agent-playbook.toml`
+- `.coding-agent-playbook.toml` (with `[output] commit = false`)
 - `.coding-agent-playbook.local.toml`
 - updated `.gitignore`
 - merged `.pre-commit-config.yaml`
-- runs `pre-commit install`
-- runs `playbook sync`
+- prints the `pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge` command for you to run (init never runs pre-commit itself)
+- runs `playbook sync` (which also writes the managed `.gitignore` block)
 ### A.4 Step 3: result
-Generated files (all with sentinel headers):
+Generated files (all with sentinel headers; all local-only — listed in the managed `.gitignore` block, never committed):
 ```
 AGENTS.md
 .continue/
@@ -2397,21 +2594,21 @@ $ playbook sync
 ✓ Updated .coding-agent-playbook.lock
 Summary: 3 files changed
 ```
-Engineer commits the diff. The team reviews the change like any other config change.
-### A.7 Step 6: drift detection
-A junior developer hand-edits `.continue/rules/50-python-typing.md` without going through the source.
+Engineer commits the dependency bump (`uv.lock`) — the regenerated files are local-only, so the review happens on the engine/overlay release itself. Teammates pulling the bump must **update their environment first** (`uv sync`) and then run `playbook sync`: the `post-merge` hook re-renders only with the engine and overlays *already installed* (the `language: system` init hook uses their current venv; a remote `language: python` hook uses the `rev:`-pinned engine), so on its own it renders the old wording. (Under `[output] commit = true` the engineer commits the regenerated diff instead, and the team reviews it like any other config change.)
+### A.7 Step 6: generated output stays out of commits
+A junior developer hand-edits `.continue/rules/50-python-typing.md` without going through the source, then force-adds it to share the tweak.
 ```bash
+$ git add -f .continue/rules/50-python-typing.md
 $ git commit -m "tweak rule"
 [pre-commit running]
-playbook-sync-check:
-✗ Drift detected:
+playbook-no-generated-output:
+Generated output is staged for commit ([output] commit = false keeps it local-only):
   .continue/rules/50-python-typing.md
-    Generated content differs from on-disk content.
-    Either revert the manual edit, or update the canonical template
-    in coding-agent-playbook / playbook-rules-bnp and bump the version.
+Unstage it (the files stay on disk) with:
+  git rm -r --cached -- .continue/rules/50-python-typing.md
 [commit blocked]
 ```
-The dev either reverts, or files a PR against the overlay to make the change properly.
+The dev unstages it and either adds a repo-local override under `playbook/rules/` or files a PR against the overlay to make the change properly; the next `playbook sync` (or checkout) overwrites the local hand-edit anyway. Under `[output] commit = true` the legacy `playbook-sync-check` hook blocks the same commit as drift instead.
 ## Appendix B: BNP overlay shape
 For Max's reference, the BNP overlay layout in detail:
 ```
@@ -2467,9 +2664,26 @@ Notes on sequencing:
 - **Track 5b (Eval Tier 0)** lands after the main CLI because it adds CLI subcommands and one new validator pass. It is independent of the adapters — eval tasks are authoring-side artifacts and don't flow through any adapter.
 - The source abstraction and the canonical types together add maybe two days of work to the early tracks but pay for themselves in test simplicity from PR 6 onward, and in clean serialization boundaries when the commercial product arrives.
 ---
-*End of SPEC.md v0.13.*
+*End of SPEC.md v0.16.*
 ---
 ## Changelog
+### v0.16 (2026-10-14)
+Generated output is **local-only** in consumer repos by default. Rendered files are build products of the installed engine + overlays + `playbook/`, so they are gitignored and regenerated on each machine instead of being committed. Behaviour change for consumers: new repos (and repos without an `[output]` table) stop committing output; `[output] commit = true` restores the pre-v0.16 committed-output policy.
+- **Section 7.1 (config)**: new `[output]` table — `commit` (bool, default `false`), parsed by `config.parse_output_config` into `config.OutputConfig`; a non-bool is a `ValueError` carrying the value. `Config.output` is `None` when the table is absent (sparse round-trip) and `Config.commit_output` is the effective value. `playbook init` writes `commit = false` explicitly and preserves an existing value.
+- **Sections 4.2 / 5.3 (data flow, consumer layout)**: new step 9 — the output policy. `commit = false`: an engine-owned managed block in the consumer's `.gitignore` lists every generated file root-anchored and escaped (skill directories — any directory holding a written `SKILL.md` — collapse to `/<dir>/`), plus the lockfile. Byte-preserving (CRLF, missing final newline), atomic, idempotent; malformed markers fail with file + line. `.gitignore` is never in the lockfile. `commit = true`: the block is removed. Leftover settling (below) runs under **both** settings.
+- **Sections 12.2 / 12.3 / 12.3.1 (sync)**: write mode applies/removes the block and, under `commit = false`, warns on stderr about generated paths git still tracks with the exact `git rm -r --cached -- …` (read-only `git ls-files`, 10 s timeout, silent when git cannot answer; exit code unchanged). `--check` also reports a stale/missing/malformed block as drift. New `--check-staged` (mutually exclusive with `--check`) fails when a staged path is generated output; no-op under `commit = true` or outside a git repo.
+- **Section 13 (pre-commit)**: new consumer hooks `playbook-sync` (`post-checkout`/`post-merge` auto-sync) and `playbook-no-generated-output` (pre-commit guard), both `minimum_pre_commit_version: "3.2.0"`; `playbook-sync-check` is kept as the legacy `commit = true` hook. The `playbook init` starter renders per policy and, for `commit = false`, adds `default_install_hook_types: [pre-commit, post-checkout, post-merge]` and `default_stages: [pre-commit]`.
+- **Review hardening (same release)**: leftovers of an earlier sync (a removed skill's `SKILL.md`/scripts, a disabled adapter's output) are owned through the previous lockfile — pristine untracked ones deleted, the rest carried forward (and, under `commit = false`, kept in the managed block), and always caught by `--check-staged` (§4.2 step 9). Under `commit = true` the same settling runs and kept leftovers are listed on stderr (`_sync_output.report_kept_leftovers`): **behaviour change from v0.15** — a removed skill's committed (tracked) files are no longer deleted; they stay until the user runs `git rm`. This is the **single deletion policy for skill dirs**: adapters' `cleanup_stale` never deletes inside one (`agent_harness` `skills/<id>/` included), a file absent from the previous lockfile is never deleted, a skill-dir file/folder swap displaces only what the policy would delete, and the pre-v0.15 lockfile claim needs unchanged `SKILL.md` bytes. Bounds: deletion only inside installed adapters' declared `Adapter.output_locations` (§10.1), never under `.git/` or through a symlink; pruning never above a declared directory or into a symlinked root's target; a skills root that is a dangling symlink is skipped with a warning. The tracked check asks `:(literal,icase)` pathspecs, matches in NFC or by file identity, and keeps everything when git cannot answer inside a work tree. Stale-vs-written comparisons use file identity; `--check`/`--check-staged` decide skill ownership on the real tree (`deciding_ownership_against`), `HARNESS.md` indexes only what it emits, and `--check` names the blocker of a refused swap (the one documented exception to "`--check` exits 0 after a successful sync", §12.3). `--check`/`--check-staged` render into an empty scratch dir (no working-tree copy: dangling symlinks, unreadable dirs, FIFOs and big venvs no longer crash or slow the guard) and map paths back through the repo's own symlinks, so they agree with write mode. Every `sync` mode refuses to run when an `overlays_enabled` package is not importable; a missing adapter is a warning. Entries are NFC-normalised (plus the as-written form); a BOM before a first-line block is tolerated and preserved; the atomic write uses a unique temp name. The `git rm -r --cached` hint gains `git -C <repo-root>` when run from elsewhere. `init` swaps a verbatim pre-v0.16 `coding-agent-playbook-sync` hook for the new pair, warns about a hand-edited one, and notes a missing `default_stages`. Docs: §12.3 limits CI use of `--check` to `commit = true`; §13.1 documents `additional_dependencies`/`rev` for the remote hooks (or the init `language: system` hooks); §12.1/A.3 say init prints (not runs) `pre-commit install`; §14.2/§14.3/A.6 drop the "review the regenerated diff" assumption under `commit = false`.
+- **Implementation**: `gitignore.py` (stdlib-only entries + managed block), `git_client.py` (`GitClient` protocol + `SubprocessGitClient`), `commands/_sync_output.py` (policy glue), `commands/_sync_orphans.py` (lockfile-based ownership of leftovers: `LeftoverPolicy`), `commands/_output_locations.py` (deletion allowlist + prune bounds), `_file_identity.py` (`FileSet`), `adapters/_prior_output.py` (the previous lockfile as proof + the installed leftover judge), `commands/_sync_preflight.py` (overlay/adapter availability), `commands/_precommit_merge.py` (existing-config merge + legacy swap), `commands/sync.py` (`--check-staged`, empty-scratch render shared with `--check`), `cli.py`, `commands/init.py`, `resources/precommit/config.yaml.j2`, `.pre-commit-hooks.yaml`, with tests (`tests/fakes.py::FakeGitClient` instead of patching `subprocess`; `tests/conftest.py::apply_hermetic_git_env` drops inherited `GIT_*` and the default global excludes).
+### v0.15 (2026-10-14)
+Native skills for every Agent-Skills harness plus the cross-agent `shared_skills/` hub, and two skill-output bug fixes. Additive for authors — the canonical skill format is unchanged.
+- **Section 10.8 (NEW)**: the `shared_skills` adapter (`shared_skills/<id>/`, on by default, not force-enabled; rules/prompts are no-ops) and the shared `SkillWriter` (`adapters/_skill_writer.py`) — the single source of truth for a native skill directory, byte-identical across roots, path-safe, with the sentinel marking a skill dir as engine-owned. (v0.15 shipped a per-directory `SkillWriter` cleanup; **since v0.16** there is none — stale skill output is settled only by the §4.2 step 9 lockfile leftover policy.)
+- **Sections 10.3 / 10.6 / 10.6.4**: `claude_code` and `opencode` delegate `write_skill` to the `SkillWriter`; OpenCode now writes `.opencode/skills/` natively instead of relying on `.claude/skills/` (duplicate discovery is safe: OpenCode keys skills by name, last wins).
+- **Section 6.3 (bug fixes)**: emitted `SKILL.md` sets `name` = the skill id (= directory name), as the Agent Skills standard requires — previously the authored display name was copied verbatim and OpenCode dropped the skill. `SKILL.md` now carries the sentinel as its first body line, so a skill directory is recognisably engine-owned (previously skill output was never cleaned); user-authored skill dirs (no sentinel) are never touched. Since v0.16 a deleted skill's output is settled only by the §4.2 step 9 lockfile leftover policy: pristine, untracked, lockfile-listed files are deleted; edited and user-added files are kept.
+- **Section 12.6 (`playbook validate`)**: new rule flagging skill ids that break `^[a-z0-9]+(-[a-z0-9]+)*$` / 64 chars, skills without a 1–1024 char `description`, and every skill with no (or a non-string) `id` — id-less skills all merge under `skill`, so they are checked from the pre-merge list.
+- **Section 10.8 (cleanup safety)**: ownership is decided before writing (a colliding hand-written skill dir is skipped with a warning, never overwritten; pre-v0.15 output is re-claimed via the lockfile); stale-vs-written decisions compare file identity, not path spelling (the identity comparison now lives in `_file_identity.FileSet`, used by the leftover policy and `Adapter._default_cleanup`); case-only id renames, file↔folder flips in `scripts/`/`references/`, and read-only copies from an earlier sync no longer delete fresh output or crash `sync` / `sync --check`.
+- **Sections 2.2 / 3 / 4 / 5.1 / 5.3 / 7.1 / 12.1**: skills are no longer described as Claude-Code-only; the consumer layout gains `.claude/skills/`, `.opencode/skills/` and `shared_skills/`; `shared_skills` joins the default adapter list.
+- **Implementation**: `adapters/_skill_writer.py`, `adapters/shared_skills_adapter.py` (+ the `shared_skills` entry point), `commands/init.py` default adapters, `commands/validate.py::_check_agent_skills`, with tests (`tests/adapters/test_skill_writer.py`, `tests/adapters/test_shared_skills.py`, `tests/cli/test_sync_skills.py`).
 ### v0.14 (2026-07-14)
 Self-contained markdown links in canonical artifacts (PR L). A deterministic, CI-enforced rule: every markdown link in every artifact must stay inside the shipped bundle. Purely additive — no rendering changes, no new dependency. Authoritative design: `specs/prL-markdown-links.md`.
 - **Section 12.6 (`playbook validate`)**: new rule — links extracted from rule/prompt/skill bodies (plus skill `references/*.md`), after masking frontmatter, fenced code blocks, and inline code spans. Relative targets must resolve inside the artifact's source layer (package `resources/` or repo-local `playbook/`; `.j2`-suffixed sources satisfy their rendered names); absolute paths, `..`-escapes, and non-`http(s)` schemes are violations; `http(s)` hosts pass only via the allowlist. Jinja-bearing targets are skipped.

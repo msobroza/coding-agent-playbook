@@ -3,19 +3,50 @@
 # pre-commit never reaches out to clone hook repos. This requires ruff and
 # mypy to be installed in your environment (e.g. your project's dev extras);
 # `language: system` runs the tools on PATH, it does NOT install them.
+{% if not output_commit %}
+#
+# [output] commit = false: the playbook's generated output (AGENTS.md, .claude/,
+# .continue/, .opencode/, the lockfile) is local-only and gitignored. The
+# post-checkout/post-merge hooks re-render it after every checkout and pull, so
+# install all three hook types — a plain `pre-commit install` honours
+# `default_install_hook_types` below. `default_stages` keeps every other hook
+# (ruff, mypy, metrics) on pre-commit only. Stage names need pre-commit >= 3.2.
+minimum_pre_commit_version: "3.2.0"
+default_install_hook_types: [pre-commit, post-checkout, post-merge]
+default_stages: [pre-commit]
+{% endif %}
 default_language_version:
   python: python3.12
 fail_fast: false
 repos:
   - repo: local
     hooks:
-      # The playbook — sync drift check
+{% if output_commit %}
+      # The playbook — sync drift check ([output] commit = true: output is committed)
       - id: coding-agent-playbook-sync
         name: coding-agent-playbook sync
         entry: playbook sync --check
         language: system
         pass_filenames: false
         always_run: true
+{% else %}
+      # The playbook — re-render the local-only output after checkout / merge
+      - id: coding-agent-playbook-autosync
+        name: coding-agent-playbook sync (regenerate local output)
+        entry: playbook sync
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [post-checkout, post-merge]
+      # The playbook — refuse commits that stage generated output
+      - id: coding-agent-playbook-no-generated-output
+        name: coding-agent-playbook guard (no generated output staged)
+        entry: playbook sync --check-staged
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+{% endif %}
       # The playbook — static code-quality gate (non-regression vs HEAD).
       # STATIC ONLY: this never runs your test suite. Execution evaluators
       # (`playbook metrics --run-tests`) are deliberately excluded from the

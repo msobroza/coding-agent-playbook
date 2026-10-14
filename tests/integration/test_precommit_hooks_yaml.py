@@ -21,14 +21,65 @@ def test_hooks_file_exists():
     assert HOOKS_PATH.is_file(), f"{HOOKS_PATH} not present"
 
 
-def test_cap_sync_check_hook_is_first_and_well_formed():
-    hooks = _load_hooks()
-    sync_check = next((h for h in hooks if h["id"] == "playbook-sync-check"), None)
-    assert sync_check is not None, "missing playbook-sync-check hook"
+# Valid ``stages`` values, verified against pre-commit 4.7.0's
+# ``pre_commit.clientlib.STAGES`` (hook-type names since pre-commit 3.2.0; the
+# legacy ``commit``/``push``/``merge-commit`` aliases are deprecated).
+_VALID_STAGES = {
+    "commit-msg",
+    "post-checkout",
+    "post-commit",
+    "post-merge",
+    "post-rewrite",
+    "pre-commit",
+    "pre-merge-commit",
+    "pre-push",
+    "pre-rebase",
+    "prepare-commit-msg",
+    "manual",
+}
+
+
+def _hook(hook_id: str) -> dict[str, Any]:
+    hook = next((h for h in _load_hooks() if h["id"] == hook_id), None)
+    assert hook is not None, f"missing {hook_id} hook"
+    return hook
+
+
+def test_every_hook_uses_valid_stage_names():
+    for hook in _load_hooks():
+        assert set(hook.get("stages", [])) <= _VALID_STAGES, hook["id"]
+
+
+def test_autosync_hook_runs_after_checkout_and_merge():
+    """[output] commit = false: output is gitignored, so re-render it locally
+    after every checkout/merge. Those hook types pass no files -> always_run."""
+    hook = _hook("playbook-sync")
+    assert hook["entry"] == "playbook sync"
+    assert hook["language"] == "python"
+    assert hook["stages"] == ["post-checkout", "post-merge"]
+    assert hook["always_run"] is True
+    assert hook["pass_filenames"] is False
+    assert hook["minimum_pre_commit_version"] == "3.2.0"
+
+
+def test_no_generated_output_hook_guards_commits():
+    hook = _hook("playbook-no-generated-output")
+    assert hook["entry"] == "playbook sync --check-staged"
+    assert hook["language"] == "python"
+    assert hook["stages"] == ["pre-commit"]
+    assert hook["always_run"] is True
+    assert hook["pass_filenames"] is False
+    assert hook["minimum_pre_commit_version"] == "3.2.0"
+
+
+def test_cap_sync_check_hook_is_kept_as_legacy_and_well_formed():
+    """``playbook-sync-check`` stays for ``[output] commit = true`` repos."""
+    sync_check = _hook("playbook-sync-check")
     assert sync_check["entry"] == "playbook sync --check"
     assert sync_check["language"] == "python"
     assert sync_check["pass_filenames"] is False
     assert sync_check["always_run"] is True
+    assert "legacy" in sync_check["name"]
     # playbook-sync-check runs on every commit — no `stages: [manual]`
     assert "stages" not in sync_check or "manual" not in sync_check["stages"]
 
@@ -61,5 +112,34 @@ def test_cap_metrics_hook_is_static_only():
 def test_no_unexpected_hooks():
     hooks = _load_hooks()
     ids = {h["id"] for h in hooks}
-    expected = {"playbook-sync-check", "playbook-validate", "playbook-metrics"}
+    expected = {
+        "playbook-sync",
+        "playbook-no-generated-output",
+        "playbook-sync-check",
+        "playbook-validate",
+        "playbook-metrics",
+    }
     assert ids == expected, f"unexpected hook IDs: {ids - expected}"
+
+
+def _header_comment() -> str:
+    lines = HOOKS_PATH.read_text(encoding="utf-8").splitlines()
+    return "\n".join(line for line in lines if line.startswith("#"))
+
+
+def test_header_recipe_installs_all_three_hook_types():
+    """Regression: explicit ``--hook-type`` flags replace the default list, so a
+    recipe naming only post-checkout/post-merge never installs the guard."""
+    install_lines = [
+        line for line in _header_comment().splitlines() if "pre-commit install --hook-type" in line
+    ]
+    assert install_lines
+    for line in install_lines:
+        assert "--hook-type pre-commit --hook-type post-checkout --hook-type post-merge" in line
+
+
+def test_header_recipe_confines_other_hooks_and_names_overlay_deps():
+    header = _header_comment()
+    assert "default_stages: [pre-commit]" in header
+    assert "additional_dependencies" in header
+    assert "language: system" in header  # the init-written alternative for overlay users

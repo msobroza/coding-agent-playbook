@@ -28,6 +28,24 @@ class StorageConfig:
     state_source: str = "filesystem"
 
 
+@dataclass(frozen=True)
+class OutputConfig:
+    """The ``[output]`` table (SPEC §7.1): is generated output committed?
+
+    ``commit = false`` (the default) keeps everything ``playbook sync`` renders
+    local-only — gitignored through a managed ``.gitignore`` block and guarded
+    by ``playbook sync --check-staged``. ``commit = true`` is the legacy policy:
+    output is committed and ``playbook sync --check`` fails a commit on drift.
+
+    Example::
+
+        >>> parse_output_config({"commit": True})
+        OutputConfig(commit=True)
+    """
+
+    commit: bool = False
+
+
 @dataclass
 class Config:
     schema_version: int
@@ -38,6 +56,21 @@ class Config:
     storage: StorageConfig = field(default_factory=StorageConfig)
     detector_cache: dict[str, Any] = field(default_factory=dict)
     user_choices: dict[str, Any] = field(default_factory=dict)
+    # ``None`` = no ``[output]`` table in the TOML. Kept distinct from an
+    # explicit ``OutputConfig()`` so ``to_dict`` round-trips sparsely while
+    # ``playbook init`` can still write ``commit = false`` for discoverability.
+    output: OutputConfig | None = None
+
+    @property
+    def commit_output(self) -> bool:
+        """Effective ``[output] commit`` — an absent table means ``False``.
+
+        Example::
+
+            >>> Config(1, ProjectMeta("x", "python-library"), "0.1").commit_output
+            False
+        """
+        return self.output.commit if self.output is not None else False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Config:
@@ -64,6 +97,7 @@ class Config:
             ),
             detector_cache=dict(data.get("detector_cache", {})),
             user_choices=dict(data.get("user_choices", {})),
+            output=parse_output_config(data["output"]) if "output" in data else None,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -87,6 +121,8 @@ class Config:
             "artifact_source": self.storage.artifact_source,
             "state_source": self.storage.state_source,
         }
+        if self.output is not None:
+            result["output"] = {"commit": self.output.commit}
         if self.detector_cache:
             result["detector_cache"] = dict(self.detector_cache)
         if self.user_choices:
@@ -183,6 +219,32 @@ def parse_links_config(data: dict[str, Any]) -> LinksConfig:
     if not isinstance(raw, list) or not all(isinstance(entry, str) for entry in raw):
         raise ValueError(f"[links] allowed_domains must be a list of strings, got {raw!r}")
     return LinksConfig(allowed_domains=tuple(entry.lower() for entry in raw))
+
+
+def parse_output_config(data: object) -> OutputConfig:
+    """Parse an ``[output]`` table (already decoded from TOML) into an
+    :class:`OutputConfig` (SPEC §7.1).
+
+    The table shape::
+
+        [output]
+        commit = false    # default: generated output is gitignored, local-only
+
+    ``commit`` must be a real TOML boolean — a string like ``"false"`` is
+    rejected rather than coerced (``bool("false")`` is ``True``). Unknown keys
+    are ignored, mirroring the other config sections.
+
+    Example::
+
+        >>> parse_output_config({})
+        OutputConfig(commit=False)
+    """
+    if not isinstance(data, dict):
+        raise ValueError(f"[output] must be a table like {{commit = false}}, got {data!r}")
+    commit = data.get("commit", False)
+    if not isinstance(commit, bool):
+        raise ValueError(f"[output] commit must be a boolean (true or false), got {commit!r}")
+    return OutputConfig(commit=commit)
 
 
 def _as_optional_float(value: Any) -> float | None:

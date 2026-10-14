@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.renderer import SENTINEL
@@ -297,12 +299,32 @@ def test_claude_code_write_skill_writes_skill_md_only(tmp_path):
     assert expected in written
     assert expected.is_file()
     content = expected.read_text(encoding="utf-8")
-    # SKILL.md preserves the skill's frontmatter + body as-is.
+    # SKILL.md keeps the skill's frontmatter + body, but the Agent Skills
+    # standard requires ``name`` == the directory name, so name is the id.
     assert content.startswith("---")
     assert "id: demo" in content
-    assert "name: Demo skill" in content
+    assert "name: demo" in content
+    assert "name: Demo skill" not in content
     assert "description: Demo skill description" in content
     assert "Do the thing." in content
+
+
+def test_claude_code_write_skill_places_sentinel_on_first_body_line(tmp_path):
+    """Frontmatter stays on line 1 (agent parsers need ``^---``); the sentinel
+    is the first body line so cleanup can recognise the dir as engine-owned."""
+    adapter = ClaudeCodeAdapter()
+    [skill_md] = adapter.write_skill(_make_skill(skill_id="demo"), repo_root=tmp_path)
+    lines = skill_md.read_text(encoding="utf-8").splitlines()
+    closing = lines.index("---", 1)
+    assert lines[0] == "---"
+    assert lines[closing + 1] == f"<!-- {SENTINEL} -->"
+
+
+def test_claude_code_write_skill_rejects_path_traversal_id(tmp_path):
+    adapter = ClaudeCodeAdapter()
+    with pytest.raises(ValueError, match="not path-safe"):
+        adapter.write_skill(_make_skill(skill_id="../escape"), repo_root=tmp_path)
+    assert not (tmp_path / ".claude").exists()
 
 
 def test_claude_code_write_skill_copies_scripts_directory(tmp_path):
@@ -363,10 +385,9 @@ def test_claude_code_output_directories(tmp_path):
     """Output directories advertise where cleanup can scan for stale files."""
     adapter = ClaudeCodeAdapter()
     dirs = list(adapter._output_directories(tmp_path))
-    assert dirs == [
-        tmp_path / ".claude" / "commands",
-        tmp_path / ".claude" / "skills",
-    ]
+    # .claude/skills/ is never scanned: stale skill output is settled by sync's
+    # lockfile leftover policy (SPEC §4.2 step 9).
+    assert dirs == [tmp_path / ".claude" / "commands"]
 
 
 def test_claude_code_cleanup_stale_removes_stale_command(tmp_path):
@@ -400,24 +421,39 @@ def test_claude_code_cleanup_stale_preserves_user_authored_files(tmp_path):
     assert user_file.is_file()
 
 
-def test_claude_code_cleanup_stale_removes_stale_files_under_skills(tmp_path):
-    """A sentinel-tagged file under .claude/skills/ not in written_paths is deleted.
-
-    The first-line sentinel check matches files whose first line contains
-    SENTINEL (HTML comment or '#' comment). SKILL.md files written by this
-    adapter today start with a '---' fence, so they're not auto-deleted —
-    only files explicitly carrying a leading sentinel banner are.
-    """
-    skills_dir = tmp_path / ".claude" / "skills" / "old-skill"
-    skills_dir.mkdir(parents=True)
-    stale = skills_dir / "stale_helper.md"
-    stale.write_text(f"# {SENTINEL}\nold helper content\n", encoding="utf-8")
-
+def test_claude_code_cleanup_stale_never_deletes_skill_files(tmp_path):
+    """A removed skill's ``.claude/skills/<id>/`` is NOT cleaned here: stale skill
+    output is settled by ``playbook sync``'s lockfile leftover policy (pristine +
+    untracked + listed), which also protects user-edited and user-added files
+    (SPEC §4.2 step 9, §10.8). The end-to-end removal is in tests/cli/."""
+    scripts = tmp_path / "src_scripts"
+    scripts.mkdir()
+    (scripts / "helper.sh").write_text("echo hi\n", encoding="utf-8")
+    repo_root = tmp_path / "repo"
     adapter = ClaudeCodeAdapter()
-    deleted = adapter.cleanup_stale(set(), repo_root=tmp_path)
+    gone = adapter.write_skill(_make_skill(skill_id="gone", scripts_dir=scripts), repo_root)
+    kept = adapter.write_skill(_make_skill(skill_id="kept"), repo_root)
 
-    assert stale.resolve() in {p.resolve() for p in deleted}
-    assert not stale.exists()
+    deleted = adapter.cleanup_stale({p.resolve() for p in kept}, repo_root=repo_root)
+
+    assert deleted == []
+    assert all(path.is_file() for path in [*gone, *kept])
+
+
+def test_claude_code_cleanup_stale_preserves_user_authored_skill_dir(tmp_path):
+    """A skill dir whose SKILL.md lacks the sentinel is user-authored: no file
+    in it is touched, even one whose first line carries the sentinel."""
+    skill_dir = tmp_path / ".claude" / "skills" / "my-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: my-skill\n---\nmine\n", encoding="utf-8")
+    helper = skill_dir / "helper.md"
+    helper.write_text(f"# {SENTINEL}\nhelper\n", encoding="utf-8")
+
+    deleted = ClaudeCodeAdapter().cleanup_stale(set(), repo_root=tmp_path)
+
+    assert deleted == []
+    assert (skill_dir / "SKILL.md").is_file()
+    assert helper.is_file()
 
 
 def test_claude_code_cleanup_stale_deletes_claude_md_when_buffer_empty(tmp_path):
