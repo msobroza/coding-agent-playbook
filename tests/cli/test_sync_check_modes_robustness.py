@@ -175,8 +175,21 @@ def test_check_staged_stays_a_noop_under_commit_true(repo: Path) -> None:
     assert git.calls == []
 
 
-def test_importable_overlay_without_artifacts_is_fine(repo: Path) -> None:
-    config = _DEFAULT_CONFIG.replace("overlays_enabled = []", 'overlays_enabled = ["json"]')
+def test_importable_overlay_without_artifacts_is_fine(
+    repo: Path, tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An overlay package whose ``resources/`` holds no artifacts (yet) is usable.
+
+    (A package with no ``resources/`` directory at all, like ``json``, is not an
+    overlay package: the shared preflight refuses it, see test_unusable_overlays.)
+    """
+    site = tmp_path_factory.mktemp("site")
+    (site / "empty_overlay_pkg" / "resources").mkdir(parents=True)
+    (site / "empty_overlay_pkg" / "__init__.py").write_text("")
+    monkeypatch.syspath_prepend(str(site))
+    config = _DEFAULT_CONFIG.replace(
+        "overlays_enabled = []", 'overlays_enabled = ["empty_overlay_pkg"]'
+    )
     (repo / ".coding-agent-playbook.toml").write_text(config)
     assert _sync.execute(repo, git=FakeGitClient()) == 0
 

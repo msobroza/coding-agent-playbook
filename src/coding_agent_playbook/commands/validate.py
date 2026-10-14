@@ -14,6 +14,10 @@ Validates:
 - Every markdown link in every artifact is self-contained (PR L): relative
   targets resolve inside the artifact's source layer, external links only
   pass through the ``[links] allowed_domains`` allowlist.
+- Every package in ``overlays_enabled`` is usable here: it imports without error
+  and ships a ``resources/`` directory — the same check ``playbook sync`` refuses
+  to run without (``_sync_preflight.unusable_overlays``), so a misspelled pack
+  fails here too instead of validating the engine layer alone.
 - Every skill is a valid Agent Skill (SPEC §6.3): it declares an ``id`` string
   (id-less skills all collapse into one skill named ``skill``), its id — emitted
   as the ``SKILL.md`` ``name`` and the output directory — matches
@@ -39,6 +43,7 @@ from coding_agent_playbook.adapters._skill_writer import (
     has_declared_id,
     skill_id_of,
 )
+from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.config import parse_links_config
 from coding_agent_playbook.detector import evaluate_predicate
 from coding_agent_playbook.evals.loader import (
@@ -56,6 +61,7 @@ from coding_agent_playbook.sources.filesystem import (
 
 if TYPE_CHECKING:
     import argparse
+    from collections.abc import Sequence
 
     from coding_agent_playbook.detector import Facts
     from coding_agent_playbook.evals.task import EvalTask
@@ -70,6 +76,18 @@ class ValidationError:
 
 
 _RULE_CALL_RE = re.compile(r"\{\{\s*rule\(\s*['\"]([^'\"]+)['\"]\s*\)\s*\}\}")
+
+
+def _check_overlays_usable(overlays: Sequence[str]) -> list[ValidationError]:
+    """One error per ``overlays_enabled`` entry that ``playbook sync`` would refuse.
+
+    Without it an unimportable overlay was skipped silently (its artifacts are
+    simply absent), so ``validate`` passed a config every sync mode rejects.
+    """
+    return [
+        ValidationError(path="overlays_enabled", message=str(problem))
+        for problem in _sync_preflight.unusable_overlays(overlays)
+    ]
 
 
 def _check_applies_if(
@@ -418,6 +436,7 @@ def run(args: argparse.Namespace) -> int:
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     ctx = SyncContext.from_repo(repo_root)
     errors: list[ValidationError] = []
+    errors.extend(_check_overlays_usable(ctx.config.overlays_enabled))
     errors.extend(_check_applies_if(ctx.rules_resolved, ctx.prompts_resolved, ctx.facts, repo_root))
     errors.extend(_check_prompt_rule_calls(ctx.prompts_resolved))
     errors.extend(_check_rule_bodies_do_not_include_rules(ctx.rules_resolved))

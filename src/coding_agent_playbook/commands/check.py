@@ -1,6 +1,10 @@
 """`playbook check` — diagnostic dump (SPEC §12.4). Includes ``--refresh`` per
 §12.5 which writes the freshly-detected facts back into the config's
 ``detector_cache`` table.
+
+A diagnostic, so it exits 0 whatever it finds (drift included). An overlay in
+``overlays_enabled`` that ``playbook sync`` would refuse (``_sync_preflight``) is
+flagged under Environment, and the Drift section then never reports a clean state.
 """
 
 from __future__ import annotations
@@ -10,15 +14,22 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
+from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.detector import detect, evaluate_predicate
 from coding_agent_playbook.lockfile import compute_hash
 from coding_agent_playbook.orchestrator import SyncContext
 
 if TYPE_CHECKING:
     import argparse
+    from collections.abc import Sequence
+
+    from coding_agent_playbook.commands._sync_preflight import UnusableOverlay
+    from coding_agent_playbook.lockfile import Lockfile
+
+_SYNC_REFUSES = "'playbook sync' refuses to run until every overlay in overlays_enabled is usable"
 
 
-def _format_env_section(ctx: SyncContext) -> str:
+def _format_env_section(ctx: SyncContext, unusable: Sequence[UnusableOverlay] = ()) -> str:
     facts = ctx.facts
     python_version = facts.get("python_version", platform.python_version())
     package_manager = facts.get("package_manager", "(unknown)")
@@ -29,8 +40,19 @@ def _format_env_section(ctx: SyncContext) -> str:
         f"  Package manager: {package_manager}",
         f"  Engine: coding-agent-playbook {_engine_version}",
         f"  Overlays: {overlays}",
+        *_format_unusable_overlays(unusable),
     ]
     return "\n".join(lines)
+
+
+def _format_unusable_overlays(unusable: Sequence[UnusableOverlay]) -> list[str]:
+    """One ``✗ <name>: <reason>`` line per unusable overlay, plus what it implies."""
+    if not unusable:
+        return []
+    return [
+        *(f"    ✗ {problem}" for problem in unusable),
+        f"    {_SYNC_REFUSES}; the artifacts below omit the unusable ones.",
+    ]
 
 
 def _format_detected_section(ctx: SyncContext) -> str:
@@ -137,22 +159,37 @@ def _format_artifacts_section(ctx: SyncContext) -> str:
     return "\n".join(out)
 
 
-def _format_drift_section(ctx: SyncContext) -> str:
+def _format_drift_section(ctx: SyncContext, unusable: Sequence[UnusableOverlay] = ()) -> str:
+    """Compare the files on disk with the lockfile.
+
+    With an unusable overlay the state is never reported clean: a matching
+    lockfile only says what the last sync wrote, and no sync can run now.
+    """
     lockfile = ctx.state_source.load_lockfile()
+    lines = ["=== Drift ==="]
     if lockfile is None:
-        return "=== Drift ===\n  No lockfile yet — run 'playbook sync' to create one."
+        lines.append("  No lockfile yet — run 'playbook sync' to create one.")
+    elif drift := _lockfile_drift(ctx, lockfile):
+        lines.extend(drift)
+    elif not unusable:
+        lines.append("  All on-disk files match generated output.")
+    else:
+        lines.append("  On-disk files match the lockfile, but the state is not clean:")
+    if unusable:
+        lines.append(f"  {_SYNC_REFUSES} (see Environment).")
+    return "\n".join(lines)
+
+
+def _lockfile_drift(ctx: SyncContext, lockfile: Lockfile) -> list[str]:
+    """One line per lockfile entry whose file is missing or no longer matches its hash."""
     drift: list[str] = []
     for entry in lockfile.entries:
         path = ctx.repo_root / entry.path
         if not path.is_file():
             drift.append(f"  missing: {entry.path}")
-            continue
-        actual = compute_hash(path.read_bytes())
-        if actual != entry.sha256:
+        elif compute_hash(path.read_bytes()) != entry.sha256:
             drift.append(f"  hash mismatch: {entry.path}")
-    if drift:
-        return "=== Drift ===\n" + "\n".join(drift)
-    return "=== Drift ===\n  All on-disk files match generated output."
+    return drift
 
 
 def _refresh(ctx: SyncContext) -> None:
@@ -172,11 +209,14 @@ def _refresh(ctx: SyncContext) -> None:
 def run(args: argparse.Namespace) -> int:
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     ctx = SyncContext.from_repo(repo_root)
+    unusable = _sync_preflight.unusable_overlays(ctx.config.overlays_enabled)
     if getattr(args, "refresh", False):
         _refresh(ctx)
         print("Refreshed detector_cache in .coding-agent-playbook.toml.")
-    print(_format_env_section(ctx))
+    print(_format_env_section(ctx, unusable))
     print(_format_detected_section(ctx))
     print(_format_artifacts_section(ctx))
-    print(_format_drift_section(ctx))
+    print(_format_drift_section(ctx, unusable))
+    # A diagnostic: problems are reported above, never through the exit code
+    # (drift exits 0 too). `playbook validate` and `playbook sync` are the gates.
     return 0

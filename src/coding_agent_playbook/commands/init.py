@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from coding_agent_playbook import __version__ as _engine_version
+from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands._precommit_merge import merge_pre_commit
 from coding_agent_playbook.config import Config, OutputConfig, ProjectMeta, StorageConfig
@@ -17,6 +18,7 @@ from coding_agent_playbook.sources.filesystem import FileSystemStateSource, _res
 
 if TYPE_CHECKING:
     import argparse
+    from collections.abc import Mapping
 
     from coding_agent_playbook.detector import Facts
 
@@ -36,7 +38,7 @@ class _Answers(TypedDict):
 
 
 # ``shared_skills`` (the cross-agent skills hub, SPEC §10.8) is on by default but,
-# unlike ``agents_md``, not force-enabled: users may drop it from [adapters] enabled.
+# unlike ``agents_md``, not force-enabled: users may drop it from adapters_enabled.
 _DEFAULT_ADAPTERS = ("continue", "claude_code", "opencode", "shared_skills")
 _VALID_KINDS = (
     "python-application",
@@ -292,9 +294,57 @@ def _write_pre_commit(
     return target, merged.messages
 
 
+def _effective_overlays(answers: _Answers, local: Mapping[str, Any]) -> tuple[list[str], str]:
+    """The overlays init's final sync will use, and the setting that lists them.
+
+    A local ``overlays_enabled`` replaces the committed list (SPEC §7.2), so when
+    ``.coding-agent-playbook.local.toml`` sets one, that list — not ``--overlays``
+    — is what the sync runs with, and what must be checked.
+
+    Example::
+
+        >>> _effective_overlays({"overlays": ["a"]}, {"overlays_enabled": ["b"]})  # doctest: +SKIP
+        (['b'], 'overlays_enabled in .coding-agent-playbook.local.toml')
+    """
+    if "overlays_enabled" in local:
+        origin = f"overlays_enabled in {FileSystemStateSource._CONFIG_LOCAL_FILENAME}"
+        return list(local["overlays_enabled"]), origin
+    return list(answers["overlays"]), "--overlays"
+
+
+def _refuse_unusable_overlays(overlays: list[str], origin: str) -> bool:
+    """Print an ``error:`` and return ``True`` when one of ``overlays`` is unusable.
+
+    Uses the sync preflight's own check, so init never writes a config that
+    every ``playbook sync`` mode would then refuse to run with. ``origin`` names
+    the setting the overlays came from (``--overlays`` or the local file's list).
+    """
+    unusable = _sync_preflight.unusable_overlays(overlays)
+    if not unusable:
+        return False
+    listed = "".join(f"\n  {problem}" for problem in unusable)
+    print(
+        f"error: {origin} names package(s) that cannot be used as overlays here; "
+        f"nothing was written:{listed}",
+        file=sys.stderr,
+    )
+    return True
+
+
 def run(args: argparse.Namespace) -> int:
+    """Bootstrap the repo: write the config files and pre-commit hooks, then sync.
+
+    Exit 2, before writing anything, on a usage error: missing flags, an unusable
+    overlay among those the final sync would use (``--overlays``, or the local
+    file's ``overlays_enabled`` that replaces it), or (raised as ``ConfigError``)
+    a config file the engine would misread — the local one is loaded here, the
+    committed one by ``_write_config`` before its first write.
+    """
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     answers = _collect_answers(args)
+    local = FileSystemStateSource(repo_root=repo_root).load_local_overrides()
+    if _refuse_unusable_overlays(*_effective_overlays(answers, local)):
+        return 2
 
     config = _write_config(repo_root, answers)
     local_path = _write_local_config(repo_root)

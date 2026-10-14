@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook import _toml
-from coding_agent_playbook.config import Config
+from coding_agent_playbook.config import Config, check_enabled_keys
 from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
@@ -147,7 +147,12 @@ def _resource_subdir(package: str, subdir: str) -> Path | None:
     """
     try:
         resource_root = resources.files(package).joinpath("resources", subdir)
-    except (ModuleNotFoundError, FileNotFoundError):
+    except Exception:
+        # ``files()`` imports the package, and an overlay's import may raise
+        # anything (its own code, a missing dependency, an empty name). Skip it
+        # like a missing one: sync/validate/check/init run the shared
+        # ``_sync_preflight.unusable_overlays`` check, which names it and the
+        # error, so discovery must not crash before that check can report it.
         return None
     # We need a ``Path`` for ``rglob``-based walking, not just a
     # ``Traversable``. The on-disk backend used by
@@ -209,6 +214,19 @@ def _atomic_write_text(target: Path, content: str) -> None:
     tmp = target.with_suffix(target.suffix + ".tmp")
     tmp.write_text(content, encoding="utf-8")
     tmp.replace(target)
+
+
+def _read_config_file(path: Path) -> dict[str, Any]:
+    """Parse one config file, refusing enabled-list shapes ``Config`` would misread.
+
+    Each file is checked on its own, before the SPEC §7.2 deep merge, so a
+    :class:`~coding_agent_playbook.config.ConfigError` names the file that holds
+    the mistake (``.coding-agent-playbook.local.toml: the [adapters] table …``).
+    """
+    with path.open("rb") as f:
+        data = tomllib.load(f)
+    check_enabled_keys(data, source=path.name)
+    return data
 
 
 def _find_skill_md(skill_dir: Path) -> Path | None:
@@ -343,17 +361,31 @@ class FileSystemStateSource(StateSource):
         self._repo_root = repo_root
 
     def load_config(self) -> Config:
+        """Read the committed config with the local overrides merged on top (SPEC §7.2).
+
+        Raises :class:`FileNotFoundError` without the committed file and
+        :class:`~coding_agent_playbook.config.ConfigError` (naming the file) for
+        a shape ``Config`` would misread — before anything else runs.
+        """
         primary = self._repo_root / self._CONFIG_FILENAME
         if not primary.is_file():
             raise FileNotFoundError(f"missing {primary.name}; run `playbook init`")
-        with primary.open("rb") as f:
-            data = tomllib.load(f)
+        data = _deep_merge(_read_config_file(primary), self.load_local_overrides())
+        return Config.from_dict(data, source=primary.name)
+
+    def load_local_overrides(self) -> dict[str, Any]:
+        """The checked ``.coding-agent-playbook.local.toml`` table, ``{}`` when absent.
+
+        ``playbook init`` calls it before writing anything, since it writes a
+        fresh committed config without loading one.
+
+        Example::
+
+            >>> FileSystemStateSource(repo_root=Path("/no/such/repo")).load_local_overrides()
+            {}
+        """
         local = self._repo_root / self._CONFIG_LOCAL_FILENAME
-        if local.is_file():
-            with local.open("rb") as f:
-                local_data = tomllib.load(f)
-            data = _deep_merge(data, local_data)
-        return Config.from_dict(data)
+        return _read_config_file(local) if local.is_file() else {}
 
     def save_config(self, config: Config) -> None:
         _atomic_write_text(

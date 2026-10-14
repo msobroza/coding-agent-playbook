@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable, Iterator
     from pathlib import Path
 
 
@@ -193,3 +193,35 @@ def make_synthetic_repo():
         return repo
 
     return _build
+
+
+@pytest.fixture
+def make_package(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[Callable[..., str]]:
+    """Return a builder for throwaway packages importable during this test only.
+
+    ``make_package("cap_boom", init="raise RuntimeError('boom')", resources=True)``
+    writes ``cap_boom/__init__.py`` (and an empty ``resources/`` dir) under a fresh
+    directory outside ``tmp_path`` that is prepended to ``sys.path``, and returns
+    the name. Dotted names nest (build the parent first to give it an
+    ``__init__.py``). Every name built is dropped from ``sys.modules`` afterwards.
+    """
+    import sys
+
+    root = tmp_path_factory.mktemp("packages")
+    monkeypatch.syspath_prepend(str(root))
+    built: list[str] = []
+
+    def _make(name: str, *, init: str = "", resources: bool = False) -> str:
+        package = root.joinpath(*name.split("."))
+        package.mkdir(parents=True, exist_ok=True)
+        (package / "__init__.py").write_text(init, encoding="utf-8")
+        if resources:
+            (package / "resources").mkdir()
+        built.append(name)
+        return name
+
+    yield _make
+    for name in built:
+        sys.modules.pop(name, None)

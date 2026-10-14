@@ -109,10 +109,12 @@ def test_spec_section_21_body_drops_deleted_symbols(symbol: str) -> None:
 
 def test_spec_version_bumped_and_changelog_preserved() -> None:
     spec = _read("SPEC.md")
-    # v0.16 (gitignored generated output) is the current header, on top of
-    # v0.15 (native skills + shared_skills); the guard cares that the
-    # refactor's changelog entries survive later revisions.
-    assert "| Version | 0.16 (draft) |" in spec
+    # v0.17 (bundled opt-in packs + the superpowers pack) is the current header,
+    # on top of v0.16 (gitignored generated output) and v0.15 (native skills +
+    # shared_skills); the guard cares that the refactor's changelog entries
+    # survive later revisions.
+    assert "| Version | 0.17 (draft) |" in spec
+    assert "### v0.17" in spec  # the changelog appendix entry for bundled opt-in packs
     assert "### v0.16" in spec  # the changelog appendix entry for gitignored output
     assert "### v0.15" in spec  # the changelog appendix entry for native skills
     assert "### v0.14" in spec  # the changelog appendix entry for self-contained links

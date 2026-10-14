@@ -148,23 +148,38 @@ Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
    ```toml
    # .coding-agent-playbook.toml
    schema_version = 1
+   # top-level keys: TOML puts anything after a [table] header inside that table
+   overlays_enabled = ["playbook_rules_bnp"]     # ordered; later wins on id collision
+   adapters_enabled = ["continue", "claude_code", "opencode", "shared_skills"]   # AGENTS.md always emitted
+   # drop "shared_skills" to skip the cross-agent skills hub (on by default)
+   # add "agent_harness" to also emit an Agent Harness tree (opt-in)
 
    [project]
    name = "risk-models"
    kind = "python-application"          # python-library | ml-research | notebook
    description = "Counterparty risk scoring service"
 
-   [overlays]
-   enabled = ["playbook_rules_bnp"]     # ordered; later wins on id collision
-
-   [adapters]
-   enabled = ["continue", "claude_code", "opencode", "shared_skills"]   # AGENTS.md always emitted
-   # drop "shared_skills" to skip the cross-agent skills hub (on by default)
-   # add "agent_harness" to also emit an Agent Harness tree (opt-in)
+   [engine]
+   version = "0.1.0a0"                  # engine version the config was written for (required)
 
    [output]
    commit = false     # default: generated output is gitignored (local-only)
    ```
+
+   (`playbook init` writes this file for you, plus `[storage]` and
+   `[detector_cache]` tables; keep its `[engine]` table.)
+
+   The enabled lists are top-level keys only, so they go **above the first
+   `[table]` header**. Every command that loads the config (`sync`, `check`,
+   `validate`, `render`, `eval`, `init`) stops with an `error:` (exit 2),
+   naming the file and the exact line to write instead, before anything is
+   written, when it finds: an `[overlays]` / `[adapters]` table (or
+   `overlays.enabled = …`); an `overlays_enabled` / `adapters_enabled` key
+   written after a `[table]` header, which TOML nests in that table (say,
+   appended to the end of the file); a misspelled key such as
+   `overlay_enabled`; or a value that is not a list of non-empty strings. A
+   personal `.coding-agent-playbook.local.toml` can set `adapters_enabled` too,
+   above its `[user_choices]` header; its list replaces the committed one.
 
 3. **Repo-local `playbook/`** — drop in per-repo rules, prompts, skills, or eval
    tasks; anything here wins on `id` collision:
@@ -204,7 +219,7 @@ playbook/skills/<dir>/  ──►  SkillWriter  ──┬──►  .claude/skil
   without `id:` falls back to `skill`, so several id-less skills collapse into
   one; `playbook validate` reports each of them.
 - `shared_skills/` is the agent-neutral hub: on by default, but not
-  force-enabled — drop `shared_skills` from `[adapters] enabled` to opt out.
+  force-enabled — drop `shared_skills` from `adapters_enabled` to opt out.
 - Emitted `SKILL.md` follows the Agent Skills standard: frontmatter `name` is
   the skill `id` (= directory name). `playbook validate` flags ids that don't
   match `^[a-z0-9]+(-[a-z0-9]+)*$` (max 64 chars) and skills without a
@@ -229,6 +244,84 @@ playbook/skills/<dir>/  ──►  SkillWriter  ──┬──►  .claude/skil
   until you move it. A path you re-point through a symlink, or a skill dir whose
   `SKILL.md` you rewrote, is yours from then on.
 
+## Bundled packs: superpowers
+
+The engine wheel bundles **opt-in content packs**. They layer exactly like an
+overlay package but need no extra install, and they stay **off** until you
+list them. The first is `superpowers`: a near-verbatim, self-contained port of
+the Superpowers skills library (v7.0.0, MIT, by Jesse Vincent) with 15 skills:
+brainstorming, writing-plans, executing-plans, subagent-driven-development,
+test-driven-development, systematic-debugging, verification-before-completion,
+requesting/receiving-code-review, using-git-worktrees,
+finishing-a-development-branch, dispatching-parallel-agents, writing-skills,
+using-superpowers, and diagnosing-superpowers.
+
+```toml
+# .coding-agent-playbook.toml (top-level keys, above the first [table] header)
+overlays_enabled = ["coding_agent_playbook.packs.superpowers"]
+adapters_enabled = ["continue", "claude_code", "opencode", "shared_skills"]
+```
+
+Use these top-level keys: they are the only ones the engine reads. Put them
+at the top of the file, above the first `[table]` header: the file
+`playbook init` writes ends with a `[detector_cache.frameworks]` table, so a
+line appended to the end lands in that table. Every command that loads the
+config (`sync`, `check`, `validate`, `render`, `eval`, `init`) refuses such a
+nested key, the `[overlays] enabled` / `[adapters] enabled` table form and a
+misspelled key: it exits 2 with an `error:` that names the file and shows the
+top-level line to write, and writes nothing, so a repo you already synced
+keeps its skills, lockfile and `.gitignore` untouched. A misspelled pack name
+is caught everywhere: `playbook sync` (write mode, `--check`, and
+`--check-staged` under the default `commit = false`; under `commit = true`
+that last one is a no-op) exits 1 naming the package and writes nothing,
+`playbook validate` fails on it, `playbook check` flags it under `Overlays:`,
+and `playbook init` refuses it before writing (from `--overlays`, or from a
+local file's `overlays_enabled`, which replaces it). A name that looks
+like a pack typo also lists the bundled packs:
+`coding_agent_playbook.packs.superpower: not importable (bundled packs: coding_agent_playbook.packs.superpowers)`.
+The same goes for a package that imports but ships no `resources/` directory,
+such as the parent `coding_agent_playbook.packs`, and for one whose import
+raises (the reason then quotes the error).
+Or let `playbook init --non-interactive --name … --kind … --overlays coding_agent_playbook.packs.superpowers`
+write the config for you.
+
+`playbook sync` then writes each skill, like any canonical skill (see above),
+to `.claude/skills/<id>/`, `.opencode/skills/<id>/` and `shared_skills/<id>/`:
+byte-identical copies of `SKILL.md` (with the `AUTOGENERATED` sentinel as its
+first body line) plus its `references/` and executable `scripts/`. Continue gets
+each skill degraded to a prompt (body only), and the opt-in `agent_harness`
+adapter (enable it by adding `agent_harness` to the top-level
+`adapters_enabled`) writes `skills/<id>/`. Like all generated output the
+copies are gitignored by default. Nothing reaches out to the upstream plugin,
+its marketplace, or the network: cross-skill references use plain skill names,
+and the pack contains no external URLs. The brainstorming visual companion (a
+Node.js server) and the plugin's SessionStart hook are not included. The
+license and the list of changes are in
+`src/coding_agent_playbook/packs/superpowers/LICENSE` and `ATTRIBUTIONS.md`.
+Every skill also carries the license as `references/LICENSE`, so it lands in
+each synced skill directory. If you render the pack only for Continue, keep a
+copy of that `LICENSE` next to the prompts yourself.
+
+**Opting out:** remove the pack from `overlays_enabled` and run `playbook sync`.
+The pack's skills are then leftovers of an earlier sync, settled by the same
+rule as a skill you remove: every file sync wrote that you have not touched
+since (and git does not track) is deleted and the emptied directories are
+pruned, so the 15 skill directories disappear from every skill root. Until you
+sync, `playbook sync --check` reports the managed `.gitignore` block as stale
+(under the default `commit = false`). A skill file you edited is kept (still
+owned and gitignored) until you delete it by hand, and a file you added inside a
+skill directory (notes in `references/`, `node_modules/` under `scripts/`) was
+never written by sync, so it and the directory that holds it stay. The pack's
+Continue prompts carry the `AUTOGENERATED` header on line 1 and are removed
+even if edited or committed. Under `commit = true`, committed (tracked) skill
+files are kept and listed on stderr until you `git rm` them. The same rule
+applies when you override one pack skill with `playbook/skills/<id>/`: your
+override replaces it in every root, and every unedited pack file under that
+skill's `scripts/` or `references/` that your override does not ship is
+removed. An override of `subagent-driven-development` must therefore ship
+`scripts/task-brief` and `scripts/sdd-workspace`, which executing-plans calls
+(SPEC §11.5.1). See SPEC §11.5 and §4.2 step 9.
+
 ## Agent Harness support (opt-in)
 
 Beyond the always-available targets, the playbook can render to and read from
@@ -237,14 +330,13 @@ the [Agent Harness](https://agentharnesses.io/specification) format — a
 
 ### The `agent_harness` adapter
 
-Enable it by adding `agent_harness` to `[adapters] enabled`. It is **opt-in** —
+Enable it by adding `agent_harness` to the top-level `adapters_enabled` list. It is **opt-in** —
 not part of the default adapter set — and otherwise behaves like any other
 adapter under `playbook sync`:
 
 ```toml
-# .coding-agent-playbook.toml
-[adapters]
-enabled = ["continue", "claude_code", "agent_harness"]
+# .coding-agent-playbook.toml (top-level key, above the first [table])
+adapters_enabled = ["continue", "claude_code", "agent_harness"]
 ```
 
 `playbook sync` then emits a `HARNESS.md` plus `skills/`, `prompts/`, `rules/`,
@@ -290,8 +382,9 @@ repos:
 > runs them in its **own** virtualenv holding only the engine at `rev:` — not your
 > project environment. List every overlay package (and any out-of-tree adapter)
 > under `additional_dependencies` and keep `rev` on the engine version you pin.
-> Otherwise `playbook sync` refuses to run ("overlay package(s) … are not
-> importable") instead of silently re-rendering without your org's rules. The
+> Otherwise `playbook sync` refuses to run ("overlay package(s) in
+> overlays_enabled are not usable here", each one `not importable`) instead of
+> silently re-rendering without your org's rules. The
 > simpler option: use the `repo: local` + `language: system` hooks `playbook init`
 > writes (below), which run the `playbook` from your project environment.
 
