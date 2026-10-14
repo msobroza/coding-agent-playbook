@@ -9,12 +9,17 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
-from typing import TYPE_CHECKING
+import shutil
+import sys
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.commands import sync as _sync
+from coding_agent_playbook.detector import detect
 from coding_agent_playbook.lockfile import LockEntry, Lockfile, Provenance, compute_hash
 from coding_agent_playbook.orchestrator import SyncContext
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
@@ -22,7 +27,8 @@ from coding_agent_playbook.types import Prompt, PromptFrontmatter, Rule, RuleFro
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
+
+    from coding_agent_playbook.detector import Facts
 
     SyntheticRepoFactory = Callable[..., Path]
 
@@ -348,3 +354,325 @@ def test_build_lockfile_scoped_entries_replace_whole_file_entry(tmp_path: Path) 
         ),
         scoped,
     ]
+
+
+# --- sync --check: orphans + hygienic scratch copy (specs/prK-lifecycle-hooks.md §P P2) ---
+
+_ORPHAN_HINT = "    Orphaned generated file; run 'playbook sync' to remove."
+
+
+def _orphan_line(rel: str) -> str:
+    return f"  {rel}\n{_ORPHAN_HINT}"
+
+
+def _check(repo: Path, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
+    """Run ``playbook sync --check`` on ``repo``; return (exit code, stdout)."""
+    capsys.readouterr()
+    rc = _sync.run(_ns(repo, check=True))
+    return rc, capsys.readouterr().out
+
+
+def _write_gated_rule(repo: Path, rule_id: str, applies_if: str) -> None:
+    """Write a repo-local rule whose frontmatter carries ``applies_if`` (YAML text)."""
+    target = repo / "playbook" / "rules" / f"{rule_id}.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        f"---\nid: {rule_id}\nname: Gated\ndescription: d\nscope: always\npriority: 50\n"
+        f"applies_if:\n  {applies_if}\n---\nGated body for {rule_id}.\n",
+        encoding="utf-8",
+    )
+
+
+def _write_skill(repo: Path, skill_id: str) -> None:
+    skill_dir = repo / "playbook" / "skills" / skill_id
+    (skill_dir / "scripts").mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nid: {skill_id}\nname: Skill\ndescription: Do it.\n---\nRun it.\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "scripts" / "run.sh").write_text("echo hi\n", encoding="utf-8")
+
+
+@dataclasses.dataclass
+class ScratchCopyRecord:
+    """What one spied ``shutil.copytree`` call of the repo produced."""
+
+    ignored: dict[str, set[str]]  # directory -> names the ``ignore`` callable skipped
+    kinds: dict[str, str]  # scratch-relative path -> "link" | "dir" | "file"
+
+
+def _spy_scratch_copy(monkeypatch: pytest.MonkeyPatch, repo: Path) -> list[ScratchCopyRecord]:
+    """Wrap ``shutil.copytree``: record the ignore decisions and the tree it
+    produced for every copy whose source is ``repo`` (adapters' own copies pass)."""
+    real_copytree = shutil.copytree
+    records: list[ScratchCopyRecord] = []
+
+    def spy(src: Any, dst: Any, *args: Any, **kwargs: Any) -> Any:
+        if Path(src) != repo:
+            return real_copytree(src, dst, *args, **kwargs)
+        ignored: dict[str, set[str]] = {}
+        ignore = kwargs.get("ignore")
+
+        def recording(directory: str, names: list[str]) -> set[str]:
+            skipped = set(ignore(directory, names)) if ignore is not None else set()
+            ignored[directory] = skipped
+            return skipped
+
+        kwargs["ignore"] = recording
+        result = real_copytree(src, dst, *args, **kwargs)
+        records.append(ScratchCopyRecord(ignored=ignored, kinds=_tree_kinds(Path(dst))))
+        return result
+
+    monkeypatch.setattr(shutil, "copytree", spy)
+    return records
+
+
+def _tree_kinds(root: Path) -> dict[str, str]:
+    kinds: dict[str, str] = {}
+    for path in root.rglob("*"):
+        kind = "link" if path.is_symlink() else "dir" if path.is_dir() else "file"
+        kinds[path.relative_to(root).as_posix()] = kind
+    return kinds
+
+
+def test_check_reports_orphaned_generated_file(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A deleted rule's generated file is reported (once) as an orphan."""
+    repo = make_synthetic_repo(tmp_path, rules=[("x", "Body of x\n")])
+    assert _sync.run(_ns(repo)) == 0
+    (repo / "playbook" / "rules" / "x.md").unlink()
+    rc, out = _check(repo, capsys)
+    assert rc == 1
+    assert _orphan_line(".continue/rules/50-x.md") in out
+    # Found by both the scratch cleanup and the lockfile; reported once.
+    assert out.count(".continue/rules/50-x.md") == 1
+    assert (repo / ".continue" / "rules" / "50-x.md").is_file()  # real tree untouched
+
+
+def test_check_fails_on_sentinel_orphan_alone(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A stale sentinel-tagged output is drift even when nothing else differs."""
+    repo = make_synthetic_repo(tmp_path, rules=[("x", "Body of x\n")])
+    assert _sync.run(_ns(repo)) == 0
+    stale = repo / ".continue" / "rules" / "99-stale.md"
+    stale.write_text(f"{sentinel_line('html')}\nstale\n", encoding="utf-8")
+    rc, out = _check(repo, capsys)
+    assert rc == 1
+    assert out.startswith("Drift detected:\n")
+    assert _orphan_line(".continue/rules/99-stale.md") in out
+    assert "Generated content differs" not in out
+    assert stale.is_file()
+
+
+def test_check_reports_lockfile_orphan_without_sentinel(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A removed skill's sentinel-less outputs are orphans via the lockfile."""
+    repo = make_synthetic_repo(tmp_path)
+    _write_skill(repo, "query-db")
+    assert _sync.run(_ns(repo)) == 0
+    shutil.rmtree(repo / "playbook" / "skills" / "query-db")
+    rc, out = _check(repo, capsys)
+    assert rc == 1
+    assert _orphan_line(".claude/skills/query-db/scripts/run.sh") in out
+    assert _orphan_line(".claude/skills/query-db/SKILL.md") in out
+
+
+def test_check_lockfile_orphan_needs_existing_whole_file(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Only an unscoped, in-repo lock entry whose file still exists is an orphan."""
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    repo = make_synthetic_repo(repo_dir, rules=[("x", "Body of x\n")])
+    assert _sync.run(_ns(repo)) == 0
+    for rel in ("kept.txt", "scoped.json", "../outside.txt"):
+        (repo / rel).write_text("generated once\n", encoding="utf-8")
+    state = FileSystemStateSource(repo_root=repo)
+    lockfile = state.load_lockfile()
+    assert lockfile is not None
+    lockfile.entries += [
+        LockEntry(path="kept.txt", sha256="0", bytes=1, kind="skill"),
+        LockEntry(path="gone.txt", sha256="0", bytes=1, kind="skill"),
+        LockEntry(path="scoped.json", sha256="0", bytes=1, kind="runtime", scope="json:/x"),
+        LockEntry(path="../outside.txt", sha256="0", bytes=1),
+    ]
+    state.save_lockfile(lockfile)
+    rc, out = _check(repo, capsys)
+    assert rc == 1
+    assert out.count("Orphaned generated file") == 1
+    assert _orphan_line("kept.txt") in out
+
+
+def test_check_reports_unreadable_lockfile(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A conflicted lockfile is drift with a clear line, never a traceback."""
+    repo = make_synthetic_repo(tmp_path, rules=[("x", "Body of x\n")])
+    assert _sync.run(_ns(repo)) == 0
+    (repo / ".coding-agent-playbook.lock").write_text("<<<<<<< HEAD\n", encoding="utf-8")
+    rc, out = _check(repo, capsys)
+    assert rc == 1
+    assert "  .coding-agent-playbook.lock\n    Unreadable lockfile (" in out
+
+
+def test_check_scratch_excludes_ignored_and_secret_paths(
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """VCS, envs, caches, build outputs and secret files never reach the scratch tree."""
+    repo = make_synthetic_repo(tmp_path, rules=[("x", "Body of x\n")])
+    for rel in (
+        ".venv/lib/site.py",
+        ".git/HEAD",
+        "node_modules/pkg/index.js",
+        ".ruff_cache/0.1/x",
+        "dist/pkg.whl",
+        "src/pkg/__pycache__/m.pyc",
+        "certs/server.pem",
+    ):
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text("x\n", encoding="utf-8")
+    (repo / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
+    (repo / ".env.example").write_text("TOKEN=\n", encoding="utf-8")
+    assert _sync.run(_ns(repo)) == 0
+    records = _spy_scratch_copy(monkeypatch, repo)
+    rc, _ = _check(repo, capsys)
+    assert rc == 0
+    [record] = records
+    assert {".venv", ".git", ".env", "node_modules", ".ruff_cache", "dist"} <= record.ignored[
+        str(repo)
+    ]
+    assert ".env.example" not in record.ignored[str(repo)]
+    for rel in (".venv", ".git", ".env", "node_modules", "dist", "certs/server.pem"):
+        assert rel not in record.kinds
+    assert "src/pkg/__pycache__" not in record.kinds
+    assert record.kinds[".env.example"] == "file"
+    assert record.kinds["playbook/rules/x.md"] == "file"
+
+
+def test_check_scratch_keeps_canonical_sources_verbatim(
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``playbook/`` is sync input: a ``build`` skill or a ``*credentials*`` rule is
+    copied, so the scratch run renders the same artifact set (no false drift)."""
+    repo = make_synthetic_repo(tmp_path, rules=[("handling-credentials", "Rotate keys.\n")])
+    _write_skill(repo, "build")
+    assert _sync.run(_ns(repo)) == 0
+    records = _spy_scratch_copy(monkeypatch, repo)
+    rc, out = _check(repo, capsys)
+    assert rc == 0, out
+    [record] = records
+    assert record.kinds["playbook/rules/handling-credentials.md"] == "file"
+    assert record.kinds["playbook/skills/build/SKILL.md"] == "file"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
+def test_check_skips_symlink_outside_repo(
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A link resolving outside the repo is skipped; an in-repo link is copied as content."""
+    outside = tmp_path / "home" / ".ssh"
+    outside.mkdir(parents=True)
+    (outside / "id_rsa").write_text("PRIVATE\n", encoding="utf-8")
+    (tmp_path / "home" / "notes.txt").write_text("outside\n", encoding="utf-8")
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    repo = make_synthetic_repo(repo_dir, rules=[("x", "Body of x\n")])
+    (repo / "docs").mkdir()
+    (repo / "docs" / "inside.md").write_text("inside\n", encoding="utf-8")
+    (repo / "ssh").symlink_to(outside, target_is_directory=True)
+    (repo / "notes.txt").symlink_to(tmp_path / "home" / "notes.txt")
+    (repo / "alias.md").symlink_to(repo / "docs" / "inside.md")
+    (repo / "dangling.md").symlink_to(repo / "missing.md")
+    assert _sync.run(_ns(repo)) == 0
+    records = _spy_scratch_copy(monkeypatch, repo)
+    rc, out = _check(repo, capsys)
+    assert rc == 0, out
+    [record] = records
+    assert {"ssh", "notes.txt", "dangling.md"} <= record.ignored[str(repo)]
+    assert not any(rel.startswith("ssh") for rel in record.kinds)
+    assert record.kinds["alias.md"] == "file"  # dereferenced, never written through
+    assert "alias.md" not in record.ignored[str(repo)]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
+def test_check_skips_symlink_into_excluded_path_or_ancestor(
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An innocuous link name never smuggles a secret or an ignored dir into the
+    scratch tree, and a link to its own ancestor is not followed forever."""
+    repo = make_synthetic_repo(tmp_path, rules=[("x", "Body of x\n")])
+    (repo / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
+    (repo / ".venv").mkdir()
+    (repo / "settings.txt").symlink_to(repo / ".env")
+    (repo / "env").symlink_to(repo / ".venv", target_is_directory=True)
+    (repo / "loop").symlink_to(repo, target_is_directory=True)
+    assert _sync.run(_ns(repo)) == 0
+    records = _spy_scratch_copy(monkeypatch, repo)
+    rc, out = _check(repo, capsys)
+    assert rc == 0, out
+    [record] = records
+    assert {"settings.txt", "env", "loop"} <= record.ignored[str(repo)]
+
+
+def test_check_facts_not_flipped_by_scratch_exclusions(
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Facts are detected once, on the real repo: a notebook under the excluded
+    ``build/`` keeps ``has_notebooks`` true for the scratch run."""
+    repo = make_synthetic_repo(tmp_path)
+    (repo / "build").mkdir()
+    (repo / "build" / "analysis.ipynb").write_text("{}\n", encoding="utf-8")
+    _write_gated_rule(repo, "notebook-hygiene", "has_notebooks: true")
+    assert _sync.run(_ns(repo)) == 0
+    assert (repo / ".continue" / "rules" / "50-notebook-hygiene.md").is_file()
+    detected: list[Path] = []
+
+    def spy_detect(root: Path) -> Facts:
+        detected.append(root)
+        return detect(root)
+
+    monkeypatch.setattr("coding_agent_playbook.orchestrator.detect", spy_detect)
+    scratch_facts: list[Facts] = []
+    real_run_sync = _sync._run_sync
+
+    def spy_run_sync(ctx: SyncContext, **kwargs: Any) -> _sync.SyncResult:
+        scratch_facts.append(ctx.facts)
+        return real_run_sync(ctx, **kwargs)
+
+    monkeypatch.setattr(_sync, "_run_sync", spy_run_sync)
+    rc, out = _check(repo, capsys)
+    assert rc == 0, out
+    assert detected == [repo]
+    assert [facts.get("has_notebooks") for facts in scratch_facts] == [True]
+
+
+def test_check_has_file_predicate_sees_real_repo(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``applies_if: has_file`` is evaluated against the real repo, so a path the
+    scratch copy excludes (``.env``) never flips the rendered rule set."""
+    repo = make_synthetic_repo(tmp_path)
+    (repo / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
+    _write_gated_rule(repo, "dotenv-hygiene", 'has_file: [".env"]')
+    assert _sync.run(_ns(repo)) == 0
+    assert (repo / ".continue" / "rules" / "50-dotenv-hygiene.md").is_file()
+    rc, out = _check(repo, capsys)
+    assert rc == 0, out

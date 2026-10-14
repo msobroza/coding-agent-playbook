@@ -1451,15 +1451,18 @@ $ playbook sync
 Summary: 23 files written, 0 unchanged, 0 removed
 ```
 ### 12.3 `playbook sync --check`
-Verify, don't write. Used by pre-commit and CI. Exits non-zero on drift.
+Verify, don't write. Used by pre-commit and CI. Exits non-zero on drift: a generated file that differs or is missing, or an **orphan** — a generated file a real sync would no longer produce, found either by the scratch sync's sentinel cleanup or as a previous lockfile entry (§14.4) that was not regenerated and whose file still exists (the only record for files without a sentinel, such as `SKILL.md` and copied skill scripts). An unreadable lockfile is reported as drift too.
 ```
 $ playbook sync --check
 ✗ Drift detected:
   .continue/rules/50-python-typing.md
     Generated content differs from on-disk content.
     Run 'playbook sync' to regenerate.
+  .claude/skills/query-db/SKILL.md
+    Orphaned generated file; run 'playbook sync' to remove.
 exit code: 1
 ```
+The check renders into a temporary copy of the repository. The copy leaves out VCS, environment, cache and build directories (`.git`, `.venv`, `venv`, `node_modules`, `__pycache__`, `.tox`, `.mypy_cache`, `.ruff_cache`, `.pytest_cache`, `dist`, `build`) and every secret path (§17.3), except inside the repo-local source tree `playbook/`, which is copied as is because it is the sync's input. A symlink is copied as its target's content only when the target exists inside the repository and is not itself left out; a symlink resolving outside the repository is skipped. Facts and `applies_if: has_file` checks come from the real repository, so the copy renders the same artifact set as a real sync.
 ### 12.4 `playbook check`
 Diagnostic dump. No writes. Used to debug "why isn't my rule appearing?"
 ```
@@ -1768,7 +1771,7 @@ adapter = "continue"
 
 Every field after `bytes` is **omitted from the TOML when it holds its default**, so a composite entry carries no `artifact_id`/`source` keys and `scope`/`executable` never appear today. Provenance is recorded by `_run_sync` wrapping each adapter's `write_rule`/`write_prompt`/`write_skill`/`finalize` call; the adapter return type (`list[Path]`) is unchanged. The lockfile is the ownership record for generated files that cannot carry a sentinel (§4.3 exceptions: `SKILL.md`, copied skill scripts and references). There is no `[overlay_versions]` or `[file_hashes]` table.
 
-**Drift.** `playbook sync --check` re-renders into a scratch copy of the repo and byte-compares every generated file against the working tree (missing or different → exit 1); it does not read the lockfile. `playbook check` reports drift from the lockfile: each entry's path is re-hashed and compared with `sha256` (`missing:` / `hash mismatch:`).
+**Drift.** `playbook sync --check` re-renders into a scratch copy of the repo and byte-compares every generated file against the working tree (missing or different → exit 1); it reads the lockfile only to find orphans: a whole-file entry (`scope = ""`) that the scratch sync did not regenerate and whose file still exists (§12.3). `playbook check` reports drift from the lockfile: each entry's path is re-hashed and compared with `sha256` (`missing:` / `hash mismatch:`).
 
 **Compatibility.** A schema-1 lockfile (`path`/`sha256`/`bytes` only) loads with every new field at its default, and the next `playbook sync` rewrites it as schema 2. An older engine reading a schema-2 file still loads it: its reader picks only `path`, `sha256` and `bytes` and ignores the other keys.
 ## 15. Eval abstractions
@@ -1948,7 +1951,7 @@ A `tests/compatibility/` directory contains a frozen consumer repo from v0.3 wit
 For BNP, the overlay package ships a rule (`30-bnp-banking-dependencies`) that lists approved third-party packages. The rule appears in every harness's context, so the assistant won't suggest unapproved libraries. This is enforcement-by-convention; actual enforcement happens at CI time via a separate package-check step.
 ### 17.3 Secrets
 - Secret paths are defined once, in `coding_agent_playbook/security/patterns.py`: a path is secret when it matches a `SECRET_PATH_GLOBS` entry (`.env*`, `*.pem`, `*.key`, `*credentials*`; key stores and SSH private keys; `.netrc`, `.pypirc`, `.npmrc`, `pip.conf`, `uv.toml`, `.git-credentials`, `.vault-token`, `krb5cc_*`; `*.tfstate`, `*.tfvars`, `*.kdbx`; per-user stores under `~/` such as `~/.aws/**` and `~/.ssh/**`) and no `SECRET_PATH_EXEMPT` entry (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`, SSH public keys, and source files such as `credentials.py`). `security/paths.py`'s `is_secret_path` decides from the path string alone and never opens the file; matching is case-insensitive on macOS and Windows.
-- The detector never opens a secret path: it reads only `pyproject.toml`, and its filesystem walks skip every secret path. `playbook sync --check` is not covered yet: its scratch copy still byte-copies the whole repository, secret files included.
+- The detector never opens a secret path: it reads only `pyproject.toml`, and its filesystem walks skip every secret path. `playbook sync --check` leaves every secret path out of its scratch copy, except inside the repo-local source tree `playbook/` (§12.3).
 - The pre-commit baseline includes `gitleaks` and `detect-private-key`.
 - No log statement in the engine ever logs config values; only structural facts (counts, paths).
 ### 17.4 Audit log

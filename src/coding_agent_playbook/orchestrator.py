@@ -242,18 +242,30 @@ class SyncContext:
         repo_root: Path,
         *,
         rule_registry: RuleRegistry | None = None,
+        facts: Facts | None = None,
     ) -> SyncContext:
-        """Discovery: load config → instantiate sources → resolve overlays.
+        """Discovery: load config → detect facts → instantiate sources → resolve overlays.
 
         ``rule_registry`` is optional because the adapters need it but the
         registry itself depends on the filtered rule list, which depends on
         facts. Callers that want the full pipeline build the context once
         without a registry, then re-build the adapters via
         :func:`discover_adapters` after the registry exists.
+
+        ``facts`` skips detection and is used verbatim. ``sync --check`` passes
+        the real repo's facts into its scratch-copy context, because the scratch
+        copy omits detector inputs (``build/``, secret files) and must never
+        select a different rule set (specs/prK-lifecycle-hooks.md §P P2).
+
+        Example::
+
+            ctx = SyncContext.from_repo(repo)
+            scratch_ctx = SyncContext.from_repo(scratch, facts=ctx.facts)
         """
         state_source = FileSystemStateSource(repo_root=repo_root)
         config = state_source.load_config()
-        facts = detect(repo_root)
+        if facts is None:
+            facts = detect(repo_root)
 
         artifact_source = FileSystemArtifactSource(
             repo_root=repo_root,

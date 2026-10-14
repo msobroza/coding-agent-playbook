@@ -8,6 +8,8 @@ Covers the three load-bearing pieces:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 from coding_agent_playbook.config import Config, ProjectMeta, StorageConfig
@@ -25,6 +27,9 @@ from coding_agent_playbook.types import (
     RuleFrontmatter,
     Skill,
 )
+
+if TYPE_CHECKING:
+    from coding_agent_playbook.detector import Facts
 
 
 def _make_rule(rule_id: str, source: str, name: str = "Rule", body: str = "body\n") -> Rule:
@@ -240,6 +245,20 @@ def test_sync_context_from_repo_loads_synthetic_repo(tmp_path, make_synthetic_re
     assert "agents_md" in ctx.adapters
     # facts include something — at minimum project_kind
     assert "project_kind" in ctx.facts
+
+
+def test_sync_context_from_repo_uses_injected_facts(tmp_path, make_synthetic_repo, monkeypatch):
+    """``facts=`` skips detection entirely (the ``sync --check`` scratch run
+    reuses the real repo's facts, specs/prK-lifecycle-hooks.md §P P2)."""
+    repo = make_synthetic_repo(tmp_path)
+
+    def _no_detect(root: object) -> None:
+        raise AssertionError(f"detect() must not run when facts are injected: {root}")
+
+    monkeypatch.setattr("coding_agent_playbook.orchestrator.detect", _no_detect)
+    facts: Facts = {"project_kind": "notebook", "has_notebooks": True}
+    ctx = SyncContext.from_repo(repo, facts=facts)
+    assert ctx.facts == {"project_kind": "notebook", "has_notebooks": True}
 
 
 def test_sync_context_from_repo_missing_config_raises(tmp_path):

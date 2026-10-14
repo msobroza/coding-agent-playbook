@@ -2,18 +2,23 @@
 
 Two modes:
 - write (default): runs detector → renders → adapters write → stamps lockfile.
-- ``--check``: re-renders in memory and compares against the on-disk files;
-  exits 1 if any differ or are missing.
+- ``--check``: re-renders into a hygienic scratch copy of the repo and compares
+  against the on-disk files; exits 1 if any differ or are missing, or if any
+  generated file is orphaned (specs/prK-lifecycle-hooks.md §P P2).
 """
 
 from __future__ import annotations
 
 import dataclasses
 import datetime as _dt
-from pathlib import Path
-from typing import TYPE_CHECKING
+import shutil
+import tempfile
+import tomllib
+from pathlib import Path, PurePosixPath
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook import __version__ as _engine_version
+from coding_agent_playbook.commands._sync_scratch import ScratchCopyPolicy
 from coding_agent_playbook.detector import evaluate_predicate
 from coding_agent_playbook.lockfile import LockEntry, Lockfile, Provenance, compute_hash
 from coding_agent_playbook.orchestrator import (
@@ -39,6 +44,8 @@ if TYPE_CHECKING:
 # 2 = provenance on every entry (specs/prK-lifecycle-hooks.md §P P4, §B.6).
 _LOCKFILE_SCHEMA = 2
 
+_LOCKFILE_FILENAME: Final = ".coding-agent-playbook.lock"
+
 # Filenames that are state-source-managed and must be excluded from the
 # drift diff (otherwise the lockfile written by sync would itself look
 # like drift). Keep this in sync with the constants in
@@ -46,8 +53,11 @@ _LOCKFILE_SCHEMA = 2
 _STATE_FILES_TO_SKIP: tuple[str, ...] = (
     ".coding-agent-playbook.toml",
     ".coding-agent-playbook.local.toml",
-    ".coding-agent-playbook.lock",
+    _LOCKFILE_FILENAME,
 )
+
+# ``sync --check`` wording for an orphan (specs/prK-lifecycle-hooks.md §P P2).
+_ORPHAN_HINT: Final = "    Orphaned generated file; run 'playbook sync' to remove."
 
 
 def _build_jinja_context(ctx: SyncContext) -> dict[str, object]:
@@ -286,12 +296,18 @@ def _cleanup_stale(
     return tuple(removed)
 
 
-def _run_sync(ctx: SyncContext) -> SyncResult:
+def _run_sync(ctx: SyncContext, *, predicate_root: Path | None = None) -> SyncResult:
     """Internal helper: render + dispatch + cleanup, returning one
     :class:`SyncResult`. Used by both write mode and ``--check`` (the latter
-    only inspects ``written`` against on-disk content)."""
-    rules = _filter_applies_if(ctx.rules_resolved, ctx.facts, ctx.repo_root)
-    prompts = _filter_applies_if(ctx.prompts_resolved, ctx.facts, ctx.repo_root)
+    compares ``written`` with on-disk content and reports ``removed`` as orphans).
+
+    ``predicate_root`` is where ``applies_if: has_file`` paths are looked up
+    (default ``ctx.repo_root``). ``--check`` passes the real repo so a path its
+    scratch copy leaves out (``.env``, ``build/``) never changes the rule set.
+    """
+    root = ctx.repo_root if predicate_root is None else predicate_root
+    rules = _filter_applies_if(ctx.rules_resolved, ctx.facts, root)
+    prompts = _filter_applies_if(ctx.prompts_resolved, ctx.facts, root)
     skills = _filter_skills(ctx.skills_resolved)
 
     base_env = build_environment([], is_prompt_context=False)
@@ -356,60 +372,135 @@ def run(args: argparse.Namespace) -> int:
 
 
 def _run_check(ctx: SyncContext) -> int:
-    """``playbook sync --check``: render in a parallel scratch tree, compare bytes
-    against the consumer repo. Exits 0 (no drift) or 1 (drift detected).
+    """``playbook sync --check``: render into a scratch copy, then report drift.
 
-    Implementation choice: we run the full sync against a temporary mirror of
-    the consumer repo so adapters can write freely without mutating the real
-    tree, then diff the rendered output against on-disk content. This avoids
-    duplicating render logic.
+    Exits 0 (no drift) or 1. Drift is a generated file that differs from, or is
+    missing in, the real repo, plus every orphan (:func:`_orphan_drift`). The
+    full sync runs against the copy so adapters write freely and the real tree
+    is never touched. The copy is hygienic (:class:`ScratchCopyPolicy`): no VCS,
+    environments, caches, build outputs, secrets or links leaving the repo.
+    Because those are detector inputs, facts and ``has_file`` predicates come
+    from the real repo, so the scratch run renders the same artifact set.
     """
-    import shutil
-    import tempfile
-
-    # ``_STATE_FILES_TO_SKIP`` is the module-local constant tuple of files
-    # owned by the StateSource (config + lockfile) — those are never
-    # written by adapters, so they must be excluded from the drift diff.
-    # See the constant's docstring above for the rationale.
-
     scratch_dir = Path(tempfile.mkdtemp(prefix="playbook-sync-check-"))
     try:
         scratch = scratch_dir / "repo"
-        shutil.copytree(ctx.repo_root, scratch, symlinks=False)
-        scratch_ctx = SyncContext.from_repo(scratch)
-        # In --check mode we still run the full sync (including
-        # ``cleanup_stale``) inside the scratch tree. That's intentional:
-        # we need the cleanup pass to populate the "removed" set for
-        # comparison, and since the work happens against a copy the real
-        # repo is untouched.
-        written = _run_sync(scratch_ctx).written
-
-        drift: list[str] = []
-        for path in written:
-            rel = path.resolve().relative_to(scratch.resolve())
-            if rel.name in _STATE_FILES_TO_SKIP:
-                continue
-            actual_path = ctx.repo_root / rel
-            scratch_bytes = path.read_bytes()
-            if not actual_path.is_file():
-                drift.append(
-                    f"  {rel.as_posix()}\n    Missing on disk; run 'playbook sync' to create."
-                )
-                continue
-            actual_bytes = actual_path.read_bytes()
-            if actual_bytes != scratch_bytes:
-                drift.append(
-                    f"  {rel.as_posix()}\n"
-                    "    Generated content differs from on-disk content.\n"
-                    "    Run 'playbook sync' to regenerate."
-                )
-
-        if drift:
-            print("Drift detected:")
-            for entry in drift:
-                print(entry)
-            return 1
-        print("No drift detected.")
-        return 0
+        policy = ScratchCopyPolicy(ctx.repo_root)
+        shutil.copytree(ctx.repo_root, scratch, symlinks=False, ignore=policy)
+        scratch_ctx = SyncContext.from_repo(scratch, facts=ctx.facts)
+        # ``cleanup_stale`` runs inside the copy: ``removed`` is exactly the set
+        # of stale generated files a real sync would delete, i.e. orphans.
+        result = _run_sync(scratch_ctx, predicate_root=ctx.repo_root)
+        drift = _content_drift(result.written, scratch, ctx.repo_root)
+        drift += _orphan_drift(result, scratch, ctx, policy)
+        return _report_drift(drift)
     finally:
         shutil.rmtree(scratch_dir, ignore_errors=True)
+
+
+def _report_drift(drift: Sequence[str]) -> int:
+    """Print the drift lines (or the all-clear) and return the exit code."""
+    if not drift:
+        print("No drift detected.")
+        return 0
+    print("Drift detected:")
+    for entry in drift:
+        print(entry)
+    return 1
+
+
+def _scratch_relative(path: Path, scratch_real: Path) -> Path:
+    """``path`` (inside the scratch copy) relative to the resolved scratch root."""
+    return path.resolve().relative_to(scratch_real)
+
+
+def _content_drift(written: Sequence[Path], scratch: Path, repo_root: Path) -> list[str]:
+    """Drift lines for scratch-generated files that differ from, or are missing
+    in, ``repo_root``; state-source files (config, lockfile) are skipped."""
+    scratch_real = scratch.resolve()
+    drift: list[str] = []
+    for path in written:
+        rel = _scratch_relative(path, scratch_real)
+        if rel.name in _STATE_FILES_TO_SKIP:
+            continue
+        line = _compare_generated(path, repo_root / rel, rel.as_posix())
+        if line is not None:
+            drift.append(line)
+    return drift
+
+
+def _compare_generated(generated: Path, actual: Path, rel: str) -> str | None:
+    """One drift line when ``actual`` is missing or differs from ``generated``."""
+    if not actual.is_file():
+        return f"  {rel}\n    Missing on disk; run 'playbook sync' to create."
+    if actual.read_bytes() != generated.read_bytes():
+        return (
+            f"  {rel}\n"
+            "    Generated content differs from on-disk content.\n"
+            "    Run 'playbook sync' to regenerate."
+        )
+    return None
+
+
+def _orphan_drift(
+    result: SyncResult, scratch: Path, ctx: SyncContext, policy: ScratchCopyPolicy
+) -> list[str]:
+    """Drift lines for orphans, each path once, sorted.
+
+    An orphan is a generated file the scratch sync's ``cleanup_stale`` removed
+    (sentinel-tagged, no longer produced), or a lockfile orphan
+    (:func:`_lockfile_orphans`) — the only record for files that cannot carry a
+    sentinel (``SKILL.md``, copied skill scripts). An unreadable lockfile (e.g.
+    merge-conflict markers) is reported as drift instead of a traceback.
+    """
+    scratch_real = scratch.resolve()
+    orphans = {_scratch_relative(p, scratch_real).as_posix() for p in result.removed}
+    try:
+        lockfile = ctx.state_source.load_lockfile()
+    except (tomllib.TOMLDecodeError, KeyError) as exc:
+        unreadable = (
+            f"  {_LOCKFILE_FILENAME}\n    Unreadable lockfile ({type(exc).__name__}: {exc}); "
+            "run 'playbook sync' to rewrite it."
+        )
+        return [*_orphan_lines(orphans), unreadable]
+    regenerated = {_scratch_relative(p, scratch_real).as_posix() for p in result.written}
+    orphans |= _lockfile_orphans(lockfile, regenerated, ctx.repo_root, policy)
+    return _orphan_lines(orphans)
+
+
+def _orphan_lines(orphans: Iterable[str]) -> list[str]:
+    return [f"  {rel}\n{_ORPHAN_HINT}" for rel in sorted(orphans)]
+
+
+def _lockfile_orphans(
+    lockfile: Lockfile | None,
+    regenerated: set[str],
+    repo_root: Path,
+    policy: ScratchCopyPolicy,
+) -> set[str]:
+    """Paths of prior whole-file lock entries the scratch sync did not
+    regenerate whose file still exists in ``repo_root``.
+
+    Scoped entries (``json:<pointer>``) are skipped: their file is shared with
+    the user and never deleted (§B.6). So are paths the scratch copy left out
+    (``policy.covers``), which the scratch run could not judge.
+    """
+    if lockfile is None:
+        return set()
+    return {
+        entry.path
+        for entry in lockfile.entries
+        if not entry.scope
+        and entry.path not in regenerated
+        and not policy.covers(entry.path)
+        and _is_repo_file(repo_root, entry.path)
+    }
+
+
+def _is_repo_file(repo_root: Path, rel: str) -> bool:
+    """Whether lockfile path ``rel`` names an existing file inside ``repo_root``
+    (absolute and ``..`` paths never do)."""
+    pure = PurePosixPath(rel)
+    if pure.is_absolute() or ".." in pure.parts:
+        return False
+    return (repo_root / pure).is_file()
