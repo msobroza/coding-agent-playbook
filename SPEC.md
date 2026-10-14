@@ -63,7 +63,7 @@ Prior art that shaped this design:
 - **Skill** — a Claude Code-specific richer prompt with bundled scripts and progressive disclosure. Degrades to a prompt for harnesses that lack the concept. OpenCode reads `.claude/skills/<name>/SKILL.md` natively, so skills authored for Claude Code work in OpenCode without duplication.
 - **Hook** — overloaded term. Two distinct meanings:
   - **Git pre-commit hook**: a shell command run before a commit lands (via pre-commit.com framework).
-  - **Assistant lifecycle hook**: PreToolUse / PostToolUse / SessionStart etc., supported by Claude Code and Continue CLI. The engine ships configuration for both kinds and keeps them visually separate in source.
+  - **Assistant lifecycle hook**: PreToolUse / PostToolUse / SessionStart etc., supported natively by Claude Code, by OpenCode through JS plugins; Continue ships no wired hook mechanism (the CLI's hook code is unreachable), so Continue receives the advisory degrade only (the hook's guidance rendered as rule text; `specs/prK-lifecycle-hooks.md` §A.8). The engine ships configuration for both kinds and keeps them visually separate in source.
 - **Plugin (OpenCode)** — JS/TS module under `.opencode/plugin/` that subscribes to OpenCode's runtime events (`tool.execute.before`, `session.idle`, etc.). The OpenCode equivalent of Claude Code's declarative hooks. v1 does not generate plugins; users author them by hand. See open question 8.
 - **Agent (OpenCode)** — a named mode with its own model, permissions, and system prompt, defined in `.opencode/agent/<name>.md`. OpenCode ships built-in `build` and `plan` agents and supports user-defined custom agents. Out of scope for the canonical artifact model in v1; users author custom agents directly. See open question 9.
 - **Eval task** — a reproducible test case associated with a prompt: a starting state (`setup/` files + mock detector facts), an invocation (`prompt_args`, `input_variables`), and a notion of success (programmatic checks + human-readable rubric). v1 ships the authoring format and validator; the runner that executes tasks against a real agent lands in v1.1 / v2. See Section 6.5.
@@ -1164,6 +1164,7 @@ class ContinueAdapter(Adapter):
         target.write_text(self._render(prompt, invokable=True), encoding="utf-8")
         return [target]
 ```
+**Hooks: none — advisory degrade only.** Continue has no wired lifecycle-hook mechanism: the `cn` CLI's hook code is dormant in every published bundle and the IDE `config.yaml` has no hooks key. The Continue adapter therefore never writes hook configuration under `.continue/`; a canonical hook reaches Continue only as advisory rule text (`specs/prK-lifecycle-hooks.md` §A.8).
 #### 10.2.1 Numbering scheme
 Continue loads rules in lexicographical order, so the file name controls priority. The adapter prefixes filenames with the rule's `priority` (default 50, zero-padded to 2 digits). Authors keep priorities sparse (00, 10, 20, ..., 90) so new rules can slot in without renumbering.
 | Priority | Used for |
@@ -1948,7 +1949,7 @@ A `tests/compatibility/` directory contains a frozen consumer repo from v0.3 wit
 ## 17. Security and operational considerations
 ### 17.1 Air-gapped operation
 - **No network calls at sync time.** All resources are bundled in the package.
-- **No HTTP-handler hooks shipped by default.** The Claude Code / Continue CLI HTTP hook type is supported by the adapter API but no engine-shipped hook uses it.
+- **No HTTP-handler hooks shipped by default.** HTTP hook handlers are not expressible in the canonical `Hook` schema and are rejected by `playbook validate` (`specs/prK-lifecycle-hooks.md` §B.5 H8; the `Hook` kind lands with PR K).
 - **Internal PyPI only.** No public PyPI dependency required for runtime; `uv` itself is the only binary dependency for the install flow.
 ### 17.2 Dependency allowlist
 For BNP, the overlay package ships a rule (`30-bnp-banking-dependencies`) that lists approved third-party packages. The rule appears in every harness's context, so the assistant won't suggest unapproved libraries. This is enforcement-by-convention; actual enforcement happens at CI time via a separate package-check step.
