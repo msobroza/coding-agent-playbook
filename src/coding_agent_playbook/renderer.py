@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol
 
 import yaml
-from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2 import FileSystemLoader, StrictUndefined
 from jinja2.exceptions import SecurityError
 from jinja2.sandbox import SandboxedEnvironment
 
@@ -24,6 +24,10 @@ from coding_agent_playbook._sentinel import sentinel_line
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
+
+    # Annotations only: every runtime construction is a ``SandboxedEnvironment``
+    # (tests/unit/test_no_unsandboxed_jinja.py allows no other jinja2 import).
+    from jinja2 import Environment
 
 # Aliases the CLI accepts as a short-form for --format. Resolved to the full
 # internal name before render_for() dispatches.
