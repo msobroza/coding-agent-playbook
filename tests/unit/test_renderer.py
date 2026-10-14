@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import tomllib
+from importlib import metadata
+from pathlib import Path
+from typing import Any
 
 import pytest
 from jinja2 import StrictUndefined, UndefinedError
 from jinja2.exceptions import SecurityError
 from jinja2.sandbox import ImmutableSandboxedEnvironment, SandboxedEnvironment
+from packaging.requirements import Requirement
+from packaging.version import Version
 
 from coding_agent_playbook.renderer import (
     SENTINEL,
@@ -19,9 +24,6 @@ from coding_agent_playbook.renderer import (
     render_sandboxed,
     render_string,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 class StubRuleRegistry:
@@ -577,3 +579,22 @@ def test_appendix_rule_ids_follow_includes_rules_unless_body_inlines_them() -> N
     assert appendix_rule_ids(["a", "b"], "Refactor.\n") == ["a", "b"]
     assert appendix_rule_ids(["a"], "{{ rule('a') }}\n") == []
     assert appendix_rule_ids([], "body") == []
+
+
+#: The jinja2 release closing the published sandbox escapes (CVE-2024-56326,
+#: fixed in 3.1.5; CVE-2025-27516, fixed in 3.1.6). Keep in step with the
+#: ``jinja2>=`` floor in ``pyproject.toml`` (SPEC §9.3, §17).
+_JINJA_SANDBOX_FLOOR = Version("3.1.6")
+
+
+def test_jinja_version_has_sandbox_fixes() -> None:
+    """The sandbox is the security boundary for agent-writable templates (prK §P1)."""
+    assert Version(metadata.version("jinja2")) >= _JINJA_SANDBOX_FLOOR
+
+
+def test_pyproject_pins_the_jinja_sandbox_floor() -> None:
+    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    dependencies = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["dependencies"]
+    [jinja] = [Requirement(dep) for dep in dependencies if dep.startswith("jinja2")]
+    assert jinja.specifier.contains(str(_JINJA_SANDBOX_FLOOR))
+    assert not jinja.specifier.contains("3.1.5")
