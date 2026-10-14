@@ -144,6 +144,41 @@ def test_timeout_is_configurable(tmp_path: Path) -> None:
         runner._invoke_agent("p", scratch)
 
 
+def test_invoke_agent_child_env_is_unattended(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The agent runs marked unattended, so hook asks degrade to deny (P-D2)."""
+    monkeypatch.delenv("PLAYBOOK_HOOK_UNATTENDED", raising=False)
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    program = (
+        "import os, sys; sys.stdout.write(os.environ.get('PLAYBOOK_HOOK_UNATTENDED', '<unset>'))"
+    )
+    runner = ClaudeCodeRunner(command=[sys.executable, "-c", program])
+
+    run = runner._invoke_agent("p", scratch)
+
+    assert run.transcript == "1"
+
+
+def test_invoke_agent_child_env_keeps_parent_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The unattended flag is added to the parent env, never a replacement for it."""
+    monkeypatch.setenv("PLAYBOOK_TEST_PARENT_MARKER", "kept")
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    program = (
+        "import os, sys; "
+        "sys.stdout.write(os.environ['PATH'] + '|' + os.environ['PLAYBOOK_TEST_PARENT_MARKER'])"
+    )
+    runner = ClaudeCodeRunner(command=[sys.executable, "-c", program])
+
+    run = runner._invoke_agent("p", scratch)
+
+    assert run.transcript == f"{os.environ['PATH']}|kept"
+
+
 # --------------------------------------------------------------------------- #
 # Prompt-strictness: a real runner must not be fed a placeholder
 # --------------------------------------------------------------------------- #
