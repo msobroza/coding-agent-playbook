@@ -22,8 +22,8 @@ from typing import TYPE_CHECKING
 
 import yaml
 
+from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.harness.leaf_detectors import HARNESS_LEAF_MARKER
-from coding_agent_playbook.renderer import SENTINEL
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -49,7 +49,7 @@ def with_sentinel_body(frontmatter: str, body: str) -> str:
     is placed as the **first body line** (an HTML comment) — it cannot be line 1
     because the frontmatter fence must be — followed by a blank line and ``body``.
     """
-    return f"{frontmatter.rstrip('\n')}\n<!-- {SENTINEL} -->\n\n{body}"
+    return f"{frontmatter.rstrip('\n')}\n{sentinel_line('html')}\n\n{body}"
 
 
 def routing_file(description: str, body: str) -> str:

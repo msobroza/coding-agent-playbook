@@ -10,7 +10,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.renderer import SENTINEL
+from coding_agent_playbook._sentinel import has_sentinel
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -73,9 +73,9 @@ class Adapter(ABC):
 
     def _default_cleanup(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
         """Default cleanup: for each directory in ``_output_directories``,
-        walk the tree; for every file whose first line contains :data:`SENTINEL`,
-        delete it if its resolved path is not in ``written_paths``. Return the
-        deleted paths.
+        walk the tree; for every file that :meth:`_carries_sentinel`, delete it
+        if its resolved path is not in ``written_paths``. Return the deleted
+        paths.
 
         Files without the sentinel marker are user-authored and are never
         touched. Binary or undecodable files are skipped silently so the
@@ -86,15 +86,29 @@ class Adapter(ABC):
             if not output_dir.is_dir():
                 continue
             for path in output_dir.rglob("*"):
-                if not path.is_file():
+                if not path.is_file() or path.resolve() in written_paths:
                     continue
-                if path.resolve() in written_paths:
-                    continue
-                try:
-                    first_line = path.read_text(encoding="utf-8").split("\n", 1)[0]
-                except (UnicodeDecodeError, OSError):
-                    continue
-                if SENTINEL in first_line:
+                if self._carries_sentinel(path):
                     path.unlink()
                     deleted.append(path)
         return deleted
+
+    @staticmethod
+    def _carries_sentinel(path: Path) -> bool:
+        """Whether ``path`` is engine-generated per :func:`_sentinel.has_sentinel`.
+
+        The sentinel must sit on line 1, or on the first body line after a
+        leading YAML frontmatter block; anywhere else it is user prose. Binary,
+        undecodable or unreadable files count as user-owned (``False``), so a
+        cleanup scan never crashes a sync.
+
+        Example::
+
+            if self._carries_sentinel(repo_root / "AGENTS.md"):
+                ...  # engine-owned: safe to delete once stale
+        """
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            return False
+        return has_sentinel(text)

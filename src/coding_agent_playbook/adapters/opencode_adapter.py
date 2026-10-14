@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.adapters.base import Adapter
-from coding_agent_playbook.renderer import SENTINEL, render_for
+from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -102,30 +102,3 @@ class OpenCodeAdapter(Adapter):
         sibling adapters.
         """
         return [repo_root / ".opencode" / "command"]
-
-    def _default_cleanup(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
-        """Scan each ``_output_directories(repo_root)`` entry and delete any
-        sentinel-tagged file whose absolute path is not in ``written_paths``.
-
-        This matches the algorithm Track 6 lands on the ABC; the override is
-        kept on the OpenCode adapter so this track can self-verify cleanly
-        before Track 6 merges. After integration the inherited behaviour is
-        byte-identical, so the override is a safe no-op.
-        """
-        deleted: list[Path] = []
-        for output_dir in self._output_directories(repo_root):
-            if not output_dir.is_dir():
-                continue
-            for path in output_dir.rglob("*"):
-                if not path.is_file():
-                    continue
-                if path.resolve() in written_paths:
-                    continue
-                try:
-                    first_line = path.read_text(encoding="utf-8").split("\n", 1)[0]
-                except (UnicodeDecodeError, OSError):
-                    continue
-                if SENTINEL in first_line:
-                    path.unlink()
-                    deleted.append(path)
-        return deleted

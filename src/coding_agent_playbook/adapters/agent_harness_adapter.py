@@ -31,9 +31,10 @@ import dataclasses
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook._sentinel import SENTINEL, sentinel_line
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.harness import emitter, manifest
-from coding_agent_playbook.renderer import SENTINEL, render_for
+from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -287,7 +288,7 @@ class AgentHarnessAdapter(Adapter):
 
     @staticmethod
     def _strip_leading_sentinel(text: str) -> str:
-        marker = f"<!-- {SENTINEL} -->\n"
+        marker = f"{sentinel_line('html')}\n"
         return text[len(marker) :] if text.startswith(marker) else text
 
     @staticmethod
