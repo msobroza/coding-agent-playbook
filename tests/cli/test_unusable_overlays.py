@@ -321,7 +321,15 @@ def test_sync_refuses_a_package_without_resources(
 ) -> None:
     repo = _repo(tmp_path, make_synthetic_repo, _PARENT)
 
-    assert _sync.execute(repo, git=FakeGitClient(staged=["AGENTS.md"]), **mode) == 1
+    assert (
+        _sync.execute(
+            repo,
+            git=FakeGitClient(staged=["AGENTS.md"]),
+            check=mode.get("check", False),
+            check_staged=mode.get("check_staged", False),
+        )
+        == 1
+    )
 
     err = capsys.readouterr().err
     assert f"\n  {_PARENT}: importable, but ships no resources/ directory" in err
@@ -342,7 +350,15 @@ def test_sync_refuses_packages_that_raise_at_import(
     rendering without them would drop their artifacts (it used to be a traceback)."""
     repo = _repo(tmp_path, make_synthetic_repo, *_raising_overlays(make_package))
 
-    assert _sync.execute(repo, git=FakeGitClient(staged=["AGENTS.md"]), **mode) == 1
+    assert (
+        _sync.execute(
+            repo,
+            git=FakeGitClient(staged=["AGENTS.md"]),
+            check=mode.get("check", False),
+            check_staged=mode.get("check_staged", False),
+        )
+        == 1
+    )
 
     err = capsys.readouterr().err
     assert "".join(f"\n  {reason}" for reason in _BOOM_REASONS) in err

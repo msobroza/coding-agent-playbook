@@ -21,7 +21,7 @@ from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.lockfile import compute_hash
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from tests.conftest import _DEFAULT_CONFIG
-from tests.fakes import FakeGitClient
+from tests.fakes import FakeGitClient, pre_gate_validate
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -336,7 +336,8 @@ def test_harness_case_only_rename_converges(
     skill_md = repo / "playbook" / "skills" / "Demo" / "SKILL.md"
     skill_md.parent.mkdir(parents=True)
     skill_md.write_text("---\nid: Demo\nname: Demo\ndescription: d\n---\nDo it.\n")
-    assert _sync.execute(repo, git=FakeGitClient()) == 0
+    # ``id: Demo`` fails validate, which now gates sync: seed pre-gate output.
+    assert _sync.execute(repo, git=FakeGitClient(), validate=pre_gate_validate) == 0
     skill_md.write_text(skill_md.read_text().replace("id: Demo", "id: demo"))
     for _ in range(2):
         capsys.readouterr()
@@ -521,7 +522,8 @@ def test_e2e_tracked_leftover_after_a_case_only_dir_rename_is_kept(repo: Path) -
     skill_md = source / "SKILL.md"
     skill_md.write_text(skill_md.read_text().replace(f"id: {_SKILL}", "id: Demo"))
     (source / "scripts" / "old.sh").write_text("old\n")
-    assert _sync.execute(repo) == 0
+    # ``id: Demo`` fails validate, which now gates sync: seed pre-gate output.
+    assert _sync.execute(repo, validate=pre_gate_validate) == 0
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "--no-verify", "-m", "committed output")
     skill_md.write_text(skill_md.read_text().replace("id: Demo", "id: demo"))

@@ -3,7 +3,8 @@
 ``FakeGitClient`` stands in for :class:`coding_agent_playbook.git_client.SubprocessGitClient`
 so ``playbook sync`` tests never shell out to git (and never monkeypatch
 :mod:`subprocess`). ``None`` models "git cannot answer" (not a repository, git
-missing, timeout) exactly like the real client.
+missing, timeout) exactly like the real client. :func:`pre_gate_validate` stands
+in for ``playbook sync``'s validate gate.
 """
 
 from __future__ import annotations
@@ -15,6 +16,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
+
+    from coding_agent_playbook.commands._validation import ValidationError
+    from coding_agent_playbook.orchestrator import SyncContext
 
 
 @dataclass
@@ -52,3 +56,14 @@ class FakeGitClient:
     def staged_paths(self, repo_root: Path) -> list[str] | None:
         self.calls.append(("staged_paths", ()))
         return None if self.staged is None else list(self.staged)
+
+
+def pre_gate_validate(ctx: SyncContext) -> list[ValidationError]:
+    """A validate gate that finds nothing: models a sync by an engine older than the gate.
+
+    ``playbook sync`` refuses content ``playbook validate`` rejects (prK §P P8),
+    such as a skill ``id: Demo`` that breaks the Agent Skills name rule. Output
+    from a release before the gate can still hold it, so regression tests seed
+    that output with ``execute(repo, validate=pre_gate_validate)``.
+    """
+    return []

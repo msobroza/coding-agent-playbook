@@ -147,10 +147,14 @@ def make_synthetic_repo():
             repo = make_synthetic_repo(
                 tmp_path,
                 rules=[("python-style", "Body content\\n")],
-                prompts=[("refactor", {"slash": "refactor"})],
+                prompts=[("tidy-up", {"slash": "tidy-up"})],
                 pyproject_extras={"dependencies": ["fastapi"]},
             )
             # repo is the path to the consumer-repo root.
+
+    Prefer artifact ids the engine does not ship: a repo-local ``refactor``
+    prompt overrides the engine's without its ``eval_tasks``, which fails
+    ``playbook validate`` and so makes ``playbook sync`` refuse to write.
     """
 
     def _build(

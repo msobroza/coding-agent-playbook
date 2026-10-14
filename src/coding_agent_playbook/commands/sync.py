@@ -24,9 +24,14 @@ Every mode first refuses to run when a configured overlay package fails to
 import or ships no ``resources/`` directory (``_sync_preflight``) —
 rendering without it would silently drop the org rules and un-ignore their
 output. A config the engine would misread fails even earlier, while loading
-(:class:`~coding_agent_playbook.config.ConfigError`). A template the Jinja
-sandbox rejects aborts every mode with exit 1, naming the source file, before
-any adapter writes (specs/prK-lifecycle-hooks.md §P P1).
+(:class:`~coding_agent_playbook.config.ConfigError`). Write mode and
+``--check`` then run the full ``playbook validate`` rule set
+(:func:`~coding_agent_playbook.commands.validate.collect_validation_errors`)
+and exit 1 on any finding, printing its ``FAIL`` lines to stderr and writing
+nothing (§P P8); ``--check-staged`` is the pre-commit hot path and is not
+gated. A template the Jinja sandbox rejects aborts every mode with exit 1,
+naming the source file, before any adapter writes (specs/prK-lifecycle-hooks.md
+§P P1).
 """
 
 from __future__ import annotations
@@ -50,6 +55,8 @@ from coding_agent_playbook.commands._sync_lockfile import (
     dispatch_to_adapters,
 )
 from coding_agent_playbook.commands._sync_render import render_artifacts, report_sandbox_violation
+from coding_agent_playbook.commands._validation import report_validation_errors
+from coding_agent_playbook.commands.validate import collect_validation_errors
 from coding_agent_playbook.git_client import SubprocessGitClient
 from coding_agent_playbook.gitignore import LOCKFILE_NAME, ignore_entries
 from coding_agent_playbook.orchestrator import (
@@ -61,16 +68,21 @@ from coding_agent_playbook.renderer import TemplateSecurityError
 
 if TYPE_CHECKING:
     import argparse
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Callable, Iterator, Sequence
 
+    from coding_agent_playbook.commands._validation import ValidationError
     from coding_agent_playbook.git_client import GitClient
     from coding_agent_playbook.lockfile import Lockfile
+
+    #: The validate gate's signature: every finding for ``ctx`` (none = go on).
+    ValidateFn = Callable[[SyncContext], Sequence[ValidationError]]
 
 # What "the lockfile cannot be read" looks like: tomllib.TOMLDecodeError and
 # lockfile.LockfileFormatError are ValueErrors; the rest guard third-party sources.
 _UNREADABLE_LOCKFILE: tuple[type[Exception], ...] = (OSError, ValueError, KeyError, TypeError)
 
-_SANDBOX_OUTCOME = "playbook sync aborted; no files were written."
+# Printed last when the sandbox or the validate gate stops a sync before any write.
+_ABORT_OUTCOME = "playbook sync aborted; no files were written."
 
 
 def _resolve_repo_root(args: argparse.Namespace) -> Path:
@@ -127,13 +139,16 @@ def execute(
     check: bool = False,
     check_staged: bool = False,
     git: GitClient | None = None,
+    validate: ValidateFn = collect_validation_errors,
 ) -> int:
     """Execute the sync pipeline in write, ``--check`` or ``--check-staged`` mode.
 
     Programmatic entry point used by ``playbook init`` (to fire a sync after
     writing the config) and by tests that want to skip the argparse plumbing.
     ``git`` defaults to :class:`SubprocessGitClient`; tests inject a fake.
-    Returns 1, having written nothing, when a template is rejected by the
+    Write and ``--check`` mode first run ``validate`` (the ``playbook
+    validate`` rule set; tests inject a fake). Returns 1, having written
+    nothing, on any validate finding or when a template is rejected by the
     Jinja sandbox.
 
     Example::
@@ -149,6 +164,8 @@ def execute(
         return 0  # the staged-output guard is a no-op under committed output
     if not _environment_ready(ctx):
         return 1
+    if not check_staged and not _passes_validation(ctx, validate):
+        return 1
     try:
         if check_staged:
             return _run_check_staged(ctx, git_client)
@@ -156,7 +173,7 @@ def execute(
             return _run_check(ctx, git_client)
         return _run_write(ctx, git_client)
     except TemplateSecurityError as exc:
-        return report_sandbox_violation(exc, ctx.repo_root, outcome=_SANDBOX_OUTCOME)
+        return report_sandbox_violation(exc, ctx.repo_root, outcome=_ABORT_OUTCOME)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -178,6 +195,22 @@ def _environment_ready(ctx: SyncContext) -> bool:
     if absent:
         _sync_preflight.warn_missing_adapters(absent)
     return True
+
+
+def _passes_validation(ctx: SyncContext, validate: ValidateFn) -> bool:
+    """Run the validate gate; on findings print them and the abort line to stderr.
+
+    Any rendering of content ``playbook validate`` rejects — an unknown
+    ``applies_if`` fact, a broken eval-task reference, an invalid Agent Skill
+    — is refused before the first write (prK §P P8b, OQ-4). ``--check-staged``
+    never comes here: it is the ``commit = false`` pre-commit hot path.
+    """
+    errors = validate(ctx)
+    if not errors:
+        return True
+    report_validation_errors(errors, sys.stderr)
+    print(_ABORT_OUTCOME, file=sys.stderr)
+    return False
 
 
 def _missing_adapters(ctx: SyncContext) -> list[str]:

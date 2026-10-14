@@ -4,7 +4,8 @@ Builds a synthetic consumer repo, runs sync programmatically, and asserts
 adapter outputs landed in the expected places plus the lockfile carries
 the right entries — schema 2, with provenance on every entry
 (specs/prK-lifecycle-hooks.md §P P4). ``--check`` orphans live in
-``test_sync_check.py``; the Jinja sandbox in ``test_sync_sandbox.py``.
+``test_sync_check.py``; the Jinja sandbox in ``test_sync_sandbox.py``; the
+validate gate (§P P8) in ``test_sync_validate_gate.py``.
 """
 
 from __future__ import annotations
@@ -42,7 +43,9 @@ def test_sync_writes_continue_rules_and_agents_md(tmp_path, make_synthetic_repo)
     repo = make_synthetic_repo(
         tmp_path,
         rules=[("style-guide", "Use spaces, not tabs.\n")],
-        prompts=[("refactor", {"slash": "refactor", "body": "Refactor the code.\n"})],
+        # Not an engine prompt id: overriding one (``refactor``) without its
+        # eval_tasks fails validate, so sync would refuse to write (prK §P P8).
+        prompts=[("tidy-up", {"slash": "tidy-up", "body": "Tidy up the code.\n"})],
     )
     rc = _sync.run(_ns(repo))
     assert rc == 0
@@ -53,13 +56,13 @@ def test_sync_writes_continue_rules_and_agents_md(tmp_path, make_synthetic_repo)
     agents_md = repo / "AGENTS.md"
     assert agents_md.is_file()
     # Continue prompt landed under .continue/prompts.
-    continue_prompt = repo / ".continue" / "prompts" / "refactor.md"
+    continue_prompt = repo / ".continue" / "prompts" / "tidy-up.md"
     assert continue_prompt.is_file()
     # claude code prompt slash command
-    claude_command = repo / ".claude" / "commands" / "refactor.md"
+    claude_command = repo / ".claude" / "commands" / "tidy-up.md"
     assert claude_command.is_file()
     # opencode prompt slash command
-    opencode_command = repo / ".opencode" / "command" / "refactor.md"
+    opencode_command = repo / ".opencode" / "command" / "tidy-up.md"
     assert opencode_command.is_file()
 
 
