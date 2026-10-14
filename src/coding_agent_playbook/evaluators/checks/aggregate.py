@@ -67,12 +67,14 @@ if TYPE_CHECKING:
 _OVER_AXES = frozenset({"gate", "rubric", "verdict"})
 
 
-def _trial_boolean(over: str, trial: TrialResult) -> bool:
+def _trial_boolean(over: str, trial: TrialResult) -> bool | None:
     """The per-trial boolean an aggregate reduces, for one ``over`` axis.
 
     ``over == "verdict"`` reads the trial's already-derived verdict;
     ``over in {"gate", "rubric"}`` reads that layer's ``CheckResult.passed`` from
-    the trial's report. This is the structural twin of
+    the trial's report, or ``None`` when that layer was **skipped** (e.g. the
+    rubric layer with no judge) — a skipped layer is neutral, it does not vote.
+    This is the structural twin of
     :func:`coding_agent_playbook.evals._compile.over_boolean`, inlined here so the
     ``evaluators`` package never imports ``evals`` (which would create a cycle).
     Raises :exc:`ValueError` on an unknown axis, or a layer the report lacks.
@@ -85,8 +87,13 @@ def _trial_boolean(over: str, trial: TrialResult) -> bool:
         )
     for check in trial.report.checks:
         if check.check_id == over:
-            return check.passed
+            return check.passed if check.status == "run" else None
     raise ValueError(f"'over' selector {over!r} has no {over!r} check in the trial report")
+
+
+def _votes(over: str, trials: list[TrialResult]) -> list[bool]:
+    """The ``over``-axis booleans of the trials where that axis actually ran."""
+    return [vote for vote in (_trial_boolean(over, t) for t in trials) if vote is not None]
 
 
 class AggregateCheck(Check):
@@ -94,10 +101,11 @@ class AggregateCheck(Check):
 
     Reads :attr:`~coding_agent_playbook.evaluators.types.EvalContext.trials` (the
     runner ran ``N = max(k)`` trials), reduces the selected ``over`` axis to the
-    success count ``c`` over ``n = len(trials)``, computes the ``0-1`` estimate via
-    the subclass :meth:`_estimate`, and grades it against the absolute
-    ``warn``/``fail`` floor. Does no agent work - both axes are
-    ``DETERMINISTIC``; :meth:`available` is ``True`` only once trials are present.
+    success count ``c`` over the ``n`` trials where that axis ran (a skipped axis
+    does not vote), computes the ``0-1`` estimate via the subclass
+    :meth:`_estimate`, and grades it against the absolute ``warn``/``fail``
+    floor. Does no agent work - both axes are ``DETERMINISTIC``;
+    :meth:`available` is ``True`` only once ``k`` trials voted on the axis.
 
     Subclasses set :attr:`_metric` (the registry/id name) and implement
     :meth:`_estimate`.
@@ -133,24 +141,32 @@ class AggregateCheck(Check):
         self.id = f"{self._metric}:{over}@{k}"
 
     def available(self, ctx: EvalContext) -> bool:
-        """True only once the runner has populated ``ctx.trials`` (multi-trial run)."""
-        return ctx.trials is not None
+        """True once the runner populated ``ctx.trials`` with ``k`` voting trials.
+
+        A trial votes when its ``over`` axis ran. An axis skipped in every trial
+        (``over = "rubric"`` with no judge) leaves nothing to aggregate, so the
+        check is unavailable — neutral, rather than a ``pass@k`` of ``0``. Fewer
+        than ``k`` votes is unavailable too, rather than silently estimating
+        ``pass@n`` in place of ``pass@k``.
+        """
+        return ctx.trials is not None and len(_votes(self.over, ctx.trials)) >= self.k
 
     def grade(self, ctx: EvalContext, measurements: MeasurementSet) -> CheckResult:
         """Reduce the trials to ``(n, c)``, estimate the ``0-1`` score, then grade it.
 
         ``measurements`` is ignored - an aggregate reads ``ctx.trials`` directly.
-        ``n`` is the trial count and ``c`` the count whose selected ``over`` axis
-        passed. The subclass :meth:`_estimate` turns ``(n, c, k)`` into a ``0-1``
+        ``n`` is the count of trials whose selected ``over`` axis ran (a trial
+        that skipped it does not vote) and ``c`` the count of those that passed.
+        The subclass :meth:`_estimate` turns ``(n, c, k)`` into a ``0-1``
         reliability score, graded against the absolute ``warn``/``fail`` floor with
         the higher-is-better strict-below rule; ``passed`` is ``score >= fail``
         (a pure ``warn`` gate still passes - a warn never fails a check).
         """
-        trials = ctx.trials or []
-        n = len(trials)
-        c = sum(1 for t in trials if _trial_boolean(self.over, t))
-        # Guard k > n: the runner guarantees n >= max(k), so this should never fire;
-        # clamp defensively to min(k, n) so the binomial terms stay well-defined.
+        votes = _votes(self.over, ctx.trials or [])
+        n = len(votes)
+        c = sum(votes)
+        # Guard k > n: available() requires n >= k, so this only fires for a direct
+        # grade() call; clamp so the binomial terms stay well-defined.
         k = min(self.k, n) if n else self.k
         score = self._estimate(n=n, c=c, k=k)
 

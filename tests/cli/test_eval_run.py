@@ -393,10 +393,10 @@ def test_show_still_works(tmp_path: Path, make_synthetic_repo: Any, capsys: Any)
     assert f"Task: {_SHIPPED_TASK}" in out
 
 
-def test_bare_id_without_run_still_defers(
+def test_bare_id_without_run_prints_a_run_hint(
     tmp_path: Path, make_synthetic_repo: Any, capsys: Any
 ) -> None:
-    """Without ``--run``, a bare ``<id>`` keeps the v1 deferral behaviour (exit 0)."""
+    """Without ``--run``, a bare ``<id>`` runs nothing and says how to (exit 0)."""
     _seed(tmp_path, make_synthetic_repo)
     args = _ns(tmp_path, id_=_SHIPPED_TASK, run=False)
     rc = _eval.run(args)
@@ -412,3 +412,101 @@ def test_run_requires_an_id(tmp_path: Path, capsys: Any) -> None:
     err = capsys.readouterr().err
     assert rc == 2
     assert "id" in err.lower() or "task" in err.lower()
+
+
+# --------------------------------------------------------------------------- #
+# Review tasks, unscorable runs, and judged-score labelling
+# --------------------------------------------------------------------------- #
+
+#: A shipped review task: its gate is ``file_unchanged``, so a no-op agent passes it.
+_REVIEW_TASK = "review-spot-the-bug"
+
+
+def _available_judge(score: float | None) -> type:
+    """A judge class the CLI can load as ``--judge llm``.
+
+    ``score=None`` makes every grading raise :class:`JudgeError` (a broken CLI).
+    """
+    from coding_agent_playbook.evals.judge import JudgeError, StubJudge
+
+    class _Judge(StubJudge):
+        @classmethod
+        def available(cls) -> bool:
+            return True
+
+        def score_criterion(self, criterion: str, artifact: Any, n: int = 1) -> float:
+            if score is None:
+                raise JudgeError("judge 'claude' gave no score: exited 1: API Error: 529")
+            return score
+
+    return _Judge
+
+
+def test_run_review_task_renders_and_skips_rubric_without_judge(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: Any
+) -> None:
+    """Regression: the review prompt crashed on ``rule()`` before any agent ran,
+    and the judge-less rubric layer then printed a vacuous ``[PASS]``."""
+    _seed(tmp_path, make_synthetic_repo)
+    rc = _eval.run(_ns(tmp_path, id_=_REVIEW_TASK, run=True, runner="fake"))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "[skip] rubric" in out
+    assert "[PASS] rubric" not in out
+    assert "uncalibrated" not in out
+
+
+def test_run_judge_error_exits_2_not_a_verdict(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: Any, monkeypatch: Any
+) -> None:
+    """A judge that cannot score makes the task unscorable: exit 2, no report."""
+    _seed(tmp_path, make_synthetic_repo)
+    monkeypatch.setattr(_eval, "_load_judge_class", lambda name: _available_judge(None))
+    rc = _eval.run(_ns(tmp_path, id_=_REVIEW_TASK, run=True, runner="fake", judge="llm"))
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "could not be scored" in captured.err
+    assert "API Error: 529" in captured.err
+    assert "summary:" not in captured.out
+
+
+def test_run_prompt_render_error_exits_2(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: Any, monkeypatch: Any
+) -> None:
+    """A prompt that fails to render is an authoring error (exit 2), not a FAIL (1)."""
+    from coding_agent_playbook.evals.prompting import PromptResolutionError
+    from coding_agent_playbook.evals.runner import HarnessRunner
+
+    def _boom(self: Any, task: Any, scratch: Any, **kwargs: Any) -> Any:
+        raise PromptResolutionError("prompt 'refactor' for task 'x' failed to render: boom")
+
+    _seed(tmp_path, make_synthetic_repo)
+    monkeypatch.setattr(HarnessRunner, "run_task", _boom)
+    rc = _eval.run(_ns(tmp_path, id_=_SHIPPED_TASK, run=True, runner="fake"))
+    assert rc == 2
+    assert "failed to render: boom" in capsys.readouterr().err
+
+
+def test_run_with_a_judge_labels_scores_uncalibrated(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: Any, monkeypatch: Any
+) -> None:
+    """Judged scores carry an "uncalibrated" note until SPEC §19 Q12 lands."""
+    _seed(tmp_path, make_synthetic_repo)
+    monkeypatch.setattr(_eval, "_load_judge_class", lambda name: _available_judge(0.9))
+    rc = _eval.run(_ns(tmp_path, id_=_REVIEW_TASK, run=True, runner="fake", judge="llm"))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "[PASS] rubric" in out
+    assert "uncalibrated" in out
+
+
+def test_run_json_reports_whether_judged_scores_are_uncalibrated(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: Any, monkeypatch: Any
+) -> None:
+    _seed(tmp_path, make_synthetic_repo)
+    _eval.run(_ns(tmp_path, id_=_REVIEW_TASK, run=True, runner="fake", fmt="json"))
+    assert json.loads(capsys.readouterr().out)["uncalibrated_judge"] is False
+
+    monkeypatch.setattr(_eval, "_load_judge_class", lambda name: _available_judge(0.9))
+    _eval.run(_ns(tmp_path, id_=_REVIEW_TASK, run=True, runner="fake", fmt="json", judge="llm"))
+    assert json.loads(capsys.readouterr().out)["uncalibrated_judge"] is True

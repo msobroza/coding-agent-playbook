@@ -25,7 +25,7 @@ Your task is to write pytest tests for {{ project_name }} — a `{{ project_kind
 
 ## Conventions
 
-- Test framework: **pytest**{% if dev_dependencies is defined and "pytest-asyncio" in dev_dependencies %} (with `pytest-asyncio` available for coroutine tests){% endif %}.
+- Test framework: **pytest**{% if has_framework("pytest-asyncio") %} (with `pytest-asyncio` available for coroutine tests){% endif %}.
 - Test files live under `tests/`, mirroring the source layout from `src/`. `src/foo/bar.py` is tested by `tests/test_bar.py` (or `tests/foo/test_bar.py` for deeper trees).
 - Use `pytest.mark.parametrize` for table-driven cases. Loops inside a test body hide which case failed.
 - Mock external services with `pytest-mock`'s `mocker` fixture; do not patch globals directly.
