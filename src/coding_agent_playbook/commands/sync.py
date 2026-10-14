@@ -40,6 +40,7 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
 from coding_agent_playbook.adapters._skill_writer import deciding_ownership_against
+from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.commands import _sync_orphans, _sync_output, _sync_preflight
 from coding_agent_playbook.commands._output_locations import OutputLocations
 from coding_agent_playbook.commands._sync_lockfile import (
@@ -319,13 +320,30 @@ def _check_lockfile(ctx: SyncContext) -> tuple[Lockfile | None, list[str]]:
 
 
 def _stale_outputs(ctx: SyncContext, real_written: Sequence[Path]) -> list[Path]:
-    """Files the enabled adapters' ``cleanup_stale`` would delete on the real tree (read-only)."""
+    """Files the enabled adapters' ``cleanup_stale`` would delete on the real tree (read-only).
+
+    An adapter written against the pre-v0.16 contract overrides ``cleanup_stale``
+    but not ``stale_outputs`` (SPEC §10.1): the check cannot know what its
+    cleanup deletes, so it is skipped with a warning rather than reporting
+    orphans its own cleanup may never remove (a drift no sync could clear).
+    """
     resolved = {path.resolve() for path in real_written}
-    return [
-        path
-        for adapter in ctx.adapters.values()
-        for path in adapter.stale_outputs(resolved, ctx.repo_root)
-    ]
+    stale: list[Path] = []
+    for name, adapter in ctx.adapters.items():
+        if _has_legacy_cleanup(adapter):
+            _sync_preflight.warn_legacy_cleanup(name)
+            continue
+        stale.extend(adapter.stale_outputs(resolved, ctx.repo_root))
+    return stale
+
+
+def _has_legacy_cleanup(adapter: Adapter) -> bool:
+    """True when ``adapter`` customizes ``cleanup_stale`` without ``stale_outputs``."""
+    cls = type(adapter)
+    return (
+        cls.cleanup_stale is not Adapter.cleanup_stale
+        and cls.stale_outputs is Adapter.stale_outputs
+    )
 
 
 def _orphans_sync_removes(

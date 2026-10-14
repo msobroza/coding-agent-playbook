@@ -12,13 +12,13 @@ The detector never opens a secret path (SPEC §17.3): its only file read is
 
 from __future__ import annotations
 
-import os
 import tomllib
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
+from coding_agent_playbook.security.files import user_home
 from coding_agent_playbook.security.paths import is_secret_path
 
 if TYPE_CHECKING:
@@ -260,17 +260,8 @@ def _walk_skips(path: Path, repo_root: Path, *, home: str) -> bool:
     return is_secret_path(path, home=home)
 
 
-def _user_home() -> str:
-    """The current user's home directory (``"~"`` when it cannot be determined).
-
-    ``os.path.expanduser`` never raises, unlike ``Path.home()``, so an odd
-    environment (no ``HOME``, no passwd entry) cannot crash detection.
-    """
-    return os.path.expanduser("~")
-
-
 def _has_notebooks(repo_root: Path) -> bool:
-    home = _user_home()
+    home = user_home()
     return any(not _walk_skips(path, repo_root, home=home) for path in repo_root.rglob("*.ipynb"))
 
 

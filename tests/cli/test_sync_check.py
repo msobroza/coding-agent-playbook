@@ -11,30 +11,34 @@ are not drift (``test_sync_orphans.py``).
 
 The check renders into an *empty* scratch directory and reads every input in
 place, so nothing from the working tree — VCS, environments, secrets, links
-leaving the repo — is ever copied (P2(b)).
+leaving the repo — is ever copied (P2(b)); the orphan scan never opens a secret
+path or follows a file symlink.
 """
 
 from __future__ import annotations
 
+import io
 import shutil
 import socket
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
 from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.commands import _sync_output
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.detector import detect
 from coding_agent_playbook.lockfile import LockEntry, compute_hash
+from coding_agent_playbook.security.files import is_secret_file
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from tests.conftest import _DEFAULT_CONFIG
 from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from coding_agent_playbook.detector import Facts
 
@@ -44,6 +48,14 @@ _ORPHAN_HINT = "    Orphaned generated file; run 'playbook sync' to remove."
 _CLAUDE_ONLY_CONFIG = _DEFAULT_CONFIG.replace(
     'adapters_enabled = ["continue", "claude_code", "opencode"]',
     'adapters_enabled = ["claude_code"]',
+)
+_CONTINUE_ONLY_CONFIG = _DEFAULT_CONFIG.replace(
+    'adapters_enabled = ["continue", "claude_code", "opencode"]',
+    'adapters_enabled = ["continue"]',
+)
+_HARNESS_CONFIG = _DEFAULT_CONFIG.replace(
+    'adapters_enabled = ["continue", "claude_code", "opencode"]',
+    'adapters_enabled = ["continue", "claude_code", "agent_harness"]',
 )
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
 
@@ -460,3 +472,151 @@ def test_check_has_file_predicate_sees_real_repo(
     assert (repo / ".continue" / "rules" / "50-dotenv-hygiene.md").is_file()
     rc, out = _check(repo, capsys)
     assert rc == 0, out
+
+
+# --- aliased and out-of-repo output dirs --------------------------------------
+
+
+@posix_only
+def test_sync_survives_aliased_continue_output_dirs(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression: with ``.continue/prompts -> rules`` a removed rule's output was
+    listed twice and the second unlink crashed ``playbook sync`` with
+    FileNotFoundError before the lockfile and the managed block were saved."""
+    repo = make_synthetic_repo(
+        tmp_path, config_text=_CONTINUE_ONLY_CONFIG, rules=[("x", "Body of x\n")]
+    )
+    (repo / ".continue" / "rules").mkdir(parents=True)
+    (repo / ".continue" / "prompts").symlink_to("rules", target_is_directory=True)
+    _sync_repo(repo)
+    (repo / "playbook" / "rules" / "x.md").unlink()
+    rc, out = _check(repo, capsys)
+    assert rc == 1
+    assert out.count("50-x.md") == 1
+    _sync_repo(repo)
+    assert not (repo / ".continue" / "rules" / "50-x.md").exists()
+    rc, out = _check(repo, capsys)
+    assert rc == 0, out
+
+
+@posix_only
+def test_check_reports_orphan_in_output_dir_symlinked_outside_repo(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression: the orphan list dropped every path resolving outside the repo,
+    so with ``.claude/commands -> ../shared-commands`` the check passed while the
+    next sync deleted ``shared-commands/px.md``."""
+    shared = tmp_path / "shared-commands"
+    shared.mkdir()
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    repo = make_synthetic_repo(
+        repo_dir, config_text=_CLAUDE_ONLY_CONFIG, prompts=[("px", {"body": "Do it.\n"})]
+    )
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "commands").symlink_to("../../shared-commands", target_is_directory=True)
+    _sync_repo(repo)
+    assert (shared / "px.md").is_file()
+    (repo / "playbook" / "prompts" / "px.md").unlink()
+    rc, out = _check(repo, capsys)
+    assert rc == 1
+    assert _orphan_line(".claude/commands/px.md") in out
+    _sync_repo(repo)
+    assert not (shared / "px.md").exists()
+
+
+# --- adapters on the pre-v0.16 cleanup contract -------------------------------
+
+
+def _never_delete(self: ContinueAdapter, written_paths: set[Path], repo_root: Path) -> list[Path]:
+    """A conservative legacy ``cleanup_stale`` override that never deletes."""
+    return []
+
+
+def test_check_skips_orphans_of_adapter_overriding_only_cleanup_stale(
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: an adapter overriding ``cleanup_stale`` (as SPEC §10.1 used to
+    say) but not ``stale_outputs`` got the default sentinel scan in ``--check``:
+    an orphan its cleanup never deletes was reported after every sync, forever."""
+    monkeypatch.setattr(ContinueAdapter, "cleanup_stale", _never_delete)
+    repo = make_synthetic_repo(tmp_path, rules=[("x", "Body of x\n")])
+    _sync_repo(repo)
+    (repo / "playbook" / "rules" / "x.md").unlink()
+    stale = repo / ".continue" / "rules" / "50-x.md"
+    stale.write_text(stale.read_text(encoding="utf-8") + "edited\n", encoding="utf-8")
+    for _ in range(2):
+        _sync_repo(repo)
+        assert stale.is_file()  # the legacy cleanup never deletes it
+        rc, out = _check(repo, capsys)
+        assert rc == 0, out
+
+
+def test_check_warns_about_adapter_overriding_only_cleanup_stale(
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(ContinueAdapter, "cleanup_stale", _never_delete)
+    repo = make_synthetic_repo(tmp_path)
+    _sync_repo(repo)
+    capsys.readouterr()
+    assert _sync.execute(repo, check=True, git=FakeGitClient()) == 0
+    err = capsys.readouterr().err
+    assert "adapter 'continue' overrides cleanup_stale() but not stale_outputs()" in err
+
+
+# --- secrets are never read or published --------------------------------------
+
+
+def _record_opens(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
+    """Record every path opened through ``open``/``Path.open`` (read or write)."""
+    opened: list[Path] = []
+    real_open = io.open
+
+    def spy(file: object, *args: object, **kwargs: object) -> object:
+        if isinstance(file, str | Path):
+            opened.append(Path(file))
+        return real_open(file, *args, **kwargs)  # type: ignore[call-overload]
+
+    monkeypatch.setattr(io, "open", spy)
+    monkeypatch.setattr("builtins.open", spy)
+    return opened
+
+
+@posix_only
+def test_check_never_opens_a_secret_path(
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: the orphan scan read every file under the scanned dirs in full,
+    so the pre-commit ``--check`` read ``rules/prod.tfvars``, ``.continue/rules/.env``,
+    ``.claude/commands/id_ed25519`` and ``references/aws-notes.md -> ~/.aws/credentials``."""
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    credentials = home / ".aws" / "credentials"
+    credentials.parent.mkdir(parents=True)
+    credentials.write_text("[default]\nkey = AKIA\n", encoding="utf-8")
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    repo = make_synthetic_repo(repo_dir, config_text=_HARNESS_CONFIG, rules=[("x", "Body\n")])
+    _sync_repo(repo)
+    for rel in ("rules/prod.tfvars", ".continue/rules/.env", ".claude/commands/id_ed25519"):
+        (repo / rel).write_text("TOKEN=secret\n", encoding="utf-8")
+    (repo / "references").mkdir(exist_ok=True)
+    (repo / "references" / "aws-notes.md").symlink_to(credentials)
+    opened = _record_opens(monkeypatch)
+    rc, out = _check(repo, capsys)
+    monkeypatch.undo()
+    assert rc == 0, out
+    secret_reads = [
+        path for path in opened if is_secret_file(path, relative_to=repo, home=str(home))
+    ]
+    assert secret_reads == []

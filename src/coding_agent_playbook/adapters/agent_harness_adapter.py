@@ -467,26 +467,27 @@ class AgentHarnessAdapter(Adapter):
         Nothing inside a skill directory (``skills/<id>/``) is reported: it mixes
         engine output with files a user may have edited or added, so only the
         lockfile leftover policy (pristine + untracked + listed, SPEC §4.2 step 9)
-        deletes there. The ABC's ``cleanup_stale`` deletes what this returns.
+        deletes there. Only files :meth:`Adapter._scan_targets` admits are opened
+        (each once; never a symlink or a secret path — these generic repo-root
+        dirs may hold anything). The ABC's ``cleanup_stale`` deletes what this
+        returns.
         """
         written = FileSet.of(written_paths)
         return [
             path
-            for path in self._scan_candidates(repo_root)
+            for path in self._scan_targets(self._scan_candidates(repo_root), repo_root)
             if not written.holds(path) and self._carries_sentinel(path)
         ]
 
     def _scan_candidates(self, repo_root: Path) -> list[Path]:
-        """Every file under the output dirs (outside skill dirs) plus the root files."""
-        candidates = [repo_root / name for name in _ROOT_FILES if (repo_root / name).is_file()]
+        """Every path under the output dirs (outside skill dirs) plus the root files."""
+        candidates = [repo_root / name for name in _ROOT_FILES]
         skills_dir = repo_root / "skills"
         for output_dir in self._output_directories(repo_root):
             if not output_dir.is_dir():
                 continue
             candidates.extend(
-                path
-                for path in output_dir.rglob("*")
-                if path.is_file() and not _inside_skill_dir(path, skills_dir)
+                path for path in output_dir.rglob("*") if not _inside_skill_dir(path, skills_dir)
             )
         return candidates
 

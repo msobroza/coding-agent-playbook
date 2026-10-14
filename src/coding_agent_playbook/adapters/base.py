@@ -12,12 +12,19 @@ from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._file_identity import FileSet
 from coding_agent_playbook._sentinel import has_sentinel
+from coding_agent_playbook.security.files import is_secret_file, user_home
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from pathlib import Path
 
     from coding_agent_playbook._typing import Prompt, Rule, Skill
+
+#: The most :meth:`Adapter._carries_sentinel` reads of one file. The sentinel
+#: sits on line 1 or right after a leading frontmatter block, which engine
+#: output keeps far below this; a scan never reads a large file whole.
+_SENTINEL_HEAD_BYTES = 64 * 1024
+_FRONTMATTER_FENCE = b"---"
 
 
 class Adapter(ABC):
@@ -67,13 +74,14 @@ class Adapter(ABC):
         """Remove generated files that no longer back a current artifact.
 
         Deletes exactly what :meth:`stale_outputs` reports and returns those
-        paths. Subclasses customize *what* is stale by overriding
-        :meth:`stale_outputs`, so ``playbook sync --check`` (which only asks)
-        and write mode (which deletes) can never disagree.
+        paths. Do not override it: subclasses customize *what* is stale by
+        overriding :meth:`stale_outputs`, so ``playbook sync --check`` (which
+        only asks) and write mode (which deletes) can never disagree (SPEC
+        §10.1). A path already gone (reported twice by an override) is skipped.
         """
         stale = self.stale_outputs(written_paths, repo_root)
         for path in stale:
-            path.unlink()
+            path.unlink(missing_ok=True)
         return stale
 
     def stale_outputs(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
@@ -102,12 +110,14 @@ class Adapter(ABC):
     def _default_cleanup(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
         """Delete every file :meth:`_stale_by_sentinel` reports; return the deleted paths.
 
-        Kept for adapters that override :meth:`cleanup_stale` and still want the
-        shared directory scan.
+        Deprecated, kept only so an out-of-tree adapter written against the
+        pre-v0.16 contract (SPEC §10.1: ``cleanup_stale`` returning
+        ``self._default_cleanup(...)``) keeps working. Override
+        :meth:`stale_outputs` instead.
         """
         stale = self._stale_by_sentinel(written_paths, repo_root)
         for path in stale:
-            path.unlink()
+            path.unlink(missing_ok=True)
         return stale
 
     def _stale_by_sentinel(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
@@ -115,22 +125,53 @@ class Adapter(ABC):
 
         Files without the sentinel at an anchored position (:meth:`_carries_sentinel`)
         are user-authored and never reported. Binary or undecodable files are
-        skipped silently so the scanner cannot crash a sync. "Not in
-        ``written_paths``" compares file identity too, so after a case-only
-        rename on a case-insensitive filesystem the file just written is never
-        reported under its old name. Reads only; deletes nothing.
+        skipped silently so the scanner cannot crash a sync, and only the files
+        :meth:`_scan_targets` admits are opened. "Not in ``written_paths``"
+        compares file identity too, so after a case-only rename on a
+        case-insensitive filesystem the file just written is never reported
+        under its old name. Reads only; deletes nothing.
         """
-        stale: list[Path] = []
         written = FileSet.of(written_paths)
-        for output_dir in self._output_directories(repo_root):
-            if not output_dir.is_dir():
+        candidates = (
+            path
+            for output_dir in self._output_directories(repo_root)
+            if output_dir.is_dir()
+            for path in output_dir.rglob("*")
+        )
+        return [
+            path
+            for path in self._scan_targets(candidates, repo_root)
+            if not written.holds(path) and self._carries_sentinel(path)
+        ]
+
+    @staticmethod
+    def _scan_targets(candidates: Iterable[Path], repo_root: Path) -> list[Path]:
+        """The ``candidates`` a stale-output scan may open, each file once, in order.
+
+        Skips non-files; symlinks (the engine never writes one into an output
+        directory, so a link is the user's, and reading through it could leave
+        the repo); and secret paths, by name or by target (SPEC §17.3: the
+        engine never opens a credential file, so ``playbook sync --check`` run as
+        a pre-commit hook cannot read one). A secret-named engine output is
+        still settled by the lockfile leftover policy (SPEC §4.2 step 9). A file
+        reached under two spellings (an output dir aliased to another by a
+        symlink) is kept once, so ``cleanup_stale`` never unlinks it twice.
+
+        Example::
+
+            targets = Adapter._scan_targets((repo_root / ".continue").rglob("*"), repo_root)
+        """
+        home = user_home()
+        seen = FileSet()
+        targets: list[Path] = []
+        for path in candidates:
+            if path.is_symlink() or not path.is_file() or seen.holds(path):
                 continue
-            for path in output_dir.rglob("*"):
-                if not path.is_file() or written.holds(path):
-                    continue
-                if self._carries_sentinel(path):
-                    stale.append(path)
-        return stale
+            if is_secret_file(path, relative_to=repo_root, home=home):
+                continue
+            seen.add(path)
+            targets.append(path)
+        return targets
 
     @staticmethod
     def _carries_sentinel(path: Path) -> bool:
@@ -147,7 +188,34 @@ class Adapter(ABC):
                 ...  # engine-owned: safe to delete once stale
         """
         try:
-            text = path.read_text(encoding="utf-8")
+            head = _sentinel_head(path).decode("utf-8")
         except (UnicodeDecodeError, OSError):
             return False
-        return has_sentinel(text)
+        return has_sentinel(head)
+
+
+def _sentinel_head(path: Path) -> bytes:
+    """The bytes :func:`has_sentinel` decides on: line 1, or a leading frontmatter block + one line.
+
+    Reads at most :data:`_SENTINEL_HEAD_BYTES`. Lines split on ``\\n`` only,
+    exactly as :func:`has_sentinel` splits, so the verdict matches a whole-file
+    read. A frontmatter block longer than the cap reads as unterminated, so the
+    file counts as user-owned.
+    """
+    budget = _SENTINEL_HEAD_BYTES
+    with path.open("rb") as handle:
+        first = handle.readline(budget)
+        if first.rstrip(b"\n").rstrip(b"\r") != _FRONTMATTER_FENCE:
+            return first
+        head = [first]
+        budget -= len(first)
+        while budget > 0:
+            line = handle.readline(budget)
+            if not line:
+                break
+            head.append(line)
+            budget -= len(line)
+            if line.rstrip(b"\n").rstrip(b"\r") == _FRONTMATTER_FENCE:
+                head.append(handle.readline(budget))  # the first body line
+                break
+    return b"".join(head)

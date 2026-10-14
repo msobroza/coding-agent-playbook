@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook._file_identity import FileSet
 from coding_agent_playbook.gitignore import (
     GITIGNORE_FILENAME,
     LOCKFILE_NAME,
@@ -103,9 +104,11 @@ def file_drift(written: Sequence[Path], scratch: Path, repo_root: Path) -> list[
 def orphan_drift(orphans: Sequence[Path], repo_root: Path) -> list[str]:
     """``--check``: one drift line per orphan ``playbook sync`` would delete.
 
-    Each path is shown once (resolved, repo-relative, sorted), however many
-    detectors found it — the adapters' sentinel cleanup and the lockfile
-    leftover policy overlap for sentinel-tagged files.
+    Each file is shown once (sorted), however many detectors found it — the
+    adapters' sentinel cleanup and the lockfile leftover policy overlap for
+    sentinel-tagged files. Unlike the ignore entries, an orphan whose target
+    lies outside the repo (an output dir symlinked to a shared folder) is kept:
+    write mode deletes it through the link, so the check must report it.
 
     Example::
 
@@ -113,7 +116,25 @@ def orphan_drift(orphans: Sequence[Path], repo_root: Path) -> list[str]:
         >>> lines[0].splitlines()[0]
         '  .continue/rules/50-x.md'
     """
-    return [f"  {rel}\n{ORPHAN_HINT}" for rel in relative_posix_paths(orphans, repo_root)]
+    seen = FileSet()
+    shown: set[str] = set()
+    for path in orphans:
+        if seen.holds(path):
+            continue
+        seen.add(path)
+        shown.add(_display_path(path, repo_root))
+    return [f"  {rel}\n{ORPHAN_HINT}" for rel in sorted(shown)]
+
+
+def _display_path(path: Path, repo_root: Path) -> str:
+    """``path`` as the user spells it: repo-relative (unresolved, so through a
+    symlinked output dir), else resolved repo-relative, else absolute."""
+    for candidate, root in ((path, repo_root), (path.resolve(), repo_root.resolve())):
+        try:
+            return candidate.relative_to(root).as_posix()
+        except ValueError:
+            continue
+    return path.as_posix()
 
 
 def unreadable_lockfile_drift(exc: Exception) -> list[str]:

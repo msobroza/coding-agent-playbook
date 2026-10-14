@@ -108,7 +108,10 @@ class OpenCodeAdapter(Adapter):
         return self._SKILL_WRITER.write(skill, repo_root)
 
     def _output_directories(self, repo_root: Path) -> Iterable[Path]:
-        """``.opencode/command/`` is scanned by the ABC's first-line sentinel cleanup.
+        """``.opencode/command/`` is scanned by the ABC's anchored sentinel scan.
+
+        A file is engine output when ``_sentinel.has_sentinel`` finds the
+        sentinel line at an anchored position (line 1 for a command file).
 
         ``.opencode/skills/`` is never scanned: stale skill output is settled by
         ``playbook sync``'s lockfile leftover policy (SPEC §4.2 step 9, §10.8).
