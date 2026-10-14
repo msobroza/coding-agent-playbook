@@ -46,8 +46,8 @@ Usage::
   the CLI, never by the gate.
 
 Exit codes: ``0`` pass; ``1`` when ``report.passed`` is ``False`` and
-``fail_on_breach``; ``2`` on usage errors (bad path, bad baseline ref/dir,
-malformed/invalid ``[metrics]`` config).
+``fail_on_breach``; ``2`` on usage errors (bad path, bad baseline ref/dir, a git
+call past ``[metrics] git_timeout_s``, malformed/invalid ``[metrics]`` config).
 
 Finding levels by format: ``--format json`` includes every finding (``ok`` level
 too) for a machine audience; ``--format text`` shows only ``warn``/``fail`` for a
@@ -63,6 +63,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from coding_agent_playbook.evaluators.metrics_gate import (
+    MetricsGateDeps,
     MetricsGateRequest,
     MetricsGateUsageError,
     load_metrics_config,
@@ -246,8 +247,11 @@ def _render(result: MetricsGateResult, fmt: str) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def run(args: argparse.Namespace) -> int:
-    """Execute ``playbook metrics``; see the module docstring for the contract."""
+def run(args: argparse.Namespace, *, deps: MetricsGateDeps | None = None) -> int:
+    """Execute ``playbook metrics``; see the module docstring for the contract.
+
+    ``deps`` replaces the gate's collaborators (git, suite runs) in tests.
+    """
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     fmt = getattr(args, "format", None) or "text"
     if fmt not in _VALID_FORMATS:
@@ -259,7 +263,7 @@ def run(args: argparse.Namespace) -> int:
         return 2
 
     try:
-        result = run_metrics_gate(_build_request(args, repo_root))
+        result = run_metrics_gate(_build_request(args, repo_root), deps=deps)
     except MetricsGateUsageError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

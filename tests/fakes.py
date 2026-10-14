@@ -6,7 +6,8 @@ so ``playbook sync`` tests never shell out to git (and never monkeypatch
 missing, timeout) exactly like the real client. :func:`pre_gate_validate` stands
 in for ``playbook sync``'s validate gate. ``FakeProjectFactory`` stands in for
 ``ProjectHandle.create`` so metrics-gate tests see which test command would run
-without running a suite.
+without running a suite, and ``FakeBaselineGit`` stands in for
+:class:`coding_agent_playbook.evaluators.baseline_git.SubprocessBaselineGit`.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, GitTimeoutError
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle
 
 if TYPE_CHECKING:
@@ -94,3 +96,53 @@ class FakeProjectFactory:
     ) -> ProjectHandle:
         self.calls.append((root, test_cmd))
         return ProjectHandle.create(root, report_dir, test_cmd=NO_OP_SUITE_CMD)
+
+
+@dataclass
+class FakeBaselineGit:
+    """In-memory :class:`~coding_agent_playbook.evaluators.baseline_git.BaselineGit`.
+
+    ``blobs`` maps ``(ref, repo-relative path)`` to the source at that ref, and
+    ``commits`` holds the refs that verify. A git command named in
+    ``timeout_on`` (``"rev-parse"``, ``"cat-file"``, ``"worktree add"``) raises
+    the real :class:`GitTimeoutError` for ``timeout_s``, the bound the gate built
+    this fake with; one named in ``fail_on`` raises :class:`BaselineGitError`
+    carrying a git-style ``fatal:`` line. ``calls`` records ``(command, ref)`` in
+    order. Like the real client, ``remove_worktree`` never raises.
+    """
+
+    timeout_s: float = 10.0
+    commits: set[str] = field(default_factory=lambda: {"HEAD"})
+    blobs: dict[tuple[str, str], str] = field(default_factory=dict)
+    timeout_on: set[str] = field(default_factory=set)
+    fail_on: set[str] = field(default_factory=set)
+    calls: list[tuple[str, str]] = field(default_factory=list)
+
+    def is_commit(self, repo_root: Path, ref: str) -> bool:
+        self._record("rev-parse", ref)
+        return ref in self.commits
+
+    def read_sources(self, repo_root: Path, ref: str, rel_paths: Sequence[str]) -> dict[str, bytes]:
+        self._record("cat-file", ref)
+        return {
+            rel: self.blobs[(ref, rel)].encode("utf-8")
+            for rel in rel_paths
+            if (ref, rel) in self.blobs
+        }
+
+    def add_worktree(self, repo_root: Path, worktree: Path, ref: str) -> None:
+        self._record("worktree add", ref)
+        for (blob_ref, rel), source in self.blobs.items():
+            if blob_ref == ref:
+                (worktree / rel).parent.mkdir(parents=True, exist_ok=True)
+                (worktree / rel).write_text(source, encoding="utf-8")
+
+    def remove_worktree(self, repo_root: Path, worktree: Path) -> None:
+        self.calls.append(("worktree remove", ""))
+
+    def _record(self, command: str, ref: str) -> None:
+        self.calls.append((command, ref))
+        if command in self.timeout_on:
+            raise GitTimeoutError(command, self.timeout_s)
+        if command in self.fail_on:
+            raise BaselineGitError(f"fatal: {command} failed for {ref}")

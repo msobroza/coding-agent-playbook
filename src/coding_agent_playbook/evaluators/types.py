@@ -27,6 +27,10 @@ Kind = Literal["absolute", "regression", "new"]
 #: Grading modes.
 Mode = Literal["regression", "absolute", "both"]
 
+#: Default ``[metrics] git_timeout_s``: every baseline git call is a local read,
+#: so one slower than this means a wedged repository (lock contention, network FS).
+DEFAULT_GIT_TIMEOUT_S = 10.0
+
 
 @dataclass(frozen=True)
 class AbsoluteThreshold:
@@ -209,6 +213,8 @@ class MetricConfig:
     ``mode`` selects the comparison strategy; ``fail_on_breach`` controls the
     process exit code; ``strict`` promotes warnings to gate failures. The three
     dicts are per-evaluator overrides keyed by evaluator ``name``.
+    ``git_timeout_s`` bounds every git call a ``git:`` baseline makes (prK
+    §F.0.3 item 7).
     """
 
     mode: Mode = "regression"
@@ -219,6 +225,7 @@ class MetricConfig:
     thresholds: dict[str, AbsoluteThreshold] = field(default_factory=dict)
     regression: dict[str, RegressionPolicy] = field(default_factory=dict)
     weights: dict[str, float] = field(default_factory=dict)
+    git_timeout_s: float = DEFAULT_GIT_TIMEOUT_S
 
 
 @dataclass

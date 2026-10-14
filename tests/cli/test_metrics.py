@@ -24,8 +24,15 @@ import argparse
 import json
 from typing import TYPE_CHECKING
 
+import pytest
+
 from coding_agent_playbook.commands import metrics as _metrics
-from coding_agent_playbook.evaluators.metrics_gate import CONFIG_FILENAME, build_rubric
+from coding_agent_playbook.evaluators.metrics_gate import (
+    CONFIG_FILENAME,
+    MetricsGateDeps,
+    build_rubric,
+)
+from tests.fakes import FakeBaselineGit
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -532,6 +539,43 @@ def test_git_baseline_new_file_treated_as_all_new(tmp_path, capsys):
         )
     )
     assert rc == 0
+
+
+@pytest.mark.parametrize(
+    ("config", "seconds"),
+    [(None, "10s"), ("[metrics]\ngit_timeout_s = 2.5\n", "2.5s")],
+    ids=["default", "configured"],
+)
+def test_git_timeout_maps_to_exit_two(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], config: str | None, seconds: str
+) -> None:
+    """A wedged git (lock contention, network FS) is a usage error, never a hang."""
+    target = _write(tmp_path / "mod.py", _BASELINE_SOURCE)
+    if config is not None:
+        (tmp_path / CONFIG_FILENAME).write_text(config, encoding="utf-8")
+    fake = FakeBaselineGit(timeout_on={"rev-parse"})
+
+    def git_factory(timeout_s: float) -> FakeBaselineGit:
+        fake.timeout_s = timeout_s
+        return fake
+
+    rc = _metrics.run(
+        _ns(paths=[str(target)], baseline="git:HEAD", repo_root=str(tmp_path)),
+        deps=MetricsGateDeps(git_factory=git_factory),
+    )
+
+    assert rc == 2
+    assert f"error: git rev-parse timed out after {seconds}" in capsys.readouterr().err
+
+
+def test_invalid_git_timeout_exits_two(tmp_path, capsys):
+    target = _write(tmp_path / "mod.py", _CLEAN_SOURCE)
+    (tmp_path / CONFIG_FILENAME).write_text("[metrics]\ngit_timeout_s = 0\n", encoding="utf-8")
+
+    rc = _metrics.run(_ns(paths=[str(target)], repo_root=str(tmp_path)))
+
+    assert rc == 2
+    assert "git_timeout_s must be a positive number of seconds, got 0" in capsys.readouterr().err
 
 
 # --------------------------------------------------------------------------- #

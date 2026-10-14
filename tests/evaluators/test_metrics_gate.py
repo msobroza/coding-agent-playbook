@@ -25,11 +25,12 @@ from coding_agent_playbook.evaluators.metrics_gate import (
 from coding_agent_playbook.evaluators.normalizer import Identity
 from coding_agent_playbook.evaluators.scope import Scope
 from coding_agent_playbook.evaluators.types import EvalContext, Measurement, MetricConfig
-from tests.fakes import FakeProjectFactory
+from tests.cli.test_metrics import _BASELINE_SOURCE, _WORSE_SOURCE
+from tests.fakes import FakeBaselineGit, FakeProjectFactory
 from tests.import_probe import new_modules_after
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
     from pathlib import Path
 
 _HIGH_CC_SOURCE = (
@@ -218,6 +219,117 @@ def test_load_metrics_config_reads_the_metrics_table(tmp_path: Path) -> None:
     )
 
     assert load_metrics_config(tmp_path) == MetricConfig(mode="both", run_tests=True)
+
+
+# --------------------------------------------------------------------------- #
+# git: baselines go through the BaselineGit seam, bounded by [metrics] git_timeout_s
+# --------------------------------------------------------------------------- #
+
+
+def _git_factory(fake: FakeBaselineGit) -> Callable[[float], FakeBaselineGit]:
+    """A ``MetricsGateDeps.git_factory`` that hands out ``fake``, built with the gate's bound."""
+
+    def build(timeout_s: float) -> FakeBaselineGit:
+        fake.timeout_s = timeout_s
+        return fake
+
+    return build
+
+
+def test_git_baseline_reads_every_file_in_one_batch(tmp_path: Path) -> None:
+    _write(tmp_path / "mod.py", _WORSE_SOURCE)
+    _write(tmp_path / "new.py", _CLEAN_SOURCE)
+    fake = FakeBaselineGit(blobs={("HEAD", "mod.py"): _BASELINE_SOURCE})
+    config = MetricConfig(mode="regression", git_timeout_s=3.5)
+
+    result = run_metrics_gate(
+        _request(tmp_path, config=config, paths=(str(tmp_path),), baseline="git:HEAD"),
+        deps=MetricsGateDeps(git_factory=_git_factory(fake)),
+    )
+
+    assert fake.timeout_s == 3.5
+    assert fake.calls == [("rev-parse", "HEAD"), ("cat-file", "HEAD")]
+    regressions = [f for f in result.report.findings if f.kind == "regression"]
+    assert [f.scope_key for f in regressions if f.level == "fail"] == ["mod.py::classify"]
+    assert {f.kind for f in result.report.findings if f.scope_key.startswith("new.py")} == {"new"}
+
+
+@pytest.mark.parametrize("command", ["rev-parse", "cat-file"])
+def test_git_timeout_is_a_usage_error_naming_command_and_seconds(
+    tmp_path: Path, command: str
+) -> None:
+    _write(tmp_path / "mod.py", _CLEAN_SOURCE)
+    fake = FakeBaselineGit(timeout_on={command})
+
+    with pytest.raises(MetricsGateUsageError) as excinfo:
+        run_metrics_gate(
+            _request(tmp_path, config=MetricConfig(git_timeout_s=2), baseline="git:HEAD"),
+            deps=MetricsGateDeps(git_factory=_git_factory(fake)),
+        )
+
+    assert str(excinfo.value).startswith(f"git {command} timed out after 2s")
+
+
+@pytest.mark.parametrize(
+    ("command", "run_tests", "message"),
+    [
+        ("cat-file", False, "bad --baseline git ref 'HEAD': fatal: cat-file failed for HEAD"),
+        (
+            "worktree add",
+            True,
+            "could not create baseline worktree for 'HEAD': fatal: worktree add failed for HEAD",
+        ),
+    ],
+    ids=["read", "worktree"],
+)
+def test_git_failures_keep_cli_messages(
+    tmp_path: Path, command: str, run_tests: bool, message: str
+) -> None:
+    _write(tmp_path / "mod.py", _CLEAN_SOURCE)
+    deps = MetricsGateDeps(
+        git_factory=_git_factory(FakeBaselineGit(fail_on={command})),
+        project_factory=FakeProjectFactory(),
+    )
+
+    with pytest.raises(MetricsGateUsageError) as excinfo:
+        run_metrics_gate(_request(tmp_path, baseline="git:HEAD", run_tests=run_tests), deps=deps)
+
+    assert str(excinfo.value) == message
+
+
+def test_git_suite_baseline_runs_in_a_worktree_then_removes_it(tmp_path: Path) -> None:
+    _write(tmp_path / "mod.py", _CLEAN_SOURCE)
+    fake = FakeBaselineGit(blobs={("HEAD", "mod.py"): _CLEAN_SOURCE})
+    factory = FakeProjectFactory()
+
+    run_metrics_gate(
+        _request(tmp_path, baseline="git:HEAD", run_tests=True),
+        deps=MetricsGateDeps(git_factory=_git_factory(fake), project_factory=factory),
+    )
+
+    assert [command for command, _ in fake.calls][-2:] == ["worktree add", "worktree remove"]
+    assert [root.name for root, _ in factory.calls] == [tmp_path.name, "baseline-worktree"]
+
+
+@pytest.mark.usefixtures("hermetic_git_env")
+def test_undecodable_git_baseline_is_treated_as_all_new(tmp_path: Path) -> None:
+    import subprocess
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True, timeout=30)
+
+    git("init", "-q")
+    (tmp_path / "mod.py").write_bytes(b"x = '\xff'\n")
+    git("add", "mod.py")
+    git("commit", "-q", "-m", "latin-1 bytes")
+    _write(tmp_path / "mod.py", _CLEAN_SOURCE)
+
+    result = run_metrics_gate(
+        _request(tmp_path, config=MetricConfig(mode="regression"), baseline="git:HEAD")
+    )
+
+    assert result.breached is False
+    assert {f.kind for f in result.report.findings} == {"new"}
 
 
 # --------------------------------------------------------------------------- #

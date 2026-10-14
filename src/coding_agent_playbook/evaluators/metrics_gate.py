@@ -42,6 +42,7 @@ from coding_agent_playbook.evaluators._metrics_inputs import (
     static_baseline,
     suite_baseline,
 )
+from coding_agent_playbook.evaluators.baseline_git import SubprocessBaselineGit
 from coding_agent_playbook.evaluators.check import MeasurementSet
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle
 from coding_agent_playbook.evaluators.metric import execution_metrics, static_metrics
@@ -53,6 +54,7 @@ from coding_agent_playbook.evaluators.types import EvalContext, MetricConfig
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
+    from coding_agent_playbook.evaluators.baseline_git import BaselineGit
     from coding_agent_playbook.evaluators.check import Check
     from coding_agent_playbook.evaluators.metric import Metric
     from coding_agent_playbook.evaluators.types import EvaluationReport, Measurement, Mode
@@ -134,11 +136,13 @@ class MetricsGateDeps:
     """The gate's replaceable collaborators (tests inject named fakes here).
 
     ``project_factory`` builds the handle a suite run executes;
-    ``load_static_metrics`` lists the static metrics to measure.
+    ``load_static_metrics`` lists the static metrics to measure; ``git_factory``
+    builds the git client for a ``git:`` baseline from ``[metrics] git_timeout_s``.
     """
 
     project_factory: ProjectFactory = ProjectHandle.create
     load_static_metrics: Callable[[], list[Metric]] = static_metrics
+    git_factory: Callable[[float], BaselineGit] = SubprocessBaselineGit
 
 
 @dataclass
@@ -208,13 +212,14 @@ def run_metrics_gate(
 
 def _measure(request: MetricsGateRequest, deps: MetricsGateDeps) -> _Measured:
     """Static candidate + baseline measurements, then the suite when requested."""
+    git = deps.git_factory(request.config.git_timeout_s)
     static = deps.load_static_metrics()
     meter = SourceMeter(static, request.tool_paths)
     targets = discover_targets(request.paths, request.repo_root)
     baseline = (
         None
         if request.baseline is None
-        else static_baseline(request.baseline, targets, request.repo_root, meter)
+        else static_baseline(request.baseline, targets, request.repo_root, meter, git)
     )
     candidates = measure_candidates(targets, request.repo_root, meter)
     measured = _Measured(
@@ -222,21 +227,23 @@ def _measure(request: MetricsGateRequest, deps: MetricsGateDeps) -> _Measured:
     )
     if request.run_tests:
         measured.execution = execution_metrics()
-        _measure_suites(request, measured, deps)
+        _measure_suites(request, measured, deps.project_factory, git)
     return measured
 
 
 def _measure_suites(
-    request: MetricsGateRequest, measured: _Measured, deps: MetricsGateDeps
+    request: MetricsGateRequest, measured: _Measured, factory: ProjectFactory, git: BaselineGit
 ) -> None:
     """Run the suite once on the candidate and, with a baseline, once on the baseline."""
     test_cmd = None if request.test_cmd is None else list(request.test_cmd)
-    suite = SuiteRun(measured.execution, test_cmd, deps.project_factory, request.tool_paths)
+    suite = SuiteRun(measured.execution, test_cmd, factory, request.tool_paths)
     with tempfile.TemporaryDirectory(prefix="playbook-metrics-") as tmp:
         work_dir = Path(tmp)
         measured.candidate.extend(suite.measure(request.repo_root, work_dir / "candidate-reports"))
         if request.baseline is not None:
-            exec_baseline = suite_baseline(request.baseline, request.repo_root, suite, work_dir)
+            exec_baseline = suite_baseline(
+                request.baseline, request.repo_root, suite, work_dir, git
+            )
             measured.baseline = (measured.baseline or []) + exec_baseline
 
 

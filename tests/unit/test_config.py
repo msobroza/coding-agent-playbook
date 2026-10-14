@@ -148,6 +148,24 @@ def test_parse_metrics_config_rejects_unknown_mode():
         parse_metrics_config({"mode": "nonsense"})
 
 
+def test_parse_metrics_config_git_timeout():
+    assert parse_metrics_config({}).git_timeout_s == 10.0
+    assert parse_metrics_config({"git_timeout_s": 3}).git_timeout_s == 3.0
+    assert parse_metrics_config({"git_timeout_s": 0.5}).git_timeout_s == 0.5
+
+
+@pytest.mark.parametrize(
+    "raw", [0, -1, 0.0, float("inf"), float("nan"), "10", True, None], ids=repr
+)
+def test_parse_metrics_config_rejects_non_positive_git_timeout(raw):
+    with pytest.raises(ValueError) as excinfo:
+        parse_metrics_config({"git_timeout_s": raw})
+
+    assert str(excinfo.value) == (
+        f"[metrics] git_timeout_s must be a positive number of seconds, got {raw!r}"
+    )
+
+
 def test_parse_links_config_empty_uses_strict_default():
     from coding_agent_playbook.config import parse_links_config
 

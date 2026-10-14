@@ -10,17 +10,18 @@ verbatim before exiting 2.
 
 from __future__ import annotations
 
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
+from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, GitTimeoutError
 from coding_agent_playbook.evaluators.parse import parse_module
 from coding_agent_playbook.evaluators.types import EvalContext
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from coding_agent_playbook.evaluators.baseline_git import BaselineGit
     from coding_agent_playbook.evaluators.execution.project import ProjectHandle
     from coding_agent_playbook.evaluators.metric import Metric
     from coding_agent_playbook.evaluators.types import Measurement
@@ -196,16 +197,16 @@ def measure_candidates(
 
 
 def static_baseline(
-    baseline: str, targets: Sequence[Path], repo_root: Path, meter: SourceMeter
+    baseline: str, targets: Sequence[Path], repo_root: Path, meter: SourceMeter, git: BaselineGit
 ) -> list[Measurement]:
     """Measure the baseline variant of each target file.
 
-    ``baseline`` is ``git:<ref>`` (read via ``git show``) or a directory path
-    (read the matching relative file). A file absent from the baseline yields no
-    measurements, so the regression check treats it as all-new.
+    ``baseline`` is ``git:<ref>`` (one batched read through ``git``) or a
+    directory path (read the matching relative file). A file absent from the
+    baseline yields no measurements, so the regression check treats it as all-new.
     """
     if baseline.startswith(_GIT_PREFIX):
-        return _git_baseline(baseline[len(_GIT_PREFIX) :], targets, repo_root, meter)
+        return _git_baseline(baseline[len(_GIT_PREFIX) :], targets, repo_root, meter, git)
     base_dir = Path(baseline)
     if not base_dir.is_dir():
         raise MetricsGateUsageError(f"baseline directory not found: {base_dir}")
@@ -220,54 +221,51 @@ def static_baseline(
 
 
 def _git_baseline(
-    ref: str, targets: Sequence[Path], repo_root: Path, meter: SourceMeter
+    ref: str, targets: Sequence[Path], repo_root: Path, meter: SourceMeter, git: BaselineGit
 ) -> list[Measurement]:
-    validate_git_ref(repo_root, ref)
+    verify_git_ref(git, repo_root, ref)
+    # A target outside repo_root has no git-tracked counterpart; treat it as
+    # all-new rather than guessing a coincidental same-named repo file.
+    rels = [rel for rel in (_repo_rel_path(t, repo_root) for t in targets) if rel is not None]
+    try:
+        blobs = git.read_sources(repo_root, ref, rels)
+    except BaselineGitError as exc:
+        raise _usage_error(exc, f"bad --baseline git ref {ref!r}") from exc
     measurements: list[Measurement] = []
-    for target in targets:
-        rel = _repo_rel_path(target, repo_root)
-        # A target outside repo_root has no git-tracked counterpart; treat it as
-        # all-new rather than guessing a coincidental same-named repo file.
-        if rel is None:
-            continue
-        source = _git_show(repo_root, ref, rel)
+    for rel in rels:
+        source = _decode_blob(blobs[rel]) if rel in blobs else None
         if source is not None:
             measurements.extend(meter.measure_or_drop(source, rel))
     return measurements
 
 
-def _git_show(repo_root: Path, ref: str, rel_path: str) -> str | None:
-    """Return the source of ``rel_path`` at ``ref`` via ``git show``.
+def _decode_blob(raw: bytes) -> str | None:
+    """Decode a baseline blob as ``git show`` under ``text=True`` did: UTF-8, universal newlines.
 
-    ``None`` when the file does not exist in that ref (all-new file). Raises
-    :class:`MetricsGateUsageError` when the ref itself is invalid or the dir is
-    not a git repo.
+    A blob that is not UTF-8 is dropped (all-new), like one that does not parse.
     """
-    proc = subprocess.run(
-        ["git", "show", f"{ref}:{rel_path}"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode == 0:
-        return proc.stdout
-    stderr = proc.stderr.lower()
-    # "does not exist" / "exists on disk, but not in" => file absent at ref.
-    if "does not exist" in stderr or "exists on disk" in stderr:
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
         return None
-    raise MetricsGateUsageError(f"bad --baseline git ref {ref!r}: {proc.stderr.strip()}")
+    return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
-def validate_git_ref(repo_root: Path, ref: str) -> None:
+def verify_git_ref(git: BaselineGit, repo_root: Path, ref: str) -> None:
     """Fail fast (exit 2) when ``ref`` is not a resolvable git revision."""
-    proc = subprocess.run(
-        ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
+    try:
+        is_commit = git.is_commit(repo_root, ref)
+    except BaselineGitError as exc:
+        raise _usage_error(exc, f"bad --baseline git ref {ref!r}") from exc
+    if not is_commit:
         raise MetricsGateUsageError(f"bad --baseline git ref {ref!r} (not a valid revision)")
+
+
+def _usage_error(exc: BaselineGitError, context: str) -> MetricsGateUsageError:
+    """A git failure as the CLI's exit-2 error; a timeout keeps its own message."""
+    if isinstance(exc, GitTimeoutError):
+        return MetricsGateUsageError(str(exc))
+    return MetricsGateUsageError(f"{context}: {exc}")
 
 
 # --------------------------------------------------------------------------- #
@@ -309,19 +307,19 @@ class SuiteRun:
 
 
 def suite_baseline(
-    baseline: str, repo_root: Path, suite: SuiteRun, work_dir: Path
+    baseline: str, repo_root: Path, suite: SuiteRun, work_dir: Path, git: BaselineGit
 ) -> list[Measurement]:
     """Run the execution metrics on the baseline (a git ref or a directory).
 
-    ``git:<ref>`` materialises the ref via a temporary ``git worktree add`` under
+    ``git:<ref>`` materialises the ref via a temporary worktree under
     ``work_dir`` (removed afterwards); ``<dir>`` runs the suite directly in that
     directory. Raises :class:`MetricsGateUsageError` on a bad ref, a non-git dir,
-    a missing directory or an unrunnable suite.
+    a missing directory, a git timeout or an unrunnable suite.
     """
     if baseline.startswith(_GIT_PREFIX):
         ref = baseline[len(_GIT_PREFIX) :]
-        validate_git_ref(repo_root, ref)
-        return _suite_in_worktree(ref, repo_root, suite, work_dir)
+        verify_git_ref(git, repo_root, ref)
+        return _suite_in_worktree(ref, repo_root, suite, work_dir, git)
     base_dir = Path(baseline)
     if not base_dir.is_dir():
         raise MetricsGateUsageError(f"baseline directory not found: {base_dir}")
@@ -329,26 +327,15 @@ def suite_baseline(
 
 
 def _suite_in_worktree(
-    ref: str, repo_root: Path, suite: SuiteRun, work_dir: Path
+    ref: str, repo_root: Path, suite: SuiteRun, work_dir: Path, git: BaselineGit
 ) -> list[Measurement]:
     """Materialise ``ref`` in a temp git worktree, run the suite, then clean up."""
     worktree = work_dir / "baseline-worktree"
-    add = subprocess.run(
-        ["git", "worktree", "add", "--detach", str(worktree), ref],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    if add.returncode != 0:
-        raise MetricsGateUsageError(
-            f"could not create baseline worktree for {ref!r}: {add.stderr.strip()}"
-        )
+    try:
+        git.add_worktree(repo_root, worktree, ref)
+    except BaselineGitError as exc:
+        raise _usage_error(exc, f"could not create baseline worktree for {ref!r}") from exc
     try:
         return suite.measure(worktree, work_dir / "baseline-reports")
     finally:
-        subprocess.run(
-            ["git", "worktree", "remove", "--force", str(worktree)],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-        )
+        git.remove_worktree(repo_root, worktree)
