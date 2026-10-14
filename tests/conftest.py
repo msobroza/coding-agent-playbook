@@ -16,28 +16,13 @@ fixture only seeds repo-local content when callers ask for it.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from pathlib import Path
-
-
-class SyntheticRepoBuilder(Protocol):
-    """The builder the ``make_synthetic_repo`` fixture returns; type test params with it."""
-
-    def __call__(
-        self,
-        tmp_path: Path,
-        *,
-        config_text: str = ...,
-        rules: Iterable[tuple[str, str]] | None = ...,
-        prompts: Iterable[tuple[str, dict[str, Any]]] | None = ...,
-        pyproject_extras: dict[str, Any] | None = ...,
-        write_config: bool = ...,
-    ) -> Path: ...
 
 
 _DEFAULT_CONFIG = """\
@@ -106,8 +91,54 @@ def _write_prompt(
     target.write_text("\n".join(lines), encoding="utf-8")
 
 
+def apply_hermetic_git_env(
+    monkeypatch: pytest.MonkeyPatch, *, ceiling: Path, config_home: Path
+) -> None:
+    """Point every real ``git`` call at the test's own tree and config only.
+
+    - Drops **every** inherited ``GIT_*`` variable first. Git exports absolute
+      ``GIT_DIR``/``GIT_INDEX_FILE`` to hooks in a linked worktree, so a suite run
+      from a pre-commit/pre-push hook would otherwise ``init``/``add``/``commit``
+      into the developer's own repository.
+    - Ignores the global and system gitconfig (``GIT_CONFIG_GLOBAL`` /
+      ``GIT_CONFIG_NOSYSTEM``: no hooksPath, signing, identity, excludesFile).
+    - Points ``XDG_CONFIG_HOME`` at the empty ``config_home``: git reads its
+      *default* global excludes (``$XDG_CONFIG_HOME/git/ignore``, else
+      ``~/.config/git/ignore``) and attributes files even with no gitconfig.
+    - Stops repository discovery at ``ceiling`` and sets a fixed identity.
+
+    Only environment variables change — ``subprocess`` itself is never patched.
+    """
+    import os
+
+    for name in [key for key in os.environ if key.startswith("GIT_")]:
+        monkeypatch.delenv(name)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(ceiling))
+    monkeypatch.setenv("GIT_AUTHOR_NAME", "playbook-test")
+    monkeypatch.setenv("GIT_AUTHOR_EMAIL", "playbook-test@example.invalid")
+    monkeypatch.setenv("GIT_COMMITTER_NAME", "playbook-test")
+    monkeypatch.setenv("GIT_COMMITTER_EMAIL", "playbook-test@example.invalid")
+
+
 @pytest.fixture
-def make_synthetic_repo() -> SyntheticRepoBuilder:
+def hermetic_git_env(
+    tmp_path: Path, tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Isolate real ``git`` calls from the developer's machine and repository.
+
+    See :func:`apply_hermetic_git_env`; discovery stops at ``tmp_path``'s parent
+    and the empty config home lives outside ``tmp_path`` (often the repo root).
+    """
+    apply_hermetic_git_env(
+        monkeypatch, ceiling=tmp_path.parent, config_home=tmp_path_factory.mktemp("xdg-config")
+    )
+
+
+@pytest.fixture
+def make_synthetic_repo():
     """Return a builder that creates a synthetic consumer repo in ``tmp_path``.
 
     Usage::

@@ -140,18 +140,29 @@ PACK_ROOT: Path = Path(str(resources.files(PACK_NAME)))
 RESOURCES_ROOT: Path = PACK_ROOT / "resources"
 SKILLS_ROOT: Path = RESOURCES_ROOT / "skills"
 
+#: The native skill roots the default adapters write through the shared
+#: ``SkillWriter`` (SPEC §10.8): claude_code, opencode, and the shared_skills hub.
+NATIVE_SKILL_ROOTS: tuple[str, ...] = (".claude/skills", ".opencode/skills", "shared_skills")
 
-def consumer_config(*, overlays: list[str]) -> str:
-    """Return a ``.coding-agent-playbook.toml`` enabling every built-in adapter.
+#: The adapter list ``playbook init`` writes (``agents_md`` is always on).
+DEFAULT_ADAPTERS: tuple[str, ...] = ("continue", "claude_code", "opencode", "shared_skills")
 
-    Example::
+
+def consumer_config(*, overlays: list[str], adapters: tuple[str, ...] = DEFAULT_ADAPTERS) -> str:
+    """Return a ``.coding-agent-playbook.toml`` enabling ``adapters`` (top-level keys).
+
+    The default is the adapter set ``playbook init`` enables (``agents_md`` is
+    always on), so a pack skill lands in every :data:`NATIVE_SKILL_ROOTS` root
+    and as a degraded Continue prompt. Example::
 
         consumer_config(overlays=[PACK_NAME])  # opt the consumer into the pack
+        consumer_config(overlays=[], adapters=(*DEFAULT_ADAPTERS, "agent_harness"))
     """
     overlay_list = ", ".join(f'"{name}"' for name in overlays)
+    adapter_list = ", ".join(f'"{name}"' for name in adapters)
     return (
         "schema_version = 1\n"
-        'adapters_enabled = ["continue", "claude_code", "opencode"]\n'
+        f"adapters_enabled = [{adapter_list}]\n"
         f"overlays_enabled = [{overlay_list}]\n"
         "\n"
         "[project]\n"
@@ -167,7 +178,9 @@ def consumer_config(*, overlays: list[str]) -> str:
     )
 
 
-def write_consumer_repo(repo: Path, *, overlays: list[str]) -> Path:
+def write_consumer_repo(
+    repo: Path, *, overlays: list[str], adapters: tuple[str, ...] = DEFAULT_ADAPTERS
+) -> Path:
     """Write a minimal consumer repo (``pyproject.toml`` + playbook config) at ``repo``.
 
     Usable from a module-scoped fixture, unlike the function-scoped
@@ -181,7 +194,7 @@ def write_consumer_repo(repo: Path, *, overlays: list[str]) -> Path:
         encoding="utf-8",
     )
     (repo / ".coding-agent-playbook.toml").write_text(
-        consumer_config(overlays=overlays), encoding="utf-8"
+        consumer_config(overlays=overlays, adapters=adapters), encoding="utf-8"
     )
     return repo
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -157,3 +158,17 @@ def test_default_cleanup_recursively_scans_subdirectories(tmp_path):
     deleted = adapter.cleanup_stale(set(), tmp_path)
     assert deleted == [stale]
     assert not stale.exists()
+
+
+def test_default_cleanup_never_deletes_a_written_file_under_another_name(tmp_path):
+    """A case-only rename on a case-insensitive FS leaves the old spelling naming the
+    file just written; a hard link reproduces that aliasing on every filesystem."""
+    out = tmp_path / "out"
+    out.mkdir()
+    written = out / "demo.md"
+    written.write_text(f"<!-- {SENTINEL} -->\nfresh\n", encoding="utf-8")
+    os.link(written, out / "Demo-alias.md")
+    adapter = _ScannedAdapter(out)
+
+    assert adapter.cleanup_stale({written.resolve()}, tmp_path) == []
+    assert written.read_text(encoding="utf-8").endswith("fresh\n")

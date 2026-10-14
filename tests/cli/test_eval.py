@@ -1,9 +1,8 @@
-"""Tests for ``playbook eval --list/--show`` and the bare ``<id>`` runner-deferred
-path (SPEC §12.8 / §15).
+"""Tests for ``playbook eval --list/--show`` and the bare ``<id>`` path (SPEC §12.8).
 
-PR 11 turns the PR-10 deferral stub into the real Tier 0 read-only surface.
-The runner remains absent; bare ``playbook eval <id>`` exits 0 with a deferral
-message that references SPEC §15.
+The read-only Tier 0 surface. Without ``--run``, bare ``playbook eval <id>``
+exits 0 and prints how to run the task (``tests/cli/test_eval_run.py`` covers
+``--run`` itself).
 """
 
 from __future__ import annotations
@@ -491,15 +490,15 @@ def test_eval_show_unknown_id_exits_nonzero(tmp_path, make_synthetic_repo, capsy
     assert "no eval task" in combined.lower()
 
 
-def test_eval_bare_id_known_task_exits_zero_with_deferral(tmp_path, make_synthetic_repo, capsys):
+def test_eval_bare_id_known_task_exits_zero_with_run_hint(tmp_path, make_synthetic_repo, capsys):
+    """Without ``--run`` a known task prints how to run it (the runner is live)."""
     _seed_eval_repo(tmp_path, make_synthetic_repo)
     rc = _eval.run(_ns(tmp_path, id_="generate-tests-happy-path"))
     assert rc == 0
     out = capsys.readouterr().out
-    assert "Eval runner not yet implemented" in out
-    # SPEC §15 v2 pointer.
-    assert "15" in out
-    assert "generate-tests-happy-path" in out
+    assert "not yet implemented" not in out
+    assert "playbook eval generate-tests-happy-path --run --runner fake" in out
+    assert "--judge llm" in out
 
 
 def test_eval_bare_id_unknown_task_exits_nonzero(tmp_path, make_synthetic_repo, capsys):

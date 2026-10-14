@@ -12,16 +12,17 @@ Sub-modes:
 - ``playbook eval --show <id>``: detailed dump for one task — sections from
   SPEC §12.8 (Task / Source / Prompt under test / Description / Setup /
   Invocation / Expected / Rubric).
-- ``playbook eval <id>`` (no ``--run``): runner-deferral message. Exits 0 if the
-  task is known, exits 1 if it isn't (so typos still surface — the deferral only
-  applies to tasks that genuinely exist).
+- ``playbook eval <id>`` (no ``--run``): prints how to run the task. Exits 0 if
+  the task is known, exits 1 if it isn't (so typos still surface).
 - ``playbook eval <id> --run [--runner NAME] [--judge NAME] [--samples N]
   [--format text|json]``: load the task, select the runner ``NAME`` from the
   ``coding_agent_playbook.runners`` entry-point group (default ``claude_code``),
   run it in a throwaway scratch dir, and render ``result.report`` (reusing
   ``commands/metrics.py``'s text/json renderer). Exits ``0`` on a passing report,
   ``1`` on a failing one, ``2`` on usage errors (unknown task,
-  unknown/unavailable runner, unknown/unavailable judge, bad ``--format``).
+  unknown/unavailable runner, unknown/unavailable judge, bad ``--format``) and
+  when the task cannot be scored at all (its prompt fails to render, or the judge
+  gives no score) — that is neither a pass nor a fail.
 
   ``--judge`` (R2) selects a Tier-2 judge from the
   ``coding_agent_playbook.judges`` group (``llm`` ships, opt-in/CLI-gated) so the
@@ -44,16 +45,20 @@ from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evaluators.types import ScopeDetail
+from coding_agent_playbook.evals.judge import JudgeError
+from coding_agent_playbook.evals.prompting import PromptResolutionError
+from coding_agent_playbook.evaluators.scope import Determinism
+from coding_agent_playbook.evaluators.types import CheckResult, ScopeDetail
 from coding_agent_playbook.orchestrator import SyncContext
 
 if TYPE_CHECKING:
     import argparse
+    from collections.abc import Iterable
 
     from coding_agent_playbook.evals.judge import Judge
     from coding_agent_playbook.evals.runner import HarnessRunner, TaskResult
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.evaluators.types import CheckResult
+    from coding_agent_playbook.evaluators.types import TrialResult
     from coding_agent_playbook.types import Prompt
 
 
@@ -69,14 +74,19 @@ _DEFAULT_RUNNER = "claude_code"
 _VALID_FORMATS = ("text", "json")
 
 
-_RUNNER_DEFERRAL_TEMPLATE = (
-    "Eval runner not yet implemented (v1 ships task schema only).\n"
-    "The task is well-formed and ready to run when the v2 runner lands. For now:\n"
-    "  - Use `playbook eval --show {task_id}` to inspect the task.\n"
-    "  - Use `playbook eval --list` to see all task coverage.\n"
-    "  - To run manually: copy setup/ to a scratch repo, invoke /{slash}\n"
-    "    with the documented args, and grade against the expected/rubric.\n"
-    "See SPEC.md Section 15 for the v2 runner API."
+_RUN_HINT_TEMPLATE = (
+    "Add --run to execute this task against an agent and grade it:\n"
+    "  playbook eval {task_id} --run --runner fake    # hermetic no-op agent, no CLI\n"
+    "  playbook eval {task_id} --run                  # default runner: {default_runner}\n"
+    "  playbook eval {task_id} --run --judge llm      # also score the [rubric] layer\n"
+    "Inspect it with `playbook eval --show {task_id}`; coverage: `playbook eval --list`.\n"
+    "To run it by hand, copy setup/ to a scratch repo and invoke /{slash}."
+)
+
+#: Printed under a report whose scores include an LLM judge's (SPEC §19 Q12).
+_UNCALIBRATED_NOTE = (
+    "  note: judged scores come from an uncalibrated LLM judge (SPEC §19 Q12); "
+    "treat them as advisory"
 )
 
 
@@ -99,7 +109,7 @@ def run(args: argparse.Namespace) -> int:
         return _print_show(show_id, tasks, ctx.prompts_resolved)
     bare_id = getattr(args, "id", None)
     if bare_id:
-        return _print_runner_deferral(bare_id, tasks, ctx.prompts_resolved)
+        return _print_run_hint(bare_id, tasks, ctx.prompts_resolved)
     # No flag — default to --list (matches the "helpful empty invocation" rule).
     return _print_list(ctx.prompts_resolved, tasks)
 
@@ -113,7 +123,8 @@ def _run_task_cli(args: argparse.Namespace, repo_root: Path) -> int:
     """Load + run one task, render its report, map ``passed`` to the exit code.
 
     Exit codes: ``0`` pass, ``1`` failing report, ``2`` usage errors (no task id,
-    unknown task, unknown/unavailable runner, bad ``--format``).
+    unknown task, unknown/unavailable runner, bad ``--format``) or an unscorable
+    task (prompt render failure, judge error).
     """
     fmt = getattr(args, "format", None) or "text"
     if fmt not in _VALID_FORMATS:
@@ -177,14 +188,19 @@ def _run_task_cli(args: argparse.Namespace, repo_root: Path) -> int:
     fail_fast = not bool(getattr(args, "full_scoring", False))
 
     runner = runner_cls()
-    with tempfile.TemporaryDirectory(prefix="playbook-eval-") as tmp:
-        result = runner.run_task(
-            task,
-            Path(tmp) / "scratch",
-            judge=judge,
-            samples=samples,
-            fail_fast=fail_fast,
-        )
+    try:
+        with tempfile.TemporaryDirectory(prefix="playbook-eval-") as tmp:
+            result = runner.run_task(
+                task,
+                Path(tmp) / "scratch",
+                judge=judge,
+                samples=samples,
+                fail_fast=fail_fast,
+            )
+    except (PromptResolutionError, JudgeError) as exc:
+        # Neither a pass nor a fail: no verdict exists, so never exit 0/1 here.
+        print(f"error: task {task_id!r} could not be scored: {exc}", file=sys.stderr)
+        return 2
 
     if fmt == "json":
         print(json.dumps(_result_to_dict(result), indent=2, sort_keys=True))
@@ -193,8 +209,9 @@ def _run_task_cli(args: argparse.Namespace, repo_root: Path) -> int:
 
     # The task verdict is ``result.passed`` — the single trial's verdict for a
     # non-aggregate task (== report.passed), or the [aggregate] layer's pass/fail
-    # when the task aggregates across trials. ``report.passed`` alone would be
-    # only the *first* trial's verdict, so map the exit code off ``result.passed``.
+    # when the task aggregates across trials (every trial's verdict if that layer
+    # was skipped). ``report.passed`` alone would be only the *first* trial's
+    # verdict, so map the exit code off ``result.passed``.
     return 0 if result.passed else 1
 
 
@@ -291,6 +308,7 @@ def _result_to_dict(result: TaskResult) -> dict[str, object]:
     }
     # Across-trial aggregate: present only when the task authored an
     # [aggregate] block. ``trials`` is the per-trial pass/fail sequence.
+    out["uncalibrated_judge"] = _any_trial_judge_scored(result)
     if result.aggregate is not None:
         out["trials"] = len(result.trials)
         out["aggregate"] = _check_to_dict(result.aggregate)
@@ -361,21 +379,61 @@ def _format_result_text(result: TaskResult) -> str:
 
     # Across-trial aggregate: pass@k / pass^k over N trials, when present.
     if result.aggregate is not None:
-        agg = result.aggregate
-        agg_verdict = "PASS" if agg.passed else "FAIL"
-        score = "n/a" if agg.score is None else f"{agg.score:.3f}"
-        n_pass = sum(1 for t in result.trials if t.verdict)
-        n = len(result.trials)
-        lines.append(
-            f"  aggregate: {agg.check_id} = {score} ({agg_verdict}), "
-            f"{n} trials ({n_pass}/{n} passed)"
-        )
+        lines.append(_aggregate_line(result.aggregate, result.trials))
+
+    if _any_trial_judge_scored(result):
+        lines.append(_UNCALIBRATED_NOTE)
 
     footer = (
         f"  task: {result.task_id} via {result.harness} — {verdict} "
         f"(score={result.aggregate_score:.3f}, {result.duration_seconds:.2f}s)"
     )
     return "\n".join([*lines, footer])
+
+
+def _aggregate_line(agg: CheckResult, trials: list[TrialResult]) -> str:
+    """The text-report line for the ``[aggregate]`` layer's result.
+
+    A skipped aggregate (its ``over`` axis never ran, e.g. ``over = "rubric"``
+    with no judge) has no verdict of its own: the task verdict fell back to the
+    trials' verdicts, so say that rather than print a misleading ``FAIL``.
+    """
+    n_pass = sum(1 for t in trials if t.verdict)
+    n = len(trials)
+    if agg.status != "run":
+        return (
+            f"  aggregate: {agg.check_id} skipped (its over-axis never ran); "
+            f"verdict from all {n} trials ({n_pass}/{n} passed)"
+        )
+    agg_verdict = "PASS" if agg.passed else "FAIL"
+    score = "n/a" if agg.score is None else f"{agg.score:.3f}"
+    return (
+        f"  aggregate: {agg.check_id} = {score} ({agg_verdict}), {n} trials ({n_pass}/{n} passed)"
+    )
+
+
+def _any_trial_judge_scored(result: TaskResult) -> bool:
+    """Whether a judge scored anything in *any* trial (not just the reported one)."""
+    reports = [t.report for t in result.trials] or [result.report]
+    return any(_judge_scored(report.checks) for report in reports)
+
+
+def _judge_scored(checks: Iterable[CheckResult]) -> bool:
+    """Whether any *leaf* check that ran was judged (its score came from a judge).
+
+    Composers inherit ``JUDGED`` from any judged child even when only their
+    deterministic children ran, so only leaves count.
+    """
+    return any(_judge_scored_leaf(check) for check in checks)
+
+
+def _judge_scored_leaf(check: CheckResult) -> bool:
+    if check.status != "run":
+        return False
+    nested = [sub for sub in check.subresults if isinstance(sub, CheckResult)]
+    if nested:
+        return _judge_scored(nested)
+    return check.determinism is Determinism.JUDGED
 
 
 def _scope_detail(sub: ScopeDetail) -> str:
@@ -539,11 +597,10 @@ def _print_show(task_id: str, tasks: list[EvalTask], prompts: list[Prompt]) -> i
     return 0
 
 
-def _print_runner_deferral(task_id: str, tasks: list[EvalTask], prompts: list[Prompt]) -> int:
-    """Bare ``playbook eval <id>`` — verify task exists, then print deferral. Exit 0.
+def _print_run_hint(task_id: str, tasks: list[EvalTask], prompts: list[Prompt]) -> int:
+    """Bare ``playbook eval <id>`` — verify the task exists, then print how to run it.
 
-    Unknown task ids exit 1 so typos surface (the deferral promise applies
-    only to tasks that genuinely exist).
+    Exit 0. Unknown task ids exit 1 so typos surface.
     """
     task = next((t for t in tasks if t.id == task_id), None)
     if task is None:
@@ -557,7 +614,7 @@ def _print_runner_deferral(task_id: str, tasks: list[EvalTask], prompts: list[Pr
             slash = prompt.frontmatter.slash
             break
     print(f"playbook eval {task_id}:")
-    print(_RUNNER_DEFERRAL_TEMPLATE.format(task_id=task_id, slash=slash))
+    print(_RUN_HINT_TEMPLATE.format(task_id=task_id, slash=slash, default_runner=_DEFAULT_RUNNER))
     return 0
 
 
