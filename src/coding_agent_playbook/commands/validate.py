@@ -57,7 +57,7 @@ from coding_agent_playbook.evals.loader import (
 )
 from coding_agent_playbook.evals.validator import validate_tasks
 from coding_agent_playbook.orchestrator import SyncContext
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, _resource_subdir
+from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 
 if TYPE_CHECKING:
     import argparse
@@ -203,44 +203,24 @@ def _load_eval_tasks_for_validation(
     and accept that those sources cannot surface per-file loader errors here —
     that's their responsibility, not ours.
     """
-    tasks: list[EvalTask] = []
-    errors: list[ValidationError] = []
-    repo_root = ctx.repo_root
     artifact_source = ctx.artifact_source
-    # Reach for the source's package list via its public read-only properties.
-    # Non-filesystem sources skip the per-package loader-error aggregation and
-    # delegate to ``list_eval_tasks()`` instead, so the validator still sees
-    # the task set even when the source isn't filesystem-backed.
     if not isinstance(artifact_source, FileSystemArtifactSource):
-        return list(artifact_source.list_eval_tasks()), errors
-    engine_package = artifact_source.engine_package
-    overlay_packages = list(artifact_source.overlay_packages)
-    for package in (engine_package, *overlay_packages):
-        root = _resource_subdir(package, "eval_tasks")
-        if root is None:
-            continue
-        for task_dir in discover_eval_task_dirs(root):
-            try:
-                tasks.append(load_eval_task_from_dir(task_dir, source_package=package))
-            except (FileNotFoundError, ValueError) as exc:
-                errors.append(
-                    ValidationError(
-                        path=str(task_dir / "task.toml"),
-                        message=str(exc),
-                    )
-                )
-    repo_local = repo_root / "playbook" / "eval_tasks"
-    for task_dir in discover_eval_task_dirs(repo_local):
-        try:
-            tasks.append(load_eval_task_from_dir(task_dir, source_package="<repo-local>"))
-        except (FileNotFoundError, ValueError) as exc:
-            errors.append(
-                ValidationError(
-                    path=str(task_dir / "task.toml"),
-                    message=str(exc),
-                )
-            )
-    return tasks, errors
+        return list(artifact_source.list_eval_tasks()), []
+    loaded = [
+        _load_eval_task(task_dir, label)
+        for label, root in artifact_source.layer_roots("eval_tasks")
+        for task_dir in discover_eval_task_dirs(root)
+    ]
+    tasks = [item for item in loaded if not isinstance(item, ValidationError)]
+    return tasks, [item for item in loaded if isinstance(item, ValidationError)]
+
+
+def _load_eval_task(task_dir: Path, source_package: str) -> EvalTask | ValidationError:
+    """Load one ``task.toml``, or return its loader failure as a finding."""
+    try:
+        return load_eval_task_from_dir(task_dir, source_package=source_package)
+    except (FileNotFoundError, ValueError) as exc:
+        return ValidationError(path=str(task_dir / "task.toml"), message=str(exc))
 
 
 def _check_eval_tasks(ctx: SyncContext) -> list[ValidationError]:

@@ -289,14 +289,36 @@ class SyncContext:
         without a registry, then re-build the adapters via
         :func:`discover_adapters` after the registry exists.
         """
-        state_source = FileSystemStateSource(repo_root=repo_root)
-        config = state_source.load_config()
-        facts = detect(repo_root)
+        config = FileSystemStateSource(repo_root=repo_root).load_config()
+        return cls.from_config(repo_root, config, rule_registry=rule_registry)
 
-        artifact_source = FileSystemArtifactSource(
-            repo_root=repo_root,
-            overlay_packages=list(config.overlays_enabled),
-        )
+    @classmethod
+    def from_config(
+        cls,
+        repo_root: Path,
+        config: Config,
+        *,
+        artifact_source: ArtifactSource | None = None,
+        rule_registry: RuleRegistry | None = None,
+    ) -> SyncContext:
+        """:meth:`from_repo` minus the config load: detect → walk → resolve overlays.
+
+        Config-less ``playbook validate`` passes a stand-in ``config`` and an
+        ``artifact_source`` with extra checkout layers (prK §P P8); by default
+        the source walks the engine, ``config.overlays_enabled`` and
+        ``<repo>/playbook/``.
+
+        Example::
+
+            >>> SyncContext.from_config(repo, config).rules_resolved  # doctest: +SKIP
+            [Rule(...), ...]
+        """
+        facts = detect(repo_root)
+        if artifact_source is None:
+            artifact_source = FileSystemArtifactSource(
+                repo_root=repo_root,
+                overlay_packages=list(config.overlays_enabled),
+            )
         # Engine + overlay artifacts come from importlib.resources via the
         # FileSystemArtifactSource walking each package's ``resources/`` tree;
         # repo-local artifacts come from ``<repo>/playbook/``. v1 walks all of
@@ -326,7 +348,7 @@ class SyncContext:
             config=config,
             facts=facts,
             artifact_source=artifact_source,
-            state_source=state_source,
+            state_source=FileSystemStateSource(repo_root=repo_root),
             adapters=adapters,
             rules_resolved=rules_resolved,
             prompts_resolved=prompts_resolved,

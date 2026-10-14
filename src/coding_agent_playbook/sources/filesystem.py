@@ -10,7 +10,7 @@ from __future__ import annotations
 import tomllib
 from importlib import resources
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook import _toml
 from coding_agent_playbook.config import Config, check_enabled_keys
@@ -23,12 +23,18 @@ from coding_agent_playbook.sources.base import ArtifactSource, StateSource
 from coding_agent_playbook.types import Prompt, Rule, Skill, split_frontmatter
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterator, Sequence
     from typing import TypeVar
 
     from coding_agent_playbook.evals.task import EvalTask
 
     _T = TypeVar("_T")
+
+#: The engine's own package: the first artifact layer (SPEC §11).
+ENGINE_PACKAGE: Final = "coding_agent_playbook"
+
+#: ``source_package`` of every artifact under ``<repo>/playbook/``.
+REPO_LOCAL_SOURCE: Final = "<repo-local>"
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -253,7 +259,13 @@ def _find_skill_md(skill_dir: Path) -> Path | None:
 
 class FileSystemArtifactSource(ArtifactSource):
     """Walks importlib.resources for the engine + overlay packages, plus
-    <repo>/playbook/ for repo-local artifacts (SPEC §20.3, §11)."""
+    <repo>/playbook/ for repo-local artifacts (SPEC §20.3, §11).
+
+    ``extra_resource_roots`` adds ``resources/`` directories found by path
+    rather than by package name — config-less ``playbook validate`` passes an
+    overlay checkout's ``<root>/src/<pkg>/resources/`` (prK §P P8). Every
+    walker, and validate's per-layer checks, go through :meth:`layer_roots`.
+    """
 
     name = "filesystem"
 
@@ -261,22 +273,23 @@ class FileSystemArtifactSource(ArtifactSource):
         self,
         *,
         repo_root: Path,
-        engine_package: str = "coding_agent_playbook",
+        engine_package: str = ENGINE_PACKAGE,
         overlay_packages: list[str] | None = None,
+        extra_resource_roots: Sequence[Path] = (),
     ) -> None:
         self._repo_root = repo_root
         self._engine_package = engine_package
         self._overlay_packages = overlay_packages or []
+        self._extra_resource_roots = tuple(extra_resource_roots)
 
     @property
     def engine_package(self) -> str:
         """Public read-only accessor for the engine package name.
 
         Callers that need to walk the same package set this source walks
-        (e.g. ``commands/validate.py``'s per-task loader-error aggregator)
-        should use this and :attr:`overlay_packages` instead of reaching
-        into the private ``_engine_package`` / ``_overlay_packages``
-        attributes, so a future rename can't silently degrade them.
+        should prefer :meth:`layer_roots`; this and :attr:`overlay_packages`
+        stay public so nobody reaches into the private ``_engine_package`` /
+        ``_overlay_packages`` attributes, which a rename would silently degrade.
         """
         return self._engine_package
 
@@ -289,6 +302,37 @@ class FileSystemArtifactSource(ArtifactSource):
         :meth:`list_rules` / :meth:`list_prompts` / :meth:`list_eval_tasks`.
         """
         return tuple(self._overlay_packages)
+
+    @property
+    def extra_resource_roots(self) -> tuple[Path, ...]:
+        """The path-based ``resources/`` layers, walked after the overlays."""
+        return self._extra_resource_roots
+
+    def layer_roots(self, subdir: str) -> list[tuple[str, Path]]:
+        """``(source_package, <layer>/<subdir>)`` for each layer that has ``subdir``.
+
+        Layers come in resolution order (later wins, SPEC §11): the engine
+        package, the overlays in ``overlays_enabled`` order, the extra
+        ``resources/`` roots, then repo-local ``playbook/``. The label is what
+        artifacts found there carry as ``source_package``: the package name,
+        the extra root's parent directory name, or ``"<repo-local>"``. A
+        layer's containment root for links is ``root.parent``.
+
+        Example::
+
+            >>> FileSystemArtifactSource(repo_root=Path("/repo")).layer_roots("rules")[0][0]
+            'coding_agent_playbook'
+        """
+        candidates: list[tuple[str, Path | None]] = [
+            *((package, _resource_subdir(package, subdir)) for package in self._packages()),
+            *((root.parent.name, root / subdir) for root in self._extra_resource_roots),
+            (REPO_LOCAL_SOURCE, self._repo_root / "playbook" / subdir),
+        ]
+        return [(label, root) for label, root in candidates if root is not None and root.is_dir()]
+
+    def _packages(self) -> tuple[str, ...]:
+        """The importable layers: the engine package, then the overlays."""
+        return (self._engine_package, *self._overlay_packages)
 
     def list_rules(self) -> list[Rule]:
         return self._walk_artifacts(
@@ -303,16 +347,11 @@ class FileSystemArtifactSource(ArtifactSource):
         )
 
     def list_skills(self) -> list[Skill]:
-        skills: list[Skill] = []
-        for package in (self._engine_package, *self._overlay_packages):
-            root = _resource_subdir(package, "skills")
-            if root is None:
-                continue
-            skills.extend(_iter_skills(root, package))
-        repo_local_root = self._repo_root / "playbook" / "skills"
-        if repo_local_root.is_dir():
-            skills.extend(_iter_skills(repo_local_root, "<repo-local>"))
-        return skills
+        return [
+            skill
+            for label, root in self.layer_roots("skills")
+            for skill in _iter_skills(root, label)
+        ]
 
     def _walk_artifacts(
         self,
@@ -320,43 +359,27 @@ class FileSystemArtifactSource(ArtifactSource):
         subdir: str,
         builder: Callable[[Path, str], _T],
     ) -> list[_T]:
-        items: list[_T] = []
-        for package in (self._engine_package, *self._overlay_packages):
-            root = _resource_subdir(package, subdir)
-            if root is None:
-                continue
-            for md in _iter_md_files(root):
-                items.append(builder(md, package))
-        repo_local_root = self._repo_root / "playbook" / subdir
-        if repo_local_root.is_dir():
-            for md in _iter_md_files(repo_local_root):
-                items.append(builder(md, "<repo-local>"))
-        return items
+        return [
+            builder(md, label)
+            for label, root in self.layer_roots(subdir)
+            for md in _iter_md_files(root)
+        ]
 
     def list_eval_tasks(self) -> list[EvalTask]:
-        """Walk engine + overlay packages + repo-local for ``eval_tasks/<id>/``.
+        """Walk every layer's ``eval_tasks/<id>/`` (:meth:`layer_roots` order).
 
-        Mirrors the rules/prompts walking pattern: each layer's
-        ``resources/eval_tasks/`` is scanned via :func:`_resource_subdir`, then
-        ``<repo>/playbook/eval_tasks/`` is appended. Later layers do NOT
-        override earlier ones here — the orchestrator's :class:`OverlayResolver`
-        handles ID-based collision semantics for rules/prompts/skills, but eval
-        tasks are aggregated as-is in v1 (no per-layer override pass yet; the
-        collision-by-id pattern is identical and lands when first overlay
-        ships eval tasks). All entries are returned with their ``source_package``
-        set to the importable package name or ``"<repo-local>"``.
+        Later layers do NOT override earlier ones here — the orchestrator's
+        :class:`OverlayResolver` handles ID-based collision semantics for
+        rules/prompts/skills, but eval tasks are aggregated as-is in v1 (no
+        per-layer override pass yet; the collision-by-id pattern is identical
+        and lands when first overlay ships eval tasks). Each task's
+        ``source_package`` is its layer's label.
         """
-        tasks: list[EvalTask] = []
-        for package in (self._engine_package, *self._overlay_packages):
-            root = _resource_subdir(package, "eval_tasks")
-            if root is None:
-                continue
-            for task_dir in discover_eval_task_dirs(root):
-                tasks.append(load_eval_task_from_dir(task_dir, source_package=package))
-        repo_local = self._repo_root / "playbook" / "eval_tasks"
-        for task_dir in discover_eval_task_dirs(repo_local):
-            tasks.append(load_eval_task_from_dir(task_dir, source_package="<repo-local>"))
-        return tasks
+        return [
+            load_eval_task_from_dir(task_dir, source_package=label)
+            for label, root in self.layer_roots("eval_tasks")
+            for task_dir in discover_eval_task_dirs(root)
+        ]
 
 
 class FileSystemStateSource(StateSource):

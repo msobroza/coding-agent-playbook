@@ -15,11 +15,7 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook.commands._validation import ValidationError
 from coding_agent_playbook.config import parse_links_config
 from coding_agent_playbook.links import LinksConfig, classify_link, extract_markdown_links
-from coding_agent_playbook.sources.filesystem import (
-    FileSystemArtifactSource,
-    _iter_md_files,
-    _resource_subdir,
-)
+from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, _iter_md_files
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -101,13 +97,13 @@ def check_markdown_links(
 ) -> list[ValidationError]:
     """Every markdown link in every artifact must be self-contained (PR L).
 
-    Filesystem sources are walked per package — the same pattern as
-    ``validate._load_eval_tasks_for_validation`` — because skill ``references/``
-    files are not carried as paths on the canonical :class:`Skill` type. The
-    walk covers rules, prompts, and skills across the engine package, overlay
-    packages, and repo-local ``playbook/``; the containment root is the
-    package's ``resources/`` (respectively ``playbook/``) so links may cross
-    artifact kinds within their layer but never leave the shipped bundle.
+    Filesystem sources are walked per layer (:meth:`FileSystemArtifactSource.layer_roots`)
+    because skill ``references/`` files are not carried as paths on the
+    canonical :class:`Skill` type. The walk covers rules, prompts, and skills
+    in every layer — engine package, overlays, extra checkout roots and
+    repo-local ``playbook/``; the containment root is the layer's
+    ``resources/`` (respectively ``playbook/``) so links may cross artifact
+    kinds within their layer but never leave the shipped bundle.
 
     Non-filesystem sources have no on-disk layout to resolve relative targets
     against, so only the external-link policy applies to their bodies.
@@ -117,57 +113,40 @@ def check_markdown_links(
         >>> check_markdown_links(source, repo_root, LinksConfig())  # doctest: +SKIP
         []
     """
-    errors: list[ValidationError] = []
     if not isinstance(artifact_source, FileSystemArtifactSource):
-        for rule in artifact_source.list_rules():
-            errors.extend(
-                _scan_markdown_text(
-                    rule.template_body,
-                    path=str(rule.source_path or rule.frontmatter.id),
-                    base_dir=None,
-                    root_dir=None,
-                    links_config=links_config,
-                )
-            )
-        for prompt in artifact_source.list_prompts():
-            errors.extend(
-                _scan_markdown_text(
-                    prompt.template_body,
-                    path=str(prompt.source_path or prompt.frontmatter.id),
-                    base_dir=None,
-                    root_dir=None,
-                    links_config=links_config,
-                )
-            )
-        for skill in artifact_source.list_skills():
-            errors.extend(
-                _scan_markdown_text(
-                    skill.body,
-                    path=str(skill.frontmatter.get("name", "skill")),
-                    base_dir=None,
-                    root_dir=None,
-                    links_config=links_config,
-                )
-            )
-        return errors
+        return _scan_source_bodies(artifact_source, links_config)
+    return [
+        error
+        for subdir in _LINK_CHECKED_SUBDIRS
+        for _label, root in artifact_source.layer_roots(subdir)
+        for md in _iter_md_files(root)
+        for error in _scan_markdown_file(md, root_dir=root.parent, links_config=links_config)
+    ]
 
-    packages = (artifact_source.engine_package, *artifact_source.overlay_packages)
-    for package in packages:
-        for subdir in _LINK_CHECKED_SUBDIRS:
-            root = _resource_subdir(package, subdir)
-            if root is None:
-                continue
-            for md in _iter_md_files(root):
-                errors.extend(
-                    _scan_markdown_file(md, root_dir=root.parent, links_config=links_config)
-                )
-    repo_local_root = repo_root / "playbook"
-    for subdir in _LINK_CHECKED_SUBDIRS:
-        subdir_path = repo_local_root / subdir
-        if not subdir_path.is_dir():
-            continue
-        for md in _iter_md_files(subdir_path):
-            errors.extend(
-                _scan_markdown_file(md, root_dir=repo_local_root, links_config=links_config)
-            )
-    return errors
+
+def _scan_source_bodies(
+    artifact_source: ArtifactSource, links_config: LinksConfig
+) -> list[ValidationError]:
+    """Scan every rule, prompt and skill body of a source with no on-disk layout.
+
+    Relative targets cannot be resolved without one, so only the external-link
+    policy applies.
+    """
+    bodies = [
+        *(
+            (str(r.source_path or r.frontmatter.id), r.template_body)
+            for r in artifact_source.list_rules()
+        ),
+        *(
+            (str(p.source_path or p.frontmatter.id), p.template_body)
+            for p in artifact_source.list_prompts()
+        ),
+        *((str(s.frontmatter.get("name", "skill")), s.body) for s in artifact_source.list_skills()),
+    ]
+    return [
+        error
+        for path, body in bodies
+        for error in _scan_markdown_text(
+            body, path=path, base_dir=None, root_dir=None, links_config=links_config
+        )
+    ]

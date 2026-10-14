@@ -17,10 +17,12 @@ from coding_agent_playbook.orchestrator import (
     OverlayResolver,
     RuleRegistryImpl,
     SyncContext,
+    artifact_id_of,
     discover_adapters,
     template_source,
 )
 from coding_agent_playbook.renderer import TemplateSecurityError, build_environment
+from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import (
     Prompt,
     PromptFrontmatter,
@@ -269,3 +271,45 @@ def test_sync_context_from_repo_missing_config_raises(tmp_path):
     ``FileNotFoundError`` and the orchestrator does not swallow it."""
     with pytest.raises(FileNotFoundError):
         SyncContext.from_repo(tmp_path)
+
+
+def _ids(artifacts: list[Rule] | list[Prompt] | list[Skill]) -> list[str]:
+    return [artifact_id_of(artifact) for artifact in artifacts]
+
+
+def test_from_config_resolves_like_from_repo(tmp_path, make_synthetic_repo):
+    """``from_repo`` is ``load_config`` + ``from_config``: the config-less validate
+    context (prK §P P8) reuses the same detect → walk → resolve step."""
+    repo = make_synthetic_repo(
+        tmp_path,
+        rules=[("repo-rule", "Body content\n")],
+        prompts=[("repo-prompt", {"slash": "repo-prompt"})],
+    )
+    by_repo = SyncContext.from_repo(repo)
+
+    by_config = SyncContext.from_config(repo, by_repo.config)
+
+    assert by_config.config is by_repo.config
+    assert by_config.facts == by_repo.facts
+    assert _ids(by_config.rules_resolved) == _ids(by_repo.rules_resolved)
+    assert _ids(by_config.prompts_resolved) == _ids(by_repo.prompts_resolved)
+    assert _ids(by_config.skills_resolved) == _ids(by_repo.skills_resolved)
+    assert by_config.adapters.keys() == by_repo.adapters.keys()
+    assert by_config.overlay_collisions == by_repo.overlay_collisions
+
+
+def test_from_config_walks_the_injected_artifact_source(tmp_path, make_synthetic_repo):
+    repo = make_synthetic_repo(tmp_path)
+    config = SyncContext.from_repo(repo).config
+    rules_dir = tmp_path / "src" / "acme_overlay" / "resources" / "rules"
+    rules_dir.mkdir(parents=True)
+    (rules_dir / "acme.md").write_text(
+        "---\nid: acme\nname: Acme\ndescription: d\nscope: always\n---\nBody\n",
+        encoding="utf-8",
+    )
+    source = FileSystemArtifactSource(repo_root=repo, extra_resource_roots=[rules_dir.parent])
+
+    ctx = SyncContext.from_config(repo, config, artifact_source=source)
+
+    assert ctx.artifact_source is source
+    assert "acme" in _ids(ctx.rules_resolved)
