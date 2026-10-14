@@ -10,10 +10,12 @@ from jinja2 import UndefinedError
 from coding_agent_playbook.renderer import (
     SENTINEL,
     build_environment,
+    carries_engine_sentinel,
     includes_rules_appendix,
     render_artifact_body,
     render_for,
     render_string,
+    with_sentinel_body,
 )
 
 if TYPE_CHECKING:
@@ -577,3 +579,56 @@ def test_includes_rules_appendix_lists_rules_for_a_template_without_calls() -> N
     appendix = includes_rules_appendix("no calls here", _INLINE_FRONTMATTER, registry)
 
     assert appendix == "\n## Reference rules\n\n### X\n\nrule body\n"
+
+
+# --- engine-output detection (sentinel position) ----------------------------
+
+_BODY_FIRST = with_sentinel_body("---\ndescription: d\n---", "body\n")
+
+
+@pytest.mark.parametrize(
+    ("text", "after_frontmatter", "owned"),
+    [
+        (f"<!-- {SENTINEL} -->\n# Title\n", False, True),
+        (f"<!-- {SENTINEL} -->\n---\ndescription: d\n---\nbody\n", False, True),
+        (_BODY_FIRST, True, True),
+        (_BODY_FIRST, False, False),
+        ("\ufeff" + _BODY_FIRST, True, True),
+        (f"\ufeff<!-- {SENTINEL} -->\n# Title\n", False, True),
+        (f"---\ndescription: d\n---\nFiles saying {SENTINEL} are generated.\n", True, False),
+        ("---\ndescription: d\n---\nbody\n", True, False),
+        (f"---\ndescription: d\n---\nintro\n<!-- {SENTINEL} -->\n", True, False),
+        (f"intro\n<!-- {SENTINEL} -->\n", True, False),
+        (f"---\ndescription: {SENTINEL}\n---\nbody\n", True, False),
+        ("", True, False),
+    ],
+    ids=[
+        "line-1",
+        "legacy-line-1-before-frontmatter",
+        "first-body-line-opted-in",
+        "first-body-line-not-opted-in",
+        "bom-first-body-line",
+        "bom-line-1",
+        "first-body-line-quotes-it-in-prose",
+        "no-sentinel",
+        "deeper-in-body",
+        "line-2-no-frontmatter",
+        "inside-frontmatter",
+        "empty",
+    ],
+)
+def test_carries_engine_sentinel_only_at_the_engine_positions(
+    text: str, after_frontmatter: bool, owned: bool
+) -> None:
+    assert carries_engine_sentinel(text, after_frontmatter=after_frontmatter) is owned
+
+
+def test_opencode_command_starts_with_its_frontmatter(tmp_path: Path) -> None:
+    """OpenCode's gray-matter needs ``---`` at offset 0; the sentinel follows the envelope."""
+    out = render_for(
+        tmp_path / "p.md",
+        "Body\n",
+        "prompt_opencode_command",
+        frontmatter={"name": "P", "description": "D"},
+    )
+    assert out == f"---\ndescription: D\n---\n<!-- {SENTINEL} -->\n\nBody\n"

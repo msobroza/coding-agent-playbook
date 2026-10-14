@@ -223,3 +223,25 @@ def test_sync_shipped_review_command_inlines_each_rule_once(tmp_path, make_synth
     review = (repo / ".claude" / "commands" / "review.md").read_text(encoding="utf-8")
     assert review.count("### Python typing conventions") == 1
     assert review.count("### Python error handling") == 1
+
+
+def test_sync_migrates_legacy_opencode_commands_to_frontmatter_first(tmp_path, make_synthetic_repo):
+    """Commands written with the sentinel on line 1 (older engines) are rewritten
+    in place with the envelope first, and a stale legacy command is still cleaned."""
+    repo = make_synthetic_repo(
+        tmp_path, prompts=[("refactor", {"slash": "refactor", "body": "Refactor the code.\n"})]
+    )
+    commands = repo / ".opencode" / "command"
+    commands.mkdir(parents=True)
+    legacy = "<!-- {s} -->\n---\ndescription: old\n---\nold body\n"
+    from coding_agent_playbook.renderer import SENTINEL
+
+    (commands / "refactor.md").write_text(legacy.format(s=SENTINEL), encoding="utf-8")
+    (commands / "gone.md").write_text(legacy.format(s=SENTINEL), encoding="utf-8")
+
+    assert _sync.run(_ns(repo)) == 0
+
+    refactor = (commands / "refactor.md").read_text(encoding="utf-8")
+    assert refactor.startswith("---\ndescription:")
+    assert refactor.count(SENTINEL) == 1
+    assert not (commands / "gone.md").exists()
