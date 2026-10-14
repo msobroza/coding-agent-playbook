@@ -26,6 +26,10 @@ Validates:
   learn here instead.
 
 All errors aggregate before a single non-zero exit; success prints one line.
+:func:`collect_validation_errors` is the rule set; ``playbook sync`` runs it
+first and refuses to write on any finding (prK §P P8b). Without a consumer
+config, validate checks the engine, the checkout's ``src/*/resources/`` and
+``playbook/``, skipping the consumer-config checks (``_validate_context``).
 Skill files no sync will ever copy — a secret path, or a link leaving the
 skill's source dir (SPEC §10.8, §17.3) — are reported as ``warning:`` lines on
 stderr and never fail validation.
@@ -48,14 +52,20 @@ from coding_agent_playbook.adapters._skill_writer import (
     skill_id_of,
 )
 from coding_agent_playbook.commands import _sync_preflight
+from coding_agent_playbook.commands._validate_context import (
+    config_less_context,
+    config_less_notes,
+    has_consumer_config,
+)
 from coding_agent_playbook.commands._validate_links import check_markdown_links, load_links_config
-from coding_agent_playbook.commands._validation import ValidationError
+from coding_agent_playbook.commands._validation import ValidationError, report_validation_errors
 from coding_agent_playbook.detector import evaluate_predicate
 from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
 )
 from coding_agent_playbook.evals.validator import validate_tasks
+from coding_agent_playbook.links import LinksConfig
 from coding_agent_playbook.orchestrator import SyncContext
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 
@@ -286,26 +296,54 @@ def _warn_refused_skill_files(skills: list[Skill]) -> list[str]:
     return lines
 
 
-def run(args: argparse.Namespace) -> int:
-    repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
-    ctx = SyncContext.from_repo(repo_root)
-    errors: list[ValidationError] = []
-    errors.extend(_check_overlays_usable(ctx.config.overlays_enabled))
-    errors.extend(_check_applies_if(ctx.rules_resolved, ctx.prompts_resolved, ctx.facts, repo_root))
-    errors.extend(_check_prompt_rule_calls(ctx.prompts_resolved))
-    errors.extend(_check_rule_bodies_do_not_include_rules(ctx.rules_resolved))
-    errors.extend(_check_jinja_compiles(ctx.rules_resolved, ctx.prompts_resolved))
-    errors.extend(_check_eval_tasks(ctx))
-    links_config, links_errors = load_links_config(repo_root)
-    errors.extend(links_errors)
-    errors.extend(check_markdown_links(ctx.artifact_source, repo_root, links_config))
-    errors.extend(_check_agent_skills(ctx.skills_resolved, ctx.artifact_source.list_skills()))
-    _warn_refused_skill_files(ctx.skills_resolved)
+def collect_validation_errors(
+    ctx: SyncContext, *, config_less: bool = False
+) -> list[ValidationError]:
+    """Run every validate rule against ``ctx``; every finding, in check order.
 
+    The single rule set behind ``playbook validate`` and the gate in front of
+    ``playbook sync`` (prK §P P8b). ``config_less`` skips the checks that read
+    the consumer config (:data:`_validate_context.CONSUMER_CONFIG_CHECKS`):
+    overlay usability, and the ``[links]`` allowlist — external links then
+    meet the strict default. Prints nothing; never raises for a finding.
+
+    Example::
+
+        >>> collect_validation_errors(SyncContext.from_repo(Path(".")))  # doctest: +SKIP
+        []
+    """
+    rules, prompts = ctx.rules_resolved, ctx.prompts_resolved
+    errors = [] if config_less else _check_overlays_usable(ctx.config.overlays_enabled)
+    errors.extend(_check_applies_if(rules, prompts, ctx.facts, ctx.repo_root))
+    errors.extend(_check_prompt_rule_calls(prompts))
+    errors.extend(_check_rule_bodies_do_not_include_rules(rules))
+    errors.extend(_check_jinja_compiles(rules, prompts))
+    errors.extend(_check_eval_tasks(ctx))
+    links_config, links_errors = (
+        (LinksConfig(), []) if config_less else load_links_config(ctx.repo_root)
+    )
+    errors.extend(links_errors)
+    errors.extend(check_markdown_links(ctx.artifact_source, ctx.repo_root, links_config))
+    errors.extend(_check_agent_skills(ctx.skills_resolved, ctx.artifact_source.list_skills()))
+    return errors
+
+
+def run(args: argparse.Namespace) -> int:
+    """``playbook validate``: exit 0 printing ``OK <n> artifacts validated``, else 1.
+
+    Without a ``.coding-agent-playbook.toml`` (an engine or overlay checkout)
+    it validates a config-less context and first prints which consumer-config
+    checks it skipped (:mod:`._validate_context`).
+    """
+    repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
+    config_less = not has_consumer_config(repo_root)
+    if config_less:
+        print("\n".join(config_less_notes(repo_root)))
+    ctx = config_less_context(repo_root) if config_less else SyncContext.from_repo(repo_root)
+    errors = collect_validation_errors(ctx, config_less=config_less)
+    _warn_refused_skill_files(ctx.skills_resolved)
     if errors:
-        for err in errors:
-            print(f"FAIL {err.path}: {err.message}")
-        print(f"validation failed with {len(errors)} error(s)")
+        report_validation_errors(errors, sys.stdout)
         return 1
     artifact_count = len(ctx.rules_resolved) + len(ctx.prompts_resolved)
     print(f"OK {artifact_count} artifacts validated")

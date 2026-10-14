@@ -6,12 +6,19 @@ Covers each error class documented in SPEC §12.6 plus the happy path.
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
+
+import coding_agent_playbook
+from coding_agent_playbook.commands import _validate_context
 from coding_agent_playbook.commands import validate as _validate
+from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Iterator
 
 
 def _ns(repo: Path) -> argparse.Namespace:
@@ -243,3 +250,115 @@ def test_validate_warns_about_skill_files_sync_never_copies(
     assert "warning: skills/query-db (<repo-local>):" in captured.err
     assert f"{scripts / '.env'} is never copied" in captured.err
     assert "run.sh" not in captured.err
+
+
+# --- Config-less validate (specs/prK-lifecycle-hooks.md §P P8a) -----------------
+
+_UNKNOWN_FACT_RULE = (
+    "---\nid: bad\nname: Bad\ndescription: bad\nscope: scoped\n"
+    "applies_if:\n  orm_version: '>=2'\n---\nBody\n"
+)
+
+
+def _engine_artifact_count(repo: Path) -> int:
+    """Rules + prompts the engine package resolves to (ids are unique per kind)."""
+    engine = FileSystemArtifactSource(repo_root=repo)
+    rule_ids = {rule.frontmatter.id for rule in engine.list_rules()}
+    prompt_ids = {prompt.frontmatter.id for prompt in engine.list_prompts()}
+    return len(rule_ids) + len(prompt_ids)
+
+
+def test_validate_without_config_checks_engine_resources(tmp_path, capsys):
+    """An engine or overlay checkout has no consumer config: validate must not
+    raise FileNotFoundError, and still validates the engine and ``playbook/``."""
+    assert _validate.run(_ns(tmp_path)) == 0
+    out = capsys.readouterr().out
+    assert f"OK {_engine_artifact_count(tmp_path)} artifacts validated" in out
+    assert "no .coding-agent-playbook.toml" in out
+
+    bad = tmp_path / "playbook" / "rules" / "bad.md"
+    bad.parent.mkdir(parents=True)
+    bad.write_text(_UNKNOWN_FACT_RULE, encoding="utf-8")
+
+    assert _validate.run(_ns(tmp_path)) == 1
+    fail_lines = [line for line in capsys.readouterr().out.splitlines() if line.startswith("FAIL")]
+    assert fail_lines == [f"FAIL {bad}: applies_if: unknown predicate key: 'orm_version'"]
+
+
+def test_validate_without_config_checks_checkout_resources(tmp_path, capsys):
+    """An overlay checkout's own ``src/<pkg>/resources/`` is a validated layer."""
+    rule = tmp_path / "src" / "acme_overlay" / "resources" / "rules" / "x.md"
+    rule.parent.mkdir(parents=True)
+    rule.write_text(
+        "---\nid: x\nname: X\ndescription: d\nscope: always\n---\n"
+        "Read [docs](https://example.com/docs).\n",
+        encoding="utf-8",
+    )
+
+    assert _validate.run(_ns(tmp_path)) == 1
+
+    out = capsys.readouterr().out
+    assert f"FAIL {rule}: markdown link 'https://example.com/docs'" in out
+    assert f"OK {_engine_artifact_count(tmp_path) + 1}" not in out
+
+
+def test_validate_without_config_reports_consumer_checks_skipped(tmp_path, capsys):
+    assert _validate.run(_ns(tmp_path)) == 0
+    skipped = [line for line in capsys.readouterr().out.splitlines() if line.startswith("skipped")]
+    assert len(skipped) == len(_validate_context.CONSUMER_CONFIG_CHECKS) == 2
+    assert any("overlays_enabled" in line for line in skipped)
+    assert any("[links] allowed_domains" in line for line in skipped)
+
+
+def test_validate_with_config_prints_no_config_less_note(tmp_path, make_synthetic_repo, capsys):
+    repo = make_synthetic_repo(tmp_path)
+    assert _validate.run(_ns(repo)) == 0
+    out = capsys.readouterr().out
+    assert "no .coding-agent-playbook.toml" not in out
+    assert "skipped" not in out
+
+
+@pytest.fixture
+def fake_engine_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
+    """``<tmp_path>/src/<pkg>/resources`` as an importable package: a checkout whose
+    src/ package IS the engine, as in an editable install of the engine repo."""
+    name = "fake_engine_p8"
+    package = tmp_path / "src" / name
+    (package / "resources" / "rules").mkdir(parents=True)
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path / "src"))
+    yield name
+    sys.modules.pop(name, None)
+
+
+def test_checkout_resource_roots_skips_the_engine_package(tmp_path, fake_engine_checkout):
+    overlay_resources = tmp_path / "src" / "acme_overlay" / "resources"
+    overlay_resources.mkdir(parents=True)
+    (tmp_path / "src" / "no_resources").mkdir()
+    (tmp_path / "src" / ".hidden" / "resources").mkdir(parents=True)
+
+    roots = _validate_context.checkout_resource_roots(tmp_path, engine_package=fake_engine_checkout)
+
+    assert roots == [overlay_resources]
+
+
+def test_checkout_resource_roots_without_src_is_empty(tmp_path):
+    assert _validate_context.checkout_resource_roots(tmp_path, engine_package="x") == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs a directory symlink")
+def test_config_less_context_in_the_engine_checkout_walks_the_engine_once(tmp_path, capsys):
+    """In the engine repo ``src/coding_agent_playbook/resources`` IS the engine
+    package: without the resolved-path dedupe every engine artifact was walked
+    twice, colliding with itself and reporting each finding twice."""
+    engine_dir = Path(coding_agent_playbook.__file__).parent
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "coding_agent_playbook").symlink_to(engine_dir, target_is_directory=True)
+
+    ctx = _validate_context.config_less_context(tmp_path)
+
+    assert isinstance(ctx.artifact_source, FileSystemArtifactSource)
+    assert ctx.artifact_source.extra_resource_roots == ()
+    assert ctx.overlay_collisions == []
+    assert _validate.run(_ns(tmp_path)) == 0
+    assert f"OK {_engine_artifact_count(tmp_path)} artifacts validated" in capsys.readouterr().out
