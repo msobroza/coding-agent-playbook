@@ -360,3 +360,45 @@ def test_a_broken_rule_file_fails_only_prompts_that_inline_rules(
     _broken_rule(inlining, as_directory=as_directory)
     with pytest.raises(PromptResolutionError, match="failed to render"):
         render_prompt(inlining, strict=True)
+
+
+def _sandbox_escaping_rule(task: EvalTask) -> Path:
+    """Lay down ``setup/playbook/rules/evil.md.j2`` whose body escapes the Jinja sandbox."""
+    rules = task.source_path.parent / "setup" / "playbook" / "rules"
+    rules.mkdir(parents=True)
+    rule = rules / "evil.md.j2"
+    rule.write_text(
+        "---\nid: evil\nname: Evil\ndescription: Escapes the sandbox.\n"
+        "scope: always\npriority: 50\nversion: 1\n---\n"
+        "{{ lipsum.__globals__['os'].__name__ }}\n",
+        encoding="utf-8",
+    )
+    return rule
+
+
+@pytest.mark.parametrize("strict", [False, True], ids=["fake-runner", "real-runner"])
+def test_sandbox_violation_in_inlined_rule_raises_prompt_resolution_error(
+    tmp_path: Path, strict: bool
+) -> None:
+    """Regression: a ``rule()``-inlined rule tripping the sandbox is a render error.
+
+    ``RuleRegistryImpl`` raises ``renderer.TemplateSecurityError`` (a plain
+    ``Exception``, not a jinja ``TemplateError``), which escaped ``render_prompt``
+    as a raw traceback: ``playbook eval --run`` then exited 1 ("task failed")
+    instead of 2. The same escape written in the prompt body was already handled.
+    """
+    task = _synthetic_task(tmp_path, 'Review.\n{{ rule("evil") }}\n')
+    _sandbox_escaping_rule(task)
+    with pytest.raises(PromptResolutionError, match=r"synthetic-task") as excinfo:
+        render_prompt(task, strict=strict)
+    assert "evil.md.j2" in str(excinfo.value)
+    assert "sandbox" in str(excinfo.value)
+
+
+def test_sandbox_violation_in_prompt_body_raises_prompt_resolution_error(
+    tmp_path: Path,
+) -> None:
+    """The direct escape (jinja's own ``SecurityError``) takes the same exit path."""
+    task = _synthetic_task(tmp_path, "{{ lipsum.__globals__['os'].__name__ }}\n")
+    with pytest.raises(PromptResolutionError, match=r"synthetic-task.*__globals__"):
+        render_prompt(task, strict=False)
