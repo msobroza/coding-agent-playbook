@@ -573,6 +573,30 @@ def test_deterministic_only_verdict_is_the_gate_when_rubric_skips(tmp_path: Path
     assert result.passed is True
 
 
+def test_no_judge_rubric_layer_is_skipped_not_a_vacuous_pass(tmp_path: Path) -> None:
+    """With no judge the rubric layer is *skipped*, so ``gate or rubric`` needs the gate.
+
+    Regression: the rubric layer (an ``AllOf`` over judged checks) used to run
+    with every child unavailable and report a vacuous ``passed=True`` — so
+    ``gate or rubric`` passed a task whose gate failed. ``fail_fast=False`` keeps
+    the JUDGED tier from being short-circuited, so the layer is really scheduled.
+    """
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    gate = {
+        "expr": "made",
+        "bind": {"made": {"check": "file_exists", "path": "never_created.py"}},
+    }
+    task = _make_task(
+        task_dir, gate=gate, rubric=_judged_rubric("clarity"), verdict="gate or rubric"
+    )
+
+    result = FakeRunner().run_task(task, tmp_path / "scratch", fail_fast=False)
+
+    assert _check(result.report, "rubric").status == "skipped"
+    assert result.passed is False
+
+
 def test_score_is_callable_directly_with_handles(tmp_path: Path) -> None:
     """``score(task, baseline, candidate)`` works without going through run_task."""
     task_dir = tmp_path / "task"

@@ -78,6 +78,24 @@ def _trial(
     return TrialResult(report=report, verdict=verdict)
 
 
+def _rubric_skipped_trial(*, verdict: bool) -> TrialResult:
+    """A trial whose rubric layer never ran (e.g. no judge configured)."""
+    skipped = CheckResult(
+        check_id="rubric",
+        passed=False,
+        score=None,
+        weight=0.0,
+        required=True,
+        determinism=Determinism.JUDGED,
+        cost=CostTier.JUDGED,
+        status="skipped",
+    )
+    report = EvaluationReport(
+        findings=[], warn_count=0, fail_count=0, composite=None, passed=verdict, checks=[skipped]
+    )
+    return TrialResult(report=report, verdict=verdict)
+
+
 def _ctx(trials: list[TrialResult]) -> EvalContext:
     return EvalContext(module=None, source="", label="agg", trials=trials)
 
@@ -163,6 +181,41 @@ def test_grade_over_gate_reads_gate_layer() -> None:
     result = check.grade(_ctx(trials), _EMPTY)
     assert result.score == pytest.approx(1.0)
     assert result.passed is True
+
+
+def test_aggregate_over_a_layer_that_never_ran_is_unavailable() -> None:
+    """Every trial skipped the rubric layer ⇒ there is nothing to aggregate.
+
+    A skipped layer is neutral, so the aggregate must skip rather than count each
+    skipped trial as a failure (``pass@k = 0``) — or as a success.
+    """
+    trials = [_rubric_skipped_trial(verdict=True) for _ in range(3)]
+    check = PassAtK(k=1, over="rubric", fail=0.5)
+    assert check.available(_ctx(trials)) is False
+
+
+def test_aggregate_counts_only_trials_where_the_layer_ran() -> None:
+    # 1 of the 2 trials whose rubric ran passed; the skipped trial does not vote.
+    trials = [
+        _trial(verdict=True, rubric=True),
+        _trial(verdict=False, rubric=False),
+        _rubric_skipped_trial(verdict=True),
+    ]
+    check = PassAtK(k=1, over="rubric", fail=0.5)
+    assert check.available(_ctx(trials)) is True
+    result = check.grade(_ctx(trials), _EMPTY)
+    assert result.score == pytest.approx(0.5)
+
+
+def test_aggregate_with_fewer_than_k_votes_is_unavailable() -> None:
+    """Fewer than ``k`` voting trials is unavailable, never a silent ``pass@n``."""
+    trials = [
+        _trial(verdict=True, rubric=True),
+        _trial(verdict=True, rubric=True),
+        _rubric_skipped_trial(verdict=True),
+    ]
+    assert PassPowK(k=3, over="rubric", fail=0.5).available(_ctx(trials)) is False
+    assert PassPowK(k=2, over="rubric", fail=0.5).available(_ctx(trials)) is True
 
 
 def test_grade_over_rubric_reads_rubric_layer() -> None:
@@ -314,3 +367,74 @@ def test_compile_multi_aggregate_handle_no_expr_raises() -> None:
             verdict_trial="gate",
             aggregate_bind=aggregate_bind,
         )
+
+
+# --------------------------------------------------------------------------- #
+# short_circuit_safe: when the cross-layer short-circuit may skip work
+# --------------------------------------------------------------------------- #
+
+_SC_GATE_BIND = {"made": {"check": "file_exists", "path": "made.py"}}
+_SC_RUBRIC_BIND = {"q": {"fail": 0.5, "rubric": [{"judge": "clear", "weight": 1.0}]}}
+
+
+def _agg_bind(**handles: tuple[str, int]) -> dict[str, dict[str, object]]:
+    return {
+        name: {"metric": "pass_at_k", "k": k, "over": over, "fail": 0.5}
+        for name, (over, k) in handles.items()
+    }
+
+
+@pytest.mark.parametrize(
+    ("verdict", "safe"),
+    [
+        ("gate and rubric", True),
+        ("rubric and gate", True),
+        ("gate or rubric", False),
+        ("rubric", False),
+        ("gate and not rubric", False),
+    ],
+)
+def test_short_circuit_is_safe_only_for_a_full_conjunction(verdict: str, safe: bool) -> None:
+    compiled = compile_task(
+        gate_bind=_SC_GATE_BIND, rubric_bind=_SC_RUBRIC_BIND, verdict_trial=verdict
+    )
+    assert compiled.short_circuit_safe is safe
+
+
+def test_weighted_verdict_is_not_short_circuit_safe() -> None:
+    compiled = compile_task(
+        gate_bind=_SC_GATE_BIND,
+        rubric_bind=_SC_RUBRIC_BIND,
+        verdict_weights={"gate": 0.5, "rubric": 0.5},
+        verdict_fail=0.5,
+    )
+    assert compiled.short_circuit_safe is False
+
+
+@pytest.mark.parametrize(
+    ("over", "safe"),
+    [("verdict", True), ("gate", True), ("rubric", False)],
+)
+def test_aggregate_breaks_short_circuit_safety_only_over_a_skippable_layer(
+    over: str, safe: bool
+) -> None:
+    """The judged rubric sits behind the deterministic gate, so only it is skippable."""
+    compiled = compile_task(
+        gate_bind=_SC_GATE_BIND,
+        rubric_bind=_SC_RUBRIC_BIND,
+        aggregate_bind=_agg_bind(a=(over, 2)),
+    )
+    assert compiled.aggregate_overs == {over}
+    assert compiled.short_circuit_safe is safe
+
+
+def test_composed_aggregate_collects_every_over_axis() -> None:
+    compiled = compile_task(
+        gate_bind=_SC_GATE_BIND,
+        rubric_bind=_SC_RUBRIC_BIND,
+        aggregate_bind=_agg_bind(a=("verdict", 3), b=("rubric", 2)),
+        aggregate_expr="a and not b",
+    )
+    assert compiled.aggregate_overs == {"verdict", "rubric"}
+    assert compiled.trials_needed == 3
+    assert compiled.short_circuit_safe is False

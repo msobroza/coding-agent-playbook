@@ -19,8 +19,14 @@ correctly:
   iff **any** child is judged (a composer over a judged child is itself judged).
 
 An **unavailable** child is *neutral*, not a failure: ``AllOf`` /``AnyOf`` ignore
-a skipped child's verdict (only *run* children vote). ``Not`` over an unavailable
-child has nothing to invert, so it is itself ``status="skipped"``.
+a skipped child's verdict (only *run* children vote). When **no** child can run
+there is no verdict to report, so the composer is itself unavailable and comes
+back ``status="skipped"`` — neutral all the way up. ``Not`` over an unavailable
+child likewise has nothing to invert. This is what makes the ``[rubric]`` layer
+skip with no judge configured (it used to report a vacuous ``[PASS]``, which let
+``gate or rubric`` pass on a failing gate). A *childless* composer keeps its
+vacuous verdict (``AllOf()`` passes, ``AnyOf()`` fails): there is nothing to be
+neutral about.
 """
 
 from __future__ import annotations
@@ -91,13 +97,18 @@ class _Composer(Check):
         """
         return self._children
 
+    def available(self, ctx: EvalContext) -> bool:
+        """True when any child can run (or there are no children to wait on)."""
+        return not self._children or any(child.available(ctx) for child in self._children)
+
     def grade(self, ctx: EvalContext, measurements: MeasurementSet) -> CheckResult:
         """Schedule the children under ``self._op`` and fold them into one result.
 
         Short-circuit is on (``op``-decided tiers stop early), single-worker (a
         composer is graded inside the parent's tier - it does not fan out its own
         thread pool). Only *run* children vote in :meth:`_verdict`; the children's
-        results ride along as ``subresults``.
+        results ride along as ``subresults``. If no child ran (each was
+        unavailable, or itself came back skipped) the composer is skipped too.
         """
         results = schedule(
             list(self._children),
@@ -108,6 +119,10 @@ class _Composer(Check):
             max_workers=1,
         )
         run = [r for r in results if r.status == "run"]
+        if self._children and not run:
+            skipped = skipped_result(self)
+            skipped.subresults = tuple(results)
+            return skipped
         passed = self._verdict(run)
         return CheckResult(
             check_id=self.id,
@@ -130,8 +145,8 @@ class AllOf(_Composer):
     """Passes iff **all** run children pass (an unavailable child is neutral).
 
     Short-circuits ``op="and"``: once a required child fails, costlier child tiers
-    are never graded. An empty / all-unavailable :class:`AllOf` is vacuously
-    ``True`` (no run child failed).
+    are never graded. An empty :class:`AllOf` is vacuously ``True``; one whose
+    children are all unavailable is skipped (see the module docstring).
     """
 
     _op = "and"
@@ -153,8 +168,8 @@ class AnyOf(_Composer):
     """Passes iff **any** run child passes (an unavailable child is neutral).
 
     Short-circuits ``op="or"``: once a child passes, costlier child tiers are
-    never graded. An empty / all-unavailable :class:`AnyOf` is ``False`` (no run
-    child passed).
+    never graded. An empty :class:`AnyOf` is ``False`` (no child passed); one
+    whose children are all unavailable is skipped (see the module docstring).
     """
 
     _op = "or"
@@ -200,6 +215,10 @@ class Not(Check):
     def children(self) -> tuple[Check, ...]:
         """The single negated child, as a one-tuple (uniform traversal API)."""
         return (self._child,)
+
+    def available(self, ctx: EvalContext) -> bool:
+        """True iff the negated child can run (else there is nothing to invert)."""
+        return self._child.available(ctx)
 
     def grade(self, ctx: EvalContext, measurements: MeasurementSet) -> CheckResult:
         """Run the one child via the scheduler and invert its verdict.
