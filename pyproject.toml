@@ -119,7 +119,16 @@ src = ["src", "tests"]
 # byte-faithful to its source. Newer, unpinned ruff versions also format code
 # blocks inside markdown (CI has gone red on that before), so never let ruff
 # lint or reformat a pack's vendored resources/.
-extend-exclude = ["src/coding_agent_playbook/packs/*/resources"]
+# Eval-task fixtures under setup/ are deliberately unclean needle material (the
+# find-injected-vuln-* bugs live there), so `ruff check --fix` / `ruff format`
+# must never rewrite them either (specs/prK-lifecycle-hooks.md §P9).
+extend-exclude = [
+    "src/coding_agent_playbook/packs/*/resources",
+    "src/coding_agent_playbook/resources/eval_tasks/*/setup",
+]
+# Pre-commit and the hook/Stop stages pass explicit paths, and ruff ignores the
+# excludes above for an explicitly passed path unless force-exclude is set.
+force-exclude = true
 
 [tool.ruff.lint]
 select = [
