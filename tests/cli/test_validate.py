@@ -76,6 +76,24 @@ def test_validate_flags_prompt_rule_call_not_in_includes_rules(
     assert "includes_rules" in out
 
 
+def test_validate_flags_undeclared_rule_call_with_trim_markers(
+    tmp_path, make_synthetic_repo, capsys
+):
+    """``validate`` shares the renderer's rule-call pattern, so a trim-marker
+    spelling the appendix logic recognises is checked against includes_rules too."""
+    repo = make_synthetic_repo(tmp_path)
+    prompts_dir = repo / "playbook" / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+    (prompts_dir / "bad-prompt.md.j2").write_text(
+        "---\nid: bad-prompt\nname: Bad\ndescription: Bad\nslash: bad\n---\n"
+        "Some text {{- rule('python-style') -}} more text.\n",
+        encoding="utf-8",
+    )
+    rc = _validate.run(_ns(repo))
+    assert rc == 1
+    assert "python-style" in capsys.readouterr().out
+
+
 def test_validate_flags_rule_calling_rule_helper(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path)
     rules_dir = repo / "playbook" / "rules"

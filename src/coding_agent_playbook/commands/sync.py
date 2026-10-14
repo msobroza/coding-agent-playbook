@@ -14,12 +14,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
-from coding_agent_playbook.detector import evaluate_predicate
 from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
 from coding_agent_playbook.orchestrator import (
-    RuleRegistryImpl,
     SyncContext,
+    build_prompt_environment,
     discover_adapters,
+    filter_applies_if,
 )
 from coding_agent_playbook.renderer import build_environment, render_string
 
@@ -28,7 +28,6 @@ if TYPE_CHECKING:
 
     from jinja2 import Environment
 
-    from coding_agent_playbook.detector import Facts
     from coding_agent_playbook.types import Prompt, Rule, Skill
 
 
@@ -118,22 +117,6 @@ def _build_lockfile(written_paths: list[Path], repo_root: Path, engine_version: 
     )
 
 
-def _filter_applies_if[T: "Rule | Prompt"](
-    artifacts: list[T],
-    facts: Facts,
-    repo_root: Path,
-) -> list[T]:
-    """Apply :func:`evaluate_predicate` to each artifact and drop the ones
-    whose ``applies_if`` evaluates to False. Empty predicate → always pass.
-    """
-    kept: list[T] = []
-    for artifact in artifacts:
-        predicate = artifact.frontmatter.applies_if or {}
-        if not predicate or evaluate_predicate(predicate, facts, repo_root=repo_root):
-            kept.append(artifact)
-    return kept
-
-
 def _filter_skills(skills: list[Skill]) -> list[Skill]:
     """Skills are unconditional in v1 (no ``applies_if`` in the SKILL.md
     schema). Returned unchanged; kept as a hook for v2 to filter on a
@@ -152,8 +135,8 @@ def _run_sync(ctx: SyncContext) -> tuple[list[Path], list[Path]]:
     """Internal helper: render + dispatch + cleanup. Returns ``(written,
     removed)``. Used by both write mode and ``--check`` (the latter only
     inspects ``written`` against on-disk content)."""
-    rules = _filter_applies_if(ctx.rules_resolved, ctx.facts, ctx.repo_root)
-    prompts = _filter_applies_if(ctx.prompts_resolved, ctx.facts, ctx.repo_root)
+    rules = filter_applies_if(ctx.rules_resolved, ctx.facts, ctx.repo_root)
+    prompts = filter_applies_if(ctx.prompts_resolved, ctx.facts, ctx.repo_root)
     skills = _filter_skills(ctx.skills_resolved)
 
     base_env = build_environment([], is_prompt_context=False)
@@ -164,9 +147,7 @@ def _run_sync(ctx: SyncContext) -> tuple[list[Path], list[Path]]:
     # by the registry when a prompt asks to inline them).
     rendered_rules = [_render_rule_body(rule, base_context, base_env) for rule in rules]
 
-    registry = RuleRegistryImpl(rendered_rules, ctx.facts, base_env)
-    prompt_env = build_environment([], is_prompt_context=True, rule_registry=registry)
-    prompt_env.globals["_facts"] = dict(ctx.facts)
+    registry, prompt_env = build_prompt_environment(rendered_rules, ctx.facts)
     rendered_prompts = [_render_prompt_body(p, base_context, prompt_env) for p in prompts]
 
     # Re-discover adapters with the rule_registry plumbed in so the

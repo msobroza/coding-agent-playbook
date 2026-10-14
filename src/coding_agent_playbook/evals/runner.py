@@ -48,13 +48,15 @@ if TYPE_CHECKING:
 
 
 class PromptResolutionError(RuntimeError):
-    """A runner that ``requires_resolved_prompt`` could not resolve its prompt.
+    """:func:`render_prompt` could not produce the task's real prompt text.
 
-    Raised by :func:`render_prompt` when ``strict=True`` and the task's
-    ``prompt_id`` resolves to no shipped :class:`Prompt`. A *real* agent must never
-    be driven with the descriptive placeholder the hermetic
-    :class:`~coding_agent_playbook.evals.fake_runner.FakeRunner` tolerates, so the
-    strict path fails loudly instead.
+    Raised in two cases. With ``strict=True`` (a runner that
+    ``requires_resolved_prompt``), when the task's ``prompt_id`` resolves to no
+    shipped :class:`Prompt`: a *real* agent must never be driven with the
+    descriptive placeholder the hermetic
+    :class:`~coding_agent_playbook.evals.fake_runner.FakeRunner` tolerates. In
+    either mode, when a resolved prompt fails to render (a Jinja error): a broken
+    template is an authoring bug, never a reason to fall back to the placeholder.
     """
 
 
@@ -285,20 +287,23 @@ def _uv_sync_scratch(scratch_dir: Path) -> None:
 
 
 def render_prompt(task: EvalTask, *, strict: bool = False) -> str:
-    """Resolve ``task.prompt_id`` to its :class:`Prompt` and render its body.
+    """Resolve ``task.prompt_id`` to its :class:`Prompt` and render it as ``sync`` would.
 
     Resolution scans the ``resources/prompts/`` directory alongside the task's
-    ``eval_tasks/`` tree (see :func:`_resolve_prompt`), finds the prompt whose
-    ``id`` matches ``task.prompt_id``, and renders its template body through the
-    renderer with ``task.invocation.input_variables`` under ``StrictUndefined``
-    (so a typo'd variable fails loudly). ``prompt_args`` is appended to the
-    rendered body.
+    ``eval_tasks/`` tree (see :func:`_resolve_prompt`) and finds the prompt whose
+    ``id`` matches ``task.prompt_id``. Rendering
+    (:func:`~coding_agent_playbook.evals.prompt_render.render_task_prompt`) matches
+    ``playbook sync`` run against the task's ``setup/`` tree: ``rule()`` is
+    registered, the ``includes_rules:`` appendix is generated when the body does not
+    inline its rules, and the Jinja context carries the fixture's facts (detected
+    from ``setup/``, overridden by the ``[setup]`` mock facts) plus
+    ``project_name``. ``task.invocation.input_variables`` join the body's context
+    under ``StrictUndefined`` (so a typo'd variable fails loudly), and
+    ``prompt_args`` is appended to the rendered text.
 
-    Pragmatic fallbacks (documented): the ``includes_rules:`` appendix is *not*
-    expanded here — rendering the bare prompt body is enough to drive an agent and
-    keeps prompt resolution free of the full sync/rule-registry machinery; a
-    prompt that uses ``{{ rule(...) }}`` in its *body* would need that registry, but
-    none of the shipped prompts do (rules are appended, not inlined).
+    A prompt that resolves but fails to render (a Jinja error) raises
+    :class:`PromptResolutionError` in either mode: a broken template is an authoring
+    bug, never a reason to fall back to a placeholder.
 
     When the prompt cannot be resolved at all (e.g. an out-of-tree test task) the
     behaviour depends on ``strict``: the hermetic
@@ -309,10 +314,11 @@ def render_prompt(task: EvalTask, *, strict: bool = False) -> str:
     prompt raises :class:`PromptResolutionError` instead. ``run_task`` selects the
     mode via :attr:`HarnessRunner.requires_resolved_prompt`.
     """
-    from coding_agent_playbook.renderer import build_environment, render_string
+    from jinja2 import TemplateError
+
+    from coding_agent_playbook.evals.prompt_render import render_task_prompt
 
     prompt = _resolve_prompt(task)
-    invocation = task.invocation.input_variables
     if prompt is None:
         if strict:
             raise PromptResolutionError(
@@ -325,8 +331,12 @@ def render_prompt(task: EvalTask, *, strict: bool = False) -> str:
         args = task.invocation.prompt_args
         return f"[prompt:{task.prompt_id}] {args}".strip()
 
-    env = build_environment([], is_prompt_context=False)
-    body = render_string(prompt.template_body, dict(invocation), env=env)
+    try:
+        body = render_task_prompt(prompt, task)
+    except TemplateError as exc:
+        raise PromptResolutionError(
+            f"prompt {task.prompt_id!r} for task {task.id!r} failed to render: {exc}"
+        ) from exc
     args = task.invocation.prompt_args
     return f"{body}\n\n{args}".rstrip() if args else body
 
@@ -344,9 +354,11 @@ def _resolve_prompt(task: EvalTask):  # type: ignore[no-untyped-def]
     directory cannot be located or no prompt matches (the caller falls back to a
     placeholder).
     """
+    from coding_agent_playbook.evals.prompt_render import resources_root
     from coding_agent_playbook.types import Prompt
 
-    prompts_dir = _infer_prompts_dir(task.source_path)
+    root = resources_root(task.source_path)
+    prompts_dir = root / "prompts" if root is not None else None
     if prompts_dir is None or not prompts_dir.is_dir():
         return None
     for entry in sorted(prompts_dir.iterdir()):
@@ -360,20 +372,6 @@ def _resolve_prompt(task: EvalTask):  # type: ignore[no-untyped-def]
         if prompt.frontmatter.id == task.prompt_id:
             return prompt
     return None
-
-
-def _infer_prompts_dir(task_toml: Path) -> Path | None:
-    """Locate the ``resources/prompts/`` dir sibling to the task's ``eval_tasks/``.
-
-    A task lives at ``<…>/resources/eval_tasks/<id>/task.toml``; the prompts live
-    at ``<…>/resources/prompts/``. Returns ``None`` when the path has no
-    ``resources`` component (e.g. a synthetic test task).
-    """
-    parts = task_toml.resolve().parts
-    if "resources" not in parts:
-        return None
-    idx = parts.index("resources")
-    return Path(*parts[: idx + 1]) / "prompts"
 
 
 def capture(scratch_dir: Path, baseline: Baseline, transcript: str) -> Candidate:

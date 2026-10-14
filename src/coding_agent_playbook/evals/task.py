@@ -53,6 +53,11 @@ class TaskSetup:
     ``setup/pyproject.toml`` (which is the single source of truth for the
     project's Python version and packages), and the detector reads the same
     file directly from the materialized scratch tree.
+
+    ``project_kind`` and the ``extra_facts`` the pyproject cannot express (e.g.
+    ``ml_stack``, so an ML-gated prompt can be evaluated without installing
+    torch) override the detected facts when the runner renders the prompt
+    (``evals/prompt_render.py``).
     """
 
     files: list[Path] = field(default_factory=list)
@@ -257,9 +262,13 @@ def _parse_setup(raw: Any) -> TaskSetup:
     Authored keys: ``files`` (list of relpaths under ``<task_dir>/setup/``),
     ``project_kind`` (mock detector fact), plus any extra detector-fact keys
     (preserved in ``extra_facts``). ``frameworks`` / ``python_version`` are
-    no longer accepted — the runner installs deps from
-    ``setup/pyproject.toml`` via ``uv sync`` and the detector reads that file
-    directly, so duplicating those facts in the TOML is dead authoring.
+    not load-bearing — the runner installs deps from ``setup/pyproject.toml``
+    via ``uv sync`` and the detector reads that file directly, so duplicating
+    those facts in the TOML is dead authoring (tolerated, ignored).
+
+    A mocked ``ml_stack`` must be a list of names or a table of
+    ``name = "version-spec"``: the prompt renderer gates rules on it, and any
+    other shape would only fail later, at ``--run``.
     """
     if not isinstance(raw, dict):
         raise ValueError(f"[setup] must be a table, got {type(raw).__name__}")
@@ -271,10 +280,26 @@ def _parse_setup(raw: Any) -> TaskSetup:
     extra_facts = {k: v for k, v in raw.items() if k not in known}
     if not isinstance(project_kind, str):
         raise ValueError(f"[setup].project_kind must be str, got {type(project_kind).__name__}")
+    if "ml_stack" in extra_facts:
+        _check_name_collection("ml_stack", extra_facts["ml_stack"])
     return TaskSetup(
         files=files,
         project_kind=project_kind,
         extra_facts=extra_facts,
+    )
+
+
+def _check_name_collection(key: str, value: Any) -> None:
+    """Raise unless ``value`` is a list of names or a ``{name: version-spec}`` table."""
+    if isinstance(value, list) and all(isinstance(name, str) for name in value):
+        return
+    if isinstance(value, dict) and all(
+        isinstance(name, str) and isinstance(spec, str) for name, spec in value.items()
+    ):
+        return
+    raise ValueError(
+        f'[setup].{key} must be a list of names (e.g. ["torch"]) or a table of '
+        f'name = "version-spec", got {value!r} ({type(value).__name__})'
     )
 
 
