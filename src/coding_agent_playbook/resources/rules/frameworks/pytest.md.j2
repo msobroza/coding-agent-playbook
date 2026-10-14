@@ -50,6 +50,7 @@ The `ids=` argument is optional but pays off the moment a failure happens — th
 - Name fixtures after what they return, scoped clearly: `db_session` rather than `db`, `tmp_repo_root` rather than `tmpdir`.
 - Default to the narrowest scope (`function`) that works. Promote to `module` or `session` only when teardown is expensive — and then weigh test isolation carefully.
 - Conftest fixtures live as close to the tests that use them as possible. A `conftest.py` for a single test file is fine.
+- Annotate every test `-> None` and every fixture with the type it returns (`Iterator[T]` for a yield fixture). Never write `from conftest import ...`; fixtures arrive by name, and shared helpers belong in an ordinary module.
 
 {% if dev_dependencies is defined and "pytest-asyncio" in dev_dependencies %}
 ## Async tests
@@ -84,4 +85,12 @@ pytest discovers `def test_*` functions. `unittest.TestCase` works but loses `pa
 
 ## One thing per test, but be reasonable
 
-Aim for one logical assertion per test — if you need three asserts on the same object's state, that's still "one thing" (the state after the action). If you find yourself testing two distinct behaviours in one test, split it.
+Aim for one logical assertion per test — if you need three asserts on the same object's state, that's still "one thing" (the state after the action). If you find yourself testing two distinct behaviours in one test, split it. Keep Arrange, Act and Assert visibly separate, with one Act per test.
+
+## Test data and assertions
+
+- Build fresh objects in each test: inline, from a function-scoped fixture, or through a typed factory. Never mutate a shared module-level instance; test order would then change the results.
+- Assert against literal expected values and put the arithmetic in a comment (`assert total == 1150  # 1000 + 15% tax`). Recomputing the expectation with the production formula only proves the formula equals itself.
+- Unit tests use no unseeded randomness, wall-clock `now()` or network. Use Hypothesis or an explicitly seeded generator, and `monkeypatch` rather than a hand-written setattr-then-restore.
+- Every assertion must be able to fail on wrong output: prefer `== expected` over `is not None` or `len(result) > 0`, and add a case that tells plausible wrong implementations apart (off-by-one, swapped arguments).
+- Never add `skip` or `xfail` to turn a red suite green. Characterization tests assert today's output, quirks included. Use `xfail(strict=True, reason=...)` only for a test of the intended behavior whose fix is already agreed, and `skipif` only for environment conditions, always with a `reason`.
