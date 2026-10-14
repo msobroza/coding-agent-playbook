@@ -52,7 +52,7 @@ The `ids=` argument is optional but pays off the moment a failure happens — th
 - Conftest fixtures live as close to the tests that use them as possible. A `conftest.py` for a single test file is fine.
 - Annotate every test `-> None` and every fixture with the type it returns (`Iterator[T]` for a yield fixture). Never write `from conftest import ...`; fixtures arrive by name, and shared helpers belong in an ordinary module.
 
-{% if dev_dependencies is defined and "pytest-asyncio" in dev_dependencies %}
+{% if has_framework("pytest-asyncio") %}
 ## Async tests
 
 This project has `pytest-asyncio` installed, so mark coroutine tests explicitly:

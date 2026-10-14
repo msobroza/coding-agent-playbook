@@ -54,10 +54,9 @@ class TaskSetup:
     project's Python version and packages), and the detector reads the same
     file directly from the materialized scratch tree.
 
-    ``project_kind`` and the ``extra_facts`` the pyproject cannot express (e.g.
-    ``ml_stack``, so an ML-gated prompt can be evaluated without installing
-    torch) override the detected facts when the runner renders the prompt
-    (``evals/prompt_render.py``).
+    ``project_kind`` and the ``extra_facts`` (e.g. ``ml_stack``, so an ML-gated
+    prompt can be evaluated without installing torch) override the detected
+    facts when the runner renders the prompt (``evals/prompting.py``).
     """
 
     files: list[Path] = field(default_factory=list)
@@ -262,9 +261,10 @@ def _parse_setup(raw: Any) -> TaskSetup:
     Authored keys: ``files`` (list of relpaths under ``<task_dir>/setup/``),
     ``project_kind`` (mock detector fact), plus any extra detector-fact keys
     (preserved in ``extra_facts``). ``frameworks`` / ``python_version`` are
-    not load-bearing — the runner installs deps from ``setup/pyproject.toml``
-    via ``uv sync`` and the detector reads that file directly, so duplicating
-    those facts in the TOML is dead authoring (tolerated, ignored).
+    not authored here any more — the runner installs deps from
+    ``setup/pyproject.toml`` via ``uv sync`` and the detector reads that file
+    directly. A stale copy is tolerated (it lands in ``extra_facts``), but the
+    prompt renderer lets it override the detected value, so delete it.
 
     A mocked ``ml_stack`` must be a list of names or a table of
     ``name = "version-spec"``: the prompt renderer gates rules on it, and any

@@ -17,20 +17,23 @@ Layout (§B):
 - ``.playbook/manifest.toml`` (round-trip sidecar) + ``.playbook/.harnessleaf``.
 
 Eval tasks are authoring-only and never dispatched to adapters, so this adapter
-never emits an ``evals/`` directory — consistent with the four built-in adapters.
+never emits an ``evals/`` directory — consistent with the five built-in adapters.
 
 The playbook :data:`SENTINEL` is written as the **first body line** of every
 generated text file (frontmatter must stay on line 1 for the harness parser).
-``cleanup_stale`` therefore detects the sentinel *anywhere* in a file and tracks
-non-sentinel engine files (scripts/raw/markers) through the prior manifest.
+``cleanup_stale`` therefore detects the sentinel *anywhere* in a file. It never
+deletes inside a skill directory (``skills/<id>/``): stale skill output — the
+``SKILL.md``, copied scripts and references — is settled only by ``playbook
+sync``'s lockfile leftover policy (SPEC §4.2 step 9), like every native skill root.
 """
 
 from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
+from coding_agent_playbook._file_identity import FileSet
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.harness import emitter, manifest
 from coding_agent_playbook.renderer import SENTINEL, render_for
@@ -48,6 +51,9 @@ _SKILL_PRIMARY_FILE = "SKILL.md"
 
 #: Top-level directory names, in the order they appear in the HARNESS.md index.
 _TOP_LEVEL_DIRS = ("skills", "prompts", "rules", "references")
+
+#: Single generated files at the harness root.
+_ROOT_FILES = ("HARNESS.md", ".leaf-detectors")
 
 
 class AgentHarnessAdapter(Adapter):
@@ -72,14 +78,17 @@ class AgentHarnessAdapter(Adapter):
 
     name = "agent_harness"
 
+    output_locations: ClassVar[tuple[str, ...]] = (
+        *_ROOT_FILES,
+        *(f"{dir_name}/" for dir_name in _TOP_LEVEL_DIRS),
+        f"{manifest.SIDECAR_DIRNAME}/",
+    )
+
     def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
         self._rule_registry = rule_registry
         self._rules: list[Rule] = []
         self._prompts: list[Prompt] = []
         self._skills: list[Skill] = []
-        # Populated at the start of finalize() from the prior manifest so
-        # cleanup_stale can recognise non-sentinel engine files (scripts/raw).
-        self._prior_engine_files: set[Path] = set()
 
     # --- buffering hooks ---------------------------------------------------
 
@@ -106,14 +115,10 @@ class AgentHarnessAdapter(Adapter):
     def finalize(self, repo_root: Path) -> list[Path]:
         """Compose the whole harness tree from the buffered artifacts.
 
-        Reads the prior ``.playbook/manifest.toml`` first (so ``cleanup_stale``
-        can identify the non-sentinel engine files it previously emitted), then
-        emits skills, prompts, rules, references, the routing files,
+        Emits skills, prompts, rules, references, the routing files,
         ``HARNESS.md``, ``.leaf-detectors`` and the ``.playbook/`` sidecar.
         Returns every path written (``[]`` when nothing was buffered).
         """
-        self._prior_engine_files = self._read_prior_engine_files(repo_root)
-
         if not (self._rules or self._prompts or self._skills):
             return []
 
@@ -382,6 +387,12 @@ class AgentHarnessAdapter(Adapter):
     def _emit_harness_md(self, repo_root: Path, always_rules: list[Rule]) -> Path:
         name = repo_root.name or "harness"
         description = f"Coding-agent harness for {name}."
+        emitted = {
+            "skills": bool(self._skills),
+            "prompts": bool(self._prompts),
+            "rules": bool(always_rules),
+            "references": len(always_rules) < len(self._rules),
+        }
         frontmatter = emitter.frontmatter_block({"name": name, "description": description})
 
         sections: list[str] = [
@@ -393,8 +404,10 @@ class AgentHarnessAdapter(Adapter):
             "## Contents",
             "",
         ]
-        present = [d for d in _TOP_LEVEL_DIRS if (repo_root / d).is_dir()]
-        for dir_name in present:
+        # Index what this render emits, never what happens to be on disk: an
+        # empty leftover dir (or the user's own ``skills/``) must not change the
+        # bytes, or ``sync --check`` (rendering into an empty scratch) drifts.
+        for dir_name in (d for d in _TOP_LEVEL_DIRS if emitted[d]):
             sections.append(f"- `{dir_name}/` — see `{dir_name}/{dir_name.upper()}.md`")
         sections.append("")
 
@@ -437,75 +450,43 @@ class AgentHarnessAdapter(Adapter):
     def _output_directories(self, repo_root: Path) -> Iterable[Path]:
         return [repo_root / d for d in _TOP_LEVEL_DIRS]
 
-    def _read_prior_engine_files(self, repo_root: Path) -> set[Path]:
-        """Resolve the non-sentinel engine files recorded by the prior manifest.
-
-        Scripts and raw assets carry no sentinel, so ``cleanup_stale`` cannot
-        recognise them by reading their contents. The prior manifest's script
-        paths give their ownership; this is read at the START of ``finalize``
-        before the manifest is overwritten.
-        """
-        prior = manifest.read_manifest(repo_root)
-        if prior is None:
-            return set()
-        files: set[Path] = set()
-        for entry in prior.entries:
-            for script in entry.scripts:
-                files.add((repo_root / script.path).resolve())
-        return files
-
     def cleanup_stale(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
-        """Remove engine-owned files no longer backing a current artifact.
+        """Remove sentinel-carrying engine files no longer backing a current artifact.
 
-        Engine ownership is established two ways, preserving user files:
+        Scans ``skills/``, ``prompts/``, ``rules/``, ``references/`` and the root
+        files (``HARNESS.md``, ``.leaf-detectors``) for files carrying
+        :data:`SENTINEL` anywhere that were not written this sync. "Not written"
+        compares file identity (:class:`FileSet`), so after a case-only id
+        rename on a case-insensitive filesystem the file just written is never
+        deleted under its old spelling.
 
-        - **Text files** carrying :data:`SENTINEL` anywhere in their contents.
-        - **Non-sentinel files** (scripts/raw assets) whose path was recorded in
-          the **prior** ``.playbook/manifest.toml`` (stashed at finalize start).
-
-        Files that are neither — user-authored markdown without the sentinel, or
-        binary assets the engine never wrote — are never deleted. Single root
-        files (``HARNESS.md``, ``.leaf-detectors``) are handled separately.
+        Nothing inside a skill directory (``skills/<id>/``) is touched: it mixes
+        engine output with files a user may have edited or added, so only the
+        lockfile leftover policy (pristine + untracked + listed, SPEC §4.2 step 9)
+        deletes there. Files without the sentinel are never deleted.
         """
+        written = FileSet.of(written_paths)
         deleted: list[Path] = []
-        deleted.extend(self._scan_output_dirs(written_paths, repo_root))
-        deleted.extend(self._scan_root_files(written_paths, repo_root))
+        for path in self._scan_candidates(repo_root):
+            if written.holds(path) or not self._has_sentinel(path):
+                continue
+            path.unlink()
+            deleted.append(path)
         return deleted
 
-    def _scan_output_dirs(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
-        deleted: list[Path] = []
+    def _scan_candidates(self, repo_root: Path) -> list[Path]:
+        """Every file under the output dirs (outside skill dirs) plus the root files."""
+        candidates = [repo_root / name for name in _ROOT_FILES if (repo_root / name).is_file()]
+        skills_dir = repo_root / "skills"
         for output_dir in self._output_directories(repo_root):
             if not output_dir.is_dir():
                 continue
-            for path in output_dir.rglob("*"):
-                if not path.is_file():
-                    continue
-                resolved = path.resolve()
-                if resolved in written_paths:
-                    continue
-                if self._is_engine_owned(path, resolved):
-                    path.unlink()
-                    deleted.append(path)
-        return deleted
-
-    def _scan_root_files(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
-        deleted: list[Path] = []
-        for filename in ("HARNESS.md", ".leaf-detectors"):
-            path = repo_root / filename
-            if not path.is_file():
-                continue
-            resolved = path.resolve()
-            if resolved in written_paths:
-                continue
-            if self._has_sentinel(path) or resolved in self._prior_engine_files:
-                path.unlink()
-                deleted.append(path)
-        return deleted
-
-    def _is_engine_owned(self, path: Path, resolved: Path) -> bool:
-        if resolved in self._prior_engine_files:
-            return True
-        return self._has_sentinel(path)
+            candidates.extend(
+                path
+                for path in output_dir.rglob("*")
+                if path.is_file() and not _inside_skill_dir(path, skills_dir)
+            )
+        return candidates
 
     @staticmethod
     def _has_sentinel(path: Path) -> bool:
@@ -517,3 +498,11 @@ class AgentHarnessAdapter(Adapter):
     @staticmethod
     def _rel(path: Path, repo_root: Path) -> str:
         return path.relative_to(repo_root).as_posix()
+
+
+def _inside_skill_dir(path: Path, skills_dir: Path) -> bool:
+    """True for ``skills/<id>/...`` (a skill's own files), False for ``skills/SKILLS.md``."""
+    try:
+        return len(path.relative_to(skills_dir).parts) > 1
+    except ValueError:
+        return False

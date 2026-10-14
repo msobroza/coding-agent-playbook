@@ -102,13 +102,17 @@ def score(
     ``fail_fast`` (default ``False``) toggles the scheduler's short-circuit: when
     ``True`` a lost deterministic gate skips the remaining costlier tiers, so a
     failing ``[gate]`` check spares the LLM judge. The runner passes ``True`` by
-    default (cost-saving); ``--full-scoring`` flips it off.
+    default (cost-saving); ``--full-scoring`` flips it off. It is ignored for a
+    task whose verdict or aggregate the short-circuit could change (an ``or``
+    verdict, a weighted verdict, an aggregate over a skippable layer — see
+    :attr:`~coding_agent_playbook.evals._compile.CompiledTask.short_circuit_safe`).
     """
     from coding_agent_playbook.evals._compile import verdict_passed, weighted_verdict
     from coding_agent_playbook.evals.task import compile_eval_task
 
     compiled = compile_eval_task(task)
     rubric = compiled.per_trial
+    fail_fast = fail_fast and compiled.short_circuit_safe
 
     metrics = _referenced_metrics(rubric.checks)
     static_metrics = [m for m in metrics if not m.needs_judge and not m.needs_project]

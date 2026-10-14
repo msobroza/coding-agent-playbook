@@ -7,19 +7,19 @@ Code's native layout:
   ``.claude/CLAUDE.md`` during ``finalize`` (priority then ``id`` order).
 - Prompts are written immediately to ``.claude/commands/{slash}.md`` as pure
   markdown (no top-level frontmatter — Claude Code commands are plain md).
-- Skills are written natively to ``.claude/skills/{id}/`` including
-  ``SKILL.md`` plus optional ``scripts/`` and ``references/`` directories.
+- Skills are written natively to ``.claude/skills/{id}/`` (``SKILL.md`` plus
+  byte-copied ``scripts/`` and ``references/``) through the shared
+  :class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter`, so the
+  output is byte-identical to the ``opencode`` / ``shared_skills`` skill roots.
 """
 
 from __future__ import annotations
 
 import dataclasses
-import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
-import yaml
-
+from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.renderer import SENTINEL, render_for
 
@@ -42,6 +42,15 @@ class ClaudeCodeAdapter(Adapter):
     """
 
     name = "claude_code"
+
+    #: Native skills root; Claude Code discovers ``.claude/skills/<name>/SKILL.md``.
+    _SKILL_WRITER: ClassVar[SkillWriter] = SkillWriter(Path(".claude") / "skills")
+
+    output_locations: ClassVar[tuple[str, ...]] = (
+        ".claude/CLAUDE.md",
+        ".claude/commands/",
+        _SKILL_WRITER.location,
+    )
 
     def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
         # Buffer of (priority, rule_id, rendered_section) tuples populated by
@@ -89,45 +98,15 @@ class ClaudeCodeAdapter(Adapter):
         return [output_path]
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
-        """Write a Claude Code native skill directory under ``.claude/skills/<id>/``.
+        """Write a native skill directory under ``.claude/skills/<id>/``.
 
-        Skills are first-class in Claude Code: the directory contains
-        ``SKILL.md`` (frontmatter + body, written as YAML), an optional
-        ``scripts/`` directory, and an optional ``references/`` directory.
-        This adapter does NOT degrade to ``Skill.to_prompt`` — siblings that
-        lack native skill support (e.g. Continue) use the ABC default.
+        Delegates to the shared :class:`SkillWriter` (``SKILL.md`` with
+        ``name`` = id and the sentinel as first body line, plus byte-copied
+        ``scripts/`` and ``references/``). This adapter does NOT degrade to
+        ``Skill.to_prompt`` — siblings without native skill support (e.g.
+        Continue) use the ABC default.
         """
-        skill_id = str(skill.frontmatter.get("id", "skill"))
-        skill_dir = repo_root / ".claude" / "skills" / skill_id
-        skill_dir.mkdir(parents=True, exist_ok=True)
-
-        # SKILL.md: standard frontmatter + body. We don't run a renderer here —
-        # the skill's frontmatter is dict[str, Any] (not a dataclass like
-        # Rule/Prompt) and Claude Code reads it as-is.
-        fenced = yaml.safe_dump(
-            dict(skill.frontmatter), sort_keys=False, allow_unicode=True
-        ).rstrip("\n")
-        skill_md = skill_dir / "SKILL.md"
-        skill_md.write_text(f"---\n{fenced}\n---\n{skill.body}", encoding="utf-8")
-        written: list[Path] = [skill_md]
-
-        if skill.scripts_dir is not None and skill.scripts_dir.is_dir():
-            written.extend(self._copy_tree(skill.scripts_dir, skill_dir / "scripts"))
-        if skill.references_dir is not None and skill.references_dir.is_dir():
-            written.extend(self._copy_tree(skill.references_dir, skill_dir / "references"))
-        return written
-
-    @staticmethod
-    def _copy_tree(src: Path, dst: Path) -> list[Path]:
-        """Copy ``src`` -> ``dst`` recursively and return the list of files written.
-
-        Uses :func:`shutil.copytree` with ``dirs_exist_ok=True`` so a re-sync
-        overwrites the previous output. The returned paths are the leaf files
-        actually copied (directories are excluded so the cleanup scan sees
-        files only).
-        """
-        shutil.copytree(src, dst, dirs_exist_ok=True)
-        return [path for path in dst.rglob("*") if path.is_file()]
+        return self._SKILL_WRITER.write(skill, repo_root)
 
     def finalize(self, repo_root: Path) -> list[Path]:
         """Compose ``.claude/CLAUDE.md`` from the buffered rule sections.
@@ -154,60 +133,40 @@ class ClaudeCodeAdapter(Adapter):
         return [output_path]
 
     def _output_directories(self, repo_root: Path) -> Iterable[Path]:
-        return [
-            repo_root / ".claude" / "commands",
-            repo_root / ".claude" / "skills",
-        ]
+        """Only ``.claude/commands/`` uses the first-line sentinel scan.
+
+        ``.claude/skills/`` is never scanned: stale skill output is settled by
+        ``playbook sync``'s lockfile leftover policy (SPEC §4.2 step 9, §10.8).
+        """
+        return [repo_root / ".claude" / "commands"]
 
     def cleanup_stale(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
         """Remove generated files that no longer back a current artifact.
 
-        Three output kinds need cleanup:
+        - ``.claude/commands/``: every first-line-sentinel file not in
+          ``written_paths`` is deleted (the ABC's default scan).
+        - ``.claude/CLAUDE.md``: deleted only if it carries the sentinel and
+          was not re-written this sync (``finalize`` skipped it), so a
+          user-authored CLAUDE.md is preserved.
 
-        - ``.claude/commands/`` and ``.claude/skills/`` are directories — every
-          file with a leading sentinel marker that isn't in ``written_paths``
-          is deleted.
-        - ``.claude/CLAUDE.md`` is a single file. If it isn't in
-          ``written_paths`` (i.e. the buffer was empty so ``finalize`` skipped
-          it) AND it carries the sentinel, delete it; otherwise leave it alone
-          so a user-authored CLAUDE.md is preserved.
-
-        Each guard mirrors the ABC's default scan algorithm (Track 6 lands a
-        shared ``_default_cleanup`` on the ABC; this override exists because
-        Claude Code uniquely needs the single-file CLAUDE.md branch).
+        ``.claude/skills/`` is deliberately left alone here: a skill dir mixes
+        engine output with files a user may have edited or added, so only the
+        lockfile leftover policy (pristine + untracked + listed) may delete there.
         """
-        deleted: list[Path] = []
-        deleted.extend(self._scan_for_stale(written_paths, repo_root))
+        deleted = self._default_cleanup(written_paths, repo_root)
+        deleted.extend(self._cleanup_claude_md(written_paths, repo_root))
+        return deleted
+
+    @staticmethod
+    def _cleanup_claude_md(written_paths: set[Path], repo_root: Path) -> list[Path]:
         claude_md = repo_root / ".claude" / "CLAUDE.md"
-        if claude_md.is_file() and claude_md.resolve() not in written_paths:
-            try:
-                first_line = claude_md.read_text(encoding="utf-8").split("\n", 1)[0]
-            except (UnicodeDecodeError, OSError):
-                return deleted
-            if SENTINEL in first_line:
-                claude_md.unlink()
-                deleted.append(claude_md)
-        return deleted
-
-    def _scan_for_stale(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
-        """Walk each output directory and delete sentinel-tagged files not in
-        ``written_paths``. Files without the sentinel (user-authored) are
-        preserved; binary files (UnicodeDecodeError) are skipped.
-        """
-        deleted: list[Path] = []
-        for output_dir in self._output_directories(repo_root):
-            if not output_dir.is_dir():
-                continue
-            for path in output_dir.rglob("*"):
-                if not path.is_file():
-                    continue
-                if path.resolve() in written_paths:
-                    continue
-                try:
-                    first_line = path.read_text(encoding="utf-8").split("\n", 1)[0]
-                except (UnicodeDecodeError, OSError):
-                    continue
-                if SENTINEL in first_line:
-                    path.unlink()
-                    deleted.append(path)
-        return deleted
+        if not claude_md.is_file() or claude_md.resolve() in written_paths:
+            return []
+        try:
+            first_line = claude_md.read_text(encoding="utf-8").split("\n", 1)[0]
+        except (UnicodeDecodeError, OSError):
+            return []
+        if SENTINEL not in first_line:
+            return []
+        claude_md.unlink()
+        return [claude_md]

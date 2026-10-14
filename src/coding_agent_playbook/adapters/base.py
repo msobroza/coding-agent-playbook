@@ -8,8 +8,9 @@ point declared in ``pyproject.toml``.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
+from coding_agent_playbook._file_identity import FileSet
 from coding_agent_playbook.renderer import SENTINEL
 
 if TYPE_CHECKING:
@@ -23,6 +24,14 @@ class Adapter(ABC):
     """Translate canonical artifacts into a harness's native format."""
 
     name: str
+
+    #: Repo-relative POSIX locations this adapter writes: a trailing ``/`` marks
+    #: a directory (everything beneath it), anything else is one file. ``playbook
+    #: sync`` deletes output an earlier sync left behind only inside a declared
+    #: location (a hand-edited lockfile cannot point it at ``.git/`` or a source
+    #: file) and never prunes empty directories above one (SPEC §4.2 step 9,
+    #: §10.1). Declared on the class, so a since-disabled adapter still counts.
+    output_locations: ClassVar[tuple[str, ...]] = ()
 
     @abstractmethod
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
@@ -40,9 +49,9 @@ class Adapter(ABC):
         """Degrade a skill to a prompt.
 
         The default treats a skill as a prompt. Subclasses with native skill
-        support override this, as do adapters whose harness reads another
-        adapter's output (e.g. OpenCode reads ``.claude/skills/`` natively and
-        returns an empty list).
+        support (``claude_code``, ``opencode``, ``shared_skills``) override this
+        and delegate to the shared ``SkillWriter``; rules-only adapters (e.g.
+        ``agents_md``) override it to return an empty list.
         """
         return self.write_prompt(skill.to_prompt(), repo_root)
 
@@ -79,16 +88,19 @@ class Adapter(ABC):
 
         Files without the sentinel marker are user-authored and are never
         touched. Binary or undecodable files are skipped silently so the
-        scanner cannot crash a sync.
+        scanner cannot crash a sync. "Not in ``written_paths``" compares file
+        identity too, so after a case-only rename on a case-insensitive
+        filesystem the file just written is never deleted under its old name.
         """
         deleted: list[Path] = []
+        written = FileSet.of(written_paths)
         for output_dir in self._output_directories(repo_root):
             if not output_dir.is_dir():
                 continue
             for path in output_dir.rglob("*"):
                 if not path.is_file():
                     continue
-                if path.resolve() in written_paths:
+                if written.holds(path):
                     continue
                 try:
                     first_line = path.read_text(encoding="utf-8").split("\n", 1)[0]

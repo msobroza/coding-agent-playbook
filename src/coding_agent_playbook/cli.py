@@ -26,6 +26,7 @@ from coding_agent_playbook.commands import render as render_cmd
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as validate_cmd
 from coding_agent_playbook.commands import validate_harness as validate_harness_cmd
+from coding_agent_playbook.config import ConfigError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -73,10 +74,19 @@ def build_parser() -> argparse.ArgumentParser:
     # playbook sync
     sync_p = subcommands.add_parser(_SUBCOMMANDS[1], help="regenerate all artifacts (SPEC §12.2)")
     sync_p.add_argument("--repo-root", help="repo to sync (defaults to cwd)")
-    sync_p.add_argument(
+    sync_mode = sync_p.add_mutually_exclusive_group()
+    sync_mode.add_argument(
         "--check",
         action="store_true",
         help="verify against the lockfile without writing (SPEC §12.3)",
+    )
+    # [output] commit = false pre-commit guard: generated output is local-only,
+    # so a commit that stages any of it fails. A no-op under commit = true.
+    sync_mode.add_argument(
+        "--check-staged",
+        dest="check_staged",
+        action="store_true",
+        help="fail if any staged path is generated output; never writes (SPEC §12.3)",
     )
     sync_p.set_defaults(func=sync_cmd.run)
 
@@ -236,6 +246,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Parse ``argv``, run the subcommand, and return its exit code.
+
+    A missing config (:class:`FileNotFoundError`) and a config the engine would
+    misread (:class:`ConfigError`) both print ``error: <message>`` and exit 2.
+    Commands load the config first, so either one stops them before they write.
+
+    Example::
+
+        >>> main(["--repo-root", "."])  # doctest: +SKIP
+    """
     parser = build_parser()
     args = parser.parse_args(argv)
     if getattr(args, "func", None) is None:
@@ -245,7 +265,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return int(args.func(args))
     except SystemExit:
         raise
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ConfigError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

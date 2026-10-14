@@ -57,6 +57,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from coding_agent_playbook.evaluators.check import Check
+    from coding_agent_playbook.evaluators.checks.aggregate import AggregateCheck
     from coding_agent_playbook.evaluators.types import CheckResult, EvaluationReport
 
 #: The default ``[verdict].trial`` expression: both layers must pass.
@@ -115,7 +116,8 @@ class CompiledTask:
     handles - or ``None`` when the task authored no ``[aggregate]`` block.
     :attr:`trials_needed` is the number of runner trials the aggregate layer needs
     (``max`` of every aggregate handle's ``k``), defaulting to **1** with no
-    aggregate so the task runs a single trial.
+    aggregate so the task runs a single trial. :attr:`aggregate_overs` is the set
+    of ``over`` axes the aggregate handles reduce (empty with no aggregate).
     """
 
     per_trial: Rubric
@@ -123,11 +125,51 @@ class CompiledTask:
     layers: frozenset[str]
     aggregate: Check | None = None
     trials_needed: int = 1
+    aggregate_overs: frozenset[str] = frozenset()
+
+    @property
+    def short_circuit_safe(self) -> bool:
+        """Whether the cross-layer short-circuit can never change this task's result.
+
+        With ``fail_fast`` the per-trial scheduler stops grading costlier layers
+        once a cheaper *required* layer failed. That only saves work — rather
+        than changing an outcome — when the failure already decides everything
+        downstream: (1) the verdict is a pure conjunction over every present
+        layer (``gate and rubric``); under ``or``/``not``, a verdict naming only
+        one of two layers, or a weighted verdict, a skipped (neutral) layer can
+        flip it — e.g. ``trial = "rubric"`` with a failing gate passed. And (2) no
+        ``[aggregate]`` reduces a layer the short-circuit could skip (one costlier
+        than the cheapest layer). :func:`coding_agent_playbook.evals.scoring.score`
+        turns ``fail_fast`` off when this is ``False``.
+        """
+        return self._verdict_is_full_conjunction() and not self._aggregate_reads_skippable_layer()
+
+    def _verdict_is_full_conjunction(self) -> bool:
+        if self.verdict_spec.mode != "boolean":
+            return False
+        return _conjoined_names(self.verdict_spec.ast) == set(self.layers)
+
+    def _aggregate_reads_skippable_layer(self) -> bool:
+        layers = self.per_trial.checks
+        cheapest = min(layer.cost for layer in layers)
+        return any(layer.id in self.aggregate_overs and layer.cost > cheapest for layer in layers)
 
     @property
     def verdict_ast(self) -> Node:
         """The boolean-mode verdict AST (convenience alias for ``verdict_spec.ast``)."""
         return self.verdict_spec.ast
+
+
+def _conjoined_names(node: Node) -> set[str] | None:
+    """The names of a pure conjunction (``a`` or ``a and b``), else ``None``."""
+    if isinstance(node, Name):
+        return {node.value}
+    if not isinstance(node, And):
+        return None
+    leaves = [child for child in node.children if isinstance(child, Name)]
+    if len(leaves) != len(node.children):
+        return None
+    return {leaf.value for leaf in leaves}
 
 
 def _compile_layer(
@@ -231,7 +273,7 @@ def compile_task(
         present=present,
     )
 
-    aggregate, trials_needed = _compile_aggregate(aggregate_bind, aggregate_expr)
+    aggregate, trials_needed, aggregate_overs = _compile_aggregate(aggregate_bind, aggregate_expr)
 
     per_trial = Rubric(checks, name=name)
     return CompiledTask(
@@ -240,6 +282,7 @@ def compile_task(
         layers=present,
         aggregate=aggregate,
         trials_needed=trials_needed,
+        aggregate_overs=aggregate_overs,
     )
 
 
@@ -310,22 +353,21 @@ def _compile_verdict(
 def _compile_aggregate(
     bind_table: Mapping[str, Mapping[str, Any]] | None,
     expr: str | None,
-) -> tuple[Check | None, int]:
-    """Compile the ``[aggregate]`` layer into ``(check | None, trials_needed)``.
+) -> tuple[Check | None, int, frozenset[str]]:
+    """Compile ``[aggregate]`` into ``(check | None, trials_needed, overs)``.
 
-    Returns ``(None, 1)`` when ``bind_table`` is absent/empty (no aggregate ⇒ the
-    runner runs a single trial). Otherwise builds the
+    Returns ``(None, 1, frozenset())`` when ``bind_table`` is absent/empty (no
+    aggregate ⇒ the runner runs a single trial). Otherwise builds the
     :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
     handle map (the ``metric``-alone fallback in
     :func:`~coding_agent_playbook.evals._handles._build_one`), compiles ``expr``
     over it (defaulting to the sole handle's name for a single-handle layer; a
-    multi-handle layer with no ``expr`` is a :exc:`ValueError`), and computes
-    ``trials_needed`` as the ``max`` ``k`` over every
-    :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
-    reachable in the compiled tree.
+    multi-handle layer with no ``expr`` is a :exc:`ValueError`), and reads every
+    reachable :class:`AggregateCheck`: ``trials_needed`` is the ``max`` of their
+    ``k`` and ``overs`` the set of their ``over`` axes.
     """
     if not bind_table:
-        return None, 1
+        return None, 1, frozenset()
     handles = build_handles(bind_table, layer="aggregate")
     resolved_expr = expr
     if resolved_expr is None:
@@ -337,27 +379,26 @@ def _compile_aggregate(
                 "the author must compose them with an explicit expr"
             )
     compiled = compile_expr(resolved_expr, handles, id="aggregate")
-    trials_needed = max((k for k in _aggregate_ks(handles.values())), default=1)
-    return compiled, trials_needed
+    leaves = _aggregate_leaves(handles.values())
+    trials_needed = max((leaf.k for leaf in leaves), default=1)
+    return compiled, trials_needed, frozenset(leaf.over for leaf in leaves)
 
 
-def _aggregate_ks(checks: Iterable[Check]) -> list[int]:
-    """Every :class:`AggregateCheck`'s ``k`` reachable under ``checks``.
+def _aggregate_leaves(checks: Iterable[Check]) -> list[AggregateCheck]:
+    """Every :class:`AggregateCheck` reachable under ``checks``.
 
-    Descends the boolean composers (``AllOf``/``AnyOf``/``Not`` via ``children``)
-    and reads ``.k`` off each
-    :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
-    leaf, so ``trials_needed`` is the ``max`` over a possibly-composed aggregate
-    expression (e.g. ``pass_at_k(k=5) and pass_pow_k(k=3)`` ⇒ ``[5, 3]``).
+    Descends the boolean composers (``AllOf``/``AnyOf``/``Not`` via ``children``),
+    so a composed aggregate expression (e.g. ``pass_at_k(k=5) and pass_pow_k(k=3)``)
+    yields both leaves.
     """
     from coding_agent_playbook.evaluators.checks.aggregate import AggregateCheck
     from coding_agent_playbook.evaluators.checks.compose import AllOf, AnyOf, Not
 
-    out: list[int] = []
+    out: list[AggregateCheck] = []
 
     def _walk(check: Check) -> None:
         if isinstance(check, AggregateCheck):
-            out.append(check.k)
+            out.append(check)
             return
         if isinstance(check, (AllOf, AnyOf, Not)):
             for child in check.children:
@@ -448,9 +489,10 @@ def weighted_verdict(
             continue  # skipped or missing -> renormalize over the rest.
         score = _layer_score(result)
         if score is None:
-            # The layer ran (as a wrapping composer) but produced no real score
-            # — e.g. its only inner check skipped (a dormant judged rubric layer).
-            # Treat as effectively skipped: exclude + renormalize.
+            # The layer ran but no leaf carried a score — e.g. a metric threshold
+            # graded over zero scopes. (A judge-less rubric layer no longer gets
+            # here: its composer is skipped and filtered above.) Treat as
+            # effectively skipped: exclude + renormalize.
             continue
         contributions.append((weight, score))
 
@@ -482,8 +524,9 @@ def _layer_score(layer_result: CheckResult) -> float | None:
        rows (or empty). Skipped leaves contribute nothing.
 
     Returns ``None`` when no leaf contributed a score - the layer ran (as a
-    composer) but has no real score (e.g. a rubric layer whose inner judged
-    threshold was skipped). :func:`weighted_verdict` treats ``None`` as
+    composer) but every leaf that ran was unscored and the scored ones were
+    skipped. (A layer none of whose leaves can run is itself skipped and never
+    reaches here.) :func:`weighted_verdict` treats ``None`` as
     effectively-skipped and renormalizes over the rest.
     """
     own_score = layer_result.score
@@ -543,12 +586,13 @@ def _mean_leaf_scores(layer_result: CheckResult) -> float | None:
     return sum(scores) / len(scores)
 
 
-def over_boolean(over: str, report: EvaluationReport, verdict: bool) -> bool:
+def over_boolean(over: str, report: EvaluationReport, verdict: bool) -> bool | None:
     """Select the boolean an aggregate ``over`` axis reduces, for one trial.
 
     ``over == "verdict"`` returns the passed-in ``verdict`` (already derived via
     :func:`verdict_passed`); ``over`` in ``{"gate", "rubric"}`` returns that
-    layer's ``CheckResult.passed`` from ``report.checks``. Raises
+    layer's ``CheckResult.passed`` from ``report.checks``, or ``None`` when the
+    layer was skipped (neutral — it does not vote). Raises
     :exc:`ValueError` when ``over`` is neither ``"verdict"`` nor a present layer
     id (an unknown axis, or a layer the task does not have). Used by the
     aggregate ``over`` selector.
@@ -561,7 +605,7 @@ def over_boolean(over: str, report: EvaluationReport, verdict: bool) -> bool:
         )
     for check in report.checks:
         if check.check_id == over:
-            return check.passed
+            return check.passed if check.status == "run" else None
     raise ValueError(f"'over' selector {over!r} has no {over!r} check in the report")
 
 

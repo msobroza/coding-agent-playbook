@@ -5,17 +5,20 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from coding_agent_playbook import __version__ as _engine_version
+from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands import sync as _sync
-from coding_agent_playbook.config import Config, ProjectMeta, StorageConfig
+from coding_agent_playbook.commands._precommit_merge import merge_pre_commit
+from coding_agent_playbook.config import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.detector import detect
 from coding_agent_playbook.renderer import build_environment, render_artifact_body
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource, _resource_subdir
 
 if TYPE_CHECKING:
     import argparse
+    from collections.abc import Mapping
 
     from coding_agent_playbook.detector import Facts
 
@@ -34,7 +37,9 @@ class _Answers(TypedDict):
     overlays: list[str]
 
 
-_DEFAULT_ADAPTERS = ("continue", "claude_code", "opencode")
+# ``shared_skills`` (the cross-agent skills hub, SPEC §10.8) is on by default but,
+# unlike ``agents_md``, not force-enabled: users may drop it from adapters_enabled.
+_DEFAULT_ADAPTERS = ("continue", "claude_code", "opencode", "shared_skills")
 _VALID_KINDS = (
     "python-application",
     "python-library",
@@ -43,16 +48,10 @@ _VALID_KINDS = (
     "python-unknown",
 )
 
-_PRE_COMMIT_BLOCK = """\
-  - repo: local
-    hooks:
-      - id: coding-agent-playbook-sync
-        name: coding-agent-playbook sync
-        entry: playbook sync --check
-        language: system
-        pass_filenames: false
-        always_run: true
-"""
+#: The three git hook types a ``commit = false`` repo needs installed.
+_HOOK_INSTALL_COMMAND = (
+    "pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge"
+)
 
 _GITIGNORE_LINE = ".coding-agent-playbook.local.toml"
 
@@ -146,11 +145,15 @@ def _collect_answers(args: argparse.Namespace) -> _Answers:
     )
 
 
-def _write_config(repo_root: Path, answers: _Answers) -> Path:
+def _write_config(repo_root: Path, answers: _Answers) -> Config:
     """Write or update ``.coding-agent-playbook.toml`` with the user's
-    answers. Idempotent: an existing config is *merged* with the new
-    answers — user-edited fields win over freshly-asked defaults, but new
-    defaults (e.g. for a freshly-added adapter) are added in.
+    answers and return the written :class:`Config`. Idempotent: an existing
+    config is *merged* with the new answers — user-edited fields win over
+    freshly-asked defaults, but new defaults (e.g. for a freshly-added
+    adapter) are added in.
+
+    ``[output] commit`` is always written explicitly (``false`` unless the
+    user already chose otherwise) so the output policy is discoverable.
     """
     primary = repo_root / FileSystemStateSource._CONFIG_FILENAME
 
@@ -176,6 +179,8 @@ def _write_config(repo_root: Path, answers: _Answers) -> Path:
         existing.adapters_enabled = existing_adapters
         existing.overlays_enabled = list(answers["overlays"])
         existing.detector_cache = detector_cache
+        if existing.output is None:
+            existing.output = OutputConfig(commit=False)
         config = existing
     else:
         config = Config(
@@ -190,11 +195,12 @@ def _write_config(repo_root: Path, answers: _Answers) -> Path:
             adapters_enabled=list(answers["adapters"]),
             storage=StorageConfig(),
             detector_cache=detector_cache,
+            output=OutputConfig(commit=False),
         )
 
     state = FileSystemStateSource(repo_root=repo_root)
     state.save_config(config)
-    return primary
+    return config
 
 
 def _facts_to_cache(facts: Facts) -> dict[str, object]:
@@ -242,59 +248,121 @@ def _append_to_gitignore(repo_root: Path) -> Path:
     return gitignore
 
 
-def _render_fresh_pre_commit() -> str:
+def _render_fresh_pre_commit(*, output_commit: bool = False) -> str:
     """Render the packaged starter ``.pre-commit-config.yaml`` template.
 
     The template (``resources/precommit/config.yaml.j2``) is air-gapped: every
     hook is ``repo: local`` + ``language: system`` so pre-commit never clones a
-    remote hook repo. It carries no Jinja variables today; we still stash an
-    empty facts dict to honour the renderer's helper contract (SPEC §9.4).
+    remote hook repo. ``output_commit`` (the ``[output] commit`` policy) selects
+    the playbook hooks: the legacy drift check for ``true``; the post-checkout /
+    post-merge auto-sync plus the staged-output guard for ``false``. We still
+    stash an empty facts dict to honour the renderer's helper contract (SPEC §9.4).
+
+    Example::
+
+        >>> "--check-staged" in _render_fresh_pre_commit()
+        True
     """
     precommit_dir = _resource_subdir("coding_agent_playbook", "precommit")
     assert precommit_dir is not None, "packaged resources/precommit/ is missing"
     template_path = precommit_dir / "config.yaml.j2"
     env = build_environment([precommit_dir])
     env.globals["_facts"] = {}
-    return render_artifact_body(template_path, {}, env=env)
+    return render_artifact_body(template_path, {"output_commit": output_commit}, env=env)
 
 
-def _write_pre_commit(repo_root: Path) -> Path:
-    """Write or merge ``.pre-commit-config.yaml``.
+def _write_pre_commit(
+    repo_root: Path, *, output_commit: bool = False
+) -> tuple[Path, tuple[str, ...]]:
+    """Write or merge ``.pre-commit-config.yaml``; return it plus user messages.
 
-    Fresh repo: render the full air-gapped starter (sync + ruff + mypy hooks).
-    Existing config: append only our ``- repo: local`` sync block, and only if
-    ``coding-agent-playbook-sync`` is not already declared — we never inject
-    ruff/mypy into a config the consumer already curates (SPEC §13.3). The
-    merge is intentionally text-based; ``ruamel.yaml`` round-tripping can land
-    later.
+    Fresh repo: render the full air-gapped starter (playbook + ruff + mypy
+    hooks). Existing config: merge only our playbook hooks for the
+    ``[output] commit`` policy (``_precommit_merge``: append once, swapping a
+    verbatim pre-v0.16 drift-check hook for the ``commit = false`` pair) — we
+    never inject ruff/mypy into a config the consumer already curates
+    (SPEC §13.3). The merge is intentionally text-based.
     """
     target = repo_root / ".pre-commit-config.yaml"
     if not target.is_file():
-        target.write_text(_render_fresh_pre_commit(), encoding="utf-8")
-        return target
+        target.write_text(_render_fresh_pre_commit(output_commit=output_commit), encoding="utf-8")
+        return target, ()
     content = target.read_text(encoding="utf-8")
-    if "coding-agent-playbook-sync" in content:
-        return target
-    if not content.endswith("\n"):
-        content += "\n"
-    content += _PRE_COMMIT_BLOCK
-    target.write_text(content, encoding="utf-8")
-    return target
+    merged = merge_pre_commit(content, output_commit=output_commit)
+    if merged.content != content:
+        target.write_text(merged.content, encoding="utf-8")
+    return target, merged.messages
+
+
+def _effective_overlays(answers: _Answers, local: Mapping[str, Any]) -> tuple[list[str], str]:
+    """The overlays init's final sync will use, and the setting that lists them.
+
+    A local ``overlays_enabled`` replaces the committed list (SPEC §7.2), so when
+    ``.coding-agent-playbook.local.toml`` sets one, that list — not ``--overlays``
+    — is what the sync runs with, and what must be checked.
+
+    Example::
+
+        >>> _effective_overlays({"overlays": ["a"]}, {"overlays_enabled": ["b"]})  # doctest: +SKIP
+        (['b'], 'overlays_enabled in .coding-agent-playbook.local.toml')
+    """
+    if "overlays_enabled" in local:
+        origin = f"overlays_enabled in {FileSystemStateSource._CONFIG_LOCAL_FILENAME}"
+        return list(local["overlays_enabled"]), origin
+    return list(answers["overlays"]), "--overlays"
+
+
+def _refuse_unusable_overlays(overlays: list[str], origin: str) -> bool:
+    """Print an ``error:`` and return ``True`` when one of ``overlays`` is unusable.
+
+    Uses the sync preflight's own check, so init never writes a config that
+    every ``playbook sync`` mode would then refuse to run with. ``origin`` names
+    the setting the overlays came from (``--overlays`` or the local file's list).
+    """
+    unusable = _sync_preflight.unusable_overlays(overlays)
+    if not unusable:
+        return False
+    listed = "".join(f"\n  {problem}" for problem in unusable)
+    print(
+        f"error: {origin} names package(s) that cannot be used as overlays here; "
+        f"nothing was written:{listed}",
+        file=sys.stderr,
+    )
+    return True
 
 
 def run(args: argparse.Namespace) -> int:
+    """Bootstrap the repo: write the config files and pre-commit hooks, then sync.
+
+    Exit 2, before writing anything, on a usage error: missing flags, an unusable
+    overlay among those the final sync would use (``--overlays``, or the local
+    file's ``overlays_enabled`` that replaces it), or (raised as ``ConfigError``)
+    a config file the engine would misread — the local one is loaded here, the
+    committed one by ``_write_config`` before its first write.
+    """
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     answers = _collect_answers(args)
+    local = FileSystemStateSource(repo_root=repo_root).load_local_overrides()
+    if _refuse_unusable_overlays(*_effective_overlays(answers, local)):
+        return 2
 
-    config_path = _write_config(repo_root, answers)
+    config = _write_config(repo_root, answers)
     local_path = _write_local_config(repo_root)
     gitignore_path = _append_to_gitignore(repo_root)
-    pre_commit_path = _write_pre_commit(repo_root)
+    pre_commit_path, pre_commit_messages = _write_pre_commit(
+        repo_root, output_commit=config.commit_output
+    )
 
-    print(f"Wrote {config_path.name}")
+    print(f"Wrote {FileSystemStateSource._CONFIG_FILENAME}")
     print(f"Wrote {local_path.name}")
     print(f"Updated {gitignore_path.name}")
     print(f"Updated {pre_commit_path.name}")
+    for message in pre_commit_messages:
+        print(message, file=sys.stderr)
+    if not config.commit_output:
+        # Generated output is gitignored ([output] commit = false): the
+        # post-checkout/post-merge hooks are what re-render it for teammates.
+        print(f"Install the git hooks with: {_HOOK_INSTALL_COMMAND}")
 
     # Final step: invoke ``playbook sync`` so the consumer's first call lands real
     # output. Use the typed programmatic entry point (``sync.execute``) so

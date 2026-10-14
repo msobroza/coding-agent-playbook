@@ -18,7 +18,7 @@ from coding_agent_playbook.sources.filesystem import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
 
@@ -482,6 +482,20 @@ def test_resource_subdir_returns_none_for_missing_package() -> None:
     from coding_agent_playbook.sources.filesystem import _resource_subdir
 
     assert _resource_subdir("nonexistent_pkg_xyz_abc_999", "rules") is None
+
+
+@pytest.mark.parametrize("init", ["raise RuntimeError('boom')\n", "import cap_missing_dep\n"])
+def test_resource_subdir_skips_a_package_that_fails_at_import(
+    init: str, make_package: Callable[..., str]
+) -> None:
+    """Discovery skips it like a missing package (it used to crash with a traceback);
+    the shared ``_sync_preflight`` check is what names it and its error."""
+    from coding_agent_playbook.sources.filesystem import _resource_subdir
+
+    name = make_package("cap_raising_overlay", init=init, resources=True)
+
+    assert _resource_subdir(name, "rules") is None
+    assert _resource_subdir("", "rules") is None  # an empty name raises ValueError
 
 
 def test_iter_skills_skips_directories_without_skill_md(

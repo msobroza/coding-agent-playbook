@@ -38,6 +38,10 @@ from pathlib import Path
 from time import monotonic
 from typing import TYPE_CHECKING
 
+# Prompt rendering lives in ``evals.prompting``; re-exported here for callers
+# that import it from the runner (its home before it was split out).
+from coding_agent_playbook.evals.prompting import PromptResolutionError as PromptResolutionError
+from coding_agent_playbook.evals.prompting import render_prompt as render_prompt
 from coding_agent_playbook.evals.scoring import score
 
 if TYPE_CHECKING:
@@ -45,19 +49,6 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evaluators import EvaluationReport, JudgeLike
     from coding_agent_playbook.evaluators.check import Check
     from coding_agent_playbook.evaluators.types import CheckResult, TrialResult
-
-
-class PromptResolutionError(RuntimeError):
-    """:func:`render_prompt` could not produce the task's real prompt text.
-
-    Raised in two cases. With ``strict=True`` (a runner that
-    ``requires_resolved_prompt``), when the task's ``prompt_id`` resolves to no
-    shipped :class:`Prompt`: a *real* agent must never be driven with the
-    descriptive placeholder the hermetic
-    :class:`~coding_agent_playbook.evals.fake_runner.FakeRunner` tolerates. In
-    either mode, when a resolved prompt fails to render (a Jinja error): a broken
-    template is an authoring bug, never a reason to fall back to the placeholder.
-    """
 
 
 # --------------------------------------------------------------------------- #
@@ -96,9 +87,12 @@ class TaskResult:
     ``report`` is a **representative** :class:`EvaluationReport` (the first trial's)
     covering the ``[gate]`` / ``[rubric]`` layers. ``passed`` is the **task**
     verdict: the single trial's verdict for a non-aggregate task (``N=1``), or the
-    ``[aggregate]`` layer's pass/fail when the task aggregates across trials.
-    ``aggregate_score`` mirrors ``report.composite`` for a single-trial task, and
-    the aggregate check's ``0-1`` reliability score when aggregating.
+    ``[aggregate]`` layer's pass/fail when the task aggregates across trials —
+    unless that layer is skipped (its ``over`` axis never ran, e.g. ``over =
+    "rubric"`` with no judge), when it passes only if every trial passed.
+    ``aggregate_score`` mirrors ``report.composite`` for a single-trial task, the
+    aggregate check's ``0-1`` reliability score when aggregating, and the trial
+    pass rate when the aggregate is skipped.
 
     ``trials`` carries every per-trial
     :class:`~coding_agent_playbook.evaluators.types.TrialResult` (one for ``N=1``);
@@ -286,94 +280,6 @@ def _uv_sync_scratch(scratch_dir: Path) -> None:
         raise RuntimeError(f"uv sync failed in {scratch_dir}: {result.stderr}")
 
 
-def render_prompt(task: EvalTask, *, strict: bool = False) -> str:
-    """Resolve ``task.prompt_id`` to its :class:`Prompt` and render it as ``sync`` would.
-
-    Resolution scans the ``resources/prompts/`` directory alongside the task's
-    ``eval_tasks/`` tree (see :func:`_resolve_prompt`) and finds the prompt whose
-    ``id`` matches ``task.prompt_id``. Rendering
-    (:func:`~coding_agent_playbook.evals.prompt_render.render_task_prompt`) matches
-    ``playbook sync`` run against the task's ``setup/`` tree: ``rule()`` is
-    registered, the ``includes_rules:`` appendix is generated when the body does not
-    inline its rules, and the Jinja context carries the fixture's facts (detected
-    from ``setup/``, overridden by the ``[setup]`` mock facts) plus
-    ``project_name``. ``task.invocation.input_variables`` join the body's context
-    under ``StrictUndefined`` (so a typo'd variable fails loudly), and
-    ``prompt_args`` is appended to the rendered text.
-
-    A prompt that resolves but fails to render (a Jinja error) raises
-    :class:`PromptResolutionError` in either mode: a broken template is an authoring
-    bug, never a reason to fall back to a placeholder.
-
-    When the prompt cannot be resolved at all (e.g. an out-of-tree test task) the
-    behaviour depends on ``strict``: the hermetic
-    :class:`~coding_agent_playbook.evals.fake_runner.FakeRunner` never reads the
-    rendered text for the deterministic scoring layers, so it tolerates a stable
-    placeholder (``strict=False``, the default). A *real* runner must never feed a
-    placeholder to a live agent, so it passes ``strict=True`` and an unresolvable
-    prompt raises :class:`PromptResolutionError` instead. ``run_task`` selects the
-    mode via :attr:`HarnessRunner.requires_resolved_prompt`.
-    """
-    from jinja2 import TemplateError
-
-    from coding_agent_playbook.evals.prompt_render import render_task_prompt
-
-    prompt = _resolve_prompt(task)
-    if prompt is None:
-        if strict:
-            raise PromptResolutionError(
-                f"prompt_id {task.prompt_id!r} for task {task.id!r} resolved to no "
-                "shipped prompt; a real runner cannot be driven with a placeholder. "
-                "Check the task's prompt_id and that resources/prompts/ is reachable."
-            )
-        # No resolvable prompt: the deterministic scoring layers do not read the
-        # rendered text, so emit a stable placeholder rather than failing.
-        args = task.invocation.prompt_args
-        return f"[prompt:{task.prompt_id}] {args}".strip()
-
-    try:
-        body = render_task_prompt(prompt, task)
-    except TemplateError as exc:
-        raise PromptResolutionError(
-            f"prompt {task.prompt_id!r} for task {task.id!r} failed to render: {exc}"
-        ) from exc
-    args = task.invocation.prompt_args
-    return f"{body}\n\n{args}".rstrip() if args else body
-
-
-def _resolve_prompt(task: EvalTask):  # type: ignore[no-untyped-def]
-    """Best-effort lookup of the :class:`Prompt` for ``task.prompt_id``.
-
-    Scans the ``resources/prompts/`` directory that sits alongside the task's
-    ``resources/eval_tasks/`` tree (engine or overlay) and returns the
-    :class:`~coding_agent_playbook.types.Prompt` whose ``id`` matches
-    ``task.prompt_id``. This deliberately reads the prompt markdown directly
-    rather than through :class:`SyncContext` — resolution must work for the
-    engine's own resources, which carry no ``.coding-agent-playbook.toml`` (that
-    config only exists in a consumer repo). Returns ``None`` when the prompts
-    directory cannot be located or no prompt matches (the caller falls back to a
-    placeholder).
-    """
-    from coding_agent_playbook.evals.prompt_render import resources_root
-    from coding_agent_playbook.types import Prompt
-
-    root = resources_root(task.source_path)
-    prompts_dir = root / "prompts" if root is not None else None
-    if prompts_dir is None or not prompts_dir.is_dir():
-        return None
-    for entry in sorted(prompts_dir.iterdir()):
-        name = entry.name
-        if not entry.is_file() or not (name.endswith(".md") or name.endswith(".md.j2")):
-            continue
-        try:
-            prompt = Prompt.from_markdown(entry, source_package=task.source_package)
-        except (OSError, ValueError, KeyError):
-            continue
-        if prompt.frontmatter.id == task.prompt_id:
-            return prompt
-    return None
-
-
 def capture(scratch_dir: Path, baseline: Baseline, transcript: str) -> Candidate:
     """Capture the post-agent tree + ``git diff`` vs baseline + the transcript.
 
@@ -394,6 +300,30 @@ def capture(scratch_dir: Path, baseline: Baseline, transcript: str) -> Candidate
         transcript=transcript,
         changed_files=changed,
     )
+
+
+def _grade_aggregate(
+    aggregate: Check, trials: list[TrialResult]
+) -> tuple[CheckResult, bool, float]:
+    """Grade the ``[aggregate]`` layer: ``(result, task verdict, task score)``.
+
+    The compiled check grades over an :class:`EvalContext` carrying the trials,
+    and its ``passed``/``score`` become the task verdict / score. When the axis it
+    reduces never ran in any trial (``over = "rubric"`` with no judge) the layer
+    is skipped — neutral — so the task falls back to the trials' own verdicts:
+    it passes only if every trial passed, scored by the trial pass rate.
+    """
+    from coding_agent_playbook.evaluators.check import MeasurementSet
+    from coding_agent_playbook.evaluators.scheduler import skipped_result
+    from coding_agent_playbook.evaluators.types import EvalContext
+
+    agg_ctx = EvalContext(module=None, source="", label="aggregate", trials=trials)
+    if not aggregate.available(agg_ctx):
+        verdicts = [t.verdict for t in trials]
+        return skipped_result(aggregate), all(verdicts), sum(verdicts) / len(verdicts)
+    result = aggregate.grade(agg_ctx, MeasurementSet([], None))
+    score = result.score if result.score is not None else float(result.passed)
+    return result, result.passed, score
 
 
 # --------------------------------------------------------------------------- #
@@ -452,13 +382,18 @@ class HarnessRunner(ABC):
         With an ``[aggregate]`` layer the task verdict is that layer's pass/fail —
         the :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`\\ s
         reduce the trials' selected ``over`` axis (``gate`` / ``rubric`` /
-        ``verdict``) into a ``pass@k`` / ``pass^k`` reliability score. Without one
-        the task verdict is the single trial's verdict.
+        ``verdict``) into a ``pass@k`` / ``pass^k`` reliability score; if that layer
+        is skipped, the task verdict falls back to every trial passing, scored by
+        the trial pass rate (see :func:`_grade_aggregate`). Without one the task
+        verdict is the single trial's verdict.
 
         ``judge``/``samples`` are keyword-only with R1-compatible defaults: with no
         ``judge`` each trial's report is deterministic-only (judged evaluators are
         skipped). ``fail_fast`` defaults to ``True`` — the per-trial scheduler's
-        cost-saving short-circuit; ``--full-scoring`` flips it off.
+        cost-saving short-circuit; ``--full-scoring`` flips it off, and
+        :func:`~coding_agent_playbook.evals.scoring.score` ignores it for a task
+        whose result it could change
+        (:attr:`~coding_agent_playbook.evals._compile.CompiledTask.short_circuit_safe`).
         """
         from coding_agent_playbook.evals.task import compile_eval_task
 
@@ -528,22 +463,15 @@ class HarnessRunner(ABC):
         With ``aggregate is None`` (the single-trial default) the task verdict
         is ``trials[0].verdict`` and the score is the representative report's
         composite (falling back to ``0.0``/``1.0``). With an ``[aggregate]`` layer
-        the compiled check grades over an :class:`EvalContext` carrying the trials,
-        and its ``passed``/``score`` become the task verdict / aggregate score.
+        see :func:`_grade_aggregate`.
         """
-        from coding_agent_playbook.evaluators.check import MeasurementSet
-        from coding_agent_playbook.evaluators.types import EvalContext
-
         report = trials[0].report
         agg_result: CheckResult | None = None
         if aggregate is None:
             passed = trials[0].verdict
             aggregate_score = report.composite if report.composite is not None else float(passed)
         else:
-            agg_ctx = EvalContext(module=None, source="", label="aggregate", trials=trials)
-            agg_result = aggregate.grade(agg_ctx, MeasurementSet([], None))
-            passed = agg_result.passed
-            aggregate_score = agg_result.score if agg_result.score is not None else float(passed)
+            agg_result, passed, aggregate_score = _grade_aggregate(aggregate, trials)
 
         return TaskResult(
             task_id=task.id,

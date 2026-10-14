@@ -1,14 +1,60 @@
 # .pre-commit-hooks.yaml — engine-side hooks exposed to consumer repos.
 # Reference from a consumer's .pre-commit-config.yaml:
 #
-#   - repo: https://github.com/msobroza/coding-agent-playbook
-#     rev: v0.1.0a0          # or any released tag
-#     hooks:
-#       - id: playbook-sync-check
+#   default_install_hook_types: [pre-commit, post-checkout, post-merge]
+#   default_stages: [pre-commit]   # keep your other always_run hooks off checkout/merge
+#   repos:
+#     - repo: https://github.com/msobroza/coding-agent-playbook
+#       rev: v0.1.0a0          # the engine version your project pins
+#       hooks:
+#         - id: playbook-sync                  # [output] commit = false (default)
+#           additional_dependencies: [playbook-rules-<org>]   # every overlay / extra adapter
+#         - id: playbook-no-generated-output   # [output] commit = false (default)
+#           additional_dependencies: [playbook-rules-<org>]
+#       # - id: playbook-sync-check            # legacy: [output] commit = true
+#
+# With [output] commit = false (the default) the generated output is local-only
+# and gitignored: `playbook-sync` re-renders it after every checkout / merge and
+# `playbook-no-generated-output` refuses commits that stage it. Install all three
+# git hook types (`default_install_hook_types` above makes a plain
+# `pre-commit install` do it; explicit `--hook-type` flags REPLACE that list, so
+# name all three): pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge
+# Stage names follow the hook-type names introduced in pre-commit 3.2.0.
+#
+# These hooks are `language: python`: pre-commit runs them in its OWN venv, which
+# holds only the engine at `rev:` — not your project environment. List every
+# overlay package (`overlays_enabled`) and out-of-tree adapter under
+# `additional_dependencies`, and keep `rev` on the engine version your project
+# pins. A missing overlay makes `playbook sync` refuse to run (it would otherwise
+# re-render without the org rules); a missing adapter is skipped with a warning.
+# Simpler for overlay users: the `repo: local` + `language: system` hooks that
+# `playbook init` writes run the `playbook` from your project environment.
 
+- id: playbook-sync
+  name: coding-agent-playbook sync (regenerate local output)
+  description: Re-render the gitignored AGENTS.md/.claude/.continue/.opencode output after checkout or merge
+  entry: playbook sync
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [post-checkout, post-merge]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: playbook-no-generated-output
+  name: coding-agent-playbook guard (no generated output staged)
+  description: Fail the commit when any staged path is gitignored generated output ([output] commit = false)
+  entry: playbook sync --check-staged
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]
+  minimum_pre_commit_version: "3.2.0"
+
+# LEGACY — only for repos that set [output] commit = true (generated output is
+# committed). Fails the commit when the committed output drifts from the source.
 - id: playbook-sync-check
-  name: coding-agent-playbook sync check
-  description: Verify .continue/, .claude/, AGENTS.md are in sync with the installed playbook
+  name: coding-agent-playbook sync check (legacy, [output] commit = true)
+  description: Verify committed .continue/, .claude/, AGENTS.md are in sync with the installed playbook
   entry: playbook sync --check
   language: python
   pass_filenames: false
