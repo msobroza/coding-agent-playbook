@@ -16,13 +16,28 @@ fixture only seeds repo-local content when callers ask for it.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 import pytest
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from pathlib import Path
+
+
+class SyntheticRepoBuilder(Protocol):
+    """The builder the ``make_synthetic_repo`` fixture returns; type test params with it."""
+
+    def __call__(
+        self,
+        tmp_path: Path,
+        *,
+        config_text: str = ...,
+        rules: Iterable[tuple[str, str]] | None = ...,
+        prompts: Iterable[tuple[str, dict[str, Any]]] | None = ...,
+        pyproject_extras: dict[str, Any] | None = ...,
+        write_config: bool = ...,
+    ) -> Path: ...
 
 
 _DEFAULT_CONFIG = """\
@@ -92,7 +107,7 @@ def _write_prompt(
 
 
 @pytest.fixture
-def make_synthetic_repo():
+def make_synthetic_repo() -> SyntheticRepoBuilder:
     """Return a builder that creates a synthetic consumer repo in ``tmp_path``.
 
     Usage::

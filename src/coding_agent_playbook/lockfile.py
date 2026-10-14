@@ -1,8 +1,9 @@
 """Lockfile dataclass + hash helpers (SPEC §14.4).
 
 The lockfile records ``sha256`` content hashes of every generated file plus
-the engine version that produced them. ``playbook sync --check`` uses this to
-detect drift between canonical source and rendered output.
+the engine version that produced them. ``playbook check`` uses it to report
+drift, and ``playbook sync`` uses the previous one as the ownership record its
+stale-output sweep deletes from (:mod:`coding_agent_playbook.stale_outputs`).
 """
 
 from __future__ import annotations
@@ -10,6 +11,17 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from typing import Any
+
+#: Schema ``playbook sync`` writes. 2: entries list only files the engine itself
+#: generated (repo-relative logical paths, never a symlink or a file merely found
+#: inside a copied skill directory), so the stale-output sweep may delete them.
+LOCKFILE_SCHEMA_VERSION = 2
+
+#: Oldest schema the stale-output sweep trusts for deletion. Schema 1 lockfiles
+#: (written before SPEC v0.15) could also list user files found inside a native
+#: skill's copied ``scripts/`` / ``references/`` dir, and the targets of
+#: symlinks, so their stale entries are reported, never deleted.
+FIRST_OWNERSHIP_SCHEMA_VERSION = 2
 
 
 def compute_hash(content: bytes) -> str:

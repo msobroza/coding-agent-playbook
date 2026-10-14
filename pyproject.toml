@@ -112,6 +112,11 @@ packages = ["src/coding_agent_playbook"]
 target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
+# Bundled opt-in packs (SPEC §11.5) vendor upstream text that must stay
+# byte-faithful to its source. Newer, unpinned ruff versions also format code
+# blocks inside markdown (CI has gone red on that before), so never let ruff
+# lint or reformat a pack's vendored resources/.
+extend-exclude = ["src/coding_agent_playbook/packs/*/resources"]
 
 [tool.ruff.lint]
 select = [

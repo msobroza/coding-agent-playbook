@@ -109,9 +109,10 @@ def test_spec_section_21_body_drops_deleted_symbols(symbol: str) -> None:
 
 def test_spec_version_bumped_and_changelog_preserved() -> None:
     spec = _read("SPEC.md")
-    # PR L bumped the header to 0.14; the guard cares that the refactor's
-    # changelog entries survive later revisions.
-    assert "| Version | 0.14 (draft) |" in spec
+    # The bundled superpowers pack (SPEC §11.5) bumped the header to 0.15; the
+    # guard cares that the refactor's changelog entries survive later revisions.
+    assert "| Version | 0.15 (draft) |" in spec
+    assert "### v0.15" in spec  # the changelog appendix entry for bundled opt-in packs
     assert "### v0.14" in spec  # the changelog appendix entry for self-contained links
     assert "### v0.13" in spec  # the changelog appendix entry for the task-config redesign
     assert "### v0.12" in spec  # the prior changelog appendix entry is preserved
