@@ -26,7 +26,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from jinja2 import Environment, StrictUndefined, TemplateSyntaxError
+from jinja2 import StrictUndefined, TemplateSyntaxError
+from jinja2.sandbox import SandboxedEnvironment
 
 from coding_agent_playbook.config import parse_links_config
 from coding_agent_playbook.detector import evaluate_predicate
@@ -133,8 +134,9 @@ def _check_rule_bodies_do_not_include_rules(rules: list[Rule]) -> list[Validatio
 
 
 def _check_jinja_compiles(rules: list[Rule], prompts: list[Prompt]) -> list[ValidationError]:
-    # Syntax-only parse — no rule_registry/no facts needed.
-    env = Environment(autoescape=False, undefined=StrictUndefined)
+    # Syntax-only parse — no rule_registry/no facts needed. Sandboxed like the
+    # renderer's environment so no Jinja construction site is unsandboxed (prK §P1).
+    env = SandboxedEnvironment(autoescape=False, undefined=StrictUndefined)
     errors: list[ValidationError] = []
     for rule in rules:
         if not rule.is_templated:

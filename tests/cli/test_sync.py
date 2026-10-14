@@ -676,3 +676,57 @@ def test_check_has_file_predicate_sees_real_repo(
     assert (repo / ".continue" / "rules" / "50-dotenv-hygiene.md").is_file()
     rc, out = _check(repo, capsys)
     assert rc == 0, out
+
+
+# --- sandboxed Jinja (specs/prK-lifecycle-hooks.md §P P1) ---------------------
+
+_ESCAPE_BODY = '{{ lipsum.__globals__["os"].__name__ }}\n'
+
+
+def _write_templated_rule(repo: Path, rule_id: str, body: str) -> Path:
+    """Write a repo-local ``.md.j2`` rule (rendered through Jinja) and return its path."""
+    target = repo / "playbook" / "rules" / f"{rule_id}.md.j2"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        f"---\nid: {rule_id}\nname: Templated\ndescription: d\nscope: always\npriority: 50\n"
+        f"---\n{body}",
+        encoding="utf-8",
+    )
+    return target
+
+
+def _tree_snapshot(root: Path) -> dict[str, bytes]:
+    """Every file under ``root`` (repo-relative posix path -> bytes)."""
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+
+def test_sync_fails_loudly_on_sandbox_violation(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_synthetic_repo(tmp_path, rules=[("benign", "Benign body.\n")])
+    _write_templated_rule(repo, "escape", _ESCAPE_BODY)
+    before = _tree_snapshot(repo)
+    rc = _sync.run(_ns(repo))
+    assert rc != 0
+    err = capsys.readouterr().err
+    assert "playbook/rules/escape.md.j2" in err
+    assert str(tmp_path) not in err  # named repo-relative, not by absolute path
+    assert "unsafe" in err  # jinja2's SecurityError detail is surfaced
+    assert _tree_snapshot(repo) == before  # nothing written, no lockfile
+
+
+def test_sync_check_fails_loudly_on_sandbox_violation(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--check`` renders in a scratch copy; the error still names the repo file."""
+    repo = make_synthetic_repo(tmp_path)
+    assert _sync.run(_ns(repo)) == 0
+    _write_templated_rule(repo, "escape", _ESCAPE_BODY)
+    before = _tree_snapshot(repo)
+    capsys.readouterr()
+    rc = _sync.run(_ns(repo, check=True))
+    assert rc != 0
+    err = capsys.readouterr().err
+    assert "error: playbook/rules/escape.md.j2:" in err
+    assert "playbook-sync-check-" not in err  # never the deleted scratch path
+    assert _tree_snapshot(repo) == before

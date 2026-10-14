@@ -1032,9 +1032,10 @@ def render_artifact_body(template_path: Path, context: dict) -> str:
 Frontmatter parsing is done by the engine before this call and is always treated as static YAML (no Jinja). Only the body is passed through this dispatch.
 ### 9.3 Jinja environment
 ```python
-from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2 import FileSystemLoader, StrictUndefined
+from jinja2.sandbox import SandboxedEnvironment
 
-env = Environment(
+env = SandboxedEnvironment(
     loader=FileSystemLoader([...]),  # engine resources + overlay resources
     autoescape=False,  # markdown, not HTML
     keep_trailing_newline=True,
@@ -1044,6 +1045,8 @@ env = Environment(
 )
 ```
 `StrictUndefined` is important: a typo'd `{{ python_versoin }}` should raise, not silently render as empty. Renders are cheap; failure modes should be loud.
+
+The environment is sandboxed because templates are author-controlled *and* agent-writable (`playbook/**/*.md.j2`, overlay `resources/`), and rendering runs inside `playbook sync`, `render`, `init` and the eval runner. Under a plain `Environment`, `{{ lipsum.__globals__["os"] }}` reaches the `os` module; under `SandboxedEnvironment` every such attribute escape raises `SecurityError`. `playbook sync` (and `sync --check`) reports it as `error: <file>: template rejected by the Jinja sandbox: <reason>`, naming the source file relative to the repo, exits 1 and writes nothing. It is the mutable sandbox, not `ImmutableSandboxedEnvironment`: blocking the escape does not require rejecting in-template list/dict mutation, which authored templates may use. Every engine construction site is sandboxed, including `playbook validate`'s parse-only syntax check. The sandbox does not bound CPU beyond Jinja's `MAX_RANGE`. Every shipped `.md.j2` renders byte-identically under it.
 ### 9.4 Rendering context
 The context passed to every template render:
 ```python

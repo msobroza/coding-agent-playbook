@@ -3,7 +3,8 @@
 See SPEC.md §9. Frontmatter is parsed by the engine before this module runs
 and is always treated as static YAML — only the body is rendered through Jinja.
 File-extension dispatch: ``.md`` body is returned verbatim; ``.md.j2`` body is
-rendered through Jinja2 with ``StrictUndefined`` so typos fail loudly.
+rendered through a sandboxed Jinja2 environment with ``StrictUndefined`` so
+typos fail loudly and attribute escapes to Python internals raise.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2.sandbox import SandboxedEnvironment
 
 # Re-exported (``as SENTINEL``) so existing ``renderer.SENTINEL`` imports keep
 # working; the import-light ``_sentinel`` module is the single home (prK §P3).
@@ -67,17 +69,29 @@ def build_environment(
     is_prompt_context: bool = False,
     rule_registry: RuleRegistry | None = None,
 ) -> Environment:
-    """Build a Jinja Environment configured per SPEC §9.3.
+    """Build a sandboxed Jinja environment configured per SPEC §9.3.
+
+    The environment is a ``SandboxedEnvironment`` (a subclass of the annotated
+    ``Environment``): templates are author-controlled *and* agent-writable
+    (``playbook/**/*.md.j2``, overlay ``resources/``), so a body such as
+    ``{{ lipsum.__globals__["os"] }}`` must raise ``SecurityError`` instead
+    of reaching ``os`` (prK §P1). It is deliberately not the immutable
+    variant, which would also reject in-template list/dict mutation.
 
     ``is_prompt_context=True`` registers the ``rule()`` helper (and requires
     ``rule_registry`` to be passed). For rules, ``rule()`` is not registered
     so calling it raises ``UndefinedError`` — that enforces the "rules cannot
     include other rules" invariant at the renderer level.
+
+    Example::
+
+        env = build_environment([])
+        render_string("{{ project_name }}", {"project_name": "demo"}, env=env)
     """
     if is_prompt_context and rule_registry is None:
         raise ValueError("rule_registry required when is_prompt_context=True")
 
-    env = Environment(
+    env = SandboxedEnvironment(
         loader=FileSystemLoader([str(p) for p in template_search_paths]),
         autoescape=False,
         keep_trailing_newline=True,

@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from jinja2 import UndefinedError
+from jinja2 import StrictUndefined, UndefinedError
+from jinja2.exceptions import SecurityError
+from jinja2.sandbox import ImmutableSandboxedEnvironment, SandboxedEnvironment
 
 from coding_agent_playbook.renderer import (
     SENTINEL,
@@ -511,3 +513,45 @@ def test_render_for_prompt_continue_no_appendix_when_all_fragments_empty(
         rule_registry=registry,
     )
     assert "## Reference rules" not in out
+
+
+# --- prK §P1: sandboxed Jinja environment -----------------------------------
+
+#: Classic template-injection escapes from a template to Python internals.
+_SANDBOX_ESCAPES = (
+    pytest.param('{{ lipsum.__globals__["os"].__name__ }}', id="lipsum.__globals__"),
+    pytest.param("{{ cycler.__init__.__globals__.os.name }}", id="cycler.__init__.__globals__"),
+    pytest.param("{{ ''.__class__.__mro__[1].__subclasses__() }}", id="str.__class__.__mro__"),
+)
+
+
+@pytest.mark.parametrize("is_prompt_context", [False, True], ids=["rule-env", "prompt-env"])
+def test_build_environment_is_sandboxed(tmp_path: Path, is_prompt_context: bool) -> None:
+    registry = StubRuleRegistry({}) if is_prompt_context else None
+    env = build_environment([tmp_path], is_prompt_context=is_prompt_context, rule_registry=registry)
+    assert isinstance(env, SandboxedEnvironment)
+    # Mutable sandbox on purpose: the escape-to-``os`` threat does not need the
+    # immutable variant, which would also reject in-template list/dict mutation.
+    assert not isinstance(env, ImmutableSandboxedEnvironment)
+
+
+def test_sandboxed_environment_keeps_render_options(tmp_path: Path) -> None:
+    env = build_environment([tmp_path])
+    assert env.autoescape is False
+    assert env.keep_trailing_newline is True
+    assert env.trim_blocks is True
+    assert env.lstrip_blocks is True
+    assert env.undefined is StrictUndefined
+
+
+@pytest.mark.parametrize("template", _SANDBOX_ESCAPES)
+def test_sandbox_blocks_globals_escape(tmp_path: Path, template: str) -> None:
+    env = build_environment([tmp_path])
+    with pytest.raises(SecurityError):
+        render_string(template, {}, env=env)
+
+
+def test_sandbox_allows_in_template_list_mutation(tmp_path: Path) -> None:
+    env = build_environment([tmp_path])
+    template = "{% set seen = [] %}{{ seen.append('a') or seen | join(',') }}"
+    assert render_string(template, {}, env=env) == "a"

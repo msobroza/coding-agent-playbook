@@ -5,6 +5,9 @@ Two modes:
 - ``--check``: re-renders into a hygienic scratch copy of the repo and compares
   against the on-disk files; exits 1 if any differ or are missing, or if any
   generated file is orphaned (specs/prK-lifecycle-hooks.md §P P2).
+
+A template the Jinja sandbox rejects aborts either mode with exit 1, naming the
+source file, before any adapter writes (specs/prK-lifecycle-hooks.md §P P1).
 """
 
 from __future__ import annotations
@@ -12,10 +15,13 @@ from __future__ import annotations
 import dataclasses
 import datetime as _dt
 import shutil
+import sys
 import tempfile
 import tomllib
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Final
+
+from jinja2.exceptions import SecurityError
 
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.commands._sync_scratch import ScratchCopyPolicy
@@ -74,6 +80,37 @@ def _build_jinja_context(ctx: SyncContext) -> dict[str, object]:
     return context
 
 
+class TemplateSecurityError(Exception):
+    """An artifact template reached for Python internals the Jinja sandbox blocks.
+
+    Raised in place of jinja2's bare ``SecurityError`` so ``playbook sync``
+    names the offending file instead of printing a traceback (prK §P1).
+    ``source`` is the artifact's source path (its id when it has none);
+    ``detail`` is jinja2's reason.
+
+    Example::
+
+        TemplateSecurityError("playbook/rules/x.md.j2", "access to attribute "
+                              "'__globals__' of 'function' object is unsafe.")
+    """
+
+    def __init__(self, source: str, detail: str) -> None:
+        super().__init__(f"{source}: template rejected by the Jinja sandbox: {detail}")
+        self.source = source
+        self.detail = detail
+
+
+def _render_template(artifact: Rule | Prompt, context: dict[str, object], env: Environment) -> str:
+    """Render ``artifact.template_body``; a sandbox violation becomes a
+    :class:`TemplateSecurityError` naming the artifact's source file."""
+    try:
+        return render_string(artifact.template_body, context, env=env)
+    except SecurityError as exc:
+        path = artifact.source_path
+        source = str(path) if path is not None else artifact_id_of(artifact)
+        raise TemplateSecurityError(source, str(exc)) from exc
+
+
 def _render_rule_body(rule: Rule, context: dict[str, object], env: Environment) -> Rule:
     """Re-emit a Rule with ``body`` set to the Jinja-rendered output.
 
@@ -82,7 +119,7 @@ def _render_rule_body(rule: Rule, context: dict[str, object], env: Environment) 
     inclusion from a prompt with a different context).
     """
     if rule.is_templated:
-        rendered = render_string(rule.template_body, dict(context), env=env)
+        rendered = _render_template(rule, dict(context), env)
         return dataclasses.replace(rule, body=rendered)
     return rule
 
@@ -101,7 +138,7 @@ def _render_prompt_body(prompt: Prompt, context: dict[str, object], env: Environ
         name = var.get("name") if isinstance(var, dict) else None
         if name and name in safe_context:
             del safe_context[name]
-    rendered = render_string(prompt.template_body, safe_context, env=env)
+    rendered = _render_template(prompt, safe_context, env)
     return dataclasses.replace(prompt, body=rendered)
 
 
@@ -346,12 +383,16 @@ def execute(repo_root: Path, *, check: bool = False) -> int:
     Programmatic entry point used by ``playbook init`` (to fire a sync after
     writing the config) and by tests that want to skip the argparse
     plumbing. The CLI's :func:`run` wrapper simply parses flags and
-    forwards to here.
+    forwards to here. Returns 1, having written nothing, when a template is
+    rejected by the Jinja sandbox.
     """
     ctx = SyncContext.from_repo(repo_root)
     if check:
         return _run_check(ctx)
-    result = _run_sync(ctx)
+    try:
+        result = _run_sync(ctx)
+    except TemplateSecurityError as exc:
+        return _report_sandbox_violation(exc, ctx.repo_root)
 
     lockfile = _build_lockfile(
         result.written,
@@ -384,18 +425,39 @@ def _run_check(ctx: SyncContext) -> int:
     """
     scratch_dir = Path(tempfile.mkdtemp(prefix="playbook-sync-check-"))
     try:
-        scratch = scratch_dir / "repo"
-        policy = ScratchCopyPolicy(ctx.repo_root)
-        shutil.copytree(ctx.repo_root, scratch, symlinks=False, ignore=policy)
-        scratch_ctx = SyncContext.from_repo(scratch, facts=ctx.facts)
+        return _check_in_scratch(ctx, scratch_dir / "repo")
+    finally:
+        shutil.rmtree(scratch_dir, ignore_errors=True)
+
+
+def _check_in_scratch(ctx: SyncContext, scratch: Path) -> int:
+    """Copy the repo to ``scratch``, sync the copy and report drift (exit code)."""
+    policy = ScratchCopyPolicy(ctx.repo_root)
+    shutil.copytree(ctx.repo_root, scratch, symlinks=False, ignore=policy)
+    scratch_ctx = SyncContext.from_repo(scratch, facts=ctx.facts)
+    try:
         # ``cleanup_stale`` runs inside the copy: ``removed`` is exactly the set
         # of stale generated files a real sync would delete, i.e. orphans.
         result = _run_sync(scratch_ctx, predicate_root=ctx.repo_root)
-        drift = _content_drift(result.written, scratch, ctx.repo_root)
-        drift += _orphan_drift(result, scratch, ctx, policy)
-        return _report_drift(drift)
-    finally:
-        shutil.rmtree(scratch_dir, ignore_errors=True)
+    except TemplateSecurityError as exc:
+        return _report_sandbox_violation(exc, scratch)
+    drift = _content_drift(result.written, scratch, ctx.repo_root)
+    drift += _orphan_drift(result, scratch, ctx, policy)
+    return _report_drift(drift)
+
+
+def _report_sandbox_violation(exc: TemplateSecurityError, root: Path) -> int:
+    """Print ``exc`` to stderr naming its file relative to ``root`` and return 1.
+
+    ``root`` is the repo, or the ``--check`` scratch copy (which mirrors the
+    repo's layout, so the relative path names the real file). Rendering runs
+    before any adapter writes, so nothing was written.
+    """
+    source = Path(exc.source)
+    shown = _repo_relative(source.resolve(), root) if source.is_absolute() else exc.source
+    print(f"error: {TemplateSecurityError(shown, exc.detail)}", file=sys.stderr)
+    print("error: playbook sync aborted; no files were written.", file=sys.stderr)
+    return 1
 
 
 def _report_drift(drift: Sequence[str]) -> int:
