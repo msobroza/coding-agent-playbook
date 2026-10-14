@@ -1,6 +1,7 @@
 """`playbook check` — diagnostic dump (SPEC §12.4). Includes ``--refresh`` per
-§12.5 which writes the freshly-detected facts back into the config's
-``detector_cache`` table.
+§12.5 which writes the freshly-detected facts back into the committed config's
+``detector_cache`` table; every other value in the file is kept, though the file is
+re-serialized (comments and layout are lost) and no local override is written.
 
 A diagnostic, so it exits 0 whatever it finds (drift included). An overlay in
 ``overlays_enabled`` that ``playbook sync`` would refuse (``_sync_preflight``) is
@@ -14,10 +15,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
-from coding_agent_playbook.commands import _sync_preflight
+from coding_agent_playbook.commands import _committed_config, _sync_preflight
 from coding_agent_playbook.detector import detect, evaluate_predicate
 from coding_agent_playbook.lockfile import compute_hash
 from coding_agent_playbook.orchestrator import SyncContext
+from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 
 if TYPE_CHECKING:
     import argparse
@@ -192,27 +194,42 @@ def _lockfile_drift(ctx: SyncContext, lockfile: Lockfile) -> list[str]:
     return drift
 
 
-def _refresh(ctx: SyncContext) -> None:
-    """Re-run the detector and persist the cache back into the primary
-    config file. Used by ``playbook check --refresh``."""
-    fresh = detect(ctx.repo_root)
-    cache: dict[str, object] = {}
-    for key, value in fresh.items():
-        if isinstance(value, set):
-            cache[key] = sorted(value)
-        else:
-            cache[key] = value
-    ctx.config.detector_cache = cache
-    ctx.state_source.save_config(ctx.config)
+def _refresh(repo_root: Path) -> None:
+    """Re-run the detector and write ``[detector_cache]`` — only it — to the committed config.
+
+    The committed file is rewritten from itself alone
+    (:func:`_committed_config.plan_detector_cache_refresh`): every other key
+    keeps its parsed value, as written — not as ``Config`` would rewrite it —
+    while comments and layout are lost; nothing from the gitignored local file
+    is written. Hence its own state source rather than ``SyncContext.config``,
+    which is the config *merged* with that file (and still what the report
+    describes).
+
+    Raises ``ConfigError`` (exit 2) before writing for a committed file ``Config``
+    would misread on its own, e.g. one missing ``[engine] version`` that only the
+    local file supplies.
+
+    Example::
+
+        >>> _refresh(repo_root)  # doctest: +SKIP
+    """
+    state = FileSystemStateSource(repo_root=repo_root)
+    cache = _committed_config.detector_cache_table(detect(repo_root))
+    _committed_config.plan_detector_cache_refresh(state, cache).save(state)
 
 
 def run(args: argparse.Namespace) -> int:
+    """Print the diagnostic report; with ``--refresh``, first rewrite ``[detector_cache]``.
+
+    A config error (``ConfigError`` / ``FileNotFoundError``, exit 2 in ``cli.main``)
+    stops it before anything is written or printed.
+    """
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     ctx = SyncContext.from_repo(repo_root)
     unusable = _sync_preflight.unusable_overlays(ctx.config.overlays_enabled)
     if getattr(args, "refresh", False):
-        _refresh(ctx)
-        print("Refreshed detector_cache in .coding-agent-playbook.toml.")
+        _refresh(repo_root)
+        print(f"Refreshed detector_cache in {FileSystemStateSource._CONFIG_FILENAME}.")
     print(_format_env_section(ctx, unusable))
     print(_format_detected_section(ctx))
     print(_format_artifacts_section(ctx))
