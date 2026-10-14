@@ -104,3 +104,121 @@ def test_json_render_omits_aggregate_when_absent() -> None:
     payload = _result_to_dict(_plain_result())
     assert "aggregate" not in payload
     assert "trials" not in payload
+
+
+# --------------------------------------------------------------------------- #
+# Skipped aggregate + judged-score labelling across trials
+# --------------------------------------------------------------------------- #
+
+
+def _skipped_aggregate_result() -> TaskResult:
+    """``over = "rubric"`` with no judge: the aggregate skipped, verdict fell back."""
+    trials = [_trial(True), _trial(True)]
+    skipped = CheckResult(
+        check_id="pass_at_k:rubric@2",
+        passed=False,
+        score=None,
+        weight=0.0,
+        required=True,
+        determinism=Determinism.DETERMINISTIC,
+        cost=CostTier.DETERMINISTIC,
+        status="skipped",
+    )
+    return TaskResult(
+        task_id="t-agg-skip",
+        harness="fake",
+        report=trials[0].report,
+        passed=True,
+        aggregate_score=1.0,
+        duration_seconds=0.1,
+        transcript="",
+        trials=trials,
+        aggregate=skipped,
+    )
+
+
+def test_text_render_explains_a_skipped_aggregate_instead_of_failing_it() -> None:
+    """A skipped aggregate has no verdict; never print ``(FAIL)`` beside a PASS task."""
+    text = _format_result_text(_skipped_aggregate_result())
+    assert "aggregate: pass_at_k:rubric@2 skipped" in text
+    assert "verdict from all 2 trials (2/2 passed)" in text
+    assert "(FAIL)" not in text
+
+
+def _judged_leaf(*, status: str) -> CheckResult:
+    return CheckResult(
+        check_id="judge:clear",
+        passed=status == "run",
+        score=0.9 if status == "run" else None,
+        weight=1.0,
+        required=False,
+        determinism=Determinism.JUDGED,
+        cost=CostTier.JUDGED,
+        status=status,  # type: ignore[arg-type]
+    )
+
+
+def _rubric_layer(*children: CheckResult, status: str = "run") -> CheckResult:
+    return CheckResult(
+        check_id="rubric",
+        passed=True,
+        score=1.0,
+        weight=0.0,
+        required=True,
+        determinism=Determinism.JUDGED,
+        cost=CostTier.JUDGED,
+        status=status,  # type: ignore[arg-type]
+        subresults=children,
+    )
+
+
+def _trial_with(*checks: CheckResult) -> TrialResult:
+    report = EvaluationReport(
+        findings=[], warn_count=0, fail_count=0, composite=None, passed=True, checks=list(checks)
+    )
+    return TrialResult(report=report, verdict=True)
+
+
+def test_uncalibrated_flag_considers_every_trial_not_just_the_reported_one() -> None:
+    """Trial 0 never reached the judge; trial 1's judged score decided the task."""
+    t0 = _trial_with(_rubric_layer(status="skipped"))
+    t1 = _trial_with(_rubric_layer(_judged_leaf(status="run")))
+    result = TaskResult(
+        task_id="t",
+        harness="fake",
+        report=t0.report,
+        passed=True,
+        aggregate_score=1.0,
+        duration_seconds=0.1,
+        transcript="",
+        trials=[t0, t1],
+        aggregate=_agg_result(1.0, passed=True),
+    )
+    assert _result_to_dict(result)["uncalibrated_judge"] is True
+    assert "uncalibrated" in _format_result_text(result)
+
+
+def test_uncalibrated_flag_ignores_a_judged_composer_whose_judged_leaf_skipped() -> None:
+    """Composers inherit JUDGED from any judged child; only a *run* judged leaf counts."""
+    deterministic_leaf = CheckResult(
+        check_id="file_exists:x",
+        passed=True,
+        score=1.0,
+        weight=0.0,
+        required=True,
+        determinism=Determinism.DETERMINISTIC,
+        cost=CostTier.DETERMINISTIC,
+        status="run",
+    )
+    trial = _trial_with(_rubric_layer(deterministic_leaf, _judged_leaf(status="skipped")))
+    result = TaskResult(
+        task_id="t",
+        harness="fake",
+        report=trial.report,
+        passed=True,
+        aggregate_score=1.0,
+        duration_seconds=0.1,
+        transcript="",
+        trials=[trial],
+    )
+    assert _result_to_dict(result)["uncalibrated_judge"] is False

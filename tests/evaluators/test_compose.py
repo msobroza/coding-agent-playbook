@@ -107,10 +107,55 @@ def test_allof_unavailable_child_is_neutral() -> None:
     assert by_id["b"].status == "skipped"
 
 
-def test_allof_all_children_unavailable_is_vacuously_true() -> None:
-    # No child ran ⇒ no failure ⇒ AllOf is vacuously True.
-    result = _run(AllOf(_Leaf("a", passed=False, avail=False)))
-    assert result.passed is True
+def test_allof_all_children_unavailable_is_skipped() -> None:
+    # No child can run ⇒ the composer has no verdict ⇒ it is itself skipped
+    # (neutral), never a vacuous pass. Regression: the [rubric] layer with no
+    # judge used to report "[PASS] rubric (score=1.000)", and so made
+    # `gate or rubric` pass on a failing gate.
+    composer = AllOf(_Leaf("a", passed=False, avail=False))
+    assert composer.available(_ctx()) is False
+    result = _run(composer)
+    assert result.status == "skipped"
+    assert result.passed is False
+    assert result.score is None
+    (child,) = result.subresults
+    assert isinstance(child, CheckResult)
+    assert child.status == "skipped"
+
+
+def test_anyof_all_children_unavailable_is_skipped() -> None:
+    # Regression: an all-unavailable AnyOf used to *fail* (no run child passed),
+    # so a judge-only `a or b` rubric layer failed outright with no judge.
+    composer = AnyOf(_Leaf("a", passed=True, avail=False), _Leaf("b", passed=True, avail=False))
+    assert composer.available(_ctx()) is False
+    assert _run(composer).status == "skipped"
+
+
+def test_composer_is_available_when_any_child_is() -> None:
+    composer = AllOf(_Leaf("a", passed=True), _Leaf("b", passed=False, avail=False))
+    assert composer.available(_ctx()) is True
+
+
+def test_skip_propagates_through_nested_composers() -> None:
+    inner = AnyOf(_Leaf("a", passed=True, avail=False), id="inner")
+    outer = AllOf(inner, Not(_Leaf("b", passed=True, avail=False)), id="outer")
+    assert inner.available(_ctx()) is False
+    assert outer.available(_ctx()) is False
+    assert _run(outer).status == "skipped"
+
+
+def test_not_is_available_iff_its_child_is() -> None:
+    assert Not(_Leaf("a", passed=True)).available(_ctx()) is True
+    assert Not(_Leaf("a", passed=True, avail=False)).available(_ctx()) is False
+
+
+def test_childless_composers_keep_their_vacuous_verdicts() -> None:
+    # Nothing to be neutral about: an empty AllOf is True, an empty AnyOf False.
+    assert AllOf().available(_ctx()) is True
+    assert AnyOf().available(_ctx()) is True
+    assert _run(AllOf()).passed is True
+    assert _run(AnyOf()).passed is False
+    assert _run(AnyOf()).status == "run"
 
 
 # --------------------------------------------------------------------------- #

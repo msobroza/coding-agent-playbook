@@ -14,15 +14,20 @@ import os
 import shutil
 import sys
 from importlib import metadata
+from typing import TYPE_CHECKING
 
 import pytest
 
 from coding_agent_playbook.evals.judge import (
     Judge,
+    JudgeError,
     LLMJudge,
     StubJudge,
     parse_score,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # --------------------------------------------------------------------------- #
 # Judge ABC — batch wrapper + n-sample averaging
@@ -116,17 +121,48 @@ def test_stub_is_not_registered() -> None:
         ("0.8", 0.8),
         ("  0.42 \n", 0.42),
         ("Score: 0.7", 0.7),
+        ("score=0.25", 0.25),
+        ("**0.9**", 0.9),
+        ("`0.6`", 0.6),
+        ("0.8.", 0.8),
+        ("**Score:** 0.8", 0.8),
+        ("**Score: 0.8**", 0.8),
+        ("**Score**: 0.8", 0.8),
+        ("__0.8__", 0.8),
+        ("0.8\r\n\n", 0.8),
+        (".5", 0.5),
         ("1", 1.0),
         ("0", 0.0),
-        ("1.5", 1.0),  # clamped high
-        ("-0.3", 0.0),  # clamped low (leading sign parsed then clamped)
-        ("the score is .9 overall", 0.9),
-        ("no number here", 0.0),  # degenerate => hard miss
-        ("", 0.0),
+        ("1.0", 1.0),
     ],
 )
-def test_parse_score(text: str, expected: float) -> None:
+def test_parse_score_accepts_a_bare_in_range_number(text: str, expected: float) -> None:
     assert parse_score(text) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "API Error: 529 Overloaded",  # regression: used to score 1.0 (529 clamped)
+        "Error: rate limited, retry in 1s",  # one in-range number, but prose
+        "Not satisfied - the answer misses step 1.",
+        "the score is .9 overall",
+        "1.5",  # out of range is off-format, never clamped into a score
+        "-0.3",
+        "0.4 or maybe 0.6",
+        "8/10",
+        "1e-1",
+        "no number here",
+        "",
+    ],
+)
+def test_parse_score_rejects_anything_but_a_bare_number(text: str) -> None:
+    """Anything but one number in ``[0, 1]`` is *no score*, not a score.
+
+    An error message or a prose verdict that happens to carry a digit must never
+    turn into a grade.
+    """
+    assert parse_score(text) is None
 
 
 # --------------------------------------------------------------------------- #
@@ -178,6 +214,110 @@ def test_llm_score_criterion_averages_n_invocations() -> None:
         )
         judge = LLMJudge(command=[sys.executable, "-c", program])
         assert judge.score_criterion("crit", "artifact", n=2) == pytest.approx(0.5)
+
+
+def _counting_program(counter: Path, body: str) -> str:
+    """A ``python -c`` program that bumps ``counter`` then runs ``body``.
+
+    ``body`` sees the pre-increment attempt index as ``i``.
+    """
+    return (
+        "import pathlib, sys, time\n"
+        f"p = pathlib.Path({str(counter)!r})\n"
+        "i = int(p.read_text()) if p.exists() else 0\n"
+        "p.write_text(str(i + 1))\n"
+        f"{body}\n"
+    )
+
+
+def test_llm_nonzero_exit_raises_instead_of_scoring() -> None:
+    """A failing CLI is a judge error, even when its output carries a number."""
+    program = "import sys; print('API Error: 529 Overloaded'); sys.exit(1)"
+    judge = LLMJudge(command=[sys.executable, "-c", program], retries=0)
+    with pytest.raises(JudgeError, match=r"exited 1.*529 Overloaded"):
+        judge.score_criterion("crit", "artifact")
+
+
+def test_llm_off_format_stdout_raises() -> None:
+    """Exit 0 but no single in-range number on stdout is a judge error."""
+    judge = LLMJudge(command=[sys.executable, "-c", "print('API Error: 529')"], retries=0)
+    with pytest.raises(JudgeError, match="off-format"):
+        judge.score_criterion("crit", "artifact")
+
+
+def test_llm_timeout_raises() -> None:
+    program = "import time; time.sleep(10)"
+    judge = LLMJudge(command=[sys.executable, "-c", program], timeout=0.2, retries=0)
+    with pytest.raises(JudgeError, match="timed out"):
+        judge.score_criterion("crit", "artifact")
+
+
+def test_llm_retries_a_failed_attempt_then_scores(tmp_path: Path) -> None:
+    """A transient failure is retried; the first good answer is the score."""
+    counter = tmp_path / "n"
+    body = "sys.exit(1) if i == 0 else print('0.6')"
+    judge = LLMJudge(command=[sys.executable, "-c", _counting_program(counter, body)], retries=1)
+    assert judge.score_criterion("crit", "artifact") == pytest.approx(0.6)
+    assert counter.read_text() == "2"
+
+
+def test_llm_retries_are_bounded(tmp_path: Path) -> None:
+    """``retries=2`` means three attempts in total, then a :class:`JudgeError`."""
+    counter = tmp_path / "n"
+    judge = LLMJudge(
+        command=[sys.executable, "-c", _counting_program(counter, "sys.exit(3)")], retries=2
+    )
+    with pytest.raises(JudgeError, match="3 attempt"):
+        judge.score_criterion("crit", "artifact")
+    assert counter.read_text() == "3"
+
+
+def test_llm_unlaunchable_command_raises_judge_error(tmp_path: Path) -> None:
+    """A command that cannot be launched (here: not executable) is a judge error.
+
+    Covers ``OSError`` from ``subprocess.run`` — e.g. ``E2BIG`` when a huge
+    artifact overflows the argv limit — which must not escape as a traceback.
+    """
+    not_executable = tmp_path / "judge.txt"
+    not_executable.write_text("not a program", encoding="utf-8")
+    judge = LLMJudge(command=[str(not_executable), "{prompt}"], retries=0)
+    with pytest.raises(JudgeError, match="could not launch"):
+        judge.score_criterion("crit", "artifact")
+
+
+def test_parse_score_is_fast_on_a_long_degenerate_answer() -> None:
+    """A huge whitespace run after a ``Score`` label must not backtrack quadratically."""
+    import time
+
+    started = time.monotonic()
+    assert parse_score("Score" + "\n" * 200_000 + "N/A") is None
+    assert parse_score("Score:" + " " * 200_000 + "0.5x") is None
+    assert time.monotonic() - started < 1.0
+
+
+def test_llm_undecodable_output_raises_judge_error() -> None:
+    """Bytes that are not UTF-8 are off-format, not a ``UnicodeDecodeError`` crash."""
+    program = "import sys; sys.stdout.buffer.write(b'\\xff\\xfe0.9')"
+    judge = LLMJudge(command=[sys.executable, "-c", program], retries=0)
+    with pytest.raises(JudgeError, match="off-format"):
+        judge.score_criterion("crit", "artifact")
+
+
+def test_llm_nul_byte_in_artifact_raises_judge_error() -> None:
+    """A NUL in the artifact cannot go on argv; it is a judge error, not a ValueError."""
+    judge = LLMJudge(command=[sys.executable, "-c", "print('0.5')", "{prompt}"], retries=0)
+    with pytest.raises(JudgeError, match="NUL byte"):
+        judge.score_criterion("crit", "before\x00after")
+
+
+def test_llm_rejects_an_empty_command() -> None:
+    with pytest.raises(ValueError, match="must not be empty"):
+        LLMJudge(command=[])
+
+
+def test_llm_rejects_negative_retries() -> None:
+    with pytest.raises(ValueError, match="retries"):
+        LLMJudge(retries=-1)
 
 
 def test_llm_default_command_targets_claude_print_mode() -> None:
