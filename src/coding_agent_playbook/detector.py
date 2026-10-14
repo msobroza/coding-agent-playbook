@@ -4,15 +4,22 @@ See SPEC.md §8. The Facts dict feeds the renderer's context (SPEC §9.4) and th
 ``applies_if`` predicate evaluator (SPEC §6.4). Detector runs at ``playbook init``,
 is cached in ``.coding-agent-playbook.toml``, and refreshes on ``pyproject.toml``
 mtime change or ``playbook check --refresh``.
+
+The detector never opens a secret path (SPEC §17.3): its only file read is
+``pyproject.toml``, and its filesystem walks skip every
+``security.paths.is_secret_path`` match.
 """
 
 from __future__ import annotations
 
+import os
 import tomllib
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
+
+from coding_agent_playbook.security.paths import is_secret_path
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -240,12 +247,31 @@ def _dev_tools_from_config_sections(pyproject: dict[str, Any]) -> set[str]:
     return found
 
 
-def _has_notebooks(repo_root: Path) -> bool:
-    for path in repo_root.rglob("*.ipynb"):
-        if any(part in _IGNORE_DIRS for part in path.relative_to(repo_root).parts):
-            continue
+def _walk_skips(path: Path, repo_root: Path, *, home: str) -> bool:
+    """Whether a detector walk must skip ``path`` (found under ``repo_root``).
+
+    Skips anything inside an ``_IGNORE_DIRS`` directory and every secret path
+    (SPEC §17.3; the one catalog lives in ``security/patterns.py``), so the
+    detector never opens, or counts, a credential file. ``home`` anchors the
+    catalog's ``~/`` globs.
+    """
+    if any(part in _IGNORE_DIRS for part in path.relative_to(repo_root).parts):
         return True
-    return False
+    return is_secret_path(path, home=home)
+
+
+def _user_home() -> str:
+    """The current user's home directory (``"~"`` when it cannot be determined).
+
+    ``os.path.expanduser`` never raises, unlike ``Path.home()``, so an odd
+    environment (no ``HOME``, no passwd entry) cannot crash detection.
+    """
+    return os.path.expanduser("~")
+
+
+def _has_notebooks(repo_root: Path) -> bool:
+    home = _user_home()
+    return any(not _walk_skips(path, repo_root, home=home) for path in repo_root.rglob("*.ipynb"))
 
 
 def _has_dockerfile(repo_root: Path) -> bool:

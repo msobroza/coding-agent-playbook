@@ -63,6 +63,17 @@ def test_find_orphans_skips_state_user_and_outside_paths(
     assert find_orphans(_lock(*entries), [], tmp_path) == []
 
 
+def test_find_orphans_never_lists_a_scoped_entry(tmp_path: Path) -> None:
+    """A ``json:<pointer>`` entry covers one managed element of a file shared with
+    the user (specs/prK-lifecycle-hooks.md §B.6): that file is never an orphan."""
+    settings = _entry(tmp_path, ".claude/settings.json", b"{}")
+    scoped = LockEntry(
+        path=settings.path, sha256=settings.sha256, bytes=settings.bytes, scope="json:/hooks/X"
+    )
+    assert find_orphans(_lock(scoped), [], tmp_path) == []
+    assert find_orphans(_lock(settings), [], tmp_path) == [settings]
+
+
 # --- "not rewritten" compares file identity, not path spelling (U3) ----------
 
 

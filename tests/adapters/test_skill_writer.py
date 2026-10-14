@@ -361,6 +361,23 @@ def test_is_engine_owned_skill_dir(tmp_path: Path) -> None:
     assert not is_engine_owned_skill_dir(tmp_path / "s" / "missing")
 
 
+def test_is_engine_owned_skill_dir_requires_an_anchored_sentinel(tmp_path: Path) -> None:
+    """A hand-written ``SKILL.md`` that merely quotes the sentinel in prose is the
+    user's (prK §P3): only an exact sentinel line as the first body line claims it."""
+    quoted = _seed_tree(
+        tmp_path / "s" / "quoted",
+        {
+            "SKILL.md": f"---\nname: q\n---\n# Notes\n\nGenerated files say <!-- {SENTINEL} -->\n".encode()
+        },
+    )
+    anchored = _seed_tree(
+        tmp_path / "s" / "anchored",
+        {"SKILL.md": f"---\nname: a\n---\n<!-- {SENTINEL} -->\n\nbody\n".encode()},
+    )
+    assert not is_engine_owned_skill_dir(quoted)
+    assert is_engine_owned_skill_dir(anchored)
+
+
 def test_is_engine_owned_skill_dir_tolerates_binary_skill_md(tmp_path: Path) -> None:
     theirs = _seed_tree(tmp_path / "s" / "theirs", {"SKILL.md": b"\x80\x81\xff"})
     assert not is_engine_owned_skill_dir(theirs)
