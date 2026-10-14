@@ -26,6 +26,7 @@ from coding_agent_playbook.commands import render as render_cmd
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as validate_cmd
 from coding_agent_playbook.commands import validate_harness as validate_harness_cmd
+from coding_agent_playbook.config import ConfigError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -245,6 +246,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Parse ``argv``, run the subcommand, and return its exit code.
+
+    A missing config (:class:`FileNotFoundError`) and a config the engine would
+    misread (:class:`ConfigError`) both print ``error: <message>`` and exit 2.
+    Commands load the config first, so either one stops them before they write.
+
+    Example::
+
+        >>> main(["--repo-root", "."])  # doctest: +SKIP
+    """
     parser = build_parser()
     args = parser.parse_args(argv)
     if getattr(args, "func", None) is None:
@@ -254,7 +265,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return int(args.func(args))
     except SystemExit:
         raise
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ConfigError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

@@ -18,9 +18,11 @@ exactly the skill dirs write mode skips. Write mode installs the leftover policy
 around its render, so a file/folder swap inside a skill dir displaces only what
 that policy would delete (``_prior_output.judging_leftovers_with``).
 
-Every mode first refuses to run when a configured overlay package is not
-importable (``_sync_preflight``) — rendering without it would silently drop
-the org rules and un-ignore their output.
+Every mode first refuses to run when a configured overlay package fails to
+import or ships no ``resources/`` directory (``_sync_preflight``) —
+rendering without it would silently drop the org rules and un-ignore their
+output. A config the engine would misread fails even earlier, while loading
+(:class:`~coding_agent_playbook.config.ConfigError`).
 """
 
 from __future__ import annotations
@@ -284,10 +286,10 @@ def run(args: argparse.Namespace) -> int:
 
 
 def _environment_ready(ctx: SyncContext) -> bool:
-    """Refuse (``False``) when an overlay is unimportable; warn on missing adapters."""
-    missing = _sync_preflight.missing_overlays(ctx.config.overlays_enabled)
-    if missing:
-        _sync_preflight.report_missing_overlays(missing)
+    """Refuse (``False``) when an overlay is unusable; warn on missing adapters."""
+    unusable = _sync_preflight.unusable_overlays(ctx.config.overlays_enabled)
+    if unusable:
+        _sync_preflight.report_unusable_overlays(unusable)
         return False
     absent = _missing_adapters(ctx)
     if absent:

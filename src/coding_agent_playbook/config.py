@@ -1,18 +1,207 @@
 """Config dataclass mirroring .coding-agent-playbook.toml (SPEC §7.1).
 
-Pure data type. The FileSystemStateSource (sources/filesystem.py) is
-responsible for loading and writing TOML files; this module only defines
-the in-memory shape.
+The FileSystemStateSource (sources/filesystem.py) is responsible for loading
+and writing TOML files; this module defines the in-memory shape plus the
+schema checks that turn a config the engine would misread into a
+:class:`ConfigError` (:func:`check_enabled_keys`, :func:`parse_output_config`).
 """
 
 from __future__ import annotations
 
+import difflib
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeGuard
+
+from coding_agent_playbook import _toml
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator, Mapping
+
     from coding_agent_playbook.evaluators.types import MetricConfig
     from coding_agent_playbook.links import LinksConfig
+
+
+class ConfigError(ValueError):
+    """A config file the engine refuses to load (SPEC §7.1).
+
+    Raised for content that parses as TOML in a shape the engine is known to
+    misread: the enabled-list mistakes :func:`check_enabled_keys` catches and a
+    malformed ``[output]`` table (:func:`parse_output_config`). Other unknown
+    keys are still ignored. A ``ValueError`` subclass, so existing
+    ``except ValueError`` callers still catch it; the CLI reports it as
+    ``error: <message>``, exit 2.
+
+    Example::
+
+        >>> raise ConfigError("cfg.toml: the [overlays] table is not read")
+        Traceback (most recent call last):
+        ...
+        coding_agent_playbook.config.ConfigError: cfg.toml: the [overlays] table is not read
+    """
+
+
+#: The top-level list keys ``Config`` reads, with the placeholder a fix-it hint
+#: shows when there is no usable value to quote back.
+_ENABLED_KEYS: dict[str, str] = {
+    "overlays_enabled": "[<package names>]",
+    "adapters_enabled": "[<adapter names>]",
+}
+
+#: Legacy names a user may write instead (``[overlays] enabled = [...]``, as the
+#: docs once showed), mapped to the key that is actually read.
+_LEGACY_NAMES: dict[str, str] = {
+    "overlays": "overlays_enabled",
+    "adapters": "adapters_enabled",
+}
+
+#: Where the enabled keys must go. Every fix-it hint says so: replacing a
+#: ``[overlays]`` table with the key *in place* would nest it in the table above.
+_PLACEMENT = "at the top of the file, above the first [table] header"
+
+_NESTED_NOTE = "TOML puts every key written after a [table] header in that table"
+
+#: How close a key must be to an enabled key to be refused as its misspelling.
+_MISSPELLING_SIMILARITY = 0.8
+
+#: A table path: ``()`` for the top level, ``("detector_cache", "frameworks")``…
+_TablePath = tuple[str, ...]
+
+
+def check_enabled_keys(data: Mapping[str, object], *, source: str) -> None:
+    """Refuse the enabled-list shapes ``Config`` would silently misread (SPEC §7.1).
+
+    Only the top-level ``overlays_enabled`` / ``adapters_enabled`` lists of
+    non-empty strings are read. Each of these was silently ignored before and is
+    now refused: an ``[overlays]`` / ``[adapters]`` table (or the dotted
+    ``overlays.enabled = …`` key), an enabled key written after a ``[table]``
+    header (TOML nests it in that table, at any depth), and a close misspelling
+    such as ``overlay_enabled``. Ignored, they read as empty lists, so
+    ``playbook sync`` rendered with only ``agents_md`` and deleted the other
+    adapters' earlier output as leftovers. A string value (which became a list
+    of characters) and an empty name are refused too. ``source`` names the file
+    in every message line; every problem found is reported in one error.
+
+    Example::
+
+        >>> check_enabled_keys({"adapters_enabled": ["claude_code"]}, source="cfg.toml")
+        >>> check_enabled_keys({"adapters": {}}, source="cfg.toml")  # doctest: +ELLIPSIS
+        Traceback (most recent call last):
+        ...
+        coding_agent_playbook.config.ConfigError: cfg.toml: the [adapters] table is not read ...
+    """
+    problems = [
+        problem
+        for path, table in _iter_tables(data)
+        for key, value in table.items()
+        if (problem := _key_problem(path, key, value)) is not None
+    ]
+    if problems:
+        raise ConfigError("\n".join(f"{source}: {problem}" for problem in problems))
+
+
+def _iter_tables(
+    table: Mapping[str, object], path: _TablePath = ()
+) -> Iterator[tuple[_TablePath, Mapping[str, object]]]:
+    """Yield ``table`` and, depth first, every table nested in it, with its path.
+
+    Arrays of tables (``[[x]]``) are walked too, under the array's own name.
+    """
+    yield path, table
+    for key, value in table.items():
+        children = value if isinstance(value, list) else [value]
+        for child in children:
+            if isinstance(child, dict):
+                yield from _iter_tables(child, (*path, key))
+
+
+def _key_problem(path: _TablePath, key: str, value: object) -> str | None:
+    """Why ``key`` (in the table at ``path``) is misread, or ``None`` when it is fine."""
+    if not path and key in _ENABLED_KEYS:
+        return _list_value_problem(key, value)
+    target = _intended_enabled_key(path, key, value)
+    return None if target is None else _misplaced_key_problem(path, key, value, target)
+
+
+def _intended_enabled_key(path: _TablePath, key: str, value: object) -> str | None:
+    """The enabled key ``key`` was meant as although it is not read there, else ``None``.
+
+    A legacy name only counts nested when it holds an ``enabled`` table, so a
+    framework called ``adapters`` in ``[detector_cache.frameworks]`` still loads.
+    """
+    if key in _ENABLED_KEYS:
+        return key  # only reached nested: the top level is read as written
+    if key in _LEGACY_NAMES:
+        legacy = not path or (isinstance(value, dict) and "enabled" in value)
+        return _LEGACY_NAMES[key] if legacy else None
+    return _misspelled_enabled_key(key)
+
+
+def _misspelled_enabled_key(key: str) -> str | None:
+    """The enabled key ``key`` is a close misspelling of, else ``None``.
+
+    Compared case-insensitively with ``-`` as ``_`` and the words sorted, so
+    ``Overlays-Enabled`` and ``enabled_adapters`` match as well as ``overlay_enabled``.
+    """
+    normalized = {_normalized_key(name): name for name in _ENABLED_KEYS}
+    close = difflib.get_close_matches(
+        _normalized_key(key), normalized, n=1, cutoff=_MISSPELLING_SIMILARITY
+    )
+    return normalized[close[0]] if close else None
+
+
+def _normalized_key(key: str) -> str:
+    """``key`` lowercased, split on ``_``/``-``, its words sorted and rejoined with ``_``."""
+    return "_".join(sorted(key.lower().replace("-", "_").split("_")))
+
+
+def _misplaced_key_problem(path: _TablePath, key: str, value: object, target: str) -> str:
+    """Say where ``key`` is and why it is not read, then the exact top-level line to write."""
+    notes = [_NESTED_NOTE] if path else []
+    if key not in _ENABLED_KEYS and key not in _LEGACY_NAMES:
+        notes.append(f"did you mean {target}?")
+    why = f" ({'; '.join(notes)})" if notes else ""
+    listed = value.get("enabled") if isinstance(value, dict) else value
+    return (
+        f"{_describe_key(path, key, value)} is not read (found {value!r}){why}; "
+        f"use the top-level key instead, {_PLACEMENT}: {target} = {_replacement(target, listed)}"
+    )
+
+
+def _describe_key(path: _TablePath, key: str, value: object) -> str:
+    """``the [overlays] table``, ``the top-level key 'x'``, or ``'x' in the [engine] table``."""
+    if isinstance(value, dict) and key in _LEGACY_NAMES:
+        return f"the [{'.'.join((*path, key))}] table"
+    if not path:
+        return f"the top-level key {key!r}"
+    return f"{key!r} in the [{'.'.join(path)}] table"
+
+
+def _list_value_problem(key: str, value: object) -> str | None:
+    """Say why ``value`` is not a usable ``key`` list, or ``None`` when it is one."""
+    if not _is_str_list(value):
+        replacement = _replacement(key, value)
+        return f"{key} must be a list of strings, got {value!r}; write {key} = {replacement}"
+    if any(not item.strip() for item in value):
+        # An empty name reached importlib and crashed every command with a traceback.
+        return f"{key} lists an empty name, got {value!r}; remove the empty entry"
+    return None
+
+
+def _replacement(key: str, listed: object) -> str:
+    """The value to show in ``key = …``: ``listed`` itself when usable, else a placeholder.
+
+    A lone string is the common slip, so it is quoted back as the one-element list.
+    """
+    if _is_str_list(listed):
+        return _toml.format_scalar(listed)
+    if isinstance(listed, str):
+        return _toml.format_scalar([listed])
+    return _ENABLED_KEYS[key]
+
+
+def _is_str_list(value: object) -> TypeGuard[list[str]]:
+    """True for a list whose every item is a ``str`` (an empty list included)."""
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
 
 
 @dataclass
@@ -73,7 +262,20 @@ class Config:
         return self.output.commit if self.output is not None else False
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Config:
+    def from_dict(cls, data: dict[str, Any], *, source: str = "config") -> Config:
+        """Build a :class:`Config` from decoded TOML, refusing misread shapes.
+
+        ``source`` names where ``data`` came from in a :class:`ConfigError`
+        (:func:`check_enabled_keys`). ``FileSystemStateSource`` checks each file
+        before merging them, so this re-check matters for other callers.
+
+        Example::
+
+            >>> Config.from_dict({"schema_version": 1, "engine": {"version": "0.1"},
+            ...                   "project": {"name": "x", "kind": "python-library"}}).project.name
+            'x'
+        """
+        check_enabled_keys(data, source=source)
         project_data = data["project"]
         engine_data = data.get("engine", {})
         storage_data = data.get("storage")
@@ -231,8 +433,8 @@ def parse_output_config(data: object) -> OutputConfig:
         commit = false    # default: generated output is gitignored, local-only
 
     ``commit`` must be a real TOML boolean — a string like ``"false"`` is
-    rejected rather than coerced (``bool("false")`` is ``True``). Unknown keys
-    are ignored, mirroring the other config sections.
+    rejected with a :class:`ConfigError` rather than coerced (``bool("false")``
+    is ``True``). Unknown keys are ignored, mirroring the other config sections.
 
     Example::
 
@@ -240,10 +442,10 @@ def parse_output_config(data: object) -> OutputConfig:
         OutputConfig(commit=False)
     """
     if not isinstance(data, dict):
-        raise ValueError(f"[output] must be a table like {{commit = false}}, got {data!r}")
+        raise ConfigError(f"[output] must be a table like {{commit = false}}, got {data!r}")
     commit = data.get("commit", False)
     if not isinstance(commit, bool):
-        raise ValueError(f"[output] commit must be a boolean (true or false), got {commit!r}")
+        raise ConfigError(f"[output] commit must be a boolean (true or false), got {commit!r}")
     return OutputConfig(commit=commit)
 
 

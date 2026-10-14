@@ -11,8 +11,8 @@ from the shared :class:`~coding_agent_playbook.adapters._skill_writer.SkillWrite
 and are identical to the ``.claude/skills/`` and ``.opencode/skills/`` copies.
 
 On by default (``playbook init`` lists it in ``adapters_enabled``) but **not**
-force-enabled like ``agents_md`` — remove it from ``[adapters] enabled`` to opt
-out.
+force-enabled like ``agents_md`` — remove it from the top-level
+``adapters_enabled`` list to opt out.
 """
 
 from __future__ import annotations

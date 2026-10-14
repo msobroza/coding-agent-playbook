@@ -229,3 +229,17 @@ def test_main_translates_missing_config_to_exit_2(tmp_path, capsys):
     assert main(["sync", "--repo-root", str(tmp_path)]) == 2
     err = capsys.readouterr().err
     assert "error" in err.lower()
+
+
+def test_main_translates_config_error_to_exit_2(monkeypatch, capsys):
+    """A ConfigError (a config the engine would misread) is reported like a
+    missing config: ``error: <message>`` on stderr, exit 2, no traceback."""
+    from coding_agent_playbook.commands import sync as sync_cmd
+    from coding_agent_playbook.config import ConfigError
+
+    def raising_run(args):
+        raise ConfigError("x.toml: the [overlays] table is not read")
+
+    monkeypatch.setattr(sync_cmd, "run", raising_run)
+    assert main(["sync"]) == 2
+    assert capsys.readouterr().err == "error: x.toml: the [overlays] table is not read\n"
