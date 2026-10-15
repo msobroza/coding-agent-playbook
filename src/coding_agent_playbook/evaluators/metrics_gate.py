@@ -14,6 +14,15 @@ never inferred from ``[metrics] run_tests``, and
 :attr:`MetricsGateRequest.test_cmd` is exactly what runs: an agent can edit
 ``[metrics] test_cmd``, so only the CLI resolves it into a request.
 
+Which metrics run is the ruff-shaped selection (prK §F.0.3 item 2): the
+request's ``select`` / ``extend_select`` / ``ignore`` override ``[metrics]``'s,
+key by key. A name the request itself passes is checked strictly, so naming an
+execution metric without ``run_tests`` is a usage error; one only ``[metrics]``
+names is dropped when the suite does not run, so the static twins
+(``--no-run-tests``, the Stop stages) keep working on a config written for test
+runs. Targets matching ``[metrics] exclude`` are never measured, and
+``changed_only`` keeps those changed since the ``git:`` baseline.
+
 Example::
 
     >>> root = Path(".")
@@ -33,27 +42,42 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.config import parse_metrics_config
 from coding_agent_playbook.evaluators._metrics_inputs import (
+    GIT_PREFIX,
+    JSON_PREFIX,
     MAX_FILE_BYTES,
     MetricsGateUsageError,
     SourceMeter,
     discover_targets,
+    filter_targets,
+    git_usage_error,
     measure_candidates,
     static_baseline,
+    verify_git_ref,
 )
 from coding_agent_playbook.evaluators._metrics_suite import ProjectFactory, SuiteRun, suite_baseline
-from coding_agent_playbook.evaluators.baseline_git import SubprocessBaselineGit
+from coding_agent_playbook.evaluators.baseline_git import (
+    BaselineGitError,
+    SubprocessBaselineGit,
+    SubprocessGitRunner,
+    changed_paths,
+)
 from coding_agent_playbook.evaluators.check import MeasurementSet
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle
+from coding_agent_playbook.evaluators.measurement_snapshot import (
+    SnapshotError,
+    read_snapshot,
+    write_snapshot,
+)
 from coding_agent_playbook.evaluators.metric import execution_metrics, static_metrics
 from coding_agent_playbook.evaluators.parse import parse_module
-from coding_agent_playbook.evaluators.policy import metric_check
+from coding_agent_playbook.evaluators.policy import metric_check, resolve_metric_selection
 from coding_agent_playbook.evaluators.rubric import Rubric
 from coding_agent_playbook.evaluators.types import EvalContext, MetricConfig
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from coding_agent_playbook.evaluators.baseline_git import BaselineGit
+    from coding_agent_playbook.evaluators.baseline_git import BaselineGit, GitRunner
     from coding_agent_playbook.evaluators.check import Check
     from coding_agent_playbook.evaluators.metric import Metric
     from coding_agent_playbook.evaluators.types import EvaluationReport, Measurement, Mode
@@ -84,10 +108,16 @@ class MetricsGateRequest:
     ``config`` is the ``[metrics]`` policy; ``mode`` overrides ``config.mode``
     and ``strict`` is OR-ed with ``config.strict``. ``paths`` resolve against the
     process cwd (empty = ``<repo_root>/src``, else ``repo_root``). ``baseline`` is
-    ``git:<ref>`` or a directory. ``tool_paths`` fills
+    ``git:<ref>``, ``json:<snapshot>`` or a directory. ``tool_paths`` fills
     :attr:`EvalContext.tool_paths` for every measurement context. A candidate or
     baseline file over ``max_file_bytes`` is never parsed (a skip note for a
     candidate, all-new for a baseline).
+
+    ``select`` / ``extend_select`` / ``ignore`` replace their ``[metrics]`` key
+    when not ``None``. ``changed_only`` needs a ``git:`` baseline.
+    ``emit_measurements`` writes the raw candidate measurements there as a
+    snapshot of ``snapshot_tree`` (the caller's ``HEAD^{tree}`` or fingerprint;
+    ``None`` when the worktree is not one).
 
     Example::
 
@@ -105,6 +135,12 @@ class MetricsGateRequest:
     test_cmd: tuple[str, ...] | None = None
     tool_paths: Mapping[str, str] = field(default_factory=dict)
     max_file_bytes: int = MAX_FILE_BYTES
+    select: tuple[str, ...] | None = None
+    extend_select: tuple[str, ...] | None = None
+    ignore: tuple[str, ...] | None = None
+    changed_only: bool = False
+    emit_measurements: Path | None = None
+    snapshot_tree: str | None = None
 
 
 @dataclass(frozen=True)
@@ -139,13 +175,16 @@ class MetricsGateDeps:
     """The gate's replaceable collaborators (tests inject named fakes here).
 
     ``project_factory`` builds the handle a suite run executes;
-    ``load_static_metrics`` lists the static metrics to measure; ``git_factory``
-    builds the git client for a ``git:`` baseline from ``[metrics] git_timeout_s``.
+    ``load_static_metrics`` lists the static metrics to select from;
+    ``git_factory`` builds the git client for a ``git:`` baseline from
+    ``[metrics] git_timeout_s``, and ``git_runner_factory`` the working-tree
+    reader ``changed_only`` lists files with (a hook passes its ``SafeGit``).
     """
 
     project_factory: ProjectFactory = ProjectHandle.create
     load_static_metrics: Callable[[], list[Metric]] = static_metrics
     git_factory: Callable[[float], BaselineGit] = SubprocessBaselineGit
+    git_runner_factory: Callable[[Path, float], GitRunner] = SubprocessGitRunner
 
 
 @dataclass
@@ -214,36 +253,122 @@ def run_metrics_gate(
 
 
 def _measure(request: MetricsGateRequest, deps: MetricsGateDeps) -> _Measured:
-    """Static candidate + baseline measurements, then the suite when requested."""
+    """Static candidate + baseline measurements, the suite when selected, then the snapshot."""
     git = deps.git_factory(request.config.git_timeout_s)
-    static = deps.load_static_metrics()
+    static, execution = _selected_metrics(request, deps)
     meter = SourceMeter(static, request.tool_paths, request.max_file_bytes)
-    targets = discover_targets(request.paths, request.repo_root)
-    baseline = (
-        None
-        if request.baseline is None
-        else static_baseline(request.baseline, targets, request.repo_root, meter, git)
-    )
+    targets = _targets(request, deps, git)
+    baseline = _baseline(request, targets, meter, git)
     candidates = measure_candidates(targets, request.repo_root, meter)
     measured = _Measured(
-        static, [], candidates.measurements, baseline, candidates.skipped, candidates.measured_count
+        static,
+        execution,
+        candidates.measurements,
+        baseline,
+        candidates.skipped,
+        candidates.measured_count,
     )
-    if request.run_tests:
-        measured.execution = execution_metrics()
+    if measured.execution:
         _measure_suites(request, measured, deps.project_factory, git)
+    if request.emit_measurements is not None:
+        _emit(request.emit_measurements, measured.candidate, request.snapshot_tree)
     return measured
+
+
+def _selected_metrics(
+    request: MetricsGateRequest, deps: MetricsGateDeps
+) -> tuple[list[Metric], list[Metric]]:
+    """The selected ``(static, execution)`` metrics; execution only when the suite runs."""
+    available = [*deps.load_static_metrics(), *execution_metrics()]
+    config = request.config
+    try:
+        if not request.run_tests:
+            # Only the request's own names are strict: [metrics] also serves test
+            # runs, so its execution metrics are dropped below, not rejected.
+            requested = (*(request.select or ()), *(request.extend_select or ()))
+            resolve_metric_selection(available, select=(), extend_select=requested)
+        chosen = resolve_metric_selection(
+            available,
+            select=config.select if request.select is None else request.select,
+            extend_select=_override(request.extend_select, config.extend_select),
+            ignore=_override(request.ignore, config.ignore),
+            run_tests=True,
+        )
+    except ValueError as exc:
+        raise MetricsGateUsageError(str(exc)) from exc
+    static = [metric for metric in chosen if not metric.needs_project]
+    execution = [metric for metric in chosen if metric.needs_project and request.run_tests]
+    return static, execution
+
+
+def _override(
+    request_value: tuple[str, ...] | None, config_value: tuple[str, ...]
+) -> tuple[str, ...]:
+    return config_value if request_value is None else request_value
+
+
+def _targets(request: MetricsGateRequest, deps: MetricsGateDeps, git: BaselineGit) -> list[Path]:
+    """Discovered targets minus ``[metrics] exclude``; only the changed ones under ``changed_only``."""
+    targets = discover_targets(request.paths, request.repo_root)
+    changed = _changed_files(request, deps, git) if request.changed_only else None
+    return filter_targets(
+        targets, request.repo_root, exclude=request.config.exclude, changed=changed
+    )
+
+
+def _changed_files(
+    request: MetricsGateRequest, deps: MetricsGateDeps, git: BaselineGit
+) -> frozenset[str]:
+    """The files changed since the ``git:`` baseline, plus untracked ones (repo-relative)."""
+    baseline = request.baseline or ""
+    if not baseline.startswith(GIT_PREFIX):
+        raise MetricsGateUsageError(
+            f"--changed needs a git: baseline (--baseline git:<ref>), got {request.baseline!r}"
+        )
+    ref = baseline[len(GIT_PREFIX) :]
+    verify_git_ref(git, request.repo_root, ref)
+    runner = deps.git_runner_factory(request.repo_root, request.config.git_timeout_s)
+    try:
+        return changed_paths(runner, ref)
+    except BaselineGitError as exc:
+        raise git_usage_error(exc, f"cannot list the files changed since {ref!r}") from exc
+
+
+def _baseline(
+    request: MetricsGateRequest, targets: Sequence[Path], meter: SourceMeter, git: BaselineGit
+) -> list[Measurement] | None:
+    """The static baseline; a ``json:`` snapshot already holds every measurement."""
+    if request.baseline is None:
+        return None
+    if request.baseline.startswith(JSON_PREFIX):
+        try:
+            return read_snapshot(Path(request.baseline[len(JSON_PREFIX) :]))
+        except SnapshotError as exc:
+            raise MetricsGateUsageError(str(exc)) from exc
+    return static_baseline(request.baseline, targets, request.repo_root, meter, git)
+
+
+def _emit(path: Path, measurements: Sequence[Measurement], tree: str | None) -> None:
+    try:
+        write_snapshot(path, measurements, tree=tree)
+    except OSError as exc:
+        raise MetricsGateUsageError(f"cannot write --emit-measurements {path}: {exc}") from exc
 
 
 def _measure_suites(
     request: MetricsGateRequest, measured: _Measured, factory: ProjectFactory, git: BaselineGit
 ) -> None:
-    """Run the suite once on the candidate and, with a baseline, once on the baseline."""
+    """Run the suite once on the candidate and, with a git/dir baseline, once on the baseline.
+
+    A ``json:`` baseline snapshot already carries the baseline's execution
+    measurements, which is what makes it cheaper than a second suite run.
+    """
     test_cmd = None if request.test_cmd is None else list(request.test_cmd)
     suite = SuiteRun(measured.execution, test_cmd, factory, request.tool_paths)
     with tempfile.TemporaryDirectory(prefix="playbook-metrics-") as tmp:
         work_dir = Path(tmp)
         measured.candidate.extend(suite.measure(request.repo_root, work_dir / "candidate-reports"))
-        if request.baseline is not None:
+        if request.baseline is not None and not request.baseline.startswith(JSON_PREFIX):
             exec_baseline = suite_baseline(
                 request.baseline, request.repo_root, suite, work_dir, git
             )

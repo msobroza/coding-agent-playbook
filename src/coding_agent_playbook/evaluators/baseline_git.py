@@ -17,6 +17,11 @@ The file reads are one ``git cat-file --batch`` process instead of one
 ``git show`` per file. ``--batch`` frames its input by line, so a path that
 contains a newline or a carriage return (``strbuf_getline`` strips a CR before
 the LF) falls back to ``git show``.
+
+``--changed`` and the ``--emit-measurements`` tree read the working tree
+(``diff``, ``ls-files``, ``status``) through a :data:`GitRunner`: one callable
+per repository root, so a hook can hand the gate its hardened ``SafeGit``
+instead of :class:`SubprocessGitRunner` (prK §F.0.3 items 3-4).
 """
 
 from __future__ import annotations
@@ -24,14 +29,37 @@ from __future__ import annotations
 import contextlib
 import os
 import subprocess
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Final, Protocol
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from pathlib import Path
 
+    #: ``git <args>`` at one repository root -> stdout. Raises
+    #: :class:`BaselineGitError` on a failure, :class:`GitTimeoutError` past its bound.
+    type GitRunner = Callable[[Sequence[str]], bytes]
+
 #: Characters ``git cat-file --batch`` cannot carry in its line-framed input.
 _UNFRAMEABLE = ("\n", "\r")
+
+#: ``core.fsmonitor`` is repository config naming a program git runs on
+#: worktree reads (``status``, ``diff``); the agent can write that config.
+_NO_FSMONITOR: Final = ("-c", "core.fsmonitor=false")
+
+#: What ``--changed`` measures: added, modified or renamed files (a deleted one
+#: has nothing to measure). ``--relative`` keeps the names relative to the
+#: runner's root, like ``ls-files``; external diff drivers and textconv never run.
+_CHANGED_DIFF: Final = (
+    "diff",
+    "--name-only",
+    "-z",
+    "--relative",
+    "--no-ext-diff",
+    "--no-textconv",
+    "-M",
+    "--diff-filter=AMR",
+)
+_UNTRACKED: Final = ("ls-files", "--others", "--exclude-standard", "-z")
 
 
 class BaselineGitError(Exception):
@@ -156,15 +184,73 @@ class SubprocessBaselineGit:
         self, args: list[str], cwd: Path, *, stdin: bytes | None = None
     ) -> subprocess.CompletedProcess[bytes]:
         """Run ``git <args>`` with the bound; timeouts and OS errors become typed errors."""
-        kwargs: dict[str, Any] = {"cwd": cwd, "capture_output": True, "check": False}
-        try:
-            return self._run(
-                [self._executable, *args], input=stdin, timeout=self._timeout_s, **kwargs
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise GitTimeoutError(_command_label(args), self._timeout_s) from exc
-        except OSError as exc:
-            raise BaselineGitError(f"cannot run {self._executable}: {exc}") from exc
+        return _run_git(self._run, self._executable, args, cwd, self._timeout_s, stdin=stdin)
+
+
+class SubprocessGitRunner:
+    """A :data:`GitRunner` over the ``git`` binary at ``repo_root``, bounded by ``timeout_s``.
+
+    Every call disables ``core.fsmonitor``; a non-zero exit raises
+    :class:`BaselineGitError` carrying git's stderr.
+
+    Example::
+
+        >>> runner = SubprocessGitRunner(Path("."), 10.0)
+        >>> runner(["rev-parse", "HEAD"])  # doctest: +SKIP
+        b'1f2e...\\n'
+    """
+
+    def __init__(
+        self,
+        repo_root: Path,
+        timeout_s: float,
+        *,
+        run: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run,
+        executable: str = "git",
+    ) -> None:
+        self._repo_root = repo_root
+        self._timeout_s = timeout_s
+        self._run = run
+        self._executable = executable
+
+    def __call__(self, args: Sequence[str]) -> bytes:
+        """``git <args>``'s stdout; raises :class:`BaselineGitError` when git fails."""
+        argv = [*_NO_FSMONITOR, *args]
+        proc = _run_git(self._run, self._executable, argv, self._repo_root, self._timeout_s)
+        if proc.returncode != 0:
+            raise BaselineGitError(f"git {_command_label(args)} failed: {_stderr(proc)}")
+        return proc.stdout
+
+
+def changed_paths(git: GitRunner, ref: str) -> frozenset[str]:
+    """Paths added, modified or renamed since ``ref``, plus untracked ones, relative to ``git``'s root.
+
+    The working tree is compared, staged or not; ignored files are left out.
+
+    Example::
+
+        >>> changed_paths(SubprocessGitRunner(Path("."), 10.0), "HEAD")  # doctest: +SKIP
+        frozenset({'src/app.py', 'src/new_module.py'})
+    """
+    changed = _split_z(git([*_CHANGED_DIFF, ref, "--"]))
+    return frozenset(changed) | frozenset(_split_z(git(list(_UNTRACKED))))
+
+
+def clean_head_tree(git: GitRunner) -> str | None:
+    """``HEAD^{tree}`` when the worktree is clean (no change, no untracked file), else ``None``.
+
+    A measurement snapshot names this tree, so a later run at the same commit
+    can reuse it as its baseline (prK §F.0.3 item 4). Raises
+    :class:`BaselineGitError` when git fails (an unborn ``HEAD`` included).
+
+    Example::
+
+        >>> clean_head_tree(SubprocessGitRunner(Path("."), 10.0))  # doctest: +SKIP
+        '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+    """
+    if git(["status", "--porcelain", "-z"]):
+        return None
+    return os.fsdecode(git(["rev-parse", "--verify", "HEAD^{tree}"])).strip()
 
 
 def parse_batch_output(stdout: bytes, rel_paths: Sequence[str]) -> dict[str, bytes]:
@@ -211,9 +297,39 @@ def _is_unframeable(rel_path: str) -> bool:
     return any(char in rel_path for char in _UNFRAMEABLE)
 
 
+def _run_git(
+    run: Callable[..., subprocess.CompletedProcess[bytes]],
+    executable: str,
+    args: Sequence[str],
+    cwd: Path,
+    timeout_s: float,
+    *,
+    stdin: bytes | None = None,
+) -> subprocess.CompletedProcess[bytes]:
+    """``<executable> <args>`` in ``cwd`` within ``timeout_s``; timeouts and OS errors become typed."""
+    kwargs: dict[str, Any] = {"cwd": cwd, "capture_output": True, "check": False}
+    try:
+        return run([executable, *args], input=stdin, timeout=timeout_s, **kwargs)
+    except subprocess.TimeoutExpired as exc:
+        raise GitTimeoutError(_command_label(args), timeout_s) from exc
+    except OSError as exc:
+        raise BaselineGitError(f"cannot run {executable}: {exc}") from exc
+
+
+def _split_z(stdout: bytes) -> list[str]:
+    """NUL-framed git output (``-z``) as paths; undecodable bytes survive as surrogates."""
+    return [os.fsdecode(name) for name in stdout.split(b"\0") if name]
+
+
 def _command_label(args: Sequence[str]) -> str:
-    """What a timeout names: ``rev-parse``, ``cat-file``, ``show``, ``worktree add``."""
-    return " ".join(args[:2]) if args[0] == "worktree" else args[0]
+    """What a timeout names: ``rev-parse``, ``cat-file``, ``show``, ``worktree add``.
+
+    Leading ``-c key=value`` options are skipped.
+    """
+    rest = list(args)
+    while rest[:1] == ["-c"]:
+        rest = rest[2:]
+    return " ".join(rest[:2]) if rest[0] == "worktree" else rest[0]
 
 
 def _stderr(proc: subprocess.CompletedProcess[bytes]) -> str:

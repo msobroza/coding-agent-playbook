@@ -7,7 +7,8 @@ missing, timeout) exactly like the real client. :func:`pre_gate_validate` stands
 in for ``playbook sync``'s validate gate. ``FakeProjectFactory`` stands in for
 ``ProjectHandle.create`` so metrics-gate tests see which test command would run
 without running a suite, and ``FakeBaselineGit`` stands in for
-:class:`coding_agent_playbook.evaluators.baseline_git.SubprocessBaselineGit`.
+:class:`coding_agent_playbook.evaluators.baseline_git.SubprocessBaselineGit`;
+``FakeGitRunner`` stands in for its working-tree reads (``SubprocessGitRunner``).
 ``FakeHandlerSchemas`` stands in for the hook-handler ``CONFIG_SCHEMA`` registry
 (K2) behind :class:`coding_agent_playbook.hook_policy.ConfigSchemaLookup`.
 ``FakePinWriter`` stands in for the ``hook_runtime.pin`` writers ``playbook sync``
@@ -159,6 +160,33 @@ class FakeBaselineGit:
             raise GitTimeoutError(command, self.timeout_s)
         if command in self.fail_on:
             raise BaselineGitError(f"fatal: {command} failed for {ref}")
+
+
+@dataclass
+class FakeGitRunner:
+    """In-memory :data:`~coding_agent_playbook.evaluators.baseline_git.GitRunner`.
+
+    ``outputs`` maps a git subcommand (``"diff"``, ``"ls-files"``, ``"status"``,
+    ``"rev-parse"``) to its stdout; an unlisted one prints nothing. A subcommand
+    in ``fail_on`` raises :class:`BaselineGitError`. ``calls`` records each argv.
+    Build one per gate with :meth:`factory` (the ``MetricsGateDeps`` shape).
+    """
+
+    outputs: dict[str, bytes] = field(default_factory=dict)
+    fail_on: set[str] = field(default_factory=set)
+    calls: list[tuple[str, ...]] = field(default_factory=list)
+    roots: list[tuple[Path, float]] = field(default_factory=list)
+
+    def __call__(self, args: Sequence[str]) -> bytes:
+        self.calls.append(tuple(args))
+        if args[0] in self.fail_on:
+            raise BaselineGitError(f"fatal: {args[0]} failed")
+        return self.outputs.get(args[0], b"")
+
+    def factory(self, repo_root: Path, timeout_s: float) -> FakeGitRunner:
+        """Record the root and bound the gate asked for, then hand out this fake."""
+        self.roots.append((repo_root, timeout_s))
+        return self
 
 
 @dataclass

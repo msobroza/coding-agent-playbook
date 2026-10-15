@@ -12,14 +12,23 @@ defaults live in exactly one place.
 
 Living in the ``evaluators`` layer keeps ``commands`` from importing ``evals``
 just for the shared default thresholds.
+
+Which metrics a gate run measures is policy too (prK §F.0.3 item 2), so the
+ruff-shaped selection (:data:`METRIC_FAMILIES`, :data:`OPT_IN_METRICS`,
+:func:`resolve_metric_selection`) lives here beside the defaults; a ``Metric``
+carries only measurement descriptors.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping, Sequence
+
     from coding_agent_playbook.evaluators.check import Check
+    from coding_agent_playbook.evaluators.metric import Metric
     from coding_agent_playbook.evaluators.types import MetricConfig
 
 #: Per-metric default grading policy. The ``Check`` layer carries the policy on
@@ -105,4 +114,112 @@ def metric_check(name: str, config: MetricConfig) -> Check | None:
     )
 
 
-__all__ = ["METRIC_DEFAULTS", "metric_check"]
+#: Selection families (prK §F.0.3 item 2): a ``select`` / ``extend_select`` name
+#: that stands for its members. ``ruff_violations`` sits in two families because
+#: it measures per ruff code family; a Stop stage keeps only its own scope keys.
+#: Members no step has registered yet are skipped, never an error.
+METRIC_FAMILIES: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
+    {
+        "quality": (
+            "cyclomatic_complexity",
+            "wmc",
+            "lcom4",
+            "dit",
+            "cbo",
+            "maintainability_index",
+            "file_sloc",
+            "ruff_violations",
+        ),
+        "docstrings": ("ruff_violations", "docstring_example"),
+        "testing": ("test_pass_rate", "coverage", "diff_coverage"),
+    }
+)
+
+#: Metrics enabled only **by name** (prK §F.2.1): never by default and never
+#: through a family. ``ruff_violations`` is available wherever ruff is on PATH,
+#: so default-selecting it would change every consumer's pre-commit results on
+#: upgrade.
+OPT_IN_METRICS: Final = frozenset({"ruff_violations", "file_sloc", "docstring_example"})
+
+
+def resolve_metric_selection(
+    available: Sequence[Metric],
+    *,
+    select: Iterable[str] | None = None,
+    extend_select: Iterable[str] = (),
+    ignore: Iterable[str] = (),
+    run_tests: bool = False,
+) -> list[Metric]:
+    """The metrics of ``available`` a gate run measures, in ``available``'s order.
+
+    ``select=None`` means the default: every static metric except
+    :data:`OPT_IN_METRICS`, plus the non-opt-in execution metrics under
+    ``run_tests``. A ``select`` list replaces the default, ``extend_select``
+    adds and ``ignore`` removes. A family name expands to its non-opt-in members
+    (in ``ignore``: to all of them), so an opt-in metric is enabled only by name.
+
+    Raises ``ValueError`` for a name that is neither a family nor a metric
+    (registered or a family member), and for an execution metric selected
+    without ``run_tests``: running tests is never implied.
+
+    Example::
+
+        >>> [m.name for m in resolve_metric_selection(all_metrics(), select=["wmc"])]
+        ['wmc']
+    """
+    select_names = None if select is None else tuple(select)
+    extend_names, ignore_names = tuple(extend_select), tuple(ignore)
+    _check_known([*(select_names or ()), *extend_names, *ignore_names], available)
+    if select_names is None:
+        chosen = {m.name for m in available if _in_default(m, run_tests=run_tests)}
+    else:
+        chosen = _expand(select_names)
+    chosen = (chosen | _expand(extend_names)) - _expand(ignore_names, opt_ins=True)
+    picked = [metric for metric in available if metric.name in chosen]
+    _check_runnable(picked, run_tests=run_tests)
+    return picked
+
+
+def _in_default(metric: Metric, *, run_tests: bool) -> bool:
+    if metric.name in OPT_IN_METRICS:
+        return False
+    return run_tests or not metric.needs_project
+
+
+def _expand(names: Iterable[str], *, opt_ins: bool = False) -> set[str]:
+    """Metric names for ``names``: a family becomes its (non-opt-in) members."""
+    out: set[str] = set()
+    for name in names:
+        members = METRIC_FAMILIES.get(name)
+        if members is None:
+            out.add(name)
+        else:
+            out.update(m for m in members if opt_ins or m not in OPT_IN_METRICS)
+    return out
+
+
+def _check_known(names: Iterable[str], available: Sequence[Metric]) -> None:
+    registered = {metric.name for metric in available} | set(METRIC_FAMILIES)
+    members = {member for family in METRIC_FAMILIES.values() for member in family}
+    unknown = [name for name in names if name not in registered | members]
+    if unknown:
+        valid = ", ".join(sorted(registered))
+        raise ValueError(f"unknown metric or family {unknown[0]!r}; expected one of: {valid}")
+
+
+def _check_runnable(picked: Sequence[Metric], *, run_tests: bool) -> None:
+    execution = [metric.name for metric in picked if metric.needs_project]
+    if execution and not run_tests:
+        raise ValueError(
+            f"execution metric(s) {', '.join(execution)} selected without --run-tests; "
+            "running the suite is never implied"
+        )
+
+
+__all__ = [
+    "METRIC_DEFAULTS",
+    "METRIC_FAMILIES",
+    "OPT_IN_METRICS",
+    "metric_check",
+    "resolve_metric_selection",
+]

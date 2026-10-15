@@ -203,7 +203,37 @@ def build_parser() -> argparse.ArgumentParser:
     )
     metrics_p.add_argument(
         "--baseline",
-        help="non-regression baseline: 'git:<ref>' (via git show) or a directory path",
+        help="non-regression baseline: 'git:<ref>', 'json:<path>' (an --emit-measurements "
+        "snapshot) or a directory path",
+    )
+    metrics_p.add_argument(
+        "--changed",
+        action="store_true",
+        help="only the *.py files changed against the git: baseline, plus untracked ones",
+    )
+    # Ruff-shaped selection (prK §F.0.3 item 2): each flag replaces its [metrics] key.
+    metrics_p.add_argument(
+        "--select",
+        metavar="NAMES",
+        help="comma-separated metrics or families (quality, docstrings, testing) to "
+        "measure instead of the default set",
+    )
+    metrics_p.add_argument(
+        "--extend-select",
+        dest="extend_select",
+        metavar="NAMES",
+        help="comma-separated metrics or families to add; opt-in metrics only by name",
+    )
+    metrics_p.add_argument(
+        "--ignore",
+        metavar="NAMES",
+        help="comma-separated metrics or families to leave out",
+    )
+    metrics_p.add_argument(
+        "--emit-measurements",
+        dest="emit_measurements",
+        metavar="PATH",
+        help="write the raw candidate measurements as a JSON snapshot (for --baseline json:PATH)",
     )
     metrics_p.add_argument(
         "--mode",
@@ -215,12 +245,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="promote warnings to gate failures (non-zero exit)",
     )
+    # Tri-state: None defers to [metrics] run_tests; --no-run-tests keeps the
+    # pre-commit twins static even when the config enables tests (§F.0.3 item 6).
     metrics_p.add_argument(
         "--run-tests",
         dest="run_tests",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help="also run the execution evaluators (test_pass_rate, coverage): "
-        "shells out to the target's pytest (opt-in, has side effects)",
+        "shells out to the target's pytest (opt-in, has side effects); "
+        "--no-run-tests overrides [metrics] run_tests = true",
     )
     metrics_p.add_argument(
         "--test-cmd",

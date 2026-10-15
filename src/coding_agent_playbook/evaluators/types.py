@@ -13,6 +13,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
+# The eval-fixture globs are defined once, for the hooks' ``eval_fixture`` path
+# class; ``_eval_paths`` imports only ``re``, so the evaluators stay light.
+from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
@@ -215,6 +219,13 @@ class MetricConfig:
     dicts are per-evaluator overrides keyed by evaluator ``name``.
     ``git_timeout_s`` bounds every git call a ``git:`` baseline makes (prK
     §F.0.3 item 7).
+
+    ``select`` / ``extend_select`` / ``ignore`` are the ruff-shaped metric
+    selection (metric or family names; ``select=None`` is the default set, see
+    :func:`~coding_agent_playbook.evaluators.policy.resolve_metric_selection`).
+    ``exclude`` lists repo-relative globs never measured; it defaults to the
+    frozen eval fixtures. ``test_timeout_s`` bounds a suite run (``None``: no
+    bound).
     """
 
     mode: Mode = "regression"
@@ -226,6 +237,11 @@ class MetricConfig:
     regression: dict[str, RegressionPolicy] = field(default_factory=dict)
     weights: dict[str, float] = field(default_factory=dict)
     git_timeout_s: float = DEFAULT_GIT_TIMEOUT_S
+    select: tuple[str, ...] | None = None
+    extend_select: tuple[str, ...] = ()
+    ignore: tuple[str, ...] = ()
+    exclude: tuple[str, ...] = FIXTURE_GLOBS
+    test_timeout_s: float | None = None
 
 
 @dataclass

@@ -35,6 +35,11 @@ def parse_metrics_config(data: dict[str, Any]) -> MetricConfig:
         run_tests = false            # reserved for M4 (execution evaluators)
         test_cmd = ["python", "-m", "pytest"]
         git_timeout_s = 10           # bound on every git call of a git: baseline
+        test_timeout_s = 300         # bound on a suite run (absent: unbounded)
+        select = ["quality"]         # metric or family names (absent: the default set)
+        extend_select = ["file_sloc"]
+        ignore = ["lcom4"]
+        exclude = ["**/eval_tasks/*/setup/**"]   # the default; a list replaces it
 
         [metrics.thresholds.cyclomatic_complexity]
         warn = 10
@@ -47,7 +52,9 @@ def parse_metrics_config(data: dict[str, Any]) -> MetricConfig:
         cyclomatic_complexity = 1.0
 
     Unknown keys are ignored; ``thresholds``/``regression``/``weights`` are
-    per-evaluator-name dicts. Raises :class:`ValueError` naming the bad value.
+    per-evaluator-name dicts. Selection names are checked by the gate, which
+    knows the registered metrics. Raises :class:`ValueError` naming the bad
+    key and value.
 
     Example::
 
@@ -60,6 +67,8 @@ def parse_metrics_config(data: dict[str, Any]) -> MetricConfig:
     if mode not in _VALID_METRIC_MODES:
         raise ValueError(f"[metrics] mode must be one of {_VALID_METRIC_MODES!r}, got {mode!r}")
     test_cmd_raw = data.get("test_cmd")
+    defaults = MetricConfig()
+    test_timeout = data.get("test_timeout_s")
     return MetricConfig(
         mode=mode,
         fail_on_breach=bool(data.get("fail_on_breach", True)),
@@ -69,7 +78,16 @@ def parse_metrics_config(data: dict[str, Any]) -> MetricConfig:
         thresholds=_parse_thresholds(data.get("thresholds") or {}),
         regression=_parse_regression(data.get("regression") or {}),
         weights={name: float(value) for name, value in (data.get("weights") or {}).items()},
-        git_timeout_s=_parse_git_timeout(data.get("git_timeout_s", DEFAULT_GIT_TIMEOUT_S)),
+        git_timeout_s=_positive_seconds(
+            "git_timeout_s", data.get("git_timeout_s", DEFAULT_GIT_TIMEOUT_S)
+        ),
+        select=_string_list(data, "select") if "select" in data else None,
+        extend_select=_string_list(data, "extend_select", defaults.extend_select),
+        ignore=_string_list(data, "ignore", defaults.ignore),
+        exclude=_string_list(data, "exclude", defaults.exclude),
+        test_timeout_s=None
+        if test_timeout is None
+        else _positive_seconds("test_timeout_s", test_timeout),
     )
 
 
@@ -93,8 +111,8 @@ def _parse_regression(table: dict[str, Any]) -> dict[str, RegressionPolicy]:
     }
 
 
-def _parse_git_timeout(raw: object) -> float:
-    """A positive, finite number of seconds: ``subprocess`` cannot wait forever on git.
+def _positive_seconds(key: str, raw: object) -> float:
+    """A positive, finite number of seconds: ``subprocess`` cannot wait forever.
 
     ``bool`` is rejected although it is an ``int``: ``git_timeout_s = true`` is a typo.
     """
@@ -103,10 +121,22 @@ def _parse_git_timeout(raw: object) -> float:
         or not isinstance(raw, int | float)
         or not (math.isfinite(raw) and raw > 0)
     ):
-        raise ValueError(
-            f"[metrics] git_timeout_s must be a positive number of seconds, got {raw!r}"
-        )
+        raise ValueError(f"[metrics] {key} must be a positive number of seconds, got {raw!r}")
     return float(raw)
+
+
+def _string_list(data: dict[str, Any], key: str, default: tuple[str, ...] = ()) -> tuple[str, ...]:
+    """``data[key]`` as a tuple of strings, ``default`` when the key is absent.
+
+    A present key must be a list of strings: a bare ``select = "quality"`` would
+    otherwise iterate into one-letter names.
+    """
+    if key not in data:
+        return default
+    raw = data[key]
+    if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
+        raise ValueError(f"[metrics] {key} must be a list of strings, got {raw!r}")
+    return tuple(raw)
 
 
 def _as_optional_float(value: Any) -> float | None:

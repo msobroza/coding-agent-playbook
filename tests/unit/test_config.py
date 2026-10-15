@@ -166,6 +166,50 @@ def test_parse_metrics_config_rejects_non_positive_git_timeout(raw):
     )
 
 
+def test_parse_metrics_config_selection_lists():
+    """prK §F.0.3 item 2: ruff-shaped selection keys; names are validated by the gate."""
+    cfg = parse_metrics_config(
+        {"select": ["quality"], "extend_select": ["ruff_violations"], "ignore": ["lcom4"]}
+    )
+
+    assert cfg.select == ("quality",)
+    assert cfg.extend_select == ("ruff_violations",)
+    assert cfg.ignore == ("lcom4",)
+    defaults = parse_metrics_config({})
+    assert (defaults.select, defaults.extend_select, defaults.ignore) == (None, (), ())
+
+
+@pytest.mark.parametrize("key", ["select", "extend_select", "ignore", "exclude"])
+@pytest.mark.parametrize("raw", ["quality", ["wmc", 3], {"a": 1}, None], ids=repr)
+def test_parse_metrics_config_rejects_non_string_list_naming_value(key, raw):
+    with pytest.raises(ValueError) as excinfo:
+        parse_metrics_config({key: raw})
+
+    assert str(excinfo.value) == f"[metrics] {key} must be a list of strings, got {raw!r}"
+
+
+def test_exclude_defaults_to_eval_fixture_globs():
+    """prK §F.0.3 item 5: intentionally bad eval needle code never gates a commit."""
+    from coding_agent_playbook.evaluators.paths import EVAL_FIXTURE_GLOBS
+    from coding_agent_playbook.evaluators.types import MetricConfig
+
+    assert parse_metrics_config({}).exclude == EVAL_FIXTURE_GLOBS
+    assert MetricConfig().exclude == EVAL_FIXTURE_GLOBS
+    assert parse_metrics_config({"exclude": []}).exclude == ()
+    assert parse_metrics_config({"exclude": ["gen/**"]}).exclude == ("gen/**",)
+
+
+def test_parse_metrics_config_timeouts_positive():
+    assert parse_metrics_config({}).test_timeout_s is None
+    assert parse_metrics_config({"test_timeout_s": 300}).test_timeout_s == 300.0
+    with pytest.raises(ValueError) as excinfo:
+        parse_metrics_config({"test_timeout_s": -5})
+
+    assert str(excinfo.value) == (
+        "[metrics] test_timeout_s must be a positive number of seconds, got -5"
+    )
+
+
 def test_parse_links_config_empty_uses_strict_default():
     from coding_agent_playbook.config import parse_links_config
 

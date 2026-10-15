@@ -95,15 +95,19 @@ def test_cap_validate_hook_is_manual_only():
 
 def test_cap_metrics_hook_is_static_only():
     """PR-M Track M3: the default metrics hook runs the *static* gate against
-    HEAD and must never opt into execution evaluators (`--run-tests`)."""
+    HEAD and must never opt into execution evaluators (`--run-tests`).
+
+    prK §F.0.3 item 6: ``--no-run-tests`` keeps it static even when the
+    consumer's ``[metrics] run_tests = true``.
+    """
     hooks = _load_hooks()
     metrics = next((h for h in hooks if h["id"] == "playbook-metrics"), None)
     assert metrics is not None, "missing playbook-metrics hook"
-    assert metrics["entry"] == "playbook metrics --baseline git:HEAD"
+    assert metrics["entry"] == "playbook metrics --baseline git:HEAD --no-run-tests"
     assert metrics["language"] == "python"
     # STATIC ONLY — execution evaluators (cost + side effects) stay out of the
     # default hook.
-    assert "--run-tests" not in metrics["entry"]
+    assert "--run-tests" not in metrics["entry"].split()
     # Runs on staged Python only (not always_run).
     assert metrics["types_or"] == ["python", "pyi"]
     assert metrics.get("always_run") in (None, False)

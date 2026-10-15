@@ -73,7 +73,8 @@
 # Diffs staged Python against HEAD so a commit may not regress cyclomatic
 # complexity, maintainability index, etc. Execution evaluators (`--run-tests`)
 # are intentionally NOT in this default hook (side effects + cost) — run those
-# in CI or a manual hook instead.
+# in CI or a manual hook instead. `--no-run-tests` keeps it static even when your
+# `[metrics]` sets `run_tests = true` (that setting is for CI and manual runs).
 # Caveat: the gate compares the *working-tree* file against HEAD (not the index),
 # so a partially-staged file is diffed working-tree-against-HEAD. Acceptable for
 # the common all-staged case (working tree == index).
@@ -84,7 +85,7 @@
 - id: playbook-metrics
   name: coding-agent-playbook metrics (static, non-regression vs HEAD)
   description: Static code-quality gate — fail when staged Python worsens vs HEAD
-  entry: playbook metrics --baseline git:HEAD
+  entry: playbook metrics --baseline git:HEAD --no-run-tests
   language: python
   types_or: [python, pyi]
   require_serial: true

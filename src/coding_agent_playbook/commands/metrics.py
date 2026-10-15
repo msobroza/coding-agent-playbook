@@ -19,19 +19,30 @@ Stop stages call in-process (prK §F.0.3 item 1).
 
 Usage::
 
-    playbook metrics [PATHS…] [--baseline git:REF|DIR] [--mode regression|absolute|both]
-                     [--strict] [--run-tests] [--test-cmd "…"]
+    playbook metrics [PATHS…] [--baseline git:REF|json:PATH|DIR] [--changed]
+                     [--select M,…] [--extend-select M,…] [--ignore M,…]
+                     [--mode regression|absolute|both] [--strict]
+                     [--run-tests|--no-run-tests] [--test-cmd "…"]
+                     [--emit-measurements PATH]
                      [--format text|json] [--repo-root DIR]
 
 * **Default PATHS** — when none are given, the repo's ``src/`` directory if it
   exists, else the repo root (``--repo-root`` or cwd). Directories recurse for
   ``*.py``, skipping dotdirs and common ignores (``__pycache__``, ``.venv``,
-  ``venv``, ``node_modules``, ``build``, ``dist``, ``.git``).
+  ``venv``, ``node_modules``, ``build``, ``dist``, ``.git``). Files matching
+  ``[metrics] exclude`` (default: the eval ``setup/`` fixtures) are never
+  measured, even when named explicitly. ``--changed`` keeps only the files
+  changed against the ``git:`` baseline (plus untracked ones).
+* **Selection** — ``--select`` / ``--extend-select`` / ``--ignore`` take
+  comma-separated metric or family names (``quality``, ``docstrings``,
+  ``testing``) and each replaces its ``[metrics]`` key. Opt-in metrics are
+  enabled only by name.
 * **Baseline** — ``--baseline git:<ref>`` reads each candidate's prior source at
   ``<ref>`` (a file missing in the ref is all-new); ``--baseline <dir>`` reads
-  the matching relative file under ``<dir>``. With no baseline (or
-  ``regression``/``both`` requested without one) the gate falls back to absolute
-  mode and notes it.
+  the matching relative file under ``<dir>``; ``--baseline json:<path>`` reads an
+  ``--emit-measurements`` snapshot, so no baseline suite runs. With no baseline
+  (or ``regression``/``both`` requested without one) the gate falls back to
+  absolute mode and notes it.
 * **Execution (`--run-tests`)** — builds a ``ProjectHandle`` rooted at
   ``--repo-root`` (or cwd), runs the suite once, and merges the
   ``test_pass_rate``/``coverage`` measurements alongside the static ones.
@@ -39,6 +50,9 @@ Usage::
   (shlex-split). With a baseline, the suite is also run against the baseline: a
   ``git:<ref>`` baseline is materialised via a temporary ``git worktree`` (heavier
   than the static read) and a ``<dir>`` baseline runs in that directory.
+  ``--no-run-tests`` overrides ``[metrics] run_tests = true``.
+* **Snapshot** — ``--emit-measurements PATH`` writes the raw candidate
+  measurements as JSON, tagged with ``HEAD^{tree}`` when the worktree is clean.
 * **Config** — a ``[metrics]`` table in ``.coding-agent-playbook.toml`` (parsed by
   :func:`coding_agent_playbook.config.parse_metrics_config`) seeds the
   :class:`~coding_agent_playbook.evaluators.types.MetricConfig`; CLI flags
@@ -46,8 +60,10 @@ Usage::
   the CLI, never by the gate.
 
 Exit codes: ``0`` pass; ``1`` when ``report.passed`` is ``False`` and
-``fail_on_breach``; ``2`` on usage errors (bad path, bad baseline ref/dir, a git
-call past ``[metrics] git_timeout_s``, malformed/invalid ``[metrics]`` config).
+``fail_on_breach``; ``2`` on usage errors (bad path, bad baseline ref/dir/snapshot,
+a git call past ``[metrics] git_timeout_s``, malformed/invalid ``[metrics]``
+config, an unknown selection name, an execution metric selected without
+``--run-tests``, ``--changed`` without a ``git:`` baseline).
 
 Finding levels by format: ``--format json`` includes every finding (``ok`` level
 too) for a machine audience; ``--format text`` shows only ``warn``/``fail`` for a
@@ -62,6 +78,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
+from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, clean_head_tree
 from coding_agent_playbook.evaluators.metrics_gate import (
     MetricsGateDeps,
     MetricsGateRequest,
@@ -107,9 +124,17 @@ def _resolve_test_cmd(args: argparse.Namespace, config: MetricConfig) -> tuple[s
     return None if config.test_cmd is None else tuple(config.test_cmd)
 
 
-def _build_request(args: argparse.Namespace, repo_root: Path) -> MetricsGateRequest:
-    """Load ``[metrics]`` and fold the flags in; ``--run-tests`` OR ``[metrics] run_tests``."""
+def _build_request(
+    args: argparse.Namespace, repo_root: Path, deps: MetricsGateDeps
+) -> MetricsGateRequest:
+    """Load ``[metrics]`` and fold the flags in.
+
+    ``--run-tests`` / ``--no-run-tests`` override ``[metrics] run_tests``; each
+    selection flag replaces its ``[metrics]`` key.
+    """
     config = load_metrics_config(repo_root)
+    run_tests = getattr(args, "run_tests", None)
+    emit = getattr(args, "emit_measurements", None)
     return MetricsGateRequest(
         repo_root=repo_root,
         config=config,
@@ -117,9 +142,34 @@ def _build_request(args: argparse.Namespace, repo_root: Path) -> MetricsGateRequ
         baseline=getattr(args, "baseline", None),
         mode=cast("Mode | None", getattr(args, "mode", None)),
         strict=bool(getattr(args, "strict", False)),
-        run_tests=bool(getattr(args, "run_tests", False)) or config.run_tests,
+        run_tests=config.run_tests if run_tests is None else bool(run_tests),
         test_cmd=_resolve_test_cmd(args, config),
+        select=_comma_names(getattr(args, "select", None)),
+        extend_select=_comma_names(getattr(args, "extend_select", None)),
+        ignore=_comma_names(getattr(args, "ignore", None)),
+        changed_only=bool(getattr(args, "changed", False)),
+        emit_measurements=None if emit is None else Path(emit),
+        snapshot_tree=None if emit is None else _snapshot_tree(repo_root, config, deps),
     )
+
+
+def _comma_names(raw: str | None) -> tuple[str, ...] | None:
+    """A comma-separated flag as names; ``None`` (flag absent) keeps the ``[metrics]`` key."""
+    if raw is None:
+        return None
+    return tuple(name.strip() for name in raw.split(",") if name.strip())
+
+
+def _snapshot_tree(repo_root: Path, config: MetricConfig, deps: MetricsGateDeps) -> str | None:
+    """``HEAD^{tree}`` for a clean worktree, so the snapshot is a reusable baseline; else ``None``.
+
+    Not knowing the tree only makes the snapshot anonymous, so a git failure is
+    not an error here.
+    """
+    try:
+        return clean_head_tree(deps.git_runner_factory(repo_root, config.git_timeout_s))
+    except BaselineGitError:
+        return None
 
 
 # --------------------------------------------------------------------------- #
@@ -262,8 +312,9 @@ def run(args: argparse.Namespace, *, deps: MetricsGateDeps | None = None) -> int
         print(f"error: unknown --mode {mode!r}", file=sys.stderr)
         return 2
 
+    gate_deps = deps if deps is not None else MetricsGateDeps()
     try:
-        result = run_metrics_gate(_build_request(args, repo_root), deps=deps)
+        result = run_metrics_gate(_build_request(args, repo_root, gate_deps), deps=gate_deps)
     except MetricsGateUsageError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

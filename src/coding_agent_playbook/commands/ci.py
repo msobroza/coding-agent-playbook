@@ -12,6 +12,8 @@ secrets and dependency twins) instead of adding a second CI entry point.
   true``: since SPEC §7.1's ``commit = false`` default, generated output is
   gitignored, so a fresh CI checkout has none and ``sync --check`` would always
   fail. A config that does not load runs it anyway, so the child reports why.
+- ``metrics`` (F.2/F.3, always on) runs the static metrics gate over the
+  files changed since the merge base, never the suite.
 - ``gate-scan`` and ``scan-secrets`` (E.4: always on, so CI scans every
   change for secret tokens and credential files) diff ``<merge base>..HEAD``;
   the base is ``--base`` or the default branch (``_git_base``), resolved only
@@ -180,9 +182,19 @@ def _scan_sinks_skip(ctx: CiContext) -> str | None:
     return None if "scan-sinks" in ctx.requested else "opt-in: run with --steps scan-sinks"
 
 
+def _metrics_argv(ctx: CiContext) -> list[str]:
+    """Static non-regression of the changed files against the merge base (§F.2.3).
+
+    The merge base, not ``origin/<base>``, keeps main's later edits out of the
+    comparison; ``--no-run-tests`` leaves the suite to the ``coverage`` row.
+    """
+    return ["metrics", "--baseline", f"git:{ctx.merge_base}", "--changed", "--no-run-tests"]
+
+
 CI_STEPS: Final[tuple[CiStep, ...]] = (
     CiStep("sync-check", "prerequisites", lambda ctx: ["sync", "--check"], _sync_check_skip),
     CiStep("validate", "existing", lambda ctx: ["validate"]),
+    CiStep("metrics", "F.2/F.3", _metrics_argv, needs_base=True),
     CiStep(
         "gate-scan",
         "E.2",

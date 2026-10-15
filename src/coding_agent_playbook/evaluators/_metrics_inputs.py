@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, GitTimeoutError
 from coding_agent_playbook.evaluators.parse import parse_module
+from coding_agent_playbook.evaluators.paths import matches_any_glob
 from coding_agent_playbook.evaluators.types import EvalContext
 
 if TYPE_CHECKING:
@@ -32,6 +33,9 @@ IGNORED_DIRS = frozenset(
 
 #: The ``--baseline`` prefix that names a git ref instead of a directory.
 GIT_PREFIX = "git:"
+
+#: The ``--baseline`` prefix that names an ``--emit-measurements`` snapshot file.
+JSON_PREFIX = "json:"
 
 #: Default ``MetricsGateRequest.max_file_bytes``: a larger candidate or baseline
 #: file is never parsed. A module that size is generated or vendored, and parsing
@@ -109,6 +113,33 @@ def _iter_py_files(directory: Path) -> list[Path]:
         elif entry.is_file() and entry.suffix == ".py":
             out.append(entry.resolve())
     return out
+
+
+def filter_targets(
+    targets: Sequence[Path],
+    repo_root: Path,
+    *,
+    exclude: Sequence[str],
+    changed: frozenset[str] | None = None,
+) -> list[Path]:
+    """Drop the targets an ``exclude`` glob matches; with ``changed``, also every one not in it.
+
+    Globs and ``changed`` hold paths relative to ``repo_root``. A target outside
+    ``repo_root`` matches no glob, and is never "changed": git cannot report it.
+
+    Example::
+
+        >>> filter_targets(targets, root, exclude=("gen/**",), changed=frozenset({"a.py"}))
+        [PosixPath('/repo/a.py')]
+    """
+    kept: list[Path] = []
+    for target in targets:
+        rel = _repo_rel_path(target, repo_root)
+        if rel is not None and matches_any_glob(rel, exclude):
+            continue
+        if changed is None or rel in changed:
+            kept.append(target)
+    return kept
 
 
 def rel_label(path: Path, repo_root: Path) -> str:
