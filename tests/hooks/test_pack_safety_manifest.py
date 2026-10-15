@@ -6,8 +6,8 @@ config-less ``playbook validate`` with no warning, and binds builtins (one per
 event for the hooks with companions) that declare their config keys (a
 ``regex`` key screened like an overlay's) and never mutate tool input.
 stop-diff-sweep names the ``secrets`` stage the coordinator plans. The §E.5
-overlay-tier mechanisms that live here ship inert: ``tier: overlay``,
-``on_error: open`` (H10: ``deny`` is an overlay's to set).
+overlay-tier mechanisms that live here ship inert: ``tier: overlay``, no
+``on_error: deny`` (H10: ``deny`` is an overlay's to set) and ``mode: off``.
 """
 
 from __future__ import annotations
@@ -66,10 +66,15 @@ SAFETY_PACK: dict[str, PackRow] = {
 
 
 #: The §E.5 overlay-tier mechanisms under ``safety/`` (Track K9): inert until an
-#: overlay promotes them. pii-prompt-guard is Claude-only (QC-2).
+#: overlay promotes them. pii-prompt-guard is Claude-only (QC-2); the two
+#: ``pre_tool_use`` guards keep ``on_error: ask`` (a guard's default) and ship ``mode: off``.
 OVERLAY_PACK: dict[str, PackRow] = {
     "pii-prompt-guard": PackRow(
         "overlay", ("user_prompt_submit",), ("deny", "none"), "open", ("claude_code",)
+    ),
+    "network-egress-guard": PackRow("overlay", ("pre_tool_use",), ("deny", "ask", "none"), "ask"),
+    "sensitive-data-read-guard": PackRow(
+        "overlay", ("pre_tool_use",), ("ask", "deny", "none"), "ask"
     ),
 }
 SHIPPED: dict[str, PackRow] = SAFETY_PACK | OVERLAY_PACK
@@ -168,3 +173,18 @@ def test_bash_guards_declare_their_prefilter_argv0s(builtin: str, argv0s: set[st
     # and taint escalates on any outbound client: neither can be prefiltered by argv0.
     assert load_builtin("dependency_guard").argv0s is None
     assert load_builtin("taint_escalation").argv0s is None
+
+
+@pytest.mark.parametrize("hook_id", sorted(OVERLAY_PACK))
+def test_overlay_mechanisms_ship_inert(hook_id: str) -> None:
+    fm = engine_hook(hook_id).frontmatter
+
+    assert (fm.tier, fm.enabled, fm.mandatory, fm.on_error != "deny") == (
+        "overlay",
+        True,
+        False,
+        True,
+    )
+    config = fm.handler_for(fm.events[0]).config
+    assert config.get("mode", "off") == "off"
+    assert not any(config.get(key) for key in ("allowed_hosts", "deny_globs", "detectors"))

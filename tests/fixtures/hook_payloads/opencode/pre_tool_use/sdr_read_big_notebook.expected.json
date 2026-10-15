@@ -1,0 +1,44 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "opencode",
+    "session_id": "ses_7a1b2c3d4e5f",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "unattended": true,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "Read",
+      "native_name": "read",
+      "tool_class": "read",
+      "tool_classes": [
+        "read"
+      ],
+      "use_id": "call_k907",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/notebooks/big.ipynb",
+          "repo_rel": "notebooks/big.ipynb",
+          "key": "notebooks/big.ipynb"
+        }
+      ],
+      "write_paths": [],
+      "content": []
+    }
+  },
+  "result": {
+    "decision": "deny",
+    "reason": "Needs user approval (OpenCode cannot ask): \"notebooks/big.ipynb\" is over 5 MiB and was not parsed: its outputs may embed customer rows.\nRead it with outputs stripped, or confirm with the user."
+  },
+  "wire": {
+    "stdout": "{\"v\":1,\"decision\":\"deny\",\"reason\":\"Needs user approval (OpenCode cannot ask): \\\"notebooks/big.ipynb\\\" is over 5 MiB and was not parsed: its outputs may embed customer rows.\\nRead it with outputs stripped, or confirm with the user.\",\"context\":[],\"notice\":\"\"}\n",
+    "stderr": "",
+    "exit_code": 10
+  }
+}

@@ -6,7 +6,8 @@ co-owned ``.claude/settings.json`` (§C.2.4: read from the real repo, written to
 the output root only when the merge changed something, never unlinked), the
 opt-in ``permissions.allow`` remediation strings, the native deny rows of the
 §E.4 guards that are on (``_secret_native``, ``_destructive_native``; rows for
-the same pointer are concatenated), and the committed launcher.
+the same pointer are concatenated) and of the §E.5 overlay guards an overlay
+activated (``_overlay_native``), and the committed launcher.
 Hooks Claude Code cannot enforce go back to the adapter's ``CLAUDE.md`` path.
 """
 
@@ -16,6 +17,10 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.adapters._destructive_native import destructive_native_rows
+from coding_agent_playbook.adapters._overlay_native import (
+    network_native_rows,
+    sensitive_read_native_rows,
+)
 from coding_agent_playbook.adapters._secret_native import secret_native_rows
 from coding_agent_playbook.adapters.claude_settings import (
     CLAUDE_SETTINGS_PATH,
@@ -148,6 +153,8 @@ class ClaudeHookEmitter:
             self._remediation_strings(),
             secret_native_rows(self.every_hook),
             destructive_native_rows(self.every_hook),
+            sensitive_read_native_rows(self.every_hook),
+            network_native_rows(self.every_hook),
         )
         if not (desired or strings or self.prior):
             return []

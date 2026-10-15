@@ -1,14 +1,18 @@
-"""The ``allowlists`` table of ``guard_config.json`` (specs/prK-lifecycle-hooks.md §D.8.2, prK-hook-pack §E.4).
+"""The ``allowlists`` and ``network`` tables of ``guard_config.json`` (prK §D.8.2, §E.4, §E.5).
 
 One rendered view of the allowlist data the §E.4 safety guards read from their
 merged configs (engine ``HOOK.md``, overlays, ``[guardrails]`` and
-``[hooks.<hook-id>]``), so a reader of the file (a reviewer, ``playbook ci``,
-network-egress-guard later) sees one source:
+``[hooks.<hook-id>]``), so a reader of the file (a reviewer, ``playbook ci``)
+sees one source:
 
 - ``dependencies``: dependency-allowlist-guard's ``allowlist``, PEP 503-normalized
   and sorted (empty: tier (b) asks instead of denying);
 - ``required_index``: its internal index (``""``: none required);
 - ``egress_hosts``: exfil-channel-guard's ``allowed_hosts``, lower-cased and sorted.
+
+``network`` is ``{"mode": ...}``: network-egress-guard's mode once an overlay
+activated it (``ask`` / ``enforce``), else ``""``. The session briefing states
+it (§E.1 item 8), so the model does not burn turns retrying blocked hosts.
 
 A guard that is off contributes nothing. Machine-independent, like every
 ``guard_config`` table (§D.8.3). Stdlib-only.
@@ -25,10 +29,12 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_policy import ResolvedHook
 
-__all__ = ["DEPENDENCY_HOOK", "EGRESS_HOOK", "allowlists_table"]
+__all__ = ["DEPENDENCY_HOOK", "EGRESS_HOOK", "NETWORK_HOOK", "allowlists_table", "network_table"]
 
 DEPENDENCY_HOOK: Final = "dependency-allowlist-guard"
 EGRESS_HOOK: Final = "exfil-channel-guard"
+NETWORK_HOOK: Final = "network-egress-guard"
+_NETWORK_MODES: Final = ("ask", "enforce")
 
 
 def allowlists_table(hooks: Sequence[ResolvedHook]) -> dict[str, Any]:
@@ -47,6 +53,18 @@ def allowlists_table(hooks: Sequence[ResolvedHook]) -> dict[str, Any]:
         "required_index": required if isinstance(required, str) else "",
         "egress_hosts": sorted({h.lower() for h in _strings(egress.get("allowed_hosts"))}),
     }
+
+
+def network_table(hooks: Sequence[ResolvedHook]) -> dict[str, str]:
+    """``{"mode": "ask" | "enforce"}`` while network-egress-guard is active, else ``{"mode": ""}``.
+
+    Example::
+
+        >>> network_table([])
+        {'mode': ''}
+    """
+    mode = _config(hooks, NETWORK_HOOK).get("mode")
+    return {"mode": mode if mode in _NETWORK_MODES else ""}
 
 
 def _config(hooks: Sequence[ResolvedHook], hook_id: str) -> dict[str, Any]:

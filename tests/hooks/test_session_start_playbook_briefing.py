@@ -50,9 +50,15 @@ HEARTBEAT: Final = "PLAYBOOK-GUARDS: OK 2"
 LOCKED_VERSION: Final = installed_engine_version() or ENGINE_VERSION
 
 
-def _install(repo: PackRepo, *, engine_version: str = LOCKED_VERSION) -> PackRepo:
+def _install(
+    repo: PackRepo,
+    *,
+    engine_version: str = LOCKED_VERSION,
+    extra: tuple[str, ...] = (),
+    overlays: tuple[str, ...] = (),
+) -> PackRepo:
     repo.write(CLAUDE_MD, f"{sentinel_line('html')}\n# Rules\n")
-    repo.install_pack([HOOK_ID, *GUARDS])
+    repo.install_pack([HOOK_ID, *GUARDS, *extra], overlays=overlays)
     repo.lock_outputs(CLAUDE_MD, engine_version=engine_version)
     git_dir = _git_dir(repo.root)
     write_machine_pins(tools={}, engine_version=engine_version, git_dir=git_dir)
@@ -128,6 +134,15 @@ def test_clean_repo_exactly_one_heartbeat_line(
     assert list(report.trace.combined.context) == golden.expected["result"]["context"]
     assert list(report.trace.combined.context) == [HEARTBEAT]
     assert report.trace.wire == golden.wire()
+
+
+def test_overlay_network_mode_is_stated(
+    pack_repo: PackRepo, regulated_overlay: str, deps: Callable[..., RuntimeDeps]
+) -> None:
+    """Item 8 (§E.5): an air-gapped overlay's egress mode, so the model stops retrying hosts."""
+    repo = _install(pack_repo, extra=("network-egress-guard",), overlays=(regulated_overlay,))
+
+    assert _lines(_start(repo, deps)) == [HEARTBEAT, 'Network mode: "enforce".']
 
 
 def test_corrupt_guard_config_reports_degraded(

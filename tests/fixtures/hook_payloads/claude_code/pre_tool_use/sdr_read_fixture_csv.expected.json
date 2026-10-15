@@ -1,0 +1,42 @@
+{
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "turn_id": "pr_09",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "default",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "Read",
+      "native_name": "Read",
+      "tool_class": "read",
+      "tool_classes": [
+        "read"
+      ],
+      "use_id": "toolu_01K906",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/data/fixtures/x.csv",
+          "repo_rel": "data/fixtures/x.csv",
+          "key": "data/fixtures/x.csv"
+        }
+      ],
+      "write_paths": [],
+      "content": []
+    }
+  },
+  "result": {
+    "decision": "none"
+  },
+  "wire": {
+    "stdout": "",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

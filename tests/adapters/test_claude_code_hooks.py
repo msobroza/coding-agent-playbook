@@ -20,8 +20,13 @@ from coding_agent_playbook.adapters._destructive_native import (
     DESTRUCTIVE_COMMAND_GUARD,
     destructive_native_rows,
 )
+from coding_agent_playbook.adapters._overlay_native import (
+    network_native_rows,
+    sensitive_read_native_rows,
+)
 from coding_agent_playbook.adapters._secret_native import (
     DENY_POINTER,
+    DENY_READ_POINTER,
     SECRETS_PATH_GUARD,
     secret_native_rows,
 )
@@ -527,3 +532,80 @@ def test_on_failure_never_rendered_on_pre_tool_use(tmp_path: Path) -> None:
     assert "onFailure" not in pre
     assert pre["command"] == claude_command("pre_tool_use")
     assert _prompt_handler(tmp_path)["onFailure"] == "block"
+
+
+# --- K9: the §E.5 overlay guards' native twins (managed-array rows) -----------------------
+
+_NETWORK = "network-egress-guard"
+_DATA = "sensitive-data-read-guard"
+#: The fixture overlay's hosts (allowed, then the gateway) and its data globs, anchored.
+_DOMAINS = ["artifactory.bank.example", "git.bank.example", "litellm.bank.example"]
+_DENY_READ = ["./data/raw", "./exports", "**/*.parquet", "**/*.sqlite", "**/*.db", "**/*.xlsx"]
+
+
+def _overlay_guards(tmp_path: Path, overlay: str) -> list[ResolvedHook]:
+    """network-egress-guard (enforce) and sensitive-data-read-guard (ask), overlay-activated."""
+    return resolve_engine_hooks([_NETWORK, _DATA], tmp_path / "engine", overlays=(overlay,))
+
+
+def test_overlay_native_rows_added_and_removed_with_guard(
+    tmp_path: Path, regulated_overlay: str
+) -> None:
+    """Rows appear with the activated guards and leave with them; ``ask`` renders no deny row."""
+    active = _overlay_guards(tmp_path, regulated_overlay)
+
+    on, _ = _sync(tmp_path, [resolved_hook(), *active])
+    settings = _settings(tmp_path)
+
+    assert settings["permissions"]["deny"] == ["WebSearch"]  # enforce; the data guard asks
+    assert settings["sandbox"]["network"]["allowedDomains"] == _DOMAINS
+    assert settings["sandbox"]["filesystem"]["denyRead"] == _DENY_READ
+
+    _sync(tmp_path, [resolved_hook()], prior=_lock(on))  # the overlay is gone
+
+    after = _settings(tmp_path)
+    assert "permissions" not in after and "sandbox" not in after
+
+
+def test_enforce_mode_renders_read_deny_rows_for_deny_globs() -> None:
+    data = resolved_hook(
+        _DATA, config={"mode": "enforce", "deny_globs": ["data/raw/**", "*.parquet"]}
+    )
+    asking = resolved_hook(_DATA, config={"mode": "ask", "deny_globs": ["data/raw/**"]})
+
+    assert sensitive_read_native_rows([data]) == {
+        DENY_READ_POINTER: ("./data/raw", "**/*.parquet"),
+        DENY_POINTER: ("Read(./data/raw/**)", "Read(**/*.parquet)"),
+    }
+    assert DENY_POINTER not in sensitive_read_native_rows([asking])
+    assert network_native_rows([resolved_hook(_NETWORK, config={"mode": "ask"})]) == {}
+
+
+def test_inert_engine_definitions_render_no_native_rows(tmp_path: Path) -> None:
+    inert = resolve_engine_hooks([_NETWORK, _DATA], tmp_path / "engine")
+
+    assert inert == []
+    assert network_native_rows(inert) == sensitive_read_native_rows(inert) == {}
+
+
+def test_user_permission_entries_untouched_by_overlay_rows(
+    tmp_path: Path, regulated_overlay: str
+) -> None:
+    settings = tmp_path / CLAUDE_SETTINGS_PATH
+    settings.parent.mkdir(parents=True)
+    deny, domains = ["WebSearch", "Bash(curl *)"], ["github.com"]
+    user = {"permissions": {"deny": deny}, "sandbox": {"network": {"allowedDomains": domains}}}
+    settings.write_text(json.dumps(user, indent=2) + "\n", encoding="utf-8")
+
+    on, _ = _sync(tmp_path, [resolved_hook(), *_overlay_guards(tmp_path, regulated_overlay)])
+    with_guards = _settings(tmp_path)
+    _sync(tmp_path, [resolved_hook()], prior=_lock(on))
+    after = _settings(tmp_path)
+
+    # The user's WebSearch row is theirs: neither duplicated nor claimed by the lock.
+    assert with_guards["permissions"]["deny"] == ["WebSearch", "Bash(curl *)"]
+    assert with_guards["sandbox"]["network"]["allowedDomains"] == ["github.com", *_DOMAINS]
+    claimed = {e.artifact_id for e in on.managed_lock_entries() if e.scope}
+    assert "permission:deny:WebSearch" not in claimed
+    assert after["permissions"] == {"deny": deny}
+    assert after["sandbox"]["network"] == {"allowedDomains": domains}

@@ -19,7 +19,9 @@ session-start briefing and the ``drift`` Stop stage read the lockfile with
 ``tomllib`` through ``lockfile`` (the new §D.1 rows): the briefing on every
 start, the stage only once the ledger shows a write it cares about. The
 ``--async`` ``post_tool_use`` dispatch (local-audit-log, OQ-19) writes its
-structure-only line from the stdlib alone: no git, no process (Track K9).
+structure-only line from the stdlib alone: no git, no process (Track K9), and
+network-egress-guard judges hosts as strings: no ``socket``, no git unless a
+remote name must be resolved, ``ipaddress`` only for an address-shaped host.
 """
 
 from __future__ import annotations
@@ -744,3 +746,62 @@ def test_async_audit_branch_imports_nothing_forbidden(
     assert "coding_agent_playbook.hook_runtime.git" not in imported
     (log,) = audited.state_root.glob("audit-*.jsonl")
     assert '"event":"post_tool_use"' in log.read_text(encoding="ascii")
+
+
+#: network-egress-guard's destination parser: its presence shows the guard ran (K9 step 4).
+_NET_TARGETS: Final = "coding_agent_playbook.hook_runtime.handlers._net_targets"
+
+
+@pytest.fixture
+def egress_guarded(tmp_path: Path, real_proc: SubprocessProc) -> GuardRepo:
+    """A synced repo with network-egress-guard activated (``enforce``) on its real builtin."""
+    repo = GuardRepo.create(tmp_path)
+    config = {
+        "mode": "enforce",
+        "allowed_hosts": ["artifactory.bank.example"],
+        "gateway_hosts": [],
+        "webfetch_max_query_chars": 256,
+    }
+    network = hook_record(
+        "network-egress-guard",
+        decisions=("deny", "ask", "none"),
+        handler={"kind": "builtin", "name": "network_egress_guard", "config": config},
+        matcher={"pre_tool_use": {"tools": ["shell", "web"]}},
+    )
+    repo.install(network)
+    _imports(real_proc, repo, EventName.SESSION_START, repo.payload(EventName.SESSION_START))
+    return repo
+
+
+@pytest.mark.parametrize(
+    ("tool", "tool_input", "exit_code", "loaded"),
+    [
+        ("Bash", {"command": "ls -la && echo done"}, 0, ()),
+        ("Bash", {"command": "curl https://pypi.org/simple/"}, DENY_EXIT, ()),
+        ("Bash", {"command": "curl http://127.0.0.1:9000/health"}, 0, ("ipaddress",)),
+        ("Bash", {"command": "pip install -i https://artifactory.bank.example/simple x"}, 0, ()),
+        ("WebSearch", {"query": "pandas"}, DENY_EXIT, ()),
+    ],
+    ids=["no-network", "public-host-deny", "loopback-address", "internal-index", "websearch"],
+)
+def test_network_guard_bash_branch_imports_nothing_forbidden(
+    egress_guarded: GuardRepo,
+    real_proc: SubprocessProc,
+    tool: str,
+    tool_input: dict[str, str],
+    exit_code: int,
+    loaded: tuple[str, ...],
+) -> None:
+    """Hosts are strings (specs/prK-hook-pack.md §E.5): no socket, no git, no process, no TOML."""
+    payload = egress_guarded.payload(EventName.PRE_TOOL_USE, tool_name=tool, tool_input=tool_input)
+
+    imported = _imports(
+        real_proc, egress_guarded, EventName.PRE_TOOL_USE, payload, exit_code=exit_code
+    )
+
+    assert _NET_TARGETS in imported  # the guard's module loaded
+    assert ("ipaddress" in imported) is bool(loaded)
+    assert _forbidden(imported) == []
+    assert "subprocess" not in imported
+    assert "socket" not in imported
+    assert "coding_agent_playbook.hook_runtime.git" not in imported

@@ -1,0 +1,15 @@
+{
+  "_fixture": {
+    "harness_version": "1.19.0",
+    "source": "docs"
+  },
+  "hook_event_name": "PreToolUse",
+  "session_id": "ses_7a1b2c3d4e5f",
+  "cwd": "/playbook-fixture/proj",
+  "tool_use_id": "call_k904",
+  "tool_name": "WebFetch",
+  "tool_input": {
+    "url": "https://artifactory.bank.example/x?q=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "format": "markdown"
+  }
+}

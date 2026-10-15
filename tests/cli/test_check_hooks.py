@@ -81,6 +81,7 @@ _ENGINE_PACK = (
     "guard-generated-outputs",
     "local-audit-log",
     "ml-unsafe-deserialization-guard",
+    "network-egress-guard",
     "notebook-output-hygiene",
     "pii-prompt-guard",
     "post-edit-ruff-format",
@@ -91,6 +92,7 @@ _ENGINE_PACK = (
     "resync-on-detector-input-change",
     "secret-content-guard",
     "secrets-path-guard",
+    "sensitive-data-read-guard",
     "session-start-playbook-briefing",
     "stop-ci-parity-gate",
     "stop-diff-sweep",
@@ -105,6 +107,13 @@ _ENGINE_PACK = (
 _OPT_IN_SKIP = (
     "    [✗] {hook_id} (skipped: tier 'opt-in' is not in [hooks] tiers ['default'] and "
     "[hooks] enable does not name it)"
+)
+
+
+#: The §E.5 overlay-tier mechanisms (K9): inert until an overlay promotes them.
+_OVERLAY_SKIP = (
+    "    [✗] {hook_id} (skipped: tier 'overlay' is activated only by an overlay "
+    "promoting the hook to tier: default)"
 )
 
 
@@ -125,7 +134,7 @@ def test_hooks_block_labels_per_adapter(
 
     assert lines == [
         "  [hooks]: on",
-        "  Hooks (26 on / 39 total):",
+        "  Hooks (26 on / 41 total):",
         # The engine pack (Track K5): OpenCode has no notebook tool, so guard-generated-outputs
         # is degraded there; control-plane-guard matches no notebook edit. OpenCode's Stop is
         # evidence-only (§C.3.6), so every Stop-stage hook is degraded there (K6).
@@ -167,10 +176,10 @@ def test_hooks_block_labels_per_adapter(
         # K7: the synthetic repo has no ML stack, so the linked rule (and the guard) is off.
         "    [✗] ml-unsafe-deserialization-guard (skipped: linked rule "
         "'ml-serialization-security' not applicable)",
+        _OVERLAY_SKIP.format(hook_id="network-egress-guard"),
         _OPT_IN_SKIP.format(hook_id="notebook-output-hygiene"),
         # K9: an overlay-tier mechanism ships inert; no [hooks] switch turns it on (K-11).
-        "    [✗] pii-prompt-guard (skipped: tier 'overlay' is activated only by an overlay "
-        "promoting the hook to tier: default)",
+        _OVERLAY_SKIP.format(hook_id="pii-prompt-guard"),
         # K7: the shared post-edit ruff pipeline, on both hook-capable harnesses.
         "    [✓] post-edit-ruff-format (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
@@ -188,6 +197,7 @@ def test_hooks_block_labels_per_adapter(
         "continue: advisory, opencode: degraded)",
         "    [✓] secrets-path-guard (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: degraded)",
+        _OVERLAY_SKIP.format(hook_id="sensitive-data-read-guard"),
         # No advisory body (a hookless harness has no heartbeat); OpenCode's session_start
         # rides an experimental API and its Stop is evidence-only (§C.3.6): degraded.
         "    [✓] session-start-playbook-briefing (agents_md: —, claude_code: enforced, "
@@ -221,7 +231,7 @@ def test_hooks_block_when_the_table_is_absent(
 
     assert lines == [
         "  [hooks]: off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')",
-        "  Hooks (0 on / 37 total):",
+        "  Hooks (0 on / 39 total):",
         *_off(_ENGINE_PACK[:14]),
         "    [✗] guard-x (skipped: hooks are off)",
         *_off(_ENGINE_PACK[14:]),
@@ -241,7 +251,7 @@ def test_hooks_block_when_hooks_are_switched_off_or_unreadable(
 
     assert off_lines == [
         "  [hooks]: off — [hooks] enabled is not true",
-        "  Hooks (0 on / 36 total):",
+        "  Hooks (0 on / 38 total):",
         *_off(_ENGINE_PACK),
     ]
     assert bad_lines[-1] == "  [hooks] cannot be read; run 'playbook validate'."
