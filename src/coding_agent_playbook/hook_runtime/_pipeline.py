@@ -262,7 +262,11 @@ def _watchdog(
     responder = shared.responder
 
     def fallback() -> WireOutput:
-        pending = [failure_result(s, once=None) for s in progress.pending() if s.is_guard]
+        pending = [
+            failure_result(s, once=None, reason=progress.failure_reason(s))
+            for s in progress.pending()
+            if s.is_guard
+        ]
         results = [*results_of(progress.ran), *pending]
         fired.append(responder.combine(ev, results, unattended_ask=cfg.unattended_ask))
         return responder.render(ev.name, fired[-1])

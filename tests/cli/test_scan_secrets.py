@@ -235,3 +235,51 @@ def test_malformed_guardrails_at_base_exit_2(
 
     assert repo.scan("--worktree") == 2
     assert "extra_globs" in capsys.readouterr().err
+
+
+#: Valid example-format values (checksums hold), assembled so this file holds none whole.
+IBAN: Final = "GB33" + "BUKB" + "2020" + "1555" + "5555" + "55"
+SSN: Final = "123" + "-45-" + "6789"
+
+
+def test_pii_flag_reports_masked_category(repo: Repo, capsys: pytest.CaptureFixture[str]) -> None:
+    """pii-prompt-guard's CI twin (§E.5): off by default, masked ``pii:<detector>`` with --pii."""
+    repo.write(
+        {
+            "exports/customers.csv": f"name;iban\nAda;{IBAN}\n",
+            "tests/cards.py": "SANDBOX = '4111 1111 1111 1111'\n",  # a published test value
+        }
+    )
+    paths = ("exports/customers.csv", "tests/cards.py")
+
+    assert repo.scan(*paths) == 0
+    capsys.readouterr()
+    assert repo.scan("--pii", *paths) == 1
+
+    captured = capsys.readouterr()
+    assert captured.out.splitlines() == [
+        "exports/customers.csv:2: pii:iban: IBAN (22 chars)",
+        "Replace personal data with a placeholder or a synthetic value.",
+        "scan-secrets paths: 1 finding",
+    ]
+    assert IBAN[4:] not in captured.out + captured.err
+
+
+def test_pii_detectors_choose_the_detectors(repo: Repo, capsys: pytest.CaptureFixture[str]) -> None:
+    repo.stage({"src/hr.py": f"OWNER_SSN = '{SSN}'\n"})
+
+    assert repo.scan("--staged", "--pii") == 0  # us_ssn is an overlay choice, not the default
+    capsys.readouterr()
+    assert repo.scan("--staged", "--pii-detectors", "iban,us_ssn", "--format", "json") == 1
+
+    report = json.loads(capsys.readouterr().out)
+    assert report["findings"] == [
+        {"path": "src/hr.py", "line": 1, "rule": "pii:us_ssn", "detail": "US SSN (11 chars)"}
+    ]
+
+
+def test_unknown_pii_detector_is_a_usage_error(
+    repo: Repo, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert repo.scan("--worktree", "--pii-detectors", "iban,email") == 2
+    assert "unknown PII detector 'email'" in capsys.readouterr().err

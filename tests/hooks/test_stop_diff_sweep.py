@@ -18,7 +18,7 @@ from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_runtime._git_parse import AddedLine
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.handlers._secret_sweep import FIX
+from coding_agent_playbook.hook_runtime.handlers._secret_sweep import FIX, PII_FIX
 from coding_agent_playbook.hook_runtime.handlers.stop_sweep import PARTIAL_NOTE
 from coding_agent_playbook.hook_runtime.stop.output import red_note
 from tests.hooks.pack_repo import engine_rules
@@ -199,3 +199,33 @@ def test_alone_without_the_coordinator_still_blocks(
 
     assert report.trace.combined.decision is Decision.DENY
     assert report.trace.combined.reason.startswith('[secrets] "config.py":3 aws-access-key-id')
+
+
+#: A valid example-format IBAN (mod-97 holds), spaced as printed; never a real account.
+IBAN_LINE: Final = 'REFUND_TO = "FR76 3000 6000 0112 3456 7890 189"'
+
+
+def _pii_tree(repo: PackRepo) -> FakeGit:
+    """An added line and an untracked export, each carrying an IBAN."""
+    repo.write("exports/customers.txt", "name;iban\nAda;GB33BUKB20201555555555\n")
+    return changed_git(
+        added=(AddedLine("refunds.py", 2, IBAN_LINE),), untracked=("exports/customers.txt",)
+    )
+
+
+def test_pii_tier_runs_only_when_enabled(pack_repo: PackRepo, deps: Deps, tmp_path: Path) -> None:
+    """pii-prompt-guard's file twin (§E.5): off in the engine, on once ``pii`` names detectors."""
+    pack_repo.install_pack([GATE_ID, HOOK_ID])
+    off = _stop(pack_repo, deps, _pii_tree(pack_repo), tmp_path / "off")
+
+    pack_repo.install_pack([GATE_ID, HOOK_ID], handler_config={HOOK_ID: {"pii": ["iban"]}})
+    on = _stop(pack_repo, deps, _pii_tree(pack_repo), tmp_path / "on")
+
+    assert off.trace.combined.decision is Decision.NONE
+    assert on.trace.combined.decision is Decision.DENY
+    assert reason_lines(on)[1:] == [
+        f'[secrets] "refunds.py":2 pii:iban (33 chars); {PII_FIX}',
+        f'[secrets] "exports/customers.txt":2 pii:iban (22 chars); {PII_FIX}',
+    ]
+    assert "3000" not in on.trace.combined.reason
+    assert "BUKB" not in on.trace.combined.reason

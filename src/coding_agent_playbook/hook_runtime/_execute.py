@@ -15,7 +15,10 @@ Each selected hook resolves its handler, runs it, and leaves one :class:`Ran`:
 
 The first guard-class deny ends the fan-out: a deny is final. :class:`Progress`
 is shared with the watchdog, which reuses :func:`failure_result` for the hooks
-still pending when the deadline passes.
+still pending when the deadline passes. A builtin declaring a
+``failure_reason`` (pii-prompt-guard, specs/prK-hook-pack.md §E.5) has its
+reason remembered on :class:`Progress` once resolved, so a raise, a contract
+violation and a watchdog timeout all show it instead of the generic one.
 """
 
 from __future__ import annotations
@@ -77,22 +80,35 @@ class Ran:
 
 @dataclass(slots=True)
 class Progress:
-    """The fan-out so far; the watchdog reads it from its own thread."""
+    """The fan-out so far; the watchdog reads it from its own thread.
+
+    ``reasons`` holds the declared ``failure_reason`` of each resolved hook
+    that has one, keyed by ``id(selected)``.
+    """
 
     selected: tuple[Selected, ...]
     ran: list[Ran] = field(default_factory=list)
+    reasons: dict[int, str] = field(default_factory=dict)
 
     def pending(self) -> list[Selected]:
         """The selected hooks that have not produced a result yet, in order."""
         done = {id(r.selected) for r in list(self.ran)}
         return [s for s in self.selected if id(s) not in done]
 
+    def failure_reason(self, selected: Selected) -> str | None:
+        """The reason ``selected``'s handler declared for its failures, if it was resolved."""
+        return self.reasons.get(id(selected))
 
-def failure_result(selected: Selected, *, once: Once | None) -> HandlerResult:
+
+def failure_result(
+    selected: Selected, *, once: Once | None, reason: str | None = None
+) -> HandlerResult:
     """The result a failed hook yields under its class (§D.4); ``degraded`` is set.
 
     A quality hook adds its note only when ``once`` says it is the first
-    failure this session (``None``, as in the watchdog: no note).
+    failure this session (``None``, as in the watchdog: no note). A guard's
+    reason is ``reason`` (its handler's declared ``failure_reason``) when
+    given, else the generic one naming the hook.
 
     Example::
 
@@ -115,7 +131,7 @@ def failure_result(selected: Selected, *, once: Once | None) -> HandlerResult:
         decision=decision,
         hook_id=hook_id,
         rule_id=INTERNAL_RULE_ID,
-        reason=GUARD_FAILURE_REASON.format(hook_id=hook_id),
+        reason=reason or GUARD_FAILURE_REASON.format(hook_id=hook_id),
         degraded=True,
     )
 
@@ -138,7 +154,9 @@ def run_handlers(
     """
     for selected in progress.selected:
         started = clock.monotonic()
-        result, status = _run_one(ev, selected, resolve=resolve, context=context, once=once)
+        result, status = _run_one(
+            ev, selected, progress, resolve=resolve, context=context, once=once
+        )
         latency = max(0, round((clock.monotonic() - started) * 1000))
         progress.ran.append(Ran(selected, result, status, latency))
         if selected.is_guard and supported_decision(ev.name, result.decision) is Decision.DENY:
@@ -149,6 +167,7 @@ def run_handlers(
 def _run_one(
     ev: CanonicalEvent,
     selected: Selected,
+    progress: Progress,
     *,
     resolve: Callable[[Selected], HandlerFn | Untrusted],
     context: Callable[[Selected], HandlerContext],
@@ -158,16 +177,25 @@ def _run_one(
         handler = resolve(selected)
         if isinstance(handler, Untrusted):
             return _untrusted(selected, handler, once), "untrusted"
+        declaration = declaration_of(handler)
+        if declaration is not None and declaration.failure_reason:
+            progress.reasons[id(selected)] = declaration.failure_reason
         spec = selected.record.handlers.get(ev.name)
-        if skips_call(declaration_of(handler), ev, {} if spec is None else spec.config):
+        if skips_call(declaration, ev, {} if spec is None else spec.config):
             return HandlerResult(decision=Decision.NONE, hook_id=selected.record.id), "ok"
         raw = handler(ev, context(selected))
     except Exception:
-        return failure_result(selected, once=once), "degraded"
-    return _checked(raw, selected, once)
+        return _failed(selected, progress, once), "degraded"
+    return _checked(raw, selected, progress, once)
 
 
-def _checked(raw: object, selected: Selected, once: Once) -> tuple[HandlerResult, RanStatus]:
+def _failed(selected: Selected, progress: Progress, once: Once) -> HandlerResult:
+    return failure_result(selected, once=once, reason=progress.failure_reason(selected))
+
+
+def _checked(
+    raw: object, selected: Selected, progress: Progress, once: Once
+) -> tuple[HandlerResult, RanStatus]:
     """``raw`` when it is a declared ``HandlerResult``, else a contract violation.
 
     The result is attributed to the hook that ran, whatever ``hook_id`` the
@@ -177,9 +205,9 @@ def _checked(raw: object, selected: Selected, once: Once) -> tuple[HandlerResult
     if raw is None:
         return HandlerResult(decision=Decision.NONE, hook_id=record.id), "ok"
     if not isinstance(raw, HandlerResult):
-        return failure_result(selected, once=once), "violation"
+        return _failed(selected, progress, once), "violation"
     if raw.decision is not Decision.NONE and raw.decision not in record.decisions:
-        return failure_result(selected, once=once), "violation"
+        return _failed(selected, progress, once), "violation"
     if raw.hook_id != record.id:
         raw = dataclasses.replace(raw, hook_id=record.id)
     return raw, "ok"

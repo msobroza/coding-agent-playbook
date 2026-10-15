@@ -5,6 +5,7 @@ env, a ``FakeProc`` that fails the test on any subprocess, ``FakeClock`` and
 ``FakeTrustStore``. Every pack hook is driven through ``simulate.run``, the
 exact dispatch pipeline, so no handler is ever called directly. ``real_proc``
 is the real ``ProcPort``, for the fresh-interpreter probes only.
+``regulated_overlay`` is the §E.5 fixture overlay as an importable package.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import pytest
 from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
 from coding_agent_playbook.hook_runtime.proc import SubprocessProc
 from tests.hook_runtime.fakes import FakeClock, FakeProc, FakeTrustStore
-from tests.hooks.pack_repo import PackRepo
+from tests.hooks.pack_repo import PackRepo, install_fixture_overlay
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -52,6 +53,16 @@ def deps() -> Callable[..., RuntimeDeps]:
 def pack_repo(tmp_path: Path) -> PackRepo:
     """An empty fixture repository (``.git/`` only) to install pack hooks into."""
     return PackRepo.create(tmp_path)
+
+
+@pytest.fixture
+def regulated_overlay(make_package: Callable[..., str]) -> str:
+    """The regulated fixture overlay (``tests/fixtures/overlays/regulated``) as a package.
+
+    It activates the §E.5 overlay-tier mechanisms (promotes them to ``tier:
+    default``, supplies their data); pass its name as ``overlays=``.
+    """
+    return install_fixture_overlay(make_package, "regulated", "playbook_rules_regulated")
 
 
 @pytest.fixture

@@ -12,10 +12,14 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.harness import DENY_EXIT
-from coding_agent_playbook.hook_runtime.registry import Untrusted
+from coding_agent_playbook.hook_runtime.registry import (
+    HANDLER_ATTR,
+    HandlerDeclaration,
+    Untrusted,
+)
 from tests.hook_runtime.dispatch_kit import POST, body, boom, dispatch, verdict
 from tests.hook_runtime.guard_repo import hook_record
 
@@ -23,6 +27,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.registry import HandlerContext, HandlerFn
     from tests.hook_runtime.fakes import FakeHandlerResolver
     from tests.hook_runtime.guard_repo import GuardRepo
 
@@ -55,6 +61,49 @@ def test_strict_overlay_guard_denies_on_failure(
     resolver.handlers["guard-s"] = boom
 
     assert dispatch(make_deps(), repo).exit_code == DENY_EXIT
+
+
+def _declaring(reason: str) -> HandlerFn:
+    """:func:`boom`, carrying a declaration whose ``failure_reason`` is ``reason``."""
+
+    def handler(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult:
+        return boom(ev, ctx)
+
+    declaration = HandlerDeclaration(
+        name="guard_s",
+        module=__name__,
+        events=frozenset({EventName.USER_PROMPT_SUBMIT}),
+        decisions=frozenset({Decision.DENY}),
+        config_schema={},
+        failure_reason=reason,
+        fn=handler,
+    )
+    setattr(handler, HANDLER_ATTR, declaration)
+    return handler
+
+
+def test_declared_failure_reason_replaces_the_generic_one(
+    repo: GuardRepo, resolver: FakeHandlerResolver, make_deps: Callable[..., RuntimeDeps]
+) -> None:
+    """pii-prompt-guard's ``FAILURE_REASON``: a strict prompt guard blocks with its own text."""
+    record = hook_record(
+        "guard-s",
+        events=["user_prompt_submit"],
+        decisions=["deny", "none"],
+        on_error="deny",
+        source_package="acme_rules",
+    )
+    repo.install(record)
+    resolver.handlers["guard-s"] = _declaring("PII guard error; resubmit or use the override")
+
+    wire = dispatch(make_deps(), repo, EventName.USER_PROMPT_SUBMIT, tool=None, prompt="hi")
+
+    assert body(wire) == {
+        "decision": "block",
+        "reason": "PII guard error; resubmit or use the override",
+    }
+    assert wire.exit_code == 0
+    assert [line["decision"] for line in repo.decisions()] == ["degraded"]
 
 
 def test_raising_quality_hook_is_none_plus_exactly_one_note_per_session(

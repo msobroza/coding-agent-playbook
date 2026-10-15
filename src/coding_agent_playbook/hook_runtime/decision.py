@@ -103,6 +103,9 @@ class HandlerResult:
     model, ``user_note`` a line for the user. ``dedupe_key`` scopes the
     per-session dedupe of the context items (typically the path); an empty key
     shows them every time. ``degraded`` marks a result the failure policy made.
+    ``escape`` names an escape hatch the hook honoured (a static identifier such
+    as ``override_token``, never the text that triggered it): the decision log
+    records it as an ``escape`` line, ids only (§D.6.2).
 
     Example: ``HandlerResult(decision=Decision.DENY, hook_id="guard-x", reason="no")``.
     """
@@ -115,6 +118,7 @@ class HandlerResult:
     user_note: str = ""
     dedupe_key: str = ""
     degraded: bool = False
+    escape: str = ""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

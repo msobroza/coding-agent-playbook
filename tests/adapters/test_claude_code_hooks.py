@@ -39,10 +39,10 @@ from coding_agent_playbook.lockfile import Lockfile
 from coding_agent_playbook.security.patterns import DESTRUCTIVE_NATIVE_PREFIXES
 from coding_agent_playbook.types import Rule, RuleFrontmatter
 from tests.hook_samples import resolved_hook
-from tests.hooks.pack_repo import resolve_engine_hooks
+from tests.hooks.pack_repo import install_fixture_overlay, resolve_engine_hooks
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
     from coding_agent_playbook.hook_policy import ResolvedHook
@@ -476,3 +476,54 @@ def test_disabling_local_audit_log_removes_only_the_async_entry(tmp_path: Path) 
     assert _post_tool_use(tmp_path) == [sync_group]
     assert off.settings_merge is not None and off.settings_merge.removed >= 1
     assert not [e for e in off.managed_lock_entries() if e.artifact_id.endswith(":async")]
+
+
+# --- K9: overlay strict mode (OQ-18, §C.2.1, §E.5 pii-prompt-guard) -----------------------
+
+_PII = "pii-prompt-guard"
+
+
+@pytest.fixture
+def regulated_overlay(make_package: Callable[..., str]) -> str:
+    """The regulated fixture overlay, which activates pii-prompt-guard with ``on_error: deny``."""
+    return install_fixture_overlay(make_package, "regulated", "playbook_rules_regulated")
+
+
+def _prompt_handler(root: Path) -> dict[str, Any]:
+    (group,) = _settings(root)["hooks"]["UserPromptSubmit"]
+    (handler,) = group["hooks"]
+    loaded: dict[str, Any] = handler
+    return loaded
+
+
+def test_strict_mode_only_when_pii_guard_enabled(tmp_path: Path, regulated_overlay: str) -> None:
+    """``onFailure: block`` + ``--strict-launch`` follow the activated guard, on its event only."""
+    ledger = resolved_hook("ledger-q", events=("user_prompt_submit",), on_error="open")
+    active = resolve_engine_hooks([_PII], tmp_path / "engine", overlays=(regulated_overlay,))
+    inert = resolve_engine_hooks([_PII], tmp_path / "engine")
+
+    _sync(tmp_path / "on", [ledger, *active])
+    _sync(tmp_path / "off", [ledger, *inert])
+
+    assert inert == []  # the engine's tier-overlay definition renders nothing
+    on, off = _prompt_handler(tmp_path / "on"), _prompt_handler(tmp_path / "off")
+    assert on["onFailure"] == "block"
+    assert on["command"] == claude_command("user_prompt_submit", strict=True)
+    assert "--strict-launch dispatch user_prompt_submit" in on["command"]
+    assert "onFailure" not in off
+    assert off["command"] == claude_command("user_prompt_submit")
+
+
+def test_on_failure_never_rendered_on_pre_tool_use(tmp_path: Path) -> None:
+    """No overlay key opts ``pre_tool_use`` into strict mode, so the adapter never does (OQ-18)."""
+    strict = resolved_hook(
+        "guard-s", events=("pre_tool_use", "user_prompt_submit"), on_error="deny"
+    )
+
+    _sync(tmp_path, [strict])
+
+    (pre_group,) = _settings(tmp_path)["hooks"]["PreToolUse"]
+    (pre,) = pre_group["hooks"]
+    assert "onFailure" not in pre
+    assert pre["command"] == claude_command("pre_tool_use")
+    assert _prompt_handler(tmp_path)["onFailure"] == "block"

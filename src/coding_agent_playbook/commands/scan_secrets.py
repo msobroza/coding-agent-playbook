@@ -17,9 +17,13 @@ row of ``playbook ci`` (``--range <merge base>..HEAD``) run:
   (``extra_globs`` add, ``allow_paths`` exempt fixtures) **as committed at
   the base**, so a change cannot exempt itself; ``.local.toml`` never applies.
 - An untracked symlink is never followed; a file over 32 MiB is noted, not read.
+- ``--pii`` (``--pii-detectors a,b`` to choose ``security.pii`` detectors; the
+  default is the engine pair ``iban,card_pan``) adds pii-prompt-guard's file twin
+  (specs/prK-hook-pack.md §E.5): checksum-validated PII on the same lines and
+  files, reported masked as ``pii:<detector>`` (category, place and length).
 
-Exit codes: 0 clean (notes only), 1 a token or a credential file, 2 a usage,
-policy or git error.
+Exit codes: 0 clean (notes only), 1 a token, PII or a credential file, 2 a
+usage, policy or git error.
 """
 
 from __future__ import annotations
@@ -43,6 +47,12 @@ from coding_agent_playbook.hook_runtime.git import GitError
 from coding_agent_playbook.hooks_config import parse_guardrails_config
 from coding_agent_playbook.security.files import user_home
 from coding_agent_playbook.security.paths import DEFAULT_PATH_POLICY, PathPolicy
+from coding_agent_playbook.security.pii_findings import (
+    PII_ADVICE,
+    PII_RULE_PREFIX,
+    pii_line_findings,
+    pii_text_findings,
+)
 from coding_agent_playbook.security.secrets import (
     SECRET_ADVICE,
     SecretFinding,
@@ -54,8 +64,9 @@ if TYPE_CHECKING:
     import argparse
 
     from coding_agent_playbook.hook_runtime.git import GitPort, SafeGit
+    from coding_agent_playbook.security.pii import PiiConfig
 
-__all__ = ["SecretHit", "SecretReport", "load_path_policy", "run", "scan_scope"]
+__all__ = ["SecretHit", "SecretReport", "load_path_policy", "pii_option", "run", "scan_scope"]
 
 CONFIG_FILE: Final = ".coding-agent-playbook.toml"
 #: Larger working-tree files are noted, never read (a CLI may be slow, not unbounded).
@@ -117,16 +128,39 @@ def run(args: argparse.Namespace, *, git: SafeGit | None = None) -> int:
         )
         return 2
     try:
+        pii = pii_option(args.pii, args.pii_detectors)
         port = git if git is not None else open_git(repo_root)
         scope = _scope(port, args, repo_root)
         policy = load_path_policy(port, scope.base)
         root = Path(port.repo.worktree_root)
-        report = scan_scope(port, scope, policy, root=root, home=user_home())
+        report = scan_scope(port, scope, policy, root=root, home=user_home(), pii=pii)
     except (GitError, ValueError) as exc:  # GitBaseError and policy errors are ValueErrors
         print(f"error: {exc}", file=sys.stderr)
         return 2
     print(_json(report, scope.label) if args.format == "json" else _text(report, scope.label))
     return report.exit_code
+
+
+def pii_option(enabled: bool, detectors: str | None) -> PiiConfig | None:
+    """The PII scan ``--pii`` / ``--pii-detectors a,b`` ask for, else ``None`` (off).
+
+    Raises ``ValueError`` naming an unknown or missing detector.
+
+    Example::
+
+        >>> pii_option(False, "iban,us_ssn").detectors
+        ('iban', 'us_ssn')
+    """
+    if not enabled and detectors is None:
+        return None
+    from coding_agent_playbook.security.pii import DEFAULT_DETECTORS, PiiConfig
+
+    if detectors is None:
+        return PiiConfig(detectors=DEFAULT_DETECTORS)
+    names = tuple(name.strip() for name in detectors.split(",") if name.strip())
+    if not names:
+        raise ValueError(f"--pii-detectors names no detector: {detectors!r}")
+    return PiiConfig(detectors=names)
 
 
 def load_path_policy(git: GitPort, base: str | None) -> PathPolicy:
@@ -152,10 +186,12 @@ def scan_scope(
     root: Path,
     home: str,
     platform: str = sys.platform,
+    pii: PiiConfig | None = None,
 ) -> SecretReport:
     """Classify the scope's paths, scan its lines and files, and judge pragmas at the base.
 
-    ``root`` is the worktree root the scope's paths are relative to.
+    ``root`` is the worktree root the scope's paths are relative to; ``pii``
+    adds the PII scan of the same lines and files (``None``: off).
 
     Example::
 
@@ -167,10 +203,12 @@ def scan_scope(
     added = [line for line in scope.added if line.path not in secret]
     texts = {(line.path, line.line): line.text for line in added}
     found = [(f, texts.get((f.path, f.line), "")) for f in scan_added_lines(added)]
+    if pii is not None:
+        found += [(f, "") for f in pii_line_findings(added, pii)]
     notes: list[str] = []
     for rel in scope.files:
         if rel not in secret:
-            found += _scan_file(root, rel, notes)
+            found += _scan_file(root, rel, notes, pii)
     base_lines = _BaseLines(git, scope.base)
     hits = [SecretHit(rel, 0, SECRET_PATH_RULE, SECRET_PATH_DETAIL) for rel in secret]
     hits += [hit for f, text in found if (hit := _token_hit(f, text, base_lines)) is not None]
@@ -217,7 +255,9 @@ def _secret_paths(
     return frozenset(named)
 
 
-def _scan_file(root: Path, rel: str, notes: list[str]) -> list[tuple[SecretFinding, str]]:
+def _scan_file(
+    root: Path, rel: str, notes: list[str], pii: PiiConfig | None
+) -> list[tuple[SecretFinding, str]]:
     """The findings of one working-tree file with each finding's line text; a skip is a note."""
     path = root / rel
     if path.is_symlink():
@@ -233,7 +273,10 @@ def _scan_file(root: Path, rel: str, notes: list[str]) -> list[tuple[SecretFindi
         notes.append(f"{rel}: cannot read ({exc.strerror})")
         return []
     lines = text.split("\n")
-    return [(f, lines[f.line - 1] if f.line else "") for f in scan_text(text, rel)]
+    found = [(f, lines[f.line - 1] if f.line else "") for f in scan_text(text, rel)]
+    if pii is not None:
+        found += [(f, "") for f in pii_text_findings(text, rel, pii)]
+    return found
 
 
 def _token_hit(finding: SecretFinding, line_text: str, base: _BaseLines) -> SecretHit | None:
@@ -271,7 +314,13 @@ def _text(report: SecretReport, label: str) -> str:
         return "\n".join([*lines, f"scan-secrets {label}: clean"])
     count = len(report.hits)
     plural = "" if count == 1 else "s"
-    return "\n".join([*lines, ADVICE, f"scan-secrets {label}: {count} finding{plural}"])
+    return "\n".join([*lines, *_advice(report), f"scan-secrets {label}: {count} finding{plural}"])
+
+
+def _advice(report: SecretReport) -> list[str]:
+    """The secret advice and the PII advice, each when a hit of its kind exists."""
+    pii = [hit.rule.startswith(PII_RULE_PREFIX) for hit in report.hits]
+    return [*([ADVICE] if not all(pii) else []), *([PII_ADVICE] if any(pii) else [])]
 
 
 def _json(report: SecretReport, label: str) -> str:

@@ -1,11 +1,13 @@
-"""The safety pack as shipped (specs/prK-hook-pack.md §E.0.6, §E.4, Track K8).
+"""The safety pack as shipped (specs/prK-hook-pack.md §E.0.6, §E.4, §E.5, Tracks K8-K9).
 
 Every ``resources/hooks/safety/<id>/HOOK.md`` matches its §E.0.6 row (tier,
-events, decisions, ``on_error``), passes the H1-H21 contract in a config-less
-``playbook validate`` with no warning, and binds builtins (one per event for
-the hooks with companions) that declare their config keys (a ``regex`` key
-screened like an overlay's) and never mutate tool input. stop-diff-sweep
-names the ``secrets`` stage the coordinator plans.
+events, decisions, ``on_error``, ``supports``), passes the H1-H21 contract in a
+config-less ``playbook validate`` with no warning, and binds builtins (one per
+event for the hooks with companions) that declare their config keys (a
+``regex`` key screened like an overlay's) and never mutate tool input.
+stop-diff-sweep names the ``secrets`` stage the coordinator plans. The §E.5
+overlay-tier mechanisms that live here ship inert: ``tier: overlay``,
+``on_error: open`` (H10: ``deny`` is an overlay's to set).
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ class PackRow(NamedTuple):
     events: tuple[str, ...]
     decisions: tuple[str, ...]
     on_error: str
+    supports: tuple[str, ...] = ("claude_code", "opencode")
 
 
 #: The nine §E.4 rows (taint-escalation's marker and the exfil snapshot are companions).
@@ -62,6 +65,16 @@ SAFETY_PACK: dict[str, PackRow] = {
 }
 
 
+#: The §E.5 overlay-tier mechanisms under ``safety/`` (Track K9): inert until an
+#: overlay promotes them. pii-prompt-guard is Claude-only (QC-2).
+OVERLAY_PACK: dict[str, PackRow] = {
+    "pii-prompt-guard": PackRow(
+        "overlay", ("user_prompt_submit",), ("deny", "none"), "open", ("claude_code",)
+    ),
+}
+SHIPPED: dict[str, PackRow] = SAFETY_PACK | OVERLAY_PACK
+
+
 def _safety_ids() -> list[str]:
     return sorted(
         hook_id
@@ -71,24 +84,25 @@ def _safety_ids() -> list[str]:
 
 
 def test_safety_hooks_match_pack_table() -> None:
-    assert _safety_ids() == sorted(SAFETY_PACK)
-    for hook_id, row in SAFETY_PACK.items():
+    assert _safety_ids() == sorted(SHIPPED)
+    for hook_id, row in SHIPPED.items():
         fm = engine_hook(hook_id).frontmatter
-        shipped = PackRow(fm.tier, tuple(fm.events), tuple(fm.decisions), fm.on_error)
+        shipped = PackRow(
+            fm.tier, tuple(fm.events), tuple(fm.decisions), fm.on_error, tuple(fm.supports)
+        )
         assert (fm.id, shipped) == (hook_id, row)
-        assert fm.supports == ["claude_code", "opencode"]
 
 
 def test_safety_hooks_validate_clean(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert _validate.run(argparse.Namespace(repo_root=str(tmp_path))) == 0
 
     captured = capsys.readouterr()
-    shipped = [str(engine_hook_paths()[hook_id]) for hook_id in SAFETY_PACK]
+    shipped = [str(engine_hook_paths()[hook_id]) for hook_id in SHIPPED]
     assert not [line for line in captured.out.splitlines() if line.startswith("FAIL")]
     assert not [line for line in captured.err.splitlines() if any(p in line for p in shipped)]
 
 
-@pytest.mark.parametrize("hook_id", sorted(SAFETY_PACK))
+@pytest.mark.parametrize("hook_id", sorted(SHIPPED))
 def test_handlers_declare_config_schema_and_no_input_mutation(hook_id: str) -> None:
     fm = engine_hook(hook_id).frontmatter
     single = fm.handler

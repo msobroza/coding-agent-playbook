@@ -2,9 +2,10 @@
 
 :func:`register_hook_handler` records a builtin's :class:`HandlerDeclaration`
 (events, decisions, ``CONFIG_SCHEMA``, ``MUTATES_INPUT``, the builtin-only
-``mutates_edited_file`` capability of :data:`MUTATES_EDITED_FILE_HANDLERS`, and
-the ``argv0s`` a shell guard inspects, which the dispatcher's prefilter reads,
-specs/prK-hook-pack.md §E.4). The
+``mutates_edited_file`` capability of :data:`MUTATES_EDITED_FILE_HANDLERS`, the
+``argv0s`` a shell guard inspects, which the dispatcher's prefilter reads,
+specs/prK-hook-pack.md §E.4, and an optional ``FAILURE_REASON`` the failure
+policy shows instead of its generic one, §E.5 pii-prompt-guard). The
 dispatcher stays import-light: :data:`_BUILTIN_HANDLER_MODULES` maps each name to its module, so
 only the modules bound to the current event are imported (no scan; a test
 checks map and decorators agree), and an out-of-tree handler, resolved at sync
@@ -112,6 +113,7 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         "activity_log": f"{_HANDLERS}.activity_log",
         "precompact_checkpoint": f"{_HANDLERS}.compaction",
         "precompact_checkpoint:reinject": f"{_HANDLERS}.compaction",
+        "pii_prompt_guard": f"{_HANDLERS}.pii_prompt_guard",
     }
 )
 #: The only handlers that may rewrite the file the tool just edited (specs/prK-hook-pack.md
@@ -143,6 +145,7 @@ class HandlerDeclaration:
     config_domain: str | None = None
     argv0s: frozenset[str] | None = None
     argv0_rows: str | None = None
+    failure_reason: str | None = None
     fn: HandlerFn = field(compare=False, repr=False)
 
 
@@ -236,6 +239,7 @@ def register_hook_handler[F: Callable[..., Any]](
     config_domain: str | None = None,
     argv0s: Iterable[str] | None = None,
     argv0_rows: str | None = None,
+    failure_reason: str | None = None,
 ) -> Callable[[F], F]:
     """Register the decorated function as builtin handler ``name``; returns it unchanged.
 
@@ -246,6 +250,9 @@ def register_hook_handler[F: Callable[..., Any]](
     ``argv0s`` are the commands a shell guard inspects (``mkfs*``: a prefix),
     plus the ``argv0`` of each row of its ``argv0_rows`` config key: on a
     shell call none of whose segments runs one, the guard is not called.
+    ``failure_reason`` replaces the failure policy's generic ask/deny reason
+    when the guard fails internally (its ``FAILURE_REASON``; a quality hook's
+    failure has no reason, so it is ignored there).
 
     Example::
 
@@ -269,6 +276,7 @@ def register_hook_handler[F: Callable[..., Any]](
             config_domain=config_domain,
             argv0s=None if argv0s is None else frozenset(argv0s),
             argv0_rows=argv0_rows,
+            failure_reason=failure_reason,
             fn=fn,
         )
         _remember(declaration)

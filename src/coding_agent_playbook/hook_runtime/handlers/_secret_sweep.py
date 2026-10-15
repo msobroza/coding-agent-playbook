@@ -14,6 +14,9 @@ and every untracked, non-ignored file (``git ls-files --others
   Symlinks are not followed; binaries (a NUL in the first 8 KiB) are skipped.
 - An ``allow-secret`` pragma waives a tracked line only when that line is
   committed at ``HEAD`` (``escape.pragma_at_head``); an untracked file has none.
+- The PII tier (specs/prK-hook-pack.md §E.5), on only when an overlay lists
+  detectors in the hook's ``pii`` key, scans the same texts within the same
+  budget and reports each hit as a masked ``pii:<detector>`` line.
 
 A private module: :mod:`.stop_sweep` turns the :class:`SweepReport` into a stage result.
 """
@@ -33,6 +36,11 @@ from coding_agent_playbook.hook_runtime.handlers._secret_policy import (
     path_policy,
 )
 from coding_agent_playbook.security.files import user_home
+from coding_agent_playbook.security.pii_findings import (
+    PII_RULE_PREFIX,
+    pii_line_findings,
+    pii_text_findings,
+)
 from coding_agent_playbook.security.secrets import is_binary, scan_added_lines, scan_text
 
 if TYPE_CHECKING:
@@ -40,13 +48,15 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.git import AddedLine
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.security.pii import PiiConfig
     from coding_agent_playbook.security.secrets import SecretFinding
 
-__all__ = ["ARTIFACT_SUFFIXES", "FIX", "SweepLimits", "SweepReport", "sweep_tree"]
+__all__ = ["ARTIFACT_SUFFIXES", "FIX", "PII_FIX", "SweepLimits", "SweepReport", "sweep_tree"]
 
 #: Untracked artifacts that warn whatever their size (weights, pickles, tables).
 ARTIFACT_SUFFIXES: Final = (".pt", ".pkl", ".safetensors", ".parquet")
 FIX: Final = "remove it, move it to env or the secret manager, or gitignore it"
+PII_FIX: Final = "replace it with a placeholder or a synthetic value"
 _MIB: Final = 1024 * 1024
 
 
@@ -86,8 +96,12 @@ class _Budget:
         return True
 
 
-def sweep_tree(ctx: HandlerContext, root: str, limits: SweepLimits) -> SweepReport:
+def sweep_tree(
+    ctx: HandlerContext, root: str, limits: SweepLimits, *, pii: PiiConfig | None = None
+) -> SweepReport:
     """Sweep the working tree of the repository at ``root`` (module docstring).
+
+    ``pii`` turns the PII tier on (``None``: off, the engine default).
 
     Example::
 
@@ -101,11 +115,17 @@ def sweep_tree(ctx: HandlerContext, root: str, limits: SweepLimits) -> SweepRepo
     lines = _within([line for line in added if line.path not in secret], budget)
     report.changed.extend(dict.fromkeys(line.path for line in lines))
     findings = _tracked_findings(lines, ctx)
+    if pii is not None:
+        findings.extend(pii_line_findings(lines, pii))
     for rel in (rel for rel in untracked if rel not in secret):
-        findings.extend(_untracked_findings(root, rel, ctx, limits, budget, report))
-    report.blocking.extend(f"{finding_line(f)}; {FIX}" for f in findings)
+        findings.extend(_untracked_findings(root, rel, ctx, limits, budget, report, pii))
+    report.blocking.extend(f"{finding_line(f)}; {_fix(f)}" for f in findings)
     report.partial = budget.exhausted
     return report
+
+
+def _fix(finding: SecretFinding) -> str:
+    return PII_FIX if finding.rule_id.startswith(PII_RULE_PREFIX) else FIX
 
 
 def _secret_names(ctx: HandlerContext, rels: Iterable[str]) -> frozenset[str]:
@@ -145,8 +165,9 @@ def _untracked_findings(
     limits: SweepLimits,
     budget: _Budget,
     report: SweepReport,
+    pii: PiiConfig | None,
 ) -> list[SecretFinding]:
-    """One untracked file: an artifact warning, or its tokens; never a followed link."""
+    """One untracked file: an artifact warning, or its tokens (and PII); never a followed link."""
     path = Path(root, rel)
     try:
         status = path.lstat()
@@ -162,7 +183,8 @@ def _untracked_findings(
     if text is None:
         return []
     report.changed.append(rel)
-    return scan_text(text, rel, rules=content_rules(ctx.cfg))
+    found = scan_text(text, rel, rules=content_rules(ctx.cfg))
+    return found if pii is None else [*found, *pii_text_findings(text, rel, pii)]
 
 
 def _artifact_warning(rel: str, size: int, limits: SweepLimits) -> str | None:

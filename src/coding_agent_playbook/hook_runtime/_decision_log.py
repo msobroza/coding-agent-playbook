@@ -46,9 +46,12 @@ class LogLine:
 
 
 def lines_for(ran: Sequence[Ran], outcomes: Sequence[Outcome]) -> list[LogLine]:
-    """The lines a fan-out logs: guard decisions, failures, violations and skips.
+    """The lines a fan-out logs: guard decisions, failures, violations, skips and escapes.
 
     A quality hook's own context is not a guard decision, so it is not logged.
+    A result carrying an ``escape`` marker (pii-prompt-guard's override token)
+    is an ``escape`` line whatever its decision: its ``rule_id`` names what was
+    let through (categories), never the content.
 
     Example::
 
@@ -67,6 +70,7 @@ def lines_for(ran: Sequence[Ran], outcomes: Sequence[Outcome]) -> list[LogLine]:
                 decision=value,
                 effective="none" if done.status == "untrusted" else outcome.effective.value,
                 degraded=done.result.degraded,
+                escape=done.result.escape or None,
                 latency_ms=done.latency_ms,
             )
         )
@@ -80,6 +84,8 @@ def _decision_value(done: Ran, outcome: Outcome) -> str | None:
         return "contract_violation"
     if done.status == "degraded":
         return "degraded"
+    if done.result.escape:
+        return "escape"
     if not done.selected.is_guard or outcome.decision not in _LOGGED:
         return None
     if outcome.decision is Decision.ASK and outcome.effective is Decision.DENY:

@@ -14,6 +14,7 @@ handler:
     max_scan_bytes: 2097152
     large_file_mb: 10
     extra_patterns: []
+    pii: []
 decisions: [deny, none]
 timeout: 3
 on_error: open

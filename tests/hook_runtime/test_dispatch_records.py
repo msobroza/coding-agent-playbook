@@ -56,6 +56,25 @@ def test_decision_line_never_contains_command_text_or_path(
     )
 
 
+def test_escape_marker_is_an_escape_line_of_ids_only(
+    repo: GuardRepo, resolver: FakeHandlerResolver, make_deps: Callable[..., RuntimeDeps]
+) -> None:
+    """A result's ``escape`` marker (pii-prompt-guard's override token) is logged, never its text."""
+    repo.install(hook_record("guard-a"))
+    resolver.handlers["guard-a"] = verdict(Decision.NONE, escape="override_token")
+
+    wire = dispatch(make_deps(), repo)
+
+    assert wire.stdout == ""
+    (line,) = repo.decisions()
+    assert (line["decision"], line["effective"], line["rule_id"], line["escape"]) == (
+        "escape",
+        "none",
+        "r1",
+        "override_token",
+    )
+
+
 def test_quality_context_is_not_a_logged_guard_decision(
     repo: GuardRepo, resolver: FakeHandlerResolver, make_deps: Callable[..., RuntimeDeps]
 ) -> None:

@@ -320,7 +320,7 @@ def _add_twin_parsers(subcommands: argparse._SubParsersAction[argparse.ArgumentP
 def _add_scan_secrets_parser(
     subcommands: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
-    """``scan-secrets [--staged | --range A..B | --worktree | PATHS]`` (prK §E.4)."""
+    """``scan-secrets [--staged | --range A..B | --worktree | PATHS] [--pii]`` (prK §E.4, §E.5)."""
     secrets_p = subcommands.add_parser(
         _SUBCOMMANDS[13], help="flag secret tokens and credential files, masked (prK §E.4)"
     )
@@ -338,6 +338,16 @@ def _add_scan_secrets_parser(
         "--worktree",
         action="store_true",
         help="scan tracked changes against HEAD and untracked, non-ignored files",
+    )
+    secrets_p.add_argument(
+        "--pii",
+        action="store_true",
+        help="also flag checksum-validated PII (IBAN, card numbers), masked (prK §E.5)",
+    )
+    secrets_p.add_argument(
+        "--pii-detectors",
+        metavar="NAMES",
+        help="comma-separated PII detectors (iban, card_pan, fr_nir, us_ssn); implies --pii",
     )
     secrets_p.add_argument("--format", choices=("text", "json"), default="text")
     secrets_p.add_argument("--repo-root", help="repo to scan (defaults to cwd)")

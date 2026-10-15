@@ -6,13 +6,20 @@ the engine's own ``HOOK.md`` resolved through the real effective view, a
 tables are the rendered ones), and the lockfile entry vouching for it. Tests
 then drive the exact dispatch pipeline through ``simulate.run`` with golden
 payloads relocated into the repository.
+
+An overlay layer is optional: :func:`install_fixture_overlay` turns the data
+under ``tests/fixtures/overlays/<name>/`` into an importable overlay package,
+and ``overlays=`` merges its same-id definitions over the engine's through the
+real §A.6 layer merge (specs/prK-hook-pack.md §E.5: overlay activation).
 """
 
 from __future__ import annotations
 
 import dataclasses
 import hashlib
+import importlib
 import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -35,6 +42,7 @@ from coding_agent_playbook.guard_config import (
     serialize_guard_config,
 )
 from coding_agent_playbook.hook_policy import RegistryCatalog, resolve_effective_hooks
+from coding_agent_playbook.hook_policy.merge import merge_hook_layers
 from coding_agent_playbook.hook_runtime.config import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.simulate import SimulateArgs, run
@@ -56,6 +64,8 @@ if TYPE_CHECKING:
 
 ENGINE_PACKAGE = "coding_agent_playbook"
 ENGINE_HOOKS = Path(coding_agent_playbook.__file__).resolve().parent / "resources" / "hooks"
+#: Data-only overlay trees (``<name>/resources/hooks/...``), copied into a package per test.
+FIXTURE_OVERLAYS = Path(__file__).resolve().parent.parent / "fixtures" / "overlays"
 #: Every enabled adapter of the fixture consumer.
 ADAPTERS = ("claude_code", "continue", "opencode", "agents_md")
 #: The fixture engine version and sync time :meth:`PackRepo.lock_outputs` records.
@@ -71,6 +81,45 @@ def engine_hook_paths() -> dict[str, Path]:
 def engine_hook(hook_id: str) -> Hook:
     """The engine's shipped definition of ``hook_id``."""
     return Hook.from_markdown(engine_hook_paths()[hook_id], ENGINE_PACKAGE)
+
+
+def install_fixture_overlay(make_package: Callable[..., str], name: str, package: str) -> str:
+    """Copy ``tests/fixtures/overlays/<name>/resources`` into importable package ``package``.
+
+    ``make_package`` is the root conftest fixture; the package lives for one test.
+    Returns ``package``.
+    """
+    make_package(package, resources=True)
+    shutil.copytree(FIXTURE_OVERLAYS / name / "resources", _resources(package), dirs_exist_ok=True)
+    return package
+
+
+def overlay_hook_paths(package: str) -> dict[str, Path]:
+    """Every ``HOOK.md`` overlay ``package`` ships, by hook id (its directory name)."""
+    root = _resources(package) / "hooks"
+    return {path.parent.name: path for path in sorted(root.rglob("HOOK.md"))}
+
+
+def layered_hook(hook_id: str, overlays: Sequence[str] = ()) -> Hook:
+    """The engine's ``hook_id`` with each overlay's same-id definition merged over it (§A.6).
+
+    Raises ``ValueError`` naming the first layer violation (H2/H14/H15).
+    """
+    definitions = [engine_hook(hook_id)]
+    for package in overlays:
+        path = overlay_hook_paths(package).get(hook_id)
+        if path is not None:
+            definitions.append(Hook.from_markdown(path, package))
+    merged, violations = merge_hook_layers(definitions, schemas=RegistryCatalog())
+    if violations:
+        raise ValueError(f"overlay merge of {hook_id!r} refused: {violations[0].message}")
+    return merged
+
+
+def _resources(package: str) -> Path:
+    module_file = importlib.import_module(package).__file__
+    assert module_file is not None
+    return Path(module_file).parent / "resources"
 
 
 def engine_prompts() -> list[Prompt]:
@@ -94,14 +143,16 @@ def resolve_engine_hooks(
     per_hook: Mapping[str, dict[str, Any]] | None = None,
     rules: Sequence[Rule] = (),
     facts: Mapping[str, Any] | None = None,
+    overlays: Sequence[str] = (),
 ) -> list[ResolvedHook]:
     """The engine hooks ``hook_ids`` through the real effective view, ``[hooks]`` on.
 
     ``rules`` are the merged rules a ``linked_rule`` resolves against (its
-    ``applies_if`` gate and ``lint_codes``), ``facts`` the detector facts.
+    ``applies_if`` gate and ``lint_codes``), ``facts`` the detector facts,
+    ``overlays`` the overlay packages layered over the engine (:func:`layered_hook`).
     """
     view = resolve_effective_hooks(
-        [engine_hook(hook_id) for hook_id in hook_ids],
+        [layered_hook(hook_id, overlays) for hook_id in hook_ids],
         list(rules),
         HooksConfig(enabled=True, tiers=("default", "opt-in"), per_hook=dict(per_hook or {})),
         GuardrailsConfig(),
@@ -155,6 +206,7 @@ class PackRepo(GuardRepo):
         rules: Sequence[Rule] = (),
         extra_tables: Mapping[str, Any] | None = None,
         handler_config: Mapping[str, Mapping[str, Any]] | None = None,
+        overlays: Sequence[str] = (),
     ) -> bytes:
         """Render ``guard_config.json`` for the engine hooks ``hook_ids``; vouch for it in the lock.
 
@@ -171,10 +223,17 @@ class PackRepo(GuardRepo):
         (e.g. a ``stop_gate`` with a typecheck stage). ``handler_config`` sets
         keys of a hook's rendered handler configs outright, as a repo-local
         override would (no strictest merge: e.g. stop-diff-sweep's ``mode = warn``).
+        ``overlays`` are overlay packages layered over the engine definitions
+        (an overlay-tier hook is on only when one of them activates it).
         """
         detect = detect or DetectInputs()
         hooks = resolve_engine_hooks(
-            hook_ids, self.root, per_hook=per_hook, rules=rules, facts=detect.facts
+            hook_ids,
+            self.root,
+            per_hook=per_hook,
+            rules=rules,
+            facts=detect.facts,
+            overlays=overlays,
         )
         protect = ProtectInputs(rows, fixture_output_dirs(self.root), packages)
         inputs = GuardConfigInputs(

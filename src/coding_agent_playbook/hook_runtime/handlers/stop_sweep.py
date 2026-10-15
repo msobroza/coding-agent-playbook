@@ -16,6 +16,9 @@ working tree differs from ``HEAD`` (the coordinator skips settled trees).
   ``[guardrails.stop_sweep]`` included): ``block`` joins the coordinator's one
   combined reason per fingerprint; ``warn`` only reports; ``off`` plans nothing.
   A capped sweep tells the user it was partial.
+- ``pii`` (empty in the engine; an overlay lists ``security.pii`` detectors,
+  ``extend``) adds the PII tier, pii-prompt-guard's file twin (specs/prK-hook-pack.md
+  §E.5): PII written into the tree joins the same block as a ``pii:<detector>`` line.
 
 Lines are masked: rule, place and length, never a secret's characters.
 ``on_error: open``; a failure reads ``NOT verified``, never green.
@@ -29,6 +32,11 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.handlers._pii_settings import (
+    PII_CONFIG_KEY,
+    PII_KEY,
+    pii_settings,
+)
 from coding_agent_playbook.hook_runtime.handlers._secret_sweep import (
     SweepLimits,
     SweepReport,
@@ -66,6 +74,7 @@ CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
     "max_scan_bytes": ConfigKey("integer"),
     "large_file_mb": ConfigKey("integer"),
     "extra_patterns": ConfigKey("regex", "extend"),
+    PII_KEY: PII_CONFIG_KEY,
 }
 PARTIAL_NOTE: Final = (
     "[secrets] partially scanned: the byte cap was reached; run playbook scan-secrets --worktree"
@@ -101,7 +110,8 @@ class SecretsStage:
     def run(self, plan: StopPlan, deadline: float) -> StageResult:
         """Red on a token or credential file (``block``); warn lines otherwise."""
         del plan, deadline  # git and the working tree are read directly; the walk is bounded
-        report = sweep_tree(self.ctx, self.root, _limits(self.ctx.config))
+        config = self.ctx.config
+        report = sweep_tree(self.ctx, self.root, _limits(config), pii=pii_settings(config))
         report.warnings.extend(_deser_lines(self.ctx, self.root, report.changed))
         return _result(report, self.mode)
 
