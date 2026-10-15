@@ -2,8 +2,8 @@
 
 Driven through ``playbook-hook simulate stop`` with the coordinator and this
 hook on, and the engine's shipped prompts rendered into ``guard_config.prompts``.
-The active-prompt record is seeded in a real state root, because K7 owns its
-writer (OQ-45). A review turn changes no file, so ``FakeGit`` reports a tree
+The active-prompt record is seeded in a real state root (K7's dispatcher branch
+writes it, OQ-45; one test drives that writer end to end). A review turn changes no file, so ``FakeGit`` reports a tree
 equal to ``HEAD``: only ``needs_diff=False`` stages run, and ruff never does.
 """
 
@@ -17,8 +17,9 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 import coding_agent_playbook
-from coding_agent_playbook.hook_runtime.active_prompt import ActivePrompt, active_prompt_doc
+from coding_agent_playbook.hook_runtime.active_prompt import ActivePrompt, active_prompt_document
 from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.git import Fingerprint
 from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
 from coding_agent_playbook.types import Prompt
@@ -63,9 +64,9 @@ def _unchanged() -> FakeGit:
 
 def _activate(state: Path, payload: bytes, slash: str = "review", turn: str = "pr_17") -> None:
     """Seed the record K7's user_prompt_submit branch writes for ``/<slash>``."""
-    doc = state / STATE_DIR_NAME / active_prompt_doc(session_of(payload))
+    doc = state / STATE_DIR_NAME / active_prompt_document(session_of(payload))
     doc.parent.mkdir(parents=True, exist_ok=True)
-    doc.write_text(json.dumps(ActivePrompt(slash, slash, turn).to_json()), "utf-8")
+    doc.write_text(json.dumps(ActivePrompt(slash, "prompt", turn).to_json()), "utf-8")
 
 
 def _stop(
@@ -238,3 +239,39 @@ def test_without_the_coordinator_the_stage_reports_alone(
 
     assert report.trace.combined.decision is Decision.NONE
     assert report.trace.combined.user_notes == (MISS_LINE,)
+
+
+def _submit(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path, turn: bytes, text: str
+) -> None:
+    """A real ``user_prompt_submit`` in ``turn``'s session and turn (K7's branch records it)."""
+    ids = json.loads(turn)
+    payload = repo.payload(
+        EventName.USER_PROMPT_SUBMIT,
+        prompt=text,
+        session_id=ids["session_id"],
+        prompt_id=ids["prompt_id"],
+    )
+    repo.simulate(payload, deps(), event=EventName.USER_PROMPT_SUBMIT, state=state)
+
+
+@pytest.mark.parametrize(
+    ("prompts", "expected"),
+    [(["/review src/app.py"], (MISS_LINE,)), (["/review src/app.py", "now fix it"], ())],
+    ids=["recorded", "cleared"],
+)
+def test_submitted_prompt_drives_the_stage(
+    repo: PackRepo,
+    deps: Callable[..., RuntimeDeps],
+    tmp_path: Path,
+    prompts: list[str],
+    expected: tuple[str, ...],
+) -> None:
+    """K6 + K7: the dispatcher's record is what the stage reads; the next prompt clears it."""
+    payload = stop_payload(repo, message=REVIEW_NO_VERDICT)
+    for text in prompts:
+        _submit(repo, deps, tmp_path, payload, text)
+
+    report = stop(repo, deps, payload, git=_unchanged(), state=tmp_path)
+
+    assert report.trace.combined.user_notes == expected

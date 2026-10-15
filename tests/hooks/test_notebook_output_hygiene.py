@@ -216,7 +216,9 @@ def test_stop_stage_inactive_without_a_notebook_write(
 
     report = _stop(pack_repo, deps, tmp_path / "state", git)
 
-    assert report.trace.combined.user_notes == ()
+    # The coordinator's own stages (K6's lint, verify-claim) may add their notes; this one adds none.
+    notes = report.trace.combined.user_notes
+    assert not [note for note in notes if note.startswith("[notebooks]")]
     assert ("diff_added", ()) not in git.calls
 
 

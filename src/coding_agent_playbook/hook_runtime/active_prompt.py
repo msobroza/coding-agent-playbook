@@ -21,9 +21,9 @@ The record is ``sessions/<sha256(session_id)[:16]>/prompt.json``:
 It is deleted when cleared, so a reader with no active prompt pays one
 ``stat``. ``turn_id`` is the event's turn (Claude's ``prompt_id``) so the Stop
 stage can ignore a record left over from another turn. Known slashes are the
-keys of prompt-write-scope-guard's ``scopes`` and of the ``prompts`` table
-(K6's output contracts), both rendered at sync. No prompt text is ever stored
-(D-10). Stdlib and ``hook_runtime`` only.
+keys of prompt-write-scope-guard's ``scopes`` and the rows of the ``prompts``
+table that carry an output contract (K6), both rendered at sync. No prompt
+text is ever stored (D-10). Stdlib and ``hook_runtime`` only.
 """
 
 from __future__ import annotations
@@ -185,7 +185,11 @@ def slash_of_prompt(text: str) -> str | None:
 
 
 def known_slashes(cfg: GuardConfig) -> frozenset[str]:
-    """The slashes of the playbook prompts the consumers know (scopes, output contracts).
+    """The slashes of the playbook prompts a consumer acts on: a write scope or an output contract.
+
+    The ``prompts`` table lists every rendered prompt; one with an empty
+    ``output_contract`` (and no scope) is not recorded, so invoking it clears
+    the record like any other prompt.
 
     Example::
 
@@ -197,7 +201,7 @@ def known_slashes(cfg: GuardConfig) -> frozenset[str]:
     spec = None if guard is None else guard.handlers.get(EventName.PRE_TOOL_USE)
     if spec is not None:
         slashes.update(_keys(spec.config.get("scopes")))
-    slashes.update(_keys(cfg.tables.get(_PROMPTS_TABLE)))
+    slashes.update(_contract_slashes(cfg.tables.get(_PROMPTS_TABLE)))
     return frozenset(slashes)
 
 
@@ -239,6 +243,17 @@ def _skill_of(ev: CanonicalEvent) -> str | None:
         return None
     skill = ev.tool.raw_input.get("skill")
     return skill.strip().lstrip("/") if isinstance(skill, str) else None
+
+
+def _contract_slashes(table: Any) -> list[str]:
+    """The slashes of the ``prompts`` table whose row carries a non-empty ``output_contract``."""
+    if not isinstance(table, Mapping):
+        return []
+    return [
+        slash
+        for slash, row in table.items()
+        if isinstance(slash, str) and isinstance(row, Mapping) and row.get("output_contract")
+    ]
 
 
 def _keys(table: Any) -> list[str]:

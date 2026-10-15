@@ -96,7 +96,7 @@ def test_security_review_then_edit_denied(
 
     combined, expected = report.trace.combined, edit.expected["result"]
     assert submitted.trace.wire == prompt.wire()  # the record is silent
-    assert _stored(state, GOLDEN_SESSION) == ActivePrompt("security-review", "prompt")
+    assert _stored(state, GOLDEN_SESSION) == ActivePrompt("security-review", "prompt", "pr_21")
     assert (combined.decision.value, combined.reason) == (expected["decision"], expected["reason"])
     assert report.trace.wire == edit.wire()
 
@@ -111,7 +111,7 @@ def test_model_invoked_skill_review_then_edit_denied(
     report = _golden(repo, deps(), state, edit)
 
     assert invoked.trace.wire == skill.wire()  # Skill itself is no write
-    assert _stored(state, GOLDEN_SESSION) == ActivePrompt("review", "skill")
+    assert _stored(state, GOLDEN_SESSION) == ActivePrompt("review", "skill", "pr_23")
     assert report.trace.combined.decision is Decision.DENY
     assert report.trace.combined.reason == f"/review is read-only: {READ_ONLY_REASON}"
 
@@ -221,7 +221,7 @@ def test_command_wrapper_records_scope(
 
     _golden(repo, deps(), state, wrapped)
 
-    assert _stored(state, GOLDEN_SESSION) == ActivePrompt("review", "prompt")
+    assert _stored(state, GOLDEN_SESSION) == ActivePrompt("review", "prompt", "pr_22")
 
 
 class CountingStore(StateStore):
@@ -253,7 +253,8 @@ def test_record_kept_while_only_the_output_contract_consumer_is_enabled(
 ) -> None:
     """OQ-45: the record is a dispatcher branch, so the guard being off never disables it."""
     contract = hook_record("prompt-output-contract-on-stop", events=["stop"], on_error="open")
-    pack_repo.install(contract, prompts={"review": {"id": "review", "output_contract": []}})
+    verdict = r"(?im)^\W*(approve|request changes)\W*$"
+    pack_repo.install(contract, prompts={"review": {"id": "review", "output_contract": [verdict]}})
 
     _prompt(pack_repo, deps(), state, "/review src/app.py")
 
