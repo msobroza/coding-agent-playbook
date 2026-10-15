@@ -18,7 +18,9 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__
 from coding_agent_playbook.commands import check as check_cmd
+from coding_agent_playbook.commands import ci as ci_cmd
 from coding_agent_playbook.commands import eval as eval_cmd
+from coding_agent_playbook.commands import gate_scan as gate_scan_cmd
 from coding_agent_playbook.commands import import_harness as import_harness_cmd
 from coding_agent_playbook.commands import init as init_cmd
 from coding_agent_playbook.commands import metrics as metrics_cmd
@@ -46,6 +48,8 @@ _SUBCOMMANDS: tuple[str, ...] = (
     "metrics",
     "import-harness",
     "validate-harness",
+    "gate-scan",
+    "ci",
 )
 
 
@@ -249,7 +253,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     validate_harness_p.set_defaults(func=validate_harness_cmd.run)
 
+    _add_twin_parsers(subcommands)
     return parser
+
+
+def _add_twin_parsers(subcommands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """``gate-scan`` and ``ci``, the hooks' off-workstation twins (prK §E.2, §F.5)."""
+    gate_p = subcommands.add_parser(
+        _SUBCOMMANDS[9], help="flag gate-weakening changes in a commit range (prK §E.2)"
+    )
+    gate_p.add_argument(
+        "--range",
+        dest="rev_range",
+        help="A..B, or A...B from their merge base (default: <merge-base>..HEAD)",
+    )
+    gate_p.add_argument("--format", choices=("text", "json"), default="text")
+    gate_p.add_argument("--repo-root", help="repo to scan (defaults to cwd)")
+    gate_p.set_defaults(func=gate_scan_cmd.run)
+
+    ci_p = subcommands.add_parser(
+        _SUBCOMMANDS[10], help="run the CI twins as child processes (prK §F.5)"
+    )
+    ci_p.add_argument("--base", help="base ref (default: the default branch, origin/HEAD first)")
+    ci_p.add_argument("--steps", help="comma-separated CI_STEPS names (default: every row)")
+    ci_p.add_argument("--format", choices=("text", "json"), default="text")
+    ci_p.add_argument("--repo-root", help="repo to check (defaults to cwd)")
+    ci_p.set_defaults(func=ci_cmd.run)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

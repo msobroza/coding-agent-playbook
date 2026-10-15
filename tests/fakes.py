@@ -12,6 +12,8 @@ without running a suite, and ``FakeBaselineGit`` stands in for
 (K2) behind :class:`coding_agent_playbook.hook_policy.ConfigSchemaLookup`.
 ``FakePinWriter`` stands in for the ``hook_runtime.pin`` writers ``playbook sync``
 calls (the interpreter pin and ``machine.json`` under the git dir).
+``FakeCiStepRunner`` stands in for :class:`coding_agent_playbook.commands.ci.SubprocessCiStepRunner`
+so ``playbook ci`` tests see each step's argv without spawning a child.
 :func:`record_opens` spies on every ``open`` so a scan test can prove a file was never read.
 """
 
@@ -24,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.commands.ci import StepRun
 from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, GitTimeoutError
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle
 from coding_agent_playbook.hook_runtime.pin import PinResult
@@ -217,6 +220,26 @@ class FakePinWriter:
         self.tools = {name: list(argv) for name, argv in tools.items()}
         self.resource_roots = dict(resource_roots or {})
         return Path("/fake/.git/playbook-hooks/machine.json") if self.git else None
+
+
+@dataclass
+class FakeCiStepRunner:
+    """In-memory :class:`~coding_agent_playbook.commands.ci.CiStepRunner`.
+
+    ``exits`` maps a step's subcommand (``validate``, ``sync``, ``gate-scan``)
+    to its exit code, ``None`` for a timeout; unlisted steps exit 0. ``calls``
+    records each argv, ``timeouts`` each per-step timeout, in order.
+    """
+
+    exits: dict[str, int | None] = field(default_factory=dict)
+    calls: list[tuple[str, ...]] = field(default_factory=list)
+    timeouts: list[float] = field(default_factory=list)
+
+    def run(self, argv: Sequence[str], *, cwd: Path, timeout_s: float) -> StepRun:
+        self.calls.append(tuple(argv))
+        self.timeouts.append(timeout_s)
+        subcommand = argv[3]  # after <python> -m coding_agent_playbook.cli
+        return StepRun(self.exits.get(subcommand, 0), f"{subcommand} said hello\n")
 
 
 def record_opens(monkeypatch: pytest.MonkeyPatch) -> list[Path]:

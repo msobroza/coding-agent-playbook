@@ -41,6 +41,7 @@ from coding_agent_playbook.hook_runtime._git_parse import (
     parse_diff_added,
     split_z,
 )
+from coding_agent_playbook.hook_runtime.git_range import PATCH_FLAGS, RangePort, RangeQueries
 from coding_agent_playbook.hook_runtime.proc import ProcTimeout
 
 if TYPE_CHECKING:
@@ -109,8 +110,8 @@ class Fingerprint:
         return self.tree_id if not self.aux else f"{self.tree_id}:{self.aux[:12]}"
 
 
-class GitPort(Protocol):
-    """What handlers and the Stop coordinator ask of git; ``FakeGit`` scripts it."""
+class GitPort(RangePort, Protocol):
+    """What handlers, the Stop coordinator and the CLI twins ask of git; ``FakeGit`` scripts it."""
 
     def head_tree(self) -> str | None: ...
 
@@ -127,13 +128,14 @@ class GitPort(Protocol):
     def config_value(self, key: str) -> str | None: ...
 
 
-class SafeGit:
+class SafeGit(RangeQueries):
     """Hardened git for one worktree; every call runs at its root through ``proc``.
 
     ``env`` is the hook process environment (scrubbed per call); ``state``
     holds the discovery caches and the temp index (``None``: no caches, a
-    system temp dir); ``secret_paths`` and ``max_file_bytes`` decide what the
-    fingerprint folds in by stat.
+    system temp dir, as in CI); ``secret_paths`` and ``max_file_bytes`` decide
+    what the fingerprint folds in by stat. The revision queries come from
+    ``git_range.RangeQueries``.
 
     Example::
 
@@ -253,19 +255,7 @@ class SafeGit:
     def diff_added(self) -> tuple[AddedLine, ...]:
         """The lines the working tree adds over ``HEAD`` (the empty tree when unborn)."""
         base = "HEAD" if self.head_tree() is not None else self._empty_tree()
-        result = self.run(
-            [
-                "diff",
-                base,
-                "-U0",
-                "--no-color",
-                "-M",
-                "--no-relative",
-                # Explicit prefixes: diff.noprefix / mnemonicPrefix would change the headers.
-                "--src-prefix=a/",
-                "--dst-prefix=b/",
-            ]
-        )
+        result = self.run(["diff", base, *PATCH_FLAGS])
         return parse_diff_added(result.stdout)
 
     def cat_head(self, repo_rel: str) -> bytes | None:

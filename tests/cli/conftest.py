@@ -14,6 +14,7 @@ exercise the real ``_uv_sync_scratch`` paths) — that scope is not affected.
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from typing import Any
 
@@ -26,10 +27,13 @@ def _stub_uv_sync_for_cli(monkeypatch: pytest.MonkeyPatch) -> None:
 
     Stubs ``subprocess.run`` (only when the first arg is ``"uv"``; git and other
     calls pass through) and ``shutil.which`` (pretends ``uv`` is on PATH so the
-    runner does not raise the missing-binary error). Function-scoped so each
-    test gets a clean stub.
+    runner does not raise the missing-binary error; every other lookup, e.g.
+    ``SafeGit``'s ``which("git", path=...)``, passes through). Both attributes
+    live on the shared modules, so the stubs must stay transparent for every
+    other caller. Function-scoped so each test gets a clean stub.
     """
     real_run = subprocess.run
+    real_which = shutil.which
 
     def _stub_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         if args and args[0] == "uv":
@@ -37,6 +41,8 @@ def _stub_uv_sync_for_cli(monkeypatch: pytest.MonkeyPatch) -> None:
         return real_run(args, **kwargs)
 
     monkeypatch.setattr("coding_agent_playbook.evals.runner.subprocess.run", _stub_run)
-    monkeypatch.setattr(
-        "coding_agent_playbook.evals.runner.shutil.which", lambda _binary: "/fake/uv"
-    )
+
+    def _stub_which(binary: str, *args: Any, **kwargs: Any) -> str | None:
+        return "/fake/uv" if binary == "uv" else real_which(binary, *args, **kwargs)
+
+    monkeypatch.setattr("coding_agent_playbook.evals.runner.shutil.which", _stub_which)

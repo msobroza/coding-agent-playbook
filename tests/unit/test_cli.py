@@ -208,6 +208,41 @@ def test_metrics_subparser_defaults():
     assert args.format == "text"
 
 
+def test_twin_subcommands_close_the_canonical_list():
+    """prK K6: the off-workstation twins are registered, and no argument is required."""
+    assert _SUBCOMMANDS[-2:] == ("gate-scan", "ci")
+
+
+def test_gate_scan_subparser_accepts_range_and_format():
+    parser = build_parser()
+    args = parser.parse_args(
+        ["gate-scan", "--range", "HEAD~1..HEAD", "--format", "json", "--repo-root", "/tmp/x"]
+    )
+    assert (args.command, args.rev_range, args.format, args.repo_root) == (
+        "gate-scan",
+        "HEAD~1..HEAD",
+        "json",
+        "/tmp/x",
+    )
+    defaults = parser.parse_args(["gate-scan"])
+    assert (defaults.rev_range, defaults.format, defaults.repo_root) == (None, "text", None)
+
+
+def test_ci_subparser_accepts_base_steps_format():
+    parser = build_parser()
+    args = parser.parse_args(
+        ["ci", "--base", "origin/main", "--steps", "validate,gate-scan", "--format", "json"]
+    )
+    assert (args.command, args.base, args.steps, args.format) == (
+        "ci",
+        "origin/main",
+        "validate,gate-scan",
+        "json",
+    )
+    defaults = parser.parse_args(["ci"])
+    assert (defaults.base, defaults.steps, defaults.format) == (None, None, "text")
+
+
 def test_main_returns_func_exit_code(monkeypatch, tmp_path):
     """Plumb a fake subcommand and verify main forwards its return code."""
     from coding_agent_playbook.commands import sync as sync_cmd

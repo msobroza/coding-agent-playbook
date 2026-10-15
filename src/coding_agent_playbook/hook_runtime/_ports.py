@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from coding_agent_playbook.hook_runtime._git_parse import DiffLines
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps, TrustPort
     from coding_agent_playbook.hook_runtime.event import RepoInfo
     from coding_agent_playbook.hook_runtime.git import AddedLine, Fingerprint, GitPort
@@ -87,6 +88,22 @@ class LazyGit:
     def config_value(self, key: str) -> str | None:
         """See ``GitPort.config_value``."""
         return self._port().config_value(key)
+
+    def default_branch(self) -> str | None:
+        """See ``GitPort.default_branch``."""
+        return self._port().default_branch()
+
+    def merge_base(self, left: str, right: str) -> str | None:
+        """See ``GitPort.merge_base``."""
+        return self._port().merge_base(left, right)
+
+    def diff_range(self, base: str, head: str) -> DiffLines:
+        """See ``GitPort.diff_range``."""
+        return self._port().diff_range(base, head)
+
+    def show(self, rev: str, repo_rel: str) -> bytes | None:
+        """See ``GitPort.show``."""
+        return self._port().show(rev, repo_rel)
 
 
 def open_trust_store(repo: RepoInfo, deps: RuntimeDeps) -> TrustPort | None:

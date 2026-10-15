@@ -6,7 +6,8 @@ never patches a module:
 - ``FakeProc`` for ``proc.SubprocessProc``: replays scripted results, records
   every call, and raises ``AssertionError("unexpected subprocess: <argv0>")``
   for a call nobody scripted, so a stray spawn fails loudly.
-- ``FakeGit`` for ``git.SafeGit``: scripted answers, every call recorded.
+- ``FakeGit`` for ``git.SafeGit``: scripted answers (range queries included),
+  every call recorded.
 - ``FakeClock`` for ``deps.SystemClock``: time moves only when told to.
 - ``FakeTrustStore`` for ``security.trust.TrustStore``: in-memory approvals.
 - ``FakeHandlerResolver`` for ``registry.resolve_handler``: hook id -> handler.
@@ -21,6 +22,7 @@ import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, NoReturn
 
+from coding_agent_playbook.hook_runtime._git_parse import DiffLines
 from coding_agent_playbook.hook_runtime.proc import ProcResult, ProcTimeout
 from coding_agent_playbook.hook_runtime.registry import HandlerResolutionError, Untrusted
 
@@ -124,7 +126,11 @@ def _payload(result: ProcResult) -> tuple[int, bytes, bytes]:
 
 @dataclass
 class FakeGit:
-    """In-memory ``GitPort``: each answer is a field; ``errors`` raises per method name."""
+    """In-memory ``GitPort``: each answer is a field; ``errors`` raises per method name.
+
+    The range answers are keyed by their arguments: ``merge_bases[(left, right)]``,
+    ``range_diffs[(base, head)]`` (empty when absent), ``revision_blobs[(rev, path)]``.
+    """
 
     head_tree_id: str | None = None
     fingerprint_value: Fingerprint | None = None
@@ -133,6 +139,10 @@ class FakeGit:
     untracked: tuple[str, ...] = ()
     symbolic_refs: dict[str, str] = field(default_factory=dict)
     config: dict[str, str] = field(default_factory=dict)
+    default_branch_name: str | None = None
+    merge_bases: dict[tuple[str, str], str] = field(default_factory=dict)
+    range_diffs: dict[tuple[str, str], DiffLines] = field(default_factory=dict)
+    revision_blobs: dict[tuple[str, str], bytes] = field(default_factory=dict)
     errors: dict[str, Exception] = field(default_factory=dict)
     calls: list[tuple[str, tuple[str, ...]]] = field(default_factory=list)
 
@@ -168,6 +178,22 @@ class FakeGit:
     def config_value(self, key: str) -> str | None:
         self._record("config_value", key)
         return self.config.get(key)
+
+    def default_branch(self) -> str | None:
+        self._record("default_branch")
+        return self.default_branch_name
+
+    def merge_base(self, left: str, right: str) -> str | None:
+        self._record("merge_base", left, right)
+        return self.merge_bases.get((left, right))
+
+    def diff_range(self, base: str, head: str) -> DiffLines:
+        self._record("diff_range", base, head)
+        return self.range_diffs.get((base, head), DiffLines())
+
+    def show(self, rev: str, repo_rel: str) -> bytes | None:
+        self._record("show", rev, repo_rel)
+        return self.revision_blobs.get((rev, repo_rel))
 
 
 @dataclass
