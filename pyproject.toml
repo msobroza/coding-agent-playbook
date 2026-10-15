@@ -113,11 +113,20 @@ packages = ["src/coding_agent_playbook"]
 target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
-# Bundled opt-in packs (SPEC §11.5) vendor upstream text that must stay
-# byte-faithful to its source. Newer, unpinned ruff versions also format code
-# blocks inside markdown (CI has gone red on that before), so never let ruff
-# lint or reformat a pack's vendored resources/.
-extend-exclude = ["src/coding_agent_playbook/packs/*/resources"]
+# A vendored opt-in pack (SPEC §11.5: superpowers) ships upstream text that must
+# stay byte-faithful to its source, so ruff never lints or reformats its
+# resources/. The distilled python_design pack (SPEC §11.5.2) is our own code:
+# its stdlib scripts ARE linted and formatted. Only its markdown is excluded,
+# because newer, unpinned ruff versions also reformat code blocks inside
+# markdown (CI has gone red on that before), and its fenced examples include
+# deliberate "before" code.
+extend-exclude = [
+    "src/coding_agent_playbook/packs/superpowers/resources",
+    "src/coding_agent_playbook/packs/python_design/resources/**/*.md",
+]
+# Skill scripts run in consumer repos on Python 3.10+, so pyupgrade must not
+# suggest 3.12-only syntax there (PEP 695 aliases/generics).
+per-file-target-version = { "src/coding_agent_playbook/packs/*/resources/skills/*/scripts/*.py" = "py310" }
 
 [tool.ruff.lint]
 select = [
@@ -155,7 +164,15 @@ files = ["src", "tests"]
 # is test *data*, not library code, so it must not gate the strict type-check.
 # `solution/` holds each task's reference agent edits (overlaid on `setup/` by the
 # gate-proof test), so it is the same kind of data.
-exclude = ['resources/eval_tasks/.*/setup/', 'resources/eval_tasks/.*/solution/']
+# A pack skill's `scripts/` (and `references/`) live under hyphenated skill dirs
+# (`python-design-review/`), which are not valid package paths, and the scripts
+# are standalone Python 3.10 programs: tests/packs/python_design/test_pack.py runs
+# `mypy --strict --python-version 3.10` on each script by path instead.
+exclude = [
+    'resources/eval_tasks/.*/setup/',
+    'resources/eval_tasks/.*/solution/',
+    'packs/.*/resources/skills/.*/(scripts|references)/',
+]
 
 [[tool.mypy.overrides]]
 module = "tests.*"

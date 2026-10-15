@@ -172,6 +172,21 @@ def test_import_restores_script_exec_bit(tmp_path):
         assert os.stat(script).st_mode & 0o111
 
 
+def test_import_skips_bytecode_caches_in_harness_skills(tmp_path):
+    """Running a harness script leaves ``__pycache__``; import must not copy it."""
+    harness = _emit_full_harness(tmp_path)
+    cache = harness / "skills" / "query-database" / "scripts" / "__pycache__"
+    cache.mkdir()
+    (cache / "run_query.cpython-312.pyc").write_bytes(b"\x00bytecode")
+    into = tmp_path / "out"
+
+    assert _import.run(_ns(harness, into)) == 0
+
+    scripts = into / "skills" / "query-database" / "scripts"
+    assert (scripts / "run_query.py").is_file()
+    assert not (scripts / "__pycache__").exists()
+
+
 def test_import_defaults_into_playbook_dir(tmp_path, monkeypatch):
     harness = _emit_full_harness(tmp_path)
     workdir = tmp_path / "work"

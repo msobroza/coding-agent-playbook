@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._file_identity import FileSet
+from coding_agent_playbook.adapters._skill_files import skill_subtree_files
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.harness import emitter, manifest
 from coding_agent_playbook.renderer import SENTINEL, render_for
@@ -184,14 +185,13 @@ class AgentHarnessAdapter(Adapter):
     def _copy_scripts(
         self, skill: Skill, skill_dir: Path, repo_root: Path
     ) -> tuple[list[manifest.ScriptEntry], list[Path]]:
+        """Copy ``scripts/`` (bytecode caches skipped) and record each file's exec flag."""
         if skill.scripts_dir is None or not skill.scripts_dir.is_dir():
             return [], []
         scripts: list[manifest.ScriptEntry] = []
         paths: list[Path] = []
         dst_root = skill_dir / "scripts"
-        for src in sorted(skill.scripts_dir.rglob("*")):
-            if not src.is_file():
-                continue
+        for src in skill_subtree_files(skill.scripts_dir):
             dst = dst_root / src.relative_to(skill.scripts_dir)
             executable = emitter.copy_script(src, dst)
             scripts.append(
@@ -202,13 +202,12 @@ class AgentHarnessAdapter(Adapter):
 
     @staticmethod
     def _copy_references(skill: Skill, skill_dir: Path) -> list[Path]:
+        """Byte-copy ``references/``, skipping bytecode caches like ``scripts/``."""
         if skill.references_dir is None or not skill.references_dir.is_dir():
             return []
         dst_root = skill_dir / "references"
         paths: list[Path] = []
-        for src in sorted(skill.references_dir.rglob("*")):
-            if not src.is_file():
-                continue
+        for src in skill_subtree_files(skill.references_dir):
             dst = dst_root / src.relative_to(skill.references_dir)
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_bytes(src.read_bytes())
