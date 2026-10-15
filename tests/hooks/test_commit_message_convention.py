@@ -222,12 +222,28 @@ def _pushed(*commits: LoggedCommit) -> FakeGit:
     )
 
 
-def _with_cutover(repo: PackRepo, cutover: str) -> None:
-    repo.install_pack([HOOK_ID], handler_config={HOOK_ID: {"cutover_date": cutover}})
+def _checking_push(repo: PackRepo, cutover: str = "") -> None:
+    """The push scan is opt-in: the consumer's ``[hooks.commit-message-convention] check_push``."""
+    repo.install_pack(
+        [HOOK_ID],
+        per_hook={HOOK_ID: {"check_push": True}},
+        handler_config={HOOK_ID: {"cutover_date": cutover}},
+    )
+
+
+def test_push_not_scanned_by_default(repo: PackRepo, deps: Deps) -> None:
+    """The shipped ``check_push = false``: the per-commit check and the commit-msg twin cover it."""
+    cz = FakeCz(rejected_ranges=frozenset({f"{TRACKING}..HEAD"}))
+    git = _pushed(_commit("c0", NEW, "Bad subject\n"))
+
+    report = _bash(repo, deps, "git push", cz=cz, git=git)
+
+    assert (report.trace.combined.decision, cz.calls) == (Decision.NONE, [])
+    assert not [call for call in git.calls if call[0] == "commit_log"]
 
 
 def test_push_skips_pre_cutover_commits(repo: PackRepo, deps: Deps) -> None:
-    _with_cutover(repo, "2026-10-15")
+    _checking_push(repo, "2026-10-15")
     cz = FakeCz()
     git = _pushed(_commit("c0", NEW, "feat: new\n"), _commit("c1", OLD, "Legacy subject\n"))
 
@@ -238,7 +254,7 @@ def test_push_skips_pre_cutover_commits(repo: PackRepo, deps: Deps) -> None:
 
 
 def test_push_rebased_commit_with_new_committer_date_is_checked(repo: PackRepo, deps: Deps) -> None:
-    _with_cutover(repo, "2026-10-15")
+    _checking_push(repo, "2026-10-15")
     cz = FakeCz(rejected_ranges=frozenset({f"{TRACKING}..HEAD"}))
     git = _pushed(_commit("c0", NEW, "Old style subject\n"))
 
@@ -252,7 +268,7 @@ def test_push_rebased_commit_with_new_committer_date_is_checked(repo: PackRepo, 
 
 
 def test_push_noncontiguous_kept_set_per_commit_messages(repo: PackRepo, deps: Deps) -> None:
-    _with_cutover(repo, "2026-10-15")
+    _checking_push(repo, "2026-10-15")
     cz = FakeCz()
     git = _pushed(
         _commit("c0", OLD, "Legacy\n"),
@@ -271,6 +287,7 @@ def test_push_noncontiguous_kept_set_per_commit_messages(repo: PackRepo, deps: D
 
 
 def test_push_explicit_refspec_names_the_tracking_ref(repo: PackRepo, deps: Deps) -> None:
+    _checking_push(repo)
     cz = FakeCz()
     tracking = "refs/remotes/upstream/main"
     git = _git(commits={tracking: "base0"}, logs={f"{tracking}..HEAD": ()})
@@ -281,6 +298,7 @@ def test_push_explicit_refspec_names_the_tracking_ref(repo: PackRepo, deps: Deps
 
 
 def test_missing_tracking_ref_fails_open(repo: PackRepo, deps: Deps) -> None:
+    _checking_push(repo)
     cz = FakeCz()
 
     report = _bash(repo, deps, "git push", cz=cz, git=_git(upstream_ref=TRACKING))
@@ -305,7 +323,7 @@ def test_cutover_date_rendered_from_the_commit_convention_table(pack_repo: PackR
 
     rendered = render_guard_config(inputs)["hooks"][HOOK_ID]["handlers"]["pre_tool_use"]
 
-    assert rendered["config"] == {"check_push": True, "cutover_date": "2026-10-15"}
+    assert rendered["config"] == {"check_push": False, "cutover_date": "2026-10-15"}
 
 
 def test_check_push_false_never_scans(pack_repo: PackRepo, deps: Deps, cz_program: Path) -> None:

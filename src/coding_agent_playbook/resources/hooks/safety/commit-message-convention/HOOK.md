@@ -1,7 +1,7 @@
 ---
 id: commit-message-convention
 name: Commit message convention
-description: Deny a git commit whose message, or a git push whose commits after the cut-over date, fail this repo's commitizen convention (cz check).
+description: Deny a git commit whose message fails this repo's commitizen convention (cz check); with check_push, also a git push whose commits after the cut-over date fail it.
 version: 1
 tier: default
 priority: 24
@@ -12,7 +12,7 @@ matcher:
 handler:
   builtin: commit_message_convention
   config:
-    check_push: true
+    check_push: false
 decisions: [deny, none]
 timeout: 10
 on_error: open

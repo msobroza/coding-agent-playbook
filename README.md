@@ -855,8 +855,11 @@ three places:
 - the `playbook-commit-msg` pre-commit hook checks every new commit message,
   yours included, with no cut-over (install the `commit-msg` hook type);
 - the `commit-message-convention` lifecycle hook denies an assistant's
-  `git commit` whose message fails, and a `git push` whose commits after the
-  cut-over fail;
+  `git commit` whose message fails; with
+  `[hooks.commit-message-convention] check_push = true` it also denies a
+  `git push` whose commits after the cut-over fail (off by default: the
+  commit check and `playbook-commit-msg` already see every new commit, and
+  the scan can take seconds per push);
 - the `commit-convention` step of `playbook ci` checks the branch's commits
   after the cut-over, plus the pull-request title when `PLAYBOOK_PR_TITLE` is
   set (in a squash-merge repo the title becomes the commit subject).

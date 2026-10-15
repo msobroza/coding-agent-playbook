@@ -13,11 +13,13 @@ reads itself: the engine has no linter, only D-Q3's cut-over (``cutover``).
   ``-C``/``-c``/``--reuse-message``, ``--amend --no-edit``,
   ``--allow-empty-message``, a ``$VAR``, backtick or other ``$(...)`` value)
   it is ``none`` with zero cz calls: the commit-msg twin covers those.
-- **push** (``check_push``, default on): the commits ``<remote>/<dst>..<src>``
-  publishes, read from local refs only (at most 200, never a fetch) and
-  filtered on the committer date by ``cutover_date`` (rendered at sync from
-  ``[hooks.commit_convention]``): one ``--rev-range`` check, or ``--message``
-  per commit (at most 20; CI checks the rest). A missing tracking ref fails open.
+- **push** (``check_push``, opt-in, default off: every new commit already met
+  the commit check or the commit-msg twin, and a scan costs 0.2-6 s per push):
+  the commits ``<remote>/<dst>..<src>`` publishes, read from local refs only
+  (at most 200, never a fetch) and filtered on the committer date by
+  ``cutover_date`` (rendered at sync from ``[hooks.commit_convention]``): one
+  ``--rev-range`` check, or ``--message`` per commit (at most 20; CI checks the
+  rest). A missing tracking ref fails open.
 - ``cz`` is the ``machine.json`` pin (§D.8.3). With no pin or a changed
   binary the check is ``none`` plus one user note per session.
 
@@ -89,7 +91,7 @@ def _segment(segment: Segment, repo: RepoInfo, ctx: HandlerContext) -> HandlerRe
     if git.subcommand == "commit":
         message = _commit_message(git, segment, repo)
         return None if message is None else _check(ctx, repo, lambda cz: cz.message(message))
-    if git.subcommand == "push" and ctx.config.get("check_push") is not False:
+    if git.subcommand == "push" and ctx.config.get("check_push") is True:
         return _check(ctx, repo, lambda cz: _push(git, cz, ctx))
     return None
 
