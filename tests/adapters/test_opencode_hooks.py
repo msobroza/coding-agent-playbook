@@ -32,6 +32,7 @@ from coding_agent_playbook.hook_registrations import (
 from coding_agent_playbook.resources.hook_shims.opencode_wire_port import WIRE_BEGIN, WIRE_END
 from tests.fakes import record_opens
 from tests.hook_samples import resolved_hook
+from tests.hooks.pack_repo import resolve_engine_hooks
 from tests.node_kit import needs_node, run_node
 
 if TYPE_CHECKING:
@@ -191,6 +192,23 @@ def test_shim_has_no_shebang_lf_endings_and_final_newline(tmp_path: Path) -> Non
     assert not data.startswith(b"\xef\xbb\xbf")
     assert b"\r" not in data
     assert data.endswith(b"}\n") and not data.endswith(b"\n\n")
+
+
+def test_shim_golden_with_async_post_tool_use(tmp_path: Path) -> None:
+    """OQ-19: local-audit-log becomes the ``async`` pre-filter of ``post_tool_use`` in REG."""
+    audit = resolve_engine_hooks(["local-audit-log"], tmp_path / "engine")
+
+    with_lint = plan_opencode_reg([*_pack(), *audit])
+    alone = plan_opencode_reg(audit)
+    _finalize(tmp_path / "out", [*_pack(), *audit])
+    text = (tmp_path / "out" / OPENCODE_SHIM_PATH).read_text(encoding="utf-8")
+
+    plain = plan_opencode_reg(_pack())["post_tool_use"]
+    assert with_lint["post_tool_use"] == {**plain, "async": "*"}  # the sync pre-filter unchanged
+    assert alone["post_tool_use"] == {"timeout_ms": 62_000, "tools": [], "async": "*"}
+    assert list(alone) == ["session_start", "post_tool_use"]
+    assert f"const REG = {opencode_reg_json(with_lint)}\n" in text
+    assert '"--project-dir", ROOT, "--async"]' in text
 
 
 def test_shim_embeds_reg_as_one_json_line(tmp_path: Path) -> None:

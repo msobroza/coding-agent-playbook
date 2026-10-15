@@ -33,19 +33,21 @@ from coding_agent_playbook.hook_registrations.stop_gate import (
 from coding_agent_playbook.hook_runtime.active_prompt import consumers_enabled
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.policy import effective_on_error
+from coding_agent_playbook.hook_runtime.routing import ASYNC_EVENT, HandlerRoute, handler_route
 from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
     from coding_agent_playbook.hook_policy import ResolvedHook
-    from coding_agent_playbook.types import HookFrontmatter
+    from coding_agent_playbook.types import HookFrontmatter, HookHandler
 
 __all__ = [
     "BOOTSTRAP_DEADLINE_MS",
     "STOP_COORDINATOR_ID",
     "STOP_EVENTS",
     "WATCHDOG_MARGIN_MS",
+    "BoundHandler",
     "DeclaredMember",
     "HookRegistration",
     "RegistrationMember",
@@ -54,6 +56,7 @@ __all__ = [
     "coordinator_budget_s",
     "deadlines_ms",
     "declared_stop_budget_s",
+    "member_route",
     "plan_registrations",
     "registration_timeout_s",
     "resolved_deadlines_ms",
@@ -73,11 +76,20 @@ STOP_EVENTS: Final = frozenset({"stop", "subagent_stop"})
 PROMPT_RECORD_EVENT: Final = "user_prompt_submit"
 
 
+class BoundHandler(Protocol):
+    """A hook's handler binding on one event, as routing reads it (``ResolvedHandler`` fits)."""
+
+    @property
+    def kind(self) -> str: ...
+    @property
+    def name(self) -> str | None: ...
+
+
 class RegistrationMember(Protocol):
     """What planning reads of a hook; :class:`~coding_agent_playbook.hook_policy.ResolvedHook` fits.
 
     ``on_error`` is already clamped per event; ``supports`` lists the adapters
-    that render the hook.
+    that render the hook; ``handlers`` and ``decisions`` decide its route.
     """
 
     @property
@@ -92,6 +104,23 @@ class RegistrationMember(Protocol):
     def on_error(self) -> Mapping[str, str]: ...
     @property
     def supports(self) -> Sequence[str]: ...
+    @property
+    def decisions(self) -> Sequence[str]: ...
+    @property
+    def handlers(self) -> Mapping[str, BoundHandler]: ...
+
+
+@dataclass(frozen=True)
+class _DeclaredHandler:
+    """A frontmatter handler as routing reads it: builtin name, or an external command."""
+
+    kind: str
+    name: str | None = None
+
+    @classmethod
+    def of(cls, handler: HookHandler) -> _DeclaredHandler:
+        """``builtin`` with its name, else ``external`` (a declared hook is not yet resolved)."""
+        return cls("builtin", handler.builtin) if handler.builtin else cls("external")
 
 
 @dataclass(frozen=True)
@@ -107,11 +136,14 @@ class DeclaredMember:
     timeout: float
     on_error: Mapping[str, str]
     supports: tuple[str, ...]
+    decisions: tuple[str, ...] = ()
+    handlers: Mapping[str, _DeclaredHandler] = field(default_factory=dict)
 
     @classmethod
     def from_frontmatter(cls, fm: HookFrontmatter) -> DeclaredMember:
         """Canonical events only, ``on_error`` clamped per event, hook-capable ``supports`` only."""
         events = tuple(event for event in dict.fromkeys(fm.events) if event in HOOK_EVENTS)
+        bound = {event: fm.handlers.get(event, fm.handler) for event in events}
         return cls(
             id=fm.id,
             events=events,
@@ -119,6 +151,8 @@ class DeclaredMember:
             timeout=fm.timeout,
             on_error={event: effective_on_error(fm.on_error, EventName(event)) for event in events},
             supports=tuple(a for a in dict.fromkeys(fm.supports) if a in HOOK_CAPABLE_ADAPTERS),
+            decisions=tuple(fm.decisions),
+            handlers={e: _DeclaredHandler.of(h) for e, h in bound.items() if h is not None},
         )
 
 
@@ -132,8 +166,10 @@ class HookRegistration:
 
     ``matchers`` are the members' entries for ``event`` (their union is the
     harness matcher); ``strict`` is overlay strict mode (``onFailure: block`` +
-    ``--strict-launch`` on Claude). Harness-neutral: :func:`to_claude_group`
-    renders it for Claude Code; K4 renders the OpenCode shim's ``REG``.
+    ``--strict-launch`` on Claude); ``asynchronous`` is the one extra async,
+    output-free ``post_tool_use`` registration of OQ-19. Harness-neutral:
+    :func:`to_claude_group` renders it for Claude Code; K4 renders the
+    OpenCode shim's ``REG``.
 
     Example::
 
@@ -148,11 +184,13 @@ class HookRegistration:
     timeout_s: int
     strict: bool = False
     matchers: tuple[HookMatcher, ...] = field(default=())
+    asynchronous: bool = False
 
     @property
     def artifact_id(self) -> str:
-        """The lockfile ``artifact_id`` of the managed group (§B.6)."""
-        return f"registration:{self.event}"
+        """The lockfile ``artifact_id`` of the managed group (§B.6); ``…:async`` for OQ-19's."""
+        suffix = ":async" if self.asynchronous else ""
+        return f"registration:{self.event}{suffix}"
 
     @property
     def claude_event(self) -> str:
@@ -174,21 +212,23 @@ def deadlines_ms(
     ``min(cap, Σ member timeouts)``; ``stop``/``subagent_stop`` instead take
     ``min(cap, budget + Σ execution-stage timeouts)``. ``session_start`` is
     always present once any member exists (:data:`BOOTSTRAP_DEADLINE_MS` when
-    no member declares it). Pass **every** resolved hook, not one adapter's:
-    ``guard_config.json`` holds one deadline per event for all harnesses.
+    no member declares it). Only synchronously routed members count: a sink
+    runs nowhere and an async member never delays the synchronous dispatch.
+    Pass **every** resolved hook, not one adapter's: ``guard_config.json``
+    holds one deadline per event for all harnesses.
 
     Example::
 
         >>> deadlines_ms([hook])  # a 2 s pre_tool_use hook  # doctest: +SKIP
         {'session_start': 2000, 'pre_tool_use': 2000}
     """
-    listed = list(members)
+    listed = [m for m in members if not _is_sink(m)]
     if not listed:
         return {}
     stop_ms = round(1000 * (stop_budget_s + sum(execution_timeouts_s)))
     deadlines: dict[str, int] = {}
     for event in HOOK_EVENTS:
-        on_event = [m for m in listed if event in m.events]
+        on_event = [m for m in listed if event in m.events and member_route(m, event) == "sync"]
         if not on_event and _bootstrapped(event, listed):
             deadlines[event] = BOOTSTRAP_DEADLINE_MS
         elif on_event:
@@ -275,21 +315,23 @@ def plan_registrations(
         ['session_start', 'pre_tool_use']
     """
     reachable = support.get(adapter_name, {})
-    on_adapter = [m for m in members if adapter_name in m.supports]
+    on_adapter = [m for m in members if adapter_name in m.supports and not _is_sink(m)]
     by_event = {
-        event: [m for m in on_adapter if event in m.events]
+        event: [m for m in on_adapter if event in m.events and member_route(m, event) == "sync"]
         for event in HOOK_EVENTS
         if event in reachable
     }
+    background = _async_members(on_adapter) if ASYNC_EVENT in reachable else []
     wanted = [
         event
         for event, found in by_event.items()
         if found or (event == PROMPT_RECORD_EVENT and _bootstrapped(event, on_adapter))
     ]
-    if wanted and "session_start" in reachable and "session_start" not in wanted:
+    if (wanted or background) and "session_start" in reachable and "session_start" not in wanted:
         wanted.insert(0, "session_start")
     limits = deadlines_ms(members) if deadlines is None else deadlines
-    return [_registration(event, by_event[event], limits, strict_pre_tool_use) for event in wanted]
+    plan = [_registration(event, by_event[event], limits, strict_pre_tool_use) for event in wanted]
+    return plan if not background else _with_async(plan, background, limits)
 
 
 def _registration(
@@ -310,6 +352,61 @@ def _registration(
         strict=strict,
         matchers=tuple(m.matcher.get(event, HookMatcher()) for m in found),
     )
+
+
+def _with_async(
+    plan: list[HookRegistration],
+    members: Sequence[RegistrationMember],
+    limits: Mapping[str, int],
+) -> list[HookRegistration]:
+    """``plan`` plus OQ-19's async ``post_tool_use`` registration, in canonical position.
+
+    Its deadline is the event's (the async dispatch's watchdog reads the same
+    ``guard_config`` value), else the engine cap when no synchronous member
+    sets one; it is never strict (Claude ignores ``onFailure`` on async hooks).
+    """
+    deadline = limits.get(ASYNC_EVENT, ENGINE_DEADLINE_CAP_MS[ASYNC_EVENT])
+    extra = HookRegistration(
+        event=ASYNC_EVENT,
+        members=tuple(sorted(m.id for m in members)),
+        deadline_ms=deadline,
+        timeout_s=checked_registration_timeout_s(ASYNC_EVENT, deadline),
+        matchers=tuple(m.matcher.get(ASYNC_EVENT, HookMatcher()) for m in members),
+        asynchronous=True,
+    )
+    order = list(HOOK_EVENTS)
+    at = next(
+        (i for i, reg in enumerate(plan) if order.index(reg.event) > order.index(ASYNC_EVENT)),
+        len(plan),
+    )
+    return [*plan[:at], extra, *plan[at:]]
+
+
+def _async_members(members: Sequence[RegistrationMember]) -> list[RegistrationMember]:
+    """The members whose ``post_tool_use`` handler is async-routed (OQ-19)."""
+    return [
+        m for m in members if ASYNC_EVENT in m.events and member_route(m, ASYNC_EVENT) == "async"
+    ]
+
+
+def member_route(member: RegistrationMember, event: str) -> HandlerRoute:
+    """The route of ``member``'s handler on ``event`` (``hook_runtime.routing``).
+
+    Example::
+
+        >>> member_route(local_audit_log, "post_tool_use")  # doctest: +SKIP
+        'async'
+    """
+    handler = member.handlers.get(event)
+    if handler is None:
+        return "sync"
+    return handler_route(event, kind=handler.kind, name=handler.name, decisions=member.decisions)
+
+
+def _is_sink(member: RegistrationMember) -> bool:
+    """A decision sink on every event it binds: no registration, no deadline share."""
+    events = [event for event in member.events if event in member.handlers]
+    return bool(events) and all(member_route(member, event) == "sink" for event in events)
 
 
 def _bootstrapped(event: str, members: Sequence[RegistrationMember]) -> bool:

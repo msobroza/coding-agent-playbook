@@ -94,6 +94,7 @@ from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
 )
 from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
 from coding_agent_playbook.hook_runtime.handlers._notebook_check import NOTEBOOK_MAX_BYTES
+from coding_agent_playbook.hook_runtime.routing import ASYNC_AUDIT_MODE, ASYNC_EVENT, handler_route
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 
 if TYPE_CHECKING:
@@ -152,7 +153,7 @@ PRECOMMIT_CONFIG: Final = ".pre-commit-config.yaml"
 #: Pre-commit configs are small; a larger one is not scanned.
 _PRECOMMIT_MAX_BYTES: Final = 1024 * 1024
 
-#: The hooks whose presence switches the local logs on (§D.6.2); K9 ships them.
+#: The hooks whose presence switches the local logs on (§D.6.2, specs/prK-hook-pack.md §E.5).
 _DECISION_LOG_HOOK: Final = "guard-decision-log"
 _AUDIT_LOG_HOOK: Final = "local-audit-log"
 
@@ -242,7 +243,6 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
         {}
     """
     cfg = inputs.hooks_config
-    on = {hook.id for hook in inputs.hooks}
     scopes = prompt_scopes(inputs.prompts)
     derived = derived_hook_config(inputs.toolchain)
     return {
@@ -257,11 +257,7 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
         },
         "deadlines_ms": resolved_deadlines_ms(inputs.hooks),
         "unattended_ask": cfg.unattended_ask,
-        "logging": {
-            "decisions": _DECISION_LOG_HOOK in on,
-            "audit": _AUDIT_LOG_HOOK in on,
-            "audit_mode": "",
-        },
+        "logging": _logging(inputs.hooks),
         "shell": {
             "wrapper_prefixes": list(cfg.wrapper_prefixes),
             "runner_wrappers": list(DEFAULT_RUNNER_WRAPPERS),
@@ -368,6 +364,26 @@ def _copy(src: Path, dst: Path) -> Path:
 
 def _runs_a_script(hook: ResolvedHook) -> bool:
     return any(handler.kind == "external" for handler in hook.handlers.values())
+
+
+def _logging(hooks: Sequence[ResolvedHook]) -> dict[str, Any]:
+    """``logging``: which local logs are on, and whether an async audit route is rendered.
+
+    ``audit_mode = "async"`` tells the synchronous ``post_tool_use`` dispatch to
+    skip the async-routed handlers, which the one async registration runs (OQ-19).
+    """
+    on = {hook.id for hook in hooks}
+    routed_async = any(
+        handler_route(ASYNC_EVENT, kind=handler.kind, name=handler.name, decisions=hook.decisions)
+        == "async"
+        for hook in hooks
+        if (handler := hook.handlers.get(ASYNC_EVENT)) is not None
+    )
+    return {
+        "decisions": _DECISION_LOG_HOOK in on,
+        "audit": _AUDIT_LOG_HOOK in on,
+        "audit_mode": ASYNC_AUDIT_MODE if routed_async else "",
+    }
 
 
 def _path_classes(generated: Iterable[str]) -> dict[str, list[str]]:

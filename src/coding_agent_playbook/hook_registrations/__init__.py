@@ -18,8 +18,10 @@ from here, not from the submodules:
   deadline adds (prK-hook-pack.md §E.0.5).
 
 The event, tool-class and support tables live in ``hook_policy`` (§A.11); this
-package only reads them. Stdlib-only. The async ``PostToolUse`` audit
-registration (OQ-19) lands with K9, its only consumer.
+package only reads them. Stdlib-only. Handler routes (``hook_runtime.routing``,
+:func:`member_route`) keep the decision sink out of every registration and put
+local-audit-log's ``post_tool_use`` on the one async registration (OQ-19):
+Claude's ``async: true`` group and the shim ``REG``'s ``async`` pre-filter.
 """
 
 from __future__ import annotations
@@ -49,6 +51,7 @@ from coding_agent_playbook.hook_registrations.plan import (
     BOOTSTRAP_DEADLINE_MS,
     STOP_EVENTS,
     WATCHDOG_MARGIN_MS,
+    BoundHandler,
     DeclaredMember,
     HookRegistration,
     RegistrationMember,
@@ -56,6 +59,7 @@ from coding_agent_playbook.hook_registrations.plan import (
     checked_registration_timeout_s,
     deadlines_ms,
     declared_stop_budget_s,
+    member_route,
     plan_registrations,
     registration_timeout_s,
     resolved_deadlines_ms,
@@ -81,6 +85,7 @@ __all__ = [
     "STOP_STATUS_MESSAGE",
     "STRICT_LAUNCH_FLAG",
     "WATCHDOG_MARGIN_MS",
+    "BoundHandler",
     "DeclaredMember",
     "HookRegistration",
     "OpenCodeRegEntry",
@@ -95,6 +100,7 @@ __all__ = [
     "declared_stop_budget_s",
     "execution_timeouts_s",
     "matcher_union",
+    "member_route",
     "opencode_reg_json",
     "plan_opencode_reg",
     "plan_registrations",

@@ -17,7 +17,9 @@ dependency comparison found a change, and ``evals.*`` / ``sources.filesystem``
 (yaml) only on an ``eval_tasks/*/task.toml`` edit; jinja2 never loads. The
 session-start briefing and the ``drift`` Stop stage read the lockfile with
 ``tomllib`` through ``lockfile`` (the new §D.1 rows): the briefing on every
-start, the stage only once the ledger shows a write it cares about.
+start, the stage only once the ledger shows a write it cares about. The
+``--async`` ``post_tool_use`` dispatch (local-audit-log, OQ-19) writes its
+structure-only line from the stdlib alone: no git, no process (Track K9).
 """
 
 from __future__ import annotations
@@ -71,6 +73,7 @@ def _imports(
     payload: bytes,
     *,
     exit_code: int = 0,
+    extra: tuple[str, ...] = (),
 ) -> set[str]:
     argv = [
         sys.executable,
@@ -83,6 +86,7 @@ def _imports(
         event.value,
         "--harness",
         "claude_code",
+        *extra,
     ]
     env = {**probe_env(), "CLAUDE_PROJECT_DIR": str(repo.root)}
     result = proc.run(argv, timeout=PROBE_TIMEOUT_S, env=env, input=payload, cwd=str(repo.root))
@@ -706,3 +710,37 @@ def test_difflib_loads_only_with_an_allowlist(tmp_path: Path, real_proc: Subproc
     assert "difflib" in imported
     assert "tomllib" not in imported
     assert "ipaddress" not in imported
+
+
+@pytest.fixture
+def audited(tmp_path: Path, real_proc: SubprocessProc) -> GuardRepo:
+    """A synced repo with local-audit-log's real builtin on the async route (K9, OQ-19)."""
+    repo = GuardRepo.create(tmp_path)
+    audit = hook_record(
+        "local-audit-log",
+        events=["session_start", "post_tool_use"],
+        decisions=("none",),
+        on_error="open",
+        handler={"kind": "builtin", "name": "activity_log"},
+    )
+    repo.install(audit, logging={"decisions": True, "audit": True, "audit_mode": "async"})
+    _imports(real_proc, repo, EventName.SESSION_START, repo.payload(EventName.SESSION_START))
+    return repo
+
+
+@pytest.mark.parametrize("tool", ["Bash", "Read"])
+def test_async_audit_branch_imports_nothing_forbidden(
+    audited: GuardRepo, real_proc: SubprocessProc, tool: str
+) -> None:
+    """The ``--async`` dispatch: structure-only lines from the stdlib, never git or a process."""
+    payload = audited.payload(EventName.POST_TOOL_USE, tool=tool, tool_response={"stdout": ""})
+
+    imported = _imports(real_proc, audited, EventName.POST_TOOL_USE, payload, extra=("--async",))
+
+    # importlib.import_module bypasses -X importtime: the helper's line shows the handler ran.
+    assert "coding_agent_playbook.hook_runtime.handlers._activity_record" in imported
+    assert _forbidden(imported) == []
+    assert "subprocess" not in imported
+    assert "coding_agent_playbook.hook_runtime.git" not in imported
+    (log,) = audited.state_root.glob("audit-*.jsonl")
+    assert '"event":"post_tool_use"' in log.read_text(encoding="ascii")

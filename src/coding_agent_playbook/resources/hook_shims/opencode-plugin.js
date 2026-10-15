@@ -58,10 +58,8 @@ function parse(code, out) {   // exit 10 = decided deny; a raw 2 (usage, interpr
 // @@wire-parse:end
 
 const own = (table, key) => (Object.hasOwn(table, key) ? table[key] : undefined)
-const wants = (event, tool) => {
-  const tools = REG[event]?.tools
-  return tools === "*" || (Array.isArray(tools) && tools.includes(tool))
-}
+const listed = (tools, tool) => tools === "*" || (Array.isArray(tools) && tools.includes(tool))
+const wants = (event, tool) => listed(REG[event]?.tools, tool)
 const note = (sid, r) => { if (sid && r.notice) notes.set(sid, [...(notes.get(sid) ?? []), r.notice].slice(-5)) }
 
 function interpreter() {   // the per-worktree pin `playbook sync` writes under the git dir (§C.2.7)
@@ -99,6 +97,19 @@ function dispatch(event, payload) {   // async spawn under the shim's own deadli
   })
 }
 
+function fire(event, payload) {   // OQ-19's async audit dispatch: never awaited, its output ignored
+  const py = interpreter()
+  if (!py) return
+  try {
+    const child = spawn(py, ["-I", "-m", "coding_agent_playbook.hook_runtime", "dispatch", event,
+      "--harness", "opencode", "--project-dir", ROOT, "--async"],
+      { cwd: ROOT, shell: false, windowsHide: true, stdio: ["pipe", "ignore", "ignore"] })
+    child.on("error", () => {})                         // a lost audit line never fails the tool call
+    child.stdin.on("error", () => {})
+    child.stdin.end(JSON.stringify(payload))
+  } catch { /* spawn failed: fail open */ }
+}
+
 async function safely(step) {   // a fault in the shim itself fails open, like any harness-level failure
   try { return (await step()) ?? NONE } catch (e) { return inactive(`shim error (${e?.message ?? e})`) }
 }
@@ -126,6 +137,9 @@ async function beforeTool(input, output) {
 async function afterTool(input, output) {
   let ctx = deferred.get(input.callID) ?? ""
   deferred.delete(input.callID)
+  if (listed(REG.post_tool_use?.async, input.tool)) {   // before the shape check: every tool is audited
+    fire("post_tool_use", toolPayload("post_tool_use", input, input.args, { tool_response: { title: output?.title ?? "" } }))
+  }
   if (typeof output.output !== "string") return   // MCP CallToolResult shapes are left untouched
   if (wants("post_tool_use", input.tool)) {
     const r = await dispatch("post_tool_use", toolPayload("post_tool_use", input, input.args,

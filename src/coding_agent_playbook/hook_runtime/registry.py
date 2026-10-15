@@ -106,6 +106,10 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         "taint_escalation": f"{_HANDLERS}.taint",
         "taint_escalation:marker": f"{_HANDLERS}.taint",
         "taint_escalation:session_start": f"{_HANDLERS}.taint",
+        # K9: the decision sink is never selected (``routing``); it is mapped so
+        # validate (H6) can read its declaration like any other builtin.
+        "decision_log": f"{_HANDLERS}.decision_log",
+        "activity_log": f"{_HANDLERS}.activity_log",
     }
 )
 #: The only handlers that may rewrite the file the tool just edited (specs/prK-hook-pack.md

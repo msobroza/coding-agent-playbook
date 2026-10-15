@@ -39,6 +39,7 @@ from coding_agent_playbook.lockfile import Lockfile
 from coding_agent_playbook.security.patterns import DESTRUCTIVE_NATIVE_PREFIXES
 from coding_agent_playbook.types import Rule, RuleFrontmatter
 from tests.hook_samples import resolved_hook
+from tests.hooks.pack_repo import resolve_engine_hooks
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -416,3 +417,62 @@ def test_destructive_literal_prefix_rows_follow_guard(tmp_path: Path) -> None:
     _sync(tmp_path, [resolved_hook(), _secrets_guard()], prior=_lock(on))  # the guard is off
 
     assert _settings(tmp_path)["permissions"]["deny"] == ["Bash(rm -rf /)", *secret]
+
+
+# --- K9: OQ-19's async PostToolUse group and the decision sink (§C.2.1, §E.5) ----------
+
+
+def _audit_hooks(tmp_path: Path, *, audit: bool) -> list[ResolvedHook]:
+    """A synchronous post-edit hook, the decision sink and (``audit``) local-audit-log."""
+    ids = ["guard-decision-log", *(["local-audit-log"] if audit else [])]
+    engine = resolve_engine_hooks(ids, tmp_path / "engine")
+    lint = resolved_hook("lint-q", events=("post_tool_use",), timeout=3.0)
+    return [lint, *engine]
+
+
+def _post_tool_use(root: Path) -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = _settings(root)["hooks"]["PostToolUse"]
+    return groups
+
+
+def test_local_audit_log_adds_exactly_one_async_post_tool_use_entry(tmp_path: Path) -> None:
+    before, _ = _sync(tmp_path / "off", _audit_hooks(tmp_path, audit=False))
+    after, _ = _sync(tmp_path / "on", _audit_hooks(tmp_path, audit=True))
+
+    sync_group, async_group = _post_tool_use(tmp_path / "on")
+    assert _post_tool_use(tmp_path / "off") == [sync_group]  # byte-identical sync entry
+    (handler,) = async_group["hooks"]
+    assert async_group["matcher"] == "*"
+    assert handler["async"] is True
+    assert handler["command"].endswith("dispatch post_tool_use --harness claude_code --async")
+    async_entries = [e for e in after.managed_lock_entries() if e.artifact_id.endswith(":async")]
+    assert [(e.scope, e.artifact_id) for e in async_entries] == [
+        ("json:/hooks/PostToolUse", "registration:post_tool_use:async")
+    ]
+    # The decision sink registers nothing: the lint hook alone renders the same entries.
+    lint_only, _ = _sync(tmp_path / "lint", _audit_hooks(tmp_path, audit=False)[:1])
+    assert before.managed_lock_entries() == lint_only.managed_lock_entries()
+
+
+def test_second_sync_with_async_entry_writes_nothing(tmp_path: Path) -> None:
+    hooks = _audit_hooks(tmp_path, audit=True)
+    first, _ = _sync(tmp_path, hooks)
+    before = (tmp_path / CLAUDE_SETTINGS_PATH).read_bytes()
+
+    second, written = _sync(tmp_path, hooks, prior=_lock(first))
+
+    assert tmp_path / CLAUDE_SETTINGS_PATH not in written
+    assert (tmp_path / CLAUDE_SETTINGS_PATH).read_bytes() == before
+    assert second.settings_merge is not None and not second.settings_merge.changed
+    assert second.managed_lock_entries() == first.managed_lock_entries()
+
+
+def test_disabling_local_audit_log_removes_only_the_async_entry(tmp_path: Path) -> None:
+    on, _ = _sync(tmp_path, _audit_hooks(tmp_path, audit=True))
+    sync_group, _ = _post_tool_use(tmp_path)
+
+    off, _ = _sync(tmp_path, _audit_hooks(tmp_path, audit=False), prior=_lock(on))
+
+    assert _post_tool_use(tmp_path) == [sync_group]
+    assert off.settings_merge is not None and off.settings_merge.removed >= 1
+    assert not [e for e in off.managed_lock_entries() if e.artifact_id.endswith(":async")]

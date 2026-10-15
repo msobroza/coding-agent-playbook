@@ -10,7 +10,10 @@ harness would get:
 - state goes to an ephemeral directory unless ``--state DIR`` is given, so
   the real decision log is never touched by default;
 - ``--unattended`` forces ask degradation; ``--config PATH`` runs a given
-  ``guard_config.json`` without the lockfile digest check.
+  ``guard_config.json`` without the lockfile digest check;
+- ``--async`` is the async ``post_tool_use`` dispatch (OQ-19): only the
+  async-routed handlers run and nothing is written; on any other event it is
+  a contract fault, exactly as the ``dispatch`` argv would be.
 
 ``--format json`` prints ``{exit_code, stdout, stderr, decisions, combined,
 latency_ms}``; ``exit_code`` is the **harness-facing** code (a pre_tool_use
@@ -29,6 +32,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
+from coding_agent_playbook.hook_runtime.cli import async_problem
 from coding_agent_playbook.hook_runtime.config import GuardConfig, parse_guard_config
 from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
 from coding_agent_playbook.hook_runtime.dispatch import dispatch_event
@@ -65,6 +69,7 @@ class SimulateArgs:
     unattended: bool = False
     env: tuple[tuple[str, str], ...] = ()
     format: Literal["text", "json"] = "text"
+    asynchronous: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,7 +146,16 @@ def run(args: SimulateArgs, payload: bytes, *, deps: RuntimeDeps | None = None) 
         )
         started = base.clock.monotonic()
         project_dir = repo if args.harness is Harness.OPENCODE else None
-        trace = dispatch_event(args.event, args.harness, payload, sim, project_dir=project_dir)
+        problem = async_problem(args.event) if args.asynchronous else None
+        trace = dispatch_event(
+            args.event,
+            args.harness,
+            payload,
+            sim,
+            project_dir=project_dir,
+            argv_problem=problem,
+            asynchronous=args.asynchronous and problem is None,
+        )
         latency = max(0, round((base.clock.monotonic() - started) * 1000))
     return SimulateReport(trace, latency)
 
@@ -232,6 +246,7 @@ def _parse(argv: Sequence[str]) -> SimulateArgs:
         unattended=ns.unattended,
         env=tuple(env),
         format=ns.format,
+        asynchronous=ns.asynchronous,
     )
 
 
@@ -250,4 +265,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--unattended", action="store_true", help="force ask degradation")
     parser.add_argument("--env", action="append", default=[], metavar="NAME=VALUE")
     parser.add_argument("--format", choices=["text", "json"], default="text")
+    parser.add_argument(
+        "--async",
+        dest="asynchronous",
+        action="store_true",
+        help="the async post_tool_use dispatch (async-routed handlers only, no output)",
+    )
     return parser

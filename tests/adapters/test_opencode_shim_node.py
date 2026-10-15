@@ -26,6 +26,7 @@ from tests.adapters.opencode_shim_kit import (
     RUNTIME_ARGV,
     SESSION,
     SETUP,
+    DispatchCall,
     ShimRepo,
     after,
     before,
@@ -397,3 +398,50 @@ def test_v2_setup_stub_is_inert(shim: ShimRepo) -> None:
     assert run.errors == [
         "[playbook] OpenCode V2 detected: lifecycle hooks inactive; AGENTS.md Guardrails are advisory"
     ]
+
+
+# --- OQ-19: the fire-and-forget async audit dispatch -------------------------------------
+
+
+def _await_calls(shim: ShimRepo, count: int, wait_s: float = 5.0) -> list[DispatchCall]:
+    """The recorded dispatches once ``count`` exist with their stdin (a fired child is async)."""
+    deadline = time.monotonic() + wait_s
+    while time.monotonic() < deadline:
+        if sum(_recorded(d) for d in (shim.fake / "calls").iterdir()) >= count:
+            return shim.calls()
+        time.sleep(0.05)
+    return shim.calls()
+
+
+def _recorded(call_dir: Path) -> bool:
+    stdin = call_dir / "stdin"
+    return (call_dir / "argv").exists() and stdin.exists() and stdin.stat().st_size > 0
+
+
+def test_async_audit_dispatch_fires_without_awaiting(tmp_path: Path) -> None:
+    reg: dict[str, OpenCodeRegEntry] = {
+        "session_start": {"timeout_ms": 5000},
+        "post_tool_use": {"timeout_ms": 5000, "tools": [], "async": "*"},
+    }
+    shim = ShimRepo.create(tmp_path, reg)
+    shim.pin()
+    shim.hang("post_tool_use", 3)  # an awaited dispatch would hold the step for 3 s
+
+    run = shim.run([after("read", "file text", args={"filePath": "a.md"})])
+
+    (step,) = run.results
+    assert step["threw"] is None and step["ms"] < 2000
+    assert _outputs(run.results) == ["file text"]  # nothing awaited, nothing appended
+    (call,) = _await_calls(shim, 1)
+    root = str(shim.root)
+    assert call.argv == [
+        *RUNTIME_ARGV,
+        "post_tool_use",
+        "--harness",
+        "opencode",
+        "--project-dir",
+        root,
+        "--async",
+    ]
+    assert call.payload["tool_name"] == "Read"
+    assert call.payload["tool_input"] == {"filePath": "a.md", "file_path": "a.md"}

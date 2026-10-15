@@ -6,6 +6,10 @@ does not name it (a ``mandatory`` hook ignores that list) and its
 ``matcher.<event>`` accepts the event. Sync already applied the on-formula
 and ``applies_if``, so the runtime never evaluates them.
 
+``routing`` decides which dispatch runs a handler: a decision sink is never
+selected, and an async-routed handler (local-audit-log's ``activity_log`` on
+``post_tool_use``) runs only in the async dispatch (OQ-19).
+
 The order is ``(class rank, priority, id)``: guards before quality hooks, so
 the first guard deny can short-circuit before a feedback hook spends its
 budget, and never dict order.
@@ -26,6 +30,7 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.event import EventName, ToolClass
 from coding_agent_playbook.hook_runtime.policy import CLASS_RANK, failure_class
+from coding_agent_playbook.hook_runtime.routing import ASYNC_AUDIT_MODE, handler_route
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -73,15 +78,22 @@ class Selection:
     disabled: tuple[str, ...] = ()
 
 
-def select_hooks(cfg: GuardConfig, ev: CanonicalEvent, hatches: EscapeHatches) -> Selection:
+def select_hooks(
+    cfg: GuardConfig, ev: CanonicalEvent, hatches: EscapeHatches, *, asynchronous: bool = False
+) -> Selection:
     """The hooks of ``cfg`` that run on ``ev``, ordered by ``(class rank, priority, id)``.
+
+    ``asynchronous`` is the async ``post_tool_use`` dispatch: only async-routed
+    handlers run there, and the synchronous dispatch skips them once
+    ``logging.audit_mode`` says the async route is rendered (``routing``).
+    A decision sink is never selected.
 
     Example::
 
         >>> [s.record.id for s in select_hooks(cfg, ev, EscapeHatches()).selected]  # doctest: +SKIP
         ['guard-generated-outputs', 'ruff-feedback']
     """
-    chosen, disabled = _candidates(cfg, ev, hatches)
+    chosen, disabled = _candidates(cfg, ev, hatches, asynchronous=asynchronous)
     chosen.sort(key=lambda s: (CLASS_RANK[s.failure_class], s.record.priority, s.record.id))
     return Selection(tuple(_route_stop(chosen, ev.name)), tuple(sorted(disabled)))
 
@@ -112,13 +124,13 @@ def stage_of(record: HookRecord, event: EventName) -> str | None:
 
 
 def _candidates(
-    cfg: GuardConfig, ev: CanonicalEvent, hatches: EscapeHatches
+    cfg: GuardConfig, ev: CanonicalEvent, hatches: EscapeHatches, *, asynchronous: bool = False
 ) -> tuple[list[Selected], list[str]]:
     """The hooks bound to ``ev``, and the ids ``PLAYBOOK_HOOKS_DISABLE`` skipped."""
     chosen: list[Selected] = []
     disabled: list[str] = []
     for record in cfg.hooks.values():
-        if not _bound(record, ev):
+        if not _bound(record, ev) or not _routed_here(record, ev.name, cfg, asynchronous):
             continue
         if hatches.skips(record.id, mandatory=record.mandatory):
             disabled.append(record.id)
@@ -126,6 +138,21 @@ def _candidates(
         on_error = record.on_error.get(ev.name, "open")
         chosen.append(Selected(record, on_error, failure_class(on_error)))
     return chosen, disabled
+
+
+def _routed_here(
+    record: HookRecord, event: EventName, cfg: GuardConfig, asynchronous: bool
+) -> bool:
+    """Whether this dispatch (sync or async) runs ``record``'s handler on ``event``."""
+    spec = record.handlers[event]
+    route = handler_route(
+        event.value, kind=spec.kind, name=spec.name, decisions=(d.value for d in record.decisions)
+    )
+    if route == "sink":
+        return False  # the dispatcher's own decision log is the sink's whole job
+    if asynchronous:
+        return route == "async"
+    return route != "async" or cfg.logging.audit_mode != ASYNC_AUDIT_MODE
 
 
 def _route_stop(chosen: list[Selected], event: EventName) -> list[Selected]:

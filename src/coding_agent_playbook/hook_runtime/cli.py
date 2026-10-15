@@ -1,7 +1,8 @@
 """``playbook-hook``: one ``main`` for harnesses and humans (specs/prK-lifecycle-hooks.md §D.1).
 
 Harnesses run ``<pin> -I -m coding_agent_playbook.hook_runtime dispatch <event>
---harness H [--project-dir DIR]`` (the one argv of D-14); humans run the
+--harness H [--project-dir DIR]`` (the one argv of D-14, plus a trailing
+``--async`` on the one async ``post_tool_use`` registration, OQ-19); humans run the
 ``playbook-hook`` console script for ``simulate``, ``doctor`` and
 ``--version``. Both reach :func:`main`.
 
@@ -31,15 +32,18 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
 
-__all__ = ["USAGE", "DispatchArgs", "main", "parse_dispatch_argv"]
+__all__ = ["ASYNC_FLAG", "USAGE", "DispatchArgs", "async_problem", "main", "parse_dispatch_argv"]
 
 USAGE: Final = (
-    "usage: playbook-hook dispatch <event> --harness claude_code|opencode [--project-dir DIR]\n"
+    "usage: playbook-hook dispatch <event> --harness claude_code|opencode [--project-dir DIR]"
+    " [--async]\n"
     "       playbook-hook simulate <event> [options] < payload.json\n"
     "       playbook-hook doctor [options]\n"
     "       playbook-hook --version"
 )
 _FLAGS: Final = ("--harness", "--project-dir")
+#: The one boolean flag: the async ``post_tool_use`` dispatch (OQ-19), valid on no other event.
+ASYNC_FLAG: Final = "--async"
 #: Exit code of a human usage error (``simulate``, ``doctor``, no subcommand); never ``dispatch``.
 USAGE_EXIT: Final = 2
 
@@ -61,6 +65,7 @@ class DispatchArgs:
     harness: Harness | None
     project_dir: str | None
     problem: str | None = None
+    asynchronous: bool = False
 
     def project_root(self, env: Mapping[str, str], cwd: str) -> str:
         """``--project-dir``, else ``CLAUDE_PROJECT_DIR``, else the cwd (§D.1)."""
@@ -68,7 +73,10 @@ class DispatchArgs:
 
 
 def parse_dispatch_argv(args: Sequence[str]) -> DispatchArgs:
-    """Parse ``<event> --harness H [--project-dir DIR]``; never raises.
+    """Parse ``<event> --harness H [--project-dir DIR] [--async]``; never raises.
+
+    ``--async`` on any event but ``post_tool_use`` is a problem, so the event
+    goes to the failure policy like any other bad argv.
 
     Example::
 
@@ -81,7 +89,15 @@ def parse_dispatch_argv(args: Sequence[str]) -> DispatchArgs:
         event = EventName(args[0])
     except ValueError:
         return DispatchArgs(None, None, None, f"unknown event {args[0]!r}")
-    values, problems = _flags(list(args[1:]))
+    rest = list(args[1:])
+    asynchronous = ASYNC_FLAG in rest
+    values, problems = _flags([arg for arg in rest if arg != ASYNC_FLAG])
+    if rest.count(ASYNC_FLAG) > 1:
+        problems.append(f"{ASYNC_FLAG} given twice")
+    wrong_event = async_problem(event) if asynchronous else None
+    if wrong_event is not None:
+        problems.append(wrong_event)
+        asynchronous = False
     harness = None
     if "--harness" not in values:
         problems.append("missing --harness")
@@ -90,7 +106,23 @@ def parse_dispatch_argv(args: Sequence[str]) -> DispatchArgs:
             harness = Harness(values["--harness"])
         except ValueError:
             problems.append(f"unknown harness {values['--harness']!r}")
-    return DispatchArgs(event, harness, values.get("--project-dir"), "; ".join(problems) or None)
+    problem = "; ".join(problems) or None
+    return DispatchArgs(
+        event, harness, values.get("--project-dir"), problem, asynchronous and problem is None
+    )
+
+
+def async_problem(event: EventName) -> str | None:
+    """Why ``--async`` cannot apply to ``event``, or ``None`` on ``post_tool_use`` (OQ-19).
+
+    Example::
+
+        >>> async_problem(EventName.STOP)
+        "--async is valid only for post_tool_use, got 'stop'"
+    """
+    if event is EventName.POST_TOOL_USE:
+        return None
+    return f"{ASYNC_FLAG} is valid only for post_tool_use, got {event.value!r}"
 
 
 def _flags(rest: list[str]) -> tuple[dict[str, str], list[str]]:
@@ -170,6 +202,7 @@ def _run(parsed: DispatchArgs, event: EventName, deps: RuntimeDeps, stdin: Binar
         deps,
         project_dir=parsed.project_dir,
         argv_problem=parsed.problem,
+        asynchronous=parsed.asynchronous,
     )
     return wire.exit_code
 

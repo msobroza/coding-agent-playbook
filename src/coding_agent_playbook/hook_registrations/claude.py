@@ -24,6 +24,7 @@ from coding_agent_playbook.hook_registrations.plan import (
     deadlines_ms,
     plan_registrations,
 )
+from coding_agent_playbook.hook_runtime.cli import ASYNC_FLAG
 from coding_agent_playbook.hook_runtime.event import Harness
 from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
 
@@ -127,37 +128,42 @@ def _exact_or_anchored(names: Sequence[str]) -> str:
     return f"^(?:{joined})$"
 
 
-def claude_command(event: str, *, strict: bool = False) -> str:
+def claude_command(event: str, *, strict: bool = False, asynchronous: bool = False) -> str:
     """The exact shell-form command of a registration (§C.2.1).
 
     No ``--config`` and no digest, so the bytes never change when only
     ``guard_config.json`` does; the project root comes from Claude's
     ``CLAUDE_PROJECT_DIR``, falling back to the git top level, never the cwd.
+    ``asynchronous`` appends ``--async`` (the OQ-19 ``post_tool_use`` dispatch).
 
     Example: ``claude_command("stop").endswith("dispatch stop --harness claude_code")``.
     """
     flag = f"{STRICT_LAUNCH_FLAG} " if strict else ""
-    return f'sh "{_PROJECT_ROOT}{LAUNCHER_TOKEN}" {flag}dispatch {event} --harness {_CLAUDE}'
+    tail = f" {ASYNC_FLAG}" if asynchronous else ""
+    return f'sh "{_PROJECT_ROOT}{LAUNCHER_TOKEN}" {flag}dispatch {event} --harness {_CLAUDE}{tail}'
 
 
 def to_claude_group(reg: HookRegistration) -> dict[str, Any]:
     """The managed matcher group: ``matcher`` (when any) and exactly one command handler.
 
     Handler keys are closed: ``type``, ``command``, ``timeout``, plus
-    ``statusMessage`` on stop events and ``onFailure: block`` in strict mode
-    only. Never ``if``, ``async``, ``args`` or a non-command type (L6).
+    ``statusMessage`` on stop events, ``onFailure: block`` in strict mode only
+    and ``async: true`` on OQ-19's one non-deciding ``post_tool_use``
+    registration only. Never ``if``, ``args`` or a non-command type (L6).
 
     Example: ``to_claude_group(reg)["hooks"][0]["type"] == "command"``.
     """
     handler: dict[str, Any] = {
         "type": "command",
-        "command": claude_command(reg.event, strict=reg.strict),
+        "command": claude_command(reg.event, strict=reg.strict, asynchronous=reg.asynchronous),
         "timeout": reg.timeout_s,
     }
     if reg.event in STOP_EVENTS:
         handler["statusMessage"] = STOP_STATUS_MESSAGE
     if reg.strict:
         handler["onFailure"] = "block"
+    if reg.asynchronous:
+        handler["async"] = True
     group: dict[str, Any] = {}
     matcher = matcher_union(reg.event, reg.matchers)
     if matcher is not None:
@@ -174,8 +180,11 @@ def claude_settings_projection(
     Example: ``claude_settings_projection([DeclaredMember.from_frontmatter(fm)])``.
     """
     limits = deadlines_ms(members, stop_budget_s=stop_budget_s)
-    regs = plan_registrations(members, _CLAUDE, deadlines=limits)
-    return {"hooks": {reg.claude_event: [to_claude_group(reg)] for reg in regs}}
+    events: dict[str, list[dict[str, Any]]] = {}
+    for reg in plan_registrations(members, _CLAUDE, deadlines=limits):
+        # PostToolUse can hold two groups: the synchronous one and OQ-19's async one.
+        events.setdefault(reg.claude_event, []).append(to_claude_group(reg))
+    return {"hooks": events}
 
 
 def render_claude_launcher() -> str:

@@ -203,6 +203,7 @@ def test_handler_approval_mirrors_the_runtime_record(repo: Path, tmp_path: Path)
         "stop-diff-sweep",
         "dependency-allowlist-guard",
         "exfil-channel-guard",
+        "guard-decision-log",
     }
     assert all(handler_approval(hook) is None for hook in builtins)
 

@@ -24,10 +24,18 @@ from coding_agent_playbook.hook_runtime._external import (
     ExternalContractError,
     parse_external_output,
 )
+from coding_agent_playbook.hook_runtime._selection import select_hooks
 from coding_agent_playbook.hook_runtime.config import GuardConfig, parse_guard_config
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch import run_event
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.escape import EscapeHatches
+from coding_agent_playbook.hook_runtime.event import (
+    CanonicalEvent,
+    EventName,
+    Harness,
+    ToolCall,
+    ToolClass,
+)
 from coding_agent_playbook.hook_runtime.harness import DENY_EXIT
 from coding_agent_playbook.hook_runtime.registry import (
     HANDLER_ATTR,
@@ -42,6 +50,12 @@ from coding_agent_playbook.hook_runtime.registry import (
     registered_handlers,
     resolve_handler,
 )
+from coding_agent_playbook.hook_runtime.routing import (
+    ASYNC_EVENT,
+    ASYNC_SAFE_HANDLERS,
+    DECISION_SINK_HANDLERS,
+    handler_route,
+)
 from coding_agent_playbook.security.trust import HandlerApproval, sha256_of_json
 from tests.hook_runtime.fakes import FakeProc, FakeTrustStore
 from tests.hook_runtime.guard_repo import GuardRepo, canonical, hook_record
@@ -51,7 +65,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
 PRE = EventName.PRE_TOOL_USE
@@ -108,6 +121,80 @@ def test_every_in_tree_handler_module_is_in_the_static_map() -> None:
 
     assert names - helpers <= set(builtin_handler_modules().values())
     assert not {d.module for d in registered_handlers().values()} & helpers
+
+
+def test_routing_sets_match_the_handler_modules() -> None:
+    """``routing`` routes without importing: its static sets mirror the modules (K9, OQ-19).
+
+    Every ``ASYNC_SAFE = True`` module is listed (and decides nothing), and every
+    sink is a builtin that can only return ``none``.
+    """
+    modules = builtin_handler_modules()
+    async_safe = set()
+    for name, module in modules.items():
+        if getattr(importlib.import_module(module), "ASYNC_SAFE", False) is True:
+            async_safe.add(name)
+
+    assert async_safe == ASYNC_SAFE_HANDLERS
+    for name in ASYNC_SAFE_HANDLERS | DECISION_SINK_HANDLERS:
+        assert load_builtin(name).decisions == {Decision.NONE}
+    assert EventName(ASYNC_EVENT) in load_builtin("activity_log").events
+    assert load_builtin("decision_log").events == frozenset(EventName)
+
+
+@pytest.mark.parametrize(
+    ("event", "name", "decisions", "route"),
+    [
+        ("pre_tool_use", "decision_log", ["none"], "sink"),
+        ("post_tool_use", "activity_log", ["none"], "async"),
+        ("session_start", "activity_log", ["none"], "sync"),
+        ("post_tool_use", "activity_log", ["context", "none"], "sync"),
+        ("post_tool_use", "guard_x", ["none"], "sync"),
+    ],
+)
+def test_handler_route(event: str, name: str, decisions: list[str], route: str) -> None:
+    assert handler_route(event, kind="builtin", name=name, decisions=decisions) == route
+    assert handler_route(event, kind="external", name=None, decisions=decisions) == "sync"
+
+
+def test_sink_and_async_routed_hooks_are_selected_only_where_they_run() -> None:
+    sink = hook_record(
+        "guard-decision-log",
+        events=["pre_tool_use", "post_tool_use"],
+        decisions=["none"],
+        handler={"kind": "builtin", "name": "decision_log"},
+    )
+    audit = hook_record(
+        "local-audit-log",
+        events=["post_tool_use"],
+        decisions=["none"],
+        handler={"kind": "builtin", "name": "activity_log"},
+    )
+    guard = hook_record("guard-a", events=["post_tool_use"])
+    routed = _config(sink, audit, guard, logging={"audit_mode": "async"})
+    unrouted = _config(sink, audit, guard)
+
+    def ids(cfg: GuardConfig, *, asynchronous: bool = False) -> list[str]:
+        ev = _post_event()
+        selection = select_hooks(cfg, ev, EscapeHatches(), asynchronous=asynchronous)
+        return [s.record.id for s in selection.selected]
+
+    assert ids(routed) == ["guard-a"]
+    assert ids(routed, asynchronous=True) == ["local-audit-log"]
+    # Without the async route rendered, the synchronous dispatch keeps the handler.
+    assert sorted(ids(unrouted)) == ["guard-a", "local-audit-log"]
+
+
+def _post_event() -> CanonicalEvent:
+    tool = ToolCall(name="Read", native_name="Read", tool_class=ToolClass.READ)
+    return CanonicalEvent(
+        name=EventName.POST_TOOL_USE,
+        harness=Harness.CLAUDE_CODE,
+        session_id="s",
+        cwd="/r",
+        project_dir="/r",
+        tool=tool,
+    )
 
 
 @register_hook_handler(

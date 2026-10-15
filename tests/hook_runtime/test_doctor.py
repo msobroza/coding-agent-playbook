@@ -1,5 +1,8 @@
 """``playbook-hook doctor``: environment checks, exit codes, read-only (specs/prK-lifecycle-hooks.md §D.9).
 
+The guard-decision-log summary rows (specs/prK-hook-pack.md §E.5) read decision
+lines written straight into the fixture's state root.
+
 The pinned interpreter's probe runs through ``FakeProc``; everything else is
 a real fixture worktree (pin file, ``machine.json``, state root, lockfile).
 """
@@ -19,6 +22,7 @@ from coding_agent_playbook.hook_runtime._doctor_checks import PROBE
 from coding_agent_playbook.hook_runtime.cli import main as cli_main
 from coding_agent_playbook.hook_runtime.doctor import Check, exit_code, main, run_doctor
 from coding_agent_playbook.hook_runtime.pin import INTERPRETER_PIN, write_machine_pins
+from coding_agent_playbook.security.audit import GuardDecisionRecord, append_decision
 from coding_agent_playbook.security.trust import HandlerApproval, sha256_of_json
 from tests.hook_runtime.fakes import FakeProc, FakeTrustStore
 from tests.hook_runtime.guard_repo import GuardRepo, hook_record
@@ -247,3 +251,70 @@ def test_main_json_format_and_cli_route(
 def test_usage_error_exits_2(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["--format", "yaml"]) == 2
     assert "invalid choice" in capsys.readouterr().err
+
+
+# --- the guard-decision-log summary (specs/prK-hook-pack.md §E.5) ---------------------
+
+
+def _decision(hook_id: str, decision: str, ts: str) -> GuardDecisionRecord:
+    return {
+        "v": 1,
+        "ts": ts,
+        "harness": "claude_code",
+        "session_id": "s",
+        "event": "pre_tool_use",
+        "hook_id": hook_id,
+        "rule_id": None,
+        "decision": decision,
+        "effective": decision,
+        "tool_name": "Bash",
+        "tool_class": "shell",
+        "unattended": False,
+        "degraded": False,
+        "escape": None,
+        "canary": False,
+        "latency_ms": 1,
+    }
+
+
+def test_doctor_reports_decision_log_summary_per_guard(
+    tmp_path: Path, runtime_deps: Callable[..., RuntimeDeps]
+) -> None:
+    repo, python = _healthy(tmp_path)
+    recent, old = "2026-10-13T09:00:00.000Z", "2026-08-01T09:00:00.000Z"  # clock: 2026-10-14
+    for hook_id, decision, ts in [
+        ("destructive-command-guard", "deny", recent),
+        ("exfil-channel-guard", "ask", recent),
+        ("exfil-channel-guard", "ask", recent),
+        ("exfil-channel-guard", "override", recent),
+        ("exfil-channel-guard", "degraded", recent),
+        ("exfil-channel-guard", "deny", old),  # outside --since 30
+    ]:
+        append_decision(repo.state_root, _decision(hook_id, decision, ts))
+
+    checks = run_doctor(str(repo.root), deps=_deps(runtime_deps, python))
+    wide = run_doctor(str(repo.root), deps=_deps(runtime_deps, python), since_days=90)
+
+    rows = {c.name: (c.severity, c.detail) for c in checks if c.name.startswith("decision-log")}
+    assert rows == {
+        "decision-log:destructive-command-guard": (
+            "ok",
+            "deny 1, ask 0, override 0 (n/a), degraded 0 (last 30 days)",
+        ),
+        "decision-log:exfil-channel-guard": (
+            "ok",
+            "deny 0, ask 2, override 1 (50%), degraded 1 (last 30 days)",
+        ),
+    }
+    assert exit_code(checks) == 0  # informational: a busy guard is not a broken install
+    assert any("deny 1, ask 2" in c.detail for c in wide if c.name.endswith("exfil-channel-guard"))
+
+
+def test_doctor_without_a_decision_log_adds_no_rows(
+    tmp_path: Path, runtime_deps: Callable[..., RuntimeDeps]
+) -> None:
+    repo, python = _healthy(tmp_path)
+
+    checks = run_doctor(str(repo.root), deps=_deps(runtime_deps, python))
+
+    assert not [c for c in checks if c.name.startswith("decision-log")]

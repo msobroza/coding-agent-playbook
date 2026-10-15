@@ -261,6 +261,31 @@ def test_text_format_and_the_cli_route(
     assert "exit_code=0 decision=deny" in out
 
 
+def test_async_flag_runs_only_async_routed_handlers_and_writes_nothing(
+    repo: GuardRepo, deps: RuntimeDeps
+) -> None:
+    """``--async`` (OQ-19): the stub is synchronously routed, so the async dispatch skips it."""
+    out = io.StringIO()
+    stdin = io.BytesIO(_payload(repo, EventName.POST_TOOL_USE))
+
+    code = main(
+        ["post_tool_use", "--async", "--repo", str(repo.root), "--format", "json"],
+        deps=deps,
+        stdin=stdin,
+        stdout=out,
+    )
+    faulted = run(
+        SimulateArgs(event=EventName.STOP, repo=str(repo.root), asynchronous=True),
+        _payload(repo, EventName.STOP),
+        deps=deps,
+    )
+
+    report = json.loads(out.getvalue())
+    assert (code, report["stdout"], report["decisions"]) == (0, "", [])
+    assert faulted.trace.ran == ()  # a contract fault: no hook runs on a wrong --async
+    assert faulted.trace.wire.stdout == ""  # and Stop renders nothing for a fault
+
+
 # --- canaries ------------------------------------------------------------------------------
 
 

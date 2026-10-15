@@ -107,11 +107,17 @@ _V1_CLAUDE_NAMES: Final = _v1_claude_names()
 OPENCODE_V1_TOOLS: Final = frozenset(_V1_CLAUDE_NAMES)
 
 
-class OpenCodeRegEntry(TypedDict):
-    """One ``REG`` value: the shim's kill timer and, on tool events, its pre-filter."""
-
-    timeout_ms: int
-    tools: NotRequired[list[str] | Literal["*"]]
+#: One ``REG`` value: the shim's kill timer and, on tool events, its pre-filter.
+#: ``async`` (``post_tool_use`` only) is the pre-filter of the fire-and-forget
+#: ``--async`` dispatch (OQ-19); functional syntax because ``async`` is a keyword.
+OpenCodeRegEntry = TypedDict(
+    "OpenCodeRegEntry",
+    {
+        "timeout_ms": int,
+        "tools": NotRequired[list[str] | Literal["*"]],
+        "async": NotRequired[list[str] | Literal["*"]],
+    },
+)
 
 
 def plan_opencode_reg(hooks: Sequence[ResolvedHook]) -> dict[str, OpenCodeRegEntry]:
@@ -137,21 +143,30 @@ def to_opencode_reg(regs: Iterable[HookRegistration]) -> dict[str, OpenCodeRegEn
     dropped), ``session_start`` added whenever any key exists, and ``{}``
     otherwise. ``timeout_ms`` is the registration timeout in milliseconds,
     re-checked against the watchdog margin (raises ``RegistrationTimeoutError``).
+    An async registration (OQ-19) becomes the ``post_tool_use`` entry's
+    ``async`` pre-filter; with no synchronous member its ``tools`` is ``[]``.
 
     Example::
 
         >>> to_opencode_reg(plan_registrations(hooks, "opencode"))  # doctest: +SKIP
         {'session_start': {'timeout_ms': 4000}, 'stop': {'timeout_ms': 5000}}
     """
+    listed = [reg for reg in regs if reg.event in OPENCODE_REG_EVENTS]
+    background = next((reg for reg in listed if reg.asynchronous and reg.members), None)
     by_event = {
         reg.event: reg
-        for reg in regs
-        if reg.event in OPENCODE_REG_EVENTS and (reg.members or reg.event == "session_start")
+        for reg in listed
+        if not reg.asynchronous and (reg.members or reg.event == "session_start")
     }
-    if not any(reg.members for reg in by_event.values()):
+    if background is None and not any(reg.members for reg in by_event.values()):
         return {}
     by_event.setdefault("session_start", _bootstrap())
-    return {event: _entry(by_event[event]) for event in OPENCODE_REG_EVENTS if event in by_event}
+    reg_table: dict[str, OpenCodeRegEntry] = {
+        event: _entry(by_event[event]) for event in OPENCODE_REG_EVENTS if event in by_event
+    }
+    if background is not None:
+        _add_async(reg_table, background)
+    return {event: reg_table[event] for event in OPENCODE_REG_EVENTS if event in reg_table}
 
 
 def opencode_reg_json(reg: Mapping[str, OpenCodeRegEntry]) -> str:
@@ -186,6 +201,16 @@ def _bootstrap() -> HookRegistration:
     return HookRegistration(
         event="session_start", members=(), deadline_ms=BOOTSTRAP_DEADLINE_MS, timeout_s=timeout_s
     )
+
+
+def _add_async(reg_table: dict[str, OpenCodeRegEntry], background: HookRegistration) -> None:
+    """Attach the async pre-filter to ``post_tool_use``, creating a tool-less entry if needed."""
+    entry = reg_table.get(background.event)
+    if entry is None:
+        entry = _entry(background)
+        entry["tools"] = []  # no synchronous member: the shim never awaits a dispatch here
+        reg_table[background.event] = entry
+    entry["async"] = _opencode_tools(background.matchers)
 
 
 def _entry(reg: HookRegistration) -> OpenCodeRegEntry:

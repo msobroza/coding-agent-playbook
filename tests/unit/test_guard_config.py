@@ -71,6 +71,7 @@ from coding_agent_playbook.security.patterns import (
 )
 from coding_agent_playbook.types import Prompt, PromptFrontmatter, Rule, RuleFrontmatter
 from tests.hook_samples import resolved_from_disk, resolved_hook, sample_hook
+from tests.hooks.pack_repo import resolve_engine_hooks
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -847,3 +848,22 @@ def test_allowlists_table_rendered_from_the_guards_configs() -> None:
         "required_index": "",
         "egress_hosts": [],
     }
+
+
+def test_logging_block_follows_hook_enablement(tmp_path: Path) -> None:
+    """guard-decision-log switches the decision log on; local-audit-log the async audit route."""
+    sink = resolve_engine_hooks(["guard-decision-log"], tmp_path)
+    both = resolve_engine_hooks(["guard-decision-log", "local-audit-log"], tmp_path)
+
+    rendered = [render_guard_config(_inputs(hooks)) for hooks in ([], sink, both)]
+
+    assert [cfg["logging"] for cfg in rendered] == [
+        {"decisions": False, "audit": False, "audit_mode": ""},
+        {"decisions": True, "audit": False, "audit_mode": ""},
+        {"decisions": True, "audit": True, "audit_mode": "async"},
+    ]
+    assert rendered[1]["deadlines_ms"] == {}  # the sink adds to no §D.4 deadline
+    assert "post_tool_use" not in rendered[2]["deadlines_ms"]  # nor does an async member
+    runtime = parse_guard_config(serialize_guard_config(rendered[2]))
+    assert isinstance(runtime, GuardConfig)
+    assert (runtime.logging.decisions, runtime.logging.audit_mode) == (True, "async")

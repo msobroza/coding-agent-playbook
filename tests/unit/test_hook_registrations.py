@@ -9,15 +9,21 @@ registration timeout at least a second above its event's watchdog deadline.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import re
 import sys
 from types import MappingProxyType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.hook_policy import ENGINE_DEADLINE_CAP_MS, HOOK_EVENTS, HOOK_SUPPORT
+from coding_agent_playbook.hook_policy import (
+    ENGINE_DEADLINE_CAP_MS,
+    HOOK_EVENTS,
+    HOOK_SUPPORT,
+    ResolvedHandler,
+)
 from coding_agent_playbook.hook_registrations import (
     BOOTSTRAP_DEADLINE_MS,
     STOP_COORDINATOR_ID,
@@ -39,6 +45,9 @@ from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
 from coding_agent_playbook.types import HookMatcher
 from tests.hook_samples import hook_frontmatter, resolved_hook
 from tests.import_probe import new_modules_after
+
+if TYPE_CHECKING:
+    from coding_agent_playbook.hook_policy import ResolvedHook
 
 _PROJECT_ROOT = "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}"
 #: Claude reads a matcher made only of these characters as an exact list (§C.2.2).
@@ -502,3 +511,112 @@ def test_hook_registrations_imports_only_the_stdlib() -> None:
     assert foreign == []
     assert "coding_agent_playbook.types" not in loaded
     assert "coding_agent_playbook.renderer" not in loaded
+
+
+# --- handler routes: the decision sink and OQ-19's async registration ----------------
+
+_EVERY_EVENT = tuple(HOOK_EVENTS)
+_BOTH = ("claude_code", "opencode")
+
+
+def _bound(
+    hook_id: str,
+    builtin: str,
+    *,
+    events: tuple[str, ...],
+    decisions: tuple[str, ...] = ("none",),
+    timeout: float = 1.0,
+) -> ResolvedHook:
+    """A hook binding ``builtin`` on every event (as the audit HOOK.md files do)."""
+    hook = resolved_hook(hook_id, events=events, timeout=timeout, on_error="open", supports=_BOTH)
+    handlers = {event: ResolvedHandler("builtin", name=builtin) for event in events}
+    return dataclasses.replace(hook, decisions=decisions, handlers=handlers)
+
+
+def _sink() -> ResolvedHook:
+    return _bound("guard-decision-log", "decision_log", events=_EVERY_EVENT, timeout=5.0)
+
+
+def _audit(decisions: tuple[str, ...] = ("none",), builtin: str = "activity_log") -> ResolvedHook:
+    events = ("session_start", "post_tool_use", "post_tool_use_failure")
+    return _bound("local-audit-log", builtin, events=events, decisions=decisions, timeout=2.0)
+
+
+def test_sink_hook_has_no_registration_and_no_deadline_share() -> None:
+    guard = resolved_hook("guard-x", supports=_BOTH)
+
+    for adapter in ("claude_code", "opencode"):
+        with_sink = plan_registrations([guard, _sink()], adapter, HOOK_SUPPORT)
+        assert with_sink == plan_registrations([guard], adapter, HOOK_SUPPORT)
+        assert plan_registrations([_sink()], adapter, HOOK_SUPPORT) == []
+    assert deadlines_ms([guard, _sink()]) == deadlines_ms([guard])
+    assert deadlines_ms([_sink()]) == {}
+    assert resolved_deadlines_ms([_sink()]) == {}
+
+
+def test_async_group_only_for_none_only_async_safe_hook() -> None:
+    regs = plan_registrations([_audit()], "claude_code", HOOK_SUPPORT)
+    with_context = plan_registrations([_audit(("context", "none"))], "claude_code", HOOK_SUPPORT)
+    other_builtin = plan_registrations([_audit(builtin="guard_x")], "claude_code", HOOK_SUPPORT)
+
+    assert [(r.event, r.asynchronous) for r in regs] == [
+        ("session_start", False),
+        ("post_tool_use", True),
+        ("post_tool_use_failure", False),
+    ]
+    assert regs[1].members == ("local-audit-log",)
+    assert regs[1].artifact_id == "registration:post_tool_use:async"
+    for sync_only in (with_context, other_builtin):
+        assert not any(r.asynchronous for r in sync_only)
+        assert _by_event(sync_only)["post_tool_use"].members == ("local-audit-log",)
+
+
+def test_async_member_leaves_the_sync_post_tool_use_registration_unchanged() -> None:
+    lint = resolved_hook("lint-q", events=("post_tool_use",), timeout=3.0, supports=_BOTH)
+
+    alone = _by_event(plan_registrations([lint], "claude_code", HOOK_SUPPORT))
+    regs = plan_registrations([lint, _audit()], "claude_code", HOOK_SUPPORT)
+    sync = [r for r in regs if r.event == "post_tool_use" and not r.asynchronous]
+    background = [r for r in regs if r.asynchronous]
+
+    assert sync == [alone["post_tool_use"]]
+    assert to_claude_group(sync[0]) == to_claude_group(alone["post_tool_use"])
+    assert deadlines_ms([lint, _audit()])["post_tool_use"] == deadlines_ms([lint])["post_tool_use"]
+    (extra,) = background
+    assert regs.index(extra) == regs.index(sync[0]) + 1  # canonical position, after the sync one
+    assert extra.deadline_ms == sync[0].deadline_ms
+
+
+def test_async_group_renders_the_async_key_and_flag() -> None:
+    (extra,) = [r for r in plan_registrations([_audit()], "claude_code") if r.asynchronous]
+
+    group = to_claude_group(extra)
+
+    assert extra.deadline_ms == ENGINE_DEADLINE_CAP_MS["post_tool_use"]  # no sync member
+    assert group == {
+        "matcher": "*",
+        "hooks": [
+            {
+                "type": "command",
+                "command": claude_command("post_tool_use", asynchronous=True),
+                "timeout": registration_timeout_s(extra.deadline_ms),
+                "async": True,
+            }
+        ],
+    }
+    assert group["hooks"][0]["command"].endswith(
+        "dispatch post_tool_use --harness claude_code --async"
+    )
+    assert "onFailure" not in group["hooks"][0]
+
+
+def test_declared_sink_projects_to_nothing() -> None:
+    fm = hook_frontmatter(
+        id="guard-decision-log",
+        events=list(_EVERY_EVENT),
+        handler={"builtin": "decision_log"},
+        decisions=["none"],
+        on_error="open",
+    )
+
+    assert claude_settings_projection([DeclaredMember.from_frontmatter(fm)]) == {"hooks": {}}

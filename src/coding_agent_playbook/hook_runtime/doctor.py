@@ -9,6 +9,8 @@ tool signatures and the external handlers' trust approvals. Then OpenCode
 (``_doctor_opencode``): the ``opencode --version`` floor (>= 1.18.29),
 ``OPENCODE_DISABLE_PROJECT_CONFIG`` and the shim's lockfile digest and
 registrations. A shim that does not match its lockfile entry is never read.
+Last, the guard-decision-log summary (``_doctor_decisions``): per guard, the
+deny/ask/override/degraded counts of the last ``--since`` days (default 30).
 
 ``--repin [PYTHON]`` is the one write: it overwrites the interpreter pin
 (default: this interpreter, unresolved) before checking. Exit codes: 0
@@ -27,6 +29,10 @@ from coding_agent_playbook.hook_runtime._doctor_checks import (
     Check,
     environment_checks,
 )
+from coding_agent_playbook.hook_runtime._doctor_decisions import (
+    DEFAULT_SINCE_DAYS,
+    decision_log_checks,
+)
 from coding_agent_playbook.hook_runtime._doctor_opencode import opencode_checks
 from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
 from coding_agent_playbook.hook_runtime.paths import find_repo
@@ -40,8 +46,16 @@ if TYPE_CHECKING:
 __all__ = ["Check", "exit_code", "main", "run_doctor"]
 
 
-def run_doctor(repo_dir: str, *, deps: RuntimeDeps, repin: str | None = None) -> list[Check]:
+def run_doctor(
+    repo_dir: str,
+    *,
+    deps: RuntimeDeps,
+    repin: str | None = None,
+    since_days: int = DEFAULT_SINCE_DAYS,
+) -> list[Check]:
     """Every check of the worktree holding ``repo_dir``; ``repin`` rewrites the pin first.
+
+    The decision-log rows summarize the last ``since_days`` days.
 
     Example::
 
@@ -56,7 +70,12 @@ def run_doctor(repo_dir: str, *, deps: RuntimeDeps, repin: str | None = None) ->
     checks: list[Check] = []
     if repin is not None:
         checks.append(_repin(repo.git_dir, repin))
-    return [*checks, *environment_checks(repo, deps), *opencode_checks(repo, deps)]
+    return [
+        *checks,
+        *environment_checks(repo, deps),
+        *opencode_checks(repo, deps),
+        *decision_log_checks(repo, deps, since_days=since_days),
+    ]
 
 
 def _repin(git_dir: str, interpreter: str) -> Check:
@@ -82,7 +101,7 @@ def exit_code(checks: Sequence[Check]) -> int:
 def main(
     argv: Sequence[str], *, deps: RuntimeDeps | None = None, stdout: TextIO | None = None
 ) -> int:
-    """``playbook-hook doctor [--repo DIR] [--repin [PYTHON]] [--format text|json]``.
+    """``playbook-hook doctor [--repo DIR] [--repin [PYTHON]] [--since DAYS] [--format text|json]``.
 
     Example::
 
@@ -93,7 +112,7 @@ def main(
         ns = _parser().parse_args(list(argv))
     except SystemExit as exc:  # argparse already printed the usage
         return 2 if exc.code else 0
-    checks = run_doctor(ns.repo, deps=deps or RuntimeDeps(), repin=ns.repin)
+    checks = run_doctor(ns.repo, deps=deps or RuntimeDeps(), repin=ns.repin, since_days=ns.since)
     code = exit_code(checks)
     print(_render(checks, code, ns.format), file=stdout or sys.stdout)
     return code
@@ -122,6 +141,13 @@ def _parser() -> argparse.ArgumentParser:
         default=None,
         metavar="PYTHON",
         help="rewrite the interpreter pin (default: this interpreter)",
+    )
+    parser.add_argument(
+        "--since",
+        type=int,
+        default=DEFAULT_SINCE_DAYS,
+        metavar="DAYS",
+        help="days of guard-decision-log to summarize (default: 30)",
     )
     parser.add_argument("--format", choices=["text", "json"], default="text")
     return parser

@@ -2,7 +2,8 @@
 
 Config (with its digest), selection, the fan-out under the watchdog, the one
 write, then the post-write records. ``dispatch`` owns steps 1-2 and the paths
-that never reach a config.
+that never reach a config. The async ``post_tool_use`` dispatch (OQ-19) runs
+only its async-routed handlers and writes nothing (:func:`_run_async`).
 """
 
 from __future__ import annotations
@@ -11,7 +12,12 @@ import dataclasses
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._decision_log import DISPATCHER_ID, DecisionLog, LogLine
+from coding_agent_playbook.hook_runtime._decision_log import (
+    DISPATCHER_ID,
+    DecisionLog,
+    LogLine,
+    lines_for,
+)
 from coding_agent_playbook.hook_runtime._event_memo import EventMemo
 from coding_agent_playbook.hook_runtime._execute import (
     Progress,
@@ -28,6 +34,7 @@ from coding_agent_playbook.hook_runtime.active_prompt import observe as observe_
 from coding_agent_playbook.hook_runtime.config import ConfigFault, load_guard_config
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.harness import WireOutput
 from coding_agent_playbook.hook_runtime.ledger import Ledger
 from coding_agent_playbook.hook_runtime.registry import (
     HandlerContext,
@@ -48,7 +55,6 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps, TrustPort
     from coding_agent_playbook.hook_runtime.escape import EscapeHatches
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
-    from coding_agent_playbook.hook_runtime.harness import WireOutput
     from coding_agent_playbook.hook_runtime.registry import HandlerFn, Untrusted
 
 __all__ = ["Shared", "run_configured"]
@@ -58,12 +64,16 @@ _DISABLED_NOTE: Final = "Playbook hook {hook_id} is off this session (PLAYBOOK_H
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Shared:
-    """What steps 3-9 take from the dispatch: deps, the responder, the start time."""
+    """What steps 3-9 take from the dispatch: deps, the responder, the start time.
+
+    ``asynchronous`` is the async ``post_tool_use`` dispatch (OQ-19, ``--async``).
+    """
 
     deps: RuntimeDeps
     responder: Responder
     started: float
     canary: bool = False
+    asynchronous: bool = False
 
 
 def run_configured(
@@ -87,9 +97,13 @@ def run_configured(
         refresh_digest=ev.name is EventName.SESSION_START,
     )
     if isinstance(cfg, ConfigFault):
+        if shared.asynchronous:
+            return DispatchTrace(wire=WireOutput())  # the synchronous dispatch reports it
         return _config_fault(ev, cfg, store, session, shared)
     if ev.tool is not None:
         ev = dataclasses.replace(ev, tool=ev.tool.with_shell_config(cfg.shell))
+    if shared.asynchronous:
+        return _run_async(ev, repo, cfg, store, session, hatches, shared)
     log = DecisionLog(
         store, ev, now=deps.clock.time, enabled=cfg.logging.decisions, canary=shared.canary
     )
@@ -122,6 +136,46 @@ def run_configured(
     if store.stateless_reason is not None:
         shared.responder.gate.note(f"playbook-hook: running stateless ({store.stateless_reason})")
     return DispatchTrace(wire=wire, combined=combined, ran=tuple(ran), written=True)
+
+
+def _run_async(
+    ev: CanonicalEvent,
+    repo: RepoInfo,
+    cfg: GuardConfig,
+    store: StateStore,
+    session: SessionState,
+    hatches: EscapeHatches,
+    shared: Shared,
+) -> DispatchTrace:
+    """The async ``post_tool_use`` dispatch (OQ-19): async-routed handlers only, empty stdout.
+
+    Claude delivers an async hook's output on the next turn, so nothing is
+    written; the synchronous dispatch already did the ledger, asks and notes.
+    Only the decision-log lines of a failing handler are recorded. The
+    watchdog still bounds a hung handler, falling back to the same empty output.
+    """
+    deps = shared.deps
+    progress = Progress(select_hooks(cfg, ev, hatches, asynchronous=True).selected)
+    dog = Watchdog(deps, shared.responder.gate, fallback=WireOutput)
+    if progress.selected:
+        dog.arm(cfg.deadlines_ms[ev.name] / 1000 - (deps.clock.monotonic() - shared.started))
+    try:
+        ran = run_handlers(
+            ev,
+            progress,
+            resolve=_resolver(ev, repo, cfg, deps),
+            context=_contexts(ev, repo, cfg, store, session, hatches, shared),
+            once=session.once,
+            clock=deps.clock,
+        )
+    finally:
+        dog.cancel()
+    combined = shared.responder.combine(ev, results_of(ran), unattended_ask=cfg.unattended_ask)
+    log = DecisionLog(
+        store, ev, now=deps.clock.time, enabled=cfg.logging.decisions, canary=shared.canary
+    )
+    log.write(lines_for(ran, combined.outcomes))
+    return DispatchTrace(wire=WireOutput(), combined=combined, ran=tuple(ran))
 
 
 def _config_fault(

@@ -236,11 +236,13 @@ class PackRepo(GuardRepo):
         env: Mapping[str, str] | None = None,
         event: EventName = EventName.PRE_TOOL_USE,
         state: Path | None = None,
+        asynchronous: bool = False,
     ) -> SimulateReport:
         """Run ``payload`` through ``playbook-hook simulate`` against this repository.
 
         ``state`` keeps session state across calls (``--state``, created when
         missing); without it every simulation starts from an ephemeral root.
+        ``asynchronous`` is ``--async``: OQ-19's ``post_tool_use`` dispatch.
         """
         if state is not None:
             state.mkdir(parents=True, exist_ok=True)
@@ -250,6 +252,7 @@ class PackRepo(GuardRepo):
             repo=str(self.root),
             env=tuple((env or {}).items()),
             state=None if state is None else str(state),
+            asynchronous=asynchronous,
         )
         return run(args, payload, deps=deps)
 

@@ -138,10 +138,12 @@ class ClaudeHookEmitter:
         A repo that never enabled hooks keeps its ``settings.json`` unread, so a
         file Claude Code itself would reject cannot break a rules-only sync.
         """
-        desired = {
-            reg.claude_event: [DesiredGroup(reg.artifact_id, to_claude_group(reg))]
-            for reg in registrations
-        }
+        # PostToolUse may hold two managed groups (sync + OQ-19's async one), each
+        # matched by its own canonical hash, so a second sync never flaps either.
+        desired: dict[str, list[DesiredGroup]] = {}
+        for reg in registrations:
+            group = DesiredGroup(reg.artifact_id, to_claude_group(reg))
+            desired.setdefault(reg.claude_event, []).append(group)
         strings = _joined(
             self._remediation_strings(),
             secret_native_rows(self.every_hook),

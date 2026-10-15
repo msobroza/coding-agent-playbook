@@ -2,12 +2,15 @@
 
 ``append_jsonl`` is the one generic writer (decision log, local audit log, the
 SPEC §17.4 sync audit line); ``append_decision`` is the typed decision-log
-wrapper. Every test writes under ``tmp_path``; the concurrency test runs two
-real writer processes against one log.
+wrapper and ``append_activity`` local-audit-log's, with its ``prev`` chain
+(specs/prK-hook-pack.md §E.5). Every test writes under ``tmp_path``; the
+concurrency test runs two real writer processes against one log, and the
+guard-decision-log tests drive a deny through ``playbook-hook simulate``.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -18,18 +21,36 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
+from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.simulate import SimulateArgs
+from coding_agent_playbook.hook_runtime.simulate import run as simulate_run
+from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
 from coding_agent_playbook.security import audit
 from coding_agent_playbook.security.audit import (
     DECISION_RECORD_KEYS,
     MAX_LINE_BYTES,
     GuardDecisionRecord,
+    activity_log_path,
+    append_activity,
     append_decision,
     append_jsonl,
     decision_log_path,
     encode_jsonl_line,
+    prune_audit,
     rotated_log_path,
     rotation_lock_path,
+    verify_chain,
 )
+from coding_agent_playbook.security.decision_summary import (
+    GuardSummary,
+    read_decisions,
+    summarize_decisions,
+)
+from tests.hook_runtime.dispatch_kit import verdict
+from tests.hook_runtime.fakes import FakeClock, FakeHandlerResolver, FakeProc
+from tests.hook_runtime.guard_repo import GuardRepo, hook_record
 from tests.import_probe import PROBE_TIMEOUT_S, new_modules_after
 
 if TYPE_CHECKING:
@@ -354,3 +375,196 @@ def test_audit_module_imports_only_the_stdlib() -> None:
     ]
     assert foreign == []
     assert "coding_agent_playbook.security.audit" in loaded
+
+
+# --------------------------------------------------------------------------- #
+# guard-decision-log through the real pipeline (specs/prK-hook-pack.md §E.5)
+# --------------------------------------------------------------------------- #
+
+_LEAKY_COMMAND = "mysql -pS3cret db"
+
+
+def _simulate_deny(tmp_path: Path, *, decisions_on: bool) -> tuple[GuardRepo, Path]:
+    """``playbook-hook simulate`` of a guard denying ``mysql -pS3cret db``, state under tmp."""
+    repo = GuardRepo.create(tmp_path)
+    repo.install(
+        hook_record("guard-a"),
+        logging={"decisions": decisions_on, "audit": False, "audit_mode": ""},
+    )
+    resolver = FakeHandlerResolver({"guard-a": verdict(Decision.DENY, "no")})
+    deps = RuntimeDeps(
+        env={}, proc=FakeProc(), clock=FakeClock(), home="/home/dev", resolve_handler=resolver
+    )
+    payload = repo.payload(
+        EventName.PRE_TOOL_USE, tool="Bash", tool_input={"command": _LEAKY_COMMAND}
+    )
+    state = tmp_path / "state"
+    state.mkdir()  # simulate's --state DIR must exist; the state root inside it is created
+    args = SimulateArgs(event=EventName.PRE_TOOL_USE, repo=str(repo.root), state=str(state))
+    report = simulate_run(args, payload, deps=deps)
+    assert report.trace.combined.decision is Decision.DENY
+    return repo, state / STATE_DIR_NAME
+
+
+def test_simulated_deny_writes_one_line_without_command_or_path(tmp_path: Path) -> None:
+    repo, root = _simulate_deny(tmp_path, decisions_on=True)
+
+    (log,) = sorted(root.glob("decisions-*.jsonl"))
+    raw = log.read_text(encoding="ascii")
+    (line,) = raw.splitlines()
+    record = json.loads(line)
+    assert set(record) == DECISION_RECORD_KEYS
+    assert (record["hook_id"], record["decision"], record["tool_name"]) == (
+        "guard-a",
+        "deny",
+        "Bash",
+    )
+    for leaked in ("S3cret", "mysql", "-pS", str(repo.root)):
+        assert leaked not in raw  # no command, flag value or path substring
+
+
+def test_guard_decision_log_disabled_writes_no_decision_line(tmp_path: Path) -> None:
+    _, root = _simulate_deny(tmp_path, decisions_on=False)
+
+    assert list(root.glob("decisions-*.jsonl")) == []
+
+
+def test_decision_file_rotates_at_size_cap(tmp_path: Path) -> None:
+    full = decision_log_path(tmp_path, _record()["ts"])
+    with full.open("wb") as handle:
+        handle.truncate(audit.ROTATE_BYTES)  # a sparse file exactly at the 5 MiB cap
+
+    append_decision(tmp_path, _record())
+
+    assert rotated_log_path(full, 1).stat().st_size == audit.ROTATE_BYTES
+    assert full.read_text(encoding="ascii") == _SPEC_EXAMPLE_LINE
+
+
+# --------------------------------------------------------------------------- #
+# append_activity: local-audit-log's writer and its hash chain
+# --------------------------------------------------------------------------- #
+
+_TS = "2026-10-14T10:30:00.123Z"
+
+
+def _activity(n: int) -> dict[str, object]:
+    return {"v": 1, "ts": _TS, "event": "post_tool_use", "tool_name": "Read", "paths": [f"f{n}"]}
+
+
+def _chained(tmp_path: Path, count: int = 3) -> Path:
+    for n in range(count):
+        append_activity(tmp_path, _activity(n), chain=True)
+    return activity_log_path(tmp_path, _TS)
+
+
+def test_append_activity_writes_the_audit_month_file(tmp_path: Path) -> None:
+    append_activity(tmp_path, _activity(0))
+
+    log = activity_log_path(tmp_path, _TS)
+    assert log.name == "audit-2026-10.jsonl"
+    assert json.loads(log.read_text(encoding="ascii")) == _activity(0)
+
+
+def test_append_activity_refuses_content_keys_and_a_caller_prev(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="'command'"):
+        append_activity(tmp_path, {**_activity(0), "command": _LEAKY_COMMAND})
+    with pytest.raises(ValueError, match="'prev'"):
+        append_activity(tmp_path, {**_activity(0), "prev": None})
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_activity_chain_links_each_line_to_the_previous_one(tmp_path: Path) -> None:
+    log = _chained(tmp_path)
+
+    lines = log.read_bytes().splitlines()
+    assert json.loads(lines[0])["prev"] is None
+    assert json.loads(lines[2])["prev"] == hashlib.sha256(lines[1]).hexdigest()
+    assert verify_chain(log) is None
+
+
+def test_activity_chain_detects_truncated_line(tmp_path: Path) -> None:
+    log = _chained(tmp_path)
+    data = log.read_bytes()
+
+    log.write_bytes(data[:-5])  # the last line lost its tail and its newline
+    truncated = verify_chain(log)
+    first, _, third = data.splitlines(keepends=True)
+    log.write_bytes(first + third)  # a whole middle line deleted
+    deleted = verify_chain(log)
+
+    assert (truncated, deleted) == (3, 2)
+
+
+@_POSIX_ONLY
+def test_activity_chain_survives_a_busy_lock_by_breaking_visibly(tmp_path: Path) -> None:
+    import fcntl
+
+    log = _chained(tmp_path, count=1)
+    holder = os.open(rotation_lock_path(log), os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(holder, fcntl.LOCK_EX)
+    try:
+        append_activity(tmp_path, _activity(1), chain=True, lock_timeout_s=0.01)
+    finally:
+        os.close(holder)
+
+    assert len(log.read_bytes().splitlines()) == 2  # never stalled, never dropped
+    assert verify_chain(log) == 2
+
+
+def test_prune_audit_respects_retain_days(tmp_path: Path) -> None:
+    for name in ("audit-2026-06.jsonl", "audit-2026-06.1.jsonl", "audit-2026-07.jsonl"):
+        (tmp_path / name).write_bytes(b"{}\n")
+    (tmp_path / "decisions-2026-01.jsonl").write_bytes(b"{}\n")
+    now = 1_791_973_800.0  # 2026-10-14: 90 days back is 2026-07-16
+
+    removed = prune_audit(tmp_path, retain_days=90, now=now)
+
+    assert sorted(p.name for p in removed) == ["audit-2026-06.1.jsonl", "audit-2026-06.jsonl"]
+    # July still holds lines younger than 90 days; the decision log has its own retention.
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "audit-2026-07.jsonl",
+        "decisions-2026-01.jsonl",
+    ]
+
+
+# --------------------------------------------------------------------------- #
+# the doctor's per-guard summary
+# --------------------------------------------------------------------------- #
+
+
+def _line(hook_id: str, decision: str, *, ts: str = _TS, canary: bool = False) -> dict[str, object]:
+    return {"hook_id": hook_id, "decision": decision, "ts": ts, "canary": canary}
+
+
+def test_summarize_decisions_counts_and_override_rate() -> None:
+    records = [
+        _line("guard-a", "deny"),
+        _line("guard-a", "ask"),
+        _line("guard-a", "ask→deny"),
+        _line("guard-a", "override"),
+        _line("guard-a", "degraded"),
+        _line("guard-a", "context"),
+        _line("guard-a", "deny", canary=True),
+        _line("guard-b", "contract_violation"),
+    ]
+
+    summaries = summarize_decisions(records)
+
+    assert summaries == [
+        GuardSummary("guard-a", deny=1, ask=2, override=1, degraded=1),
+        GuardSummary("guard-b", degraded=1),
+    ]
+    assert summaries[0].override_rate == 0.5
+    assert summaries[0].line() == "deny 1, ask 2, override 1 (50%), degraded 1"
+    assert summaries[1].line() == "deny 0, ask 0, override 0 (n/a), degraded 1"
+
+
+def test_read_decisions_keeps_the_window_and_skips_bad_lines(tmp_path: Path) -> None:
+    append_decision(tmp_path, _record(ts="2026-08-01T00:00:00.000Z"))
+    append_decision(tmp_path, _record(ts="2026-10-14T10:30:00.123Z"))
+    with (tmp_path / "decisions-2026-10.jsonl").open("ab") as handle:
+        handle.write(b"not json\n")
+
+    records = read_decisions(tmp_path, since_ts="2026-09-14T10:30:00.000Z")
+
+    assert [r["ts"] for r in records] == ["2026-10-14T10:30:00.123Z"]

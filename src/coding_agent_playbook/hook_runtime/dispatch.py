@@ -36,7 +36,7 @@ from coding_agent_playbook.hook_runtime._faults import (
 from coding_agent_playbook.hook_runtime._pipeline import Shared, run_configured
 from coding_agent_playbook.hook_runtime._tail import DispatchTrace, Responder
 from coding_agent_playbook.hook_runtime.escape import HOOKS_VAR, read_escape_hatches, settings_files
-from coding_agent_playbook.hook_runtime.event import Harness
+from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.harness import (
     STDIN_CAP_BYTES,
     ContractFault,
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName
+    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.harness import ParseOutcome
 
 __all__ = ["DispatchTrace", "dispatch_event", "read_stdin", "run_event"]
@@ -68,11 +68,13 @@ def run_event(
     *,
     project_dir: str | None = None,
     argv_problem: str | None = None,
+    asynchronous: bool = False,
 ) -> WireOutput:
     """Run the pipeline for one event and return the output it wrote (or would write).
 
     ``argv_problem`` is a dispatch-argv error from ``cli``: the event then
     goes to the failure policy as a ``ContractFault``, never to an exit 2.
+    ``asynchronous`` is the ``--async`` ``post_tool_use`` dispatch (OQ-19).
 
     Example::
 
@@ -81,7 +83,13 @@ def run_event(
         10
     """
     trace = dispatch_event(
-        event, harness, stdin, deps, project_dir=project_dir, argv_problem=argv_problem
+        event,
+        harness,
+        stdin,
+        deps,
+        project_dir=project_dir,
+        argv_problem=argv_problem,
+        asynchronous=asynchronous,
     )
     return trace.wire
 
@@ -95,17 +103,27 @@ def dispatch_event(
     project_dir: str | None = None,
     argv_problem: str | None = None,
     canary: bool = False,
+    asynchronous: bool = False,
 ) -> DispatchTrace:
     """:func:`run_event`, returning the whole :class:`DispatchTrace` (``simulate``, canaries).
 
     ``canary`` tags every decision line ``canary: true`` (doctor / heartbeat self-tests).
+    ``asynchronous`` runs only the async-routed handlers and writes nothing; it
+    is honoured on ``post_tool_use`` only (``cli`` turns it into a fault elsewhere).
 
     Example::
 
         >>> dispatch_event(EventName.STOP, Harness.CLAUDE_CODE, b"{}", deps).written  # doctest: +SKIP
         False
     """
-    run = _Dispatch(event, harness, deps, project_dir=project_dir, canary=canary)
+    run = _Dispatch(
+        event,
+        harness,
+        deps,
+        project_dir=project_dir,
+        canary=canary,
+        asynchronous=asynchronous and event is EventName.POST_TOOL_USE,
+    )
     return run.execute(stdin, argv_problem)
 
 
@@ -140,12 +158,14 @@ class _Dispatch:
         *,
         project_dir: str | None,
         canary: bool,
+        asynchronous: bool = False,
     ) -> None:
         self.event = event
         self.harness = harness
         self.deps = deps
         self.project_dir = project_dir
         self.canary = canary
+        self.asynchronous = asynchronous
         self.responder = Responder(harness, OutputGate(deps.out, deps.err))
         self.started = deps.clock.monotonic()
 
@@ -165,11 +185,17 @@ class _Dispatch:
         if isinstance(outcome, ForeignPayload):
             return DispatchTrace(wire=WireOutput())
         if isinstance(outcome, ContractFault):
+            if self.asynchronous:
+                return DispatchTrace(wire=WireOutput())  # the synchronous dispatch reports it
             return self._contract_fault(outcome)
         if outcome.repo is None:
             return DispatchTrace(wire=WireOutput())  # hooks are git-only in v1 (K-12)
         shared = Shared(
-            deps=self.deps, responder=self.responder, started=self.started, canary=self.canary
+            deps=self.deps,
+            responder=self.responder,
+            started=self.started,
+            canary=self.canary,
+            asynchronous=self.asynchronous,
         )
         return run_configured(outcome, outcome.repo, hatches, shared)
 

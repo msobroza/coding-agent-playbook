@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.hook_registrations import OPENCODE_REG_EVENTS
+from coding_agent_playbook.hook_registrations import OPENCODE_REG_EVENTS, claude_command
 from coding_agent_playbook.hook_registrations._templates import shim_template
 from coding_agent_playbook.hook_runtime.cli import DispatchArgs, main, parse_dispatch_argv
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
@@ -97,6 +97,36 @@ def test_shim_spawn_argv_parses_with_hook_runtime_cli(event: str) -> None:
     assert argv[:4] == ["-I", "-m", "coding_agent_playbook.hook_runtime", "dispatch"]
     assert parse_dispatch_argv(argv[4:]) == DispatchArgs(
         EventName(event), Harness.OPENCODE, "/work/proj", None
+    )
+
+
+@pytest.mark.parametrize("event", [e for e in EventName if e is not EventName.POST_TOOL_USE])
+def test_async_flag_accepted_only_for_post_tool_use(event: EventName) -> None:
+    accepted = parse_dispatch_argv(["post_tool_use", "--harness", "claude_code", "--async"])
+    refused = parse_dispatch_argv([event.value, "--harness", "claude_code", "--async"])
+    twice = parse_dispatch_argv(["post_tool_use", "--harness", "opencode", "--async", "--async"])
+
+    assert accepted == DispatchArgs(EventName.POST_TOOL_USE, Harness.CLAUDE_CODE, None, None, True)
+    assert refused.event is event and refused.asynchronous is False
+    assert refused.problem == f"--async is valid only for post_tool_use, got {event.value!r}"
+    assert (twice.problem, twice.asynchronous) == ("--async given twice", False)
+
+
+def test_async_registration_and_shim_fire_argv_parse_as_async() -> None:
+    """OQ-19's Claude command and the shim's fire-and-forget spawn both reach ``--async``."""
+    command = claude_command("post_tool_use", asynchronous=True)
+    spawns = re.findall(r"spawn\(py, \[(.*?)\]", shim_template("opencode-plugin.js"), re.DOTALL)
+    fire = [word.strip() for word in spawns[1].split(",")]
+
+    from_claude = parse_dispatch_argv(_launcher_args(command)[1:])
+    words = {"event": "post_tool_use", "ROOT": "/work/proj"}
+    from_shim = parse_dispatch_argv([w[1:-1] if w.startswith('"') else words[w] for w in fire][4:])
+
+    assert from_claude == DispatchArgs(
+        EventName.POST_TOOL_USE, Harness.CLAUDE_CODE, None, None, True
+    )
+    assert from_shim == DispatchArgs(
+        EventName.POST_TOOL_USE, Harness.OPENCODE, "/work/proj", None, True
     )
 
 
