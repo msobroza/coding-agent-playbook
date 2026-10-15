@@ -6,7 +6,8 @@
 #
 # - Lifecycle hooks stay OFF: no `[hooks] enabled`, and no wrapper_prefixes,
 #   convention or trailer rows. Those stay in each developer's untracked setup;
-#   a `.coding-agent-playbook.local.toml` cannot carry them ([hooks] is ignored there).
+#   a `.coding-agent-playbook.local.toml` cannot carry them ([hooks] is ignored there),
+#   so a developer's own wrapper prefixes go in PLAYBOOK_HOOK_WRAPPER_PREFIXES.
 # - Do NOT run `playbook sync`, `playbook init` or `playbook check --refresh` in
 #   this repo. The engine's AGENTS.md and CLAUDE.md are hand-maintained local
 #   files, and init and check --refresh rewrite this file.

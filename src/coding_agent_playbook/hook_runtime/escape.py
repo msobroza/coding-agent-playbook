@@ -4,6 +4,12 @@ Hatches are read **only** from the dispatcher's own environment, with exact
 values (``PLAYBOOK_HOOKS=off``, not ``OFF``): never from a parsed command's
 ``VAR=1 cmd`` prefix, ``guard_config`` or ``CLAUDE_ENV_FILE``.
 
+``PLAYBOOK_HOOK_WRAPPER_PREFIXES`` (comma-separated, e.g. ``proxy,proxy run``)
+is read the same way: one developer's own command launchers, which the
+dispatcher merges into ``guard_config.shell.wrapper_prefixes`` for the event.
+An entry that would hide a guarded command (``wrapper_policy``) is refused and
+reported in ``rejected_wrappers``, never applied.
+
 Claude Code also copies every settings-file ``env`` key into the hook
 environment, and an agent can edit a settings file. So whenever a hatch is in
 effect, the ``env`` objects of the settings files Claude loads are read (the
@@ -26,6 +32,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime._config_reader import FileTooLarge, read_small_file
+from coding_agent_playbook.hook_runtime.wrapper_policy import WrapperDeclaration, declare_wrappers
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -40,6 +47,7 @@ __all__ = [
     "HOOKS_DISABLE_VAR",
     "HOOKS_VAR",
     "SETTINGS_MAX_BYTES",
+    "WRAPPER_PREFIXES_VAR",
     "EscapeHatches",
     "pragma_at_head",
     "read_escape_hatches",
@@ -50,8 +58,15 @@ HOOKS_VAR: Final = "PLAYBOOK_HOOKS"
 GATE_VAR: Final = "PLAYBOOK_GATE"
 ALLOW_GENERATED_EDIT_VAR: Final = "PLAYBOOK_ALLOW_GENERATED_EDIT"
 HOOKS_DISABLE_VAR: Final = "PLAYBOOK_HOOKS_DISABLE"
+WRAPPER_PREFIXES_VAR: Final = "PLAYBOOK_HOOK_WRAPPER_PREFIXES"
 #: Every hatch, in the order they are reported.
-HATCH_VARS: Final = (ALLOW_GENERATED_EDIT_VAR, GATE_VAR, HOOKS_VAR, HOOKS_DISABLE_VAR)
+HATCH_VARS: Final = (
+    ALLOW_GENERATED_EDIT_VAR,
+    GATE_VAR,
+    HOOKS_VAR,
+    HOOKS_DISABLE_VAR,
+    WRAPPER_PREFIXES_VAR,
+)
 #: The one value each on/off hatch accepts.
 _EXACT: Final = {HOOKS_VAR: "off", GATE_VAR: "off", ALLOW_GENERATED_EDIT_VAR: "1"}
 #: Settings files above this are not parsed, and every present hatch is ignored.
@@ -66,6 +81,8 @@ class EscapeHatches:
 
     ``via_settings_env`` names the hatches ignored because a settings file
     sets them; the decision log records ``escape_via_settings_env`` for them.
+    ``wrapper_prefixes`` are the declared launchers in effect;
+    ``rejected_wrappers`` those refused for hiding a guarded command.
 
     Example::
 
@@ -78,6 +95,8 @@ class EscapeHatches:
     allow_generated_edit: bool = False
     disabled_ids: frozenset[str] = frozenset()
     via_settings_env: tuple[str, ...] = ()
+    wrapper_prefixes: tuple[str, ...] = ()
+    rejected_wrappers: tuple[str, ...] = ()
 
     @property
     def used(self) -> tuple[str, ...]:
@@ -87,6 +106,7 @@ class EscapeHatches:
             GATE_VAR: self.gate_off,
             HOOKS_VAR: self.hooks_off,
             HOOKS_DISABLE_VAR: bool(self.disabled_ids),
+            WRAPPER_PREFIXES_VAR: bool(self.wrapper_prefixes),
         }
         return tuple(name for name in HATCH_VARS if flags[name])
 
@@ -108,9 +128,10 @@ def read_escape_hatches(
         >>> read_escape_hatches({"PLAYBOOK_GATE": "off"}, settings_files=lambda: ()).gate_off
         True
     """
-    present = {name: env[name] for name in HATCH_VARS if _effective(name, env.get(name))}
+    wrappers = _wrappers(env.get(WRAPPER_PREFIXES_VAR))
+    present = {name: env[name] for name in HATCH_VARS if _effective(name, env.get(name), wrappers)}
     if not present:
-        return EscapeHatches()
+        return EscapeHatches(rejected_wrappers=wrappers.rejected)
     defined = _settings_env(settings_files())
     ignored = tuple(
         name for name in present if defined is None or present[name] in defined.get(name, ())
@@ -122,6 +143,8 @@ def read_escape_hatches(
         allow_generated_edit=ALLOW_GENERATED_EDIT_VAR in kept,
         disabled_ids=_ids(kept.get(HOOKS_DISABLE_VAR, "")),
         via_settings_env=ignored,
+        wrapper_prefixes=wrappers.accepted if WRAPPER_PREFIXES_VAR in kept else (),
+        rejected_wrappers=wrappers.rejected,
     )
 
 
@@ -171,12 +194,18 @@ def pragma_at_head(git: GitPort, repo_rel: str, line_text: str) -> bool:
     return any(line.strip() == wanted for line in blob.decode("utf-8", "replace").splitlines())
 
 
-def _effective(name: str, value: str | None) -> bool:
+def _effective(name: str, value: str | None, wrappers: WrapperDeclaration) -> bool:
     if value is None:
         return False
     if name == HOOKS_DISABLE_VAR:
         return bool(_ids(value))
+    if name == WRAPPER_PREFIXES_VAR:
+        return bool(wrappers.accepted)  # refused entries never take effect
     return value == _EXACT[name]
+
+
+def _wrappers(value: str | None) -> WrapperDeclaration:
+    return WrapperDeclaration() if not value else declare_wrappers(value)
 
 
 def _ids(value: str) -> frozenset[str]:

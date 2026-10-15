@@ -5,7 +5,8 @@ production, because a harness fails open on every launcher or interpreter
 error (§D.4): the ``guard_config.json`` digest against its lock entry, the
 interpreter pin (it exists, is executable, runs ``-I`` on Python >= 3.12 and
 imports this engine), the state root's mode and owner, the ``machine.json``
-tool signatures and the external handlers' trust approvals. Then OpenCode
+tool signatures, the external handlers' trust approvals and, when set, the
+``PLAYBOOK_HOOK_WRAPPER_PREFIXES`` declaration. Then OpenCode
 (``_doctor_opencode``): the ``opencode --version`` floor (>= 1.18.29),
 ``OPENCODE_DISABLE_PROJECT_CONFIG`` and the shim's lockfile digest and
 registrations. A shim that does not match its lockfile entry is never read.

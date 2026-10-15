@@ -653,6 +653,7 @@ so set them where you start the assistant (`PLAYBOOK_HOOKS=off claude`):
 | `PLAYBOOK_HOOKS_DISABLE=<id>,<id>` | Those hooks off, unless an overlay made them mandatory. |
 | `PLAYBOOK_GATE=off` | The Stop coordinator lets the turn end, reported as not verified. |
 | `PLAYBOOK_ALLOW_GENERATED_EDIT=1` | Allow hand edits of generated files. |
+| `PLAYBOOK_HOOK_WRAPPER_PREFIXES=proxy,proxy run` | Your own command launchers: the guards and the "tests pass" check judge the command after them. An entry naming a command the guards inspect (`git`, `rm`, `sudo`, `uv`, …) is ignored, and `playbook-hook doctor` warns. |
 | `PLAYBOOK_HOOK_UNATTENDED=1` | Mark a headless run: an `ask` becomes what `[hooks] unattended_ask` says. |
 
 A `VAR=1 cmd` prefix inside an assistant's shell command never counts, and a
@@ -675,7 +676,7 @@ interpreter is not a trust approval.
 ### Checking that they run
 
 ```bash
-playbook-hook doctor              # pin, state dir, guard_config.json digest, trust, OpenCode, decision-log summary
+playbook-hook doctor              # pin, state dir, guard_config.json digest, trust, wrappers, OpenCode, decision-log summary
 playbook-hook doctor --repin      # re-pin this worktree's interpreter to the running python
 playbook-hook simulate pre_tool_use --harness claude_code < payload.json   # what the harness would get
 playbook-hook simulate pre_tool_use --env PLAYBOOK_HOOKS=off < payload.json  # try a kill switch

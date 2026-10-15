@@ -16,6 +16,7 @@ from coding_agent_playbook.hook_runtime._decision_log import (
     DISPATCHER_ID,
     DecisionLog,
     LogLine,
+    escape_lines,
     lines_for,
 )
 from coding_agent_playbook.hook_runtime._event_memo import EventMemo
@@ -44,6 +45,7 @@ from coding_agent_playbook.hook_runtime.registry import (
 from coding_agent_playbook.hook_runtime.session import SessionState
 from coding_agent_playbook.hook_runtime.state import StateStore
 from coding_agent_playbook.hook_runtime.watchdog import Watchdog
+from coding_agent_playbook.hook_runtime.wrapper_policy import with_wrapper_prefixes
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -100,6 +102,8 @@ def run_configured(
         if shared.asynchronous:
             return DispatchTrace(wire=WireOutput())  # the synchronous dispatch reports it
         return _config_fault(ev, cfg, store, session, shared)
+    # The developer's own launchers (PLAYBOOK_HOOK_WRAPPER_PREFIXES) join [hooks] ones (§D.7).
+    cfg = with_wrapper_prefixes(cfg, hatches.wrapper_prefixes)
     if ev.tool is not None:
         ev = dataclasses.replace(ev, tool=ev.tool.with_shell_config(cfg.shell))
     if shared.asynchronous:
@@ -107,7 +111,7 @@ def run_configured(
     log = DecisionLog(
         store, ev, now=deps.clock.time, enabled=cfg.logging.decisions, canary=shared.canary
     )
-    log.write(_escape_lines(hatches, session))
+    log.write(escape_lines(hatches, session.once))
     # Before any hook: a guard's deny must not skip recording the prompt (OQ-45).
     observe_active_prompt(ev, cfg, store)
     selection = select_hooks(cfg, ev, hatches)
@@ -287,27 +291,6 @@ def _watchdog(
         elapsed = shared.deps.clock.monotonic() - shared.started
         dog.arm(cfg.deadlines_ms[ev.name] / 1000 - elapsed)
     return dog
-
-
-def _escape_lines(hatches: EscapeHatches, session: SessionState) -> list[LogLine]:
-    """One ``escape`` line per hatch per session; a settings-file hatch is logged as ignored."""
-    lines = [
-        LogLine(hook_id=DISPATCHER_ID, decision="escape", effective="none", escape=name)
-        for name in hatches.used
-        if session.once(f"escape:{name}")
-    ]
-    lines.extend(
-        LogLine(
-            hook_id=DISPATCHER_ID,
-            rule_id=name,
-            decision="escape",
-            effective="none",
-            escape="escape_via_settings_env",
-        )
-        for name in hatches.via_settings_env
-        if session.once(f"escape_via_settings_env:{name}")
-    )
-    return lines
 
 
 def _disabled_notes(disabled: Sequence[str], session: SessionState) -> list[HandlerResult]:

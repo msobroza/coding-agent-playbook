@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.escape import WRAPPER_PREFIXES_VAR
 from coding_agent_playbook.hook_runtime.state import StateUnavailable, iso_utc
 from coding_agent_playbook.security.audit import GuardDecisionRecord, append_decision
 
@@ -21,14 +22,27 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime._execute import Ran
     from coding_agent_playbook.hook_runtime.decision import Outcome
+    from coding_agent_playbook.hook_runtime.escape import EscapeHatches
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.state import StateStore
 
-__all__ = ["DISPATCHER_ID", "DecisionLog", "LogLine", "lines_for"]
+__all__ = [
+    "DISPATCHER_ID",
+    "VIA_SETTINGS_ENV",
+    "WRAPPER_REJECTED",
+    "DecisionLog",
+    "LogLine",
+    "escape_lines",
+    "lines_for",
+]
 
 #: The ``hook_id`` of lines the dispatcher itself decides (faults, escapes, overrides).
 DISPATCHER_ID: Final = "playbook-dispatcher"
 ASK_TO_DENY: Final = "ask→deny"
+#: The ``escape`` value of a hatch ignored because a settings-file ``env`` sets it (§D.7).
+VIA_SETTINGS_ENV: Final = "escape_via_settings_env"
+#: The ``escape`` value of a ``PLAYBOOK_HOOK_WRAPPER_PREFIXES`` entry refused for hiding a guard.
+WRAPPER_REJECTED: Final = "wrapper_prefix_rejected"
 _LOGGED: Final = frozenset({Decision.DENY, Decision.ASK, Decision.CONTEXT})
 
 
@@ -74,6 +88,36 @@ def lines_for(ran: Sequence[Ran], outcomes: Sequence[Outcome]) -> list[LogLine]:
                 latency_ms=done.latency_ms,
             )
         )
+    return lines
+
+
+def escape_lines(hatches: EscapeHatches, once: Callable[[str], bool]) -> list[LogLine]:
+    """The dispatcher's ``escape`` lines, each at most once per session (``once``).
+
+    One per hatch in effect; one per hatch a settings file sets (ignored, so
+    ``rule_id`` names it); one when a declared wrapper prefix was refused. The
+    lines carry variable names only, never a value (D-10).
+
+    Example::
+
+        >>> escape_lines(EscapeHatches(gate_off=True), lambda key: True)[0].escape
+        'PLAYBOOK_GATE'
+    """
+    lines = [
+        LogLine(hook_id=DISPATCHER_ID, decision="escape", effective="none", escape=name)
+        for name in hatches.used
+        if once(f"escape:{name}")
+    ]
+    ignored = [(name, VIA_SETTINGS_ENV) for name in hatches.via_settings_env]
+    if hatches.rejected_wrappers:
+        ignored.append((WRAPPER_PREFIXES_VAR, WRAPPER_REJECTED))
+    lines.extend(
+        LogLine(
+            hook_id=DISPATCHER_ID, rule_id=name, decision="escape", effective="none", escape=why
+        )
+        for name, why in ignored
+        if once(f"{why}:{name}")
+    )
     return lines
 
 

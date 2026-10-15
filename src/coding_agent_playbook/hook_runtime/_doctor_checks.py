@@ -8,6 +8,11 @@ unapproved external handler) or ``broken`` (hooks cannot run as synced: no
 pin, a pin that cannot import the engine, a ``guard_config.json`` the runtime
 refuses). The OpenCode checks live in ``_doctor_opencode``; registration
 canaries through the harness argv are not run yet.
+
+A ``wrappers`` row appears only when ``PLAYBOOK_HOOK_WRAPPER_PREFIXES`` is set:
+``ok`` lists the prefixes the dispatcher will strip, ``warning`` names an entry
+it refuses (it would hide a guarded command) or a value a settings-file
+``env`` sets (ignored, like an escape hatch).
 """
 
 from __future__ import annotations
@@ -21,6 +26,11 @@ from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.hook_runtime._ports import open_trust_store
 from coding_agent_playbook.hook_runtime.config import GuardConfig, load_guard_config
+from coding_agent_playbook.hook_runtime.escape import (
+    WRAPPER_PREFIXES_VAR,
+    read_escape_hatches,
+    settings_files,
+)
 from coding_agent_playbook.hook_runtime.pin import (
     INTERPRETER_PIN,
     MACHINE_PINS,
@@ -28,6 +38,7 @@ from coding_agent_playbook.hook_runtime.pin import (
     parse_machine_pins,
 )
 from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
+from coding_agent_playbook.hook_runtime.wrapper_policy import hidden_program
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -80,6 +91,7 @@ def environment_checks(repo: RepoInfo, deps: RuntimeDeps) -> list[Check]:
         _state_check(state_root),
         _machine_check(state_root),
         _trust_check(repo, deps, cfg),
+        *_wrapper_checks(repo, deps),
     ]
 
 
@@ -184,6 +196,31 @@ def _trust_check(repo: RepoInfo, deps: RuntimeDeps, cfg: GuardConfig | ConfigFau
         detail = f"not approved on this machine (skipped): {', '.join(missing)}"
         return Check("trust", "degraded", detail)
     return Check("trust", "ok", f"{len(external)} external handler(s) approved")
+
+
+def _wrapper_checks(repo: RepoInfo, deps: RuntimeDeps) -> list[Check]:
+    """``PLAYBOOK_HOOK_WRAPPER_PREFIXES`` read as the dispatcher reads it; no row when unset."""
+    value = deps.env.get(WRAPPER_PREFIXES_VAR)
+    hatches = read_escape_hatches(
+        {} if value is None else {WRAPPER_PREFIXES_VAR: value},
+        settings_files=lambda: settings_files(
+            repo, project_dir=repo.worktree_root, env=deps.env, home=deps.home
+        ),
+    )
+    if WRAPPER_PREFIXES_VAR in hatches.via_settings_env:
+        detail = "is set in a settings file env and is ignored; export it in the shell that "
+        return [Check("wrappers", "warning", f"{WRAPPER_PREFIXES_VAR} {detail}launches the agent")]
+    kept = ", ".join(repr(prefix) for prefix in hatches.wrapper_prefixes)
+    if hatches.rejected_wrappers:
+        ignored = ", ".join(
+            f"{prefix!r} (it would hide {hidden_program(prefix)!r} from every guard)"
+            for prefix in hatches.rejected_wrappers
+        )
+        detail = f"ignored {ignored}; kept {kept or 'none'}"
+        return [Check("wrappers", "warning", f"{WRAPPER_PREFIXES_VAR}: {detail}")]
+    if not kept:
+        return []
+    return [Check("wrappers", "ok", f"{WRAPPER_PREFIXES_VAR} adds wrapper prefixes: {kept}")]
 
 
 def _first_line(path: Path) -> str | None:

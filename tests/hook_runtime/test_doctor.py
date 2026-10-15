@@ -21,6 +21,7 @@ import pytest
 from coding_agent_playbook.hook_runtime._doctor_checks import PROBE
 from coding_agent_playbook.hook_runtime.cli import main as cli_main
 from coding_agent_playbook.hook_runtime.doctor import Check, exit_code, main, run_doctor
+from coding_agent_playbook.hook_runtime.escape import WRAPPER_PREFIXES_VAR
 from coding_agent_playbook.hook_runtime.pin import INTERPRETER_PIN, write_machine_pins
 from coding_agent_playbook.security.audit import GuardDecisionRecord, append_decision
 from coding_agent_playbook.security.trust import HandlerApproval, sha256_of_json
@@ -196,6 +197,66 @@ def test_trust_reports_unapproved_external_handlers(
 
     assert _severities(missing)["trust"] == "degraded"
     assert _severities(approved)["trust"] == "ok"
+
+
+def _wrapper_check(
+    tmp_path: Path, runtime_deps: Callable[..., RuntimeDeps], value: str
+) -> tuple[Check, int]:
+    repo, python = _healthy(tmp_path)
+    deps = _deps(runtime_deps, python, env={WRAPPER_PREFIXES_VAR: value}, home=str(tmp_path))
+    checks = run_doctor(str(repo.root), deps=deps)
+    (check,) = [c for c in checks if c.name == "wrappers"]
+    return check, exit_code(checks)
+
+
+def test_no_wrapper_declaration_no_wrapper_row(
+    tmp_path: Path, runtime_deps: Callable[..., RuntimeDeps]
+) -> None:
+    repo, python = _healthy(tmp_path)
+
+    names = [c.name for c in run_doctor(str(repo.root), deps=_deps(runtime_deps, python))]
+
+    assert "wrappers" not in names
+
+
+def test_declared_wrappers_are_listed(
+    tmp_path: Path, runtime_deps: Callable[..., RuntimeDeps]
+) -> None:
+    check, code = _wrapper_check(tmp_path, runtime_deps, "proxy, proxy run")
+
+    assert check == Check(
+        "wrappers", "ok", f"{WRAPPER_PREFIXES_VAR} adds wrapper prefixes: 'proxy', 'proxy run'"
+    )
+    assert code == 0
+
+
+def test_a_wrapper_hiding_a_guarded_command_is_a_warning(
+    tmp_path: Path, runtime_deps: Callable[..., RuntimeDeps]
+) -> None:
+    check, code = _wrapper_check(tmp_path, runtime_deps, "proxy,git push,sudo")
+
+    assert check.severity == "warning"
+    assert check.detail == (
+        f"{WRAPPER_PREFIXES_VAR}: ignored 'git push' (it would hide 'git' from every guard), "
+        "'sudo' (it would hide 'sudo' from every guard); kept 'proxy'"
+    )
+    assert code == 0  # a warning is healthy
+
+
+def test_a_wrapper_set_in_a_settings_env_is_a_warning(
+    tmp_path: Path, runtime_deps: Callable[..., RuntimeDeps]
+) -> None:
+    user_settings = tmp_path / ".claude" / "settings.json"
+    user_settings.parent.mkdir()
+    user_settings.write_text(json.dumps({"env": {WRAPPER_PREFIXES_VAR: "proxy"}}), "utf-8")
+
+    check, _ = _wrapper_check(tmp_path, runtime_deps, "proxy")
+
+    assert check.severity == "warning"
+    assert check.detail == (
+        f"{WRAPPER_PREFIXES_VAR} is set in a settings file env and is ignored; "
+        "export it in the shell that launches the agent"
+    )
 
 
 def _snapshot(root: Path) -> dict[str, tuple[int, int]]:

@@ -102,9 +102,11 @@ and the metrics gate must not depend on a gitignored file CI never sees. In
 and `playbook validate` fails on a `[hooks]` or `[guardrails]` key there (H21).
 Move such a table into the committed `.coding-agent-playbook.toml`. A developer
 deviates at run time instead, through the hook-process environment
-(`PLAYBOOK_HOOKS=off`, `PLAYBOOK_HOOKS_DISABLE=<ids>`). `playbook init` and
-`playbook check --refresh` keep these tables when they rewrite the committed
-config, and never write a local override into it.
+(`PLAYBOOK_HOOKS=off`, `PLAYBOOK_HOOKS_DISABLE=<ids>`, and their own command
+launchers in `PLAYBOOK_HOOK_WRAPPER_PREFIXES=proxy,proxy run` rather than a
+local `[hooks] wrapper_prefixes`). `playbook init` and `playbook check
+--refresh` keep these tables when they rewrite the committed config, and never
+write a local override into it.
 
 ### 5. `--no-run-tests` on the metrics pre-commit hooks
 

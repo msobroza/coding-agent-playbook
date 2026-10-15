@@ -561,7 +561,7 @@ Parsed by `config.parse_hooks_config(data) -> HooksConfig` (frozen dataclass; un
 | `unattended_ask` | `"deny"` \| `"warn"` | `"deny"` | What `ask` (decision or `on_error`) becomes when no human can answer (headless `claude -p`, SDK, CI, runner evals, OpenCode; detection in §D.3.6). `warn` = `context` + proceed + a user note. This is the only value set; §D.3.6 and `guard_config.unattended_ask` use it verbatim. |
 | `allow_code_from` | `list[str]` | `[]` | Source packages whose external-command or entry-point handlers may run: overlay names from `overlays_enabled`, and/or `"<repo-local>"`. The engine package is implicit. |
 | `auto_sync` | `bool` | `false` | Lets validate-then-sync-on-canonical-edit run `playbook sync` itself (never for edits to hooks, `[hooks]`, `[guardrails]`, `overlays_enabled`, `adapters_enabled`). |
-| `wrapper_prefixes` | `list[str]` | `[]` | (shared name — proposed) Extra command prefixes the dispatcher strips before shell matching (e.g. `["proxy"]` for a command-rewriting launcher), beyond the built-in `env`/`sudo`/`timeout`/`nice`/`nohup`; rendered to `guard_config.shell.wrapper_prefixes` (§D.8.2). A stripped prefix is invisible to every guard, so no token of an entry may name a guarded command — a program a guard inspects by name (every builtin handler's `argv0s` and the guards' program tables), a built-in launcher, a runner (`uv`, `poetry`, …) or a shell/interpreter; such an entry is an H21 error. |
+| `wrapper_prefixes` | `list[str]` | `[]` | (shared name — proposed) Extra command prefixes the dispatcher strips before shell matching (e.g. `["proxy"]` for a command-rewriting launcher), beyond the built-in `env`/`sudo`/`timeout`/`nice`/`nohup`; rendered to `guard_config.shell.wrapper_prefixes` (§D.8.2). A stripped prefix is invisible to every guard, so no token of an entry may name a guarded command — a program a guard inspects by name (every builtin handler's `argv0s` and the guards' program tables), a built-in launcher, a runner (`uv`, `poetry`, …) or a shell/interpreter; such an entry is an H21 error. A launcher only one developer uses is declared at run time instead, through `PLAYBOOK_HOOK_WRAPPER_PREFIXES` (§B.2, §D.7): `.local.toml` never holds `[hooks]`. |
 | `state_ttl_days` | `int` | `7` | (shared name — proposed) Age after which per-session state is swept (§D.6.1). |
 | `render_remediation_allow` | `bool` | `false` | (shared name — proposed) Render the fixed engine list of remediation commands into `permissions.allow` (§C.2.8). Off by default: an allow list is a committed privilege grant. |
 
@@ -586,7 +586,7 @@ on(w) = cfg.enabled
 
 **Absent table ⇒ off (no upgrade injection).** A consumer upgrading the engine without a `[hooks]` table gets **zero byte change** — no settings entries, no shim, no advisory text — and `playbook sync` prints one notice line (`hooks available: add [hooks] enabled = true or re-run playbook init`). New repos opt in through `playbook init` ("Enable assistant lifecycle hooks? [Y/n]"; non-interactive default yes, `--no-hooks` (shared name — proposed) to opt out). Once enabled, `default`-tier hooks are on by default as the catalog intends. This reconciles "default = on by default" with the engine-upgrade drift invariant (§B.7 Q3).
 
-**`.coding-agent-playbook.local.toml` exclusion.** `[hooks]` and `[guardrails]` keys in the gitignored local file are **ignored** (sync warns; validate errors, H21): committed output (`.claude/settings.json`, the shim, `guard_config.json`) must not depend on a file CI never sees, and a gitignored, deep-merged file is an unreviewed off switch. This narrows §7.2's deep-merge for these two tables only. Per-developer deviation is runtime-only, through the hook-process environment (§B.2).
+**`.coding-agent-playbook.local.toml` exclusion.** `[hooks]` and `[guardrails]` keys in the gitignored local file are **ignored** (sync warns; validate errors, H21): committed output (`.claude/settings.json`, the shim, `guard_config.json`) must not depend on a file CI never sees, and a gitignored, deep-merged file is an unreviewed off switch. This narrows §7.2's deep-merge for these two tables only. Per-developer deviation is runtime-only, through the hook-process environment (§B.2): `PLAYBOOK_HOOKS_DISABLE`, and a developer's own command launchers through `PLAYBOOK_HOOK_WRAPPER_PREFIXES`.
 
 ### B.2 Kill switches and escape hatches
 
@@ -598,6 +598,7 @@ on(w) = cfg.enabled
 | `PLAYBOOK_HOOKS_DISABLE=a,b` | hook-process environment | listed non-mandatory ids | Runtime skip, reported like the above. |
 | `PLAYBOOK_GATE=off` | hook-process environment | the Stop coordinator | Stop allowed with `systemMessage` "gate disabled — NOT verified". |
 | `PLAYBOOK_ALLOW_GENERATED_EDIT=1` | hook-process environment | guard-generated-outputs | Hand edit allowed (sync will still overwrite it). |
+| `PLAYBOOK_HOOK_WRAPPER_PREFIXES=proxy,proxy run` | hook-process environment | the shell guards and verify-run tagging | This developer's own command launchers, merged with `[hooks] wrapper_prefixes` into `guard_config.shell` for the dispatch (§D.7). An entry with a token naming a guarded command is ignored, logged and reported by `doctor`; it can only reveal a command, never hide one. |
 
 Escape hatches cannot be self-granted in-session: the dispatcher reads these **only from its own `os.environ`**, never from a `VAR=1 cmd` prefix inside a Bash `tool_input`. On Claude Code `os.environ` **does** include every `env` key from the user, project, local and managed settings files (Claude sets them for every subprocess it starts, hooks included; `PLAYBOOK_*` and `PYTHON*` are not on its exclusion list). So whenever a hatch variable is present, the dispatcher (§D.7) reads the `env` objects of the settings files Claude loads — repo `.claude/settings.json`, the effective `.claude/settings.local.json` (§E.1 control-plane-guard resolves its location), `${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json` — and **ignores** a hatch defined there (a deliberate human override belongs in the launching shell), reporting it once in the session-start briefing and the decision log (`escape_via_settings_env`). control-plane-guard's deny on `env` edits stays, labelled a speed bump. `-I` already neutralizes `PYTHONPATH`/`PYTHONSTARTUP` for the dispatcher itself. Edits to `[hooks]`/`[guardrails]` by the agent are denied by control-plane-guard, and edits to `playbook/hooks/**` are `ask` (executable policy the user approves; §E.1 is the single verdict).
 
@@ -1952,7 +1953,7 @@ class ShellCommand:
 | `bash`/`sh`/`zsh`/`dash`/`ksh` | `-c SCRIPT` (including combined `-lc`, `-ec`, `-xc`, `-euc`) → recursive parse (`origin="bash_c"`). `bash file.sh` is opaque, not unwrapped |
 | `eval` | args joined → recursive parse |
 | `find … -exec/-execdir/-ok CMD … ;` | CMD extracted as an extra segment (`args_open=True`); `find` itself stays a segment (for `-delete`) |
-| `guard_config.shell.wrapper_prefixes` | longest-prefix token strip, e.g. `["proxy run", "proxy"]` for a command-rewriting launcher. A user's own rewriting hook runs in parallel on the *original* input, but agents also type `proxy …` literally (catalog principle 18). A prefix is stripped as bare tokens, so none of its tokens may name a guarded command, launcher, runner or shell (`wrapper_policy.hidden_program`; H21 for `[hooks]`) |
+| `guard_config.shell.wrapper_prefixes` | longest-prefix token strip, e.g. `["proxy run", "proxy"]` for a command-rewriting launcher. A user's own rewriting hook runs in parallel on the *original* input, but agents also type `proxy …` literally (catalog principle 18). A prefix is stripped as bare tokens, so none of its tokens may name a guarded command, launcher, runner or shell (`wrapper_policy.hidden_program`; H21 for `[hooks]`). At run time `PLAYBOOK_HOOK_WRAPPER_PREFIXES` adds a developer's own prefixes (§D.7) |
 | `guard_config.shell.runner_wrappers` | default `uv run`, `uvx`, `poetry run`, `pdm run`, `hatch run`, `pipx run`, with their own options skipped. Kept in `wrappers`, so command-convention-guard still sees `uv run mypy` |
 
 **Limits and degradation.**
@@ -2332,7 +2333,7 @@ There is one JSON line per decision event. `security/audit.py` defines two funct
 - `ask→deny`;
 - `override`: a post-tool event for a `tool_use_id` in the session's asked set, meaning the user approved an ask;
 - `degraded` (failure policy);
-- `escape` (a kill switch or allow env var used);
+- `escape` (a kill switch, allow env var or `PLAYBOOK_HOOK_WRAPPER_PREFIXES` used, its name in `escape`; for a variable that was ignored, `rule_id` names it and `escape` says why: `escape_via_settings_env`, or `wrapper_prefix_rejected` for a refused wrapper entry);
 - `untrusted` (an external handler or execution stage skipped);
 - `contract_violation`;
 - `canary` (doctor or heartbeat self-tests, also tagged `canary: true`).
@@ -2384,6 +2385,7 @@ Escape hatches are read **only from the dispatcher process environment** (`os.en
 | `PLAYBOOK_GATE` | `off` | `stop` and `subagent_stop` skip all stages | once per session; user note `work NOT verified` |
 | `PLAYBOOK_ALLOW_GENERATED_EDIT` | `1` | guard-generated-outputs returns `NONE` (§E.1) | once per session; user note |
 | `PLAYBOOK_HOOKS_DISABLE` | comma-separated hook ids | step 4 of the pipeline skips the listed ids unless `mandatory` (§B.2) | once per session per id; user note |
+| `PLAYBOOK_HOOK_WRAPPER_PREFIXES` | comma-separated prefixes, each one or more words (`proxy,proxy run`); spaces normalized | after the config loads, the accepted prefixes join `guard_config.shell.wrapper_prefixes` for this dispatch, so every shell guard and the verify-run tags (§D.6.3) see the launched command. An entry any token of which names a guarded command, launcher, runner or shell (`wrapper_policy.hidden_program`, the H21 rule) is never applied | `escape: PLAYBOOK_HOOK_WRAPPER_PREFIXES` once per session while a prefix is in effect; a refused entry: one `escape` line `rule_id: PLAYBOOK_HOOK_WRAPPER_PREFIXES`, `escape: wrapper_prefix_rejected` (never the value), and a `doctor` warning |
 
 **Pragmas.** The pragmas are `playbook: allow-secret` and `playbook: trusted-artifact` (§E), found in a line comment. A pragma on line `L` of `path` is honored **only if present at HEAD**: `escape.pragma_at_head(git, repo_rel, line_text)` holds when `SafeGit` `cat-file -p HEAD:<path>` contains a line equal to `line_text` after whitespace strip.
 - **Cost.** One 2 s-bounded git call, made only when a payload or diff contains a pragma.
@@ -2412,7 +2414,7 @@ Escape hatches are read **only from the dispatcher process environment** (`os.en
 | `deadlines_ms` | per-event watchdog deadlines | the §D.4 formula (derived, not configured) | watchdog; §C registration timeouts |
 | `unattended_ask` | `"deny"` \| `"warn"` | `[hooks]` (§B.1) | §D.3.6 |
 | `logging` | `{decisions: bool, audit: bool, audit_mode}` | guard-decision-log / local-audit-log enablement | §D.6.2 |
-| `shell` | `{wrapper_prefixes[], runner_wrappers[]}` | engine defaults ∪ `[hooks]` ∪ overlays (add-only) | §D.2.5 |
+| `shell` | `{wrapper_prefixes[], runner_wrappers[]}` | engine defaults ∪ `[hooks]` ∪ overlays (add-only); at run time ∪ `PLAYBOOK_HOOK_WRAPPER_PREFIXES` (§D.7) | §D.2.5 |
 | `path_classes` | `{canonical, detector_input, generated, control_plane, py, test, notebook, eval_fixture}` globs | detector facts + layout + `protected` | ledger `cats`, stage planning |
 | `secret_path_globs` | list | `security/patterns.py::SECRET_PATH_GLOBS` ∪ overlay additions (add-only, L2) | path guards, fingerprint exclusions, ledger masking |
 | `secret_rules` | engine ruleset id/version + overlay `extra_patterns` (compiled and ReDoS-checked at validate) | `security/patterns.py` + overlays | secret-content-guard, the `secrets` stage |
@@ -2545,7 +2547,8 @@ The exit code is 0 for any completed simulation, whatever the decision, and 2 on
   - `claude --version` ≥ 2.1.295 wherever a registration carries `onFailure` (QC-11); `opencode --version` ≥ 1.18.29 when `opencode` is on PATH (QC-14); a warning when `copilot` is on PATH (Windows deny-all risk, §C.5.2);
   - the state root is mode 0700 and owned by the user;
   - `machine.json` tool signatures match;
-  - the trust-store status.
+  - the trust-store status;
+  - when `PLAYBOOK_HOOK_WRAPPER_PREFIXES` is set, a `wrappers` row: `ok` with the prefixes the dispatcher will strip, or a `warning` naming each refused entry and the command it would hide, or a value a settings-file `env` sets (ignored).
 - **Decision-log summary** over `--since` days (default 30): per hook, deny/ask/override/degraded counts and the override rate. This is the evidence needed before promoting an opt-in hook or flipping an ask to a deny (§E.0.2).
 - **Hygiene.** Canary runs use the session id `playbook-doctor-<pid>`, are logged `canary: true`, and their session dir is removed afterwards.
 - **Exit codes:** 0 healthy, 1 degraded, 2 broken.
@@ -2629,7 +2632,7 @@ The user's locks L1–L9 (selection) and addenda D-Q1–D-Q3 are final as resolv
 | K-10 | Stop order = `STOP_STAGE_ORDER`; `priority` orders fan-out only | §D.5.2, §E.0.4 |
 | K-11 | Overlay-tier mechanisms are activated only by an overlay promoting them to `tier: default` | §A.6, §E.5 |
 | K-12 | Hooks are git-only in v1 | §C.2.7, §D.6.1 |
-| K-13 | Escape hatches come from the hook process env only; hatches defined in settings `env` objects are ignored and reported | §B.2, §D.7 |
+| K-13 | Escape hatches (and `PLAYBOOK_HOOK_WRAPPER_PREFIXES`) come from the hook process env only; hatches defined in settings `env` objects are ignored and reported | §B.2, §D.7 |
 | K-14 | The trust store holds approvals only; the interpreter pin is not a trust approval | §B.4 |
 | K-15 | Launcher design D (committed launcher + per-worktree pin) | §C.2.7 |
 | K-16 | Runtime decisions D-1…D-14 | §D.10 |
@@ -2812,11 +2815,11 @@ Each question has one owner; the per-section lists (§B.7, §C.8, §D.12, the §
 | ID | Question | Proposed default | Source | Status |
 | --- | --- | --- | --- | --- |
 | OQ-1 | `[guardrails]` as a second top-level table, or fold its domains into `[hooks.<domain>]`? | Keep `[guardrails]`: twins and permission rendering read policy even with hooks disabled. | §B.7 Q1 | Accepted |
-| OQ-2 | Ignore `[hooks]` / `[guardrails]` in `.local.toml` (no local *enable* of an opt-in hook)? | Accept; per-developer deviation is runtime-only (`PLAYBOOK_HOOKS_DISABLE`). | §B.7 Q2 | Accepted |
+| OQ-2 | Ignore `[hooks]` / `[guardrails]` in `.local.toml` (no local *enable* of an opt-in hook)? | Accept; per-developer deviation is runtime-only (`PLAYBOOK_HOOKS_DISABLE`; a developer's own command launchers through `PLAYBOOK_HOOK_WRAPPER_PREFIXES`, §D.7, read like the escape hatches and never able to hide a guarded command). | §B.7 Q2 | Accepted |
 | OQ-3 | Absent `[hooks]` ⇒ off, or on for every consumer on upgrade? | Off; `playbook init` asks (default yes), `--no-hooks` opts out, and sync prints one notice line. | §B.7 Q3 | Accepted |
 | OQ-4 | Keep P6–P9 in Track P? P8's validate-gated sync may break consumers whose content fails `playbook validate` today. | Keep in P; gate sync on the full validate set, with a MIGRATION note to run `playbook validate` before upgrading. | §B.7 Q4 | Accepted |
 | OQ-5 | Commit the CLAUDE.md edits, or keep them local under the harness-files policy? | Keep them local (the harness-files policy); SPEC §4.3 and the README carry the sentinel wording and the invariants. | §B.7 Q5 | Accepted |
-| OQ-6 | **Dogfooding.** D-Q3 says this repo sets `cutover_date` to the date the hooks PR lands, which needs a committed `.coding-agent-playbook.toml`; that flips the engine repo out of config-less validate (H16/H21 apply) and puts `sync --check` and `playbook ci` into its CI. Commit it, or keep the settings in the user's untracked setup? | Honor D-Q3 minimally: commit only `[hooks.commit_convention] cutover_date` (and `[tool.commitizen]` in `pyproject.toml`) and add the `playbook ci` job; keep the developer's own wrapper prefixes, the command-convention rows and the trailer rows in the user's untracked setup. `.local.toml` cannot hold `[hooks]` (§B.1). | §F.4.1, §F.5, §E.4 | Accepted |
+| OQ-6 | **Dogfooding.** D-Q3 says this repo sets `cutover_date` to the date the hooks PR lands, which needs a committed `.coding-agent-playbook.toml`; that flips the engine repo out of config-less validate (H16/H21 apply) and puts `sync --check` and `playbook ci` into its CI. Commit it, or keep the settings in the user's untracked setup? | Honor D-Q3 minimally: commit only `[hooks.commit_convention] cutover_date` (and `[tool.commitizen]` in `pyproject.toml`) and add the `playbook ci` job; keep the developer's own wrapper prefixes (`PLAYBOOK_HOOK_WRAPPER_PREFIXES` in the launching shell, §D.7), the command-convention rows and the trailer rows in the user's untracked setup. `.local.toml` cannot hold `[hooks]` (§B.1). | §F.4.1, §F.5, §E.4 | Accepted |
 | OQ-7 | TTY-only trust approvals acceptable for scripted machine bootstrap? | Accept; document "one interactive `playbook sync` per machine". | §B.7 Q7 | Accepted |
 | OQ-8 | TOFU on (distribution, version) for entry-point handlers? | Not in v1: `allow_code_from` plus the consumer's dependency lock; revisit when an overlay ships one. | §B.7 Q8, §D.3.1 | Accepted |
 | OQ-9 | Align skills to recursive marker discovery? | Keep the difference; align skills in a separate PR if wanted. | §B.7 Q9 | Accepted |

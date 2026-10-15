@@ -4,6 +4,8 @@ Hatches come only from the hook process environment, with exact values, and
 a hatch that a Claude settings file sets with the same value is ignored: an
 agent can edit a settings ``env`` block, but a deliberate human override
 belongs in the launching shell. Pragmas count only when already committed.
+``PLAYBOOK_HOOK_WRAPPER_PREFIXES`` is read the same way; an entry that would hide
+a guarded command is refused (``wrapper_policy``) and reported, never applied.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from coding_agent_playbook.hook_runtime.escape import (
     HOOKS_DISABLE_VAR,
     HOOKS_VAR,
     SETTINGS_MAX_BYTES,
+    WRAPPER_PREFIXES_VAR,
     EscapeHatches,
     pragma_at_head,
     read_escape_hatches,
@@ -27,6 +30,8 @@ from coding_agent_playbook.hook_runtime.escape import (
 from coding_agent_playbook.hook_runtime.event import RepoInfo
 from coding_agent_playbook.hook_runtime.git import GitTimeout
 from tests.hook_runtime.fakes import FakeGit
+
+_PROXIES = ("proxy", "proxy run")
 
 
 def _no_settings() -> tuple[Path, ...]:
@@ -48,6 +53,13 @@ def _no_settings() -> tuple[Path, ...]:
         ({HOOKS_DISABLE_VAR: "a, b,,c "}, EscapeHatches(disabled_ids=frozenset({"a", "b", "c"}))),
         ({HOOKS_DISABLE_VAR: " , "}, EscapeHatches()),
         ({"PLAYBOOK_OTHER": "off"}, EscapeHatches()),
+        ({WRAPPER_PREFIXES_VAR: "proxy, proxy  run"}, EscapeHatches(wrapper_prefixes=_PROXIES)),
+        ({WRAPPER_PREFIXES_VAR: " , "}, EscapeHatches()),
+        (
+            {WRAPPER_PREFIXES_VAR: "git,proxy,proxy run,sudo"},
+            EscapeHatches(wrapper_prefixes=_PROXIES, rejected_wrappers=("git", "sudo")),
+        ),
+        ({WRAPPER_PREFIXES_VAR: "rm"}, EscapeHatches(rejected_wrappers=("rm",))),
     ],
 )
 def test_hatches_require_exact_values(env: dict[str, str], expected: EscapeHatches) -> None:
@@ -55,11 +67,23 @@ def test_hatches_require_exact_values(env: dict[str, str], expected: EscapeHatch
 
 
 def test_used_names_every_hatch_in_effect_for_the_decision_log() -> None:
-    env = {HOOKS_VAR: "off", GATE_VAR: "off", HOOKS_DISABLE_VAR: "x", ALLOW_GENERATED_EDIT_VAR: "1"}
+    env = {
+        HOOKS_VAR: "off",
+        GATE_VAR: "off",
+        HOOKS_DISABLE_VAR: "x",
+        ALLOW_GENERATED_EDIT_VAR: "1",
+        WRAPPER_PREFIXES_VAR: "proxy",
+    }
 
     hatches = read_escape_hatches(env, settings_files=_no_settings)
 
-    assert hatches.used == (ALLOW_GENERATED_EDIT_VAR, GATE_VAR, HOOKS_VAR, HOOKS_DISABLE_VAR)
+    assert hatches.used == (
+        ALLOW_GENERATED_EDIT_VAR,
+        GATE_VAR,
+        HOOKS_VAR,
+        HOOKS_DISABLE_VAR,
+        WRAPPER_PREFIXES_VAR,
+    )
     assert EscapeHatches().used == ()
 
 
@@ -188,3 +212,25 @@ def test_an_oversized_settings_file_ignores_every_present_hatch(tmp_path: Path) 
 
     assert not hatches.gate_off and not hatches.hooks_off
     assert hatches.via_settings_env == (GATE_VAR, HOOKS_VAR)
+
+
+def test_a_wrapper_declared_in_settings_env_is_ignored_like_a_hatch(tmp_path: Path) -> None:
+    settings = _write_settings(
+        tmp_path / ".claude" / "settings.local.json", {"env": {WRAPPER_PREFIXES_VAR: "proxy"}}
+    )
+
+    same = read_escape_hatches({WRAPPER_PREFIXES_VAR: "proxy"}, settings_files=lambda: (settings,))
+    own = read_escape_hatches({WRAPPER_PREFIXES_VAR: "rewrap"}, settings_files=lambda: (settings,))
+
+    assert same.wrapper_prefixes == () and same.via_settings_env == (WRAPPER_PREFIXES_VAR,)
+    assert own.wrapper_prefixes == ("rewrap",) and own.via_settings_env == ()
+
+
+def test_only_refused_wrappers_never_read_the_settings_files() -> None:
+    def explode() -> tuple[Path, ...]:
+        raise AssertionError("settings files read although nothing takes effect")
+
+    hatches = read_escape_hatches({WRAPPER_PREFIXES_VAR: "git"}, settings_files=explode)
+
+    assert hatches == EscapeHatches(rejected_wrappers=("git",))
+    assert hatches.used == ()
