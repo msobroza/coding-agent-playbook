@@ -8,6 +8,8 @@ in for ``playbook sync``'s validate gate. ``FakeProjectFactory`` stands in for
 ``ProjectHandle.create`` so metrics-gate tests see which test command would run
 without running a suite, and ``FakeBaselineGit`` stands in for
 :class:`coding_agent_playbook.evaluators.baseline_git.SubprocessBaselineGit`.
+``FakeHandlerSchemas`` stands in for the hook-handler ``CONFIG_SCHEMA`` registry
+(K2) behind :class:`coding_agent_playbook.hook_policy.ConfigSchemaLookup`.
 """
 
 from __future__ import annotations
@@ -21,10 +23,11 @@ from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, GitT
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
     from coding_agent_playbook.commands._validation import ValidationError
+    from coding_agent_playbook.hook_policy import ConfigKeySpec
     from coding_agent_playbook.orchestrator import SyncContext
 
 
@@ -146,3 +149,20 @@ class FakeBaselineGit:
             raise GitTimeoutError(command, self.timeout_s)
         if command in self.fail_on:
             raise BaselineGitError(f"fatal: {command} failed for {ref}")
+
+
+@dataclass
+class FakeHandlerSchemas:
+    """In-memory :class:`~coding_agent_playbook.hook_policy.ConfigSchemaLookup`.
+
+    ``schemas`` maps a builtin handler name to its config key policies; an
+    unknown name has none (``{}``), like a handler without a ``CONFIG_SCHEMA``.
+    ``calls`` records every name asked for, in order.
+    """
+
+    schemas: dict[str, dict[str, ConfigKeySpec]] = field(default_factory=dict)
+    calls: list[str] = field(default_factory=list)
+
+    def key_specs(self, builtin: str) -> Mapping[str, ConfigKeySpec]:
+        self.calls.append(builtin)
+        return self.schemas.get(builtin, {})

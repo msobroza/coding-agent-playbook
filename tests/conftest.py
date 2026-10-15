@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from tests.hook_samples import write_hook
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
     from pathlib import Path
@@ -229,3 +231,16 @@ def make_package(
     yield _make
     for name in built:
         sys.modules.pop(name, None)
+
+
+@pytest.fixture
+def make_hook() -> Callable[..., Path]:
+    """Return a builder that writes one hook directory (specs/prK-lifecycle-hooks.md §A.1).
+
+    ``make_hook(root, "guard-y", tier="opt-in")`` writes
+    ``<root>/protect/guard-y/HOOK.md`` from a minimal valid frontmatter with
+    those keys replaced, and returns the path (``category=``, ``marker=``,
+    ``body=`` and ``scripts=`` adjust the layout; see
+    :func:`tests.hook_samples.write_hook`).
+    """
+    return write_hook

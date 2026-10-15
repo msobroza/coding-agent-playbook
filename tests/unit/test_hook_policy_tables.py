@@ -161,7 +161,10 @@ def test_hook_policy_imports_only_the_stdlib() -> None:
     ]
     assert ours == [
         "coding_agent_playbook._hook_schema",
+        "coding_agent_playbook._layers",
         "coding_agent_playbook.hook_policy",
+        "coding_agent_playbook.hook_policy.merge",
+        "coding_agent_playbook.hook_policy.override_rules",
         "coding_agent_playbook.hook_policy.tables",
     ]
     assert foreign == []

@@ -10,15 +10,18 @@ from __future__ import annotations
 import tomllib
 from importlib import resources
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook import _toml
+from coding_agent_playbook._layers import ENGINE_PACKAGE as ENGINE_PACKAGE
+from coding_agent_playbook._layers import REPO_LOCAL_SOURCE as REPO_LOCAL_SOURCE
 from coding_agent_playbook.config import Config, check_enabled_keys
 from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
 )
 from coding_agent_playbook.lockfile import Lockfile
+from coding_agent_playbook.sources._hook_walk import walk_hook_layer
 from coding_agent_playbook.sources.base import ArtifactSource, StateSource
 from coding_agent_playbook.types import Prompt, Rule, Skill, split_frontmatter
 
@@ -27,14 +30,9 @@ if TYPE_CHECKING:
     from typing import TypeVar
 
     from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.types import Hook, HookSchemaError
 
     _T = TypeVar("_T")
-
-#: The engine's own package: the first artifact layer (SPEC §11).
-ENGINE_PACKAGE: Final = "coding_agent_playbook"
-
-#: ``source_package`` of every artifact under ``<repo>/playbook/``.
-REPO_LOCAL_SOURCE: Final = "<repo-local>"
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -352,6 +350,32 @@ class FileSystemArtifactSource(ArtifactSource):
             for label, root in self.layer_roots("skills")
             for skill in _iter_skills(root, label)
         ]
+
+    def list_hooks(self) -> list[Hook]:
+        """Every hook directory of every layer, in :meth:`layer_roots` order (prK §A.5).
+
+        Fails loudly, like ``Rule.from_markdown``: raises the first
+        :class:`~coding_agent_playbook.types.HookSchemaError` that
+        :meth:`collect_hooks` finds.
+        """
+        hooks, errors = self.collect_hooks()
+        if errors:
+            raise errors[0]
+        return hooks
+
+    def collect_hooks(self) -> tuple[list[Hook], list[HookSchemaError]]:
+        """Every well-formed hook plus every malformed one's error, never raising.
+
+        What ``SyncContext.from_repo(..., tolerate_hook_errors=True)`` reads, so
+        ``playbook validate`` reports each malformed hook (prK §P P8c).
+
+        Example::
+
+            >>> FileSystemArtifactSource(repo_root=Path("/no/such/repo")).collect_hooks()
+            ([], [])
+        """
+        walks = [walk_hook_layer(root, label) for label, root in self.layer_roots("hooks")]
+        return [h for walk in walks for h in walk.hooks], [e for walk in walks for e in walk.errors]
 
     def _walk_artifacts(
         self,

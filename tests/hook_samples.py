@@ -5,12 +5,10 @@ Plain builders, not fixtures, so parametrize lists can call them at import time.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 
-from coding_agent_playbook.types import HookFrontmatter
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from coding_agent_playbook.types import Hook, HookFrontmatter, format_frontmatter
 
 #: The ``where`` label the builders parse under.
 HOOK_WHERE = "playbook/hooks/guard-x/HOOK.md"
@@ -66,6 +64,20 @@ def hook_frontmatter(**overrides: Any) -> HookFrontmatter:
     return HookFrontmatter.from_mapping(hook_mapping(**overrides), where=HOOK_WHERE)
 
 
+def sample_hook(
+    source_package: str = "<repo-local>", *, path: str | None = None, **overrides: Any
+) -> Hook:
+    """An in-memory hook ``guard-x`` from ``source_package`` (``id=`` renames it).
+
+    ``overrides`` replace frontmatter keys of :func:`hook_mapping`; ``path`` sets
+    ``source_path``. Example: ``sample_hook("acme", tier="opt-in")``.
+    """
+    source_path = None if path is None else Path(path)
+    return Hook(
+        hook_frontmatter(**overrides), "Advice.\n", "Advice.\n", False, source_path, source_package
+    )
+
+
 def write_hook_md(
     root: Path,
     text: str,
@@ -81,4 +93,30 @@ def write_hook_md(
         (hook_dir / "scripts").mkdir()
     path = hook_dir / name
     path.write_text(text, encoding="utf-8")
+    return path
+
+
+def write_hook(
+    root: Path,
+    hook_id: str = "guard-x",
+    *,
+    category: str = "protect",
+    marker: str = "HOOK.md",
+    body: str = "Advice.\n",
+    scripts: bool = False,
+    **frontmatter: Any,
+) -> Path:
+    """Write ``<root>/<category>/<hook_id>/<marker>`` from :func:`hook_mapping`; return its path.
+
+    ``frontmatter`` replaces keys of the minimal valid mapping (``id`` is
+    ``hook_id``); an empty ``category`` puts the hook directly under ``root``.
+    Example: ``write_hook(tmp_path / "playbook" / "hooks", "guard-y", tier="opt-in")``.
+    """
+    hook_dir = root / category / hook_id if category else root / hook_id
+    hook_dir.mkdir(parents=True, exist_ok=True)
+    if scripts:
+        (hook_dir / "scripts").mkdir(exist_ok=True)
+    path = hook_dir / marker
+    data = hook_mapping(**{"id": hook_id, **frontmatter})
+    path.write_text(format_frontmatter(data, body), encoding="utf-8")
     return path
