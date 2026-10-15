@@ -12,7 +12,10 @@ from here, not from the submodules:
   launcher command, and :func:`render_claude_launcher`;
 - :mod:`.opencode`: :func:`to_opencode_reg`, the OpenCode V1 shim's ``REG``
   over the closed V1 tool vocabulary, :func:`plan_opencode_reg` (§C.3.2), and
-  :func:`render_opencode_shim`, the one generated plugin file (§C.3.1).
+  :func:`render_opencode_shim`, the one generated plugin file (§C.3.1);
+- :mod:`.stop_gate`: the Stop coordinator's ``guard_config.stop_gate`` table
+  (:func:`stop_gate_table`) and the execution-stage timeouts the stop
+  deadline adds (prK-hook-pack.md §E.0.5).
 
 The event, tool-class and support tables live in ``hook_policy`` (§A.11); this
 package only reads them. Stdlib-only. The async ``PostToolUse`` audit
@@ -44,7 +47,6 @@ from coding_agent_playbook.hook_registrations.opencode import (
 )
 from coding_agent_playbook.hook_registrations.plan import (
     BOOTSTRAP_DEADLINE_MS,
-    STOP_COORDINATOR_ID,
     STOP_EVENTS,
     WATCHDOG_MARGIN_MS,
     DeclaredMember,
@@ -52,12 +54,19 @@ from coding_agent_playbook.hook_registrations.plan import (
     RegistrationMember,
     RegistrationTimeoutError,
     checked_registration_timeout_s,
-    coordinator_budget_s,
     deadlines_ms,
     declared_stop_budget_s,
     plan_registrations,
     registration_timeout_s,
     resolved_deadlines_ms,
+)
+from coding_agent_playbook.hook_registrations.stop_gate import (
+    STOP_COORDINATOR_ID,
+    StageRecord,
+    coordinator_budget_s,
+    execution_timeouts_s,
+    stop_gate_table,
+    stop_stage_records,
 )
 
 __all__ = [
@@ -77,12 +86,14 @@ __all__ = [
     "OpenCodeRegEntry",
     "RegistrationMember",
     "RegistrationTimeoutError",
+    "StageRecord",
     "checked_registration_timeout_s",
     "claude_command",
     "claude_settings_projection",
     "coordinator_budget_s",
     "deadlines_ms",
     "declared_stop_budget_s",
+    "execution_timeouts_s",
     "matcher_union",
     "opencode_reg_json",
     "plan_opencode_reg",
@@ -91,6 +102,8 @@ __all__ = [
     "render_claude_launcher",
     "render_opencode_shim",
     "resolved_deadlines_ms",
+    "stop_gate_table",
+    "stop_stage_records",
     "to_claude_group",
     "to_opencode_reg",
 ]

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Final, Protocol
+from typing import TYPE_CHECKING, Final, Protocol
 
 from coding_agent_playbook._hook_schema import HookMatcher
 from coding_agent_playbook.hook_policy import (
@@ -21,6 +21,12 @@ from coding_agent_playbook.hook_policy import (
     HOOK_CAPABLE_ADAPTERS,
     HOOK_EVENTS,
     HOOK_SUPPORT,
+)
+from coding_agent_playbook.hook_registrations.stop_gate import (
+    STOP_COORDINATOR_ID,
+    budget_of,
+    coordinator_budget_s,
+    execution_timeouts_s,
 )
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.policy import effective_on_error
@@ -50,8 +56,6 @@ __all__ = [
     "resolved_deadlines_ms",
 ]
 
-#: The Stop coordinator hook, whose merged ``budget_s`` sets the stop deadline (§D.4).
-STOP_COORDINATOR_ID: Final = "stop-ci-parity-gate"
 #: The deadline of a ``session_start`` registered with no member hook: the
 #: dispatcher's bootstrap only (state sweep, launcher-log report). The §D.4 sum
 #: would be 0, which the runtime's ``guard_config`` loader rejects (minimum 1).
@@ -188,22 +192,11 @@ def deadlines_ms(
     return deadlines
 
 
-def coordinator_budget_s(hooks: Iterable[ResolvedHook]) -> float:
-    """The Stop coordinator's merged ``budget_s``, else :data:`DEFAULT_BUDGET_S`.
-
-    K6 adds the enabled execution stages' timeouts through ``deadlines_ms``.
-
-    Example: ``deadlines_ms(hooks, stop_budget_s=coordinator_budget_s(hooks))``.
-    """
-    for hook in hooks:
-        handler = hook.handlers.get("stop")
-        if hook.id == STOP_COORDINATOR_ID and handler is not None:
-            return _budget(handler.config)
-    return DEFAULT_BUDGET_S
-
-
 def resolved_deadlines_ms(hooks: Sequence[ResolvedHook]) -> dict[str, int]:
-    """The per-event deadlines sync renders: :func:`deadlines_ms` with the coordinator's budget.
+    """The per-event deadlines sync renders: :func:`deadlines_ms` with the Stop gate's terms.
+
+    The stop deadline is the coordinator's ``budget_s`` plus the timeouts of
+    the enabled execution stages (``stop_gate.execution_timeouts_s``, §D.4).
 
     The one call both ``guard_config.json`` (the watchdog) and every adapter's
     registrations (the harness backstop) use, so the two can never disagree.
@@ -211,7 +204,11 @@ def resolved_deadlines_ms(hooks: Sequence[ResolvedHook]) -> dict[str, int]:
 
     Example: ``plan_registrations(on_claude, "claude_code", deadlines=resolved_deadlines_ms(all_on))``.
     """
-    return deadlines_ms(hooks, stop_budget_s=coordinator_budget_s(hooks))
+    return deadlines_ms(
+        hooks,
+        stop_budget_s=coordinator_budget_s(hooks),
+        execution_timeouts_s=execution_timeouts_s(hooks),
+    )
 
 
 def declared_stop_budget_s(fm: HookFrontmatter) -> float:
@@ -219,7 +216,7 @@ def declared_stop_budget_s(fm: HookFrontmatter) -> float:
     handler = fm.handlers.get("stop", fm.handler)
     if fm.id != STOP_COORDINATOR_ID or handler is None:
         return DEFAULT_BUDGET_S
-    return _budget(handler.config)
+    return budget_of(handler.config)
 
 
 def registration_timeout_s(deadline_ms: int) -> int:
@@ -308,11 +305,3 @@ def _registration(
 
 def _sum_ms(members: Iterable[RegistrationMember]) -> int:
     return sum(round(member.timeout * 1000) for member in members)
-
-
-def _budget(config: Mapping[str, Any]) -> float:
-    """A positive number ``budget_s``, else the default (validate reports a bad one)."""
-    value = config.get("budget_s")
-    if isinstance(value, bool) or not isinstance(value, int | float) or value <= 0:
-        return DEFAULT_BUDGET_S
-    return float(value)

@@ -73,6 +73,7 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         "guard_eval_fixtures": f"{_HANDLERS}.guard_eval_fixtures",
         "stop_drift_and_orphan_gate": f"{_HANDLERS}.stop_drift_and_orphan_gate",
         "session_start_playbook_briefing": f"{_HANDLERS}.session_start_playbook_briefing",
+        "stop_ci_parity_gate": f"{_HANDLERS}.stop_ci_parity_gate",
     }
 )
 

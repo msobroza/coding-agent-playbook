@@ -59,7 +59,7 @@ from coding_agent_playbook.hook_policy import (
     adapter_label,
     resolve_effective_hooks,
 )
-from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH
+from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH, stop_stage_records
 from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.lockfile import Provenance
 from coding_agent_playbook.orchestrator import engine_package_of
@@ -330,7 +330,11 @@ def finish_write(
         version = ctx.config.engine_version or _installed_version
         roots = resolve_resource_roots(layer_packages(ctx))
         _sync_hook_local.write_pins(
-            ctx.repo_root, deps, engine_version=version, resource_roots=roots
+            ctx.repo_root,
+            deps,
+            engine_version=version,
+            resource_roots=roots,
+            stage_tools=[r.tool for r in stop_stage_records(hooks.resolved) if r.tool],
         )
     for line in summary_lines(hooks, ctx.adapters):
         print(line)

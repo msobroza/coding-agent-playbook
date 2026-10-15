@@ -9,13 +9,20 @@ and ``applies_if``, so the runtime never evaluates them.
 The order is ``(class rank, priority, id)``: guards before quality hooks, so
 the first guard deny can short-circuit before a feedback hook spends its
 budget, and never dict order.
+
+On ``stop`` / ``subagent_stop`` the Stop coordinator (builtin
+``stop_ci_parity_gate``) is the only handler of the Stop-stage hooks (those
+whose handler names ``config.stage``, §D.5.1): with it selected they are
+never fanned out, because it plans them itself (:func:`select_stage_hooks`)
+under one budget and one combined reason. Without it (disabled, or a config
+that lacks it) each stage hook's own binding still runs, failing open.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.event import EventName, ToolClass
 from coding_agent_playbook.hook_runtime.policy import CLASS_RANK, failure_class
@@ -29,7 +36,19 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.policy import FailureClass, OnError
 
-__all__ = ["Selected", "Selection", "matcher_accepts", "select_hooks"]
+__all__ = [
+    "STOP_COORDINATOR_HANDLER",
+    "Selected",
+    "Selection",
+    "matcher_accepts",
+    "select_hooks",
+    "select_stage_hooks",
+    "stage_of",
+]
+
+#: The Stop coordinator's builtin: the only handler of the Stop-stage hooks (§D.5.1).
+STOP_COORDINATOR_HANDLER: Final = "stop_ci_parity_gate"
+_STOP_EVENTS: Final = frozenset({EventName.STOP, EventName.SUBAGENT_STOP})
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +81,40 @@ def select_hooks(cfg: GuardConfig, ev: CanonicalEvent, hatches: EscapeHatches) -
         >>> [s.record.id for s in select_hooks(cfg, ev, EscapeHatches()).selected]  # doctest: +SKIP
         ['guard-generated-outputs', 'ruff-feedback']
     """
+    chosen, disabled = _candidates(cfg, ev, hatches)
+    chosen.sort(key=lambda s: (CLASS_RANK[s.failure_class], s.record.priority, s.record.id))
+    return Selection(tuple(_route_stop(chosen, ev.name)), tuple(sorted(disabled)))
+
+
+def select_stage_hooks(
+    cfg: GuardConfig, ev: CanonicalEvent, hatches: EscapeHatches
+) -> tuple[HookRecord, ...]:
+    """The Stop-stage hooks bound to ``ev`` that the coordinator plans (by id; it orders them).
+
+    Example::
+
+        >>> [r.id for r in select_stage_hooks(cfg, stop_ev, EscapeHatches())]  # doctest: +SKIP
+        ['stop-drift-and-orphan-gate']
+    """
+    chosen, _ = _candidates(cfg, ev, hatches)
+    staged = (s.record for s in chosen if stage_of(s.record, ev.name) is not None)
+    return tuple(sorted(staged, key=lambda record: record.id))
+
+
+def stage_of(record: HookRecord, event: EventName) -> str | None:
+    """The Stop stage ``record`` contributes on ``event`` (its ``config.stage``), else ``None``.
+
+    Example: ``stage_of(cfg.hooks["stop-drift-and-orphan-gate"], EventName.STOP) == "drift"``.
+    """
+    spec = record.handlers.get(event)
+    stage = None if spec is None else spec.config.get("stage")
+    return stage if isinstance(stage, str) else None
+
+
+def _candidates(
+    cfg: GuardConfig, ev: CanonicalEvent, hatches: EscapeHatches
+) -> tuple[list[Selected], list[str]]:
+    """The hooks bound to ``ev``, and the ids ``PLAYBOOK_HOOKS_DISABLE`` skipped."""
     chosen: list[Selected] = []
     disabled: list[str] = []
     for record in cfg.hooks.values():
@@ -72,8 +125,19 @@ def select_hooks(cfg: GuardConfig, ev: CanonicalEvent, hatches: EscapeHatches) -
             continue
         on_error = record.on_error.get(ev.name, "open")
         chosen.append(Selected(record, on_error, failure_class(on_error)))
-    chosen.sort(key=lambda s: (CLASS_RANK[s.failure_class], s.record.priority, s.record.id))
-    return Selection(tuple(chosen), tuple(sorted(disabled)))
+    return chosen, disabled
+
+
+def _route_stop(chosen: list[Selected], event: EventName) -> list[Selected]:
+    """With the coordinator selected, the Stop-stage hooks are its stages, never fanned out."""
+    if event not in _STOP_EVENTS or not any(_is_coordinator(s.record, event) for s in chosen):
+        return chosen
+    return [s for s in chosen if stage_of(s.record, event) is None]
+
+
+def _is_coordinator(record: HookRecord, event: EventName) -> bool:
+    spec = record.handlers.get(event)
+    return spec is not None and spec.kind == "builtin" and spec.name == STOP_COORDINATOR_HANDLER
 
 
 def _bound(record: HookRecord, ev: CanonicalEvent) -> bool:

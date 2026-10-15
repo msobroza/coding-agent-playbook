@@ -45,6 +45,7 @@ ASK_DENIED_PREFIX: Final = "Needs user confirmation; unattended run, so denied: 
 OPENCODE_ASK_PREFIX: Final = "Needs user approval (OpenCode cannot ask): "
 ASK_WARNED_PREFIX: Final = "Needs user confirmation; unattended run, so allowed with a warning: "
 _MORE_FINDINGS = "(+{n} more playbook findings)"
+_STOP_EVENTS: Final = frozenset({EventName.STOP, EventName.SUBAGENT_STOP})
 _WARNED_NOTE = (
     "Playbook hook {hook_id} would have asked for confirmation; "
     "unattended run, so it was allowed with a warning."
@@ -107,7 +108,7 @@ def combine(
         final = Decision.NONE
     return CombinedResult(
         decision=final,
-        reason=_reason(effective, final),
+        reason=_reason(effective, final, ev.name),
         context=context,
         user_notes=clamp_lines(_notes(effective), OutputCaps.USER_NOTES),
         outcomes=tuple(_outcome(e) for e in effective),
@@ -149,13 +150,18 @@ def _reason_text(r: HandlerResult) -> str:
     return f"Playbook hook {r.hook_id} {verb}."
 
 
-def _reason(effective: list[_Effective], final: Decision) -> str:
-    """The reasons of the results that decided, clamped to the §D.3.4 reason budget."""
+def _reason(effective: list[_Effective], final: Decision, event: EventName) -> str:
+    """The reasons of the results that decided, clamped to the §D.3.4 reason budget.
+
+    A Stop block is the coordinator's one combined reason, whose own budget is
+    40 lines (§D.5.4), not a tool-call deny's four.
+    """
     if final not in (Decision.DENY, Decision.ASK):
         return ""
     deciding = [e.reason for e in effective if e.decision is final]
     summary = (lambda n: _MORE_FINDINGS.format(n=n)) if len(deciding) > 1 else None
-    return "\n".join(clamp_lines(deciding, OutputCaps.REASON, summary=summary))
+    cap = OutputCaps.STOP_REASON if event in _STOP_EVENTS else OutputCaps.REASON
+    return "\n".join(clamp_lines(deciding, cap, summary=summary))
 
 
 def _context(effective: list[_Effective], once: Callable[[str], bool]) -> tuple[str, ...]:

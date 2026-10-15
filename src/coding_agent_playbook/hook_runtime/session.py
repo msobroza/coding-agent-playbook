@@ -88,6 +88,11 @@ class SessionState:
         self.document = f"sessions/{session_key(session_id)}/session.json"
         self._memory: dict[str, Any] = {}
 
+    @property
+    def store(self) -> StateStore:
+        """The state root this session lives in (the Stop coordinator keeps its chain there)."""
+        return self._store
+
     def once(self, key: str) -> bool:
         """True only the first time ``key`` is seen this session (always True stateless)."""
         try:

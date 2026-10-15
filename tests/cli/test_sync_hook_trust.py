@@ -14,7 +14,11 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.commands import sync as _sync
-from coding_agent_playbook.commands._sync_hook_local import RuntimePinWriter, handler_approval
+from coding_agent_playbook.commands._sync_hook_local import (
+    RuntimePinWriter,
+    handler_approval,
+    write_pins,
+)
 from coding_agent_playbook.commands._sync_render import render_artifacts
 from coding_agent_playbook.hook_runtime._external import approval_of
 from coding_agent_playbook.hook_runtime.config import GuardConfig, parse_guard_config
@@ -54,6 +58,17 @@ def test_pin_written_in_write_mode_only_first_writer_wins_never_in_check(
     assert _sync.execute(repo, git=staged, check_staged=True, hook_deps=deps) == 1
     assert pins.calls == []
     assert "Pinned" not in capsys.readouterr().out
+
+
+def test_stop_stage_tools_join_the_pin_list(repo: Path, tmp_path: Path) -> None:
+    """The Stop stage runner resolves a stage's logical tool only through machine.json."""
+    pins = FakePinWriter()
+    which = {"ruff": "/v/bin/ruff", "project_python": "/v/bin/python"}.get
+    deps = hook_deps(tmp_path / "state", pins=pins, which=which)
+
+    write_pins(repo, deps, engine_version="0.2.0", stage_tools=["project_python", "ruff"])
+
+    assert pins.tools == {"ruff": ["/v/bin/ruff"], "project_python": ["/v/bin/python"]}
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the first writer is /bin/sh")
@@ -155,5 +170,6 @@ def test_handler_approval_mirrors_the_runtime_record(repo: Path, tmp_path: Path)
         "eval-task-authoring-lint",
         "stop-drift-and-orphan-gate",
         "session-start-playbook-briefing",
+        "stop-ci-parity-gate",
     }
     assert all(handler_approval(hook) is None for hook in builtins)

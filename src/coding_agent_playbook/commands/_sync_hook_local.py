@@ -36,7 +36,7 @@ from coding_agent_playbook.security.trust import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Mapping, Sequence
     from pathlib import Path
 
     from coding_agent_playbook.hook_policy import ResolvedHook
@@ -133,10 +133,13 @@ def write_pins(
     *,
     engine_version: str,
     resource_roots: Mapping[str, str] | None = None,
+    stage_tools: Iterable[str] = (),
 ) -> None:
     """Pin the interpreter (first writer wins), the tools and the layers' resource dirs.
 
-    Warns when outside git, where nothing is pinned.
+    ``stage_tools`` are the logical tools of ``stop_gate.stages``: the Stop
+    stage runner finds them only through these pins (§D.8.3). Warns when
+    outside git, where nothing is pinned.
 
     Example: ``write_pins(ctx.repo_root, SyncHookDeps(), engine_version="0.2.0")``.
     """
@@ -157,7 +160,8 @@ def write_pins(
             "cache that may be deleted; re-pin with 'playbook-hook doctor --repin <python>'.",
             file=sys.stderr,
         )
-    tools = {name: [path] for name in PINNED_TOOLS if (path := deps.which(name))}
+    names = dict.fromkeys((*PINNED_TOOLS, *stage_tools))
+    tools = {name: [path] for name in names if (path := deps.which(name))}
     deps.pins.write_machine_pins(repo_root, tools, engine_version, resource_roots)
 
 

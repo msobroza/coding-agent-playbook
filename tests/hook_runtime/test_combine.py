@@ -125,6 +125,16 @@ def test_one_handler_with_too_many_lines_is_cut_without_a_summary_line() -> None
     assert combined.reason.splitlines() == ["l0", "l1", "l2", "l3"]
 
 
+@pytest.mark.parametrize("event", [EventName.STOP, EventName.SUBAGENT_STOP])
+def test_stop_block_keeps_the_coordinators_40_line_reason(event: EventName) -> None:
+    """The Stop coordinator's one combined reason has its own 40-line budget (§D.5.4)."""
+    reason = "\n".join(f"[lint] line {i}" for i in range(45))
+
+    combined = combine([_r(D, reason=reason)], ev=_ev(event))
+
+    assert combined.reason.splitlines() == reason.splitlines()[: OutputCaps.STOP_REASON.max_lines]
+
+
 def test_reason_lines_and_total_are_capped() -> None:
     combined = combine([_r(D, reason="\n".join(["x" * 300] * 4))], ev=_ev())
     lines = combined.reason.splitlines()

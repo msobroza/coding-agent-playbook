@@ -22,7 +22,9 @@ playbook hook ids of the repo's ``.pre-commit-config.yaml``, scanned with the
 runtime's regex so control-plane-guard and sync never disagree; ``facts`` and
 ``applicability`` (resync-on-detector-input-change) come from
 ``_guard_config_detect``, ``eval`` is the fixture-glob engine constant and
-``auto_sync`` mirrors ``[hooks] auto_sync``.
+``auto_sync`` mirrors ``[hooks] auto_sync``. ``stop_gate`` (K6) is the Stop
+coordinator's table from ``hook_registrations.stop_gate``: its stage records,
+budget and verify commands, also machine-independent.
 """
 
 from __future__ import annotations
@@ -54,6 +56,7 @@ from coding_agent_playbook.hook_registrations import (
     LAUNCHER_PATH,
     OPENCODE_SHIM_PATH,
     resolved_deadlines_ms,
+    stop_gate_table,
 )
 from coding_agent_playbook.hook_runtime._shell_wrappers import DEFAULT_RUNNER_WRAPPERS
 from coding_agent_playbook.hook_runtime.config import GUARD_CONFIG_REL
@@ -184,8 +187,8 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
     ``allow_code_from`` and ``state_ttl_days`` are the runtime keys beyond the
     §D.8.2 table that ``hook_runtime.config`` reads (it cannot read ``[hooks]``);
     ``sentinel``, ``protected``, ``control_plane``, ``precommit``, ``facts``,
-    ``applicability``, ``eval`` and ``auto_sync`` are §E.0.5 pack keys
-    (``GuardConfig.tables``).
+    ``applicability``, ``eval``, ``auto_sync`` and ``stop_gate`` are §E.0.5
+    pack keys (``GuardConfig.tables``).
 
     Example::
 
@@ -222,6 +225,7 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
         "applicability": applicability_table(inputs.detect.applicability),
         "eval": {"fixture_globs": list(FIXTURE_GLOBS)},
         "auto_sync": cfg.auto_sync,
+        "stop_gate": stop_gate_table(inputs.hooks, inputs.detect.facts),
     }
 
 

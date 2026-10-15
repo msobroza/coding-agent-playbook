@@ -11,6 +11,8 @@ never patches a module:
 - ``FakeClock`` for ``deps.SystemClock``: time moves only when told to.
 - ``FakeTrustStore`` for ``security.trust.TrustStore``: in-memory approvals.
 - ``FakeHandlerResolver`` for ``registry.resolve_handler``: hook id -> handler.
+- ``FakeStageRunner`` for ``stop.runner.PinnedStageRunner``: a scripted
+  ``ToolRun`` per logical tool (timeouts and crashes included), calls recorded.
 - ``FakeTimer`` for ``deps.thread_timer`` (fires only when told, or on start)
   and ``FakeExit`` / ``fake_exit`` for ``os._exit``: the watchdog runs
   in-process and its exit surfaces as an exception.
@@ -25,6 +27,7 @@ from typing import TYPE_CHECKING, NoReturn
 from coding_agent_playbook.hook_runtime._git_parse import DiffLines
 from coding_agent_playbook.hook_runtime.proc import ProcResult, ProcTimeout
 from coding_agent_playbook.hook_runtime.registry import HandlerResolutionError, Untrusted
+from coding_agent_playbook.hook_runtime.stop.runner import ToolRun
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -254,6 +257,45 @@ class FakeHandlerResolver:
 
 
 @dataclass
+class FakeStageRunner:
+    """In-memory ``StageRunner``: one scripted ``ToolRun`` per logical tool, every call recorded.
+
+    ``script("ruff", returncode=1, stdout=b"[]")`` answers every ``ruff`` run;
+    ``timeout=True`` makes it a ``timeout`` skip and ``crash=True`` makes the
+    call raise, as a broken tool wrapper would. An unscripted tool is
+    ``toolchain_missing``. ``calls`` holds ``(tool, args, timeout)``.
+    """
+
+    runs: dict[str, ToolRun | Exception] = field(default_factory=dict)
+    calls: list[tuple[str, tuple[str, ...], float]] = field(default_factory=list)
+
+    def script(
+        self,
+        tool: str,
+        *,
+        returncode: int = 0,
+        stdout: bytes = b"",
+        stderr: bytes = b"",
+        timeout: bool = False,
+        crash: bool = False,
+    ) -> None:
+        """Answer every run of ``tool`` (see the class docstring)."""
+        if crash:
+            self.runs[tool] = RuntimeError(f"{tool} wrapper crashed")
+        elif timeout:
+            self.runs[tool] = ToolRun(tool, skip_category="timeout")
+        else:
+            self.runs[tool] = ToolRun(tool, returncode, stdout, stderr)
+
+    def run(self, tool: str, args: Sequence[str], *, timeout: float) -> ToolRun:
+        self.calls.append((tool, tuple(args), timeout))
+        found = self.runs.get(tool, ToolRun(tool, skip_category="toolchain_missing"))
+        if isinstance(found, Exception):
+            raise found
+        return found
+
+
+@dataclass
 class FakeTimer:
     """A ``TimerHandle`` that fires only through :meth:`fire` (or at start, when asked)."""
 
@@ -314,6 +356,7 @@ __all__ = [
     "FakeGit",
     "FakeHandlerResolver",
     "FakeProc",
+    "FakeStageRunner",
     "FakeTimer",
     "FakeTimers",
     "FakeTrustStore",

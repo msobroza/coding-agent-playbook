@@ -521,3 +521,106 @@ def test_auto_sync_rendered_from_hooks_table() -> None:
     assert render_guard_config(on)["auto_sync"] is True
     parsed = parse_guard_config(serialize_guard_config(render_guard_config(on)))
     assert isinstance(parsed, GuardConfig) and parsed.tables["auto_sync"] is True
+
+
+# --- K6: the stop_gate table and the stop deadline (prK-hook-pack.md §E.0.5, §D.4) ------
+
+
+def _stop_hooks(config: dict[str, Any] | None = None) -> list[ResolvedHook]:
+    return [
+        resolved_hook("stop-ci-parity-gate", events=("stop",), config=config or {}),
+        resolved_hook(
+            "coverage-diff-gate", events=("stop",), timeout=60.0, config={"stage": "coverage"}
+        ),
+        resolved_hook(
+            "stop-drift-and-orphan-gate", events=("stop",), timeout=5.0, config={"stage": "drift"}
+        ),
+    ]
+
+
+def _stop_gate(hooks: list[ResolvedHook], facts: dict[str, Any] | None = None) -> dict[str, Any]:
+    inputs = dataclasses.replace(_inputs(hooks), detect=DetectInputs(facts=facts or {}))
+    gate: dict[str, Any] = render_guard_config(inputs)["stop_gate"]
+    return gate
+
+
+def test_stop_gate_derived_from_hook_config_and_dev_tools() -> None:
+    config = {
+        "budget_s": 4.5,
+        "max_blocks": 3,
+        "verify_commands": ["uv run --frozen --no-sync pytest -q"],
+        "claim_patterns": ["(?i)shipped it"],
+    }
+
+    gate = _stop_gate(_stop_hooks(config), {"dev_tools": {"ruff"}})
+
+    assert (gate["budget_s"], gate["max_blocks"]) == (4.5, 3)
+    assert gate["stages"] == [
+        {
+            "name": "drift",
+            "owner": "stop-drift-and-orphan-gate",
+            "cost": "deterministic",
+            "tool": "",
+            "args": [],
+            "timeout_s": 5.0,
+            "needs_diff": False,
+            "mode": "block",
+        },
+        {
+            "name": "coverage",
+            "owner": "coverage-diff-gate",
+            "cost": "execution",
+            "tool": "",
+            "args": [],
+            "timeout_s": 60.0,
+            "needs_diff": True,
+            "mode": "block",
+        },
+    ]
+    assert gate["verify_commands"] == [
+        {"id": "custom-1", "argv": ["uv", "run", "--frozen", "--no-sync", "pytest", "-q"]}
+    ]
+    assert gate["claim_patterns"][-1] == "(?i)shipped it" and len(gate["claim_patterns"]) > 1
+    parsed = parse_guard_config(serialize_guard_config(render_guard_config(_inputs([]))))
+    assert isinstance(parsed, GuardConfig) and parsed.tables["stop_gate"]["stages"] == []
+
+
+def test_verify_commands_derived_when_absent() -> None:
+    gate = _stop_gate(_stop_hooks(), {"dev_tools": {"pytest", "mypy", "ruff"}})
+
+    assert gate["verify_commands"] == [
+        {"id": "lint", "argv": ["ruff", "check"]},
+        {"id": "format", "argv": ["ruff", "format"]},
+        {"id": "typecheck", "argv": ["mypy"]},
+        {"id": "tests", "argv": ["pytest"]},
+    ]
+    assert (gate["budget_s"], gate["max_blocks"]) == (3.0, 2)
+    assert _stop_gate(_stop_hooks())["verify_commands"] == []
+
+
+def test_stop_gate_is_machine_independent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    rendered: list[bytes] = []
+    for prefix, home in (("/opt/venv-a", tmp_path / "home-a"), ("/srv/venv-b", tmp_path / "b")):
+        monkeypatch.setattr(sys, "prefix", prefix)
+        monkeypatch.setenv("HOME", str(home))
+        gate = _stop_gate(_stop_hooks({"budget_s": 4.0}), {"dev_tools": {"ruff", "pytest"}})
+        rendered.append(serialize_guard_config(gate))
+
+    assert rendered[0] == rendered[1]
+    text = rendered[0].decode("ascii")
+    assert str(tmp_path) not in text and "/opt/" not in text and "/srv/" not in text
+
+
+def test_stop_deadline_formula_includes_exec_timeouts() -> None:
+    hooks = _stop_hooks({"budget_s": 4.0})
+    coverage = {"stage": "coverage"}
+    slow = [
+        hooks[0],
+        resolved_hook("coverage-diff-gate", events=("stop",), timeout=900.0, config=coverage),
+    ]
+
+    deadlines = render_guard_config(_inputs(hooks))["deadlines_ms"]
+
+    assert deadlines["stop"] == 64_000  # 1000 * (budget_s 4.0 + the coverage stage's 60 s)
+    assert deadlines == resolved_deadlines_ms(hooks)
+    assert resolved_deadlines_ms(slow)["stop"] == 595_000  # the engine cap

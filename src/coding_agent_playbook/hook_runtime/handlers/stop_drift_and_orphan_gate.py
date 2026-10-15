@@ -16,10 +16,11 @@ Run playbook validate && playbook sync before finishing.``
   sees a lockfile orphan whose canonical source was deleted.
 - Any error or timeout is ``skipped`` (``NOT verified``), never green.
 
-The Stop coordinator (K6) plans the stage through :func:`drift_stage` and owns
-the one-block-per-fingerprint budget. Until it lands, the dispatcher calls the
-hook's binding directly: it runs the stage alone, blocks once per distinct
-finding per session and then only notes, approximating that budget.
+The Stop coordinator (stop-ci-parity-gate) plans the stage through
+:func:`drift_stage` and owns the one-block-per-fingerprint budget. Only when
+the coordinator is not selected (disabled, or absent from the config) does the
+dispatcher call this hook's own binding: it runs the stage alone, blocks once
+per distinct finding per session and then only notes, approximating that budget.
 """
 
 from __future__ import annotations
@@ -145,7 +146,7 @@ class DriftStage:
 
 
 def drift_stage(ev: CanonicalEvent, ctx: HandlerContext) -> DriftStage | None:
-    """The ``drift`` stage for ``ev``'s repository (``None`` outside one): K6's planning hook.
+    """The ``drift`` stage for ``ev``'s repository (``None`` outside one): the coordinator's factory.
 
     Example::
 
@@ -162,7 +163,7 @@ def drift_stage(ev: CanonicalEvent, ctx: HandlerContext) -> DriftStage | None:
     config_schema=CONFIG_SCHEMA,
 )
 def stop_drift_and_orphan_gate(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult | None:
-    """Run the ``drift`` stage alone (until K6's coordinator plans it): deny once, then note.
+    """Run the ``drift`` stage alone (no coordinator selected): deny once, then note.
 
     Example::
 
