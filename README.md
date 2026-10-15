@@ -34,6 +34,11 @@ Multi-harness playbook engine
   typo'd predicate keys), and a local lockfile records the engine version and
   content hash of every artifact it produced, so regenerations are reproducible
   (and, with `[output] commit = true`, reviewable in a diff).
+- **Guardrails inside the session (opt-in).** Lifecycle hooks, rendered
+  natively for Claude Code and OpenCode, stop an assistant from hand-editing
+  generated files, persisting a secret, skipping your pre-commit hooks or
+  ending a turn on a red tree. Every other assistant gets the same guidance as
+  text in `AGENTS.md`. Nothing changes until a repo opts in.
 - **Self-contained artifacts.** Every markdown link in every artifact must
   resolve inside the shipped bundle; external links pass only through the
   `[links] allowed_domains` allowlist (default: none). Deterministic — no
@@ -50,9 +55,15 @@ Engine and CLI are implemented: detector, renderer, six adapters
 skills hub, and the opt-in
 [Agent Harness](https://agentharnesses.io/specification)), the `playbook`
 commands (`init` / `sync` / `check` / `validate` / `render` / `eval` /
-`metrics` / `import-harness` / `validate-harness`), the Tier 0 eval schema
+`metrics` / `import-harness` / `validate-harness`), the off-workstation checks
+(`ci` / `gate-scan` / `scan-secrets` / `scan-sinks` / `check-deps` /
+`check-commit-trailers` / `check-notebooks`), the Tier 0 eval schema
 plus the v1.1 eval runner (`playbook eval --run`, deterministic layers live;
-judged rubric scoring live via `--judge`), and the code-quality metrics gate. See
+judged rubric scoring live via `--judge`), and the code-quality metrics gate.
+v0.18 adds the opt-in [assistant lifecycle hooks](#assistant-lifecycle-hooks):
+a shipped pack of guards that Claude Code and OpenCode enforce natively and every
+other assistant reads as advice, all run by one dispatcher, the `playbook-hook`
+runtime (`dispatch` for the harnesses; `simulate` and `doctor` for you). See
 `SPEC.md` for the full design.
 
 Working on the engine itself:
@@ -62,6 +73,50 @@ uv sync --extra dev   # install engine + dev tools
 uv run pytest         # run the test suite
 uv run playbook --version  # smoke-test the CLI
 ```
+
+## Architecture
+
+`playbook sync` composes the three source layers, keeps what applies to the
+repo, renders it once, and hands every artifact to every enabled adapter. With
+hooks on, one dispatcher answers every harness event at run time:
+
+```text
+ sources (later layer wins by id)    resolve                               render
+ engine resources/     ─┐            OverlayResolver: one winner per id    sandboxed Jinja,
+ overlay packages      ─┼──────────► (hooks: overlays only add)  ────────► StrictUndefined
+ repo-local playbook/  ─┘            detector facts + applies_if                 │
+ rules, prompts, skills, hooks       resolve_effective_hooks ([hooks])           │
+                                                                                 ▼
+ adapters: each writes what its harness reads
+   continue       .continue/rules/ + .continue/prompts/
+   claude_code    .claude/ + managed hook entries in .claude/settings.json
+                           + .claude/hooks/playbook/launch.sh
+   opencode       .opencode/ + .opencode/plugins/playbook-hooks.js
+   agents_md      AGENTS.md (always; a ## Guardrails section when hooks are on)
+   shared_skills  shared_skills/
+   agent_harness  HARNESS.md tree + .playbook/ sidecar (opt-in)
+ sync-level       .coding-agent-playbook.lock
+                  .coding-agent-playbook/hooks/guard_config.json (+ copied hook scripts)
+
+ run time (hooks on): every harness event reaches one dispatcher
+   Claude Code ── sh .claude/hooks/playbook/launch.sh ──┐
+   OpenCode ───── .opencode/plugins/playbook-hooks.js ──┴──► <pinned python> -I -m
+                                                             coding_agent_playbook.hook_runtime
+                                                             dispatch <event>
+   the playbook-hook dispatcher reads guard_config.json, runs every on hook in-process,
+   answers deny | ask | context | none and exits 0, or 10 for a deny; the interpreter
+   pin lives under <git-dir>/playbook-hooks/, never in the repository
+```
+
+Generated output is local-only by default (`[output] commit = false`): the
+adapters' files, the launcher, the OpenCode plugin and `guard_config.json` are
+gitignored and re-rendered in each clone by the post-checkout `playbook sync`.
+`.claude/settings.json` is co-owned with you: sync manages only its own entries
+there (hook groups and the native deny rows of the guards that are on),
+recognised by their lockfile hash, and never touches your keys or
+`.claude/settings.local.json`. Guards on a developer machine are speed bumps;
+the authoritative checks run off the workstation, as the
+[pre-commit hooks](#pre-commit-hooks) and [`playbook ci`](#playbook-ci).
 
 ## Using the playbook in an external repo
 
@@ -87,10 +142,12 @@ uv add --dev playbook-rules-<org>             # optional: your org's overlay
 playbook init
 ```
 
-`playbook init` detects your stack, then writes:
+`playbook init` detects your stack, asks whether to enable the
+[assistant lifecycle hooks](#assistant-lifecycle-hooks) (`--no-hooks` skips
+them), then writes:
 
 - `.coding-agent-playbook.toml` — the committed project config (below),
-  including `[output] commit = false`;
+  including `[output] commit = false` and your `[hooks] enabled` answer;
 - `.coding-agent-playbook.local.toml` — personal per-engineer overrides
   (gitignored automatically);
 - a merged `.pre-commit-config.yaml`;
@@ -400,7 +457,12 @@ Repos that set `[output] commit = true` keep the **legacy** flow instead: use `-
 
 `playbook init` writes a starter `.pre-commit-config.yaml` for you — an **air-gapped-friendly** config whose hooks are all `repo: local` + `language: system` (the playbook hooks for your `[output] commit` policy plus `ruff`/`ruff-format`/`mypy`), so pre-commit never clones a remote hook repo and the playbook hooks see your overlays. The flip side: those tools must already be installed in your environment, since `language: system` runs them from PATH rather than installing them. Re-running `init` on a config from before v0.16 swaps its old `playbook sync --check` hook for the two new ones (or tells you to delete it if you edited it). See SPEC.md §13.2 for the full template and the hooks deliberately left out.
 
-### Hooks
+### Pre-commit hooks
+
+These run at `git commit` (or checkout, merge, commit-msg), for humans and
+assistants alike. They are not the [assistant lifecycle hooks](#assistant-lifecycle-hooks),
+which run inside an assistant's session; most lifecycle guards have one of these as
+their off-workstation twin.
 
 | Hook ID | When it runs | What it does |
 | --- | --- | --- |
@@ -408,7 +470,273 @@ Repos that set `[output] commit = true` keep the **legacy** flow instead: use `-
 | `playbook-no-generated-output` | Every commit | Runs `playbook sync --check-staged`; fails the commit when generated output is staged. Default policy. |
 | `playbook-sync-check` | Every commit | **Legacy** (`[output] commit = true`): runs `playbook sync --check`; fails the commit on drift. |
 | `playbook-validate` | Manual only (`pre-commit run --hook-stage manual playbook-validate`) | Runs `playbook validate`; surfaces canonical-source mistakes (typo'd `applies_if` keys, orphan eval tasks, etc.). Overlay-author-facing. |
-| `playbook-metrics` | Every commit (Python files) | Runs `playbook metrics --baseline git:HEAD`; fails the commit when staged Python worsens vs `HEAD`. **Static only** — never runs your test suite. |
+| `playbook-metrics` | Every commit (Python files) | Runs `playbook metrics --baseline git:HEAD --no-run-tests`; fails the commit when staged Python worsens vs `HEAD`. **Static only**: `--no-run-tests` keeps your test suite out even when `[metrics] run_tests = true`. |
+| `playbook-coverage` | Manual only (`pre-commit run playbook-coverage --hook-stage manual`, or move it to `pre-push`) | **Runs your test suite** with coverage: changed lines must be at least 80% executed (`diff_coverage`) and total coverage must not drop below `HEAD`. Needs `pytest-cov` in your project. |
+| `playbook-secrets` | Every commit | Runs `playbook scan-secrets --staged`; fails when staged lines add a known token format (cloud, VCS, chat and LLM API keys, PEM private keys, JWTs, URLs with inline passwords) or a credential file (`.env*`, `*.pem`, …) is staged. Output is masked. The stdlib, air-gapped stand-in for gitleaks. |
+| `playbook-commit-msg` | `commit-msg` | Runs commitizen's `cz check --commit-msg-file` against your [`[tool.commitizen]` convention](#commit-message-convention-commitizen). `language: system`: `cz` comes from your environment, and a machine without it fails loudly. |
+| `playbook-notebooks` | Every commit (notebooks) | Runs `playbook check-notebooks`; fails when a staged notebook keeps cell outputs (they may embed data rows). For ML / data-science repos. |
+| `playbook-scan-sinks` | Every commit (Python, notebooks) | Runs `playbook scan-sinks --staged`; fails when staged code adds an unsafe deserialization sink (`pickle.loads`, `torch.load(weights_only=False)`, …). For ML repos. |
+
+`playbook-commit-msg` needs the `commit-msg` hook type: add it to
+`default_install_hook_types` (`[pre-commit, post-checkout, post-merge, commit-msg]`),
+or append `--hook-type commit-msg` to the `pre-commit install` line above. The
+air-gapped starter `playbook init` writes carries `repo: local` twins of these:
+`coding-agent-playbook-metrics` (with `--no-run-tests`), the manual
+`coding-agent-playbook-coverage` and `coding-agent-playbook-secrets`, plus, only
+when the repo opted into them, `coding-agent-playbook-commit-msg` (commitizen) and
+`coding-agent-playbook-commit-trailers` (`playbook check-commit-trailers`, the
+commit-trailer rows of `[hooks.git-commit-push-policy-guard]`), both at the
+`commit-msg` stage, which the starter then installs. Run against an existing
+`.pre-commit-config.yaml`, `init` adds only the sync hooks it lacks, so copy any
+new hook you want into yours by hand (SPEC §13.2).
+
+## Assistant lifecycle hooks
+
+Lifecycle hooks are the fourth canonical kind, next to rules, prompts and
+skills: a `<id>/HOOK.md` directory whose static frontmatter binds assistant
+events (`pre_tool_use`, `post_tool_use`, `stop`, `session_start`, …) to a
+handler. The engine ships a pack of them: guards that protect the playbook's
+own outputs, verify the work before the assistant says it is done, feed lint
+back after an edit, keep secrets and destructive commands out, and keep a local
+audit trail. Claude Code and OpenCode enforce them natively; every other
+assistant reads the same guidance as text. Overlays and `playbook/hooks/` can
+add their own (SPEC §6.6.7).
+
+### Turning them on
+
+Hooks are **off until a repo opts in**, and an engine upgrade never turns them
+on: with no `[hooks] enabled = true`, every mode of `playbook sync` renders byte
+for byte what it rendered before, and write mode prints one line, `hooks
+available: add [hooks] enabled = true or re-run playbook init`. `playbook init`
+asks `Enable assistant lifecycle hooks? [Y/n]` and writes your answer;
+`playbook init --no-hooks` writes `enabled = false` without asking. Or edit the
+committed config yourself:
+
+```toml
+# .coding-agent-playbook.toml
+[hooks]
+enabled = true                       # the opt-in: an absent table or key means off
+tiers = ["default"]                  # add "opt-in" to turn every opt-in hook on
+enable = ["coverage-diff-gate"]      # single hooks, whatever their tier
+disable = ["typing-lint-feedback"]   # wins over enable
+unattended_ask = "deny"              # what an `ask` becomes when no human can answer
+
+[hooks.stop-ci-parity-gate]          # [hooks.<hook-id>]: that hook's own settings
+stages = ["typecheck", "tests"]      # execution stages: they run your code, so they
+max_blocks = 2                       # also need a trust approval (below)
+```
+
+Policy shared with the off-workstation twins lives in `[guardrails]`, which
+applies even with hooks off:
+
+```toml
+[guardrails.git]
+protected_branches = ["develop"]           # extends main, master and release/*
+
+[guardrails.secrets]
+allow_paths = ["tests/fixtures/sample.env"]   # exempt paths, such as test fixtures
+```
+
+Then run `playbook sync`. With hooks on it writes `guard_config.json`, the
+Claude Code registrations and launcher, and the OpenCode plugin; pins this
+worktree's Python interpreter; and prints a `✓ Hooks:` summary line counting
+the enabled and skipped hooks per adapter. `playbook check` lists every hook
+with its state per adapter: `enforced`, `degraded` (registered, with a gap),
+`advisory` (text only) or `—`, so advice is never mistaken for enforcement.
+`[hooks]`, `[guardrails]` and `[metrics]` are team policy: they are read from
+the committed file only, and `.coding-agent-playbook.local.toml` cannot set
+them (a developer deviates at run time, below).
+
+### The pack
+
+Tiers: `default` hooks are on in any repo that enabled hooks; `opt-in` hooks
+ship off and are turned on through `tiers` or `enable`; `overlay` hooks are
+mechanisms that ship inert and that only an organization overlay activates,
+with its own data (an overlay can also make a hook `mandatory`, which
+`[hooks] disable` cannot turn off). "Enforced on" says where the hook blocks or
+answers natively; "checked on OpenCode" means OpenCode reports but cannot block
+(its Stop event is evidence-only and its session start rides an experimental
+API). Everywhere else, the hook's guidance reaches the assistant as text.
+
+#### Protect the playbook
+
+| Hook | Tier | Enforced on | What it does |
+| --- | --- | --- | --- |
+| `guard-generated-outputs` | `default` | Claude Code, OpenCode | Deny hand edits of files `playbook sync` generates and point at the canonical source. |
+| `control-plane-guard` | `default` | Claude Code, OpenCode | Stop the agent disabling or rewriting its own guardrails (hook config, settings files, pre-commit config). |
+| `stop-drift-and-orphan-gate` | `default` | Claude Code; checked on OpenCode | Block the end of a turn while generated outputs differ from the lockfile or orphans remain. |
+| `validate-then-sync-on-canonical-edit` | `default` | Claude Code, OpenCode | Report `playbook validate` failures for an edited canonical source in-turn; sync only when `[hooks] auto_sync` allows. |
+| `resync-on-detector-input-change` | `default` | Claude Code, OpenCode | Name the rules and prompts a dependency, Dockerfile, CI or notebook change newly activates. |
+| `session-start-playbook-briefing` | `default` | Claude Code; checked on OpenCode | Prove the guards answer (one `PLAYBOOK-GUARDS: OK` heartbeat line) and report playbook anomalies at session start. |
+| `eval-task-authoring-lint` | `default` | Claude Code, OpenCode | Parse and trial-compile an edited eval task; never runs it. |
+| `guard-eval-fixtures` | `opt-in` | Claude Code, OpenCode | Ask before editing a committed eval task's frozen `setup/` fixtures. |
+
+#### Verify before done
+
+The Stop hooks are stages of one coordinator, `stop-ci-parity-gate`: they run
+in a fixed order, once per working tree, and a red tree gets one combined
+reason, at most `max_blocks` times per stop chain.
+
+| Hook | Tier | Enforced on | What it does |
+| --- | --- | --- | --- |
+| `stop-ci-parity-gate` | `default` | Claude Code; checked on OpenCode | The Stop coordinator: lint and verify the "done" claim; with an approved stage list, also typecheck and run the tests. |
+| `clean-code-metrics-nonregression` | `default` | Claude Code, OpenCode | Stage `quality-metrics`: touched Python must not worsen against `HEAD` under your `[metrics]`. |
+| `docstring-nonregression` | `default` | Claude Code, OpenCode | Stage `docstrings`: removed docstrings and new undocumented public symbols. |
+| `gate-weakening-guard` | `default` | Claude Code, OpenCode | Stage `gate-integrity`: new suppressions, skipped or deleted tests, loosened checker config. |
+| `block-precommit-bypass` | `default` | Claude Code, OpenCode | Deny skipping the playbook pre-commit hooks (`--no-verify`, `SKIP=`, `core.hooksPath`). |
+| `tests-with-source-nudge` | `opt-in` | Claude Code; checked on OpenCode | Stage `tests-nudge`: name each new public function, class or method no test mentions. |
+| `coverage-diff-gate` | `opt-in` | Claude Code; checked on OpenCode | Stage `coverage`: changed lines at least 80% covered, total coverage not below the last green run. |
+| `subagent-stop-verify` | `opt-in` | Claude Code | Run the scoped Stop stages on an editing subagent's files before it may stop. |
+| `prompt-output-contract-on-stop` | `opt-in` | Claude Code | Stage `output-contract`: the final answer must match the active playbook prompt's output contract. |
+
+#### Edit feedback
+
+| Hook | Tier | Enforced on | What it does |
+| --- | --- | --- | --- |
+| `post-edit-ruff-format` | `default` | Claude Code, OpenCode | Format already-clean Python after an edit (safe fixes only) and report the ruff findings CI fails on. |
+| `ml-unsafe-deserialization-guard` | `default` | Claude Code, OpenCode | Deny an edit that adds pickle-based loads or other unsafe deserialization. |
+| `error-handling-lint-feedback` | `default` | Claude Code, OpenCode | Report bare or blind excepts, silent `pass`, a missing `raise ... from` (warn only). |
+| `typing-lint-feedback` | `default` | Claude Code, OpenCode | Report missing annotations on public signatures, `Any`, mutable defaults (warn only). |
+| `pytest-conventions-feedback` | `default` | Claude Code, OpenCode | Report unittest-style asserts, broad `pytest.raises`, composite asserts (warn only). |
+| `prompt-write-scope-guard` | `default` | Claude Code | Keep read-only playbook prompts from editing code, and test-writing prompts inside their test globs. |
+| `toolchain-missing-hint` | `default` | Claude Code, OpenCode | When ruff, mypy, pytest or commitizen is missing, name the project's install command once. |
+| `notebook-output-hygiene` | `opt-in` | Claude Code, OpenCode | Warn when an edited notebook keeps cell outputs, embedded images or base64 payloads. |
+
+#### Secrets and risky actions
+
+| Hook | Tier | Enforced on | What it does |
+| --- | --- | --- | --- |
+| `secrets-path-guard` | `default` | Claude Code, OpenCode | Deny agent reads and writes of credential files (`.env`, keys, cloud and SSH credentials). |
+| `secret-content-guard` | `default` | Claude Code, OpenCode | Deny a write that would persist a secret token, and a push whose commits add one. |
+| `stop-diff-sweep` | `default` | Claude Code; checked on OpenCode | Stage `secrets`: block when the turn's working tree adds a token or an untracked credential file. |
+| `destructive-command-guard` | `default` | Claude Code, OpenCode | Deny catastrophic shell commands; ask before one that would lose uncommitted work. |
+| `git-commit-push-policy-guard` | `default` | Claude Code, OpenCode | Deny changes to git identity, authorship or signing; ask before committing on the default branch. |
+| `commit-message-convention` | `default` | Claude Code, OpenCode | Deny an agent's commit whose message fails `cz check` (see [commitizen](#commit-message-convention-commitizen)). |
+| `dependency-allowlist-guard` | `default` | Claude Code, OpenCode | Deny the wrong package manager and lockfile hand edits; ask before a new direct dependency. |
+| `exfil-channel-guard` | `default` | Claude Code, OpenCode | Ask before repository data leaves through ordinary tools (a new remote, an upload, `scp`). |
+| `taint-escalation` | `opt-in` | Claude Code, OpenCode | After the session reads untrusted content, ask before pushes, installs and network calls. |
+| `command-convention-guard` | `opt-in` | Claude Code, OpenCode | Apply your repository's Bash convention rows (the engine ships none). |
+| `network-egress-guard` | `overlay` | Claude Code, OpenCode | Restrict agent network egress to approved hosts; an air-gapped overlay activates it. |
+| `sensitive-data-read-guard` | `overlay` | Claude Code, OpenCode | Ask before raw-data reads (data globs, large CSVs, notebook outputs); a regulated overlay activates it. |
+| `pii-prompt-guard` | `overlay` | Claude Code | Block a prompt carrying checksum-validated personal data; a regulated overlay activates it. |
+
+#### Audit
+
+| Hook | Tier | Enforced on | What it does |
+| --- | --- | --- | --- |
+| `guard-decision-log` | `default` | Claude Code, OpenCode | Log every guard deny, ask, override and degraded event locally, as ids and flags only. |
+| `local-audit-log` | `opt-in` | Claude Code, OpenCode | One structure-only local audit line per tool call, prompt and session boundary. |
+| `precompact-checkpoint` | `opt-in` | Claude Code | Before compaction, remember where your own prompts are; re-inject them, masked, after it. |
+
+### Where hooks run
+
+| Assistant | How the hooks reach it |
+| --- | --- |
+| Claude Code | Natively, on every event: one managed matcher group per event in `.claude/settings.json`, each running `.claude/hooks/playbook/launch.sh`. Your keys, your hook groups and `.claude/settings.local.json` are never touched, and a hand-edited managed group is restored with a warning. |
+| OpenCode ≥ 1.18.29 | Natively, through the one generated plugin `.opencode/plugins/playbook-hooks.js` (OpenCode's V1 plugin API): tool calls before and after, plus session start (an experimental API) and Stop (evidence only: it reports, it cannot block). Restart OpenCode after sync reports that the plugin changed. |
+| Codex, Cursor, GitHub Copilot, Gemini and other `AGENTS.md` readers | Advice only: the `## Guardrails` section at the end of `AGENTS.md`, each entry saying where it is enforced. |
+| Continue | Advice only: `.continue/rules/30-guardrail-<id>.md`. |
+| Agent Harness (opt-in) | Advice only: `rules/30-guardrail-<id>.md`, plus the `.playbook/hooks/<id>/` sidecar that keeps `import-harness` lossless. |
+
+### Kill switches and escape hatches
+
+They are read only from the environment of the hook process, with exact values,
+so set them where you start the assistant (`PLAYBOOK_HOOKS=off claude`):
+
+| Variable | Effect |
+| --- | --- |
+| `PLAYBOOK_HOOKS=off` | Every hook off for this session, mandatory ones included; the pre-commit hooks and `playbook ci` stay the control. |
+| `PLAYBOOK_HOOKS_DISABLE=<id>,<id>` | Those hooks off, unless an overlay made them mandatory. |
+| `PLAYBOOK_GATE=off` | The Stop coordinator lets the turn end, reported as not verified. |
+| `PLAYBOOK_ALLOW_GENERATED_EDIT=1` | Allow hand edits of generated files. |
+| `PLAYBOOK_HOOK_UNATTENDED=1` | Mark a headless run: an `ask` becomes what `[hooks] unattended_ask` says. |
+
+A `VAR=1 cmd` prefix inside an assistant's shell command never counts, and a
+variable set through a settings file's `env` object is ignored and reported.
+
+### Trust
+
+The engine's own hooks run builtin handlers only. A hook that runs an external
+command or script, from an overlay or from `playbook/hooks/`, runs only when its
+source is listed in `[hooks] allow_code_from` (`"<repo-local>"` or an overlay
+package name) **and** you approved its command and script hash on this machine.
+An interactive `playbook sync` (stdin and stdout are terminals) asks `[y/N]` for
+each pending item; the answer is stored per user outside the repository, shared
+by the clone's worktrees, and any change to the command or script asks again.
+Execution Stop stages that run your code (`typecheck`, `tests`, `coverage`) are
+approved the same way. There is no non-interactive approve flag, so a scripted
+machine bootstrap needs one interactive `playbook sync` per machine. The pinned
+interpreter is not a trust approval.
+
+### Checking that they run
+
+```bash
+playbook-hook doctor              # pin, state dir, guard_config.json digest, trust, OpenCode, decision-log summary
+playbook-hook doctor --repin      # re-pin this worktree's interpreter to the running python
+playbook-hook simulate pre_tool_use --harness claude_code < payload.json   # what the harness would get
+playbook-hook simulate pre_tool_use --env PLAYBOOK_HOOKS=off < payload.json  # try a kill switch
+```
+
+`doctor` is read-only apart from `--repin`; it exits 0 when healthy, 1 when
+degraded and 2 when broken. `simulate` runs the exact dispatch pipeline on one
+payload (the JSON the harness would send on stdin) with a throwaway state
+directory, so your real decision log is never touched. With
+`session-start-playbook-briefing` on, Claude Code shows `PLAYBOOK-GUARDS: OK` at
+session start, and `.claude/CLAUDE.md` ends with a line asking Claude to tell you
+when that heartbeat is missing.
+
+### Caveats
+
+- **Start Claude Code at the repository root.** Claude Code reads project
+  settings only from the `.claude/` of the directory a session starts in: a
+  session started in a subdirectory loads no playbook hook, and the heartbeat
+  cannot report it either.
+- **Claude Code holds project hooks until you accept the folder's trust
+  dialog**; `-p` and SDK runs count as trusted. Anthropic-hosted cloud sessions
+  run no project hook, and `disableAllHooks` or a managed
+  `allowManagedHooksOnly` policy silently drops them.
+- **Windows** works with Git Bash, which Claude Code uses for shell-form hooks.
+  On a PowerShell-only install the hook command fails and Claude Code shows a
+  non-blocking hook error: the hooks are fail-open there.
+- **Copilot CLI** and other tools also read `.claude/settings.json`. The
+  dispatcher ignores a payload that is not Claude Code's, but Copilot CLI's
+  `preToolUse` fails closed on errors: verify a repo used with Copilot CLI
+  (Windows above all) against the real CLI before relying on its hooks.
+- **Gemini CLI:** never run `gemini hooks migrate` on playbook-managed entries.
+  Its `--from-claude` conversion copies `timeout` (seconds) into a milliseconds
+  field.
+- **OpenCode ≥ 1.18.29** is required (`playbook-hook doctor` warns below it).
+  The plugin targets OpenCode's V1 plugin API; under V2 an inert `setup()` stub
+  loads without error and logs that the hooks are inactive, and the `AGENTS.md`
+  guidance remains.
+- **Generated, not committed.** Under the default `[output] commit = false`
+  the launcher, the plugin and `guard_config.json` are local output, rendered in
+  each clone by `playbook sync`; until then a registration is inert, never
+  blocking.
+
+### Invariants
+
+- Every hook decision is one of `deny | ask | context | none`; a hook never
+  rewrites a tool's input.
+- `dispatch` exits 0 or 10 (a decided deny); a raw 2 is never a deny, and a
+  broken install fails open instead of blocking your assistant (unless an
+  overlay opted into its strict mode).
+- An engine upgrade never adds executable hooks: an absent `[hooks]` table (or
+  one without `enabled = true`) means zero byte change.
+- `.local.toml` never carries policy: `[hooks]`, `[guardrails]` and `[metrics]`
+  there are ignored.
+- No repository or overlay code runs without your user-local trust approval.
+- `settings.local.json` is never written, and user keys, hook groups and
+  permission entries in `.claude/settings.json` stay untouched.
+- Committed outputs are machine-independent; the interpreter and tool pins live
+  under the git directory.
+- No telemetry and no network: guards never connect to a host, and the decision
+  log stays local and stores no content (no commands, paths, prompts or values).
+- A Stop stage that errors, times out or finds its tool missing is reported as
+  not verified, never as green.
+- Every speed bump has an off-workstation twin, a pre-commit hook or a
+  `playbook ci` step.
+- Hooks are git-only in v1: outside a git work tree nothing is pinned.
 
 ## Code-quality metrics gate
 
@@ -419,21 +747,70 @@ playbook metrics                              # measure src/ against absolute th
 playbook metrics --baseline git:HEAD          # fail if the working tree worsens vs HEAD
 playbook metrics src tests --format json      # machine-readable findings
 playbook metrics --strict                     # promote warnings to failures (non-zero exit)
+playbook metrics --baseline git:origin/main --changed   # only the files a branch changed
 ```
 
-It exits `0` on pass, `1` on a breach, and `2` on a usage error (bad path, bad baseline, malformed `[metrics]` config). Defaults and per-metric thresholds live in a `[metrics]` table in `.coding-agent-playbook.toml`. Under the hood each metric is wrapped in a **check** (a threshold or non-regression grader) and the checks are folded into one **rubric** report — the `Metric` / `Check` / `Rubric` model (see SPEC §21).
+It exits `0` on pass, `1` on a breach, and `2` on a usage error (bad path, bad baseline, malformed `[metrics]` config). Defaults and per-metric thresholds live in a `[metrics]` table in `.coding-agent-playbook.toml`. Under the hood each metric is wrapped in a **check** (a threshold or non-regression grader) and the checks are folded into one **rubric** report — the `Metric` / `Check` / `Rubric` model (see SPEC §21). The same `[metrics]` policy drives the pre-commit hook, the `metrics` step of [`playbook ci`](#playbook-ci) and the quality Stop stages of the lifecycle hooks, and it is read from the committed config only.
+
+### The metrics
+
+| Metric | Families | Selected | Measures |
+| --- | --- | --- | --- |
+| `cyclomatic_complexity` | `quality` | by default | 1 + the decision points of each function |
+| `wmc` | `quality` | by default | the summed complexity of a class's methods |
+| `lcom4` | `quality` | by default | class cohesion: groups of methods sharing no attribute |
+| `dit` | `quality` | by default | depth of inheritance |
+| `cbo` | `quality` | by default | coupling between objects (approximate) |
+| `maintainability_index` | `quality` | by default (needs `radon`) | the SEI maintainability index, 0–100 |
+| `ruff_violations` | `quality`, `docstrings` | opt-in, by name | ruff findings per file and code family: `quality` (C901, PLR0911, PLR0912, PLR0913, PLR0915), `docstrings` (D100–D107); needs `ruff` on `PATH` |
+| `file_sloc` | `quality` | opt-in, by name (needs `radon`) | source lines per file |
+| `docstring_example` | `docstrings` | opt-in, by name | whether each public function's docstring carries a usage example |
+| `test_pass_rate` | `testing` | with `--run-tests` | the share of passing tests |
+| `coverage` | `testing` | with `--run-tests` | line coverage per file and in total |
+| `diff_coverage` | `testing` | with `--run-tests` | the share of the changed executable lines the suite ran |
+
+Select with `--select` / `--extend-select` / `--ignore` (or the `select`,
+`extend_select` and `ignore` keys of `[metrics]`), naming metrics or the
+families `quality`, `docstrings` and `testing`. A family expands to its
+default members only, so an opt-in metric is selected by its own name: an engine
+upgrade never changes what an existing `[metrics]` measures. `--changed` limits
+a `git:` baseline run to the Python files changed against it.
+
+### Clean Code for AI Agents preset
+
+Code an agent edits stays legible when functions stay short, nesting and
+argument lists stay small, files stay under a few hundred lines and public
+functions carry a docstring with a usage example. This turns those budgets
+into the gate, without editing your own ruff configuration:
+
+```toml
+# .coding-agent-playbook.toml
+[metrics]
+extend_select = ["ruff_violations", "file_sloc", "docstring_example"]   # opt-in, by name
+
+[metrics.ruff_violations]   # passed as --config to the gate's own ruff call only
+config = { "lint.mccabe.max-complexity" = 10, "lint.pylint.max-args" = 5, "lint.pylint.max-statements" = 20 }
+
+[metrics.thresholds.file_sloc]   # 1.0 up to 300 source lines, 0.0 at 800
+warn = 1.0                       # warn above 300 lines
+fail = 0.6                       # fail above 500 lines
+```
+
+Under the default non-regression mode, existing code that already breaks a
+budget stays quiet; only a change that makes a file worse fails.
 
 ### Running tests and coverage (`--run-tests`)
 
-`--run-tests` additionally runs the **execution** metrics — `test_pass_rate` and `coverage` — which shell out to your project's own `pytest` (and `pytest-cov`) and parse the standard junit/coverage XML. These have side effects and cost, so they are **opt-in and never part of the default pre-commit hook**; run them in CI or on demand:
+`--run-tests` additionally runs the **execution** metrics — `test_pass_rate`, `coverage` and `diff_coverage` — which shell out to your project's own `pytest` (and `pytest-cov`) and parse the standard junit/coverage XML. These have side effects and cost, so they are **opt-in and never part of the default pre-commit hook**; run them in CI or on demand:
 
 ```bash
 playbook metrics --run-tests                          # also run the suite + measure coverage
 playbook metrics --run-tests --baseline git:HEAD      # fail on new test failures / coverage drop
 playbook metrics --run-tests --test-cmd "pytest -q"   # override the test command
+playbook metrics --run-tests --select testing --baseline git:HEAD   # the playbook-coverage hook
 ```
 
-The engine adds no dependency for this — your target project supplies `pytest`/`pytest-cov`.
+`diff_coverage` grades the change, not the whole file: the changed executable lines must be at least 80% executed. Test files and `[metrics] exclude` are never scored, and a change with no executable line passes without a fake 100%. `[metrics] run_tests = true` makes `--run-tests` the default for CI and manual runs; `--no-run-tests` overrides it, and the `playbook-metrics` pre-commit hook always passes it, so a commit never runs your suite. The engine adds no dependency for this — your target project supplies `pytest`/`pytest-cov`.
 
 ### The `metrics` optional extra (maintainability index)
 
@@ -441,6 +818,99 @@ The core gate is **stdlib-only** and runs with nothing extra installed. The main
 
 ```bash
 pip install 'coding-agent-playbook[metrics]'   # adds radon for maintainability_index
+```
+
+## Commit-message convention (commitizen)
+
+The playbook has no commit-message linter of its own: the convention is
+[commitizen](https://commitizen-tools.github.io/commitizen/)'s, configured where
+commitizen reads it, and every check calls `cz check`. Add commitizen to your
+dev tools (`uv add --dev commitizen`), then declare the convention:
+
+```toml
+# pyproject.toml
+[tool.commitizen]
+name = "cz_conventional_commits"   # commitizen's default; use cz_customize + schema_pattern for your own
+```
+
+A repo with history that predates the convention sets a cut-over date, so old
+commits are grandfathered:
+
+```toml
+# .coding-agent-playbook.toml
+[hooks.commit_convention]
+cutover_date = "2026-10-15"   # "YYYY-MM-DD", quoted: an unquoted TOML date is an error
+```
+
+Range checks skip every commit whose **committer** date is before
+`cutover_date`; a commit rebased or amended after it counts as new and must
+conform. Unset, every commit is checked. The convention is then enforced in
+three places:
+
+- the `playbook-commit-msg` pre-commit hook checks every new commit message,
+  yours included, with no cut-over (install the `commit-msg` hook type);
+- the `commit-message-convention` lifecycle hook denies an assistant's
+  `git commit` whose message fails, and a `git push` whose commits after the
+  cut-over fail;
+- the `commit-convention` step of `playbook ci` checks the branch's commits
+  after the cut-over, plus the pull-request title when `PLAYBOOK_PR_TITLE` is
+  set (in a squash-merge repo the title becomes the commit subject).
+
+A missing `cz` fails the CI step and the pre-commit hook loudly; the lifecycle
+hook fails open with a once-per-session hint to install it.
+
+## `playbook ci`
+
+`playbook ci` is the one required status check: it runs every off-workstation
+twin of the lifecycle hooks against the merge base with the default branch,
+each step as a child process (no shell, a timeout per step), and reports all of
+them, with no fail-fast.
+
+```bash
+playbook ci                                   # every applicable step vs the default branch
+playbook ci --base origin/main --steps validate,scan-secrets
+playbook ci --steps scan-sinks                # --steps also switches on opt-in steps
+playbook ci --format json                     # one {step, argv, exit, duration_s, status} per step
+```
+
+| Step | Runs | When |
+| --- | --- | --- |
+| `sync-check` | `playbook sync --check` | `[output] commit = true` only: under the default, a fresh clone has no output to compare |
+| `validate` | `playbook validate` | always |
+| `metrics` | `playbook metrics --baseline git:<merge base> --changed --no-run-tests` | always (static, never the suite) |
+| `coverage` | `playbook metrics --run-tests --select testing --baseline git:<merge base>` | `[metrics] run_tests = true`, or `--steps coverage` |
+| `gate-scan` | `playbook gate-scan`: new suppressions, skipped tests, loosened checker config | always |
+| `scan-secrets` | `playbook scan-secrets` over the branch | always |
+| `commit-convention` | `cz check` on the commits after `cutover_date`, plus `$PLAYBOOK_PR_TITLE` | `[tool.commitizen]` or `[hooks.commit_convention]` is set |
+| `commit-trailers` | `playbook check-commit-trailers` over the branch | a commit-trailer row is configured |
+| `check-deps` | `playbook check-deps`: newly declared dependencies against your policy | a dependency policy is configured |
+| `scan-sinks` | `playbook scan-sinks` over the branch | only when `--steps` names it |
+
+It exits `0` when every step that ran passed, `1` when one failed or timed out,
+and `2` on a usage error or an unresolvable base. The job needs the full history
+(`fetch-depth: 0`), and the pull-request title is attacker-controlled text: pass
+it **only through `env:`**, never inside a `run:` line, so it cannot inject shell
+commands:
+
+```yaml
+# .github/workflows/ci.yml
+jobs:
+  playbook-ci:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0                 # playbook ci diffs <merge base>..HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the project with its dev tools (coding-agent-playbook, commitizen)
+        run: python -m pip install -e ".[dev]"
+      - name: playbook ci
+        run: playbook ci --base origin/main
+        env:
+          PLAYBOOK_PR_TITLE: ${{ github.event.pull_request.title }}
 ```
 
 ## Running evals

@@ -1,13 +1,220 @@
 # Migration guide
 
-> **Heads-up:** the **v0.13 task-config redesign** (below) supersedes parts of the
+> **Heads-up:** **v0.18** (assistant lifecycle hooks, below) asks one thing of every
+> consumer: run `playbook validate` before upgrading, because `playbook sync` now
+> refuses content that validate rejects. Everything else in v0.18 is opt-in or a
+> one-time diff; its TL;DR says who must act.
+>
+> Older: the **v0.13 task-config redesign** supersedes parts of the
 > v0.12 guide. The authored `[expected]`/`[metrics]`/`[rubric]` task TOML that v0.12
 > called "unchanged" is **gone** — replaced by the `[gate]`/`[rubric]`/`[verdict]`/
 > `[aggregate]` layers — and `higher_is_worse` is replaced by a per-`Metric`
-> `Normalizer`. Read the v0.13 section first; the v0.12 section still applies to the
-> engine `Metric`/`Check`/`Rubric` API and the entry-point group renames.
+> `Normalizer`. Read the v0.13 section before the v0.12 one; the v0.12 section still
+> applies to the engine `Metric`/`Check`/`Rubric` API and the entry-point group renames.
 
-## v0.16 — Out-of-tree adapters: override `stale_outputs`, not `cleanup_stale`
+## v0.18 — Assistant lifecycle hooks (PR K)
+
+v0.18 adds **lifecycle hooks**, the fourth canonical kind: rendered natively for
+Claude Code and OpenCode and as advisory text for every other assistant, and run
+by one dispatcher, `playbook-hook` (README "Assistant lifecycle hooks", SPEC
+§6.6.7). It also adds the off-workstation checks behind them (`playbook ci`,
+`scan-secrets`, `gate-scan`, …), new pre-commit hooks and new opt-in metrics.
+Hooks are opt-in: a repo that does not enable them renders what it rendered
+before. Authoritative design: `specs/prK-lifecycle-hooks.md` and
+`specs/prK-hook-pack.md`; the SPEC changelog entry is v0.18.
+
+### TL;DR — who needs to do anything
+
+| You are… | Migration |
+|---|---|
+| **Every consumer repo** | Run `playbook validate` before upgrading and fix what it reports (§2). Nothing else is required: hooks stay off, and the only other changes are the lockfile schema (§1) and one notice line from `playbook sync` (§3). |
+| A repo that **wants lifecycle hooks** | Re-run `playbook init` (it asks) or set `[hooks] enabled = true`, then run `playbook sync` once interactively on each machine (§3). Expect a one-time `.claude/CLAUDE.md` change (§9). |
+| A repo whose **`.coding-agent-playbook.local.toml`** sets `[hooks]`, `[guardrails]` or `[metrics]` | Move them to the committed config: the local copies are ignored (§4). |
+| A **`playbook metrics`** user | The engine's pre-commit hook: nothing. An `init`-written `repo: local` hook with `[metrics] run_tests = true`: add `--no-run-tests` (§5). `--run-tests` with a `git:` baseline now also grades `diff_coverage` (§7). |
+| Code calling **`CoverageCheck(warn=80.0)`** | Pass the 0–1 cutoff, `warn=0.8` (§6). |
+| A repo whose **dependency names** use `_`, `.` or capitals | Commit the one-time `[detector_cache]` change (§8). |
+| An **overlay author** | Nothing required. Overlays may now ship hooks, which only add to the engine's (SPEC §11.6), and `playbook validate` runs in an overlay checkout with no consumer config (§2). |
+| An **out-of-tree adapter** author | Nothing required; read §10 (the hook members, and `stale_outputs` over `cleanup_stale`). |
+
+### 1. Lockfile schema 2
+
+`.coding-agent-playbook.lock` is now `schema_version = 2`: every entry records
+its provenance (`kind`, `artifact_id`, `source`, `adapter`), and with hooks on it
+gains scoped entries (`scope = "json:/hooks/PreToolUse"`) for the managed
+elements of `.claude/settings.json` plus an `executable` flag for copied hook
+scripts (SPEC §14.4). A schema-1 lockfile still loads, its entries reading as
+unknown provenance, and the first write-mode `playbook sync` rewrites it as
+schema 2. Under the default `[output] commit = false` the lockfile is local
+state, so there is nothing to do. Under `commit = true` that first sync changes
+the committed lockfile once: commit it together with the engine bump.
+
+### 2. Run `playbook validate` first: `playbook sync` is validate-gated
+
+Write-mode `playbook sync` and `playbook sync --check` now run the whole
+`playbook validate` rule set before rendering. On any error they print its
+`FAIL` lines, then
+
+```text
+playbook sync aborted; no files were written.
+```
+
+and exit 1, so content the engine would render wrongly (an unknown `applies_if`
+fact, a broken eval-task reference, an invalid Agent Skill, a hook that breaks
+its contract) never reaches disk. A repo whose content fails validate today
+stops syncing on upgrade, the post-checkout auto-sync included, and its
+generated output goes stale until the content is fixed. So run
+`playbook validate` with your current engine and fix every `FAIL` before you
+bump; after the bump, run it once more before the first sync, since v0.18 adds
+the hook rules H1–H21 (SPEC §12.6). Warnings never stop a sync, and
+`playbook sync --check-staged` (the pre-commit guard) is not gated.
+
+`playbook validate` also runs without a `.coding-agent-playbook.toml` now: in an
+engine or overlay checkout it validates the package's own `resources/` and
+`playbook/`, and first names the consumer-config checks it skips.
+
+### 3. `[hooks]`: opt in through `playbook init`, or not at all
+
+An engine upgrade never enables hooks. Without a `[hooks]` table every mode of
+`playbook sync` renders byte for byte what v0.17 rendered, and write mode prints
+one line:
+
+```text
+hooks available: add [hooks] enabled = true or re-run playbook init
+```
+
+To opt in, re-run `playbook init`: it asks `Enable assistant lifecycle hooks?
+[Y/n]`, writes your answer as `[hooks] enabled` and keeps the rest of your
+config. Or add `[hooks] enabled = true` by hand (README "Turning them on"). Then
+run `playbook sync` once **interactively** on each machine: it pins the
+worktree's Python interpreter under the git directory and asks the trust
+questions for external handlers and execution Stop stages, which have no
+non-interactive approve flag. To record a "no" and silence the notice, run
+`playbook init --no-hooks` (it writes `enabled = false`). A scripted
+`playbook init --non-interactive` re-run enables hooks unless the config already
+sets `enabled`, so pass `--no-hooks` there to keep them off.
+
+### 4. `.coding-agent-playbook.local.toml` never carries policy
+
+`[hooks]` (with every `[hooks.<hook-id>]` and `[hooks.commit_convention]`),
+`[guardrails]` and `[metrics]` are team policy: the rendered hooks, the CI twins
+and the metrics gate must not depend on a gitignored file CI never sees. In
+`.coding-agent-playbook.local.toml` they are **ignored**: `playbook sync` warns,
+and `playbook validate` fails on a `[hooks]` or `[guardrails]` key there (H21).
+Move such a table into the committed `.coding-agent-playbook.toml`. A developer
+deviates at run time instead, through the hook-process environment
+(`PLAYBOOK_HOOKS=off`, `PLAYBOOK_HOOKS_DISABLE=<ids>`). `playbook init` and
+`playbook check --refresh` keep these tables when they rewrite the committed
+config, and never write a local override into it.
+
+### 5. `--no-run-tests` on the metrics pre-commit hooks
+
+`[metrics] run_tests = true` used to make the `playbook-metrics` pre-commit hook
+run your whole test suite on every commit. The engine's hook now runs
+`playbook metrics --baseline git:HEAD --no-run-tests`, and the starter
+`coding-agent-playbook-metrics` does too, so `run_tests` applies to CI and
+manual runs only. Repos that reference the engine's `.pre-commit-hooks.yaml` get
+this with the `rev:` bump. A `.pre-commit-config.yaml` that an older
+`playbook init` wrote keeps its old `entry:` (init never rewrites a hook already
+present), so add `--no-run-tests` there by hand if you set `run_tests = true`.
+New hooks are not appended to an existing config either: copy
+`playbook-secrets`, `playbook-coverage`, `playbook-commit-msg` and the others you
+want from README "Pre-commit hooks" or SPEC §13.2.
+
+### 6. `CoverageCheck` grades on the 0–1 score
+
+`CoverageCheck()` now defaults to `warn=0.8`, which flags a file under 80%
+coverage. The old default, `warn=80.0`, was a raw percentage that a normalized
+0–1 score can never reach, so every file warned. Code that passes a percentage
+explicitly must pass the 0–1 cutoff instead: `CoverageCheck(warn=80.0)` becomes
+`CoverageCheck(warn=0.8)`. Eval-task `[gate]` thresholds were already 0–1
+(v0.13) and need nothing.
+
+### 7. New metrics, and how to select them
+
+| Metric | Measures | Selected |
+| --- | --- | --- |
+| `ruff_violations` | ruff findings per file and code family (`quality`: C901, PLR0911, PLR0912, PLR0913, PLR0915; `docstrings`: D100–D107), through `ruff` on `PATH` as a subprocess | opt-in, by name |
+| `file_sloc` | source lines per file (needs the `metrics` extra, radon) | opt-in, by name |
+| `docstring_example` | whether a public function's docstring carries a usage example | opt-in, by name |
+| `diff_coverage` | the share of the changed executable lines the suite ran (fails below 80%) | with `--run-tests` and a `git:` baseline |
+
+The three opt-in metrics are selected only by name, never by default or through
+a family, so an upgrade leaves every existing static result byte-stable:
+
+```toml
+[metrics]
+extend_select = ["ruff_violations", "file_sloc"]
+```
+
+or `playbook metrics --extend-select ruff_violations,file_sloc`. `diff_coverage`
+is a default member of the `testing` family: `playbook metrics --run-tests
+--baseline git:<ref>` now grades it as well, which can fail a change whose new
+lines are untested. Keep the old result with `ignore = ["diff_coverage"]`. The
+other new `[metrics]` keys are `select`, `ignore`, `exclude` (default
+`["**/eval_tasks/*/setup/**"]`; a list replaces it), `git_timeout_s`,
+`test_timeout_s` and the `[metrics.ruff_violations]` sub-table (SPEC §7.1.1).
+The README's "Clean Code for AI Agents preset" combines them.
+
+### 8. PEP 503 dependency names: a one-time `detector_cache` change
+
+The detector now normalizes dependency names the way package indexes compare
+them (PEP 503): lower case, with every run of `-`, `_` and `.` turned into one
+`-`, so `Foo_Bar` → `foo-bar` (names used to be lower-cased only). The detector,
+the `has_dev_dependency` predicate, dependency-allowlist-guard and
+`playbook check-deps` share this one normalization. Two one-time effects
+(OQ-36):
+
+- the `[detector_cache]` tables of `.coding-agent-playbook.toml` change their
+  keys for such a name the next time `playbook init` or
+  `playbook check --refresh` rewrites them: commit that diff;
+- a dependency declared as `pytest_asyncio` now matches the `pytest-asyncio`
+  the detector knows, so a rule or prompt gated on it can start to apply.
+  Spell `applies_if` names in the normalized form
+  (`has_framework: ["pytest-asyncio"]`).
+
+### 9. One heartbeat line in `.claude/CLAUDE.md`
+
+With hooks on, `session-start-playbook-briefing` (a `default`-tier hook) proves
+at session start that the guards answer, and `.claude/CLAUDE.md` ends with one
+fixed line:
+
+```text
+If PLAYBOOK-GUARDS: OK did not appear at session start, tell the user guardrails are not running before risky work.
+```
+
+It appears once per opted-in repo and never changes after that (OQ-30). Under
+`[output] commit = true`, commit that one-time diff; under the default it is
+local output. `AGENTS.md` never carries it, and it goes away with the hook.
+
+### 10. Out-of-tree adapters: the hook members, and `stale_outputs`
+
+`Adapter` gains six hook members. Each is a concrete default, like
+`write_skill`, so an adapter written before hooks keeps working unchanged and
+is an advisory-only target:
+
+- `hook_support` (class attribute, default empty): canonical event → the
+  decisions this adapter renders natively; empty means advisory-only.
+- `shared_outputs` (class attribute): files co-owned with the user, such as
+  `.claude/settings.json`, which get scoped lock entries for their managed
+  elements and never a whole-file one.
+- `runtime_outputs` (class attribute): hook plumbing that `finalize` writes,
+  locked as `kind = "runtime"`.
+- `begin_sync(repo_root, prior_lock, *, hooks_config=None)`: called once per
+  sync before any `write_*`, always with the real repository, `--check` included.
+- `write_hook(hook, repo_root)`: called for every on hook, after the skills. The
+  default degrades the hook to its advisory rule (`guardrail-<id>`, priority 30)
+  through your own `write_rule`, so with hooks on your `write_rule` receives one
+  such rule per on hook whose body is not blank. Override `write_hook` to route
+  or drop them.
+- `managed_lock_entries()`: the scoped lock entries of the last `finalize`
+  (default `[]`).
+
+Sync calls them in one order per adapter: `begin_sync`, the `write_rule` /
+`write_prompt` / `write_skill` loops, `write_hook`, `finalize`, then
+`managed_lock_entries`; `cleanup_stale` still runs after every adapter's
+`finalize` (SPEC §10.1).
+
+#### Override `stale_outputs`, not `cleanup_stale`
 
 `playbook sync --check` now reports orphans (SPEC §12.3), so it must know what
 write mode would delete without deleting it. `Adapter.stale_outputs(written_paths,
@@ -18,7 +225,7 @@ entry-point group) that override `cleanup_stale`. Rule/prompt/skill authors and
 built-in adapter users need nothing.
 
 ```python
-# before (SPEC §10.1 up to v0.15)
+# before (SPEC §10.1 up to v0.17)
 def cleanup_stale(self, written_paths, repo_root):
     return self._default_cleanup(written_paths, repo_root)
 
