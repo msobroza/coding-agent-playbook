@@ -135,16 +135,19 @@ def test_first_sync_writes_every_hook_output(synced: Path) -> None:
     assert list(doc["hooks"]) == ENGINE_PACK_EVENTS
     assert (synced / LAUNCHER).is_file()
     config = json.loads((synced / GUARD_CONFIG).read_bytes())
-    # The engine pack's default-tier hooks (Tracks K5, K6), K7's feedback hooks and K8's
-    # secret, Bash, dependency and exfil guards, and K9's guard-decision-log (a sink: no
-    # registration); guard-eval-fixtures, command-convention-guard, taint-escalation and
-    # local-audit-log are opt-in, and the fixture detects no pytest (its lint hook is off).
+    # The engine pack's default-tier hooks (Tracks K5, K6), K7's feedback hooks, K8's
+    # secret, Bash, dependency and exfil guards, K9's guard-decision-log (a sink: no
+    # registration) and K10's docstring stage and commit-message convention;
+    # guard-eval-fixtures, command-convention-guard, taint-escalation, local-audit-log and
+    # coverage-diff-gate are opt-in, and the fixture detects no pytest (its lint hook is off).
     assert sorted(config["hooks"]) == [
         "block-precommit-bypass",
         "clean-code-metrics-nonregression",
+        "commit-message-convention",
         "control-plane-guard",
         "dependency-allowlist-guard",
         "destructive-command-guard",
+        "docstring-nonregression",
         "error-handling-lint-feedback",
         "eval-task-authoring-lint",
         "exfil-channel-guard",
@@ -396,24 +399,24 @@ def test_summary_lines_counts_and_hand_edit_warning(
     repo = make_hook_repo(tmp_path / "repo", make_synthetic_repo)
     assert _sync_repo(repo, tmp_path) == 0
     out = capsys.readouterr().out
-    # guard-x, guard-ext and the engine pack's twenty-four default-tier hooks on here (seven
-    # protect, the Stop coordinator, two of its stage hooks, block-precommit-bypass (K6),
+    # guard-x, guard-ext and the engine pack's twenty-six default-tier hooks on here (seven
+    # protect, the Stop coordinator, three of its stage hooks (K6, K10), block-precommit-bypass,
     # post-edit-ruff-format, prompt-write-scope-guard, the error-handling and typing lint
     # hooks, toolchain-missing-hint (K7), the three secret hooks, the two Bash guards and the
-    # dependency and exfil guards (K8), guard-decision-log (K9)); pytest's is off (no pytest
-    # detected), and so is the ML deserialization guard (no ML stack); the opt-in ones
-    # (guard-eval-fixtures, three K6 Stop hooks, the notebook hook, command-convention-guard,
-    # taint-escalation, local-audit-log, precompact-checkpoint) are skipped, as are the inert
-    # overlay-tier pii-prompt-guard, network-egress-guard and sensitive-data-read-guard (K9).
-    # The briefing, the two lint hooks and the decision sink have no advisory body, so
-    # Continue gets four fewer;
-    # the sink registers nothing, so the managed entries are unchanged. The member-less UserPromptSubmit group
-    # is one entry, toolchain-missing-hint's PostToolUseFailure another, and each native
-    # deny row (secrets and destructive prefixes) one more.
+    # dependency and exfil guards (K8), guard-decision-log (K9), commit-message-convention
+    # (K10)); pytest's is off (no pytest detected), and so is the ML deserialization guard (no
+    # ML stack); the opt-in ones (guard-eval-fixtures, three K6 Stop hooks, the notebook hook,
+    # command-convention-guard, taint-escalation, local-audit-log, precompact-checkpoint,
+    # coverage-diff-gate) are skipped, as are the inert overlay-tier pii-prompt-guard,
+    # network-egress-guard and sensitive-data-read-guard (K9). The briefing, the two lint hooks
+    # and the decision sink have no advisory body, so Continue gets four fewer; the sink
+    # registers nothing, so the managed entries are unchanged. The member-less
+    # UserPromptSubmit group is one entry, toolchain-missing-hint's PostToolUseFailure
+    # another, and each native deny row (secrets and destructive prefixes) one more.
     native = sum(len(rows) for rows in _native_rows().values())
-    assert "✓ Hooks: 26 enabled, 14 skipped (" in out
-    assert "claude_code: 26 enforced" in out
-    assert "continue: 22 advisory" in out
+    assert "✓ Hooks: 28 enabled, 15 skipped (" in out
+    assert "claude_code: 28 enforced" in out
+    assert "continue: 24 advisory" in out
     updated = f"{6 + native} managed entries updated, 0 removed (user keys untouched)"
     assert f"✓ {SETTINGS}: {updated}" in out
 

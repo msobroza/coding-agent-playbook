@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
 CLI_PREFIX = (sys.executable, "-m", "coding_agent_playbook.cli")
+_METRICS_ARGV = ("metrics", "--baseline", "git:abc123", "--changed", "--no-run-tests")
 _COMMITTED = _DEFAULT_CONFIG + "\n[output]\ncommit = true\n"
 
 
@@ -70,8 +71,11 @@ def test_ci_steps_table_rows_and_owners() -> None:
     assert [(step.name, step.owner) for step in ci.CI_STEPS] == [
         ("sync-check", "prerequisites"),
         ("validate", "existing"),
+        ("metrics", "F.2/F.3"),
+        ("coverage", "F.1"),
         ("gate-scan", "E.2"),
         ("scan-secrets", "E.4"),
+        ("commit-convention", "F.4"),
         ("commit-trailers", "E.4"),
         ("check-deps", "E.4"),
         ("scan-sinks", "E.3"),
@@ -90,6 +94,46 @@ def test_runs_steps_in_ci_steps_order(committed: Path) -> None:
         (*CLI_PREFIX, "gate-scan", "--range", "abc123..HEAD", "--repo-root", root),
     ]
     assert runner.timeouts == [ci.DEFAULT_STEP_TIMEOUT_S] * 3
+
+
+def test_metrics_step_argv_uses_merge_base_changed_no_run_tests(tmp_path: Path) -> None:
+    """prK §F.2.3: always enabled; the merge base keeps main's later edits out."""
+    runner = FakeCiStepRunner()
+
+    assert _run(tmp_path, "--steps", "metrics", runner=runner, git=_git("f00d")) == 0
+
+    root = str(tmp_path.resolve())
+    argv = ("metrics", "--baseline", "git:f00d", "--changed", "--no-run-tests")
+    assert runner.calls == [(*CLI_PREFIX, *argv, "--repo-root", root)]
+
+
+_COVERAGE_ARGV = ("metrics", "--run-tests", "--select", "testing", "--baseline", "git:f00d")
+
+
+@pytest.mark.parametrize(
+    ("metrics_table", "steps", "runs"),
+    [
+        ("", ("--steps", "metrics,coverage"), True),  # named explicitly
+        ("[metrics]\nrun_tests = true\n", (), True),  # the config runs tests
+        ("[metrics]\nrun_tests = false\n", (), False),
+        ("", (), False),
+        ("[metrics]\nrun_tests = 3\n", (), True),  # unloadable: run it, so it reports why
+    ],
+    ids=["steps-flag", "run-tests-true", "run-tests-false", "no-table", "invalid-config"],
+)
+def test_coverage_step_enabled_by_run_tests_or_steps_flag(
+    tmp_path: Path, metrics_table: str, steps: tuple[str, ...], runs: bool
+) -> None:
+    """prK §F.1.3/§F.5: the suite-running row is opt-in; its argv diffs the merge base."""
+    config = _DEFAULT_CONFIG + "\n" + metrics_table
+    (tmp_path / ".coding-agent-playbook.toml").write_text(config, encoding="utf-8")
+    runner = FakeCiStepRunner()
+
+    assert _run(tmp_path, *steps, runner=runner, git=_git("f00d")) == 0
+
+    root = str(tmp_path.resolve())
+    coverage_call = (*CLI_PREFIX, *_COVERAGE_ARGV, "--repo-root", root)
+    assert (coverage_call in runner.calls) is runs
 
 
 def test_scan_secrets_step_uses_merge_base_range(tmp_path: Path) -> None:
@@ -111,12 +155,14 @@ def test_aggregated_exit_1_when_any_step_fails(
 
     assert _run(committed, runner=runner) == 1
 
-    assert _subcommands(runner) == ["sync", "validate", "gate-scan", "scan-secrets"]  # no fail-fast
+    # no fail-fast
+    assert _subcommands(runner) == ["sync", "validate", "metrics", "gate-scan", "scan-secrets"]
     out = capsys.readouterr().out
     assert "validate said hello" in out
     assert "FAIL validate (exit 1" in out
-    # commit-trailers (no rows), check-deps (no policy) and the opt-in scan-sinks
-    assert "playbook ci: 3 passed, 1 failed, 3 skipped" in out
+    # coverage (run_tests off), commit-convention (no commitizen), commit-trailers
+    # (no rows), check-deps (no policy) and the opt-in scan-sinks
+    assert "playbook ci: 4 passed, 1 failed, 5 skipped" in out
 
 
 @pytest.mark.parametrize("steps", ["validate,nope", "", ",,"])
@@ -130,7 +176,7 @@ def test_unknown_step_is_usage_error_exit_2(
     assert runner.calls == []
     err = capsys.readouterr().err
     assert err.startswith("error: --steps")
-    assert "sync-check, validate, gate-scan, scan-secrets" in err
+    assert "sync-check, validate, metrics, coverage, gate-scan, scan-secrets" in err
 
 
 def test_json_records_step_argv_exit_duration(
@@ -143,7 +189,7 @@ def test_json_records_step_argv_exit_duration(
         "--format",
         "json",
         runner=runner,
-        clock=_clock(0, 1.5, 2, 2.25, 3, 3.5, 4, 4.125),
+        clock=_clock(0, 1.5, 2, 2.25, 2.5, 2.75, 3, 3.5, 4, 4.125),
     )
 
     assert code == 1
@@ -167,6 +213,21 @@ def test_json_records_step_argv_exit_duration(
             "status": "passed",
         },
         {
+            "step": "metrics",
+            "argv": [*CLI_PREFIX, *_METRICS_ARGV, "--repo-root", root],
+            "exit": 0,
+            "duration_s": 0.25,
+            "status": "passed",
+        },
+        {
+            "step": "coverage",
+            "argv": [],
+            "exit": None,
+            "duration_s": 0.0,
+            "status": "skipped",
+            "note": "[metrics] run_tests is not true: run with --steps coverage",
+        },
+        {
             "step": "gate-scan",
             "argv": [*CLI_PREFIX, "gate-scan", "--range", "abc123..HEAD", "--repo-root", root],
             "exit": 1,
@@ -179,6 +240,14 @@ def test_json_records_step_argv_exit_duration(
             "exit": 0,
             "duration_s": 0.125,
             "status": "passed",
+        },
+        {
+            "step": "commit-convention",
+            "argv": [],
+            "exit": None,
+            "duration_s": 0.0,
+            "status": "skipped",
+            "note": "no [tool.commitizen] in pyproject.toml and no [hooks.commit_convention]",
         },
         {
             "step": "commit-trailers",
@@ -216,7 +285,7 @@ def test_sync_check_skipped_when_output_commit_false(
 
     assert _run(tmp_path, "--format", "json", runner=runner) == 0
 
-    assert _subcommands(runner) == ["validate", "gate-scan", "scan-secrets"]
+    assert _subcommands(runner) == ["validate", "metrics", "gate-scan", "scan-secrets"]
     skipped = json.loads(capsys.readouterr().out)["steps"][0]
     assert skipped["step"] == "sync-check"
     assert skipped["status"] == "skipped"
@@ -231,7 +300,7 @@ def test_sync_check_skipped_without_config(
 
     assert _run(tmp_path, runner=runner) == 0
 
-    assert _subcommands(runner) == ["validate", "gate-scan", "scan-secrets"]
+    assert _subcommands(runner) == ["validate", "metrics", "gate-scan", "scan-secrets"]
     assert "SKIP sync-check: no .coding-agent-playbook.toml" in capsys.readouterr().out
 
 

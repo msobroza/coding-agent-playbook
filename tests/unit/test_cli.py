@@ -206,6 +206,43 @@ def test_metrics_subparser_defaults():
     assert args.mode is None
     assert args.strict is False
     assert args.format == "text"
+    assert (args.select, args.extend_select, args.ignore) == (None, None, None)
+    assert (args.changed, args.emit_measurements) == (False, None)
+
+
+def test_metrics_subparser_new_flags():
+    """prK §F.0.3 items 2-4: selection, --changed and the measurement snapshot."""
+    args = build_parser().parse_args(
+        [
+            "metrics",
+            "--select",
+            "quality",
+            "--extend-select",
+            "ruff_violations,file_sloc",
+            "--ignore",
+            "lcom4",
+            "--changed",
+            "--emit-measurements",
+            "cov.json",
+            "--baseline",
+            "json:base.json",
+        ]
+    )
+    assert args.select == "quality"
+    assert args.extend_select == "ruff_violations,file_sloc"
+    assert args.ignore == "lcom4"
+    assert args.changed is True
+    assert args.emit_measurements == "cov.json"
+    assert args.baseline == "json:base.json"
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [([], None), (["--run-tests"], True), (["--no-run-tests"], False)],
+)
+def test_metrics_run_tests_is_tristate_default_none(argv, expected):
+    """``None`` defers to ``[metrics] run_tests``; ``--no-run-tests`` overrides it (§F.0.3 item 6)."""
+    assert build_parser().parse_args(["metrics", *argv]).run_tests is expected
 
 
 def test_twin_subcommands_close_the_canonical_list():

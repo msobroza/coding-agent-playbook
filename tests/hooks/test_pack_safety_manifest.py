@@ -37,7 +37,7 @@ class PackRow(NamedTuple):
     supports: tuple[str, ...] = ("claude_code", "opencode")
 
 
-#: The nine §E.4 rows (taint-escalation's marker and the exfil snapshot are companions).
+#: The nine §E.4 rows plus §F.4.2 (taint-escalation's marker and the exfil snapshot are companions).
 SAFETY_PACK: dict[str, PackRow] = {
     "secrets-path-guard": PackRow(
         "default", ("pre_tool_use",), ("deny", "ask", "context", "none"), "ask"
@@ -62,6 +62,8 @@ SAFETY_PACK: dict[str, PackRow] = {
     "taint-escalation": PackRow(
         "opt-in", ("pre_tool_use", "post_tool_use", "session_start"), ("ask", "none"), "ask"
     ),
+    # §F.4.2: commitizen on commits and pushes; never asks (a convention is no judgment call).
+    "commit-message-convention": PackRow("default", ("pre_tool_use",), ("deny", "none"), "open"),
 }
 
 

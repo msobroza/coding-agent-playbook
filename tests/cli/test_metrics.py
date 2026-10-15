@@ -91,6 +91,11 @@ def classify(value):
 
 
 def _ns(**kwargs: object) -> argparse.Namespace:
+    """The parsed ``playbook metrics`` argv, with the parser's defaults.
+
+    ``run_tests`` is tri-state like ``--run-tests/--no-run-tests``: ``None``
+    defers to ``[metrics] run_tests``.
+    """
     base: dict[str, object] = {
         "paths": [],
         "baseline": None,
@@ -98,8 +103,13 @@ def _ns(**kwargs: object) -> argparse.Namespace:
         "strict": False,
         "format": "text",
         "repo_root": None,
-        "run_tests": False,
+        "run_tests": None,
         "test_cmd": None,
+        "select": None,
+        "extend_select": None,
+        "ignore": None,
+        "changed": False,
+        "emit_measurements": None,
     }
     base.update(kwargs)
     return argparse.Namespace(**base)

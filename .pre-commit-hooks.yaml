@@ -19,6 +19,8 @@
 # git hook types (`default_install_hook_types` above makes a plain
 # `pre-commit install` do it; explicit `--hook-type` flags REPLACE that list, so
 # name all three): pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge
+# With `playbook-commit-msg` (a commitizen convention), add commit-msg to the list:
+#   pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge --hook-type commit-msg
 # Stage names follow the hook-type names introduced in pre-commit 3.2.0.
 #
 # These hooks are `language: python`: pre-commit runs them in its OWN venv, which
@@ -73,7 +75,8 @@
 # Diffs staged Python against HEAD so a commit may not regress cyclomatic
 # complexity, maintainability index, etc. Execution evaluators (`--run-tests`)
 # are intentionally NOT in this default hook (side effects + cost) — run those
-# in CI or a manual hook instead.
+# in CI or a manual hook instead. `--no-run-tests` keeps it static even when your
+# `[metrics]` sets `run_tests = true` (that setting is for CI and manual runs).
 # Caveat: the gate compares the *working-tree* file against HEAD (not the index),
 # so a partially-staged file is diffed working-tree-against-HEAD. Acceptable for
 # the common all-staged case (working tree == index).
@@ -84,10 +87,25 @@
 - id: playbook-metrics
   name: coding-agent-playbook metrics (static, non-regression vs HEAD)
   description: Static code-quality gate — fail when staged Python worsens vs HEAD
-  entry: playbook metrics --baseline git:HEAD
+  entry: playbook metrics --baseline git:HEAD --no-run-tests
   language: python
   types_or: [python, pyi]
   require_serial: true
+
+# Coverage gate (prK §F.1.3). RUNS YOUR TEST SUITE, so it is manual-only (SPEC
+# §21.7: execution is never on every commit): changed lines must be >= 80%
+# executed (diff_coverage) and total coverage must not drop vs HEAD. Run it with
+#   pre-commit run playbook-coverage --hook-stage manual
+# or move it to `stages: [pre-push]`. It uses your project's own pytest-cov.
+- id: playbook-coverage
+  name: coding-agent-playbook coverage (diff + non-regression; runs your test suite)
+  description: Changed-line and total coverage vs HEAD — runs the project's test suite
+  entry: playbook metrics --run-tests --select testing --baseline git:HEAD
+  language: python
+  pass_filenames: false
+  types_or: [python]
+  require_serial: true
+  stages: [manual]
 
 # Opt-in ML twins of the playbook's assistant hooks (prK §E.3). Both are stdlib-only:
 # SPEC §13.2 keeps nbstripout/nbqa out of the air-gapped starter, so these stand in.
@@ -125,3 +143,18 @@
   pass_filenames: false
   always_run: true
   stages: [pre-commit]
+
+# Commit-message convention (prK §F.4.3): commitizen's own `cz check` on every commit
+# message, editor-composed and human ones included. The convention is your
+# [tool.commitizen] (default cz_conventional_commits); there is no playbook wrapper
+# and no cut-over here (every new commit conforms). `language: system`: cz comes from
+# your project environment, and a machine without it fails loudly ("executable not
+# found"), the intended signal once you opted into commitizen. Needs the commit-msg
+# hook type installed (see the recipe above).
+- id: playbook-commit-msg
+  name: commit message convention (commitizen)
+  description: Fail a commit whose message breaks the repo's commitizen convention (cz check)
+  entry: cz check --commit-msg-file
+  language: system
+  stages: [commit-msg]
+  minimum_pre_commit_version: "3.2.0"

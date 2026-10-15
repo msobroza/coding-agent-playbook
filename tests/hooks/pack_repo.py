@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import coding_agent_playbook
+from coding_agent_playbook._guard_config_quality import read_quality_lint
 from coding_agent_playbook._guard_config_ruff import read_project_ruff_selection
 from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
@@ -218,8 +219,8 @@ class PackRepo(GuardRepo):
         ``write_scope``, §E.2/§E.3); ``precommit_ids`` the repo's playbook
         pre-commit ids; ``wrapper_prefixes`` ``[hooks] wrapper_prefixes``;
         ``rules`` the rules a ``linked_rule`` names. The layout (source and test
-        roots), the ``ruff`` table and the toolchain inputs are read from the
-        repository, as sync does; ``extra_tables`` replace top-level tables
+        roots), the ``ruff`` table, the toolchain inputs and the committed
+        ``[metrics.ruff_violations]`` are read from the repository, as sync does; ``extra_tables`` replace top-level tables
         (e.g. a ``stop_gate`` with a typecheck stage). ``handler_config`` sets
         keys of a hook's rendered handler configs outright, as a repo-local
         override would (no strictest merge: e.g. stop-diff-sweep's ``mode = warn``).
@@ -250,6 +251,7 @@ class PackRepo(GuardRepo):
             layout=repo_layout(self.root),
             ruff=read_project_ruff_selection(self.root),
             toolchain=read_toolchain_inputs(self.root, detect.facts),
+            quality=read_quality_lint(self.root),
         )
         document = render_guard_config(inputs)
         document.update(extra_tables or {})

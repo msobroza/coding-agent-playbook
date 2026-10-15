@@ -9,8 +9,10 @@ of the machine (§D.8.3): absolute tool paths and stat signatures are pins in
   stop handler names ``config.stage``) and per stage the coordinator owns
   (:data:`OWN_STAGE_COMMANDS`: ``lint`` and ``verify-claim`` always, the
   ``typecheck`` / ``tests`` execution stages when its ``stages`` opts in), in
-  ``STOP_STAGE_ORDER``. An execution approval hashes exactly this list (§B.4),
-  so any stage change needs a new one;
+  ``STOP_STAGE_ORDER``. A stage hook that runs a tool takes it from
+  :data:`STAGE_HOOK_COMMANDS` (``coverage``: the project's pytest, its
+  ``timeout_s`` from the hook's config, §F.1.2). An execution approval hashes
+  exactly this list (§B.4), so any stage change needs a new one;
 - ``budget_s`` and ``max_blocks`` from ``[hooks.stop-ci-parity-gate]``
   (defaults 3.0 and 2; ``max_blocks`` clamped to 1-8);
 - ``verify_commands``: ``{id, argv}`` rows from the consumer's
@@ -47,6 +49,7 @@ __all__ = [
     "DEFAULT_MAX_BLOCKS",
     "OPT_IN_STAGES",
     "OWN_STAGE_COMMANDS",
+    "STAGE_HOOK_COMMANDS",
     "STOP_COORDINATOR_ID",
     "StageRecord",
     "budget_of",
@@ -79,6 +82,17 @@ OWN_STAGE_COMMANDS: Final[Mapping[str, tuple[str, tuple[str, ...], float]]] = Ma
         "verify-claim": ("", (), 1.0),
         "typecheck": ("project_python", ("-m", "mypy"), 120.0),
         "tests": ("project_python", ("-m", "pytest", "-q"), 300.0),
+    }
+)
+#: The tool and args of a stage hook that runs one (§F.1.2): coverage-diff-gate's shared
+#: suite. ``-o addopts=`` drops a project ``--cov-fail-under``, as ``default_test_cmd`` does;
+#: the run appends its report paths and ``--cov=<import root>``, which are per-worktree.
+STAGE_HOOK_COMMANDS: Final[Mapping[str, tuple[str, tuple[str, ...]]]] = MappingProxyType(
+    {
+        "coverage": (
+            "project_python",
+            ("-m", "pytest", "-o", "addopts=", "-p", "no:cacheprovider", "-q"),
+        )
     }
 )
 #: Phrases that claim completion (§E.2 verify-claim), case-insensitive.
@@ -220,14 +234,31 @@ def _record(hook: ResolvedHook) -> StageRecord | None:
     stage = None if handler is None else handler.config.get("stage")
     if handler is None or stage not in STAGE_COSTS:
         return None
-    mode = handler.config.get("mode")
+    tool, args = STAGE_HOOK_COMMANDS.get(str(stage), ("", ()))
     return StageRecord(
         name=str(stage),
         owner=hook.id,
-        timeout_s=float(hook.timeout),
+        tool=tool,
+        args=args,
+        timeout_s=_stage_timeout(handler.config.get("timeout_s"), float(hook.timeout)),
         needs_diff=stage not in _NO_DIFF_STAGES,
-        mode=mode if isinstance(mode, str) else "block",
+        mode=_stage_mode(handler.config),
     )
+
+
+def _stage_timeout(configured: object, default: float) -> float:
+    """A stage hook's positive ``config.timeout_s`` (coverage-diff-gate), else its hook timeout."""
+    if isinstance(configured, bool) or not isinstance(configured, int | float) or configured <= 0:
+        return default
+    return float(configured)
+
+
+def _stage_mode(config: Mapping[str, Any]) -> str:
+    """``config.mode``; ``decision = "context"`` (coverage-diff-gate) reads as ``warn``."""
+    mode = config.get("mode")
+    if isinstance(mode, str):
+        return mode
+    return "warn" if config.get("decision") == "context" else "block"
 
 
 def budget_of(config: Mapping[str, Any]) -> float:

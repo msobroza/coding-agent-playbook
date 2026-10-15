@@ -81,13 +81,14 @@ STAGE_COSTS: Final[Mapping[str, StageCost]] = MappingProxyType(
 
 type StageStatus = Literal["green", "red", "warn", "skipped"]
 #: Why a stage did not run to a verdict; a skipped stage is never reported green.
+#: ``suite_red``: the suite the ``coverage`` stage grades failed, so it is not graded (§F.1.2).
 type SkipCategory = Literal[
-    "", "timeout", "crash", "tool_changed", "toolchain_missing", "untrusted"
+    "", "timeout", "crash", "tool_changed", "toolchain_missing", "untrusted", "suite_red"
 ]
 
 _STATUSES: Final = frozenset({"green", "red", "warn", "skipped"})
 _SKIP_CATEGORIES: Final = frozenset(
-    {"timeout", "crash", "tool_changed", "toolchain_missing", "untrusted"}
+    {"timeout", "crash", "tool_changed", "toolchain_missing", "untrusted", "suite_red"}
 )
 
 

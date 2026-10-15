@@ -273,6 +273,100 @@ def test_one_d1_argv_per_event_with_all_consumers_enabled(
     assert {"E722", "ANN001", "UP046"} <= set(extended)
 
 
+# --- §F's companions: the quality and docstrings buckets (§F.2.2, §F.3.2) ----------------------
+
+QUALITY_ID: Final = "clean-code-metrics-nonregression"
+DOCSTRINGS_ID: Final = "docstring-nonregression"
+QUALITY_ON: Final = {QUALITY_ID: {"lint_feedback": True}}
+
+
+def _install_companions(
+    repo: PackRepo, program: Path, *, select: str, metrics: str, drops: list[str] | None = None
+) -> None:
+    repo.write("pyproject.toml", f"[tool.ruff.lint]\nselect = {select}\n")
+    repo.write(".coding-agent-playbook.toml", metrics)
+    repo.write(APP, EDITED)
+    hooks = [HOOK_ID, QUALITY_ID, DOCSTRINGS_ID]
+    repo.install_pack(hooks, rules=engine_rules(), per_hook=QUALITY_ON)
+    pin_ruff(repo, program, drops={"ruff": drops} if drops else None)
+
+
+def _config_flags(args: tuple[str, ...]) -> list[str]:
+    return [args[i + 1] for i, arg in enumerate(args) if arg == "--config"]
+
+
+def test_one_d1_argv_carries_quality_and_docstring_codes_and_config_override(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], ruff_program: Path
+) -> None:
+    metrics = '[metrics.ruff_violations]\nconfig = { "lint.mccabe.max-complexity" = 10 }\n'
+    _install_companions(pack_repo, ruff_program, select='["E", "F"]', metrics=metrics)
+    ruff = FakeRuff(diagnostics=[ruff_row("C901", 6, "`f` is too complex (12 > 10)")])
+
+    report = _edit(pack_repo, deps(proc=ruff, git=_git()))
+
+    [d1] = ruff.argvs("d1")
+    extended = set(_value(d1, "--extend-select").split(","))
+    assert {"C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "D100", "D107"} <= extended
+    assert _config_flags(d1) == ["lint.mccabe.max-complexity=10"]
+    assert ruff.kinds().count("preview") == 0
+    assert _context(report) == ['quality: "src/app.py:6 C901 `f` is too complex (12 > 10)"']
+
+
+def test_no_override_when_project_selects_c901(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], ruff_program: Path
+) -> None:
+    metrics = (
+        "[metrics.ruff_violations]\n"
+        'config = { "lint.mccabe.max-complexity" = 10, "lint.pylint.max-args" = 5 }\n'
+    )
+    _install_companions(pack_repo, ruff_program, select='["E", "F", "C901"]', metrics=metrics)
+    ruff = FakeRuff()
+
+    _edit(pack_repo, deps(proc=ruff, git=_git()))
+
+    [d1] = ruff.argvs("d1")
+    assert _config_flags(d1) == ["lint.pylint.max-args=5"]  # C901's threshold is the project's
+
+
+def test_plr1702_only_via_separate_preview_call(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], ruff_program: Path
+) -> None:
+    metrics = (
+        '[metrics.ruff_violations]\nfamilies = { quality = ["C901", "PLR1702"] }\npreview = true\n'
+    )
+    _install_companions(
+        pack_repo, ruff_program, select='["E", "F"]', metrics=metrics, drops=["PLR1702"]
+    )
+    nested = ruff_row("PLR1702", 6, "Too many nested blocks (6 > 5)")
+    ruff = FakeRuff(preview_diagnostics=[nested])
+
+    report = _edit(pack_repo, deps(proc=ruff, git=_git()))
+
+    [d1], [preview] = ruff.argvs("d1"), ruff.argvs("preview")
+    assert "PLR1702" not in _value(d1, "--extend-select").split(",")
+    assert "--preview" not in d1
+    assert (_value(preview, "--select"), preview[-2:]) == (
+        "PLR1702",
+        ("--", str(pack_repo.root / APP)),
+    )
+    assert _context(report) == ['quality: "src/app.py:6 PLR1702 Too many nested blocks (6 > 5)"']
+
+
+def test_quality_companion_off_by_default_adds_nothing(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], ruff_program: Path
+) -> None:
+    pack_repo.write("pyproject.toml", '[tool.ruff.lint]\nselect = ["E", "F"]\n')
+    pack_repo.write(APP, EDITED)
+    pack_repo.install_pack([HOOK_ID, QUALITY_ID])
+    _pin(pack_repo, ruff_program)
+    ruff = FakeRuff()
+
+    _edit(pack_repo, deps(proc=ruff, git=_git()))
+
+    [d1] = ruff.argvs("d1")
+    assert "--extend-select" not in d1 and "--config" not in d1
+
+
 def test_eight_line_total_cap_bucket_1_first(
     pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], ruff_program: Path
 ) -> None:

@@ -63,14 +63,17 @@ def _report(repo: Path, capsys: pytest.CaptureFixture[str]) -> str:
 
 # --- the Hooks block -------------------------------------------------------------------
 
-#: The engine pack's hooks shipped so far (Tracks K5-K9), in check's sorted order.
+#: The engine pack's hooks shipped so far (Tracks K5-K10), in check's sorted order.
 _ENGINE_PACK = (
     "block-precommit-bypass",
     "clean-code-metrics-nonregression",
     "command-convention-guard",
+    "commit-message-convention",
     "control-plane-guard",
+    "coverage-diff-gate",
     "dependency-allowlist-guard",
     "destructive-command-guard",
+    "docstring-nonregression",
     "error-handling-lint-feedback",
     "eval-task-authoring-lint",
     "exfil-channel-guard",
@@ -134,7 +137,7 @@ def test_hooks_block_labels_per_adapter(
 
     assert lines == [
         "  [hooks]: on",
-        "  Hooks (26 on / 41 total):",
+        "  Hooks (28 on / 44 total):",
         # The engine pack (Track K5): OpenCode has no notebook tool, so guard-generated-outputs
         # is degraded there; control-plane-guard matches no notebook edit. OpenCode's Stop is
         # evidence-only (§C.3.6), so every Stop-stage hook is degraded there (K6).
@@ -143,13 +146,20 @@ def test_hooks_block_labels_per_adapter(
         "    [✓] clean-code-metrics-nonregression (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: degraded)",
         _OPT_IN_SKIP.format(hook_id="command-convention-guard"),
+        # K10: commitizen on the shared shell parse, on both harnesses.
+        "    [✓] commit-message-convention (agents_md: advisory, claude_code: enforced, "
+        "continue: advisory, opencode: enforced)",
         "    [✓] control-plane-guard (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
+        _OPT_IN_SKIP.format(hook_id="coverage-diff-gate"),
         # K8: the Bash guards run in the shared shell dispatcher on both harnesses.
         "    [✓] dependency-allowlist-guard (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
         "    [✓] destructive-command-guard (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
+        # K10: a Stop stage plus its post-edit bucket; OpenCode's Stop is evidence-only.
+        "    [✓] docstring-nonregression (agents_md: advisory, claude_code: enforced, "
+        "continue: advisory, opencode: degraded)",
         # K7: a rule-linked lint hook has no body (its rule carries the practice).
         "    [✓] error-handling-lint-feedback (agents_md: —, claude_code: enforced, "
         "continue: —, opencode: enforced)",
@@ -231,10 +241,10 @@ def test_hooks_block_when_the_table_is_absent(
 
     assert lines == [
         "  [hooks]: off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')",
-        "  Hooks (0 on / 39 total):",
-        *_off(_ENGINE_PACK[:14]),
+        "  Hooks (0 on / 42 total):",
+        *_off(_ENGINE_PACK[:17]),
         "    [✗] guard-x (skipped: hooks are off)",
-        *_off(_ENGINE_PACK[14:]),
+        *_off(_ENGINE_PACK[17:]),
     ]
 
 
@@ -251,7 +261,7 @@ def test_hooks_block_when_hooks_are_switched_off_or_unreadable(
 
     assert off_lines == [
         "  [hooks]: off — [hooks] enabled is not true",
-        "  Hooks (0 on / 38 total):",
+        "  Hooks (0 on / 41 total):",
         *_off(_ENGINE_PACK),
     ]
     assert bad_lines[-1] == "  [hooks] cannot be read; run 'playbook validate'."

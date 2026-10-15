@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.config import HookRecord
     from coding_agent_playbook.hook_runtime.event import EventName
-    from coding_agent_playbook.hook_runtime.git import AddedLine, Fingerprint
+    from coding_agent_playbook.hook_runtime.git import AddedLine, Fingerprint, LoggedCommit
     from coding_agent_playbook.hook_runtime.registry import HandlerFn, ResolveContext
     from coding_agent_playbook.security.trust import HandlerApproval
 
@@ -143,7 +143,8 @@ class FakeGit:
     ``grep_word`` finds exactly the ``test_words``; ``rev_commit`` reads ``commits``.
     ``upstream`` answers ``upstream_ref``; ``unpushed_lines`` the ``unpushed`` patch;
     ``porcelain_status`` the ``status`` entries (``(XY, path)``); ``remote_urls`` the
-    ``remotes`` map (name -> URL), as ``git remote -v`` lists it.
+    ``remotes`` map (name -> URL), as ``git remote -v`` lists it; ``commit_log`` the
+    ``logs[rev_range]`` commits, newest first (empty when absent).
     """
 
     head_tree_id: str | None = None
@@ -165,6 +166,7 @@ class FakeGit:
     unpushed: DiffLines = field(default_factory=DiffLines)
     status: tuple[tuple[str, str], ...] = ()
     remotes: dict[str, str] = field(default_factory=dict)
+    logs: dict[str, tuple[LoggedCommit, ...]] = field(default_factory=dict)
     errors: dict[str, Exception] = field(default_factory=dict)
     calls: list[tuple[str, tuple[str, ...]]] = field(default_factory=list)
 
@@ -257,6 +259,10 @@ class FakeGit:
         self._record("remote_urls")
         return tuple(self.remotes.items())
 
+    def commit_log(self, rev_range: str, *, limit: int) -> tuple[LoggedCommit, ...]:
+        self._record("commit_log", rev_range)
+        return self.logs.get(rev_range, ())[:limit]
+
 
 @dataclass
 class FakeClock:
@@ -317,12 +323,16 @@ class FakeHandlerResolver:
 
 @dataclass(frozen=True)
 class StageCall:
-    """One recorded ``FakeStageRunner.run`` call (``cwd``: ``None`` is the worktree root)."""
+    """One recorded ``FakeStageRunner.run`` call (``cwd``: ``None`` is the worktree root).
+
+    ``env`` is the child environment the stage passed (``None``: inherited).
+    """
 
     tool: str
     args: tuple[str, ...]
     timeout: float
     cwd: str | None
+    env: Mapping[str, str] | None = None
 
 
 type StageAnswer = ToolRun | Exception | Callable[[StageCall], ToolRun]
@@ -365,9 +375,15 @@ class FakeStageRunner:
             self.runs[tool] = ToolRun(tool, returncode, stdout, stderr)
 
     def run(
-        self, tool: str, args: Sequence[str], *, timeout: float, cwd: str | None = None
+        self,
+        tool: str,
+        args: Sequence[str],
+        *,
+        timeout: float,
+        cwd: str | None = None,
+        env: Mapping[str, str] | None = None,
     ) -> ToolRun:
-        call = StageCall(tool, tuple(args), timeout, cwd)
+        call = StageCall(tool, tuple(args), timeout, cwd, None if env is None else dict(env))
         self.calls.append(call)
         found = self.runs.get(tool, ToolRun(tool, skip_category="toolchain_missing"))
         if isinstance(found, Exception):
@@ -426,7 +442,11 @@ class FakeRuff:
     """In-memory ``ProcPort`` for the pinned ruff: answers by subcommand, records every argv.
 
     - D1 (``check ... --output-format json``) prints ``diagnostics`` (rows from
-      :func:`ruff_row`), exit ``d1_exit``;
+      :func:`ruff_row`), exit ``d1_exit``; its separate ``--preview`` call
+      (``preview``) prints ``preview_diagnostics``;
+    - the metrics gate's ``ruff_violations`` call (``check ... --stdin-filename
+      <label> -``, kind ``metrics``) prints ``by_stdin[<the bytes on stdin>]``
+      (``[]`` for any other text);
     - M1 (``check --fix-only``) and M2 (``format -- <path>``) rewrite the file
       after ``--`` through ``fix`` / ``reformat`` (identity when ``None``);
     - the HEAD check (``format --check ... -``) exits 0 when ``format_clean``;
@@ -439,6 +459,8 @@ class FakeRuff:
     """
 
     diagnostics: list[dict[str, object]] = field(default_factory=list)
+    preview_diagnostics: list[dict[str, object]] = field(default_factory=list)
+    by_stdin: dict[bytes, list[dict[str, object]]] = field(default_factory=dict)
     d1_exit: int = 0
     format_clean: bool = True
     fix: Callable[[str], str] | None = None
@@ -451,10 +473,15 @@ class FakeRuff:
 
     @staticmethod
     def kind(args: Sequence[str]) -> str:
-        """``d1``, ``fix``, ``format-check``, ``format``, ``rule-all`` or ``rule``."""
+        """``d1``, ``preview``, ``metrics``, ``fix``, ``format-check``, ``format``, ``rule-all``
+        or ``rule``."""
         head = args[0] if args else ""
         if head == "check":
-            return "fix" if "--fix-only" in args else "d1"
+            if "--fix-only" in args:
+                return "fix"
+            if "--stdin-filename" in args:
+                return "metrics"
+            return "preview" if "--preview" in args else "d1"
         if head == "format":
             return "format-check" if "--check" in args else "format"
         return "rule-all" if "--all" in args else head
@@ -478,6 +505,8 @@ class FakeRuff:
         kind = self.kind(args)
         if kind in self.timeouts:
             raise ProcTimeout(command[0], timeout)
+        if kind == "metrics":
+            return ProcResult(command, 0, json.dumps(self.by_stdin.get(input or b"", [])).encode())
         returncode, stdout = self._answer(kind, args)
         return ProcResult(command, returncode, stdout)
 
@@ -495,6 +524,8 @@ class FakeRuff:
     def _answer(self, kind: str, args: Sequence[str]) -> tuple[int, bytes]:
         if kind == "d1":
             return self.d1_exit, json.dumps(self.diagnostics).encode()
+        if kind == "preview":
+            return 0, json.dumps(self.preview_diagnostics).encode()
         if kind in ("fix", "format"):
             self._rewrite(args[-1], self.fix if kind == "fix" else self.reformat)
             return 0, b""

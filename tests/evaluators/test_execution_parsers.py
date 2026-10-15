@@ -8,14 +8,20 @@ hand-written XML fixtures (no subprocess), so they are fast and isolated.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from coding_agent_playbook.evaluators.execution.coverage_xml import (
     CoverageReport,
     parse_coverage_xml,
+    repo_relative,
 )
 from coding_agent_playbook.evaluators.execution.junit import (
     JunitSummary,
     parse_junit_xml,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # --------------------------------------------------------------------------- #
 # junit
@@ -176,3 +182,87 @@ def test_coverage_file_without_lines_uses_line_rate_attr() -> None:
     report = parse_coverage_xml(xml)
     assert report.per_file["x.py"] == 40.0
     assert report.per_file["y.py"] == 0.0
+
+
+# --------------------------------------------------------------------------- #
+# coverage: per-line hits, <sources> and repo-relative names (prK §F.1.1)
+# --------------------------------------------------------------------------- #
+
+_SOURCE_MODE_XML = """\
+<?xml version="1.0" ?>
+<coverage line-rate="0.6" version="7.0">
+  <sources>
+    <source>{source}</source>
+  </sources>
+  <packages>
+    <package name="pkg" line-rate="0.6">
+      <classes>
+        <class filename="pkg/a.py" line-rate="0.6">
+          <methods/>
+          <lines>
+            <line number="1" hits="1"/>
+            <line number="2" hits="3"/>
+            <line number="4" hits="0"/>
+            <line number="5" hits="1"/>
+            <line number="7" hits="0"/>
+          </lines>
+        </class>
+      </classes>
+    </package>
+  </packages>
+</coverage>
+"""
+
+
+def test_coverage_report_lines_and_sources_single_pass() -> None:
+    report = parse_coverage_xml(_SOURCE_MODE_XML.format(source="/work/repo/src"))
+
+    assert report.sources == ("/work/repo/src",)
+    assert report.lines == {"pkg/a.py": {1: 1, 2: 3, 4: 0, 5: 1, 7: 0}}
+    assert report.per_file["pkg/a.py"] == 60.0
+
+
+def test_per_file_keys_unchanged() -> None:
+    """``per_file`` keeps coverage.py's own ``filename``, so ``coverage`` scopes stay stable."""
+    report = parse_coverage_xml(_COVERAGE_XML)
+
+    assert set(report.per_file) == {"pkg/a.py", "pkg/b.py"}
+    assert set(report.lines) == set(report.per_file)
+    assert report.sources == ()
+
+
+def test_coverage_lines_skip_rows_without_a_line_number() -> None:
+    xml = (
+        "<coverage><packages><package><classes>"
+        '<class filename="x.py"><lines><line hits="1"/><line number="3" hits="2"/></lines>'
+        "</class></classes></package></packages></coverage>"
+    )
+
+    report = parse_coverage_xml(xml)
+
+    assert report.lines == {"x.py": {3: 2}}
+    assert report.per_file["x.py"] == 100.0  # both rows still count, as before
+
+
+def test_repo_relative_resolves_against_source_roots(tmp_path: Path) -> None:
+    (tmp_path / "src" / "pkg").mkdir(parents=True)
+    (tmp_path / "src" / "pkg" / "a.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "b.py").write_text("y = 2\n", encoding="utf-8")
+    src = str(tmp_path / "src")
+
+    assert repo_relative("pkg/a.py", (src,), tmp_path) == "src/pkg/a.py"
+    # Several sources: the one where the file exists wins.
+    assert repo_relative("pkg/b.py", (src, str(tmp_path)), tmp_path) == "pkg/b.py"
+    # No <sources>: the name is already relative to the root.
+    assert repo_relative("pkg/b.py", (), tmp_path) == "pkg/b.py"
+    # A relative source (``relative_files = true``) is relative to the root.
+    assert repo_relative("pkg/a.py", ("src",), tmp_path) == "src/pkg/a.py"
+
+
+def test_repo_relative_outside_the_root_is_none(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()
+
+    assert repo_relative("lib.py", (str(tmp_path / "elsewhere"),), root) is None
+    assert repo_relative("../escape.py", (), root) is None

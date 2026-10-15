@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, GitTimeoutError
 from coding_agent_playbook.evaluators.parse import parse_module
-from coding_agent_playbook.evaluators.types import EvalContext
+from coding_agent_playbook.evaluators.paths import matches_any_glob
+from coding_agent_playbook.evaluators.types import EvalContext, ToolSetup
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -32,6 +33,9 @@ IGNORED_DIRS = frozenset(
 
 #: The ``--baseline`` prefix that names a git ref instead of a directory.
 GIT_PREFIX = "git:"
+
+#: The ``--baseline`` prefix that names an ``--emit-measurements`` snapshot file.
+JSON_PREFIX = "json:"
 
 #: Default ``MetricsGateRequest.max_file_bytes``: a larger candidate or baseline
 #: file is never parsed. A module that size is generated or vendored, and parsing
@@ -111,6 +115,33 @@ def _iter_py_files(directory: Path) -> list[Path]:
     return out
 
 
+def filter_targets(
+    targets: Sequence[Path],
+    repo_root: Path,
+    *,
+    exclude: Sequence[str],
+    changed: frozenset[str] | None = None,
+) -> list[Path]:
+    """Drop the targets an ``exclude`` glob matches; with ``changed``, also every one not in it.
+
+    Globs and ``changed`` hold paths relative to ``repo_root``. A target outside
+    ``repo_root`` matches no glob, and is never "changed": git cannot report it.
+
+    Example::
+
+        >>> filter_targets(targets, root, exclude=("gen/**",), changed=frozenset({"a.py"}))
+        [PosixPath('/repo/a.py')]
+    """
+    kept: list[Path] = []
+    for target in targets:
+        rel = _repo_rel_path(target, repo_root)
+        if rel is not None and matches_any_glob(rel, exclude):
+            continue
+        if changed is None or rel in changed:
+            kept.append(target)
+    return kept
+
+
 def rel_label(path: Path, repo_root: Path) -> str:
     """Repo-relative POSIX label for ``path`` (falls back to the name)."""
     try:
@@ -141,12 +172,14 @@ def _repo_rel_path(path: Path, repo_root: Path) -> str | None:
 class SourceMeter:
     """Reads and measures Python sources with the gate's static metrics.
 
-    A file over ``max_file_bytes`` is never read into the parser.
+    A file over ``max_file_bytes`` is never read into the parser. ``tool_setup``
+    is how a subprocess-backed metric (``ruff_violations``) runs its tool.
     """
 
     metrics: Sequence[Metric]
     tool_paths: Mapping[str, str]
     max_file_bytes: int = MAX_FILE_BYTES
+    tool_setup: ToolSetup = field(default_factory=ToolSetup)
 
     def measure(self, source: str, label: str) -> list[Measurement]:
         """Parse ``source`` and run every available metric over it.
@@ -155,7 +188,13 @@ class SourceMeter:
         (:data:`_BAD_SOURCE_ERRORS`); the caller skips or drops the file.
         """
         module = parse_module(source, label)
-        ctx = EvalContext(module=module, source=source, label=label, tool_paths=self.tool_paths)
+        ctx = EvalContext(
+            module=module,
+            source=source,
+            label=label,
+            tool_paths=self.tool_paths,
+            tool_setup=self.tool_setup,
+        )
         measurements: list[Measurement] = []
         for metric in self.metrics:
             if metric.available(ctx):
@@ -188,13 +227,27 @@ class SourceMeter:
         ``None`` (the file counts as all-new, like one that does not parse) when
         the blob is over the cap or not UTF-8.
         """
-        if len(raw) > self.max_file_bytes:
-            return None
-        try:
-            text = raw.decode("utf-8")
-        except UnicodeDecodeError:
-            return None
-        return text.replace("\r\n", "\n").replace("\r", "\n")
+        return decode_source_blob(raw, self.max_file_bytes)
+
+
+def decode_source_blob(raw: bytes, max_file_bytes: int = MAX_FILE_BYTES) -> str | None:
+    """A baseline blob as the text the gate measures: UTF-8 with universal newlines.
+
+    ``None`` when it is over ``max_file_bytes`` or not UTF-8. A Stop stage
+    decodes a ``HEAD`` blob with it to ask the gate's ruff memo about the same text.
+
+    Example::
+
+        >>> decode_source_blob(b"x = 1\\r\\n")
+        'x = 1\\n'
+    """
+    if len(raw) > max_file_bytes:
+        return None
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
 @dataclass

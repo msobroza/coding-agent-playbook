@@ -25,7 +25,7 @@ from coding_agent_playbook.hook_runtime.stop.output import NO_PINS_ADVICE, toolc
 from coding_agent_playbook.hook_runtime.stop.stages import StageResult
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.deps import ProcPort
     from coding_agent_playbook.hook_runtime.event import RepoInfo
@@ -64,10 +64,18 @@ class StageRunner(Protocol):
     """Runs a stage's logical tool with its args; ``FakeStageRunner`` scripts it.
 
     ``cwd`` defaults to the worktree root; the lint baseline runs in an export.
+    ``env`` replaces the child environment when given (the shared suite points
+    ``COVERAGE_FILE`` into the state dir, specs/prK-hook-pack.md §F.1.2).
     """
 
     def run(
-        self, tool: str, args: Sequence[str], *, timeout: float, cwd: str | None = None
+        self,
+        tool: str,
+        args: Sequence[str],
+        *,
+        timeout: float,
+        cwd: str | None = None,
+        env: Mapping[str, str] | None = None,
     ) -> ToolRun: ...
 
 
@@ -99,14 +107,22 @@ class PinnedStageRunner:
         )
 
     def run(
-        self, tool: str, args: Sequence[str], *, timeout: float, cwd: str | None = None
+        self,
+        tool: str,
+        args: Sequence[str],
+        *,
+        timeout: float,
+        cwd: str | None = None,
+        env: Mapping[str, str] | None = None,
     ) -> ToolRun:
         """Run ``tool``'s pinned argv plus ``args`` within ``timeout`` seconds, in ``cwd``."""
         pin = self._pin(tool)
         if isinstance(pin, ToolRun):
             return pin
         try:
-            done = self._proc.run([*pin.argv, *args], timeout=timeout, cwd=cwd or self._cwd)
+            done = self._proc.run(
+                [*pin.argv, *args], timeout=timeout, cwd=cwd or self._cwd, env=env
+            )
         except ProcTimeout:
             return ToolRun(tool, skip_category="timeout")
         except OSError:  # the pinned program vanished between the stat and the spawn

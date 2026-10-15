@@ -19,20 +19,33 @@ is the lever that neutralises an inherited config), and ``--cov-config`` pins
 coverage to the target. The exit code of the run is *not* asserted here (a
 failing suite is a legitimate measurement, not a handle error); only a command
 that cannot be *launched* (e.g. pytest absent) raises.
+
+**prK §F.1.1 extensions** (keyword-only, defaults byte-identical):
+``diff_base`` is the ref ``diff_coverage`` diffs against; ``timeout_s`` bounds
+the run (a hook-driven suite must never hang the agent); ``env_overrides``
+lets a hook point ``COVERAGE_FILE`` into its state dir, so the run leaves no
+new file in the worktree; :func:`default_test_cmd` takes the interpreter to run
+(a hook passes the project's, not the engine's) and the ``--cov`` sources that
+put coverage.py in source mode (:func:`import_roots`).
 """
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.execution.coverage_xml import (
     CoverageReport,
     parse_coverage_xml,
 )
 from coding_agent_playbook.evaluators.execution.junit import JunitSummary, parse_junit_xml
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 
 @dataclass(frozen=True)
@@ -49,24 +62,34 @@ class RunArtifacts:
     returncode: int
 
 
-def default_test_cmd(report_dir: Path) -> list[str]:
+def default_test_cmd(
+    report_dir: Path, *, python: str | None = None, cov_sources: Sequence[str] = ()
+) -> list[str]:
     """The default pytest command writing junit + coverage XML into ``report_dir``.
 
-    Uses ``sys.executable -m pytest`` so the run targets the active interpreter.
-    ``-p no:cacheprovider`` and ``-o addopts=`` neutralise any inherited
-    ``addopts`` from a surrounding config; ``--cov-config`` is pinned to the
-    empty config :meth:`ProjectHandle.create` writes so the target's coverage is
-    measured without picking up an outer ``[tool.coverage]`` table.
+    Uses ``<python> -m pytest`` (default ``sys.executable``, the active
+    interpreter). ``-p no:cacheprovider`` and ``-o addopts=`` neutralise any
+    inherited ``addopts`` from a surrounding config; ``--cov-config`` is pinned
+    to the empty config :meth:`ProjectHandle.create` writes so the target's
+    coverage is measured without picking up an outer ``[tool.coverage]`` table.
+    Each of ``cov_sources`` becomes ``--cov=<source>`` instead of the bare
+    ``--cov``, so coverage.py also reports never-imported files, at 0%.
+
+    Example::
+
+        >>> default_test_cmd(Path("r"), python="py", cov_sources=["src"])[:5]
+        ['py', '-m', 'pytest', '--junitxml=r/junit.xml', '--cov=src']
     """
     junit = report_dir / "junit.xml"
     cov = report_dir / "coverage.xml"
     cov_config = report_dir / "coveragerc"
+    cov_flags = [f"--cov={source}" for source in cov_sources] or ["--cov"]
     return [
-        sys.executable,
+        python or sys.executable,
         "-m",
         "pytest",
         f"--junitxml={junit}",
-        "--cov",
+        *cov_flags,
         f"--cov-report=xml:{cov}",
         f"--cov-config={cov_config}",
         "-o",
@@ -75,6 +98,26 @@ def default_test_cmd(report_dir: Path) -> list[str]:
         "no:cacheprovider",
         "-q",
     ]
+
+
+def import_roots(root: Path) -> tuple[str, ...]:
+    """The directory the project's code imports from, as ``--cov`` sources: ``src`` or ``.``.
+
+    A ``src/`` holding Python (a module, or a package one level down) is the
+    src layout; anything else is flat, imported from the root. One source per
+    project, never one per package: coverage.py names each file relative to
+    the ``<source>`` holding it, so two packages' ``__init__.py`` would share a
+    name and one would be dropped from the report.
+
+    Example::
+
+        >>> import_roots(Path("/repo/with/src-layout"))  # doctest: +SKIP
+        ('src',)
+    """
+    src = root / "src"
+    if src.is_dir() and (any(src.glob("*.py")) or any(src.glob("*/*.py"))):
+        return ("src",)
+    return (".",)
 
 
 @dataclass
@@ -92,6 +135,12 @@ class ProjectHandle:
     report_dir: Path
     #: Reruns allowed for the flaky-tolerant pass rate (``0`` ⇒ single run).
     flaky_retries: int = 0
+    #: The ref ``diff_coverage`` diffs against; ``None`` (a baseline handle) yields nothing.
+    diff_base: str | None = None
+    #: Bound on one suite run, in seconds (``None``: unbounded).
+    timeout_s: float | None = None
+    #: Environment variables set on top of the inherited environment for the run.
+    env_overrides: Mapping[str, str] = field(default_factory=dict)
     _artifacts: RunArtifacts | None = field(default=None, init=False, repr=False)
 
     @classmethod
@@ -101,24 +150,41 @@ class ProjectHandle:
         report_dir: Path,
         test_cmd: list[str] | None = None,
         flaky_retries: int = 0,
+        *,
+        diff_base: str | None = None,
+        timeout_s: float | None = None,
+        env_overrides: Mapping[str, str] | None = None,
+        python: str | None = None,
+        cov_sources: Sequence[str] = (),
     ) -> ProjectHandle:
         """Build a handle, defaulting to the isolated pytest command.
 
         Creates ``report_dir`` and writes an empty coverage config there so the
         default command's ``--cov-config`` resolves without inheriting an outer
         ``[tool.coverage]`` table. ``flaky_retries`` (default ``0``) enables the
-        flaky-tolerant pass rate (see :meth:`best_pass_rate`).
+        flaky-tolerant pass rate (see :meth:`best_pass_rate`). ``python`` and
+        ``cov_sources`` shape the default command only; an explicit
+        ``test_cmd`` runs exactly as given.
+
+        Example::
+
+            >>> ProjectHandle.create(root, report_dir, timeout_s=300).timeout_s  # doctest: +SKIP
+            300
         """
         report_dir = Path(report_dir)
         report_dir.mkdir(parents=True, exist_ok=True)
         # Empty coverage config: a present-but-blank file beats outer discovery.
         (report_dir / "coveragerc").write_text("[run]\n", encoding="utf-8")
-        cmd = test_cmd if test_cmd is not None else default_test_cmd(report_dir)
+        if test_cmd is None:
+            test_cmd = default_test_cmd(report_dir, python=python, cov_sources=cov_sources)
         return cls(
             root=Path(root),
-            test_cmd=list(cmd),
+            test_cmd=list(test_cmd),
             report_dir=report_dir,
             flaky_retries=flaky_retries,
+            diff_base=diff_base,
+            timeout_s=timeout_s,
+            env_overrides=dict(env_overrides or {}),
         )
 
     def run(self) -> RunArtifacts:
@@ -154,19 +220,31 @@ class ProjectHandle:
         return best
 
     def _run_once(self) -> RunArtifacts:
-        """Execute the test command once and parse its reports (uncached)."""
+        """Execute the test command once and parse its reports (uncached).
+
+        Raises :class:`RuntimeError` when the command cannot be launched or runs
+        past :attr:`timeout_s`.
+        """
         self.report_dir.mkdir(parents=True, exist_ok=True)
+        env = {**os.environ, **self.env_overrides} if self.env_overrides else None
         try:
             proc = subprocess.run(
                 self.test_cmd,
                 cwd=self.root,
                 capture_output=True,
                 text=True,
+                timeout=self.timeout_s,
+                env=env,
             )
         except FileNotFoundError as exc:
             raise RuntimeError(
                 f"could not run the test command {self.test_cmd!r}: {exc}. "
                 "Is pytest installed in the target environment?"
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                f"test command timed out after {exc.timeout:g}s: {self.test_cmd!r}; "
+                "raise [metrics] test_timeout_s for a slow suite"
             ) from exc
 
         junit = self._read_junit()

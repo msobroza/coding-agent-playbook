@@ -12,6 +12,12 @@ secrets and dependency twins) instead of adding a second CI entry point.
   true``: since SPEC §7.1's ``commit = false`` default, generated output is
   gitignored, so a fresh CI checkout has none and ``sync --check`` would always
   fail. A config that does not load runs it anyway, so the child reports why.
+- ``metrics`` (F.2/F.3, always on) runs the static metrics gate over the
+  files changed since the merge base, never the suite.
+- ``coverage`` (F.1) runs the suite: changed-line coverage and total coverage
+  non-regression against the merge base. It runs when ``[metrics] run_tests =
+  true`` (a config that does not load runs it anyway, to report why) or when
+  ``--steps`` names it.
 - ``gate-scan`` and ``scan-secrets`` (E.4: always on, so CI scans every
   change for secret tokens and credential files) diff ``<merge base>..HEAD``;
   the base is ``--base`` or the default branch (``_git_base``), resolved only
@@ -24,6 +30,12 @@ secrets and dependency twins) instead of adding a second CI entry point.
   dependency policy is configured (same fail-closed rule).
 - ``scan-sinks`` (E.3, K7's tool) is opt-in: it runs only when ``--steps``
   names it.
+- ``commit-convention`` (F.4) runs ``cz check`` itself, not an engine child
+  (``_ci_commit_convention``): over ``<merge base>..HEAD`` filtered by the
+  committer-date cut-over, plus ``PLAYBOOK_PR_TITLE`` as one argv element. It
+  runs when ``[tool.commitizen]`` or ``[hooks.commit_convention]`` is set, and
+  a missing ``cz`` fails it. The readers that decide which rows run live in
+  ``_ci_policy``; each fails closed.
 
 Exit codes: 0 every run step passed, 1 any failed or timed out, 2 a usage
 error or an unresolvable base (nothing ran). ``--format json`` prints one
@@ -33,8 +45,8 @@ children's output on stderr.
 
 from __future__ import annotations
 
-import json
-import shlex
+import os
+import shutil
 import subprocess
 import sys
 import time
@@ -42,12 +54,27 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, Protocol
 
+from coding_agent_playbook.commands._ci_commit_convention import (
+    COMMIT_STEP,
+    CzCommands,
+    cz_commands,
+    run_cz_commands,
+)
+from coding_agent_playbook.commands._ci_policy import (
+    CONFIG_FILE,
+    commit_convention_configured,
+    dependency_policy_set,
+    metrics_run_tests,
+    output_committed,
+    trailer_rows_configured,
+)
+from coding_agent_playbook.commands._ci_report import json_report, log_step, summary_text
 from coding_agent_playbook.commands._git_base import open_git, resolve_merge_base
 from coding_agent_playbook.hook_runtime.git import GitError
 
 if TYPE_CHECKING:
     import argparse
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
     from typing import TextIO
 
     from coding_agent_playbook.hook_runtime.git import GitPort
@@ -69,7 +96,6 @@ __all__ = [
 
 #: Per child step: generous, since a CI runner is slow and K10's coverage row runs a suite.
 DEFAULT_STEP_TIMEOUT_S: Final = 600.0
-CONFIG_FILE: Final = ".coding-agent-playbook.toml"
 _CLI: Final = ("-m", "coding_agent_playbook.cli")
 
 type StepStatus = Literal["passed", "failed", "timeout", "skipped"]
@@ -84,7 +110,10 @@ class CiContext:
     named explicitly (empty: none), for rows enabled only on request.
     ``trailer_rows`` says whether a commit-trailer row is configured (read
     only when the ``commit-trailers`` row is selected); ``dependency_policy``
-    the same for the ``check-deps`` row.
+    the same for the ``check-deps`` row, and ``run_tests`` (``[metrics]
+    run_tests``) for the ``coverage`` row; ``commit_convention`` whether a
+    commitizen convention is configured, and ``commit_checks`` the ``cz``
+    calls of the ``commit-convention`` row once the merge base is known.
     """
 
     repo_root: Path
@@ -93,11 +122,20 @@ class CiContext:
     merge_base: str = ""
     trailer_rows: bool = False
     dependency_policy: bool = False
+    run_tests: bool = False
+    commit_convention: bool = False
+    commit_checks: CzCommands | None = None
+
+
+type StepExecutor = Callable[[CiContext, CiStepRunner, float], tuple[tuple[str, ...], StepRun]]
 
 
 @dataclass(frozen=True, slots=True)
 class CiStep:
     """One ``CI_STEPS`` row: ``argv`` builds the subcommand argv, ``skip_reason`` says why not.
+
+    ``execute`` replaces the engine child for a row that runs another program
+    (``commit-convention`` runs ``cz``): it returns the argv it shows and the result.
 
     Example: ``CiStep("validate", "existing", lambda ctx: ["validate"])``.
     """
@@ -108,6 +146,7 @@ class CiStep:
     skip_reason: Callable[[CiContext], str | None] = lambda ctx: None
     needs_base: bool = False
     timeout_s: float = DEFAULT_STEP_TIMEOUT_S
+    execute: StepExecutor | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,9 +219,48 @@ def _scan_sinks_skip(ctx: CiContext) -> str | None:
     return None if "scan-sinks" in ctx.requested else "opt-in: run with --steps scan-sinks"
 
 
+def _metrics_argv(ctx: CiContext) -> list[str]:
+    """Static non-regression of the changed files against the merge base (§F.2.3).
+
+    The merge base, not ``origin/<base>``, keeps main's later edits out of the
+    comparison; ``--no-run-tests`` leaves the suite to the ``coverage`` row.
+    """
+    return ["metrics", "--baseline", f"git:{ctx.merge_base}", "--changed", "--no-run-tests"]
+
+
+def _coverage_argv(ctx: CiContext) -> list[str]:
+    """Changed-line coverage plus total non-regression against the merge base (§F.1.3).
+
+    Two suite runs (candidate and a baseline worktree); ``diff_coverage``
+    alone would need one.
+    """
+    return ["metrics", "--run-tests", "--select", "testing", "--baseline", f"git:{ctx.merge_base}"]
+
+
+def _coverage_skip(ctx: CiContext) -> str | None:
+    if ctx.run_tests or "coverage" in ctx.requested:
+        return None
+    return "[metrics] run_tests is not true: run with --steps coverage"
+
+
+def _commit_convention_skip(ctx: CiContext) -> str | None:
+    if ctx.commit_convention:
+        return None
+    return "no [tool.commitizen] in pyproject.toml and no [hooks.commit_convention]"
+
+
+def _commit_convention_run(
+    ctx: CiContext, runner: CiStepRunner, timeout_s: float
+) -> tuple[tuple[str, ...], StepRun]:
+    checks = ctx.commit_checks or CzCommands(error="the commit range was not listed")
+    return run_cz_commands(checks, ctx.repo_root, runner, timeout_s)
+
+
 CI_STEPS: Final[tuple[CiStep, ...]] = (
     CiStep("sync-check", "prerequisites", lambda ctx: ["sync", "--check"], _sync_check_skip),
     CiStep("validate", "existing", lambda ctx: ["validate"]),
+    CiStep("metrics", "F.2/F.3", _metrics_argv, needs_base=True),
+    CiStep("coverage", "F.1", _coverage_argv, _coverage_skip, needs_base=True),
     CiStep(
         "gate-scan",
         "E.2",
@@ -194,6 +272,14 @@ CI_STEPS: Final[tuple[CiStep, ...]] = (
         "E.4",
         lambda ctx: ["scan-secrets", "--range", f"{ctx.merge_base}..HEAD"],
         needs_base=True,
+    ),
+    CiStep(
+        COMMIT_STEP,
+        "F.4",
+        lambda ctx: ["cz", "check"],
+        _commit_convention_skip,
+        needs_base=True,
+        execute=_commit_convention_run,
     ),
     CiStep(
         "commit-trailers",
@@ -254,8 +340,13 @@ def run(
     runner: CiStepRunner | None = None,
     git: GitPort | None = None,
     clock: Callable[[], float] = time.monotonic,
+    which: Callable[[str], str | None] = shutil.which,
+    env: Mapping[str, str] | None = None,
 ) -> int:
     """Run the selected ``CI_STEPS`` rows and report them; returns 0, 1 or 2.
+
+    ``which`` finds ``cz`` and ``env`` holds ``PLAYBOOK_PR_TITLE`` (default: this
+    process's environment) for the ``commit-convention`` row.
 
     Example::
 
@@ -268,19 +359,21 @@ def run(
         names = {step.name for step in steps}
         ctx = CiContext(
             repo_root,
-            _output_committed(repo_root),
+            output_committed(repo_root),
             _requested(args.steps),
-            trailer_rows="commit-trailers" in names and _trailers(repo_root),
-            dependency_policy="check-deps" in names and _dependency_policy(repo_root),
+            trailer_rows="commit-trailers" in names and trailer_rows_configured(repo_root),
+            dependency_policy="check-deps" in names and dependency_policy_set(repo_root),
+            run_tests="coverage" in names and metrics_run_tests(repo_root),
+            commit_convention=COMMIT_STEP in names and commit_convention_configured(repo_root),
         )
-        ctx = _with_base(ctx, steps, args.base, git)
+        ctx = _with_base(ctx, steps, args.base, git, (which, os.environ if env is None else env))
     except (GitError, ValueError) as exc:  # GitBaseError is a ValueError
         print(f"error: {exc}", file=sys.stderr)
         return 2
     log = sys.stderr if args.format == "json" else sys.stdout
     records = run_ci(steps, ctx, runner or SubprocessCiStepRunner(), clock, log=log)
     code = aggregate_exit(records)
-    print(_json(records, code) if args.format == "json" else _summary(records))
+    print(json_report(records, code) if args.format == "json" else summary_text(records))
     return code
 
 
@@ -329,7 +422,7 @@ def run_ci(
             records.append(StepRecord(step.name, (), None, 0.0, "skipped", note=reason))
             continue
         records.append(_run_step(step, ctx, runner, clock))
-        _log(records[-1], log)
+        log_step(records[-1], log)
     return tuple(records)
 
 
@@ -347,9 +440,12 @@ def aggregate_exit(records: Sequence[StepRecord]) -> int:
 def _run_step(
     step: CiStep, ctx: CiContext, runner: CiStepRunner, clock: Callable[[], float]
 ) -> StepRecord:
-    argv = (sys.executable, *_CLI, *step.argv(ctx), "--repo-root", str(ctx.repo_root))
     started = clock()
-    result = runner.run(argv, cwd=ctx.repo_root, timeout_s=step.timeout_s)
+    if step.execute is not None:
+        argv, result = step.execute(ctx, runner, step.timeout_s)
+    else:
+        argv = (sys.executable, *_CLI, *step.argv(ctx), "--repo-root", str(ctx.repo_root))
+        result = runner.run(argv, cwd=ctx.repo_root, timeout_s=step.timeout_s)
     duration = round(clock() - started, 3)
     return StepRecord(
         step.name, argv, result.exit, duration, _status(result.exit), output=result.output
@@ -363,82 +459,27 @@ def _status(exit_code: int | None) -> StepStatus:
 
 
 def _with_base(
-    ctx: CiContext, steps: Sequence[CiStep], base: str | None, git: GitPort | None
+    ctx: CiContext,
+    steps: Sequence[CiStep],
+    base: str | None,
+    git: GitPort | None,
+    cz_lookup: tuple[Callable[[str], str | None], Mapping[str, str]],
 ) -> CiContext:
-    """``ctx`` with the merge base set, when a step that will run needs one."""
-    if not any(step.needs_base and step.skip_reason(ctx) is None for step in steps):
+    """``ctx`` with the merge base set when a running step needs one, then the ``cz`` checks."""
+    running = [step for step in steps if step.skip_reason(ctx) is None]
+    if not any(step.needs_base for step in running):
         return ctx
     port = git if git is not None else open_git(ctx.repo_root)
-    return replace(ctx, merge_base=resolve_merge_base(port, base).sha)
-
-
-def _output_committed(repo_root: Path) -> bool | None:
-    """``[output] commit`` of the merged config; ``True`` when it does not load (fail closed)."""
-    if not (repo_root / CONFIG_FILE).is_file():
-        return None
-    from coding_agent_playbook.sources.filesystem import FileSystemStateSource
-
-    try:
-        return FileSystemStateSource(repo_root=repo_root).load_config().commit_output
-    except (ValueError, OSError, KeyError, TypeError):
-        return True  # sync --check then reports the broken config itself
-
-
-def _trailers(repo_root: Path) -> bool:
-    """Whether a trailer row is configured; ``True`` when the policy does not load (fail closed)."""
-    from coding_agent_playbook.commands._twin_policy import commit_trailer_policy
-
-    try:
-        return commit_trailer_policy(repo_root).has_rows
-    except (ValueError, OSError, KeyError, TypeError):
-        return True  # check-commit-trailers then reports the broken config itself
-
-
-def _dependency_policy(repo_root: Path) -> bool:
-    """Whether a dependency policy is set; ``True`` when it does not load (fail closed)."""
-    from coding_agent_playbook.commands._twin_policy import dependency_policy_configured
-
-    try:
-        return dependency_policy_configured(repo_root)
-    except (ValueError, OSError, KeyError, TypeError):
-        return True  # check-deps then reports the broken config itself
+    ctx = replace(ctx, merge_base=resolve_merge_base(port, base).sha)
+    if not any(step.name == COMMIT_STEP for step in running):
+        return ctx
+    which, env = cz_lookup
+    checks = cz_commands(port, ctx.repo_root, ctx.merge_base, which=which, env=env)
+    return replace(ctx, commit_checks=checks)
 
 
 def _requested(text: str | None) -> frozenset[str]:
     return frozenset(name.strip() for name in (text or "").split(",") if name.strip())
-
-
-def _log(record: StepRecord, stream: TextIO | None) -> None:
-    if stream is None:
-        return
-    print(f"--- {record.step}: {shlex.join(record.argv)}", file=stream)
-    if record.output.strip():
-        print(record.output.rstrip("\n"), file=stream)
-    stream.flush()
-
-
-def _summary(records: Sequence[StepRecord]) -> str:
-    lines = [_status_line(record) for record in records]
-    counts = {status: sum(r.status == status for r in records) for status in ("passed", "skipped")}
-    failed = len(records) - counts["passed"] - counts["skipped"]
-    lines.append(
-        f"playbook ci: {counts['passed']} passed, {failed} failed, {counts['skipped']} skipped"
-    )
-    return "\n".join(lines)
-
-
-def _status_line(record: StepRecord) -> str:
-    if record.status == "skipped":
-        return f"SKIP {record.step}: {record.note}"
-    if record.status == "timeout":
-        return f"TIMEOUT {record.step} (after {record.duration_s:.2f}s)"
-    word = "PASS" if record.status == "passed" else "FAIL"
-    return f"{word} {record.step} (exit {record.exit}, {record.duration_s:.2f}s)"
-
-
-def _json(records: Sequence[StepRecord], code: int) -> str:
-    document = {"steps": [record.to_json() for record in records], "exit": code}
-    return json.dumps(document, indent=2)
 
 
 def _decoded(output: bytes | str | None) -> str:

@@ -166,6 +166,109 @@ def test_parse_metrics_config_rejects_non_positive_git_timeout(raw):
     )
 
 
+def test_parse_metrics_config_selection_lists():
+    """prK §F.0.3 item 2: ruff-shaped selection keys; names are validated by the gate."""
+    cfg = parse_metrics_config(
+        {"select": ["quality"], "extend_select": ["ruff_violations"], "ignore": ["lcom4"]}
+    )
+
+    assert cfg.select == ("quality",)
+    assert cfg.extend_select == ("ruff_violations",)
+    assert cfg.ignore == ("lcom4",)
+    defaults = parse_metrics_config({})
+    assert (defaults.select, defaults.extend_select, defaults.ignore) == (None, (), ())
+
+
+@pytest.mark.parametrize("key", ["select", "extend_select", "ignore", "exclude"])
+@pytest.mark.parametrize("raw", ["quality", ["wmc", 3], {"a": 1}, None], ids=repr)
+def test_parse_metrics_config_rejects_non_string_list_naming_value(key, raw):
+    with pytest.raises(ValueError) as excinfo:
+        parse_metrics_config({key: raw})
+
+    assert str(excinfo.value) == f"[metrics] {key} must be a list of strings, got {raw!r}"
+
+
+def test_exclude_defaults_to_eval_fixture_globs():
+    """prK §F.0.3 item 5: intentionally bad eval needle code never gates a commit."""
+    from coding_agent_playbook.evaluators.paths import EVAL_FIXTURE_GLOBS
+    from coding_agent_playbook.evaluators.types import MetricConfig
+
+    assert parse_metrics_config({}).exclude == EVAL_FIXTURE_GLOBS
+    assert MetricConfig().exclude == EVAL_FIXTURE_GLOBS
+    assert parse_metrics_config({"exclude": []}).exclude == ()
+    assert parse_metrics_config({"exclude": ["gen/**"]}).exclude == ("gen/**",)
+
+
+def test_parse_metrics_config_timeouts_positive():
+    assert parse_metrics_config({}).test_timeout_s is None
+    assert parse_metrics_config({"test_timeout_s": 300}).test_timeout_s == 300.0
+    with pytest.raises(ValueError) as excinfo:
+        parse_metrics_config({"test_timeout_s": -5})
+
+    assert str(excinfo.value) == (
+        "[metrics] test_timeout_s must be a positive number of seconds, got -5"
+    )
+
+
+def test_parse_ruff_violations_subtable_defaults_and_overrides():
+    """prK §F.2.1: ``[metrics.ruff_violations]`` families (per-family replace), config, preview."""
+    from coding_agent_playbook.evaluators.types import DEFAULT_RUFF_FAMILIES
+
+    defaults = parse_metrics_config({})
+    cfg = parse_metrics_config(
+        {
+            "ruff_violations": {
+                "families": {"quality": ["C901", "PLR1702"], "docstrings": []},
+                "config": {"lint.mccabe.max-complexity": 10, "lint.pylint.max-args": 5},
+                "preview": True,
+            }
+        }
+    )
+
+    assert defaults.ruff_families == dict(DEFAULT_RUFF_FAMILIES)
+    assert (defaults.ruff_config, defaults.ruff_preview) == ({}, False)
+    assert cfg.ruff_families == {"quality": ("C901", "PLR1702")}
+    assert cfg.ruff_settings.config == (
+        "lint.mccabe.max-complexity=10",
+        "lint.pylint.max-args=5",
+    )
+    assert cfg.ruff_settings.preview is True
+
+
+@pytest.mark.parametrize(
+    ("table", "message"),
+    [
+        (
+            {"families": {"quality": ["C901", "c9x"]}},
+            "[metrics] ruff_violations.families.quality must be a list of ruff codes like "
+            "'C901', got ['C901', 'c9x']",
+        ),
+        (
+            {"families": {"Bad Name": ["C901"]}},
+            "[metrics] ruff_violations.families: bad family name 'Bad Name' "
+            "(expected lowercase letters, digits and _)",
+        ),
+        (
+            {"config": {"--select": "ALL"}},
+            "[metrics] ruff_violations.config: bad ruff setting '--select' "
+            "(expected a dotted name like 'lint.mccabe.max-complexity')",
+        ),
+        (
+            {"config": {"lint.x": {"a": 1}}},
+            "[metrics] ruff_violations.config.lint.x must be a string, number, boolean "
+            "or a list of them, got {'a': 1}",
+        ),
+        ({"preview": "yes"}, "[metrics] ruff_violations.preview must be true or false, got 'yes'"),
+    ],
+    ids=["code", "family", "setting", "value", "preview"],
+)
+def test_ruff_violations_rejects_bad_codes_naming_value(table, message):
+    with pytest.raises(ValueError) as excinfo:
+        parse_metrics_config({"ruff_violations": table})
+
+    assert str(excinfo.value) == message
+
+
 def test_parse_links_config_empty_uses_strict_default():
     from coding_agent_playbook.config import parse_links_config
 

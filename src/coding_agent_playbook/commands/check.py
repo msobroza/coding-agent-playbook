@@ -79,27 +79,28 @@ def _format_detected_section(ctx: SyncContext) -> str:
     return "\n".join(lines)
 
 
+#: List-valued ``applies_if`` keys the skip reason quotes as written.
+_LIST_PREDICATE_KEYS = frozenset(
+    {"has_framework", "any_framework", "has_file", "has_dev_dependency"}
+)
+
+
 def _format_skip_reason(predicate: dict[str, object], facts: dict[str, object]) -> str:
     """Render a SPEC §12.4-style ``(skipped: ...)`` suffix for the first
     predicate key that fails. Mirrors the canonical examples:
 
     * boolean fact: ``(skipped: has_notebooks=False)``
     * framework check: ``(skipped: applies_if has_framework=['great-expectations'])``
+    * dev dependency: ``(skipped: applies_if has_dev_dependency=['pytest-cov'])``
 
     We deliberately don't try to be exhaustive — we surface the first failing
     key in the order the predicate dict iterates (insertion order), since
     that's what the example shows and it's the most actionable for the user.
     """
     for key, value in predicate.items():
-        if key == "has_framework":
+        if key in _LIST_PREDICATE_KEYS:
             wanted = value if isinstance(value, list) else [value]
-            return f"(skipped: applies_if has_framework={wanted!r})"
-        if key == "any_framework":
-            wanted = value if isinstance(value, list) else [value]
-            return f"(skipped: applies_if any_framework={wanted!r})"
-        if key == "has_file":
-            wanted = value if isinstance(value, list) else [value]
-            return f"(skipped: applies_if has_file={wanted!r})"
+            return f"(skipped: applies_if {key}={wanted!r})"
         if key == "python_version":
             return f"(skipped: applies_if python_version={value!r})"
         # Boolean facts (has_notebooks, has_dockerfile, has_ci, banking_mode).

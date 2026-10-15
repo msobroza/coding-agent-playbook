@@ -5,21 +5,27 @@ so ``playbook sync`` tests never shell out to git (and never monkeypatch
 :mod:`subprocess`). ``None`` models "git cannot answer" (not a repository, git
 missing, timeout) exactly like the real client. :func:`pre_gate_validate` stands
 in for ``playbook sync``'s validate gate. ``FakeProjectFactory`` stands in for
-``ProjectHandle.create`` so metrics-gate tests see which test command would run
-without running a suite, and ``FakeBaselineGit`` stands in for
-:class:`coding_agent_playbook.evaluators.baseline_git.SubprocessBaselineGit`.
+``ProjectHandle.create`` so metrics-gate tests see which test command (and
+diff base, timeout, ``--cov`` sources) would run without running a suite; its
+``FakeProjectHandle`` serves canned ``RunArtifacts``. ``FakeBaselineGit`` stands in for
+:class:`coding_agent_playbook.evaluators.baseline_git.SubprocessBaselineGit`;
+``FakeGitRunner`` stands in for its working-tree reads (``SubprocessGitRunner``).
 ``FakeHandlerSchemas`` stands in for the hook-handler ``CONFIG_SCHEMA`` registry
 (K2) behind :class:`coding_agent_playbook.hook_policy.ConfigSchemaLookup`.
 ``FakePinWriter`` stands in for the ``hook_runtime.pin`` writers ``playbook sync``
 calls (the interpreter pin and ``machine.json`` under the git dir).
 ``FakeCiStepRunner`` stands in for :class:`coding_agent_playbook.commands.ci.SubprocessCiStepRunner`
 so ``playbook ci`` tests see each step's argv without spawning a child.
+``FakeRuffRunner`` stands in for the metrics gate's ``ToolRunner`` (a ruff
+subprocess), so ``ruff_violations`` tests script ruff's JSON per source text.
 :func:`record_opens` spies on every ``open`` so a scan test can prove a file was never read.
 """
 
 from __future__ import annotations
 
 import io
+import json
+import os
 import sys
 import unicodedata
 from dataclasses import dataclass, field
@@ -28,7 +34,10 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.commands.ci import StepRun
 from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, GitTimeoutError
-from coding_agent_playbook.evaluators.execution.project import ProjectHandle
+from coding_agent_playbook.evaluators.execution.coverage_xml import CoverageReport
+from coding_agent_playbook.evaluators.execution.junit import JunitSummary
+from coding_agent_playbook.evaluators.execution.project import ProjectHandle, RunArtifacts
+from coding_agent_playbook.evaluators.tool_runner import ToolRunError
 from coding_agent_playbook.hook_runtime.pin import PinResult
 
 if TYPE_CHECKING:
@@ -89,26 +98,80 @@ def pre_gate_validate(ctx: SyncContext) -> list[ValidationError]:
     return []
 
 
-#: A suite command that runs nothing and writes no report (an empty, passing suite).
+#: The command a :class:`FakeProjectHandle` claims to run; it never runs it.
 NO_OP_SUITE_CMD = [sys.executable, "-c", "pass"]
+
+
+def empty_run() -> RunArtifacts:
+    """What an empty, passing suite reports: no tests, no coverage, exit 0."""
+    return RunArtifacts(junit=JunitSummary(0, 0, 0, 0, 0), coverage=CoverageReport(), returncode=0)
+
+
+@dataclass
+class FakeProjectHandle(ProjectHandle):
+    """A :class:`ProjectHandle` whose suite never runs: each run serves ``artifacts``.
+
+    ``runs`` counts the suite runs the handle was asked for (``run()`` caches
+    the first, as the real handle does), so a test can prove a suite ran once.
+    """
+
+    artifacts: RunArtifacts = field(default_factory=empty_run)
+    runs: int = 0
+
+    def _run_once(self) -> RunArtifacts:
+        self.runs += 1
+        return self.artifacts
+
+
+@dataclass(frozen=True)
+class SuiteRequest:
+    """One handle the metrics gate asked :class:`FakeProjectFactory` for, with its options."""
+
+    root: Path
+    test_cmd: list[str] | None
+    diff_base: str | None
+    timeout_s: float | None
+    cov_sources: tuple[str, ...]
 
 
 @dataclass
 class FakeProjectFactory:
     """Stands in for ``ProjectHandle.create`` in :class:`MetricsGateDeps`.
 
-    Records ``(root, test_cmd)`` for every handle the gate asks for, then builds
-    a real handle that runs :data:`NO_OP_SUITE_CMD`, so no project suite ever
-    runs. ``calls == []`` proves the gate never built a handle.
+    Records ``(root, test_cmd)`` in ``calls`` and the full request in
+    ``requests`` for every handle the gate asks for, then hands out a
+    :class:`FakeProjectHandle` serving ``artifacts``, so no project suite ever
+    runs. ``calls == []`` proves the gate never built a handle; ``handles``
+    keeps each one for its ``runs`` count.
     """
 
+    artifacts: RunArtifacts = field(default_factory=empty_run)
     calls: list[tuple[Path, list[str] | None]] = field(default_factory=list)
+    requests: list[SuiteRequest] = field(default_factory=list)
+    handles: list[FakeProjectHandle] = field(default_factory=list)
 
     def __call__(
-        self, root: Path, report_dir: Path, test_cmd: list[str] | None = None
+        self,
+        root: Path,
+        report_dir: Path,
+        test_cmd: list[str] | None = None,
+        *,
+        diff_base: str | None = None,
+        timeout_s: float | None = None,
+        cov_sources: Sequence[str] = (),
     ) -> ProjectHandle:
         self.calls.append((root, test_cmd))
-        return ProjectHandle.create(root, report_dir, test_cmd=NO_OP_SUITE_CMD)
+        self.requests.append(SuiteRequest(root, test_cmd, diff_base, timeout_s, tuple(cov_sources)))
+        handle = FakeProjectHandle(
+            root=root,
+            test_cmd=list(NO_OP_SUITE_CMD),
+            report_dir=report_dir,
+            diff_base=diff_base,
+            timeout_s=timeout_s,
+            artifacts=self.artifacts,
+        )
+        self.handles.append(handle)
+        return handle
 
 
 @dataclass
@@ -159,6 +222,33 @@ class FakeBaselineGit:
             raise GitTimeoutError(command, self.timeout_s)
         if command in self.fail_on:
             raise BaselineGitError(f"fatal: {command} failed for {ref}")
+
+
+@dataclass
+class FakeGitRunner:
+    """In-memory :data:`~coding_agent_playbook.evaluators.baseline_git.GitRunner`.
+
+    ``outputs`` maps a git subcommand (``"diff"``, ``"ls-files"``, ``"status"``,
+    ``"rev-parse"``) to its stdout; an unlisted one prints nothing. A subcommand
+    in ``fail_on`` raises :class:`BaselineGitError`. ``calls`` records each argv.
+    Build one per gate with :meth:`factory` (the ``MetricsGateDeps`` shape).
+    """
+
+    outputs: dict[str, bytes] = field(default_factory=dict)
+    fail_on: set[str] = field(default_factory=set)
+    calls: list[tuple[str, ...]] = field(default_factory=list)
+    roots: list[tuple[Path, float]] = field(default_factory=list)
+
+    def __call__(self, args: Sequence[str]) -> bytes:
+        self.calls.append(tuple(args))
+        if args[0] in self.fail_on:
+            raise BaselineGitError(f"fatal: {args[0]} failed")
+        return self.outputs.get(args[0], b"")
+
+    def factory(self, repo_root: Path, timeout_s: float) -> FakeGitRunner:
+        """Record the root and bound the gate asked for, then hand out this fake."""
+        self.roots.append((repo_root, timeout_s))
+        return self
 
 
 @dataclass
@@ -231,19 +321,59 @@ class FakeCiStepRunner:
     """In-memory :class:`~coding_agent_playbook.commands.ci.CiStepRunner`.
 
     ``exits`` maps a step's subcommand (``validate``, ``sync``, ``gate-scan``)
-    to its exit code, ``None`` for a timeout; unlisted steps exit 0. ``calls``
-    records each argv, ``timeouts`` each per-step timeout, in order.
+    to its exit code, ``None`` for a timeout; unlisted steps exit 0. Any other
+    program (the ``cz`` the ``commit-convention`` row runs) is keyed by its
+    basename, or by ``cz_exits[<the call's last argument>]`` when listed there.
+    ``calls`` records each argv, ``timeouts`` each per-step timeout, in order.
     """
 
     exits: dict[str, int | None] = field(default_factory=dict)
+    cz_exits: dict[str, int | None] = field(default_factory=dict)
     calls: list[tuple[str, ...]] = field(default_factory=list)
     timeouts: list[float] = field(default_factory=list)
 
     def run(self, argv: Sequence[str], *, cwd: Path, timeout_s: float) -> StepRun:
         self.calls.append(tuple(argv))
         self.timeouts.append(timeout_s)
+        if tuple(argv[1:3]) != ("-m", "coding_agent_playbook.cli"):
+            program = os.path.basename(argv[0])
+            code = self.cz_exits.get(argv[-1], self.exits.get(program, 0))
+            return StepRun(code, f"{program} said hello\n")
         subcommand = argv[3]  # after <python> -m coding_agent_playbook.cli
         return StepRun(self.exits.get(subcommand, 0), f"{subcommand} said hello\n")
+
+
+def ruff_row(code: str | None, row: int = 1, message: str = "") -> dict[str, object]:
+    """One ``ruff check --output-format json`` row (``code=None``: a syntax error).
+
+    Example: ``FakeRuffRunner(answers={"x = (": [ruff_row(None)]})``.
+    """
+    return {"code": code, "location": {"row": row, "column": 1}, "message": message}
+
+
+@dataclass
+class FakeRuffRunner:
+    """In-memory ``ToolRunner`` for ``ruff check ... -``: answers by the source on stdin.
+
+    ``answers`` maps a source text to its JSON rows (unlisted sources: ``[]``);
+    ``returncode`` is every call's exit; ``timeout`` makes every call raise
+    :class:`ToolRunError` as a timed-out subprocess does. ``calls`` records
+    ``(argv, stdin text, cwd, timeout_s)``.
+    """
+
+    answers: dict[str, list[dict[str, object]]] = field(default_factory=dict)
+    returncode: int = 0
+    timeout: bool = False
+    calls: list[tuple[tuple[str, ...], str, Path | None, float]] = field(default_factory=list)
+
+    def __call__(
+        self, argv: Sequence[str], stdin: bytes, cwd: Path | None, timeout_s: float
+    ) -> tuple[int, bytes]:
+        source = stdin.decode("utf-8")
+        self.calls.append((tuple(argv), source, cwd, timeout_s))
+        if self.timeout:
+            raise ToolRunError(f"{argv[0]} timed out after {timeout_s:g}s")
+        return self.returncode, json.dumps(self.answers.get(source, [])).encode()
 
 
 def record_opens(monkeypatch: pytest.MonkeyPatch) -> list[Path]:

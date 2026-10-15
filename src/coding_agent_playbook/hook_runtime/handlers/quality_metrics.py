@@ -1,45 +1,56 @@
-"""clean-code-metrics-nonregression: the ``quality-metrics`` Stop stage (specs/prK-hook-pack.md §E.2).
+"""clean-code-metrics-nonregression: the ``quality-metrics`` Stop stage (specs/prK-hook-pack.md §E.2, §F.2.2).
 
 The repo's own ``playbook metrics`` gate, static only, over the Python files
-this work touched (the session ledger, ``git diff HEAD`` and untracked files,
-minus the ``eval_fixture`` path class), with ``--baseline git:HEAD``:
+this work touched, with ``--baseline git:HEAD``: the ``quality`` family of the
+consumer's ``[metrics]`` selection plus ``ruff_violations``' ``ruff:quality``
+counts (C901, PLR0911, PLR0912, PLR0913, PLR0915). It reads the one pass it
+shares with the ``docstrings`` stage (``_metrics_pass``), so nothing is
+measured twice per Stop.
 
-- it calls ``evaluators.metrics_gate.run_metrics_gate`` in-process (imported
-  only when the stage runs) with ``run_tests=False`` **always**: a repo's
-  ``[metrics] run_tests = true`` must never run its suite from a hook (§B.4).
-  The baseline blobs come through the hook's hardened ``SafeGit``;
-- ``[metrics]`` is read live, like the pre-commit hook it mirrors;
-- severity mirrors the repo's gate: fail-level findings block only when
+- **severity** mirrors the repo's gate: a fail-level finding blocks only when
   ``.pre-commit-config.yaml`` declares ``playbook-metrics`` or
-  ``coding-agent-playbook-metrics`` (the rendered ``precommit`` snapshot or a
-  live scan) **and** ``[metrics] fail_on_breach`` is true; otherwise each is a
-  context line. A file that cannot be parsed or measured, a bad ``[metrics]``
-  table or any gate error is a context line too, never a crash.
+  ``coding-agent-playbook-metrics``, ``[metrics] fail_on_breach`` is true and
+  the consumer's own selection includes the metric (so ``ruff_violations``
+  blocks only for a consumer who selected it); otherwise each is a context
+  line. A file that cannot be measured, a bad ``[metrics]`` table or any gate
+  error is a context line too, never a crash;
+- at most :data:`MAX_LINES` lines, then ``+N more (playbook metrics ...)``.
 
-At most :data:`MAX_FILES` files are measured per Stop. The registered stop
-handler runs the stage alone when the coordinator is not selected.
+The opt-in **post-edit companion** (``lint_feedback = true``) is the
+``quality`` bucket of the §E.3 shared D1 ruff call: no metric code, the
+family's codes and the ``[metrics.ruff_violations] config`` thresholds that
+sync renders into its config. The registered stop handler runs the stage alone
+when the coordinator is not selected.
 """
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.caps import clean_text, clip, quote_data
-from coding_agent_playbook.hook_runtime.paths import fold_key
+from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.handlers._metrics_pass import (
+    MAX_FILES,
+    METRICS_HOOK_IDS,
+    PortBaselineGit,
+    capped,
+    finding_line,
+    ruff_detail,
+    ruff_line,
+    shared_pass,
+    touched_py,
+)
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.stop.alone import run_alone
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult, StopPlan
-from coding_agent_playbook.hook_runtime.stop.tools import edited_py
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
+    from coding_agent_playbook.evaluators.types import ScopeDetail
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.git import GitPort
+    from coding_agent_playbook.hook_runtime.handlers._metrics_pass import MetricsPass
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
     type Gate = Callable[[Any, Any], Any]  # (MetricsGateRequest, MetricsGateDeps) -> result
@@ -47,24 +58,29 @@ if TYPE_CHECKING:
 __all__ = [
     "CONFIG_SCHEMA",
     "MAX_FILES",
+    "MAX_LINES",
     "METRICS_HOOK_IDS",
+    "POST_EDIT_CONFIG_SCHEMA",
     "STAGE_NAME",
+    "PortBaselineGit",
     "QualityMetricsStage",
     "clean_code_metrics_nonregression",
+    "clean_code_metrics_post_edit",
     "quality_metrics_stage",
 ]
 
 STAGE_NAME: Final = "quality-metrics"
+FAMILY: Final = "quality"
+MAX_LINES: Final = 6
 CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
     "stage": ConfigKey("string", "replace", (STAGE_NAME,)),
 }
-#: The pre-commit ids that make a metrics regression fail the commit (§E.2).
-METRICS_HOOK_IDS: Final = frozenset({"playbook-metrics", "coding-agent-playbook-metrics"})
-MAX_FILES: Final = 50
-_PRECOMMIT: Final = ".pre-commit-config.yaml"
-_PRECOMMIT_MAX_BYTES: Final = 1024 * 1024
-#: What a hostile source, a bad ``[metrics]`` table or a git failure can raise.
-_MEASURE_ERRORS: Final = (SyntaxError, RecursionError, MemoryError, ValueError, OSError)
+#: ``lint_codes`` / ``ruff_config`` / ``ruff_preview`` are rendered at sync from
+#: ``[metrics.ruff_violations]``, the one source shared with the Stop stage.
+POST_EDIT_CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
+    "lint_feedback": ConfigKey("boolean"),
+}
+_DECISIONS: Final = ["deny", "context", "none"]  # the hook's set (H5): stop denies, post-edit adds
 
 
 @dataclass(slots=True, kw_only=True)
@@ -80,6 +96,7 @@ class QualityMetricsStage:
 
     ctx: HandlerContext
     root: str
+    git_dir: str | None = None
     gate: Gate | None = None
     name: str = STAGE_NAME
     cost: StageCost = StageCost.DETERMINISTIC
@@ -94,7 +111,7 @@ class QualityMetricsStage:
     def targets(self, plan: StopPlan) -> list[str]:
         """The touched ``.py`` files, repo-relative and existing (memoized per Stop)."""
         if self._targets is None:
-            self._targets = _touched(plan, self.ctx, self.root)
+            self._targets = touched_py(plan, self.ctx, self.root)
         return self._targets
 
     def run(self, plan: StopPlan, deadline: float) -> StageResult:
@@ -102,63 +119,44 @@ class QualityMetricsStage:
         targets = self.targets(plan)
         if not targets or plan.head_tree is None:  # an unborn branch has no baseline
             return StageResult(STAGE_NAME, "green")
-        try:
-            result = self._measure(targets[:MAX_FILES])
-        except _MEASURE_ERRORS as exc:
-            return _warn([f"metrics not measured ({type(exc).__name__})"])
-        except Exception as exc:  # MetricsGateUsageError: a bad [metrics] table or git ref
-            return _warn([f"metrics not measured: {clip(clean_text(str(exc)), 120)}"])
-        lines = [_finding_line(f) for f in result.report.findings if f.level == "fail"]
-        notes = [f"{quote_data(label)} not measured: {why}" for label, why in result.skipped]
-        if len(targets) > MAX_FILES:
-            notes.append(f"(+{len(targets) - MAX_FILES} touched files not measured)")
-        if lines and result.config.fail_on_breach and _gated(self.ctx, self.root):
+        found = shared_pass(
+            plan, self.ctx, self.root, deadline, git_dir=self.git_dir, gate=self.gate
+        )
+        if found.error:
+            return _warn([found.error])
+        mine = [f for f in found.fails() if _in_quality(f)]
+        lines = capped([self._line(found, f) for f in mine], MAX_LINES)
+        notes = _notes(found, len(targets))
+        if any(found.deny_eligible(f.evaluator) for f in mine):
             return StageResult(STAGE_NAME, "red", lines=(*lines, *notes))
         return _warn([*lines, *notes]) if lines or notes else StageResult(STAGE_NAME, "green")
 
-    def _measure(self, targets: Sequence[str]) -> Any:
-        from coding_agent_playbook.evaluators import metrics_gate as gates  # the stage runs
-
-        root = Path(self.root)
-        request = gates.MetricsGateRequest(
-            repo_root=root,
-            config=gates.load_metrics_config(root),
-            paths=tuple(os.path.join(self.root, rel) for rel in targets),
-            baseline="git:HEAD",
-            run_tests=False,  # never the suite from a hook, whatever [metrics] run_tests says
-        )
-        git = self.ctx.git
-        deps = gates.MetricsGateDeps(git_factory=lambda _timeout: PortBaselineGit(git))
-        if self.gate is not None:
-            return self.gate(request, deps)
-        return gates.run_metrics_gate(request, deps=deps)
+    def _line(self, found: MetricsPass, finding: ScopeDetail) -> str:
+        if finding.evaluator != "ruff_violations":
+            return finding_line(finding)
+        rel = str(finding.scope_key).partition("::")[0]
+        return ruff_line(finding, FAMILY, ruff_detail(found, self.ctx, self.root, rel, FAMILY))
 
 
-class PortBaselineGit:
-    """``evaluators.baseline_git.BaselineGit`` over the hook's hardened ``GitPort``.
+def _in_quality(finding: ScopeDetail) -> bool:
+    """A ``quality``-family finding: a quality metric, or ruff's ``ruff:quality`` count."""
+    from coding_agent_playbook.evaluators.builtins.ruff_violations import ruff_family
+    from coding_agent_playbook.evaluators.policy import METRIC_FAMILIES
 
-    Only ``HEAD`` blobs are read (the stage never runs a suite, so no worktree).
-    Example: ``PortBaselineGit(ctx.git).read_sources(root, "HEAD", ["src/a.py"])``.
-    """
+    if finding.evaluator == "ruff_violations":
+        return ruff_family(finding.scope_key) == FAMILY
+    return finding.evaluator in METRIC_FAMILIES[FAMILY]
 
-    def __init__(self, git: GitPort) -> None:
-        self._git = git
 
-    def is_commit(self, repo_root: Path, ref: str) -> bool:
-        """Only ``HEAD`` on a born branch."""
-        return ref == "HEAD" and self._git.head_tree() is not None
-
-    def read_sources(self, repo_root: Path, ref: str, rel_paths: Sequence[str]) -> dict[str, bytes]:
-        """Each path's ``HEAD`` blob; paths absent there are left out."""
-        blobs = {rel: self._git.cat_head(rel) for rel in rel_paths}
-        return {rel: blob for rel, blob in blobs.items() if blob is not None}
-
-    def add_worktree(self, repo_root: Path, worktree: Path, ref: str) -> None:
-        """Never needed: the hook never measures a suite baseline."""
-        raise NotImplementedError("the quality-metrics stage never runs a suite")
-
-    def remove_worktree(self, repo_root: Path, worktree: Path) -> None:
-        """Nothing to remove."""
+def _notes(found: MetricsPass, touched: int) -> list[str]:
+    """Files not measured and why; the cap; a selected ``ruff_violations`` without ruff."""
+    skipped = [] if found.result is None else found.result.skipped
+    notes = [f"{quote_data(label)} not measured: {why}" for label, why in skipped]
+    if touched > MAX_FILES:
+        notes.append(f"(+{touched - MAX_FILES} touched files not measured)")
+    if found.ruff_missing:
+        notes.append(found.ruff_missing)
+    return notes
 
 
 def quality_metrics_stage(ev: CanonicalEvent, ctx: HandlerContext) -> QualityMetricsStage | None:
@@ -166,13 +164,15 @@ def quality_metrics_stage(ev: CanonicalEvent, ctx: HandlerContext) -> QualityMet
 
     Example: ``quality_metrics_stage(stop_event, ctx).name == "quality-metrics"``.
     """
-    return None if ev.repo is None else QualityMetricsStage(ctx=ctx, root=ev.repo.worktree_root)
+    if ev.repo is None:
+        return None
+    return QualityMetricsStage(ctx=ctx, root=ev.repo.worktree_root, git_dir=ev.repo.git_dir)
 
 
 @register_hook_handler(
     "clean_code_metrics_nonregression",
     events=["stop"],
-    decisions=["deny", "none"],
+    decisions=_DECISIONS,
     config_schema=CONFIG_SCHEMA,
 )
 def clean_code_metrics_nonregression(
@@ -186,52 +186,25 @@ def clean_code_metrics_nonregression(
     return None if stage is None else run_alone(stage, ev, ctx)
 
 
-def _touched(plan: StopPlan, ctx: HandlerContext, root: str) -> list[str]:
-    """Ledger ``.py`` edits, then ``git diff HEAD`` and untracked ``.py`` files, eval fixtures out."""
-    found = dict.fromkeys(edited_py(plan.ledger))
-    found.update(dict.fromkeys(line.path for line in ctx.git.diff_added()))
-    found.update(dict.fromkeys(ctx.git.ls_untracked()))
-    fixtures = ctx.cfg.path_classes.get("eval_fixture")
-    return [
-        rel
-        for rel in found
-        if rel.endswith(".py")
-        and not (fixtures is not None and fixtures.matches(fold_key(rel, ctx.platform)))
-        and os.path.isfile(os.path.join(root, rel))
-    ]
+@register_hook_handler(
+    "clean_code_metrics_nonregression:post_edit",
+    events=["post_tool_use"],
+    decisions=_DECISIONS,
+    config_schema=POST_EDIT_CONFIG_SCHEMA,
+)
+def clean_code_metrics_post_edit(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult | None:
+    """The opt-in ``quality`` bucket of the shared D1 ruff call, on the lines an edit changed.
 
+    Example::
 
-def _gated(ctx: HandlerContext, root: str) -> bool:
-    """The repo gates metrics in pre-commit: the rendered snapshot or a live scan says so."""
-    table = ctx.cfg.tables.get("precommit")
-    rendered = table.get("playbook_hook_ids") if isinstance(table, dict) else None
-    if isinstance(rendered, list) and METRICS_HOOK_IDS.intersection(rendered):
-        return True
-    return bool(METRICS_HOOK_IDS.intersection(_live_precommit_ids(root)))
+        >>> clean_code_metrics_post_edit(edit_growing_parse, ctx).context  # doctest: +SKIP
+        ('quality: "src/x.py:3 C901 `parse` is too complex (12 > 10)"',)
+    """
+    if ctx.config.get("lint_feedback") is not True:
+        return None  # opt-in: off, it adds no code to D1 and spawns nothing
+    from coding_agent_playbook.hook_runtime.handlers.ruff_feedback import bucket_feedback
 
-
-def _live_precommit_ids(root: str) -> Iterable[str]:
-    from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
-        playbook_precommit_ids,
-    )
-
-    try:
-        with open(os.path.join(root, _PRECOMMIT), "rb") as handle:
-            data = handle.read(_PRECOMMIT_MAX_BYTES)
-    except OSError:
-        return ()
-    return playbook_precommit_ids(data.decode("utf-8", errors="replace"))
-
-
-def _finding_line(finding: Any) -> str:
-    """``"src/x.py"::parse cyclomatic_complexity 6 -> 9 (regression)``."""
-    path, _, scope = str(finding.scope_key).partition("::")
-    where = f"{quote_data(path)}::{clip(clean_text(scope), 60)}" if scope else quote_data(path)
-    if finding.baseline is not None:
-        change = f"{finding.baseline:g} -> {finding.value:g}"
-    else:
-        change = f"= {finding.value:g}"
-    return f"{where} {finding.evaluator} {change} ({finding.kind})"
+    return bucket_feedback(ev, ctx, rule_id=FAMILY)
 
 
 def _warn(lines: Sequence[str]) -> StageResult:
