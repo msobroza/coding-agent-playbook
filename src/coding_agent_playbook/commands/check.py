@@ -5,16 +5,20 @@
 A diagnostic, so it exits 0 whatever it finds (drift included). An overlay in
 ``overlays_enabled`` that ``playbook sync`` would refuse (``_sync_preflight``) is
 flagged under Environment, and the Drift section then never reports a clean state.
+The Hooks block and the scoped (``json:<pointer>``) drift lines come from
+:mod:`._check_hooks` (specs/prK-lifecycle-hooks.md §A.8, §C.2.6).
 """
 
 from __future__ import annotations
 
+import os
 import platform
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.commands import _sync_preflight
+from coding_agent_playbook.commands._check_hooks import format_hooks_section, scoped_drift
 from coding_agent_playbook.detector import detect, evaluate_predicate
 from coding_agent_playbook.lockfile import compute_hash
 from coding_agent_playbook.orchestrator import SyncContext
@@ -24,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from coding_agent_playbook.commands._sync_preflight import UnusableOverlay
-    from coding_agent_playbook.lockfile import Lockfile
+    from coding_agent_playbook.lockfile import LockEntry, Lockfile
 
 _SYNC_REFUSES = "'playbook sync' refuses to run until every overlay in overlays_enabled is usable"
 
@@ -181,15 +185,29 @@ def _format_drift_section(ctx: SyncContext, unusable: Sequence[UnusableOverlay] 
 
 
 def _lockfile_drift(ctx: SyncContext, lockfile: Lockfile) -> list[str]:
-    """One line per lockfile entry whose file is missing or no longer matches its hash."""
+    """One line per lockfile entry whose file is missing, changed, or lost its exec bit.
+
+    A scoped entry (one managed element of a file shared with the user) is
+    judged by its element, never by the whole file's hash.
+    """
     drift: list[str] = []
     for entry in lockfile.entries:
+        if entry.scope:
+            continue
         path = ctx.repo_root / entry.path
         if not path.is_file():
             drift.append(f"  missing: {entry.path}")
         elif compute_hash(path.read_bytes()) != entry.sha256:
             drift.append(f"  hash mismatch: {entry.path}")
+        elif _lost_exec_bit(path, entry):
+            drift.append(f"  mode mismatch: {entry.path} (expected executable)")
+    drift.extend(scoped_drift(ctx.repo_root, lockfile.entries))
     return drift
+
+
+def _lost_exec_bit(path: Path, entry: LockEntry) -> bool:
+    """POSIX only: an entry recorded executable (a copied hook script) whose file is not."""
+    return entry.executable and os.name == "posix" and not path.stat().st_mode & 0o111
 
 
 def _refresh(ctx: SyncContext) -> None:
@@ -224,6 +242,7 @@ def run(args: argparse.Namespace) -> int:
     print(_format_env_section(ctx, unusable))
     print(_format_detected_section(ctx))
     print(_format_artifacts_section(ctx))
+    print(format_hooks_section(ctx))
     print(_format_drift_section(ctx, unusable))
     # A diagnostic: problems are reported above, never through the exit code
     # (drift exits 0 too). `playbook validate` and `playbook sync` are the gates.

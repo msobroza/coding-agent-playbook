@@ -145,6 +145,7 @@ def test_init_interactive_uses_input(tmp_path, monkeypatch):
             "python-library",  # kind
             "",  # adapters: blank => defaults
             "",  # overlays: blank => defaults
+            "",  # lifecycle hooks: blank => yes (prK §B.1)
         ]
     )
     monkeypatch.setattr("builtins.input", lambda *_args, **_kw: next(answers))

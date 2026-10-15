@@ -6,7 +6,8 @@ not from the submodules. Today it carries the one home of the event, tool-class
 and adapter-support tables (:mod:`.tables`), the additive layer merge
 (:mod:`.merge`, with the H14 override rules in :mod:`.override_rules`), the
 effective view (:mod:`.effective`) with its ``guard_config.json`` hook records
-(:mod:`.resolved`) and their advisory projection (:mod:`.advisory`), and the
+(:mod:`.resolved`), their advisory projection (:mod:`.advisory`) and their
+per-adapter labels (:mod:`.labels`), and the
 trust contract ``playbook validate`` enforces: per hook (:mod:`.contract`),
 across hooks and config (:mod:`.contract_set`), and against the handler
 registry (:mod:`.handler_catalog`, H6/H21's registry half).
@@ -36,6 +37,7 @@ from coding_agent_playbook.hook_policy.handler_catalog import (
     config_findings,
     registry_findings,
 )
+from coding_agent_playbook.hook_policy.labels import HOOK_LABELS, HookLabel, adapter_label
 from coding_agent_playbook.hook_policy.merge import (
     NO_HANDLER_SCHEMAS,
     ConfigKeySpec,
@@ -77,6 +79,7 @@ __all__ = [
     "ENGINE_DEADLINE_CAP_MS",
     "HOOK_CAPABLE_ADAPTERS",
     "HOOK_EVENTS",
+    "HOOK_LABELS",
     "HOOK_SCRIPTS_DIR",
     "HOOK_SUPPORT",
     "MATCHER_VALUES",
@@ -92,6 +95,7 @@ __all__ = [
     "HandlerKind",
     "HookCheckContext",
     "HookIssue",
+    "HookLabel",
     "HookLayerMerger",
     "HookSetInputs",
     "HookViolation",
@@ -101,6 +105,7 @@ __all__ = [
     "ResolvedHook",
     "Severity",
     "SkippedHook",
+    "adapter_label",
     "advisory_block",
     "advisory_text",
     "classify_hook",

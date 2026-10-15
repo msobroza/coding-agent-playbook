@@ -32,6 +32,7 @@ from coding_agent_playbook.hook_registrations import (
     matcher_union,
     plan_registrations,
     registration_timeout_s,
+    resolved_deadlines_ms,
     to_claude_group,
 )
 from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
@@ -275,6 +276,18 @@ def test_coordinator_budget_read_from_its_merged_config() -> None:
 
     assert coordinator_budget_s([other, coordinator]) == 7.5
     assert coordinator_budget_s([other]) == DEFAULT_BUDGET_S
+
+
+def test_resolved_deadlines_take_the_coordinator_budget_and_every_hook() -> None:
+    coordinator = resolved_hook(STOP_COORDINATOR_ID, events=("stop",), config={"budget_s": 7.5})
+    elsewhere = resolved_hook("guard-y", timeout=3.0, supports=("opencode",))
+    hooks = [resolved_hook(timeout=2.0), elsewhere, coordinator]
+
+    assert resolved_deadlines_ms(hooks) == {
+        "session_start": BOOTSTRAP_DEADLINE_MS,
+        "pre_tool_use": 5000,
+        "stop": 7500,
+    }
 
 
 @pytest.mark.parametrize("bad", [True, "3", -1, 0])

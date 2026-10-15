@@ -1,0 +1,264 @@
+"""``playbook check`` with hooks: the Hooks block and scoped drift (specs/prK-lifecycle-hooks.md §A.8, §C.2.6).
+
+The Hooks block labels every on hook per enabled adapter (``enforced`` /
+``degraded`` / ``advisory`` / ``—``) and gives every off hook its reason. The
+Drift section judges a co-owned ``settings.json`` element by element (scoped
+lock entries), never by whole-file hash, and reports a lost exec bit.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from typing import TYPE_CHECKING
+
+import pytest
+
+from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
+from coding_agent_playbook.adapters.claude_settings import CLAUDE_SETTINGS_PATH
+from coding_agent_playbook.commands import check as _check
+from coding_agent_playbook.hooks_config import HooksConfig
+from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
+from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from tests.hook_samples import resolved_hook, write_hook
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+    SyntheticRepoFactory = Callable[..., Path]
+
+_HOOKS_ON = """\
+schema_version = 1
+adapters_enabled = ["continue", "claude_code", "opencode"]
+
+[project]
+name = "synthetic"
+kind = "python-library"
+
+[engine]
+version = "0.1.0a0"
+
+[hooks]
+enabled = true
+"""
+
+
+def _ns(repo: Path) -> argparse.Namespace:
+    return argparse.Namespace(repo_root=str(repo), refresh=False)
+
+
+def _section(out: str, title: str) -> list[str]:
+    lines = out.splitlines()
+    start = lines.index(f"=== {title} ===")
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("===")), None)
+    return lines[start + 1 : end]
+
+
+def _report(repo: Path, capsys: pytest.CaptureFixture[str]) -> str:
+    assert _check.run(_ns(repo)) == 0  # a diagnostic: always exit 0
+    return capsys.readouterr().out
+
+
+# --- the Hooks block -------------------------------------------------------------------
+
+
+def test_hooks_block_labels_per_adapter(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_synthetic_repo(tmp_path, config_text=_HOOKS_ON)
+    hooks_dir = repo / "playbook" / "hooks"
+    write_hook(hooks_dir, "guard-x")
+    write_hook(hooks_dir, "guard-quiet", body="")
+    write_hook(hooks_dir, "guard-y", tier="opt-in")
+
+    lines = _section(_report(repo, capsys), "Hooks")
+
+    assert lines == [
+        "  [hooks]: on",
+        "  Hooks (2 on / 3 total):",
+        "    [✓] guard-quiet (agents_md: —, claude_code: enforced, continue: —, opencode: —)",
+        "    [✓] guard-x (agents_md: advisory, claude_code: enforced, continue: advisory, "
+        "opencode: advisory)",
+        "    [✗] guard-y (skipped: tier 'opt-in' is not in [hooks] tiers ['default'] and "
+        "[hooks] enable does not name it)",
+    ]
+
+
+def test_hooks_block_when_the_table_is_absent(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_synthetic_repo(tmp_path)
+    write_hook(repo / "playbook" / "hooks", "guard-x")
+
+    lines = _section(_report(repo, capsys), "Hooks")
+
+    assert lines == [
+        "  [hooks]: off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')",
+        "  Hooks (0 on / 1 total):",
+        "    [✗] guard-x (skipped: hooks are off)",
+    ]
+
+
+def test_hooks_block_when_hooks_are_switched_off_or_unreadable(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "off").mkdir()
+    (tmp_path / "bad").mkdir()
+    off = make_synthetic_repo(tmp_path / "off", config_text=_HOOKS_ON.replace("true", "false"))
+    bad = make_synthetic_repo(tmp_path / "bad", config_text=_HOOKS_ON + "tiers = 3\n")
+
+    off_lines = _section(_report(off, capsys), "Hooks")
+    bad_lines = _section(_report(bad, capsys), "Hooks")
+
+    assert off_lines == [
+        "  [hooks]: off — [hooks] enabled is not true",
+        "  Hooks (0 on / 0 total):",
+        "    (none)",
+    ]
+    assert bad_lines[-1] == "  [hooks] cannot be read; run 'playbook validate'."
+    assert bad_lines[0].startswith("  ✗ [hooks] tiers")
+
+
+# --- scoped drift ----------------------------------------------------------------------
+
+
+def _synced_settings(repo: Path) -> Path:
+    """Render one managed group into ``settings.json`` and record its scoped entries."""
+    settings = repo / CLAUDE_SETTINGS_PATH
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text('{\n  "permissions": {"allow": ["Bash(ls)"]}\n}\n', encoding="utf-8")
+    adapter = ClaudeCodeAdapter()
+    adapter.begin_sync(repo, None, hooks_config=HooksConfig(enabled=True))
+    adapter.write_hook(resolved_hook(), repo)
+    adapter.finalize(repo)
+    lock = Lockfile(2, "0", "", entries=adapter.managed_lock_entries())
+    FileSystemStateSource(repo_root=repo).save_lockfile(lock)
+    return settings
+
+
+def _edit_timeout(settings: Path) -> None:
+    doc = json.loads(settings.read_text("utf-8"))
+    doc["hooks"]["PreToolUse"][0]["hooks"][0]["timeout"] = 1
+    settings.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+
+
+def _delete_group(settings: Path) -> None:
+    doc = json.loads(settings.read_text("utf-8"))
+    del doc["hooks"]["PreToolUse"]
+    settings.write_text(json.dumps(doc), encoding="utf-8")
+
+
+def _break_json(settings: Path) -> None:
+    settings.write_text(settings.read_text("utf-8").replace("{", "{ // c\n", 1), encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("mutate", "expected"),
+    [
+        pytest.param(
+            _edit_timeout,
+            ["  managed entry edited: .claude/settings.json#/hooks/PreToolUse"],
+            id="managed_entry_edited",
+        ),
+        pytest.param(
+            _delete_group,
+            ["  managed entry missing: .claude/settings.json#/hooks/PreToolUse"],
+            id="managed_entry_missing",
+        ),
+        pytest.param(
+            _break_json,
+            ["  unreadable: .claude/settings.json (line 1, col 3: invalid JSON: "],
+            id="invalid_json_unreadable",
+        ),
+    ],
+)
+def test_scoped_drift(
+    mutate: Callable[[Path], None],
+    expected: list[str],
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo = make_synthetic_repo(tmp_path, config_text=_HOOKS_ON)
+    mutate(_synced_settings(repo))
+
+    lines = _section(_report(repo, capsys), "Drift")
+
+    assert [line[: len(want)] for line, want in zip(lines, expected, strict=True)] == expected
+    assert not any("hash mismatch" in line for line in lines)
+
+
+def test_user_permission_edit_not_drift(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_synthetic_repo(tmp_path, config_text=_HOOKS_ON)
+    settings = _synced_settings(repo)
+    doc = json.loads(settings.read_text("utf-8"))
+    doc["permissions"]["allow"].append("Bash(git status)")
+    doc["model"] = "opus"
+    doc["hooks"]["Stop"] = [{"hooks": [{"type": "command", "command": "./mine.sh"}]}]
+    settings.write_text(json.dumps(doc, indent=4, sort_keys=True), encoding="utf-8")
+
+    lines = _section(_report(repo, capsys), "Drift")
+
+    assert lines == ["  All on-disk files match generated output."]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="exec bits are POSIX-only")
+def test_executable_mode_drift(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_synthetic_repo(tmp_path, config_text=_HOOKS_ON)
+    script = repo / ".coding-agent-playbook" / "hooks" / "scripts" / "guard-x" / "check.sh"
+    script.parent.mkdir(parents=True)
+    script.write_bytes(b"#!/bin/sh\n")
+    script.chmod(0o644)
+    entry = LockEntry(
+        ".coding-agent-playbook/hooks/scripts/guard-x/check.sh",
+        compute_hash(b"#!/bin/sh\n"),
+        10,
+        kind="hook",
+        artifact_id="guard-x",
+        executable=True,
+    )
+    FileSystemStateSource(repo_root=repo).save_lockfile(Lockfile(2, "0", "", entries=[entry]))
+
+    drifted = _section(_report(repo, capsys), "Drift")
+    script.chmod(0o755)
+    clean = _section(_report(repo, capsys), "Drift")
+
+    assert drifted == [
+        "  mode mismatch: .coding-agent-playbook/hooks/scripts/guard-x/check.sh "
+        "(expected executable)"
+    ]
+    assert clean == ["  All on-disk files match generated output."]
+
+
+def test_scoped_drift_on_a_path_that_cannot_be_read_is_one_line(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_synthetic_repo(tmp_path, config_text=_HOOKS_ON)
+    settings = _synced_settings(repo)
+    settings.unlink()
+    settings.mkdir()
+
+    lines = _section(_report(repo, capsys), "Drift")
+
+    assert len(lines) == 1
+    assert lines[0].startswith("  unreadable: .claude/settings.json (")
+
+
+def test_an_absent_settings_file_reports_each_entry_missing(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_synthetic_repo(tmp_path, config_text=_HOOKS_ON)
+    _synced_settings(repo).unlink()
+
+    lines = _section(_report(repo, capsys), "Drift")
+
+    assert lines == [
+        "  managed entry missing: .claude/settings.json#/hooks/SessionStart",
+        "  managed entry missing: .claude/settings.json#/hooks/PreToolUse",
+    ]

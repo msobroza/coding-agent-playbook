@@ -67,6 +67,7 @@ __all__ = [
     "decode_settings",
     "json_pointer",
     "merge_managed_entries",
+    "parse_settings",
     "scoped_lock_entry",
     "write_settings",
 ]
@@ -164,6 +165,20 @@ def merge_managed_entries(
         plan.updated,
         plan.removed,
     )
+
+
+def parse_settings(text: str | None, *, path: str = CLAUDE_SETTINGS_PATH) -> Any:
+    """The strictly parsed document (§C.2.4 step 2); absent or whitespace-only text is ``{}``.
+
+    Raises :class:`SettingsMergeError` (``path:line:col``) for anything Claude
+    Code's own parser rejects. ``playbook check`` reads the file through it.
+
+    Example::
+
+        >>> parse_settings('{"model": "x"}')
+        {'model': 'x'}
+    """
+    return _load(text, path).doc
 
 
 def _load(text: str | None, path: str) -> _Source:

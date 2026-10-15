@@ -15,6 +15,8 @@ Layout (§B):
 - ``HARNESS.md`` (root role summary + dir index + "Always consult these" pointer).
 - ``.leaf-detectors`` (``skill=SKILL.md``) when any skill/prompt leaf exists.
 - ``.playbook/manifest.toml`` (round-trip sidecar) + ``.playbook/.harnessleaf``.
+- ``.playbook/hooks/<id>/`` hook sidecars and ``rules/30-guardrail-<id>.md``
+  advisories (:mod:`._harness_hooks`, specs/prK-lifecycle-hooks.md §C.6).
 
 Eval tasks are authoring-only and never dispatched to adapters, so this adapter
 never emits an ``evals/`` directory — consistent with the five built-in adapters.
@@ -35,16 +37,22 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.adapters._harness_hooks import (
+    copy_scripts,
+    emit_hook_sidecars,
+    guardrail_rules,
+    stale_sidecar_candidates,
+)
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.harness import emitter, manifest
 from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
     from coding_agent_playbook.harness.manifest import ManifestEntry
+    from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.renderer import RuleRegistry
     from coding_agent_playbook.types import Prompt, Rule, Skill
 
@@ -92,6 +100,7 @@ class AgentHarnessAdapter(Adapter):
         self._rules: list[Rule] = []
         self._prompts: list[Prompt] = []
         self._skills: list[Skill] = []
+        self._hooks: list[ResolvedHook] = []
 
     # --- buffering hooks ---------------------------------------------------
 
@@ -113,6 +122,12 @@ class AgentHarnessAdapter(Adapter):
         self._skills.append(skill)
         return []
 
+    def write_hook(self, hook: ResolvedHook, repo_root: Path) -> list[Path]:
+        """Buffer a hook for :meth:`finalize`: its sidecar always, its advisory if any (§C.6)."""
+        del repo_root
+        self._hooks.append(hook)
+        return []
+
     # --- composition -------------------------------------------------------
 
     def finalize(self, repo_root: Path) -> list[Path]:
@@ -122,7 +137,7 @@ class AgentHarnessAdapter(Adapter):
         ``HARNESS.md``, ``.leaf-detectors`` and the ``.playbook/`` sidecar.
         Returns every path written (``[]`` when nothing was buffered).
         """
-        if not (self._rules or self._prompts or self._skills):
+        if not (self._rules or self._prompts or self._skills or self._hooks):
             return []
 
         written: list[Path] = []
@@ -131,10 +146,12 @@ class AgentHarnessAdapter(Adapter):
         written.extend(self._emit_skills(repo_root, entries))
         written.extend(self._emit_prompts(repo_root, entries))
         always_rules, scoped_rules = self._partition_rules()
-        written.extend(self._emit_always_rules(repo_root, always_rules, entries))
+        advisories = guardrail_rules(self._hooks)
+        written.extend(self._emit_always_rules(repo_root, always_rules, entries, advisories))
         written.extend(self._emit_scoped_rules(repo_root, scoped_rules, entries))
+        written.extend(emit_hook_sidecars(self._hooks, repo_root, entries))
 
-        written.append(self._emit_harness_md(repo_root, always_rules))
+        written.append(self._emit_harness_md(repo_root, [*always_rules, *advisories]))
 
         if self._skills or self._prompts:
             written.append(self._emit_leaf_detectors(repo_root))
@@ -162,7 +179,9 @@ class AgentHarnessAdapter(Adapter):
             )
             written.append(skill_md)
 
-            scripts, script_paths = self._copy_scripts(skill, skill_dir, repo_root)
+            scripts, script_paths = copy_scripts(
+                skill.scripts_dir, skill_dir / "scripts", repo_root
+            )
             written.extend(script_paths)
             written.extend(self._copy_references(skill, skill_dir))
 
@@ -183,24 +202,6 @@ class AgentHarnessAdapter(Adapter):
             )
         written.append(self._emit_routing(repo_root, "skills", "Skills available in this harness."))
         return written
-
-    def _copy_scripts(
-        self, skill: Skill, skill_dir: Path, repo_root: Path
-    ) -> tuple[list[manifest.ScriptEntry], list[Path]]:
-        """Copy the skill's publishable scripts (never a secret or an escaping link)."""
-        if skill.scripts_dir is None:
-            return [], []
-        scripts: list[manifest.ScriptEntry] = []
-        paths: list[Path] = []
-        dst_root = skill_dir / "scripts"
-        for src in copyable_skill_files(skill.scripts_dir, dst_root):
-            dst = dst_root / src.relative_to(skill.scripts_dir)
-            executable = emitter.copy_script(src, dst)
-            scripts.append(
-                manifest.ScriptEntry(path=self._rel(dst, repo_root), executable=executable)
-            )
-            paths.append(dst)
-        return scripts, paths
 
     @staticmethod
     def _copy_references(skill: Skill, skill_dir: Path) -> list[Path]:
@@ -284,29 +285,12 @@ class AgentHarnessAdapter(Adapter):
         )
         # The claude-command renderer prepends its own sentinel comment; drop it
         # so this leaf carries exactly one sentinel (placed by with_sentinel_body).
-        rendered = self._strip_leading_sentinel(rendered)
+        rendered = emitter.strip_leading_sentinel(rendered)
 
-        note = self._input_variables_note(prompt)
+        note = emitter.input_variables_note(prompt.frontmatter.input_variables)
         if note:
             return f"{rendered.rstrip(chr(10))}\n\n{note}"
         return rendered
-
-    @staticmethod
-    def _strip_leading_sentinel(text: str) -> str:
-        marker = f"{sentinel_line('html')}\n"
-        return text[len(marker) :] if text.startswith(marker) else text
-
-    @staticmethod
-    def _input_variables_note(prompt: Prompt) -> str:
-        variables = prompt.frontmatter.input_variables
-        if not variables:
-            return ""
-        lines = ["## Input variables", ""]
-        for var in variables:
-            varname = str(var.get("name", ""))
-            desc = str(var.get("description", "")).strip()
-            lines.append(f"- `{varname}`" + (f" — {desc}" if desc else ""))
-        return "\n".join(lines) + "\n"
 
     # --- rules -------------------------------------------------------------
 
@@ -316,14 +300,25 @@ class AgentHarnessAdapter(Adapter):
         return always, scoped
 
     def _emit_always_rules(
-        self, repo_root: Path, rules: list[Rule], entries: list[ManifestEntry]
+        self,
+        repo_root: Path,
+        rules: list[Rule],
+        entries: list[ManifestEntry],
+        advisories: Sequence[Rule] = (),
     ) -> list[Path]:
-        if not rules:
+        """``rules/<NN>-<id>.md`` per always-rule and hook advisory, then ``RULES.md``.
+
+        Advisories are written with ``record_manifest=False``: presentation only,
+        so a lossless import never turns one into a ``Rule`` (§C.6).
+        """
+        if not (rules or advisories):
             return []
         written: list[Path] = []
-        for rule in rules:
+        for rule, record in [*((r, True) for r in rules), *((r, False) for r in advisories)]:
             target = repo_root / "rules" / self._always_rule_filename(rule)
-            written.append(self._write_rule_content(target, rule, repo_root, entries))
+            written.append(
+                self._write_rule_content(target, rule, repo_root, entries, record_manifest=record)
+            )
         written.append(self._emit_routing(repo_root, "rules", "Rules to apply every session."))
         return written
 
@@ -342,12 +337,20 @@ class AgentHarnessAdapter(Adapter):
         return written
 
     def _write_rule_content(
-        self, target: Path, rule: Rule, repo_root: Path, entries: list[ManifestEntry]
+        self,
+        target: Path,
+        rule: Rule,
+        repo_root: Path,
+        entries: list[ManifestEntry],
+        *,
+        record_manifest: bool = True,
     ) -> Path:
         target.parent.mkdir(parents=True, exist_ok=True)
         fm = rule.frontmatter
         frontmatter = emitter.frontmatter_block({"description": fm.description})
         target.write_text(emitter.with_sentinel_body(frontmatter, rule.body), encoding="utf-8")
+        if not record_manifest:
+            return target
         entries.append(
             manifest.ManifestEntry(
                 kind="rule",
@@ -391,7 +394,7 @@ class AgentHarnessAdapter(Adapter):
             "skills": bool(self._skills),
             "prompts": bool(self._prompts),
             "rules": bool(always_rules),
-            "references": len(always_rules) < len(self._rules),
+            "references": any(r.frontmatter.scope != "always" for r in self._rules),
         }
         frontmatter = emitter.frontmatter_block({"name": name, "description": description})
 
@@ -479,8 +482,8 @@ class AgentHarnessAdapter(Adapter):
         ]
 
     def _scan_candidates(self, repo_root: Path) -> list[Path]:
-        """Every path under the output dirs (outside skill dirs) plus the root files."""
-        candidates = [repo_root / name for name in _ROOT_FILES]
+        """Every path under the output dirs (outside skill dirs), the root files, hook sidecars."""
+        candidates = [*(repo_root / n for n in _ROOT_FILES), *stale_sidecar_candidates(repo_root)]
         skills_dir = repo_root / "skills"
         for output_dir in self._output_directories(repo_root):
             if not output_dir.is_dir():

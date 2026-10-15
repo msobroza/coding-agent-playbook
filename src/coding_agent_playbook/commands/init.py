@@ -1,5 +1,10 @@
 """`playbook init` — interactive (or flag-driven) bootstrap for a fresh repo
-(SPEC §12.1)."""
+(SPEC §12.1).
+
+It also asks whether to enable assistant lifecycle hooks and writes the answer
+as ``[hooks] enabled`` (specs/prK-lifecycle-hooks.md §B.1, OQ-3): an absent
+table means off, so an engine upgrade never switches executable hooks on.
+"""
 
 from __future__ import annotations
 
@@ -35,6 +40,9 @@ class _Answers(TypedDict):
     description: str
     adapters: list[str]
     overlays: list[str]
+    # ``[hooks] enabled``; None = no explicit choice (non-interactive without
+    # --no-hooks): keep a value the config already has, else enable.
+    hooks: bool | None
 
 
 # ``shared_skills`` (the cross-agent skills hub, SPEC §10.8) is on by default but,
@@ -54,6 +62,10 @@ _HOOK_INSTALL_COMMAND = (
 )
 
 _GITIGNORE_LINE = ".coding-agent-playbook.local.toml"
+
+_HOOKS_QUESTION = "Enable assistant lifecycle hooks?"
+_YES = frozenset({"y", "yes"})
+_NO = frozenset({"n", "no"})
 
 
 def _prompt(question: str, default: str | None = None) -> str:
@@ -88,6 +100,27 @@ def _prompt_multi_select(question: str, choices: list[str], defaults: list[str])
     return selected or list(defaults)
 
 
+def _prompt_yes_no(question: str, *, default: bool = True) -> bool:
+    """Ask a yes/no question until the reply is clear; an empty reply takes ``default``.
+
+    Example: ``_prompt_yes_no("Enable assistant lifecycle hooks?")`` asks ``... [Y/n]: ``.
+    """
+    suffix = "[Y/n]" if default else "[y/N]"
+    while True:
+        answer = input(f"{question} {suffix}: ").strip().lower()
+        if not answer:
+            return default
+        if answer in _YES or answer in _NO:
+            return answer in _YES
+
+
+def _hooks_answer(args: argparse.Namespace, *, interactive: bool) -> bool | None:
+    """``False`` for ``--no-hooks``; the user's answer when interactive; else no choice (None)."""
+    if getattr(args, "no_hooks", False):
+        return False
+    return _prompt_yes_no(_HOOKS_QUESTION) if interactive else None
+
+
 def _collect_answers(args: argparse.Namespace) -> _Answers:
     """Resolve the project parameters from flags (non-interactive) or prompts
     (interactive). Returns a typed mapping the writer functions consume."""
@@ -116,6 +149,7 @@ def _collect_answers(args: argparse.Namespace) -> _Answers:
             description=str(getattr(args, "description", "") or ""),
             adapters=adapters,
             overlays=overlays,
+            hooks=_hooks_answer(args, interactive=False),
         )
     # Interactive path.
     name = _prompt("Project name")
@@ -142,6 +176,7 @@ def _collect_answers(args: argparse.Namespace) -> _Answers:
         description=description,
         adapters=adapters,
         overlays=overlays,
+        hooks=_hooks_answer(args, interactive=True),
     )
 
 
@@ -202,8 +237,27 @@ def _write_config(repo_root: Path, answers: _Answers) -> Config:
             output=OutputConfig(commit=False),
         )
 
+    _apply_hooks_answer(config, answers["hooks"])
     state.save_config(config)
     return config
+
+
+def _apply_hooks_answer(config: Config, answer: bool | None) -> None:
+    """Set ``[hooks] enabled`` through ``extra_tables`` (P6), keeping the table's other keys.
+
+    No explicit ``answer`` keeps an ``enabled`` the committed table already
+    has (a re-run never flips an earlier choice), else enables hooks.
+
+    Example::
+
+        _apply_hooks_answer(config, False)  # config.extra_tables["hooks"]["enabled"] is False
+    """
+    existing = config.extra_tables.get("hooks")
+    table = dict(existing) if isinstance(existing, dict) else {}
+    if answer is None and "enabled" in table:
+        return
+    table["enabled"] = True if answer is None else answer
+    config.extra_tables["hooks"] = table
 
 
 def _facts_to_cache(facts: Facts) -> dict[str, object]:

@@ -47,6 +47,7 @@ __all__ = [
     "declared_stop_budget_s",
     "plan_registrations",
     "registration_timeout_s",
+    "resolved_deadlines_ms",
 ]
 
 #: The Stop coordinator hook, whose merged ``budget_s`` sets the stop deadline (§D.4).
@@ -199,6 +200,18 @@ def coordinator_budget_s(hooks: Iterable[ResolvedHook]) -> float:
         if hook.id == STOP_COORDINATOR_ID and handler is not None:
             return _budget(handler.config)
     return DEFAULT_BUDGET_S
+
+
+def resolved_deadlines_ms(hooks: Sequence[ResolvedHook]) -> dict[str, int]:
+    """The per-event deadlines sync renders: :func:`deadlines_ms` with the coordinator's budget.
+
+    The one call both ``guard_config.json`` (the watchdog) and every adapter's
+    registrations (the harness backstop) use, so the two can never disagree.
+    Pass every resolved hook, whatever adapters it supports.
+
+    Example: ``plan_registrations(on_claude, "claude_code", deadlines=resolved_deadlines_ms(all_on))``.
+    """
+    return deadlines_ms(hooks, stop_budget_s=coordinator_budget_s(hooks))
 
 
 def declared_stop_budget_s(fm: HookFrontmatter) -> float:

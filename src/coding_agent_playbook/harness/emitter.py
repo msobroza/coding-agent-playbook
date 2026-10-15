@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 import shutil
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
@@ -26,7 +26,7 @@ from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.harness.leaf_detectors import HARNESS_LEAF_MARKER
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
 _FENCE = "---"
@@ -59,6 +59,36 @@ def routing_file(description: str, body: str) -> str:
     and carry the playbook sentinel as their first body line.
     """
     return with_sentinel_body(frontmatter_block({"description": description}), body)
+
+
+def strip_leading_sentinel(text: str) -> str:
+    """Drop a leading html sentinel line, so a re-wrapped leaf carries exactly one.
+
+    Example::
+
+        >>> strip_leading_sentinel(sentinel_line("html") + "\\n# Title\\n")
+        '# Title\\n'
+    """
+    marker = f"{sentinel_line('html')}\n"
+    return text[len(marker) :] if text.startswith(marker) else text
+
+
+def input_variables_note(variables: Sequence[Mapping[str, Any]]) -> str:
+    """A ``## Input variables`` list telling the agent what to substitute; ``""`` without any.
+
+    Example::
+
+        >>> input_variables_note([{"name": "path", "description": "file to review"}])
+        '## Input variables\\n\\n- `path` — file to review\\n'
+    """
+    if not variables:
+        return ""
+    lines = ["## Input variables", ""]
+    for var in variables:
+        varname = str(var.get("name", ""))
+        desc = str(var.get("description", "")).strip()
+        lines.append(f"- `{varname}`" + (f" — {desc}" if desc else ""))
+    return "\n".join(lines) + "\n"
 
 
 def leaf_detectors_file(types: Mapping[str, str]) -> str:

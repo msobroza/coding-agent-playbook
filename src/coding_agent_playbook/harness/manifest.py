@@ -10,8 +10,13 @@ TOML I/O mirrors the project's existing conventions: read with stdlib
 :mod:`tomllib`; write with a small hand-rolled serializer (the engine vendors no
 TOML *writer* — see ``sources/filesystem.py``). The serializer emits one
 ``[[artifact]]`` array-of-tables entry per artifact, with nested
-``[[artifact.script]]`` entries for a skill's scripts and inline tables for
-open-dict fields (``applies_if``, ``extra_frontmatter``).
+``[[artifact.script]]`` entries for a skill's (or hook's) scripts and inline
+tables for open-dict fields (``applies_if``, ``extra_frontmatter``,
+``hook_frontmatter``).
+
+Kind ``"hook"`` (specs/prK-lifecycle-hooks.md §C.6) needs no schema bump: an
+older engine ignores the unknown ``hook_frontmatter`` key and warns-and-skips
+the unknown kind.
 """
 
 from __future__ import annotations
@@ -32,7 +37,7 @@ MANIFEST_FILENAME = "manifest.toml"
 #: Current manifest schema version.
 SCHEMA_VERSION = 1
 
-ArtifactKind = Literal["rule", "prompt", "skill", "eval_task"]
+ArtifactKind = Literal["rule", "prompt", "skill", "eval_task", "hook"]
 
 
 @dataclass
@@ -84,7 +89,10 @@ class ManifestEntry:
     eval_tasks: list[str] = field(default_factory=list)
     # Skill-only.
     extra_frontmatter: dict[str, Any] = field(default_factory=dict)
+    # Skill and hook.
     scripts: list[ScriptEntry] = field(default_factory=list)
+    # Hook-only: the canonical HOOK.md frontmatter (``HookFrontmatter.to_mapping``).
+    hook_frontmatter: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -122,6 +130,7 @@ _KIND_FIELDS: dict[str, tuple[str, ...]] = {
     ),
     "skill": ("name", "body"),
     "eval_task": (),
+    "hook": ("name", "body", "is_templated"),
 }
 
 
@@ -134,6 +143,8 @@ def _entry_to_table(entry: ManifestEntry) -> dict[str, Any]:
         table["applies_if"] = entry.applies_if
     if entry.kind == "skill":
         table["extra_frontmatter"] = entry.extra_frontmatter
+    if entry.kind == "hook":
+        table["hook_frontmatter"] = entry.hook_frontmatter
     return table
 
 
@@ -162,6 +173,7 @@ def _entry_from_table(table: dict[str, Any]) -> ManifestEntry:
         eval_tasks=list(table.get("eval_tasks", [])),
         extra_frontmatter=dict(table.get("extra_frontmatter", {})),
         scripts=scripts,
+        hook_frontmatter=dict(table.get("hook_frontmatter", {})),
     )
 
 

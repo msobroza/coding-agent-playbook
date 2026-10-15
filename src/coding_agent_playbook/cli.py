@@ -70,6 +70,12 @@ def build_parser() -> argparse.ArgumentParser:
     init_p.add_argument("--description", default="")
     init_p.add_argument("--adapters", help="comma-separated adapter names")
     init_p.add_argument("--overlays", help="comma-separated overlay package names")
+    init_p.add_argument(
+        "--no-hooks",
+        dest="no_hooks",
+        action="store_true",
+        help="do not enable assistant lifecycle hooks (writes [hooks] enabled = false)",
+    )
     init_p.set_defaults(func=init_cmd.run)
 
     # playbook sync

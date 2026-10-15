@@ -43,6 +43,7 @@ from coding_agent_playbook.hook_registrations.plan import (
     declared_stop_budget_s,
     plan_registrations,
     registration_timeout_s,
+    resolved_deadlines_ms,
 )
 
 __all__ = [
@@ -67,5 +68,6 @@ __all__ = [
     "plan_registrations",
     "registration_timeout_s",
     "render_claude_launcher",
+    "resolved_deadlines_ms",
     "to_claude_group",
 ]

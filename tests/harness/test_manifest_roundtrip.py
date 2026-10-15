@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import tomllib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.commands.import_harness import import_harness
 from coding_agent_playbook.harness.manifest import (
     ManifestEntry,
     ScriptEntry,
@@ -14,6 +15,8 @@ from coding_agent_playbook.harness.manifest import (
     read_manifest,
     write_manifest,
 )
+from coding_agent_playbook.types import HookFrontmatter
+from tests.hook_samples import hook_frontmatter
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -245,3 +248,69 @@ def test_roundtrip_non_identifier_key_in_inline_table(tmp_path: Path) -> None:
 def test_format_scalar_rejects_unsupported_type() -> None:
     with pytest.raises(TypeError):
         _format_scalar(object())
+
+
+# --- kind "hook" (specs/prK-lifecycle-hooks.md §C.6) -------------------------
+
+
+def _hook_entry(**frontmatter: object) -> ManifestEntry:
+    return ManifestEntry(
+        kind="hook",
+        path=".playbook/hooks/guard-x/HOOK.md",
+        id="guard-x",
+        name="Guard X",
+        body="Advice for {{ project.name }}.\n",
+        is_templated=True,
+        hook_frontmatter=hook_frontmatter(**frontmatter).to_mapping(),
+        scripts=[ScriptEntry(path=".playbook/hooks/guard-x/scripts/check.sh", executable=True)],
+    )
+
+
+def test_hook_kind_roundtrip(tmp_path: Path) -> None:
+    write_manifest(tmp_path, [_rule_entry(), _hook_entry()])
+
+    manifest = read_manifest(tmp_path)
+
+    assert manifest is not None
+    assert manifest.entries == [_rule_entry(), _hook_entry()]
+    [table] = [t for t in _tables(tmp_path) if t["kind"] == "hook"]
+    assert table["hook_frontmatter"]["handler"] == {"builtin": "guard_x"}
+    assert "hook_frontmatter" not in next(t for t in _tables(tmp_path) if t["kind"] == "rule")
+
+
+def test_hook_float_timeout_and_config_roundtrip(tmp_path: Path) -> None:
+    handler = {"builtin": "guard_x", "config": {"threshold": 0.75, "limits": {"max": 3}}}
+    entry = _hook_entry(timeout=2.5, handler=handler)
+    write_manifest(tmp_path, [entry])
+
+    manifest = read_manifest(tmp_path)
+
+    assert manifest is not None
+    [read] = manifest.entries
+    rebuilt = HookFrontmatter.from_mapping(read.hook_frontmatter, where="manifest")
+    assert rebuilt == hook_frontmatter(timeout=2.5, handler=handler)
+    assert repr(read.hook_frontmatter["timeout"]) == "2.5"
+    assert repr(read.hook_frontmatter["handler"]["config"]["threshold"]) == "0.75"
+
+
+def test_old_engine_unknown_kind_warns_and_skips(tmp_path: Path) -> None:
+    """A newer engine's kind reads fine and is skipped with a warning (no schema bump)."""
+    (tmp_path / "HARNESS.md").write_text("---\nname: h\ndescription: d\n---\n", "utf-8")
+    sidecar = tmp_path / ".playbook"
+    sidecar.mkdir()
+    (sidecar / "manifest.toml").write_text(
+        'schema = 1\n\n[[artifact]]\nkind = "widget"\npath = "HARNESS.md"\nid = "w"\n'
+        "widget_fields = { a = 1 }\n",
+        "utf-8",
+    )
+
+    result = import_harness(tmp_path)
+
+    assert (result.rules, result.prompts, result.skills, result.hooks) == ([], [], [], [])
+    assert result.warnings == ["manifest entry 'HARNESS.md' has unsupported kind 'widget'; skipped"]
+
+
+def _tables(root: Path) -> list[dict[str, Any]]:
+    with (root / ".playbook" / "manifest.toml").open("rb") as handle:
+        tables: list[dict[str, Any]] = tomllib.load(handle)["artifact"]
+    return tables

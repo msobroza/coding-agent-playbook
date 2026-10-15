@@ -31,7 +31,9 @@ __all__ = [
     "SettingsShapeError",
     "canonical_json",
     "json_pointer",
+    "launcher_kind",
     "plan_settings",
+    "pointer_keys",
     "scoped_lock_entry",
 ]
 
@@ -108,7 +110,14 @@ def json_pointer(keys: Iterable[str]) -> str:
     return "".join("/" + key.replace("~", "~0").replace("/", "~1") for key in keys)
 
 
-def _pointer_keys(pointer: str) -> tuple[str, ...]:
+def pointer_keys(pointer: str) -> tuple[str, ...]:
+    """The object keys of an RFC 6901 ``pointer`` (the inverse of :func:`json_pointer`).
+
+    Example::
+
+        >>> pointer_keys("/permissions/allow")
+        ('permissions', 'allow')
+    """
     return tuple(p.replace("~1", "/").replace("~0", "~") for p in pointer.split("/")[1:])
 
 
@@ -227,7 +236,11 @@ class _Found:
     suspect: bool
 
 
-def _launcher_kind(group: Mapping[str, Any]) -> Literal["user", "suspect", "mixed"]:
+def launcher_kind(group: Mapping[str, Any]) -> Literal["user", "suspect", "mixed"]:
+    """``suspect`` when every handler runs the playbook launcher, ``mixed`` when only some do.
+
+    Example: ``launcher_kind({"hooks": [{"command": "./mine.sh"}]}) == "user"``.
+    """
     handlers = group.get("hooks")
     if not isinstance(handlers, list) or not handlers:
         return "user"
@@ -248,7 +261,7 @@ def _classify(event: str, groups: list[dict[str, Any]], owned: set[str]) -> list
         if compute_hash(key) in owned:
             found.append(_Found(i, key, suspect=False))
             continue
-        kind = _launcher_kind(group)
+        kind = launcher_kind(group)
         if kind == "mixed":
             raise SettingsShapeError(
                 ("hooks", event, i),
@@ -370,7 +383,7 @@ def _plan_strings(
     ours = {e.sha256 for e in scoped if e.scope == scope}
     if not wanted and not ours:
         return  # never inspect (or reject) an array the engine has no stake in
-    keys = _pointer_keys(pointer)
+    keys = pointer_keys(pointer)
     unique = list(dict.fromkeys(wanted))
     delete, present = _strings_to_delete(_string_array(doc, keys), unique, ours)
     append = tuple(s for s in unique if s not in present)

@@ -386,8 +386,9 @@ def test_claude_code_output_directories(tmp_path):
     adapter = ClaudeCodeAdapter()
     dirs = list(adapter._output_directories(tmp_path))
     # .claude/skills/ is never scanned: stale skill output is settled by sync's
-    # lockfile leftover policy (SPEC §4.2 step 9).
-    assert dirs == [tmp_path / ".claude" / "commands"]
+    # lockfile leftover policy (SPEC §4.2 step 9). The hook launcher's dir is
+    # (prK §C.0); settings.json never is (co-owned, edited in place).
+    assert dirs == [tmp_path / ".claude" / "commands", tmp_path / ".claude" / "hooks" / "playbook"]
 
 
 def test_claude_code_cleanup_stale_removes_stale_command(tmp_path):

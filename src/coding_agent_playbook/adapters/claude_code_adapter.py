@@ -11,6 +11,10 @@ Code's native layout:
   byte-copied ``scripts/`` and ``references/``) through the shared
   :class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter`, so the
   output is byte-identical to the ``opencode`` / ``shared_skills`` skill roots.
+- Hooks it enforces become managed groups in the co-owned
+  ``.claude/settings.json`` plus the committed ``.claude/hooks/playbook/launch.sh``
+  (:mod:`._claude_hooks`, specs/prK-lifecycle-hooks.md §C.2); the rest degrade
+  to ``CLAUDE.md`` sections through :meth:`write_rule` (§C.4.2).
 """
 
 from __future__ import annotations
@@ -20,15 +24,26 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.adapters._claude_hooks import ClaudeHookEmitter
 from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.adapters.claude_settings import CLAUDE_SETTINGS_PATH
+from coding_agent_playbook.hook_policy import HOOK_SUPPORT
+from coding_agent_playbook.hook_registrations import LAUNCHER_PATH
 from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
 
+    from coding_agent_playbook.adapters.claude_settings import MergeResult
+    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks_config import HooksConfig
+    from coding_agent_playbook.lockfile import LockEntry, Lockfile
     from coding_agent_playbook.renderer import RuleRegistry
     from coding_agent_playbook.types import Prompt, Rule, Skill
+
+#: The committed launcher's directory: sentinel-scanned, and a declared output location.
+_LAUNCHER_DIR = LAUNCHER_PATH.rsplit("/", 1)[0]
 
 
 class ClaudeCodeAdapter(Adapter):
@@ -51,13 +66,57 @@ class ClaudeCodeAdapter(Adapter):
         ".claude/CLAUDE.md",
         ".claude/commands/",
         _SKILL_WRITER.location,
+        f"{_LAUNCHER_DIR}/",
     )
+
+    #: Every canonical event, with every decision it allows (§C.5.1).
+    hook_support: ClassVar[Mapping[str, frozenset[str]]] = HOOK_SUPPORT["claude_code"]
+
+    #: Co-owned with the user and Claude Code itself: only managed elements are
+    #: ours (scoped lock entries), so the file is never deleted or gitignored.
+    shared_outputs: ClassVar[tuple[str, ...]] = (CLAUDE_SETTINGS_PATH,)
 
     def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
         # Buffer of (priority, rule_id, rendered_section) tuples populated by
         # ``write_rule``. ``finalize`` sorts by (priority, rule_id) and joins.
         self._buffered_rules: list[tuple[int, str, str]] = []
         self._rule_registry = rule_registry
+        self._hooks = ClaudeHookEmitter(self.name, self.hook_support)
+
+    def begin_sync(
+        self,
+        repo_root: Path,
+        prior_lock: Lockfile | None,
+        *,
+        hooks_config: HooksConfig | None = None,
+    ) -> None:
+        """Remember the real repo (``settings.json`` is read there), the prior hashes and ``[hooks]``.
+
+        Example: ``adapter.begin_sync(ctx.repo_root, lock, hooks_config=cfg)``.
+        """
+        self._hooks.begin(repo_root, prior_lock, hooks_config)
+
+    def write_hook(self, hook: ResolvedHook, repo_root: Path) -> list[Path]:
+        """Buffer a hook Claude Code enforces; degrade any other to a ``CLAUDE.md`` section.
+
+        A natively enforced hook adds no advisory here: its deny reasons and
+        the session-start briefing carry the context (§C.4.2). Writes nothing;
+        :meth:`finalize` does.
+
+        Example: ``adapter.write_hook(hook, repo_root)`` -> ``[]``.
+        """
+        if self._hooks.add(hook):
+            return []
+        return super().write_hook(hook, repo_root)
+
+    def managed_lock_entries(self) -> list[LockEntry]:
+        """One scoped entry per managed ``settings.json`` element, unchanged ones included."""
+        return self._hooks.entries()
+
+    @property
+    def settings_merge(self) -> MergeResult | None:
+        """What the last :meth:`finalize` merge did (warnings, counts), or None if it never ran."""
+        return self._hooks.merge
 
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
         """Buffer a rendered claude_md_section for ``finalize`` to compose.
@@ -109,15 +168,27 @@ class ClaudeCodeAdapter(Adapter):
         return self._SKILL_WRITER.write(skill, repo_root)
 
     def finalize(self, repo_root: Path) -> list[Path]:
-        """Compose ``.claude/CLAUDE.md`` from the buffered rule sections.
+        """Compose ``.claude/CLAUDE.md``, then the hook registrations and the launcher.
 
-        Sections are sorted by ``(priority, rule_id)`` for deterministic
-        output. Output begins with a one-line sentinel banner followed by a
-        generic ``CLAUDE.md`` title block, then each rule section separated by
-        the blank lines that ``claude_md_section`` already emits. Returns the
-        composed path or ``[]`` if the buffer is empty.
+        ``settings.json`` is merged first: a file that cannot be merged safely
+        raises :class:`~.claude_settings.SettingsMergeError` before this adapter
+        writes anything. Returns the paths written; ``settings.json`` only when
+        the merge changed it.
         """
-        if not self._buffered_rules:
+        hook_paths = self._compose_settings(repo_root)
+        return [*self._compose_claude_md(repo_root), *hook_paths]
+
+    def _compose_claude_md(self, repo_root: Path) -> list[Path]:
+        """Compose ``.claude/CLAUDE.md`` from the buffered sections and the heartbeat line.
+
+        Sections (rules, and advisories of hooks this adapter cannot enforce)
+        are sorted by ``(priority, rule_id)``: a sentinel banner, a generic
+        title block, then each section separated by the blank lines that
+        ``claude_md_section`` already emits. The fixed heartbeat line closes the
+        file when the session-start briefing runs here. ``[]`` when both are absent.
+        """
+        heartbeat = self._hooks.heartbeat()
+        if not (self._buffered_rules or heartbeat):
             return []
         ordered = sorted(self._buffered_rules, key=lambda item: (item[0], item[1]))
         sections = [section for _, _, section in ordered]
@@ -127,18 +198,26 @@ class ClaudeCodeAdapter(Adapter):
             "This file is generated by coding-agent-playbook.\n\n"
         )
         body = "\n".join(sections)
+        if heartbeat:
+            body += ("\n" if sections else "") + heartbeat + "\n"
         output_path = repo_root / ".claude" / "CLAUDE.md"
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(header + body, encoding="utf-8")
         return [output_path]
 
+    def _compose_settings(self, repo_root: Path) -> list[Path]:
+        """Merge the managed groups into ``settings.json``; write the launcher when any exists."""
+        return self._hooks.emit(repo_root)
+
     def _output_directories(self, repo_root: Path) -> Iterable[Path]:
-        """Only ``.claude/commands/`` uses the sentinel scan.
+        """``.claude/commands/`` and the launcher dir use the sentinel scan.
 
         ``.claude/skills/`` is never scanned: stale skill output is settled by
         ``playbook sync``'s lockfile leftover policy (SPEC §4.2 step 9, §10.8).
+        ``settings.json`` is never stale: managed elements are removed inside
+        :meth:`finalize`, and the co-owned file itself is never deleted.
         """
-        return [repo_root / ".claude" / "commands"]
+        return [repo_root / ".claude" / "commands", repo_root / _LAUNCHER_DIR]
 
     def stale_outputs(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
         """Generated files that no longer back a current artifact (deletes nothing).

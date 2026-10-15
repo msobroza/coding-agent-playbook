@@ -6,16 +6,20 @@ Plain builders, not fixtures, so parametrize lists can call them at import time.
 from __future__ import annotations
 
 import copy
+import stat
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-from coding_agent_playbook.hook_policy import ResolvedHandler, ResolvedHook
+from coding_agent_playbook.hook_policy import ResolvedHandler, ResolvedHook, resolve_effective_hooks
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.policy import effective_on_error
+from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.types import Hook, HookFrontmatter, HookMatcher, format_frontmatter
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+
+    from coding_agent_playbook.detector import Facts
 
 #: The ``where`` label the builders parse under.
 HOOK_WHERE = "playbook/hooks/guard-x/HOOK.md"
@@ -191,6 +195,52 @@ def write_hook(
     data = hook_mapping(**{"id": hook_id, **frontmatter})
     path.write_text(format_frontmatter(data, body), encoding="utf-8")
     return path
+
+
+def resolved_from_disk(
+    root: Path,
+    hook_id: str = "guard-x",
+    *,
+    body: str = "Advice.\n",
+    templated: bool = False,
+    advisory: bool = True,
+    **frontmatter: Any,
+) -> ResolvedHook:
+    """An external-command hook written under ``root`` with ``scripts/``, resolved as sync would.
+
+    ``scripts/check.sh`` is executable, ``scripts/lib/data.txt`` is not. The hook
+    goes through the real ``resolve_effective_hooks`` with ``[hooks] enabled``,
+    so ``definition`` is the on-disk ``Hook`` (an un-rendered ``.md.j2`` body
+    stays as written). Example: ``resolved_from_disk(tmp_path / "src", templated=True)``.
+    """
+    marker = "HOOK.md.j2" if templated else "HOOK.md"
+    handler = {"command": "sh", "script": "scripts/check.sh", "args": ["--fast"]}
+    path = write_hook(
+        root,
+        hook_id,
+        category="",
+        marker=marker,
+        body=body,
+        scripts=True,
+        **{"handler": handler, **frontmatter},
+    )
+    script = path.parent / "scripts" / "check.sh"
+    script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    script.chmod(script.stat().st_mode | stat.S_IXUSR)
+    (path.parent / "scripts" / "lib").mkdir()
+    (path.parent / "scripts" / "lib" / "data.txt").write_text("data\n", encoding="utf-8")
+    hook = Hook.from_markdown(path, "<repo-local>")
+    view = resolve_effective_hooks(
+        [hook],
+        [],
+        HooksConfig(enabled=True, advisory=advisory),
+        GuardrailsConfig(),
+        cast("Facts", {}),
+        root,
+        adapters_enabled=["claude_code"],
+    )
+    [resolved] = view.resolved
+    return resolved
 
 
 #: The import name of the sample handler distribution (see :func:`install_sample_handlers`).
