@@ -278,6 +278,10 @@ _WRAPPERS: Final[Mapping[str, Callable[[Unwrapped], bool]]] = MappingProxyType(
     }
 )
 
+#: Every launcher the built-in table unwraps, and the shells whose ``-c`` is parsed (§D.2.5).
+LAUNCHER_NAMES: Final = frozenset(_WRAPPERS)
+SHELL_NAMES: Final = _SHELLS
+
 _UV_LONG = (
     "python with with-editable with-requirements package extra group only-group no-group "
     "env-file directory project index default-index index-url extra-index-url find-links "

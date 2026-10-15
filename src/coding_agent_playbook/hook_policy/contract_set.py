@@ -10,10 +10,13 @@ The rules no single ``HOOK.md`` can decide:
   and no hook id is also a rule or prompt id (``playbook render`` looks ids up
   across kinds);
 - H21: ``enable``/``disable`` name existing hooks and are disjoint;
-  ``allow_code_from`` ⊆ ``overlays_enabled`` + ``<repo-local>``; every
-  ``[hooks.<x>]`` names a hook; ``[hooks.stop-ci-parity-gate] stages`` ⊆
-  {``typecheck``, ``tests``}; and neither policy table sits in ``.local.toml``
-  (an error for validate, a warning for sync, §B.1).
+  ``allow_code_from`` ⊆ ``overlays_enabled`` + ``<repo-local>``; no
+  ``wrapper_prefixes`` entry hides a guarded command
+  (``hook_runtime.wrapper_policy``, the rule the dispatcher applies to
+  ``PLAYBOOK_HOOK_WRAPPER_PREFIXES``); every ``[hooks.<x>]`` names a hook;
+  ``[hooks.stop-ci-parity-gate] stages`` ⊆ {``typecheck``, ``tests``}; and
+  neither policy table sits in ``.local.toml`` (an error for validate, a
+  warning for sync, §B.1).
 
 That the tables parse at all (unknown keys, types, ``cutover_date``) is the
 parser's ``ValueError``, reported by the caller; checking ``[hooks.<x>]``
@@ -36,6 +39,7 @@ from coding_agent_playbook.hook_policy._findings import (
 )
 from coding_agent_playbook.hook_policy.handler_catalog import config_findings
 from coding_agent_playbook.hook_policy.tables import ADVISORY_RULE_PREFIX
+from coding_agent_playbook.hook_runtime.wrapper_policy import hidden_program
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -195,6 +199,7 @@ def _hooks_table(inputs: HookSetInputs) -> Iterator[HookIssue]:
                 "so list it in one of them only",
             )
     yield from _code_source_names(inputs, cfg)
+    yield from _hiding_wrappers(inputs, cfg)
     for table in cfg.per_hook:
         if table not in hook_ids:
             hint = did_you_mean(table, hook_ids)
@@ -213,6 +218,19 @@ def _code_source_names(inputs: HookSetInputs, cfg: HooksConfig) -> Iterator[Hook
                 inputs,
                 f"[hooks] allow_code_from: {source!r} is neither an enabled overlay nor "
                 f"{REPO_LOCAL_SOURCE!r}; allowed: {', '.join(allowed)}",
+            )
+
+
+def _hiding_wrappers(inputs: HookSetInputs, cfg: HooksConfig) -> Iterator[HookIssue]:
+    """A declared wrapper is stripped before every shell guard, so it must not be a guarded command."""
+    for prefix in dict.fromkeys(cfg.wrapper_prefixes):
+        hidden = hidden_program(prefix)
+        if hidden is not None:
+            yield _config_error(
+                inputs,
+                f"[hooks] wrapper_prefixes: {prefix!r} would hide {hidden!r} from every shell "
+                "guard; declare only a launcher that is not itself a guarded command "
+                "(e.g. 'proxy')",
             )
 
 

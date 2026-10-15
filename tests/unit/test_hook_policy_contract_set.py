@@ -52,7 +52,12 @@ def test_nothing_to_report_without_config() -> None:
 
 
 def test_a_clean_hooks_table_has_no_issues() -> None:
-    table = {"enabled": True, "enable": ["guard-x"], "allow_code_from": [OVERLAY, "<repo-local>"]}
+    table = {
+        "enabled": True,
+        "enable": ["guard-x"],
+        "allow_code_from": [OVERLAY, "<repo-local>"],
+        "wrapper_prefixes": ["proxy", "proxy run"],
+    }
 
     assert classify_hook_set(_inputs(table, overlays_enabled=(OVERLAY,))) == []
 
@@ -105,6 +110,20 @@ _CASES: list[tuple[str, dict[str, Any], dict[str, Any], str]] = [
         {"enabled": True, "guard-z": {"mode": "warn"}},
         {},
         "[hooks.guard-z]: unknown hook id 'guard-z'; did you mean 'guard-x'?",
+    ),
+    (
+        "H21-wrapper-hides-git",
+        {"enabled": True, "wrapper_prefixes": ["proxy", "git"]},
+        {},
+        "[hooks] wrapper_prefixes: 'git' would hide 'git' from every shell guard; declare "
+        "only a launcher that is not itself a guarded command (e.g. 'proxy')",
+    ),
+    (
+        "H21-wrapper-hides-a-later-token",
+        {"enabled": True, "wrapper_prefixes": ["proxy rm"]},
+        {},
+        "[hooks] wrapper_prefixes: 'proxy rm' would hide 'rm' from every shell guard; declare "
+        "only a launcher that is not itself a guarded command (e.g. 'proxy')",
     ),
     (
         "H21-stop-gate-stages",
