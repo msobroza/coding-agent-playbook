@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import tomllib
 from typing import TYPE_CHECKING
@@ -10,11 +12,15 @@ import pytest
 
 from coding_agent_playbook.adapters.claude_settings import scoped_lock_entry
 from coding_agent_playbook.lockfile import (
+    DriftItem,
     LockEntry,
     Lockfile,
     LockfileFormatError,
     Provenance,
+    ScopedUnreadable,
     compute_hash,
+    drift_entries,
+    parse_json_document,
 )
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 
@@ -290,3 +296,138 @@ def test_scoped_entry_roundtrips_with_scope_and_omits_defaults(tmp_path: Path) -
     assert 'scope = "json:/permissions/deny"' in text
     assert "source" not in text
     assert "executable" not in text
+
+
+# --- drift_entries: the jinja2-free drift definition (specs/prK-hook-pack.md §E.1) -----
+
+_SETTINGS = ".claude/settings.json"
+_GROUP = {"hooks": [{"type": "command", "command": "launch.sh dispatch stop"}]}
+
+
+def _whole(root: Path, rel: str, content: bytes, *, executable: bool = False) -> LockEntry:
+    """Write ``rel`` with ``content`` and return its pristine whole-file entry."""
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    return LockEntry(rel, compute_hash(content), len(content), executable=executable)
+
+
+def _lock(*entries: LockEntry) -> Lockfile:
+    return Lockfile(2, "0.2.0", "2026-10-14T10:00:00Z", entries=list(entries))
+
+
+def test_drift_entries_missing_and_hash_mismatch(tmp_path: Path) -> None:
+    clean = _whole(tmp_path, "AGENTS.md", b"# agents\n")
+    edited = _whole(tmp_path, ".continue/rules/10-x.md", b"rule\n")
+    (tmp_path / edited.path).write_bytes(b"hand edit\n")
+    gone = LockEntry(".claude/commands/triage.md", compute_hash(b"x"), 1)
+    folder = LockEntry(".opencode/command/x.md", compute_hash(b"x"), 1)
+    (tmp_path / folder.path).mkdir(parents=True)
+
+    items = drift_entries(_lock(clean, edited, gone, folder), tmp_path)
+
+    assert items == [
+        DriftItem(".continue/rules/10-x.md", "hash_mismatch"),
+        DriftItem(".claude/commands/triage.md", "missing"),
+        DriftItem(".opencode/command/x.md", "missing"),
+    ]
+    assert [item.line() for item in items] == [
+        "hash mismatch: .continue/rules/10-x.md",
+        "missing: .claude/commands/triage.md",
+        "missing: .opencode/command/x.md",
+    ]
+
+
+def test_drift_entries_scoped_entry_matched_by_canonical_hash(tmp_path: Path) -> None:
+    entry = scoped_lock_entry(_SETTINGS, "/hooks/Stop", _GROUP, artifact_id="registration:stop")
+    settings = tmp_path / _SETTINGS
+    settings.parent.mkdir()
+    reordered = {"command": "launch.sh dispatch stop", "type": "command"}
+    settings.write_text(
+        json.dumps({"model": "x", "hooks": {"Stop": [{"hooks": [reordered]}]}}, indent=4),
+        encoding="utf-8",
+    )
+    present = drift_entries(_lock(entry), tmp_path)
+    settings.write_text('{"hooks": {"Stop": []}}', encoding="utf-8")
+    removed = drift_entries(_lock(entry), tmp_path)
+    settings.write_text('{"hooks": ', encoding="utf-8")
+    broken = drift_entries(_lock(entry), tmp_path)
+    settings.unlink()
+    absent = drift_entries(_lock(entry), tmp_path)
+
+    assert present == []
+    assert removed == absent == [DriftItem(_SETTINGS, "managed_missing", pointer="/hooks/Stop")]
+    assert removed[0].line() == "managed entry missing: .claude/settings.json#/hooks/Stop"
+    [unreadable] = broken
+    assert unreadable.line().startswith("unreadable: .claude/settings.json (line 1, col ")
+
+
+def test_drift_entries_scoped_edited_probe_names_an_edited_element(tmp_path: Path) -> None:
+    entry = scoped_lock_entry(_SETTINGS, "/hooks/Stop", _GROUP, artifact_id="registration:stop")
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / _SETTINGS).write_text('{"hooks": {"Stop": [{"hooks": []}]}}', encoding="utf-8")
+    calls: list[tuple[str, int, frozenset[str]]] = []
+
+    def edited(pointer: str, items: object, hashes: object, recorded: frozenset[str]) -> bool:
+        calls.append((pointer, len(hashes), recorded))  # type: ignore[arg-type]
+        return True
+
+    items = drift_entries(_lock(entry), tmp_path, edited=edited)
+
+    assert items == [DriftItem(_SETTINGS, "managed_edited", pointer="/hooks/Stop")]
+    assert calls == [("/hooks/Stop", 1, frozenset({entry.sha256}))]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="exec bits are POSIX-only")
+def test_drift_entries_exec_bit_mode_drift(tmp_path: Path) -> None:
+    script = _whole(tmp_path, ".coding-agent-playbook/hooks/scripts/g/check.sh", b"#!/bin/sh\n")
+    script.executable = True
+    (tmp_path / script.path).chmod(0o644)
+
+    drifted = drift_entries(_lock(script), tmp_path)
+    (tmp_path / script.path).chmod(0o755)
+
+    assert [item.line() for item in drifted] == [
+        "mode mismatch: .coding-agent-playbook/hooks/scripts/g/check.sh (expected executable)"
+    ]
+    assert drift_entries(_lock(script), tmp_path) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="symlinks need POSIX permissions")
+def test_drift_entries_never_follows_symlink_or_reads_secret_path(tmp_path: Path) -> None:
+    target = _whole(tmp_path, "real.md", b"engine output\n")
+    linked = LockEntry("AGENTS.md", target.sha256, target.bytes)  # same bytes, through a link
+    (tmp_path / linked.path).symlink_to(tmp_path / target.path)
+    secret = _whole(tmp_path, ".env", b"TOKEN=1\n")
+    (tmp_path / secret.path).write_bytes(b"TOKEN=2\n")  # would be a hash mismatch if read
+    outside = LockEntry("../outside.md", compute_hash(b"x"), 1)
+    absolute = LockEntry(str(tmp_path / "real.md"), compute_hash(b"x"), 1)
+
+    items = drift_entries(
+        _lock(linked, secret, outside, absolute), tmp_path, skip=lambda rel: rel == ".env"
+    )
+
+    assert items == [DriftItem("AGENTS.md", "hash_mismatch")]
+
+
+def test_parse_json_document_reads_blank_as_empty_and_names_what_it_cannot_read() -> None:
+    assert parse_json_document(b"\xef\xbb\xbf  \n", "s.json") == {}
+    assert parse_json_document(b'\xef\xbb\xbf{"a": [1]}', "s.json") == {"a": [1]}
+    with pytest.raises(ScopedUnreadable, match="not valid UTF-8 at byte 2"):
+        parse_json_document(b'{"\xff": 1}', "s.json")
+    with pytest.raises(ScopedUnreadable, match=r"^line 2, col 2: Extra data"):
+        parse_json_document(b"{\n}x", "s.json")
+
+
+def test_drift_entries_shared_file_that_is_not_a_regular_file_is_one_unreadable_line(
+    tmp_path: Path,
+) -> None:
+    entry = scoped_lock_entry(_SETTINGS, "/hooks/Stop", _GROUP, artifact_id="registration:stop")
+    other = scoped_lock_entry(_SETTINGS, "/permissions/allow", "Bash(ls)", artifact_id="allow")
+    (tmp_path / _SETTINGS).mkdir(parents=True)
+
+    items = drift_entries(_lock(entry, other), tmp_path)
+
+    assert [item.line() for item in items] == [
+        "unreadable: .claude/settings.json (not a regular file)"
+    ]

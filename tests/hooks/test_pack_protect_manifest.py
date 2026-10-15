@@ -45,6 +45,10 @@ PROTECT_PACK: dict[str, PackRow] = {
     ),
     "eval-task-authoring-lint": PackRow("default", ("post_tool_use",), ("context", "none"), "open"),
     "guard-eval-fixtures": PackRow("opt-in", ("pre_tool_use",), ("ask", "none"), "open"),
+    "stop-drift-and-orphan-gate": PackRow("default", ("stop",), ("deny", "none"), "open"),
+    "session-start-playbook-briefing": PackRow(
+        "default", ("session_start",), ("context", "none"), "open"
+    ),
 }
 
 
@@ -115,3 +119,27 @@ def test_source_changed_child_timeout_nests_under_the_hook_timeout() -> None:
         "eval-task-authoring-lint",
     ):
         assert engine_hook(hook_id).frontmatter.timeout > CHILD_TIMEOUT_S
+
+
+def test_drift_hook_declares_only_its_stage_name() -> None:
+    """A Stop-stage hook names its stage in ``handler.config.stage``; order is the engine's (K-10)."""
+    from coding_agent_playbook.hook_runtime.stop.stages import STOP_STAGE_ORDER
+
+    handler = engine_hook("stop-drift-and-orphan-gate").frontmatter.handler
+
+    assert handler is not None and handler.config == {"stage": "drift"}
+    assert handler.config["stage"] in STOP_STAGE_ORDER
+
+
+def test_briefing_runs_on_every_session_start_source() -> None:
+    hook = engine_hook("session-start-playbook-briefing")
+    fm = hook.frontmatter
+
+    assert tuple(fm.matcher["session_start"].sources) == (
+        "startup",
+        "resume",
+        "clear",
+        "compact",
+        "fork",
+    )
+    assert hook.body.strip() == ""  # no advisory: a hookless harness has no heartbeat to miss

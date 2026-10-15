@@ -153,5 +153,7 @@ def test_handler_approval_mirrors_the_runtime_record(repo: Path, tmp_path: Path)
         "validate-then-sync-on-canonical-edit",
         "resync-on-detector-input-change",
         "eval-task-authoring-lint",
+        "stop-drift-and-orphan-gate",
+        "session-start-playbook-briefing",
     }
     assert all(handler_approval(hook) is None for hook in builtins)

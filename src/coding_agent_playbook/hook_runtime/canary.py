@@ -35,6 +35,7 @@ from coding_agent_playbook.hook_runtime.state import StateStore, session_key
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from coding_agent_playbook.hook_runtime.config import HookRecord
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
 
 __all__ = [
@@ -43,6 +44,7 @@ __all__ = [
     "Canary",
     "CanaryResult",
     "canary_session_id",
+    "enabled_canaries",
     "run_canaries",
 ]
 
@@ -111,6 +113,25 @@ DEFAULT_CANARIES: Final[tuple[Canary, ...]] = (
         },
     ),
 )
+
+
+def enabled_canaries(
+    hooks: Mapping[str, HookRecord], canaries: Sequence[Canary] = DEFAULT_CANARIES
+) -> tuple[Canary, ...]:
+    """The rows of ``canaries`` whose guard is on and bound to the row's event (the heartbeat's set).
+
+    A guard without a row is simply not proven; it never counts as degraded.
+
+    Example::
+
+        >>> [c.hook_id for c in enabled_canaries(cfg.hooks)]  # doctest: +SKIP
+        ['guard-generated-outputs', 'control-plane-guard']
+    """
+    return tuple(
+        canary
+        for canary in canaries
+        if canary.hook_id in hooks and canary.event in hooks[canary.hook_id].events
+    )
 
 
 def canary_session_id(pid: int | None = None) -> str:

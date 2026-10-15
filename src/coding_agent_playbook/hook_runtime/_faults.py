@@ -7,7 +7,9 @@
 - A ``ConfigFault`` (``guard_config.json`` missing, changed since sync, or
   newer than this engine) asks **once per session** on ``pre_tool_use``, then
   adds one degraded note; every other event only gets the note. Asking on
-  every call would brick the session.
+  every call would brick the session. ``session_start`` also tells the model
+  ``GUARDRAILS DEGRADED: config`` every time: the briefing that would print the
+  heartbeat cannot run, and a compaction drops what the model was told.
 
 Both are logged as ``degraded`` (:func:`degraded_lines`), ids only.
 """
@@ -21,6 +23,7 @@ from coding_agent_playbook.hook_runtime._decision_log import DISPATCHER_ID, LogL
 from coding_agent_playbook.hook_runtime.config import CONFIG_FAULT_REASON
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName
+from coding_agent_playbook.hook_runtime.heartbeat import degraded_line
 from coding_agent_playbook.hook_runtime.policy import is_unattended
 
 if TYPE_CHECKING:
@@ -104,6 +107,7 @@ def config_fault_results(
         <Decision.ASK: 'ask'>
     """
     rule_id = f"{CONFIG_FAULT_RULE}:{fault.kind}"
+    heartbeat = _degraded_heartbeat(rule_id) if event is EventName.SESSION_START else []
     if event is EventName.PRE_TOOL_USE and once("config_fault:ask"):
         return [
             HandlerResult(
@@ -115,13 +119,25 @@ def config_fault_results(
             )
         ]
     if not once("config_fault:note"):
-        return []
+        return heartbeat
+    note = HandlerResult(
+        decision=Decision.NONE,
+        hook_id=DISPATCHER_ID,
+        rule_id=rule_id,
+        user_note=CONFIG_FAULT_NOTE.format(kind=fault.kind),
+        degraded=True,
+    )
+    return [*heartbeat, note]
+
+
+def _degraded_heartbeat(rule_id: str) -> list[HandlerResult]:
+    """The heartbeat the session-start briefing would have printed, as ``DEGRADED: config``."""
     return [
         HandlerResult(
-            decision=Decision.NONE,
+            decision=Decision.CONTEXT,
             hook_id=DISPATCHER_ID,
             rule_id=rule_id,
-            user_note=CONFIG_FAULT_NOTE.format(kind=fault.kind),
+            context=(degraded_line(["config"]),),
             degraded=True,
         )
     ]

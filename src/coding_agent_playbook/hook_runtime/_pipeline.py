@@ -188,6 +188,7 @@ def _contexts(
             platform=deps.platform,
             home=deps.home,
             env=deps.env,
+            deps=deps,
         )
 
     return make

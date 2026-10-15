@@ -70,6 +70,8 @@ _ENGINE_PACK = (
     "guard-eval-fixtures",
     "guard-generated-outputs",
     "resync-on-detector-input-change",
+    "session-start-playbook-briefing",
+    "stop-drift-and-orphan-gate",
     "validate-then-sync-on-canonical-edit",
 )
 _OPT_IN_SKIP = (
@@ -95,7 +97,7 @@ def test_hooks_block_labels_per_adapter(
 
     assert lines == [
         "  [hooks]: on",
-        "  Hooks (7 on / 9 total):",
+        "  Hooks (9 on / 11 total):",
         # The engine pack (Track K5): OpenCode has no notebook tool, so guard-generated-outputs
         # is degraded there; control-plane-guard matches no notebook edit.
         "    [✓] control-plane-guard (agents_md: advisory, claude_code: enforced, "
@@ -111,6 +113,12 @@ def test_hooks_block_labels_per_adapter(
         _OPT_IN_SKIP.format(hook_id="guard-y"),
         "    [✓] resync-on-detector-input-change (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
+        # No advisory body (a hookless harness has no heartbeat); OpenCode's session_start
+        # rides an experimental API and its Stop is evidence-only (§C.3.6): degraded.
+        "    [✓] session-start-playbook-briefing (agents_md: —, claude_code: enforced, "
+        "continue: —, opencode: degraded)",
+        "    [✓] stop-drift-and-orphan-gate (agents_md: advisory, claude_code: enforced, "
+        "continue: advisory, opencode: degraded)",
         "    [✓] validate-then-sync-on-canonical-edit (agents_md: advisory, "
         "claude_code: enforced, continue: advisory, opencode: enforced)",
     ]
@@ -126,7 +134,7 @@ def test_hooks_block_when_the_table_is_absent(
 
     assert lines == [
         "  [hooks]: off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')",
-        "  Hooks (0 on / 7 total):",
+        "  Hooks (0 on / 9 total):",
         *_off(_ENGINE_PACK[:4]),
         "    [✗] guard-x (skipped: hooks are off)",
         *_off(_ENGINE_PACK[4:]),
@@ -146,7 +154,7 @@ def test_hooks_block_when_hooks_are_switched_off_or_unreadable(
 
     assert off_lines == [
         "  [hooks]: off — [hooks] enabled is not true",
-        "  Hooks (0 on / 6 total):",
+        "  Hooks (0 on / 8 total):",
         *_off(_ENGINE_PACK),
     ]
     assert bad_lines[-1] == "  [hooks] cannot be read; run 'playbook validate'."

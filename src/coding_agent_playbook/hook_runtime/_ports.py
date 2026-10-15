@@ -80,6 +80,14 @@ class LazyGit:
         """See ``GitPort.ls_untracked``."""
         return self._port().ls_untracked()
 
+    def symbolic_ref(self, ref: str) -> str | None:
+        """See ``GitPort.symbolic_ref``."""
+        return self._port().symbolic_ref(ref)
+
+    def config_value(self, key: str) -> str | None:
+        """See ``GitPort.config_value``."""
+        return self._port().config_value(key)
+
 
 def open_trust_store(repo: RepoInfo, deps: RuntimeDeps) -> TrustPort | None:
     """``deps.trust``, else the user-local store of ``repo``; ``None`` when it cannot be used.

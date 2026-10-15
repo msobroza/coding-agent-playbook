@@ -1,93 +1,80 @@
-"""Which managed ``settings.json`` elements drifted (specs/prK-lifecycle-hooks.md §C.2.6).
+"""How ``playbook check`` judges managed ``settings.json`` elements (specs/prK-lifecycle-hooks.md §C.2.6).
 
-``playbook check`` cannot byte-compare a file it co-owns with the user, so a
-scoped lock entry (``json:<pointer>``) is checked by looking for an element of
-the array at ``<pointer>`` whose canonical hash equals the recorded one. User
-keys, user hook groups, reformatting and key order never count as drift.
+The element match itself (an element of the array at ``<pointer>`` with the
+recorded canonical hash) is ``lockfile.managed_drift``, shared with the hook
+runtime. This module adds the two Claude-specific refinements ``playbook
+check`` passes to ``lockfile.drift_entries``:
 
-Stdlib-only; it works on the parsed document (:func:`.claude_settings.parse_settings`).
+- :func:`settings_document`: the strict parser Claude Code itself applies, so
+  a file Claude would reject is reported ``unreadable`` with its line and column;
+- :func:`stray_launcher_edited`: a missing managed hook group whose array still
+  holds an unrecorded launcher-only group was hand-edited, not removed.
+
+Stdlib-only apart from the settings parser.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Final, Literal
+from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.adapters._settings_plan import (
-    canonical_json,
-    launcher_kind,
-    pointer_keys,
+from coding_agent_playbook.adapters._settings_plan import launcher_kind
+from coding_agent_playbook.adapters.claude_settings import (
+    SettingsMergeError,
+    decode_settings,
+    parse_settings,
 )
-from coding_agent_playbook.lockfile import compute_hash
+from coding_agent_playbook.lockfile import ScopedUnreadable, managed_drift
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from coding_agent_playbook.lockfile import LockEntry
+    from coding_agent_playbook.lockfile import DriftItem, LockEntry
 
-__all__ = ["DriftKind", "ManagedDrift", "managed_entry_drift"]
+__all__ = ["managed_entry_drift", "settings_document", "stray_launcher_edited"]
 
-DriftKind = Literal["edited", "missing"]
-_JSON_SCOPE: Final = "json:"
 _HOOKS_POINTER: Final = "/hooks/"
 
 
-@dataclass(frozen=True)
-class ManagedDrift:
-    """One scoped entry with no matching element: hand-edited, or gone.
+def settings_document(data: bytes | None, rel: str) -> object:
+    """``data`` parsed as Claude Code parses settings; absent or blank is ``{}``.
 
-    Example: ``ManagedDrift(entry, "missing").line()``.
-    """
-
-    entry: LockEntry
-    kind: DriftKind
-
-    def line(self) -> str:
-        """``managed entry <kind>: <path>#<pointer>`` (the ``playbook check`` drift line)."""
-        pointer = self.entry.scope.removeprefix(_JSON_SCOPE)
-        return f"managed entry {self.kind}: {self.entry.path}#{pointer}"
-
-
-def managed_entry_drift(doc: object, entries: Iterable[LockEntry]) -> list[ManagedDrift]:
-    """The scoped ``entries`` that no element of ``doc`` matches, in entry order.
-
-    A managed hook group whose array still holds an unrecorded launcher-only
-    group was ``edited``; anything else (a deleted group, a removed string, an
-    absent array) is ``missing``. Whole-file entries are skipped.
+    Raises ``ScopedUnreadable("line L, col C: <message>")`` for what Claude rejects.
 
     Example::
 
-        >>> managed_entry_drift({}, lock.entries)  # doctest: +SKIP
-        [ManagedDrift(entry=..., kind='missing')]
+        >>> settings_document(b'{"model": "x"}', ".claude/settings.json")
+        {'model': 'x'}
     """
-    scoped = [entry for entry in entries if entry.scope.startswith(_JSON_SCOPE)]
-    drift: list[ManagedDrift] = []
-    for entry in scoped:
-        pointer = entry.scope.removeprefix(_JSON_SCOPE)
-        hashes = [compute_hash(canonical_json(item)) for item in _array_at(doc, pointer)]
-        if entry.sha256 in hashes:
-            continue
-        recorded = {other.sha256 for other in scoped if other.scope == entry.scope}
-        edited = pointer.startswith(_HOOKS_POINTER) and _has_stray_launcher(
-            _array_at(doc, pointer), hashes, recorded
-        )
-        drift.append(ManagedDrift(entry, "edited" if edited else "missing"))
-    return drift
+    try:
+        return parse_settings(decode_settings(data, path=rel), path=rel)
+    except SettingsMergeError as exc:
+        raise ScopedUnreadable(f"line {exc.line}, col {exc.col}: {exc.message}") from None
 
 
-def _array_at(doc: object, pointer: str) -> Sequence[Any]:
-    """The array at ``pointer``, or ``()`` when a step is absent or of another shape."""
-    node: Any = doc
-    for key in pointer_keys(pointer):
-        if not isinstance(node, dict) or key not in node:
-            return ()
-        node = node[key]
-    return node if isinstance(node, list) else ()
+def stray_launcher_edited(
+    pointer: str, items: Sequence[object], hashes: Sequence[str], recorded: frozenset[str]
+) -> bool:
+    """Whether a hook array holds a launcher-only group no entry recorded: our group, edited.
 
+    Example::
 
-def _has_stray_launcher(items: Sequence[Any], hashes: list[str], recorded: set[str]) -> bool:
-    """Whether a launcher-only group carries a hash no entry recorded: our group, edited."""
+        >>> stray_launcher_edited("/permissions/allow", [], [], frozenset())
+        False
+    """
+    if not pointer.startswith(_HOOKS_POINTER):
+        return False
     return any(
         isinstance(item, dict) and launcher_kind(item) == "suspect" and digest not in recorded
         for item, digest in zip(items, hashes, strict=True)
     )
+
+
+def managed_entry_drift(doc: object, entries: Iterable[LockEntry]) -> list[DriftItem]:
+    """The scoped ``entries`` no element of ``doc`` matches, ``edited`` per :func:`stray_launcher_edited`.
+
+    Example::
+
+        >>> managed_entry_drift({}, [])
+        []
+    """
+    return managed_drift(doc, entries, edited=stray_launcher_edited)

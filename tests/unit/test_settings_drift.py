@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.adapters._settings_drift import ManagedDrift, managed_entry_drift
+from coding_agent_playbook.adapters._settings_drift import (
+    managed_entry_drift,
+    settings_document,
+    stray_launcher_edited,
+)
 from coding_agent_playbook.adapters.claude_settings import (
     CLAUDE_SETTINGS_PATH,
     SettingsMergeError,
     parse_settings,
     scoped_lock_entry,
 )
+from coding_agent_playbook.lockfile import DriftItem, ScopedUnreadable
 
 _LAUNCH = 'sh "$D/.claude/hooks/playbook/launch.sh" dispatch stop --harness claude_code'
 _GROUP = {"hooks": [{"type": "command", "command": _LAUNCH, "timeout": 5}]}
@@ -37,7 +42,7 @@ def test_a_hand_edited_group_is_edited() -> None:
 
     drift = managed_entry_drift({"hooks": {"Stop": [edited]}}, [_STOP])
 
-    assert drift == [ManagedDrift(_STOP, "edited")]
+    assert drift == [DriftItem(CLAUDE_SETTINGS_PATH, "managed_edited", pointer="/hooks/Stop")]
     assert drift[0].line() == "managed entry edited: .claude/settings.json#/hooks/Stop"
 
 
@@ -53,14 +58,15 @@ def test_a_hand_edited_group_is_edited() -> None:
 def test_a_deleted_group_is_missing(doc: object) -> None:
     drift = managed_entry_drift(doc, [_STOP])
 
-    assert drift == [ManagedDrift(_STOP, "missing")]
+    assert drift == [DriftItem(CLAUDE_SETTINGS_PATH, "managed_missing", pointer="/hooks/Stop")]
     assert drift[0].line() == "managed entry missing: .claude/settings.json#/hooks/Stop"
 
 
 def test_managed_strings_are_missing_never_edited() -> None:
     doc = {"permissions": {"allow": ["Bash(git status)"]}}
 
-    assert managed_entry_drift(doc, [_ALLOW]) == [ManagedDrift(_ALLOW, "missing")]
+    missing = DriftItem(CLAUDE_SETTINGS_PATH, "managed_missing", pointer="/permissions/allow")
+    assert managed_entry_drift(doc, [_ALLOW]) == [missing]
     assert managed_entry_drift({"permissions": {"allow": ["Bash(playbook check)"]}}, [_ALLOW]) == []
 
 
@@ -78,3 +84,18 @@ def test_parse_settings_is_strict_and_reads_absence_as_empty() -> None:
     with pytest.raises(SettingsMergeError) as caught:
         parse_settings('{"a": 1, "a": 2}')
     assert str(caught.value).startswith(".claude/settings.json:1:")
+
+
+def test_settings_document_reports_what_claude_rejects_as_unreadable() -> None:
+    assert settings_document(None, CLAUDE_SETTINGS_PATH) == {}
+    with pytest.raises(ScopedUnreadable) as caught:
+        settings_document(b'{"a": 1, "a": 2}', CLAUDE_SETTINGS_PATH)
+    assert caught.value.detail.startswith("line 1, col ")
+
+
+def test_stray_launcher_edited_only_for_hook_arrays() -> None:
+    launcher_only = _GROUP
+
+    assert stray_launcher_edited("/hooks/Stop", [launcher_only], ["new"], frozenset({"old"}))
+    assert not stray_launcher_edited("/hooks/Stop", [launcher_only], ["old"], frozenset({"old"}))
+    assert not stray_launcher_edited("/permissions/allow", [launcher_only], ["new"], frozenset())

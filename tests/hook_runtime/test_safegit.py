@@ -286,6 +286,35 @@ def test_cat_head_is_none_for_a_path_absent_at_head(tmp_path: Path, answer: byte
     assert _safe_git(_layout(tmp_path), proc).cat_head("a.py") is None
 
 
+def test_symbolic_ref_and_config_value_skip_filter_discovery(tmp_path: Path) -> None:
+    """Neither query reads worktree content, so neither needs (or waits for) the filter flags."""
+    proc = FakeProc(programs={"git": GIT})
+    proc.script(["git", "symbolic-ref"], stdout=b"main\n")
+    proc.script(["git", "config", "--get", "user.email"], stdout=b"dev@corp.example\n")
+    proc.script(["git", "config", "--get", "user.name"], returncode=1)
+    git = _safe_git(_layout(tmp_path), proc)
+
+    assert git.symbolic_ref("HEAD") == "main"
+    assert git.config_value("user.email") == "dev@corp.example"
+    assert git.config_value("user.name") is None
+    assert proc.calls[0].argv[1:] == (
+        "-c",
+        "core.fsmonitor=false",
+        "symbolic-ref",
+        "--quiet",
+        "--short",
+        "HEAD",
+    )
+    assert not any("--get-regexp" in call.argv for call in proc.calls)
+
+
+def test_symbolic_ref_is_none_when_detached_or_absent(tmp_path: Path) -> None:
+    proc = FakeProc(programs={"git": GIT})
+    proc.script(["git", "symbolic-ref"], returncode=1)
+
+    assert _safe_git(_layout(tmp_path), proc).symbolic_ref("refs/remotes/origin/HEAD") is None
+
+
 def test_head_tree_is_none_on_an_unborn_branch(tmp_path: Path) -> None:
     proc = _fake_proc()
     proc.script(["git", "rev-parse"], returncode=1)
@@ -477,3 +506,18 @@ def test_oversized_untracked_file_is_folded_into_aux(
     assert first is not None and second is not None
     assert first.tree_id == second.tree_id == git.head_tree()
     assert first.aux and second.aux and first.aux != second.aux
+
+
+def test_symbolic_ref_and_config_value_against_a_real_repo(
+    tmp_path: Path, real_git: Callable[..., str], real_proc: SubprocessProc
+) -> None:
+    root = Path(os.path.realpath(tmp_path)) / "repo"
+    root.mkdir()
+    real_git("init", "-q", "-b", "trunk", cwd=root)
+    real_git("config", "user.email", "you@example.com", cwd=root)
+    git = _real_safe_git(root, real_proc)
+
+    assert git.symbolic_ref("HEAD") == "trunk"
+    assert git.symbolic_ref("refs/remotes/origin/HEAD") is None
+    assert git.config_value("user.email") == "you@example.com"
+    assert git.config_value("playbook.unset") is None

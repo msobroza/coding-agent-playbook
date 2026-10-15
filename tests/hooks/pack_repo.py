@@ -36,6 +36,8 @@ from coding_agent_playbook.hook_runtime.config import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.simulate import SimulateArgs, run
 from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
+from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
+from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from coding_agent_playbook.types import Hook
 from tests.hook_payloads import PROJECT_DIR, HookPayloadCase
 from tests.hook_runtime.guard_repo import GuardRepo
@@ -53,6 +55,9 @@ ENGINE_PACKAGE = "coding_agent_playbook"
 ENGINE_HOOKS = Path(coding_agent_playbook.__file__).resolve().parent / "resources" / "hooks"
 #: Every enabled adapter of the fixture consumer.
 ADAPTERS = ("claude_code", "continue", "opencode", "agents_md")
+#: The fixture engine version and sync time :meth:`PackRepo.lock_outputs` records.
+ENGINE_VERSION = "0.1.0a0"
+RENDERED_AT = "2026-10-14T10:00:00Z"
 
 
 def engine_hook_paths() -> dict[str, Path]:
@@ -144,6 +149,23 @@ class PackRepo(GuardRepo):
         self.write_lock(hashlib.sha256(data).hexdigest())
         return data
 
+    def lock_outputs(
+        self,
+        *rels: str,
+        engine_version: str = ENGINE_VERSION,
+        rendered_at: str = RENDERED_AT,
+        extra: Sequence[LockEntry] = (),
+    ) -> Lockfile:
+        """Write the full lockfile sync would: each ``rels`` file as it is now, plus ``extra``.
+
+        ``guard_config.json`` is always recorded (it vouches for the config), so
+        call this after :meth:`install_pack`.
+        """
+        entries = [_pristine(self.root, rel) for rel in (*rels, GUARD_CONFIG_REL)]
+        lockfile = Lockfile(2, engine_version, rendered_at, entries=[*entries, *extra])
+        FileSystemStateSource(repo_root=self.root).save_lockfile(lockfile)
+        return lockfile
+
     def relocate(self, case: HookPayloadCase) -> bytes:
         """``case``'s payload with the fixture project dir replaced by this repository."""
         text = case.raw.decode("utf-8").replace(PROJECT_DIR, str(self.root))
@@ -193,6 +215,11 @@ class PackRepo(GuardRepo):
             body["tool_response"] = {"success": True}
         body.update(fields)
         return json.dumps(body).encode("utf-8")
+
+
+def _pristine(root: Path, rel: str) -> LockEntry:
+    data = (root / rel).read_bytes()
+    return LockEntry(rel, compute_hash(data), len(data))
 
 
 def rows_of(*rows: tuple[str, str, str, str]) -> list[ProtectedRow]:

@@ -5,22 +5,24 @@
 A diagnostic, so it exits 0 whatever it finds (drift included). An overlay in
 ``overlays_enabled`` that ``playbook sync`` would refuse (``_sync_preflight``) is
 flagged under Environment, and the Drift section then never reports a clean state.
-The Hooks block and the scoped (``json:<pointer>``) drift lines come from
-:mod:`._check_hooks` (specs/prK-lifecycle-hooks.md §A.8, §C.2.6).
+The Hooks block comes from :mod:`._check_hooks` (specs/prK-lifecycle-hooks.md
+§A.8). The Drift lines are ``lockfile.drift_entries``, the definition the
+``drift`` Stop stage shares (specs/prK-hook-pack.md §E.1), with Claude's strict
+settings parser for the scoped (``json:<pointer>``) entries (§C.2.6).
 """
 
 from __future__ import annotations
 
-import os
 import platform
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
+from coding_agent_playbook.adapters._settings_drift import settings_document, stray_launcher_edited
 from coding_agent_playbook.commands import _sync_preflight
-from coding_agent_playbook.commands._check_hooks import format_hooks_section, scoped_drift
+from coding_agent_playbook.commands._check_hooks import format_hooks_section
 from coding_agent_playbook.detector import detect, evaluate_predicate
-from coding_agent_playbook.lockfile import compute_hash
+from coding_agent_playbook.lockfile import drift_entries
 from coding_agent_playbook.orchestrator import SyncContext
 
 if TYPE_CHECKING:
@@ -28,7 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from coding_agent_playbook.commands._sync_preflight import UnusableOverlay
-    from coding_agent_playbook.lockfile import LockEntry, Lockfile
+    from coding_agent_playbook.lockfile import Lockfile
 
 _SYNC_REFUSES = "'playbook sync' refuses to run until every overlay in overlays_enabled is usable"
 
@@ -190,24 +192,10 @@ def _lockfile_drift(ctx: SyncContext, lockfile: Lockfile) -> list[str]:
     A scoped entry (one managed element of a file shared with the user) is
     judged by its element, never by the whole file's hash.
     """
-    drift: list[str] = []
-    for entry in lockfile.entries:
-        if entry.scope:
-            continue
-        path = ctx.repo_root / entry.path
-        if not path.is_file():
-            drift.append(f"  missing: {entry.path}")
-        elif compute_hash(path.read_bytes()) != entry.sha256:
-            drift.append(f"  hash mismatch: {entry.path}")
-        elif _lost_exec_bit(path, entry):
-            drift.append(f"  mode mismatch: {entry.path} (expected executable)")
-    drift.extend(scoped_drift(ctx.repo_root, lockfile.entries))
-    return drift
-
-
-def _lost_exec_bit(path: Path, entry: LockEntry) -> bool:
-    """POSIX only: an entry recorded executable (a copied hook script) whose file is not."""
-    return entry.executable and os.name == "posix" and not path.stat().st_mode & 0o111
+    items = drift_entries(
+        lockfile, ctx.repo_root, parse_scoped=settings_document, edited=stray_launcher_edited
+    )
+    return [f"  {item.line()}" for item in items]
 
 
 def _refresh(ctx: SyncContext) -> None:

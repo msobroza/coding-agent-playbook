@@ -122,6 +122,10 @@ class GitPort(Protocol):
 
     def ls_untracked(self) -> tuple[str, ...]: ...
 
+    def symbolic_ref(self, ref: str) -> str | None: ...
+
+    def config_value(self, key: str) -> str | None: ...
+
 
 class SafeGit:
     """Hardened git for one worktree; every call runs at its root through ``proc``.
@@ -275,6 +279,18 @@ class SafeGit:
         """Untracked, non-ignored paths, repo-relative."""
         result = self.run(["ls-files", "--others", "--exclude-standard", "-z"])
         return split_z(result.stdout)
+
+    def symbolic_ref(self, ref: str) -> str | None:
+        """What ``ref`` points at, short (``HEAD`` -> ``main``); ``None`` if detached or absent."""
+        result = self.bare_run(["symbolic-ref", "--quiet", "--short", ref], ok_codes=(0, 1))
+        name = result.stdout.decode("utf-8", errors="replace").strip()
+        return name if result.ok and name else None
+
+    def config_value(self, key: str) -> str | None:
+        """``git config --get <key>`` over git's own scopes, ``None`` when unset (no worktree read)."""
+        result = self.bare_run(["config", "--get", key], ok_codes=(0, 1))
+        value = result.stdout.decode("utf-8", errors="replace").strip()
+        return value if result.ok else None
 
     def fingerprint(self) -> Fingerprint | None:
         """The working-tree fingerprint, or ``None`` when git cannot give one safely."""

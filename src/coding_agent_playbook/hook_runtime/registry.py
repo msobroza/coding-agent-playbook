@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.config import GuardConfig, HookRecord
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
-    from coding_agent_playbook.hook_runtime.deps import Clock, ProcPort, TrustPort
+    from coding_agent_playbook.hook_runtime.deps import Clock, ProcPort, RuntimeDeps, TrustPort
     from coding_agent_playbook.hook_runtime.escape import EscapeHatches
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.git import GitPort
@@ -71,6 +71,8 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         "resync_on_detector_input_change": f"{_HANDLERS}.resync_on_detector_input_change",
         "eval_task_authoring_lint": f"{_HANDLERS}.eval_task_authoring_lint",
         "guard_eval_fixtures": f"{_HANDLERS}.guard_eval_fixtures",
+        "stop_drift_and_orphan_gate": f"{_HANDLERS}.stop_drift_and_orphan_gate",
+        "session_start_playbook_briefing": f"{_HANDLERS}.session_start_playbook_briefing",
     }
 )
 
@@ -113,6 +115,10 @@ class HandlerContext:
     ``deadline`` is the event's watchdog deadline on ``clock.monotonic()``;
     ``env`` is the hook process environment (``CLAUDE_CONFIG_DIR``,
     ``XDG_STATE_HOME``: where user-level files live), never a command's prefix.
+    ``deps`` is the dispatch's own ``RuntimeDeps`` (``None`` in a hand-built
+    context), for the cold paths that re-enter the pipeline or open a
+    user-local store: the session-start heartbeat's in-process canaries and
+    its pending-trust probe (specs/prK-hook-pack.md §E.1).
     """
 
     hook: HookRecord
@@ -128,6 +134,7 @@ class HandlerContext:
     platform: str = sys.platform
     home: str | None = None
     env: Mapping[str, str] = field(default_factory=dict)
+    deps: RuntimeDeps | None = None
 
 
 class HandlerResolutionError(Exception):

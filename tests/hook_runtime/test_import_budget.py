@@ -14,7 +14,10 @@ loads its JSON/TOML/text verdict modules only on their branch, and ``tomllib``
 only for an edit of a ``.toml`` policy file (§D.1's branch-local row). On the
 source-changed branch, ``detector`` (and ``packaging``) loads only after the
 dependency comparison found a change, and ``evals.*`` / ``sources.filesystem``
-(yaml) only on an ``eval_tasks/*/task.toml`` edit; jinja2 never loads.
+(yaml) only on an ``eval_tasks/*/task.toml`` edit; jinja2 never loads. The
+session-start briefing and the ``drift`` Stop stage read the lockfile with
+``tomllib`` through ``lockfile`` (the new §D.1 rows): the briefing on every
+start, the stage only once the ledger shows a write it cares about.
 """
 
 from __future__ import annotations
@@ -425,3 +428,71 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
     )
     assert _forbidden(imported, allowed=branch_local) == []
     assert "jinja2" not in imported
+
+
+# --- K5 step 4: the briefing and the drift stage (§D.1 rows: lockfile + tomllib) ------
+
+_LOCKFILE_MODULE: Final = "coding_agent_playbook.lockfile"
+_BRIEFING: Final = "coding_agent_playbook.hook_runtime.handlers._briefing_probes"
+_DRIFT_FAST_PATH: Final = "coding_agent_playbook.hook_runtime.handlers._drift"
+
+
+@pytest.fixture
+def briefed(tmp_path: Path, real_proc: SubprocessProc) -> GuardRepo:
+    """A synced repo with the briefing and the drift stage bound to their real builtins."""
+    repo = GuardRepo.create(tmp_path)
+    command = repo.root / ".claude" / "commands" / "x.md"
+    command.parent.mkdir(parents=True)
+    command.write_text(f"{sentinel_line('html')}\n# x\n", encoding="utf-8")
+    briefing = hook_record(
+        "session-start-playbook-briefing",
+        events=["session_start"],
+        decisions=("context", "none"),
+        on_error="open",
+        matcher={"session_start": {"sources": ["startup", "resume", "clear", "compact"]}},
+    )
+    drift = hook_record(
+        "stop-drift-and-orphan-gate",
+        events=["stop"],
+        decisions=("deny", "none"),
+        on_error="open",
+        handler={"kind": "builtin", "name": "stop_drift_and_orphan_gate"},
+    )
+    protected = {"entries": [], "output_dirs": [".claude/commands/"], "hook_artifacts": []}
+    path_classes = {"generated": [".claude/commands/"], "py": ["*.py"]}
+    repo.install(briefing, drift, sentinel=SENTINEL, protected=protected, path_classes=path_classes)
+    return repo
+
+
+def test_session_start_briefing_loads_only_tomllib_and_lockfile(
+    briefed: GuardRepo, real_proc: SubprocessProc
+) -> None:
+    start = briefed.payload(EventName.SESSION_START, source="startup")
+
+    imported = _imports(real_proc, briefed, EventName.SESSION_START, start)
+
+    assert _BRIEFING in imported  # the briefing ran
+    assert {"tomllib", _LOCKFILE_MODULE} <= imported
+    assert _forbidden(imported, allowed=("tomllib",)) == []
+    assert "jinja2" not in imported
+
+
+def test_stop_drift_stage_loads_the_lockfile_only_when_active(
+    briefed: GuardRepo, real_proc: SubprocessProc
+) -> None:
+    stop = briefed.payload(EventName.STOP, stop_hook_active=False)
+    _imports(real_proc, briefed, EventName.SESSION_START, briefed.payload(EventName.SESSION_START))
+
+    inactive = _imports(real_proc, briefed, EventName.STOP, stop)
+    edit = {"file_path": ".claude/commands/x.md", "old_string": "x", "new_string": "y"}
+    post = briefed.payload(
+        EventName.POST_TOOL_USE, tool_name="Edit", tool_input=edit, tool_response={}
+    )
+    _imports(real_proc, briefed, EventName.POST_TOOL_USE, post)  # the ledger: a generated output
+    active = _imports(real_proc, briefed, EventName.STOP, stop)
+
+    assert _LOCKFILE_MODULE not in inactive and "tomllib" not in inactive
+    assert _DRIFT_FAST_PATH not in inactive
+    assert {_LOCKFILE_MODULE, "tomllib", _DRIFT_FAST_PATH} <= active
+    assert _forbidden(active, allowed=("tomllib",)) == []
+    assert "subprocess" not in active  # no canonical edit: the fast path only, no sync --check

@@ -14,7 +14,7 @@ import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from coding_agent_playbook._canonical_json import canonical_json
+from coding_agent_playbook._canonical_json import canonical_json, pointer_keys
 from coding_agent_playbook.adapters._json_edits import ArrayEdit
 from coding_agent_playbook.lockfile import LockEntry, compute_hash
 
@@ -95,17 +95,6 @@ def json_pointer(keys: Iterable[str]) -> str:
         '/hooks/PreToolUse'
     """
     return "".join("/" + key.replace("~", "~0").replace("/", "~1") for key in keys)
-
-
-def pointer_keys(pointer: str) -> tuple[str, ...]:
-    """The object keys of an RFC 6901 ``pointer`` (the inverse of :func:`json_pointer`).
-
-    Example::
-
-        >>> pointer_keys("/permissions/allow")
-        ('permissions', 'allow')
-    """
-    return tuple(p.replace("~1", "/").replace("~0", "~") for p in pointer.split("/")[1:])
 
 
 def scoped_lock_entry(

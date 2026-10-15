@@ -46,8 +46,9 @@ pytestmark = pytest.mark.usefixtures("sample_hook_handlers")
 _NOTICE = "hooks available: add [hooks] enabled = true or re-run playbook init"
 
 
-#: The Claude events the engine pack registers (Track K5 adds post_tool_use hooks).
-ENGINE_PACK_EVENTS = ["SessionStart", "PreToolUse", "PostToolUse"]
+#: The Claude events the engine pack registers (Track K5: the briefing, the guards,
+#: the source-changed hooks and the ``drift`` Stop stage).
+ENGINE_PACK_EVENTS = ["SessionStart", "PreToolUse", "PostToolUse", "Stop"]
 
 
 def _sync_repo(repo: Path, tmp_path: Path, **kwargs: Any) -> int:
@@ -112,6 +113,8 @@ def test_first_sync_writes_every_hook_output(synced: Path) -> None:
         "guard-generated-outputs",
         "guard-x",
         "resync-on-detector-input-change",
+        "session-start-playbook-briefing",
+        "stop-drift-and-orphan-gate",
         "validate-then-sync-on-canonical-edit",
     ]
     assert (synced / SCRIPT).read_bytes() == SCRIPT_BYTES
@@ -335,11 +338,12 @@ def test_summary_lines_counts_and_hand_edit_warning(
     repo = make_hook_repo(tmp_path / "repo", make_synthetic_repo)
     assert _sync_repo(repo, tmp_path) == 0
     out = capsys.readouterr().out
-    # guard-x, guard-ext and the engine pack's five default-tier protect hooks
-    assert "✓ Hooks: 7 enabled, 1 skipped (" in out
-    assert "claude_code: 7 enforced" in out
-    assert "continue: 7 advisory" in out
-    assert f"✓ {SETTINGS}: 3 managed entries updated, 0 removed (user keys untouched)" in out
+    # guard-x, guard-ext and the engine pack's seven default-tier protect hooks; the
+    # briefing has no advisory body, so Continue gets one advisory fewer
+    assert "✓ Hooks: 9 enabled, 1 skipped (" in out
+    assert "claude_code: 9 enforced" in out
+    assert "continue: 8 advisory" in out
+    assert f"✓ {SETTINGS}: 4 managed entries updated, 0 removed (user keys untouched)" in out
 
     _edit_managed_group(repo)
     assert _sync_repo(repo, tmp_path) == 0

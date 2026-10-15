@@ -1,37 +1,27 @@
-"""The hook parts of ``playbook check`` (specs/prK-lifecycle-hooks.md §A.8, §C.1.1, §C.2.6).
+"""The Hooks block of ``playbook check`` (specs/prK-lifecycle-hooks.md §A.8, §C.1.1).
 
-- :func:`format_hooks_section`: the ``=== Hooks ===`` block. Every on hook is
-  labelled per enabled adapter (``enforced`` / ``degraded`` / ``advisory`` /
-  ``—``, from the adapter class's ``hook_support``), so advice is never
-  mistaken for enforcement (QC-10); every off hook gets its reason.
-- :func:`scoped_drift`: drift lines for scoped lock entries. A co-owned file
-  (``.claude/settings.json``) is judged element by element, so user keys, user
-  hook groups and reformatting never count as drift.
+:func:`format_hooks_section` prints the ``=== Hooks ===`` block. Every on hook
+is labelled per enabled adapter (``enforced`` / ``degraded`` / ``advisory`` /
+``—``, from the adapter class's ``hook_support``), so advice is never mistaken
+for enforcement (QC-10); every off hook gets its reason. The scoped drift lines
+moved to ``lockfile.drift_entries`` (shared with the ``drift`` Stop stage).
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.adapters._settings_drift import managed_entry_drift
-from coding_agent_playbook.adapters.claude_settings import (
-    SettingsMergeError,
-    decode_settings,
-    parse_settings,
-)
 from coding_agent_playbook.hook_policy import adapter_label, resolve_effective_hooks
 from coding_agent_playbook.orchestrator import discover_adapters
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
-    from pathlib import Path
+    from collections.abc import Mapping
 
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
-    from coding_agent_playbook.lockfile import LockEntry
     from coding_agent_playbook.orchestrator import SyncContext
 
-__all__ = ["format_hooks_section", "scoped_drift"]
+__all__ = ["format_hooks_section"]
 
 _ABSENT: Final = "off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')"
 _DISABLED: Final = "off — [hooks] enabled is not true"
@@ -98,39 +88,3 @@ def _labels(hook: ResolvedHook, support: Mapping[str, Mapping[str, frozenset[str
     return ", ".join(
         f"{name}: {adapter_label(hook, name, events)}" for name, events in support.items()
     )
-
-
-def scoped_drift(repo_root: Path, entries: Iterable[LockEntry]) -> list[str]:
-    """``managed entry edited|missing: <path>#<pointer>`` / ``unreadable: <path> (...)`` lines.
-
-    Whole-file entries are ignored here. An absent file reads as ``{}``, so its
-    entries are each ``missing``; a file Claude Code would reject is one
-    ``unreadable`` line.
-
-    Example::
-
-        drift.extend(scoped_drift(ctx.repo_root, lockfile.entries))
-    """
-    by_path: dict[str, list[LockEntry]] = {}
-    for entry in entries:
-        if entry.scope:
-            by_path.setdefault(entry.path, []).append(entry)
-    lines: list[str] = []
-    for rel, scoped in by_path.items():
-        try:
-            doc = parse_settings(decode_settings(_read(repo_root / rel), path=rel), path=rel)
-        except SettingsMergeError as exc:
-            lines.append(f"  unreadable: {rel} (line {exc.line}, col {exc.col}: {exc.message})")
-            continue
-        except OSError as exc:  # a directory, no permission: still one line, never a traceback
-            lines.append(f"  unreadable: {rel} ({exc.strerror or exc})")
-            continue
-        lines.extend(f"  {drift.line()}" for drift in managed_entry_drift(doc, scoped))
-    return lines
-
-
-def _read(path: Path) -> bytes | None:
-    try:
-        return path.read_bytes()
-    except FileNotFoundError:
-        return None

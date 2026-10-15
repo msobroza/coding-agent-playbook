@@ -48,3 +48,18 @@ def test_module_imports_only_json_and_hashlib() -> None:
     )
 
     assert out == "['coding_agent_playbook._canonical_json']"
+
+
+def test_settings_plan_reexports_the_one_pointer_decoder() -> None:
+    assert _settings_plan.pointer_keys is _canonical_json.pointer_keys
+    assert _canonical_json.pointer_keys("/a~1b/c~0d") == ("a/b", "c~d")
+
+
+def test_element_hashes_find_a_managed_element_at_its_pointer() -> None:
+    doc = {"hooks": {"PreToolUse": [{"matcher": "user"}, _GROUP]}, "model": "x"}
+
+    hashes = _canonical_json.element_hashes(doc, "/hooks/PreToolUse")
+
+    assert hashes[1] == element_sha256(_GROUP)
+    assert _canonical_json.element_hashes(doc, "/hooks/Stop") == []
+    assert _canonical_json.element_hashes(doc, "/model") == []  # not an array

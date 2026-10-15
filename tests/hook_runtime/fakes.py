@@ -131,6 +131,8 @@ class FakeGit:
     added: tuple[AddedLine, ...] = ()
     head_blobs: dict[str, bytes] = field(default_factory=dict)
     untracked: tuple[str, ...] = ()
+    symbolic_refs: dict[str, str] = field(default_factory=dict)
+    config: dict[str, str] = field(default_factory=dict)
     errors: dict[str, Exception] = field(default_factory=dict)
     calls: list[tuple[str, tuple[str, ...]]] = field(default_factory=list)
 
@@ -158,6 +160,14 @@ class FakeGit:
     def ls_untracked(self) -> tuple[str, ...]:
         self._record("ls_untracked")
         return self.untracked
+
+    def symbolic_ref(self, ref: str) -> str | None:
+        self._record("symbolic_ref", ref)
+        return self.symbolic_refs.get(ref)
+
+    def config_value(self, key: str) -> str | None:
+        self._record("config_value", key)
+        return self.config.get(key)
 
 
 @dataclass

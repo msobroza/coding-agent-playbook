@@ -25,7 +25,7 @@ import json
 import re
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook._canonical_json import element_sha256
+from coding_agent_playbook._canonical_json import element_hashes
 from coding_agent_playbook.hook_runtime.decision import Decision
 
 if TYPE_CHECKING:
@@ -192,9 +192,7 @@ def _changed(before: Doc, after: Doc, path: tuple[str, ...]) -> bool:
 
 
 def _hashes(doc: Doc, pointer: str) -> set[str]:
-    keys = tuple(p.replace("~1", "/").replace("~0", "~") for p in pointer.split("/")[1:])
-    array = _get(doc, keys)
-    return {element_sha256(item) for item in array} if isinstance(array, list) else set()
+    return set(element_hashes(doc, pointer))
 
 
 def _strings(value: object) -> set[str]:
