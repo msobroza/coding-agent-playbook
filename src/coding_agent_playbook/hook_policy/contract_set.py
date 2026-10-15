@@ -17,7 +17,7 @@ The rules no single ``HOOK.md`` can decide:
 
 That the tables parse at all (unknown keys, types, ``cutover_date``) is the
 parser's ``ValueError``, reported by the caller; checking ``[hooks.<x>]``
-against the handler's ``CONFIG_SCHEMA`` is K2's registry half. Without a
+against the handler's ``CONFIG_SCHEMA`` is the registry half (``handler_catalog``). Without a
 consumer config every input is empty, so H15/H16/H21 find nothing (P8).
 """
 
@@ -34,11 +34,13 @@ from coding_agent_playbook.hook_policy._findings import (
     did_you_mean,
     hook_location,
 )
+from coding_agent_playbook.hook_policy.handler_catalog import config_findings
 from coding_agent_playbook.hook_policy.tables import ADVISORY_RULE_PREFIX
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
+    from coding_agent_playbook.hook_policy.handler_catalog import HandlerCatalog
     from coding_agent_playbook.hooks_config import HooksConfig
     from coding_agent_playbook.types import Hook, Rule
 
@@ -57,6 +59,8 @@ class HookSetInputs:
     own); ``hooks_table_present`` tells an explicit ``[hooks]`` from an absent
     one. ``on_hook_ids`` are the hooks the effective view switched on (H16).
     ``local_keys`` are the ``.local.toml`` policy keys sync ignored.
+    ``handlers`` checks each ``[hooks.<id>]`` against its handlers'
+    ``CONFIG_SCHEMA`` (``None``: skipped).
     ``config_where`` / ``local_where`` locate config findings.
 
     Example::
@@ -77,6 +81,7 @@ class HookSetInputs:
     config_where: str = ".coding-agent-playbook.toml"
     local_where: str = ".coding-agent-playbook.local.toml"
     local_policy_is_error: bool = True
+    handlers: HandlerCatalog | None = None
 
 
 def classify_hook_set(inputs: HookSetInputs) -> list[HookIssue]:
@@ -195,6 +200,9 @@ def _hooks_table(inputs: HookSetInputs) -> Iterator[HookIssue]:
             hint = did_you_mean(table, hook_ids)
             yield _config_error(inputs, f"[hooks.{table}]: unknown hook id {table!r}{hint}")
     yield from _stop_gate_stages(inputs, cfg)
+    if inputs.handlers is not None:  # the CONFIG_SCHEMA half (K2's registry)
+        for finding in config_findings(inputs.hooks, cfg.per_hook, inputs.handlers):
+            yield HookIssue(finding.severity, inputs.config_where, finding.message)
 
 
 def _code_source_names(inputs: HookSetInputs, cfg: HooksConfig) -> Iterator[HookIssue]:

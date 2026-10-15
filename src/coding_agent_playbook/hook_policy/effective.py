@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.hook_policy.handler_catalog import HandlerCatalog
     from coding_agent_playbook.hook_policy.merge import ConfigKeySpec, ConfigSchemaLookup
     from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
     from coding_agent_playbook.types import Hook, HookHandler, Rule
@@ -62,6 +63,7 @@ class _Inputs:
     repo_root: Path
     targets: tuple[str, ...]
     schemas: ConfigSchemaLookup
+    handlers: HandlerCatalog | None
 
 
 def resolve_effective_hooks(
@@ -74,11 +76,14 @@ def resolve_effective_hooks(
     *,
     adapters_enabled: Sequence[str],
     schemas: ConfigSchemaLookup = NO_HANDLER_SCHEMAS,
+    handlers: HandlerCatalog | None = None,
 ) -> EffectiveHooks:
     """Split merged ``hooks`` into on (:class:`ResolvedHook`) and off (:class:`SkippedHook`).
 
     ``rules`` is the merged rule set (pre-``applies_if``), ``adapters_enabled``
     the config's, ``schemas`` the handlers' key policies and guardrails domains.
+    ``handlers`` resolves a builtin name provided by an out-of-tree package to
+    an ``entry_point`` record (in-tree wins), and is the default ``schemas``.
     With ``[hooks]`` off, every list is empty: sync renders nothing and prints
     its one notice line instead.
 
@@ -93,7 +98,11 @@ def resolve_effective_hooks(
         return EffectiveHooks([], [], [])
     targets = _hook_adapters(hooks_cfg, adapters_enabled)
     rule_ids = {rule.frontmatter.id: rule for rule in rules}
-    inputs = _Inputs(rule_ids, hooks_cfg, guardrails_cfg, facts, repo_root, targets, schemas)
+    if handlers is not None and schemas is NO_HANDLER_SCHEMAS:
+        schemas = handlers
+    inputs = _Inputs(
+        rule_ids, hooks_cfg, guardrails_cfg, facts, repo_root, targets, schemas, handlers
+    )
     warnings = _adapter_warnings(hooks_cfg, targets)
     resolved: list[ResolvedHook] = []
     skipped: list[SkippedHook] = []
@@ -298,9 +307,19 @@ def _resolve_handler(
     for label, layer in _consumer_layers(hook, handler, inputs):
         config = merge_config(config, _without_relaxed(layer, specs, hook, label, warnings), specs)
     if handler.builtin is not None:
-        return ResolvedHandler("builtin", name=handler.builtin, config=config)
+        return _builtin(handler.builtin, config, inputs.handlers)
     return ResolvedHandler(
         "external", argv=external_argv(hook.frontmatter.id, handler), config=config
+    )
+
+
+def _builtin(name: str, config: dict[str, Any], handlers: HandlerCatalog | None) -> ResolvedHandler:
+    """An in-tree builtin by name, or the out-of-tree entry point that provides ``name``."""
+    entry = None if handlers is None else handlers.lookup(name)
+    if entry is None or entry.source != "entry_point" or entry.target is None:
+        return ResolvedHandler("builtin", name=name, config=config)
+    return ResolvedHandler(
+        "entry_point", name=name, target=entry.target, dist=entry.dist, config=config
     )
 
 

@@ -27,9 +27,9 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.types import Hook, HookHandler, HookMatcher, Rule
 
-#: K1 emits builtin and external handlers; K2 adds ``entry_point`` (``target`` +
-#: ``dist``), resolved at sync from the ``coding_agent_playbook.hook_handlers`` group.
-HandlerKind = Literal["builtin", "external"]
+#: ``entry_point`` is a builtin name resolved at sync to an out-of-tree handler of the
+#: ``coding_agent_playbook.hook_handlers`` group (``target`` + ``dist``; in-tree wins).
+HandlerKind = Literal["builtin", "entry_point", "external"]
 
 #: The ``scripts/`` dir of a hook directory, copied as ``<HOOK_SCRIPTS_DIR>/<id>/`` (§C.0).
 _SCRIPTS = "scripts"
@@ -37,7 +37,7 @@ _SCRIPTS = "scripts"
 
 @dataclass(frozen=True)
 class ResolvedHandler:
-    """One event's handler with its merged config: a builtin name or an external argv.
+    """One event's handler with its merged config: a builtin name, an entry point or an argv.
 
     Example::
 
@@ -49,13 +49,19 @@ class ResolvedHandler:
     name: str | None = None
     argv: tuple[str, ...] = ()
     config: dict[str, Any] = field(default_factory=dict)
+    target: str | None = None
+    dist: str | None = None
 
     def to_json(self) -> dict[str, Any]:
-        """``{"kind", "name"|"argv", "config"}``, the config deep-copied."""
-        target: dict[str, Any] = (
-            {"name": self.name} if self.kind == "builtin" else {"argv": list(self.argv)}
-        )
-        return {"kind": self.kind, **target, "config": copy.deepcopy(self.config)}
+        """``{"kind", "name"|"target"+"dist"|"argv", "config"}``, the config deep-copied."""
+        where: dict[str, Any]
+        if self.kind == "builtin":
+            where = {"name": self.name}
+        elif self.kind == "entry_point":
+            where = {"target": self.target, "dist": self.dist}
+        else:
+            where = {"argv": list(self.argv)}
+        return {"kind": self.kind, **where, "config": copy.deepcopy(self.config)}
 
 
 @dataclass(frozen=True)

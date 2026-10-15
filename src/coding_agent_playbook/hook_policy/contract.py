@@ -39,6 +39,7 @@ from coding_agent_playbook.hook_policy._findings import (
     seconds,
     warning,
 )
+from coding_agent_playbook.hook_policy.handler_catalog import registry_findings
 from coding_agent_playbook.hook_policy.tables import (
     ENGINE_DEADLINE_CAP_MS,
     HOOK_CAPABLE_ADAPTERS,
@@ -53,6 +54,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
     from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.hook_policy.handler_catalog import HandlerCatalog
     from coding_agent_playbook.types import Hook, HookFrontmatter, HookMatcher
 
 HOOK_ID_PATTERN: Final = "^[a-z0-9][a-z0-9-]{0,62}$"
@@ -75,7 +77,8 @@ class HookCheckContext:
 
     ``rule_ids`` is the merged rule set (H18); ``facts`` and ``repo_root`` judge
     ``applies_if`` (H17); ``definitions`` holds every layer's definition of each
-    hook id, in layer order (H12). A hook is engine-sourced when its
+    hook id, in layer order (H12); ``handlers`` is the handler catalog for H6's
+    registry half (``None``: skipped, as before K2). A hook is engine-sourced when its
     ``source_package`` equals ``engine_package`` exactly, so a bundled pack
     (``coding_agent_playbook.packs.*``) is an overlay.
 
@@ -90,6 +93,7 @@ class HookCheckContext:
     facts: Mapping[str, Any] = field(default_factory=dict)
     repo_root: Path = field(default_factory=Path)
     definitions: Mapping[str, tuple[Hook, ...]] = field(default_factory=dict)
+    handlers: HandlerCatalog | None = None
 
     def is_engine(self, hook: Hook) -> bool:
         """True for a hook the engine package itself ships."""
@@ -322,6 +326,8 @@ def _on_error_check(hook: Hook, ctx: HookCheckContext) -> Iterator[Finding]:
 
 def _handlers_check(hook: Hook, ctx: HookCheckContext) -> Iterator[Finding]:
     yield from handler_findings(hook, engine_sourced=ctx.is_engine(hook))
+    if ctx.handlers is not None:
+        yield from registry_findings(hook, ctx.handlers)
 
 
 # --- H11, H12: supports, tier, mandatory --------------------------------------------

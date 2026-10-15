@@ -7,10 +7,12 @@ and adapter-support tables (:mod:`.tables`), the additive layer merge
 (:mod:`.merge`, with the H14 override rules in :mod:`.override_rules`), the
 effective view (:mod:`.effective`) with its ``guard_config.json`` hook records
 (:mod:`.resolved`), and the trust contract ``playbook validate`` enforces: per
-hook (:mod:`.contract`) and across hooks and config (:mod:`.contract_set`).
+hook (:mod:`.contract`), across hooks and config (:mod:`.contract_set`), and
+against the handler registry (:mod:`.handler_catalog`, H6/H21's registry half).
 
-Stdlib-only and sync-time only: ``hook_runtime`` never imports it, it reads the
-compiled ``guard_config.json`` instead (§D.8).
+Sync-time only, stdlib plus the import-light ``hook_runtime`` tables and
+registry it shares with the dispatcher: ``hook_runtime`` never imports it, it
+reads the compiled ``guard_config.json`` instead (§D.8).
 """
 
 from __future__ import annotations
@@ -19,6 +21,13 @@ from coding_agent_playbook.hook_policy._findings import HookIssue, Severity
 from coding_agent_playbook.hook_policy.contract import HookCheckContext, classify_hook
 from coding_agent_playbook.hook_policy.contract_set import HookSetInputs, classify_hook_set
 from coding_agent_playbook.hook_policy.effective import resolve_effective_hooks
+from coding_agent_playbook.hook_policy.handler_catalog import (
+    CatalogEntry,
+    HandlerCatalog,
+    RegistryCatalog,
+    config_findings,
+    registry_findings,
+)
 from coding_agent_playbook.hook_policy.merge import (
     NO_HANDLER_SCHEMAS,
     ConfigKeySpec,
@@ -65,10 +74,12 @@ __all__ = [
     "NO_HANDLER_SCHEMAS",
     "ON_ERROR_STRENGTH",
     "TOOL_CLASS_NAMES",
+    "CatalogEntry",
     "ConfigKeySpec",
     "ConfigSchemaLookup",
     "EffectiveHooks",
     "EventSpec",
+    "HandlerCatalog",
     "HandlerKind",
     "HookCheckContext",
     "HookIssue",
@@ -76,14 +87,17 @@ __all__ = [
     "HookSetInputs",
     "HookViolation",
     "KeyPolicy",
+    "RegistryCatalog",
     "ResolvedHandler",
     "ResolvedHook",
     "Severity",
     "SkippedHook",
     "classify_hook",
     "classify_hook_set",
+    "config_findings",
     "merge_config",
     "merge_hook_layers",
+    "registry_findings",
     "resolve_effective_hooks",
     "split_hook_layers",
 ]

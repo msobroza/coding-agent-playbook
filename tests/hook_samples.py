@@ -120,3 +120,60 @@ def write_hook(
     data = hook_mapping(**{"id": hook_id, **frontmatter})
     path.write_text(format_frontmatter(data, body), encoding="utf-8")
     return path
+
+
+#: The import name of the sample handler distribution (see :func:`install_sample_handlers`).
+SAMPLE_HANDLERS_PACKAGE = "playbook_sample_handlers"
+#: The builtin names the sample hooks bind (``hook_mapping`` uses ``guard_x``).
+SAMPLE_HANDLER_NAMES = ("guard_x", "guard_y", "guard_z")
+
+_SAMPLE_HANDLERS_SOURCE = '''\
+"""Sample hook handlers, registered through the hook_handlers entry-point group."""
+
+from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
+
+EVENTS = [
+    "session_start", "user_prompt_submit", "pre_tool_use", "post_tool_use",
+    "post_tool_use_failure", "stop", "subagent_stop", "pre_compact", "session_end",
+]
+DECISIONS = ["deny", "ask", "context", "none"]
+SCHEMA = {
+    "budget_s": ConfigKey("number"),
+    "limits": ConfigKey("table"),
+    "extra_protected": ConfigKey("list", "extend"),
+    "mode": ConfigKey("string", "strictest", ("off", "warn", "block")),
+}
+
+{handlers}
+'''
+_SAMPLE_HANDLER = """
+@register_hook_handler({name!r}, events=EVENTS, decisions=DECISIONS, config_schema=SCHEMA)
+def {name}(ev, ctx):
+    return None
+"""
+
+
+def install_sample_handlers(root: Path) -> None:
+    """Write an installed-looking distribution under ``root`` whose entry points provide
+    :data:`SAMPLE_HANDLER_NAMES` in the ``coding_agent_playbook.hook_handlers`` group.
+
+    Put ``root`` on ``sys.path`` and ``importlib.metadata`` finds it, exactly as it
+    finds an overlay's handler package (the catalog's real lookup path; §D.3.1).
+    """
+    package = root / SAMPLE_HANDLERS_PACKAGE
+    package.mkdir(parents=True)
+    handlers = "".join(_SAMPLE_HANDLER.format(name=name) for name in SAMPLE_HANDLER_NAMES)
+    (package / "__init__.py").write_text(
+        _SAMPLE_HANDLERS_SOURCE.replace("{handlers}", handlers), encoding="utf-8"
+    )
+    dist = root / f"{SAMPLE_HANDLERS_PACKAGE}-1.0.dist-info"
+    dist.mkdir()
+    (dist / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: playbook-sample-handlers\nVersion: 1.0\n", encoding="utf-8"
+    )
+    points = "".join(
+        f"{name} = {SAMPLE_HANDLERS_PACKAGE}:{name}\n" for name in SAMPLE_HANDLER_NAMES
+    )
+    (dist / "entry_points.txt").write_text(
+        f"[coding_agent_playbook.hook_handlers]\n{points}", encoding="utf-8"
+    )

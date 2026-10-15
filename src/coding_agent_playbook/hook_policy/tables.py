@@ -5,9 +5,10 @@ Every consumer reads these instead of re-declaring them: validate's
 §C.3), and the built-in adapters' ``hook_support`` ClassVars, which are taken
 from :data:`HOOK_SUPPORT` (specs/prK-lifecycle-hooks.md §A.11, §C.1.2, §C.5.1).
 
-Stdlib-only and sync-time only: the dispatcher reads the rendered
-``guard_config.json``, never this module (§D.8). Every table is read-only, so a
-caller cannot widen what another caller sees.
+Sync-time only, stdlib plus the import-light ``hook_runtime`` tables it shares
+with the dispatcher (each table has one source): the dispatcher reads the
+rendered ``guard_config.json``, never this module (§D.8). Every table is
+read-only, so a caller cannot widen what another caller sees.
 """
 
 from __future__ import annotations
@@ -17,6 +18,13 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook._hook_schema import ADVISORY_RULE_PREFIX, ADVISORY_RULE_PRIORITY
+from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS
+from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.harness import CLAUDE_EVENT_NAMES
+from coding_agent_playbook.hook_runtime.policy import (
+    ENGINE_DEADLINE_CAP_MS as RUNTIME_DEADLINE_CAP_MS,
+)
+from coding_agent_playbook.hook_runtime.policy import ON_ERROR_ALLOWED
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -57,33 +65,34 @@ class EventSpec:
     matcher_fields: frozenset[str]
 
 
-def _spec(claude_name: str, decisions: str, on_error: str, matcher: str = "") -> EventSpec:
+def _spec(event: EventName, matcher: str = "") -> EventSpec:
+    """``event``'s row, its decisions and ``on_error`` values taken from the runtime's tables."""
     return EventSpec(
-        claude_name,
-        frozenset(decisions.split()),
-        frozenset(on_error.split()),
+        CLAUDE_EVENT_NAMES[event],
+        frozenset(decision.value for decision in EVENT_DECISIONS[event]),
+        frozenset(ON_ERROR_ALLOWED[event]),
         frozenset(matcher.split()),
     )
 
 
 _TOOL_MATCHER = "tools tool_names paths command"
+_MATCHER_FIELDS: Final[Mapping[EventName, str]] = MappingProxyType(
+    {
+        EventName.SESSION_START: "sources",
+        EventName.PRE_TOOL_USE: _TOOL_MATCHER,
+        EventName.POST_TOOL_USE: _TOOL_MATCHER,
+        EventName.POST_TOOL_USE_FAILURE: _TOOL_MATCHER,
+        EventName.SUBAGENT_STOP: "agent_types",
+        EventName.PRE_COMPACT: "triggers",
+    }
+)
 
 #: Canonical events in canonical order: renderers append new event keys to
-#: ``.claude/settings.json`` in this order (§C.2.2).
+#: ``.claude/settings.json`` in this order (§C.2.2). Event names, Claude names,
+#: decisions and ``on_error`` values have one source, the runtime (``hook_runtime``
+#: ``event``, ``harness``, ``decision``, ``policy``); sync adds the matcher fields.
 HOOK_EVENTS: Final[Mapping[str, EventSpec]] = MappingProxyType(
-    {
-        "session_start": _spec("SessionStart", "context none", "open", "sources"),
-        "user_prompt_submit": _spec("UserPromptSubmit", "deny context none", "deny open"),
-        "pre_tool_use": _spec(
-            "PreToolUse", "deny ask context none", "ask deny open", _TOOL_MATCHER
-        ),
-        "post_tool_use": _spec("PostToolUse", "context none", "open", _TOOL_MATCHER),
-        "post_tool_use_failure": _spec("PostToolUseFailure", "context none", "open", _TOOL_MATCHER),
-        "stop": _spec("Stop", "deny context none", "open"),
-        "subagent_stop": _spec("SubagentStop", "deny context none", "open", "agent_types"),
-        "pre_compact": _spec("PreCompact", "none", "open", "triggers"),
-        "session_end": _spec("SessionEnd", "none", "open"),
-    }
+    {event.value: _spec(event, _MATCHER_FIELDS.get(event, "")) for event in EventName}
 )
 
 
@@ -98,21 +107,10 @@ MATCHER_VALUES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
 
 #: The most a whole event may take, per event (the §D.4 timeout formula):
 #: ``deadline_ms = min(cap, Σ timeout_ms of its enabled hooks)``. A hook timeout
-#: above its event's cap is clamped, with a validate warning (H9).
+#: above its event's cap is clamped, with a validate warning (H9). The runtime's
+#: ``policy.ENGINE_DEADLINE_CAP_MS`` is the source; this is its string-keyed view.
 ENGINE_DEADLINE_CAP_MS: Final[Mapping[str, int]] = MappingProxyType(
-    {
-        "session_start": 15_000,
-        "user_prompt_submit": 30_000,
-        "pre_tool_use": 30_000,
-        "post_tool_use": 60_000,
-        "post_tool_use_failure": 30_000,
-        # The stop budget formula's upper bound; the per-sync value is K3's.
-        "stop": 595_000,
-        "subagent_stop": 595_000,
-        "pre_compact": 30_000,
-        # Above Claude's shared 1.5 s SessionEnd budget: the registration raises it.
-        "session_end": 8_000,
-    }
+    {event.value: cap for event, cap in RUNTIME_DEADLINE_CAP_MS.items()}
 )
 
 

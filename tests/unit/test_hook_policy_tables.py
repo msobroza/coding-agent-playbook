@@ -24,6 +24,13 @@ from coding_agent_playbook.hook_policy import (
     ON_ERROR_STRENGTH,
     TOOL_CLASS_NAMES,
 )
+from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS
+from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.harness import CLAUDE_EVENT_NAMES
+from coding_agent_playbook.hook_runtime.policy import (
+    ENGINE_DEADLINE_CAP_MS as RUNTIME_DEADLINE_CAP_MS,
+)
+from coding_agent_playbook.hook_runtime.policy import ON_ERROR_ALLOWED
 from coding_agent_playbook.types import HookDecision, HookEvent, HookOnError, ToolClass
 from tests.import_probe import new_modules_after
 
@@ -183,7 +190,8 @@ def test_package_facade_exports_every_table() -> None:
 
 def test_hook_policy_imports_only_the_stdlib() -> None:
     # Sync-time but stdlib-only (§A.6): no yaml/jinja2, and not types.py, which
-    # imports yaml at module top.
+    # imports yaml at module top. Since K2 it also reads the import-light runtime
+    # tables and handler registry it shares with the dispatcher (one source each).
     loaded = new_modules_after("import coding_agent_playbook.hook_policy")
 
     ours = [name for name in loaded if name.startswith("coding_agent_playbook")]
@@ -203,9 +211,30 @@ def test_hook_policy_imports_only_the_stdlib() -> None:
         "coding_agent_playbook.hook_policy.contract",
         "coding_agent_playbook.hook_policy.contract_set",
         "coding_agent_playbook.hook_policy.effective",
+        "coding_agent_playbook.hook_policy.handler_catalog",
         "coding_agent_playbook.hook_policy.merge",
         "coding_agent_playbook.hook_policy.override_rules",
         "coding_agent_playbook.hook_policy.resolved",
         "coding_agent_playbook.hook_policy.tables",
+        "coding_agent_playbook.hook_runtime",
+        "coding_agent_playbook.hook_runtime._config_keys",
+        "coding_agent_playbook.hook_runtime.decision",
+        "coding_agent_playbook.hook_runtime.event",
+        "coding_agent_playbook.hook_runtime.harness",
+        "coding_agent_playbook.hook_runtime.paths",
+        "coding_agent_playbook.hook_runtime.policy",
+        "coding_agent_playbook.hook_runtime.registry",
     ]
     assert foreign == []
+
+
+def test_event_decision_and_deadline_tables_have_one_source() -> None:
+    # The runtime owns these tables (§D.3.5, §D.4); hook_policy derives its
+    # string-keyed views from them, so the two can never drift apart.
+    assert list(HOOK_EVENTS) == [event.value for event in EventName]
+    for event in EventName:
+        spec = HOOK_EVENTS[event.value]
+        assert spec.decisions == {decision.value for decision in EVENT_DECISIONS[event]}
+        assert spec.on_error_allowed == set(ON_ERROR_ALLOWED[event])
+        assert spec.claude_name == CLAUDE_EVENT_NAMES[event]
+        assert ENGINE_DEADLINE_CAP_MS[event.value] == RUNTIME_DEADLINE_CAP_MS[event]

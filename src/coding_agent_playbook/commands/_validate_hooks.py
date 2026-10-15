@@ -6,7 +6,8 @@
 - H1 (and H2's layout half): each ``HOOK.md`` that did not load, which a
   context built with ``tolerate_hook_errors=True`` records (P8c);
 - H2, H14, H15: the layer overrides the merge refused (``hook_violations``);
-- per hook, every layer's definition: ``hook_policy.classify_hook`` and the
+- per hook, every layer's definition: ``hook_policy.classify_hook`` (with the
+  handler registry, so H6 checks each builtin's declaration) and the
   H19 body checks (a Jinja syntax error, a ``rule()`` call); H19's links are
   ``_validate_links``'s, with ``hooks`` among the link-checked kinds;
 - across hooks, artifacts and the committed config: the ``[hooks]`` /
@@ -29,6 +30,7 @@ from coding_agent_playbook.hook_policy import (
     HookCheckContext,
     HookIssue,
     HookSetInputs,
+    RegistryCatalog,
     classify_hook,
     classify_hook_set,
     resolve_effective_hooks,
@@ -41,6 +43,7 @@ from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
+    from coding_agent_playbook.hook_policy import HandlerCatalog
     from coding_agent_playbook.hooks_config import HooksConfig
     from coding_agent_playbook.orchestrator import SyncContext
     from coding_agent_playbook.types import Hook, HookSchemaError
@@ -62,13 +65,14 @@ def check_hooks(
     errors = [_load_error(exc) for exc in ctx.hook_load_errors]
     errors.extend(ValidationError(v.where, v.message) for v in ctx.hook_violations)
     warnings: list[ValidationError] = []
-    check_ctx = _check_context(ctx)
+    handlers = RegistryCatalog()  # H6/H21's registry half: in-tree map, then entry points
+    check_ctx = _check_context(ctx, handlers)
     for hook in _definitions(ctx):
         _sort_into(classify_hook(hook, check_ctx), errors, warnings)
         errors.extend(_body_errors(hook))
     hooks_cfg, policy_errors = _parsed_policy(ctx)
     errors.extend(policy_errors)
-    set_inputs = _set_inputs(ctx, hooks_cfg, local_policy_is_error)
+    set_inputs = _set_inputs(ctx, hooks_cfg, local_policy_is_error, handlers)
     _sort_into(classify_hook_set(set_inputs), errors, warnings)
     return errors, warnings
 
@@ -94,13 +98,14 @@ def _definitions(ctx: SyncContext) -> list[Hook]:
     return list(ctx.hooks_resolved)  # a context assembled without the resolver
 
 
-def _check_context(ctx: SyncContext) -> HookCheckContext:
+def _check_context(ctx: SyncContext, handlers: HandlerCatalog) -> HookCheckContext:
     return HookCheckContext(
         engine_package=engine_package_of(ctx.artifact_source),
         rule_ids=frozenset(rule.frontmatter.id for rule in ctx.rules_resolved),
         facts=dict(ctx.facts),
         repo_root=ctx.repo_root,
         definitions=ctx.hook_definitions,
+        handlers=handlers,
     )
 
 
@@ -143,7 +148,10 @@ def _parsed_or_reported[T](
 
 
 def _set_inputs(
-    ctx: SyncContext, hooks_cfg: HooksConfig | None, local_policy_is_error: bool
+    ctx: SyncContext,
+    hooks_cfg: HooksConfig | None,
+    local_policy_is_error: bool,
+    handlers: HandlerCatalog,
 ) -> HookSetInputs:
     tables = ctx.policy_tables
     return HookSetInputs(
@@ -159,6 +167,7 @@ def _set_inputs(
         config_where=_config_where(ctx, FileSystemStateSource._CONFIG_FILENAME),
         local_where=_config_where(ctx, FileSystemStateSource._CONFIG_LOCAL_FILENAME),
         local_policy_is_error=local_policy_is_error,
+        handlers=handlers,
     )
 
 

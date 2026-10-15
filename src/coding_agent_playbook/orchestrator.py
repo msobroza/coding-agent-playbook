@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook.detector import detect
 from coding_agent_playbook.hook_policy import (
     NO_HANDLER_SCHEMAS,
+    RegistryCatalog,
     merge_hook_layers,
     split_hook_layers,
 )
@@ -426,7 +427,7 @@ class SyncContext:
         # repo-local artifacts come from ``<repo>/playbook/``. v1 walks all of
         # those in a single ``list_*`` call — sufficient for PR 10. PRs 13+
         # may split per-layer if we need fine-grained source provenance.
-        resolver = OverlayResolver()
+        resolver = OverlayResolver(hook_schemas=RegistryCatalog())  # handlers' CONFIG_SCHEMA
         all_rules = artifact_source.list_rules()
         all_prompts = artifact_source.list_prompts()
         all_skills = artifact_source.list_skills()

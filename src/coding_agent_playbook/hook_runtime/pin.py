@@ -40,6 +40,7 @@ __all__ = [
     "ToolPin",
     "ensure_interpreter_pin",
     "is_ephemeral",
+    "parse_machine_pins",
     "read_interpreter_pin",
     "read_machine_pins",
     "tool_signature",
@@ -206,7 +207,7 @@ def read_machine_pins(*, git_dir: str | None = None, start: str = ".") -> Machin
         document = store.read_json(MACHINE_PINS)
     except StateUnavailable:
         return None
-    return _parse_pins(document)
+    return parse_machine_pins(document)
 
 
 def _store(git_dir: str | None, start: str) -> StateStore | None:
@@ -238,7 +239,14 @@ def _tool_entry(argv: Sequence[str]) -> dict[str, Any]:
     return {"argv": list(argv), "sig": None if sig is None else list(sig)}
 
 
-def _parse_pins(document: dict[str, Any]) -> MachinePins | None:
+def parse_machine_pins(document: dict[str, Any]) -> MachinePins | None:
+    """A ``machine.json`` document as :class:`MachinePins`, or ``None`` when malformed.
+
+    Example::
+
+        >>> parse_machine_pins({"tools": {}}).tools
+        mappingproxy({})
+    """
     tools, roots = document.get("tools"), document.get("resource_roots", {})
     if not isinstance(tools, dict) or not isinstance(roots, dict):
         return None

@@ -40,6 +40,10 @@ kind = "python-library"
 version = "0.1.0a0"
 {extra}"""
 
+# The sample hooks bind builtins guard_x/guard_y/guard_z, which validate (H6)
+# resolves through the handler registry: install them as a real entry point.
+pytestmark = pytest.mark.usefixtures("sample_hook_handlers")
+
 
 def _config(*, overlays: tuple[str, ...] = (), extra: str = "") -> str:
     listed = "[" + ", ".join(f'"{name}"' for name in overlays) + "]"

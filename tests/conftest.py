@@ -249,6 +249,32 @@ def make_hook() -> Callable[..., Path]:
 
 
 @pytest.fixture
+def sample_hook_handlers(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[tuple[str, ...]]:
+    """Install the sample handler distribution so the sample hooks' builtins are registered.
+
+    ``playbook validate`` checks every builtin name against the handler registry
+    (H6); the engine ships no handlers before K5, so tests whose hooks bind
+    ``guard_x`` / ``guard_y`` / ``guard_z`` resolve them through a real
+    ``coding_agent_playbook.hook_handlers`` entry point. Yields the names.
+    """
+    import sys
+
+    from tests.hook_samples import (
+        SAMPLE_HANDLER_NAMES,
+        SAMPLE_HANDLERS_PACKAGE,
+        install_sample_handlers,
+    )
+
+    root = tmp_path_factory.mktemp("sample-handlers")
+    install_sample_handlers(root)
+    monkeypatch.syspath_prepend(str(root))
+    yield SAMPLE_HANDLER_NAMES
+    sys.modules.pop(SAMPLE_HANDLERS_PACKAGE, None)
+
+
+@pytest.fixture
 def hook_payload() -> Callable[[str, str, str], HookPayloadCase]:
     """Return the loader of the golden harness payloads (specs/prK-lifecycle-hooks.md §D.9).
 

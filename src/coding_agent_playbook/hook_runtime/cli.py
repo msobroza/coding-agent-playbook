@@ -2,7 +2,8 @@
 
 Harnesses run ``<pin> -I -m coding_agent_playbook.hook_runtime dispatch <event>
 --harness H [--project-dir DIR]`` (the one argv of D-14); humans run the
-``playbook-hook`` console script. Both reach :func:`main`.
+``playbook-hook`` console script for ``simulate``, ``doctor`` and
+``--version``. Both reach :func:`main`.
 
 ``dispatch`` is hand-parsed (no ``argparse`` on the hot path) and **never
 exits 2**: an unknown flag, a missing argument or trailing junk becomes a
@@ -10,7 +11,8 @@ exits 2**: an unknown flag, a missing argument or trailing junk becomes a
 engine can never pass for a deny. It exits ``0`` or ``DENY_EXIT``. At the
 process entry only, fd 1 is moved to fd 2, so stray prints from handlers,
 overlay code or child processes land on stderr and the one JSON object on the
-real stdout stays parseable.
+real stdout stays parseable. ``simulate`` and ``doctor`` are cold paths that
+import ``argparse`` lazily and may exit 2 on usage errors.
 """
 
 from __future__ import annotations
@@ -33,10 +35,12 @@ __all__ = ["USAGE", "DispatchArgs", "main", "parse_dispatch_argv"]
 
 USAGE: Final = (
     "usage: playbook-hook dispatch <event> --harness claude_code|opencode [--project-dir DIR]\n"
+    "       playbook-hook simulate <event> [options] < payload.json\n"
+    "       playbook-hook doctor [options]\n"
     "       playbook-hook --version"
 )
 _FLAGS: Final = ("--harness", "--project-dir")
-#: Exit code of a human usage error (no or an unknown subcommand); never ``dispatch``.
+#: Exit code of a human usage error (``simulate``, ``doctor``, no subcommand); never ``dispatch``.
 USAGE_EXIT: Final = 2
 
 
@@ -132,6 +136,14 @@ def main(
 
         print(f"playbook-hook {__version__}")
         return 0
+    if command == "simulate":
+        from coding_agent_playbook.hook_runtime.simulate import main as simulate_main
+
+        return simulate_main(rest, deps=deps, stdin=stdin)
+    if command == "doctor":
+        from coding_agent_playbook.hook_runtime.doctor import main as doctor_main
+
+        return doctor_main(rest, deps=deps)
     print(USAGE, file=sys.stderr)
     return 0 if command in ("-h", "--help") else USAGE_EXIT
 

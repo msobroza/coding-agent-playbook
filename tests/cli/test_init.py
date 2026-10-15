@@ -454,6 +454,7 @@ def _committed_config(tmp_path: Path) -> dict[str, object]:
         return tomllib.load(f)
 
 
+@pytest.mark.usefixtures("sample_hook_handlers")
 def test_init_rerun_preserves_hooks_guardrails_links_metrics(tmp_path):
     _pyproject(tmp_path)
     write_hook(tmp_path / "playbook" / "hooks", "some-hook")
