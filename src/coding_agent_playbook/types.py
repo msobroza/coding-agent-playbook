@@ -1,4 +1,4 @@
-"""Canonical artifact types: Rule, Prompt, Skill. See SPEC.md §6.6.
+"""Canonical artifact types: Rule, Prompt, Skill, Hook. See SPEC.md §6.6.
 
 The authoring format is markdown + YAML frontmatter (``.md`` / ``.md.j2``);
 these dataclasses are the engine's internal representation. The two formats
@@ -15,9 +15,26 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import yaml
+
+from coding_agent_playbook import _hook_schema as schema
+
+# The nested HOOK.md levels live beside their key sets (file-size budget); this
+# module is their public home, so import them from here.
+from coding_agent_playbook._hook_schema import HookDecision as HookDecision
+from coding_agent_playbook._hook_schema import HookEvent as HookEvent
+from coding_agent_playbook._hook_schema import HookHandler as HookHandler
+from coding_agent_playbook._hook_schema import HookLauncher as HookLauncher
+from coding_agent_playbook._hook_schema import HookMatcher as HookMatcher
+from coding_agent_playbook._hook_schema import HookOnError as HookOnError
+from coding_agent_playbook._hook_schema import HookSchemaError as HookSchemaError
+from coding_agent_playbook._hook_schema import HookTier as HookTier
+from coding_agent_playbook._hook_schema import ToolClass as ToolClass
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 _FENCE = "---"
 
@@ -258,3 +275,195 @@ class Skill:
             None if references_dir is None else Path(references_dir),
             data["source_package"],
         )
+
+
+# --- Hook: the 4th canonical kind (specs/prK-lifecycle-hooks.md §A) -----------
+# The Literal-typed fields hold whatever string the author wrote: from_mapping
+# checks structure (H1) and classify_hook checks value domains (H2-H13), so
+# validate can aggregate every problem of a hook (§B.5).
+
+
+@dataclass
+class HookFrontmatter:
+    """The static YAML frontmatter of ``HOOK.md`` (§A.2), parsed before any Jinja."""
+
+    id: str
+    name: str
+    description: str
+    tier: HookTier
+    events: list[HookEvent]
+    decisions: list[HookDecision]
+    timeout: float
+    on_error: HookOnError
+    supports: list[str]
+    handler: HookHandler | None = None  # exactly one of handler / handlers (H6)
+    handlers: dict[str, HookHandler] = field(default_factory=dict)
+    version: int = 1
+    enabled: bool = True
+    mandatory: bool = False
+    priority: int = 50
+    matcher: dict[str, HookMatcher] = field(default_factory=dict)
+    applies_if: dict[str, Any] = field(default_factory=dict)
+    linked_rule: str | None = None
+    tags: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        schema.restore_defaults(self)
+        # timeout is float in TOML/JSON outputs; an authored `timeout: 2` is int.
+        if isinstance(self.timeout, int) and not isinstance(self.timeout, bool):
+            self.timeout = float(self.timeout)
+
+    def handler_for(self, event: str) -> HookHandler:
+        """The handler bound to ``event``: ``handlers[event]``, else the shared ``handler``.
+
+        Example: ``fm.handler_for("pre_tool_use").builtin``.
+        """
+        if event in self.handlers:
+            return self.handlers[event]
+        if self.handler is not None:
+            return self.handler
+        raise HookSchemaError(
+            f"hook {self.id!r}",
+            "handlers",
+            event,
+            "a handler or a handlers entry",
+            problem=f"no handler bound to event {event!r}",
+        )
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any], *, where: str) -> HookFrontmatter:
+        """Build the frontmatter, nested HookHandler/HookMatcher included, from parsed YAML.
+
+        Raises HookSchemaError on an unknown key (H1; contract keys H8), a
+        missing required key or a wrong type, naming the dotted field and value.
+        Example: ``HookFrontmatter.from_mapping(yaml.safe_load(text), where="playbook/hooks/x/HOOK.md")``.
+        """
+        fields = schema.FieldReader.root(data, where=where)
+        fields.check_keys(schema.TOP_KEYS)
+        fields.check_required(schema.TOP_REQUIRED)
+        handler = fields.child("handler")
+        return cls(
+            id=fields.text("id"),
+            name=fields.text("name"),
+            description=fields.text("description"),
+            tier=cast("HookTier", fields.text("tier")),
+            events=cast("list[HookEvent]", fields.strings("events", required=True)),
+            decisions=cast("list[HookDecision]", fields.strings("decisions", required=True)),
+            timeout=fields.seconds("timeout"),
+            on_error=cast("HookOnError", fields.text("on_error")),
+            supports=fields.strings("supports", required=True),
+            handler=None if handler is None else HookHandler.from_fields(handler),
+            handlers={
+                e: HookHandler.from_fields(f) for e, f in fields.per_event("handlers").items()
+            },
+            version=fields.integer("version", 1),
+            enabled=fields.flag("enabled", True),
+            mandatory=fields.flag("mandatory", False),
+            priority=fields.integer("priority", 50),
+            matcher={e: HookMatcher.from_fields(f) for e, f in fields.per_event("matcher").items()},
+            applies_if=fields.table("applies_if"),
+            linked_rule=fields.optional_text("linked_rule"),
+            tags=fields.strings("tags"),
+        )
+
+    def to_mapping(self) -> dict[str, Any]:
+        """Inverse of from_mapping: ``asdict`` with empty values dropped at every schema level."""
+        return schema.compact_frontmatter(dataclasses.asdict(self))
+
+
+@dataclass
+class Hook:
+    """A hook directory (§A.1): ``HOOK.md``/``HOOK.md.j2`` plus an optional ``scripts/``.
+
+    Unlike Skill it keeps ``source_path``: validate, ``render --show-source``
+    and script containment (H7) need it.
+    """
+
+    frontmatter: HookFrontmatter
+    body: str  # post-Jinja advisory prose (== template_body for .md)
+    template_body: str
+    is_templated: bool  # HOOK.md.j2
+    source_path: Path | None  # .../<id>/HOOK.md(.j2); None for non-filesystem sources
+    source_package: str  # engine/overlay package name or "<repo-local>"
+    scripts_dir: Path | None = None  # <hook dir>/scripts when present
+
+    @property
+    def hook_dir(self) -> Path | None:
+        """The directory holding ``HOOK.md`` (its name is the hook id), if on disk."""
+        return None if self.source_path is None else self.source_path.parent
+
+    @classmethod
+    def from_markdown(cls, path: Path, source_package: str) -> Hook:
+        """Parse ``path``; a bad fence or bad YAML is a HookSchemaError on ``frontmatter``.
+
+        Example: ``Hook.from_markdown(Path("playbook/hooks/x/HOOK.md"), "<repo-local>")``.
+        """
+        try:
+            data, body = split_frontmatter(path.read_text(encoding="utf-8"))
+        except (ValueError, yaml.YAMLError) as exc:
+            raise HookSchemaError(
+                str(path), "frontmatter", None, "a '---' fenced YAML mapping", problem=str(exc)
+            ) from exc
+        scripts = path.parent / "scripts"
+        return cls(
+            HookFrontmatter.from_mapping(data, where=str(path)),
+            body,
+            body,
+            path.name.endswith(".md.j2"),
+            path,
+            source_package,
+            scripts if scripts.is_dir() else None,
+        )
+
+    def to_markdown(self) -> str:
+        """Frontmatter (compacted) plus the template body; byte identity is not promised."""
+        return format_frontmatter(self.frontmatter.to_mapping(), self.template_body)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Lossless dict form: full frontmatter, paths as ``str | None`` (§A.4)."""
+        return {
+            "frontmatter": dataclasses.asdict(self.frontmatter),
+            "body": self.body,
+            "template_body": self.template_body,
+            "is_templated": self.is_templated,
+            "source_path": None if self.source_path is None else str(self.source_path),
+            "source_package": self.source_package,
+            "scripts_dir": None if self.scripts_dir is None else str(self.scripts_dir),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Hook:
+        """Inverse of to_dict: ``Hook.from_dict(h.to_dict()) == h``."""
+        source_path, scripts_dir = data["source_path"], data["scripts_dir"]
+        return cls(
+            HookFrontmatter.from_mapping(data["frontmatter"], where=source_path or "<dict>"),
+            data["body"],
+            data["template_body"],
+            data["is_templated"],
+            None if source_path is None else Path(source_path),
+            data["source_package"],
+            None if scripts_dir is None else Path(scripts_dir),
+        )
+
+    def to_advisory_rule(self) -> Rule | None:
+        """The advisory-rule envelope (§A.8), or None when the body is blank.
+
+        The body is this hook's (rendered) body; K3's ``hook_advisory``
+        projection adds the enforcement line, and resolve_effective_hooks
+        swaps in globs inherited from a linked rule.
+        Example: ``hook.to_advisory_rule().frontmatter.id == "guardrail-" + hook.frontmatter.id``.
+        """
+        if not self.body.strip():
+            return None
+        fm = self.frontmatter
+        globs = list(dict.fromkeys(p for m in fm.matcher.values() for p in m.paths))
+        advisory = RuleFrontmatter(
+            id=schema.ADVISORY_RULE_PREFIX + fm.id,
+            name="Guardrail: " + fm.name,
+            description=fm.description,
+            scope="scoped" if globs else "always",
+            globs=globs,
+            applies_if={},  # already gated by the hook's own applies_if
+            priority=schema.ADVISORY_RULE_PRIORITY,
+        )
+        return Rule(advisory, self.body, self.body, False, self.source_path, self.source_package)
