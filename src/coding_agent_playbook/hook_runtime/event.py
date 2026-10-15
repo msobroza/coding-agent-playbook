@@ -1,17 +1,11 @@
 """The canonical event every harness payload is normalized into (specs/prK-lifecycle-hooks.md §D.2.1).
 
-Handlers see one shape whatever the harness: a frozen, slotted
-``CanonicalEvent`` they can never mutate. The per-harness parsers build it
-(§D.2.2); ``paths.normalize_path`` builds the ``NormalizedPath`` values a
-``ToolCall`` carries (§D.2.4).
-
-The runtime may not import ``types`` or ``hook_policy`` (§D.1), so the
-enumerations here re-declare their sync-side twins; ``tests/hook_runtime/
-test_event.py`` pins each one to its single source.
-
-Content-bearing fields (the prompt, the raw tool input, persisted text, the
-last assistant message) are left out of ``repr``: the decision log stores no
-content (D-10), and a stray ``repr`` in an internal note must not leak any.
+Handlers see one frozen, slotted ``CanonicalEvent`` whatever the harness. The
+runtime may not import ``types`` or ``hook_policy`` (§D.1), so the enumerations
+here re-declare their sync-side twins; ``tests/hook_runtime/test_event.py`` pins
+each one to its single source. Content-bearing fields stay out of ``repr``: the
+decision log stores no content (D-10), and a stray ``repr`` in an internal note
+must not leak any.
 """
 
 from __future__ import annotations
@@ -27,22 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
-
-__all__ = [
-    "SESSION_ID_MAX_CHARS",
-    "STOP_MESSAGE_MAX_CHARS",
-    "TOOL_ERROR_MAX_CHARS",
-    "CanonicalEvent",
-    "ContentFragment",
-    "EventName",
-    "Harness",
-    "RepoInfo",
-    "StopInfo",
-    "ToolCall",
-    "ToolClass",
-    "ToolResponse",
-    "sanitize_session_id",
-]
+    from coding_agent_playbook.hook_runtime.shell import ShellCommand, ShellConfig, ShellKind
 
 SESSION_ID_MAX_CHARS: Final = 128
 STOP_MESSAGE_MAX_CHARS: Final = 8_000
@@ -52,12 +31,9 @@ _UNSAFE_SESSION_CHAR = re.compile(r"[^A-Za-z0-9._-]")
 
 
 class EventName(StrEnum):
-    """The nine canonical hook events; values are the shared snake_case names (§A.2).
+    """The nine canonical hook events, valued by their shared snake_case names (§A.2).
 
-    Example::
-
-        >>> EventName("pre_tool_use") is EventName.PRE_TOOL_USE
-        True
+    Example: ``EventName("pre_tool_use") is EventName.PRE_TOOL_USE``.
     """
 
     SESSION_START = "session_start"
@@ -72,12 +48,9 @@ class EventName(StrEnum):
 
 
 class Harness(StrEnum):
-    """The harnesses that dispatch to the runtime; values equal their adapter entry-point names.
+    """The dispatching harnesses, valued by their adapter entry-point names.
 
-    Example::
-
-        >>> Harness("opencode").value
-        'opencode'
+    Example: ``Harness("opencode") is Harness.OPENCODE``.
     """
 
     CLAUDE_CODE = "claude_code"
@@ -85,15 +58,10 @@ class Harness(StrEnum):
 
 
 class ToolClass(StrEnum):
-    """The §A.2 tool-class vocabulary (K-1) plus the runtime-only ``OTHER``.
+    """The §A.2 tool classes (K-1) plus ``OTHER``, the runtime-only class of unmapped tools.
 
-    ``OTHER`` covers unmapped tools (``Skill``, ``TodoWrite``, ...); only a
-    matcher that matches every tool selects it.
-
-    Example::
-
-        >>> ToolClass("notebook_edit") is ToolClass.NOTEBOOK_EDIT
-        True
+    Only a matcher that matches every tool selects ``OTHER``. Example:
+    ``ToolClass("notebook_edit") is ToolClass.NOTEBOOK_EDIT``.
     """
 
     SHELL = "shell"
@@ -111,17 +79,15 @@ class ToolClass(StrEnum):
 def sanitize_session_id(raw: object) -> str:
     """Return ``raw`` as a session id that is safe as one path component.
 
-    The session id names a directory under the state root (§D.6.1), so every
-    character outside ``[A-Za-z0-9._-]`` becomes ``_``, the result is cut to
-    128 characters, and an id made only of dots (``.``, ``..``) has its dots
-    replaced as well. A missing or non-string id is ``""``.
+    The id names a directory under the state root (§D.6.1): every character
+    outside ``[A-Za-z0-9._-]`` becomes ``_``, the result is cut to 128
+    characters, and an all-dots id (``.``, ``..``) has its dots replaced too.
+    A missing or non-string id is ``""``.
 
     Example::
 
-        >>> sanitize_session_id("../etc/passwd")
-        '.._etc_passwd'
-        >>> sanitize_session_id("..")
-        '__'
+        >>> sanitize_session_id("../etc/passwd"), sanitize_session_id("..")
+        ('.._etc_passwd', '__')
     """
     if not isinstance(raw, str):
         return ""
@@ -133,19 +99,13 @@ def sanitize_session_id(raw: object) -> str:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RepoInfo:
-    """Where the event's repository lives, found without git by ``paths.find_repo``.
+    """The event's repository, found without git by ``paths.find_repo`` (§D.2.4).
 
-    ``git_dir`` is the per-worktree git dir (``.git`` or
-    ``.git/worktrees/<name>``) and ``common_dir`` the shared one.
-    ``sibling_roots`` lists the other worktrees sharing ``common_dir`` (the main
-    checkout included): a path inside one still belongs to this repository
-    (Q-D5, OQ-24).
-
-    Example::
-
-        >>> RepoInfo(worktree_root="/r", git_dir="/r/.git", common_dir="/r/.git",
-        ...          is_linked_worktree=False).sibling_roots
-        ()
+    ``git_dir`` is per worktree (``.git`` or ``.git/worktrees/<name>``) and
+    ``common_dir`` shared. ``sibling_roots`` are the other worktrees sharing
+    ``common_dir``, main checkout included: their paths still belong to this
+    repository (OQ-24). Example: ``RepoInfo(worktree_root="/r", git_dir="/r/.git",
+    common_dir="/r/.git", is_linked_worktree=False)``.
     """
 
     worktree_root: str
@@ -159,14 +119,9 @@ class RepoInfo:
 class StopInfo:
     """What a ``stop`` / ``subagent_stop`` event carries.
 
-    ``last_assistant_message`` keeps only its last 8,000 characters: the
-    output-contract stage reads the end of a turn, and no handler needs a
-    multi-megabyte transcript tail in memory.
-
-    Example::
-
-        >>> StopInfo(stop_hook_active=False, last_assistant_message="done").stop_hook_active
-        False
+    Only the last 8,000 characters of ``last_assistant_message`` are kept: the
+    output-contract stage reads the end of a turn, and no handler needs more.
+    Example: ``StopInfo(stop_hook_active=False, last_assistant_message="done")``.
     """
 
     stop_hook_active: bool
@@ -183,13 +138,9 @@ class StopInfo:
 class ToolResponse:
     """The outcome a ``post_tool_use`` / ``post_tool_use_failure`` event reports.
 
-    ``exit_code`` is parsed from the ``Exit code N`` prefix of a failure;
-    ``error`` keeps its first 2,000 characters, where the cause usually is.
-
-    Example::
-
-        >>> ToolResponse(ok=False, exit_code=1, error="boom").exit_code
-        1
+    ``exit_code`` comes from the ``Exit code N`` prefix of a failure; ``error``
+    keeps its first 2,000 characters, where the cause usually is. Example:
+    ``ToolResponse(ok=False, exit_code=1, error="boom")``.
     """
 
     ok: bool
@@ -204,16 +155,11 @@ class ToolResponse:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ContentFragment:
-    """Text a tool call is about to persist: ``(path, field, text)``.
+    """Text a tool call is about to persist, as ``(path, field, text)``.
 
-    ``path`` is the raw payload path, equal to the ``NormalizedPath.raw`` it
-    belongs to; ``field`` names the payload field (``content``,
-    ``new_string``, ``edits[2].new_string``, ``patch``, ...).
-
-    Example::
-
-        >>> ContentFragment(path="a.py", field="content", text="x = 1").field
-        'content'
+    ``path`` is the raw payload path (the ``NormalizedPath.raw`` it belongs to)
+    and ``field`` the payload field (``content``, ``edits[2].new_string``,
+    ``patch``, ...). Example: ``ContentFragment(path="a.py", field="content", text="x")``.
     """
 
     path: str
@@ -223,19 +169,34 @@ class ContentFragment:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class ShellSource:
+    """What a shell tool call's ``command`` is parsed from (§D.2.5).
+
+    ``cwd`` is where the first segment starts (OpenCode's ``workdir``, else the
+    event cwd); ``config`` is ``guard_config.shell``, or ``None`` for the engine
+    default. Example: ``ShellSource(text="ls", cwd="/r")``.
+    """
+
+    text: str = field(repr=False)
+    kind: ShellKind = "posix"
+    cwd: str | None = None
+    config: ShellConfig | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ToolCall:
     """Everything a handler may inspect about one tool call, parsed once per event.
 
-    ``tool_class`` is the primary class and ``tool_classes`` every class the
-    call belongs to: OpenCode's ``apply_patch`` both edits and writes
-    (§D.2.3), so selection matches on the set. ``tool_classes`` defaults to
-    ``{tool_class}``; ``raw_input`` is stored as a read-only copy.
+    ``tool_classes`` is every class the call belongs to (OpenCode's
+    ``apply_patch`` both edits and writes, §D.2.3) and defaults to
+    ``{tool_class}``. ``raw_input`` is kept as a read-only copy. ``command`` is
+    parsed from ``shell`` on first access only, so non-shell events never load
+    the shell parser.
 
     Example::
 
-        >>> call = ToolCall(name="Edit", native_name="Edit", tool_class=ToolClass.EDIT)
-        >>> sorted(call.tool_classes)
-        [<ToolClass.EDIT: 'edit'>]
+        >>> ToolCall(name="Edit", native_name="Edit", tool_class=ToolClass.EDIT).command is None
+        True
     """
 
     name: str
@@ -249,6 +210,9 @@ class ToolCall:
     mcp_server: str | None = None
     response: ToolResponse | None = None
     raw_input: Mapping[str, object] = field(default_factory=dict, repr=False)
+    shell: ShellSource | None = None
+    #: The memoized parse of ``shell``; ``None`` until ``command`` is first read.
+    _command: ShellCommand | None = field(default=None, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         classes = self.tool_classes or frozenset({self.tool_class})
@@ -260,21 +224,40 @@ class ToolCall:
         object.__setattr__(self, "tool_classes", classes)
         object.__setattr__(self, "raw_input", MappingProxyType(dict(self.raw_input)))
 
+    @property
+    def command(self) -> ShellCommand | None:
+        """The parsed shell command, or ``None`` for a call without ``shell``."""
+        if self.shell is not None and self._command is None:
+            object.__setattr__(self, "_command", _parse_shell(self.shell))
+        return self._command
+
+    def with_shell_config(self, config: ShellConfig) -> ToolCall:
+        """A copy whose ``command`` parses with ``config`` (loaded after the payload)."""
+        if self.shell is None:
+            return self
+        return dataclasses.replace(self, shell=dataclasses.replace(self.shell, config=config))
+
+
+def _parse_shell(source: ShellSource) -> ShellCommand:
+    # Imported here so that an Edit or Read event never loads the shell parser (§D.1).
+    from coding_agent_playbook.hook_runtime.shell import DEFAULT_SHELL_CONFIG, parse_shell
+
+    return parse_shell(source.text, source.kind, source.cwd, source.config or DEFAULT_SHELL_CONFIG)
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CanonicalEvent:
     """One harness event, normalized; handlers never mutate it.
 
-    ``session_id`` is sanitized on construction (:func:`sanitize_session_id`).
-    ``repo`` is ``None`` outside git, where hooks are inert (K-12). ``cwd``
-    follows the agent's ``cd``; ``project_dir`` stays at the session root.
-    ``prompt`` is never logged and never persisted.
+    ``session_id`` is sanitized on construction. ``repo`` is ``None`` outside
+    git, where hooks are inert (K-12). ``cwd`` follows the agent's ``cd`` while
+    ``project_dir`` stays at the session root. ``prompt`` is never logged and
+    never persisted.
 
     Example::
 
-        >>> ev = CanonicalEvent(name=EventName.STOP, harness=Harness.CLAUDE_CODE,
-        ...                     session_id="s/1", cwd="/r", project_dir="/r")
-        >>> ev.session_id
+        >>> CanonicalEvent(name=EventName.STOP, harness=Harness.CLAUDE_CODE,
+        ...                session_id="s/1", cwd="/r", project_dir="/r").session_id
         's_1'
     """
 

@@ -24,12 +24,15 @@ from coding_agent_playbook.hook_runtime.event import (
     EventName,
     Harness,
     RepoInfo,
+    ShellSource,
     StopInfo,
     ToolCall,
     ToolClass,
     ToolResponse,
     sanitize_session_id,
 )
+from coding_agent_playbook.hook_runtime.shell import ShellConfig
+from tests.import_probe import new_modules_after
 
 _NINE_EVENTS = [
     "session_start",
@@ -92,7 +95,7 @@ def test_tool_class_matches_types_tool_class() -> None:
 
 @pytest.mark.parametrize(
     "cls",
-    [RepoInfo, StopInfo, ToolResponse, ContentFragment, ToolCall, CanonicalEvent],
+    [RepoInfo, StopInfo, ToolResponse, ContentFragment, ShellSource, ToolCall, CanonicalEvent],
     ids=lambda cls: cls.__name__,
 )
 def test_every_event_record_is_frozen_and_slotted(cls: type) -> None:
@@ -203,3 +206,63 @@ def test_raw_input_is_a_read_only_copy() -> None:
     assert call.raw_input["file_path"] == "a.py"
     with pytest.raises(TypeError):
         call.raw_input["file_path"] = "b.py"  # type: ignore[index]
+
+
+# --- the lazy shell parse -------------------------------------------------------------
+
+
+def _bash(text: str, **source: object) -> ToolCall:
+    return ToolCall(
+        name="Bash",
+        native_name="Bash",
+        tool_class=ToolClass.SHELL,
+        shell=ShellSource(text=text, **source),  # type: ignore[arg-type]
+    )
+
+
+def test_tool_call_shell_parse_is_lazy_and_memoized() -> None:
+    call = _bash("cd sub && rm -rf x", cwd="/r")
+
+    first = call.command
+
+    assert first is not None
+    assert first is call.command
+    assert [(s.argv, s.cwd) for s in first.segments] == [
+        (("cd", "sub"), "/r"),
+        (("rm", "-rf", "x"), "/r/sub"),
+    ]
+
+
+def test_building_a_shell_call_imports_no_shell_parser() -> None:
+    loaded = new_modules_after(
+        "from coding_agent_playbook.hook_runtime.event import ShellSource, ToolCall, ToolClass; "
+        "ToolCall(name='Bash', native_name='Bash', tool_class=ToolClass.SHELL, "
+        "shell=ShellSource(text='rm -rf x'))"
+    )
+
+    assert "coding_agent_playbook.hook_runtime.shell" not in loaded
+    assert "shlex" not in loaded
+
+
+def test_a_non_shell_call_has_no_command() -> None:
+    call = ToolCall(name="Read", native_name="Read", tool_class=ToolClass.READ)
+
+    assert call.command is None
+    assert call.with_shell_config(ShellConfig(wrapper_prefixes=("rtk",))) is call
+
+
+def test_with_shell_config_reparses_with_the_new_config() -> None:
+    call = _bash("rtk git status")
+    configured = call.with_shell_config(ShellConfig(wrapper_prefixes=("rtk",)))
+
+    assert call.command is not None
+    assert configured.command is not None
+    assert call.command.segments[0].argv[0] == "rtk"
+    assert configured.command.segments[0].argv == ("git", "status")
+
+
+def test_a_powershell_source_is_never_shlex_parsed() -> None:
+    command = _bash("Remove-Item -Recurse x", kind="powershell").command
+
+    assert command is not None
+    assert (command.kind, command.segments) == ("powershell", ())
