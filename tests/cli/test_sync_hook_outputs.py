@@ -357,10 +357,11 @@ def test_summary_lines_counts_and_hand_edit_warning(
     # guard-x, guard-ext and the engine pack's thirteen default-tier hooks on here (seven
     # protect, the Stop coordinator, post-edit-ruff-format, prompt-write-scope-guard, the
     # error-handling and typing lint hooks, toolchain-missing-hint); pytest's is off (no
-    # pytest detected). The briefing and the two lint hooks have no advisory body, so
-    # Continue gets three fewer. The member-less UserPromptSubmit group is one entry,
+    # pytest detected), and so is the ML deserialization guard (no ML stack); the opt-in
+    # notebook hook is skipped. The briefing and the two lint hooks have no advisory body,
+    # so Continue gets three fewer. The member-less UserPromptSubmit group is one entry,
     # toolchain-missing-hint's PostToolUseFailure another.
-    assert "✓ Hooks: 15 enabled, 2 skipped (" in out
+    assert "✓ Hooks: 15 enabled, 4 skipped (" in out
     assert "claude_code: 15 enforced" in out
     assert "continue: 12 advisory" in out
     assert f"✓ {SETTINGS}: 6 managed entries updated, 0 removed (user keys untouched)" in out

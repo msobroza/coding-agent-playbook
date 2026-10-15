@@ -88,3 +88,25 @@
   language: python
   types_or: [python, pyi]
   require_serial: true
+
+# Opt-in ML twins of the playbook's assistant hooks (prK §E.3). Both are stdlib-only:
+# SPEC §13.2 keeps nbstripout/nbqa out of the air-gapped starter, so these stand in.
+# playbook-notebooks fails a commit whose notebooks keep cell outputs (they may embed
+# data rows); playbook-scan-sinks fails one whose staged Python or notebook cells add an
+# unsafe deserialization sink (pickle.loads, torch.load(weights_only=False), ...).
+- id: playbook-notebooks
+  name: coding-agent-playbook notebooks (no outputs committed)
+  description: Fail when a staged notebook keeps cell outputs, embedded images or oversized output
+  entry: playbook check-notebooks
+  language: python
+  types: [jupyter]
+  stages: [pre-commit]
+
+- id: playbook-scan-sinks
+  name: coding-agent-playbook scan-sinks (no new unsafe deserialization)
+  description: Fail when staged Python or notebook code adds pickle-based loads or other unsafe sinks
+  entry: playbook scan-sinks --staged
+  language: python
+  types_or: [python, jupyter]
+  pass_filenames: false
+  stages: [pre-commit]

@@ -30,6 +30,8 @@ apply (``_guard_config_ruff``); the pinned ruff's version-specific facts live
 in ``machine.json`` instead. toolchain-missing-hint's install hint and
 pytest-conventions-feedback's asyncio flag are derived from the repo's
 pyproject into those hooks' config (``_guard_config_toolchain``).
+``notebooks.max_bytes`` is the engine's parse cap for a notebook (a larger
+one is reported unparsed), shared by the notebook-reading hooks.
 """
 
 from __future__ import annotations
@@ -77,6 +79,7 @@ from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
     playbook_precommit_ids,
 )
 from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
+from coding_agent_playbook.hook_runtime.handlers._notebook_check import NOTEBOOK_MAX_BYTES
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 
 if TYPE_CHECKING:
@@ -209,8 +212,8 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
     ``allow_code_from`` and ``state_ttl_days`` are the runtime keys beyond the
     §D.8.2 table that ``hook_runtime.config`` reads (it cannot read ``[hooks]``);
     ``sentinel``, ``protected``, ``control_plane``, ``precommit``, ``facts``,
-    ``applicability``, ``eval``, ``auto_sync``, ``stop_gate`` and ``ruff`` are
-    §E.0.5 / §E.3 pack keys (``GuardConfig.tables``).
+    ``applicability``, ``eval``, ``auto_sync``, ``stop_gate``, ``ruff`` and
+    ``notebooks`` are §E.0.5 / §E.3 pack keys (``GuardConfig.tables``).
 
     Example::
 
@@ -254,6 +257,7 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
         "auto_sync": cfg.auto_sync,
         "stop_gate": stop_gate_table(inputs.hooks, inputs.detect.facts),
         "ruff": ruff_table(inputs.ruff),
+        "notebooks": {"max_bytes": NOTEBOOK_MAX_BYTES},
     }
 
 

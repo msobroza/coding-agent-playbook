@@ -118,8 +118,30 @@ def test_no_unexpected_hooks():
         "playbook-sync-check",
         "playbook-validate",
         "playbook-metrics",
+        "playbook-notebooks",
+        "playbook-scan-sinks",
     }
     assert ids == expected, f"unexpected hook IDs: {ids - expected}"
+
+
+def test_notebooks_hook_types_jupyter_language_python():
+    """prK §E.3: the stdlib twin of notebook-output-hygiene, on staged notebooks only."""
+    hook = _hook("playbook-notebooks")
+    assert hook["entry"] == "playbook check-notebooks"
+    assert hook["language"] == "python"
+    assert hook["types"] == ["jupyter"]
+    assert hook.get("pass_filenames", True) is True  # the staged notebooks are its PATHS
+    assert hook.get("always_run") in (None, False)
+
+
+def test_scan_sinks_hook_scans_the_index_once():
+    """prK §E.3: the guard's twin reads the index itself, so it takes no filenames."""
+    hook = _hook("playbook-scan-sinks")
+    assert hook["entry"] == "playbook scan-sinks --staged"
+    assert hook["language"] == "python"
+    assert hook["types_or"] == ["python", "jupyter"]
+    assert hook["pass_filenames"] is False
+    assert hook["stages"] == ["pre-commit"]
 
 
 def _header_comment() -> str:

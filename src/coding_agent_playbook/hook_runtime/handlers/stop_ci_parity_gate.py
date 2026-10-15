@@ -59,7 +59,10 @@ CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
 _HANDLERS: Final = "coding_agent_playbook.hook_runtime.handlers"
 #: Stage name -> ``module:function`` building it; a pack track adds a row per stage.
 STAGE_FACTORIES: Final[Mapping[str, str]] = MappingProxyType(
-    {"drift": f"{_HANDLERS}.stop_drift_and_orphan_gate:drift_stage"}
+    {
+        "drift": f"{_HANDLERS}.stop_drift_and_orphan_gate:drift_stage",
+        "notebooks": f"{_HANDLERS}.notebooks:notebooks_stage",
+    }
 )
 #: Leaves the dispatcher time to compose and write before the watchdog fires.
 _WRITE_MARGIN_S: Final = 0.25

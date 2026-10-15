@@ -42,7 +42,7 @@ from coding_agent_playbook.hook_runtime._ruff import (
 )
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths
+from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths, repo_file
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -121,17 +121,8 @@ def edited_python_files(ev: CanonicalEvent, ctx: HandlerContext) -> list[EditedF
 
 
 def _eligible(path: NormalizedPath, root: str, cfg: GuardConfig) -> EditedFile | None:
-    real = path.realpath
-    if path.repo_rel is None or path.sibling_worktree or not real.endswith(_PY_SUFFIXES):
-        return None
-    if not real.startswith(root + os.sep):
-        return None  # a symlink out of the worktree: not this repo's code
-    rel = real[len(root) + 1 :].replace(os.sep, "/")
-    fixtures = cfg.path_classes.get("eval_fixture")
-    for key in (path.key, rel):
-        if cfg.secret_paths.matches(key) or (fixtures is not None and fixtures.matches(key)):
-            return None
-    return EditedFile(real, rel, path.key)
+    found = repo_file(path, root, cfg, suffixes=_PY_SUFFIXES)
+    return None if found is None else EditedFile(found[0], found[1], path.key)
 
 
 # --- 2. the pin ----------------------------------------------------------------------------------

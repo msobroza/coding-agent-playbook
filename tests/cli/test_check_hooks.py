@@ -70,6 +70,8 @@ _ENGINE_PACK = (
     "eval-task-authoring-lint",
     "guard-eval-fixtures",
     "guard-generated-outputs",
+    "ml-unsafe-deserialization-guard",
+    "notebook-output-hygiene",
     "post-edit-ruff-format",
     "prompt-write-scope-guard",
     "pytest-conventions-feedback",
@@ -104,7 +106,7 @@ def test_hooks_block_labels_per_adapter(
 
     assert lines == [
         "  [hooks]: on",
-        "  Hooks (15 on / 18 total):",
+        "  Hooks (15 on / 20 total):",
         # The engine pack (Track K5): OpenCode has no notebook tool, so guard-generated-outputs
         # is degraded there; control-plane-guard matches no notebook edit.
         "    [✓] control-plane-guard (agents_md: advisory, claude_code: enforced, "
@@ -121,6 +123,10 @@ def test_hooks_block_labels_per_adapter(
         "    [✓] guard-x (agents_md: advisory, claude_code: enforced, continue: advisory, "
         "opencode: advisory)",
         _OPT_IN_SKIP.format(hook_id="guard-y"),
+        # K7: the synthetic repo has no ML stack, so the linked rule (and the guard) is off.
+        "    [✗] ml-unsafe-deserialization-guard (skipped: linked rule "
+        "'ml-serialization-security' not applicable)",
+        _OPT_IN_SKIP.format(hook_id="notebook-output-hygiene"),
         # K7: the shared post-edit ruff pipeline, on both hook-capable harnesses.
         "    [✓] post-edit-ruff-format (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
@@ -159,7 +165,7 @@ def test_hooks_block_when_the_table_is_absent(
 
     assert lines == [
         "  [hooks]: off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')",
-        "  Hooks (0 on / 16 total):",
+        "  Hooks (0 on / 18 total):",
         *_off(_ENGINE_PACK[:5]),
         "    [✗] guard-x (skipped: hooks are off)",
         *_off(_ENGINE_PACK[5:]),
@@ -179,7 +185,7 @@ def test_hooks_block_when_hooks_are_switched_off_or_unreadable(
 
     assert off_lines == [
         "  [hooks]: off — [hooks] enabled is not true",
-        "  Hooks (0 on / 15 total):",
+        "  Hooks (0 on / 17 total):",
         *_off(_ENGINE_PACK),
     ]
     assert bad_lines[-1] == "  [hooks] cannot be read; run 'playbook validate'."

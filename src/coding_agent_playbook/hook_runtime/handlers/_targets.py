@@ -9,6 +9,7 @@ so the two guards can never disagree about where a redirect lands.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.event import ToolClass
@@ -17,12 +18,19 @@ from coding_agent_playbook.hook_runtime.paths import normalize_path
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from coding_agent_playbook.hook_runtime.config import GuardConfig
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell import Segment
 
-__all__ = ["FILE_WRITE_CLASSES", "file_write_paths", "shell_target", "shell_write_targets"]
+__all__ = [
+    "FILE_WRITE_CLASSES",
+    "file_write_paths",
+    "repo_file",
+    "shell_target",
+    "shell_write_targets",
+]
 
 #: The tool classes whose ``write_paths`` a path guard checks.
 FILE_WRITE_CLASSES: Final = frozenset({ToolClass.EDIT, ToolClass.WRITE, ToolClass.NOTEBOOK_EDIT})
@@ -72,3 +80,30 @@ def shell_write_targets(
         for segment in command.segments
         for raw in extract(segment)
     ]
+
+
+def repo_file(
+    path: NormalizedPath, root: str, cfg: GuardConfig, *, suffixes: tuple[str, ...]
+) -> tuple[str, str] | None:
+    """``(realpath, repo-relative POSIX name)`` of a file the §E.3 hooks may read, else ``None``.
+
+    The realpath must end in one of ``suffixes`` and lie inside ``root`` (the
+    worktree's realpath: a symlink out of it is not this repo's code); secret
+    paths and frozen eval fixtures are never read, whatever their spelling.
+
+    Example::
+
+        >>> repo_file(edited_app_py, "/repo", cfg, suffixes=(".py",))  # doctest: +SKIP
+        ('/repo/src/app.py', 'src/app.py')
+    """
+    real = path.realpath
+    if path.repo_rel is None or path.sibling_worktree or not real.endswith(suffixes):
+        return None
+    if not real.startswith(root + os.sep):
+        return None
+    rel = real[len(root) + 1 :].replace(os.sep, "/")
+    fixtures = cfg.path_classes.get("eval_fixture")
+    for key in (path.key, rel):
+        if cfg.secret_paths.matches(key) or (fixtures is not None and fixtures.matches(key)):
+            return None
+    return real, rel
