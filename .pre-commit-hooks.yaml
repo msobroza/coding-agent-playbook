@@ -90,6 +90,21 @@
   types_or: [python, pyi]
   require_serial: true
 
+# Coverage gate (prK §F.1.3). RUNS YOUR TEST SUITE, so it is manual-only (SPEC
+# §21.7: execution is never on every commit): changed lines must be >= 80%
+# executed (diff_coverage) and total coverage must not drop vs HEAD. Run it with
+#   pre-commit run playbook-coverage --hook-stage manual
+# or move it to `stages: [pre-push]`. It uses your project's own pytest-cov.
+- id: playbook-coverage
+  name: coding-agent-playbook coverage (diff + non-regression; runs your test suite)
+  description: Changed-line and total coverage vs HEAD — runs the project's test suite
+  entry: playbook metrics --run-tests --select testing --baseline git:HEAD
+  language: python
+  pass_filenames: false
+  types_or: [python]
+  require_serial: true
+  stages: [manual]
+
 # Opt-in ML twins of the playbook's assistant hooks (prK §E.3). Both are stdlib-only:
 # SPEC §13.2 keeps nbstripout/nbqa out of the air-gapped starter, so these stand in.
 # playbook-notebooks fails a commit whose notebooks keep cell outputs (they may embed

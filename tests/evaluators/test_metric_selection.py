@@ -147,7 +147,7 @@ def test_stop_stage_selection_keeps_families_plus_ruff_by_name() -> None:
 
     wanted = {"wmc", "docstring_example", "ruff_violations"}
     assert _names(picked) == [n for n in _names(static_metrics()) if n in wanted]
-    assert own == {"wmc", "docstring_example", "coverage", "test_pass_rate"}
+    assert own == {"wmc", "docstring_example", "coverage", "test_pass_rate", "diff_coverage"}
 
 
 def test_family_and_metric_names_are_disjoint() -> None:

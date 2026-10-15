@@ -5,8 +5,9 @@ so ``playbook sync`` tests never shell out to git (and never monkeypatch
 :mod:`subprocess`). ``None`` models "git cannot answer" (not a repository, git
 missing, timeout) exactly like the real client. :func:`pre_gate_validate` stands
 in for ``playbook sync``'s validate gate. ``FakeProjectFactory`` stands in for
-``ProjectHandle.create`` so metrics-gate tests see which test command would run
-without running a suite, and ``FakeBaselineGit`` stands in for
+``ProjectHandle.create`` so metrics-gate tests see which test command (and
+diff base, timeout, ``--cov`` sources) would run without running a suite; its
+``FakeProjectHandle`` serves canned ``RunArtifacts``. ``FakeBaselineGit`` stands in for
 :class:`coding_agent_playbook.evaluators.baseline_git.SubprocessBaselineGit`;
 ``FakeGitRunner`` stands in for its working-tree reads (``SubprocessGitRunner``).
 ``FakeHandlerSchemas`` stands in for the hook-handler ``CONFIG_SCHEMA`` registry
@@ -32,7 +33,9 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.commands.ci import StepRun
 from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, GitTimeoutError
-from coding_agent_playbook.evaluators.execution.project import ProjectHandle
+from coding_agent_playbook.evaluators.execution.coverage_xml import CoverageReport
+from coding_agent_playbook.evaluators.execution.junit import JunitSummary
+from coding_agent_playbook.evaluators.execution.project import ProjectHandle, RunArtifacts
 from coding_agent_playbook.evaluators.tool_runner import ToolRunError
 from coding_agent_playbook.hook_runtime.pin import PinResult
 
@@ -94,26 +97,80 @@ def pre_gate_validate(ctx: SyncContext) -> list[ValidationError]:
     return []
 
 
-#: A suite command that runs nothing and writes no report (an empty, passing suite).
+#: The command a :class:`FakeProjectHandle` claims to run; it never runs it.
 NO_OP_SUITE_CMD = [sys.executable, "-c", "pass"]
+
+
+def empty_run() -> RunArtifacts:
+    """What an empty, passing suite reports: no tests, no coverage, exit 0."""
+    return RunArtifacts(junit=JunitSummary(0, 0, 0, 0, 0), coverage=CoverageReport(), returncode=0)
+
+
+@dataclass
+class FakeProjectHandle(ProjectHandle):
+    """A :class:`ProjectHandle` whose suite never runs: each run serves ``artifacts``.
+
+    ``runs`` counts the suite runs the handle was asked for (``run()`` caches
+    the first, as the real handle does), so a test can prove a suite ran once.
+    """
+
+    artifacts: RunArtifacts = field(default_factory=empty_run)
+    runs: int = 0
+
+    def _run_once(self) -> RunArtifacts:
+        self.runs += 1
+        return self.artifacts
+
+
+@dataclass(frozen=True)
+class SuiteRequest:
+    """One handle the metrics gate asked :class:`FakeProjectFactory` for, with its options."""
+
+    root: Path
+    test_cmd: list[str] | None
+    diff_base: str | None
+    timeout_s: float | None
+    cov_sources: tuple[str, ...]
 
 
 @dataclass
 class FakeProjectFactory:
     """Stands in for ``ProjectHandle.create`` in :class:`MetricsGateDeps`.
 
-    Records ``(root, test_cmd)`` for every handle the gate asks for, then builds
-    a real handle that runs :data:`NO_OP_SUITE_CMD`, so no project suite ever
-    runs. ``calls == []`` proves the gate never built a handle.
+    Records ``(root, test_cmd)`` in ``calls`` and the full request in
+    ``requests`` for every handle the gate asks for, then hands out a
+    :class:`FakeProjectHandle` serving ``artifacts``, so no project suite ever
+    runs. ``calls == []`` proves the gate never built a handle; ``handles``
+    keeps each one for its ``runs`` count.
     """
 
+    artifacts: RunArtifacts = field(default_factory=empty_run)
     calls: list[tuple[Path, list[str] | None]] = field(default_factory=list)
+    requests: list[SuiteRequest] = field(default_factory=list)
+    handles: list[FakeProjectHandle] = field(default_factory=list)
 
     def __call__(
-        self, root: Path, report_dir: Path, test_cmd: list[str] | None = None
+        self,
+        root: Path,
+        report_dir: Path,
+        test_cmd: list[str] | None = None,
+        *,
+        diff_base: str | None = None,
+        timeout_s: float | None = None,
+        cov_sources: Sequence[str] = (),
     ) -> ProjectHandle:
         self.calls.append((root, test_cmd))
-        return ProjectHandle.create(root, report_dir, test_cmd=NO_OP_SUITE_CMD)
+        self.requests.append(SuiteRequest(root, test_cmd, diff_base, timeout_s, tuple(cov_sources)))
+        handle = FakeProjectHandle(
+            root=root,
+            test_cmd=list(NO_OP_SUITE_CMD),
+            report_dir=report_dir,
+            diff_base=diff_base,
+            timeout_s=timeout_s,
+            artifacts=self.artifacts,
+        )
+        self.handles.append(handle)
+        return handle
 
 
 @dataclass

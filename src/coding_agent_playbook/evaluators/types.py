@@ -19,9 +19,10 @@ from typing import TYPE_CHECKING, Any, Final, Literal, Protocol, runtime_checkab
 from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
     from pathlib import Path
 
+    from coding_agent_playbook.evaluators.baseline_git import GitRunner
     from coding_agent_playbook.evaluators.parse import ModuleModel
     from coding_agent_playbook.evaluators.scope import CostTier, Determinism
     from coding_agent_playbook.evaluators.tool_runner import ToolRunner
@@ -77,6 +78,12 @@ class ToolSetup:
     ``runner`` ``None`` means a plain subprocess; ``cwd`` is the repository root,
     so the project's own config, ``per-file-ignores`` and ``# noqa`` apply.
 
+    A diff-based metric (``diff_coverage``) reads git through ``git``, which
+    builds a reader for a project root and bound (``None``: a plain ``git``
+    subprocess; a hook passes its hardened ``SafeGit``), and never scores a
+    path matching ``exclude`` (``[metrics] exclude``). ``timeout_s`` bounds
+    those git reads too.
+
     Example::
 
         >>> ToolSetup().timeout_s
@@ -87,6 +94,8 @@ class ToolSetup:
     runner: ToolRunner | None = None
     timeout_s: float = DEFAULT_GIT_TIMEOUT_S
     ruff: RuffSettings = field(default_factory=RuffSettings)
+    git: Callable[[Path, float], GitRunner] | None = None
+    exclude: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

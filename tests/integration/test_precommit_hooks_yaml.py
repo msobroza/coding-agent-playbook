@@ -122,11 +122,23 @@ def test_no_unexpected_hooks():
         "playbook-sync-check",
         "playbook-validate",
         "playbook-metrics",
+        "playbook-coverage",
         "playbook-notebooks",
         "playbook-scan-sinks",
         "playbook-secrets",
     }
     assert ids == expected, f"unexpected hook IDs: {ids - expected}"
+
+
+def test_coverage_hook_is_manual_only():
+    """prK §F.1.3: it runs the consumer's suite, so never on an ordinary commit (SPEC §21.7)."""
+    hook = _hook("playbook-coverage")
+    assert hook["entry"] == "playbook metrics --run-tests --select testing --baseline git:HEAD"
+    assert hook["language"] == "python"
+    assert hook["stages"] == ["manual"]
+    assert hook["pass_filenames"] is False
+    assert hook["types_or"] == ["python"]
+    assert hook["require_serial"] is True
 
 
 def test_notebooks_hook_types_jupyter_language_python():

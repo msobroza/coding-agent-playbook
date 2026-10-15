@@ -72,6 +72,7 @@ def test_ci_steps_table_rows_and_owners() -> None:
         ("sync-check", "prerequisites"),
         ("validate", "existing"),
         ("metrics", "F.2/F.3"),
+        ("coverage", "F.1"),
         ("gate-scan", "E.2"),
         ("scan-secrets", "E.4"),
         ("commit-trailers", "E.4"),
@@ -105,6 +106,35 @@ def test_metrics_step_argv_uses_merge_base_changed_no_run_tests(tmp_path: Path) 
     assert runner.calls == [(*CLI_PREFIX, *argv, "--repo-root", root)]
 
 
+_COVERAGE_ARGV = ("metrics", "--run-tests", "--select", "testing", "--baseline", "git:f00d")
+
+
+@pytest.mark.parametrize(
+    ("metrics_table", "steps", "runs"),
+    [
+        ("", ("--steps", "metrics,coverage"), True),  # named explicitly
+        ("[metrics]\nrun_tests = true\n", (), True),  # the config runs tests
+        ("[metrics]\nrun_tests = false\n", (), False),
+        ("", (), False),
+        ("[metrics]\nrun_tests = 3\n", (), True),  # unloadable: run it, so it reports why
+    ],
+    ids=["steps-flag", "run-tests-true", "run-tests-false", "no-table", "invalid-config"],
+)
+def test_coverage_step_enabled_by_run_tests_or_steps_flag(
+    tmp_path: Path, metrics_table: str, steps: tuple[str, ...], runs: bool
+) -> None:
+    """prK §F.1.3/§F.5: the suite-running row is opt-in; its argv diffs the merge base."""
+    config = _DEFAULT_CONFIG + "\n" + metrics_table
+    (tmp_path / ".coding-agent-playbook.toml").write_text(config, encoding="utf-8")
+    runner = FakeCiStepRunner()
+
+    assert _run(tmp_path, *steps, runner=runner, git=_git("f00d")) == 0
+
+    root = str(tmp_path.resolve())
+    coverage_call = (*CLI_PREFIX, *_COVERAGE_ARGV, "--repo-root", root)
+    assert (coverage_call in runner.calls) is runs
+
+
 def test_scan_secrets_step_uses_merge_base_range(tmp_path: Path) -> None:
     """prK §E.4/§F.5: always enabled (no config needed), over <merge base>..HEAD."""
     runner = FakeCiStepRunner()
@@ -129,8 +159,9 @@ def test_aggregated_exit_1_when_any_step_fails(
     out = capsys.readouterr().out
     assert "validate said hello" in out
     assert "FAIL validate (exit 1" in out
-    # commit-trailers (no rows), check-deps (no policy) and the opt-in scan-sinks
-    assert "playbook ci: 4 passed, 1 failed, 3 skipped" in out
+    # coverage (run_tests off), commit-trailers (no rows), check-deps (no policy)
+    # and the opt-in scan-sinks
+    assert "playbook ci: 4 passed, 1 failed, 4 skipped" in out
 
 
 @pytest.mark.parametrize("steps", ["validate,nope", "", ",,"])
@@ -144,7 +175,7 @@ def test_unknown_step_is_usage_error_exit_2(
     assert runner.calls == []
     err = capsys.readouterr().err
     assert err.startswith("error: --steps")
-    assert "sync-check, validate, metrics, gate-scan, scan-secrets" in err
+    assert "sync-check, validate, metrics, coverage, gate-scan, scan-secrets" in err
 
 
 def test_json_records_step_argv_exit_duration(
@@ -186,6 +217,14 @@ def test_json_records_step_argv_exit_duration(
             "exit": 0,
             "duration_s": 0.25,
             "status": "passed",
+        },
+        {
+            "step": "coverage",
+            "argv": [],
+            "exit": None,
+            "duration_s": 0.0,
+            "status": "skipped",
+            "note": "[metrics] run_tests is not true: run with --steps coverage",
         },
         {
             "step": "gate-scan",

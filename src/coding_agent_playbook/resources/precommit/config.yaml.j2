@@ -71,6 +71,17 @@ repos:
         language: system
         types_or: [python, pyi]
         require_serial: true
+      # The playbook — coverage gate. RUNS YOUR TEST SUITE, so manual-only: changed
+      # lines >= 80% executed, total coverage not below HEAD (needs pytest-cov).
+      #   pre-commit run coding-agent-playbook-coverage --hook-stage manual
+      - id: coding-agent-playbook-coverage
+        name: coding-agent-playbook coverage (diff + non-regression; runs your test suite)
+        entry: playbook metrics --run-tests --select testing --baseline git:HEAD
+        language: system
+        pass_filenames: false
+        types_or: [python]
+        require_serial: true
+        stages: [manual]
       # The playbook — secret scan of every commit (stdlib; stands in for gitleaks,
       # which SPEC §13.2 keeps out because it clones a remote hook repo). Fails when
       # staged lines add a known token format or a credential file is staged; masked.

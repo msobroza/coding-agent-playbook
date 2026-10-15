@@ -70,6 +70,32 @@ def test_check_artifact_section_marks_applies_if(tmp_path, make_synthetic_repo, 
     assert "some-framework-that-isnt-installed" in out
 
 
+def test_skip_reason_names_has_dev_dependency(tmp_path, make_synthetic_repo, capsys):
+    """prK §F.1.2: a rule gated on a missing dev dependency says which one."""
+    repo = make_synthetic_repo(tmp_path)
+    rules_dir = repo / "playbook" / "rules"
+    rules_dir.mkdir(parents=True, exist_ok=True)
+    (rules_dir / "coverage.md").write_text(
+        "---\n"
+        "id: coverage-rule\n"
+        "name: Coverage Rule\n"
+        "description: Only where pytest-cov is a dev dependency\n"
+        "scope: scoped\n"
+        "priority: 50\n"
+        "applies_if:\n"
+        "  has_dev_dependency:\n"
+        "    - pytest-cov\n"
+        "---\n"
+        "Body\n",
+        encoding="utf-8",
+    )
+
+    assert _check.run(_ns(repo)) == 0
+
+    out = capsys.readouterr().out
+    assert "(skipped: applies_if has_dev_dependency=['pytest-cov'])" in out
+
+
 def test_check_drift_section_reports_drift(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
     sync_args = argparse.Namespace(repo_root=str(repo), check=False)

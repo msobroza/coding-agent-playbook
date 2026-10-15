@@ -14,6 +14,10 @@ secrets and dependency twins) instead of adding a second CI entry point.
   fail. A config that does not load runs it anyway, so the child reports why.
 - ``metrics`` (F.2/F.3, always on) runs the static metrics gate over the
   files changed since the merge base, never the suite.
+- ``coverage`` (F.1) runs the suite: changed-line coverage and total coverage
+  non-regression against the merge base. It runs when ``[metrics] run_tests =
+  true`` (a config that does not load runs it anyway, to report why) or when
+  ``--steps`` names it.
 - ``gate-scan`` and ``scan-secrets`` (E.4: always on, so CI scans every
   change for secret tokens and credential files) diff ``<merge base>..HEAD``;
   the base is ``--base`` or the default branch (``_git_base``), resolved only
@@ -86,7 +90,8 @@ class CiContext:
     named explicitly (empty: none), for rows enabled only on request.
     ``trailer_rows`` says whether a commit-trailer row is configured (read
     only when the ``commit-trailers`` row is selected); ``dependency_policy``
-    the same for the ``check-deps`` row.
+    the same for the ``check-deps`` row, and ``run_tests`` (``[metrics]
+    run_tests``) for the ``coverage`` row.
     """
 
     repo_root: Path
@@ -95,6 +100,7 @@ class CiContext:
     merge_base: str = ""
     trailer_rows: bool = False
     dependency_policy: bool = False
+    run_tests: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,10 +197,26 @@ def _metrics_argv(ctx: CiContext) -> list[str]:
     return ["metrics", "--baseline", f"git:{ctx.merge_base}", "--changed", "--no-run-tests"]
 
 
+def _coverage_argv(ctx: CiContext) -> list[str]:
+    """Changed-line coverage plus total non-regression against the merge base (§F.1.3).
+
+    Two suite runs (candidate and a baseline worktree); ``diff_coverage``
+    alone would need one.
+    """
+    return ["metrics", "--run-tests", "--select", "testing", "--baseline", f"git:{ctx.merge_base}"]
+
+
+def _coverage_skip(ctx: CiContext) -> str | None:
+    if ctx.run_tests or "coverage" in ctx.requested:
+        return None
+    return "[metrics] run_tests is not true: run with --steps coverage"
+
+
 CI_STEPS: Final[tuple[CiStep, ...]] = (
     CiStep("sync-check", "prerequisites", lambda ctx: ["sync", "--check"], _sync_check_skip),
     CiStep("validate", "existing", lambda ctx: ["validate"]),
     CiStep("metrics", "F.2/F.3", _metrics_argv, needs_base=True),
+    CiStep("coverage", "F.1", _coverage_argv, _coverage_skip, needs_base=True),
     CiStep(
         "gate-scan",
         "E.2",
@@ -284,6 +306,7 @@ def run(
             _requested(args.steps),
             trailer_rows="commit-trailers" in names and _trailers(repo_root),
             dependency_policy="check-deps" in names and _dependency_policy(repo_root),
+            run_tests="coverage" in names and _metrics_run_tests(repo_root),
         )
         ctx = _with_base(ctx, steps, args.base, git)
     except (GitError, ValueError) as exc:  # GitBaseError is a ValueError
@@ -414,6 +437,19 @@ def _dependency_policy(repo_root: Path) -> bool:
         return dependency_policy_configured(repo_root)
     except (ValueError, OSError, KeyError, TypeError):
         return True  # check-deps then reports the broken config itself
+
+
+def _metrics_run_tests(repo_root: Path) -> bool:
+    """``[metrics] run_tests``; ``True`` when the config does not load (fail closed)."""
+    from coding_agent_playbook.evaluators.metrics_gate import (
+        MetricsGateUsageError,
+        load_metrics_config,
+    )
+
+    try:
+        return load_metrics_config(repo_root).run_tests
+    except (MetricsGateUsageError, OSError):
+        return True  # the metrics child then reports the broken config itself
 
 
 def _requested(text: str | None) -> frozenset[str]:

@@ -55,7 +55,12 @@ from coding_agent_playbook.evaluators._metrics_inputs import (
     static_baseline,
     verify_git_ref,
 )
-from coding_agent_playbook.evaluators._metrics_suite import ProjectFactory, SuiteRun, suite_baseline
+from coding_agent_playbook.evaluators._metrics_suite import (
+    ProjectFactory,
+    gate_suite,
+    run_suites,
+    without_diff_based,
+)
 from coding_agent_playbook.evaluators.baseline_git import (
     BaselineGitError,
     SubprocessBaselineGit,
@@ -124,6 +129,11 @@ class MetricsGateRequest:
     snapshot of ``snapshot_tree`` (the caller's ``HEAD^{tree}`` or fingerprint;
     ``None`` when the worktree is not one).
 
+    ``diff_base`` is the ref diff-based metrics (``diff_coverage``) diff the
+    candidate against; ``None`` takes a ``git:`` baseline's ref, so a hook
+    grading against a ``json:`` snapshot passes it explicitly.
+    ``[metrics] test_timeout_s`` bounds each suite run.
+
     Example::
 
         >>> MetricsGateRequest(repo_root=Path("."), config=MetricConfig()).run_tests
@@ -146,6 +156,7 @@ class MetricsGateRequest:
     changed_only: bool = False
     emit_measurements: Path | None = None
     snapshot_tree: str | None = None
+    diff_base: str | None = None
 
 
 @dataclass(frozen=True)
@@ -267,11 +278,10 @@ def _measure(request: MetricsGateRequest, deps: MetricsGateDeps) -> _Measured:
     """Static candidate + baseline measurements, the suite when selected, then the snapshot."""
     git = deps.git_factory(request.config.git_timeout_s)
     static, execution = _selected_metrics(request, deps)
-    meter = SourceMeter(
-        static, request.tool_paths, request.max_file_bytes, tool_setup(request, deps)
-    )
+    setup = tool_setup(request, deps)
+    meter = SourceMeter(static, request.tool_paths, request.max_file_bytes, setup)
     targets = _targets(request, deps, git)
-    baseline = _baseline(request, targets, meter, git)
+    baseline = without_diff_based(_baseline(request, targets, meter, git), execution)
     candidates = measure_candidates(targets, request.repo_root, meter)
     measured = _Measured(
         static,
@@ -283,7 +293,11 @@ def _measure(request: MetricsGateRequest, deps: MetricsGateDeps) -> _Measured:
         request.tool_paths,
     )
     if measured.execution:
-        _measure_suites(request, measured, deps.project_factory, git)
+        suite = gate_suite(request, execution, deps.project_factory, setup)
+        candidate, suite_base = run_suites(suite, request.repo_root, request.baseline, git=git)
+        measured.candidate.extend(candidate)
+        if suite_base:
+            measured.baseline = (measured.baseline or []) + suite_base
     if request.emit_measurements is not None:
         _emit(request.emit_measurements, measured.candidate, request.snapshot_tree)
     return measured
@@ -293,7 +307,8 @@ def tool_setup(request: MetricsGateRequest, deps: MetricsGateDeps) -> ToolSetup:
     """How this run's subprocess-backed metrics run: memoized runner, repo root, ``[metrics]`` ruff.
 
     The memo is per run: an unchanged file's identical candidate and baseline
-    text costs one ruff call.
+    text costs one ruff call. ``diff_coverage`` reads git through the same
+    ``git_runner_factory`` as ``changed_only`` and skips ``[metrics] exclude``.
 
     Example::
 
@@ -305,6 +320,8 @@ def tool_setup(request: MetricsGateRequest, deps: MetricsGateDeps) -> ToolSetup:
         runner=MemoToolRunner(deps.tool_runner),
         timeout_s=request.config.git_timeout_s,
         ruff=request.config.ruff_settings,
+        git=deps.git_runner_factory,
+        exclude=request.config.exclude,
     )
 
 
@@ -398,26 +415,6 @@ def _emit(path: Path, measurements: Sequence[Measurement], tree: str | None) -> 
         write_snapshot(path, measurements, tree=tree)
     except OSError as exc:
         raise MetricsGateUsageError(f"cannot write --emit-measurements {path}: {exc}") from exc
-
-
-def _measure_suites(
-    request: MetricsGateRequest, measured: _Measured, factory: ProjectFactory, git: BaselineGit
-) -> None:
-    """Run the suite once on the candidate and, with a git/dir baseline, once on the baseline.
-
-    A ``json:`` baseline snapshot already carries the baseline's execution
-    measurements, which is what makes it cheaper than a second suite run.
-    """
-    test_cmd = None if request.test_cmd is None else list(request.test_cmd)
-    suite = SuiteRun(measured.execution, test_cmd, factory, request.tool_paths)
-    with tempfile.TemporaryDirectory(prefix="playbook-metrics-") as tmp:
-        work_dir = Path(tmp)
-        measured.candidate.extend(suite.measure(request.repo_root, work_dir / "candidate-reports"))
-        if request.baseline is not None and not request.baseline.startswith(JSON_PREFIX):
-            exec_baseline = suite_baseline(
-                request.baseline, request.repo_root, suite, work_dir, git
-            )
-            measured.baseline = (measured.baseline or []) + exec_baseline
 
 
 def _effective_config(request: MetricsGateRequest) -> tuple[MetricConfig, str | None]:

@@ -558,6 +558,42 @@ def test_evaluate_predicate_any_ml_stack_empty_list_false() -> None:
     assert evaluate_predicate({"any_ml_stack": []}, facts) is False
 
 
+@pytest.mark.parametrize(
+    ("wanted", "expected"),
+    [
+        (["pytest-cov"], True),
+        (["pytest-cov", "pytest"], True),
+        (["Pytest_Cov"], True),  # compared PEP 503-normalized, like the fact's keys
+        (["pytest-cov", "hypothesis"], False),
+        (["fastapi"], False),  # a runtime dependency is not a dev dependency
+    ],
+)
+def test_has_dev_dependency_all_required(wanted: list[str], expected: bool) -> None:
+    """prK §F.1.2: every named package must be a declared dev dependency."""
+    facts: Facts = {
+        "dependencies": {"fastapi": ">=0.110"},
+        "dev_dependencies": {"pytest": ">=8", "pytest-cov": ">=5"},
+    }
+    assert evaluate_predicate({"has_dev_dependency": wanted}, facts) is expected
+
+
+def test_has_dev_dependency_absent_fact_is_false() -> None:
+    assert evaluate_predicate({"has_dev_dependency": ["pytest-cov"]}, {}) is False
+
+
+def test_has_dev_dependency_requires_a_list_of_strings() -> None:
+    with pytest.raises(ValueError, match="'has_dev_dependency' must be a list of strings"):
+        evaluate_predicate({"has_dev_dependency": "pytest-cov"}, {})
+
+
+def test_has_dev_dependency_reads_the_detected_pyproject(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\n[project.optional-dependencies]\ndev = ["pytest_cov>=5"]\n',
+        encoding="utf-8",
+    )
+    assert evaluate_predicate({"has_dev_dependency": ["pytest-cov"]}, detect(tmp_path)) is True
+
+
 def test_evaluate_predicate_ml_stack_requires_list() -> None:
     facts: Facts = {"ml_stack": {"torch": ""}}
     with pytest.raises(ValueError, match="list of strings"):

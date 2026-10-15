@@ -50,7 +50,11 @@ Usage::
   (shlex-split). With a baseline, the suite is also run against the baseline: a
   ``git:<ref>`` baseline is materialised via a temporary ``git worktree`` (heavier
   than the static read) and a ``<dir>`` baseline runs in that directory.
-  ``--no-run-tests`` overrides ``[metrics] run_tests = true``.
+  ``--no-run-tests`` overrides ``[metrics] run_tests = true``. ``diff_coverage``
+  scores only the lines changed since a ``git:`` baseline (test files and
+  ``[metrics] exclude`` left out); it needs no baseline run, so ``--select
+  diff_coverage`` runs the suite once. ``[metrics] test_timeout_s`` bounds
+  each run.
 * **Snapshot** — ``--emit-measurements PATH`` writes the raw candidate
   measurements as JSON, tagged with ``HEAD^{tree}`` when the worktree is clean.
 * **Config** — a ``[metrics]`` table in ``.coding-agent-playbook.toml`` (parsed by

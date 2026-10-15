@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypedDict
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
+from coding_agent_playbook._pep503 import canonical_name
 from coding_agent_playbook._pyproject_deps import dependency_specs
 from coding_agent_playbook.security.files import user_home
 from coding_agent_playbook.security.paths import is_secret_path
@@ -328,6 +329,15 @@ def _check_python_version(constraint: str, facts: Facts) -> bool:
         raise ValueError(f"invalid python_version constraint or value: {exc}") from exc
 
 
+def _has_dev_dependencies(wanted: list[str], facts: Facts) -> bool:
+    """Whether every name in ``wanted`` is a declared dev dependency (prK §F.1.2).
+
+    The fact's keys are PEP 503-normalized, so ``pytest_cov`` matches ``pytest-cov``.
+    """
+    present = set(facts.get("dev_dependencies", {}))
+    return all(canonical_name(name) in present for name in wanted)
+
+
 def evaluate_predicate(
     predicate: dict[str, Any], facts: Facts, *, repo_root: Path | None = None
 ) -> bool:
@@ -339,6 +349,8 @@ def evaluate_predicate(
       - ``any_framework: ["pytest", "unittest"]`` — at least one present
       - ``has_ml_stack: ["torch", "numpy"]`` — ALL must be present in facts["ml_stack"]
       - ``any_ml_stack: ["torch", "tensorflow"]`` — at least one present in facts["ml_stack"]
+      - ``has_dev_dependency: ["pytest-cov"]`` — ALL declared as dev dependencies
+        (facts["dev_dependencies"]; names compared PEP 503-normalized)
       - ``has_file: ["Dockerfile"]`` — file exists in repo root (relative paths)
       - ``banking_mode: true`` — boolean facts compared by equality
 
@@ -375,6 +387,9 @@ def evaluate_predicate(
             wanted = _coerce_string_list(value, key)
             present = set(facts.get("ml_stack", {}).keys())
             if not any(name in present for name in wanted):
+                return False
+        elif key == "has_dev_dependency":
+            if not _has_dev_dependencies(_coerce_string_list(value, key), facts):
                 return False
         elif key == "has_file":
             paths = _coerce_string_list(value, key)

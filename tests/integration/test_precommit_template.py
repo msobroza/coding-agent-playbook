@@ -85,6 +85,18 @@ def test_starter_metrics_hook_passes_no_run_tests(output_commit: bool) -> None:
 
 
 @pytest.mark.parametrize("output_commit", [False, True])
+def test_starter_coverage_hook_is_manual_system(output_commit: bool) -> None:
+    """prK §F.1.3: the air-gapped twin of ``playbook-coverage``; it runs the suite, so manual."""
+    hooks = _hooks(yaml.safe_load(_render_fresh_pre_commit(output_commit=output_commit)))
+    coverage = hooks["coding-agent-playbook-coverage"]
+    assert coverage["entry"] == "playbook metrics --run-tests --select testing --baseline git:HEAD"
+    assert coverage["language"] == "system"
+    assert coverage["stages"] == ["manual"]
+    assert coverage["pass_filenames"] is False
+    assert coverage["require_serial"] is True
+
+
+@pytest.mark.parametrize("output_commit", [False, True])
 def test_starter_runs_secret_scan(output_commit: bool) -> None:
     """prK §E.4: SPEC §13.2 excludes gitleaks (it clones), so the starter scans with the engine."""
     hooks = _hooks(yaml.safe_load(_render_fresh_pre_commit(output_commit=output_commit)))

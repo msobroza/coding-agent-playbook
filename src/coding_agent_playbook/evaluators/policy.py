@@ -53,6 +53,9 @@ METRIC_DEFAULTS: dict[str, tuple[float | None, float | None, float]] = {
     "maintainability_index": (None, 0.65, 0.0),
     "coverage": (0.8, None, 0.0),
     "test_pass_rate": (None, 1.0, 0.0),
+    # prK §F.1.1: changed lines must be >= 80% executed; max_worsening is moot,
+    # since a diff-based metric is never compared with a baseline value.
+    "diff_coverage": (None, 0.8, 0.0),
     # prK §F.2.1/§F.3.1: no band by default (non-regression only); file_sloc is
     # regression-exempt, since a score drop can never exceed 1.0.
     "ruff_violations": (None, None, 0.0),

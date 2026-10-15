@@ -10,10 +10,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.evaluators.execution.project import ProjectHandle
 from coding_agent_playbook.evaluators.metric import Metric, static_metrics
 from coding_agent_playbook.evaluators.metrics_gate import (
     CONFIG_FILENAME,
@@ -28,7 +29,7 @@ from coding_agent_playbook.evaluators.normalizer import Identity
 from coding_agent_playbook.evaluators.scope import Scope
 from coding_agent_playbook.evaluators.types import EvalContext, Measurement, MetricConfig
 from tests.cli.test_metrics import _BASELINE_SOURCE, _WORSE_SOURCE
-from tests.fakes import FakeBaselineGit, FakeProjectFactory
+from tests.fakes import FakeBaselineGit, FakeGitRunner, FakeProjectFactory
 from tests.import_probe import new_modules_after
 
 if TYPE_CHECKING:
@@ -115,6 +116,40 @@ def test_request_test_cmd_is_exactly_what_runs(
 
     assert factory.calls == [(tmp_path, expected)]
     assert {check.check_id for check in result.report.checks} >= _EXECUTION_CHECKS
+
+
+def test_test_timeout_bounds_every_suite_run(tmp_path: Path) -> None:
+    """prK §F.0.3 item 7: ``[metrics] test_timeout_s`` becomes ``ProjectHandle.timeout_s``."""
+    _write(tmp_path / "mod.py", _CLEAN_SOURCE)
+    factory = FakeProjectFactory()
+    config = MetricConfig(mode="absolute", test_timeout_s=42.0)
+
+    run_metrics_gate(
+        _request(tmp_path, config=config, run_tests=True),
+        deps=MetricsGateDeps(project_factory=factory),
+    )
+
+    assert [request.timeout_s for request in factory.requests] == [42.0]
+    assert [handle.timeout_s for handle in factory.handles] == [42.0]
+
+
+def test_suite_timeout_is_a_usage_error(tmp_path: Path) -> None:
+    """A run past its bound raises ``RuntimeError`` in the handle; the gate exits 2 on it."""
+    import sys
+
+    _write(tmp_path / "mod.py", _CLEAN_SOURCE)
+
+    def slow_factory(
+        root: Path, report_dir: Path, test_cmd: list[str] | None = None, **options: Any
+    ) -> ProjectHandle:
+        sleeper = [sys.executable, "-c", "import time; time.sleep(30)"]
+        return ProjectHandle.create(root, report_dir, sleeper, timeout_s=0.2)
+
+    with pytest.raises(MetricsGateUsageError, match=r"timed out after 0\.2s"):
+        run_metrics_gate(
+            _request(tmp_path, config=MetricConfig(mode="absolute"), run_tests=True),
+            deps=MetricsGateDeps(project_factory=slow_factory),
+        )
 
 
 def test_tool_paths_reach_every_measurement_context(tmp_path: Path) -> None:
@@ -289,6 +324,8 @@ def test_git_failures_keep_cli_messages(
     _write(tmp_path / "mod.py", _CLEAN_SOURCE)
     deps = MetricsGateDeps(
         git_factory=_git_factory(FakeBaselineGit(fail_on={command})),
+        # Under run_tests diff_coverage also reads the working-tree diff.
+        git_runner_factory=FakeGitRunner().factory,
         project_factory=FakeProjectFactory(),
     )
 
@@ -305,11 +342,17 @@ def test_git_suite_baseline_runs_in_a_worktree_then_removes_it(tmp_path: Path) -
 
     run_metrics_gate(
         _request(tmp_path, baseline="git:HEAD", run_tests=True),
-        deps=MetricsGateDeps(git_factory=_git_factory(fake), project_factory=factory),
+        deps=MetricsGateDeps(
+            git_factory=_git_factory(fake),
+            git_runner_factory=FakeGitRunner().factory,
+            project_factory=factory,
+        ),
     )
 
     assert [command for command, _ in fake.calls][-2:] == ["worktree add", "worktree remove"]
     assert [root.name for root, _ in factory.calls] == [tmp_path.name, "baseline-worktree"]
+    # Only the candidate run diffs: the baseline handle has no diff base.
+    assert [request.diff_base for request in factory.requests] == ["HEAD", None]
 
 
 @pytest.mark.usefixtures("hermetic_git_env")
