@@ -190,8 +190,9 @@ class FakePinWriter:
     ``git=False`` models a repository outside git (both writers return ``None``).
     The interpreter pin follows the real first-writer-wins rule: ``pinned`` holds
     the current pin, set by the first call (to ``interpreter``) unless already
-    set. ``calls`` records ``(method, repo_root)``; ``tools`` the last tool map
-    and ``resource_roots`` the last ``pkg:`` id -> directory map.
+    set. ``calls`` records ``(method, repo_root)``; ``tools`` the last tool map,
+    ``resource_roots`` the last ``pkg:`` id -> directory map and ``drops`` the
+    last per-tool dropped codes.
     """
 
     git: bool = True
@@ -200,6 +201,7 @@ class FakePinWriter:
     calls: list[tuple[str, Path]] = field(default_factory=list)
     tools: dict[str, list[str]] = field(default_factory=dict)
     resource_roots: dict[str, str] = field(default_factory=dict)
+    drops: dict[str, list[str]] = field(default_factory=dict)
 
     def ensure_interpreter_pin(self, repo_root: Path) -> PinResult | None:
         self.calls.append(("ensure_interpreter_pin", repo_root))
@@ -215,10 +217,12 @@ class FakePinWriter:
         tools: Mapping[str, Sequence[str]],
         engine_version: str,
         resource_roots: Mapping[str, str] | None = None,
+        drops: Mapping[str, Sequence[str]] | None = None,
     ) -> Path | None:
         self.calls.append(("write_machine_pins", repo_root))
         self.tools = {name: list(argv) for name, argv in tools.items()}
         self.resource_roots = dict(resource_roots or {})
+        self.drops = {name: list(codes) for name, codes in (drops or {}).items()}
         return Path("/fake/.git/playbook-hooks/machine.json") if self.git else None
 
 

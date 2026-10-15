@@ -9,8 +9,10 @@ records an entry-point handler in ``guard_config.json`` as ``{"kind":
 From the declarations, validate closes the two halves K1 deferred:
 
 - H6: the name is registered; the hook's ``decisions`` and bound events are
-  ones the handler declares; ``MUTATES_INPUT`` is ``False``; the authored
-  ``handler.config`` keys are in its ``CONFIG_SCHEMA`` with the right kinds;
+  ones the handler declares; ``MUTATES_INPUT`` is ``False``;
+  ``mutates_edited_file`` only on an in-tree builtin of the engine's
+  allowlist bound to ``post_tool_use`` (specs/prK-hook-pack.md §E.3); the
+  authored ``handler.config`` keys are in its ``CONFIG_SCHEMA`` with the right kinds;
 - H21: each consumer ``[hooks.<hook-id>]`` key is in that schema too.
 
 :class:`RegistryCatalog` also implements ``ConfigSchemaLookup``, so the layer
@@ -31,6 +33,7 @@ from coding_agent_playbook.hook_runtime.registry import (
     HandlerResolutionError,
     builtin_handler_modules,
     declaration_of,
+    edited_file_mutation_problem,
     load_builtin,
 )
 
@@ -249,6 +252,10 @@ def _slot_findings(
         yield error(
             f"handler {name!r} declares MUTATES_INPUT = True; hooks never rewrite tool input (L6)"
         )
+    in_tree = entry.source == "in_tree"
+    mutation = edited_file_mutation_problem(declaration, in_tree=in_tree, events=events)
+    if mutation is not None:
+        yield error(mutation)
     yield from _config_problems(f"{label}.config", handler.config, declaration)
 
 

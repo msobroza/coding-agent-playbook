@@ -1,8 +1,9 @@
 """The handler registry: builtin declarations, the static module map, run-time resolution (§D.3.1).
 
 :func:`register_hook_handler` records a builtin's :class:`HandlerDeclaration`
-(events, decisions, ``CONFIG_SCHEMA``, ``MUTATES_INPUT``). The dispatcher stays
-import-light: :data:`_BUILTIN_HANDLER_MODULES` maps each name to its module, so
+(events, decisions, ``CONFIG_SCHEMA``, ``MUTATES_INPUT``, and the builtin-only
+``mutates_edited_file`` capability of :data:`MUTATES_EDITED_FILE_HANDLERS`). The
+dispatcher stays import-light: :data:`_BUILTIN_HANDLER_MODULES` maps each name to its module, so
 only the modules bound to the current event are imported (no scan; a test
 checks map and decorators agree), and an out-of-tree handler, resolved at sync
 to ``{"kind": "entry_point", "target": "pkg.mod:attr"}``, is imported directly,
@@ -21,6 +22,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime._config_keys import ConfigKey, ConfigKind, KeyPolicy
+from coding_agent_playbook.hook_runtime._event_memo import EventMemo
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName
 
@@ -38,6 +40,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "HANDLER_ATTR",
+    "MUTATES_EDITED_FILE_HANDLERS",
     "ConfigKey",
     "ConfigKind",
     "HandlerContext",
@@ -50,6 +53,7 @@ __all__ = [
     "Untrusted",
     "builtin_handler_modules",
     "declaration_of",
+    "edited_file_mutation_problem",
     "load_builtin",
     "register_hook_handler",
     "registered_handlers",
@@ -75,8 +79,13 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         "session_start_playbook_briefing": f"{_HANDLERS}.session_start_playbook_briefing",
         "stop_ci_parity_gate": f"{_HANDLERS}.stop_ci_parity_gate",
         "prompt_scope_guard": f"{_HANDLERS}.prompt_scope",
+        "ruff_post_edit": f"{_HANDLERS}.ruff_feedback",
     }
 )
+#: The only handlers that may rewrite the file the tool just edited (specs/prK-hook-pack.md
+#: §E.3): an engine builtin, on ``post_tool_use``. No external or entry-point handler, ever (L6).
+MUTATES_EDITED_FILE_HANDLERS: Final = frozenset({"ruff_post_edit"})
+_MUTATION_EVENT: Final = EventName.POST_TOOL_USE
 
 #: snake_case, plus ``:<role>`` for a companion bound to a second event (K-2).
 _NAME: Final = re.compile(r"[a-z][a-z0-9_]*(?::[a-z][a-z0-9_]*)?")
@@ -98,6 +107,7 @@ class HandlerDeclaration:
     decisions: frozenset[Decision]
     config_schema: Mapping[str, ConfigKey]
     mutates_input: bool = False
+    mutates_edited_file: bool = False
     config_domain: str | None = None
     fn: HandlerFn = field(compare=False, repr=False)
 
@@ -120,7 +130,9 @@ class HandlerContext:
     ``deps`` is the dispatch's own ``RuntimeDeps`` (``None`` in a hand-built
     context), for the cold paths that re-enter the pipeline or open a
     user-local store: the session-start heartbeat's in-process canaries and
-    its pending-trust probe (specs/prK-hook-pack.md §E.1).
+    its pending-trust probe (specs/prK-hook-pack.md §E.1). ``memo`` is shared by
+    every hook of this event: the §E.3 post-edit hooks run one ruff call per
+    edited file through it (a hand-built context gets a private one).
     """
 
     hook: HookRecord
@@ -137,6 +149,7 @@ class HandlerContext:
     home: str | None = None
     env: Mapping[str, str] = field(default_factory=dict)
     deps: RuntimeDeps | None = None
+    memo: EventMemo = field(default_factory=EventMemo)
 
 
 class HandlerResolutionError(Exception):
@@ -185,12 +198,15 @@ def register_hook_handler[F: Callable[..., Any]](
     decisions: Iterable[str],
     config_schema: Mapping[str, ConfigKey] | None = None,
     mutates_input: bool = False,
+    mutates_edited_file: bool = False,
     config_domain: str | None = None,
 ) -> Callable[[F], F]:
     """Register the decorated function as builtin handler ``name``; returns it unchanged.
 
     ``events`` and ``decisions`` are the canonical names it serves and may
     return; ``config_schema`` is its ``CONFIG_SCHEMA`` (empty: no config keys).
+    ``mutates_edited_file`` is honored only for :data:`MUTATES_EDITED_FILE_HANDLERS`
+    (validate reports any other declaration; resolution refuses it).
 
     Example::
 
@@ -210,6 +226,7 @@ def register_hook_handler[F: Callable[..., Any]](
             decisions=decision_set,
             config_schema=MappingProxyType(dict(config_schema or {})),
             mutates_input=mutates_input,
+            mutates_edited_file=mutates_edited_file,
             config_domain=config_domain,
             fn=fn,
         )
@@ -245,6 +262,38 @@ def declaration_of(obj: object) -> HandlerDeclaration | None:
     """The declaration a decorated function carries, else ``None``."""
     found = getattr(obj, HANDLER_ATTR, None)
     return found if isinstance(found, HandlerDeclaration) else None
+
+
+def edited_file_mutation_problem(
+    declaration: HandlerDeclaration, *, in_tree: bool, events: Iterable[str]
+) -> str | None:
+    """Why ``declaration``'s ``mutates_edited_file`` is not allowed here, or ``None``.
+
+    Allowed only for an in-tree builtin of :data:`MUTATES_EDITED_FILE_HANDLERS`
+    bound to ``post_tool_use`` alone (an extension of the L6 trust contract).
+
+    Example::
+
+        >>> edited_file_mutation_problem(load_builtin("ruff_post_edit"), in_tree=True,
+        ...     events=["pre_tool_use"])  # doctest: +SKIP
+        "handler 'ruff_post_edit' declares mutates_edited_file, allowed on post_tool_use only; ..."
+    """
+    if not declaration.mutates_edited_file:
+        return None
+    name = declaration.name
+    if not in_tree or name not in MUTATES_EDITED_FILE_HANDLERS:
+        allowed = ", ".join(sorted(MUTATES_EDITED_FILE_HANDLERS))
+        return (
+            f"handler {name!r} declares mutates_edited_file; only the engine builtins "
+            f"({allowed}) may rewrite the edited file (L6)"
+        )
+    elsewhere = [event for event in events if event != _MUTATION_EVENT.value]
+    if elsewhere:
+        return (
+            f"handler {name!r} declares mutates_edited_file, allowed on "
+            f"{_MUTATION_EVENT.value} only; it is bound to {elsewhere!r}"
+        )
+    return None
 
 
 def load_builtin(
@@ -284,12 +333,28 @@ def resolve_handler(
     if spec is None:
         raise HandlerResolutionError(f"hook {record.id!r} binds no handler to {event.value!r}")
     if spec.kind == "builtin":
-        return load_builtin(spec.name or "", modules=ctx.builtin_modules).fn
+        declaration = load_builtin(spec.name or "", modules=ctx.builtin_modules)
+        _refuse_mutation(declaration, in_tree=True, event=event)
+        return declaration.fn
     if spec.kind == "entry_point":
-        return _entry_point(spec.target or "", ctx.cfg.allow_code_from)
+        found = _entry_point(spec.target or "", ctx.cfg.allow_code_from)
+        if not isinstance(found, Untrusted):
+            _refuse_mutation(declaration_of(found), in_tree=False, event=event)
+        return found
     from coding_agent_playbook.hook_runtime._external import external_handler
 
     return external_handler(record, event, ctx)
+
+
+def _refuse_mutation(
+    declaration: HandlerDeclaration | None, *, in_tree: bool, event: EventName
+) -> None:
+    """The runtime backstop of validate's ``mutates_edited_file`` rule."""
+    if declaration is None:
+        return
+    problem = edited_file_mutation_problem(declaration, in_tree=in_tree, events=[event.value])
+    if problem is not None:
+        raise HandlerResolutionError(problem)
 
 
 def _entry_point(target: str, allow_code_from: frozenset[str]) -> HandlerFn | Untrusted:

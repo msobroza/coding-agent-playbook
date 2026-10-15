@@ -8,9 +8,10 @@
   them), whenever hooks are enabled and a hook-capable adapter is on. Its
   ``protected`` table is this sync's written set as lock rows, the adapters'
   scan dirs and the layer packages, its ``precommit`` table the playbook
-  hook ids of the repo's pre-commit config, and its ``facts`` /
+  hook ids of the repo's pre-commit config, its ``facts`` /
   ``applicability`` tables the detector facts and every rule, prompt and
-  applicability-gated hook with its predicates (specs/prK-hook-pack.md §E.0.5);
+  applicability-gated hook with its predicates (specs/prK-hook-pack.md §E.0.5),
+  and its ``ruff`` table the repo's own ruff selection (§E.3);
 - :func:`check_settings_readable`: refuses a ``settings.json`` the Claude Code
   merge would choke on *before* any adapter writes;
 - :func:`finish_write`: write mode's pins, summary lines and approvals;
@@ -29,6 +30,10 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook import __version__ as _installed_version
+from coding_agent_playbook._guard_config_ruff import (
+    read_project_ruff_selection,
+    ruff_candidate_codes,
+)
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.claude_settings import (
     CLAUDE_SETTINGS_PATH,
@@ -194,6 +199,7 @@ def write_runtime_outputs(
         precommit_ids=precommit_hook_ids(ctx.repo_root),
         detect=_detect_inputs(ctx, hooks),
         prompts=prompts,
+        ruff=read_project_ruff_selection(ctx.repo_root),
     )
     path = write_guard_config(out_root, render_guard_config(inputs))
     recorder.record([path], Provenance(kind="runtime"))
@@ -345,6 +351,7 @@ def finish_write(
             engine_version=version,
             resource_roots=roots,
             stage_tools=[r.tool for r in stop_stage_records(hooks.resolved) if r.tool],
+            ruff_codes=ruff_candidate_codes(hooks.resolved),
         )
     for line in summary_lines(hooks, ctx.adapters):
         print(line)

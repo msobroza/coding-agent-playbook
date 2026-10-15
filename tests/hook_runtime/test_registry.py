@@ -386,6 +386,36 @@ def test_broken_entry_point_targets_are_resolution_errors(
         resolve_handler(cfg.hooks["ep"], PRE, _ctx(cfg, GuardRepo.create(tmp_path)))
 
 
+_MUTATOR = """\
+from coding_agent_playbook.hook_runtime.registry import register_hook_handler
+
+
+@register_hook_handler(
+    "acme_k7_fixer", events=["post_tool_use"], decisions=["context"], mutates_edited_file=True
+)
+def fix(ev, ctx):
+    return None
+"""
+
+
+def test_mutates_edited_file_is_refused_at_resolution_off_its_allowlist(
+    tmp_path: Path, make_package: PackageFactory
+) -> None:
+    """The runtime backstop of validate's rule (specs/prK-hook-pack.md §E.3)."""
+    make_package("acme_k7mut", init=_MUTATOR)
+    target = {"kind": "entry_point", "target": "acme_k7mut:fix", "dist": None}
+    entry = hook_record("acme-fix", events=["post_tool_use"], handler=target)
+    builtin = {"kind": "builtin", "name": "ruff_post_edit"}
+    misbound = hook_record("misbound", handler=builtin)
+    cfg = _config(entry, misbound, allow_code_from=["acme_k7mut"])
+    ctx = _ctx(cfg, GuardRepo.create(tmp_path))
+
+    with pytest.raises(HandlerResolutionError, match="only the engine builtins"):
+        resolve_handler(cfg.hooks["acme-fix"], EventName.POST_TOOL_USE, ctx)
+    with pytest.raises(HandlerResolutionError, match="allowed on post_tool_use only"):
+        resolve_handler(cfg.hooks["misbound"], PRE, ctx)
+
+
 def test_event_without_a_bound_handler_is_a_resolution_error(tmp_path: Path) -> None:
     cfg = _config(hook_record("guard-a"))
 

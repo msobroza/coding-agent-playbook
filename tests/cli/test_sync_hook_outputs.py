@@ -106,14 +106,15 @@ def test_first_sync_writes_every_hook_output(synced: Path) -> None:
     assert list(doc["hooks"]) == ENGINE_PACK_EVENTS
     assert (synced / LAUNCHER).is_file()
     config = json.loads((synced / GUARD_CONFIG).read_bytes())
-    # The engine pack's default-tier protect hooks (Track K5) and prompt-write-scope-guard
-    # (K7); guard-eval-fixtures is opt-in.
+    # The engine pack's default-tier protect hooks (Track K5), post-edit-ruff-format and
+    # prompt-write-scope-guard (K7); guard-eval-fixtures is opt-in.
     assert sorted(config["hooks"]) == [
         "control-plane-guard",
         "eval-task-authoring-lint",
         "guard-ext",
         "guard-generated-outputs",
         "guard-x",
+        "post-edit-ruff-format",
         "prompt-write-scope-guard",
         "resync-on-detector-input-change",
         "session-start-playbook-briefing",
@@ -342,12 +343,13 @@ def test_summary_lines_counts_and_hand_edit_warning(
     repo = make_hook_repo(tmp_path / "repo", make_synthetic_repo)
     assert _sync_repo(repo, tmp_path) == 0
     out = capsys.readouterr().out
-    # guard-x, guard-ext and the engine pack's nine default-tier hooks (seven protect,
-    # the Stop coordinator, prompt-write-scope-guard); the briefing has no advisory body,
-    # so Continue gets one fewer. The member-less UserPromptSubmit group is the fifth entry.
-    assert "✓ Hooks: 11 enabled, 1 skipped (" in out
-    assert "claude_code: 11 enforced" in out
-    assert "continue: 10 advisory" in out
+    # guard-x, guard-ext and the engine pack's ten default-tier hooks (seven protect,
+    # the Stop coordinator, post-edit-ruff-format, prompt-write-scope-guard); the briefing
+    # has no advisory body, so Continue gets one fewer. The member-less UserPromptSubmit
+    # group is the fifth entry; post-edit-ruff-format joins the PostToolUse one.
+    assert "✓ Hooks: 12 enabled, 1 skipped (" in out
+    assert "claude_code: 12 enforced" in out
+    assert "continue: 11 advisory" in out
     assert f"✓ {SETTINGS}: 5 managed entries updated, 0 removed (user keys untouched)" in out
 
     _edit_managed_group(repo)

@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import coding_agent_playbook
+from coding_agent_playbook._guard_config_ruff import read_project_ruff_selection
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
@@ -137,7 +138,8 @@ class PackRepo(GuardRepo):
         The decision log is switched on (guard-decision-log would, K9), so a test
         can read what the dispatch recorded, e.g. that canary lines are tagged.
         ``auto_sync`` is ``[hooks] auto_sync``; ``detect`` the facts and rows;
-        ``prompts`` the rendered prompts (their ``write_scope``, §E.3).
+        ``prompts`` the rendered prompts (their ``write_scope``, §E.3). The
+        ``ruff`` table is read from the repository's own ruff config, as sync does.
         """
         hooks = resolve_engine_hooks(hook_ids, self.root, per_hook=per_hook)
         protect = ProtectInputs(rows, fixture_output_dirs(self.root), packages)
@@ -149,6 +151,7 @@ class PackRepo(GuardRepo):
             protected=protect,
             detect=detect or DetectInputs(),
             prompts=prompts,
+            ruff=read_project_ruff_selection(self.root),
         )
         document = render_guard_config(inputs)
         document["logging"]["decisions"] = True

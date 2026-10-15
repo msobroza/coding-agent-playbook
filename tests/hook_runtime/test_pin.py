@@ -9,6 +9,7 @@ reported green.
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 from pathlib import Path
@@ -160,6 +161,36 @@ def test_machine_pins_record_size_mtime_ino_signature(tmp_path: Path) -> None:
 
     ruff.write_text("#!/bin/sh\necho upgraded\n", encoding="utf-8")
     assert not pinned.unchanged()  # a changed tool is skipped, never green
+
+
+def test_ruff_drop_list_round_trips_sorted_and_only_when_set(tmp_path: Path) -> None:
+    """``tools.ruff.drop``: the codes the pinned ruff cannot run (specs/prK-hook-pack.md §E.3)."""
+    git_dir = _git_dir(tmp_path)
+    ruff = _executable(tmp_path / "venv" / "bin" / "ruff")
+
+    write_machine_pins(
+        git_dir=str(git_dir),
+        tools={"ruff": [str(ruff)], "cz": ["/no/such/cz"]},
+        drops={"ruff": ["UP045", "DOC201", "UP045"]},
+        engine_version="0",
+    )
+
+    document = json.loads((git_dir / STATE_DIR_NAME / MACHINE_PINS).read_text(encoding="utf-8"))
+    assert document["tools"]["ruff"]["drop"] == ["DOC201", "UP045"]
+    assert "drop" not in document["tools"]["cz"]
+    pins = read_machine_pins(git_dir=str(git_dir))
+    assert pins is not None
+    assert pins.tools["ruff"].drop == {"DOC201", "UP045"}
+    assert pins.tools["cz"].drop == frozenset()
+
+
+def test_malformed_drop_list_reads_as_absent(tmp_path: Path) -> None:
+    git_dir = _git_dir(tmp_path)
+    write_machine_pins(git_dir=str(git_dir), tools={}, engine_version="0")
+    bad = {"tools": {"ruff": {"argv": ["/v/ruff"], "sig": None, "drop": "UP045"}}}
+    (git_dir / STATE_DIR_NAME / MACHINE_PINS).write_text(json.dumps(bad), encoding="utf-8")
+
+    assert read_machine_pins(git_dir=str(git_dir)) is None
 
 
 def test_corrupt_machine_pins_read_as_absent(tmp_path: Path) -> None:

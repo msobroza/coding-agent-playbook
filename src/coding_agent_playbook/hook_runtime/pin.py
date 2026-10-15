@@ -13,6 +13,10 @@ use these helpers; they are jinja2-free and stdlib-only.
   longer names an executable file (or on ``--repin``).
 - A tool pin keeps ``[st_size, st_mtime_ns, st_ino]``: a stage whose tool no
   longer matches is skipped as ``tool_changed``, never reported green.
+- ``tools.ruff.drop`` lists the rule codes this ruff does not know or only
+  has in preview, probed at sync per ruff signature: the hooks' code lists in
+  ``guard_config.json`` stay machine-independent, and the post-edit ruff call
+  leaves these out (specs/prK-hook-pack.md §E.3, OQ-37).
 - Hooks are git-only in v1: outside git there is no state root and no pin.
 """
 
@@ -43,6 +47,7 @@ __all__ = [
     "parse_machine_pins",
     "read_interpreter_pin",
     "read_machine_pins",
+    "state_store",
     "tool_signature",
     "write_machine_pins",
 ]
@@ -68,10 +73,11 @@ class PinResult:
 
 @dataclass(frozen=True, slots=True)
 class ToolPin:
-    """One tool's argv as sync resolved it, and its program's stat signature."""
+    """One tool's argv as sync resolved it, its program's stat signature, its dropped codes."""
 
     argv: tuple[str, ...]
     sig: Signature | None
+    drop: frozenset[str] = frozenset()
 
     def unchanged(self) -> bool:
         """Whether the program still has the signature sync recorded."""
@@ -166,10 +172,14 @@ def write_machine_pins(
     tools: Mapping[str, Sequence[str]],
     engine_version: str,
     resource_roots: Mapping[str, str] | None = None,
+    drops: Mapping[str, Sequence[str]] | None = None,
     git_dir: str | None = None,
     start: str = ".",
 ) -> Path | None:
-    """Rewrite ``machine.json`` with each tool's argv and its program's signature.
+    """Rewrite ``machine.json`` with each tool's argv, its program's signature and ``drops``.
+
+    ``drops`` maps a tool to the codes its pinned version cannot run (sorted
+    into ``tools.<name>.drop``; omitted when empty).
 
     Example::
 
@@ -182,7 +192,9 @@ def write_machine_pins(
     document = {
         "schema_version": MACHINE_PINS_SCHEMA,
         "engine_version": engine_version,
-        "tools": {name: _tool_entry(argv) for name, argv in tools.items()},
+        "tools": {
+            name: _tool_entry(argv, (drops or {}).get(name, ())) for name, argv in tools.items()
+        },
         "resource_roots": dict(resource_roots or {}),
     }
     try:
@@ -210,6 +222,19 @@ def read_machine_pins(*, git_dir: str | None = None, start: str = ".") -> Machin
     return parse_machine_pins(document)
 
 
+def state_store(*, git_dir: str | None = None, start: str = ".") -> StateStore | None:
+    """The usable per-worktree state root of the repository at ``start``, or ``None``.
+
+    Sync-time caches beside the pins use it (the ruff rule probe of §E.3).
+
+    Example::
+
+        >>> state_store(start="/no/such/dir") is None
+        True
+    """
+    return _store(git_dir, start)
+
+
 def _store(git_dir: str | None, start: str) -> StateStore | None:
     if git_dir is None:
         repo = find_repo(start)
@@ -234,9 +259,12 @@ def _is_executable(path: str) -> bool:
     return os.path.isfile(path) and os.access(path, os.X_OK)
 
 
-def _tool_entry(argv: Sequence[str]) -> dict[str, Any]:
+def _tool_entry(argv: Sequence[str], drop: Sequence[str] = ()) -> dict[str, Any]:
     sig = tool_signature(argv[0]) if argv else None
-    return {"argv": list(argv), "sig": None if sig is None else list(sig)}
+    entry: dict[str, Any] = {"argv": list(argv), "sig": None if sig is None else list(sig)}
+    if drop:
+        entry["drop"] = sorted(set(drop))
+    return entry
 
 
 def parse_machine_pins(document: dict[str, Any]) -> MachinePins | None:
@@ -266,7 +294,10 @@ def _tool_pin(entry: object) -> ToolPin | None:
     argv = entry.get("argv")
     if not isinstance(argv, list) or not argv or not all(isinstance(a, str) for a in argv):
         return None
-    return ToolPin(tuple(argv), _signature_of(entry.get("sig")))
+    drop = entry.get("drop", [])
+    if not isinstance(drop, list) or not all(isinstance(code, str) for code in drop):
+        return None
+    return ToolPin(tuple(argv), _signature_of(entry.get("sig")), frozenset(drop))
 
 
 def _signature_of(value: object) -> Signature | None:

@@ -390,3 +390,33 @@ def test_long_advisory_body_warns_and_passes(
         f"warning: {long}: advisory body is 601 characters; keep it under 600 so the "
         "AGENTS.md Guardrails section stays lean"
     ]
+
+
+def test_mutates_edited_file_rejected_for_external_handlers(
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    make_hook: HookFactory,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Only an engine builtin may rewrite the edited file (specs/prK-hook-pack.md §E.3).
+
+    A ``HOOK.md`` has no way to claim the capability: the key is unknown (H1).
+    """
+    repo = make_synthetic_repo(tmp_path)
+    handler = {"command": "python", "script": "scripts/fix.py", "mutates_edited_file": True}
+    path = make_hook(
+        repo / "playbook" / "hooks",
+        "fixer",
+        scripts=True,
+        events=["post_tool_use"],
+        decisions=["context", "none"],
+        on_error="open",
+        handler=handler,
+    )
+
+    assert _run(repo) == 1
+
+    assert _fail_lines(capsys.readouterr().out) == [
+        f"FAIL {path}: handler.mutates_edited_file: unknown key 'mutates_edited_file'; "
+        "allowed: builtin, command, script, args, config"
+    ]

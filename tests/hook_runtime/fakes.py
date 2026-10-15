@@ -13,6 +13,9 @@ never patches a module:
 - ``FakeHandlerResolver`` for ``registry.resolve_handler``: hook id -> handler.
 - ``FakeStageRunner`` for ``stop.runner.PinnedStageRunner``: a scripted
   ``ToolRun`` per logical tool (timeouts and crashes included), calls recorded.
+- ``FakeRuff`` for the pinned ruff behind ``RuntimeDeps.proc`` (and the
+  sync-time rule probe): scripted D1 JSON, M1/M2 rewrites of the file, the
+  HEAD format verdict and ``ruff rule`` answers; any other program fails.
 - ``FakeTimer`` for ``deps.thread_timer`` (fires only when told, or on start)
   and ``FakeExit`` / ``fake_exit`` for ``os._exit``: the watchdog runs
   in-process and its exit surfaces as an exception.
@@ -20,6 +23,7 @@ never patches a module:
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, NoReturn
@@ -336,6 +340,108 @@ class FakeTimers:
         return timer
 
 
+def ruff_row(code: str | None, row: int, message: str = "finding") -> dict[str, object]:
+    """One D1 diagnostic as ``ruff check --output-format json`` prints it (the parts read)."""
+    return {"code": code, "location": {"row": row, "column": 1}, "message": message}
+
+
+@dataclass
+class FakeRuff:
+    """In-memory ``ProcPort`` for the pinned ruff: answers by subcommand, records every argv.
+
+    - D1 (``check ... --output-format json``) prints ``diagnostics`` (rows from
+      :func:`ruff_row`), exit ``d1_exit``;
+    - M1 (``check --fix-only``) and M2 (``format -- <path>``) rewrite the file
+      after ``--`` through ``fix`` / ``reformat`` (identity when ``None``);
+    - the HEAD check (``format --check ... -``) exits 0 when ``format_clean``;
+    - ``rule --all`` prints ``rules`` (exit 2 when ``rule_all`` is off: a ruff
+      without the JSON listing) and ``rule <code>`` answers from ``rules``
+      (exit 2 for an unknown code).
+
+    ``timeouts`` holds the kinds (:meth:`kind`) that time out. Any program
+    other than ``ruff`` fails the test, like ``FakeProc``.
+    """
+
+    diagnostics: list[dict[str, object]] = field(default_factory=list)
+    d1_exit: int = 0
+    format_clean: bool = True
+    fix: Callable[[str], str] | None = None
+    reformat: Callable[[str], str] | None = None
+    rules: list[dict[str, object]] = field(default_factory=list)
+    rule_all: bool = True
+    timeouts: set[str] = field(default_factory=set)
+    calls: list[FakeCall] = field(default_factory=list)
+    programs: dict[str, str] = field(default_factory=dict)
+
+    @staticmethod
+    def kind(args: Sequence[str]) -> str:
+        """``d1``, ``fix``, ``format-check``, ``format``, ``rule-all`` or ``rule``."""
+        head = args[0] if args else ""
+        if head == "check":
+            return "fix" if "--fix-only" in args else "d1"
+        if head == "format":
+            return "format-check" if "--check" in args else "format"
+        return "rule-all" if "--all" in args else head
+
+    def run(
+        self,
+        argv: Sequence[str],
+        *,
+        timeout: float,
+        env: Mapping[str, str] | None = None,
+        input: bytes | None = None,
+        cwd: str | None = None,
+    ) -> ProcResult:
+        command = tuple(argv)
+        self.calls.append(
+            FakeCall(command, timeout, None if env is None else dict(env), input, cwd)
+        )
+        if not command or not os.path.basename(command[0]).startswith("ruff"):
+            raise AssertionError(f"unexpected subprocess: {command[0] if command else '<empty>'}")
+        args = command[1:]
+        kind = self.kind(args)
+        if kind in self.timeouts:
+            raise ProcTimeout(command[0], timeout)
+        returncode, stdout = self._answer(kind, args)
+        return ProcResult(command, returncode, stdout)
+
+    def which(self, name: str, *, path: str | None = None) -> str | None:
+        return self.programs.get(name)
+
+    def argvs(self, kind: str) -> list[tuple[str, ...]]:
+        """The ruff arguments (after the program) of every call of ``kind``, in order."""
+        return [c.argv[1:] for c in self.calls if self.kind(c.argv[1:]) == kind]
+
+    def kinds(self) -> list[str]:
+        """The kind of every call, in order."""
+        return [self.kind(c.argv[1:]) for c in self.calls]
+
+    def _answer(self, kind: str, args: Sequence[str]) -> tuple[int, bytes]:
+        if kind == "d1":
+            return self.d1_exit, json.dumps(self.diagnostics).encode()
+        if kind in ("fix", "format"):
+            self._rewrite(args[-1], self.fix if kind == "fix" else self.reformat)
+            return 0, b""
+        if kind == "format-check":
+            return (0 if self.format_clean else 1), b""
+        if kind == "rule-all":
+            return (0, json.dumps(self.rules).encode()) if self.rule_all else (2, b"")
+        return self._rule(args[1] if len(args) > 1 else "")
+
+    def _rule(self, code: str) -> tuple[int, bytes]:
+        row = next((r for r in self.rules if r.get("code") == code), None)
+        return (2, b"") if row is None else (0, json.dumps(row).encode())
+
+    @staticmethod
+    def _rewrite(path: str, change: Callable[[str], str] | None) -> None:
+        if change is None:
+            return
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(change(text))
+
+
 class FakeExit(BaseException):
     """Raised by :func:`fake_exit`: a ``BaseException`` so no handler ``except`` swallows it."""
 
@@ -356,9 +462,11 @@ __all__ = [
     "FakeGit",
     "FakeHandlerResolver",
     "FakeProc",
+    "FakeRuff",
     "FakeStageRunner",
     "FakeTimer",
     "FakeTimers",
     "FakeTrustStore",
     "fake_exit",
+    "ruff_row",
 ]

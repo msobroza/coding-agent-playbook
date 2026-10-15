@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime._decision_log import DISPATCHER_ID, DecisionLog, LogLine
+from coding_agent_playbook.hook_runtime._event_memo import EventMemo
 from coding_agent_playbook.hook_runtime._execute import (
     Progress,
     failure_result,
@@ -175,6 +176,7 @@ def _contexts(
             platform=deps.platform,
         )
     deadline = shared.started + cfg.deadlines_ms[ev.name] / 1000
+    memo = EventMemo()  # one per event: hooks share work on it (the §E.3 single ruff call)
 
     def make(selected: Selected) -> HandlerContext:
         return HandlerContext(
@@ -192,6 +194,7 @@ def _contexts(
             home=deps.home,
             env=deps.env,
             deps=deps,
+            memo=memo,
         )
 
     return make

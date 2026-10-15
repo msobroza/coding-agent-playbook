@@ -24,7 +24,10 @@ runtime's regex so control-plane-guard and sync never disagree; ``facts`` and
 ``_guard_config_detect``, ``eval`` is the fixture-glob engine constant and
 ``auto_sync`` mirrors ``[hooks] auto_sync``. ``stop_gate`` (K6) is the Stop
 coordinator's table from ``hook_registrations.stop_gate``: its stage records,
-budget and verify commands, also machine-independent.
+budget and verify commands, also machine-independent. ``ruff`` (K7) is the
+repo's own ruff selection and the safe-fix rules the post-edit pipeline may
+apply (``_guard_config_ruff``); the pinned ruff's version-specific facts live
+in ``machine.json`` instead.
 """
 
 from __future__ import annotations
@@ -50,6 +53,7 @@ from coding_agent_playbook._guard_config_protect import (
     resolve_resource_roots,
     resource_root_ids,
 )
+from coding_agent_playbook._guard_config_ruff import RuffSelection, ruff_table
 from coding_agent_playbook._sentinel import SENTINEL
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.hook_policy import HOOK_SCRIPTS_DIR
@@ -87,6 +91,7 @@ __all__ = [
     "GuardConfigInputs",
     "ProtectInputs",
     "ProtectedRow",
+    "RuffSelection",
     "adapter_output_dirs",
     "applicability_rows",
     "copy_hook_scripts",
@@ -160,7 +165,8 @@ class GuardConfigInputs:
     ``precommit_ids`` the repo's playbook pre-commit hook ids and ``detect``
     the detector facts and applicability rows (§E.0.5); ``prompts`` the
     rendered prompts, whose ``write_scope`` becomes prompt-write-scope-guard's
-    ``scopes`` (specs/prK-hook-pack.md §E.3).
+    ``scopes`` (specs/prK-hook-pack.md §E.3); ``ruff`` the repo's ruff
+    selection (``read_project_ruff_selection``).
 
     Example::
 
@@ -176,6 +182,7 @@ class GuardConfigInputs:
     precommit_ids: Sequence[str] = ()
     detect: DetectInputs = field(default_factory=DetectInputs)
     prompts: Sequence[Prompt] = ()
+    ruff: RuffSelection = field(default_factory=RuffSelection)
 
 
 @dataclass(frozen=True)
@@ -192,8 +199,8 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
     ``allow_code_from`` and ``state_ttl_days`` are the runtime keys beyond the
     §D.8.2 table that ``hook_runtime.config`` reads (it cannot read ``[hooks]``);
     ``sentinel``, ``protected``, ``control_plane``, ``precommit``, ``facts``,
-    ``applicability``, ``eval``, ``auto_sync`` and ``stop_gate`` are §E.0.5
-    pack keys (``GuardConfig.tables``).
+    ``applicability``, ``eval``, ``auto_sync``, ``stop_gate`` and ``ruff`` are
+    §E.0.5 / §E.3 pack keys (``GuardConfig.tables``).
 
     Example::
 
@@ -232,6 +239,7 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
         "eval": {"fixture_globs": list(FIXTURE_GLOBS)},
         "auto_sync": cfg.auto_sync,
         "stop_gate": stop_gate_table(inputs.hooks, inputs.detect.facts),
+        "ruff": ruff_table(inputs.ruff),
     }
 
 
