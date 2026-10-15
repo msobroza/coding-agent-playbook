@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.proc import ProcResult
     from coding_agent_playbook.hook_runtime.registry import HandlerResolver
     from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.stop.runner import StageRunner
     from coding_agent_playbook.security.trust import HandlerApproval
 
 __all__ = [
@@ -139,7 +140,9 @@ class RuntimeDeps:
     hook's handler (``None``: ``registry.resolve_handler``; ``simulate``'s
     goldens pass a ``FakeHandlerResolver``). ``guard_config`` replaces the
     repo's verified config (``simulate --config`` only; ``None``: load and
-    check the digest). ``exit`` ends the process from
+    check the digest). ``stage_runner`` runs the Stop stages' pinned tools
+    (``None``: ``stop.runner.PinnedStageRunner``; tests pass a
+    ``FakeStageRunner``). ``exit`` ends the process from
     the watchdog without unwinding (``os._exit``); ``timer_factory`` makes its
     timer. ``home`` and ``platform`` feed path normalization.
 
@@ -157,6 +160,7 @@ class RuntimeDeps:
     trust: TrustPort | None = None
     resolve_handler: HandlerResolver | None = None
     guard_config: GuardConfig | None = None
+    stage_runner: StageRunner | None = None
     out: TextIO | None = None
     err: TextIO | None = None
     exit: Callable[[int], NoReturn] = os._exit

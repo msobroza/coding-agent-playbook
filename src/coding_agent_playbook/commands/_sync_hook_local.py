@@ -12,8 +12,11 @@ lockfile is saved, in write mode only, when hooks are live:
 - **trust on first use**: each external handler whose code (source, launcher,
   args, script bytes) the user-local trust store has not approved is listed
   with its source, full command and old -> new script hash, then asked
-  ``[y/N]`` — only when stdin and stdout are TTYs. There is deliberately no
-  non-interactive approve flag: an agent's shell has no TTY (§B.4).
+  ``[y/N]``; so is the Stop gate's execution-stage list (``typecheck``,
+  ``tests``: they run pytest, ``conftest.py`` and mypy plugins), by the sha256
+  of the rendered ``stop_gate.stages``. Only when stdin and stdout are TTYs:
+  there is deliberately no non-interactive approve flag, as an agent's shell
+  has no TTY (§B.4).
 
 Every machine effect is injected through :class:`SyncHookDeps`, so tests never
 write a real pin or trust store, nor read a terminal.
@@ -21,11 +24,13 @@ write a real pin or trust store, nor read a terminal.
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, Protocol
 
+from coding_agent_playbook.hook_registrations import stop_stage_records
 from coding_agent_playbook.hook_runtime import pin
 from coding_agent_playbook.security.trust import (
     HandlerApproval,
@@ -44,16 +49,22 @@ if TYPE_CHECKING:
 
 __all__ = [
     "PINNED_TOOLS",
+    "PROJECT_PYTHON",
     "PinWriter",
     "RuntimePinWriter",
     "SyncHookDeps",
     "approve_pending",
+    "execution_digest",
     "handler_approval",
+    "project_python",
     "write_pins",
 ]
 
-#: Logical tools the builtins run, pinned per worktree (``project_python`` lands with K6).
+#: Logical tools the builtins run, pinned per worktree; Stop stage tools join them.
 PINNED_TOOLS: Final = ("ruff", "cz")
+#: The project's own interpreter (the execution stages' tool), not a program on PATH.
+PROJECT_PYTHON: Final = "project_python"
+_VENV_PYTHONS: Final = (".venv/bin/python", ".venv/Scripts/python.exe")
 _PROMPT: Final = "Approve it? [y/N]: "
 _YES: Final = frozenset({"y", "yes"})
 
@@ -161,8 +172,24 @@ def write_pins(
             file=sys.stderr,
         )
     names = dict.fromkeys((*PINNED_TOOLS, *stage_tools))
-    tools = {name: [path] for name in names if (path := deps.which(name))}
+    tools = {name: [path] for name in names if (path := _locate(name, repo_root, deps))}
     deps.pins.write_machine_pins(repo_root, tools, engine_version, resource_roots)
+
+
+def project_python(repo_root: Path, which: Callable[[str], str | None]) -> str | None:
+    """The project's interpreter: its ``.venv`` one (unresolved), else ``python3`` on PATH.
+
+    Example: ``project_python(repo_root, shutil.which)`` is ``<repo>/.venv/bin/python``.
+    """
+    for rel in _VENV_PYTHONS:
+        candidate = repo_root / rel
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)  # never resolved: the venv symlink keeps its site-packages
+    return which("python3") or which("python")
+
+
+def _locate(name: str, repo_root: Path, deps: SyncHookDeps) -> str | None:
+    return project_python(repo_root, deps.which) if name == PROJECT_PYTHON else deps.which(name)
 
 
 def handler_approval(hook: ResolvedHook) -> HandlerApproval | None:
@@ -196,7 +223,8 @@ def approve_pending(
     Example: ``approve_pending(sync_hooks.resolved, ctx.repo_root, SyncHookDeps())``.
     """
     wanted = _wanted(hooks)
-    if not wanted:
+    digest = execution_digest(hooks)
+    if not wanted and digest is None:
         return []  # engine builtins only: the trust store is never opened
     try:
         store = deps.trust_store(repo_root)
@@ -204,16 +232,63 @@ def approve_pending(
         print(f"warning: hook approvals unavailable: {exc}", file=sys.stderr)
         return []
     pending = [(h, a) for h, a in wanted if not store.allows_handler(h.id, a)]
-    if not pending:
+    stages = digest is not None and not store.allows_execution(digest)
+    if not pending and not stages:
         return []
     if not deps.is_tty():
+        _pending_note(pending, stages=stages)
+        return []
+    approved = _ask_each(pending, store, deps)
+    if stages and digest is not None and _ask_execution(hooks, digest, store, deps):
+        approved.append("stop gate")
+    return approved
+
+
+def _pending_note(pending: list[tuple[ResolvedHook, HandlerApproval]], *, stages: bool) -> None:
+    review = "run 'playbook sync' in a terminal to review them."
+    if pending:
         ids = ", ".join(hook.id for hook, _ in pending)
         print(
-            f"note: {len(pending)} hook handler(s) await approval on this machine ({ids}); "
-            "run 'playbook sync' in a terminal to review them."
+            f"note: {len(pending)} hook handler(s) await approval on this machine ({ids}); {review}"
         )
-        return []
-    return _ask_each(pending, store, deps)
+    if stages:
+        print(f"note: the stop gate's execution stages await approval on this machine; {review}")
+
+
+def execution_digest(hooks: Sequence[ResolvedHook]) -> str | None:
+    """The sha256 the Stop gate's execution stages need approved, ``None`` without one.
+
+    The same digest the runtime checks (``GatePolicy.stages_sha256``): every
+    rendered stage record, so any change to the list needs a new approval.
+
+    Example: ``execution_digest(hooks)`` is ``None`` until ``typecheck`` or ``tests`` is on.
+    """
+    records = stop_stage_records(hooks)
+    if not any(record.cost == "execution" for record in records):
+        return None
+    return sha256_of_json([record.to_json() for record in records])
+
+
+def _ask_execution(
+    hooks: Sequence[ResolvedHook], digest: str, store: TrustStore, deps: SyncHookDeps
+) -> bool:
+    """Show the execution stages' commands and ask; record the approval on yes."""
+    print("The Stop gate runs repo-controlled code (tests, conftest.py, mypy plugins):")
+    for record in stop_stage_records(hooks):
+        if record.cost == "execution":
+            print(f"  {record.name}: {' '.join([record.tool, *record.args])}")
+    try:
+        answer = deps.ask(_PROMPT)
+    except EOFError:
+        answer = ""
+    if answer.strip().lower() not in _YES:
+        return False
+    try:
+        store.approve_execution(digest)
+    except TrustStoreError as exc:
+        print(f"warning: the stop gate approval was not recorded: {exc}", file=sys.stderr)
+        return False
+    return True
 
 
 def _wanted(hooks: Sequence[ResolvedHook]) -> list[tuple[ResolvedHook, HandlerApproval]]:

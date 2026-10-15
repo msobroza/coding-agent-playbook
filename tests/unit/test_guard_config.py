@@ -567,6 +567,26 @@ def test_stop_gate_derived_from_hook_config_and_dev_tools() -> None:
             "mode": "block",
         },
         {
+            "name": "lint",
+            "owner": "stop-ci-parity-gate",
+            "cost": "deterministic",
+            "tool": "ruff",
+            "args": ["check", "--output-format=json", "."],
+            "timeout_s": 3.0,
+            "needs_diff": True,
+            "mode": "block",
+        },
+        {
+            "name": "verify-claim",
+            "owner": "stop-ci-parity-gate",
+            "cost": "deterministic",
+            "tool": "",
+            "args": [],
+            "timeout_s": 1.0,
+            "needs_diff": True,
+            "mode": "block",
+        },
+        {
             "name": "coverage",
             "owner": "coverage-diff-gate",
             "cost": "execution",
@@ -583,6 +603,28 @@ def test_stop_gate_derived_from_hook_config_and_dev_tools() -> None:
     assert gate["claim_patterns"][-1] == "(?i)shipped it" and len(gate["claim_patterns"]) > 1
     parsed = parse_guard_config(serialize_guard_config(render_guard_config(_inputs([]))))
     assert isinstance(parsed, GuardConfig) and parsed.tables["stop_gate"]["stages"] == []
+
+
+def test_opted_in_execution_stages_join_the_table_and_the_deadline() -> None:
+    hooks = _stop_hooks({"stages": ["tests", "typecheck"]})[:1]
+
+    gate = _stop_gate(hooks)
+    deadlines = render_guard_config(_inputs(hooks))["deadlines_ms"]
+
+    rows = [(r["name"], r["owner"], r["cost"], r["tool"], r["args"]) for r in gate["stages"]]
+    assert rows == [
+        (
+            "lint",
+            "stop-ci-parity-gate",
+            "deterministic",
+            "ruff",
+            ["check", "--output-format=json", "."],
+        ),
+        ("verify-claim", "stop-ci-parity-gate", "deterministic", "", []),
+        ("typecheck", "stop-ci-parity-gate", "execution", "project_python", ["-m", "mypy"]),
+        ("tests", "stop-ci-parity-gate", "execution", "project_python", ["-m", "pytest", "-q"]),
+    ]
+    assert deadlines["stop"] == 423_000  # 1000 * (budget_s 3.0 + typecheck 120 + tests 300)
 
 
 def test_verify_commands_derived_when_absent() -> None:

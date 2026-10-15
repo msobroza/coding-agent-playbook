@@ -10,7 +10,9 @@ the answers against real repositories.
 
 from __future__ import annotations
 
+import io
 import os
+import tarfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -227,6 +229,51 @@ def test_option_like_or_malformed_revision_is_refused(tmp_path: Path, rev: str) 
     assert not any("diff" in call.argv or "merge-base" in call.argv for call in proc.calls)
 
 
+def test_diff_worktree_diffs_a_revision_against_the_working_tree(tmp_path: Path) -> None:
+    proc = _hardened_proc()
+    proc.script(["git", "diff"], stdout=b"--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-a\n+b\n")
+
+    lines = _fake_safe_git(tmp_path, proc).diff_worktree("HEAD")
+
+    assert lines.added == (AddedLine("a.py", 1, "b"),)
+    assert proc.calls[-1].argv[3:7] == ("diff", "--no-ext-diff", "--no-textconv", "HEAD")
+    assert "-U0" in proc.calls[-1].argv
+
+
+def _tar(members: dict[str, bytes], links: dict[str, str]) -> bytes:
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as archive:
+        for name, data in members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+        for name, target in links.items():
+            info = tarfile.TarInfo(name)
+            info.type, info.linkname = tarfile.SYMTYPE, target
+            archive.addfile(info)
+    return buffer.getvalue()
+
+
+def test_archive_to_skips_secrets_and_anything_leaving_the_export(tmp_path: Path) -> None:
+    proc = _hardened_proc()
+    members = {"src/a.py": b"x = 1\n", ".env": b"TOKEN=1\n", "../escape.txt": b"!"}
+    proc.script(["git", "archive"], stdout=_tar(members, {"etc": "/etc/passwd"}))
+    export = tmp_path / "export"
+    export.mkdir()
+
+    written = _fake_safe_git(tmp_path, proc).archive_to(
+        "HEAD", str(export), skip=lambda r: r == ".env"
+    )
+
+    assert written == 1
+    assert sorted(p.relative_to(export).as_posix() for p in export.rglob("*")) == [
+        "src",
+        "src/a.py",
+    ]
+    assert not (tmp_path / "escape.txt").exists()
+    assert proc.calls[-1].argv[-3:] == ("archive", "--format=tar", "HEAD")
+
+
 # --- ports -----------------------------------------------------------------------------------
 
 
@@ -248,12 +295,16 @@ def test_lazy_git_delegates_the_range_queries(
         lazy.merge_base("origin/main", "HEAD"),
         lazy.diff_range("abc", "HEAD").paths,
         lazy.show("abc", "a.py"),
+        lazy.diff_worktree("HEAD").paths,
+        lazy.archive_to("HEAD", str(tmp_path), skip=lambda rel: False),
     )
 
-    assert answers == ("origin/main", "abc", ("a.py",), b"x")
+    assert answers == ("origin/main", "abc", ("a.py",), b"x", (), 0)
     assert [method for method, _ in fake.calls] == [
         "default_branch",
         "merge_base",
         "diff_range",
         "show",
+        "diff_worktree",
+        "archive_to",
     ]

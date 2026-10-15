@@ -61,9 +61,14 @@ class ToolRun:
 
 
 class StageRunner(Protocol):
-    """Runs a stage's logical tool with its args; ``FakeStageRunner`` scripts it."""
+    """Runs a stage's logical tool with its args; ``FakeStageRunner`` scripts it.
 
-    def run(self, tool: str, args: Sequence[str], *, timeout: float) -> ToolRun: ...
+    ``cwd`` defaults to the worktree root; the lint baseline runs in an export.
+    """
+
+    def run(
+        self, tool: str, args: Sequence[str], *, timeout: float, cwd: str | None = None
+    ) -> ToolRun: ...
 
 
 class PinnedStageRunner:
@@ -93,13 +98,15 @@ class PinnedStageRunner:
             proc, cwd=repo.worktree_root, pins=lambda: read_machine_pins(git_dir=repo.git_dir)
         )
 
-    def run(self, tool: str, args: Sequence[str], *, timeout: float) -> ToolRun:
-        """Run ``tool``'s pinned argv plus ``args`` within ``timeout`` seconds."""
+    def run(
+        self, tool: str, args: Sequence[str], *, timeout: float, cwd: str | None = None
+    ) -> ToolRun:
+        """Run ``tool``'s pinned argv plus ``args`` within ``timeout`` seconds, in ``cwd``."""
         pin = self._pin(tool)
         if isinstance(pin, ToolRun):
             return pin
         try:
-            done = self._proc.run([*pin.argv, *args], timeout=timeout, cwd=self._cwd)
+            done = self._proc.run([*pin.argv, *args], timeout=timeout, cwd=cwd or self._cwd)
         except ProcTimeout:
             return ToolRun(tool, skip_category="timeout")
         except OSError:  # the pinned program vanished between the stat and the spawn

@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from coding_agent_playbook.hook_runtime._git_parse import DiffLines
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps, TrustPort
     from coding_agent_playbook.hook_runtime.event import RepoInfo
@@ -104,6 +106,14 @@ class LazyGit:
     def show(self, rev: str, repo_rel: str) -> bytes | None:
         """See ``GitPort.show``."""
         return self._port().show(rev, repo_rel)
+
+    def diff_worktree(self, base: str) -> DiffLines:
+        """See ``GitPort.diff_worktree``."""
+        return self._port().diff_worktree(base)
+
+    def archive_to(self, rev: str, dest: str, *, skip: Callable[[str], bool]) -> int:
+        """See ``GitPort.archive_to``."""
+        return self._port().archive_to(rev, dest, skip=skip)
 
 
 def open_trust_store(repo: RepoInfo, deps: RuntimeDeps) -> TrustPort | None:

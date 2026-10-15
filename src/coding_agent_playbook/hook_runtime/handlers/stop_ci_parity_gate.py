@@ -1,7 +1,9 @@
 """stop-ci-parity-gate: the dispatcher's one Stop handler, the coordinator (specs/prK-hook-pack.md §E.2).
 
-It plans every Stop-stage hook bound to the event (``config.stage``, ordered
-by ``STOP_STAGE_ORDER``, never ``priority``) through :data:`STAGE_FACTORIES`,
+It plans its own stages (the ``stop_gate.stages`` records it owns: ``lint``,
+``verify-claim`` and the opted-in ``typecheck`` / ``tests``) and every
+Stop-stage hook bound to the event (``config.stage``), ordered by
+``STOP_STAGE_ORDER``, never ``priority``, through :data:`STAGE_FACTORIES`,
 then hands them to ``stop.coordinator.StopCoordinator``, which owns the
 policy: fingerprint skip, block budget, one combined reason per tree, the
 ``NOT verified`` rule. The selection never fans the stage hooks out while
@@ -55,11 +57,20 @@ CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
     "claim_patterns": ConfigKey("list", "extend"),
     "max_blocks": ConfigKey("integer"),
     "budget_s": ConfigKey("number"),
+    "tests_scope": ConfigKey("string", "replace", ("all", "touched")),
 }
 _HANDLERS: Final = "coding_agent_playbook.hook_runtime.handlers"
 #: Stage name -> ``module:function`` building it; a pack track adds a row per stage.
 STAGE_FACTORIES: Final[Mapping[str, str]] = MappingProxyType(
-    {"drift": f"{_HANDLERS}.stop_drift_and_orphan_gate:drift_stage"}
+    {
+        "drift": f"{_HANDLERS}.stop_drift_and_orphan_gate:drift_stage",
+        "lint": f"{_HANDLERS}._lint_stage:lint_stage",
+        "quality-metrics": f"{_HANDLERS}.quality_metrics:quality_metrics_stage",
+        "gate-integrity": f"{_HANDLERS}.gate_weakening:gate_integrity_stage",
+        "verify-claim": f"{_HANDLERS}._verify_claim:verify_claim_stage",
+        "typecheck": f"{_HANDLERS}._exec_stages:typecheck_stage",
+        "tests": f"{_HANDLERS}._exec_stages:tests_stage",
+    }
 )
 #: Leaves the dispatcher time to compose and write before the watchdog fires.
 _WRITE_MARGIN_S: Final = 0.25
@@ -98,6 +109,12 @@ def coordinator_deps(ev: CanonicalEvent, ctx: HandlerContext, repo: RepoInfo) ->
     """
     stages: list[Stage] = []
     timeouts: dict[str, float] = {}
+    for name, timeout_s in _own_stages(ctx):  # first: a stage hook never replaces them
+        own = _factory(name)
+        stage = None if own is None else own(ev, ctx)
+        if stage is not None:
+            stages.append(stage)
+            timeouts[name] = timeout_s
     for record in select_stage_hooks(ctx.cfg, ev, ctx.hatches):
         stage = _build(record, ev, ctx)
         if stage is not None and stage.name not in timeouts:  # one stage per name: first id wins
@@ -119,13 +136,35 @@ def coordinator_deps(ev: CanonicalEvent, ctx: HandlerContext, repo: RepoInfo) ->
 
 def _build(record: HookRecord, ev: CanonicalEvent, ctx: HandlerContext) -> Stage | None:
     """The stage ``record`` contributes, from its factory; ``None`` for an unknown stage name."""
-    target = STAGE_FACTORIES.get(stage_of(record, ev.name) or "")
+    factory = _factory(stage_of(record, ev.name) or "")
+    if factory is None:
+        return None
+    own: Mapping[str, Any] = record.handlers[ev.name].config
+    return factory(ev, dataclasses.replace(ctx, hook=record, config=own))
+
+
+def _factory(stage: str) -> StageFactory | None:
+    """Stage ``stage``'s factory, its module imported only now; ``None`` for an unknown name."""
+    target = STAGE_FACTORIES.get(stage)
     if target is None:
         return None
     module, _, attr = target.partition(":")
     factory: StageFactory = getattr(importlib.import_module(module), attr)
-    own: Mapping[str, Any] = record.handlers[ev.name].config
-    return factory(ev, dataclasses.replace(ctx, hook=record, config=own))
+    return factory
+
+
+def _own_stages(ctx: HandlerContext) -> list[tuple[str, float]]:
+    """``(name, timeout_s)`` of each ``stop_gate.stages`` record this coordinator owns."""
+    table = ctx.cfg.tables.get("stop_gate")
+    records = table.get("stages") if isinstance(table, dict) else None
+    owned: list[tuple[str, float]] = []
+    for record in records if isinstance(records, list) else ():
+        if not isinstance(record, dict) or record.get("owner") != ctx.hook.id:
+            continue
+        name, timeout_s = record.get("name"), record.get("timeout_s")
+        if isinstance(name, str) and isinstance(timeout_s, int | float) and timeout_s > 0:
+            owned.append((name, float(timeout_s)))
+    return owned
 
 
 def _trust(repo: RepoInfo, ctx: HandlerContext) -> Callable[[], TrustPort | None]:

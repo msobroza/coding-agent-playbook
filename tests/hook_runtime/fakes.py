@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
 from coding_agent_playbook.hook_runtime._git_parse import DiffLines
@@ -133,6 +134,8 @@ class FakeGit:
 
     The range answers are keyed by their arguments: ``merge_bases[(left, right)]``,
     ``range_diffs[(base, head)]`` (empty when absent), ``revision_blobs[(rev, path)]``.
+    ``worktree_diffs[base]`` is ``diff_worktree``'s answer; ``archives[rev]`` maps
+    repo paths to the bytes ``archive_to`` writes (``skip`` honoured, as in git).
     """
 
     head_tree_id: str | None = None
@@ -146,6 +149,8 @@ class FakeGit:
     merge_bases: dict[tuple[str, str], str] = field(default_factory=dict)
     range_diffs: dict[tuple[str, str], DiffLines] = field(default_factory=dict)
     revision_blobs: dict[tuple[str, str], bytes] = field(default_factory=dict)
+    worktree_diffs: dict[str, DiffLines] = field(default_factory=dict)
+    archives: dict[str, dict[str, bytes]] = field(default_factory=dict)
     errors: dict[str, Exception] = field(default_factory=dict)
     calls: list[tuple[str, tuple[str, ...]]] = field(default_factory=list)
 
@@ -197,6 +202,22 @@ class FakeGit:
     def show(self, rev: str, repo_rel: str) -> bytes | None:
         self._record("show", rev, repo_rel)
         return self.revision_blobs.get((rev, repo_rel))
+
+    def diff_worktree(self, base: str) -> DiffLines:
+        self._record("diff_worktree", base)
+        return self.worktree_diffs.get(base, DiffLines())
+
+    def archive_to(self, rev: str, dest: str, *, skip: Callable[[str], bool]) -> int:
+        self._record("archive_to", rev)
+        written = 0
+        for rel, data in self.archives.get(rev, {}).items():
+            if skip(rel):
+                continue
+            target = Path(dest, rel)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            written += 1
+        return written
 
 
 @dataclass
@@ -256,18 +277,36 @@ class FakeHandlerResolver:
         return found
 
 
+@dataclass(frozen=True)
+class StageCall:
+    """One recorded ``FakeStageRunner.run`` call (``cwd``: ``None`` is the worktree root)."""
+
+    tool: str
+    args: tuple[str, ...]
+    timeout: float
+    cwd: str | None
+
+
+type StageAnswer = ToolRun | Exception | Callable[[StageCall], ToolRun]
+
+
 @dataclass
 class FakeStageRunner:
     """In-memory ``StageRunner``: one scripted ``ToolRun`` per logical tool, every call recorded.
 
     ``script("ruff", returncode=1, stdout=b"[]")`` answers every ``ruff`` run;
     ``timeout=True`` makes it a ``timeout`` skip and ``crash=True`` makes the
-    call raise, as a broken tool wrapper would. An unscripted tool is
-    ``toolchain_missing``. ``calls`` holds ``(tool, args, timeout)``.
+    call raise, as a broken tool wrapper would. ``answer("ruff", fn)`` lets
+    ``fn(call)`` decide per call (e.g. by ``args`` or ``cwd``). An unscripted
+    tool is ``toolchain_missing``. ``calls`` holds every :class:`StageCall`.
     """
 
-    runs: dict[str, ToolRun | Exception] = field(default_factory=dict)
-    calls: list[tuple[str, tuple[str, ...], float]] = field(default_factory=list)
+    runs: dict[str, StageAnswer] = field(default_factory=dict)
+    calls: list[StageCall] = field(default_factory=list)
+
+    def answer(self, tool: str, fn: Callable[[StageCall], ToolRun]) -> None:
+        """Answer every run of ``tool`` with ``fn(call)``."""
+        self.runs[tool] = fn
 
     def script(
         self,
@@ -287,12 +326,15 @@ class FakeStageRunner:
         else:
             self.runs[tool] = ToolRun(tool, returncode, stdout, stderr)
 
-    def run(self, tool: str, args: Sequence[str], *, timeout: float) -> ToolRun:
-        self.calls.append((tool, tuple(args), timeout))
+    def run(
+        self, tool: str, args: Sequence[str], *, timeout: float, cwd: str | None = None
+    ) -> ToolRun:
+        call = StageCall(tool, tuple(args), timeout, cwd)
+        self.calls.append(call)
         found = self.runs.get(tool, ToolRun(tool, skip_category="toolchain_missing"))
         if isinstance(found, Exception):
             raise found
-        return found
+        return found if isinstance(found, ToolRun) else found(call)
 
 
 @dataclass
@@ -360,5 +402,6 @@ __all__ = [
     "FakeTimer",
     "FakeTimers",
     "FakeTrustStore",
+    "StageCall",
     "fake_exit",
 ]

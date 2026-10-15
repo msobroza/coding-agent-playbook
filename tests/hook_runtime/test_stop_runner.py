@@ -49,6 +49,18 @@ def test_argv_is_machine_pin_plus_record_args(tmp_path: Path) -> None:
     assert (call.timeout, call.cwd) == (2.5, str(tmp_path))
 
 
+def test_cwd_overrides_the_worktree_root(tmp_path: Path) -> None:
+    """The lint baseline runs the same argv inside a ``git archive`` export."""
+    tool = _tool(tmp_path)
+    proc = FakeProc()
+    proc.script([str(tool), "format"])
+    runner = PinnedStageRunner(proc, cwd=str(tmp_path), pins=lambda: _pins(tool))
+
+    runner.run("ruff", ["format", "--check", "."], timeout=1.0, cwd="/tmp/export")
+
+    assert [call.cwd for call in proc.calls] == ["/tmp/export"]
+
+
 def test_sig_mismatch_is_tool_changed(tmp_path: Path) -> None:
     tool = _tool(tmp_path)
     proc = FakeProc()

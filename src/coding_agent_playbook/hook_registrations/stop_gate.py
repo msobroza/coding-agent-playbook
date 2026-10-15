@@ -6,8 +6,11 @@ of the machine (§D.8.3): absolute tool paths and stat signatures are pins in
 
 - ``stages``: one machine-independent record ``{name, owner, cost, tool,
   args, timeout_s, needs_diff, mode}`` per on Stop-stage hook (a hook whose
-  stop handler names ``config.stage``), in ``STOP_STAGE_ORDER``. An execution
-  approval hashes exactly this list (§B.4), so any stage change needs a new one;
+  stop handler names ``config.stage``) and per stage the coordinator owns
+  (:data:`OWN_STAGE_COMMANDS`: ``lint`` and ``verify-claim`` always, the
+  ``typecheck`` / ``tests`` execution stages when its ``stages`` opts in), in
+  ``STOP_STAGE_ORDER``. An execution approval hashes exactly this list (§B.4),
+  so any stage change needs a new one;
 - ``budget_s`` and ``max_blocks`` from ``[hooks.stop-ci-parity-gate]``
   (defaults 3.0 and 2; ``max_blocks`` clamped to 1-8);
 - ``verify_commands``: ``{id, argv}`` rows from the consumer's
@@ -23,6 +26,7 @@ from __future__ import annotations
 
 import shlex
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime.stop.stages import (
@@ -38,14 +42,18 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_policy import ResolvedHook
 
 __all__ = [
+    "COORDINATOR_STAGES",
     "DEFAULT_CLAIM_PATTERNS",
     "DEFAULT_MAX_BLOCKS",
+    "OPT_IN_STAGES",
+    "OWN_STAGE_COMMANDS",
     "STOP_COORDINATOR_ID",
     "StageRecord",
     "budget_of",
     "coordinator_budget_s",
     "coordinator_config",
     "execution_timeouts_s",
+    "own_stage_names",
     "stop_gate_table",
     "stop_stage_records",
 ]
@@ -58,6 +66,21 @@ _MAX_BLOCKS_RANGE: Final = (1, 8)
 #: outputs are gitignored; a review turn has no diff): they still run on an
 #: unchanged tree. Mirrors each stage class's ``needs_diff``; a test pins drift's.
 _NO_DIFF_STAGES: Final = frozenset({"drift", "output-contract"})
+#: The coordinator's own stages that always run (§E.2), and the opt-in execution ones
+#: ``[hooks.stop-ci-parity-gate] stages`` may name (H21 checks the names).
+COORDINATOR_STAGES: Final = ("lint", "verify-claim")
+OPT_IN_STAGES: Final = ("typecheck", "tests")
+#: Each own stage's logical tool, args and timeout. ``ruff check`` gives JSON so the
+#: lint stage attributes findings; mypy and pytest run through the project's interpreter
+#: with no path args (CI parity). A pin, never this table, says where a tool lives.
+OWN_STAGE_COMMANDS: Final[Mapping[str, tuple[str, tuple[str, ...], float]]] = MappingProxyType(
+    {
+        "lint": ("ruff", ("check", "--output-format=json", "."), DEFAULT_BUDGET_S),
+        "verify-claim": ("", (), 1.0),
+        "typecheck": ("project_python", ("-m", "mypy"), 120.0),
+        "tests": ("project_python", ("-m", "pytest", "-q"), 300.0),
+    }
+)
 #: Phrases that claim completion (§E.2 verify-claim), case-insensitive.
 DEFAULT_CLAIM_PATTERNS: Final[tuple[str, ...]] = (
     r"(?i)\b(?:all )?tests? (?:now )?pass(?:es|ed|ing)?\b",
@@ -130,16 +153,39 @@ def coordinator_config(hooks: Iterable[ResolvedHook]) -> Mapping[str, Any]:
 
 
 def stop_stage_records(hooks: Iterable[ResolvedHook]) -> list[StageRecord]:
-    """One record per on Stop-stage hook, in ``STOP_STAGE_ORDER`` (unknown stage names skipped).
+    """One record per on Stop stage, in ``STOP_STAGE_ORDER`` (unknown stage names skipped).
 
-    Example: ``[r.name for r in stop_stage_records(hooks)] == ["drift"]``.
+    The coordinator's own stages come first, so a stage hook cannot replace them.
+    Example: ``[r.name for r in stop_stage_records(hooks)] == ["drift", "lint", "verify-claim"]``.
     """
-    found: dict[str, StageRecord] = {}
-    for hook in sorted(hooks, key=lambda h: h.id):  # one stage per name: the first id wins
+    listed = list(hooks)
+    found = {record.name: record for record in _own_records(listed)}
+    for hook in sorted(listed, key=lambda h: h.id):  # one stage per name: the first id wins
         record = _record(hook)
         if record is not None:
             found.setdefault(record.name, record)
     return [found[name] for name in STOP_STAGE_ORDER if name in found]
+
+
+def own_stage_names(config: Mapping[str, Any]) -> tuple[str, ...]:
+    """The coordinator's stages under its merged ``config``: the defaults plus the opted-in ones.
+
+    Example: ``own_stage_names({"stages": ["tests"]}) == ("lint", "verify-claim", "tests")``.
+    """
+    opted = config.get("stages")
+    chosen = [name for name in OPT_IN_STAGES if isinstance(opted, list) and name in opted]
+    return (*COORDINATOR_STAGES, *chosen)
+
+
+def _own_records(hooks: list[ResolvedHook]) -> list[StageRecord]:
+    """The coordinator's own stage records, or none when the coordinator is off."""
+    if not any(hook.id == STOP_COORDINATOR_ID and "stop" in hook.handlers for hook in hooks):
+        return []
+    records: list[StageRecord] = []
+    for name in own_stage_names(coordinator_config(hooks)):
+        tool, args, timeout_s = OWN_STAGE_COMMANDS[name]
+        records.append(StageRecord(name, STOP_COORDINATOR_ID, tool, args, timeout_s))
+    return records
 
 
 def execution_timeouts_s(hooks: Iterable[ResolvedHook]) -> tuple[float, ...]:

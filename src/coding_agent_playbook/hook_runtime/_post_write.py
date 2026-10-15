@@ -9,7 +9,9 @@ write and never raises:
 - the asked set: each attended ``ask`` on ``pre_tool_use`` marks its
   ``tool_use_id`` with the hook that asked;
 - the session ledger on ``post_tool_use`` / ``post_tool_use_failure``: the
-  paths the tool touched and the files a shell command wrote;
+  paths the tool touched, the files a shell command wrote, and each
+  ``stop_gate.verify_commands`` id it ran (green on ``post_tool_use``, red on
+  ``_failure``: verify-claim's evidence);
 - deferred notes, pushed where Claude has no user-visible channel
   (``session_end``, ``pre_compact``);
 - the bounded TTL sweep on ``session_start`` (and lazily on ``stop``).
@@ -108,7 +110,8 @@ def _ledger(post: PostWrite) -> None:
     if ev.name not in _POST_TOOL or tool is None:
         return
     writes = (*tool.write_paths, *_shell_writes(ev, tool, post.deps))
-    if not tool.paths and not writes:
+    verifies = _verify_runs(tool, post.cfg)
+    if not tool.paths and not writes and not verifies:
         return
     ledger = Ledger(
         post.store,
@@ -118,9 +121,25 @@ def _ledger(post: PostWrite) -> None:
         now=post.deps.clock.time,
         platform=post.deps.platform,
     )
-    ledger.record_touch(
-        event=ev.name, tool_class=tool.tool_class, tool=tool.name, paths=tool.paths, writes=writes
-    )
+    if tool.paths or writes:
+        ledger.record_touch(
+            event=ev.name,
+            tool_class=tool.tool_class,
+            tool=tool.name,
+            paths=tool.paths,
+            writes=writes,
+        )
+    for verify in verifies:
+        ledger.record_verify(event=ev.name, verify=verify, ok=ev.name is EventName.POST_TOOL_USE)
+
+
+def _verify_runs(tool: ToolCall, cfg: GuardConfig) -> list[str]:
+    """The verify command ids a shell call ran (none for any other tool)."""
+    if tool.tool_class is not ToolClass.SHELL or tool.command is None:
+        return []
+    from coding_agent_playbook.hook_runtime._verify_tag import verify_ids
+
+    return verify_ids(tool, cfg)
 
 
 def _shell_writes(ev: CanonicalEvent, tool: ToolCall, deps: RuntimeDeps) -> list[NormalizedPath]:

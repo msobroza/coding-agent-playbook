@@ -13,6 +13,11 @@ read no worktree content and skip filter discovery, like ``symbolic_ref``.
 
 A revision is refused before git sees it when it could be read as an option
 (``--output=...``) or would break the ``cat-file --batch`` line protocol.
+
+The Stop stages add two working-tree forms: ``diff_worktree`` (the
+gate-integrity scan's added and removed lines) and ``archive_to`` (the lint
+baseline's ``git archive`` export, extracted with ``tarfile``'s ``data``
+filter so no member lands outside the export or keeps a special mode).
 """
 
 from __future__ import annotations
@@ -26,7 +31,7 @@ from coding_agent_playbook.hook_runtime._git_parse import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Callable, Iterable, Sequence
 
     from coding_agent_playbook.hook_runtime.proc import ProcResult
 
@@ -71,6 +76,10 @@ class RangePort(Protocol):
     def diff_range(self, base: str, head: str) -> DiffLines: ...
 
     def show(self, rev: str, repo_rel: str) -> bytes | None: ...
+
+    def diff_worktree(self, base: str) -> DiffLines: ...
+
+    def archive_to(self, rev: str, dest: str, *, skip: Callable[[str], bool]) -> int: ...
 
 
 class _Runner(Protocol):
@@ -131,6 +140,33 @@ class RangeQueries:
             return None
         spec = f"{checked_rev(rev)}:{repo_rel}\n".encode()
         return parse_batch_blob(self.run(["cat-file", "--batch"], input=spec).stdout)
+
+    def diff_worktree(self: _Runner, base: str) -> DiffLines:
+        """The ``-U0`` patch from revision ``base`` to the working tree, parsed."""
+        return parse_diff_lines(self.run(["diff", checked_rev(base), *PATCH_FLAGS]).stdout)
+
+    def archive_to(self: _Runner, rev: str, dest: str, *, skip: Callable[[str], bool]) -> int:
+        """Export ``rev``'s tree into the directory ``dest``; returns the files written.
+
+        A member whose repo path ``skip`` accepts (a secret glob) is never
+        extracted. Filters are neutralized like every hardened call, so a
+        ``smudge`` driver never runs during the export.
+        """
+        import io
+        import tarfile
+
+        data = self.run(["archive", "--format=tar", checked_rev(rev)]).stdout
+        written = 0
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as archive:
+            for member in archive:
+                if member.isdir() or skip(member.name):
+                    continue
+                try:
+                    archive.extract(member, dest, filter="data")
+                except tarfile.FilterError:  # e.g. a committed symlink leaving the export
+                    continue
+                written += 1
+        return written
 
 
 def pick_default_branch(refs: Iterable[str]) -> str | None:
