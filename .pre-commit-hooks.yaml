@@ -110,3 +110,18 @@
   types_or: [python, jupyter]
   pass_filenames: false
   stages: [pre-commit]
+
+# The air-gapped secret scan (prK §E.4). SPEC §13.2 keeps gitleaks and
+# detect-private-key out of the starter (both need a remote clone), so this stdlib
+# twin of the assistant's secret guards stands in: it fails a commit whose staged
+# lines add a known token format (cloud, VCS, chat and LLM API keys, PEM private
+# keys, JWTs, URLs with inline passwords) or that stages a credential file
+# (.env*, *.pem, credentials.json, ...). Output is masked. Every commit, always_run.
+- id: playbook-secrets
+  name: coding-agent-playbook secrets (no tokens or credential files committed)
+  description: Fail when staged changes add a secret token or stage a credential file (masked output)
+  entry: playbook scan-secrets --staged
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]

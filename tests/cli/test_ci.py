@@ -71,6 +71,7 @@ def test_ci_steps_table_rows_and_owners() -> None:
         ("sync-check", "prerequisites"),
         ("validate", "existing"),
         ("gate-scan", "E.2"),
+        ("scan-secrets", "E.4"),
     ]
 
 
@@ -88,6 +89,18 @@ def test_runs_steps_in_ci_steps_order(committed: Path) -> None:
     assert runner.timeouts == [ci.DEFAULT_STEP_TIMEOUT_S] * 3
 
 
+def test_scan_secrets_step_uses_merge_base_range(tmp_path: Path) -> None:
+    """prK §E.4/§F.5: always enabled (no config needed), over <merge base>..HEAD."""
+    runner = FakeCiStepRunner()
+
+    assert _run(tmp_path, "--steps", "scan-secrets", runner=runner, git=_git("f00d")) == 0
+
+    root = str(tmp_path.resolve())
+    assert runner.calls == [
+        (*CLI_PREFIX, "scan-secrets", "--range", "f00d..HEAD", "--repo-root", root)
+    ]
+
+
 def test_aggregated_exit_1_when_any_step_fails(
     committed: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -95,11 +108,11 @@ def test_aggregated_exit_1_when_any_step_fails(
 
     assert _run(committed, runner=runner) == 1
 
-    assert _subcommands(runner) == ["sync", "validate", "gate-scan"]  # no fail-fast
+    assert _subcommands(runner) == ["sync", "validate", "gate-scan", "scan-secrets"]  # no fail-fast
     out = capsys.readouterr().out
     assert "validate said hello" in out
     assert "FAIL validate (exit 1" in out
-    assert "playbook ci: 2 passed, 1 failed, 0 skipped" in out
+    assert "playbook ci: 3 passed, 1 failed, 0 skipped" in out
 
 
 @pytest.mark.parametrize("steps", ["validate,nope", "", ",,"])
@@ -113,7 +126,7 @@ def test_unknown_step_is_usage_error_exit_2(
     assert runner.calls == []
     err = capsys.readouterr().err
     assert err.startswith("error: --steps")
-    assert "sync-check, validate, gate-scan" in err
+    assert "sync-check, validate, gate-scan, scan-secrets" in err
 
 
 def test_json_records_step_argv_exit_duration(
@@ -121,7 +134,13 @@ def test_json_records_step_argv_exit_duration(
 ) -> None:
     runner = FakeCiStepRunner(exits={"gate-scan": 1})
 
-    code = _run(committed, "--format", "json", runner=runner, clock=_clock(0, 1.5, 2, 2.25, 3, 3.5))
+    code = _run(
+        committed,
+        "--format",
+        "json",
+        runner=runner,
+        clock=_clock(0, 1.5, 2, 2.25, 3, 3.5, 4, 4.125),
+    )
 
     assert code == 1
     captured = capsys.readouterr()
@@ -150,6 +169,13 @@ def test_json_records_step_argv_exit_duration(
             "duration_s": 0.5,
             "status": "failed",
         },
+        {
+            "step": "scan-secrets",
+            "argv": [*CLI_PREFIX, "scan-secrets", "--range", "abc123..HEAD", "--repo-root", root],
+            "exit": 0,
+            "duration_s": 0.125,
+            "status": "passed",
+        },
     ]
     assert "gate-scan said hello" in captured.err  # child output stays off the JSON stream
 
@@ -162,7 +188,7 @@ def test_sync_check_skipped_when_output_commit_false(
 
     assert _run(tmp_path, "--format", "json", runner=runner) == 0
 
-    assert _subcommands(runner) == ["validate", "gate-scan"]
+    assert _subcommands(runner) == ["validate", "gate-scan", "scan-secrets"]
     skipped = json.loads(capsys.readouterr().out)["steps"][0]
     assert skipped["step"] == "sync-check"
     assert skipped["status"] == "skipped"
@@ -177,7 +203,7 @@ def test_sync_check_skipped_without_config(
 
     assert _run(tmp_path, runner=runner) == 0
 
-    assert _subcommands(runner) == ["validate", "gate-scan"]
+    assert _subcommands(runner) == ["validate", "gate-scan", "scan-secrets"]
     assert "SKIP sync-check: no .coding-agent-playbook.toml" in capsys.readouterr().out
 
 

@@ -120,6 +120,7 @@ def test_no_unexpected_hooks():
         "playbook-metrics",
         "playbook-notebooks",
         "playbook-scan-sinks",
+        "playbook-secrets",
     }
     assert ids == expected, f"unexpected hook IDs: {ids - expected}"
 
@@ -141,6 +142,16 @@ def test_scan_sinks_hook_scans_the_index_once():
     assert hook["language"] == "python"
     assert hook["types_or"] == ["python", "jupyter"]
     assert hook["pass_filenames"] is False
+    assert hook["stages"] == ["pre-commit"]
+
+
+def test_secrets_hook_scans_staged():
+    """prK §E.4: the stdlib gitleaks stand-in; every commit, reading the index itself."""
+    hook = _hook("playbook-secrets")
+    assert hook["entry"] == "playbook scan-secrets --staged"
+    assert hook["language"] == "python"
+    assert hook["pass_filenames"] is False
+    assert hook["always_run"] is True
     assert hook["stages"] == ["pre-commit"]
 
 

@@ -209,8 +209,34 @@ def test_metrics_subparser_defaults():
 
 
 def test_twin_subcommands_close_the_canonical_list():
-    """prK K6/K7: the off-workstation twins are registered, and no argument is required."""
-    assert _SUBCOMMANDS[-4:] == ("gate-scan", "ci", "scan-sinks", "check-notebooks")
+    """prK K6-K8: the off-workstation twins are registered, and no argument is required."""
+    assert _SUBCOMMANDS[-5:] == ("gate-scan", "ci", "scan-sinks", "check-notebooks", "scan-secrets")
+
+
+def test_scan_secrets_modes_are_mutually_exclusive():
+    """prK §E.4: one of --staged / --range / --worktree, or PATHS (checked by the command)."""
+    parser = build_parser()
+    staged = parser.parse_args(["scan-secrets", "--staged"])
+    worktree = parser.parse_args(["scan-secrets", "--worktree", "--format", "json"])
+    ranged = parser.parse_args(["scan-secrets", "--range", "A..B"])
+    paths = parser.parse_args(["scan-secrets", "a.py", "b/.env"])
+
+    assert (staged.staged, staged.worktree, staged.rev_range, staged.paths) == (
+        True,
+        False,
+        None,
+        [],
+    )
+    assert (worktree.worktree, worktree.format) == (True, "json")
+    assert ranged.rev_range == "A..B"
+    assert paths.paths == ["a.py", "b/.env"]
+    for pair in (
+        ["--staged", "--worktree"],
+        ["--staged", "--range", "A..B"],
+        ["--worktree", "--range", "A..B"],
+    ):
+        with pytest.raises(SystemExit):
+            parser.parse_args(["scan-secrets", *pair])
 
 
 def test_scan_sinks_subparser_accepts_staged_or_range():

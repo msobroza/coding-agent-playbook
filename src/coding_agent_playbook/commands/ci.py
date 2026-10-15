@@ -12,8 +12,10 @@ secrets and dependency twins) instead of adding a second CI entry point.
   true``: since SPEC §7.1's ``commit = false`` default, generated output is
   gitignored, so a fresh CI checkout has none and ``sync --check`` would always
   fail. A config that does not load runs it anyway, so the child reports why.
-- ``gate-scan`` diffs ``<merge base>..HEAD``; the base is ``--base`` or the
-  default branch (``_git_base``), resolved only when a selected step needs it.
+- ``gate-scan`` and ``scan-secrets`` (E.4: always on, so CI scans every
+  change for secret tokens and credential files) diff ``<merge base>..HEAD``;
+  the base is ``--base`` or the default branch (``_git_base``), resolved only
+  when a selected step needs it.
 
 Exit codes: 0 every run step passed, 1 any failed or timed out, 2 a usage
 error or an unresolvable base (nothing ran). ``--format json`` prints one
@@ -156,6 +158,12 @@ CI_STEPS: Final[tuple[CiStep, ...]] = (
         "gate-scan",
         "E.2",
         lambda ctx: ["gate-scan", "--range", f"{ctx.merge_base}..HEAD"],
+        needs_base=True,
+    ),
+    CiStep(
+        "scan-secrets",
+        "E.4",
+        lambda ctx: ["scan-secrets", "--range", f"{ctx.merge_base}..HEAD"],
         needs_base=True,
     ),
 )

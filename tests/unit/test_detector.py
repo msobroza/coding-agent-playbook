@@ -816,3 +816,26 @@ def test_detect_skips_non_dev_optional_groups(tmp_path: Path) -> None:
 
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])
+
+
+def test_detect_underscore_dependency_matches_known_framework(tmp_path: Path) -> None:
+    """PEP 503 (prK §E.4): ``pytest_asyncio`` is the ``pytest-asyncio`` framework."""
+    repo = tmp_path / "underscore-deps"
+    repo.mkdir()
+    _write(
+        repo,
+        "pyproject.toml",
+        """\
+        [project]
+        name = "x"
+        dependencies = ["Pydantic_Core>=2"]
+
+        [project.optional-dependencies]
+        dev = ["pytest_asyncio>=0.23"]
+        """,
+    )
+
+    facts = detect(repo)
+
+    assert facts.get("frameworks", {}).get("pytest-asyncio") == ">=0.23"
+    assert facts.get("dependencies") == {"pydantic-core": ">=2"}

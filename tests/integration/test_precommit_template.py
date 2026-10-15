@@ -73,3 +73,15 @@ def test_commit_true_starter_keeps_the_legacy_drift_check():
     assert "coding-agent-playbook-no-generated-output" not in hooks
     assert "default_install_hook_types" not in parsed
     assert "default_stages" not in parsed
+
+
+@pytest.mark.parametrize("output_commit", [False, True])
+def test_starter_runs_secret_scan(output_commit: bool) -> None:
+    """prK §E.4: SPEC §13.2 excludes gitleaks (it clones), so the starter scans with the engine."""
+    hooks = _hooks(yaml.safe_load(_render_fresh_pre_commit(output_commit=output_commit)))
+    secrets = hooks["coding-agent-playbook-secrets"]
+    assert secrets["entry"] == "playbook scan-secrets --staged"
+    assert secrets["language"] == "system"
+    assert secrets["pass_filenames"] is False
+    assert secrets["always_run"] is True
+    assert secrets["stages"] == ["pre-commit"]

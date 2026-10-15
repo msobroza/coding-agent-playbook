@@ -14,9 +14,12 @@ import pytest
 
 from coding_agent_playbook.security.paths import is_secret_path
 from coding_agent_playbook.security.patterns import (
+    EXAMPLE_SECRET_ALLOWLIST,
+    SECRET_CONTENT_RULES,
     SECRET_GLOB_EXEMPT,
     SECRET_PATH_EXEMPT,
     SECRET_PATH_GLOBS,
+    SECRET_SCAN_SKIP_NAMES,
 )
 from tests.import_probe import new_modules_after
 
@@ -217,3 +220,23 @@ def test_paths_module_imports_only_the_stdlib() -> None:
         and name.split(".")[0] not in sys.stdlib_module_names
     ]
     assert foreign == []
+
+
+def test_secret_content_rule_ids_unique_and_compile() -> None:
+    import re
+
+    from coding_agent_playbook.security.secrets import screen_regex
+
+    ids = [rule_id for rule_id, _, _ in SECRET_CONTENT_RULES]
+    assert len(set(ids)) == len(ids)
+    for rule_id, source, label in SECRET_CONTENT_RULES:
+        assert re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", rule_id), rule_id
+        assert label and re.compile(source).groups == 0, rule_id
+        assert screen_regex(source) is None, rule_id  # the engine passes its own screen
+
+
+def test_example_allowlist_and_skip_names_are_frozen() -> None:
+    assert "AKIAIOSFODNN7EXAMPLE" in EXAMPLE_SECRET_ALLOWLIST
+    assert {"uv.lock", "poetry.lock", "package-lock.json"} <= SECRET_SCAN_SKIP_NAMES
+    assert isinstance(EXAMPLE_SECRET_ALLOWLIST, frozenset)
+    assert isinstance(SECRET_SCAN_SKIP_NAMES, frozenset)

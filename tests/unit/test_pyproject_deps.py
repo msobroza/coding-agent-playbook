@@ -14,7 +14,9 @@ from coding_agent_playbook._pyproject_deps import (
     DEV_GROUP_NAMES,
     dependency_names,
     dependency_specs,
+    manifest_dependency_names,
     parse_dep_name,
+    parse_dep_spec,
 )
 from coding_agent_playbook.detector import detect
 
@@ -59,3 +61,64 @@ def test_parse_dep_name_and_malformed_tables() -> None:
         {},
         {},
     )
+
+
+def test_parse_dep_name_pep503() -> None:
+    assert parse_dep_name("Foo_Bar @ https://x/y.whl") == "foo-bar"
+    assert parse_dep_name("git+https://example.com/x.git") == ""
+
+
+def test_parse_dep_spec_keeps_constraint_for_normalized_names() -> None:
+    """Regression: the constraint was found with ``lower().find(name)``, which
+    misses once the name is normalized (``foo_bar`` vs ``foo-bar``)."""
+    assert parse_dep_spec("Foo_Bar>=1.0") == ("foo-bar", ">=1.0")
+    assert parse_dep_spec("zope.interface [x] ~= 6.0 ; os_name == 'nt'") == (
+        "zope-interface",
+        "~= 6.0",
+    )
+
+
+_ALL_TABLES = """\
+[project]
+dependencies = ["Requests>=2", "numpy"]
+
+[project.optional-dependencies]
+docs = ["Sphinx"]
+dev = ["pytest_asyncio"]
+
+[dependency-groups]
+lint = ["ruff", { include-group = "docs" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+Django = "^5"
+
+[tool.poetry.dev-dependencies]
+black = "*"
+
+[tool.poetry.group.test.dependencies]
+Hypothesis = "*"
+"""
+
+
+def test_manifest_dependency_names_covers_four_tables() -> None:
+    names = manifest_dependency_names(tomllib.loads(_ALL_TABLES))
+
+    assert names == frozenset(
+        {
+            "requests",
+            "numpy",
+            "sphinx",
+            "pytest-asyncio",
+            "ruff",
+            "django",
+            "black",
+            "hypothesis",
+        }
+    )
+
+
+def test_manifest_dependency_names_ignores_malformed_tables() -> None:
+    pyproject = {"project": {"dependencies": "requests"}, "tool": {"poetry": []}}
+
+    assert manifest_dependency_names(pyproject) == frozenset()

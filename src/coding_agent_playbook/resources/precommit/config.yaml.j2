@@ -63,6 +63,16 @@ repos:
         language: system
         types_or: [python, pyi]
         require_serial: true
+      # The playbook — secret scan of every commit (stdlib; stands in for gitleaks,
+      # which SPEC §13.2 keeps out because it clones a remote hook repo). Fails when
+      # staged lines add a known token format or a credential file is staged; masked.
+      - id: coding-agent-playbook-secrets
+        name: coding-agent-playbook secrets
+        entry: playbook scan-secrets --staged
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
       # Linting and formatting (ruff must be installed)
       - id: ruff
         name: ruff (lint + autofix)

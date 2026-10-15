@@ -26,6 +26,7 @@ from coding_agent_playbook.commands import import_harness as import_harness_cmd
 from coding_agent_playbook.commands import init as init_cmd
 from coding_agent_playbook.commands import metrics as metrics_cmd
 from coding_agent_playbook.commands import render as render_cmd
+from coding_agent_playbook.commands import scan_secrets as scan_secrets_cmd
 from coding_agent_playbook.commands import scan_sinks as scan_sinks_cmd
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as validate_cmd
@@ -54,6 +55,7 @@ _SUBCOMMANDS: tuple[str, ...] = (
     "ci",
     "scan-sinks",
     "check-notebooks",
+    "scan-secrets",
 )
 
 
@@ -262,8 +264,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _add_twin_parsers(subcommands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """The hooks' off-workstation twins: ``gate-scan``, ``ci`` (prK §E.2, §F.5), ``scan-sinks``
-    and ``check-notebooks`` (§E.3)."""
+    """The hooks' off-workstation twins: ``gate-scan``, ``ci`` (prK §E.2, §F.5), ``scan-sinks``,
+    ``check-notebooks`` (§E.3) and ``scan-secrets`` (§E.4)."""
     gate_p = subcommands.add_parser(
         _SUBCOMMANDS[9], help="flag gate-weakening changes in a commit range (prK §E.2)"
     )
@@ -307,6 +309,34 @@ def _add_twin_parsers(subcommands: argparse._SubParsersAction[argparse.ArgumentP
     )
     notebooks_p.add_argument("--repo-root", help="repo the paths are relative to (defaults to cwd)")
     notebooks_p.set_defaults(func=check_notebooks_cmd.run)
+    _add_scan_secrets_parser(subcommands)
+
+
+def _add_scan_secrets_parser(
+    subcommands: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """``scan-secrets [--staged | --range A..B | --worktree | PATHS]`` (prK §E.4)."""
+    secrets_p = subcommands.add_parser(
+        _SUBCOMMANDS[13], help="flag secret tokens and credential files, masked (prK §E.4)"
+    )
+    secrets_p.add_argument(
+        "paths", nargs="*", help="files to scan whole, relative to --repo-root (exclusive of modes)"
+    )
+    scope = secrets_p.add_mutually_exclusive_group()
+    scope.add_argument("--staged", action="store_true", help="scan the index against HEAD")
+    scope.add_argument(
+        "--range",
+        dest="rev_range",
+        help="A..B, or A...B from their merge base (default: <merge-base>..HEAD)",
+    )
+    scope.add_argument(
+        "--worktree",
+        action="store_true",
+        help="scan tracked changes against HEAD and untracked, non-ignored files",
+    )
+    secrets_p.add_argument("--format", choices=("text", "json"), default="text")
+    secrets_p.add_argument("--repo-root", help="repo to scan (defaults to cwd)")
+    secrets_p.set_defaults(func=scan_secrets_cmd.run)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
