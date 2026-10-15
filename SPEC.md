@@ -9,7 +9,7 @@
 | License | Apache-2.0 (engine); organization overlays may be private |
 
 **Changelog**
-- **0.18** — Assistant lifecycle hooks (PR K; design `specs/prK-lifecycle-hooks.md` + `specs/prK-hook-pack.md`). **`Hook` is the fourth emitted canonical kind**: a `<id>/HOOK.md` (or `HOOK.md.j2`) directory, found at any depth under `resources/hooks/` and `playbook/hooks/`, whose static frontmatter binds canonical events to a builtin or external handler and declares its decisions (only `deny | ask | context | none`), timeout, `on_error` and supported adapters (§6.6.7). Hooks are **opt-in per repo**: an absent `[hooks]` table, or one without `enabled = true`, changes no byte on upgrade; `playbook init` asks (`--no-hooks` opts out). New committed policy tables `[hooks]`, `[hooks.<hook-id>]`, `[hooks.commit_convention]` and `[guardrails]`, plus new `[metrics]` keys, none of which `.coding-agent-playbook.local.toml` may carry (§7.1.1, §7.2). Overlays merge hooks additively — `extend` / `strictest` / `relax` / `replace` config keys, overlay-only `mandatory` hooks (§11.6). Sync resolves the effective set (`hook_policy.resolve_effective_hooks`), dispatches each hook through the new `Adapter.write_hook`, and writes the sync-level `.coding-agent-playbook/hooks/guard_config.json`; Claude Code gets managed entries in `.claude/settings.json` plus the committed launcher `.claude/hooks/playbook/launch.sh`, OpenCode gets the one generated plugin `.opencode/plugins/playbook-hooks.js`, and every other target gets the hook's advisory text. Every harness event runs one dispatcher, `playbook-hook` (§4.1, §4.2). New: the `has_dev_dependency` predicate (§6.4), prompt `write_scope` / `output_contract` and rule `lint_codes` frontmatter (§6.1, §6.2), the `hook_advisory` / `hook_claude_settings` formats (§9.7), `ArtifactSource.list_hooks` (§20.2) and manifest kind `"hook"` (§20.10). Q8 resolved, Q1 partially answered (§19).
+- **0.18** — Assistant lifecycle hooks (PR K; design `specs/prK-lifecycle-hooks.md` + `specs/prK-hook-pack.md`). **`Hook` is the fourth emitted canonical kind**: a `<id>/HOOK.md` (or `HOOK.md.j2`) directory, found at any depth under `resources/hooks/` and `playbook/hooks/`, whose static frontmatter binds canonical events to a builtin or external handler and declares its decisions (only `deny | ask | context | none`), timeout, `on_error` and supported adapters (§6.6.7). Hooks are **opt-in per repo**: an absent `[hooks]` table, or one without `enabled = true`, changes no byte on upgrade; `playbook init` asks (`--no-hooks` opts out). New committed policy tables `[hooks]`, `[hooks.<hook-id>]`, `[hooks.commit_convention]` and `[guardrails]`, plus new `[metrics]` keys, none of which `.coding-agent-playbook.local.toml` may carry (§7.1.1, §7.2). Overlays merge hooks additively — `extend` / `strictest` / `relax` / `replace` config keys, overlay-only `mandatory` hooks (§11.6). Sync resolves the effective set (`hook_policy.resolve_effective_hooks`), dispatches each hook through the new `Adapter.write_hook`, and writes the sync-level `.coding-agent-playbook/hooks/guard_config.json`; Claude Code gets managed entries in `.claude/settings.json` plus the committed launcher `.claude/hooks/playbook/launch.sh`, OpenCode gets the one generated plugin `.opencode/plugins/playbook-hooks.js`, and every other target gets the hook's advisory text. Every harness event runs one dispatcher, `playbook-hook` (§4.1, §4.2). New: the `has_dev_dependency` predicate (§6.4), prompt `write_scope` / `output_contract` and rule `lint_codes` frontmatter (§6.1, §6.2), the `hook_advisory` / `hook_claude_settings` formats (§9.7), `ArtifactSource.list_hooks` (§20.2) and manifest kind `"hook"` (§20.10). The adapter contract (§10.1), the Claude Code settings merge, launcher and pin (§10.3.2), the OpenCode shim (§10.6.2), the `playbook ci` aggregate twin, the `playbook-hook` runtime and the other off-workstation twins (§12.11–§12.19), the new pre-commit ids (§13), populated scoped lockfile entries (§14.4), the hook test strategy (§16.6), the air-gapped `playbook-secrets` scan in place of the unshipped gitleaks promise (§17.3) and the opt-in metrics `ruff_violations`, `file_sloc`, `docstring_example` and `diff_coverage` (§21) complete the release. Q8 resolved, Q1 partially answered (§19).
 - **0.17** — Bundled opt-in packs: the engine wheel now ships **packs**, importable subpackages under `coding_agent_playbook.packs.*` layered exactly like overlay packages but needing no extra install, **off by default** and enabled by listing the pack's dotted name in the top-level `overlays_enabled` key. The first pack, `coding_agent_playbook.packs.superpowers`, is a near-verbatim, self-contained port of the Superpowers skills library (v7.0.0, MIT): 15 skills rendered like any canonical skill — natively and byte-identically to `.claude/skills/<id>/`, `.opencode/skills/<id>/` and the `shared_skills/<id>/` hub through the shared `SkillWriter` (`SKILL.md` with the sentinel as its first body line), degraded to Continue prompts, and to `skills/<id>/` under the opt-in `agent_harness` — with only the self-containment edits applied (supporting files moved under `references/`/`scripts/`, an `id` frontmatter key, plain skill names instead of `superpowers:<skill>`, no external URLs, upstream-plugin coupling removed). Dropped: the brainstorming visual companion, the SessionStart bootstrap hook, and diagnosing-superpowers' upstream issue filing. MIT notice in the pack's `LICENSE` + `ATTRIBUTIONS.md`, and as `references/LICENSE` in every skill so it travels with each synced copy. No rendering behaviour changes: opting out of the pack or overriding one of its skills is settled by the v0.16 lockfile leftover policy (§4.2 step 9). **Config hardening (same release):** the enabled lists are the top-level `overlays_enabled` / `adapters_enabled` keys only, above the first `[table]` header — an `[overlays]`/`[adapters]` table (incl. the dotted `overlays.enabled` key), an enabled key nested in any table (what applying the fix-it hint in place, or appending the key to the end of the file, produces), a close misspelling such as `overlay_enabled`, or a value that is not a list of non-empty strings is a new `config.ConfigError` naming the file (`.toml` and `.local.toml` are checked separately, before the merge) and showing the line to write and where, and every command that loads the config (`sync`, `check`, `validate`, `render`, `eval`, `init`) prints `error: …` and exits 2 before writing anything (each of these shapes used to read as an empty list, so `sync` rendered only `AGENTS.md` and deleted the rest as leftovers); `[output]` value errors are `ConfigError`s too (they were a traceback). An unusable overlay — its import fails (missing, or raising at import time, which used to be a traceback and is now reported with its error), or it imports with no `resources/` directory — is caught by the one shared preflight check in every command, one line per overlay: `sync` refuses (exit 1), `validate` fails (exit 1), `check` flags it and no longer reports a clean state (exit 0), `init` refuses before writing (exit 2; it checks the overlays its sync will use — `--overlays`, or the local file's list that replaces it); a pack-like typo lists the bundled packs (discovered with `pkgutil`). Every config example uses the top-level keys, and §7.1 shows the `detector_cache` table the code reads and writes (§4.2, §7.1, §7.2, §10.7, §10.8, §11.1, §11.5, §12.1–§12.6). `[tool.ruff] extend-exclude` keeps the vendored text byte-faithful; `tests/packs/` gates it (§5.1, §6.3, §11.5).
 - **0.16** — Generated output is **local-only by default**: everything `playbook sync` renders into a consumer repo (`AGENTS.md`, `.claude/`, `.continue/`, `.opencode/`, skill directories, the lockfile) is gitignored and never committed. New `[output] commit = <bool>` toggle in `.coding-agent-playbook.toml` (default `false`; `playbook init` writes it explicitly; `true` restores the legacy committed-output policy). With `commit = false`, write-mode `sync` keeps an engine-owned **managed block** in the consumer's `.gitignore` current (root-anchored, escaped entries — one per generated file, skill directories collapsed to `/<dir>/`; byte-preserving, atomic, idempotent; malformed markers fail loudly) and warns on stderr about generated paths git still tracks, printing the exact `git rm -r --cached -- …` to run (it never changes git state). Leftovers of an earlier sync stay owned through the previous lockfile: deleted only when pristine, untracked and every enabled adapter is installed, else kept (and, for `commit = false`, kept ignored). This **lockfile leftover policy is the one deletion policy for stale native-skill output**, under both `commit` settings: adapters' `cleanup_stale` never deletes inside a skill directory, and a file the engine never wrote — even one dropped into an engine-owned skill dir — is never deleted (it replaces the v0.15 `SkillWriter` cleanup, which deleted every unwritten file in an engine-owned dir). It deletes only inside the `output_locations` installed adapters declare (§10.1) — never under `.git/`, never through a symlink the user put on the path — prunes emptied directories no higher than the skills root (never a symlinked root's target), and fails closed when git cannot say whether a leftover is tracked (asked case-insensitively, matched in NFC or by file identity); a file/folder swap inside a skill dir displaces only what the same policy would delete, and the pre-v0.15 lockfile claim needs unchanged `SKILL.md` bytes. Stale-vs-written comparisons use file identity (the `agent_harness` cleanup too), so a case-only skill-id rename on a case-insensitive filesystem never deletes fresh output; `sync --check`/`--check-staged` render into an empty scratch dir but decide skill-dir ownership against the real tree, so they skip exactly the skill dirs write mode skips. A missing overlay package makes every `sync` mode refuse to run. `sync --check` reports a stale/missing block as drift; the new **`sync --check-staged`** fails a commit that stages generated output. New hooks: `playbook-sync` (`post-checkout`/`post-merge` auto-sync) and `playbook-no-generated-output` (pre-commit guard); `playbook-sync-check` is kept as the legacy hook for `commit = true`. New stdlib modules `gitignore.py` + `git_client.py` (an injectable read-only `GitClient`) and `commands/_sync_output.py` (§4.2, §5.3, §6.3, §7.1, §10.8, §12.1–§12.3, §13, §14.4).
 - **0.15** — Native skills for every Agent-Skills harness + the `shared_skills/` hub: a new shared `SkillWriter` (`adapters/_skill_writer.py`) is the single source of truth for a native skill directory (`<root>/<id>/SKILL.md` + byte-copied `scripts/`/`references/`), byte-identical across roots. `claude_code` writes `.claude/skills/`, `opencode` now writes **`.opencode/skills/`** natively (no longer relying on `claude_code`), and the new **`shared_skills`** adapter (on by default, not force-enabled) writes the cross-agent hub `shared_skills/`. Two bug fixes: `SKILL.md` frontmatter `name` is now the skill id (= directory name, the Agent Skills rule OpenCode enforces), and `SKILL.md` carries the sentinel as its first body line, so a skill directory is recognisably engine-owned (user-authored skill dirs are never touched; since v0.16 a deleted skill's unchanged, untracked files are removed by the lockfile leftover policy, §4.2 step 9, and edited or user-added files are kept). New `playbook validate` rule for the Agent Skills `id`/`name`/`description` constraints (id-less skills included). Ownership is decided before writing: a colliding hand-written skill dir is skipped with a warning, never overwritten (§6.3, §10.3, §10.6, §10.8, §12.6).
@@ -1534,6 +1534,15 @@ class Adapter(ABC):
     # ".claude/skills/"). The leftover policy (Section 4.2 step 9) deletes only
     # inside a declared location and never prunes above one.
     output_locations: ClassVar[tuple[str, ...]] = ()
+    # Canonical hook event -> the decisions this adapter renders natively. The
+    # empty default means advisory-only: hooks degrade to text (v0.18).
+    hook_support: ClassVar[Mapping[str, frozenset[str]]] = MappingProxyType({})
+    # Files co-owned with the user and the harness (Claude Code's
+    # .claude/settings.json): managed elements only, never a whole-file entry.
+    shared_outputs: ClassVar[tuple[str, ...]] = ()
+    # finalize() outputs that are hook runtime plumbing (the launcher, the
+    # OpenCode shim): lock entries of kind "runtime", no artifact id (§14.4).
+    runtime_outputs: ClassVar[tuple[str, ...]] = ()
 
     @abstractmethod
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
@@ -1551,6 +1560,32 @@ class Adapter(ABC):
         shared SkillWriter (Section 10.8); rules-only adapters return []."""
         prompt = skill.to_prompt()
         return self.write_prompt(prompt, repo_root)
+
+    def begin_sync(
+        self,
+        repo_root: Path,
+        prior_lock: Lockfile | None,
+        *,
+        hooks_config: HooksConfig | None = None,
+    ) -> None:
+        """Called once per sync, before any write_*. repo_root is always the
+        real repository, even when output goes to a scratch dir (sync --check),
+        so an adapter that owns sub-file regions reads the co-owned file and its
+        prior ownership hashes here. hooks_config is the parsed [hooks] table.
+        Default: no-op."""
+
+    def write_hook(self, hook: ResolvedHook, repo_root: Path) -> list[Path]:
+        """Default: degrade the hook to advisory text through this adapter's own
+        rule channel (mirrors write_skill -> to_prompt). Hook-capable adapters
+        override and fall back to super() for hooks they cannot enforce; a hook
+        with a blank body (or [hooks] advisory = false) degrades to nothing."""
+        rule = hook.advisory
+        return [] if rule is None else self.write_rule(rule, repo_root)
+
+    def managed_lock_entries(self) -> list[LockEntry]:
+        """The scoped lock entries of the last finalize(): one per managed JSON
+        element of a shared output, unchanged ones included. Default: []."""
+        return []
 
     def finalize(self, repo_root: Path) -> list[Path]:
         """Optional lifecycle hook called after all write_* calls for this adapter.
@@ -1577,7 +1612,18 @@ class Adapter(ABC):
             path.unlink(missing_ok=True)
         return stale
 ```
-Adapters customize staleness by overriding `stale_outputs`, never `cleanup_stale`: `playbook sync --check` asks `stale_outputs` and write mode deletes what `cleanup_stale` returns, so only a shared source keeps the check's "run 'playbook sync' to remove" hint true. An out-of-tree adapter written against the pre-v0.16 contract (which overrode `cleanup_stale`, often returning `self._default_cleanup(...)`) keeps working in write mode — `_default_cleanup` is kept, deprecated — but `--check` cannot see what its cleanup deletes: it warns (`adapter '<name>' overrides cleanup_stale() but not stale_outputs()`) and reports no sentinel orphans for that adapter, rather than orphans its cleanup may never remove (MIGRATION.md). Adapters return the paths they wrote. The CLI uses these for the lockfile and for `cleanup_stale`. `output_locations` is read from **every installed** adapter class, enabled or not (`orchestrator.installed_output_locations()`), so a since-disabled adapter's leftovers can still be settled; a third-party adapter that declares none never has a leftover deleted by the policy (its own `cleanup_stale` still runs while enabled). Of the five built-in adapters (Continue, Claude Code, OpenCode, AGENTS.md, shared_skills), only ClaudeCodeAdapter overrides `finalize()` (to compose CLAUDE.md); the rest write immediately in `write_rule` / `write_prompt` / `write_skill`.
+Adapters customize staleness by overriding `stale_outputs`, never `cleanup_stale`: `playbook sync --check` asks `stale_outputs` and write mode deletes what `cleanup_stale` returns, so only a shared source keeps the check's "run 'playbook sync' to remove" hint true. An out-of-tree adapter written against the pre-v0.16 contract (which overrode `cleanup_stale`, often returning `self._default_cleanup(...)`) keeps working in write mode — `_default_cleanup` is kept, deprecated — but `--check` cannot see what its cleanup deletes: it warns (`adapter '<name>' overrides cleanup_stale() but not stale_outputs()`) and reports no sentinel orphans for that adapter, rather than orphans its cleanup may never remove (MIGRATION.md). Adapters return the paths they wrote. The CLI uses these for the lockfile and for `cleanup_stale`. `output_locations` is read from **every installed** adapter class, enabled or not (`orchestrator.installed_output_locations()`), so a since-disabled adapter's leftovers can still be settled; a third-party adapter that declares none never has a leftover deleted by the policy (its own `cleanup_stale` still runs while enabled). Of the six adapters the engine ships (the five built-ins plus the opt-in `agent_harness`), four override `finalize()`: `ClaudeCodeAdapter` (it composes `.claude/CLAUDE.md`, then merges the hook registrations into `.claude/settings.json` and writes the launcher, §10.3.2), `AgentsMdAdapter` (`AGENTS.md`, with its Guardrails section, §10.4), `OpenCodeAdapter` (the one generated plugin, §10.6.2) and `AgentHarnessAdapter` (the whole harness tree, §10.7). Continue and shared_skills write immediately in `write_rule` / `write_prompt` / `write_skill`.
+
+**Hook members (v0.18).** `hook_support`, `shared_outputs`, `runtime_outputs`, `begin_sync`, `write_hook` and `managed_lock_entries` are concrete defaults, like `write_skill`: an `@abstractmethod` would break every out-of-tree adapter written before hooks existed, and an adapter that overrides none of them is an advisory-only target whose hooks reach its users as text. Sync calls them in one order per adapter (§4.2): `begin_sync(repo_root, prior_lock, hooks_config=…)` with the real repository (under `--check` too), the `write_rule` / `write_prompt` / `write_skill` loops, `write_hook` for every on hook after the skills (a `hook_policy.ResolvedHook`: the winning definition with its rendered body and merged config, §6.6.7), `finalize`, then `managed_lock_entries`; `cleanup_stale` still runs after every adapter's `finalize`. Every on hook goes to every adapter, whatever its `supports`: each adapter decides what it enforces from its own `hook_support` and the hook's `supports`, and `playbook check` labels each pair `enforced`, `degraded`, `advisory` or `—` from the same two (§12.4).
+
+| Adapter | `hook_support` | `write_hook` | Hook output of `finalize` |
+| --- | --- | --- | --- |
+| `claude_code` | every canonical event (`hook_policy.HOOK_SUPPORT`) | buffers the hooks it enforces; any other goes to `super()`, a `.claude/CLAUDE.md` section | managed matcher groups in `.claude/settings.json` (its `shared_outputs`) and `.claude/hooks/playbook/launch.sh` (its `runtime_outputs`), §10.3.2 |
+| `opencode` | `pre_tool_use`, `post_tool_use`, `session_start` and `stop` (the last two degraded) | buffers every hook and returns `[]` | `.opencode/plugins/playbook-hooks.js` (its `runtime_outputs`), §10.6.2 |
+| `agents_md` | `{}` | buffers every on hook's advisory | the trailing `## Guardrails` section of `AGENTS.md`, §10.4 |
+| `continue` | `{}` | ABC default: `.continue/rules/30-guardrail-<id>.md` through `write_rule` | — |
+| `agent_harness` | `{}` | buffers every hook | `rules/30-guardrail-<id>.md` and the `.playbook/hooks/<id>/` sidecar, §10.7.2 |
+| `shared_skills` | `{}` | ABC default (its `write_rule` writes nothing) | — |
 ### 10.2 Continue adapter
 ```python
 # coding_agent_playbook/adapters/continue_adapter.py
@@ -1636,7 +1682,7 @@ class ClaudeCodeAdapter(Adapter):
         target.write_text(body, encoding="utf-8")
         return [target]
 ```
-Skills are written natively to `.claude/skills/<id>/` (`SKILL.md` + byte-copied `scripts/` and `references/`) by the shared `SkillWriter`, with `name` = id and the sentinel as the first body line (§6.3). `stale_outputs` (and so `cleanup_stale`) combines two passes: the anchored sentinel scan (`_sentinel.has_sentinel`) over `.claude/commands/` and the single-file `.claude/CLAUDE.md` branch. It never deletes inside `.claude/skills/`: stale skill output is settled by the lockfile leftover policy (§4.2 step 9, §10.8).
+Skills are written natively to `.claude/skills/<id>/` (`SKILL.md` + byte-copied `scripts/` and `references/`) by the shared `SkillWriter`, with `name` = id and the sentinel as the first body line (§6.3). `stale_outputs` (and so `cleanup_stale`) combines two passes: the anchored sentinel scan (`_sentinel.has_sentinel`) over `.claude/commands/` and the launcher directory `.claude/hooks/playbook/`, and the single-file `.claude/CLAUDE.md` branch. It never deletes inside `.claude/skills/`: stale skill output is settled by the lockfile leftover policy (§4.2 step 9, §10.8). `.claude/settings.json` is never stale: managed elements are removed inside `finalize`, and the file itself is never deleted. Hooks are §10.3.2.
 #### 10.3.1 CLAUDE.md composition
 ```markdown
 <!-- AUTOGENERATED by coding-agent-playbook — edit in source, run 'playbook sync' -->
@@ -1655,6 +1701,40 @@ This file is the project context for Claude Code. Rules are grouped by scope.
 [for each prompt:]
 - `/{prompt.slash}` — {prompt.description}
 ```
+#### 10.3.2 Hooks: the managed `settings.json` merge, the launcher and the pin (v0.18)
+With `[hooks] enabled = true` and `claude_code` among the `[hooks] adapters` (§7.1.1), the adapter enforces hooks natively (`adapters/_claude_hooks.py`, `adapters/claude_settings.py`, `hook_registrations/claude.py`; design `specs/prK-lifecycle-hooks.md` §C.2). Its `finalize` merges the registrations into the co-owned `.claude/settings.json` **first**, so a file it cannot merge stops the sync before this adapter writes anything.
+
+**Registrations.** There is one managed matcher group per Claude event that has an on hook, each holding exactly one `command` handler; the dispatcher fans out to the hooks in-process. `SessionStart` is registered whenever any registration exists (the session bootstrap, the heartbeat briefing, and the launcher's one visible failure channel), and at most one extra `async: true`, non-deciding `PostToolUse` group carries the async-safe handlers (local-audit-log). Handler keys are closed: `type`, `command` and `timeout`, plus `statusMessage` on `Stop` / `SubagentStop`, `onFailure: "block"` only in overlay strict mode, and `async: true` only on that one group — never `if`, `args`, or a handler type other than `command`. The command is the same string on every machine (here for `pre_tool_use`):
+```text
+sh "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}/.claude/hooks/playbook/launch.sh" dispatch pre_tool_use --harness claude_code
+```
+In overlay strict mode `--strict-launch` precedes `dispatch`, and the async group's command ends in `--async`. The shell fallback is the git top level, never the cwd, and no path or digest of `guard_config.json` appears, so the registration bytes never change when only `guard_config.json` does. The timeout is `ceil(deadline_ms / 1000) + 2` seconds over the event's deadline in `guard_config.json` (sync checks the one-second margin), and the matcher is the union of the members' tool classes: `*` when one matches every tool, else a sorted exact list (`Edit` never matches `NotebookEdit`), anchored as `^(?:…)$` once an `mcp` class adds a regex.
+
+**Ownership: lockfile hashes, never markers.** JSON has no comment syntax, so a managed element is identified only by the sha256 of its canonical JSON, recorded as a scoped lock entry (`scope = "json:/hooks/<Event>"`, `kind = "runtime"`, `artifact_id = "registration:<event>"`, §14.4); teammates share ownership through the lockfile. The merge parses strictly (duplicate keys, `NaN`, comments and trailing commas are errors, as they are for Claude Code) and plans per event: an equal element is kept; a hand-edited group the prior lockfile records is **restored with a warning** (`managed entry was edited by hand; restored`); a deleted one is re-added, since deleting a group is no off switch (`[hooks]` is); a stale one is removed; and a group mixing the launcher with a user handler is an error naming `hooks.<Event>[i]`. An empty plan rewrites nothing; otherwise each edit is spliced into the original text, so user keys, user hook groups, indentation, line endings and a BOM stay byte-identical. The file is never deleted, even when its last managed element goes. A file that cannot be merged raises `SettingsMergeError` (`path:line:col: message`): write mode exits 1 with `error: playbook sync stopped; .claude/settings.json was not changed.`, and `--check` prints `Cannot verify .claude/settings.json: <message> at L:C.` and exits 1.
+
+**Other managed arrays.** The same machinery manages engine strings in `permissions.deny`, `sandbox.filesystem.denyRead` and `sandbox.network.allowedDomains` — the native twins of the secret, destructive-command and overlay network and read guards that are on: deny rows, and the network guard's allowed domains — and, only with `[hooks] render_remediation_allow = true`, a fixed `permissions.allow` list (`playbook validate`, `playbook check`, `playbook sync --check`, `playbook sync`, `ruff check .`, `ruff format --check .`; never `pytest` or `mypy`, which run repo-controlled code). Each string is one scoped lock entry (`artifact_id = "permission:<list>:<string>"`), and user entries are never touched. `.claude/settings.local.json` is **never written**: it is Claude Code's personal file.
+
+**Both `[output] commit` values.** `.claude/settings.json` is a shared output under either value: it never gets a whole-file lock entry, never enters the managed `.gitignore` block, is never flagged by `playbook sync --check-staged` and is never deleted, so whether it is committed stays the team's decision. `--check` merges against the real file although it renders into an empty scratch directory, and reports drift only when the managed projection differs (a hand-edited or deleted managed group, an on hook not yet registered); user edits to `permissions`, `env` or formatting are never drift. The launcher, like `guard_config.json` and copied hook scripts, is ordinary generated output: under `[output] commit = false` it is gitignored and rendered in each clone by the post-checkout `playbook sync`; under `[output] commit = true` it is committed and compared by `sync --check`. Either way a registration is inert until a local write-mode sync: without the launcher (a fresh `commit = false` clone of a repo that commits `settings.json`) Claude Code reports a non-blocking hook error and the call proceeds, and without the interpreter pin the launcher exits 0.
+
+**The launcher.** `.claude/hooks/playbook/launch.sh` carries the sentinel as `# …` on line 1 and no shebang (it runs as `sh launch.sh`), holds nothing machine-specific, and is rendered from a one-placeholder template (`str.replace`, never Jinja). It reads the interpreter from the per-worktree pin `<git-dir>/playbook-hooks/interpreter` and runs `<pin> -I -m coding_agent_playbook.hook_runtime "$@"`. It exits 0, or 2 only when the dispatcher exits 10 (a decided deny); any other dispatcher exit is appended to `<git-dir>/playbook-hooks/launcher.log` and becomes 0, so a broken install never blocks a tool call. Under `--strict-launch` it exits 1 instead, which `onFailure: "block"` turns into a block. On `session_start` without a usable pin it prints a `systemMessage` saying the lifecycle hooks are INACTIVE and pointing at `playbook-hook doctor`.
+
+**The pin.** Write-mode `playbook sync` (hooks on, `claude_code` or `opencode` enabled) writes the interpreter pin — `sys.executable`, unresolved, so a venv's `bin/python` keeps its site-packages — only when none names an executable file yet (the first writer wins, so a venv and pre-commit's environment never flap), and rewrites `<git-dir>/playbook-hooks/machine.json`, the per-machine tool pins (a path plus a stat signature; a Stop stage whose tool changed is skipped, never green). Neither file is committed, so committed output stays machine-independent. `playbook-hook doctor --repin [PYTHON]` rewrites the pin (§12.13). Outside a git work tree nothing is pinned and sync warns: hooks are git-only in v1. The pin is not a trust approval (§7.1.1 `allow_code_from`).
+
+**CLAUDE.md and commands.** Hooks Claude Code enforces add nothing to `.claude/CLAUDE.md` (their deny reasons and the session-start briefing carry the context); a hook it cannot enforce becomes an advisory section there. When session-start-playbook-briefing is on, the file ends with one fixed heartbeat line, which is never written to `AGENTS.md` and changes `.claude/CLAUDE.md` once per opted-in repo (MIGRATION.md):
+```text
+If PLAYBOOK-GUARDS: OK did not appear at session start, tell the user guardrails are not running before risky work.
+```
+A read-only prompt (`write_scope: {read_only: true}`) renders as a command whose frontmatter is `disallowed-tools: Edit Write NotebookEdit`, with the sentinel on the first body line (§9.7); every other command renders as before.
+
+**Caveats** (`specs/prK-lifecycle-hooks.md` §C.2.9, §C.5.2):
+- *Launch directory.* Claude Code reads project settings only from the `.claude/` of the directory the session starts in, with no parent fallback: a session started in a subdirectory loads no playbook hook, and the heartbeat cannot report it either.
+- *Trust and `-p`.* An interactive session holds every project hook until the folder's trust dialog is accepted; `-p` and SDK runs count as trusted and run the registrations at once, inert until a local sync has pinned an interpreter.
+- *Cloud sessions.* Anthropic-hosted multi-repo cloud sessions read only `enabledPlugins` / `extraKnownMarketplaces` from repo settings, so no playbook hook runs there.
+- *Policy kill switches.* `disableAllHooks` in any settings file, a managed `allowManagedHooksOnly` and `strictPluginOnlyCustomization: ["hooks"]` silently drop project hooks.
+- *Hot reload.* Settings edits apply to the running session: a `playbook sync` takes effect without a restart, and so would an agent's edit removing a managed group, which is why control-plane-guard denies structured edits of the settings files in-session.
+- *Windows.* Supported with Git Bash, which Claude Code uses for shell-form hooks; on a PowerShell-only install the `sh …` command fails and Claude Code shows its non-blocking hook error: fail-open (OQ-14).
+- *Concurrent handlers.* Claude Code runs every matching handler in parallel, the user's own included, and the playbook group always sees the original `tool_input`. A user, plugin or skill hook returning `updatedInput` can still change the executed input after the playbook's verdict, a known gap that ordering cannot close.
+- *Incidental reach.* Other harnesses read `.claude/settings.json` too (Cursor, GitHub Copilot CLI, VS Code's opt-in Claude format); the dispatcher goes inert on a payload that is not Claude-shaped. Copilot CLI's `preToolUse` fails closed on errors, so a repo used with Copilot CLI, on Windows above all, must be verified against the real CLI before relying on hooks (OQ-15). Gemini CLI's `gemini hooks migrate --from-claude` copies `timeout` into a milliseconds field: never migrate playbook-managed entries.
 ### 10.4 AGENTS.md adapter
 Always enabled. Produces a single `AGENTS.md` at the repo root. Identical in shape to `CLAUDE.md` but lives at the root because that's where Codex, Cursor, and Copilot look for it.
 ```python
@@ -1664,6 +1744,7 @@ class AgentsMdAdapter(Adapter):
     # Prompts are not separately written; instead they are listed at the bottom
     # of AGENTS.md as documented slash-equivalents.
 ```
+**Guardrails section (v0.18).** With hooks on, `AGENTS.md` ends with a `## Guardrails` section holding the advisory (`hook_advisory`, §9.7) of every on hook, enforced elsewhere or not: Codex, Cursor, Copilot, Gemini and the other AGENTS.md readers only ever see this text, and OpenCode reads its advisories here too. The section opens with one fixed sentence (`These practices are enforced automatically by lifecycle hooks on assistants that support them; on every other assistant, follow them yourself.`), then one `### <hook name>` block per hook, sorted by hook id, each closing with the italic line that names where the hook is enforced. A hook with a blank body (infrastructure such as guard-decision-log) or `[hooks] advisory = false` adds nothing. `AGENTS.md` is always generated, in a hooks-only repo too (§4.3); with no on hook it is byte-identical to v0.17's. `playbook check` labels this channel `advisory`, never `enforced` (§12.4).
 ### 10.5 Adapter registration
 Adapters are registered via entry points so overlay packages can ship their own (e.g. a Cursor adapter from a community package).
 ```toml
@@ -1676,7 +1757,7 @@ agents_md = "coding_agent_playbook.adapters.agents_md_adapter:AgentsMdAdapter"
 agent_harness = "coding_agent_playbook.adapters.agent_harness_adapter:AgentHarnessAdapter"
 ```
 ### 10.6 OpenCode adapter
-OpenCode is structurally close to Claude Code but with one architectural twist: rules are not in a dedicated directory. OpenCode reads `AGENTS.md` at the repo root as its primary rules source, walking up the directory tree, with `CLAUDE.md` accepted as a fallback. This means the AGENTS.md adapter already delivers rules to OpenCode — the OpenCode adapter's job is prompts and skills.
+OpenCode is structurally close to Claude Code but with one architectural twist: rules are not in a dedicated directory. OpenCode reads `AGENTS.md` at the repo root as its primary rules source, walking up the directory tree, with `CLAUDE.md` accepted as a fallback. This means the AGENTS.md adapter already delivers rules to OpenCode — the OpenCode adapter's job is prompts, skills and, with hooks on, the one generated plugin (§10.6.2). **Hooks need OpenCode ≥ 1.18.29**, the floor of the V1 plugin API the shim targets; `playbook-hook doctor` warns below it (§12.13), and the README states it.
 Skills are written natively to `.opencode/skills/<id>/SKILL.md` (+ `scripts/`, `references/`) through the shared `SkillWriter` (§10.8), so OpenCode no longer depends on the Claude Code adapter being enabled. OpenCode *also* scans `.claude/skills/` (its Claude-compatibility discovery), so with both adapters on the same skill is discovered twice. That is safe: OpenCode stores discovered skills in a `Map` keyed by skill name, last write wins (verified in anomalyco/opencode `packages/core/src/config/plugin/compatibility.ts:53` and `skill.ts:155`), and the two copies are byte-identical.
 ```python
 class OpenCodeAdapter(Adapter):
@@ -1721,15 +1802,22 @@ Mapping from canonical to OpenCode:
 | `includes_rules` | Inlined into body via same appendix logic as other adapters |
 | `name` | Not used in frontmatter; OpenCode uses filename as the command name |
 | `applies_if` | Evaluated upstream by the engine; non-matching prompts produce no file |
-OpenCode commands have no native concept of named input variables beyond positional `$N`. If a prompt declares an input variable `target`, the adapter substitutes `$ARGUMENTS` for it in the body and inlines a brief HTML comment noting the variable's purpose for the human reader. v1 does not attempt to model OpenCode's optional `agent` / `model` / `subtask` frontmatter fields — the rendered command runs in OpenCode's default agent with the user's default model.
-#### 10.6.2 Hook gap (out of scope for v1)
-OpenCode does not support declarative lifecycle hooks. Equivalent behavior requires shipping a JS/TS plugin to `.opencode/plugin/`, subscribing to OpenCode's 31 documented runtime events (`tool.execute.before`, `tool.execute.after`, `session.idle`, etc.). This is **out of scope for v1**; the OpenCode adapter emits no plugin code. See open question 8 in Section 19.
+| `write_scope` | `{read_only: true}` adds `agent: plan` to the frontmatter; any other scope adds nothing |
+OpenCode commands have no native concept of named input variables beyond positional `$N`. If a prompt declares an input variable `target`, the adapter substitutes `$ARGUMENTS` for it in the body and inlines a brief HTML comment noting the variable's purpose for the human reader. Of OpenCode's optional `agent` / `model` / `subtask` frontmatter fields the adapter models one case: a read-only prompt (`write_scope: {read_only: true}`, §6.2.1) adds `agent: plan`, so the command runs as OpenCode's built-in `plan` agent, which has no edit tools (§9.7). Every other command runs in OpenCode's default agent with the user's default model.
+#### 10.6.2 Hooks: the one generated plugin (v0.18)
+With `[hooks] enabled = true` and `opencode` among the `[hooks] adapters` (§7.1.1), `write_hook` buffers every on hook and `finalize` renders **exactly one file**, `.opencode/plugins/playbook-hooks.js`, an OpenCode V1 plugin (`hook_registrations/opencode.py`; design `specs/prK-lifecycle-hooks.md` §C.3). With no hook OpenCode can enforce, nothing is written. It is the one exception to §10.6.4's "never touch `.opencode/plugin(s)/`": V1's non-recursive `{plugin,plugins}/*.{ts,js}` scan finds it, so `opencode.json` is never touched, and every other file in those directories stays the user's.
+- **Shape.** Plain `.js` importing only `node:` built-ins (the desktop sidecar runs plugins under Node, not Bun), with one default export and no helper file beside it. Line 1 is the sentinel as `// …`. It is rendered from a packaged template whose one placeholder is replaced (`str.replace`, never Jinja) by `REG`, a JSON table `{event: {timeout_ms, tools}}` whose strings all come from closed vocabularies (canonical event names, OpenCode's V1 tool names, `*`), never from a hook author.
+- **Events.** `tool.execute.before` → `pre_tool_use` (deny, ask → deny, context deferred into the tool result), `tool.execute.after` → `post_tool_use` (context), `experimental.chat.system.transform` → `session_start` (context, degraded: an experimental API), and `session.idle` → `stop` (degraded, evidence-only: the findings ride into the next turn, since `session.idle` cannot block). `pre_compact` has no V1 hook, so it is never registered; other events reach OpenCode only as `AGENTS.md` text.
+- **Spawning.** Each event spawns the pinned interpreter (`<git-dir>/playbook-hooks/interpreter`, as for the Claude Code launcher, §10.3.2) as `<pin> -I -m coding_agent_playbook.hook_runtime dispatch <event> --harness opencode --project-dir <repo root>` (the repo root taken from the shim's own location), kills it at the registration's `timeout_ms`, and throws — blocking the tool call — only on dispatcher exit 10 or a `deny` decision. Every harness-level failure (no pin, a crash, a timeout, unparseable output) fails open and says so once per process.
+- **Restart.** V1 has no plugin hot reload: when the shim's lock entry changes, write-mode `playbook sync` prints `! .opencode/plugins/playbook-hooks.js changed: restart OpenCode to load it` (or `removed: restart OpenCode to unload it`). A `guard_config.json` change needs no restart.
+- **OpenCode V2.** The default export also carries an inert `setup()` stub, so OpenCode V2 loads the file without error and logs that the lifecycle hooks are inactive (the `AGENTS.md` Guardrails section stays the instruction). The shim is ported when V2 becomes OpenCode's default installer (OQ-11).
+- **Ownership.** The shim is a `runtime_outputs` file (`kind = "runtime"`, §14.4): gitignored under `[output] commit = false`, committed under `true`. `stale_outputs` checks that one path only, never walking `.opencode/plugins/`, and reports it only when it carries the sentinel, is reached without a symlink and was not written this sync.
 #### 10.6.3 Agents gap (out of scope for v1)
 OpenCode supports named agents (`build`, `plan`, custom modes) with their own model and permission overrides, defined in `.opencode/agent/<name>.md`. The canonical artifact model has no concept of named agents in v1. Users wanting custom OpenCode agents write them by hand. See open question 9.
 #### 10.6.4 What the OpenCode adapter does NOT touch
-To make the boundaries explicit, the OpenCode adapter writes only `.opencode/command/` and `.opencode/skills/`, and its own `cleanup_stale` scans only `.opencode/command/` (stale `.opencode/skills/` output is settled by the lockfile leftover policy, §4.2 step 9). In `.opencode/skills/` it writes only engine-owned skill dirs — a hand-written skill dir whose name collides with a canonical skill id is skipped with a warning, never overwritten. It does **not** write or modify:
+To make the boundaries explicit, the OpenCode adapter writes only `.opencode/command/`, `.opencode/skills/` and the one shim file `.opencode/plugins/playbook-hooks.js`, and its own `cleanup_stale` scans only `.opencode/command/` plus that one shim path (stale `.opencode/skills/` output is settled by the lockfile leftover policy, §4.2 step 9). In `.opencode/skills/` it writes only engine-owned skill dirs — a hand-written skill dir whose name collides with a canonical skill id is skipped with a warning, never overwritten. It does **not** write or modify:
 - **`.opencode/agent/`** — out of scope; users own custom agents.
-- **`.opencode/plugin/`** — out of scope (hook equivalent); users own plugins.
+- **`.opencode/plugin/` and `.opencode/plugins/`** — users own every plugin there except the one generated shim, `.opencode/plugins/playbook-hooks.js` (§10.6.2), which the adapter writes only with hooks on and never as a directory.
 - **`opencode.json`** — out of scope; users own MCP server config, permissions, model selection, and the `instructions` array.
 - **`AGENTS.md`** — owned by the AGENTS.md adapter; OpenCode reads it natively.
 - **`.claude/` (incl. `.claude/skills/`)** — owned by the Claude Code adapter. OpenCode may also discover skills there; duplicates are safe (see above).
@@ -1767,6 +1855,7 @@ The adapter emits a harness tree under the repo root (`specs/prH-agent-harness.m
 │   └── <id>.md                 #   scope=scoped rules; frontmatter = description only
 └── .playbook/                  # round-trip sidecar (dotfile; harness clients skip it)
     ├── manifest.toml           #   full canonical reconstruction payload (§20.10)
+    ├── hooks/<id>/             #   hook sidecar: HOOK.md (+ byte-copied scripts/), v0.18
     └── .harnessleaf            #   terminal marker so clients treat .playbook/ as opaque
 ```
 #### 10.7.2 Canonical → harness mapping
@@ -1776,12 +1865,15 @@ The adapter emits a harness tree under the repo root (`specs/prH-agent-harness.m
 | `Prompt` | `prompts/<slash>/SKILL.md` (skill-shaped leaf) | `name`, `description`, body with `includes_rules` inlined via `rule()` + an input-variables note |
 | `Rule` (scope=always) | `rules/<priority:02d>-<id>.md` | `description`, body |
 | `Rule` (scope=scoped) | `references/<id>.md` | `description`, body |
+| `Hook` (v0.18) | `.playbook/hooks/<id>/HOOK.md` (+ `scripts/`), and `rules/30-guardrail-<id>.md` when its body is not blank | none: the harness spec has no lifecycle-event concept, so the sidecar is opaque and the rule file is advisory text (`description` + the `hook_advisory` body) |
 
 `scope=always` rules go to `rules/` and `HARNESS.md` adds an "Always consult these" section instructing the agent to read them every session — keeping the root body small and spec-idiomatic. The harness rule file emits **only** `description`; the rule `name` and every other non-native field round-trip via the sidecar (§20.10).
 
-**Eval tasks are not emitted.** The `Adapter` ABC has no eval hook — `sync` only dispatches `write_rule` / `write_prompt` / `write_skill` / `finalize` — so eval tasks are authoring-only and never reach any adapter. The `agent_harness` adapter therefore never writes an `evals/` directory, exactly like the five built-in adapters. (The importer in §12.9 can still *read* a foreign `evals/` directory.)
+**Hooks are advisory here (v0.18).** The Agent Harness spec defines no lifecycle event, so `agent_harness` has an empty `hook_support` and only ever degrades a hook. `write_hook` buffers every on hook, and `finalize` emits two things per hook. The **sidecar**, always: `.playbook/hooks/<id>/HOOK.md` with the canonical frontmatter, the sentinel as its first body line and the un-rendered body, plus the hook's `scripts/` byte-copied with their exec bits, recorded in `manifest.toml` as kind `"hook"` (§20.10); `.playbook/` carries `.harnessleaf`, so clients and `playbook validate-harness` treat it as opaque, and a hook script is never exposed as a skill script. The **advisory**, only for a non-blank body: `rules/30-guardrail-<id>.md`, listed in `RULES.md` and under `HARNESS.md`'s "Always consult these", with no manifest entry, so a lossless `playbook import-harness` rebuilds the hook from the sidecar and never imports the advisory as a spurious `Rule` (§12.9). Without the sidecar, the importer reads `rules/NN-guardrail-*.md` as a rule and warns that the hook cannot be reconstructed.
+
+**Eval tasks are not emitted.** The `Adapter` ABC has no eval hook — `sync` only dispatches `write_rule` / `write_prompt` / `write_skill` / `write_hook` / `finalize` — so eval tasks are authoring-only and never reach any adapter. The `agent_harness` adapter therefore never writes an `evals/` directory, exactly like the five built-in adapters. (The importer in §12.9 can still *read* a foreign `evals/` directory.)
 #### 10.7.3 Sentinel placement and cleanup
-A harness parser requires frontmatter to start on line 1 (`^---`), so the playbook `SENTINEL` cannot be line 1. The adapter writes it as the **first body line** (an HTML comment, after the closing frontmatter fence) on every generated text file — one of the two anchored positions `_sentinel.has_sentinel` accepts (§4.3), so its cleanup recognises engine output exactly like every other adapter's scanner: an exact sentinel line on line 1, or on the first body line after a leading frontmatter block. A user file under `skills/`, `prompts/`, `rules/` or `references/` that merely quotes the sentinel (in prose, a code block, or any later line) is user-authored and never deleted. Its scan (the read-only `stale_outputs`, which `cleanup_stale` deletes and `sync --check` reports) compares against the written set by file identity (a case-only id rename on a case-insensitive filesystem never deletes the file just written). Files without a sentinel are user-authored and never deleted. `cleanup_stale` never deletes inside a skill directory (`skills/<id>/` — its `SKILL.md`, scripts and references): like every native skill root, stale skill output there is settled only by the lockfile leftover policy (§4.2 step 9), so a user-edited script is kept; `skills/SKILLS.md` and the `prompts/`, `rules/`, `references/` and root files are still cleaned here. The `HARNESS.md` directory index lists what this render emits, never what happens to be on disk (a leftover or user-owned top-level `skills/` would otherwise change its bytes, and `sync --check`, rendering into an empty scratch dir, would drift forever).
+A harness parser requires frontmatter to start on line 1 (`^---`), so the playbook `SENTINEL` cannot be line 1. The adapter writes it as the **first body line** (an HTML comment, after the closing frontmatter fence) on every generated text file — one of the two anchored positions `_sentinel.has_sentinel` accepts (§4.3), so its cleanup recognises engine output exactly like every other adapter's scanner: an exact sentinel line on line 1, or on the first body line after a leading frontmatter block. A user file under `skills/`, `prompts/`, `rules/` or `references/` that merely quotes the sentinel (in prose, a code block, or any later line) is user-authored and never deleted. Its scan (the read-only `stale_outputs`, which `cleanup_stale` deletes and `sync --check` reports) compares against the written set by file identity (a case-only id rename on a case-insensitive filesystem never deletes the file just written). Files without a sentinel are user-authored and never deleted. The scan also covers every `.playbook/hooks/<id>/HOOK.md` (sentinel-tagged); copied hook scripts carry no sentinel and are settled by the lockfile leftover policy (§4.2 step 9). `cleanup_stale` never deletes inside a skill directory (`skills/<id>/` — its `SKILL.md`, scripts and references): like every native skill root, stale skill output there is settled only by the lockfile leftover policy (§4.2 step 9), so a user-edited script is kept; `skills/SKILLS.md` and the `prompts/`, `rules/`, `references/` and root files are still cleaned here. The `HARNESS.md` directory index lists what this render emits, never what happens to be on disk (a leftover or user-owned top-level `skills/` would otherwise change its bytes, and `sync --check`, rendering into an empty scratch dir, would drift forever).
 ### 10.8 Shared-skills adapter and the `SkillWriter`
 The `shared_skills` adapter writes every canonical skill to `<repo>/shared_skills/<id>/` — the **cross-agent skills hub**: one agent-neutral copy of the skills that any Agent-Skills-aware tool (or a human) can be pointed at, independent of which harness adapters are enabled. Like all generated output it is gitignored and regenerated on each machine by default; it is committed only with `[output] commit = true` (§5.3, §7.1). It is **on by default** (`playbook init` lists it in `adapters_enabled`) but, unlike `agents_md`, **not force-enabled** — remove it from `adapters_enabled` to opt out. `write_rule` / `write_prompt` return `[]` (rules reach every assistant through `AGENTS.md`; prompts through the harness adapters). It takes no `rule_registry`, so `discover_adapters` constructs it with no arguments, like `agents_md`.
 ```python
@@ -1940,6 +2032,7 @@ The CLI binary is `coding-agent-playbook`, with a short alias `playbook`. Both n
 [project.scripts]
 coding-agent-playbook = "coding_agent_playbook.cli:main"
 playbook = "coding_agent_playbook.cli:main"
+playbook-hook = "coding_agent_playbook.hook_runtime.cli:main"   # the hook runtime, §12.13 (v0.18)
 ```
 ### 12.1 `playbook init`
 Interactive bootstrap for a fresh repo. Idempotent if re-run, but won't clobber user-edited files.
@@ -1960,6 +2053,7 @@ coding-agent-playbook v0.4.0
    ◯ Codex CLI (AGENTS.md only)
 ? Enable overlay packages? (detected: playbook-rules-bnp)
    ◉ playbook-rules-bnp
+? Enable assistant lifecycle hooks? [Y/n]: y
 ? Docstring style: › numpy
                      google
                      none
@@ -1980,6 +2074,8 @@ Next steps:
   - Open VS Code; Continue will pick up rules automatically
 ```
 `playbook init` writes `[output] commit = false` explicitly (an existing value is preserved) and picks the playbook hooks for that policy (§13.2/§13.3). It **does not run pre-commit itself**: under `commit = false` it prints the hook-install command, since the auto-sync hook only fires once the `post-checkout`/`post-merge` git hooks are installed: `pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge` (a plain `pre-commit install` does the same when the config carries `default_install_hook_types`, as the fresh starter does). Merging into an existing config can also print a `warning:` (a hand-edited legacy drift hook to delete) or a `note:` (no `default_stages`) on stderr — §13.3.
+
+**Hooks (v0.18).** `playbook init` asks `Enable assistant lifecycle hooks? [Y/n]` and writes the answer as `[hooks] enabled` (§7.1.1), keeping the table's other keys. `--no-hooks` writes `enabled = false` without asking, in `--non-interactive` mode too; a non-interactive run without it keeps a value the config already has, else enables hooks, so a re-run never flips an earlier choice. Engine upgrades never write the key: an absent `[hooks]` table means hooks are off and nothing changes, apart from the one notice line `playbook sync` prints (§12.2). The starter pre-commit config gains `coding-agent-playbook-commit-msg` when the repo opted into commitizen (`[tool.commitizen]` or `[hooks.commit_convention]`) and `coding-agent-playbook-commit-trailers` when a commit-trailer row is configured, each adding `commit-msg` to `default_install_hook_types` (§13.2).
 
 `playbook init` writes the enabled lists as the top-level `overlays_enabled` / `adapters_enabled` keys (§7.1). Before writing **any** file it exits 2 on a usage error: missing `--name`/`--kind` in non-interactive mode, an overlay the sync preflight would reject among those its final sync will use (`error: --overlays names package(s) that cannot be used as overlays here; nothing was written:` followed by one `<name>: <reason>` line each — not importable, with the import error when there is one, or no `resources/` directory; a pack-like typo lists the bundled packs, §11.5). When `.coding-agent-playbook.local.toml` sets `overlays_enabled`, that list replaces `--overlays` (§7.2), so it is the one checked and the error starts `error: overlays_enabled in .coding-agent-playbook.local.toml names package(s) …`. A `ConfigError` (§7.1) in an existing `.coding-agent-playbook.toml` or `.coding-agent-playbook.local.toml` stops it too (the local one is loaded up front, since a fresh config never loads it; the committed one is loaded before its first write).
 ### 12.2 `playbook sync`
@@ -2010,6 +2106,14 @@ Stop tracking them (the files stay on disk) with:
   git rm -r --cached -- .claude/CLAUDE.md AGENTS.md
 ```
 The query is `git --literal-pathspecs ls-files -z -- <paths>` (arg-list, no shell, `cwd` = repo root, 10 s timeout) behind the injectable `GitClient` protocol (`git_client.py`; tests use a `FakeGitClient`). Not a git repository, git missing, or a timeout → the warning is skipped silently. Deciding whether a *leftover* is tracked is stricter (§4.2 step 9): it asks with `:(literal,icase)` pathspecs, confirms each match by NFC spelling or file identity, and when git cannot answer inside a git work tree it keeps every leftover — it never reads "unknown" as "untracked". The paths are relative to the repo root, so when that is not the current directory (`playbook sync --repo-root packages/foo` from a monorepo root) the printed command is `git -C <repo-root> rm -r --cached -- …`. Before the block is written, leftovers of an earlier sync are settled from the previous lockfile (§4.2 step 9): pristine, untracked orphans are deleted and counted in `removed`; the rest are carried forward in the lockfile and kept in the block. A `ConfigError` (§7.1) exits 2 before anything runs. If a package in `overlays_enabled` is not importable or ships no `resources/` directory, `sync` prints `error: overlay package(s) in overlays_enabled are not usable here:` with one `<name>: <reason>` line per package (plus the bundled-pack list for a pack-like typo, §11.5) and the fix (§13.1), and exits 1 before writing anything; a missing adapter is a `warning:` and the run continues. With `commit = true` write mode removes the managed block instead (`Removed the managed block from .gitignore`); it settles leftovers by the same policy (asking git only when there are leftovers to judge) and lists every kept one on stderr (`note: kept output an earlier sync wrote …`), since a committed — tracked — leftover is never deleted. A malformed block (unmatched or duplicated markers) makes `sync` print `error: <file>:<line>: …` and exit 1 after the outputs and lockfile are written, without touching `.gitignore`.
+**Hooks (v0.18).** Without a `[hooks]` table, every mode renders byte for byte what v0.17 rendered and write mode prints one line, `hooks available: add [hooks] enabled = true or re-run playbook init`. With `[hooks] enabled = true`, every mode resolves the on hooks (`hook_policy.resolve_effective_hooks`, §7.1.1), dispatches them to the adapters (§10.1), and writes the sync-level `.coding-agent-playbook/hooks/guard_config.json` and the copied external-handler scripts beside it whenever a hook-capable adapter is enabled. Write mode then, after the `Summary:` line, pins the interpreter (§10.3.2) and prints:
+```
+✓ Pinned the hook interpreter for this worktree: /repo/.venv/bin/python
+✓ Hooks: 28 enabled, 15 skipped (claude_code: 28 enforced; opencode: 21 enforced, 2 degraded, 5 advisory; continue: 24 advisory; agents_md: 28 advisory)
+✓ .claude/settings.json: 9 managed entries updated, 0 removed (user keys untouched)
+! .opencode/plugins/playbook-hooks.js changed: restart OpenCode to load it
+```
+The pin line appears only when the pin is first written; the `Hooks:` counts use the `playbook check` labels (§12.4); the `settings.json` line (with its `note:` lines) only when the merge changed the file; the restart line only when the shim's lock entry changed (§10.6.2). `warning:` lines follow on stderr — a restored hand edit of a managed group, a pinned interpreter in a uv or pipx cache, a `[hooks]` / `[guardrails]` table in `.local.toml` that is ignored (§7.2), hooks outside a git work tree. Last, and only when stdin and stdout are terminals, sync asks the trust questions for pending external handlers and execution Stop stages (`[y/N]` per item, §7.1.1); this is the one interactive `playbook sync` each machine needs. Write mode and `--check` first run the validate gate (§12.6), and a `.claude/settings.json` the merge cannot parse stops write mode before any write (§10.3.2).
 ### 12.3 `playbook sync --check`
 Verify, don't write. Exits non-zero on drift: a generated file that differs or is missing, or an **orphan** — generated output a real `playbook sync` would delete: a sentinel-tagged file an adapter's `cleanup_stale` removes, or a previous-lockfile entry (§14.4) the leftover policy deletes (§4.2 step 9: not regenerated, still on disk, bytes unchanged, untracked, inside a declared output location) — the only record for files without a sentinel (copied skill scripts and references) and for everything in a skill directory. Leftovers that policy keeps (edited, tracked by git, or an enabled adapter missing) stay owned by design and are not orphans, so the hint `run 'playbook sync' to remove` is always true. An unreadable lockfile (merge-conflict markers, a key of the wrong type) is drift too, reported as one line naming the offending key — never a traceback. Under `[output] commit = true` it is the CI and legacy pre-commit check: the output is committed, so a fresh checkout has everything to compare. Under the default `commit = false` the output is **not in the repository**, so `--check` only makes sense in a working copy where `playbook sync` has already run (it then also reports a stale, missing, or malformed managed `.gitignore` block, and a not-yet-settled leftover, as drift; `--check` never writes `.gitignore`). Do not run it on a fresh CI clone under `commit = false` — every generated file reports "Missing on disk"; running `playbook sync` first would make it vacuous. CI for such repos validates the source instead (`playbook validate`).
 ```
@@ -2026,6 +2130,7 @@ $ playbook sync --check
 exit code: 1
 ```
 Implementation: the render reads its inputs (config, detector facts, artifacts, `applies_if` file checks) from the real repo but the adapters write into an **empty** scratch directory named like the repo — nothing from the working tree is copied, so a dangling symlink, an unreadable data directory, a socket/FIFO, or a large `.venv` can neither crash nor slow the check, and the real tree is never written. Skill-dir ownership is decided against the real tree, not the empty scratch (§10.8), so a skill dir write mode skips — hand-written with a colliding id, a symlink, a plain file, an unusable skills root — is skipped in the render too, and nothing the adapters render depends on what else is on disk (the `agent_harness` `HARNESS.md` index lists what it emits, §10.7.3). So after a successful `playbook sync`, `--check` exits 0 — with one documented exception: a file/folder swap inside a skill dir that `sync` refused because files it may not delete are in the way (a user file, an edited or tracked copy, §10.8). That destination stays missing, and `--check` reports it as `Missing on disk: <blocker> is in the way …`, telling the user to move those files rather than to re-run `playbook sync` (which cannot fix it); under `commit = true` the legacy `playbook-sync-check` hook fails until they do. Scratch paths are mapped back onto the real tree before ignore entries and orphans are computed, so a symlinked output directory (e.g. `.claude/skills -> ../.agents/skills`, or `.claude/commands -> ../tools/claude-commands`) yields exactly the entries and lockfile paths write mode writes — no false orphan. The scratch output is then diffed against the repo, and orphans are judged on the real tree, read-only: each enabled adapter's `stale_outputs` (the twin of `cleanup_stale` that deletes nothing) plus the leftover policy's plan, computed exactly as write mode settles it. Because nothing is copied, inputs whose paths look like build output or secrets (a `build` skill, a `*credentials*` rule, a `.env` that an `applies_if: has_file` checks) render as in write mode. The orphan scan reads only what it needs, on the real tree: each file once, never a symlink, never a secret path (§17.3), and only the head `has_sentinel` decides on (line 1, or a leading frontmatter block plus one line, at most 64 KiB). So an output whose own name is secret-classified (`rotate-credentials.md`) is judged by the lockfile leftover policy alone. An orphan reached through an output directory symlinked outside the repo (`.claude/commands -> ../shared-commands`) is reported under its in-repo spelling, since write mode deletes it through the link. A template the Jinja sandbox rejects makes every mode exit 1 naming the source file (§9.3), before any adapter writes.
+**Hooks (v0.18).** The hook outputs are rendered into the scratch directory and compared like every other file: the launcher, the shim, `guard_config.json` and the copied scripts byte for byte, plus, on POSIX, `Mode differs: generated as executable.` for a copied script that lost its exec bit. `.claude/settings.json` is the exception: it is re-merged against the **real** file, so it is drift only when its managed projection differs — a managed group edited, deleted or not yet registered — never for the user's keys, hook groups or formatting (§10.3.2). A `settings.json` that cannot be parsed ends the check with `Cannot verify .claude/settings.json: <message> at L:C.` and exit 1. Under `[output] commit = false` the shared `settings.json` is never in the managed block and never flagged by `--check-staged`; the launcher, the shim and `.coding-agent-playbook/hooks/` are local output like the rest.
 #### 12.3.1 `playbook sync --check-staged`
 The `[output] commit = false` commit guard (pre-commit stage). It renders into an empty scratch directory exactly like `--check` (no writes, no working-tree copy; skill-dir ownership judged on the real tree, so files in a hand-written skill dir are never flagged), asks git for the staged paths — `git diff --cached --name-only -z --relative --no-renames --diff-filter=d`, so staged *deletions* (the `git rm --cached` migration) never trip it — and exits 1 listing every staged path covered by an entry for this render's output **or for any leftover of an earlier sync still on disk** (every orphan in the previous lockfile, pristine or not), including files under a collapsed skill directory. Paths are matched in Unicode NFC on both sides:
 ```
@@ -2088,6 +2193,19 @@ Each overlay in `overlays_enabled` that `playbook sync` would refuse (the shared
   'playbook sync' refuses to run until every overlay in overlays_enabled is usable (see Environment).
 ```
 `playbook check` is a diagnostic: it exits 0 whatever it reports, drift included, as before; `playbook validate` (§12.6) and `playbook sync` are the gates that exit non-zero. A `ConfigError` (§7.1) is the exception — the config cannot be loaded, so `check` (and `check --refresh`, which then writes nothing) exits 2 with `error: …`.
+**Hooks block (v0.18).** Between `=== Artifacts ===` and `=== Drift ===`, `playbook check` prints the `[hooks]` switch and every hook the sources define, by id. An on hook is labelled per enabled adapter from that adapter's `hook_support` and the hook's events and `supports` — `enforced`, `degraded` (registered there, with a gap: an unreachable or degraded event, or a tool class the harness lacks), `advisory` (text only) or `—` (neither: not registered there and no advisory body) — so advice is never mistaken for enforcement; an off hook gives its reason:
+```
+=== Hooks ===
+  [hooks]: on
+  Hooks (28 on / 43 total):
+    [✓] block-precommit-bypass (agents_md: advisory, claude_code: enforced, continue: advisory, opencode: enforced)
+    [✓] session-start-playbook-briefing (agents_md: advisory, claude_code: enforced, continue: advisory, opencode: degraded)
+    [✗] coverage-diff-gate (skipped: tier 'opt-in' is not in [hooks] tiers ['default'] and [hooks] enable does not name it)
+=== Drift ===
+  managed entry edited: .claude/settings.json#/hooks/PreToolUse
+  mode mismatch: .coding-agent-playbook/hooks/scripts/bnp-sql-pii-columns/check.py (expected executable)
+```
+Without a table the switch reads `off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')`. The Drift section reads the lockfile's scoped entries too: for each `json:<pointer>` entry it parses the shared file and looks for an element under the pointer whose canonical hash matches, printing `managed entry missing: <path>#<pointer>` or `managed entry edited: <path>#<pointer>`, and `unreadable: <path> (<why>)` when the file cannot be parsed; user edits elsewhere in the file are never drift. An `executable` entry whose file lost its exec bit is `mode mismatch:` (POSIX only).
 ### 12.5 `playbook check --refresh`
 Re-runs the detector and writes the fresh facts back to `.coding-agent-playbook.toml`. Use after adding a dependency.
 ### 12.6 `playbook validate`
@@ -2103,6 +2221,7 @@ $ playbook validate
 ✓ All task `prompt_id` back-references match a prompt's `eval_tasks:` list
 ✓ All markdown links self-contained (relative targets resolve; externals allowlisted)
 ✓ All skills are valid Agent Skills (string id declared, id/name matches ^[a-z0-9]+(-[a-z0-9]+)*$, description present)
+✓ All hooks honour the hook trust contract (H1–H21)
 ✗ overlays_enabled: coding_agent_playbook.packs.superpower: not importable (bundled packs: coding_agent_playbook.packs.superpowers)
 ✗ rules/frameworks/sqlalchemy-v2.md.j2: applies_if references unknown fact 'orm_version'
 ✗ prompts/refactor.md.j2: body calls `{{ rule("python-style") }}` but rule not in includes_rules
@@ -2113,16 +2232,51 @@ $ playbook validate
 ✗ prompts/review.md.j2: markdown link 'https://blog.example.com/x' (line 4): external link to host 'blog.example.com' is not in [links] allowed_domains
 ✗ skills/My_Skill (<repo-local>): skill id 'My_Skill' is not a valid Agent Skills name (must match ^[a-z0-9]+(-[a-z0-9]+)*$); OpenCode silently skips it
 ✗ skills/query-db (<repo-local>): skill has no 'description'; Agent Skills requires a non-empty description
+✗ playbook/hooks/guard-x/HOOK.md: decision 'allow' is never permitted: it would bypass the harness permission system
 ✗ skills/<no id; name 'pdf-tools', at playbook/skills/pdf-tools> (<repo-local>): skill has no 'id'; it is emitted as 'skill' and collides with every other id-less skill (declare 'id:' in its SKILL.md frontmatter)
 exit code: 1
 ```
-The sample is stylized: the command prints `OK <N> artifacts validated` when it passes, and otherwise one `FAIL <path>: <message>` line per error followed by `validation failed with <N> error(s)`.
+The sample is stylized: the command prints `OK <N> artifacts validated` (rules, prompts and hooks) when it passes, and otherwise one `FAIL <path>: <message>` line per error followed by `validation failed with <N> error(s)`.
 
 The self-contained-links rule (PR L, design in `specs/prL-markdown-links.md`) covers rule bodies, prompt bodies, and skills (`SKILL.md` + every markdown file under `references/`) across all three source layers. Extraction masks frontmatter, fenced code blocks, and inline code spans (code examples like `def first[T](items: list[T])` are not links); Jinja-bearing targets are skipped as not statically checkable. Relative targets must resolve — `other.md` is satisfied by a canonical `other.md.j2` since rendering drops the suffix — and must stay inside the artifact's source layer; `http(s)` targets pass only via `[links] allowed_domains` (§7.1); every other scheme and absolute paths are violations. Deterministic by construction: stdlib only, no network. The engine's own shipped artifacts are enforced on CI by a pytest integration test (`tests/cli/test_validate_links.py`); consumer repos and overlays inherit the rule through `playbook validate`.
 
 The overlay rule (v0.17) runs the sync preflight's own check (`_sync_preflight.unusable_overlays`, §4.2 step 1) over `overlays_enabled`: one error per package whose import fails (the reason quotes the error when the package exists but raises), or that imports with no `resources/` directory, printed as `FAIL overlays_enabled: <name>: <reason>` (with the bundled-pack list for a pack-like typo, §11.5) and counted in the exit-1 `validation failed with <N> error(s)` summary. Before v0.17 `validate` skipped such a package silently (its artifacts were simply absent) and exited 0 on a config every `sync` mode refuses. A `ConfigError` (§7.1) is not a validation error: the config cannot be loaded, so `validate` exits 2 with `error: …` before checking anything.
 
 The Agent Skills rule (v0.15) checks every resolved skill: it must declare a string `id` (§6.3), its id — emitted as the `SKILL.md` `name` and the output directory — must match `^[a-z0-9]+(-[a-z0-9]+)*$` and be at most 64 chars, and it must carry a `description` of 1–1024 chars. OpenCode silently drops a skill that breaks either name/description constraint, so authors learn here instead of at runtime. Id-less skills all merge under the fallback id `skill` (all but one silently dropped), so they are checked from the **pre-merge** list and each one is reported. Skills carry no source path, so errors are reported as `skills/<id> (<source package>)`, or — for an id-less skill — by its authored `name` plus, when it has `scripts/`/`references/`, its source directory.
+**Without a consumer config (v0.18).** An engine or overlay checkout has no `.coding-agent-playbook.toml`, and `playbook validate` no longer fails there: it validates the engine package, the checkout's own `src/*/resources/` (an overlay checkout; the engine's own resources are never walked twice) and `playbook/`, and first names the consumer-config checks it skips. Installed overlays are not discovered, since overlays resolve by package name from `overlays_enabled` only:
+```
+note: no .coding-agent-playbook.toml in /repo; validating the engine package, src/*/resources/ and playbook/ only
+skipped: overlays_enabled usability (no overlay list to check)
+skipped: [links] allowed_domains (no allowlist to read; external links fail the strict default)
+skipped: [hooks] / [guardrails] policy: H15 switches, H16 allow_code_from, H21 tables (no consumer config to read)
+```
+**The validate gate on `playbook sync` (v0.18).** Write-mode `playbook sync` and `playbook sync --check` run this whole rule set (`commands.validate.sync_gate_errors`) before rendering. On any error they print its `FAIL` lines and `playbook sync aborted; no files were written.` to stderr and exit 1, so content the engine would render wrongly — an unknown `applies_if` fact, a broken eval-task reference, an invalid Agent Skill, a hook that breaks its contract — never reaches disk. Warnings never stop a sync, and `--check-staged`, the pre-commit hot path, is not gated. A repo whose content fails `playbook validate` today stops syncing on upgrade, so run `playbook validate` before upgrading (MIGRATION.md).
+
+**The hook trust contract, H1–H21 (v0.18).** Every hook is checked (`commands/_validate_hooks.py` over `hook_policy`), and each message names the offending value and the expected shape. A malformed `HOOK.md` is a `FAIL` line, never a traceback; degraded cells and clamped timeouts are `warning:` lines on stderr.
+
+| Rule | Checks |
+| --- | --- |
+| H1 | `HOOK.md` parses; frontmatter keys come from the schema, required fields are present and types match §6.6.7. |
+| H2 | `id` matches `^[a-z0-9][a-z0-9-]{0,62}$` and equals its directory name; it is unique within a layer; a directory holds `HOOK.md` or `HOOK.md.j2`, not both, and no hook directory sits inside another. |
+| H3 | `events` is non-empty, unique and canonical (§6.6.7). |
+| H4 | `matcher` keys are declared events; each entry uses only the fields its event allows and tool classes from the authoring vocabulary (`mcp` on a hook that supports `opencode` is a warning); regexes compile; globs are relative, without `..`. |
+| H5 | `decisions` ⊆ {`deny`, `ask`, `context`, `none`}, each valid for a declared event. `allow` is always an error: it would bypass the harness permission system. |
+| H6 | Exactly one of `handler` / `handlers` (whose keys equal `events`). A builtin is registered, supports its event, validates its `config` against its `CONFIG_SCHEMA`, emits only declared decisions and never mutates the tool input. |
+| H7 | An external handler's `command` is `python`, `bash`, `sh` or `node`; its `script` is a regular file under the hook's own `scripts/`, never a symlink or an escape; `args` carry no URL; `config` is JSON-serializable. |
+| H8 | No HTTP, async, prompt, agent or input-rewriting handler: the keys `type`, `url`, `headers`, `async`, `updated_input`, `prompt` and `model` are rejected (§17.1). |
+| H9 | `0 < timeout ≤ 600`, and `≤ 30` on tool and prompt events; a timeout above its event's cap is clamped, with a warning. |
+| H10 | `on_error` is valid for a declared event; `deny` (fail-closed) only on an overlay hook. |
+| H11 | `supports` lists hook-capable adapters only, with at least one declared event reachable on each; an event unreachable on a listed adapter is a warning, and the hook is `degraded` and not registered there for it. |
+| H12 | `tier` is valid; `tier: overlay` only on an engine hook or an overlay's same-id override of one; `mandatory: true` only on an overlay hook, with `enabled: true`. |
+| H13 | An engine hook is builtin-only and ships no `scripts/`. |
+| H14 | An overlay override only adds (§11.6): no handler swap, no dropped event, tool class, `deny` or `ask`, no weaker `on_error`, no tier demotion. |
+| H15 | No repo-local override of a `mandatory` hook; `[hooks] disable` names none, and `[hooks] enabled = false` is an error while an enabled overlay ships one. |
+| H16 | An external or entry-point handler of an on hook comes from a package listed in `[hooks] allow_code_from`. |
+| H17 | `applies_if` uses known facts. |
+| H18 | `linked_rule` resolves in the merged rule set. |
+| H19 | A `HOOK.md.j2` body compiles in the sandbox and never calls `rule()`; the body's markdown links are self-contained. |
+| H20 | No authored rule id takes the reserved `guardrail-` prefix, and no hook id equals a rule or prompt id (`playbook render` looks ids up across kinds). |
+| H21 | `[hooks]` and `[guardrails]` parse; `enable` / `disable` name existing hooks and are disjoint; `allow_code_from` ⊆ `overlays_enabled` ∪ {`<repo-local>`}; every `[hooks.<x>]` names a hook (or `commit_convention`) and validates against its `CONFIG_SCHEMA`; `[hooks.stop-ci-parity-gate] stages` ⊆ {`typecheck`, `tests`}; `cutover_date` is a `"YYYY-MM-DD"` string; neither table appears in `.local.toml` (an error here, a warning in `sync`). |
 ### 12.7 `playbook render` (debug)
 Render a single artifact to stdout for debugging. Does not write.
 ```
@@ -2144,7 +2298,12 @@ includes_rules:
   - pytest              (engine, applies_if=True → INLINED)
   - python-style        (engine, applies_if=False → OMITTED)
 Inclusion mode: explicit ({{ rule() }} calls in body)
+$ playbook render destructive-command-guard
+[the hook's advisory: ### heading, rendered body, the italic enforcement line]
+$ playbook render destructive-command-guard --format hook_claude_settings
+[{"hooks": {"PreToolUse": [...]}}: its Claude Code registrations, from its own frontmatter]
 ```
+**Hooks (v0.18).** A hook id renders `hook_advisory` by default — the text `AGENTS.md`, Continue, CLAUDE.md and `agent_harness` receive — and `--format hook_claude_settings` shows the hook's Claude Code registrations as `settings.json` JSON, built from its declared frontmatter alone (no `[hooks]` gating, no deadlines from other hooks), for debugging; sync never writes that projection (§9.7). Only these two formats apply to a hook, and rule or prompt formats are refused for it. Ids are looked up across rules, prompts, skills and hooks, which is why validate reports a hook id that equals a rule or prompt id (H20, §12.6). A hook body that calls `rule()` fails naming the file (H19).
 ### 12.8 `playbook eval` (Tier 0 enumeration + the v1.1 `--run` runner)
 `playbook eval` is a read-only enumeration of the prompt-to-task graph and — with `--run` (v1.1 PR R1) — the entry point that *executes* one task end-to-end through a `HarnessRunner` and grades it (§15.3). Without `--run`, the bare `playbook eval <id>` prints how to run the task (exit 0; example below).
 ```
@@ -2219,7 +2378,7 @@ $ playbook eval refactor-extract-helper --run --runner fake [--judge llm] [--sam
 Parse an Agent Harness tree back into canonical artifacts and write them into an overlay directory (default `./playbook/`) in the `FileSystemArtifactSource` layout, so a later `playbook sync` re-reads them. The reverse of the `agent_harness` adapter (§10.7).
 ```
 $ playbook import-harness ./vendor/some-harness
-imported 6 artifact(s) into /repo/playbook (3 rules, 2 prompts, 1 skills)
+imported 6 artifact(s) into /repo/playbook (3 rules, 2 prompts, 1 skills, 0 hooks)
 ```
 Two fidelity tiers, picked automatically (`specs/prH-agent-harness.md` §C):
 - **Lossless** — when a `.playbook/manifest.toml` sidecar is present (a playbook-emitted harness): every artifact is rebuilt from the manifest's full reconstruction payload (full frontmatter incl. rule `name`, the un-rendered source body, `is_templated`, per-script `executable` bit), independent of how the leaf rendered or inlined content. Script exec bits are restored on POSIX, no-op on Windows.
@@ -2228,9 +2387,9 @@ Two fidelity tiers, picked automatically (`specs/prH-agent-harness.md` §C):
 $ playbook import-harness ./vendor/foreign-harness --into playbook
 warning: no .playbook/manifest.toml sidecar found; reconstructing best-effort. ...
 warning: rule 'pep8': scope inferred as 'always' from rules/ placement; globs/applies_if/priority/tags/version not recoverable without sidecar
-imported 2 artifact(s) into /repo/playbook (2 rules, 0 prompts, 0 skills)
+imported 2 artifact(s) into /repo/playbook (2 rules, 0 prompts, 0 skills, 0 hooks)
 ```
-All reconstructed rules — `scope=always` *and* `scope=scoped` — are written under `<into>/rules/<id>.md` (the only directory `FileSystemArtifactSource.list_rules()` reads); `scope` is preserved in the rule's emitted frontmatter, so a scoped rule stays scoped without needing a separate directory. Exit code is 2 on a usage error (missing/non-directory path, or no `HARNESS.md`), else 0.
+All reconstructed rules — `scope=always` *and* `scope=scoped` — are written under `<into>/rules/<id>.md` (the only directory `FileSystemArtifactSource.list_rules()` reads); `scope` is preserved in the rule's emitted frontmatter, so a scoped rule stays scoped without needing a separate directory. A lossless import also rebuilds every hook from its manifest entry (kind `"hook"`, v0.18) through `Hook.from_dict`, never from the rendered files, and writes it as `<into>/hooks/<id>/HOOK.md` (`HOOK.md.j2` when templated) with its `scripts/`, exec bits restored; a best-effort import reads a `rules/NN-guardrail-*.md` advisory as a rule and warns that the hook cannot be reconstructed without the sidecar (§10.7.2). Exit code is 2 on a usage error (missing/non-directory path, or no `HARNESS.md`), else 0.
 ### 12.10 `playbook validate-harness`
 Run `harnesses-ref`-equivalent structural checks on an Agent Harness tree (emitted or foreign). This is the lint half of the client-runtime decision (§10.7 / decision #3): the playbook validates harness *structure*, it does not implement a harness client runtime.
 ```
@@ -2248,9 +2407,105 @@ validation failed with 0 error(s), 1 warning(s) (warnings promoted by --strict)
 exit code: 1
 ```
 A missing or malformed `HARNESS.md` is reported as a validation **error** (exit 1) — not a usage error (exit 2) — because for a validator a malformed harness is precisely the failure it exists to report. Directories marked opaque by a `.harnessleaf` marker are terminal leaves: the validator never expects a routing file for them and does not inspect their internal content.
+### 12.11 `playbook ci`
+```
+playbook ci [--base REF] [--steps STEP[,STEP…]] [--format text|json] [--repo-root DIR]
+```
+The aggregate off-workstation twin of the hooks (v0.18; design `specs/prK-hook-pack.md` §F.5): one required status check. Hooks are speed bumps on the developer's machine; this is the authoritative check. It runs each row of `commands.ci.CI_STEPS` as a **child process** — `<python> -m coding_agent_playbook.cli <argv> --repo-root <root>`, an argv list with no shell and a 600 s timeout per step — so one step crashing cannot take the others down, and every step sees exactly what a developer running it would. Steps run in table order with no fail-fast; a row whose condition does not hold is reported `skipped` with its reason, and a config that does not load runs the rows it gates anyway, so the child reports why (fail closed). `--steps` selects a comma-separated subset (an unknown name is a usage error listing the valid ones) and also switches on the opt-in rows it names. The base is `--base REF`, else the default branch (`refs/remotes/origin/HEAD`, then `main`, then `master`); the range is `<merge base>..HEAD`, resolved only when a selected step needs it, so the CI checkout needs the full history (`fetch-depth: 0`). `--repo-root DIR` checks another checkout.
+
+| Step | Runs | When |
+| --- | --- | --- |
+| `sync-check` | `playbook sync --check` | a config exists and sets `[output] commit = true` (under `commit = false` a fresh clone has no output to compare) |
+| `validate` | `playbook validate` | always |
+| `metrics` | `playbook metrics --baseline git:<merge base> --changed --no-run-tests` | always: static, never the suite |
+| `coverage` | `playbook metrics --run-tests --select testing --baseline git:<merge base>` | `[metrics] run_tests = true`, or `--steps coverage` |
+| `gate-scan` | `playbook gate-scan --range <merge base>..HEAD` | always |
+| `scan-secrets` | `playbook scan-secrets --range <merge base>..HEAD` | always |
+| `commit-convention` | `cz check` itself, not an engine child: the range's commits whose committer date is on or after `[hooks.commit_convention] cutover_date`, plus `cz check --message` on `$PLAYBOOK_PR_TITLE` when it is set; a missing `cz` fails the step | `[tool.commitizen]` in `pyproject.toml`, or `[hooks.commit_convention]` |
+| `commit-trailers` | `playbook check-commit-trailers --range <merge base>..HEAD` | a commit-trailer row is configured |
+| `check-deps` | `playbook check-deps --base <merge base>` | a dependency policy is configured |
+| `scan-sinks` | `playbook scan-sinks --range <merge base>..HEAD` | only when `--steps` names it |
+
+Exit codes: `0` every step that ran passed; `1` any failed or timed out; `2` a usage error or an unresolvable base (nothing ran). `--format json` prints one `{step, argv, exit, duration_s, status}` record per step (plus `note` for a skipped one) on stdout, and the children's output on stderr.
+
+**Pull-request titles.** In a squash-merge repository the PR title becomes the commit subject, so the `commit-convention` step also checks `PLAYBOOK_PR_TITLE` when it is set, passed to `cz` as one argv element. A PR title is attacker-controlled text: the workflow passes it only through `env:`, never interpolated into a `run:` line (the GitHub Actions script-injection pattern). A consumer's pull-request job:
+```yaml
+jobs:
+  playbook-ci:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0                 # playbook ci diffs <merge base>..HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the project with its dev tools (coding-agent-playbook, commitizen)
+        run: python -m pip install -e ".[dev]"
+      - name: playbook ci
+        run: playbook ci --base origin/main
+        env:
+          PLAYBOOK_PR_TITLE: ${{ github.event.pull_request.title }}
+```
+### 12.12 `playbook metrics`
+The static code-quality gate and, with `--run-tests`, its execution metrics. The whole contract — targets, selection (`--select`, `--extend-select`, `--ignore`), baselines, `--changed`, exit codes and the pre-commit hooks — is §21.5; `playbook ci` runs it as its `metrics` and `coverage` steps (§12.11).
+### 12.13 `playbook-hook`: the hook runtime (v0.18)
+One console script with two kinds of caller (design `specs/prK-lifecycle-hooks.md` §D). Harnesses never use the console script: the Claude Code launcher and the OpenCode shim run `<pin> -I -m coding_agent_playbook.hook_runtime dispatch …` with the pinned interpreter (§10.3.2, §10.6.2). Humans run `simulate`, `doctor` and `--version`.
+```
+usage: playbook-hook dispatch <event> --harness claude_code|opencode [--project-dir DIR] [--async]
+       playbook-hook simulate <event> [options] < payload.json
+       playbook-hook doctor [options]
+       playbook-hook --version
+```
+**`playbook-hook dispatch`** reads one harness payload on stdin, normalizes it to a canonical event (under `--harness claude_code`, a foreign payload from another harness that reads `.claude/settings.json` leaves it inert), runs every on hook bound to that event in-process from `.coding-agent-playbook/hooks/guard_config.json` (checked against its lockfile digest), combines their results — deny over ask over context over none — and writes one JSON object to stdout in the harness's shape. It is hand-parsed and import-light: the hot path imports only `hook_runtime.*`, `security.*` and the stdlib, and runs no subprocess for a non-git, non-pragma call. It **exits 0 or 10**, never 2: 10 is a decided deny, which the launcher turns into Claude Code's exit 2 and the shim into a throw, while a usage error, an unknown flag or a version-skewed engine goes to the failure policy, so a raw 2 is never a deny. At entry fd 1 is moved to fd 2, so a stray print from a handler or a child cannot corrupt the one JSON object. `--async` (valid on `post_tool_use` only) runs the async-safe handlers and writes nothing. A handler that fails is judged by its hook's `on_error` — `open` skips it with one note per session, `ask` asks (a deny when no human can answer), `deny` is an overlay's fail-closed choice — and a watchdog writes the decided result before the harness's own timeout.
+
+**Kill switches and escape hatches** are read only from the dispatcher's own environment, with exact values: `PLAYBOOK_HOOKS=off` turns every hook off, mandatory ones included (the off-workstation twins stay the control); `PLAYBOOK_HOOKS_DISABLE=<id>,<id>` turns off non-mandatory ones; `PLAYBOOK_GATE=off` makes the Stop coordinator allow the stop, reported as not verified; `PLAYBOOK_ALLOW_GENERATED_EDIT=1` allows hand edits of generated files. A `VAR=1 cmd` prefix inside a Bash call never counts, and a hatch set through a settings file's `env` object is ignored and reported. `PLAYBOOK_HOOK_UNATTENDED=1` marks a headless run, where an `ask` becomes what `[hooks] unattended_ask` says.
+
+**The Stop coordinator** is the one registration on each stop event. Its stages run in this fixed order (`hook_runtime.stop.stages.STOP_STAGE_ORDER`), never by hook priority:
+
+`drift` → `lint` → `quality-metrics` → `docstrings` → `gate-integrity` → `secrets` → `notebooks` → `verify-claim` → `output-contract` → `tests-nudge` → `typecheck` → `tests` → `coverage`
+
+The deterministic stages share a 3 s default budget and feed one combined reason of at most 40 lines. The execution stages — `typecheck`, `tests` and `coverage`, which run repo-controlled code — run only when every deterministic stage is green, they are enabled (`[hooks.stop-ci-parity-gate] stages`, or coverage-diff-gate), and this machine approved the stage list (§7.1.1). A stage that times out, crashes or finds its tool missing or changed is reported NOT verified, never green. A tree unchanged since its last block is not blocked again, and a stop chain is blocked at most `max_blocks` times (default 2, 1–8). On OpenCode the Stop gate is evidence-only (§10.6.2).
+
+**`playbook-hook simulate <event>`** runs the exact dispatch pipeline on one payload from stdin and prints what the harness would get. Options: `--harness claude_code|opencode`, `--repo DIR`, `--config PATH` (a `guard_config.json` run without the digest check), `--state DIR` (default: an ephemeral directory, so the real decision log is never touched), `--unattended` (force the ask degradation), `--env NAME=VALUE` (repeatable, to try kill switches), `--async` and `--format text|json`. The JSON is `{exit_code, stdout, stderr, decisions, combined, latency_ms}`, where `exit_code` is the harness-facing code: a `pre_tool_use` deny is 2, though `dispatch` itself exits 10. A completed simulation exits 0 whatever it decided; a usage error exits 2.
+
+**`playbook-hook doctor`** is human-run and read-only (it never syncs). It checks what a harness hides by failing open: the `guard_config.json` digest against its lock entry; the interpreter pin (present, executable, Python ≥ 3.12, isolated under `-I`, importing this engine; an interpreter in a uv or pipx cache is degraded); the state root `<git-dir>/playbook-hooks/` (mode 700, owned by the user); the `machine.json` tool signatures; the trust approvals of external handlers; OpenCode (`opencode --version` ≥ 1.18.29, `OPENCODE_DISABLE_PROJECT_CONFIG`, the shim's lock digest and registrations); and a guard-decision-log summary of the last `--since DAYS` (default 30): per guard, the deny, ask, override and degraded counts. `--repin [PYTHON]` is its one write: it rewrites the interpreter pin (default: the running interpreter) before checking. `--repo DIR` and `--format text|json` as for `simulate`. Exit codes: `0` healthy (warnings included), `1` degraded, `2` broken, and `2` for usage errors. Running the exact registered commands with canary payloads, reporting `disableAllHooks` and the managed-policy kill switches, and warning when `copilot` is on `PATH` are designed (`specs/prK-lifecycle-hooks.md` §D.9) but not implemented yet.
+
+**`playbook-hook --version`** prints `playbook-hook <version>`.
+### 12.14 `playbook gate-scan`
+```
+playbook gate-scan [--range A..B | --range A...B] [--format text|json] [--repo-root DIR]
+```
+gate-weakening-guard's off-workstation twin (v0.18); the `gate-integrity` Stop stage calls the same `gate_scan.scan`, so the hook and CI never disagree. It flags added checker suppressions (`# type: ignore`, `# noqa`, `# pragma: no cover`, `# nosec`), skipped or non-strict-xfail tests, `cast(Any, …)`, a new bare `Any` under the source roots, `verify=False` and the self-service escape pragmas, plus loosened checker config, removed pre-commit hooks or workflow steps, and any `.gitleaks.toml` change. A trailing reason comment exempts a suppression (`# type: ignore[attr-defined]  # stub gap`); config loosenings and pragmas always reach the user as notes. `--range A..B` diffs A to B and `--range A...B` their merge base to B; without it the range is `<merge base with the default branch>..HEAD`. The policy is the engine default extended by `[hooks.gate-weakening-guard]` **as committed at the range's base**, so a change cannot loosen the rules it is judged by; `.local.toml` never applies. `--format json` prints the findings as JSON; `--repo-root DIR` scans another checkout. Exit: `0` clean (justified notes only), `1` blocking findings, `2` a usage error, an unresolvable base, a malformed policy table or a git failure.
+### 12.15 `playbook scan-secrets`
+```
+playbook scan-secrets [--staged | --range A..B | --worktree | PATH…] [--pii] [--pii-detectors NAMES] [--format text|json] [--repo-root DIR]
+```
+The secret guards' off-workstation twin (v0.18), run by the `playbook-secrets` pre-commit hook (`--staged`, the index against `HEAD`) and the `scan-secrets` step of `playbook ci` (`--range <merge base>..HEAD`, also the default). `--worktree` scans tracked changes against `HEAD` plus untracked, non-ignored files; PATHs are scanned whole. Tokens — cloud, VCS, chat and LLM API keys, PEM private keys, JWTs, URLs with inline passwords — are found with the in-session guard's own rules (`security.secrets`) and reported **masked**: rule, place and match length, never a character of the value. Credential files (§17.3) are flagged by path and never read. `# playbook: allow-secret <rule-id>` waives its line only when the base revision already has it. The path policy is the engine catalog extended by `[guardrails.secrets]` as committed at the base; `.local.toml` never applies. `--pii` adds checksum-validated PII on the same lines and files, masked as `pii:<detector>`; `--pii-detectors iban,card_pan,fr_nir,us_ssn` chooses the detectors (default `iban,card_pan`) and implies `--pii`. `--format json` and `--repo-root DIR` as above. Exit: `0` clean (notes only), `1` a token, PII or a credential file, `2` a usage, policy or git error.
+### 12.16 `playbook scan-sinks`
+```
+playbook scan-sinks [--staged | --range A..B] [--format text|json] [--repo-root DIR]
+```
+ml-unsafe-deserialization-guard's off-workstation twin (v0.18): it counts the unsafe deserialization sinks a change adds (`pickle.loads`, `torch.load(weights_only=False)`, …) in Python files and notebook code cells, with the guard's own visitor and the sink table its `HOOK.md` ships. `--staged` scans the index against `HEAD` (the opt-in `playbook-scan-sinks` pre-commit hook); `--range` works as for `gate-scan`, defaulting to `<merge base>..HEAD` (the opt-in `scan-sinks` step of `playbook ci`). A block sink under a `# playbook: trusted-artifact` comment the base already had passes; under a new one it is a note for the reviewer. `--format json` and `--repo-root DIR` as above. Exit: `0` clean (notes only), `1` a new block sink, `2` a usage or git error.
+### 12.17 `playbook check-deps`
+```
+playbook check-deps [--base REF] [--repo-root DIR]
+```
+dependency-allowlist-guard's off-workstation twin (v0.18), the "separate package-check step" of §17.2. Each dependency manifest changed since the merge base of `--base REF` (default: the default branch) and `HEAD`, or untracked, is read at the base and in the working tree, and only newly declared names (PEP 503-normalized) and package indexes count, so existing dependencies are grandfathered. The rules are the guard's merged config, whatever `[hooks]` says: a name outside the overlay's `allowlist` or an index other than `required_index` is deny-class, index mixing follows `index_mode`, and without an allowlist the new names are listed. One `<path>: <deny|ask> <rule>: <detail>` line per finding; `--repo-root DIR` checks another checkout. Exit: `0` no deny-class finding, `1` a deny-class finding, `2` a git or config error.
+### 12.18 `playbook check-commit-trailers`
+```
+playbook check-commit-trailers <msgfile> | --range A..B [--repo-root DIR]
+```
+The commit-trailer rows of git-commit-push-policy-guard (`[hooks.git-commit-push-policy-guard]`: forbidden, co-author and required trailers, the `CP4xx` rows; the subject form is commitizen's) as a twin that judges every commit, the human's and editor-composed ones included (v0.18). `<msgfile>` is what the pre-commit `commit-msg` stage passes (`coding-agent-playbook-commit-trailers`, §13.2); `--range A..B` checks every commit of a range, each line prefixed with its short sha (the `commit-trailers` step of `playbook ci`). The policy is the one of `--repo-root DIR` (default: the cwd). Exit: `0` nothing breaks a row (always, with no rows), `1` a violation, `2` the message, the range or the config cannot be read.
+### 12.19 `playbook check-notebooks`
+```
+playbook check-notebooks [PATH…] [--repo-root DIR]
+```
+notebook-output-hygiene's off-workstation twin (v0.18), run by the opt-in `playbook-notebooks` pre-commit hook: every cell of each notebook named (pre-commit passes the staged ones), or of every tracked `.ipynb` file without PATHs, must keep no outputs. It is stdlib-only, standing in for nbstripout and nbqa, which the air-gapped starter leaves out (§13.2). PATHs are relative to `--repo-root DIR` (default: the cwd). Exit: `0` clean, `1` a notebook keeps outputs or is not valid notebook JSON, `2` a path that does not exist or no git repository to list.
 ## 13. Pre-commit integration
 ### 13.1 The engine's `.pre-commit-hooks.yaml`
-Shipped at the root of `coding-agent-playbook` so consumers can reference it. The first two hooks implement the default `[output] commit = false` policy; `playbook-sync-check` is the **legacy** hook, only for repos that set `commit = true`:
+Shipped at the root of `coding-agent-playbook` so consumers can reference it. The first two hooks implement the default `[output] commit = false` policy; `playbook-sync-check` is the **legacy** hook, only for repos that set `commit = true`; the rest (second block) gate code quality, secrets, notebooks and commit messages:
 ```yaml
 # .pre-commit-hooks.yaml (inside the engine repo)
 - id: playbook-sync
@@ -2288,7 +2543,62 @@ Shipped at the root of `coding-agent-playbook` so consumers can reference it. Th
   always_run: true
   stages: [manual]
 ```
-(`playbook-metrics`, the static code-quality gate, is listed in §21.5.) Stage names are pre-commit's hook-type names (`pre-commit`, `post-checkout`, `post-merge`, …; verified against pre-commit 4.7.0's `clientlib.STAGES`), introduced in pre-commit 3.2.0 — hence `minimum_pre_commit_version`. `post-checkout`/`post-merge` hooks receive no filenames, so `always_run: true` is required for them to run at all. A consumer wiring the default policy installs all three hook types (`pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge`; explicit `--hook-type` flags *replace* `default_install_hook_types`, so all three must be named):
+```yaml
+# Static code-quality gate (§21.5): never the suite, even with [metrics] run_tests = true.
+- id: playbook-metrics
+  name: coding-agent-playbook metrics (static, non-regression vs HEAD)
+  description: Static code-quality gate — fail when staged Python worsens vs HEAD
+  entry: playbook metrics --baseline git:HEAD --no-run-tests
+  language: python
+  types_or: [python, pyi]
+  require_serial: true
+# Coverage gate (§21.5): RUNS YOUR TEST SUITE, so manual only.
+- id: playbook-coverage
+  name: coding-agent-playbook coverage (diff + non-regression; runs your test suite)
+  description: Changed-line and total coverage vs HEAD — runs the project's test suite
+  entry: playbook metrics --run-tests --select testing --baseline git:HEAD
+  language: python
+  pass_filenames: false
+  types_or: [python]
+  require_serial: true
+  stages: [manual]
+# Opt-in ML twins (§12.16, §12.19).
+- id: playbook-notebooks
+  name: coding-agent-playbook notebooks (no outputs committed)
+  description: Fail when a staged notebook keeps cell outputs, embedded images or oversized output
+  entry: playbook check-notebooks
+  language: python
+  types: [jupyter]
+  stages: [pre-commit]
+- id: playbook-scan-sinks
+  name: coding-agent-playbook scan-sinks (no new unsafe deserialization)
+  description: Fail when staged Python or notebook code adds pickle-based loads or other unsafe sinks
+  entry: playbook scan-sinks --staged
+  language: python
+  types_or: [python, jupyter]
+  pass_filenames: false
+  stages: [pre-commit]
+# The air-gapped secret scan (§12.15), every commit.
+- id: playbook-secrets
+  name: coding-agent-playbook secrets (no tokens or credential files committed)
+  description: Fail when staged changes add a secret token or stage a credential file (masked output)
+  entry: playbook scan-secrets --staged
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]
+# Commit-message convention: commitizen's own check, from the project environment.
+- id: playbook-commit-msg
+  name: commit message convention (commitizen)
+  description: Fail a commit whose message breaks the repo's commitizen convention (cz check)
+  entry: cz check --commit-msg-file
+  language: system
+  stages: [commit-msg]
+  minimum_pre_commit_version: "3.2.0"
+```
+**The second block (v0.18).** `playbook-metrics` passes `--no-run-tests`, so the static-only promise of §21.5 holds even when `[metrics] run_tests = true` (that setting is for CI and manual runs). `playbook-coverage` runs the project's suite, so it is `stages: [manual]` (`pre-commit run playbook-coverage --hook-stage manual`, or move it to `pre-push`): changed lines at least 80% executed (`diff_coverage`) and total coverage not below `HEAD`. `playbook-secrets` runs on every commit: the stdlib, air-gapped stand-in for gitleaks and detect-private-key, which need a remote clone (§13.2, §17.3). `playbook-notebooks` and `playbook-scan-sinks` are opt-in ML twins of the notebook and deserialization hooks. `playbook-commit-msg` is commitizen's own `cz check` on every commit message, editor-composed and human ones included, with the convention from the project's `[tool.commitizen]` (default `cz_conventional_commits`) and no cut-over (every new commit conforms; `playbook ci` applies `cutover_date` to history, §12.11). It is `language: system`, so `cz` comes from the project environment and a machine without it fails loudly, and it needs the `commit-msg` hook type installed: `default_install_hook_types: [pre-commit, post-checkout, post-merge, commit-msg]`, or `pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge --hook-type commit-msg`. Every engine pre-commit id starts with `playbook-` (and every starter id with `coding-agent-playbook-`), which is how block-precommit-bypass recognises them, `SKIP=` included.
+
+Stage names are pre-commit's hook-type names (`pre-commit`, `post-checkout`, `post-merge`, …; verified against pre-commit 4.7.0's `clientlib.STAGES`), introduced in pre-commit 3.2.0 — hence `minimum_pre_commit_version`. `post-checkout`/`post-merge` hooks receive no filenames, so `always_run: true` is required for them to run at all. A consumer wiring the default policy installs all three hook types (`pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge`; explicit `--hook-type` flags *replace* `default_install_hook_types`, so all three must be named):
 ```yaml
 # consumer .pre-commit-config.yaml
 default_install_hook_types: [pre-commit, post-checkout, post-merge]
@@ -2334,13 +2644,30 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
-      # The playbook — static code-quality gate (§21.5)
+      # The playbook — static code-quality gate (§21.5); --no-run-tests keeps it static
       - id: coding-agent-playbook-metrics
         name: coding-agent-playbook metrics (static)
-        entry: playbook metrics --baseline git:HEAD
+        entry: playbook metrics --baseline git:HEAD --no-run-tests
         language: system
         types_or: [python, pyi]
         require_serial: true
+      # The playbook — coverage gate; RUNS YOUR TEST SUITE, so manual-only
+      - id: coding-agent-playbook-coverage
+        name: coding-agent-playbook coverage (diff + non-regression; runs your test suite)
+        entry: playbook metrics --run-tests --select testing --baseline git:HEAD
+        language: system
+        pass_filenames: false
+        types_or: [python]
+        require_serial: true
+        stages: [manual]
+      # The playbook — secret scan of every commit (stands in for gitleaks)
+      - id: coding-agent-playbook-secrets
+        name: coding-agent-playbook secrets
+        entry: playbook scan-secrets --staged
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
       # Linting and formatting (ruff must be installed)
       - id: ruff
         name: ruff (lint + autofix)
@@ -2364,7 +2691,9 @@ repos:
 ```
 `default_install_hook_types` makes a plain `pre-commit install` install the `post-checkout`/`post-merge` git hooks the auto-sync needs; `default_stages: [pre-commit]` keeps every hook without an explicit `stages` (notably the `always_run` mypy hook) from also running after each checkout/merge — pre-commit's default is *all* stages. With `[output] commit = true` the template instead renders the legacy `coding-agent-playbook-sync` hook (`entry: playbook sync --check`, every commit) and omits those three top-level keys.
 
-Intentionally **not** shipped in the starter: generic-hygiene hooks (trailing-whitespace, end-of-file-fixer, check-yaml/-toml, detect-private-key, check-merge-conflict, check-added-large-files), secret scanning (gitleaks), and notebook hooks (nbstripout/nbqa) — all of which require cloning a remote repo. `ruff format` already covers Python whitespace/EOF; a pre-push `pytest` hook can be added by the consumer as a `repo: local` entry if desired.
+**Commit-message hooks (v0.18).** Two more variables add `commit-msg` hooks, and `commit-msg` to `default_install_hook_types` (which the template then writes under `commit = true` too). `commitizen` — the repo opted into a convention, through `[tool.commitizen]` in `pyproject.toml` or `[hooks.commit_convention]` — adds `coding-agent-playbook-commit-msg` (`entry: cz check --commit-msg-file`, `stages: [commit-msg]`); `commit_trailers` — a trailer row is configured in `[hooks.git-commit-push-policy-guard]` — adds `coding-agent-playbook-commit-trailers` (`entry: playbook check-commit-trailers`, `stages: [commit-msg]`, §12.18). A consumer without either never gets a commit hook that cannot run.
+
+Intentionally **not** shipped in the starter: generic-hygiene hooks (trailing-whitespace, end-of-file-fixer, check-yaml/-toml, detect-private-key, check-merge-conflict, check-added-large-files), gitleaks, and notebook hooks (nbstripout/nbqa) — all of which require cloning a remote repo. Secret scanning is covered without them: `coding-agent-playbook-secrets` runs the stdlib `playbook scan-secrets --staged` on every commit (§12.15); notebook hygiene is the opt-in `playbook-notebooks` hook of §13.1. `ruff format` already covers Python whitespace/EOF; a pre-push `pytest` hook can be added by the consumer as a `repo: local` entry if desired.
 ### 13.3 Merge with existing `.pre-commit-config.yaml`
 If the consumer already has a config, `playbook init` appends only our playbook `- repo: local` hook block for the configured policy — the `coding-agent-playbook-autosync` + `coding-agent-playbook-no-generated-output` pair for `commit = false` (deduplicated on the guard's id), the legacy `coding-agent-playbook-sync` drift check for `commit = true` — and only when it is not already present. It never injects ruff/mypy into a config the consumer already curates, and it does not add top-level keys (`default_install_hook_types`, `default_stages`) to a file it does not own: the consumer installs the extra hook types with `pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge` (which `init` prints) and should confine their own `always_run` hooks with `stages:`/`default_stages`. A legacy `coding-agent-playbook-sync` hook (`playbook sync --check`) left over from before v0.16 is **swapped in place** for the `commit = false` pair when it is still byte-for-byte what `init` wrote (in the old starter or the old appended block) — it would otherwise report drift after every checkout/merge, since the output is no longer committed. A hand-edited one is left alone and `init` prints a `warning:` telling the user to delete it. When the merged config has no `default_stages`, `init` also prints a `note:` that the consumer's own `always_run` hooks need `stages: [pre-commit]` (or `default_stages: [pre-commit]`) before the `post-checkout`/`post-merge` hook types are installed. The current implementation is a text-based append; round-trip merging with `ruamel.yaml` (to preserve comments/ordering and surface version conflicts, e.g. a different ruff pin) can land later.
 ## 14. Distribution and versioning
@@ -2409,21 +2738,45 @@ kind = "rule"
 artifact_id = "python-house-style"
 source = "coding_agent_playbook"
 adapter = "continue"
+
+[[entries]]                           # one managed element of a shared file (v0.18)
+path = ".claude/settings.json"
+sha256 = "41ab…"                     # canonical JSON of this one matcher group
+bytes = 212
+kind = "runtime"
+artifact_id = "registration:pre_tool_use"
+adapter = "claude_code"
+scope = "json:/hooks/PreToolUse"
+
+[[entries]]                           # sync-level hook output: no adapter
+path = ".coding-agent-playbook/hooks/guard_config.json"
+sha256 = "07d2…"
+bytes = 18340
+kind = "runtime"
+
+[[entries]]                           # a copied external-handler script
+path = ".coding-agent-playbook/hooks/scripts/bnp-sql-pii-columns/check.py"
+sha256 = "5be0…"
+bytes = 2210
+kind = "hook"
+artifact_id = "bnp-sql-pii-columns"
+source = "playbook_rules_bnp"
+executable = true
 ```
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `path` | `str` | — | Repo-relative, forward slashes. |
 | `sha256` / `bytes` | `str` / `int` | — | Hex digest and size of the file's bytes as written. |
-| `kind` | `str` | `""` | `rule` / `prompt` / `skill` = the output of one artifact's `write_rule` / `write_prompt` / `write_skill` (a skill degraded to a prompt by an adapter stays `skill`); `composite` = a multi-source output: every path returned by `finalize` (`.claude/CLAUDE.md`, `AGENTS.md`, the `agent_harness` tree) and any path returned for two different artifacts. `hook` and `runtime` are reserved for the lifecycle-hook tracks (`specs/prK-lifecycle-hooks.md` §B.6). `""` = unknown provenance (an entry read from a schema-1 lockfile). |
-| `artifact_id` | `str` | `""` | Canonical artifact id (frontmatter `id`); `""` for `composite`. |
+| `kind` | `str` | `""` | `rule` / `prompt` / `skill` = the output of one artifact's `write_rule` / `write_prompt` / `write_skill` (a skill degraded to a prompt by an adapter stays `skill`); `composite` = a multi-source output: every path returned by `finalize` (`.claude/CLAUDE.md`, `AGENTS.md`, the `agent_harness` tree) and any path returned for two different artifacts. `hook` = a hook's advisory file from `write_hook` (e.g. `.continue/rules/30-guardrail-<id>.md`) or a copied external-handler script; `runtime` = hook plumbing with no source artifact to edit: `guard_config.json`, the Claude Code launcher, the OpenCode shim and each managed element of `.claude/settings.json` (v0.18). `""` = unknown provenance (an entry read from a schema-1 lockfile). |
+| `artifact_id` | `str` | `""` | Canonical artifact id (frontmatter `id`); `"registration:<canonical_event>"` for a managed hook registration and `"permission:<list>:<string>"` for a managed `permissions` / `sandbox` array string; `""` for `composite` and the other `runtime` files. |
 | `source` | `str` | `""` | The artifact's `source_package`: `coding_agent_playbook`, an overlay package name, or `<repo-local>`; `""` for `composite`. |
 | `adapter` | `str` | `""` | Entry-point name of the adapter that wrote the path; `""` when two different adapters returned the same path. |
-| `scope` | `str` | `""` | `""` = the entry covers the whole file. Reserved for scoped (`json:<pointer>`) entries covering one managed element of a shared JSON file; a path with scoped entries then gets no whole-file entry. No adapter writes one yet. |
-| `executable` | `bool` | `false` | Reserved: git-style exec bit for copied hook scripts. Not populated yet. |
+| `scope` | `str` | `""` | `""` = the entry covers the whole file. `json:<pointer>` = one managed element of the JSON array at that pointer in a shared file (`json:/hooks/PreToolUse`, `json:/permissions/deny`, …), from the adapter's `managed_lock_entries` (§10.1); the element index is deliberately not recorded, since user inserts shift it. A path with scoped entries — `.claude/settings.json` — gets no whole-file entry. |
+| `executable` | `bool` | `false` | The git-style exec bit of a copied hook script, compared on POSIX only. |
 
-Every field after `bytes` is **omitted from the TOML when it holds its default**, so a composite entry carries no `artifact_id`/`source` keys and `scope`/`executable` never appear today. Provenance is recorded by `playbook sync` wrapping each adapter's `write_rule`/`write_prompt`/`write_skill`/`finalize` call (`commands/_sync_lockfile.py`); the adapter return type (`list[Path]`) is unchanged. The lockfile is the ownership record for generated files that cannot carry a sentinel (§4.3 exceptions: copied skill scripts and references) and the only deletion authority inside a skill directory (§10.8). A lockfile that parses as TOML but has the wrong shape (a key missing or of the wrong type) raises `LockfileFormatError`, a `ValueError` naming the key and value. There is no `[overlay_versions]` or `[file_hashes]` table.
+Every field after `bytes` is **omitted from the TOML when it holds its default**, so a composite entry carries no `artifact_id`/`source` keys, `scope` appears only on scoped entries, and `executable` only on a copied script that has the bit. Provenance is recorded by `playbook sync` wrapping each adapter's `write_rule`/`write_prompt`/`write_skill`/`finalize` call (`commands/_sync_lockfile.py`); the adapter return type (`list[Path]`) is unchanged. The lockfile is the ownership record for generated files that cannot carry a sentinel (§4.3 exceptions: copied skill scripts and references, copied hook scripts, `guard_config.json`, and the managed elements of `.claude/settings.json`) and the only deletion authority inside a skill directory (§10.8). A lockfile that parses as TOML but has the wrong shape (a key missing or of the wrong type) raises `LockfileFormatError`, a `ValueError` naming the key and value. There is no `[overlay_versions]` or `[file_hashes]` table.
 
-**Drift.** `playbook sync --check` re-renders into an empty scratch directory and byte-compares every generated file against the working tree (missing or different → exit 1); it reads the lockfile to find the orphans write mode would delete — a whole-file entry (`scope = ""`) not regenerated whose file still exists and that the leftover policy deletes (§12.3, §4.2 step 9). `playbook check` reports drift from the lockfile: each entry's path is re-hashed and compared with `sha256` (`missing:` / `hash mismatch:`).
+**Drift.** `playbook sync --check` re-renders into an empty scratch directory and byte-compares every generated file against the working tree (missing or different → exit 1); it reads the lockfile to find the orphans write mode would delete — a whole-file entry (`scope = ""`) not regenerated whose file still exists and that the leftover policy deletes (§12.3, §4.2 step 9). `playbook check` reports drift from the lockfile: each whole-file entry's path is re-hashed and compared with `sha256` (`missing:` / `hash mismatch:`, and `mode mismatch:` for an `executable` entry that lost its bit); for a scoped entry it parses the shared file and looks for an element under the pointer whose canonical hash equals `sha256` (`managed entry missing:` / `managed entry edited: <path>#<pointer>`, or `unreadable:` when the file cannot be parsed), so user edits elsewhere in the file are never drift (§12.4).
 
 **Ownership.** Write mode settles orphans from the previous lockfile before stamping: pristine, untracked ones in a declared output location are deleted; every other orphan is **carried** into the new lockfile with its old entry unchanged (provenance included). A scoped (`json:<pointer>`) entry is never an orphan: its file is shared with the user. Under the default `[output] commit = false` the lockfile is local state like the output it describes: it is always listed in the managed `.gitignore` block (`/.coding-agent-playbook.lock`) and never committed. The consumer's `.gitignore` is never a lockfile entry — it is a user file the engine only edits inside its managed block.
 
@@ -2590,28 +2943,46 @@ Test asserts the adapter output matches `output.md` byte-for-byte. Update via `p
 ### 16.3 Integration tests
 `tests/integration/test_end_to_end.py` builds a synthetic consumer repo in a `tmp_path`, runs the full `playbook init` → `playbook sync` flow, and asserts the resulting file tree matches expectations.
 ### 16.4 CI
-GitHub Actions / internal Jenkins running:
-1. `uv sync --dev`
-2. `pre-commit run --all-files` (ruff, mypy, gitleaks)
-3. `pytest -q`
-4. `playbook validate` against own resources
-5. `playbook render python-typing --format continue > /tmp/out.md` smoke test
+GitHub Actions (`.github/workflows/ci.yml`, ubuntu, Python 3.12 and 3.13) runs the tools directly rather than through pre-commit, installed with pip and first-party actions only:
+1. `python -m pip install -e ".[dev]"` (no `metrics` extra: the gate must pass without radon)
+2. `ruff check .` and `ruff format --check .`
+3. `mypy` (strict)
+4. `pytest -q` (coverage floor 80%), which also runs `playbook validate` over the engine's own resources and the docs-consistency tests
+5. `--version` smoke tests of `playbook`, `coding-agent-playbook` and `playbook-hook`
+6. a `playbook-hook simulate` smoke test: the committed destructive-command fixture config denies `rm -rf /` (harness-facing exit code 2, §12.13)
+
+The same four tools from the repo root, with no path arguments, cache-free and without radon, are the CI-parity gate every change must pass locally. A consumer's pull-request job runs `playbook ci` (§12.11).
 ### 16.5 Backwards compatibility tests
 A `tests/compatibility/` directory contains a frozen consumer repo from v0.3 with its expected generated output. CI asserts v0.4 still generates compatible output (or that the migration is explicitly documented).
+### 16.6 Hook tests (v0.18)
+Hook code is tested where it lives, hermetically, and never against a real harness in CI:
+- **Layout.** Runtime tests in `tests/hook_runtime/`, pack and tool-hook tests in `tests/hooks/`, security-library tests (secret patterns, PII checksums, the trust store, the audit writer) in `tests/security/`, adapter rendering in `tests/adapters/`, and sync, check, validate and twin commands in `tests/cli/`.
+- **Named fakes through `RuntimeDeps`.** Every external effect of the dispatcher has one injected seam — harness I/O, git (`GitPort`), processes, the clock, the trust store, state — with named fakes in `tests/hook_runtime/fakes.py` (`FakeGit`, `FakeProc`, `FakeClock`, `FakeTrustStore`, …); an autouse fixture gives every in-process dispatch a `FakeProc` that fails on any unscripted subprocess, so a missing binary in CI can never pass silently. `SafeGit` itself is tested against throwaway real repositories (a clean filter that must never run, an untracked secret that must never be read).
+- **Golden payloads.** `tests/fixtures/hook_payloads/{claude_code,opencode,foreign}/<event>/<case>.json`, each with the exact expected wire output beside it, served by the root `hook_payload` fixture; the `foreign` set (VS Code, Copilot CLI, Cursor) pins the inert check of §10.3.2.
+- **Red-team tables.** Parametrized shell-parsing, path, combination and failure-policy cases: wrappers and `bash -lc`, heredocs, Windows paths, symlinks into `.git/`, a raising guard, a usage error that must never become exit 2.
+- **Import budget.** In the default run, a fresh `-I -X importtime` dispatch per hot-path branch asserts that no forbidden module (`jinja2`, `yaml`, `importlib.metadata`, `argparse`, the CLI, renderer, adapters, evaluators, …) is imported.
+- **Shim and launcher.** The OpenCode shim's wire-parse slice runs under node (skipped without it) and is pinned by sha256 to a Python port; the launcher runs under `sh` against fake dispatchers.
+- **Gated tests.** Wall-clock latency budgets run only with `PLAYBOOK_LATENCY_TESTS=1` and assert the excess over a bare interpreter start (the default run keeps one generous N = 3 smoke); the real-OpenCode end-to-end test runs only with the CLI on `PATH` and `PLAYBOOK_E2E_OPENCODE=1`, like the `PLAYBOOK_E2E_CLAUDE=1` runner and judge smokes. None runs in CI.
+
 ## 17. Security and operational considerations
 ### 17.1 Air-gapped operation
 - **No network calls at sync time.** All resources are bundled in the package.
-- **No HTTP-handler hooks shipped by default.** HTTP hook handlers are not expressible in the canonical `Hook` schema and are rejected by `playbook validate` (`specs/prK-lifecycle-hooks.md` §B.5 H8; the `Hook` kind lands with PR K).
+- **No HTTP-handler hooks shipped by default.** HTTP hook handlers are not expressible in the canonical `Hook` schema and are rejected by `playbook validate` (rule H8, §12.6); neither are async, prompt, agent or input-rewriting handlers.
+- **Hooks never reach the network (v0.18).** Guards never resolve or connect to a host, tools are never downloaded (a guard uses a tool only when it is already installed and pinned), there is no telemetry, and the decision and audit logs stay on the machine (§17.4).
 - **Internal PyPI only.** No public PyPI dependency required for runtime; `uv` itself is the only binary dependency for the install flow.
 ### 17.2 Dependency allowlist
 For BNP, the overlay package ships a rule (`30-bnp-banking-dependencies`) that lists approved third-party packages. The rule appears in every harness's context, so the assistant won't suggest unapproved libraries. This is enforcement-by-convention; actual enforcement happens at CI time via a separate package-check step.
 ### 17.3 Secrets
 - Secret paths are defined once, in `coding_agent_playbook/security/patterns.py`: a path is secret when it matches a `SECRET_PATH_GLOBS` entry (`.env*`, `*.pem`, `*.key`, `*credentials*`; key stores and SSH private keys; `.netrc`, `.pypirc`, `.npmrc`, `pip.conf`, `uv.toml`, `.git-credentials`, `.vault-token`, `krb5cc_*`; `*.tfstate`, `*.tfstate.*`, `*.tfvars`, `*.tfvars.json`, `*.kdbx`; per-user stores under `~/` such as `~/.aws/**` and `~/.ssh/**`) not cancelled for it — by a `SECRET_PATH_EXEMPT` entry (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`, SSH public keys), which cancels every glob, or by `SECRET_GLOB_EXEMPT`, which cancels one glob only: source files such as `credentials.py` are spared by `*credentials*` but `.env.credentials.py` stays secret through `.env*`. `security/paths.py`'s `is_secret_path(path, *, home)` decides from the path string alone and never opens the file; the caller passes the home that anchors the `~/` globs, and matching is case-insensitive on macOS and Windows.
 - The detector never opens a secret path: it reads only `pyproject.toml`, and its filesystem walks skip every secret path. `playbook sync --check` copies nothing from the working tree — it renders into an empty scratch directory and reads its inputs in place (§12.3) — and its orphan scan never opens a secret path or follows a file symlink (`security/files.py::is_secret_file` judges a path by its spelling and by its resolved target). Skill copies refuse secret paths and links leaving the skill's source directory in every mode (§10.8), so no secret file reaches the scratch tree, a skills root, `shared_skills/` or the lockfile; `playbook validate` warns about each refused file.
-- The pre-commit baseline includes `gitleaks` and `detect-private-key`.
+- **Secret scanning without a download (v0.18).** The engine ships neither gitleaks nor detect-private-key — both need a remote clone, which an air-gapped starter cannot do (§13.2) — and never downloads or runs gitleaks. Its own stdlib scanner stands in for them: the `playbook-secrets` pre-commit hook (`coding-agent-playbook-secrets` in the starter) runs `playbook scan-secrets --staged` on every commit, `playbook ci` scans the branch (§12.11, §12.15), and the in-session guards — secrets-path-guard (agent reads and writes of credential paths), secret-content-guard (tokens in written content and pushed ranges) and stop-diff-sweep — use the same rules (`security.secrets`) and the same path catalog (`security.paths`). Findings are always masked; credential files are judged by path and never read.
 - No log statement in the engine ever logs config values; only structural facts (counts, paths).
 ### 17.4 Audit log
-`playbook sync` writes a structured log line (JSON, one per invocation) to `.coding-agent-playbook.log` (gitignored):
+Every engine log is append-only JSONL written by one module, `security/audit.py` (`append_jsonl`): a line is one `O_APPEND` write of at most 4 KiB, so concurrent writers never interleave; `O_NOFOLLOW` refuses a log swapped for a symlink; files are mode 0600 and rotate by size under a bounded lock that never stalls a tool call. The hook logs live under the per-worktree state root `<git-dir>/playbook-hooks/`, never in the working tree (v0.18):
+- **guard-decision-log** (`decisions-YYYY-MM.jsonl`, on by default with hooks): one line per deny, ask, warn, override, degraded or escape event, and **no content** — never a command, path, prompt, reason or environment value; the writer refuses any record key outside its fixed set. `playbook-hook doctor` summarizes it (§12.13).
+- **local-audit-log** (`audit-YYYY-MM.jsonl`, an overlay-enabled mechanism): one structure-only activity line per event, with an optional hash chain and `[guardrails.audit] retain_days` retention.
+
+A `playbook sync` audit line — JSON, one per invocation, to `.coding-agent-playbook.log` (gitignored) — is a design target that will go through the same writer; sync writes no log yet:
 ```json
 {"timestamp": "2026-05-20T10:30:00Z", "command": "sync", "engine": "0.4.0", "overlays": {"bnp": "0.2.0"}, "files_written": 18, "duration_ms": 340}
 ```
@@ -2876,16 +3247,23 @@ Source is parsed **once** into a `ModuleModel` (`evaluators/parse.py`, which als
 | `dit` | CLASS | `Ramp(good=1, bad=8)` | `warn=0.5` | `0` | — |
 | `cbo` (≈) | CLASS | `Ramp(good=3, bad=25)` | `warn=0.5` | `0` | — |
 | `maintainability_index` | FILE | `Percent` (0–100→0–1) | `fail=0.65` | `0` | `radon` |
+| `ruff_violations` (opt-in) | FILE, one value per ruff code family (`<file>::ruff:<family>`) | `Ramp(good=0, bad=5)` | none (non-regression only) | `0` | `ruff` on `PATH` (a subprocess, never an import) |
+| `file_sloc` (opt-in) | FILE | `Ramp(good=300, bad=800)` | none; a band is configured, e.g. `warn=1.0, fail=0.6` | `1.0` (regression-exempt) | `radon` |
+| `docstring_example` (opt-in) | FUNCTION/METHOD, public only | `Identity` (1.0 an example, 0.5 a summary only, 0.0 none) | none; strict mode sets `fail=1.0` | `0` | — |
 A `Ramp(good, bad)` scores `good`→`1.0`, `bad`→`0.0` and interpolates between (clamped); the single direction-free formula handles a worse-when-larger metric (`good < bad`) and a better-when-larger one alike. Algorithms: **CC** = 1 + decision points (`If/For/AsyncFor/While`, comprehension `if`s, `BoolOp` operands−1, `ExceptHandler`, `IfExp`, `match` guards, `assert`); **WMC** = Σ of method CC; **LCOM4** = connected components of the method graph (shared `self.x` attr or `self.m()` call); **DIT** = longest resolvable base chain (external base = depth 1); **CBO≈** = distinct external types referenced (labeled approximate — undercounts under duck typing); **MI** = `radon.metrics.mi_visit(source, multi=True)`, the SEI 0–100 variant. `maintainability_index` is the engine's only optional extra (`pip install 'coding-agent-playbook[metrics]'`): it self-registers like every builtin, but radon is imported **lazily inside `measure`** and `available()` returns `False` when radon is absent, so the gate transparently skips MI and the engine still loads air-gapped with nothing extra installed.
+**The v0.18 static metrics are opt-in** (`OPT_IN_METRICS`, §21.3): selected only by name, never by default or through a family, so an engine upgrade leaves every consumer's `playbook-metrics` results byte-stable. `ruff_violations` wraps ruff, a consumer-toolchain subprocess: one `<ruff> check --no-fix --exit-zero --force-exclude --output-format json --stdin-filename <file> --select <codes> -` call per side and file, with the source on stdin for the candidate and the baseline alike (so no worktree is needed, the project's `per-file-ignores` and `# noqa` still apply, and its excludes stay effective). It yields one measurement per configured family — `quality` (C901, PLR0911, PLR0912, PLR0913, PLR0915) and `docstrings` (D100–D107), both overridable in `[metrics.ruff_violations]` (§7.1.1) — including a zero, so `0 → 1` is a regression; a syntax error, a failed or timed-out call or unreadable output yields no measurement, never a zero, and without a ruff the metric is unavailable. `file_sloc` is radon's source lines of code per file (`radon.raw.analyze(source).sloc`), the one gap ruff lacks (no too-many-lines rule): a growing legacy file is never a regression, and a new file is graded only against a configured band (`warn=1.0` flags over 300 SLOC, `fail=0.6` over 500). `docstring_example` is the strict "intent + one usage example" docstring mode in stdlib `ast`: a public function scores 1.0 when its docstring holds a usage example (a `>>>` line, an `Example:` / `Examples:` / `Usage:` header, a numpy `Examples` section or a reST `::` block); with `[metrics.thresholds.docstring_example] fail = 1.0` in regression mode it bites only new public functions.
 #### 21.2.2 Execution metrics (`evaluators/execution/`)
 Deterministic, but they need to **run the target's test suite**, so they add **no playbook dependency**: a `ProjectHandle` (`execution/project.py`) runs a configurable command (default `python -m pytest --junitxml=… --cov --cov-report=xml:… -q`) in the target, and the metrics parse the standard **junit XML** + **coverage XML** with stdlib `xml.etree.ElementTree` (`execution/junit.py`, `execution/coverage_xml.py`). The target supplies `pytest`/`pytest-cov`. The convenience check factories `TestsPassCheck()`/`CoverageCheck()` (`evaluators/checks/execution.py`) are thin `ThresholdCheck` wrappers bound to these metrics with the conventional default bounds.
 | `name` | scope | `normalizer` (raw→0–1) | default warn/fail (0–1) | default `max_worsening` | needs |
 | --- | --- | --- | --- | --- | --- |
 | `test_pass_rate` | MODULE (suite) | `Identity` (already 0–1) | `fail=1.0` (all must pass) | `0` (no new failures) | `ctx.project` |
 | `coverage` | FILE (+MODULE total) | `Percent` (0–100→0–1) | `warn=0.8` | `0` (must not drop) | `ctx.project` |
+| `diff_coverage` | MODULE (the change) | `Percent` (0–100→0–1) | `fail=0.8` (changed lines ≥ 80% executed) | moot: diff-based, never compared with a baseline value | `ctx.project` + the changed lines against `ProjectHandle.diff_base` |
 - **One run, both metrics:** `ProjectHandle.run()` executes the suite once and caches the parsed junit + coverage reports; both metrics read that cache (no double run).
 - **Flaky tolerance:** `test_pass_rate` is DETERMINISTIC but supports an optional flaky-retry (`ProjectHandle.flaky_retries`; reruns and takes the best observed pass rate); off (`0`) by default.
 - **Non-regression needs two runs.** Standalone with `--baseline git:<ref>` materialises the ref via a temporary `git worktree add` (heavier than the static `git show`); `--baseline <dir>` runs the suite there. Absolute mode (single run on the current tree) is the lighter default.
+- **`diff_coverage` (v0.18)** is the attribution-correct coverage signal: the share of the executable lines a change added or edited that the suite ran. It declares `diff_based = True` (a new `Metric` descriptor): one suite run, no baseline run. Test paths (`evaluators/paths.py::TEST_PATH_GLOBS`) and `[metrics] exclude` are never scored; a changed file the coverage report does not list is *unmeasured*, named but not scored; and a change with no executable line yields nothing, so its check passes vacuously, never on a fake 100%. For it, `CoverageReport` gains `lines` (per-file line hits) and `sources` (the report's source roots), and `ProjectHandle` gains `diff_base`, `timeout_s` (`[metrics] test_timeout_s`; a hook-driven suite must never hang the agent) and `env_overrides` (a hook points `COVERAGE_FILE` into its state dir, so the run leaves no file in the worktree). `default_test_cmd(report_dir, python=, cov_sources=)` takes the interpreter to run (a hook passes the project's, not the engine's) and the `--cov=<source>` roots, which also report never-imported files at 0%.
+- **`CoverageCheck()` grades on the normalized score (v0.18 fix):** its default `warn=0.8` flags a file under 80% coverage; the earlier raw `warn=80.0` could never be met, since a 0–1 score is never 80.
 - **Opt-in & cost-gated:** running tests has side effects and cost, so execution metrics are opt-in — `--run-tests` on the standalone `playbook metrics` gate, *inferred* (a `[gate]` referencing an execution metric) on `playbook eval --run`. Their checks are EXECUTION-tier (the scheduler runs them after the deterministic tier) and are **excluded from the default pre-commit hook** — it stays static-only.
 #### 21.2.3 Judged criteria — the rubric, as checks (`evaluators/checks/judged.py`, `judge_metric.py`)
 A rubric criterion is a `JudgeCheck`: a graded SCORE whose value comes from a *judge* (LLM/human). It is **parameterized**, not a registered singleton — a `[rubric.bind]` `rubric` group instantiates one per criterion line (via `Rubric.of`), each carrying its own `criterion` text, `weight`, and a `0-1` `threshold` floor (id `judge:<slug>`, `determinism=JUDGED`, `cost=JUDGED`). `grade` calls `ctx.judge.score_criterion(self.criterion, ctx.artifact, n=ctx.samples) -> float` and averages over `ctx.samples` to damp LLM noise; the score feeds the composite and the `passed` gate is `score >= threshold`. It is **dormant without a judge**: `available()` returns `True` only when `ctx.judge` is set, so a `Rubric` evaluated with no judge records each `JudgeCheck` as `status="skipped"` (never sinking the gate). Because `JudgeCheck` is JUDGED-cost, the cost-tiered scheduler (§21.4) runs it **last** — a failing deterministic gate short-circuits it away, so under the default conjunction verdict a failed gate check never spends an LLM call (see `CompiledTask.short_circuit_safe` for the tasks scored in full).
@@ -2913,6 +3291,8 @@ The list is never hardcoded; **in-tree builtins win** over an entry point reusin
 - `static_metrics()` — every metric with `not needs_project` (the `playbook metrics` default set).
 - `execution_metrics()` — every metric with `needs_project` (`coverage`, `test_pass_rate`); `--run-tests` adds these.
 - `get_metric(name)` — a fresh instance, or `KeyError`.
+
+**Selection (v0.18).** Which metrics a gate run measures is ruff-shaped policy, so it lives in `evaluators/policy.py` beside `METRIC_DEFAULTS`, never on the `Metric`: `resolve_metric_selection(available, *, select, extend_select, ignore, run_tests)`. `METRIC_FAMILIES` names three families — `quality` (`cyclomatic_complexity`, `wmc`, `lcom4`, `dit`, `cbo`, `maintainability_index`, `file_sloc`, `ruff_violations`), `docstrings` (`ruff_violations`, `docstring_example`) and `testing` (`test_pass_rate`, `coverage`, `diff_coverage`); `ruff_violations` sits in two because it measures per ruff code family, and a Stop stage keeps only its own family's scope keys. `OPT_IN_METRICS` (`ruff_violations`, `file_sloc`, `docstring_example`) are enabled only by name. The default selection is `static_metrics()` minus the opt-ins, plus the non-opt-in execution metrics under `run_tests`; `select` replaces it, `extend_select` adds, `ignore` removes (a family in `ignore` removes all its members). A name that is neither a family nor a metric, or an execution metric named without `run_tests`, raises `ValueError`, a usage error in the CLI: running tests is never implied.
 ### 21.4 Aggregation — `Rubric.evaluate` + the cost-tiered scheduler
 `Rubric.evaluate(ctx, measurements, *, strict=False, fail_fast=False, max_workers=1) -> EvaluationReport` replaces the old free `grade()`. It runs its ordered checks through the cost-tiered scheduler (`evaluators/scheduler.py`) and folds the `CheckResult`s into one report. Each metric-backed check (`_MetricCheck`) grades on the metric's **normalized 0–1 score** (every metric owns a `Normalizer`, so direction is already baked in — higher is always better), per scope, matching the baseline by `(metric.name, scope_key)`:
 - **existing scope:** `worsening = base_score − cand_score` (a *drop* in goodness); `> max_worsening` ⇒ `fail`/`kind="regression"`; otherwise the absolute level. The per-scope `score` is the normalized `0-1` goodness.
@@ -2923,17 +3303,25 @@ Two aggregates fall out: the **gate** (`passed` = every *required, run* check pa
 **The scheduler (`evaluators/scheduler.schedule`)** is the Strategy a `Rubric` (and the composers) use to run checks: **cheapest-tier-first** (`DETERMINISTIC` → `EXECUTION` → `JUDGED`), results always returned in **authored order**, with an optional **short-circuit** (`op="and"` stops descending into costlier tiers the moment a required check fails; `op="or"` stops on the first pass) and optional within-tier `concurrent.futures` concurrency (`max_workers > 1`; the default `1` is the deterministic path CI uses). The headline guarantee: with the short-circuit on, a lost deterministic gate **never grades the JUDGED tier** — the LLM judge is never invoked. Eval scoring turns it on only where it cannot change a result (see `CompiledTask.short_circuit_safe`). `Rubric.evaluate` defaults to `fail_fast=False` (complete report); the runner passes `fail_fast=True` for cost-saving, which `playbook eval --run --full-scoring` flips off.
 ### 21.5 Standalone gate — `playbook metrics` (`commands/metrics.py`)
 ```
-playbook metrics [PATHS…] [--baseline git:REF|DIR] [--mode regression|absolute|both]
-                 [--strict] [--run-tests] [--test-cmd "…"]
-                 [--format text|json] [--repo-root DIR]
+playbook metrics [PATHS…] [--baseline git:REF|json:PATH|DIR] [--changed]
+                 [--mode regression|absolute|both] [--strict]
+                 [--select NAMES] [--extend-select NAMES] [--ignore NAMES]
+                 [--run-tests | --no-run-tests] [--test-cmd "…"]
+                 [--emit-measurements PATH] [--format text|json] [--repo-root DIR]
 ```
 - **Default targets** — the repo's `src/` if it exists, else the repo root; directories recurse for `*.py`, skipping dotdirs and common ignores (`__pycache__`, `.venv`, `venv`, `node_modules`, `build`, `dist`, `.git`, `.tox`, `.mypy_cache`).
 - **Default checks** — one metric-backed check per `static_metrics()` metric (fast, air-gapped), assembled into one `Rubric` via the shared `metric_check()` factory. `--run-tests` (or `[metrics] run_tests`) additionally builds a `ProjectHandle` and adds the `execution_metrics()` checks (run once).
 - **Baseline** — static via `git show <ref>:<relpath>` (`git:` form) or the matching relative file under a `<dir>`; a file missing from the baseline is treated all-new. Execution baseline via temp `git worktree` (`git:`) or running in `<dir>`. `regression`/`both` without a baseline degrade to `absolute` with a note.
-- **Config** — a `[metrics]` table in `.coding-agent-playbook.toml` (parsed by `config.parse_metrics_config` into a `MetricConfig`); CLI flags override it.
-- **Exit codes** — `0` pass; `1` when `report.passed` is `False` and `fail_on_breach`; `2` on usage errors (bad path, bad baseline ref/dir, unparseable `--test-cmd`, malformed/invalid `[metrics]` config).
+- **Config** — a `[metrics]` table in `.coding-agent-playbook.toml` (parsed by `config.parse_metrics_config` into a `MetricConfig`, §7.1.1), read from the committed file only; CLI flags override it.
+- **Library (v0.18)** — the gate is `evaluators/metrics_gate.py::run_metrics_gate(MetricsGateRequest) -> MetricsGateResult`: discovery, baselines, measurement and grading, without printing, parsing argv or importing the CLI or jinja2, so the Stop stages call it in-process. `commands/metrics.py` is the thin CLI over it, its output pinned byte for byte by goldens. Running the suite is the explicit `run_tests` request field, never inferred from `[metrics] run_tests`, and `tool_paths` carries the pinned ruff (`machine.json` in a hook, `PATH` elsewhere).
+- **Selection (v0.18)** — `--select`, `--extend-select` and `--ignore` take comma-separated metric or family names and override `[metrics] select`, `extend_select` and `ignore` key by key (§21.3).
+- **`--changed` (v0.18)** — only the `*.py` files changed against the `git:` baseline (`git diff --name-only --diff-filter=AMR <ref>`) plus untracked ones; it requires a `git:` baseline. The Stop stages and the `playbook ci` `metrics` step use it, so the hook and CI agree on what was touched.
+- **Snapshots (v0.18)** — `--emit-measurements PATH` writes the raw candidate measurements as `{"schema": 1, "tree": …, "measurements": [{"evaluator", "scope_key", "value"}]}`, and `--baseline json:PATH` compares against such a file instead of re-running a baseline suite.
+- **`--run-tests` / `--no-run-tests`** — omitted, `[metrics] run_tests` decides; `--no-run-tests` overrides `run_tests = true`, which is how both metrics pre-commit hooks stay static.
+- **Robustness (v0.18)** — every git call is bounded by `[metrics] git_timeout_s` (default 10 s) and a suite run by `test_timeout_s`; baseline sources are read through one `git cat-file --batch`; a file that does not parse, or is over 1 MB, is skipped with a note, never a traceback; and `[metrics] exclude` (default `**/eval_tasks/*/setup/**`) is never measured, so intentionally bad eval fixtures never gate a commit.
+- **Exit codes** — `0` pass; `1` when `report.passed` is `False` and `fail_on_breach`; `2` on usage errors (bad path, bad baseline ref/dir, unparseable `--test-cmd`, malformed/invalid `[metrics]` config, and since v0.18 an unknown selection name, an execution metric selected without `--run-tests`, `--changed` without a `git:` baseline, and an unreadable or wrong-schema `json:` baseline).
 - **Output** — `--format text` shows only `warn`/`fail` findings grouped by file plus a summary; `--format json` includes every finding (`ok` too) for machine consumption.
-**Pre-commit:** the engine ships a `repo: local`, `language: python` hook `playbook-metrics` running `playbook metrics --baseline git:HEAD` — **static only**, never the suite. Execution non-regression belongs in CI or a separate, off-by-default hook. (The hook diffs the working tree against `HEAD`, not the index, which is exact for the common all-staged case.)
+**Pre-commit:** the engine ships a `language: python` hook `playbook-metrics` running `playbook metrics --baseline git:HEAD --no-run-tests` — **static only**, never the suite, even when `[metrics] run_tests = true` — and the starter's `coding-agent-playbook-metrics` is the same command (§13). Execution non-regression belongs in CI (`playbook ci`'s `coverage` step, §12.11) or the manual `playbook-coverage` hook (`playbook metrics --run-tests --select testing --baseline git:HEAD`, `stages: [manual]`), which runs the project's suite: changed lines at least 80% executed and total coverage not below `HEAD`. (The static hook diffs the working tree against `HEAD`, not the index, which is exact for the common all-staged case.)
 ### 21.6 Eval `[gate]`/`[rubric]`/`[verdict]`/`[aggregate]` wiring — live (v1.1)
 The eval task schema (§6.5.3, §15.2) declares its evaluation as layer blocks, each a `[<layer>.bind]` handle table + an `expr`. `evals/task.py::compile_eval_task` → `evals/_compile.py::compile_task` turns them into one `CompiledTask`:
 - `[gate]` / `[rubric]` → `evals/_handles.py::build_handles` turns each handle binding into a `Check` (a `{check=…}` via `get_check`, a `{ref=…}` via `get_gate`/`get_rubric`, a `{rubric=[…]}` group via `Rubric.of` + a `ThresholdCheck`, or a boolean `{all_of/any_of/not=…}` group), then `compile_expr` folds the layer `expr` into a `compose.py` check tree labeled with the layer id. Each present layer is one named check (`id="gate"` / `id="rubric"`) inside the per-trial `Rubric` (named `task.id`).
@@ -2969,11 +3357,18 @@ With no judge configured the `[rubric]` layer reports `available() is False` and
 - **The verdict is derived, not re-run.** `[<layer>].expr` / `[verdict].trial` are a tiny boolean DSL (`evals/_expr.py`) over handle names; the per-trial `Rubric` evaluates each layer once and the verdict is a boolean fold over the results (skipped layer = neutral), so the judge / test-suite is never double-invoked.
 - **Cost-tiered short-circuit.** The scheduler runs checks `DETERMINISTIC` → `EXECUTION` → `JUDGED`, so a failing deterministic gate **never invokes the LLM judge**; results stay in authored order. `--full-scoring` forces every check. The short-circuit may only save work, never change a result, so scoring disables it for a task where a skipped layer could flip the outcome (`CompiledTask.short_circuit_safe`): a verdict that is not a pure conjunction of every present layer (`gate or rubric`, `not …`, `rubric` alone beside a gate — which passed on a failing gate — or a weighted verdict), or an `[aggregate]` over a layer the short-circuit could skip.
 - **Non-regression is primary** (new scopes fall back to absolute); it compares the normalized goodness (`worsening = base_score − cand_score`). Deterministic static/execution use `max_worsening=0`; judged uses a `threshold` floor + n-sample averaging; `test_pass_rate` has an optional flaky-retry.
-- **Execution is opt-in and excluded from the default pre-commit** (side effects + cost); the static gate is the only thing that runs on every commit.
+- **Execution is opt-in and excluded from the default pre-commit** (side effects + cost); the static gate is the only thing that runs on every commit, and both metrics pre-commit hooks pass `--no-run-tests` so a config setting cannot change that.
+- **ruff is a consumer-toolchain subprocess, never an engine import; radon stays the only optional extra.** `ruff_violations` shells out to the pinned or `PATH` ruff (as `cz` and `pytest` run, never imported); the engine adds no dependency for the v0.18 metrics.
+- **`file_sloc` is regression-exempt** (`max_worsening=1.0`, the one exception to `max_worsening=0`): a growing legacy file is never a regression; only a configured band grades it.
+- **Tool policy has one source**, shared by the CLI, the pre-commit hooks, `playbook ci` and the lifecycle hooks: `[metrics]` (with `[metrics.ruff_violations]`) for coverage, quality and docstrings. A hook is never stricter or looser than its twin, and `.coding-agent-playbook.local.toml` never overrides it (§7.2).
+- **New metrics are opt-in by name**, so an engine upgrade never changes a consumer's gate results (§21.3).
 - **CI parity** — `mypy` + `pytest -q` + `ruff` from the repo root with no path args.
 ### 21.8 Open caveats (documented, not blocking)
 - **CBO≈** undercounts under duck typing (rendered approximate); **DIT** cross-module bases are approximated and low-signal in idiomatic Python; **MI** variant is pinned (SEI 0–100); **RFC/NOC/Abstractness/Distance/LCOM1-2/standalone Halstead** are intentionally absent.
 - **Execution cost/flakiness:** running tests is slow and can be flaky; test non-regression is exact only modulo flaky-retry; coverage non-regression assumes a stable test set. The two-run baseline (`git worktree`) is the cost.
+- **`ruff_violations` counts per file and family**, so moving a violation between functions of one file is invisible, and its `Ramp(good=0, bad=5)` saturates: a family already at five or more violations no longer regresses.
+- **`diff_coverage` reports files outside the measured sources as unmeasured**, not as 0%, so a source root missing from the coverage configuration hides changed lines; the report names them.
+- **MI non-regression is volatile on any growth**: adding code to a file lowers its maintainability index even when the new code is clean.
 - **Judged scoring is stochastic** — meaningful only with ≥N samples; single-sample judged scores are advisory. The judge signature is reconciled (§21.2.3, Option A) — no forward-compat debt remains.
 ## Appendix A: Full worked example
 Walking through `risk-models`, a counterparty risk scoring service, going from zero to a fully synced playbook.
@@ -3207,7 +3602,13 @@ Assistant lifecycle hooks (PR K). `Hook` joins `Rule`, `Prompt` and `Skill` as t
 - **Section 19**: Q8 (OpenCode plugin generation) resolved; Q1 partially answered for executable overlay code.
 - **Sections 20.2 / 20.10**: the concrete `ArtifactSource.list_hooks` / `collect_hooks` and `StateSource.load_primary_config` / `load_local_overrides` / `load_policy_tables` defaults; manifest `kind = "hook"` with `hook_frontmatter`, and the optional `lint_codes` / `write_scope` / `output_contract` sidecar fields.
 - **Implementation order (recap)**: the PR K tracks, Pa and Pb through K11.
-- **CI**: `tests/unit/test_docs_lifecycle_hooks_spec.py` derives the names it requires from the landed code (`HooksConfig`, `GuardrailsConfig` and `MetricConfig` fields, the canonical `Hook` dataclasses, `renderer.BUILTIN_FORMATS`, the merge key policies, the manifest kinds), so a key or field added without documentation fails the docs gate.
+- **Section 10 (adapters)**: §10.1's ABC gains the concrete `hook_support`, `shared_outputs`, `runtime_outputs`, `begin_sync`, `write_hook` and `managed_lock_entries`, the sync dispatch order and a per-adapter hook table; the stale claim that Claude Code is the only adapter overriding `finalize()` is corrected (four of the six shipped adapters do). New §10.3.2: the managed `.claude/settings.json` merge (ownership by lockfile hash, restore-and-warn, a span-preserving splice, the file never deleted, `settings.local.json` never written), the launcher, the interpreter pin, the heartbeat line, read-only command frontmatter, the behaviour under both `[output] commit` values, and the Claude Code caveats (launch directory, trust and `-p`, cloud sessions, policy kill switches, hot reload, Windows, concurrent handlers, incidental reach and `gemini hooks migrate`). §10.4: the `## Guardrails` section. §10.6: OpenCode ≥ 1.18.29 and `agent: plan` for read-only commands; §10.6.2, formerly the out-of-scope hook gap, now documents the one generated V1 shim (events, spawning, the restart notice, the inert V2 `setup()` stub); §10.6.4 gives users every plugin but the shim. §10.7: the `.playbook/hooks/<id>/` sidecar and the `rules/30-guardrail-<id>.md` advisory.
+- **Section 12 (CLI)**: `init` asks to enable hooks (`--no-hooks`); `sync` prints the absent-table notice or the hook summary lines, pins the interpreter and asks the TTY-only trust questions; `sync --check` compares the hook outputs and re-merges `settings.json` against the real file; `playbook check` gains the Hooks block and scoped drift lines; `validate` runs without a consumer config, gates `sync` (P8) and lists H1–H21; `render <hook-id>`; `import-harness` rebuilds hooks. New: §12.11 `playbook ci` (the `CI_STEPS` table and a pull-request job that passes the PR title only through `env:`), §12.12 `playbook metrics` (a pointer to §21.5), §12.13 the `playbook-hook` runtime (`dispatch` and its 0-or-10 exit contract, the kill switches, the Stop stage order, `simulate`, `doctor`), and §12.14–§12.19 the off-workstation twins `gate-scan`, `scan-secrets`, `scan-sinks`, `check-deps`, `check-commit-trailers` and `check-notebooks`.
+- **Section 13 (pre-commit)**: the stale §13.1 snippet gains `playbook-metrics` (now with `--no-run-tests`), the manual `playbook-coverage`, `playbook-secrets`, `playbook-commit-msg` and the opt-in `playbook-notebooks` / `playbook-scan-sinks`; the §13.2 starter gains `--no-run-tests`, `coding-agent-playbook-coverage`, `coding-agent-playbook-secrets` and the conditional `commit-msg` hooks with `default_install_hook_types`.
+- **Section 14.4 (lockfile)**: scoped `json:<pointer>` entries and `executable` are populated; the `hook` and `runtime` kinds and the `registration:` / `permission:` artifact ids are documented, and `playbook check` reports scoped drift.
+- **Sections 16 / 17**: the §16.4 CI list matches `ci.yml` (no gitleaks), and new §16.6 is the hook test strategy (`tests/hook_runtime/`, `tests/hooks/`, `tests/security/`, golden payloads, named fakes, the import budget, gated latency and end-to-end tests). §17.1 adds that hooks never reach the network; §17.3's unshipped gitleaks promise becomes `playbook-secrets` / `playbook scan-secrets`; §17.4 names `security/audit.py` as the one log writer (guard-decision-log, local-audit-log) and marks the `playbook sync` audit line as not written yet.
+- **Section 21 (metrics)**: the opt-in `ruff_violations`, `file_sloc` and `docstring_example` rows; `diff_coverage` with the `diff_based` descriptor, the new `CoverageReport` and `ProjectHandle` fields and the `CoverageCheck` `warn=0.8` fix; `resolve_metric_selection`, `METRIC_FAMILIES` and `OPT_IN_METRICS`; the `metrics_gate.py` library, the new flags and usage errors, and the pre-commit paragraph; new invariants (ruff as a consumer-toolchain subprocess, the `file_sloc` exemption, one tool policy) and caveats.
+- **CI**: `tests/unit/test_docs_lifecycle_hooks_spec.py` derives the names it requires from the landed code (`HooksConfig`, `GuardrailsConfig` and `MetricConfig` fields, the canonical `Hook` dataclasses, `renderer.BUILTIN_FORMATS`, the merge key policies, the manifest kinds), and `tests/unit/test_docs_lifecycle_hooks_cli.py` does the same for §10–§21 (the `Adapter` members, `cli._SUBCOMMANDS` and their argparse flags, `CI_STEPS`, the `playbook-hook` usage, `STOP_STAGE_ORDER`, `.pre-commit-hooks.yaml`, the starter template, the OpenCode floor, the metric families), so a key, field, command, flag, step, hook id or metric added without documentation fails the docs gate.
 ### v0.17 (2026-10-14)
 Bundled opt-in packs and the `superpowers` pack. The pack itself is purely additive: no rendering, config-schema, or lockfile change; it is consumed through the existing overlay path and rendered by the v0.15 native-skill adapters, and leaving or overriding it is settled by the v0.16 lockfile leftover policy. The config hardening below changes what is *accepted*: the enabled-list shapes the engine used to misread silently are now refused (other unknown keys are still ignored).
 - **Section 11.5 (new)**: packs are importable subpackages under `coding_agent_playbook.packs.*`, layered exactly like overlay packages but shipped in the engine wheel (no extra install), off by default, and enabled by listing the dotted package name in the top-level `overlays_enabled` key. It documents the two configuration mistakes the pack invites and how each is now caught (see the config-hardening bullet): the `[overlays]`/`[adapters]` table form is refused with a `ConfigError`, and a misspelled pack name is flagged by `sync`, `validate`, `check` and `init`. "Opting out and overriding" applies §4.2 step 9 to a pack: removing it, or overriding one of its skills with fewer `scripts/`/`references/` files, deletes the pristine, untracked pack files from every skill root on the next sync and prunes the emptied directories; edited, tracked, and user-added skill files are kept; the degraded Continue prompts are removed by `cleanup_stale`, edited or not, tracked or not.
