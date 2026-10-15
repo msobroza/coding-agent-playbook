@@ -14,12 +14,14 @@ Stdlib-only and sync-time only, like the rest of ``hook_policy``.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 from coding_agent_playbook._hook_schema import MATCHER_KEYS
+from coding_agent_playbook.hook_policy.advisory import advisory_text
 from coding_agent_playbook.hook_policy.tables import HOOK_SCRIPTS_DIR
 
 if TYPE_CHECKING:
@@ -71,7 +73,10 @@ class ResolvedHook:
     ``matcher`` has an entry per declared event (inherited linked-rule globs
     included), ``on_error`` is clamped per event, ``supports`` is narrowed to
     the adapters that receive hooks. ``advisory`` (not serialized) is the §A.8
-    advisory rule K3 routes, or None.
+    advisory rule K3 routes, or None: its body is the §C.4.1 projection (the
+    hook body plus one enforcement line). ``definition`` (not serialized, not
+    compared) is the merged ``Hook`` it came from: the template the sync renders
+    and the canonical form the agent_harness sidecar copies.
 
     Example::
 
@@ -92,6 +97,44 @@ class ResolvedHook:
     mandatory: bool
     script_sha256: str | None
     advisory: Rule | None = None
+    definition: Hook | None = field(default=None, compare=False, repr=False)
+
+    @property
+    def name(self) -> str:
+        """The human-readable name heading the advisory (the id without a definition)."""
+        return self.id if self.definition is None else self.definition.frontmatter.name
+
+    @property
+    def declared_supports(self) -> tuple[str, ...]:
+        """The frontmatter's ``supports``, before ``[hooks] adapters`` narrowed it.
+
+        The advisory's enforcement line reads these, never :attr:`supports`, so
+        committed advisory bytes never depend on which adapters a repo enables.
+        """
+        if self.definition is None:
+            return self.supports
+        return tuple(dict.fromkeys(self.definition.frontmatter.supports))
+
+    def with_rendered_body(self, body: str) -> ResolvedHook:
+        """A copy carrying ``body``, the rendered ``HOOK.md`` body (§C.1.3).
+
+        The advisory body becomes ``body`` plus the static enforcement line; a
+        body that renders blank drops the advisory; a suppressed advisory
+        (``[hooks] advisory = false``) stays suppressed. The definition's
+        ``body`` is replaced too, its ``template_body`` kept.
+
+        Example::
+
+            hook = hook.with_rendered_body(render_hook_body(hook.definition, ctx, env))
+        """
+        definition = self.definition
+        if definition is not None and definition.body != body:
+            definition = dataclasses.replace(definition, body=body)
+        if self.advisory is None or not body.strip():
+            return dataclasses.replace(self, advisory=None, definition=definition)
+        text = advisory_text(body, self.events, self.declared_supports)
+        rule = dataclasses.replace(self.advisory, body=text, template_body=text)
+        return dataclasses.replace(self, advisory=rule, definition=definition)
 
     def to_json(self) -> dict[str, Any]:
         """The ``guard_config.json`` record: JSON-ready values, copies of every container."""

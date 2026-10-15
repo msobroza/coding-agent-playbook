@@ -9,7 +9,8 @@
 - per hook, every layer's definition: ``hook_policy.classify_hook`` (with the
   handler registry, so H6 checks each builtin's declaration) and the
   H19 body checks (a Jinja syntax error, a ``rule()`` call); H19's links are
-  ``_validate_links``'s, with ``hooks`` among the link-checked kinds;
+  ``_validate_links``'s, with ``hooks`` among the link-checked kinds; and a
+  warning for an advisory body over :data:`ADVISORY_BODY_LIMIT` (§C.4.2);
 - across hooks, artifacts and the committed config: the ``[hooks]`` /
   ``[guardrails]`` parse (H21) and ``hook_policy.classify_hook_set``.
 
@@ -19,7 +20,7 @@ leaf ``_validation``, never ``validate``.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands._validation import (
     RULE_CALL_RE,
@@ -48,6 +49,10 @@ if TYPE_CHECKING:
     from coding_agent_playbook.orchestrator import SyncContext
     from coding_agent_playbook.types import Hook, HookSchemaError
 
+#: Every enabled hook's advisory lands in AGENTS.md (§C.4.2); past this many
+#: characters of body, validate warns so the Guardrails section stays lean.
+ADVISORY_BODY_LIMIT: Final = 600
+
 
 def check_hooks(
     ctx: SyncContext, *, local_policy_is_error: bool = True
@@ -70,6 +75,7 @@ def check_hooks(
     for hook in _definitions(ctx):
         _sort_into(classify_hook(hook, check_ctx), errors, warnings)
         errors.extend(_body_errors(hook))
+        warnings.extend(_advisory_length_warning(hook))
     hooks_cfg, policy_errors = _parsed_policy(ctx)
     errors.extend(policy_errors)
     set_inputs = _set_inputs(ctx, hooks_cfg, local_policy_is_error, handlers)
@@ -121,6 +127,17 @@ def _body_errors(hook: Hook) -> Iterator[ValidationError]:
     if RULE_CALL_RE.search(hook.template_body):
         yield ValidationError(
             where, "body calls {{ rule(...) }} — hook bodies cannot include rules"
+        )
+
+
+def _advisory_length_warning(hook: Hook) -> Iterator[ValidationError]:
+    """§C.4.2: the advisory body (its template, before rendering) stays under the limit."""
+    length = len(hook.template_body.strip())
+    if length > ADVISORY_BODY_LIMIT:
+        yield ValidationError(
+            hook_location(hook),
+            f"advisory body is {length} characters; keep it under {ADVISORY_BODY_LIMIT} so "
+            "the AGENTS.md Guardrails section stays lean",
         )
 
 

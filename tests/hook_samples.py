@@ -5,10 +5,17 @@ Plain builders, not fixtures, so parametrize lists can call them at import time.
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.types import Hook, HookFrontmatter, format_frontmatter
+from coding_agent_playbook.hook_policy import ResolvedHandler, ResolvedHook
+from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.policy import effective_on_error
+from coding_agent_playbook.types import Hook, HookFrontmatter, HookMatcher, format_frontmatter
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 #: The ``where`` label the builders parse under.
 HOOK_WHERE = "playbook/hooks/guard-x/HOOK.md"
@@ -76,6 +83,70 @@ def sample_hook(
     return Hook(
         hook_frontmatter(**overrides), "Advice.\n", "Advice.\n", False, source_path, source_package
     )
+
+
+def resolved_hook(
+    hook_id: str = "guard-x",
+    *,
+    name: str = "Guard X",
+    events: Sequence[str] = ("pre_tool_use",),
+    matcher: Mapping[str, Mapping[str, list[str]]] | None = None,
+    timeout: float = 2.0,
+    on_error: str = "ask",
+    supports: Sequence[str] = ("claude_code",),
+    declared_supports: Sequence[str] | None = None,
+    config: Mapping[str, Any] | None = None,
+    body: str = "Advice.\n",
+    source_package: str = "<repo-local>",
+) -> ResolvedHook:
+    """A hand-built :class:`ResolvedHook`, with no gating, for the K3 renderers and planners.
+
+    ``supports`` is the narrowed (effective) list, ``declared_supports`` the
+    frontmatter's (default: the same); ``on_error`` is clamped per event as the
+    effective view does; ``matcher`` gives authored entries per event (the rest
+    match everything). The advisory carries ``body`` through ``with_rendered_body``.
+    Example: ``resolved_hook("guard-y", events=("stop",), supports=("claude_code", "opencode"))``.
+    """
+    authored = {event: dict(entry) for event, entry in (matcher or {}).items()}
+    handler_config: dict[str, Any] = copy.deepcopy(dict(config or {}))
+    handler = {"builtin": "guard_x", "config": handler_config}
+    definition = Hook(
+        hook_frontmatter(
+            id=hook_id,
+            name=name,
+            events=list(events),
+            matcher=authored,
+            timeout=timeout,
+            on_error=on_error,
+            supports=list(supports if declared_supports is None else declared_supports),
+            handler=handler,
+        ),
+        body,
+        body,
+        False,
+        None,
+        source_package,
+    )
+    fm = definition.frontmatter
+    return ResolvedHook(
+        id=hook_id,
+        source_package=source_package,
+        events=tuple(events),
+        priority=fm.priority,
+        matcher={event: copy.deepcopy(fm.matcher.get(event, HookMatcher())) for event in events},
+        handlers={
+            event: ResolvedHandler("builtin", name="guard_x", config=copy.deepcopy(handler_config))
+            for event in events
+        },
+        decisions=tuple(fm.decisions),
+        timeout=float(timeout),
+        on_error={event: effective_on_error(on_error, EventName(event)) for event in events},
+        supports=tuple(supports),
+        mandatory=False,
+        script_sha256=None,
+        advisory=definition.to_advisory_rule(),
+        definition=definition,
+    ).with_rendered_body(body)
 
 
 def write_hook_md(

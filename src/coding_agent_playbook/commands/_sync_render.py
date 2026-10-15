@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.detector import Facts
     from coding_agent_playbook.orchestrator import SyncContext
-    from coding_agent_playbook.types import Prompt, Rule, Skill
+    from coding_agent_playbook.types import Hook, Prompt, Rule, Skill
 
 
 @dataclass(frozen=True)
@@ -102,6 +102,25 @@ def render_prompt_body(prompt: Prompt, context: dict[str, object], env: Environm
         prompt.template_body, safe_context, env=env, source=template_source(prompt)
     )
     return dataclasses.replace(prompt, body=rendered)
+
+
+def render_hook_body(hook: Hook, context: dict[str, object], env: Environment) -> str:
+    """The advisory body of ``hook``: ``HOOK.md`` verbatim, ``HOOK.md.j2`` rendered (§C.1.3).
+
+    Renders ``template_body`` through ``env``, the sandboxed *base* environment
+    (``is_prompt_context=False``): ``rule()`` is undefined there, so a body
+    cannot include a rule (H19). Only the body renders; frontmatter, handler
+    commands and scripts never do (L7). A sandbox violation raises
+    :class:`TemplateSecurityError` naming the hook's file (its id without one).
+
+    Example::
+
+        hook = resolved.with_rendered_body(render_hook_body(resolved.definition, ctx, env))
+    """
+    if not hook.is_templated:
+        return hook.body
+    source = str(hook.source_path) if hook.source_path is not None else hook.frontmatter.id
+    return render_sandboxed(hook.template_body, dict(context), env=env, source=source)
 
 
 def filter_applies_if[T: "Rule | Prompt"](
@@ -183,9 +202,24 @@ def report_sandbox_violation(exc: TemplateSecurityError, repo_root: Path, *, out
 
         return report_sandbox_violation(exc, ctx.repo_root, outcome="playbook render aborted.")
     """
-    source = Path(exc.source)
-    shown = _repo_relative(source, repo_root) if source.is_absolute() else exc.source
-    print(f"error: {TemplateSecurityError(shown, exc.detail)}", file=sys.stderr)
+    detail = f"template rejected by the Jinja sandbox: {exc.detail}"
+    return report_template_error(exc.source, detail, repo_root, outcome=outcome)
+
+
+def report_template_error(source: str, detail: str, repo_root: Path, *, outcome: str) -> int:
+    """Print ``error: <source>: <detail>`` and ``error: <outcome>`` to stderr; return 1.
+
+    An absolute ``source`` is shown relative to ``repo_root``; anything else
+    (an artifact id) is shown as given.
+
+    Example::
+
+        return report_template_error(str(hook.source_path), "'rule' is undefined", repo_root,
+                                     outcome="playbook render aborted.")
+    """
+    path = Path(source)
+    shown = _repo_relative(path, repo_root) if path.is_absolute() else source
+    print(f"error: {shown}: {detail}", file=sys.stderr)
     print(f"error: {outcome}", file=sys.stderr)
     return 1
 

@@ -371,3 +371,22 @@ def test_validate_without_config_tolerates_a_malformed_hook(
     assert _fail_lines(capsys.readouterr().out) == [
         f"FAIL {bad}: events: expected a list of strings, got 'stop'"
     ]
+
+
+def test_long_advisory_body_warns_and_passes(
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    make_hook: HookFactory,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # §C.4.2: every enabled hook's advisory lands in AGENTS.md; keep each one short.
+    repo = make_synthetic_repo(tmp_path)
+    hooks = repo / "playbook" / "hooks"
+    make_hook(hooks, "guard-x", body="x" * 600 + "\n")
+    long = make_hook(hooks, "guard-y", body="y" * 601 + "\n")
+
+    assert _run(repo) == 0
+    assert capsys.readouterr().err.splitlines() == [
+        f"warning: {long}: advisory body is 601 characters; keep it under 600 so the "
+        "AGENTS.md Guardrails section stays lean"
+    ]

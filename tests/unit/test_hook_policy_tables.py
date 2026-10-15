@@ -208,6 +208,7 @@ def test_hook_policy_imports_only_the_stdlib() -> None:
         "coding_agent_playbook.hook_policy",
         "coding_agent_playbook.hook_policy._contract_handlers",
         "coding_agent_playbook.hook_policy._findings",
+        "coding_agent_playbook.hook_policy.advisory",
         "coding_agent_playbook.hook_policy.contract",
         "coding_agent_playbook.hook_policy.contract_set",
         "coding_agent_playbook.hook_policy.effective",

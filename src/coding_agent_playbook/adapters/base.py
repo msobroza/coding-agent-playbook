@@ -3,11 +3,16 @@
 Concrete adapters (Continue, Claude Code, OpenCode, AGENTS.md) land in PRs 6-9.
 Third-party adapters register via the ``coding_agent_playbook.adapters`` entry
 point declared in ``pyproject.toml``.
+
+The lifecycle-hook additions (specs/prK-lifecycle-hooks.md §C.1.1) are all
+concrete defaults, like ``write_skill``: an ``@abstractmethod`` would break
+every third-party adapter written before hooks existed.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._file_identity import FileSet
@@ -15,10 +20,13 @@ from coding_agent_playbook._sentinel import has_sentinel
 from coding_agent_playbook.security.files import is_secret_file, user_home
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
     from pathlib import Path
 
     from coding_agent_playbook._typing import Prompt, Rule, Skill
+    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks_config import HooksConfig
+    from coding_agent_playbook.lockfile import LockEntry, Lockfile
 
 #: The most :meth:`Adapter._carries_sentinel` reads of one file. The sentinel
 #: sits on line 1 or right after a leading frontmatter block, which engine
@@ -39,6 +47,17 @@ class Adapter(ABC):
     #: file) and never prunes empty directories above one (SPEC §4.2 step 9,
     #: §10.1). Declared on the class, so a since-disabled adapter still counts.
     output_locations: ClassVar[tuple[str, ...]] = ()
+
+    #: Canonical hook event -> the decisions this adapter renders natively. The
+    #: empty default means advisory-only: hooks degrade to text (§C.1.1, §C.5.1).
+    #: Built-in hook-capable adapters take their row from ``hook_policy.HOOK_SUPPORT``.
+    hook_support: ClassVar[Mapping[str, frozenset[str]]] = MappingProxyType({})
+
+    #: Repo-relative files this adapter co-owns with the user and the harness
+    #: (Claude Code's ``.claude/settings.json``): it edits managed elements in
+    #: place, so ``playbook sync`` never gives one a whole-file lock entry,
+    #: gitignores it, flags it as staged output, or deletes it.
+    shared_outputs: ClassVar[tuple[str, ...]] = ()
 
     @abstractmethod
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
@@ -61,6 +80,48 @@ class Adapter(ABC):
         ``agents_md``) override it to return an empty list.
         """
         return self.write_prompt(skill.to_prompt(), repo_root)
+
+    # Concrete on purpose (B027): an abstract hook would break every out-of-tree adapter.
+    def begin_sync(  # noqa: B027
+        self,
+        repo_root: Path,
+        prior_lock: Lockfile | None,
+        *,
+        hooks_config: HooksConfig | None = None,
+    ) -> None:
+        """Called once per sync before any ``write_*``. Default: no-op.
+
+        ``repo_root`` is the real repository (the input root), even when output
+        goes to a scratch directory (``sync --check``): adapters that own
+        sub-file regions read the co-owned file and their prior ownership hashes
+        from ``prior_lock`` here. ``hooks_config`` is the parsed ``[hooks]`` table.
+
+        Example::
+
+            adapter.begin_sync(ctx.repo_root, state_source.load_lockfile())
+        """
+
+    def write_hook(self, hook: ResolvedHook, repo_root: Path) -> list[Path]:
+        """Degrade a hook to advisory text: its advisory rule goes through :meth:`write_rule`.
+
+        Mirrors ``write_skill`` -> ``to_prompt``. Hook-capable adapters override
+        and fall back to ``super().write_hook`` for hooks they cannot enforce. A
+        hook whose body is blank (or whose advisory is off) degrades to nothing.
+
+        Example::
+
+            written = adapter.write_hook(hook, repo_root)  # e.g. 30-guardrail-<id>.md
+        """
+        rule = hook.advisory
+        return [] if rule is None else self.write_rule(rule, repo_root)
+
+    def managed_lock_entries(self) -> list[LockEntry]:
+        """Sub-file ownership records (scoped lock entries) of the last :meth:`finalize`.
+
+        Default: ``[]``. The Claude Code adapter returns one per managed
+        ``settings.json`` element, including the ones this sync left unchanged.
+        """
+        return []
 
     def finalize(self, repo_root: Path) -> list[Path]:
         """Emit any buffered composite output. Default: nothing.

@@ -6,9 +6,10 @@ not from the submodules. Today it carries the one home of the event, tool-class
 and adapter-support tables (:mod:`.tables`), the additive layer merge
 (:mod:`.merge`, with the H14 override rules in :mod:`.override_rules`), the
 effective view (:mod:`.effective`) with its ``guard_config.json`` hook records
-(:mod:`.resolved`), and the trust contract ``playbook validate`` enforces: per
-hook (:mod:`.contract`), across hooks and config (:mod:`.contract_set`), and
-against the handler registry (:mod:`.handler_catalog`, H6/H21's registry half).
+(:mod:`.resolved`) and their advisory projection (:mod:`.advisory`), and the
+trust contract ``playbook validate`` enforces: per hook (:mod:`.contract`),
+across hooks and config (:mod:`.contract_set`), and against the handler
+registry (:mod:`.handler_catalog`, H6/H21's registry half).
 
 Sync-time only, stdlib plus the import-light ``hook_runtime`` tables and
 registry it shares with the dispatcher: ``hook_runtime`` never imports it, it
@@ -18,6 +19,13 @@ reads the compiled ``guard_config.json`` instead (§D.8).
 from __future__ import annotations
 
 from coding_agent_playbook.hook_policy._findings import HookIssue, Severity
+from coding_agent_playbook.hook_policy.advisory import (
+    ADAPTER_LABELS,
+    advisory_block,
+    advisory_text,
+    enforcement_line,
+    enforcement_targets,
+)
 from coding_agent_playbook.hook_policy.contract import HookCheckContext, classify_hook
 from coding_agent_playbook.hook_policy.contract_set import HookSetInputs, classify_hook_set
 from coding_agent_playbook.hook_policy.effective import resolve_effective_hooks
@@ -62,6 +70,7 @@ from coding_agent_playbook.hook_policy.tables import (
 )
 
 __all__ = [
+    "ADAPTER_LABELS",
     "ADVISORY_RULE_PREFIX",
     "ADVISORY_RULE_PRIORITY",
     "DEGRADED_EVENTS",
@@ -92,9 +101,13 @@ __all__ = [
     "ResolvedHook",
     "Severity",
     "SkippedHook",
+    "advisory_block",
+    "advisory_text",
     "classify_hook",
     "classify_hook_set",
     "config_findings",
+    "enforcement_line",
+    "enforcement_targets",
     "merge_config",
     "merge_hook_layers",
     "registry_findings",

@@ -9,6 +9,7 @@ typos fail loudly and attribute escapes to Python internals raise.
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any, Protocol
 
 import yaml
@@ -20,6 +21,13 @@ from jinja2.sandbox import SandboxedEnvironment
 # working; the import-light ``_sentinel`` module is the single home (prK §P3).
 from coding_agent_playbook._sentinel import SENTINEL as SENTINEL
 from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.hook_policy import advisory_block, advisory_text
+from coding_agent_playbook.hook_registrations import (
+    DeclaredMember,
+    claude_settings_projection,
+    declared_stop_budget_s,
+)
+from coding_agent_playbook.types import HookFrontmatter
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -48,6 +56,10 @@ BUILTIN_FORMATS: frozenset[str] = frozenset(
         "prompt_continue",
         "prompt_claude_command",
         "prompt_opencode_command",
+        # Hooks (specs/prK-lifecycle-hooks.md §C.4.1): the advisory markdown every
+        # advisory target shares, and the debug JSON of the Claude registrations.
+        "hook_advisory",
+        "hook_claude_settings",
     }
 )
 
@@ -212,8 +224,8 @@ def render_for(
     ``FORMAT_ALIASES``). Behaviour per format is documented in SPEC §9.7.
 
     ``_template_path`` is reserved for future format-specific dispatch
-    (SPEC §9.7); current transforms key off ``fmt`` and ``frontmatter`` only.
-    The leading underscore marks it as intentionally unused for now.
+    (SPEC §9.7); current transforms key off ``fmt`` and ``frontmatter`` only,
+    and ``hook_claude_settings`` names it when the frontmatter is malformed.
     """
     resolved = FORMAT_ALIASES.get(fmt, fmt)
     if resolved not in BUILTIN_FORMATS:
@@ -230,6 +242,10 @@ def render_for(
         return _render_prompt_claude_command(body, frontmatter, rule_registry)
     if resolved == "prompt_opencode_command":
         return _render_prompt_opencode_command(body, frontmatter, rule_registry)
+    if resolved == "hook_advisory":
+        return _render_hook_advisory(body, frontmatter)
+    if resolved == "hook_claude_settings":
+        return _render_hook_claude_settings(_template_path, frontmatter)
 
     # All BUILTIN_FORMATS are handled above; reaching here means a new format
     # was added to the set but its branch was forgotten.
@@ -286,6 +302,30 @@ def _render_markdown_rule_section(body: str, frontmatter: dict[str, Any]) -> str
     parts.append("---")
     parts.append("")
     return "\n".join(parts)
+
+
+def _render_hook_advisory(body: str, frontmatter: dict[str, Any]) -> str:
+    """``### <name>``, the rendered hook body, and its static enforcement line (§C.4.1).
+
+    ``frontmatter`` is the hook's (``HookFrontmatter.to_mapping()``); the line
+    comes from its declared ``events`` and ``supports`` only.
+    """
+    events = frontmatter.get("events") or []
+    supports = frontmatter.get("supports") or []
+    return advisory_block(frontmatter["name"], advisory_text(body, events, supports))
+
+
+def _render_hook_claude_settings(source: Path, frontmatter: dict[str, Any]) -> str:
+    """The hook's Claude registrations as ``settings.json`` JSON, alone in the repo (debug-only).
+
+    Built from the declared frontmatter (no ``[hooks]`` gating or consumer
+    config); raises ``HookSchemaError`` naming ``source`` on a malformed one.
+    """
+    fm = HookFrontmatter.from_mapping(frontmatter, where=str(source))
+    projection = claude_settings_projection(
+        [DeclaredMember.from_frontmatter(fm)], stop_budget_s=declared_stop_budget_s(fm)
+    )
+    return json.dumps(projection, indent=2, ensure_ascii=False) + "\n"
 
 
 def _has_inline_rule_call(body: str) -> bool:

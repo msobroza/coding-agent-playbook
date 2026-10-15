@@ -23,6 +23,7 @@ from coding_agent_playbook._hook_schema import MATCHER_KEYS
 from coding_agent_playbook.hook_policy import (
     HOOK_SCRIPTS_DIR,
     ResolvedHook,
+    advisory_text,
     resolve_effective_hooks,
 )
 from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
@@ -249,7 +250,7 @@ def test_advisory_rule_uses_inherited_globs() -> None:
     assert advisory is not None
     assert advisory.frontmatter.id == "guardrail-guard-x"
     assert (advisory.frontmatter.scope, advisory.frontmatter.globs) == ("scoped", ["**/*.sql"])
-    assert advisory.body == "Advice.\n"
+    assert advisory.body == advisory_text("Advice.\n", ["pre_tool_use"], ["claude_code"])
 
 
 def test_advisory_is_none_when_hooks_advisory_is_false() -> None:
@@ -262,3 +263,79 @@ def test_advisory_is_none_for_a_blank_body() -> None:
     hook = dataclasses.replace(sample_hook(), body="  \n", template_body="  \n")
 
     assert _resolved(hook).advisory is None
+
+
+# --- K3: the advisory projection and the rendered body (§A.8, §C.1.3) ---------------------
+
+
+def _templated(body: str) -> Hook:
+    return dataclasses.replace(sample_hook(), body=body, template_body=body, is_templated=True)
+
+
+def test_resolved_carries_its_definition_and_name() -> None:
+    hook = sample_hook()
+
+    resolved = _resolved(hook)
+
+    assert resolved.definition is hook
+    assert resolved.name == "Guard X"
+    assert resolved.declared_supports == ("claude_code",)
+
+
+def test_advisory_line_uses_the_declared_supports_not_the_enabled_adapters() -> None:
+    hook = sample_hook(supports=["claude_code", "opencode"])
+    view = resolve_effective_hooks(
+        [hook],
+        [],
+        HooksConfig(enabled=True),
+        GuardrailsConfig(),
+        {},
+        Path("/repo"),
+        adapters_enabled=["claude_code"],
+    )
+
+    (resolved,) = view.resolved
+    assert resolved.supports == ("claude_code",)
+    assert resolved.declared_supports == ("claude_code", "opencode")
+    assert resolved.advisory is not None
+    assert "Claude Code, OpenCode" in resolved.advisory.body
+
+
+def test_with_rendered_body_rebuilds_the_advisory_and_the_definition_body() -> None:
+    resolved = _resolved(_templated("Use {{ tool }}.\n"))
+
+    rendered = resolved.with_rendered_body("Use ruff.\n")
+
+    assert rendered.advisory is not None
+    assert rendered.advisory.body == advisory_text("Use ruff.\n", ["pre_tool_use"], ["claude_code"])
+    assert rendered.advisory.frontmatter == resolved.advisory.frontmatter  # type: ignore[union-attr]
+    assert rendered.definition is not None
+    assert rendered.definition.body == "Use ruff.\n"
+    assert rendered.definition.template_body == "Use {{ tool }}.\n"
+    assert resolved.definition is not None
+    assert resolved.definition.body == "Use {{ tool }}.\n"  # the input is untouched
+    assert rendered.to_json() == resolved.to_json()
+
+
+def test_with_rendered_body_drops_an_advisory_that_renders_blank() -> None:
+    resolved = _resolved(_templated("{% if false %}Never.{% endif %}\n"))
+
+    assert resolved.advisory is not None
+    assert resolved.with_rendered_body("\n").advisory is None
+
+
+def test_with_rendered_body_keeps_a_suppressed_advisory_suppressed() -> None:
+    resolved = _resolved(sample_hook(), cfg=HooksConfig(enabled=True, advisory=False))
+
+    assert resolved.with_rendered_body("Advice.\n").advisory is None
+
+
+def test_with_rendered_body_without_a_definition_uses_the_record() -> None:
+    resolved = dataclasses.replace(_resolved(sample_hook()), definition=None)
+
+    rendered = resolved.with_rendered_body("Other.\n")
+
+    assert rendered.name == "guard-x"
+    assert rendered.declared_supports == resolved.supports
+    assert rendered.advisory is not None
+    assert rendered.advisory.body.startswith("Other.\n\n*Enforced")

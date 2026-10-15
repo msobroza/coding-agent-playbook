@@ -267,7 +267,8 @@ def _resolve(hook: Hook, inputs: _Inputs, warnings: list[str]) -> ResolvedHook:
         mandatory=fm.mandatory,
         script_sha256=script_sha256(hook, bound.values()),
         advisory=advisory_source.to_advisory_rule() if inputs.cfg.advisory else None,
-    )
+        definition=hook,
+    ).with_rendered_body(hook.body)  # a .md body is final; sync re-renders a .md.j2 one
 
 
 def _effective_matcher(hook: Hook, rule: Rule | None) -> dict[str, HookMatcher]:
