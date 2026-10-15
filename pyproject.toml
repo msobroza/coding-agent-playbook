@@ -153,7 +153,9 @@ files = ["src", "tests"]
 # imports (e.g. `from app.db import ...`) resolve there but have no package base in
 # this source tree, and the code is deliberately un-annotated needle material. It
 # is test *data*, not library code, so it must not gate the strict type-check.
-exclude = ['resources/eval_tasks/.*/setup/']
+# `solution/` holds each task's reference agent edits (overlaid on `setup/` by the
+# gate-proof test), so it is the same kind of data.
+exclude = ['resources/eval_tasks/.*/setup/', 'resources/eval_tasks/.*/solution/']
 
 [[tool.mypy.overrides]]
 module = "tests.*"

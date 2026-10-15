@@ -16,9 +16,9 @@ The default for error handling is to let exceptions propagate. Catch only when y
 
 ## What to catch
 
-- No bare `except:`. `except Exception` is the loosest acceptable form, and only when you re-raise or log with a traceback.
+- No bare `except:`. `except Exception` is the loosest acceptable form, and only when the recovery ends by surfacing the error (roll back or clean up, then re-raise). A retry catches only an explicit set of transient errors, never `Exception`. Logging and continuing is allowed only at an isolation boundary (see "Across layers").
 - Catch the most specific type you actually expect. `except ValueError` beats `except Exception` beats `except:`.
-- Don't swallow exceptions to "make it pass". Logging `pass` is still swallowing.
+- No `try`/`except` without a concrete recovery. Don't swallow exceptions to "make it pass": `except Exception: pass` is never acceptable, and logging then `pass` is still swallowing.
 
 ## Chaining
 
@@ -37,6 +37,26 @@ except json.JSONDecodeError as exc:
 
 - Every project gets one base exception class. App-level exceptions inherit from it, never directly from `Exception`. This lets callers do `except MyAppError` and catch the whole family.
 - Name the exception after the failure mode, not the location. `ConfigParseError` is better than `ConfigParserError`.
+
+## Across layers
+
+- Raise in the core; translate once, at the boundary. Only entry points (an HTTP handler or exception handler, a CLI `main`, a worker loop, a per-item batch loop) catch domain exceptions, through one mapping per edge. Business code never raises framework exceptions.
+- Those entry points are the isolation boundaries: the only places where logging a failure and moving on to the next request, message or item is acceptable.
+- Never let `KeyError`, `IndexError` or `AttributeError` cross a layer as a signal. Translate at the adapter that did the lookup (`raise OrderNotFoundError(order_id) from exc`); otherwise a typo in business code reads as "not found".
+- Never signal failure with sentinels or error dicts (`None`, `-1`, `False`, `{"error": ...}`). Raise instead: a caller can forget to check a sentinel but cannot ignore an exception.
+- Follow the codebase's existing absence convention. If it has none, required lookups raise a domain not-found error, `T | None` is returned only where absence is a normal outcome, and the function name makes the difference visible to the caller.
+- `ValueError` and `TypeError` are for violations of the argument contract. Domain failures get subclasses of the project base exception, with the offending identifier in the message.
+- Validate where data enters (request parsing, config loading, file readers) and trust the validated values inside. Let unexpected exceptions reach the default handler instead of wrapping internal calls defensively.
+
+```python
+def main(argv: list[str]) -> int:
+    try:
+        run(parse_args(argv))
+    except AppError as exc:  # the one place domain errors become an exit code
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    return 0
+```
 
 ## `assert` is not a runtime check
 

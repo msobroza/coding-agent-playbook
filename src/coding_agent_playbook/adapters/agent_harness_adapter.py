@@ -280,6 +280,7 @@ class AgentHarnessAdapter(Adapter):
             "prompt_claude_command",
             frontmatter=dataclasses.asdict(prompt.frontmatter),
             rule_registry=self._rule_registry,
+            template_body=prompt.template_body,
         )
         # The claude-command renderer prepends its own sentinel comment; drop it
         # so this leaf carries exactly one sentinel (placed by with_sentinel_body).

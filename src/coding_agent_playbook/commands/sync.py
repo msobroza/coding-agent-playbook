@@ -41,14 +41,14 @@ from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
 from coding_agent_playbook.adapters._skill_writer import deciding_ownership_against
 from coding_agent_playbook.commands import _sync_orphans, _sync_output, _sync_preflight
 from coding_agent_playbook.commands._output_locations import OutputLocations
-from coding_agent_playbook.detector import evaluate_predicate
 from coding_agent_playbook.git_client import SubprocessGitClient
 from coding_agent_playbook.gitignore import LOCKFILE_NAME, ignore_entries
 from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
 from coding_agent_playbook.orchestrator import (
-    RuleRegistryImpl,
     SyncContext,
+    build_prompt_environment,
     discover_adapters,
+    filter_applies_if,
     installed_output_locations,
 )
 from coding_agent_playbook.renderer import build_environment, render_string
@@ -59,7 +59,6 @@ if TYPE_CHECKING:
 
     from jinja2 import Environment
 
-    from coding_agent_playbook.detector import Facts
     from coding_agent_playbook.git_client import GitClient
     from coding_agent_playbook.types import Prompt, Rule, Skill
 
@@ -151,22 +150,6 @@ def _build_lockfile(
     )
 
 
-def _filter_applies_if[T: "Rule | Prompt"](
-    artifacts: list[T],
-    facts: Facts,
-    repo_root: Path,
-) -> list[T]:
-    """Apply :func:`evaluate_predicate` to each artifact and drop the ones
-    whose ``applies_if`` evaluates to False. Empty predicate → always pass.
-    """
-    kept: list[T] = []
-    for artifact in artifacts:
-        predicate = artifact.frontmatter.applies_if or {}
-        if not predicate or evaluate_predicate(predicate, facts, repo_root=repo_root):
-            kept.append(artifact)
-    return kept
-
-
 def _filter_skills(skills: list[Skill]) -> list[Skill]:
     """Skills are unconditional in v1 (no ``applies_if`` in the SKILL.md
     schema). Returned unchanged; kept as a hook for v2 to filter on a
@@ -189,8 +172,8 @@ def _render_into(ctx: SyncContext, output_root: Path) -> list[Path]:
     ``output_root``. So ``--check`` modes render into an empty scratch dir
     without copying the working tree. Returns the written paths.
     """
-    rules = _filter_applies_if(ctx.rules_resolved, ctx.facts, ctx.repo_root)
-    prompts = _filter_applies_if(ctx.prompts_resolved, ctx.facts, ctx.repo_root)
+    rules = filter_applies_if(ctx.rules_resolved, ctx.facts, ctx.repo_root)
+    prompts = filter_applies_if(ctx.prompts_resolved, ctx.facts, ctx.repo_root)
     skills = _filter_skills(ctx.skills_resolved)
 
     base_env = build_environment([], is_prompt_context=False)
@@ -201,9 +184,7 @@ def _render_into(ctx: SyncContext, output_root: Path) -> list[Path]:
     # by the registry when a prompt asks to inline them).
     rendered_rules = [_render_rule_body(rule, base_context, base_env) for rule in rules]
 
-    registry = RuleRegistryImpl(rendered_rules, ctx.facts, base_env)
-    prompt_env = build_environment([], is_prompt_context=True, rule_registry=registry)
-    prompt_env.globals["_facts"] = dict(ctx.facts)
+    registry, prompt_env = build_prompt_environment(rendered_rules, ctx.facts)
     rendered_prompts = [_render_prompt_body(p, base_context, prompt_env) for p in prompts]
 
     # Re-discover adapters with the rule_registry plumbed in so the

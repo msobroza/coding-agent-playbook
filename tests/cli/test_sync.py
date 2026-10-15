@@ -135,3 +135,113 @@ def test_sync_check_detects_missing_file(tmp_path, make_synthetic_repo, capsys):
     assert rc == 1
     out = capsys.readouterr().out
     assert "Missing" in out or "AGENTS.md" in out
+
+
+_ALL_PROMPT_ADAPTERS_CONFIG = """\
+schema_version = 1
+adapters_enabled = ["continue", "claude_code", "opencode", "agent_harness"]
+overlays_enabled = []
+
+[project]
+name = "synthetic"
+kind = "python-library"
+
+[engine]
+version = "0.1.0a0"
+
+[storage]
+artifact_source = "filesystem"
+state_source = "filesystem"
+"""
+
+_INLINE_RULE_PROMPT = """\
+---
+id: inline-review
+name: Inline review
+description: Inlines its rule
+slash: inline-review
+includes_rules:
+  - house-rule
+---
+Review it.
+
+{{rule("house-rule")}}
+"""
+
+
+def _generated_prompt_files(repo: Path, slash: str) -> list[Path]:
+    return [
+        repo / ".claude" / "commands" / f"{slash}.md",
+        repo / ".continue" / "prompts" / f"{slash}.md",
+        repo / ".opencode" / "command" / f"{slash}.md",
+        repo / "prompts" / slash / "SKILL.md",
+    ]
+
+
+def test_sync_emits_an_inlined_rule_once_in_every_prompt_adapter(tmp_path, make_synthetic_repo):
+    """Regression: an inlined ``rule()`` was also re-appended as a
+    ``## Reference rules`` appendix (SPEC §6.2.5 forbids that)."""
+    repo = make_synthetic_repo(
+        tmp_path,
+        config_text=_ALL_PROMPT_ADAPTERS_CONFIG,
+        rules=[("house-rule", "HOUSE RULE BODY\n")],
+    )
+    (repo / "playbook" / "prompts").mkdir(parents=True)
+    (repo / "playbook" / "prompts" / "inline-review.md.j2").write_text(
+        _INLINE_RULE_PROMPT, encoding="utf-8"
+    )
+
+    assert _sync.run(_ns(repo)) == 0
+
+    for path in _generated_prompt_files(repo, "inline-review"):
+        content = path.read_text(encoding="utf-8")
+        assert content.count("HOUSE RULE BODY") == 1, path
+        assert "## Reference rules" not in content, path
+
+
+def test_sync_still_appends_rules_to_a_prompt_without_inline_calls(tmp_path, make_synthetic_repo):
+    repo = make_synthetic_repo(
+        tmp_path,
+        config_text=_ALL_PROMPT_ADAPTERS_CONFIG,
+        rules=[("house-rule", "HOUSE RULE BODY\n")],
+        prompts=[("plain", {"body": "Do it.\n", "includes_rules": ["house-rule"]})],
+    )
+
+    assert _sync.run(_ns(repo)) == 0
+
+    for path in _generated_prompt_files(repo, "plain"):
+        content = path.read_text(encoding="utf-8")
+        assert content.count("HOUSE RULE BODY") == 1, path
+        assert "## Reference rules" in content, path
+
+
+def test_sync_shipped_review_command_inlines_each_rule_once(tmp_path, make_synthetic_repo):
+    repo = make_synthetic_repo(tmp_path)
+
+    assert _sync.run(_ns(repo)) == 0
+
+    review = (repo / ".claude" / "commands" / "review.md").read_text(encoding="utf-8")
+    assert review.count("### Python typing conventions") == 1
+    assert review.count("### Python error handling") == 1
+
+
+def test_sync_migrates_legacy_opencode_commands_to_frontmatter_first(tmp_path, make_synthetic_repo):
+    """Commands written with the sentinel on line 1 (older engines) are rewritten
+    in place with the envelope first, and a stale legacy command is still cleaned."""
+    repo = make_synthetic_repo(
+        tmp_path, prompts=[("refactor", {"slash": "refactor", "body": "Refactor the code.\n"})]
+    )
+    commands = repo / ".opencode" / "command"
+    commands.mkdir(parents=True)
+    legacy = "<!-- {s} -->\n---\ndescription: old\n---\nold body\n"
+    from coding_agent_playbook.renderer import SENTINEL
+
+    (commands / "refactor.md").write_text(legacy.format(s=SENTINEL), encoding="utf-8")
+    (commands / "gone.md").write_text(legacy.format(s=SENTINEL), encoding="utf-8")
+
+    assert _sync.run(_ns(repo)) == 0
+
+    refactor = (commands / "refactor.md").read_text(encoding="utf-8")
+    assert refactor.startswith("---\ndescription:")
+    assert refactor.count(SENTINEL) == 1
+    assert not (commands / "gone.md").exists()

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
-from coding_agent_playbook.renderer import SENTINEL
+from coding_agent_playbook.renderer import SENTINEL, with_sentinel_body
 from coding_agent_playbook.types import (
     Prompt,
     PromptFrontmatter,
@@ -264,3 +264,21 @@ def test_continue_write_skill_degrades_to_prompt_path(tmp_path: Path) -> None:
     assert "Demo skill body" in content
     # The Continue prompt shape ships invokable: true at the top.
     assert "invokable: true" in content
+
+
+def test_cleanup_keeps_a_copied_skill_md_whose_sentinel_follows_frontmatter(
+    tmp_path: Path,
+) -> None:
+    """Only OpenCode opts into the after-frontmatter sentinel position: a generated
+    SKILL.md a user copied into a Continue folder stays theirs, as before."""
+    prompts = tmp_path / ".continue" / "prompts"
+    prompts.mkdir(parents=True)
+    copied = prompts / "my-skill.md"
+    copied.write_text(
+        with_sentinel_body("---\nname: x\ndescription: y\n---", "body\n"), encoding="utf-8"
+    )
+
+    deleted = ContinueAdapter().cleanup_stale(written_paths=set(), repo_root=tmp_path)
+
+    assert deleted == []
+    assert copied.is_file()

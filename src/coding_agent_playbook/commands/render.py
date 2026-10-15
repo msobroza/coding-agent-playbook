@@ -19,7 +19,7 @@ from coding_agent_playbook.commands.sync import (
     _render_rule_body,
 )
 from coding_agent_playbook.detector import evaluate_predicate
-from coding_agent_playbook.orchestrator import RuleRegistryImpl, SyncContext, artifact_id_of
+from coding_agent_playbook.orchestrator import SyncContext, artifact_id_of, build_prompt_environment
 from coding_agent_playbook.renderer import (
     BUILTIN_FORMATS,
     FORMAT_ALIASES,
@@ -158,9 +158,7 @@ def _render_prompt(ctx: SyncContext, prompt: Prompt, resolved_format: str) -> st
     base_env.globals["_facts"] = dict(ctx.facts)
     context = _build_jinja_context(ctx)
     rendered_rules = [_render_rule_body(rule, context, base_env) for rule in ctx.rules_resolved]
-    registry = RuleRegistryImpl(rendered_rules, ctx.facts, base_env)
-    prompt_env = build_environment([], is_prompt_context=True, rule_registry=registry)
-    prompt_env.globals["_facts"] = dict(ctx.facts)
+    registry, prompt_env = build_prompt_environment(rendered_rules, ctx.facts)
     rendered_prompt = _render_prompt_body(prompt, context, prompt_env)
     return render_for(
         rendered_prompt.source_path or Path("inline"),
@@ -168,6 +166,7 @@ def _render_prompt(ctx: SyncContext, prompt: Prompt, resolved_format: str) -> st
         resolved_format,
         frontmatter=dataclasses.asdict(rendered_prompt.frontmatter),
         rule_registry=registry,
+        template_body=rendered_prompt.template_body,
     )
 
 

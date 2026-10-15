@@ -30,7 +30,6 @@ All errors aggregate before a single non-zero exit; success prints one line.
 
 from __future__ import annotations
 
-import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,6 +52,7 @@ from coding_agent_playbook.evals.loader import (
 from coding_agent_playbook.evals.validator import validate_tasks
 from coding_agent_playbook.links import LinksConfig, classify_link, extract_markdown_links
 from coding_agent_playbook.orchestrator import SyncContext
+from coding_agent_playbook.renderer import RULE_CALL_RE
 from coding_agent_playbook.sources.filesystem import (
     FileSystemArtifactSource,
     _iter_md_files,
@@ -73,9 +73,6 @@ if TYPE_CHECKING:
 class ValidationError:
     path: str
     message: str
-
-
-_RULE_CALL_RE = re.compile(r"\{\{\s*rule\(\s*['\"]([^'\"]+)['\"]\s*\)\s*\}\}")
 
 
 def _check_overlays_usable(overlays: Sequence[str]) -> list[ValidationError]:
@@ -133,7 +130,7 @@ def _check_prompt_rule_calls(prompts: list[Prompt]) -> list[ValidationError]:
     errors: list[ValidationError] = []
     for prompt in prompts:
         declared = set(prompt.frontmatter.includes_rules or [])
-        for match in _RULE_CALL_RE.finditer(prompt.template_body):
+        for match in RULE_CALL_RE.finditer(prompt.template_body):
             rule_id = match.group(1)
             if rule_id not in declared:
                 errors.append(
@@ -151,7 +148,7 @@ def _check_prompt_rule_calls(prompts: list[Prompt]) -> list[ValidationError]:
 def _check_rule_bodies_do_not_include_rules(rules: list[Rule]) -> list[ValidationError]:
     errors: list[ValidationError] = []
     for rule in rules:
-        if _RULE_CALL_RE.search(rule.template_body):
+        if RULE_CALL_RE.search(rule.template_body):
             errors.append(
                 ValidationError(
                     path=str(rule.source_path or rule.frontmatter.id),

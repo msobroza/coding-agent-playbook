@@ -360,3 +360,35 @@ def test_a_broken_rule_file_fails_only_prompts_that_inline_rules(
     _broken_rule(inlining, as_directory=as_directory)
     with pytest.raises(PromptResolutionError, match="failed to render"):
         render_prompt(inlining, strict=True)
+
+
+@pytest.mark.parametrize("with_dockerfile", [False, True])
+def test_has_file_rule_gate_resolves_against_the_setup_tree(
+    tmp_path: Path, with_dockerfile: bool
+) -> None:
+    """``has_file`` paths are checked inside ``setup/`` (the project the agent works in),
+    never against the eval process's working directory."""
+    task = _synthetic_task(tmp_path, '{{ rule("needs-dockerfile") }}\n')
+    setup = task.source_path.parent / "setup"
+    rules = setup / "playbook" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "needs-dockerfile.md").write_text(
+        textwrap.dedent(
+            """\
+            ---
+            id: needs-dockerfile
+            name: Needs Dockerfile
+            description: Gated on a Dockerfile.
+            scope: always
+            applies_if:
+              has_file: ["Dockerfile"]
+            ---
+            DOCKERFILE RULE BODY
+            """
+        ),
+        encoding="utf-8",
+    )
+    if with_dockerfile:
+        (setup / "Dockerfile").write_text("FROM python:3.12\n", encoding="utf-8")
+
+    assert ("DOCKERFILE RULE BODY" in render_prompt(task, strict=True)) is with_dockerfile

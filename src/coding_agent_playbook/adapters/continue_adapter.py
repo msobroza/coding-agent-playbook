@@ -78,6 +78,7 @@ class ContinueAdapter(Adapter):
             "prompt_continue",
             frontmatter=prompt.frontmatter.__dict__,
             rule_registry=self._rule_registry,
+            template_body=prompt.template_body,
         )
         target.write_text(rendered, encoding="utf-8")
         return [target]

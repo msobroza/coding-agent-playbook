@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook.renderer import SENTINEL
+from coding_agent_playbook.renderer import carries_engine_sentinel
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -32,6 +32,12 @@ class Adapter(ABC):
     #: file) and never prunes empty directories above one (SPEC §4.2 step 9,
     #: §10.1). Declared on the class, so a since-disabled adapter still counts.
     output_locations: ClassVar[tuple[str, ...]] = ()
+
+    #: Whether this adapter writes the sentinel as the first body line after a
+    #: frontmatter block (frontmatter must stay on line 1 for its harness), so the
+    #: default cleanup also recognises that position. Off by default: adapters
+    #: that write the sentinel on line 1 keep the strict line-1 rule.
+    sentinel_after_frontmatter: ClassVar[bool] = False
 
     @abstractmethod
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
@@ -82,9 +88,11 @@ class Adapter(ABC):
 
     def _default_cleanup(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
         """Default cleanup: for each directory in ``_output_directories``,
-        walk the tree; for every file whose first line contains :data:`SENTINEL`,
-        delete it if its resolved path is not in ``written_paths``. Return the
-        deleted paths.
+        walk the tree; for every engine-owned file (:func:`carries_engine_sentinel`:
+        the :data:`SENTINEL` on line 1, or — when the adapter sets
+        :attr:`sentinel_after_frontmatter` — the sentinel comment as the first
+        line after a leading frontmatter block), delete it if its resolved path
+        is not in ``written_paths``. Return the deleted paths.
 
         Files without the sentinel marker are user-authored and are never
         touched. Binary or undecodable files are skipped silently so the
@@ -103,10 +111,10 @@ class Adapter(ABC):
                 if written.holds(path):
                     continue
                 try:
-                    first_line = path.read_text(encoding="utf-8").split("\n", 1)[0]
+                    text = path.read_text(encoding="utf-8")
                 except (UnicodeDecodeError, OSError):
                     continue
-                if SENTINEL in first_line:
+                if carries_engine_sentinel(text, after_frontmatter=self.sentinel_after_frontmatter):
                     path.unlink()
                     deleted.append(path)
         return deleted
