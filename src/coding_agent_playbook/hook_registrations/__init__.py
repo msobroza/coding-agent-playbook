@@ -9,11 +9,13 @@ from here, not from the submodules:
   bootstrap, and the one §D.4 timeout formula (:func:`deadlines_ms`,
   :func:`registration_timeout_s`, the checked one-second margin);
 - :mod:`.claude`: :func:`to_claude_group` with its matcher union and exact
-  launcher command, and :func:`render_claude_launcher`.
+  launcher command, and :func:`render_claude_launcher`;
+- :mod:`.opencode`: :func:`to_opencode_reg`, the OpenCode V1 shim's ``REG``
+  over the closed V1 tool vocabulary, and :func:`plan_opencode_reg` (§C.3.2).
 
 The event, tool-class and support tables live in ``hook_policy`` (§A.11); this
-package only reads them. Stdlib-only. K4 adds the OpenCode shim's ``REG``; the
-async ``PostToolUse`` audit registration (OQ-19) lands with K9, its only consumer.
+package only reads them. Stdlib-only. The async ``PostToolUse`` audit
+registration (OQ-19) lands with K9, its only consumer.
 """
 
 from __future__ import annotations
@@ -27,6 +29,14 @@ from coding_agent_playbook.hook_registrations.claude import (
     matcher_union,
     render_claude_launcher,
     to_claude_group,
+)
+from coding_agent_playbook.hook_registrations.opencode import (
+    OPENCODE_REG_EVENTS,
+    OPENCODE_V1_TOOLS,
+    OpenCodeRegEntry,
+    opencode_reg_json,
+    plan_opencode_reg,
+    to_opencode_reg,
 )
 from coding_agent_playbook.hook_registrations.plan import (
     BOOTSTRAP_DEADLINE_MS,
@@ -49,6 +59,8 @@ from coding_agent_playbook.hook_registrations.plan import (
 __all__ = [
     "BOOTSTRAP_DEADLINE_MS",
     "LAUNCHER_PATH",
+    "OPENCODE_REG_EVENTS",
+    "OPENCODE_V1_TOOLS",
     "STOP_COORDINATOR_ID",
     "STOP_EVENTS",
     "STOP_STATUS_MESSAGE",
@@ -56,6 +68,7 @@ __all__ = [
     "WATCHDOG_MARGIN_MS",
     "DeclaredMember",
     "HookRegistration",
+    "OpenCodeRegEntry",
     "RegistrationMember",
     "RegistrationTimeoutError",
     "checked_registration_timeout_s",
@@ -65,9 +78,12 @@ __all__ = [
     "deadlines_ms",
     "declared_stop_budget_s",
     "matcher_union",
+    "opencode_reg_json",
+    "plan_opencode_reg",
     "plan_registrations",
     "registration_timeout_s",
     "render_claude_launcher",
     "resolved_deadlines_ms",
     "to_claude_group",
+    "to_opencode_reg",
 ]
