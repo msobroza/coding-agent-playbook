@@ -1,14 +1,15 @@
 # SPEC.md — coding-agent-playbook
 | Field | Value |
 | --- | --- |
-| Version | 0.17 (draft) |
+| Version | 0.18 (draft) |
 | Status | Proposed |
-| Last updated | 2026-10-14 |
+| Last updated | 2026-10-15 |
 | Authors | Max Pereira, with Claude |
 | Audience | Implementers, reviewers, future contributors |
 | License | Apache-2.0 (engine); organization overlays may be private |
 
 **Changelog**
+- **0.18** — Assistant lifecycle hooks (PR K; design `specs/prK-lifecycle-hooks.md` + `specs/prK-hook-pack.md`). **`Hook` is the fourth emitted canonical kind**: a `<id>/HOOK.md` (or `HOOK.md.j2`) directory, found at any depth under `resources/hooks/` and `playbook/hooks/`, whose static frontmatter binds canonical events to a builtin or external handler and declares its decisions (only `deny | ask | context | none`), timeout, `on_error` and supported adapters (§6.6.7). Hooks are **opt-in per repo**: an absent `[hooks]` table, or one without `enabled = true`, changes no byte on upgrade; `playbook init` asks (`--no-hooks` opts out). New committed policy tables `[hooks]`, `[hooks.<hook-id>]`, `[hooks.commit_convention]` and `[guardrails]`, plus new `[metrics]` keys, none of which `.coding-agent-playbook.local.toml` may carry (§7.1.1, §7.2). Overlays merge hooks additively — `extend` / `strictest` / `relax` / `replace` config keys, overlay-only `mandatory` hooks (§11.6). Sync resolves the effective set (`hook_policy.resolve_effective_hooks`), dispatches each hook through the new `Adapter.write_hook`, and writes the sync-level `.coding-agent-playbook/hooks/guard_config.json`; Claude Code gets managed entries in `.claude/settings.json` plus the committed launcher `.claude/hooks/playbook/launch.sh`, OpenCode gets the one generated plugin `.opencode/plugins/playbook-hooks.js`, and every other target gets the hook's advisory text. Every harness event runs one dispatcher, `playbook-hook` (§4.1, §4.2). New: the `has_dev_dependency` predicate (§6.4), prompt `write_scope` / `output_contract` and rule `lint_codes` frontmatter (§6.1, §6.2), the `hook_advisory` / `hook_claude_settings` formats (§9.7), `ArtifactSource.list_hooks` (§20.2) and manifest kind `"hook"` (§20.10). Q8 resolved, Q1 partially answered (§19).
 - **0.17** — Bundled opt-in packs: the engine wheel now ships **packs**, importable subpackages under `coding_agent_playbook.packs.*` layered exactly like overlay packages but needing no extra install, **off by default** and enabled by listing the pack's dotted name in the top-level `overlays_enabled` key. The first pack, `coding_agent_playbook.packs.superpowers`, is a near-verbatim, self-contained port of the Superpowers skills library (v7.0.0, MIT): 15 skills rendered like any canonical skill — natively and byte-identically to `.claude/skills/<id>/`, `.opencode/skills/<id>/` and the `shared_skills/<id>/` hub through the shared `SkillWriter` (`SKILL.md` with the sentinel as its first body line), degraded to Continue prompts, and to `skills/<id>/` under the opt-in `agent_harness` — with only the self-containment edits applied (supporting files moved under `references/`/`scripts/`, an `id` frontmatter key, plain skill names instead of `superpowers:<skill>`, no external URLs, upstream-plugin coupling removed). Dropped: the brainstorming visual companion, the SessionStart bootstrap hook, and diagnosing-superpowers' upstream issue filing. MIT notice in the pack's `LICENSE` + `ATTRIBUTIONS.md`, and as `references/LICENSE` in every skill so it travels with each synced copy. No rendering behaviour changes: opting out of the pack or overriding one of its skills is settled by the v0.16 lockfile leftover policy (§4.2 step 9). **Config hardening (same release):** the enabled lists are the top-level `overlays_enabled` / `adapters_enabled` keys only, above the first `[table]` header — an `[overlays]`/`[adapters]` table (incl. the dotted `overlays.enabled` key), an enabled key nested in any table (what applying the fix-it hint in place, or appending the key to the end of the file, produces), a close misspelling such as `overlay_enabled`, or a value that is not a list of non-empty strings is a new `config.ConfigError` naming the file (`.toml` and `.local.toml` are checked separately, before the merge) and showing the line to write and where, and every command that loads the config (`sync`, `check`, `validate`, `render`, `eval`, `init`) prints `error: …` and exits 2 before writing anything (each of these shapes used to read as an empty list, so `sync` rendered only `AGENTS.md` and deleted the rest as leftovers); `[output]` value errors are `ConfigError`s too (they were a traceback). An unusable overlay — its import fails (missing, or raising at import time, which used to be a traceback and is now reported with its error), or it imports with no `resources/` directory — is caught by the one shared preflight check in every command, one line per overlay: `sync` refuses (exit 1), `validate` fails (exit 1), `check` flags it and no longer reports a clean state (exit 0), `init` refuses before writing (exit 2; it checks the overlays its sync will use — `--overlays`, or the local file's list that replaces it); a pack-like typo lists the bundled packs (discovered with `pkgutil`). Every config example uses the top-level keys, and §7.1 shows the `detector_cache` table the code reads and writes (§4.2, §7.1, §7.2, §10.7, §10.8, §11.1, §11.5, §12.1–§12.6). `[tool.ruff] extend-exclude` keeps the vendored text byte-faithful; `tests/packs/` gates it (§5.1, §6.3, §11.5).
 - **0.16** — Generated output is **local-only by default**: everything `playbook sync` renders into a consumer repo (`AGENTS.md`, `.claude/`, `.continue/`, `.opencode/`, skill directories, the lockfile) is gitignored and never committed. New `[output] commit = <bool>` toggle in `.coding-agent-playbook.toml` (default `false`; `playbook init` writes it explicitly; `true` restores the legacy committed-output policy). With `commit = false`, write-mode `sync` keeps an engine-owned **managed block** in the consumer's `.gitignore` current (root-anchored, escaped entries — one per generated file, skill directories collapsed to `/<dir>/`; byte-preserving, atomic, idempotent; malformed markers fail loudly) and warns on stderr about generated paths git still tracks, printing the exact `git rm -r --cached -- …` to run (it never changes git state). Leftovers of an earlier sync stay owned through the previous lockfile: deleted only when pristine, untracked and every enabled adapter is installed, else kept (and, for `commit = false`, kept ignored). This **lockfile leftover policy is the one deletion policy for stale native-skill output**, under both `commit` settings: adapters' `cleanup_stale` never deletes inside a skill directory, and a file the engine never wrote — even one dropped into an engine-owned skill dir — is never deleted (it replaces the v0.15 `SkillWriter` cleanup, which deleted every unwritten file in an engine-owned dir). It deletes only inside the `output_locations` installed adapters declare (§10.1) — never under `.git/`, never through a symlink the user put on the path — prunes emptied directories no higher than the skills root (never a symlinked root's target), and fails closed when git cannot say whether a leftover is tracked (asked case-insensitively, matched in NFC or by file identity); a file/folder swap inside a skill dir displaces only what the same policy would delete, and the pre-v0.15 lockfile claim needs unchanged `SKILL.md` bytes. Stale-vs-written comparisons use file identity (the `agent_harness` cleanup too), so a case-only skill-id rename on a case-insensitive filesystem never deletes fresh output; `sync --check`/`--check-staged` render into an empty scratch dir but decide skill-dir ownership against the real tree, so they skip exactly the skill dirs write mode skips. A missing overlay package makes every `sync` mode refuse to run. `sync --check` reports a stale/missing block as drift; the new **`sync --check-staged`** fails a commit that stages generated output. New hooks: `playbook-sync` (`post-checkout`/`post-merge` auto-sync) and `playbook-no-generated-output` (pre-commit guard); `playbook-sync-check` is kept as the legacy hook for `commit = true`. New stdlib modules `gitignore.py` + `git_client.py` (an injectable read-only `GitClient`) and `commands/_sync_output.py` (§4.2, §5.3, §6.3, §7.1, §10.8, §12.1–§12.3, §13, §14.4).
 - **0.15** — Native skills for every Agent-Skills harness + the `shared_skills/` hub: a new shared `SkillWriter` (`adapters/_skill_writer.py`) is the single source of truth for a native skill directory (`<root>/<id>/SKILL.md` + byte-copied `scripts/`/`references/`), byte-identical across roots. `claude_code` writes `.claude/skills/`, `opencode` now writes **`.opencode/skills/`** natively (no longer relying on `claude_code`), and the new **`shared_skills`** adapter (on by default, not force-enabled) writes the cross-agent hub `shared_skills/`. Two bug fixes: `SKILL.md` frontmatter `name` is now the skill id (= directory name, the Agent Skills rule OpenCode enforces), and `SKILL.md` carries the sentinel as its first body line, so a skill directory is recognisably engine-owned (user-authored skill dirs are never touched; since v0.16 a deleted skill's unchanged, untracked files are removed by the lockfile leftover policy, §4.2 step 9, and edited or user-added files are kept). New `playbook validate` rule for the Agent Skills `id`/`name`/`description` constraints (id-less skills included). Ownership is decided before writing: a colliding hand-written skill dir is skipped with a warning, never overwritten (§6.3, §10.3, §10.6, §10.8, §12.6).
@@ -44,7 +45,7 @@ Prior art that shaped this design:
 - No Cursor dedicated adapter beyond the universal AGENTS.md fallback. (v2.)
 - No Codex CLI dedicated adapter — Codex reads AGENTS.md natively, so the universal adapter is sufficient.
 - No OpenCode agents (custom modes in `.opencode/agent/`) — users author these by hand. (v2; see open question 9.)
-- No OpenCode plugins (`.opencode/plugin/`) — users author lifecycle hooks by hand. (v2; see open question 8.)
+- No management of user-authored OpenCode plugins. The engine generates exactly one plugin, the lifecycle-hook shim `.opencode/plugins/playbook-hooks.js` (§10.6), and only when the repo opts into hooks (§7.1.1); every other file under `.opencode/plugin/` or `.opencode/plugins/` is the user's, authored by hand and never touched. (Open question 8, resolved.)
 - No `opencode.json` management — MCP servers, permissions, model selection are owned by the user.
 - No eval runner — `playbook eval` prints a deferred-implementation message; task authoring + validation is v1, execution is v1.1 / v2.
 - No LLM-as-judge — rubric scoring is human-only until v2.
@@ -54,20 +55,21 @@ Prior art that shaped this design:
 ### 2.3 v2+ aspirations
 - MCP server registry and per-harness MCP config generation (including OpenCode's `opencode.json` mcp block)
 - Cursor dedicated adapter with `.cursor/rules/*.mdc` output
-- OpenCode plugin generation from canonical hook descriptions (highest-ROI v2 feature for banking-compliance contexts)
-- OpenCode agent definitions as a fifth canonical artifact category
+- OpenCode agent definitions as a further canonical artifact category
 - Eval runner (Tier 1) — programmatic checks against agent output, per-harness comparison
 - LLM-as-judge for rubrics (Tier 2) with calibration tooling
 - Per-team overlay packages discoverable via internal registry
 - Rule provenance and changelogs
+
+Delivered: OpenCode plugin generation from canonical hook descriptions — listed here through v0.17 — shipped in v0.18 as the generated lifecycle-hook shim, driven by the canonical `Hook` artifact (§3, §6.6.7, §10.6).
 ## 3. Glossary
 - **Rule** — a unit of always-on or context-scoped guidance loaded into the assistant's system prompt. Example: *"Use ruff for linting, never black or flake8."* Rendered as `.continue/rules/*.md`, or as sections of `CLAUDE.md` / `AGENTS.md`. OpenCode reads `AGENTS.md` natively, so rules reach OpenCode via the AGENTS.md adapter rather than a dedicated path.
 - **Prompt** — a reusable, named instruction the user invokes explicitly. Example: `/refactor` or `/generate-tests`. Rendered as `.continue/prompts/*.md` with `invokable: true`, `.claude/commands/*.md`, or `.opencode/command/*.md`.
 - **Skill** — a richer prompt with bundled scripts and progressive disclosure, in the Agent Skills layout (`<name>/SKILL.md` + `scripts/` + `references/`). Written natively to `.claude/skills/` (Claude Code), `.opencode/skills/` (OpenCode) and the cross-agent `shared_skills/` hub by one shared `SkillWriter`, so every copy is byte-identical (the opt-in `agent_harness` adapter also writes it natively, in its own `skills/` tree). Degraded to a prompt only by adapters that keep the ABC default (Continue); not emitted by the rules-only `agents_md` adapter.
 - **Hook** — overloaded term. Two distinct meanings:
-  - **Git pre-commit hook**: a shell command run before a commit lands (via pre-commit.com framework).
-  - **Assistant lifecycle hook**: PreToolUse / PostToolUse / SessionStart etc., supported natively by Claude Code, by OpenCode through JS plugins; Continue ships no wired hook mechanism (the CLI's hook code is unreachable), so Continue receives the advisory degrade only (the hook's guidance rendered as rule text; `specs/prK-lifecycle-hooks.md` §A.8). The engine ships configuration for both kinds and keeps them visually separate in source.
-- **Plugin (OpenCode)** — JS/TS module under `.opencode/plugin/` that subscribes to OpenCode's runtime events (`tool.execute.before`, `session.idle`, etc.). The OpenCode equivalent of Claude Code's declarative hooks. v1 does not generate plugins; users author them by hand. See open question 8.
+  - **Git pre-commit hook**: a shell command run before a commit lands (via pre-commit.com framework). The engine's are listed in `.pre-commit-hooks.yaml` (§13).
+  - **Assistant lifecycle hook**: PreToolUse / PostToolUse / SessionStart etc., supported natively by Claude Code, by OpenCode through JS plugins; Continue ships no wired hook mechanism (the CLI's hook code is unreachable), so Continue receives the advisory degrade only (the hook's guidance rendered as rule text; `specs/prK-lifecycle-hooks.md` §A.8). Since v0.18 a lifecycle hook is the **fourth emitted canonical kind**, `Hook` (after `Rule`, `Prompt` and `Skill`; eval tasks are never emitted): a `<id>/HOOK.md` directory whose static frontmatter binds canonical events (`pre_tool_use`, `stop`, …) to one builtin or external handler (§6.6.7). Hooks are opt-in per repo (§7.1.1), and every harness event runs the one dispatcher, `playbook-hook` (§4.1). The engine ships configuration for both kinds and keeps them visually separate in source.
+- **Plugin (OpenCode)** — JS/TS module under `.opencode/plugins/` (or `.opencode/plugin/`) that subscribes to OpenCode's runtime events (`tool.execute.before`, `session.idle`, etc.). The OpenCode equivalent of Claude Code's declarative hooks. The engine generates exactly one: the lifecycle-hook shim `.opencode/plugins/playbook-hooks.js` (OpenCode V1 plugin API), which forwards each event to `playbook-hook` (§10.6). Every other plugin is the user's, authored by hand and never touched. See open question 8 (resolved).
 - **Agent (OpenCode)** — a named mode with its own model, permissions, and system prompt, defined in `.opencode/agent/<name>.md`. OpenCode ships built-in `build` and `plan` agents and supports user-defined custom agents. Out of scope for the canonical artifact model in v1; users author custom agents directly. See open question 9.
 - **Eval task** — a reproducible test case associated with a prompt: a starting state (`setup/` files + mock detector facts), an invocation (`prompt_args`, `input_variables`), and a notion of success (programmatic checks + human-readable rubric). v1 ships the authoring format and validator; the runner that executes tasks against a real agent lands in v1.1 / v2. See Section 6.5.
 - **Harness** — a coding assistant runtime (Continue, Claude Code, OpenCode, Codex, Cursor).
@@ -88,7 +90,15 @@ Prior art that shaped this design:
                                     │  │  resources/   (canonical)  │  │
                                     │  │   ├── rules/*.md|*.md.j2   │  │
                                     │  │   ├── prompts/*.md|*.md.j2 │  │
-                                    │  │   └── skills/*/SKILL.md    │  │
+                                    │  │   ├── skills/*/SKILL.md    │  │
+                                    │  │   └── hooks/**/HOOK.md     │  │
+                                    │  └─────────────┬──────────────┘  │
+                                    │                │                 │
+                                    │                ▼                 │
+                                    │  ┌────────────────────────────┐  │
+                                    │  │  overlay merge + applies_if│  │
+                                    │  │  hooks: hook_policy.       │  │
+                                    │  │    resolve_effective_hooks │  │
                                     │  └─────────────┬──────────────┘  │
                                     │                │                 │
                                     │                ▼                 │
@@ -104,6 +114,19 @@ Prior art that shaped this design:
                                     │  │   ├── opencode             │  │
                                     │  │   ├── shared_skills        │  │
                                     │  │   └── agents_md            │  │
+                                    │  │  write_rule / write_prompt │  │
+                                    │  │  / write_skill / write_hook│  │
+                                    │  │  then finalize             │  │
+                                    │  └────────────────────────────┘  │
+                                    │  ┌────────────────────────────┐  │
+                                    │  │  guard_config.py: the sync-│  │
+                                    │  │  level guard_config.json   │  │
+                                    │  │  (hooks on only)           │  │
+                                    │  └────────────────────────────┘  │
+                                    │  ┌────────────────────────────┐  │
+                                    │  │  hook_runtime: the one     │  │
+                                    │  │  dispatcher, playbook-hook │  │
+                                    │  │  dispatch|simulate|doctor  │  │
                                     │  └────────────────────────────┘  │
                                     └──────────────────────────────────┘
                                                     │
@@ -118,13 +141,24 @@ Prior art that shaped this design:
               │   - banking-security rules   │         │  Generated (gitignored):     │
               │   - PII redaction prompts    │         │   .continue/rules/*.md       │
               │   - LiteLLM-aware config     │         │   .continue/prompts/*.md     │
-              │                              │         │   .claude/CLAUDE.md          │
-              └──────────────┬───────────────┘         │   .claude/commands/*.md      │
-                             │                         │   .claude/skills/*/          │
-                             │                         │   .opencode/command/*.md     │
+              │   - overlay hooks (data-only │         │   .claude/CLAUDE.md          │
+              │     unless allow_code_from)  │         │   .claude/commands/*.md      │
+              │                              │         │   .claude/skills/*/          │
+              └──────────────┬───────────────┘         │   .opencode/command/*.md     │
                              │                         │   .opencode/skills/*/        │
                              │                         │   shared_skills/*/           │
                              │                         │   AGENTS.md                  │
+                             │                         │  ... and with hooks on:      │
+                             │                         │   .claude/hooks/playbook/    │
+                             │                         │       launch.sh              │
+                             │                         │   .opencode/plugins/         │
+                             │                         │       playbook-hooks.js      │
+                             │                         │   .coding-agent-playbook/    │
+                             │                         │       hooks/guard_config.json│
+                             │                         │                              │
+                             │                         │  Managed entries (user file):│
+                             │                         │   .claude/settings.json      │
+                             │                         │       `hooks` (hooks on)     │
                              │                         │                              │
                              │                         │  Merged by init (committed): │
                              └─────── merges ─────────►│   .pre-commit-config.yaml    │
@@ -134,25 +168,58 @@ Prior art that shaped this design:
                                                        │       local.toml (gitignored)│
                                                        └──────────────────────────────┘
 ```
+**Runtime path, only with `[hooks] enabled = true`.** One dispatcher serves every harness event; nothing in it imports `cli.py`, Jinja or YAML, and it reads only the compiled `guard_config.json`, never the canonical sources (`specs/prK-lifecycle-hooks.md` §D):
+```
+  Claude Code ── .claude/settings.json `hooks` ──► sh .claude/hooks/playbook/launch.sh ──┐
+                                                                                         │
+  OpenCode ───── .opencode/plugins/playbook-hooks.js (spawn) ────────────────────────────┤
+                                                                                         ▼
+                    <pin> -I -m coding_agent_playbook.hook_runtime dispatch <event> --harness H
+                    (<pin> = <git_dir>/playbook-hooks/interpreter, written by write-mode sync)
+                         │  reads .coding-agent-playbook/hooks/guard_config.json
+                         │  fans out in-process to the enabled hooks, one Stop coordinator
+                         ▼
+                    exit 0 (decision on stdout) | exit 10 (deny); the launcher maps 10 to 2
+```
 ### 4.2 Data flow
 The end-to-end flow of `playbook sync` in a consumer repo:
 1. **Load configuration.** Read `.coding-agent-playbook.toml` (committed), merge `.coding-agent-playbook.local.toml` (gitignored, personal overrides) on top. The read goes through the configured `StateSource` (filesystem in v1; see Section 20); a config the engine would misread — an `[overlays]`/`[adapters]` table, an enabled key nested in a table or misspelled, a `*_enabled` value that is not a list of non-empty strings, a non-boolean `[output] commit` — is a `ConfigError` and `sync` exits 2 before anything else runs (§7.1). **Preflight:** every package in `overlays_enabled` must import without error in the running environment and ship a `resources/` directory, else `sync` (every mode) exits 1 naming it with the reason and writes nothing — rendering without an overlay would silently drop its rules and un-ignore its output (the classic case is a pre-commit hook venv, §13.1). The check is `_sync_preflight.unusable_overlays`, shared with `validate` (§12.6), `check` (§12.4) and `init --overlays` (§12.1). An enabled adapter with no installed entry point is only warned about (its earlier output is kept, step 9).
+   The hook policy tables `[hooks]` and `[guardrails]` are read from the committed file only (`StateSource.load_policy_tables`, §7.2). Write mode and `--check` then run the full `playbook validate` rule set, the hook trust contract H1–H21 included, and exit 1 on any finding before writing anything (§12.6).
 2. **Run detector.** Inspect `pyproject.toml`, lockfiles, filesystem. Produce a facts dictionary.
-3. **Resolve overlays.** Query the configured `ArtifactSource` (filesystem in v1; see Section 20) for rules, prompts, skills, and eval tasks across the engine package, each declared overlay package, and the consumer's `playbook/` directory. Build a unified artifact list, with later layers overriding earlier ones by ID.
-4. **Filter.** For each artifact, evaluate its `applies_if` predicate against the facts dictionary. Drop non-matching artifacts.
-5. **Render.** Apply Jinja2 to each surviving artifact's template with `facts | config` as context.
-6. **Dispatch to adapters.** For each enabled adapter (`continue`, `claude_code`, `opencode`, `shared_skills`, `agents_md`), pass the rendered artifacts; the adapter writes to its harness-specific locations.
-7. **Write `AGENTS.md`** as the universal fallback regardless of which adapters are enabled.
-8. **Stamp.** Write a `.coding-agent-playbook.lock` file containing the rendered file hashes via the configured `StateSource`; used by `playbook sync --check` to detect drift.
-9. **Settle leftovers, then apply the output policy** (`[output] commit`, §7.1). Under **both** `commit` settings, first settle **orphans** — paths the *previous* lockfile lists that this run did not rewrite but that are still on disk (a removed skill's `SKILL.md` + scripts, a script dropped from a skill that still exists, everything a since-disabled adapter wrote). "Did not rewrite" compares file identity (`st_dev`/`st_ino`), not path spelling: after a case-only skill-id rename on a case-insensitive filesystem the old entry names the very file just written, so it is no orphan (and two entries naming one file yield one orphan, so no duplicate block entries). This is the **only** deletion policy for stale native-skill output — adapters' `cleanup_stale` never deletes inside a skill directory (`agent_harness`'s `skills/<id>/` included), and a file/folder swap inside a skill dir displaces only files this same policy would delete (§10.8) — and a path the previous lockfile does not list is a user file, never an orphan, even inside an engine-owned skill directory (with no readable previous lockfile nothing there is deleted). An entry is **released** — never deleted, no longer owned — when it leaves the repo, names a user/state file, has a `.git` segment, or reaches its file through a symlink (lockfile paths are recorded resolved, so a symlink on the way means the user re-pointed the path since — e.g. moved a skill dir into their own tree and linked it back — and git cannot see through it either), and, unless an adapter is missing, when it lies outside every installed adapter's declared `output_locations` (§10.1), so a hand-edited or merged lockfile can never aim `sync` at `.git/HEAD` or a source file. An orphan inside a declared location whose bytes still hash to its old lockfile entry and that git does not track is deleted, and the directories it leaves empty are pruned bottom-up: never above the declared directory that holds it, the declared directory itself (an emptied skills root such as `.claude/skills/`) only when it is a real directory as spelled — so the target of a symlinked root (`.claude/skills -> ../.agents/skills`) is never removed — never the repo root, never a directory with anything left in it. Directories emptied by `cleanup_stale`, or by a kept leftover the user later deleted, are pruned within the same bounds. If an enabled adapter is missing from the environment, all orphans are kept. "Git does not track it" is asked with case-insensitive literal pathspecs (`:(literal,icase)`; plain pathspecs are case-sensitive even under `core.ignorecase`) and a match is confirmed by NFC spelling (git on macOS reports precomposed names) or file identity (the index's `Demo/x` *is* `demo/x` on a case-insensitive filesystem); when git cannot answer (missing, timeout, "dubious ownership", non-zero exit) inside a git work tree (a `.git` at or above the repo root) every orphan is kept — the check fails closed. Every other orphan stays engine-owned: carried into the lockfile stamped in step 8 (orphans are settled just before stamping). With `commit = false` (the default) kept orphans are also listed in the managed block until they are gone, so leftover output never becomes committable: write the root-anchored paths of everything rendered plus the kept orphans into the managed block of the consumer's `.gitignore`, and ask git (read-only) whether any of them is still tracked and, if so, warn with the exact `git rm -r --cached -- …` to run. With `commit = true` remove the managed block and list the kept orphans on stderr — committed output is normally tracked, so a removed skill's committed files stay until the user deletes them (`git rm`). `.gitignore` is a user file: it is never hashed into the lockfile and never part of the written set.
+3. **Resolve overlays.** Query the configured `ArtifactSource` (filesystem in v1; see Section 20) for rules, prompts, skills, hooks, and eval tasks across the engine package, each declared overlay package, and the consumer's `playbook/` directory. Build a unified artifact list, with later layers overriding earlier ones by ID — except hooks, whose layers merge additively (`OverlayResolver.resolve_hooks` + `hook_policy.merge_hook_layers`, §11.6).
+4. **Filter.** For each artifact, evaluate its `applies_if` predicate against the facts dictionary. Drop non-matching artifacts. Hooks are gated in one place only, `hook_policy.resolve_effective_hooks`: the `[hooks]` on-formula (`enabled`, `tiers`, `enable`, `disable`, `mandatory`), `applies_if` ANDed with a `linked_rule`'s, the `[guardrails]` domain merge, and `supports ∩ [hooks] adapters`. It returns the on hooks as `ResolvedHook`s and the off ones as `SkippedHook`s (reported by `playbook check`); with `[hooks]` off both lists are empty.
+5. **Render.** Apply Jinja2 to each surviving artifact's template with `facts | config` as context. A `HOOK.md.j2` body renders the same way (without `rule()`); hook frontmatter, handler commands and scripts never pass through Jinja.
+6. **Dispatch to adapters.** For each enabled adapter (`continue`, `claude_code`, `opencode`, `shared_skills`, `agents_md`), call `begin_sync(repo_root, prior_lock)` (the real repo and the previous lockfile, even under `--check`), pass the rendered artifacts, then every `ResolvedHook` through `write_hook`, then `finalize`; the adapter writes to its harness-specific locations. Claude Code merges its managed entries into `.claude/settings.json` and writes the launcher `.claude/hooks/playbook/launch.sh`, OpenCode writes the one shim `.opencode/plugins/playbook-hooks.js`, and every other adapter degrades a hook to its advisory text (§10). `managed_lock_entries()` then reports the sub-file elements the adapter owns.
+7. **Write `AGENTS.md`** as the universal fallback regardless of which adapters are enabled. With hooks on it gains a Guardrails section holding the on hooks' advisory text. **Sync-level hook output:** whenever `[hooks] enabled` and a hook-capable adapter is on, sync itself (not an adapter) writes `.coding-agent-playbook/hooks/guard_config.json` — the machine-independent record the dispatcher reads (`guard_config.render_guard_config`) — and byte-copies external handlers' scripts beside it.
+8. **Stamp.** Write a `.coding-agent-playbook.lock` file containing the rendered file hashes via the configured `StateSource`; used by `playbook sync --check` to detect drift. The lockfile is schema 2: every entry records its provenance (`kind`, `artifact_id`, `source`, `adapter`), and each managed element of a co-owned file (`.claude/settings.json`) is a scoped entry hashed on its canonical JSON (§14.4).
+9. **Settle leftovers, then apply the output policy** (`[output] commit`, §7.1). Under **both** `commit` settings, first settle **orphans** — paths the *previous* lockfile lists that this run did not rewrite but that are still on disk (a removed skill's `SKILL.md` + scripts, a script dropped from a skill that still exists, everything a since-disabled adapter wrote). "Did not rewrite" compares file identity (`st_dev`/`st_ino`), not path spelling: after a case-only skill-id rename on a case-insensitive filesystem the old entry names the very file just written, so it is no orphan (and two entries naming one file yield one orphan, so no duplicate block entries). This is the **only** deletion policy for stale native-skill output — adapters' `cleanup_stale` never deletes inside a skill directory (`agent_harness`'s `skills/<id>/` included), and a file/folder swap inside a skill dir displaces only files this same policy would delete (§10.8) — and a path the previous lockfile does not list is a user file, never an orphan, even inside an engine-owned skill directory (with no readable previous lockfile nothing there is deleted). An entry is **released** — never deleted, no longer owned — when it leaves the repo, names a user/state file, has a `.git` segment, or reaches its file through a symlink (lockfile paths are recorded resolved, so a symlink on the way means the user re-pointed the path since — e.g. moved a skill dir into their own tree and linked it back — and git cannot see through it either), and, unless an adapter is missing, when it lies outside every installed adapter's declared `output_locations` (§10.1), so a hand-edited or merged lockfile can never aim `sync` at `.git/HEAD` or a source file. An orphan inside a declared location whose bytes still hash to its old lockfile entry and that git does not track is deleted, and the directories it leaves empty are pruned bottom-up: never above the declared directory that holds it, the declared directory itself (an emptied skills root such as `.claude/skills/`) only when it is a real directory as spelled — so the target of a symlinked root (`.claude/skills -> ../.agents/skills`) is never removed — never the repo root, never a directory with anything left in it. Directories emptied by `cleanup_stale`, or by a kept leftover the user later deleted, are pruned within the same bounds. If an enabled adapter is missing from the environment, all orphans are kept. "Git does not track it" is asked with case-insensitive literal pathspecs (`:(literal,icase)`; plain pathspecs are case-sensitive even under `core.ignorecase`) and a match is confirmed by NFC spelling (git on macOS reports precomposed names) or file identity (the index's `Demo/x` *is* `demo/x` on a case-insensitive filesystem); when git cannot answer (missing, timeout, "dubious ownership", non-zero exit) inside a git work tree (a `.git` at or above the repo root) every orphan is kept — the check fails closed. Every other orphan stays engine-owned: carried into the lockfile stamped in step 8 (orphans are settled just before stamping). With `commit = false` (the default) kept orphans are also listed in the managed block until they are gone, so leftover output never becomes committable: write the root-anchored paths of everything rendered plus the kept orphans into the managed block of the consumer's `.gitignore`, and ask git (read-only) whether any of them is still tracked and, if so, warn with the exact `git rm -r --cached -- …` to run. With `commit = true` remove the managed block and list the kept orphans on stderr — committed output is normally tracked, so a removed skill's committed files stay until the user deletes them (`git rm`). `.gitignore` is a user file: it is never hashed into the lockfile and never part of the written set. `.claude/settings.json` is a co-owned file of the same kind: its managed hook entries are owned through scoped lockfile entries, but the file itself is never whole-file locked, never listed in the managed block and never flagged as staged output.
+10. **Hooks: pins, notices, approvals** (write mode). With hooks on, write the per-worktree interpreter pin `<git_dir>/playbook-hooks/interpreter` from `sys.executable` (first writer wins; `playbook-hook doctor --repin` rewrites it) and the tool pins in `machine.json` beside it — machine-local files outside the working tree, never committed and never in the lockfile. Print the summary lines and, when the shim's lockfile entry changed, the OpenCode restart notice; then, only on a TTY, ask the trust-on-first-use questions for external handlers and execution stages (§7.1.1). With `[hooks]` absent, print one notice line instead (`hooks available: …`) and change nothing.
 Eval tasks (Section 6.5) are intentionally **not** part of the sync flow. They live in engine and overlay packages, are read at validation time (`playbook validate`) and enumeration time (`playbook eval --list`), and v2 will read them at runner time — but they never produce files in the consumer repo. They are authoring-side artifacts, not deliverables.
 ### 4.3 Key design choices, recapped
 - **Copies, not symlinks.** Cross-platform, banking-friendly, git-friendly.
 - **Jinja sparingly.** Variable substitution and conditional file selection only. Avoid `{% if %}` inside rule bodies — makes templates unreadable.
-- **Sentinel headers.** Generated text files carry the sentinel `AUTOGENERATED by coding-agent-playbook — edit in source, run 'playbook sync'` — verbatim the code string `renderer.SENTINEL` (defined in the import-light `coding_agent_playbook._sentinel`). The wording is never changed, since a new wording would make every consumer's generated files drift on upgrade. Markdown output carries it as an HTML comment, `<!-- AUTOGENERATED by coding-agent-playbook — edit in source, run 'playbook sync' -->`, on line 1, or — when the harness needs frontmatter on line 1 (the `agent_harness` adapter, §10.7.3) — on the first body line after the closing `---` fence. Native skill `SKILL.md` files (§10.8) use that second position too. Those two anchored positions are the only ones cleanup recognises (`_sentinel.has_sentinel`), and only as an exact sentinel line; the sentinel quoted anywhere else — or inside prose on one of those lines — is user text. **Exceptions** — files that carry no sentinel and whose ownership is recorded only in `.coding-agent-playbook.lock` (§14.4; `agent_harness` scripts also in `.playbook/manifest.toml`, §20.10): byte-copied skill `scripts/` and `references/`, and strict-JSON output (JSON has no comment syntax). Everything inside a skill directory — `SKILL.md` included — is deleted only through the lockfile leftover policy (§4.2 step 9), never by a sentinel scan.
+- **Sentinel headers.** Generated text files carry the sentinel `AUTOGENERATED by coding-agent-playbook — edit in source, run 'playbook sync'` — verbatim the code string `renderer.SENTINEL` (defined in the import-light `coding_agent_playbook._sentinel`). The wording is never changed, since a new wording would make every consumer's generated files drift on upgrade. Markdown output carries it as an HTML comment, `<!-- AUTOGENERATED by coding-agent-playbook — edit in source, run 'playbook sync' -->`, on line 1, or — when the harness needs frontmatter on line 1 (the `agent_harness` adapter, §10.7.3) — on the first body line after the closing `---` fence. Native skill `SKILL.md` files (§10.8) use that second position too, as do read-only Claude commands, which open with a `disallowed-tools` frontmatter block (§9.7). Non-markdown output carries it on line 1 in its own comment syntax: `# …` in the Claude Code launcher `.claude/hooks/playbook/launch.sh`, `// …` in the OpenCode shim `.opencode/plugins/playbook-hooks.js`; neither has a shebang. Those two anchored positions are the only ones cleanup recognises (`_sentinel.has_sentinel`), and only as an exact sentinel line; the sentinel quoted anywhere else — or inside prose on one of those lines — is user text. **Exceptions** — files that carry no sentinel and whose ownership is recorded only in `.coding-agent-playbook.lock` (§14.4; `agent_harness` scripts also in `.playbook/manifest.toml`, §20.10): byte-copied skill `scripts/` and `references/`, byte-copied external hook scripts (`.coding-agent-playbook/hooks/scripts/<hook-id>/`), and strict-JSON output (JSON has no comment syntax): `guard_config.json` as a whole file, and each managed hook entry of the user's `.claude/settings.json` as one scoped lockfile entry — never markers. Everything inside a skill directory — `SKILL.md` included — is deleted only through the lockfile leftover policy (§4.2 step 9), never by a sentinel scan.
 - **Detector facts are cached.** Written into `.coding-agent-playbook.toml` at init. Refreshed automatically when `pyproject.toml` mtime changes, or manually via `playbook check --refresh`.
-- **`AGENTS.md` is always generated.** Even if no adapters are enabled. It is the lowest-common-denominator output and costs nothing.
+- **`AGENTS.md` is always generated.** Even if no adapters are enabled. It is the lowest-common-denominator output and costs nothing. That includes a repo whose only content is hooks; its Guardrails section exists only when hooks are on.
 - **Generated output is local-only by default.** Rendered files are build products of the installed engine + overlays + `playbook/`, so (with `[output] commit = false`) they are gitignored through an engine-owned managed block and regenerated on each machine by the `post-checkout`/`post-merge` hook — the committed source of truth is the config and `playbook/`, not the rendered copies.
+- **Lifecycle hooks keep these invariants** (v0.18; the full list with its owners is `specs/prK-lifecycle-hooks.md` §I). The bullets above apply to hooks too: hook scripts are byte copies, only `HOOK.md.j2` bodies pass through the sandboxed Jinja environment, and frontmatter is static YAML.
+  - **Engine upgrades never inject executable hooks.** An absent `[hooks]` table, or one without `enabled = true`, means zero byte change; `playbook init` asks, and `playbook sync` prints one notice line.
+  - **Hook outputs are only `deny | ask | context | none`.** Never `allow`, an input rewrite, or an HTTP, async, prompt or agent handler (validate rules H5 and H8, backed by the dispatcher's closed-key renderers). Only engine builtins may hold the `mutates_edited_file` capability (post-edit formatting).
+  - **One registration per harness event**, fanned out in-process, plus at most one async, non-deciding, output-free `PostToolUse` registration for audit-only handlers.
+  - **The hot path is import-light.** The dispatcher imports nothing outside `hook_runtime.*`, `security.*` and the standard library, and starts no subprocess for a call that touches neither git nor a pragma.
+  - **Exit codes.** The launcher exits 0 or 2 (1 only under `--strict-launch`); `dispatch` exits 0 or 10 (`DENY_EXIT`); a raw 2 is never a deny; the OpenCode shim throws only on exit 10 or a `deny` decision.
+  - **Rendered hook outputs are machine-independent.** No absolute path, stat signature or `$HOME` path in any file sync renders; the interpreter and tool pins live under the git dir.
+  - **`.local.toml` never carries policy.** `[hooks]`, `[guardrails]`, `[metrics]` and `[hooks.commit_convention]` written there are ignored (§7.2).
+  - **No repo- or overlay-controlled code runs without a user-local trust entry** (`[hooks] allow_code_from` plus a TTY-only trust-on-first-use approval); the interpreter pin is not trust.
+  - **Escape hatches come only from the hook process's own environment**, with exact values. A hatch set through a settings file's `env` object is ignored and reported, and a pragma counts only when present at `HEAD`.
+  - **Every git call goes through `SafeGit`**: filter drivers neutralized, `core.fsmonitor=false`, no external diff or textconv, a scrubbed environment, bounded timeouts.
+  - **The decision log stores no content**: no command text, paths, prompts, reasons or environment values.
+  - **A stage never reports green on an error, and red is never presented as green.** One combined Stop reason per tree fingerprint, at most `max_blocks` blocks per stop chain.
+  - **Every speed bump has an off-workstation twin** (a pre-commit hook or a `playbook ci` step), and every guard is labelled honestly as a boundary, a speed bump or detective.
+  - **User-owned settings are never modified.** User keys, user hook groups and user permission entries in `.claude/settings.json` stay byte-stable, managed elements are identified only by lockfile hash, and `settings.local.json` is never written.
+  - **Overlays only add**, and a `mandatory` overlay hook cannot be disabled by `[hooks] disable` or shadowed by a repo-local override (§11.6).
+  - **Tool policy has one source** shared by a hook and its twins: `[metrics]`, `[tool.commitizen]` and `[hooks.commit_convention]`.
+  - **Hooks are git-only in v1.**
 ## 5. Repository layout
 ### 5.1 The engine repo (`coding-agent-playbook`)
 ```
@@ -165,15 +232,28 @@ coding-agent-playbook/
 ├── src/coding_agent_playbook/
 │   ├── __init__.py
 │   ├── cli.py                              # `playbook` entrypoint
-│   ├── types.py                            # Rule, Prompt, Skill dataclasses (Section 6.6)
+│   ├── types.py                            # Rule, Prompt, Skill, Hook dataclasses (Section 6.6)
 │   ├── config.py                           # .toml loading + merge
+│   ├── hooks_config.py                     # [hooks] / [guardrails] tables (Section 7.1.1)
+│   ├── metrics_config.py                   # [metrics] table (Section 7.1.1)
 │   ├── detector.py                         # facts dictionary
 │   ├── renderer.py                         # Jinja2 environment
+│   ├── _sentinel.py                        # SENTINEL, import-light (Section 4.3)
+│   ├── _pep503.py                          # PEP 503 package-name normalization
 │   ├── overlays.py                         # overlay resolution
 │   ├── lockfile.py                         # .coding-agent-playbook.lock
 │   ├── gitignore.py                        # managed .gitignore block ([output] commit = false)
 │   ├── git_client.py                       # GitClient protocol: read-only tracked/staged queries
 │   ├── _file_identity.py                   # FileSet: stale-vs-written by file identity (§4.2 step 9)
+│   ├── hook_policy/                        # sync-time: hook layer merge, effective view, validate H1-H21
+│   ├── hook_registrations/                 # per-harness registrations: Claude groups, OpenCode REG + shim
+│   ├── guard_config.py                     # the sync-level guard_config.json (§4.2 step 7)
+│   ├── hook_runtime/                       # the playbook-hook dispatcher: import-light, never imports cli.py
+│   │   ├── handlers/                       # builtin hook handlers (@register_hook_handler)
+│   │   ├── harness/                        # per-harness payload parsers and wire renderers
+│   │   └── stop/                           # the Stop stage contract and coordinator
+│   ├── security/                           # secret paths/patterns, PII, trust store, audit log (stdlib)
+│   ├── gate_scan.py                        # added-line suppression/loosening scan (`playbook gate-scan`)
 │   ├── adapters/
 │   │   ├── __init__.py
 │   │   ├── base.py                         # Adapter ABC
@@ -181,6 +261,7 @@ coding-agent-playbook/
 │   │   ├── _prior_output.py                # previous lockfile as proof of engine-written files
 │   │   ├── continue_adapter.py
 │   │   ├── claude_code_adapter.py
+│   │   ├── claude_settings.py              # managed merge into .claude/settings.json `hooks`
 │   │   ├── opencode_adapter.py
 │   │   ├── shared_skills_adapter.py        # cross-agent shared_skills/ hub
 │   │   └── agents_md_adapter.py
@@ -240,6 +321,10 @@ coding-agent-playbook/
 │       │   │   └── ...
 │       │   └── refactor-extract-helper/
 │       │       └── ...
+│       ├── hooks/                          # canonical <id>/HOOK.md dirs, builtin handlers only
+│       │   ├── protect/  verify/  feedback/
+│       │   └── safety/  audit/                 # category folders carry no meaning
+│       ├── hook_shims/                     # launcher + OpenCode shim templates (str.replace, never Jinja)
 │       └── precommit/
 │           └── config.yaml.j2              # starter .pre-commit-config.yaml (air-gapped: repo: local)
 ├── tests/
@@ -251,6 +336,9 @@ coding-agent-playbook/
 │   │   ├── test_sources.py
 │   │   ├── test_types.py
 │   │   └── test_lockfile.py
+│   ├── hook_runtime/                       # dispatcher, normalization, decisions, Stop coordinator
+│   ├── hooks/                              # one module per shipped hook, golden payloads
+│   ├── security/
 │   ├── adapters/
 │   │   ├── test_continue.py
 │   │   ├── test_claude_code.py
@@ -320,8 +408,14 @@ risk-models/                                # the user's project
 │       ├── generate-tests.md
 │       ├── review.md
 │       └── explain.md
+├── .coding-agent-playbook/
+│   └── hooks/                              # AUTOGENERATED (hooks on): sync-level, no adapter
+│       ├── guard_config.json               # the record the playbook-hook dispatcher reads
+│       └── scripts/<hook-id>/              # byte-copied external-handler scripts, if any
 ├── .claude/
 │   ├── CLAUDE.md                           # AUTOGENERATED
+│   ├── settings.json                       # the user's; with hooks on, sync manages its `hooks` entries
+│   ├── hooks/playbook/launch.sh            # AUTOGENERATED (hooks on): the machine-independent launcher
 │   ├── commands/
 │   │   ├── refactor.md
 │   │   ├── generate-tests.md
@@ -337,6 +431,8 @@ risk-models/                                # the user's project
 │   │   ├── generate-tests.md
 │   │   ├── review.md
 │   │   └── explain.md
+│   ├── plugins/
+│   │   └── playbook-hooks.js               # AUTOGENERATED (hooks on): the one generated OpenCode plugin
 │   └── skills/                             # AUTOGENERATED — OpenCode native skills
 │       └── query-db/                       #   (byte-identical to .claude/skills/query-db/)
 ├── shared_skills/                          # AUTOGENERATED — cross-agent skills hub (Section 10.8)
@@ -344,10 +440,13 @@ risk-models/                                # the user's project
 └── playbook/                               # OPTIONAL: per-repo customizations
     ├── rules/
     │   └── risk-models-specific.md.j2
-    └── skills/
-        └── query-db/                       # canonical skill source (SKILL.md with `id: query-db` + scripts/)
+    ├── skills/
+    │   └── query-db/                       # canonical skill source (SKILL.md with `id: query-db` + scripts/)
+    └── hooks/
+        └── check-names/                    # repo-local hook: HOOK.md (+ scripts/ for an external handler)
 ```
 Everything marked AUTOGENERATED carries the sentinel and is owned by `playbook sync` (a `SKILL.md` carries it as its first body line, since its frontmatter must stay on line 1; the files the engine writes into a skill directory are owned through that `SKILL.md` and the lockfile — a file a user adds to a generated skill directory stays the user's and is never deleted, §4.2 step 9). The user owns `.coding-agent-playbook.toml`, `.coding-agent-playbook.local.toml`, anything under `playbook/`, their own source code, and any hand-written skill directory (no sentinel) under the three skill roots — a canonical skill whose `id` collides with one is skipped for that root with a warning (Section 10.8). The output directory name is the skill's `id:` frontmatter value, not the source folder name (Section 6.3).
+**Hook output (only with `[hooks] enabled = true`, which `playbook init` writes unless `--no-hooks` is given; §7.1.1).** Sync writes `.coding-agent-playbook/hooks/guard_config.json` and any copied scripts under `.coding-agent-playbook/hooks/scripts/`, the Claude Code launcher `.claude/hooks/playbook/launch.sh` and the OpenCode shim `.opencode/plugins/playbook-hooks.js`; they follow the `[output] commit` policy like every other generated file. `.claude/settings.json` is different: it stays the user's file (never gitignored, never whole-file owned), and sync only merges its managed matcher groups into the `hooks` key, each owned through a scoped lockfile entry. The pins the launcher and the shim read live outside the working tree, under `<git_dir>/playbook-hooks/`. Repo-local hooks are authored under `playbook/hooks/<id>/`.
 **Generated output is local-only (default `[output] commit = false`, §7.1).** `AGENTS.md`, `.continue/`, `.claude/CLAUDE.md`, `.claude/commands/`, `.claude/skills/<id>/`, `.opencode/command/`, `.opencode/skills/<id>/`, `shared_skills/<id>/` and the lockfile are **not committed**: `playbook sync` lists them in an engine-owned block of the repo's `.gitignore`, and every clone regenerates them locally (the `post-checkout`/`post-merge` hook runs `playbook sync`; run it once by hand right after cloning). The `.gitignore` itself, including that block, *is* committed so every checkout ignores the same paths:
 ```gitignore
 .coding-agent-playbook.local.toml
@@ -367,7 +466,7 @@ Block rules: entries are root-anchored (relative to the playbook repo root, wher
 Note one deliberate non-duplication for OpenCode, and one deliberate duplication:
 - **No `.opencode/rules/` directory.** OpenCode reads `AGENTS.md` natively as its primary rules source, walking up the directory tree. The universal AGENTS.md adapter is OpenCode's rule-delivery path. Writing a separate `.opencode/rules/` would just duplicate content OpenCode is already reading from `AGENTS.md`.
 - **`.opencode/skills/` is written natively.** The OpenCode adapter emits its own skill tree so OpenCode works without the Claude Code adapter enabled. OpenCode also scans `.claude/skills/`; the duplicate is harmless because OpenCode keys discovered skills by name in a map (last wins) and both copies are byte-identical (§10.6).
-The user's own `.opencode/agent/` (custom agents) and `.opencode/plugin/` (lifecycle hooks) directories, plus `opencode.json` (MCP servers, permissions, model selection), are owned by the user and not touched by the engine. See Section 10.6 for the OpenCode adapter's boundaries.
+The user's own `.opencode/agent/` (custom agents), every other file under `.opencode/plugin/` or `.opencode/plugins/` (the user's own plugins), and `opencode.json` (MCP servers, permissions, model selection) are owned by the user and not touched by the engine. The one exception is the generated shim `.opencode/plugins/playbook-hooks.js`, which the OpenCode adapter owns (sentinel on line 1, whole-file lockfile entry) and writes only when hooks are on; OpenCode auto-discovers it, so `opencode.json` is never edited. See Section 10.6 for the OpenCode adapter's boundaries.
 ## 6. Canonical artifact model
 ### 6.0 File formats: `.md` and `.md.j2`
 Every artifact — rules, prompts, skills — is a markdown file with YAML frontmatter. The file extension chooses between two processing paths:
@@ -413,7 +512,13 @@ applies_if:                          # optional Python expression evaluated agai
   has_framework: ["pydantic"]
 priority: 50                         # optional, lower = earlier in lex order; default 50
 tags: [language, python]             # optional, for filtering
+lint_codes:                          # optional: the ruff codes a rule-linked lint hook reports (v0.18)
+  warn: [ANN001, ANN201, UP007]
+  when:                              # extra codes under a sync-time applies_if predicate
+    - applies_if: {python_version: ">=3.12"}
+      warn: [UP040]
 ```
+`lint_codes` links the rule's text to the hook that enforces it: a hook whose `linked_rule` names this rule inherits its `applies_if` and `globs`, and the resolved code list (`warn` plus every `when` row whose predicate holds at sync) is merged into the hook's handler `config` (§6.6.7). There is no `block` key: lint feedback is warn-only. `playbook validate` checks the shape and the predicates, and an empty `lint_codes` is dropped from the markdown round trip, so unlinked rules stay byte-identical.
 #### 6.1.2 Example: `resources/rules/languages/python/typing.md.j2`
 ```markdown
 ---
@@ -516,7 +621,14 @@ eval_tasks:                          # optional, task IDs that test this prompt 
   - generate-tests-happy-path
   - generate-tests-edge-cases
   - generate-tests-async-code
+write_scope:                         # optional (v0.18): exactly one of `read_only: true` | `globs: [...]`
+  globs: ["tests/**", "**/conftest.py"]
+output_contract:                     # optional (v0.18): regexes the final message must match
+  - '(?im)^\W*verdict\W*(approve|request changes)\W*$'
 ```
+Two optional keys tie a prompt to the lifecycle hooks (§6.6.7); both are dropped from the markdown when empty, so other prompts render byte-identically:
+- **`write_scope`** — what the prompt may write while it is active: `{read_only: true}` (a review or explain prompt) or `{globs: [...]}` (repo-relative globs, e.g. a test generator limited to `tests/**`). Absent means unrestricted. `playbook validate` rejects any other shape (both keys, `read_only: false`, an empty glob list). The prompt-write-scope-guard hook enforces it; a read-only prompt also renders natively restricted, as a Claude command with a `disallowed-tools` frontmatter block (§9.7) and as an OpenCode command bound to the read-only `plan` agent (§10.6.1).
+- **`output_contract`** — Python regexes the agent's final message must match while the prompt is active, checked by the `output-contract` Stop stage (prompt-output-contract-on-stop). `playbook validate` compiles every entry and fails closed on one that does not compile.
 #### 6.2.2 Example: `resources/prompts/generate-tests.md.j2`
 ```markdown
 ---
@@ -674,11 +786,13 @@ applies_if:
   any_framework: ["pytest", "unittest"]  # at least one must be present in facts["frameworks"]
   has_ml_stack: ["torch", "numpy"]   # all of these must be present in facts["ml_stack"]
   any_ml_stack: ["torch", "tensorflow"]  # at least one must be present in facts["ml_stack"]
+  has_dev_dependency: ["pytest-cov"] # all of these must be declared dev dependencies (v0.18)
   has_file: ["Dockerfile"]           # file must exist in repo root
   banking_mode: true                 # boolean facts
 ```
 Multiple keys are ANDed together. The evaluator lives in `coding_agent_playbook.detector.evaluate_predicate(predicate, facts) -> bool`.
 The framework operators (`has_framework`, `any_framework`) read `facts["frameworks"]`; the ML-stack operators (`has_ml_stack`, `any_ml_stack`) read the separate `facts["ml_stack"]` fact (torch, tensorflow, scikit-learn, … — see Section 8.2). Use the ML-stack operators to gate ML-specific rules and prompts, since ML libraries never appear in `frameworks`.
+`has_dev_dependency` reads `facts["dev_dependencies"]` (Section 8.2) and compares names PEP 503-normalized, so `pytest_cov` matches `pytest-cov`. It mirrors `has_framework` for tools that live only in a dev group, and gates artifacts that need one: the opt-in coverage-diff-gate hook applies only with `has_dev_dependency: [pytest-cov]`.
 Note that `has_framework` appears in two distinct places with different shapes — once as a predicate key here (taking a list of required framework names), and once as a Jinja helper in the rendering context (taking a single framework name and returning a bool, see Section 9.4). The same split applies to the ML stack: `has_ml_stack`/`any_ml_stack` are `applies_if:` predicate keys (lists), while `has_ml_dep("torch")` is the Jinja callable (single name) used inside `{% if %}`. They share concepts but live at different evaluation layers (frontmatter is parsed before Jinja runs). When reading or writing artifacts, the rule is: lists in `applies_if:`, callables inside `{% if %}`.
 ### 6.5 Eval tasks (Tier 0: schema only, no runner)
 Eval tasks are reproducible test cases associated with prompts. Each task captures: *"given this starting state and this invocation, here's what success looks like for this prompt."* In v1 only the **schema and validation** ship — there is no `playbook eval` runner, no LLM-as-judge, no scoring. Authors write tasks alongside the prompts they create; the tasks accumulate as institutional knowledge and become the input to the runner in v2.
@@ -808,7 +922,7 @@ Validation stays cheap: it ships as schema + trial-compile + cross-reference che
 ### 6.6 Canonical types and serialization
 This section codifies a distinction that has been implicit throughout the spec and makes it explicit: there are **two** formats in this system, and they serve different audiences.
 **The authoring format** is markdown + YAML frontmatter (`.md` or `.md.j2`). It is what humans write, what gets reviewed in PRs, what lives in `resources/` directories. It never changes. Authors at every level — engine maintainers, overlay authors, repo-local customizers — write exclusively in this format.
-**The canonical internal format** is a set of typed Python dataclasses: `Rule`, `Prompt`, `Skill`, `EvalTask`. These are what the engine operates on internally between parse-time and adapter-time. Adapters consume these objects, not markdown. The renderer produces these objects. The validator type-checks these objects.
+**The canonical internal format** is a set of typed Python dataclasses: `Rule`, `Prompt`, `Skill`, `Hook`, `EvalTask`. These are what the engine operates on internally between parse-time and adapter-time. Adapters consume these objects, not markdown. The renderer produces these objects. The validator type-checks these objects.
 The two formats round-trip exactly: `Rule.from_markdown(rule.to_markdown())` is the identity. The dataclasses also serialize to JSON via `to_dict()` / `from_dict()` for alternative storage and transport.
 #### 6.6.1 Why this distinction matters
 Three reasons to make the canonical types a first-class concern, even though v1's authoring story doesn't need them:
@@ -834,6 +948,7 @@ class RuleFrontmatter:
     applies_if: dict[str, Any] = field(default_factory=dict)
     priority: int = 50
     tags: list[str] = field(default_factory=list)
+    lint_codes: dict[str, Any] = field(default_factory=dict)  # {warn, when}; §6.1.1
 
 
 @dataclass
@@ -864,6 +979,8 @@ class PromptFrontmatter:
     input_variables: list[dict] = field(default_factory=list)
     includes_rules: list[str] = field(default_factory=list)
     eval_tasks: list[str] = field(default_factory=list)
+    output_contract: list[str] = field(default_factory=list)  # regexes; §6.2.1
+    write_scope: dict[str, Any] = field(default_factory=dict)  # {read_only: true} | {globs}; §6.2.1
 
 
 @dataclass
@@ -889,6 +1006,77 @@ class Skill:
     ...
 
 
+# --- Hook: the fourth emitted kind (Section 6.6.7) ---
+class HookSchemaError(ValueError):
+    """Field-precise HOOK.md error: carries where / field (dotted path) / value / expected."""
+
+
+@dataclass
+class HookMatcher:  # per-event filter; present dimensions are ANDed
+    tools: list[str] = field(default_factory=list)  # canonical tool classes
+    tool_names: list[str] = field(default_factory=list)  # regexes over Claude tool names
+    paths: list[str] = field(default_factory=list)  # repo-relative globs
+    command: list[str] = field(default_factory=list)  # regexes over shell segments
+    sources: list[str] = field(default_factory=list)  # session_start
+    triggers: list[str] = field(default_factory=list)  # pre_compact
+    agent_types: list[str] = field(default_factory=list)  # subagent_stop
+
+
+@dataclass
+class HookHandler:  # exactly one form: builtin, or external command + script
+    builtin: str | None = None  # a registered handler name
+    command: Literal["python", "bash", "sh", "node"] | None = None  # the launcher
+    script: str | None = None  # under the hook's scripts/
+    args: list[str] = field(default_factory=list)  # static argv
+    config: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class HookFrontmatter:
+    id: str
+    name: str
+    description: str
+    tier: Literal["default", "opt-in", "overlay"]
+    events: list[str]  # canonical event names
+    decisions: list[Literal["deny", "ask", "context", "none"]]
+    timeout: float  # seconds
+    on_error: Literal["ask", "deny", "open"]
+    supports: list[str]  # hook-capable adapters: claude_code, opencode
+    handler: HookHandler | None = None  # exactly one of handler / handlers
+    handlers: dict[str, HookHandler] = field(default_factory=dict)  # per event
+    version: int = 1
+    enabled: bool = True
+    mandatory: bool = False  # overlay-only
+    priority: int = 50  # fan-out order within an event
+    matcher: dict[str, HookMatcher] = field(default_factory=dict)  # per event
+    applies_if: dict[str, Any] = field(default_factory=dict)
+    linked_rule: str | None = None
+    tags: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any], *, where: str) -> "HookFrontmatter": ...
+    def to_mapping(self) -> dict: ...  # empty values dropped at every schema level
+
+
+@dataclass
+class Hook:
+    frontmatter: HookFrontmatter
+    body: str  # post-Jinja advisory prose
+    template_body: str
+    is_templated: bool  # source was HOOK.md.j2
+    source_path: Path | None  # kept, unlike Skill: validate and script containment need it
+    source_package: str
+    scripts_dir: Path | None = None
+
+    @classmethod
+    def from_markdown(cls, path: Path, source_package: str) -> "Hook": ...
+    def to_markdown(self) -> str: ...
+    def to_dict(self) -> dict: ...
+    @classmethod
+    def from_dict(cls, data: dict) -> "Hook": ...
+    def to_advisory_rule(self) -> Rule | None: ...  # Section 6.6.7
+
+
 # EvalTask is already defined in Section 15.2 with the same to_dict / from_dict pattern.
 ```
 The fields capture three things every artifact needs:
@@ -903,8 +1091,11 @@ rule == Rule.from_dict(rule.to_dict())
 # These two produce equivalent rules from different inputs:
 Rule.from_markdown(some_path, context, "pkg")
 Rule.from_dict(some_dict)
+# Hooks: the dict form is the identity; the markdown form keeps frontmatter and template.
+hook == Hook.from_dict(hook.to_dict())
 ```
 Round-trip is **lossless for both directions** for static (`.md`) artifacts. For templated (`.md.j2`) artifacts, the round-trip preserves `template_body` so re-rendering with a new context produces correct output.
+A `Hook` round-trips the same way: `Hook.from_dict(hook.to_dict())` is the identity (`to_dict` keeps the full frontmatter, with `source_path` and `scripts_dir` as `str | None`), and `Hook.from_markdown(p, pkg).to_markdown()` re-parses to an equal frontmatter and `template_body`. `to_markdown` drops empty values at every schema level (`handler`, `handlers.*`, `matcher.*`), so `handler: {builtin: x}` does not come back as a block of nulls; byte identity of the authored file is not promised, the same contract rules and prompts have. Scripts are not part of the canonical type: `scripts_dir` points at them and they are byte-copied.
 The pre-Jinja `template_body` is kept because some operations need it. The OSS engine's `playbook sync` re-renders templates on every run, so it needs the template, not just the last rendered output. The commercial version's hosted registry might store the template once and render per-customer at fetch time — same pattern.
 #### 6.6.4 What does NOT live on the canonical type
 Equally important is what's deliberately absent:
@@ -912,18 +1103,68 @@ Equally important is what's deliberately absent:
 - **No source-specific data** beyond `source_package` and the optional `source_path`. A `Rule` from a database row should be indistinguishable in behavior from a `Rule` from a markdown file.
 - **No render context** (the Jinja variables). The render context is supplied at parse-time and consumed; the resulting `Rule` carries only the rendered `body` and (for templated rules) the `template_body`. Two different contexts produce two different `Rule` objects.
 #### 6.6.5 What v1 ships
-The dataclasses themselves: `coding_agent_playbook/types.py` with the full type definitions and the `from_markdown` / `to_markdown` / `to_dict` / `from_dict` methods. The existing loader becomes a thin wrapper that calls `Rule.from_markdown` per file. Adapters' signatures explicitly typed as taking `Rule`, `Prompt`, `Skill`. The renderer produces these typed objects.
+The dataclasses themselves: `coding_agent_playbook/types.py` with the full type definitions and the `from_markdown` / `to_markdown` / `to_dict` / `from_dict` methods. The existing loader becomes a thin wrapper that calls `Rule.from_markdown` per file. Adapters' signatures explicitly typed as taking `Rule`, `Prompt`, `Skill`, and the resolved form of a `Hook` (`ResolvedHook`, §6.6.7). The renderer produces these typed objects.
 v1 does **not** ship:
 - Any non-markdown source of canonical types (no `from_database`, no `from_http`).
-- Any non-markdown serialization (the JSON `to_dict` is available, but the OSS engine never writes it to disk — that's a commercial-version concern).
+- Any non-markdown serialization (the JSON `to_dict` is available, but the OSS engine never writes it to disk — that's a commercial-version concern). The one JSON file sync writes for hooks, `guard_config.json`, holds derived `ResolvedHook.to_json()` records, not canonical artifacts (§6.6.7).
 - Any schema versioning beyond the `version: int` field already in frontmatter (per-artifact). Schema evolution at the type level is a v2 concern; v1 commits to the type as defined.
-This means v1's `playbook sync` flow is *exactly* what it was before introducing this section — markdown in, markdown out, no JSON anywhere. The types are an internal refactor for clarity and testability. The dual-format story matters for the commercial path; it doesn't change anything user-visible in v1.
+This means v1's `playbook sync` flow is *exactly* what it was before introducing this section — markdown in, markdown out, no canonical JSON anywhere (the JSON that hooks add — `guard_config.json` and the managed `.claude/settings.json` entries — holds derived records, §6.6.7). The types are an internal refactor for clarity and testability. The dual-format story matters for the commercial path; it doesn't change anything user-visible in v1.
 #### 6.6.6 The contract for alternative deployments
 For implementations beyond the OSS engine, the contract is:
 1. **The authoring format never changes.** Any product accepting user-authored rules accepts markdown + YAML frontmatter, byte-compatible with the OSS engine. Customers can paste a rule from OSS into the commercial product and have it work.
 2. **The canonical type is the interchange format.** Commercial versions may store, transmit, and operate on `Rule` / `Prompt` / `EvalTask` objects in any serialization (JSON, MessagePack, database rows). The dataclass definition is the schema.
 3. **Round-trip remains lossless.** A rule that goes markdown → `Rule` → JSON → `Rule` → markdown produces a markdown file byte-identical to the original (modulo whitespace normalization in the frontmatter YAML).
 These three guarantees are what make the OSS engine and a future commercial product *compatible*, not *competitors*. A customer using both should never have to convert formats.
+#### 6.6.7 Hooks (v0.18)
+A **hook** is the fourth emitted kind. It is authored as a **directory** holding `HOOK.md` (or `HOOK.md.j2`) plus, for an external handler only, a `scripts/` folder. The directory name is the hook id, and category folders above it carry no meaning, so hooks are found at any depth under `resources/hooks/` (engine and overlay packages) and `playbook/hooks/` (repo-local); a `HOOK.md` beneath another hook directory is a validate error. Engine hooks are builtin-only and ship no `scripts/`. Scripts are never templated, never get a sentinel, and are byte-copied (`shutil.copy2`).
+```markdown
+---
+id: guard-generated-outputs
+name: Guard generated outputs
+description: Deny hand-edits to files that playbook sync generates and point at the canonical source.
+tier: default                        # default | opt-in | overlay (an engine mechanism an overlay activates)
+priority: 10                         # fan-out order within an event, never the Stop stage order
+events: [pre_tool_use]
+matcher:
+  pre_tool_use:
+    tools: [edit, write, notebook_edit, shell]
+handler:
+  builtin: guard_generated_outputs   # or: command: python|bash|sh|node + script: scripts/x.py + args
+  config:
+    extra_protected: []
+decisions: [deny, ask, none]         # the only decisions this hook may emit; never `allow`
+timeout: 2                           # seconds; ≤ 30 on tool and prompt events
+on_error: ask                        # ask | deny (overlay hooks only) | open
+supports: [claude_code, opencode]    # adapters allowed to render native enforcement
+---
+Files that begin with the AUTOGENERATED sentinel are produced by `playbook sync`; a hand
+edit is overwritten by the next sync. Edit the canonical source under `playbook/` instead.
+```
+**Frontmatter** is static YAML, parsed by `HookFrontmatter.from_mapping` before any Jinja; an unknown key, a missing required key or a wrong type is a `HookSchemaError` naming the dotted field and the value. Required: `id` (`^[a-z0-9][a-z0-9-]{0,62}$`, equal to the directory name), `name`, `description`, `tier`, `events`, `decisions`, `timeout`, `on_error`, `supports`, and exactly one of `handler` (shared by every event) or `handlers` (one per event, e.g. a Stop stage plus a `pre_tool_use` companion). Optional: `version`, `enabled`, `mandatory` (overlay hooks only: cannot be disabled or shadowed, §11.6), `priority`, `matcher` (per event; present dimensions are ANDed), `applies_if` (the §6.4 DSL), `linked_rule` (inherit a rule's `applies_if`, `globs` and `lint_codes`, §6.1.1) and `tags`.
+
+**Events** use one canonical snake_case spelling; the harness names live in the adapters. OpenCode renders four of them (two degraded); a hook must reach at least one declared event on every adapter it `supports`:
+
+| Canonical event | Claude Code event | OpenCode | Allowed decisions | `on_error` allowed | Matcher fields |
+| --- | --- | --- | --- | --- | --- |
+| `session_start` | `SessionStart` | degraded | `context`, `none` | `open` | `sources` |
+| `user_prompt_submit` | `UserPromptSubmit` | — | `deny`, `context`, `none` | `deny`, `open` | — |
+| `pre_tool_use` | `PreToolUse` | yes | `deny`, `ask`, `context`, `none` | `ask`, `deny`, `open` | `command`, `paths`, `tool_names`, `tools` |
+| `post_tool_use` | `PostToolUse` | yes | `context`, `none` | `open` | `command`, `paths`, `tool_names`, `tools` |
+| `post_tool_use_failure` | `PostToolUseFailure` | — | `context`, `none` | `open` | `command`, `paths`, `tool_names`, `tools` |
+| `stop` | `Stop` | degraded (evidence-only) | `deny`, `context`, `none` | `open` | — |
+| `subagent_stop` | `SubagentStop` | — | `deny`, `context`, `none` | `open` | `agent_types` |
+| `pre_compact` | `PreCompact` | — | `none` | `open` | `triggers` |
+| `session_end` | `SessionEnd` | — | `none` | `open` | — |
+
+`on_error` is clamped per firing event: on an event whose column allows only `open`, the effective value is `open` whatever is declared. Matcher `tools` name canonical **tool classes**, one vocabulary for authors, harness registrations and the runtime: `shell`, `edit`, `write`, `notebook_edit`, `read`, `search`, `web`, `subagent`, `mcp`.
+
+**Handlers.** A builtin handler is a registered snake_case name (`@register_hook_handler`, or the `coding_agent_playbook.hook_handlers` entry-point group for out-of-tree packages); several hooks may share one with different `config`. An external handler is a launcher (`python`, `bash`, `sh` or `node`, never a shell string), a script contained in the hook's `scripts/`, and static `args`; it comes only from an overlay or repo-local source and runs only behind `[hooks] allow_code_from` plus a user-local trust approval (§7.1.1). A builtin's `config` is validated against the handler's `CONFIG_SCHEMA` and merged across layers (§11.6) and with the consumer's `[hooks.<hook-id>]` table.
+
+**The body degrades to advisory text.** `Hook.to_advisory_rule()` returns `None` for a blank body, else a `Rule` with id `guardrail-<id>` (the prefix is reserved), priority 30, `scoped` on the effective paths or `always`, whose body is the `hook_advisory` projection: the rendered body plus one line saying where the hook is enforced (§9.7). It goes to `AGENTS.md` and Continue for every on hook, and to `CLAUDE.md` only when Claude Code does not enforce the hook; `[hooks] advisory = false` turns the degrade off.
+
+**The effective view.** `hook_policy.resolve_effective_hooks` (§4.2 step 4) turns the merged hooks into `ResolvedHook`s — frozen, with the merged handler config, the clamped `on_error` per event, the inherited matcher paths, the `supports` narrowed to the adapters that receive hooks, and the copied script's `script_sha256` — and `SkippedHook(id, reason)` records. `ResolvedHook.to_json()` is the single hook-record schema of `guard_config.json`, the file the dispatcher reads instead of the canonical sources.
+
+**The sidecar.** The opt-in `agent_harness` adapter has no lifecycle-event concept, so it is advisory-only, but it keeps the `playbook/hooks/` → harness → `import-harness` round trip lossless: it writes `.playbook/hooks/<id>/HOOK.md` (canonical frontmatter, the sentinel as first body line, the un-rendered body) with any scripts byte-copied, and records it in `.playbook/manifest.toml` as kind `"hook"` (§20.10).
 ## 7. Configuration files
 ### 7.1 `.coding-agent-playbook.toml` (committed)
 The project's playbook config. Committed to git, reviewed in PRs.
@@ -994,6 +1235,95 @@ test_layout = "tests-mirror"         # tests-mirror | tests-flat | inline
 | Hooks (§13) | `post-checkout`/`post-merge` auto-sync + staged-output guard | `playbook sync --check` drift check |
 
 The managed block lists what *this* checkout renders (plus still-owned leftovers, §4.2 step 9). A `.local.toml` that narrows `adapters_enabled` (§7.2) therefore narrows the block too — the dropped adapter's pristine output is deleted — and that `.gitignore` change is personal and should not be committed.
+#### 7.1.1 Hooks and tool policy: `[hooks]`, `[guardrails]`, `[metrics]` (v0.18)
+Three tables are team policy: they are read from the committed file only (§7.2), and their parsers raise one `ValueError` that names every offending value and its expected shape, which `playbook validate` reports (rule H21 for the first two). `[hooks]` is **mechanism** — which lifecycle hooks render, and how — parsed by `hooks_config.parse_hooks_config` into `HooksConfig`. `[guardrails]` is **policy data** read by the hooks *and* by their off-workstation twins (pre-commit hooks, `playbook ci` steps), so it applies even with hooks off; it is parsed by `hooks_config.parse_guardrails_config` into `GuardrailsConfig`. Both parsers are re-exported from `config`. `[metrics]` is the code-quality gate's table (§21.5), parsed by `metrics_config.parse_metrics_config` into `MetricConfig`, and is shared by `playbook metrics`, its pre-commit hook, the `playbook ci` step and the quality Stop stages.
+```toml
+[hooks]
+enabled = true                        # the opt-in: an absent table or key means off
+tiers = ["default"]                   # add "opt-in" to turn every opt-in hook on
+enable = ["coverage-diff-gate"]       # single hooks, whatever their tier
+disable = ["typing-lint-feedback"]     # wins over enable; never a mandatory hook
+allow_code_from = ["<repo-local>"]    # whose external handlers may run (plus a trust approval)
+wrapper_prefixes = ["rtk"]            # extra command prefixes stripped before shell matching
+
+[hooks.stop-ci-parity-gate]           # [hooks.<hook-id>]: the consumer layer of that hook's config
+max_blocks = 2
+
+[hooks.commit_convention]             # the one reserved sub-table that is not a hook id
+cutover_date = "2026-10-15"           # a TOML string, never a date literal
+
+[guardrails.git]
+protected_branches = ["develop"]      # extends main, master, release/*
+
+[metrics]
+extend_select = ["ruff_violations", "file_sloc"]   # opt-in metrics are selected by name
+exclude = ["**/eval_tasks/*/setup/**", "legacy/**"]
+
+[metrics.ruff_violations]
+config = { "lint.mccabe.max-complexity" = 10 }
+```
+**`[hooks]`** (`HooksConfig`). Unknown keys and wrong types are errors.
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `enabled` | bool | `false`, whether the table or only the key is absent | The opt-in. `false` renders no registration, no shim, no `guard_config.json` and no advisory text, and strips the entries an earlier sync managed. `playbook init` writes `true` unless given `--no-hooks`. |
+| `adapters` | list | `adapters_enabled` ∩ {`claude_code`, `opencode`} | Adapters that receive native registrations. |
+| `tiers` | list ⊆ {`default`, `opt-in`} | `["default"]` | Tiers that are on. An `overlay`-tier hook is an engine mechanism, turned on only when an overlay promotes it to `tier: default` (§11.6), never from here. |
+| `enable` | list of hook ids | `[]` | Hooks turned on whatever their tier. |
+| `disable` | list of hook ids | `[]` | Hooks turned off; wins over `enable`; may not name a `mandatory` hook. |
+| `advisory` | bool | `true` | Render the on hooks' bodies as advisory text (§6.6.7). |
+| `unattended_ask` | `"deny"` \| `"warn"` | `"deny"` | What an `ask` becomes when no human can answer (headless runs, CI, evals, OpenCode). `"warn"` adds context and lets the call proceed. |
+| `allow_code_from` | list | `[]` | Source packages whose external or entry-point handlers may run: names from `overlays_enabled` and/or `"<repo-local>"` (the engine is implicit). An external handler also needs a **trust-on-first-use approval**: an interactive `playbook sync` (stdin and stdout are TTYs; there is no non-interactive approve flag) lists each pending command and script hash and asks `[y/N]`, and the answer is stored per user outside the repo, shared by every worktree of the clone. Any change to the launcher, args or script bytes asks again. Enabling an execution stage that runs repo code (`pytest`, `mypy`, coverage) is approved the same way. |
+| `auto_sync` | bool | `false` | Let validate-then-sync-on-canonical-edit run `playbook sync` itself. |
+| `wrapper_prefixes` | list | `[]` | Command prefixes the dispatcher strips before shell matching, beyond the built-in `env`, `sudo`, `timeout`, `nice` and `nohup`. |
+| `state_ttl_days` | int > 0 | `7` | Age after which per-session hook state is swept. |
+| `render_remediation_allow` | bool | `false` | Render a fixed list of remediation commands into `.claude/settings.json` `permissions.allow`. Off by default, because an allow list is a privilege grant. |
+| `[hooks.<hook-id>]` | table | — | The **consumer layer** of that hook's handler `config`, merged last with the §11.6 key policies and validated against the handler's `CONFIG_SCHEMA`. Its keys are the hook's own `config` keys, e.g. `[hooks.stop-ci-parity-gate] stages` (⊆ `typecheck`, `tests`), `max_blocks` (1–8) and `budget_s`. |
+| `[hooks.commit_convention]` | table | — | The one reserved sub-table that is not a hook id: `cutover_date`, a `"YYYY-MM-DD"` TOML string (a date literal is an error). Range checks (the `playbook ci` step and the push scan) skip commits whose **committer** date is earlier; unset, every commit is checked. The convention itself is commitizen's, in the consumer's `pyproject.toml` `[tool.commitizen]` (default `cz_conventional_commits`). |
+
+Per-event deadlines are derived from the hooks' `timeout`s, never configured. A hook is on when (`resolve_effective_hooks`, evaluated at sync on the winning definition `w` of §11.6):
+```
+on(w) = cfg.enabled and w.enabled
+        and applicable(w)    # applies_if ∧ linked rule applies ∧ (w.supports ∩ cfg.adapters ≠ ∅)
+        and (w.mandatory or (w.id not in cfg.disable and (w.id in cfg.enable or w.tier in cfg.tiers)))
+```
+**`[guardrails]`** (`GuardrailsConfig`): one table per policy domain. A builtin handler declares its domain, and the keys the consumer sets merge into its config after the layer merge, with the key policy shown (§11.6; a consumer's `relax` key is ignored for a `mandatory` hook).
+
+| Key | Type | Merge | Meaning |
+| --- | --- | --- | --- |
+| `secrets.extra_globs` | list | `extend` | Added to the built-in secret path globs (`security.patterns`). |
+| `secrets.allow_paths` | list | `relax` | Exempt paths, such as test fixtures. |
+| `git.protected_branches` | list | `extend` | Branches no agent may force-push to; default `["main", "master", "release/*"]`. |
+| `network.mode` | `"off"` \| `"ask"` \| `"enforce"` | `strictest` | network-egress-guard (an overlay-tier mechanism); default `"off"`. |
+| `network.allowed_hosts` | list | `relax` | Allowed host suffixes; loopback is always allowed. |
+| `dependencies.mode` | string | `strictest` | dependency-allowlist-guard's mode. |
+| `dependencies.allowlist` | list | `relax` | Allowed new direct dependencies. |
+| `audit.retain_days` | int > 0 | `replace` | local-audit-log retention. |
+| `stop_sweep.mode` | `"block"` \| `"warn"` \| `"off"` | `strictest` | stop-diff-sweep; default `"block"`. |
+
+**`[metrics]`** (`MetricConfig`; the gate itself is §21.5). New in v0.18: the selection keys, `exclude`, both timeouts and the `[metrics.ruff_violations]` sub-table.
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `mode` | `"regression"` \| `"absolute"` \| `"both"` | `"regression"` | The comparison strategy. |
+| `fail_on_breach` | bool | `true` | A breach exits 1. |
+| `strict` | bool | `false` | Warnings fail the gate too. |
+| `run_tests` | bool | `false` | Add the execution metrics. `--no-run-tests` overrides it, and both metrics pre-commit hooks pass that flag. |
+| `test_cmd` | list | detected | The suite command for the execution metrics. |
+| `git_timeout_s` | number > 0 | `10` | Bound on every git call a `git:` baseline makes. |
+| `test_timeout_s` | number > 0 | unbounded | Bound on one suite run. |
+| `select` | list | the default set | Metric or family names (`quality`, `docstrings`, `testing`) replacing the default selection. A family expands to its non-opt-in members. |
+| `extend_select` | list | `[]` | Added to the selection. The opt-in metrics `ruff_violations`, `file_sloc` and `docstring_example` are selected only by name, so an upgrade leaves existing results byte-stable. |
+| `ignore` | list | `[]` | Removed from the selection. |
+| `exclude` | list of globs | `["**/eval_tasks/*/setup/**"]` | Never measured; a list replaces the default. |
+| `[metrics.thresholds.<metric>]` | `warn`, `fail` | per metric | Absolute 0–1 cutoffs. |
+| `[metrics.regression.<metric>]` | `max_worsening` | per metric | Non-regression tolerance. |
+| `[metrics.weights]` | table | per metric | Composite weights. |
+| `[metrics.ruff_violations] families` | table of code lists | `quality` = C901, PLR0911, PLR0912, PLR0913, PLR0915; `docstrings` = D100–D107 | Replaces the named families only (`[]` drops one). |
+| `[metrics.ruff_violations] config` | table | `{}` | Per-invocation ruff `--config` overrides, shared by the post-edit feedback and the Stop gate. |
+| `[metrics.ruff_violations] preview` | bool | `false` | ruff `--preview` on this call only. |
+
+Unknown `[metrics]` keys are ignored; a selection name the gate does not know is a usage error (exit 2).
 ### 7.2 `.coding-agent-playbook.local.toml` (gitignored)
 Personal, per-engineer overrides. Merged on top of the committed config but never checked in. `playbook init` appends it to `.gitignore`.
 ```toml
@@ -1004,6 +1334,7 @@ adapters_enabled = ["claude_code"]   # replaces the committed list (top-level ke
 docstring_style = "google"           # overrides project default for me
 ```
 Merge semantics: deep merge, with `.local.toml` winning — tables merge key by key, while lists and scalars are **replaced**, not merged: a local `adapters_enabled` is the whole adapter list for this checkout. The local file is checked on its own before the merge (§7.1), so an `[adapters]` table there fails with `error: .coding-agent-playbook.local.toml: the [adapters] table is not read …` (exit 2) instead of being ignored. `playbook init` writes the local file as a lone `[user_choices]` header, so add `adapters_enabled` **above** that header: appended below it, the key lands in `[user_choices]` and fails the same way (`'adapters_enabled' in the [user_choices] table is not read …`). The committed config always remains the team's source of truth; local just lets individuals deviate without polluting the repo.
+**Policy tables are never local (v0.18).** `[hooks]` (with every `[hooks.<hook-id>]` and `[hooks.commit_convention]`), `[guardrails]` and `[metrics]` in `.coding-agent-playbook.local.toml` are **ignored**: the rendered hook outputs, the CI twins and the metrics gate must not depend on a gitignored file CI never sees, and a deep-merged local file would be an unreviewed off switch. `playbook sync` warns and `playbook validate` fails on a `[hooks]` or `[guardrails]` key there (H21). This narrows the deep merge above for these tables only; a developer deviates at runtime instead, through the hook-process environment (`PLAYBOOK_HOOKS=off`, `PLAYBOOK_HOOKS_DISABLE=<ids>`). `playbook init` and `playbook check --refresh` save the committed file alone, so a local override is never written back into it.
 ### 7.3 `pyproject.toml` entry for the consumer
 `playbook init` adds the engine and any chosen overlays as dev dependencies:
 ```toml
@@ -1179,8 +1510,10 @@ The renderer exposes per-format transforms applied after Jinja substitution:
 | `claude_md_section` | Strip frontmatter, convert title to `##`, append `---` separator. |
 | `agents_md_section` | Same as `claude_md_section`. |
 | `prompt_continue` | Pass-through. If `includes_rules:` is set and body has no `{{ rule() }}` calls, append the auto-generated "Reference rules" section. |
-| `prompt_claude_command` | Strip frontmatter; prepend a title line if not present. Same `includes_rules:` appendix logic. |
-| `prompt_opencode_command` | Strip canonical frontmatter; emit a new minimal frontmatter with `description:` only (OpenCode's required field). Map `input_variables` to `$ARGUMENTS` / `$1` / `$2`. Same `includes_rules:` appendix logic. |
+| `prompt_claude_command` | Strip frontmatter; prepend a title line if not present. Same `includes_rules:` appendix logic. A read-only prompt (`write_scope: {read_only: true}`, §6.2.1) instead opens with the frontmatter block `---` / `disallowed-tools: Edit Write NotebookEdit` / `---`, so Claude Code removes those tools while the command runs, and carries the sentinel on the first body line (§4.3). Every other prompt renders as before. |
+| `prompt_opencode_command` | Strip canonical frontmatter; emit a new minimal frontmatter with `description:` only (OpenCode's required field), plus `agent: plan` for a read-only prompt (§10.6.1). Map `input_variables` to `$ARGUMENTS` / `$1` / `$2`. Same `includes_rules:` appendix logic. |
+| `hook_advisory` | A hook's advisory text (§6.6.7): a `### <name>` heading, the rendered hook body, and one italic line saying where the hook is enforced, derived from its declared `events` and `supports` (e.g. `*Enforced by lifecycle hooks on: Claude Code, OpenCode. …*`, or `*Not enforced automatically; apply it yourself.*`). Shared by every advisory target: AGENTS.md's Guardrails section, Continue's `30-guardrail-<id>.md`, CLAUDE.md for hooks Claude Code does not enforce, and `agent_harness`. The default format of `playbook render <hook-id>`. |
+| `hook_claude_settings` | Debug only: the hook's Claude Code registrations as `settings.json` JSON, built from its declared frontmatter alone (no `[hooks]` gating, no consumer config). Never written by sync; a malformed frontmatter is a `HookSchemaError` naming the file. |
 The CLI accepts both the full internal name and a short alias (e.g., `--format continue` is shorthand for `continue_rule`; `--format claude` for `claude_md_section`; `--format opencode` for `prompt_opencode_command`). The full names appear in `playbook render --show-source` output for precision; the short aliases are the daily UX.
 ```python
 def render_for(template_path: str, context: dict, fmt: str) -> str: ...
@@ -1483,6 +1816,7 @@ For each artifact ID across all layers:
 - If only one layer defines it, use it.
 - If multiple layers define it, the later layer wins (overrides). The original is not merged; it is replaced.
 - If a layer wants to *extend* rather than *replace*, it ships an artifact with a different ID (e.g. `python-typing-banking-extras`) and relies on both being loaded.
+- **Hooks are the one exception** (v0.18): an overlay's same-id hook replaces the definition but may only add to it, and builtin handler config merges key by key across layers (Section 11.6).
 This is intentionally non-magic. We considered Jinja-based block inheritance across layers and rejected it as too implicit — the user reading `playbook render --show-source python-typing` should see exactly one source file.
 ### 11.3 Example
 Engine ships:
@@ -1560,7 +1894,7 @@ The upstream wording is kept. The only edits are the self-containment transforma
 
 Dropped, and why:
 - **The brainstorming visual companion** (a Node.js server with its HTML/JS assets and start/stop scripts, plus `visual-companion.md`). It needs a JavaScript runtime and a local web server, so it cannot be self-contained.
-- **The SessionStart bootstrap hook** that injects `using-superpowers` at session start. The canonical artifact model has no hook artifact (cf. the hook gap in Section 10.6.2), so `using-superpowers` is discovered like any other skill, by its description.
+- **The SessionStart bootstrap hook** that injects `using-superpowers` at session start. The pack ships skills only — no `Hook` artifact (Section 6.6.7), since lifecycle hooks are opt-in per consumer repo and a content pack should not switch one on — so `using-superpowers` is discovered like any other skill, by its description.
 - **diagnosing-superpowers' upstream issue filing.** The issue-filing reference, issue template, and GitHub-issues workflow step are gone. The skill still writes its local report and, when the goal is a bug report, offers a scrubbed bundle on request.
 - **All non-skill repository content**: per-harness plugin manifests (including the repo-root `GEMINI.md`), hooks, docs, tests, and repo-root scripts.
 
@@ -1579,6 +1913,27 @@ Consumer-repo conventions the skills use (`docs/superpowers/specs/`, `docs/super
 **Attribution.** `packs/superpowers/LICENSE` is the upstream MIT text verbatim. MIT requires the copyright and permission notice in every copy, so it ships in the wheel, and the byte-identical `references/LICENSE` in every skill carries it into each synced skill directory (`.claude/skills/<id>/`, `.opencode/skills/<id>/`, `shared_skills/<id>/`, and the Agent Harness `skills/<id>/`). Continue's body-only prompts are the exception noted above. `ATTRIBUTIONS.md` records the source, version, commit, the indication of changes above, the provenance of `anthropic-best-practices.md`, and a per-skill table. Both are plain text with no URLs.
 
 **Gates.** `tests/packs/` pins the 15 ids, the 7-script inventory (plus the `package.json` module-type sidecar), and the full `references/` inventory, with every `references/LICENSE` byte-identical to the pack's. It also pins frontmatter identity (`id` first, `id == name ==` directory name), the synced-entries-only layout, and self-containment: no URL of any scheme anywhere in the pack (including `LICENSE`, `ATTRIBUTIONS.md`, and `__init__.py`), no `superpowers:` references, no upstream-plugin markers, and every `references/…` / `scripts/…` path named in a `SKILL.md` or reference file resolving inside the pack, apart from an explicit allowlist of illustrative examples. Further gates cover executable bits and `bash -n`; an end-to-end opt-in `playbook sync` + `validate` + `sync --check` that checks each synced `SKILL.md` (sentinel body line, then the vendored body), the license copy in every synced skill, that the `.claude/skills/`, `.opencode/skills/` and `shared_skills/` copies are byte-identical, and each degraded Continue prompt (sentinel on line 1, then the vendored body); an opt-in `agent_harness` sync whose `skills/<id>/` copies carry the sentinel body line, the vendored body and `references/LICENSE`, with every script executable and flagged in `.playbook/manifest.toml`; and the opt-out and override removal described in Section 11.5. `tests/cli/test_validate_links.py` runs the PR-L link gate over the pack and asserts that the pack's `skills/` resource directory resolves, so the gate cannot pass without scanning anything.
+### 11.6 Hook layers: overlays only add (v0.18)
+Hooks follow the three layers of Section 11.1, but not the replace-only rule of Section 11.2: `OverlayResolver.resolve_hooks` hands **every** layer's definition of an id, in layer order (engine, overlays in `overlays_enabled` order, repo-local), to `hook_policy.merge_hook_layers`, because the policy compares each override with what it overrides. Violations are collected and reported by `playbook validate` (H14, H15), and the validate-gated `playbook sync` refuses to render while one stands; resolution itself never raises.
+
+| A layer overriding an earlier definition | Frontmatter | Builtin `handler.config` |
+| --- | --- | --- |
+| **Overlay** over the engine or an earlier overlay | Replaced by id, but the override may not swap `handler.builtin`, set `enabled: false` on a `default`-tier hook, drop an event, a tool class or a `deny`/`ask` decision, weaken `on_error` (`open` < `ask` < `deny`), or demote `tier`. Promoting `opt-in` or `overlay` to `default` is how an overlay **activates** an engine mechanism. | Merged per the handler's `CONFIG_SCHEMA` key policy (below). |
+| **Repo-local** over a non-mandatory hook | Replaced by id: the consumer's choice, as strong as `[hooks] disable`. | Every key `replace`. |
+| **Repo-local** over a `mandatory` hook | Refused (H15). | — |
+| **Consumer** `[hooks.<hook-id>]` (§7.1.1), applied last | — | Merged with the same key policies as an overlay; a `relax` key is ignored for a `mandatory` hook (sync warns). |
+
+Each key of a builtin handler's config declares one merge policy (`hook_policy.KeyPolicy`):
+- `extend` — deny rows, patterns, protected paths: the union, earlier layers first, de-duplicated;
+- `strictest` — ordered modes (e.g. `off` < `warn` < `block`): the stricter value wins;
+- `relax` — allowlists and exemptions: the union;
+- `replace` — messages, caps: the later value wins.
+
+An overlay therefore can never shrink an `extend` key or lower a `strictest` key. A `[guardrails]` domain (§7.1.1) merges into the handlers that declare it with the same policies.
+
+**`mandatory`** (overlay hooks only, and only with `enabled: true`) makes an overlay's hook binding on its consumers: `[hooks] disable` may not name it, a repo-local same-id override is refused, `[hooks] enabled = false` is an error while an enabled overlay ships one, and `PLAYBOOK_HOOKS_DISABLE` does not skip it. The consumer still tunes it through `[hooks.<hook-id>]` and `[guardrails]`, minus the `relax` keys. (`PLAYBOOK_HOOKS=off` still switches every hook off for one machine — the same-UID user can always do that, which is why every guard has an off-workstation twin.)
+
+**Overlays are data-only by default.** An overlay may ship builtin-handler hooks, same-id overrides and handler config freely; an **external-command** hook, from an overlay or from `playbook/hooks/`, runs only when its source package is listed in `[hooks] allow_code_from` and its command and script hash are approved in the user-local trust store (§7.1.1).
 ## 12. CLI contract
 The CLI binary is `coding-agent-playbook`, with a short alias `playbook`. Both names are entry points in `pyproject.toml`:
 ```toml
@@ -2282,14 +2637,14 @@ For BNP, the overlay can extend this to write to a central audit endpoint at syn
 - Eval harness implementation
 - Auto-suggestion of new rules from PR review patterns
 ## 19. Open questions
-1. **Should overlay packages be allowed to ship adapters?** (E.g. a community Cursor adapter via overlay.) Currently the design says yes via entry points; we should validate no security implications.
+1. **Should overlay packages be allowed to ship adapters?** (E.g. a community Cursor adapter via overlay.) Currently the design says yes via entry points; we should validate no security implications. *Partially answered in v0.18 (PR K), for executable hook code:* overlays are data-only by default. An overlay's external-command hook or out-of-tree handler runs only when the consumer lists the overlay in `[hooks] allow_code_from` (committed, reviewed), and an external command additionally needs a user-local trust-on-first-use approval; `mandatory` overlay hooks can only add (Section 11.6). Overlay-shipped adapters are still discovered through entry points without such a gate, so that half stays open.
 2. **Lockfile granularity.** Per-file hashes vs. content-addressable single hash. Current spec is per-file; simpler but more lock churn. Revisit if churn becomes a problem.
 3. **Migration of existing `.continue/rules/` content.** If a consumer already has rules they hand-authored, `playbook init` should detect and offer to convert them to canonical templates. Out of scope for v1, but worth scoping in v2.
 4. **Multi-language support.** v1 assumes Python. The architecture is language-agnostic (rules are just markdown), but the detector is Python-specific. v2 would add JS/TS detection. Defer.
 5. **Versioning of overlays vs. engine.** Currently overlays pin the engine's minor range. Is that the right contract? Or should overlays declare a `compatible_engine_versions` field explicitly?
 6. **Glob/tag-based rule inclusion in prompts.** Currently `includes_rules:` requires explicit rule IDs. A natural follow-on is `includes_rules_matching: { tags: ["python", "testing"] }`. Rejected for v1 for readability reasons (see Section 6.2.5); revisit in v2 if explicit lists become unwieldy.
 7. **Cross-prompt rule sharing.** If three prompts all `includes_rules: [python-typing, pytest]`, the rule content is duplicated three times in three rendered files. Acceptable for v1; v2 might explore a shared "context library" referenced from prompts.
-8. **OpenCode plugin generation.** OpenCode's only lifecycle hook mechanism is JS/TS plugins under `.opencode/plugin/`, subscribing to 31 documented runtime events (`tool.execute.before`, `session.idle`, etc.). The engine could generate plugin code from a canonical hook description, but plugin code is a different artifact class entirely (executable JS, not declarative config) and the OpenCode plugin API still has known gaps around mid-session message injection. v1 leaves plugins to the user; v2 should evaluate whether the playbook ships plugins or just hook *patterns* via documentation. For BNP specifically, this is probably the highest-ROI v2 feature — a pre-tool-use PII redactor plugin is exactly the kind of guardrail banking IT will value.
+8. **OpenCode plugin generation.** *Resolved in v0.18 (PR K).* OpenCode's only lifecycle hook mechanism is JS/TS plugins under `.opencode/plugin/` or `.opencode/plugins/`, subscribing to runtime events (`tool.execute.before`, `session.idle`, etc.). The engine does not generate per-hook plugin code. It generates **one** static shim, `.opencode/plugins/playbook-hooks.js` (OpenCode V1 plugin API), which forwards `pre_tool_use`, `post_tool_use`, `session_start` and `stop` to the same `playbook-hook` dispatcher Claude Code uses, so the hook logic stays in canonical `Hook` artifacts and engine Python (Section 6.6.7). The API gaps are accepted and labelled: `ask` degrades to deny (OpenCode has no ask primitive), Stop is evidence-only, and session context goes through an experimental API. Every other plugin stays the user's. The regulated-overlay use case this question named ships as overlay-tier engine mechanisms that an overlay activates: `pii-prompt-guard` (user prompts; Claude Code only, since OpenCode does not render `user_prompt_submit`) and `sensitive-data-read-guard` (`pre_tool_use` reads, on both harnesses).
 9. **OpenCode agents as a first-class artifact.** OpenCode supports named modes (`build`, `plan`, custom agents) with distinct system prompts, models, and permissions, defined in `.opencode/agent/<name>.md`. Claude Code subagents are conceptually similar. v1 treats agents as out of scope; users author them by hand. v2 could add a fifth artifact category — but the degradation story for harnesses without named agents (Continue, Codex) is unclear. Revisit when a concrete use case appears.
 10. **HarnessRunner invocation contract.** v2 needs a uniform way to programmatically invoke Claude Code, Continue CLI, and OpenCode with a given prompt and working directory. Each harness exposes a different surface — Claude Code SDK with session API, `cn -p --prompt`, `opencode` CLI flags. Decide: thin wrappers per harness (matched to native APIs, more flexible) or a normalized "agent loop" interface the engine owns (LiteLLM-backed, more portable but reimplements harness behavior). My instinct is thin wrappers because the value of evals is catching *harness-specific* regressions, not papering over them.
 11. **Determinism and seeding for evals.** Coding agents are non-deterministic. A Tier 1 runner that fails a task once might pass it on retry. Options: (a) seed temperature=0 and accept residual noise; (b) run each task N times and report pass-rate; (c) accept flakiness, focus on aggregate trends across many tasks. (b) is statistically honest but expensive; (a) is cheap but the seed isn't always honored. Defer to v2 with bias toward (a) + per-task `flaky: true` annotation for known-noisy tasks.
@@ -2306,13 +2661,14 @@ The fix is a small abstraction: route "where do artifacts come from" and "where 
 ```python
 # coding_agent_playbook/sources/base.py
 from abc import ABC, abstractmethod
-from coding_agent_playbook.types import Rule, Prompt, Skill, EvalTask
+from coding_agent_playbook.types import Rule, Prompt, Skill, Hook, HookSchemaError, EvalTask
 from coding_agent_playbook.config import Config
+from coding_agent_playbook.hooks_config import PolicyTables
 from coding_agent_playbook.lockfile import Lockfile
 
 
 class ArtifactSource(ABC):
-    """Where rules, prompts, skills, and eval tasks come from."""
+    """Where rules, prompts, skills, hooks, and eval tasks come from."""
 
     name: str
 
@@ -2322,6 +2678,8 @@ class ArtifactSource(ABC):
     def list_prompts(self) -> list[Prompt]: ...
     @abstractmethod
     def list_skills(self) -> list[Skill]: ...
+    def list_hooks(self) -> list[Hook]: ...  # concrete: returns [] (v0.18)
+    def collect_hooks(self) -> tuple[list[Hook], list[HookSchemaError]]: ...  # concrete
     @abstractmethod
     def list_eval_tasks(self) -> list[EvalTask]: ...
 
@@ -2333,6 +2691,9 @@ class StateSource(ABC):
 
     @abstractmethod
     def load_config(self) -> Config: ...
+    def load_primary_config(self) -> Config: ...  # concrete: the committed file alone
+    def load_local_overrides(self) -> dict: ...  # concrete: {}
+    def load_policy_tables(self) -> PolicyTables: ...  # concrete: committed [hooks]/[guardrails]
     @abstractmethod
     def save_config(self, config: Config) -> None: ...
     @abstractmethod
@@ -2341,6 +2702,7 @@ class StateSource(ABC):
     def save_lockfile(self, lockfile: Lockfile) -> None: ...
 ```
 These are deliberately small. They expose typed Python objects, not raw bytes or filesystem paths. The engine never has to know whether something came from a wheel, a TOML file, or anywhere else.
+The methods added since v1 are **concrete defaults**, never `@abstractmethod`, so a third-party source written before them still instantiates (§20.7). `list_hooks` returns `[]` and raises `HookSchemaError` on the first malformed hook; `collect_hooks` returns the well-formed hooks plus the errors of the malformed ones without raising, which is what `playbook validate` reads so it reports every malformed hook, not a traceback. `FileSystemArtifactSource.list_hooks` walks `resources/hooks/` of the engine, then each overlay in `overlays_enabled` order, then `<repo>/playbook/hooks/`, yielding one `Hook` per directory that holds `HOOK.md` or `HOOK.md.j2` at any depth (dot-directories skipped). On the state side, `load_primary_config` is the committed file alone (what `init` and `check --refresh` save back, so a local override is never persisted), `load_local_overrides` the `.local.toml` table, and `load_policy_tables` the committed `[hooks]` and `[guardrails]` tables, recording any local keys only to warn about them (§7.2).
 ### 20.3 What v1 ships
 Two concrete implementations, both already implied by the rest of the spec:
 ```python
@@ -2412,6 +2774,10 @@ The sidecar stores the **full canonical reconstruction payload**, not merely "no
 - the original, **un-rendered** canonical source `body` for every kind — the harness leaf is the client-facing *presentation* and may rewrite/inline content (a prompt's `includes_rules` are inlined into its `SKILL.md`), so the recorded body is the authoritative canonical text;
 - `is_templated` for every kind (tracks `.md` vs `.md.j2` origin);
 - for skills, a per-script `executable` boolean (git's single-bit model, not a full octal mode).
+
+v0.18 adds, with **no schema bump** (an older engine ignores unknown keys and warns-and-skips an unknown kind):
+- **`kind = "hook"`**: one entry per hook, keyed by `.playbook/hooks/<id>/HOOK.md`, holding `name`, the un-rendered `body`, `is_templated`, the canonical frontmatter as the inline table `hook_frontmatter` (`HookFrontmatter.to_mapping()`, floats and all), and a `ScriptEntry(path, executable)` per copied script. `import-harness` rebuilds the hook through `Hook.from_dict` and writes it in the repo-local layout, `<into>/hooks/<id>/HOOK.md` (or `.md.j2`) plus `scripts/`, restoring the scripts' exec bits. The client-facing advisory `rules/30-guardrail-<id>.md` is presentation only and gets no entry, so a lossless import never turns it into a spurious `Rule`;
+- the rule field `lint_codes` and the prompt fields `write_scope` and `output_contract` (§6.1.1, §6.2.1), each emitted only when non-empty, so existing sidecars stay byte-identical.
 Because each entry carries the whole payload, `import-harness` reconstructs each artifact via `from_dict` **independently of how the leaf rendered or inlined things** — the leaf files exist only for harness clients; the sidecar is the source of truth. When the sidecar is absent (a foreign harness), the importer falls back to best-effort structural inference and surfaces the lossiness (§12.9).
 ### 20.11 Out of scope: the harness client runtime
 The Agent Harness spec also defines a **client runtime contract** — `load_content` / `run_script` and the four loading phases (Load → Discovery → Activation → Execution). The playbook intentionally does **not** implement that runtime. It produces harness files (the `agent_harness` adapter), consumes them (`import-harness`), and validates their structure (`validate-harness`), but it is not a harness *client*: it never injects `HARNESS.md` into a session, reads routing files at runtime, or executes scripts. Modeling the full client runtime is future work; for v1 the `validate-harness` lint is the structural stand-in for runtime conformance (decision #3 in `specs/prH-agent-harness.md` §D).
@@ -2804,10 +3170,44 @@ Notes on sequencing:
 - **Track 2c (PR 5)** adds the filesystem implementations after the detector and renderer because those modules' types (`Config`, `Facts`, `Lockfile`) are needed by `StateSource`.
 - **Track 5b (Eval Tier 0)** lands after the main CLI because it adds CLI subcommands and one new validator pass. It is independent of the adapters — eval tasks are authoring-side artifacts and don't flow through any adapter.
 - The source abstraction and the canonical types together add maybe two days of work to the early tracks but pay for themselves in test simplicity from PR 6 onward, and in clean serialization boundaries when the commercial product arrives.
+
+**PR K — assistant lifecycle hooks (v0.18).** Authoritative design: `specs/prK-lifecycle-hooks.md` (mechanism, tracks P and K1–K4, K11) and `specs/prK-hook-pack.md` (the hook pack and the new tools, tracks K5–K10). Phases: **P (Pa → Pb) → K1 → K2 → {K3 ∥ K4} → K5 → K6 → K7 → K8 → K9 → K10 → K11**; the "Depends on" column is the hard ordering. Sizes are production lines (Python, JS, shell and shipped markdown), tests excluded.
+
+| Track | What | Depends on | LoC estimate |
+| --- | --- | --- | --- |
+| Pa | Prerequisites, first PR: the sandboxed Jinja environment, an orphan-aware `sync --check`, one import-light sentinel, lockfile schema 2 with provenance, the corrected Continue hook claims, one `SECRET_PATH_GLOBS` | — | ~1,000 (with Pb) |
+| Pb | Prerequisites, second PR: config extension tables and primary-only saves, config-less `validate` and the validate-gated `sync`, ruff kept off eval fixtures, the runtime prerequisites (an import-light package, unattended runner env, the extracted metrics gate, the audit writer, the `hook_handlers` entry-point group) | Pa | (see Pa) |
+| K1 | The canonical `Hook` kind, discovery, the additive overlay merge, `[hooks]`/`[guardrails]`, the trust store, validate H1–H21 | Pa, Pb | ~1,100 |
+| K2 | The `hook_runtime` core: dispatcher, payload normalization, decisions, failure policy, state, pins, the Stop stage contract, `playbook-hook simulate`/`doctor` | Pa, Pb, K1 | ~3,000 |
+| K3 | The adapter contract, sync dispatch, `guard_config.json`, the Claude Code managed merge and launcher, the advisory degrade, the agent_harness round trip | K1, K2 | ~1,700 |
+| K4 | The OpenCode V1 shim | K2, K3 | ~350 |
+| K5 | Pack: protect the playbook | K2, K3 | ~1,600 |
+| K6 | Pack: verify before done, the Stop coordinator, `playbook ci` | Pa, Pb, K2, K3, K5 | ~2,200 |
+| K7 | Pack: rule-linked edit feedback and the shared ruff call | Pb, K2, K3 | ~1,550 |
+| K8 | Pack: secrets and risky actions, with their native deny twins | K2, K3, K6, K7 | ~2,500 |
+| K9 | Pack: audit and overlay mechanisms | Pb, K2, K3, K8 | ~1,250 |
+| K10 | New tools: coverage, quality metrics, docstrings, commit names | Pa, Pb, K2, K6, K7, K8 | ~2,100 |
+| K11 | Docs and rollout: this SPEC, the README, MIGRATION.md, dogfooding the commit convention | all | prose |
 ---
-*End of SPEC.md v0.17.*
+*End of SPEC.md v0.18.*
 ---
 ## Changelog
+### v0.18 (2026-10-15)
+Assistant lifecycle hooks (PR K). `Hook` joins `Rule`, `Prompt` and `Skill` as the fourth emitted canonical kind, rendered natively for Claude Code and OpenCode and as advisory text everywhere else, with one import-light dispatcher for every harness event. **Opt-in, with zero byte change on upgrade:** a repo without `[hooks] enabled = true` renders exactly what v0.17 rendered (plus one notice line from `playbook sync`). Authoritative design: `specs/prK-lifecycle-hooks.md` and `specs/prK-hook-pack.md`; migration: `MIGRATION.md`.
+- **Sections 2.2 / 2.3**: the "No OpenCode plugins" non-goal narrows to user-authored plugins — the engine owns exactly one generated plugin, `.opencode/plugins/playbook-hooks.js` — and the "OpenCode plugin generation" aspiration is marked delivered.
+- **Section 3 (glossary)**: Hook is the fourth emitted kind (the Continue correction of PR K Track P is kept verbatim); the Plugin (OpenCode) entry names the one generated shim.
+- **Sections 4.1 / 4.2 (architecture, data flow)**: the component diagram gains `hooks/**/HOOK.md`, `hook_policy.resolve_effective_hooks`, `write_hook`, the sync-level `guard_config.json` and the `playbook-hook` runtime, plus a runtime-path diagram (launcher or shim → `<pin> -I -m coding_agent_playbook.hook_runtime dispatch` → exit 0 or 10). The data flow reads the policy tables from the committed file, runs the validate gate, merges hook layers additively, gates hooks in `resolve_effective_hooks`, dispatches `begin_sync` / `write_hook` / `finalize` / `managed_lock_entries`, writes the sync-level hook output, and (new step 10) pins the interpreter, prints notices and asks the TTY-only trust questions.
+- **Section 4.3 (design recap)**: the sentinel positions and exceptions for hook outputs (`# …` launcher, `// …` shim, read-only Claude commands in the second position, byte-copied hook scripts and strict JSON without one), and the hook invariants of `specs/prK-lifecycle-hooks.md` §I, recorded here because the repo's agent instruction files are local-only.
+- **Sections 5.1 / 5.3 (layouts)**: the engine gains `hook_runtime/`, `hook_policy/`, `hook_registrations/`, `security/`, `guard_config.py`, `hooks_config.py`, `metrics_config.py`, `_sentinel.py`, `_pep503.py`, `gate_scan.py`, `adapters/claude_settings.py`, `resources/hooks/` and `resources/hook_shims/`; the consumer gains `playbook/hooks/`, `.coding-agent-playbook/hooks/`, `.claude/hooks/playbook/launch.sh`, `.opencode/plugins/playbook-hooks.js` and managed entries in the user's `.claude/settings.json`. The `.opencode/plugin/` ownership note now gives the user every plugin but the shim.
+- **Sections 6.1 / 6.2 / 6.6**: `RuleFrontmatter.lint_codes`, `PromptFrontmatter.write_scope` and `output_contract`; the `Hook`, `HookFrontmatter`, `HookMatcher`, `HookHandler` and `HookSchemaError` types with their round trip (`Hook.from_dict(hook.to_dict())` is the identity); new §6.6.7 on the authoring layout, the event table, handlers, the advisory degrade, `ResolvedHook` and the agent_harness sidecar.
+- **Section 6.4**: the `has_dev_dependency` predicate (PEP 503-normalized names over `facts["dev_dependencies"]`).
+- **Sections 7.1 / 7.2 (config)**: new §7.1.1 with every `[hooks]` key, `[hooks.<hook-id>]`, `[hooks.commit_convention] cutover_date`, every `[guardrails]` domain key with its merge policy, the `[metrics]` keys (new: `select`, `extend_select`, `ignore`, `exclude`, `git_timeout_s`, `test_timeout_s`, `[metrics.ruff_violations]`), the on-formula, and the trust-on-first-use approval. `.local.toml` never carries `[hooks]`, `[guardrails]` or `[metrics]`.
+- **Section 9.7 (formats)**: `hook_advisory` and `hook_claude_settings`; the `disallowed-tools` frontmatter of a read-only Claude command and `agent: plan` for a read-only OpenCode command.
+- **Section 11 (overlays)**: new §11.6 — overlays only add to a hook, the `extend` / `strictest` / `relax` / `replace` config key policies, `mandatory` overlay hooks, data-only overlays. The stale §11.5.1 claim that the canonical model has no hook artifact is corrected.
+- **Section 19**: Q8 (OpenCode plugin generation) resolved; Q1 partially answered for executable overlay code.
+- **Sections 20.2 / 20.10**: the concrete `ArtifactSource.list_hooks` / `collect_hooks` and `StateSource.load_primary_config` / `load_local_overrides` / `load_policy_tables` defaults; manifest `kind = "hook"` with `hook_frontmatter`, and the optional `lint_codes` / `write_scope` / `output_contract` sidecar fields.
+- **Implementation order (recap)**: the PR K tracks, Pa and Pb through K11.
+- **CI**: `tests/unit/test_docs_lifecycle_hooks_spec.py` derives the names it requires from the landed code (`HooksConfig`, `GuardrailsConfig` and `MetricConfig` fields, the canonical `Hook` dataclasses, `renderer.BUILTIN_FORMATS`, the merge key policies, the manifest kinds), so a key or field added without documentation fails the docs gate.
 ### v0.17 (2026-10-14)
 Bundled opt-in packs and the `superpowers` pack. The pack itself is purely additive: no rendering, config-schema, or lockfile change; it is consumed through the existing overlay path and rendered by the v0.15 native-skill adapters, and leaving or overriding it is settled by the v0.16 lockfile leftover policy. The config hardening below changes what is *accepted*: the enabled-list shapes the engine used to misread silently are now refused (other unknown keys are still ignored).
 - **Section 11.5 (new)**: packs are importable subpackages under `coding_agent_playbook.packs.*`, layered exactly like overlay packages but shipped in the engine wheel (no extra install), off by default, and enabled by listing the dotted package name in the top-level `overlays_enabled` key. It documents the two configuration mistakes the pack invites and how each is now caught (see the config-hardening bullet): the `[overlays]`/`[adapters]` table form is refused with a `ConfigError`, and a misspelled pack name is flagged by `sync`, `validate`, `check` and `init`. "Opting out and overriding" applies §4.2 step 9 to a pack: removing it, or overriding one of its skills with fewer `scripts/`/`references/` files, deletes the pristine, untracked pack files from every skill root on the next sync and prunes the emptied directories; edited, tracked, and user-added skill files are kept; the degraded Continue prompts are removed by `cleanup_stale`, edited or not, tracked or not.
