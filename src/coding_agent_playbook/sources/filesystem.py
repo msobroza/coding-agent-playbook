@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook import _toml
+from coding_agent_playbook._atomic_io import atomic_write_bytes
 from coding_agent_playbook._layers import ENGINE_PACKAGE as ENGINE_PACKAGE
 from coding_agent_playbook._layers import REPO_LOCAL_SOURCE as REPO_LOCAL_SOURCE
 from coding_agent_playbook.config import Config, check_enabled_keys
@@ -220,17 +221,15 @@ def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
 
 
 def _atomic_write_text(target: Path, content: str) -> None:
-    """Write ``content`` to ``target`` atomically.
+    """Write ``content`` to ``target`` atomically, as UTF-8 bytes.
 
-    Writes to ``target + ".tmp"`` first, then renames over the target. A SIGKILL
-    or power loss mid-write leaves either the old file intact or the new file
-    fully written — never a half-written one. Used for both
+    A SIGKILL or power loss mid-write leaves either the old file intact or the
+    new file fully written — never a half-written one. Used for both
     ``.coding-agent-playbook.toml`` and ``.coding-agent-playbook.lock`` so a
-    crashed ``playbook sync`` can be safely retried.
+    crashed ``playbook sync`` can be safely retried. It delegates to the byte
+    writer because ``Path.write_text`` translates ``\\n`` on Windows.
     """
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(content, encoding="utf-8")
-    tmp.replace(target)
+    atomic_write_bytes(target, content.encode("utf-8"))
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:

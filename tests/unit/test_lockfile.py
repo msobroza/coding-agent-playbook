@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.adapters.claude_settings import scoped_lock_entry
 from coding_agent_playbook.lockfile import (
     LockEntry,
     Lockfile,
@@ -260,3 +261,32 @@ def test_lock_entry_is_whole_file_unless_scoped() -> None:
     assert LockEntry(path="AGENTS.md", sha256="a", bytes=1).is_whole_file
     scoped = LockEntry(path=".claude/settings.json", sha256="a", bytes=1, scope="json:/hooks/X")
     assert not scoped.is_whole_file
+
+
+def test_scoped_entry_roundtrips_with_scope_and_omits_defaults(tmp_path: Path) -> None:
+    """A managed settings element (K3 §C.1.4) survives save/load, and its TOML
+    carries ``scope`` but neither ``source`` nor ``executable`` (both default)."""
+    entry = scoped_lock_entry(
+        ".claude/settings.json",
+        "/permissions/deny",
+        "Read(./.env)",
+        artifact_id="permission:deny:Read(./.env)",
+    )
+    assert list(entry.to_dict()) == [
+        "path",
+        "sha256",
+        "bytes",
+        "kind",
+        "artifact_id",
+        "adapter",
+        "scope",
+    ]
+    lockfile = Lockfile(2, "0.2.0", "2026-10-14T10:00:00Z", entries=[entry])
+    state = FileSystemStateSource(repo_root=tmp_path)
+    state.save_lockfile(lockfile)
+
+    assert state.load_lockfile() == lockfile
+    text = (tmp_path / ".coding-agent-playbook.lock").read_text(encoding="utf-8")
+    assert 'scope = "json:/permissions/deny"' in text
+    assert "source" not in text
+    assert "executable" not in text

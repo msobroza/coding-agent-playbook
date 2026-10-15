@@ -23,12 +23,11 @@ without touching this module.
 
 from __future__ import annotations
 
-import os
-import shutil
-import tempfile
 import unicodedata
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
+
+from coding_agent_playbook._atomic_io import atomic_write_bytes
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -37,7 +36,8 @@ GITIGNORE_FILENAME = ".gitignore"
 BLOCK_START = "# >>> coding-agent-playbook (managed — do not edit) >>>"
 BLOCK_END = "# <<< coding-agent-playbook <<<"
 # Mirrors ``FileSystemStateSource._LOCKFILE_FILENAME`` (kept as a literal so this
-# module stays a stdlib-only leaf; a unit test pins the two together).
+# module stays stdlib-only, importing only the ``_atomic_io`` leaf; a unit test
+# pins the two together).
 LOCKFILE_NAME = ".coding-agent-playbook.lock"
 LOCKFILE_ENTRY = f"/{LOCKFILE_NAME}"
 
@@ -355,31 +355,11 @@ def _read(path: Path) -> str | None:
 
 
 def _atomic_write(target: Path, text: str) -> None:
-    """Write ``text`` via a uniquely named temp file + ``os.replace``.
+    """Write ``text`` atomically, keeping undecodable bytes and the file's mode.
 
-    ``.gitignore`` sits among user files, so the temp name comes from
-    :func:`tempfile.mkstemp` (``.<name>.<random>.tmp``) — a fixed ``.gitignore.tmp``
-    would clobber a user file of that name. Bytes, not text mode, so no newline
-    translation touches the user's file; the original permission bits are carried
-    over (a new file gets the umask default, not mkstemp's ``0o600``).
+    ``.gitignore`` sits among user files: :func:`atomic_write_bytes` uses a unique
+    temp name (a fixed ``.gitignore.tmp`` would clobber a user file of that name),
+    writes bytes so no newline translation touches the file, and carries the
+    original permission bits over.
     """
-    fd, tmp_name = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
-    tmp = Path(tmp_name)
-    try:
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(text.encode("utf-8", errors="surrogateescape"))
-        _copy_mode(target, tmp)
-        os.replace(tmp, target)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
-
-
-def _copy_mode(target: Path, tmp: Path) -> None:
-    """Give ``tmp`` the mode of ``target``, or the umask default when it is new."""
-    if target.exists():
-        shutil.copymode(target, tmp)
-        return
-    umask = os.umask(0)
-    os.umask(umask)
-    tmp.chmod(0o666 & ~umask)
+    atomic_write_bytes(target, text.encode("utf-8", errors="surrogateescape"))
