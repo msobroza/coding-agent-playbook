@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__
 from coding_agent_playbook.commands import check as check_cmd
+from coding_agent_playbook.commands import check_notebooks as check_notebooks_cmd
 from coding_agent_playbook.commands import ci as ci_cmd
 from coding_agent_playbook.commands import eval as eval_cmd
 from coding_agent_playbook.commands import gate_scan as gate_scan_cmd
@@ -25,6 +26,7 @@ from coding_agent_playbook.commands import import_harness as import_harness_cmd
 from coding_agent_playbook.commands import init as init_cmd
 from coding_agent_playbook.commands import metrics as metrics_cmd
 from coding_agent_playbook.commands import render as render_cmd
+from coding_agent_playbook.commands import scan_sinks as scan_sinks_cmd
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as validate_cmd
 from coding_agent_playbook.commands import validate_harness as validate_harness_cmd
@@ -50,6 +52,8 @@ _SUBCOMMANDS: tuple[str, ...] = (
     "validate-harness",
     "gate-scan",
     "ci",
+    "scan-sinks",
+    "check-notebooks",
 )
 
 
@@ -258,7 +262,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _add_twin_parsers(subcommands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """``gate-scan`` and ``ci``, the hooks' off-workstation twins (prK §E.2, §F.5)."""
+    """The hooks' off-workstation twins: ``gate-scan``, ``ci`` (prK §E.2, §F.5), ``scan-sinks``
+    and ``check-notebooks`` (§E.3)."""
     gate_p = subcommands.add_parser(
         _SUBCOMMANDS[9], help="flag gate-weakening changes in a commit range (prK §E.2)"
     )
@@ -279,6 +284,29 @@ def _add_twin_parsers(subcommands: argparse._SubParsersAction[argparse.ArgumentP
     ci_p.add_argument("--format", choices=("text", "json"), default="text")
     ci_p.add_argument("--repo-root", help="repo to check (defaults to cwd)")
     ci_p.set_defaults(func=ci_cmd.run)
+
+    sinks_p = subcommands.add_parser(
+        _SUBCOMMANDS[11], help="flag new unsafe deserialization sinks in a change (prK §E.3)"
+    )
+    sinks_scope = sinks_p.add_mutually_exclusive_group()
+    sinks_scope.add_argument("--staged", action="store_true", help="scan the index against HEAD")
+    sinks_scope.add_argument(
+        "--range",
+        dest="rev_range",
+        help="A..B, or A...B from their merge base (default: <merge-base>..HEAD)",
+    )
+    sinks_p.add_argument("--format", choices=("text", "json"), default="text")
+    sinks_p.add_argument("--repo-root", help="repo to scan (defaults to cwd)")
+    sinks_p.set_defaults(func=scan_sinks_cmd.run)
+
+    notebooks_p = subcommands.add_parser(
+        _SUBCOMMANDS[12], help="fail when notebooks keep cell outputs (prK §E.3)"
+    )
+    notebooks_p.add_argument(
+        "paths", nargs="*", help="notebooks to check (default: every tracked .ipynb file)"
+    )
+    notebooks_p.add_argument("--repo-root", help="repo the paths are relative to (defaults to cwd)")
+    notebooks_p.set_defaults(func=check_notebooks_cmd.run)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

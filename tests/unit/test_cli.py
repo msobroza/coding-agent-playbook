@@ -209,8 +209,29 @@ def test_metrics_subparser_defaults():
 
 
 def test_twin_subcommands_close_the_canonical_list():
-    """prK K6: the off-workstation twins are registered, and no argument is required."""
-    assert _SUBCOMMANDS[-2:] == ("gate-scan", "ci")
+    """prK K6/K7: the off-workstation twins are registered, and no argument is required."""
+    assert _SUBCOMMANDS[-4:] == ("gate-scan", "ci", "scan-sinks", "check-notebooks")
+
+
+def test_scan_sinks_subparser_accepts_staged_or_range():
+    parser = build_parser()
+    staged = parser.parse_args(["scan-sinks", "--staged", "--format", "json"])
+    ranged = parser.parse_args(["scan-sinks", "--range", "A..B", "--repo-root", "/tmp/x"])
+    defaults = parser.parse_args(["scan-sinks"])
+
+    assert (staged.staged, staged.rev_range, staged.format) == (True, None, "json")
+    assert (ranged.staged, ranged.rev_range, ranged.repo_root) == (False, "A..B", "/tmp/x")
+    assert (defaults.staged, defaults.rev_range, defaults.format) == (False, None, "text")
+    with pytest.raises(SystemExit):
+        parser.parse_args(["scan-sinks", "--staged", "--range", "A..B"])
+
+
+def test_check_notebooks_subparser_takes_paths():
+    parser = build_parser()
+    args = parser.parse_args(["check-notebooks", "a.ipynb", "nb/b.ipynb"])
+
+    assert (args.command, args.paths) == ("check-notebooks", ["a.ipynb", "nb/b.ipynb"])
+    assert parser.parse_args(["check-notebooks"]).paths == []
 
 
 def test_gate_scan_subparser_accepts_range_and_format():

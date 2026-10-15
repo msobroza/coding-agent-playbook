@@ -53,6 +53,16 @@ def k2cat_rewriter(ev: object, ctx: object) -> None:
     return None
 
 
+@register_hook_handler(
+    "k7cat_mutator",
+    events=["post_tool_use", "pre_tool_use"],
+    decisions=["context", "none"],
+    mutates_edited_file=True,
+)
+def k7cat_mutator(ev: object, ctx: object) -> None:
+    return None
+
+
 def not_a_handler(ev: object, ctx: object) -> None:
     return None
 
@@ -139,6 +149,49 @@ def test_h6_mutates_input_true_is_rejected() -> None:
     assert _messages(findings) == [
         "handler 'k2cat_rewriter' declares MUTATES_INPUT = True; hooks never rewrite tool input (L6)"
     ]
+
+
+_MUTATOR_REFUSED = (
+    "handler 'k7cat_mutator' declares mutates_edited_file; only the engine builtins "
+    "(ruff_post_edit) may rewrite the edited file (L6)"
+)
+
+
+def _post_edit_hook(builtin: str, events: list[str] | None = None) -> Any:
+    return sample_hook(
+        handler={"builtin": builtin},
+        events=events or ["post_tool_use"],
+        decisions=["context", "none"],
+    )
+
+
+def test_mutates_edited_file_rejected_for_entry_point_handlers() -> None:
+    entry = FakeEntryPoint("k7cat_mutator", f"{THIS_MODULE}:k7cat_mutator", obj=k7cat_mutator)
+
+    findings = registry_findings(_post_edit_hook("k7cat_mutator"), _catalog(entry))
+
+    assert _messages(findings) == [_MUTATOR_REFUSED]
+
+
+def test_mutates_edited_file_rejected_for_in_tree_handlers_off_the_allowlist() -> None:
+    catalog = _catalog(in_tree={"k7cat_mutator": THIS_MODULE})
+
+    assert _messages(registry_findings(_post_edit_hook("k7cat_mutator"), catalog)) == [
+        _MUTATOR_REFUSED
+    ]
+
+
+def test_mutates_edited_file_only_on_post_tool_use() -> None:
+    catalog = RegistryCatalog(entry_points=lambda: ())
+
+    allowed = registry_findings(_post_edit_hook("ruff_post_edit"), catalog)
+    elsewhere = registry_findings(_post_edit_hook("ruff_post_edit", ["pre_tool_use"]), catalog)
+
+    assert allowed == []
+    assert _messages(elsewhere)[-1] == (
+        "handler 'ruff_post_edit' declares mutates_edited_file, allowed on post_tool_use only; "
+        "it is bound to ['pre_tool_use']"
+    )
 
 
 def test_h6_authored_config_is_checked_against_config_schema() -> None:

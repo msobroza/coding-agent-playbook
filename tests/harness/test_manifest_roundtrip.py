@@ -149,6 +149,50 @@ def test_prompt_without_output_contract_emits_no_key(tmp_path: Path) -> None:
     assert "output_contract" not in text
 
 
+@pytest.mark.parametrize("scope", [{"read_only": True}, {"globs": ["tests/**", "**/conftest.py"]}])
+def test_roundtrip_prompt_write_scope(tmp_path: Path, scope: dict[str, Any]) -> None:
+    """specs/prK-lifecycle-hooks.md §A.7: the sidecar carries ``write_scope`` as an inline table."""
+    entry = _prompt_entry()
+    entry.write_scope = scope
+
+    write_manifest(tmp_path, [entry])
+
+    manifest = read_manifest(tmp_path)
+    assert manifest is not None and manifest.entries == [entry]
+    assert _tables(tmp_path)[0]["write_scope"] == scope
+
+
+def test_prompt_without_write_scope_emits_no_key(tmp_path: Path) -> None:
+    """Existing sidecars stay byte-identical: an unscoped prompt writes no ``write_scope`` line."""
+    write_manifest(tmp_path, [_prompt_entry(), _rule_entry()])
+
+    text = (tmp_path / ".playbook" / "manifest.toml").read_text(encoding="utf-8")
+
+    assert "write_scope" not in text
+    assert all("write_scope" not in table for table in _tables(tmp_path))
+
+
+def test_roundtrip_rule_lint_codes_inline_table(tmp_path: Path) -> None:
+    """specs/prK-lifecycle-hooks.md §A.7: ``lint_codes`` rides the sidecar as one inline table.
+
+    A rule without it writes no ``lint_codes`` line (existing sidecars stay byte-identical).
+    """
+    entry = _scoped_rule_entry()
+    entry.lint_codes = {
+        "warn": ["ANN001", "B006"],
+        "when": [{"applies_if": {"python_version": ">=3.12"}, "warn": ["UP046"]}],
+    }
+
+    write_manifest(tmp_path, [entry, _rule_entry()])
+
+    manifest = read_manifest(tmp_path)
+    text = (tmp_path / ".playbook" / "manifest.toml").read_text(encoding="utf-8")
+    assert manifest is not None and manifest.entries == [entry, _rule_entry()]
+    assert text.count("lint_codes = {") == 1
+    assert _tables(tmp_path)[0]["lint_codes"] == entry.lint_codes
+    assert "lint_codes" not in _tables(tmp_path)[1]
+
+
 def test_roundtrip_records_name_body_and_is_templated(tmp_path: Path) -> None:
     """The canonical reconstruction payload (``name`` + un-rendered source
     ``body`` + ``is_templated``) round-trips for rules, prompts and skills —

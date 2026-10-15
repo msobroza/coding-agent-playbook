@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime._decision_log import DISPATCHER_ID, DecisionLog, LogLine
+from coding_agent_playbook.hook_runtime._event_memo import EventMemo
 from coding_agent_playbook.hook_runtime._execute import (
     Progress,
     failure_result,
@@ -23,6 +24,7 @@ from coding_agent_playbook.hook_runtime._ports import LazyGit, open_trust_store
 from coding_agent_playbook.hook_runtime._post_write import PostWrite, record_after_write
 from coding_agent_playbook.hook_runtime._selection import select_hooks
 from coding_agent_playbook.hook_runtime._tail import DispatchTrace
+from coding_agent_playbook.hook_runtime.active_prompt import observe as observe_active_prompt
 from coding_agent_playbook.hook_runtime.config import ConfigFault, load_guard_config
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import EventName
@@ -92,6 +94,8 @@ def run_configured(
         store, ev, now=deps.clock.time, enabled=cfg.logging.decisions, canary=shared.canary
     )
     log.write(_escape_lines(hatches, session))
+    # Before any hook: a guard's deny must not skip recording the prompt (OQ-45).
+    observe_active_prompt(ev, cfg, store)
     selection = select_hooks(cfg, ev, hatches)
     progress = Progress(selection.selected)
     dog = _watchdog(ev, cfg, progress, log, shared)
@@ -172,6 +176,7 @@ def _contexts(
             platform=deps.platform,
         )
     deadline = shared.started + cfg.deadlines_ms[ev.name] / 1000
+    memo = EventMemo()  # one per event: hooks share work on it (the §E.3 single ruff call)
 
     def make(selected: Selected) -> HandlerContext:
         return HandlerContext(
@@ -189,6 +194,7 @@ def _contexts(
             home=deps.home,
             env=deps.env,
             deps=deps,
+            memo=memo,
         )
 
     return make

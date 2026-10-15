@@ -120,6 +120,16 @@ def test_json_round_trip_and_corrupt_file_reads_empty(tmp_path: Path) -> None:
     assert store.read_json("cfg-digest.json") == {}
 
 
+def test_remove_deletes_a_document_and_tolerates_an_absent_one(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.write_json("sessions/ab/prompt.json", {"slash": "review"})
+
+    store.remove("sessions/ab/prompt.json")
+    store.remove("sessions/ab/prompt.json")  # already gone: no error
+
+    assert not (store.root / "sessions" / "ab" / "prompt.json").exists()
+
+
 def test_update_json_returns_the_change_result_and_persists(tmp_path: Path) -> None:
     store = _store(tmp_path)
 

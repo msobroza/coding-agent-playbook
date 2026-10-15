@@ -8,9 +8,10 @@
   them), whenever hooks are enabled and a hook-capable adapter is on. Its
   ``protected`` table is this sync's written set as lock rows, the adapters'
   scan dirs and the layer packages, its ``precommit`` table the playbook
-  hook ids of the repo's pre-commit config, and its ``facts`` /
+  hook ids of the repo's pre-commit config, its ``facts`` /
   ``applicability`` tables the detector facts and every rule, prompt and
-  applicability-gated hook with its predicates (specs/prK-hook-pack.md §E.0.5);
+  applicability-gated hook with its predicates (specs/prK-hook-pack.md §E.0.5),
+  and its ``ruff`` table the repo's own ruff selection (§E.3);
 - :func:`check_settings_readable`: refuses a ``settings.json`` the Claude Code
   merge would choke on *before* any adapter writes;
 - :func:`finish_write`: write mode's pins, summary lines and approvals;
@@ -29,6 +30,11 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook import __version__ as _installed_version
+from coding_agent_playbook._guard_config_ruff import (
+    read_project_ruff_selection,
+    ruff_candidate_codes,
+)
+from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.claude_settings import (
     CLAUDE_SETTINGS_PATH,
@@ -66,7 +72,7 @@ from coding_agent_playbook.lockfile import Provenance
 from coding_agent_playbook.orchestrator import engine_package_of
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
 
     from coding_agent_playbook.adapters.base import Adapter
@@ -76,6 +82,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_policy import ResolvedHook, SkippedHook
     from coding_agent_playbook.lockfile import Lockfile
     from coding_agent_playbook.orchestrator import SyncContext
+    from coding_agent_playbook.types import Prompt
 
 __all__ = [
     "HOOKS_NOTICE",
@@ -167,11 +174,20 @@ def runtime_enabled(ctx: SyncContext, hooks: SyncHooks) -> bool:
 
 
 def write_runtime_outputs(
-    ctx: SyncContext, hooks: SyncHooks, out_root: Path, recorder: ProvenanceRecorder
+    ctx: SyncContext,
+    hooks: SyncHooks,
+    out_root: Path,
+    recorder: ProvenanceRecorder,
+    *,
+    prompts: Sequence[Prompt] = (),
 ) -> None:
     """Write ``guard_config.json`` and the script copies into ``out_root``; record provenance.
 
-    Example: ``write_runtime_outputs(ctx, hooks, scratch, recorder)``.
+    ``prompts`` are the prompts this sync renders: they become the ``prompts``
+    table of output contracts (specs/prK-hook-pack.md §E.2), and their
+    ``write_scope`` prompt-write-scope-guard's ``scopes`` (§E.3).
+
+    Example: ``write_runtime_outputs(ctx, hooks, scratch, recorder, prompts=rendered.prompts)``.
     """
     if not runtime_enabled(ctx, hooks):
         return
@@ -185,8 +201,10 @@ def write_runtime_outputs(
         # The real repo's config in every mode: --check renders into an empty scratch dir.
         precommit_ids=precommit_hook_ids(ctx.repo_root),
         detect=_detect_inputs(ctx, hooks),
-        prompts=ctx.prompts_resolved,
+        prompts=prompts,
         layout=repo_layout(ctx.repo_root),
+        ruff=read_project_ruff_selection(ctx.repo_root),
+        toolchain=read_toolchain_inputs(ctx.repo_root, ctx.facts),
     )
     path = write_guard_config(out_root, render_guard_config(inputs))
     recorder.record([path], Provenance(kind="runtime"))
@@ -338,6 +356,7 @@ def finish_write(
             engine_version=version,
             resource_roots=roots,
             stage_tools=[r.tool for r in stop_stage_records(hooks.resolved) if r.tool],
+            ruff_codes=ruff_candidate_codes(hooks.resolved),
         )
     for line in summary_lines(hooks, ctx.adapters):
         print(line)

@@ -47,8 +47,17 @@ _NOTICE = "hooks available: add [hooks] enabled = true or re-run playbook init"
 
 
 #: The Claude events the engine pack registers (Track K5: the briefing, the guards,
-#: the source-changed hooks and the ``drift`` Stop stage).
-ENGINE_PACK_EVENTS = ["SessionStart", "PreToolUse", "PostToolUse", "Stop"]
+#: the source-changed hooks and the ``drift`` Stop stage; K7: the active-prompt
+#: record of prompt-write-scope-guard, a member-less ``UserPromptSubmit``, and
+#: toolchain-missing-hint's ``PostToolUseFailure``).
+ENGINE_PACK_EVENTS = [
+    "SessionStart",
+    "UserPromptSubmit",
+    "PreToolUse",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "Stop",
+]
 
 
 def _sync_repo(repo: Path, tmp_path: Path, **kwargs: Any) -> int:
@@ -105,20 +114,26 @@ def test_first_sync_writes_every_hook_output(synced: Path) -> None:
     assert list(doc["hooks"]) == ENGINE_PACK_EVENTS
     assert (synced / LAUNCHER).is_file()
     config = json.loads((synced / GUARD_CONFIG).read_bytes())
-    # The engine pack's default-tier hooks (Tracks K5, K6); guard-eval-fixtures is opt-in.
+    # The engine pack's default-tier hooks (Tracks K5, K6) and K7's feedback hooks;
+    # guard-eval-fixtures is opt-in, and the fixture detects no pytest (its lint hook is off).
     assert sorted(config["hooks"]) == [
         "block-precommit-bypass",
         "clean-code-metrics-nonregression",
         "control-plane-guard",
+        "error-handling-lint-feedback",
         "eval-task-authoring-lint",
         "gate-weakening-guard",
         "guard-ext",
         "guard-generated-outputs",
         "guard-x",
+        "post-edit-ruff-format",
+        "prompt-write-scope-guard",
         "resync-on-detector-input-change",
         "session-start-playbook-briefing",
         "stop-ci-parity-gate",
         "stop-drift-and-orphan-gate",
+        "toolchain-missing-hint",
+        "typing-lint-feedback",
         "validate-then-sync-on-canonical-edit",
     ]
     assert (synced / SCRIPT).read_bytes() == SCRIPT_BYTES
@@ -342,13 +357,18 @@ def test_summary_lines_counts_and_hand_edit_warning(
     repo = make_hook_repo(tmp_path / "repo", make_synthetic_repo)
     assert _sync_repo(repo, tmp_path) == 0
     out = capsys.readouterr().out
-    # guard-x, guard-ext and the engine pack's eleven default-tier hooks (seven protect, the
-    # Stop coordinator, two of its stage hooks and block-precommit-bypass); the briefing has
-    # no advisory body, so Continue gets one fewer. The four opt-in ones are skipped.
-    assert "✓ Hooks: 13 enabled, 4 skipped (" in out
-    assert "claude_code: 13 enforced" in out
-    assert "continue: 12 advisory" in out
-    assert f"✓ {SETTINGS}: 4 managed entries updated, 0 removed (user keys untouched)" in out
+    # guard-x, guard-ext and the engine pack's sixteen default-tier hooks on here (seven
+    # protect, the Stop coordinator, two of its stage hooks, block-precommit-bypass (K6),
+    # post-edit-ruff-format, prompt-write-scope-guard, the error-handling and typing lint
+    # hooks, toolchain-missing-hint (K7)); pytest's is off (no pytest detected), and so is
+    # the ML deserialization guard (no ML stack); the opt-in ones (guard-eval-fixtures, three
+    # K6 Stop hooks, the notebook hook) are skipped. The briefing and the two lint hooks
+    # have no advisory body, so Continue gets three fewer. The member-less UserPromptSubmit
+    # group is one entry, toolchain-missing-hint's PostToolUseFailure another.
+    assert "✓ Hooks: 18 enabled, 7 skipped (" in out
+    assert "claude_code: 18 enforced" in out
+    assert "continue: 15 advisory" in out
+    assert f"✓ {SETTINGS}: 6 managed entries updated, 0 removed (user keys untouched)" in out
 
     _edit_managed_group(repo)
     assert _sync_repo(repo, tmp_path) == 0

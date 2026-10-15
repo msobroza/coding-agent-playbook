@@ -56,6 +56,7 @@ def _make_prompt(
     input_variables: list[dict[str, str]] | None = None,
     includes_rules: list[str] | None = None,
     body: str = "Task: generate tests for {{ target }}.\n",
+    write_scope: dict[str, object] | None = None,
 ) -> Prompt:
     fm = PromptFrontmatter(
         id=prompt_id,
@@ -64,6 +65,7 @@ def _make_prompt(
         slash=slash,
         input_variables=list(input_variables) if input_variables is not None else [],
         includes_rules=list(includes_rules) if includes_rules is not None else [],
+        write_scope=dict(write_scope or {}),
     )
     return Prompt(
         frontmatter=fm,
@@ -177,6 +179,36 @@ def test_write_prompt_creates_file_with_opencode_envelope(tmp_path: Path) -> Non
     assert lines[2].startswith("description:")
     assert "description: Generate pytest tests for the provided code" in content
     assert "Task: generate tests." in content
+
+
+def test_read_only_prompt_renders_agent_plan(tmp_path: Path) -> None:
+    """specs/prK-hook-pack.md §E.3: a read-only prompt runs as OpenCode's ``plan`` agent."""
+    prompt = _make_prompt(
+        description="Review code", body="Review.\n", write_scope={"read_only": True}
+    )
+
+    [path] = OpenCodeAdapter().write_prompt(prompt, repo_root=tmp_path)
+
+    assert path.read_text(encoding="utf-8").splitlines() == [
+        f"<!-- {SENTINEL} -->",
+        "---",
+        "description: Review code",
+        "agent: plan",
+        "---",
+        "Review.",
+    ]
+
+
+def test_unscoped_prompt_command_unchanged(tmp_path: Path) -> None:
+    """No ``agent`` key without a read-only scope; a glob scope has no native form."""
+    plain = _make_prompt(body="Write tests.\n")
+    scoped = _make_prompt(body="Write tests.\n", write_scope={"globs": ["tests/**"]})
+
+    [plain_path] = OpenCodeAdapter().write_prompt(plain, repo_root=tmp_path / "plain")
+    [scoped_path] = OpenCodeAdapter().write_prompt(scoped, repo_root=tmp_path / "scoped")
+
+    assert scoped_path.read_bytes() == plain_path.read_bytes()
+    assert "agent:" not in plain_path.read_text(encoding="utf-8")
 
 
 def test_write_prompt_substitutes_single_input_variable_with_dollar_arguments(

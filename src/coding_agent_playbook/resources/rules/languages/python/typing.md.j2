@@ -10,6 +10,11 @@ applies_if:
   python_version: ">=3.11"
 priority: 50
 tags: [python, typing]
+lint_codes:
+  warn: [ANN001, ANN201, ANN401, B006, PGH003, UP007, UP045]
+  when:
+    - applies_if: {python_version: ">=3.12"}
+      warn: [UP040, UP046, UP047]
 ---
 
 # Python typing conventions

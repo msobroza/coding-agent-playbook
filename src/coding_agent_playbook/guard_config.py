@@ -25,7 +25,14 @@ runtime's regex so control-plane-guard and sync never disagree; ``facts`` and
 ``auto_sync`` mirrors ``[hooks] auto_sync``. ``stop_gate`` (K6) is the Stop
 coordinator's table from ``hook_registrations.stop_gate``: its stage records,
 budget and verify commands, also machine-independent; ``prompts`` and the
-tests-with-source-nudge layout come from ``_guard_config_verify``.
+tests-with-source-nudge layout come from ``_guard_config_verify``. ``ruff`` (K7) is the
+repo's own ruff selection and the safe-fix rules the post-edit pipeline may
+apply (``_guard_config_ruff``); the pinned ruff's version-specific facts live
+in ``machine.json`` instead. toolchain-missing-hint's install hint and
+pytest-conventions-feedback's asyncio flag are derived from the repo's
+pyproject into those hooks' config (``_guard_config_toolchain``).
+``notebooks.max_bytes`` is the engine's parse cap for a notebook (a larger
+one is reported unparsed), shared by the notebook-reading hooks.
 """
 
 from __future__ import annotations
@@ -41,6 +48,7 @@ from coding_agent_playbook._guard_config_detect import (
     applicability_table,
     facts_table,
 )
+from coding_agent_playbook._guard_config_prompts import prompt_scopes, with_prompt_scopes
 from coding_agent_playbook._guard_config_protect import (
     ProtectedRow,
     ProtectInputs,
@@ -49,6 +57,12 @@ from coding_agent_playbook._guard_config_protect import (
     protected_table,
     resolve_resource_roots,
     resource_root_ids,
+)
+from coding_agent_playbook._guard_config_ruff import RuffSelection, ruff_table
+from coding_agent_playbook._guard_config_toolchain import (
+    ToolchainInputs,
+    derived_hook_config,
+    with_derived_config,
 )
 from coding_agent_playbook._guard_config_verify import (
     RepoLayout,
@@ -72,6 +86,7 @@ from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
     playbook_precommit_ids,
 )
 from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
+from coding_agent_playbook.hook_runtime.handlers._notebook_check import NOTEBOOK_MAX_BYTES
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 
 if TYPE_CHECKING:
@@ -94,6 +109,7 @@ __all__ = [
     "ProtectInputs",
     "ProtectedRow",
     "RepoLayout",
+    "RuffSelection",
     "adapter_output_dirs",
     "applicability_rows",
     "copy_hook_scripts",
@@ -166,9 +182,14 @@ class GuardConfigInputs:
     ``generated`` holds the enabled adapters' ``output_locations``;
     ``protected`` the written set, scan dirs and layer packages;
     ``precommit_ids`` the repo's playbook pre-commit hook ids, ``detect``
-    the detector facts and applicability rows (§E.0.5), ``prompts`` the
-    resolved prompts (the ``prompts`` table) and ``layout`` the source and
-    test roots baked into tests-with-source-nudge's config (§E.2).
+    the detector facts and applicability rows (§E.0.5); ``prompts`` the
+    rendered prompts: the ``prompts`` table of output contracts (§E.2) and,
+    from their ``write_scope``, prompt-write-scope-guard's ``scopes`` (§E.3);
+    ``layout`` the source and test roots baked into tests-with-source-nudge's
+    config (§E.2); ``ruff`` the repo's ruff selection
+    (``read_project_ruff_selection``); ``toolchain`` the hook config derived
+    from its pyproject (``read_toolchain_inputs``: the install hint, pytest's
+    asyncio marks).
 
     Example::
 
@@ -185,6 +206,8 @@ class GuardConfigInputs:
     detect: DetectInputs = field(default_factory=DetectInputs)
     prompts: Sequence[Prompt] = ()
     layout: RepoLayout = field(default_factory=RepoLayout)
+    ruff: RuffSelection = field(default_factory=RuffSelection)
+    toolchain: ToolchainInputs = field(default_factory=ToolchainInputs)
 
 
 @dataclass(frozen=True)
@@ -201,8 +224,9 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
     ``allow_code_from`` and ``state_ttl_days`` are the runtime keys beyond the
     §D.8.2 table that ``hook_runtime.config`` reads (it cannot read ``[hooks]``);
     ``sentinel``, ``protected``, ``control_plane``, ``precommit``, ``facts``,
-    ``applicability``, ``eval``, ``auto_sync``, ``stop_gate`` and ``prompts``
-    are §E.0.5 pack keys (``GuardConfig.tables``).
+    ``applicability``, ``eval``, ``auto_sync``, ``stop_gate``, ``prompts``,
+    ``ruff`` and ``notebooks`` are §E.0.5 / §E.2 / §E.3 pack keys
+    (``GuardConfig.tables``).
 
     Example::
 
@@ -212,10 +236,18 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
     """
     cfg = inputs.hooks_config
     on = {hook.id for hook in inputs.hooks}
+    scopes = prompt_scopes(inputs.prompts)
+    derived = derived_hook_config(inputs.toolchain)
     return {
         "schema_version": GUARD_CONFIG_SCHEMA,
         "engine_version": inputs.engine_version,
-        "hooks": {hook.id: bake_layout(hook.to_json(), inputs.layout) for hook in inputs.hooks},
+        "hooks": {
+            hook.id: bake_layout(
+                with_derived_config(with_prompt_scopes(hook.to_json(), scopes), derived),
+                inputs.layout,
+            )
+            for hook in inputs.hooks
+        },
         "deadlines_ms": resolved_deadlines_ms(inputs.hooks),
         "unattended_ask": cfg.unattended_ask,
         "logging": {
@@ -241,6 +273,8 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
         "auto_sync": cfg.auto_sync,
         "stop_gate": stop_gate_table(inputs.hooks, inputs.detect.facts),
         "prompts": prompts_table(inputs.prompts),
+        "ruff": ruff_table(inputs.ruff),
+        "notebooks": {"max_bytes": NOTEBOOK_MAX_BYTES},
     }
 
 

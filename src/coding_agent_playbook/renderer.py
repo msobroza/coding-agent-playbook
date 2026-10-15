@@ -46,6 +46,9 @@ FORMAT_ALIASES: dict[str, str] = {
     "opencode": "prompt_opencode_command",
 }
 
+#: The tools a read-only prompt's Claude command removes (specs/prK-hook-pack.md §E.3).
+CLAUDE_READ_ONLY_DISALLOWED = "Edit Write NotebookEdit"
+
 # All built-in formats. Adapters may register more via the renderer registry
 # (future work — v1 just has the built-ins inline here).
 BUILTIN_FORMATS: frozenset[str] = frozenset(
@@ -391,6 +394,23 @@ def _render_prompt_continue(
     return output
 
 
+def is_read_only_prompt(frontmatter: dict[str, Any]) -> bool:
+    """Whether a prompt's ``write_scope`` is ``{read_only: true}`` (specs/prK-hook-pack.md §E.3).
+
+    Only an explicit ``True`` counts: a malformed scope (validate rejects it)
+    never removes tools from a command.
+
+    Example::
+
+        >>> is_read_only_prompt({"write_scope": {"read_only": True}})
+        True
+        >>> is_read_only_prompt({"write_scope": {"globs": ["tests/**"]}})
+        False
+    """
+    scope = frontmatter.get("write_scope")
+    return isinstance(scope, dict) and scope.get("read_only") is True
+
+
 def _render_prompt_claude_command(
     body: str,
     frontmatter: dict[str, Any],
@@ -403,12 +423,21 @@ def _render_prompt_claude_command(
     the file as engine-owned; we then prepend ``# {name}`` if the body
     does not already start with a level-1 heading, then optionally append
     the ``includes_rules`` appendix.
+
+    A read-only prompt instead opens with a ``disallowed-tools`` frontmatter
+    block (Claude removes those tools while the command runs) and carries the
+    sentinel on its first body line, the second anchored position
+    ``_sentinel.has_sentinel`` accepts (specs/prK-lifecycle-hooks.md §C.4.3).
+    Every other prompt renders exactly as before.
     """
     name = frontmatter["name"]
     output = body if body.lstrip().startswith("# ") else f"# {name}\n\n{body}"
     if not _has_inline_rule_call(body):
         output += _build_includes_rules_appendix(frontmatter, rule_registry)
-    return f"{sentinel_line('html')}\n{output}"
+    marked = f"{sentinel_line('html')}\n{output}"
+    if is_read_only_prompt(frontmatter):
+        return f"---\ndisallowed-tools: {CLAUDE_READ_ONLY_DISALLOWED}\n---\n{marked}"
+    return marked
 
 
 def _render_prompt_opencode_command(
@@ -447,7 +476,10 @@ def _render_prompt_opencode_command(
     ).rstrip("\n")
     # The sentinel comment goes BEFORE the YAML envelope so adapter cleanup
     # can recognise the file as engine-owned by reading the first line.
-    output = f"{sentinel_line('html')}\n---\n{description_line}\n---\n{rendered_body}"
+    # A read-only prompt runs as OpenCode's built-in ``plan`` agent, which has
+    # no edit tools (specs/prK-hook-pack.md §E.3; SPEC §10.6.1 lists ``agent``).
+    agent_line = "\nagent: plan" if is_read_only_prompt(frontmatter) else ""
+    output = f"{sentinel_line('html')}\n---\n{description_line}{agent_line}\n---\n{rendered_body}"
     if not _has_inline_rule_call(body):
         output += _build_includes_rules_appendix(frontmatter, rule_registry)
     return output

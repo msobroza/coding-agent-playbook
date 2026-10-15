@@ -262,6 +262,50 @@ def test_lossless_prompt_output_contract_survives_emit_then_import(tmp_path):
     assert _semantic(imported) == _semantic(prompt)
 
 
+def test_lossless_prompt_write_scope_round_trips(tmp_path):
+    """specs/prK-lifecycle-hooks.md §A.7: ``write_scope`` survives emit -> sidecar -> import."""
+    scoped = [_make_prompt(), _make_prompt()]
+    scoped[0].frontmatter.write_scope = {"read_only": True}
+    scoped[1].frontmatter.id = scoped[1].frontmatter.slash = "generate-tests"
+    scoped[1].frontmatter.write_scope = {"globs": ["tests/**", "**/conftest.py"]}
+    repo = tmp_path / "harness"
+    repo.mkdir()
+    adapter = AgentHarnessAdapter(rule_registry=_StubRegistry())
+    for prompt in scoped:
+        adapter.write_prompt(prompt, repo)
+    adapter.finalize(repo)
+
+    result = import_harness(repo)
+
+    by_id = {prompt.frontmatter.id: prompt for prompt in result.prompts}
+    assert [_semantic(by_id[p.frontmatter.id]) for p in scoped] == [_semantic(p) for p in scoped]
+
+
+def test_lossless_rule_lint_codes_round_trip(tmp_path):
+    """specs/prK-lifecycle-hooks.md §A.7: ``lint_codes`` survives emit -> sidecar -> import.
+
+    Both rule placements (an always rule's ``rules/`` leaf, a scoped rule's
+    ``references/`` leaf) record it.
+    """
+    linked = [_make_always_rule(), _make_scoped_rule()]
+    linked[0].frontmatter.lint_codes = {"warn": ["E722", "BLE001"]}
+    linked[1].frontmatter.lint_codes = {
+        "warn": ["ANN001"],
+        "when": [{"applies_if": {"python_version": ">=3.12"}, "warn": ["UP046"]}],
+    }
+    repo = tmp_path / "harness"
+    repo.mkdir()
+    adapter = AgentHarnessAdapter(rule_registry=_StubRegistry())
+    for rule in linked:
+        adapter.write_rule(rule, repo)
+    adapter.finalize(repo)
+
+    result = import_harness(repo)
+
+    by_id = {rule.frontmatter.id: rule for rule in result.rules}
+    assert [_semantic(by_id[r.frontmatter.id]) for r in linked] == [_semantic(r) for r in linked]
+
+
 def test_lossless_prompt_body_recovers_original_uninlined_body(tmp_path):
     """HARD CASE (defect #2): the harness leaf inlines ``includes_rules`` (the
     registry fragment is genuinely written into ``prompts/review/SKILL.md``), so

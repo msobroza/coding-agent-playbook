@@ -8,7 +8,11 @@ lockfile is saved, in write mode only, when hooks are live:
   argv and the layers' absolute ``resources/`` dirs (the guards resolve
   ``guard_config.json``'s ``pkg:`` ids through them), both under the git dir
   (``hook_runtime.pin``). Outside git there is no pin, so the hooks stay
-  inactive and sync says so;
+  inactive and sync says so. ``ruff`` is the project venv's own first
+  (``.venv/bin/ruff``: version parity with the project's pin), else the one on
+  ``PATH``, never ``uv run`` (L8); when hooks ask D1 for extra rule codes, the
+  pinned ruff is probed for them once per signature and the ones it cannot
+  run become ``tools.ruff.drop`` (specs/prK-hook-pack.md §E.3, OQ-37);
 - **trust on first use**: each external handler whose code (source, launcher,
   args, script bytes) the user-local trust store has not approved is listed
   with its source, full command and old -> new script hash, then asked
@@ -30,8 +34,10 @@ import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, Protocol
 
+from coding_agent_playbook._guard_config_ruff import RuleCache, probe_ruff_rules, ruff_drop_codes
 from coding_agent_playbook.hook_registrations import stop_stage_records
 from coding_agent_playbook.hook_runtime import pin
+from coding_agent_playbook.hook_runtime.proc import SubprocessProc
 from coding_agent_playbook.security.trust import (
     HandlerApproval,
     TrustStore,
@@ -45,6 +51,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hook_runtime.deps import ProcPort
     from coding_agent_playbook.hook_runtime.pin import PinResult
 
 __all__ = [
@@ -57,6 +64,7 @@ __all__ = [
     "execution_digest",
     "handler_approval",
     "project_python",
+    "project_venv_tool",
     "write_pins",
 ]
 
@@ -64,7 +72,8 @@ __all__ = [
 PINNED_TOOLS: Final = ("ruff", "cz")
 #: The project's own interpreter (the execution stages' tool), not a program on PATH.
 PROJECT_PYTHON: Final = "project_python"
-_VENV_PYTHONS: Final = (".venv/bin/python", ".venv/Scripts/python.exe")
+#: Tools taken from the project's own ``.venv`` before ``PATH`` (§E.3: version parity).
+VENV_FIRST_TOOLS: Final = frozenset({"ruff"})
 _PROMPT: Final = "Approve it? [y/N]: "
 _YES: Final = frozenset({"y", "yes"})
 
@@ -81,8 +90,12 @@ class PinWriter(Protocol):
         tools: Mapping[str, Sequence[str]],
         engine_version: str,
         resource_roots: Mapping[str, str] | None = None,
+        drops: Mapping[str, Sequence[str]] | None = None,
     ) -> Path | None:
-        """Rewrite ``machine.json`` with ``tools`` and ``resource_roots``; ``None`` outside git."""
+        """Rewrite ``machine.json`` with ``tools``, ``resource_roots`` and ``drops``.
+
+        ``None`` outside git.
+        """
 
 
 @dataclass(frozen=True)
@@ -102,18 +115,25 @@ class RuntimePinWriter:
         tools: Mapping[str, Sequence[str]],
         engine_version: str,
         resource_roots: Mapping[str, str] | None = None,
+        drops: Mapping[str, Sequence[str]] | None = None,
     ) -> Path | None:
         """See :func:`hook_runtime.pin.write_machine_pins`."""
         return pin.write_machine_pins(
             tools=tools,
             engine_version=engine_version,
             resource_roots=resource_roots,
+            drops=drops,
             start=str(repo_root),
         )
 
 
 def _user_trust_store(repo_root: Path) -> TrustStore:
     return TrustStore(default_trust_store_path(), repo_root=repo_root)
+
+
+def _state_rule_cache(repo_root: Path) -> RuleCache | None:
+    store = pin.state_store(start=str(repo_root))
+    return None if store is None else RuleCache(store)
 
 
 def _stdio_is_tty() -> bool:
@@ -126,6 +146,9 @@ def _stdio_is_tty() -> bool:
 class SyncHookDeps:
     """The machine-local seams of a write-mode sync; every default is the real one.
 
+    ``proc`` runs the sync-time ruff rule probe (``FakeRuff`` in tests) and
+    ``rule_cache`` keeps its answer per ruff signature.
+
     Example::
 
         execute(repo, hook_deps=SyncHookDeps(pins=FakePinWriter(), is_tty=lambda: False))
@@ -136,6 +159,8 @@ class SyncHookDeps:
     is_tty: Callable[[], bool] = _stdio_is_tty
     ask: Callable[[str], str] = input
     which: Callable[[str], str | None] = shutil.which
+    proc: ProcPort = field(default_factory=SubprocessProc)
+    rule_cache: Callable[[Path], RuleCache | None] = _state_rule_cache
 
 
 def write_pins(
@@ -145,12 +170,15 @@ def write_pins(
     engine_version: str,
     resource_roots: Mapping[str, str] | None = None,
     stage_tools: Iterable[str] = (),
+    ruff_codes: Sequence[str] = (),
 ) -> None:
     """Pin the interpreter (first writer wins), the tools and the layers' resource dirs.
 
     ``stage_tools`` are the logical tools of ``stop_gate.stages``: the Stop
-    stage runner finds them only through these pins (§D.8.3). Warns when
-    outside git, where nothing is pinned.
+    stage runner finds them only through these pins (§D.8.3). ``ruff_codes``
+    are the codes the enabled hooks add to the post-edit ruff call; the pinned
+    ruff is probed for them only when there are some. Warns when outside git,
+    where nothing is pinned.
 
     Example: ``write_pins(ctx.repo_root, SyncHookDeps(), engine_version="0.2.0")``.
     """
@@ -173,7 +201,34 @@ def write_pins(
         )
     names = dict.fromkeys((*PINNED_TOOLS, *stage_tools))
     tools = {name: [path] for name in names if (path := _locate(name, repo_root, deps))}
-    deps.pins.write_machine_pins(repo_root, tools, engine_version, resource_roots)
+    drops = _ruff_drops(repo_root, tools.get("ruff"), ruff_codes, deps)
+    deps.pins.write_machine_pins(repo_root, tools, engine_version, resource_roots, drops=drops)
+
+
+def project_venv_tool(repo_root: Path, name: str) -> str | None:
+    """``<repo_root>/.venv``'s own ``name`` (``bin/`` or Windows ``Scripts/*.exe``), unresolved.
+
+    Example::
+
+        >>> project_venv_tool(Path("/no/such/repo"), "ruff") is None
+        True
+    """
+    venv = repo_root / ".venv"
+    for candidate in (venv / "bin" / name, venv / "Scripts" / f"{name}.exe"):
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
+
+
+def _ruff_drops(
+    repo_root: Path, argv: Sequence[str] | None, codes: Sequence[str], deps: SyncHookDeps
+) -> dict[str, list[str]]:
+    """``{"ruff": [...]}``: the hook codes the pinned ruff cannot run (OQ-37); ``{}`` for none."""
+    if not argv or not codes:
+        return {}  # no extra code asked for: the probe never spawns ruff
+    probe = probe_ruff_rules(argv, codes, proc=deps.proc, cache=deps.rule_cache(repo_root))
+    drop = ruff_drop_codes(codes, probe)
+    return {"ruff": drop} if drop else {}
 
 
 def project_python(repo_root: Path, which: Callable[[str], str | None]) -> str | None:
@@ -181,15 +236,17 @@ def project_python(repo_root: Path, which: Callable[[str], str | None]) -> str |
 
     Example: ``project_python(repo_root, shutil.which)`` is ``<repo>/.venv/bin/python``.
     """
-    for rel in _VENV_PYTHONS:
-        candidate = repo_root / rel
-        if candidate.is_file() and os.access(candidate, os.X_OK):
-            return str(candidate)  # never resolved: the venv symlink keeps its site-packages
-    return which("python3") or which("python")
+    # Never resolved: the venv symlink keeps its site-packages.
+    return project_venv_tool(repo_root, "python") or which("python3") or which("python")
 
 
 def _locate(name: str, repo_root: Path, deps: SyncHookDeps) -> str | None:
-    return project_python(repo_root, deps.which) if name == PROJECT_PYTHON else deps.which(name)
+    """Where ``name`` is pinned from: the project interpreter, the project ``.venv``, else PATH."""
+    if name == PROJECT_PYTHON:
+        return project_python(repo_root, deps.which)
+    if name in VENV_FIRST_TOOLS and (venv := project_venv_tool(repo_root, name)) is not None:
+        return venv
+    return deps.which(name)
 
 
 def handler_approval(hook: ResolvedHook) -> HandlerApproval | None:

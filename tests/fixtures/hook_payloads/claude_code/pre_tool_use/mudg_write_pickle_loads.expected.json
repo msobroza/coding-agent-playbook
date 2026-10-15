@@ -1,0 +1,54 @@
+{
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "default",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "Write",
+      "native_name": "Write",
+      "tool_class": "write",
+      "tool_classes": [
+        "write"
+      ],
+      "use_id": "toolu_01MudgWrite",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/src/app/io.py",
+          "repo_rel": "src/app/io.py",
+          "key": "src/app/io.py"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/src/app/io.py",
+          "repo_rel": "src/app/io.py",
+          "key": "src/app/io.py"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/src/app/io.py",
+          "content",
+          "import pickle\n\n\ndef read_model(blob):\n    return pickle.loads(blob)\n"
+        ]
+      ]
+    }
+  },
+  "result": {
+    "decision": "deny",
+    "reason": "\"src/app/io.py:5\" adds pickle.loads(...): loading untrusted data this way runs code.\nLoad a data-only format instead: safetensors, JSON, Parquet or .npy without pickle.\nFor an artifact you trust, ask the user to confirm a `# playbook: trusted-artifact <provenance>` comment above the call."
+  },
+  "wire": {
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"\\\"src/app/io.py:5\\\" adds pickle.loads(...): loading untrusted data this way runs code.\\nLoad a data-only format instead: safetensors, JSON, Parquet or .npy without pickle.\\nFor an artifact you trust, ask the user to confirm a `# playbook: trusted-artifact <provenance>` comment above the call.\"}}\n",
+    "stderr": "\"src/app/io.py:5\" adds pickle.loads(...): loading untrusted data this way runs code.\nLoad a data-only format instead: safetensors, JSON, Parquet or .npy without pickle.\nFor an artifact you trust, ask the user to confirm a `# playbook: trusted-artifact <provenance>` comment above the call.\n",
+    "exit_code": 10
+  }
+}

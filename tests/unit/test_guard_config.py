@@ -49,6 +49,7 @@ from coding_agent_playbook.hook_runtime.config import (
     GuardConfig,
     parse_guard_config,
 )
+from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import CONTROL_PLANE
 from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
     playbook_precommit_ids,
@@ -732,3 +733,47 @@ def test_tests_nudge_roots_from_src_and_testpaths(tmp_path: Path) -> None:
     assert "source_roots" not in hooks["guard-x"]["handlers"]["pre_tool_use"]["config"]
     rendered = render_guard_config(consumer)["hooks"]["tests-with-source-nudge"]
     assert rendered["handlers"]["stop"]["config"]["test_roots"] == ["checks"]  # consumer wins
+
+
+# --- prompt-write-scope-guard scopes (specs/prK-hook-pack.md §E.3) ----------------------
+
+
+def _scoped_prompt(slash: str, scope: dict[str, Any]) -> Prompt:
+    prompt = _prompt(slash)
+    prompt.frontmatter.write_scope = scope
+    return prompt
+
+
+def test_prompt_scopes_rendered_into_the_scope_guard_config_only() -> None:
+    guard = resolved_hook("prompt-write-scope-guard", config={"keep": 1})
+    other = resolved_hook("guard-y")
+    prompts = [
+        _scoped_prompt("review", {"read_only": True}),
+        _scoped_prompt("generate-tests", {"globs": ["tests/**", "**/conftest.py"]}),
+        _prompt("refactor"),  # no write_scope: no row
+    ]
+    inputs = dataclasses.replace(_inputs([guard, other]), prompts=prompts)
+
+    hooks = render_guard_config(inputs)["hooks"]
+
+    assert hooks["prompt-write-scope-guard"]["handlers"]["pre_tool_use"]["config"] == {
+        "keep": 1,
+        "scopes": {
+            "generate-tests": {"globs": ["tests/**", "**/conftest.py"]},
+            "review": {"read_only": True},
+        },
+    }
+    assert hooks["guard-y"] == other.to_json()
+    assert guard.handlers["pre_tool_use"].config == {"keep": 1}  # the resolved hook is untouched
+
+
+def test_runtime_reads_the_scopes_back() -> None:
+    guard = resolved_hook("prompt-write-scope-guard")
+    scoped = [_scoped_prompt("x", {"read_only": True})]
+    inputs = dataclasses.replace(_inputs([guard]), prompts=scoped)
+
+    parsed = parse_guard_config(serialize_guard_config(render_guard_config(inputs)))
+
+    assert isinstance(parsed, GuardConfig)
+    spec = parsed.hooks["prompt-write-scope-guard"].handlers[EventName.PRE_TOOL_USE]
+    assert spec.config["scopes"] == {"x": {"read_only": True}}

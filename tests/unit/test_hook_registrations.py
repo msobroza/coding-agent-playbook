@@ -179,6 +179,33 @@ def test_session_start_registered_whenever_any_registration() -> None:
     assert regs[0].artifact_id == "registration:session_start"
 
 
+@pytest.mark.parametrize("consumer", ["prompt-write-scope-guard", "prompt-output-contract-on-stop"])
+def test_user_prompt_submit_registered_when_active_prompt_consumer_enabled(consumer: str) -> None:
+    """OQ-45: the active-prompt record is a dispatcher branch, registered with no member hook."""
+    hooks = [resolved_hook(consumer, events=("stop",) if "stop" in consumer else ("pre_tool_use",))]
+    deadlines = deadlines_ms(hooks)
+
+    regs = _by_event(plan_registrations(hooks, "claude_code", HOOK_SUPPORT, deadlines=deadlines))
+    on_opencode = plan_registrations(
+        [resolved_hook(consumer, supports=("opencode",))], "opencode", HOOK_SUPPORT
+    )
+
+    assert list(regs)[:2] == ["session_start", "user_prompt_submit"]
+    assert regs["user_prompt_submit"].members == ()
+    assert regs["user_prompt_submit"].deadline_ms == deadlines["user_prompt_submit"]
+    assert deadlines["user_prompt_submit"] == BOOTSTRAP_DEADLINE_MS
+    assert "user_prompt_submit" not in {reg.event for reg in on_opencode}  # QC-2: no ledger
+
+
+def test_user_prompt_submit_not_registered_without_a_consumer() -> None:
+    hooks = [resolved_hook("guard-a")]
+
+    regs = plan_registrations(hooks, "claude_code", HOOK_SUPPORT)
+
+    assert [reg.event for reg in regs] == ["session_start", "pre_tool_use"]
+    assert "user_prompt_submit" not in deadlines_ms(hooks)
+
+
 def test_no_hooks_no_registrations() -> None:
     assert plan_registrations([], "claude_code", HOOK_SUPPORT) == []
 

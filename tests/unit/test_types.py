@@ -231,6 +231,32 @@ def test_rule_markdown_roundtrip_with_blank_optional_fields(tmp_path):
     assert Rule.from_markdown(path, "pkg") == rule
 
 
+def test_rule_lint_codes_none_coerced_and_dropped_when_empty(tmp_path: Path) -> None:
+    """specs/prK-lifecycle-hooks.md §A.7: blank ``lint_codes:`` is ``{}`` and never rendered."""
+    blank = RuleFrontmatter(
+        id="x",
+        name="x",
+        description="x",
+        scope="always",
+        lint_codes=None,  # type: ignore[arg-type]
+    )
+    path = tmp_path / "rule.md.j2"
+    path.write_text(RULE_MD, encoding="utf-8")
+    rule = Rule.from_markdown(path, "pkg")
+    unchanged = rule.to_markdown()
+    rule.frontmatter.lint_codes = {
+        "warn": ["ANN001", "B006"],
+        "when": [{"applies_if": {"python_version": ">=3.12"}, "warn": ["UP046"]}],
+    }
+
+    path.write_text(rule.to_markdown(), encoding="utf-8")
+
+    assert blank.lint_codes == {}
+    assert "lint_codes" not in unchanged
+    assert Rule.from_markdown(path, "pkg") == rule
+    assert Rule.from_dict(rule.to_dict()) == rule
+
+
 # ---------------------------------------------------------------------------
 # Prompt and PromptFrontmatter
 # ---------------------------------------------------------------------------
@@ -350,6 +376,42 @@ def test_prompt_without_output_contract_markdown_unchanged(tmp_path):
     markdown = Prompt.from_markdown(path, "pkg").to_markdown()
 
     assert "output_contract" not in markdown
+
+
+@pytest.mark.parametrize("scope", [{"read_only": True}, {"globs": ["tests/**", "**/conftest.py"]}])
+def test_prompt_write_scope_none_coerced_and_roundtrips(
+    tmp_path: Path, scope: dict[str, Any]
+) -> None:
+    """specs/prK-hook-pack.md §E.3: a blank ``write_scope:`` is ``{}``; a set one round-trips."""
+    blank = PromptFrontmatter(
+        id="x",
+        name="x",
+        description="x",
+        slash="x",
+        write_scope=None,  # type: ignore[arg-type]
+    )
+    path = tmp_path / "review.md"
+    path.write_text(PROMPT_MD, encoding="utf-8")
+    prompt = Prompt.from_markdown(path, "pkg")
+    prompt.frontmatter.write_scope = scope
+
+    path.write_text(prompt.to_markdown(), encoding="utf-8")
+
+    assert blank.write_scope == {}
+    assert Prompt.from_markdown(path, "pkg") == prompt
+    assert Prompt.from_dict(prompt.to_dict()) == prompt
+
+
+def test_prompt_without_write_scope_to_markdown_unchanged(tmp_path: Path) -> None:
+    """An unscoped prompt's markdown carries no ``write_scope`` key (byte-identical, SPEC §6.6.3)."""
+    path = tmp_path / "generate-tests.md.j2"
+    path.write_text(PROMPT_MD, encoding="utf-8")
+
+    rendered = Prompt.from_markdown(path, "pkg").to_markdown()
+
+    data, _ = split_frontmatter(rendered)
+    assert "write_scope" not in rendered
+    assert list(data) == ["id", "name", "description", "slash", "version", "includes_rules"]
 
 
 # ---------------------------------------------------------------------------

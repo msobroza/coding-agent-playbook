@@ -496,3 +496,45 @@ def test_stop_drift_stage_loads_the_lockfile_only_when_active(
     assert {_LOCKFILE_MODULE, "tomllib", _DRIFT_FAST_PATH} <= active
     assert _forbidden(active, allowed=("tomllib",)) == []
     assert "subprocess" not in active  # no canonical edit: the fast path only, no sync --check
+
+
+# --- K7 step 2: the post-edit ruff branch (specs/prK-hook-pack.md §E.3) ------------------
+
+_RUFF_PIPELINE: Final = "coding_agent_playbook.hook_runtime.handlers._ruff_pipeline"
+
+
+@pytest.fixture
+def ruff_edited(tmp_path: Path, real_proc: SubprocessProc) -> GuardRepo:
+    """A synced repo with post-edit-ruff-format bound to its real builtin, no ruff pinned."""
+    repo = GuardRepo.create(tmp_path)
+    (repo.root / "src").mkdir()
+    (repo.root / "src" / "app.py").write_text("x = 1\n", encoding="utf-8")
+    post_edit = hook_record(
+        "post-edit-ruff-format",
+        events=["post_tool_use"],
+        decisions=("context", "none"),
+        on_error="open",
+        matcher={"post_tool_use": {"tools": ["edit", "write"], "paths": ["*.py", "*.pyi"]}},
+        handler={"kind": "builtin", "name": "ruff_post_edit"},
+    )
+    repo.install(post_edit, path_classes={"py": ["*.py"]})
+    _imports(real_proc, repo, EventName.SESSION_START, repo.payload(EventName.SESSION_START))
+    return repo
+
+
+def test_python_edit_branch_imports_no_forbidden_module(
+    ruff_edited: GuardRepo, real_proc: SubprocessProc
+) -> None:
+    """The shared pipeline loads stdlib and hook_runtime only; unpinned, it spawns nothing.
+
+    ``difflib`` (changed lines) is a branch-local stdlib import, like ``ast``
+    for the rule-linked hooks; neither is on the forbidden list.
+    """
+    payload = _post_edit(ruff_edited, "src/app.py")
+
+    imported = _imports(real_proc, ruff_edited, EventName.POST_TOOL_USE, payload)
+
+    assert _RUFF_PIPELINE in imported  # the post-edit handler ran up to its pin check
+    assert _forbidden(imported) == []
+    assert "subprocess" not in imported
+    assert "coding_agent_playbook._guard_config_ruff" not in imported  # sync-time (tomllib)

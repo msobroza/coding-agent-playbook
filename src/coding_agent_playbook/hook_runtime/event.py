@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 SESSION_ID_MAX_CHARS: Final = 128
 STOP_MESSAGE_MAX_CHARS: Final = 8_000
 TOOL_ERROR_MAX_CHARS: Final = 2_000
+TOOL_OUTPUT_TAIL_CHARS: Final = 8_192
 
 _UNSAFE_SESSION_CHAR = re.compile(r"[^A-Za-z0-9._-]")
 
@@ -139,7 +140,10 @@ class ToolResponse:
     """The outcome a ``post_tool_use`` / ``post_tool_use_failure`` event reports.
 
     ``exit_code`` comes from the ``Exit code N`` prefix of a failure; ``error``
-    keeps its first 2,000 characters, where the cause usually is. Example:
+    keeps its first 2,000 characters, where the cause usually is. ``output`` is
+    a successful shell call's stdout and stderr, its last 8 KiB (where a
+    ``command not found`` of a later segment lands; toolchain-missing-hint,
+    specs/prK-hook-pack.md §E.3). Example:
     ``ToolResponse(ok=False, exit_code=1, error="boom")``.
     """
 
@@ -147,10 +151,13 @@ class ToolResponse:
     exit_code: int | None = None
     error: str | None = None
     is_interrupt: bool = False
+    output: str | None = None
 
     def __post_init__(self) -> None:
         if self.error is not None and len(self.error) > TOOL_ERROR_MAX_CHARS:
             object.__setattr__(self, "error", self.error[:TOOL_ERROR_MAX_CHARS])
+        if self.output is not None and len(self.output) > TOOL_OUTPUT_TAIL_CHARS:
+            object.__setattr__(self, "output", self.output[-TOOL_OUTPUT_TAIL_CHARS:])
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

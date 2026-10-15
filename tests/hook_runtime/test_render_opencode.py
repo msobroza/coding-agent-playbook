@@ -230,6 +230,24 @@ def test_alias_table_and_glob_path_never_aliased_to_file_path() -> None:
     assert isinstance(path_only_edit, ContractFault)
 
 
+def test_successful_shell_output_is_kept_and_a_read_body_is_not() -> None:
+    """toolchain-missing-hint scans a successful Bash output (specs/prK-hook-pack.md §E.3)."""
+    post = {
+        "hook_event_name": "PostToolUse",
+        "tool_response": {"output": "zsh: command not found: cz"},
+    }
+    bash = _event({**_payload(), **post}, event=EventName.POST_TOOL_USE)
+    read = _event(
+        {**_payload("Read", {"filePath": f"{PROJECT_DIR}/a.py"}), **post},
+        event=EventName.POST_TOOL_USE,
+    )
+
+    assert bash.tool is not None and bash.tool.response is not None
+    assert bash.tool.response.output == "zsh: command not found: cz"
+    assert read.tool is not None and read.tool.response is not None
+    assert read.tool.response.output is None
+
+
 def test_bash_workdir_is_the_segment_cwd() -> None:
     ev = _event(_payload("Bash", {"command": "rm -rf build", "workdir": "pkg"}))
 

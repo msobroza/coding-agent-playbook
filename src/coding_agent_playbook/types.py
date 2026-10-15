@@ -80,6 +80,10 @@ class RuleFrontmatter:
     applies_if: dict[str, Any] = field(default_factory=dict)
     priority: int = 50
     tags: list[str] = field(default_factory=list)
+    # The ruff codes a rule-linked lint hook reports (specs/prK-lifecycle-hooks.md
+    # §A.7): ``{warn: [...], when: [{applies_if, warn}]}``, resolved at sync.
+    # ``_without_empty`` drops it when ``{}``, so unlinked rules stay byte-identical.
+    lint_codes: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         # YAML parses 'key:' (blank value) as None; the dataclass default does
@@ -97,6 +101,8 @@ class RuleFrontmatter:
             self.priority = 50
         if self.tags is None:
             self.tags = []
+        if self.lint_codes is None:
+            self.lint_codes = {}
 
 
 @dataclass
@@ -156,6 +162,11 @@ class PromptFrontmatter:
     # (specs/prK-hook-pack.md §E.2 prompt-output-contract-on-stop); compiled by
     # ``playbook validate``, dropped from markdown when empty.
     output_contract: list[str] = field(default_factory=list)
+    # Exactly one of {"read_only": True} or {"globs": [...]} (specs/prK-hook-pack.md
+    # §E.3). A dict on purpose: ``_without_empty`` drops ``[]``, so an empty-list
+    # "read-only" would round-trip to "unrestricted", and a defaulted bool would
+    # add ``read_only: false`` to every prompt's markdown.
+    write_scope: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         # YAML parses 'key:' (blank value) as None; the dataclass default does
@@ -175,6 +186,8 @@ class PromptFrontmatter:
             self.eval_tasks = []
         if self.output_contract is None:
             self.output_contract = []
+        if self.write_scope is None:
+            self.write_scope = {}
 
 
 @dataclass

@@ -191,6 +191,11 @@ def test_handler_approval_mirrors_the_runtime_record(repo: Path, tmp_path: Path)
         "stop-drift-and-orphan-gate",
         "session-start-playbook-briefing",
         "stop-ci-parity-gate",
+        "prompt-write-scope-guard",
+        "post-edit-ruff-format",
+        "error-handling-lint-feedback",
+        "typing-lint-feedback",
+        "toolchain-missing-hint",
     }
     assert all(handler_approval(hook) is None for hook in builtins)
 
