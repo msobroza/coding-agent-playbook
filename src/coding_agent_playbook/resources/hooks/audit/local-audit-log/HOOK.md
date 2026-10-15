@@ -12,6 +12,7 @@ handler:
     retain_days: 90
     chain: false
     full_commands: false
+    pii: []
 decisions: [none]
 timeout: 2
 on_error: open

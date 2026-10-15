@@ -110,6 +110,8 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         # validate (H6) can read its declaration like any other builtin.
         "decision_log": f"{_HANDLERS}.decision_log",
         "activity_log": f"{_HANDLERS}.activity_log",
+        "precompact_checkpoint": f"{_HANDLERS}.compaction",
+        "precompact_checkpoint:reinject": f"{_HANDLERS}.compaction",
     }
 )
 #: The only handlers that may rewrite the file the tool just edited (specs/prK-hook-pack.md

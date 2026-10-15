@@ -6,7 +6,8 @@ per segment the argv0 basename, a subcommand for the known multi-command tools
 and the flag NAMES (``-pS3cret`` -> ``-p``, ``--password=x`` -> ``--password``),
 never a value or a positional argument. Paths are repo-relative, a secret path
 is ``<secret-path>`` and one outside the repository ``<outside>`` (the ledger's
-masks). A prompt is its length, sha256 and secret-category counts.
+masks). A prompt is its length, sha256 and secret-category counts, plus PII
+category counts when an overlay enabled PII (``security.pii``, never a value).
 ``config.full_commands`` adds :func:`redacted_text`, the best-effort redaction
 an org opts into knowing its limits. Every string that is not a closed-set value
 is shape-checked, so an odd argv0 becomes ``<other>`` rather than a leak.
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime._shell_segments import Segment
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.globs import GlobSet
+    from coding_agent_playbook.security.pii import PiiConfig
 
 __all__ = [
     "OTHER",
@@ -91,9 +93,18 @@ _PREV_PLACEHOLDER: Final = "0" * 64
 
 
 def activity_record(
-    ev: CanonicalEvent, *, now: float, secret: GlobSet, platform: str, full_commands: bool = False
+    ev: CanonicalEvent,
+    *,
+    now: float,
+    secret: GlobSet,
+    platform: str,
+    full_commands: bool = False,
+    pii: PiiConfig | None = None,
 ) -> dict[str, Any]:
     """The local-audit-log line for ``ev`` (``security.audit.ACTIVITY_RECORD_KEYS`` only).
+
+    ``pii`` (the overlay-enabled detectors, else ``None``) adds a prompt's PII
+    category counts.
 
     Example::
 
@@ -111,7 +122,7 @@ def activity_record(
     if ev.name is EventName.SESSION_START:
         record["source"] = _shaped(ev.source, _SUBCOMMAND)
     if ev.name is EventName.USER_PROMPT_SUBMIT and ev.prompt is not None:
-        record["prompt"] = prompt_summary(ev.prompt)
+        record["prompt"] = prompt_summary(ev.prompt, pii=pii)
     if ev.tool is not None:
         record.update(_tool_fields(ev.tool, secret, platform, full_commands))
     return record
@@ -180,8 +191,10 @@ def flag_name(arg: str) -> str | None:
     return name if _FLAG.fullmatch(name) else None
 
 
-def prompt_summary(prompt: str) -> dict[str, Any]:
+def prompt_summary(prompt: str, *, pii: PiiConfig | None = None) -> dict[str, Any]:
     """A prompt as its length, sha256 and secret-rule counts; never a character of it.
+
+    With ``pii``, also its PII category counts (``{"iban": 1}``).
 
     Example::
 
@@ -194,7 +207,12 @@ def prompt_summary(prompt: str) -> dict[str, Any]:
     for finding in scan_bounded(prompt, "<prompt>").findings:
         counts[finding.rule_id] = counts.get(finding.rule_id, 0) + 1
     digest = hashlib.sha256(prompt.encode("utf-8", "surrogatepass")).hexdigest()
-    return {"length": len(prompt), "sha256": digest, "secrets": dict(sorted(counts.items()))}
+    summary = {"length": len(prompt), "sha256": digest, "secrets": dict(sorted(counts.items()))}
+    if pii is not None:
+        from coding_agent_playbook.security.pii import category_counts, scan_pii
+
+        summary["pii"] = category_counts(scan_pii(prompt, pii))
+    return summary
 
 
 def redacted_text(segments: Iterable[Segment]) -> str:

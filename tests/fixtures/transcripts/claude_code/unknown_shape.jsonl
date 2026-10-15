@@ -1,0 +1,2 @@
+{"type":"user","uuid":"u-0001","parentUuid":null,"sessionId":"9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c","isSidechain":false,"userType":"external","timestamp":"2026-10-14T10:00:00.000Z","message":{"role":"user","content":"do not push"}}
+{"type":"user","uuid":"u-0002","sessionId":"9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c","message":"keep going"}

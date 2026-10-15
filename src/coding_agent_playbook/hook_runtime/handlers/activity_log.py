@@ -18,7 +18,9 @@ event carries.
 tamper evidence, unless the org's shipper anchors the head), ``full_commands``
 the redacted command text, ``retain_days`` (also ``[guardrails.audit]``) the
 retention :func:`~coding_agent_playbook.security.audit.prune_audit` applies at
-session start. A write failure is an internal error: ``on_error: open``.
+session start, and ``pii`` (empty in the engine; an overlay lists detectors)
+the PII category counts of a prompt. A write failure is an internal error:
+``on_error: open``.
 """
 
 from __future__ import annotations
@@ -27,6 +29,11 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._activity_record import activity_record, fitted
+from coding_agent_playbook.hook_runtime.handlers._pii_settings import (
+    PII_CONFIG_KEY,
+    PII_KEY,
+    pii_settings,
+)
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.security.audit import append_activity, prune_audit
 
@@ -46,6 +53,7 @@ CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
     "retain_days": ConfigKey("integer"),
     "chain": ConfigKey("boolean"),
     "full_commands": ConfigKey("boolean"),
+    PII_KEY: PII_CONFIG_KEY,
 }
 
 
@@ -82,6 +90,7 @@ def activity_log(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult | Non
         secret=ctx.cfg.secret_paths,
         platform=ctx.platform,
         full_commands=ctx.config.get("full_commands") is True,
+        pii=pii_settings(ctx.config) if ev.prompt is not None else None,
     )
     append_activity(state, fitted(record), chain=ctx.config.get("chain") is True)
     return None

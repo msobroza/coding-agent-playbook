@@ -1,10 +1,11 @@
-"""The audit pack as shipped (specs/prK-hook-pack.md §E.0.6, §E.5, Track K9 step 1).
+"""The audit pack as shipped (specs/prK-hook-pack.md §E.0.6, §E.5, Track K9 steps 1-2).
 
-guard-decision-log (default) and local-audit-log (opt-in) match their §E.5
-rows, pass the H1-H21 contract in a config-less ``playbook validate`` with no
-warning, and bind builtins that declare their config keys and never mutate
-tool input. The decision sink routes nowhere; local-audit-log's
-``post_tool_use`` is the one async route, and ``[guardrails.audit]`` reaches it.
+guard-decision-log (default), local-audit-log and precompact-checkpoint
+(opt-in) match their §E.5 rows, pass the H1-H21 contract in a config-less
+``playbook validate`` with no warning, and bind builtins that declare their
+config keys and never mutate tool input. The decision sink routes nowhere;
+local-audit-log's ``post_tool_use`` is the one async route, and
+``[guardrails.audit]`` reaches it. precompact-checkpoint is Claude-only.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ class PackRow(NamedTuple):
     events: tuple[str, ...]
     decisions: tuple[str, ...]
     on_error: str
+    supports: tuple[str, ...] = ("claude_code", "opencode")
 
 
 #: guard-decision-log covers every dispatcher event; local-audit-log adds
@@ -63,6 +65,10 @@ AUDIT_PACK: dict[str, PackRow] = {
         ("none",),
         "open",
     ),
+    # OpenCode has no transcript to re-read and no post-compaction start (§C.1.2).
+    "precompact-checkpoint": PackRow(
+        "opt-in", ("pre_compact", "session_start"), ("context", "none"), "open", ("claude_code",)
+    ),
 }
 
 
@@ -79,9 +85,10 @@ def test_audit_hooks_match_pack_table() -> None:
     for hook_id, row in AUDIT_PACK.items():
         hook = engine_hook(hook_id)
         fm = hook.frontmatter
-        shipped = PackRow(fm.tier, tuple(fm.events), tuple(fm.decisions), fm.on_error)
+        shipped = PackRow(
+            fm.tier, tuple(fm.events), tuple(fm.decisions), fm.on_error, tuple(fm.supports)
+        )
         assert (fm.id, shipped) == (hook_id, row)
-        assert fm.supports == ["claude_code", "opencode"]
         assert not hook.body.strip()  # infrastructure: no advisory anywhere (§C.4.1)
 
 
@@ -97,14 +104,16 @@ def test_audit_hooks_validate_clean(tmp_path: Path, capsys: pytest.CaptureFixtur
 @pytest.mark.parametrize("hook_id", sorted(AUDIT_PACK))
 def test_handlers_declare_config_schema_and_no_input_mutation(hook_id: str) -> None:
     fm = engine_hook(hook_id).frontmatter
-    assert fm.handler is not None and fm.handler.builtin is not None
+    bound = {event: fm.handler_for(event) for event in fm.events}
 
-    declaration = load_builtin(fm.handler.builtin)
+    for event, handler in bound.items():
+        assert handler.builtin is not None
+        declaration = load_builtin(handler.builtin)
 
-    assert declaration.mutates_input is False
-    assert set(fm.handler.config) <= set(declaration.config_schema)
-    assert all(declaration.config_schema[k].accepts(v) for k, v in fm.handler.config.items())
-    assert set(fm.events) <= {e.value for e in declaration.events}
+        assert declaration.mutates_input is False
+        assert set(handler.config) <= set(declaration.config_schema)
+        assert all(declaration.config_schema[k].accepts(v) for k, v in handler.config.items())
+        assert event in {e.value for e in declaration.events}
 
 
 def test_routes_sink_everywhere_and_async_on_post_tool_use_only(tmp_path: Path) -> None:
@@ -127,3 +136,14 @@ def test_guardrails_audit_domain_feeds_local_audit_log() -> None:
     assert declaration.config_domain == "audit"
     assert declaration.config_schema["retain_days"].policy == "replace"
     assert load_builtin("decision_log").config_schema == {}
+
+
+@pytest.mark.parametrize("handler", ["activity_log", "precompact_checkpoint:reinject"])
+def test_pii_key_is_an_extend_list_off_in_the_engine(handler: str) -> None:
+    """Only an overlay turns PII on, and no later layer can drop its detectors (§A.6)."""
+    declaration = load_builtin(handler)
+
+    assert (declaration.config_schema["pii"].kind, declaration.config_schema["pii"].policy) == (
+        "list",
+        "extend",
+    )

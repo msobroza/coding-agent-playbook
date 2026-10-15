@@ -403,13 +403,13 @@ def test_summary_lines_counts_and_hand_edit_warning(
     # dependency and exfil guards (K8), guard-decision-log (K9)); pytest's is off (no pytest
     # detected), and so is the ML deserialization guard (no ML stack); the opt-in ones
     # (guard-eval-fixtures, three K6 Stop hooks, the notebook hook, command-convention-guard,
-    # taint-escalation, local-audit-log) are skipped. The briefing, the two lint hooks and the
-    # decision sink have no advisory body, so Continue gets four fewer; the sink registers
-    # nothing, so the managed entries are unchanged. The member-less UserPromptSubmit group
+    # taint-escalation, local-audit-log, precompact-checkpoint) are skipped. The briefing, the
+    # two lint hooks and the decision sink have no advisory body, so Continue gets four fewer;
+    # the sink registers nothing, so the managed entries are unchanged. The member-less UserPromptSubmit group
     # is one entry, toolchain-missing-hint's PostToolUseFailure another, and each native
     # deny row (secrets and destructive prefixes) one more.
     native = sum(len(rows) for rows in _native_rows().values())
-    assert "✓ Hooks: 26 enabled, 10 skipped (" in out
+    assert "✓ Hooks: 26 enabled, 11 skipped (" in out
     assert "claude_code: 26 enforced" in out
     assert "continue: 22 advisory" in out
     updated = f"{6 + native} managed entries updated, 0 removed (user keys untouched)"

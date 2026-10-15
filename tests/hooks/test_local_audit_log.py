@@ -38,6 +38,9 @@ HOOK_ID: Final = "local-audit-log"
 LEAKY: Final = "mysql -pS3cret db"
 #: A token the secret rules flag (``security.secrets.scan_text``'s own example).
 AWS_KEY: Final = "AKIA" + "Z7Q2" * 4
+#: A valid IBAN (ISO 13616 check digits 76) and a Luhn-valid Visa, neither a test value.
+IBAN: Final = "FR7630006000011234567890189"
+CARD: Final = "4539148803436467"
 
 
 class Audit:
@@ -138,6 +141,26 @@ def test_prompt_recorded_as_length_sha256_and_counts_only(audit: Audit) -> None:
     raw = audit.log.read_text(encoding="ascii")
     assert AWS_KEY not in raw and "deploy" not in raw
     assert report.trace.wire.stdout == ""
+
+
+def test_prompt_pii_category_counts_only_when_enabled(
+    pack_repo: PackRepo, deps: Deps, tmp_path: Path
+) -> None:
+    """PII counts join the prompt record only when an overlay lists detectors in ``pii``."""
+    prompt = f"wire {IBAN} from card {CARD} (test card 4111 1111 1111 1111)"
+    payload = pack_repo.payload(EventName.USER_PROMPT_SUBMIT, prompt=prompt)
+    off = _audit(pack_repo, deps, tmp_path)
+    off.run(EventName.USER_PROMPT_SUBMIT, payload)
+
+    on = _audit(pack_repo, deps, tmp_path / "on", pii=["iban", "card_pan"])
+    on.run(EventName.USER_PROMPT_SUBMIT, payload)
+
+    (plain,) = off.lines()
+    (counted,) = on.lines()
+    assert "pii" not in plain["prompt"]
+    assert counted["prompt"]["pii"] == {"card_pan": 1, "iban": 1}
+    raw = on.log.read_text(encoding="ascii")
+    assert IBAN[4:] not in raw and CARD not in raw and "wire" not in raw
 
 
 def test_async_dispatch_writes_empty_stdout(audit: Audit) -> None:

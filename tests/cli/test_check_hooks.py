@@ -83,6 +83,7 @@ _ENGINE_PACK = (
     "ml-unsafe-deserialization-guard",
     "notebook-output-hygiene",
     "post-edit-ruff-format",
+    "precompact-checkpoint",
     "prompt-output-contract-on-stop",
     "prompt-write-scope-guard",
     "pytest-conventions-feedback",
@@ -123,7 +124,7 @@ def test_hooks_block_labels_per_adapter(
 
     assert lines == [
         "  [hooks]: on",
-        "  Hooks (26 on / 37 total):",
+        "  Hooks (26 on / 38 total):",
         # The engine pack (Track K5): OpenCode has no notebook tool, so guard-generated-outputs
         # is degraded there; control-plane-guard matches no notebook edit. OpenCode's Stop is
         # evidence-only (§C.3.6), so every Stop-stage hook is degraded there (K6).
@@ -169,6 +170,7 @@ def test_hooks_block_labels_per_adapter(
         # K7: the shared post-edit ruff pipeline, on both hook-capable harnesses.
         "    [✓] post-edit-ruff-format (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
+        _OPT_IN_SKIP.format(hook_id="precompact-checkpoint"),
         _OPT_IN_SKIP.format(hook_id="prompt-output-contract-on-stop"),
         # Claude Code only (K7): the native read-only constraints cover OpenCode.
         "    [✓] prompt-write-scope-guard (agents_md: advisory, claude_code: enforced, "
@@ -215,7 +217,7 @@ def test_hooks_block_when_the_table_is_absent(
 
     assert lines == [
         "  [hooks]: off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')",
-        "  Hooks (0 on / 35 total):",
+        "  Hooks (0 on / 36 total):",
         *_off(_ENGINE_PACK[:14]),
         "    [✗] guard-x (skipped: hooks are off)",
         *_off(_ENGINE_PACK[14:]),
@@ -235,7 +237,7 @@ def test_hooks_block_when_hooks_are_switched_off_or_unreadable(
 
     assert off_lines == [
         "  [hooks]: off — [hooks] enabled is not true",
-        "  Hooks (0 on / 34 total):",
+        "  Hooks (0 on / 35 total):",
         *_off(_ENGINE_PACK),
     ]
     assert bad_lines[-1] == "  [hooks] cannot be read; run 'playbook validate'."

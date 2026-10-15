@@ -10,7 +10,9 @@ removes:
 - ``tmp/*`` older than a day;
 - ``stop/lint-baseline-<tree>.json`` for a tree other than ``HEAD^{tree}``,
   older than 7 days;
-- ``decisions-YYYY-MM[.n].jsonl`` more than ``retain_months`` months old.
+- ``decisions-YYYY-MM[.n].jsonl`` more than ``retain_months`` months old;
+- ``checkpoints/*`` (precompact-checkpoint) untouched for ``ttl_days``, like
+  the sessions they belong to.
 """
 
 from __future__ import annotations
@@ -140,6 +142,7 @@ def _candidates(
         ("tmp", _tmp_expired),
         ("stop", _baseline_expired),
         ("", _decision_log_expired),
+        ("checkpoints", _checkpoint_expired),  # last: a saved cursor keeps its category index
     )
     for index, (subdir, expired) in enumerate(categories):
         directory = str(store.path(subdir)) if subdir else str(store.root)
@@ -173,6 +176,11 @@ def _session_expired(path: str, _name: str, limits: _Limits) -> bool:
 def _tmp_expired(path: str, _name: str, limits: _Limits) -> bool:
     mtime = _mtime(path)
     return mtime is not None and limits.now - mtime > _TMP_TTL_S
+
+
+def _checkpoint_expired(path: str, _name: str, limits: _Limits) -> bool:
+    mtime = _mtime(path)
+    return mtime is not None and limits.now - mtime > limits.ttl_s
 
 
 def _baseline_expired(path: str, name: str, limits: _Limits) -> bool:
