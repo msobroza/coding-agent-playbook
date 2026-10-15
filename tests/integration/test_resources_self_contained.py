@@ -152,7 +152,8 @@ def scan_targets(
     """Every file the gate scans under ``root``, sorted by relative path.
 
     Each id is ``prefix`` + the path relative to ``root``; ``policy`` sees the
-    unprefixed relative path. Example::
+    unprefixed relative path. An empty or missing ``root`` fails loudly: a gate
+    that scans nothing passes vacuously. Example::
 
         scan_targets(pack_root, prefix="packs/python_design/", policy=pack_policy_for)
     """
@@ -162,6 +163,7 @@ def scan_targets(
         for p in root.rglob("*")
         if p.is_file() and not _is_hidden(p, root)
     )
+    assert rels, f"nothing scanned under {root}"
     return [ScanTarget(root / rel, prefix + rel, policy(Path(rel))) for rel in rels]
 
 

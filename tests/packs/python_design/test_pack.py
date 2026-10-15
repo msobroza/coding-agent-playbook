@@ -85,8 +85,10 @@ def _in_subdir(rel: str, subdir: str, suffix: str) -> bool:
 
 
 # Discovered at collection time: the content is distilled, so only the fixed
-# contracts are pinned (a missing expected script still fails its tests).
-_SKILL_FILES = _source_files(SKILLS_ROOT) if SKILLS_ROOT.is_dir() else []
+# contracts are pinned (a missing expected script still fails its tests). An
+# empty tree fails collection rather than silently skipping every doc test.
+_SKILL_FILES = _source_files(SKILLS_ROOT)
+assert _SKILL_FILES, f"no skills under {SKILLS_ROOT}"
 _DOCS = [
     rel
     for rel in _SKILL_FILES

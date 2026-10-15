@@ -21,6 +21,9 @@ from tests.packs.superpowers_expectations import SKILLS_ROOT
 if TYPE_CHECKING:
     from pathlib import Path
 
+    import pytest
+
+    from coding_agent_playbook.commands.validate import ValidationError
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.types import Rule, Skill
 
@@ -183,15 +186,45 @@ def test_non_filesystem_source_skips_relative_targets(tmp_path):
     assert _validate._check_markdown_links(source, tmp_path, LinksConfig()) == []
 
 
-def test_shipped_engine_artifacts_have_self_contained_links(tmp_path):
+def _check_links_recording_visits(
+    source: FileSystemArtifactSource, repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[list[ValidationError], list[Path]]:
+    """Run the link gate; return its errors and every markdown file it scanned.
+
+    The gate silently skips a root that does not resolve, so only the visits
+    prove it is not vacuous. Example::
+
+        errors, visited = _check_links_recording_visits(source, tmp_path, monkeypatch)
+    """
+    visited: list[Path] = []
+    real_scan = _validate._scan_markdown_file
+
+    def _recording_scan(
+        md: Path, *, root_dir: Path, links_config: LinksConfig
+    ) -> list[ValidationError]:
+        visited.append(md)
+        return real_scan(md, root_dir=root_dir, links_config=links_config)
+
+    monkeypatch.setattr(_validate, "_scan_markdown_file", _recording_scan)
+    return _validate._check_markdown_links(source, repo, LinksConfig()), visited
+
+
+def test_shipped_engine_artifacts_have_self_contained_links(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The CI gate: every markdown link in every shipped engine artifact must
     be self-contained under the strict default (empty allowlist)."""
     source = FileSystemArtifactSource(repo_root=tmp_path)
-    errors = _validate._check_markdown_links(source, tmp_path, LinksConfig())
+    errors, visited = _check_links_recording_visits(source, tmp_path, monkeypatch)
+    assert any("rules" in md.parts for md in visited), (
+        f"the link gate visited no rule of {source.engine_package} ({len(visited)} files scanned)"
+    )
     assert errors == [], "\n".join(f"{e.path}: {e.message}" for e in errors)
 
 
-def test_superpowers_pack_has_self_contained_links(tmp_path: Path) -> None:
+def test_superpowers_pack_has_self_contained_links(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The same CI gate over the opt-in superpowers pack (SPEC §11.5): it is
     walked only when enabled, so the engine-only gate above never sees it."""
     # The validator silently skips a package whose skills/ does not resolve, so
@@ -201,5 +234,8 @@ def test_superpowers_pack_has_self_contained_links(tmp_path: Path) -> None:
     assert walked.resolve() == SKILLS_ROOT.resolve()
     assert any(walked.glob("*/SKILL.md"))
     source = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PACK_NAME])
-    errors = _validate._check_markdown_links(source, tmp_path, LinksConfig())
+    errors, visited = _check_links_recording_visits(source, tmp_path, monkeypatch)
+    assert any(md.name == "SKILL.md" for md in visited), (
+        f"the link gate visited no SKILL.md of {PACK_NAME} ({len(visited)} files scanned)"
+    )
     assert errors == [], "\n".join(f"{e.path}: {e.message}" for e in errors)

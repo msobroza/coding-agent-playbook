@@ -234,6 +234,11 @@ def _shipped_task_dirs() -> list[Path]:
     return list(discover_eval_task_dirs(_TASKS_ROOT))
 
 
+# Fail collection loudly: an empty or mis-pointed root would turn every gate proof
+# below into a silent "empty parameter set" skip.
+assert _shipped_task_dirs(), f"no shipped eval tasks found under {_TASKS_ROOT}"
+
+
 def _solved_task_dirs() -> list[Path]:
     return [d for d in _shipped_task_dirs() if (d / _SOLUTION_DIR).is_dir()]
 
