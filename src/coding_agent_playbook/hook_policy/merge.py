@@ -56,10 +56,15 @@ class ConfigKeySpec:
 
 
 class ConfigSchemaLookup(Protocol):
-    """Where a builtin handler's config key policies come from (its ``CONFIG_SCHEMA``)."""
+    """Where a builtin handler's config key policies (``CONFIG_SCHEMA``) and its
+    ``[guardrails]`` domain (``CONFIG_DOMAIN``, §B.3) come from."""
 
     def key_specs(self, builtin: str) -> Mapping[str, ConfigKeySpec]:
         """Key policies of handler ``builtin``; ``{}`` when it declares none."""
+        ...
+
+    def config_domain(self, builtin: str) -> str | None:
+        """The ``[guardrails]`` domain handler ``builtin`` reads, or None when it reads none."""
         ...
 
 
@@ -67,10 +72,13 @@ _NO_SPECS: Final[Mapping[str, ConfigKeySpec]] = MappingProxyType({})
 
 
 class _NoHandlerSchemas:
-    """No handler declares key policies: every config key merges as ``replace``."""
+    """No handler declares key policies or a guardrails domain: every key is ``replace``."""
 
     def key_specs(self, builtin: str) -> Mapping[str, ConfigKeySpec]:
         return _NO_SPECS
+
+    def config_domain(self, builtin: str) -> str | None:
+        return None
 
 
 #: The lookup until K2's handler registry exists.

@@ -4,8 +4,9 @@
 the additive layer merge and records ``Collision(kind="hook")``, violations and
 definitions; :class:`SyncContext` splits a source's flat hook list into real
 layers and either fails loudly on a malformed hook or, with
-``tolerate_hook_errors``, records it. Kept apart from ``test_orchestrator.py``
-for the file-size budget.
+``tolerate_hook_errors``, records it. It also carries the committed
+``[hooks]`` / ``[guardrails]`` tables raw (§B.1). Kept apart from
+``test_orchestrator.py`` for the file-size budget.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from coding_agent_playbook.hook_policy import (
     merge_hook_layers,
     split_hook_layers,
 )
+from coding_agent_playbook.hooks_config import PolicyTables
 from coding_agent_playbook.orchestrator import Collision, OverlayResolver, SyncContext
 from coding_agent_playbook.sources.filesystem import ENGINE_PACKAGE, FileSystemArtifactSource
 from coding_agent_playbook.types import Hook, HookSchemaError
@@ -197,3 +199,59 @@ def test_from_config_merges_hook_layers_across_packages(
     assert [violation.message for violation in ctx.hook_violations] == [
         "overlay 'k1_orch_overlay' override of 'guard-x' drops decision 'deny'"
     ]
+
+
+_POLICY_CONFIG = """\
+schema_version = 1
+adapters_enabled = ["claude_code"]
+
+[project]
+name = "synthetic"
+kind = "python-library"
+
+[engine]
+version = "0.1.0a0"
+
+[hooks]
+enabled = true
+"""
+
+
+def test_from_repo_reads_policy_tables_from_the_committed_config(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path]
+) -> None:
+    repo = make_synthetic_repo(tmp_path, config_text=_POLICY_CONFIG)
+    (repo / ".coding-agent-playbook.local.toml").write_text(
+        "[hooks]\nenabled = false\n", encoding="utf-8"
+    )
+
+    ctx = SyncContext.from_repo(repo)
+
+    assert ctx.policy_tables.hooks == {"enabled": True}
+    assert ctx.policy_tables.local_keys == ("hooks.enabled",)
+
+
+def test_from_repo_keeps_a_malformed_hooks_table_raw(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path]
+) -> None:
+    """Parsed lazily, so validate can report it (H21) instead of dying at load."""
+    config_text = _POLICY_CONFIG.replace("enabled = true", 'enabled = "yes"')
+    repo = make_synthetic_repo(tmp_path, config_text=config_text)
+
+    ctx = SyncContext.from_repo(repo)
+
+    assert ctx.policy_tables.hooks == {"enabled": "yes"}
+    with pytest.raises(ValueError, match="enabled: must be true or false"):
+        ctx.policy_tables.hooks_config()
+
+
+def test_from_config_defaults_to_no_policy_tables(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path]
+) -> None:
+    """Config-less validate builds its context here: no consumer config, so no
+    [hooks] table and hooks are off."""
+    repo = make_synthetic_repo(tmp_path, config_text=_POLICY_CONFIG)
+
+    ctx = SyncContext.from_config(repo, SyncContext.from_repo(repo).config)
+
+    assert ctx.policy_tables == PolicyTables()

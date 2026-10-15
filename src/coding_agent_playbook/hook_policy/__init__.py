@@ -3,8 +3,10 @@
 ``coding_agent_playbook.hook_policy`` is the spec's ``hook_policy.py``. It is a
 package so each concern stays under the file-size budget; import from here,
 not from the submodules. Today it carries the one home of the event, tool-class
-and adapter-support tables (:mod:`.tables`) and the additive layer merge
-(:mod:`.merge`, with the H14 override rules in :mod:`.override_rules`).
+and adapter-support tables (:mod:`.tables`), the additive layer merge
+(:mod:`.merge`, with the H14 override rules in :mod:`.override_rules`), and the
+effective view (:mod:`.effective`) with its ``guard_config.json`` hook records
+(:mod:`.resolved`).
 
 Stdlib-only and sync-time only: ``hook_runtime`` never imports it, it reads the
 compiled ``guard_config.json`` instead (§D.8).
@@ -12,6 +14,7 @@ compiled ``guard_config.json`` instead (§D.8).
 
 from __future__ import annotations
 
+from coding_agent_playbook.hook_policy.effective import resolve_effective_hooks
 from coding_agent_playbook.hook_policy.merge import (
     NO_HANDLER_SCHEMAS,
     ConfigKeySpec,
@@ -22,6 +25,13 @@ from coding_agent_playbook.hook_policy.merge import (
     merge_config,
     merge_hook_layers,
     split_hook_layers,
+)
+from coding_agent_playbook.hook_policy.resolved import (
+    EffectiveHooks,
+    HandlerKind,
+    ResolvedHandler,
+    ResolvedHook,
+    SkippedHook,
 )
 from coding_agent_playbook.hook_policy.tables import (
     ADVISORY_RULE_PREFIX,
@@ -49,11 +59,17 @@ __all__ = [
     "TOOL_CLASS_NAMES",
     "ConfigKeySpec",
     "ConfigSchemaLookup",
+    "EffectiveHooks",
     "EventSpec",
+    "HandlerKind",
     "HookLayerMerger",
     "HookViolation",
     "KeyPolicy",
+    "ResolvedHandler",
+    "ResolvedHook",
+    "SkippedHook",
     "merge_config",
     "merge_hook_layers",
+    "resolve_effective_hooks",
     "split_hook_layers",
 ]

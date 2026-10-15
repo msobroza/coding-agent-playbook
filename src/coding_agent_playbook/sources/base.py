@@ -9,10 +9,11 @@ via the ``coding_agent_playbook.artifact_sources`` and
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-# Imports nothing from the package at runtime, so this stays a light import.
+# Both are stdlib-only package modules, so this stays a light import.
 from coding_agent_playbook._hook_schema import HookSchemaError
+from coding_agent_playbook.hooks_config import PolicyTables, policy_tables
 
 if TYPE_CHECKING:
     from coding_agent_playbook._typing import (
@@ -97,6 +98,33 @@ class StateSource(ABC):
             state_source.save_config(config)
         """
         return self.load_config()
+
+    def load_local_overrides(self) -> dict[str, Any]:
+        """The per-developer table layered over the committed config; ``{}`` here.
+
+        ``FileSystemStateSource`` returns ``.coding-agent-playbook.local.toml``.
+        Concrete, so a third-party source that has no such file still instantiates.
+
+        Example::
+
+            >>> state_source.load_local_overrides()  # doctest: +SKIP
+            {}
+        """
+        return {}
+
+    def load_policy_tables(self) -> PolicyTables:
+        """The ``[hooks]`` / ``[guardrails]`` tables of the committed config, kept raw.
+
+        Never from the local overrides (specs/prK-lifecycle-hooks.md §B.1):
+        committed output must not depend on a gitignored file CI never sees, so
+        the local keys are only recorded, for the sync warning and validate (H21).
+
+        Example::
+
+            >>> state_source.load_policy_tables().hooks_config().enabled  # doctest: +SKIP
+            True
+        """
+        return policy_tables(self.load_primary_config().extra_tables, self.load_local_overrides())
 
     @abstractmethod
     def save_config(self, config: Config) -> None: ...

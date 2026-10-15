@@ -6,7 +6,8 @@ schema checks that turn a config the engine would misread into a
 :class:`ConfigError` (:func:`check_enabled_keys`, :func:`parse_output_config`).
 Top-level keys ``Config`` does not model (``[hooks]``, ``[guardrails]``,
 ``[links]``, ``[metrics]``…) are kept verbatim in ``Config.extra_tables``.
-:func:`parse_metrics_config` lives in ``metrics_config`` and is re-exported here.
+:func:`parse_metrics_config` lives in ``metrics_config`` and the ``[hooks]`` /
+``[guardrails]`` parsers in ``hooks_config``; both are re-exported here.
 """
 
 from __future__ import annotations
@@ -17,6 +18,10 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeGuard
 
 from coding_agent_playbook import _toml
+from coding_agent_playbook.hooks_config import GuardrailsConfig as GuardrailsConfig
+from coding_agent_playbook.hooks_config import HooksConfig as HooksConfig
+from coding_agent_playbook.hooks_config import parse_guardrails_config as parse_guardrails_config
+from coding_agent_playbook.hooks_config import parse_hooks_config as parse_hooks_config
 from coding_agent_playbook.metrics_config import parse_metrics_config as parse_metrics_config
 
 if TYPE_CHECKING:

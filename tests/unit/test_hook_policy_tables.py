@@ -159,12 +159,16 @@ def test_hook_policy_imports_only_the_stdlib() -> None:
         for name in loaded
         if name not in ours and name.split(".")[0] not in sys.stdlib_module_names
     ]
+    # Not detector (packaging) nor hooks_config: the effective view imports
+    # evaluate_predicate when it runs, and the config types only for typing.
     assert ours == [
         "coding_agent_playbook._hook_schema",
         "coding_agent_playbook._layers",
         "coding_agent_playbook.hook_policy",
+        "coding_agent_playbook.hook_policy.effective",
         "coding_agent_playbook.hook_policy.merge",
         "coding_agent_playbook.hook_policy.override_rules",
+        "coding_agent_playbook.hook_policy.resolved",
         "coding_agent_playbook.hook_policy.tables",
     ]
     assert foreign == []

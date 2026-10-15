@@ -157,12 +157,17 @@ class FakeHandlerSchemas:
 
     ``schemas`` maps a builtin handler name to its config key policies; an
     unknown name has none (``{}``), like a handler without a ``CONFIG_SCHEMA``.
-    ``calls`` records every name asked for, in order.
+    ``domains`` maps a name to the ``[guardrails]`` domain it reads (its
+    ``CONFIG_DOMAIN``). ``calls`` records every name asked for key policies, in order.
     """
 
     schemas: dict[str, dict[str, ConfigKeySpec]] = field(default_factory=dict)
     calls: list[str] = field(default_factory=list)
+    domains: dict[str, str] = field(default_factory=dict)
 
     def key_specs(self, builtin: str) -> Mapping[str, ConfigKeySpec]:
         self.calls.append(builtin)
         return self.schemas.get(builtin, {})
+
+    def config_domain(self, builtin: str) -> str | None:
+        return self.domains.get(builtin)

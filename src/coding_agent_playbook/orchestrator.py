@@ -33,6 +33,7 @@ from coding_agent_playbook.hook_policy import (
     merge_hook_layers,
     split_hook_layers,
 )
+from coding_agent_playbook.hooks_config import PolicyTables
 from coding_agent_playbook.renderer import render_sandboxed
 from coding_agent_playbook.sources.filesystem import (
     ENGINE_PACKAGE,
@@ -339,6 +340,9 @@ class SyncContext:
     filtering is the command's responsibility (sync filters; render does not).
     ``hook_load_errors`` holds the malformed hooks that ``tolerate_hook_errors``
     set aside; ``hook_violations`` the refused layer overrides (prK §A.5, §A.6).
+    ``policy_tables`` holds the committed ``[hooks]`` / ``[guardrails]`` tables,
+    raw so validate can report a malformed one (H21); read hooks policy there,
+    never from ``config.extra_tables``, which merges ``.local.toml`` in (§B.1).
     """
 
     repo_root: Path
@@ -355,6 +359,7 @@ class SyncContext:
     hook_definitions: dict[str, tuple[Hook, ...]] = field(default_factory=dict)
     hook_load_errors: list[HookSchemaError] = field(default_factory=list)
     hook_violations: list[HookViolation] = field(default_factory=list)
+    policy_tables: PolicyTables = field(default_factory=PolicyTables)
 
     @classmethod
     def from_repo(
@@ -377,12 +382,13 @@ class SyncContext:
         ``hook_load_errors`` instead, so ``playbook validate`` can report them
         all (prK §P P8c).
         """
-        config = FileSystemStateSource(repo_root=repo_root).load_config()
+        state_source = FileSystemStateSource(repo_root=repo_root)
         return cls.from_config(
             repo_root,
-            config,
+            state_source.load_config(),
             rule_registry=rule_registry,
             tolerate_hook_errors=tolerate_hook_errors,
+            policy_tables=state_source.load_policy_tables(),
         )
 
     @classmethod
@@ -394,13 +400,15 @@ class SyncContext:
         artifact_source: ArtifactSource | None = None,
         rule_registry: RuleRegistry | None = None,
         tolerate_hook_errors: bool = False,
+        policy_tables: PolicyTables | None = None,
     ) -> SyncContext:
         """:meth:`from_repo` minus the config load: detect → walk → resolve overlays.
 
         Config-less ``playbook validate`` passes a stand-in ``config`` and an
         ``artifact_source`` with extra checkout layers (prK §P P8); by default
         the source walks the engine, ``config.overlays_enabled`` and
-        ``<repo>/playbook/``.
+        ``<repo>/playbook/``. Without ``policy_tables`` there is no ``[hooks]``
+        table, so hooks are off.
 
         Example::
 
@@ -455,6 +463,7 @@ class SyncContext:
             hook_definitions=resolver.hook_definitions,
             hook_load_errors=hook_load_errors,
             hook_violations=resolver.hook_violations,
+            policy_tables=PolicyTables() if policy_tables is None else policy_tables,
         )
 
 
