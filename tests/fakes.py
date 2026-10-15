@@ -10,6 +10,8 @@ without running a suite, and ``FakeBaselineGit`` stands in for
 :class:`coding_agent_playbook.evaluators.baseline_git.SubprocessBaselineGit`.
 ``FakeHandlerSchemas`` stands in for the hook-handler ``CONFIG_SCHEMA`` registry
 (K2) behind :class:`coding_agent_playbook.hook_policy.ConfigSchemaLookup`.
+``FakePinWriter`` stands in for the ``hook_runtime.pin`` writers ``playbook sync``
+calls (the interpreter pin and ``machine.json`` under the git dir).
 """
 
 from __future__ import annotations
@@ -17,14 +19,15 @@ from __future__ import annotations
 import sys
 import unicodedata
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, GitTimeoutError
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle
+from coding_agent_playbook.hook_runtime.pin import PinResult
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
-    from pathlib import Path
 
     from coding_agent_playbook.commands._validation import ValidationError
     from coding_agent_playbook.hook_policy import ConfigKeySpec
@@ -171,3 +174,35 @@ class FakeHandlerSchemas:
 
     def config_domain(self, builtin: str) -> str | None:
         return self.domains.get(builtin)
+
+
+@dataclass
+class FakePinWriter:
+    """In-memory :class:`~coding_agent_playbook.commands._sync_hook_local.PinWriter`.
+
+    ``git=False`` models a repository outside git (both writers return ``None``).
+    The interpreter pin follows the real first-writer-wins rule: ``pinned`` holds
+    the current pin, set by the first call (to ``interpreter``) unless already
+    set. ``calls`` records ``(method, repo_root)``; ``tools`` the last tool map.
+    """
+
+    git: bool = True
+    interpreter: str = "/fake/venv/bin/python"
+    pinned: str | None = None
+    calls: list[tuple[str, Path]] = field(default_factory=list)
+    tools: dict[str, list[str]] = field(default_factory=dict)
+
+    def ensure_interpreter_pin(self, repo_root: Path) -> PinResult | None:
+        self.calls.append(("ensure_interpreter_pin", repo_root))
+        if not self.git:
+            return None
+        written = self.pinned is None
+        self.pinned = self.pinned or self.interpreter
+        return PinResult(Path("/fake/.git/playbook-hooks/interpreter"), self.pinned, written, False)
+
+    def write_machine_pins(
+        self, repo_root: Path, tools: Mapping[str, Sequence[str]], engine_version: str
+    ) -> Path | None:
+        self.calls.append(("write_machine_pins", repo_root))
+        self.tools = {name: list(argv) for name, argv in tools.items()}
+        return Path("/fake/.git/playbook-hooks/machine.json") if self.git else None

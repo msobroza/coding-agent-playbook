@@ -6,11 +6,20 @@ It is recorded **without changing the adapter return type**: the dispatch
 wraps each ``write_rule``/``write_prompt``/``write_skill``/``finalize`` call
 and tags every path it returns. Orphans the leftover policy keeps
 (``_sync_orphans``) ride along in the new lockfile with their old entries.
+
+Hooks (specs/prK-lifecycle-hooks.md §C.1.3): every adapter first gets
+``begin_sync`` with the real repo and the prior lockfile, receives
+``write_hook`` after the skills and before ``finalize``, and then hands back its
+scoped (per-JSON-element) lock entries. A co-owned file (an adapter's
+``shared_outputs``) never gets a whole-file entry, and a copied hook script
+records its exec bit (§B.6).
 """
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as _dt
+import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -18,10 +27,13 @@ from coding_agent_playbook.lockfile import LockEntry, Lockfile, Provenance, comp
 from coding_agent_playbook.orchestrator import artifact_id_of
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Collection, Iterable, Mapping, Sequence
     from pathlib import Path
 
     from coding_agent_playbook.adapters.base import Adapter
+    from coding_agent_playbook.commands._sync_hooks import SyncHooks
+    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks_config import HooksConfig
     from coding_agent_playbook.lockfile import ProvenanceKind
     from coding_agent_playbook.types import Prompt, Rule, Skill
 
@@ -38,7 +50,8 @@ class SyncResult:
     maps each *resolved* written path to its origin; ``removed`` lists the
     files the adapters' ``cleanup_stale`` (and a file/folder swap) deleted;
     ``managed`` holds the scoped (per-JSON-element) lock entries hook-capable
-    adapters contribute (§C.1.4), empty until those adapters exist.
+    adapters contribute (§C.1.4); ``hooks`` the hooks the render dispatched
+    (``None`` when built by hand), for write mode's pins and summary.
 
     Example::
 
@@ -51,6 +64,7 @@ class SyncResult:
     removed: tuple[Path, ...]
     provenance: Mapping[Path, Provenance]
     managed: tuple[LockEntry, ...] = ()
+    hooks: SyncHooks | None = None
 
 
 @dataclass
@@ -69,6 +83,7 @@ class ProvenanceRecorder:
 
     written: list[Path] = field(default_factory=list)
     provenance: dict[Path, Provenance] = field(default_factory=dict)
+    managed: list[LockEntry] = field(default_factory=list)
 
     def record(self, paths: Iterable[Path], provenance: Provenance) -> None:
         """Append ``paths`` and tag each (resolved) path with ``provenance``."""
@@ -100,40 +115,87 @@ def _artifact_provenance(
     )
 
 
+@dataclass(frozen=True)
+class HookDispatch:
+    """The hook inputs of one dispatch: the on hooks and what ``begin_sync`` is told.
+
+    ``source_root`` is the real repo even when output goes to a scratch dir
+    (``sync --check``); ``None`` means the output root. ``config`` is ``[hooks]``.
+
+    Example::
+
+        HookDispatch(hooks, ctx.repo_root, previous_lockfile, hooks_cfg)
+    """
+
+    hooks: Sequence[ResolvedHook] = ()
+    source_root: Path | None = None
+    prior_lock: Lockfile | None = None
+    config: HooksConfig | None = None
+
+
 def dispatch_to_adapters(
     adapters: Mapping[str, Adapter],
     rules: Sequence[Rule],
     prompts: Sequence[Prompt],
     skills: Sequence[Skill],
     output_root: Path,
+    *,
+    hooks: HookDispatch | None = None,
 ) -> ProvenanceRecorder:
-    """Run every adapter's ``write_*`` calls then ``finalize`` into ``output_root``,
+    """Run every adapter's ``begin_sync``, ``write_*`` calls and ``finalize`` into ``output_root``,
     tagging each returned path with the artifact (or composite output) that produced it.
 
     ``adapters`` maps the entry-point name to the instance, e.g.
-    ``{"continue": ContinueAdapter()}``.
+    ``{"continue": ContinueAdapter()}``. Each adapter's scoped lock entries are
+    collected on ``recorder.managed`` after its ``finalize``.
 
     Example::
 
-        recorder = dispatch_to_adapters(adapters, rules, prompts, skills, repo_root)
+        recorder = dispatch_to_adapters(adapters, rules, prompts, skills, repo_root,
+                                        hooks=HookDispatch(on_hooks, repo_root, lock, cfg))
     """
+    plan = hooks if hooks is not None else HookDispatch()
     recorder = ProvenanceRecorder()
     for name, adapter in adapters.items():
-        for rule in rules:
-            recorder.record(
-                adapter.write_rule(rule, output_root), _artifact_provenance("rule", rule, name)
-            )
-        for prompt in prompts:
-            recorder.record(
-                adapter.write_prompt(prompt, output_root),
-                _artifact_provenance("prompt", prompt, name),
-            )
-        for skill in skills:
-            recorder.record(
-                adapter.write_skill(skill, output_root), _artifact_provenance("skill", skill, name)
-            )
+        adapter.begin_sync(
+            plan.source_root or output_root, plan.prior_lock, hooks_config=plan.config
+        )
+        _write_artifacts(recorder, name, adapter, (rules, prompts, skills), output_root)
+        for hook in plan.hooks:
+            recorder.record(adapter.write_hook(hook, output_root), _hook_provenance(hook, name))
         recorder.record(adapter.finalize(output_root), Provenance(kind="composite", adapter=name))
+        recorder.managed.extend(adapter.managed_lock_entries())
     return recorder
+
+
+def _write_artifacts(
+    recorder: ProvenanceRecorder,
+    name: str,
+    adapter: Adapter,
+    artifacts: tuple[Sequence[Rule], Sequence[Prompt], Sequence[Skill]],
+    output_root: Path,
+) -> None:
+    """One adapter's rules, prompts and skills, in that order."""
+    rules, prompts, skills = artifacts
+    for rule in rules:
+        recorder.record(
+            adapter.write_rule(rule, output_root), _artifact_provenance("rule", rule, name)
+        )
+    for prompt in prompts:
+        recorder.record(
+            adapter.write_prompt(prompt, output_root), _artifact_provenance("prompt", prompt, name)
+        )
+    for skill in skills:
+        recorder.record(
+            adapter.write_skill(skill, output_root), _artifact_provenance("skill", skill, name)
+        )
+
+
+def _hook_provenance(hook: ResolvedHook, adapter_name: str) -> Provenance:
+    """A ``write_hook`` output (an advisory file): ``kind=hook`` names the hook to edit."""
+    return Provenance(
+        kind="hook", artifact_id=hook.id, source=hook.source_package, adapter=adapter_name
+    )
 
 
 def build_lockfile(
@@ -144,25 +206,27 @@ def build_lockfile(
     provenance: Mapping[Path, Provenance],
     managed: Sequence[LockEntry] = (),
     carried: Sequence[LockEntry] = (),
+    shared: Collection[str] = (),
 ) -> Lockfile:
     """Stamp a schema-2 lockfile.
 
     One provenance-bearing whole-file entry per written path, sorted by path
     (``provenance`` is keyed by resolved path; a path without one gets the v1
     unknown provenance, ``kind=""``). A path owned element-wise by ``managed``
-    scoped entries gets no whole-file entry; those entries follow. ``carried``
-    are the kept orphans (``_sync_orphans``): output an earlier sync wrote that
-    is still engine-owned, so their old entries ride along unchanged (§B.6).
+    scoped entries, or co-owned with the user (``shared``, repo-relative), gets
+    no whole-file entry; the scoped entries follow. ``carried`` are the kept
+    orphans (``_sync_orphans``): output an earlier sync wrote that is still
+    engine-owned, so their old entries ride along unchanged (§B.6).
 
     Example::
 
         build_lockfile(r.written, root, "0.2.0", provenance=r.provenance, carried=plan.keep)
     """
-    scoped_paths = {entry.path for entry in managed}
+    not_whole = {entry.path for entry in managed} | set(shared)
     entries: list[LockEntry] = []
     for path in sorted({p.resolve() for p in written}):
         entry = _whole_file_entry(path, repo_root, provenance.get(path))
-        if entry is not None and entry.path not in scoped_paths:
+        if entry is not None and entry.path not in not_whole:
             entries.append(entry)
     entries.extend(managed)
     entries.extend(sorted(carried, key=lambda entry: entry.path))
@@ -185,7 +249,15 @@ def _whole_file_entry(path: Path, repo_root: Path, origin: Provenance | None) ->
     rel = _repo_relative(path, repo_root)
     if origin is None:
         return LockEntry(path=rel, sha256=compute_hash(content), bytes=len(content))
-    return LockEntry.from_provenance(rel, content, origin)
+    entry = LockEntry.from_provenance(rel, content, origin)
+    if origin.kind == "hook" and _is_executable(path):
+        entry = dataclasses.replace(entry, executable=True)
+    return entry
+
+
+def _is_executable(path: Path) -> bool:
+    """The git-style single exec bit, POSIX only (§B.6): Windows modes say nothing about it."""
+    return os.name == "posix" and bool(path.stat().st_mode & 0o111)
 
 
 def _repo_relative(path: Path, repo_root: Path) -> str:

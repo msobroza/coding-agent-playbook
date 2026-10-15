@@ -2,25 +2,29 @@
 
 from __future__ import annotations
 
+import os
 import shlex
 import unicodedata
 from pathlib import Path
-from typing import TYPE_CHECKING
 
+import pytest
+
+from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
+from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.commands._sync_output import (
+    file_drift,
     gitignore_drift,
     report_kept_leftovers,
     report_staged_output,
+    shared_outputs,
     staged_generated_paths,
     untrack_command,
     update_gitignore,
     warn_tracked_output,
+    without_shared,
 )
 from coding_agent_playbook.gitignore import BLOCK_START, ignore_entries
 from tests.fakes import FakeGitClient
-
-if TYPE_CHECKING:
-    import pytest
 
 
 def test_update_gitignore_applies_then_reports_no_change(tmp_path: Path) -> None:
@@ -146,3 +150,55 @@ def test_report_kept_leftovers_is_silent_when_nothing_is_kept(
 ) -> None:
     assert report_kept_leftovers(tmp_path, []) == []
     assert capsys.readouterr().err == ""
+
+
+# --- shared outputs (specs/prK-lifecycle-hooks.md §C.0): co-owned, never "generated" ---
+
+
+def test_shared_outputs_come_from_the_adapter_classes() -> None:
+    adapters = {"claude_code": ClaudeCodeAdapter(), "agents_md": AgentsMdAdapter()}
+
+    assert shared_outputs(adapters) == frozenset({".claude/settings.json"})
+    assert shared_outputs({"agents_md": AgentsMdAdapter()}) == frozenset()
+
+
+def test_shared_outputs_excluded_from_ignore_entries_and_tracked_warning(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    settings = tmp_path / ".claude" / "settings.json"
+    agents = tmp_path / "AGENTS.md"
+    git = FakeGitClient(tracked={".claude/settings.json"})
+
+    owned = without_shared([settings, agents], tmp_path, frozenset({".claude/settings.json"}))
+
+    assert owned == [agents]
+    assert "/.claude/settings.json" not in ignore_entries(owned, tmp_path)
+    assert warn_tracked_output(tmp_path, owned, git) == []
+    assert capsys.readouterr().err == ""
+
+
+def _scratch_pair(tmp_path: Path, mode: int) -> tuple[Path, Path, Path]:
+    scratch, repo = tmp_path / "scratch", tmp_path / "repo"
+    for root in (scratch, repo):
+        (root / "s").mkdir(parents=True)
+        (root / "s" / "run.sh").write_bytes(b"#!/bin/sh\n")
+    (scratch / "s" / "run.sh").chmod(0o755)
+    (repo / "s" / "run.sh").chmod(mode)
+    return scratch, repo, scratch / "s" / "run.sh"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="exec bits are POSIX-only")
+def test_file_drift_reports_a_lost_exec_bit(tmp_path: Path) -> None:
+    scratch, repo, rendered = _scratch_pair(tmp_path, 0o644)
+
+    [line] = file_drift([rendered], scratch, repo)
+
+    assert line.splitlines()[:2] == ["  s/run.sh", "    Mode differs: generated as executable."]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="exec bits are POSIX-only")
+def test_file_drift_is_clean_when_the_exec_bit_matches(tmp_path: Path) -> None:
+    scratch, repo, rendered = _scratch_pair(tmp_path, 0o755)
+
+    assert file_drift([rendered], scratch, repo) == []

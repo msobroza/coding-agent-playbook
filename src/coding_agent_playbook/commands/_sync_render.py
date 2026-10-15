@@ -1,9 +1,10 @@
 """Jinja rendering of the canonical artifacts for ``playbook sync`` / ``render`` (SPEC §9.4).
 
 Every template a sync executes runs here, **before any adapter writes**: rule
-bodies, prompt bodies, and every rule a prompt inlines through
-``includes_rules`` (pre-rendered — adapters repeat that render inside
-``write_prompt``, after earlier files are on disk). So a template the Jinja
+bodies, prompt bodies, every rule a prompt inlines through ``includes_rules``
+(pre-rendered — adapters repeat that render inside ``write_prompt``, after
+earlier files are on disk), and the advisory body of every on hook (resolved
+by ``_sync_hooks``, specs/prK-lifecycle-hooks.md §C.1.3). So a template the Jinja
 sandbox rejects aborts the sync with nothing written and the offending file
 named (:class:`~coding_agent_playbook.renderer.TemplateSecurityError`,
 specs/prK-lifecycle-hooks.md §P1).
@@ -13,11 +14,12 @@ from __future__ import annotations
 
 import dataclasses
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
+from coding_agent_playbook.commands._sync_hooks import SyncHooks, resolve_sync_hooks
 from coding_agent_playbook.detector import evaluate_predicate
 from coding_agent_playbook.orchestrator import RuleRegistryImpl, template_source
 from coding_agent_playbook.renderer import (
@@ -31,6 +33,7 @@ if TYPE_CHECKING:
     from jinja2 import Environment
 
     from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.orchestrator import SyncContext
     from coding_agent_playbook.types import Hook, Prompt, Rule, Skill
 
@@ -41,6 +44,7 @@ class RenderedArtifacts:
 
     ``registry`` resolves ``includes_rules`` for the adapters (already
     exercised once per included rule, so the adapters' repeat cannot fail).
+    ``hooks`` holds the ``[hooks]`` policy and the on hooks, bodies rendered.
 
     Example::
 
@@ -52,6 +56,7 @@ class RenderedArtifacts:
     prompts: list[Prompt]
     skills: list[Skill]
     registry: RuleRegistryImpl
+    hooks: SyncHooks = field(default_factory=SyncHooks)
 
 
 def build_jinja_context(ctx: SyncContext) -> dict[str, object]:
@@ -150,8 +155,9 @@ def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
     """Filter by ``applies_if`` and run every template a sync needs; write nothing.
 
     Inputs (``applies_if`` file checks included) are read from the real repo
-    through ``ctx``. Raises :class:`TemplateSecurityError` before any adapter
-    has written a file.
+    through ``ctx``. Raises :class:`TemplateSecurityError` (or, for a malformed
+    ``[hooks]`` table, ``_sync_hooks.HookPolicyError``) before any adapter has
+    written a file.
 
     Example::
 
@@ -170,12 +176,21 @@ def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
     prompt_env.globals["_facts"] = dict(ctx.facts)
     rendered_prompts = [render_prompt_body(p, base_context, prompt_env) for p in prompts]
     _prerender_inclusions(rendered_prompts, registry)
+    hooks = resolve_sync_hooks(ctx, lambda hook: _with_body(hook, base_context, base_env))
     return RenderedArtifacts(
         rules=rendered_rules,
         prompts=rendered_prompts,
         skills=filter_skills(ctx.skills_resolved),
         registry=registry,
+        hooks=hooks,
     )
+
+
+def _with_body(hook: ResolvedHook, context: dict[str, object], env: Environment) -> ResolvedHook:
+    """``hook`` with its ``HOOK.md.j2`` body rendered (a hook built in memory has none)."""
+    if hook.definition is None:
+        return hook
+    return hook.with_rendered_body(render_hook_body(hook.definition, context, env))
 
 
 def _prerender_inclusions(prompts: list[Prompt], registry: RuleRegistryImpl) -> None:

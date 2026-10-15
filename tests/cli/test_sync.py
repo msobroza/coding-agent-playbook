@@ -262,7 +262,7 @@ def test_run_sync_returns_frozen_sync_result(
     tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory
 ) -> None:
     """``_run_sync`` returns one frozen ``SyncResult``; ``managed`` is empty
-    until hook-capable adapters contribute scoped entries."""
+    without hooks (only hook-capable adapters contribute scoped entries)."""
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
     ctx = SyncContext.from_repo(repo)
     result = _sync._run_sync(ctx, _sync._leftover_policy(ctx, FakeGitClient(), None))
