@@ -5,8 +5,10 @@ lockfile is saved, in write mode only, when hooks are live:
 
 - **pins**: the per-worktree interpreter pin the committed launcher reads
   (first writer wins) and ``machine.json`` with the logical tools' absolute
-  argv, both under the git dir (``hook_runtime.pin``). Outside git there is no
-  pin, so the hooks stay inactive and sync says so;
+  argv and the layers' absolute ``resources/`` dirs (the guards resolve
+  ``guard_config.json``'s ``pkg:`` ids through them), both under the git dir
+  (``hook_runtime.pin``). Outside git there is no pin, so the hooks stay
+  inactive and sync says so;
 - **trust on first use**: each external handler whose code (source, launcher,
   args, script bytes) the user-local trust store has not approved is listed
   with its source, full command and old -> new script hash, then asked
@@ -63,9 +65,13 @@ class PinWriter(Protocol):
         """Pin this interpreter unless a usable pin exists; ``None`` outside git."""
 
     def write_machine_pins(
-        self, repo_root: Path, tools: Mapping[str, Sequence[str]], engine_version: str
+        self,
+        repo_root: Path,
+        tools: Mapping[str, Sequence[str]],
+        engine_version: str,
+        resource_roots: Mapping[str, str] | None = None,
     ) -> Path | None:
-        """Rewrite ``machine.json`` with ``tools``; ``None`` outside git."""
+        """Rewrite ``machine.json`` with ``tools`` and ``resource_roots``; ``None`` outside git."""
 
 
 @dataclass(frozen=True)
@@ -80,11 +86,18 @@ class RuntimePinWriter:
         return pin.ensure_interpreter_pin(start=str(repo_root))
 
     def write_machine_pins(
-        self, repo_root: Path, tools: Mapping[str, Sequence[str]], engine_version: str
+        self,
+        repo_root: Path,
+        tools: Mapping[str, Sequence[str]],
+        engine_version: str,
+        resource_roots: Mapping[str, str] | None = None,
     ) -> Path | None:
         """See :func:`hook_runtime.pin.write_machine_pins`."""
         return pin.write_machine_pins(
-            tools=tools, engine_version=engine_version, start=str(repo_root)
+            tools=tools,
+            engine_version=engine_version,
+            resource_roots=resource_roots,
+            start=str(repo_root),
         )
 
 
@@ -114,8 +127,16 @@ class SyncHookDeps:
     which: Callable[[str], str | None] = shutil.which
 
 
-def write_pins(repo_root: Path, deps: SyncHookDeps, *, engine_version: str) -> None:
-    """Pin the interpreter (first writer wins) and the tools; warn when outside git.
+def write_pins(
+    repo_root: Path,
+    deps: SyncHookDeps,
+    *,
+    engine_version: str,
+    resource_roots: Mapping[str, str] | None = None,
+) -> None:
+    """Pin the interpreter (first writer wins), the tools and the layers' resource dirs.
+
+    Warns when outside git, where nothing is pinned.
 
     Example: ``write_pins(ctx.repo_root, SyncHookDeps(), engine_version="0.2.0")``.
     """
@@ -137,7 +158,7 @@ def write_pins(repo_root: Path, deps: SyncHookDeps, *, engine_version: str) -> N
             file=sys.stderr,
         )
     tools = {name: [path] for name in PINNED_TOOLS if (path := deps.which(name))}
-    deps.pins.write_machine_pins(repo_root, tools, engine_version)
+    deps.pins.write_machine_pins(repo_root, tools, engine_version, resource_roots)
 
 
 def handler_approval(hook: ResolvedHook) -> HandlerApproval | None:

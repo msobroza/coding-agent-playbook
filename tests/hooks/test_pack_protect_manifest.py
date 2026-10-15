@@ -1,0 +1,85 @@
+"""The protect pack as shipped (specs/prK-hook-pack.md §E.0.6, §E.1, Track K5).
+
+Every ``resources/hooks/protect/<id>/HOOK.md`` matches its §E.0.6 row (id,
+tier, events, decisions, ``on_error``), passes the H1-H21 contract in a
+config-less ``playbook validate`` with no warning, and binds a builtin that
+declares its config keys and never mutates tool input. Each K5 step adds its
+hooks' rows to :data:`PROTECT_PACK`; a shipped hook without a row fails.
+"""
+
+from __future__ import annotations
+
+import argparse
+from typing import TYPE_CHECKING, NamedTuple
+
+import pytest
+
+from coding_agent_playbook.commands import validate as _validate
+from coding_agent_playbook.hook_runtime.registry import load_builtin
+from tests.hooks.pack_repo import ENGINE_HOOKS, engine_hook, engine_hook_paths
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+
+class PackRow(NamedTuple):
+    """One §E.0.6 row: what the shipped ``HOOK.md`` must declare."""
+
+    tier: str
+    events: tuple[str, ...]
+    decisions: tuple[str, ...]
+    on_error: str
+
+
+#: §E.0.6 rows of the hooks shipped so far (E.0.3 maps block -> deny; a pass is none).
+PROTECT_PACK: dict[str, PackRow] = {
+    "guard-generated-outputs": PackRow(
+        "default", ("pre_tool_use",), ("deny", "ask", "none"), "ask"
+    ),
+}
+
+
+def _protect_ids() -> list[str]:
+    return sorted(
+        hook_id
+        for hook_id, path in engine_hook_paths().items()
+        if path.is_relative_to(ENGINE_HOOKS / "protect")
+    )
+
+
+def test_protect_hooks_match_pack_table() -> None:
+    assert _protect_ids() == sorted(PROTECT_PACK)
+    for hook_id, row in PROTECT_PACK.items():
+        fm = engine_hook(hook_id).frontmatter
+        shipped = PackRow(fm.tier, tuple(fm.events), tuple(fm.decisions), fm.on_error)
+        assert (fm.id, shipped) == (hook_id, row)
+        assert fm.supports == ["claude_code", "opencode"]
+        assert fm.handler is not None and fm.handler.builtin == hook_id.replace("-", "_")
+
+
+def test_protect_hooks_validate_clean(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Config-less validate (an engine checkout) runs H1-H21 on the shipped hooks."""
+    ns = argparse.Namespace(repo_root=str(tmp_path))
+
+    assert _validate.run(ns) == 0
+
+    captured = capsys.readouterr()
+    shipped = [str(engine_hook_paths()[hook_id]) for hook_id in PROTECT_PACK]
+    assert not [line for line in captured.out.splitlines() if line.startswith("FAIL")]
+    assert not [line for line in captured.err.splitlines() if any(p in line for p in shipped)]
+
+
+@pytest.mark.parametrize("hook_id", sorted(PROTECT_PACK))
+def test_handlers_declare_config_schema_and_no_input_mutation(hook_id: str) -> None:
+    fm = engine_hook(hook_id).frontmatter
+    assert fm.handler is not None and fm.handler.builtin is not None
+
+    declaration = load_builtin(fm.handler.builtin)
+
+    assert declaration.mutates_input is False
+    assert set(fm.handler.config) <= set(declaration.config_schema)
+    assert all(
+        declaration.config_schema[key].accepts(value) for key, value in fm.handler.config.items()
+    )
+    assert {e.value for e in declaration.events} >= set(fm.events)
+    assert {d.value for d in declaration.decisions} >= set(fm.decisions)

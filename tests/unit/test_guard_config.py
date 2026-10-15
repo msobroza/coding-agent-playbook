@@ -16,12 +16,23 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook import renderer
+from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
+from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
+from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
+from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
+from coding_agent_playbook.commands._sync_lockfile import build_lockfile
 from coding_agent_playbook.guard_config import (
     GUARD_CONFIG_PATH,
+    HOOK_ARTIFACTS,
     SYNC_OUTPUT_LOCATIONS,
     GuardConfigInputs,
+    ProtectInputs,
+    adapter_output_dirs,
     copy_hook_scripts,
+    protected_rows,
     render_guard_config,
+    resource_root_ids,
     serialize_guard_config,
     write_guard_config,
 )
@@ -36,6 +47,7 @@ from coding_agent_playbook.hooks_config import (
     HooksConfig,
     SecretsGuardrails,
 )
+from coding_agent_playbook.lockfile import LockEntry, Provenance
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 from tests.hook_samples import resolved_from_disk, resolved_hook
 
@@ -45,13 +57,21 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_policy import ResolvedHook
 
 
-def _inputs(hooks: list[ResolvedHook]) -> GuardConfigInputs:
+_PROTECT = ProtectInputs(
+    entries=(),
+    output_dirs=(".claude/commands/", "AGENTS.md"),
+    packages=("coding_agent_playbook", "coding_agent_playbook.packs.superpowers"),
+)
+
+
+def _inputs(hooks: list[ResolvedHook], protect: ProtectInputs = _PROTECT) -> GuardConfigInputs:
     return GuardConfigInputs(
         hooks=hooks,
         hooks_config=HooksConfig(enabled=True),
         guardrails=GuardrailsConfig(),
         engine_version="0.2.0",
         generated=(".claude/commands/", "AGENTS.md"),
+        protected=protect,
     )
 
 
@@ -74,6 +94,8 @@ def test_render_is_machine_independent(tmp_path: Path, monkeypatch: pytest.Monke
     text = rendered[0].decode("ascii")
     assert str(tmp_path) not in text
     assert "/opt/" not in text and "/srv/" not in text
+    assert '"protected":' in text and '"sentinel":' in text
+    assert "site-packages" not in text
 
 
 def test_canonical_serialization_sorted_compact_ascii_newline() -> None:
@@ -177,3 +199,129 @@ def test_external_argv_repo_relative_and_scripts_copied_with_exec_bit(tmp_path: 
     assert (root / "check.sh").read_bytes() == b"#!/bin/sh\nexit 0\n"
     assert (root / "check.sh").stat().st_mode & stat.S_IXUSR
     assert not (root / "lib" / "data.txt").stat().st_mode & 0o111
+
+
+# --- the §E.0.5 protect tables (Track K5 step 1) ------------------------------------------------
+
+
+def _written_tree(root: Path) -> tuple[dict[Path, Provenance], list[LockEntry]]:
+    """A synced tree: two whole-file outputs, a composite and a co-owned settings file."""
+    files = {
+        ".claude/skills/demo/SKILL.md": Provenance("skill", "demo", "<repo-local>", "claude_code"),
+        ".continue/rules/10-x.md": Provenance("rule", "x", "coding_agent_playbook", "continue"),
+        "AGENTS.md": Provenance("composite", adapter="agents_md"),
+        ".claude/settings.json": Provenance("composite", adapter="claude_code"),
+    }
+    provenance: dict[Path, Provenance] = {}
+    for rel, origin in files.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"{rel}\n", encoding="utf-8")
+        provenance[path.resolve()] = origin
+    managed = [
+        LockEntry(
+            path=".claude/settings.json",
+            sha256="ab" * 32,
+            bytes=40,
+            kind="runtime",
+            artifact_id="registration:pre_tool_use",
+            adapter="claude_code",
+            scope="json:/hooks/PreToolUse",
+        )
+    ]
+    return provenance, managed
+
+
+def test_protected_entries_mirror_lockfile_provenance(tmp_path: Path) -> None:
+    provenance, managed = _written_tree(tmp_path)
+    shared = (".claude/settings.json",)
+
+    rows = protected_rows(provenance, managed, tmp_path, shared=shared)
+
+    lock = build_lockfile(
+        list(provenance), tmp_path, "0.2.0", provenance=provenance, managed=managed, shared=shared
+    )
+    columns = ("path", "kind", "artifact_id", "source", "scope")
+    assert [{c: row.to_json()[c] for c in columns} for row in rows] == [
+        {c: getattr(entry, c) for c in columns} for entry in lock.entries
+    ]
+
+
+def test_scoped_entries_carry_sha256(tmp_path: Path) -> None:
+    provenance, managed = _written_tree(tmp_path)
+
+    rows = [row.to_json() for row in protected_rows(provenance, managed, tmp_path)]
+
+    scoped = [row for row in rows if row["scope"]]
+    assert scoped == [
+        {
+            "path": ".claude/settings.json",
+            "kind": "runtime",
+            "artifact_id": "registration:pre_tool_use",
+            "source": "",
+            "scope": "json:/hooks/PreToolUse",
+            "sha256": "ab" * 32,
+        }
+    ]
+    assert all("sha256" not in row for row in rows if not row["scope"])
+
+
+def test_protected_output_dirs_match_adapter_stale_scan_dirs(tmp_path: Path) -> None:
+    adapters = {
+        "claude_code": ClaudeCodeAdapter(),
+        "continue": ContinueAdapter(),
+        "opencode": OpenCodeAdapter(),
+        "agents_md": AgentsMdAdapter(),
+    }
+
+    dirs = adapter_output_dirs(adapters, tmp_path)
+
+    scanned = {
+        f"{path.relative_to(tmp_path).as_posix()}/"
+        for adapter in adapters.values()
+        for path in adapter._output_directories(tmp_path)
+    }
+    assert set(dirs) == scanned | {".claude/CLAUDE.md", "AGENTS.md"}
+    assert ".claude/skills/" not in dirs  # skill output is lockfile-only (main #25)
+    assert dirs == sorted(dirs)
+    assert adapter_output_dirs({"continue": ContinueAdapter()}, tmp_path) == [
+        ".continue/prompts/",
+        ".continue/rules/",
+    ]
+
+
+def test_resource_roots_are_package_relative_ids() -> None:
+    packages = ("coding_agent_playbook", "coding_agent_playbook.packs.superpowers")
+
+    table = render_guard_config(_inputs([]))["protected"]
+
+    assert resource_root_ids(packages) == [
+        "pkg:coding_agent_playbook/resources",
+        "pkg:coding_agent_playbook.packs.superpowers/resources",
+    ]
+    assert table["resource_roots"] == resource_root_ids(packages)
+    assert table["hook_artifacts"] == list(HOOK_ARTIFACTS)
+    assert table["hook_artifacts"] == [
+        ".coding-agent-playbook/hooks/",
+        ".claude/hooks/playbook/",
+        ".opencode/plugins/playbook-hooks.js",
+    ]
+    assert table["output_dirs"] == [".claude/commands/", "AGENTS.md"]
+
+
+def test_sentinel_key_is_renderer_sentinel() -> None:
+    cfg = render_guard_config(_inputs([]))
+
+    assert cfg["sentinel"] == renderer.SENTINEL
+
+
+def test_runtime_reads_the_protect_tables_back(tmp_path: Path) -> None:
+    provenance, managed = _written_tree(tmp_path)
+    protect = ProtectInputs(entries=protected_rows(provenance, managed, tmp_path))
+
+    parsed = parse_guard_config(serialize_guard_config(render_guard_config(_inputs([], protect))))
+
+    assert isinstance(parsed, GuardConfig), parsed
+    assert parsed.tables["sentinel"] == renderer.SENTINEL
+    paths = [row["path"] for row in parsed.tables["protected"]["entries"]]
+    assert paths == sorted(paths)

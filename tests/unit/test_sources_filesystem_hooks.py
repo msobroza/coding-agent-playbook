@@ -31,8 +31,18 @@ if TYPE_CHECKING:
 _POSIX_ONLY = pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges")
 
 
+#: An importable engine stand-in without a ``resources/`` tree: the real engine ships
+#: the §E hook pack (Track K5), which these discovery tests must not see.
+_HOOKLESS_ENGINE = "coding_agent_playbook.packs"
+
+
 def _hooks_root(repo: Path) -> Path:
     return repo / "playbook" / "hooks"
+
+
+def _local_source(repo: Path) -> FileSystemArtifactSource:
+    """A source walking only ``repo``'s ``playbook/hooks`` (its engine layer has no hooks)."""
+    return FileSystemArtifactSource(repo_root=repo, engine_package=_HOOKLESS_ENGINE)
 
 
 def _package_hooks(name: str) -> Path:
@@ -54,7 +64,7 @@ def test_list_hooks_discovers_hook_dirs_at_any_depth(
     make_hook(root, "in-category")
     make_hook(root / "a" / "b", "deep", marker="HOOK.md.j2")
 
-    hooks = FileSystemArtifactSource(repo_root=tmp_path).list_hooks()
+    hooks = _local_source(tmp_path).list_hooks()
 
     by_id = {hook.frontmatter.id: hook for hook in hooks}
     assert sorted(by_id) == ["deep", "in-category", "top-level"]
@@ -82,7 +92,7 @@ def test_list_hooks_orders_engine_then_overlays_then_repo_local(
 
 
 def test_list_hooks_is_empty_without_any_hooks_dir(tmp_path: Path) -> None:
-    assert FileSystemArtifactSource(repo_root=tmp_path).list_hooks() == []
+    assert _local_source(tmp_path).list_hooks() == []
 
 
 def test_list_hooks_skips_dot_directories(tmp_path: Path, make_hook: HookFactory) -> None:
@@ -91,7 +101,7 @@ def test_list_hooks_skips_dot_directories(tmp_path: Path, make_hook: HookFactory
     make_hook(root / ".cache", "hidden")
     make_hook(root, "dotted", category=".git")
 
-    assert _ids(FileSystemArtifactSource(repo_root=tmp_path)) == ["kept"]
+    assert _ids(_local_source(tmp_path)) == ["kept"]
 
 
 def test_list_hooks_ignores_other_markdown_and_scripts_readme(
@@ -103,14 +113,14 @@ def test_list_hooks_ignores_other_markdown_and_scripts_readme(
     (hook_md.parent.parent / "NOTES.md").write_text("notes\n", encoding="utf-8")
     (hook_md.parent / "HOOK.md.bak").write_text("not the marker\n", encoding="utf-8")
 
-    assert _ids(FileSystemArtifactSource(repo_root=tmp_path)) == ["guard-x"]
+    assert _ids(_local_source(tmp_path)) == ["guard-x"]
 
 
 def test_hook_nested_under_another_hook_is_rejected(tmp_path: Path, make_hook: HookFactory) -> None:
     outer = make_hook(_hooks_root(tmp_path), "outer", scripts=True)
     nested = make_hook(outer.parent / "scripts", "inner", category="")
 
-    hooks, errors = FileSystemArtifactSource(repo_root=tmp_path).collect_hooks()
+    hooks, errors = _local_source(tmp_path).collect_hooks()
 
     assert [hook.frontmatter.id for hook in hooks] == ["outer"]
     assert len(errors) == 1
@@ -126,7 +136,7 @@ def test_hook_md_and_hook_md_j2_together_are_rejected(
     make_hook(_hooks_root(tmp_path), "guard-x", marker="HOOK.md.j2")
     make_hook(_hooks_root(tmp_path), "guard-y")
 
-    hooks, errors = FileSystemArtifactSource(repo_root=tmp_path).collect_hooks()
+    hooks, errors = _local_source(tmp_path).collect_hooks()
 
     assert [hook.frontmatter.id for hook in hooks] == ["guard-y"]
     assert len(errors) == 1
@@ -141,7 +151,7 @@ def test_hook_under_a_rejected_two_marker_dir_is_still_nested(
     make_hook(_hooks_root(tmp_path), "outer", marker="HOOK.md.j2")
     make_hook(outer.parent, "inner", category="")
 
-    hooks, errors = FileSystemArtifactSource(repo_root=tmp_path).collect_hooks()
+    hooks, errors = _local_source(tmp_path).collect_hooks()
 
     assert hooks == []
     assert [error.field for error in errors] == ["layout", "layout"]
@@ -152,7 +162,7 @@ def test_scripts_dir_recorded_only_when_present(tmp_path: Path, make_hook: HookF
     make_hook(_hooks_root(tmp_path), "without-scripts")
     (with_scripts.parent.parent / "without-scripts" / "scripts").write_text("a file\n")
 
-    by_id = {h.frontmatter.id: h for h in FileSystemArtifactSource(repo_root=tmp_path).list_hooks()}
+    by_id = {h.frontmatter.id: h for h in _local_source(tmp_path).list_hooks()}
 
     assert by_id["with-scripts"].scripts_dir == with_scripts.parent / "scripts"
     assert by_id["without-scripts"].scripts_dir is None
@@ -167,7 +177,7 @@ def test_collect_hooks_returns_every_error_without_raising(
     bad_fence.write_text("no frontmatter here\n", encoding="utf-8")
     make_hook(root, "good")
 
-    hooks, errors = FileSystemArtifactSource(repo_root=tmp_path).collect_hooks()
+    hooks, errors = _local_source(tmp_path).collect_hooks()
 
     assert [hook.frontmatter.id for hook in hooks] == ["good"]
     assert sorted(error.where for error in errors) == sorted([str(bad_fence), str(bad_timeout)])
@@ -180,7 +190,7 @@ def test_list_hooks_raises_first_hook_schema_error(tmp_path: Path, make_hook: Ho
     make_hook(root, "b-second", tier=3)
 
     with pytest.raises(HookSchemaError) as caught:
-        FileSystemArtifactSource(repo_root=tmp_path).list_hooks()
+        _local_source(tmp_path).list_hooks()
 
     assert caught.value.where == str(first)
     assert caught.value.field == "timeout"
@@ -194,7 +204,7 @@ def test_symlinked_directories_are_not_followed(tmp_path: Path, make_hook: HookF
     make_hook(root, "kept")
     (root / "via-link").symlink_to(outside, target_is_directory=True)
 
-    assert _ids(FileSystemArtifactSource(repo_root=tmp_path)) == ["kept"]
+    assert _ids(_local_source(tmp_path)) == ["kept"]
 
 
 @_POSIX_ONLY
@@ -206,7 +216,7 @@ def test_marker_linking_out_of_its_layer_is_rejected(
     link.parent.mkdir(parents=True)
     link.symlink_to(outside)
 
-    hooks, errors = FileSystemArtifactSource(repo_root=tmp_path).collect_hooks()
+    hooks, errors = _local_source(tmp_path).collect_hooks()
 
     assert hooks == []
     assert [error.where for error in errors] == [str(link)]
@@ -231,7 +241,7 @@ def test_marker_that_is_not_a_regular_file_is_an_error(
     make_marker(marker)
     make_hook(_hooks_root(tmp_path), "good")
 
-    hooks, errors = FileSystemArtifactSource(repo_root=tmp_path).collect_hooks()
+    hooks, errors = _local_source(tmp_path).collect_hooks()
 
     assert [hook.frontmatter.id for hook in hooks] == ["good"]
     assert [error.where for error in errors] == [str(marker)]
@@ -247,7 +257,7 @@ def test_unreadable_marker_is_an_error_not_a_traceback(
     marker = make_hook(_hooks_root(tmp_path), "locked")
     marker.chmod(0)
     try:
-        hooks, errors = FileSystemArtifactSource(repo_root=tmp_path).collect_hooks()
+        hooks, errors = _local_source(tmp_path).collect_hooks()
     finally:
         marker.chmod(0o644)
 

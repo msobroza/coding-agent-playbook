@@ -77,7 +77,10 @@ def test_hooks_block_labels_per_adapter(
 
     assert lines == [
         "  [hooks]: on",
-        "  Hooks (2 on / 3 total):",
+        "  Hooks (3 on / 4 total):",
+        # The engine pack (Track K5): OpenCode has no notebook tool, so it is degraded there.
+        "    [✓] guard-generated-outputs (agents_md: advisory, claude_code: enforced, "
+        "continue: advisory, opencode: degraded)",
         "    [✓] guard-quiet (agents_md: —, claude_code: enforced, continue: —, opencode: —)",
         "    [✓] guard-x (agents_md: advisory, claude_code: enforced, continue: advisory, "
         "opencode: advisory)",
@@ -96,7 +99,8 @@ def test_hooks_block_when_the_table_is_absent(
 
     assert lines == [
         "  [hooks]: off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')",
-        "  Hooks (0 on / 1 total):",
+        "  Hooks (0 on / 2 total):",
+        "    [✗] guard-generated-outputs (skipped: hooks are off)",
         "    [✗] guard-x (skipped: hooks are off)",
     ]
 
@@ -114,8 +118,8 @@ def test_hooks_block_when_hooks_are_switched_off_or_unreadable(
 
     assert off_lines == [
         "  [hooks]: off — [hooks] enabled is not true",
-        "  Hooks (0 on / 0 total):",
-        "    (none)",
+        "  Hooks (0 on / 1 total):",
+        "    [✗] guard-generated-outputs (skipped: hooks are off)",
     ]
     assert bad_lines[-1] == "  [hooks] cannot be read; run 'playbook validate'."
     assert bad_lines[0].startswith("  ✗ [hooks] tiers")

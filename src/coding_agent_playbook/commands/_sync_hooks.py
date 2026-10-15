@@ -5,7 +5,9 @@
   (``filter_applies_if`` is never widened for hooks), with bodies rendered;
 - :func:`write_runtime_outputs`: the sync-level ``guard_config.json`` and the
   copied scripts, into the output root in every mode (so ``--check`` compares
-  them), whenever hooks are enabled and a hook-capable adapter is on;
+  them), whenever hooks are enabled and a hook-capable adapter is on. Its
+  ``protected`` table is this sync's written set as lock rows, the adapters'
+  scan dirs and the layer packages (specs/prK-hook-pack.md §E.0.5);
 - :func:`check_settings_readable`: refuses a ``settings.json`` the Claude Code
   merge would choke on *before* any adapter writes;
 - :func:`finish_write`: write mode's pins, summary lines and approvals;
@@ -32,11 +34,16 @@ from coding_agent_playbook.adapters.claude_settings import (
 )
 from coding_agent_playbook.commands import _sync_hook_local
 from coding_agent_playbook.commands._sync_lockfile import HookDispatch
+from coding_agent_playbook.commands._sync_output import shared_outputs
 from coding_agent_playbook.guard_config import (
     SYNC_OUTPUT_LOCATIONS,
     GuardConfigInputs,
+    ProtectInputs,
+    adapter_output_dirs,
     copy_hook_scripts,
+    protected_rows,
     render_guard_config,
+    resolve_resource_roots,
     write_guard_config,
 )
 from coding_agent_playbook.hook_policy import (
@@ -49,6 +56,7 @@ from coding_agent_playbook.hook_policy import (
 from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH
 from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.lockfile import Provenance
+from coding_agent_playbook.orchestrator import engine_package_of
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -68,6 +76,7 @@ __all__ = [
     "SyncHooks",
     "check_settings_readable",
     "finish_write",
+    "layer_packages",
     "opencode_restart_notice",
     "report_settings_error",
     "resolve_sync_hooks",
@@ -165,12 +174,31 @@ def write_runtime_outputs(
         guardrails=hooks.guardrails,
         engine_version=ctx.config.engine_version or _installed_version,
         generated=_generated_locations(ctx.adapters),
+        protected=_protect_inputs(ctx, out_root, recorder),
     )
     path = write_guard_config(out_root, render_guard_config(inputs))
     recorder.record([path], Provenance(kind="runtime"))
     for copy in copy_hook_scripts(hooks.resolved, out_root):
         origin = Provenance(kind="hook", artifact_id=copy.hook.id, source=copy.hook.source_package)
         recorder.record(copy.paths, origin)
+
+
+def _protect_inputs(
+    ctx: SyncContext, out_root: Path, recorder: ProvenanceRecorder
+) -> ProtectInputs:
+    """The ``protected`` table's inputs: what the adapters wrote, where they scan, the layers."""
+    rows = protected_rows(
+        recorder.provenance, recorder.managed, out_root, shared=shared_outputs(ctx.adapters)
+    )
+    return ProtectInputs(rows, adapter_output_dirs(ctx.adapters, out_root), layer_packages(ctx))
+
+
+def layer_packages(ctx: SyncContext) -> tuple[str, ...]:
+    """The importable artifact layers: the engine package, then ``overlays_enabled`` (packs too).
+
+    Example: ``layer_packages(ctx) == ("coding_agent_playbook",)`` without overlays.
+    """
+    return (engine_package_of(ctx.artifact_source), *ctx.config.overlays_enabled)
 
 
 def _generated_locations(adapters: Mapping[str, Adapter]) -> list[str]:
@@ -278,7 +306,10 @@ def finish_write(
     live = runtime_enabled(ctx, hooks)
     if live:
         version = ctx.config.engine_version or _installed_version
-        _sync_hook_local.write_pins(ctx.repo_root, deps, engine_version=version)
+        roots = resolve_resource_roots(layer_packages(ctx))
+        _sync_hook_local.write_pins(
+            ctx.repo_root, deps, engine_version=version, resource_roots=roots
+        )
     for line in summary_lines(hooks, ctx.adapters):
         print(line)
     if restart_notice is not None:

@@ -16,7 +16,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook._sentinel import has_sentinel
+from coding_agent_playbook._sentinel import file_has_sentinel
 from coding_agent_playbook.security.files import is_secret_file, user_home
 
 if TYPE_CHECKING:
@@ -27,12 +27,6 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hooks_config import HooksConfig
     from coding_agent_playbook.lockfile import LockEntry, Lockfile
-
-#: The most :meth:`Adapter._carries_sentinel` reads of one file. The sentinel
-#: sits on line 1 or right after a leading frontmatter block, which engine
-#: output keeps far below this; a scan never reads a large file whole.
-_SENTINEL_HEAD_BYTES = 64 * 1024
-_FRONTMATTER_FENCE = b"---"
 
 
 class Adapter(ABC):
@@ -242,47 +236,17 @@ class Adapter(ABC):
 
     @staticmethod
     def _carries_sentinel(path: Path) -> bool:
-        """Whether ``path`` is engine-generated per :func:`_sentinel.has_sentinel`.
+        """Whether ``path`` is engine-generated per :func:`_sentinel.file_has_sentinel`.
 
         The sentinel line must be line 1, or the first body line after a
         leading YAML frontmatter block; anywhere else it is user prose. Binary,
         undecodable or unreadable files count as user-owned (``False``), so a
-        cleanup scan never crashes a sync.
+        cleanup scan never crashes a sync. The read is bounded to that head and
+        shared with the hook guards (specs/prK-hook-pack.md §E.1).
 
         Example::
 
             if self._carries_sentinel(repo_root / "AGENTS.md"):
                 ...  # engine-owned: safe to delete once stale
         """
-        try:
-            head = _sentinel_head(path).decode("utf-8")
-        except (UnicodeDecodeError, OSError):
-            return False
-        return has_sentinel(head)
-
-
-def _sentinel_head(path: Path) -> bytes:
-    """The bytes :func:`has_sentinel` decides on: line 1, or a leading frontmatter block + one line.
-
-    Reads at most :data:`_SENTINEL_HEAD_BYTES`. Lines split on ``\\n`` only,
-    exactly as :func:`has_sentinel` splits, so the verdict matches a whole-file
-    read. A frontmatter block longer than the cap reads as unterminated, so the
-    file counts as user-owned.
-    """
-    budget = _SENTINEL_HEAD_BYTES
-    with path.open("rb") as handle:
-        first = handle.readline(budget)
-        if first.rstrip(b"\n").rstrip(b"\r") != _FRONTMATTER_FENCE:
-            return first
-        head = [first]
-        budget -= len(first)
-        while budget > 0:
-            line = handle.readline(budget)
-            if not line:
-                break
-            head.append(line)
-            budget -= len(line)
-            if line.rstrip(b"\n").rstrip(b"\r") == _FRONTMATTER_FENCE:
-                head.append(handle.readline(budget))  # the first body line
-                break
-    return b"".join(head)
+        return file_has_sentinel(path)

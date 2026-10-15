@@ -6,6 +6,10 @@ is the single home of that marker and performs **zero runtime imports**: hook
 runtimes read it on the hot path, where ``renderer`` (which pulls in ``jinja2``
 and ``yaml`` at import time) is off-limits. ``renderer.SENTINEL`` re-exports it.
 
+:func:`file_has_sentinel` is the one bounded head read both the adapters'
+stale-output scans and the hook guards (specs/prK-hook-pack.md §E.1) decide
+on, so the two can never disagree about which file is engine output.
+
 The text is canonical as shipped: changing it would make every consumer's
 generated files drift on upgrade (specs/prK-lifecycle-hooks.md §P3).
 """
@@ -14,6 +18,7 @@ generated files drift on upgrade (specs/prK-lifecycle-hooks.md §P3).
 # runtime imports; mypy treats any name ``TYPE_CHECKING`` as true.
 TYPE_CHECKING = False
 if TYPE_CHECKING:
+    from os import PathLike
     from typing import Literal
 
     SentinelStyle = Literal["html", "hash", "slash"]
@@ -34,6 +39,12 @@ _SENTINEL_LINES: frozenset[str] = frozenset(
 )
 
 _FRONTMATTER_FENCE = "---"
+_FENCE_BYTES = b"---"
+
+#: The most :func:`file_has_sentinel` reads of one file. The sentinel sits on
+#: line 1 or right after a leading frontmatter block, which engine output keeps
+#: far below this; a scan never reads a large file whole.
+SENTINEL_HEAD_BYTES = 64 * 1024
 
 
 def sentinel_line(style: "SentinelStyle") -> str:
@@ -53,7 +64,7 @@ def sentinel_line(style: "SentinelStyle") -> str:
     return f"{opener}{SENTINEL}{closer}"
 
 
-def has_sentinel(text: str) -> bool:
+def has_sentinel(text: str, *, sentinel: str = SENTINEL) -> bool:
     """Whether ``text`` carries a sentinel line at one of its two anchored positions.
 
     The positions are line 1, or — for files that must open with a YAML
@@ -63,6 +74,8 @@ def has_sentinel(text: str) -> bool:
     ``\\r`` ignored), which is all the engine ever writes. A sentinel anywhere
     else, or quoted inside prose on one of those lines, is user text (``SPEC.md``
     and test fixtures quote it), so it never marks a file as engine-generated.
+    ``sentinel`` is the text to look for: a hook guard passes the one its
+    ``guard_config.json`` was rendered with.
 
     Example::
 
@@ -75,16 +88,44 @@ def has_sentinel(text: str) -> bool:
         >>> has_sentinel("Lines like `" + sentinel_line("html") + "` are generated.\\n")
         False
     """
+    accepted = _sentinel_lines(sentinel)
     lines = text.split("\n")
-    if _is_sentinel_line(lines[0]):
+    if _is_sentinel_line(lines[0], accepted):
         return True
     body_line = _first_body_line(lines)
-    return body_line is not None and _is_sentinel_line(body_line)
+    return body_line is not None and _is_sentinel_line(body_line, accepted)
 
 
-def _is_sentinel_line(line: str) -> bool:
-    """Whether ``line`` (its ``\\r`` stripped) is exactly one of the engine's sentinel lines."""
-    return line.rstrip("\r") in _SENTINEL_LINES
+def file_has_sentinel(path: "str | PathLike[str]", *, sentinel: str = SENTINEL) -> bool:
+    """:func:`has_sentinel` over the head of the file at ``path``, read bounded.
+
+    Reads line 1, or a leading frontmatter block plus one line, never more
+    than :data:`SENTINEL_HEAD_BYTES`. Binary, undecodable or unreadable files
+    (a directory, a missing path) count as user-owned: ``False``. The caller
+    keeps symlinks, secrets and non-regular files (a FIFO blocks ``open``) away.
+
+    Example::
+
+        >>> file_has_sentinel("/no/such/file.md")
+        False
+    """
+    try:
+        head = _sentinel_head(path).decode("utf-8")
+    except (UnicodeDecodeError, OSError):
+        return False
+    return has_sentinel(head, sentinel=sentinel)
+
+
+def _sentinel_lines(sentinel: str) -> frozenset[str]:
+    """Every exact marker line for ``sentinel``, one per comment style."""
+    if sentinel == SENTINEL:
+        return _SENTINEL_LINES
+    return frozenset(f"{opener}{sentinel}{closer}" for opener, closer in _STYLE_DELIMITERS.values())
+
+
+def _is_sentinel_line(line: str, accepted: frozenset[str]) -> bool:
+    """Whether ``line`` (its ``\\r`` stripped) is exactly one of the ``accepted`` lines."""
+    return line.rstrip("\r") in accepted
 
 
 def _first_body_line(lines: list[str]) -> str | None:
@@ -100,3 +141,30 @@ def _first_body_line(lines: list[str]) -> str | None:
         if lines[index].rstrip("\r") == _FRONTMATTER_FENCE:
             return lines[index + 1]
     return None
+
+
+def _sentinel_head(path: "str | PathLike[str]") -> bytes:
+    """The bytes :func:`has_sentinel` decides on: line 1, or a leading frontmatter block + one line.
+
+    Reads at most :data:`SENTINEL_HEAD_BYTES`. Lines split on ``\\n`` only,
+    exactly as :func:`has_sentinel` splits, so the verdict matches a whole-file
+    read. A frontmatter block longer than the cap reads as unterminated, so the
+    file counts as user-owned.
+    """
+    budget = SENTINEL_HEAD_BYTES
+    with open(path, "rb") as handle:
+        first = handle.readline(budget)
+        if first.rstrip(b"\n").rstrip(b"\r") != _FENCE_BYTES:
+            return first
+        head = [first]
+        budget -= len(first)
+        while budget > 0:
+            line = handle.readline(budget)
+            if not line:
+                break
+            head.append(line)
+            budget -= len(line)
+            if line.rstrip(b"\n").rstrip(b"\r") == _FENCE_BYTES:
+                head.append(handle.readline(budget))  # the first body line
+                break
+    return b"".join(head)

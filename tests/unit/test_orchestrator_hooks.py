@@ -40,6 +40,11 @@ def _make_hook(hook_id: str, source: str, **overrides: Any) -> Hook:
     return sample_hook(source, id=hook_id, **overrides)
 
 
+def _local(hooks: Sequence[Hook]) -> list[Hook]:
+    """The repo-local hooks; the engine's own pack (Track K5 on) resolves alongside them."""
+    return [hook for hook in hooks if hook.source_package == "<repo-local>"]
+
+
 class _SpyMerge:
     """Records every definition tuple handed to the layer merge, then merges for real."""
 
@@ -140,17 +145,20 @@ def test_from_repo_resolves_repo_local_hook(tmp_path, make_synthetic_repo, make_
 
     ctx = SyncContext.from_repo(repo)
 
-    assert [hook.frontmatter.id for hook in ctx.hooks_resolved] == ["guard-x"]
-    assert ctx.hooks_resolved[0].source_package == "<repo-local>"
-    assert ctx.hook_definitions == {"guard-x": (ctx.hooks_resolved[0],)}
+    [local] = _local(ctx.hooks_resolved)
+    assert local.frontmatter.id == "guard-x"
+    assert ctx.hook_definitions["guard-x"] == (local,)
+    assert {h.source_package for h in ctx.hooks_resolved} == {ENGINE_PACKAGE, "<repo-local>"}
     assert ctx.hook_load_errors == []
     assert ctx.hook_violations == []
 
 
-def test_from_repo_without_hooks_has_empty_hook_fields(tmp_path, make_synthetic_repo):
+def test_from_repo_without_hooks_has_only_the_engine_pack(tmp_path, make_synthetic_repo):
     ctx = SyncContext.from_repo(make_synthetic_repo(tmp_path))
 
-    assert (ctx.hooks_resolved, ctx.hook_definitions) == ([], {})
+    assert _local(ctx.hooks_resolved) == []
+    assert {hook.source_package for hook in ctx.hooks_resolved} <= {ENGINE_PACKAGE}
+    assert set(ctx.hook_definitions) == {hook.frontmatter.id for hook in ctx.hooks_resolved}
     assert (ctx.hook_load_errors, ctx.hook_violations) == ([], [])
 
 
@@ -163,7 +171,7 @@ def test_from_repo_tolerate_hook_errors_records_load_errors(
 
     ctx = SyncContext.from_repo(repo, tolerate_hook_errors=True)
 
-    assert [hook.frontmatter.id for hook in ctx.hooks_resolved] == ["good"]
+    assert [hook.frontmatter.id for hook in _local(ctx.hooks_resolved)] == ["good"]
     assert [error.where for error in ctx.hook_load_errors] == [str(bad)]
 
 

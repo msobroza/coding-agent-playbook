@@ -415,6 +415,21 @@ def test_mcp_on_opencode_and_unreachable_event_are_warnings() -> None:
     ]
 
 
+def test_engine_hook_degradation_is_not_a_consumer_warning() -> None:
+    """The engine's degraded cells are the documented §C.5.1 matrix (``playbook check``
+    labels them); warning about them would print in every consumer's sync (Track K5)."""
+    hook = sample_hook(
+        ENGINE,
+        events=["pre_tool_use", "subagent_stop"],
+        decisions=["deny", "none"],
+        supports=["claude_code", "opencode"],
+        matcher={"pre_tool_use": {"tools": ["edit", "notebook_edit", "mcp"]}},
+    )
+
+    assert _messages(hook) == []
+    assert _messages(hook, severity="warning") == []
+
+
 def test_timeout_above_event_cap_is_warning() -> None:
     hook = sample_hook(events=["session_start"], decisions=["context"], on_error="open", timeout=20)
 

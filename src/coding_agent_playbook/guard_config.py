@@ -15,19 +15,34 @@ hook-capable adapter is on:
 Both are committed and byte-compared by ``sync --check`` on every machine, so
 nothing here may read the machine: no absolute path, no ``sys.prefix``, no
 ``$HOME`` (§D.8.3). Absolute tool and interpreter paths are pins under the git
-dir instead (``hook_runtime.pin``). The §E.0.5 pack tables land with K5.
+dir instead (``hook_runtime.pin``). The §E.0.5 pack tables land with K5: the
+``sentinel`` and ``protected`` tables are built by ``_guard_config_protect``.
 """
 
 from __future__ import annotations
 
 import json
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook._guard_config_protect import (
+    ProtectedRow,
+    ProtectInputs,
+    adapter_output_dirs,
+    protected_rows,
+    protected_table,
+    resolve_resource_roots,
+    resource_root_ids,
+)
+from coding_agent_playbook._sentinel import SENTINEL
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.hook_policy import HOOK_SCRIPTS_DIR
-from coding_agent_playbook.hook_registrations import resolved_deadlines_ms
+from coding_agent_playbook.hook_registrations import (
+    LAUNCHER_PATH,
+    OPENCODE_SHIM_PATH,
+    resolved_deadlines_ms,
+)
 from coding_agent_playbook.hook_runtime._shell_wrappers import DEFAULT_RUNNER_WRAPPERS
 from coding_agent_playbook.hook_runtime.config import GUARD_CONFIG_REL
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
@@ -43,11 +58,18 @@ __all__ = [
     "GUARD_CONFIG_PATH",
     "GUARD_CONFIG_SCHEMA",
     "HOOKS_OUTPUT_DIR",
+    "HOOK_ARTIFACTS",
     "SYNC_OUTPUT_LOCATIONS",
     "CopiedScripts",
     "GuardConfigInputs",
+    "ProtectInputs",
+    "ProtectedRow",
+    "adapter_output_dirs",
     "copy_hook_scripts",
+    "protected_rows",
     "render_guard_config",
+    "resolve_resource_roots",
+    "resource_root_ids",
     "serialize_guard_config",
     "write_guard_config",
 ]
@@ -61,6 +83,13 @@ HOOKS_OUTPUT_DIR: Final = ".coding-agent-playbook/hooks/"
 #: Joins the adapters' ``output_locations`` in the leftover policy, so disabling
 #: hooks deletes the pristine sync-level outputs (no adapter declares them).
 SYNC_OUTPUT_LOCATIONS: Final[tuple[str, ...]] = (HOOKS_OUTPUT_DIR,)
+#: The guardrail files only the user may change (runtime glob grammar): the
+#: sync-level outputs, the Claude launcher dir and the OpenCode shim (§E.1).
+HOOK_ARTIFACTS: Final[tuple[str, ...]] = (
+    HOOKS_OUTPUT_DIR,
+    f"{LAUNCHER_PATH.rsplit('/', 1)[0]}/",
+    OPENCODE_SHIM_PATH,
+)
 
 #: The hooks whose presence switches the local logs on (§D.6.2); K9 ships them.
 _DECISION_LOG_HOOK: Final = "guard-decision-log"
@@ -96,7 +125,8 @@ _PATH_CLASSES: Final[Mapping[str, tuple[str, ...]]] = {
 class GuardConfigInputs:
     """Everything ``guard_config.json`` is rendered from; all of it machine-independent.
 
-    ``generated`` holds the enabled adapters' ``output_locations``.
+    ``generated`` holds the enabled adapters' ``output_locations``;
+    ``protected`` the written set, scan dirs and layer packages (§E.0.5).
 
     Example::
 
@@ -108,6 +138,7 @@ class GuardConfigInputs:
     guardrails: GuardrailsConfig
     engine_version: str
     generated: Sequence[str] = ()
+    protected: ProtectInputs = field(default_factory=ProtectInputs)
 
 
 @dataclass(frozen=True)
@@ -119,10 +150,11 @@ class CopiedScripts:
 
 
 def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
-    """The ``guard_config.json`` document (§D.8.2): envelope, hooks, deadlines, K3 tables.
+    """The ``guard_config.json`` document (§D.8.2): envelope, hooks, deadlines, K3/K5 tables.
 
     ``allow_code_from`` and ``state_ttl_days`` are the runtime keys beyond the
-    §D.8.2 table that ``hook_runtime.config`` reads (it cannot read ``[hooks]``).
+    §D.8.2 table that ``hook_runtime.config`` reads (it cannot read ``[hooks]``);
+    ``sentinel`` and ``protected`` are §E.0.5 pack tables (``GuardConfig.tables``).
 
     Example::
 
@@ -151,6 +183,8 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
         "secret_path_globs": _unique([*SECRET_PATH_GLOBS, *inputs.guardrails.secrets.extra_globs]),
         "allow_code_from": sorted(set(cfg.allow_code_from)),
         "state_ttl_days": cfg.state_ttl_days,
+        "sentinel": SENTINEL,
+        "protected": protected_table(inputs.protected, HOOK_ARTIFACTS),
     }
 
 

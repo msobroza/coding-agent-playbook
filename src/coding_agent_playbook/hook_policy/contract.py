@@ -11,8 +11,12 @@ hook at once:
 
 Three things are warnings, not errors (OQ-43): a tool class or event a listed
 adapter cannot reach (degraded there), and a timeout above its event's deadline
-cap (clamped). H14/H15 come from the layer merge, H19 from validate's body
-check, and the checks across hooks and config from :mod:`.contract_set`.
+cap (clamped). The two degradation warnings are author advice, so they are not
+raised for an engine-sourced hook: its degraded cells are the documented §C.5.1
+matrix, which ``playbook check`` labels, and every consumer's sync would print
+them otherwise (Track K5, the first engine pack hook). H14/H15 come from the
+layer merge, H19 from validate's body check, and the checks across hooks and
+config from :mod:`.contract_set`.
 
 Pure over one :class:`~coding_agent_playbook.types.Hook` and a
 :class:`HookCheckContext`; stdlib-only at import (the detector, which pulls in
@@ -173,7 +177,7 @@ def _matcher_check(hook: Hook, ctx: HookCheckContext) -> Iterator[Finding]:
             continue
         spec = HOOK_EVENTS.get(event)
         if spec is not None:  # a non-canonical event is H3's
-            yield from _matcher_entry(label, event, entry, spec, fm.supports)
+            yield from _matcher_entry(label, event, entry, spec, _degradable(hook, ctx))
 
 
 def _matcher_entry(
@@ -333,6 +337,11 @@ def _handlers_check(hook: Hook, ctx: HookCheckContext) -> Iterator[Finding]:
 # --- H11, H12: supports, tier, mandatory --------------------------------------------
 
 
+def _degradable(hook: Hook, ctx: HookCheckContext) -> Sequence[str]:
+    """The adapters whose degraded cells warn: none for an engine hook (§C.5.1 documents them)."""
+    return () if ctx.is_engine(hook) else hook.frontmatter.supports
+
+
 def _supports_check(hook: Hook, ctx: HookCheckContext) -> Iterator[Finding]:
     fm = hook.frontmatter
     capable = ", ".join(sorted(HOOK_CAPABLE_ADAPTERS))
@@ -345,7 +354,7 @@ def _supports_check(hook: Hook, ctx: HookCheckContext) -> Iterator[Finding]:
             yield error(f"supports: adapter {adapter!r} cannot enforce hooks; allowed: {capable}")
         elif events and not any(event in reachable for event in events):
             yield error(f"no declared event of hook {fm.id!r} is reachable on adapter {adapter!r}")
-        else:
+        elif adapter in _degradable(hook, ctx):
             for event in events:
                 if event not in reachable:
                     yield warning(

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib
 import re
+import sys
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
@@ -58,8 +59,13 @@ __all__ = [
 #: The attribute the decorator sets on a handler function: its declaration.
 HANDLER_ATTR: Final = "__playbook_hook_handler__"
 
-#: Registry name -> module. Empty in K2: the pack tracks (K5-K10) add their handlers.
-_BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType({})
+_HANDLERS: Final = "coding_agent_playbook.hook_runtime.handlers"
+#: Registry name -> module; the pack tracks (K5-K10) add a row per handler.
+_BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "guard_generated_outputs": f"{_HANDLERS}.guard_generated_outputs",
+    }
+)
 
 #: snake_case, plus ``:<role>`` for a companion bound to a second event (K-2).
 _NAME: Final = re.compile(r"[a-z][a-z0-9_]*(?::[a-z][a-z0-9_]*)?")
@@ -110,6 +116,8 @@ class HandlerContext:
     clock: Clock
     deadline: float
     hatches: EscapeHatches
+    platform: str = sys.platform
+    home: str | None = None
 
 
 class HandlerResolutionError(Exception):

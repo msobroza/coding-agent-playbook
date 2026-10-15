@@ -3,8 +3,10 @@
 The session-start heartbeat (§E.1) and ``playbook-hook doctor`` both prove the
 guards answer by dispatching canned payloads (a benign ``ls``, ``rm -rf /``,
 an edit of a protected file) and comparing the combined decision with the one
-expected. This module is the mechanism only; K5 adds the heartbeat's
-payloads to :data:`DEFAULT_CANARIES`.
+expected. Each row of :data:`DEFAULT_CANARIES` names the guard it proves
+(``hook_id``), so the heartbeat runs only the rows of enabled guards; the
+pack tracks add a row with each pre_tool_use guard (K5: an edit of the
+lockfile must be denied by guard-generated-outputs).
 
 Canary runs never pollute a real session: they use the session id
 ``playbook-doctor-<pid>``, every decision line is tagged ``canary: true``, and
@@ -20,8 +22,10 @@ import shutil
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook.hook_runtime.config import LOCKFILE_REL
+from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch import dispatch_event
-from coding_agent_playbook.hook_runtime.event import Harness
+from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.harness import CLAUDE_EVENT_NAMES
 from coding_agent_playbook.hook_runtime.paths import find_repo
 from coding_agent_playbook.hook_runtime.state import StateStore, session_key
@@ -29,9 +33,7 @@ from coding_agent_playbook.hook_runtime.state import StateStore, session_key
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.hook_runtime.decision import Decision
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.event import EventName
 
 __all__ = [
     "CANARY_SESSION_PREFIX",
@@ -50,7 +52,9 @@ class Canary:
     """One synthetic event and the combined decision it must produce.
 
     ``fields`` are the payload fields beyond the common ones (``tool_name``,
-    ``tool_input``, ``source``, ...).
+    ``tool_input``, ``source``, ...); a relative path in them resolves against
+    the repo root (the payload's ``cwd``). ``hook_id`` names the guard the row
+    proves (``""``: none in particular).
 
     Example::
 
@@ -62,6 +66,7 @@ class Canary:
     event: EventName
     expect: Decision
     fields: Mapping[str, Any] = field(default_factory=dict)
+    hook_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,8 +79,23 @@ class CanaryResult:
     latency_ms: int
 
 
-#: The heartbeat's canaries; K5 (§E.1) adds them with the guards they test.
-DEFAULT_CANARIES: Final[tuple[Canary, ...]] = ()
+#: The heartbeat's canaries, one row per guard it proves (§E.1); later tracks add theirs.
+DEFAULT_CANARIES: Final[tuple[Canary, ...]] = (
+    Canary(
+        name="edit-lockfile",
+        hook_id="guard-generated-outputs",
+        event=EventName.PRE_TOOL_USE,
+        expect=Decision.DENY,
+        fields={
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": LOCKFILE_REL,
+                "old_string": "schema_version",
+                "new_string": "schema_version",
+            },
+        },
+    ),
+)
 
 
 def canary_session_id(pid: int | None = None) -> str:

@@ -185,6 +185,8 @@ def _contexts(
             clock=deps.clock,
             deadline=deadline,
             hatches=hatches,
+            platform=deps.platform,
+            home=deps.home,
         )
 
     return make

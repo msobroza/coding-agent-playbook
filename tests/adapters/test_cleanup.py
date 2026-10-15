@@ -20,8 +20,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook._sentinel import has_sentinel, sentinel_line
-from coding_agent_playbook.adapters import base as adapter_base
+from coding_agent_playbook._sentinel import SENTINEL_HEAD_BYTES, has_sentinel, sentinel_line
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
@@ -257,15 +256,16 @@ def test_sentinel_head_verdict_matches_a_whole_file_read(tmp_path: Path, text: s
 
 
 def test_sentinel_head_read_is_bounded(tmp_path: Path) -> None:
-    """Only line 1 (or a frontmatter block + one line) is read, never the whole file."""
-    big_body = "x" * (2 * adapter_base._SENTINEL_HEAD_BYTES) + "\n"
-    plain = tmp_path / "plain.md"
-    plain.write_text(f"# Title\n{big_body}", encoding="utf-8")
+    """Only line 1 (or a frontmatter block + one line) is read, never the whole file.
+
+    The bounded read itself lives in ``_sentinel.file_has_sentinel`` (shared
+    with the hook guards); this pins that adapters still go through it.
+    """
+    big_body = "x" * (2 * SENTINEL_HEAD_BYTES) + "\n"
     fronted = tmp_path / "fronted.md"
     fronted.write_text(f"{_FRONTMATTER}{sentinel_line('html')}\n{big_body}", encoding="utf-8")
+    plain = tmp_path / "plain.md"
+    plain.write_text(f"# Title\n{big_body}", encoding="utf-8")
 
-    assert adapter_base._sentinel_head(plain) == b"# Title\n"
-    assert adapter_base._sentinel_head(fronted) == (
-        f"{_FRONTMATTER}{sentinel_line('html')}\n".encode()
-    )
     assert ContinueAdapter._carries_sentinel(fronted) is True
+    assert ContinueAdapter._carries_sentinel(plain) is False

@@ -261,11 +261,12 @@ _UNKNOWN_FACT_RULE = (
 
 
 def _engine_artifact_count(repo: Path) -> int:
-    """Rules + prompts the engine package resolves to (ids are unique per kind)."""
+    """Rules + prompts + hooks the engine package resolves to (ids are unique per kind)."""
     engine = FileSystemArtifactSource(repo_root=repo)
     rule_ids = {rule.frontmatter.id for rule in engine.list_rules()}
     prompt_ids = {prompt.frontmatter.id for prompt in engine.list_prompts()}
-    return len(rule_ids) + len(prompt_ids)
+    hook_ids = {hook.frontmatter.id for hook in engine.list_hooks()}
+    return len(rule_ids) + len(prompt_ids) + len(hook_ids)
 
 
 def test_validate_without_config_checks_engine_resources(tmp_path, capsys):
