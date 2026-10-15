@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook import __version__ as _installed_version
+from coding_agent_playbook._guard_config_quality import read_quality_lint
 from coding_agent_playbook._guard_config_ruff import (
     read_project_ruff_selection,
     ruff_candidate_codes,
@@ -205,6 +206,7 @@ def write_runtime_outputs(
         layout=repo_layout(ctx.repo_root),
         ruff=read_project_ruff_selection(ctx.repo_root),
         toolchain=read_toolchain_inputs(ctx.repo_root, ctx.facts),
+        quality=read_quality_lint(ctx.repo_root),
     )
     path = write_guard_config(out_root, render_guard_config(inputs))
     recorder.record([path], Provenance(kind="runtime"))
@@ -356,7 +358,11 @@ def finish_write(
             engine_version=version,
             resource_roots=roots,
             stage_tools=[r.tool for r in stop_stage_records(hooks.resolved) if r.tool],
-            ruff_codes=ruff_candidate_codes(hooks.resolved),
+            # The quality companion's codes are derived from [metrics] at render
+            # time, so they are added here for the probe (§F.2.2).
+            ruff_codes=sorted(
+                {*ruff_candidate_codes(hooks.resolved), *read_quality_lint(ctx.repo_root).codes}
+            ),
         )
     for line in summary_lines(hooks, ctx.adapters):
         print(line)

@@ -210,6 +210,65 @@ def test_parse_metrics_config_timeouts_positive():
     )
 
 
+def test_parse_ruff_violations_subtable_defaults_and_overrides():
+    """prK §F.2.1: ``[metrics.ruff_violations]`` families (per-family replace), config, preview."""
+    from coding_agent_playbook.evaluators.types import DEFAULT_RUFF_FAMILIES
+
+    defaults = parse_metrics_config({})
+    cfg = parse_metrics_config(
+        {
+            "ruff_violations": {
+                "families": {"quality": ["C901", "PLR1702"], "docstrings": []},
+                "config": {"lint.mccabe.max-complexity": 10, "lint.pylint.max-args": 5},
+                "preview": True,
+            }
+        }
+    )
+
+    assert defaults.ruff_families == dict(DEFAULT_RUFF_FAMILIES)
+    assert (defaults.ruff_config, defaults.ruff_preview) == ({}, False)
+    assert cfg.ruff_families == {"quality": ("C901", "PLR1702")}
+    assert cfg.ruff_settings.config == (
+        "lint.mccabe.max-complexity=10",
+        "lint.pylint.max-args=5",
+    )
+    assert cfg.ruff_settings.preview is True
+
+
+@pytest.mark.parametrize(
+    ("table", "message"),
+    [
+        (
+            {"families": {"quality": ["C901", "c9x"]}},
+            "[metrics] ruff_violations.families.quality must be a list of ruff codes like "
+            "'C901', got ['C901', 'c9x']",
+        ),
+        (
+            {"families": {"Bad Name": ["C901"]}},
+            "[metrics] ruff_violations.families: bad family name 'Bad Name' "
+            "(expected lowercase letters, digits and _)",
+        ),
+        (
+            {"config": {"--select": "ALL"}},
+            "[metrics] ruff_violations.config: bad ruff setting '--select' "
+            "(expected a dotted name like 'lint.mccabe.max-complexity')",
+        ),
+        (
+            {"config": {"lint.x": {"a": 1}}},
+            "[metrics] ruff_violations.config.lint.x must be a string, number, boolean "
+            "or a list of them, got {'a': 1}",
+        ),
+        ({"preview": "yes"}, "[metrics] ruff_violations.preview must be true or false, got 'yes'"),
+    ],
+    ids=["code", "family", "setting", "value", "preview"],
+)
+def test_ruff_violations_rejects_bad_codes_naming_value(table, message):
+    with pytest.raises(ValueError) as excinfo:
+        parse_metrics_config({"ruff_violations": table})
+
+    assert str(excinfo.value) == message
+
+
 def test_parse_links_config_empty_uses_strict_default():
     from coding_agent_playbook.config import parse_links_config
 

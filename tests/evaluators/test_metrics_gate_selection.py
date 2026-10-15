@@ -21,6 +21,7 @@ from coding_agent_playbook.evaluators.metrics_gate import (
     MetricsGateUsageError,
     run_metrics_gate,
 )
+from coding_agent_playbook.evaluators.policy import OPT_IN_METRICS
 from coding_agent_playbook.evaluators.types import Measurement, MetricConfig
 from tests.cli.test_metrics import _BASELINE_SOURCE, _CLEAN_SOURCE, _WORSE_SOURCE
 from tests.fakes import FakeBaselineGit, FakeGitRunner, FakeProjectFactory
@@ -28,7 +29,10 @@ from tests.fakes import FakeBaselineGit, FakeGitRunner, FakeProjectFactory
 if TYPE_CHECKING:
     from pathlib import Path
 
-_STATIC_CHECKS = [f"threshold:{metric.name}" for metric in static_metrics()]
+#: The default selection: every static metric except the opt-in ones (prK §F.2.1).
+_STATIC_CHECKS = [
+    f"threshold:{metric.name}" for metric in static_metrics() if metric.name not in OPT_IN_METRICS
+]
 _FIXTURE = "eval_tasks/t1/setup/needle.py"
 
 

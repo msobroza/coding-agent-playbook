@@ -30,7 +30,10 @@ repo's own ruff selection and the safe-fix rules the post-edit pipeline may
 apply (``_guard_config_ruff``); the pinned ruff's version-specific facts live
 in ``machine.json`` instead. toolchain-missing-hint's install hint and
 pytest-conventions-feedback's asyncio flag are derived from the repo's
-pyproject into those hooks' config (``_guard_config_toolchain``).
+pyproject into those hooks' config (``_guard_config_toolchain``), and the
+quality companion's codes and ``--config`` thresholds from the committed
+``[metrics.ruff_violations]`` into clean-code-metrics-nonregression's
+(``_guard_config_quality``, §F.2.2).
 ``notebooks.max_bytes`` is the engine's parse cap for a notebook (a larger
 one is reported unparsed), shared by the notebook-reading hooks. The K8
 secret tables (``secret_path_exempt``, ``secret_glob_exempt``,
@@ -63,6 +66,11 @@ from coding_agent_playbook._guard_config_protect import (
     protected_table,
     resolve_resource_roots,
     resource_root_ids,
+)
+from coding_agent_playbook._guard_config_quality import (
+    QUALITY_HOOK_ID,
+    QualityLint,
+    quality_hook_config,
 )
 from coding_agent_playbook._guard_config_ruff import RuffSelection, ruff_table
 from coding_agent_playbook._guard_config_secrets import secret_tables
@@ -196,7 +204,8 @@ class GuardConfigInputs:
     config (§E.2); ``ruff`` the repo's ruff selection
     (``read_project_ruff_selection``); ``toolchain`` the hook config derived
     from its pyproject (``read_toolchain_inputs``: the install hint, pytest's
-    asyncio marks).
+    asyncio marks); ``quality`` the committed ``[metrics.ruff_violations]``
+    (``read_quality_lint``).
 
     Example::
 
@@ -215,6 +224,7 @@ class GuardConfigInputs:
     layout: RepoLayout = field(default_factory=RepoLayout)
     ruff: RuffSelection = field(default_factory=RuffSelection)
     toolchain: ToolchainInputs = field(default_factory=ToolchainInputs)
+    quality: QualityLint = field(default_factory=QualityLint)
 
 
 @dataclass(frozen=True)
@@ -244,7 +254,10 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
     cfg = inputs.hooks_config
     on = {hook.id for hook in inputs.hooks}
     scopes = prompt_scopes(inputs.prompts)
-    derived = derived_hook_config(inputs.toolchain)
+    derived = {
+        **derived_hook_config(inputs.toolchain),
+        QUALITY_HOOK_ID: quality_hook_config(inputs.quality, inputs.ruff),
+    }
     return {
         "schema_version": GUARD_CONFIG_SCHEMA,
         "engine_version": inputs.engine_version,

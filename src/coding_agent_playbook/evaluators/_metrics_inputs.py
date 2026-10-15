@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, GitTimeoutError
 from coding_agent_playbook.evaluators.parse import parse_module
 from coding_agent_playbook.evaluators.paths import matches_any_glob
-from coding_agent_playbook.evaluators.types import EvalContext
+from coding_agent_playbook.evaluators.types import EvalContext, ToolSetup
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -172,12 +172,14 @@ def _repo_rel_path(path: Path, repo_root: Path) -> str | None:
 class SourceMeter:
     """Reads and measures Python sources with the gate's static metrics.
 
-    A file over ``max_file_bytes`` is never read into the parser.
+    A file over ``max_file_bytes`` is never read into the parser. ``tool_setup``
+    is how a subprocess-backed metric (``ruff_violations``) runs its tool.
     """
 
     metrics: Sequence[Metric]
     tool_paths: Mapping[str, str]
     max_file_bytes: int = MAX_FILE_BYTES
+    tool_setup: ToolSetup = field(default_factory=ToolSetup)
 
     def measure(self, source: str, label: str) -> list[Measurement]:
         """Parse ``source`` and run every available metric over it.
@@ -186,7 +188,13 @@ class SourceMeter:
         (:data:`_BAD_SOURCE_ERRORS`); the caller skips or drops the file.
         """
         module = parse_module(source, label)
-        ctx = EvalContext(module=module, source=source, label=label, tool_paths=self.tool_paths)
+        ctx = EvalContext(
+            module=module,
+            source=source,
+            label=label,
+            tool_paths=self.tool_paths,
+            tool_setup=self.tool_setup,
+        )
         measurements: list[Measurement] = []
         for metric in self.metrics:
             if metric.available(ctx):
@@ -219,13 +227,27 @@ class SourceMeter:
         ``None`` (the file counts as all-new, like one that does not parse) when
         the blob is over the cap or not UTF-8.
         """
-        if len(raw) > self.max_file_bytes:
-            return None
-        try:
-            text = raw.decode("utf-8")
-        except UnicodeDecodeError:
-            return None
-        return text.replace("\r\n", "\n").replace("\r", "\n")
+        return decode_source_blob(raw, self.max_file_bytes)
+
+
+def decode_source_blob(raw: bytes, max_file_bytes: int = MAX_FILE_BYTES) -> str | None:
+    """A baseline blob as the text the gate measures: UTF-8 with universal newlines.
+
+    ``None`` when it is over ``max_file_bytes`` or not UTF-8. A Stop stage
+    decodes a ``HEAD`` blob with it to ask the gate's ruff memo about the same text.
+
+    Example::
+
+        >>> decode_source_blob(b"x = 1\\r\\n")
+        'x = 1\\n'
+    """
+    if len(raw) > max_file_bytes:
+        return None
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
 @dataclass

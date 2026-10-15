@@ -18,7 +18,7 @@ from coding_agent_playbook.cli import build_parser
 from coding_agent_playbook.commands import metrics as _metrics
 from coding_agent_playbook.evaluators.metrics_gate import CONFIG_FILENAME, MetricsGateDeps
 from tests.cli.test_metrics import _BASELINE_SOURCE, _CLEAN_SOURCE, _HIGH_CC_SOURCE, _WORSE_SOURCE
-from tests.fakes import FakeProjectFactory
+from tests.fakes import FakeProjectFactory, FakeRuffRunner, ruff_row
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -226,3 +226,49 @@ def test_json_baseline_bad_schema_exits_two(
 
     assert rc == 2
     assert message in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------------- #
+# ruff_violations (prK §F.2.1): opt-in, ruff found on PATH, both sides on stdin
+# --------------------------------------------------------------------------- #
+
+_STUB_RUFF = "/stub/bin/ruff"
+
+
+def _ruff_deps(runner: FakeRuffRunner) -> MetricsGateDeps:
+    """``ruff`` "on PATH" is the stub path; its calls go to ``runner``, never a process."""
+    return MetricsGateDeps(
+        which=lambda name: _STUB_RUFF if name == "ruff" else None, tool_runner=runner
+    )
+
+
+def test_extend_select_ruff_violations_with_stub_ruff(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    grown = _BASELINE_SOURCE + "\n\ndef extra():\n    return 1\n"
+    _write(repo / "a.py", grown)
+    runner = FakeRuffRunner(answers={grown: [ruff_row("D103", 7, "Missing docstring")]})
+    argv = ["--baseline", "git:HEAD", "--extend-select", "ruff_violations", "--format", "json"]
+
+    rc = _cli(str(repo / "a.py"), *argv, "--repo-root", str(repo), deps=_ruff_deps(runner))
+
+    findings = json.loads(capsys.readouterr().out)["findings"]
+    ruff = {(f["scope_key"], f["level"]) for f in findings if f["evaluator"] == "ruff_violations"}
+    assert rc == 1
+    assert ruff == {("a.py::ruff:docstrings", "fail"), ("a.py::ruff:quality", "ok")}
+    assert sorted(stdin for _, stdin, _, _ in runner.calls) == sorted([_BASELINE_SOURCE, grown])
+    assert {(argv[0], cwd) for argv, _, cwd, _ in runner.calls} == {(_STUB_RUFF, repo)}
+
+
+def test_ruff_violations_absent_from_default_output(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    runner = FakeRuffRunner()
+
+    rc = _cli(
+        str(repo / "a.py"), "--format", "json", "--repo-root", str(repo), deps=_ruff_deps(runner)
+    )
+
+    evaluators = {f["evaluator"] for f in json.loads(capsys.readouterr().out)["findings"]}
+    assert (rc, runner.calls) == (0, [])
+    assert evaluators.isdisjoint({"ruff_violations", "file_sloc", "docstring_example"})

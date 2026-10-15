@@ -1,8 +1,8 @@
 """The shared §E.3 post-edit pipeline: one ruff diagnostics call per edited file (specs/prK-hook-pack.md §E.3).
 
 Every ruff consumer hook (post-edit-ruff-format, the three rule-linked lint
-hooks; §F's companions later) runs these steps per edited file, in-process,
-sharing their work through the event memo:
+hooks, §F's quality and docstrings companions) runs these steps per edited
+file, in-process, sharing their work through the event memo:
 
 1. **eligibility** (:func:`edited_python_files`): a ``.py``/``.pyi`` file
    tool write whose realpath is inside this worktree, not a secret path, not
@@ -15,7 +15,10 @@ sharing their work through the event memo:
 5. **D1** (:func:`file_report`): ``_ruff.ruff_diagnostics_for``, the
    project's selection plus ``U`` (:func:`file_codes`): the codes of the
    consumers that are on for this event **and** whose paths take this file.
-   Every consumer computes the same ``U`` for a file, so D1 runs once;
+   Every consumer computes the same ``U`` for a file, so D1 runs once. The
+   quality companion's ``--config`` thresholds ride on D1, and its preview-only
+   codes (PLR1702) get one separate ``--preview`` call (:func:`file_ruff_config`,
+   :func:`file_preview_codes`);
 6. **changed lines**: diagnostics outside the lines the edit inserted or
    replaced are dropped, so legacy code is never flooded; a parse error is
    always kept (the edit caused it, wherever ruff points);
@@ -45,7 +48,7 @@ from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths, repo_file
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
     from coding_agent_playbook.hook_runtime._ruff import PinProblem, RuffDiagnostic
     from coding_agent_playbook.hook_runtime.config import GuardConfig, HookRecord
@@ -63,8 +66,11 @@ __all__ = [
     "blob_oid",
     "edited_python_files",
     "enabled_consumers",
+    "event_ruff_pin",
     "file_codes",
+    "file_preview_codes",
     "file_report",
+    "file_ruff_config",
     "head_blob",
     "lint_codes_of",
     "ruff_runner",
@@ -73,7 +79,14 @@ __all__ = [
 
 POST_EDIT_HOOK_ID: Final = "post-edit-ruff-format"
 #: The builtins that read D1; every one of them computes the same codes, so D1 runs once.
-RUFF_CONSUMERS: Final = frozenset({"ruff_post_edit", "ruff_lint_feedback"})
+RUFF_CONSUMERS: Final = frozenset(
+    {
+        "ruff_post_edit",
+        "ruff_lint_feedback",
+        "clean_code_metrics_nonregression:post_edit",
+        "docstring_nonregression:post_edit",
+    }
+)
 #: A file larger than this gets no ruff work: 2 s per call would not cover it.
 MAX_FILE_BYTES: Final = 2 * 1024 * 1024
 _PY_SUFFIXES: Final = (".py", ".pyi")
@@ -138,15 +151,27 @@ def ruff_runner(ev: CanonicalEvent, ctx: HandlerContext) -> RuffRunner | PinProb
     """
     repo = ev.repo
     assert repo is not None  # eligibility found a file in this repo
+    pin = event_ruff_pin(ctx, repo.git_dir)
+    if isinstance(pin, RuffPin):
+        return RuffRunner(ctx.proc, pin, cwd=repo.worktree_root)
+    return pin
+
+
+def event_ruff_pin(ctx: HandlerContext, git_dir: str | None) -> RuffPin | PinProblem:
+    """The worktree's ruff pin, read once per event (post-edit and Stop share it).
+
+    Example::
+
+        >>> event_ruff_pin(ctx, ev.repo.git_dir)  # doctest: +SKIP
+        'missing'
+    """
 
     def load() -> RuffPin | PinProblem:
         from coding_agent_playbook.hook_runtime.pin import read_machine_pins
 
-        return ruff_pin(read_machine_pins(git_dir=repo.git_dir))
+        return ruff_pin(read_machine_pins(git_dir=git_dir))
 
-    pin = ctx.memo.get_or_compute(("ruff-pin",), load)
-    if isinstance(pin, RuffPin):
-        return RuffRunner(ctx.proc, pin, cwd=repo.worktree_root)
+    pin: RuffPin | PinProblem = ctx.memo.get_or_compute(("ruff-pin", git_dir), load)
     return pin
 
 
@@ -243,6 +268,9 @@ def file_report(
     edited: EditedFile,
     head: HeadBlob | None,
     codes: Iterable[str],
+    *,
+    config: Sequence[str] = (),
+    preview: Iterable[str] = (),
 ) -> FileReport | None:
     """D1 on ``edited`` as it is on disk now, kept to the changed lines; ``None`` if unreadable.
 
@@ -257,7 +285,9 @@ def file_report(
     wanted = frozenset(codes)
 
     def build() -> FileReport:
-        found = ruff_diagnostics_for(runner, ctx.memo, edited.path, data, wanted)
+        found = ruff_diagnostics_for(
+            runner, ctx.memo, edited.path, data, wanted, config=config, preview=preview
+        )
         text = data.decode("utf-8", errors="replace")
         changed = frozenset(changed_lines(None if head is None else head.text, text))
         kept = tuple(d for d in found if d.is_syntax_error or d.row in changed)
@@ -301,6 +331,8 @@ def enabled_consumers(ev: CanonicalEvent, ctx: HandlerContext) -> dict[str, Hook
         spec = record.handlers.get(EventName.POST_TOOL_USE)
         if spec is None or spec.kind != "builtin" or spec.name not in RUFF_CONSUMERS:
             continue
+        if spec.config.get("lint_feedback") is False:
+            continue  # a companion switched off (the quality one is opt-in): no codes, no lines
         if ev.harness.value not in record.supports:
             continue
         if ctx.hatches.skips(hook_id, mandatory=record.mandatory):
@@ -335,6 +367,53 @@ def lint_codes_of(record: HookRecord) -> frozenset[str]:
     if not isinstance(listed, list):
         return frozenset()
     return frozenset(code for code in listed if isinstance(code, str))
+
+
+def file_ruff_config(consumers: Mapping[str, HookRecord], edited: EditedFile) -> list[str]:
+    """The ``--config`` overrides D1 carries for ``edited``: its consumers' ``ruff_config``.
+
+    Sync renders them from ``[metrics.ruff_violations] config`` into the
+    quality companion's config, minus those of codes the project selects itself.
+
+    Example::
+
+        >>> file_ruff_config({}, edited)  # doctest: +SKIP
+        []
+    """
+    flags: set[str] = set()
+    for record in consumers.values():
+        if accepts_file(record, edited):
+            flags.update(_strings(_post_edit_config(record).get("ruff_config")))
+    return sorted(flags)
+
+
+def file_preview_codes(
+    consumers: Mapping[str, HookRecord], edited: EditedFile, drop: Iterable[str]
+) -> list[str]:
+    """The codes of a ``ruff_preview`` consumer the pinned ruff runs only under ``--preview``.
+
+    ``drop`` is the pin's: what plain D1 cannot run (preview-only or unknown).
+
+    Example::
+
+        >>> file_preview_codes({}, edited, ["PLR1702"])  # doctest: +SKIP
+        []
+    """
+    dropped = set(drop)
+    codes: set[str] = set()
+    for record in consumers.values():
+        if accepts_file(record, edited) and _post_edit_config(record).get("ruff_preview") is True:
+            codes.update(lint_codes_of(record) & dropped)
+    return sorted(codes)
+
+
+def _post_edit_config(record: HookRecord) -> Mapping[str, object]:
+    spec = record.handlers.get(EventName.POST_TOOL_USE)
+    return {} if spec is None else spec.config
+
+
+def _strings(value: object) -> list[str]:
+    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
 
 
 def file_codes(consumers: Mapping[str, HookRecord], edited: EditedFile) -> frozenset[str]:

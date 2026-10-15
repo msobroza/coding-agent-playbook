@@ -35,7 +35,14 @@ class PackRow(NamedTuple):
 
 VERIFY_PACK: dict[str, PackRow] = {
     "stop-ci-parity-gate": PackRow("default", ("stop",), ("deny", "none"), "open"),
-    "clean-code-metrics-nonregression": PackRow("default", ("stop",), ("deny", "none"), "open"),
+    # §E.2 + §F.2.2: the stage plus its opt-in post-edit companion (the quality bucket).
+    "clean-code-metrics-nonregression": PackRow(
+        "default", ("stop", "post_tool_use"), ("deny", "context", "none"), "open"
+    ),
+    # §F.3.2: the docstrings stage plus its post-edit bucket.
+    "docstring-nonregression": PackRow(
+        "default", ("stop", "post_tool_use"), ("deny", "context", "none"), "open"
+    ),
     "block-precommit-bypass": PackRow("default", ("pre_tool_use",), ("deny", "ask", "none"), "ask"),
     "gate-weakening-guard": PackRow(
         "default", ("stop", "pre_tool_use"), ("deny", "ask", "none"), "ask"
@@ -94,6 +101,7 @@ def test_handlers_declare_config_schema_and_no_input_mutation(hook_id: str) -> N
     ("hook_id", "stage"),
     [
         ("clean-code-metrics-nonregression", "quality-metrics"),
+        ("docstring-nonregression", "docstrings"),
         ("gate-weakening-guard", "gate-integrity"),
         ("tests-with-source-nudge", "tests-nudge"),
         ("prompt-output-contract-on-stop", "output-contract"),

@@ -182,6 +182,7 @@ def test_handler_approval_mirrors_the_runtime_record(repo: Path, tmp_path: Path)
         "guard-x",
         "block-precommit-bypass",
         "clean-code-metrics-nonregression",
+        "docstring-nonregression",
         "gate-weakening-guard",
         "guard-generated-outputs",
         "control-plane-guard",

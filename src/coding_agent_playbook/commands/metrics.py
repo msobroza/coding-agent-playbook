@@ -83,6 +83,7 @@ from coding_agent_playbook.evaluators.metrics_gate import (
     MetricsGateDeps,
     MetricsGateRequest,
     MetricsGateUsageError,
+    cli_tool_paths,
     load_metrics_config,
     run_metrics_gate,
 )
@@ -130,7 +131,8 @@ def _build_request(
     """Load ``[metrics]`` and fold the flags in.
 
     ``--run-tests`` / ``--no-run-tests`` override ``[metrics] run_tests``; each
-    selection flag replaces its ``[metrics]`` key.
+    selection flag replaces its ``[metrics]`` key. ``ruff`` comes from ``PATH``
+    (``deps.which``), for the opt-in ``ruff_violations``.
     """
     config = load_metrics_config(repo_root)
     run_tests = getattr(args, "run_tests", None)
@@ -144,6 +146,7 @@ def _build_request(
         strict=bool(getattr(args, "strict", False)),
         run_tests=config.run_tests if run_tests is None else bool(run_tests),
         test_cmd=_resolve_test_cmd(args, config),
+        tool_paths=cli_tool_paths(deps.which),
         select=_comma_names(getattr(args, "select", None)),
         extend_select=_comma_names(getattr(args, "extend_select", None)),
         ignore=_comma_names(getattr(args, "ignore", None)),

@@ -15,12 +15,15 @@ without running a suite, and ``FakeBaselineGit`` stands in for
 calls (the interpreter pin and ``machine.json`` under the git dir).
 ``FakeCiStepRunner`` stands in for :class:`coding_agent_playbook.commands.ci.SubprocessCiStepRunner`
 so ``playbook ci`` tests see each step's argv without spawning a child.
+``FakeRuffRunner`` stands in for the metrics gate's ``ToolRunner`` (a ruff
+subprocess), so ``ruff_violations`` tests script ruff's JSON per source text.
 :func:`record_opens` spies on every ``open`` so a scan test can prove a file was never read.
 """
 
 from __future__ import annotations
 
 import io
+import json
 import sys
 import unicodedata
 from dataclasses import dataclass, field
@@ -30,6 +33,7 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook.commands.ci import StepRun
 from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, GitTimeoutError
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle
+from coding_agent_playbook.evaluators.tool_runner import ToolRunError
 from coding_agent_playbook.hook_runtime.pin import PinResult
 
 if TYPE_CHECKING:
@@ -272,6 +276,39 @@ class FakeCiStepRunner:
         self.timeouts.append(timeout_s)
         subcommand = argv[3]  # after <python> -m coding_agent_playbook.cli
         return StepRun(self.exits.get(subcommand, 0), f"{subcommand} said hello\n")
+
+
+def ruff_row(code: str | None, row: int = 1, message: str = "") -> dict[str, object]:
+    """One ``ruff check --output-format json`` row (``code=None``: a syntax error).
+
+    Example: ``FakeRuffRunner(answers={"x = (": [ruff_row(None)]})``.
+    """
+    return {"code": code, "location": {"row": row, "column": 1}, "message": message}
+
+
+@dataclass
+class FakeRuffRunner:
+    """In-memory ``ToolRunner`` for ``ruff check ... -``: answers by the source on stdin.
+
+    ``answers`` maps a source text to its JSON rows (unlisted sources: ``[]``);
+    ``returncode`` is every call's exit; ``timeout`` makes every call raise
+    :class:`ToolRunError` as a timed-out subprocess does. ``calls`` records
+    ``(argv, stdin text, cwd, timeout_s)``.
+    """
+
+    answers: dict[str, list[dict[str, object]]] = field(default_factory=dict)
+    returncode: int = 0
+    timeout: bool = False
+    calls: list[tuple[tuple[str, ...], str, Path | None, float]] = field(default_factory=list)
+
+    def __call__(
+        self, argv: Sequence[str], stdin: bytes, cwd: Path | None, timeout_s: float
+    ) -> tuple[int, bytes]:
+        source = stdin.decode("utf-8")
+        self.calls.append((tuple(argv), source, cwd, timeout_s))
+        if self.timeout:
+            raise ToolRunError(f"{argv[0]} timed out after {timeout_s:g}s")
+        return self.returncode, json.dumps(self.answers.get(source, [])).encode()
 
 
 def record_opens(monkeypatch: pytest.MonkeyPatch) -> list[Path]:

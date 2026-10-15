@@ -23,6 +23,11 @@ typing skips ``tests/`` and stubs, reports ``ANN001``/``ANN201`` on public
 defs only, leaves every ``ANN*`` to a Stop ``typecheck`` stage when one is on,
 and leaves ``UP007``/``UP045`` to M1 when the safe fixes cover them. An
 ``ANN401`` line carries the rule's "Any is a last resort" note.
+
+§F's companions add two rows (§F.2.2, §F.3.2): ``quality:`` (C901 and the
+PLR budget codes, opt-in) and ``rule python-docstrings:`` (D100-D107, never
+under ``tests/``). Both report on def lines, so the changed-lines filter
+already keeps them to defs that are new or whose signature line changed.
 """
 
 from __future__ import annotations
@@ -53,9 +58,11 @@ if TYPE_CHECKING:
 
 __all__ = [
     "BUCKETS",
+    "DOCSTRINGS_HOOK_ID",
     "ERROR_HANDLING_HOOK_ID",
     "MAX_EVENT_LINES",
     "PYTEST_HOOK_ID",
+    "QUALITY_HOOK_ID",
     "TYPING_HOOK_ID",
     "BucketRow",
     "Finding",
@@ -67,6 +74,8 @@ __all__ = [
 ERROR_HANDLING_HOOK_ID: Final = "error-handling-lint-feedback"
 TYPING_HOOK_ID: Final = "typing-lint-feedback"
 PYTEST_HOOK_ID: Final = "pytest-conventions-feedback"
+QUALITY_HOOK_ID: Final = "clean-code-metrics-nonregression"
+DOCSTRINGS_HOOK_ID: Final = "docstring-nonregression"
 #: §E.3: at most 8 lines per event, at most 5 from bucket 1 (post-edit's ``max_project_lines``).
 MAX_EVENT_LINES: Final = OutputCaps.CONTEXT_ITEMS_PER_EVENT
 DEFAULT_PROJECT_LINES: Final = 5
@@ -137,11 +146,16 @@ class Judge:
 
 @dataclass(frozen=True, slots=True)
 class BucketRow:
-    """One §E.3 bucket: the hook that reports it, its linked rule (``""``: CI's), its claim."""
+    """One §E.3 bucket: the hook that reports it, its linked rule (``""``: CI's), its claim.
+
+    ``label`` names a row with no linked rule (``quality``): its line prefix is
+    ``<label>:`` instead of ``rule <id>:``.
+    """
 
     hook_id: str
     rule: str
     claims: Callable[[Finding, Judge], bool]
+    label: str = ""
 
 
 def _ci_fails(finding: Finding, judge: Judge) -> bool:
@@ -176,12 +190,22 @@ def _pytest(finding: Finding, judge: Judge) -> bool:
     return judge.owns(PYTEST_HOOK_ID, finding)
 
 
-#: First match wins; §F's companions (quality, docstrings) add rows here.
+def _quality(finding: Finding, judge: Judge) -> bool:
+    return judge.owns(QUALITY_HOOK_ID, finding)
+
+
+def _docstrings(finding: Finding, judge: Judge) -> bool:
+    return judge.owns(DOCSTRINGS_HOOK_ID, finding) and not _in_tests(finding.rel)
+
+
+#: First match wins.
 BUCKETS: Final[tuple[BucketRow, ...]] = (
     BucketRow(POST_EDIT_HOOK_ID, "", _ci_fails),
     BucketRow(ERROR_HANDLING_HOOK_ID, "python-error-handling", _error_handling),
     BucketRow(TYPING_HOOK_ID, "python-typing", _typing),
     BucketRow(PYTEST_HOOK_ID, "pytest", _pytest),
+    BucketRow(QUALITY_HOOK_ID, "quality", _quality, label="quality"),
+    BucketRow(DOCSTRINGS_HOOK_ID, "python-docstrings", _docstrings),
 )
 
 
@@ -234,7 +258,7 @@ def _place(
     if rows[first].rule != "":
         return first, finding, ""
     also = next((rows[i] for i in claimed[1:] if rows[i].rule != ""), None)
-    return first, finding, "" if also is None else f" (rule {_rule_id(also, judge)})"
+    return first, finding, "" if also is None else f" ({_name(also, judge)})"
 
 
 def _rule_id(row: BucketRow, judge: Judge) -> str:
@@ -242,8 +266,13 @@ def _rule_id(row: BucketRow, judge: Judge) -> str:
     return judge.rules.get(row.hook_id, row.rule)
 
 
+def _name(row: BucketRow, judge: Judge) -> str:
+    """``rule <id>``, or the row's own label when it has no linked rule."""
+    return row.label or f"rule {_rule_id(row, judge)}"
+
+
 def _prefix(row: BucketRow, judge: Judge) -> str:
-    return _CI_PREFIX if row.rule == "" else f"rule {_rule_id(row, judge)}:"
+    return _CI_PREFIX if row.rule == "" else f"{_name(row, judge)}:"
 
 
 def _dedupe_key(finding: Finding) -> str:

@@ -135,15 +135,17 @@ def test_first_sync_writes_every_hook_output(synced: Path) -> None:
     assert list(doc["hooks"]) == ENGINE_PACK_EVENTS
     assert (synced / LAUNCHER).is_file()
     config = json.loads((synced / GUARD_CONFIG).read_bytes())
-    # The engine pack's default-tier hooks (Tracks K5, K6), K7's feedback hooks and K8's
-    # secret, Bash, dependency and exfil guards; guard-eval-fixtures, command-convention-guard
-    # and taint-escalation are opt-in, and the fixture detects no pytest (its lint hook is off).
+    # The engine pack's default-tier hooks (Tracks K5, K6), K7's feedback hooks, K8's
+    # secret, Bash, dependency and exfil guards and K10's docstring stage; guard-eval-fixtures,
+    # command-convention-guard and taint-escalation are opt-in, and the fixture detects no
+    # pytest (its lint hook is off).
     assert sorted(config["hooks"]) == [
         "block-precommit-bypass",
         "clean-code-metrics-nonregression",
         "control-plane-guard",
         "dependency-allowlist-guard",
         "destructive-command-guard",
+        "docstring-nonregression",
         "error-handling-lint-feedback",
         "eval-task-authoring-lint",
         "exfil-channel-guard",
@@ -394,8 +396,8 @@ def test_summary_lines_counts_and_hand_edit_warning(
     repo = make_hook_repo(tmp_path / "repo", make_synthetic_repo)
     assert _sync_repo(repo, tmp_path) == 0
     out = capsys.readouterr().out
-    # guard-x, guard-ext and the engine pack's twenty-three default-tier hooks on here (seven
-    # protect, the Stop coordinator, two of its stage hooks, block-precommit-bypass (K6),
+    # guard-x, guard-ext and the engine pack's twenty-four default-tier hooks on here (seven
+    # protect, the Stop coordinator, three of its stage hooks (K6, K10), block-precommit-bypass,
     # post-edit-ruff-format, prompt-write-scope-guard, the error-handling and typing lint
     # hooks, toolchain-missing-hint (K7), the three secret hooks, the two Bash guards and the
     # dependency and exfil guards (K8)); pytest's is off (no pytest detected), and so is the ML
@@ -405,9 +407,9 @@ def test_summary_lines_counts_and_hand_edit_warning(
     # is one entry, toolchain-missing-hint's PostToolUseFailure another, and each native
     # deny row (secrets and destructive prefixes) one more.
     native = sum(len(rows) for rows in _native_rows().values())
-    assert "✓ Hooks: 25 enabled, 9 skipped (" in out
-    assert "claude_code: 25 enforced" in out
-    assert "continue: 22 advisory" in out
+    assert "✓ Hooks: 26 enabled, 9 skipped (" in out
+    assert "claude_code: 26 enforced" in out
+    assert "continue: 23 advisory" in out
     updated = f"{6 + native} managed entries updated, 0 removed (user keys untouched)"
     assert f"✓ {SETTINGS}: {updated}" in out
 

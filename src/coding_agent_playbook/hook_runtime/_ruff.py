@@ -10,7 +10,9 @@ Every ruff call of the §E.3 pipeline goes through :class:`RuffRunner`: the
 - the argv of each call: M1 (safe fixes, ``F401``/``F841``/``F811`` never
   fixed), M2 (format), the HEAD format-clean check and D1, the **one**
   diagnostics call, ``--extend-select`` so the project's own ``select``,
-  ``ignore``, ``per-file-ignores`` and ``# noqa`` win;
+  ``ignore``, ``per-file-ignores`` and ``# noqa`` win (plus the quality
+  bucket's ``--config`` thresholds, and one ``--preview`` call for the codes
+  only ruff's preview has, §F.2.2);
 - :func:`ruff_diagnostics_for`: D1 memoized per ``(path, content sha256)`` on
   the event's memo, so whichever post-edit hook asks first runs it;
 - :func:`changed_lines`: the lines an edit inserted or replaced, so legacy
@@ -54,6 +56,7 @@ __all__ = [
     "format_check_args",
     "intersect_selectors",
     "parse_diagnostics",
+    "preview_args",
     "ruff_diagnostics_for",
     "ruff_pin",
     "selector_matches",
@@ -198,11 +201,14 @@ class RuffRunner:
 # --- argv ------------------------------------------------------------------------------------
 
 
-def d1_args(path: str, codes: Iterable[str], drop: Iterable[str] = ()) -> list[str]:
+def d1_args(
+    path: str, codes: Iterable[str], drop: Iterable[str] = (), config: Iterable[str] = ()
+) -> list[str]:
     """D1, the one diagnostics call: report-only, JSON, project config plus ``codes``.
 
     ``drop`` (codes the pinned ruff does not know or has only in preview)
     never reaches ``--extend-select``, where ruff would reject the whole call.
+    ``config`` are per-invocation ``--config`` overrides (``key=value``).
 
     Example::
 
@@ -214,7 +220,26 @@ def d1_args(path: str, codes: Iterable[str], drop: Iterable[str] = ()) -> list[s
     args = ["check", "--no-fix", "--exit-zero", "--force-exclude", "--output-format", "json"]
     if extend:
         args += ["--extend-select", ",".join(extend)]
+    for flag in config:
+        args += ["--config", flag]
     return [*args, "--", path]
+
+
+def preview_args(path: str, codes: Iterable[str], config: Iterable[str] = ()) -> list[str]:
+    """The separate call for codes only ruff's preview has (PLR1702): ``--preview`` here only.
+
+    Preview is never enabled globally (addendum D-Q1), and ``--select`` keeps
+    this call to exactly those codes.
+
+    Example::
+
+        >>> preview_args("/r/a.py", ["PLR1702"])[-5:]
+        ['--preview', '--select', 'PLR1702', '--', '/r/a.py']
+    """
+    args = ["check", "--no-fix", "--exit-zero", "--force-exclude", "--output-format", "json"]
+    for flag in config:
+        args += ["--config", flag]
+    return [*args, "--preview", "--select", ",".join(sorted(set(codes))), "--", path]
 
 
 def fix_args(path: str, select: Sequence[str], ignore: Sequence[str] = ()) -> list[str]:
@@ -313,12 +338,21 @@ def _diagnostic(row: object) -> RuffDiagnostic:
 
 
 def ruff_diagnostics_for(
-    runner: RuffRunner, memo: EventMemo, path: str, content: bytes, codes: Iterable[str]
+    runner: RuffRunner,
+    memo: EventMemo,
+    path: str,
+    content: bytes,
+    codes: Iterable[str],
+    *,
+    config: Sequence[str] = (),
+    preview: Iterable[str] = (),
 ) -> list[RuffDiagnostic]:
     """D1 on ``path`` (whose bytes are ``content``), run at most once per event per content.
 
-    Every post-edit consumer computes the same ``codes`` for a path, so the
-    key is ``(path, sha256(content))``: a changed file (after M1/M2) is a new key.
+    Every post-edit consumer computes the same ``codes``, ``config`` and
+    ``preview`` for a path, so the key is ``(path, sha256(content))``: a changed
+    file (after M1/M2) is a new key. ``preview`` codes get their own
+    ``--preview`` call, its diagnostics added to D1's.
 
     Example::
 
@@ -326,13 +360,19 @@ def ruff_diagnostics_for(
         [RuffDiagnostic(code='B006', row=4, message='...')]
     """
     key = ("ruff-d1", path, hashlib.sha256(content).hexdigest())
-    args = d1_args(path, codes, runner.pin.drop)
+    calls = [d1_args(path, codes, runner.pin.drop, config)]
+    previewed = sorted(set(preview))
+    if previewed:
+        calls.append(preview_args(path, previewed, config))
 
     def run() -> list[RuffDiagnostic]:
-        done = runner.run(args)
-        if not done.ok:
-            raise RuffFailure("error", "ruff check")
-        return parse_diagnostics(done.stdout)
+        found: list[RuffDiagnostic] = []
+        for args in calls:
+            done = runner.run(args)
+            if not done.ok:
+                raise RuffFailure("error", "ruff check")
+            found.extend(parse_diagnostics(done.stdout))
+        return found
 
     return list(memo.get_or_compute(key, run))
 

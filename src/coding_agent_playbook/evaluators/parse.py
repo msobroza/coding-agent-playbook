@@ -109,12 +109,20 @@ def _local_roots(node: ast.AST) -> list[ast.AST]:
 
 @dataclass
 class FunctionScope:
-    """A function or method, with its precomputed cyclomatic complexity."""
+    """A function or method, with its precomputed cyclomatic complexity and its AST node.
+
+    ``node`` is retained (like :attr:`ClassScope.node`) so ``docstring_example``
+    reads the def's docstring without re-parsing; it stays out of ``repr`` and
+    equality, which compare the measured shape only.
+    """
 
     qualname: str
     scope: Scope
     complexity: int
     scope_key: str
+    node: ast.FunctionDef | ast.AsyncFunctionDef | None = field(
+        default=None, repr=False, compare=False
+    )
 
 
 @dataclass
@@ -170,6 +178,7 @@ def parse_module(source: str, label: str) -> ModuleModel:
             scope=kind,
             complexity=_cyclomatic(node),
             scope_key=scope_key(label, qualname),
+            node=node,
         )
         model.functions.append(fn)
         return fn

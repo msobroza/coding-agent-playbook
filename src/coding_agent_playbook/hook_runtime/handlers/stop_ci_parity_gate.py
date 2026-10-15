@@ -74,6 +74,7 @@ STAGE_FACTORIES: Final[Mapping[str, str]] = MappingProxyType(
         "drift": f"{_HANDLERS}.stop_drift_and_orphan_gate:drift_stage",
         "lint": f"{_HANDLERS}._lint_stage:lint_stage",
         "quality-metrics": f"{_HANDLERS}.quality_metrics:quality_metrics_stage",
+        "docstrings": f"{_HANDLERS}.docstring_nonregression:docstrings_stage",
         "gate-integrity": f"{_HANDLERS}.gate_weakening:gate_integrity_stage",
         "secrets": f"{_HANDLERS}.stop_sweep:secrets_stage",
         "verify-claim": f"{_HANDLERS}._verify_claim:verify_claim_stage",

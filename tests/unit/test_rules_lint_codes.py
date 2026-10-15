@@ -44,6 +44,8 @@ SPEC_CODES: Final[Mapping[str, dict[str, Any]]] = {
         "when": [{"applies_if": {"python_version": ">=3.12"}, "warn": ["UP040", "UP046", "UP047"]}],
     },
     "pytest": {"warn": ["PT006", "PT007", "PT009", "PT011", "PT018", "PT027"]},
+    # specs/prK-hook-pack.md §F.3.1: docstring-nonregression's post-edit bucket.
+    "python-docstrings": {"warn": ["D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107"]},
 }
 
 
@@ -58,7 +60,7 @@ def _evaluate(predicate: dict[str, Any], facts: Mapping[str, Any]) -> bool:
 
 
 def test_shipped_rules_declare_spec_codes() -> None:
-    """Exactly the three linked rules carry codes, each a valid warn-only ``lint_codes``."""
+    """Exactly the four linked rules carry codes, each a valid warn-only ``lint_codes``."""
     rules = _engine_rules()
 
     declared = {
@@ -86,6 +88,19 @@ def test_when_block_applies_only_for_py312(python_version: str, pep695: bool) ->
     assert resolved[:7] == SPEC_CODES["python-typing"]["warn"]
     assert ("UP046" in resolved) is pep695
     assert resolved[7:] == (["UP040", "UP046", "UP047"] if pep695 else [])
+
+
+def test_python_docstrings_round_trips_lint_codes(tmp_path: Path) -> None:
+    """SPEC §6.6.3: the plain-markdown rule writes back to the same frontmatter, codes included."""
+    rule = _engine_rules()["python-docstrings"]
+    copy_path = tmp_path / "docstrings.md"
+    copy_path.write_text(rule.to_markdown(), encoding="utf-8")
+
+    again = Rule.from_markdown(copy_path, "coding_agent_playbook")
+
+    assert again.frontmatter == rule.frontmatter
+    assert again.frontmatter.lint_codes == SPEC_CODES["python-docstrings"]
+    assert (rule.frontmatter.scope, rule.frontmatter.globs) == ("scoped", ["**/*.py"])
 
 
 def test_no_block_key_allowed() -> None:

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.deps import ProcPort, RuntimeDeps
     from coding_agent_playbook.hook_runtime.simulate import SimulateReport
     from tests.hook_runtime.fakes import StageCall
     from tests.hooks.pack_repo import PackRepo
@@ -106,13 +106,24 @@ def stop(
     state: Path,
     runner: FakeStageRunner | None = None,
     trust: FakeTrustStore | None = None,
+    proc: ProcPort | None = None,
 ) -> SimulateReport:
-    """One Stop dispatch with the given fakes (a clean ruff when ``runner`` is omitted)."""
+    """One Stop dispatch with the given fakes (a clean ruff when ``runner`` is omitted).
+
+    ``proc`` replaces the spawn-refusing ``FakeProc``: ``FakeRuff`` for the
+    metrics pass's pinned ruff.
+    """
     if runner is None:
         runner = FakeStageRunner()
         script_ruff(runner)
-    runtime = deps(git=git, stage_runner=runner, trust=trust or FakeTrustStore())
-    return repo.simulate(payload, runtime, event=EventName.STOP, state=state)
+    fields: dict[str, Any] = {
+        "git": git,
+        "stage_runner": runner,
+        "trust": trust or FakeTrustStore(),
+    }
+    if proc is not None:
+        fields["proc"] = proc
+    return repo.simulate(payload, deps(**fields), event=EventName.STOP, state=state)
 
 
 def reason_lines(report: SimulateReport) -> list[str]:

@@ -426,7 +426,11 @@ class FakeRuff:
     """In-memory ``ProcPort`` for the pinned ruff: answers by subcommand, records every argv.
 
     - D1 (``check ... --output-format json``) prints ``diagnostics`` (rows from
-      :func:`ruff_row`), exit ``d1_exit``;
+      :func:`ruff_row`), exit ``d1_exit``; its separate ``--preview`` call
+      (``preview``) prints ``preview_diagnostics``;
+    - the metrics gate's ``ruff_violations`` call (``check ... --stdin-filename
+      <label> -``, kind ``metrics``) prints ``by_stdin[<the bytes on stdin>]``
+      (``[]`` for any other text);
     - M1 (``check --fix-only``) and M2 (``format -- <path>``) rewrite the file
       after ``--`` through ``fix`` / ``reformat`` (identity when ``None``);
     - the HEAD check (``format --check ... -``) exits 0 when ``format_clean``;
@@ -439,6 +443,8 @@ class FakeRuff:
     """
 
     diagnostics: list[dict[str, object]] = field(default_factory=list)
+    preview_diagnostics: list[dict[str, object]] = field(default_factory=list)
+    by_stdin: dict[bytes, list[dict[str, object]]] = field(default_factory=dict)
     d1_exit: int = 0
     format_clean: bool = True
     fix: Callable[[str], str] | None = None
@@ -451,10 +457,15 @@ class FakeRuff:
 
     @staticmethod
     def kind(args: Sequence[str]) -> str:
-        """``d1``, ``fix``, ``format-check``, ``format``, ``rule-all`` or ``rule``."""
+        """``d1``, ``preview``, ``metrics``, ``fix``, ``format-check``, ``format``, ``rule-all``
+        or ``rule``."""
         head = args[0] if args else ""
         if head == "check":
-            return "fix" if "--fix-only" in args else "d1"
+            if "--fix-only" in args:
+                return "fix"
+            if "--stdin-filename" in args:
+                return "metrics"
+            return "preview" if "--preview" in args else "d1"
         if head == "format":
             return "format-check" if "--check" in args else "format"
         return "rule-all" if "--all" in args else head
@@ -478,6 +489,8 @@ class FakeRuff:
         kind = self.kind(args)
         if kind in self.timeouts:
             raise ProcTimeout(command[0], timeout)
+        if kind == "metrics":
+            return ProcResult(command, 0, json.dumps(self.by_stdin.get(input or b"", [])).encode())
         returncode, stdout = self._answer(kind, args)
         return ProcResult(command, returncode, stdout)
 
@@ -495,6 +508,8 @@ class FakeRuff:
     def _answer(self, kind: str, args: Sequence[str]) -> tuple[int, bytes]:
         if kind == "d1":
             return self.d1_exit, json.dumps(self.diagnostics).encode()
+        if kind == "preview":
+            return 0, json.dumps(self.preview_diagnostics).encode()
         if kind in ("fix", "format"):
             self._rewrite(args[-1], self.fix if kind == "fix" else self.reformat)
             return 0, b""

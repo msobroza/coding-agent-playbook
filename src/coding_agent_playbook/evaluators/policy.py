@@ -53,6 +53,11 @@ METRIC_DEFAULTS: dict[str, tuple[float | None, float | None, float]] = {
     "maintainability_index": (None, 0.65, 0.0),
     "coverage": (0.8, None, 0.0),
     "test_pass_rate": (None, 1.0, 0.0),
+    # prK §F.2.1/§F.3.1: no band by default (non-regression only); file_sloc is
+    # regression-exempt, since a score drop can never exceed 1.0.
+    "ruff_violations": (None, None, 0.0),
+    "file_sloc": (None, None, 1.0),
+    "docstring_example": (None, None, 0.0),
 }
 
 
@@ -180,6 +185,41 @@ def resolve_metric_selection(
     return picked
 
 
+def stop_stage_selection(
+    available: Sequence[Metric],
+    config: MetricConfig,
+    *,
+    families: Iterable[str] = ("quality", "docstrings"),
+    by_name: Iterable[str] = ("ruff_violations",),
+) -> tuple[list[Metric], frozenset[str]]:
+    """What the Stop stages' one shared gate pass measures, and what ``[metrics]`` itself selects.
+
+    The pass measures the consumer's selection restricted to ``families``, plus
+    ``by_name`` (prK §F.2.2: the stages always count ruff); never an execution
+    metric. The second value is the consumer's own selection (suite metrics
+    included): a stage is deny-eligible on a metric only when it is in there,
+    so a hook is never stricter than its pre-commit twin. Raises ``ValueError``
+    for an unknown name in ``[metrics]``.
+
+    Example::
+
+        >>> picked, own = stop_stage_selection(static_metrics(), MetricConfig())
+        >>> "ruff_violations" in [m.name for m in picked], "ruff_violations" in own
+        (True, False)
+    """
+    own = resolve_metric_selection(
+        available,
+        select=config.select,
+        extend_select=config.extend_select,
+        ignore=config.ignore,
+        run_tests=True,
+    )
+    names = frozenset(metric.name for metric in own)
+    members = {member for family in families for member in METRIC_FAMILIES.get(family, ())}
+    wanted = (names & members) | set(by_name)
+    return [m for m in available if m.name in wanted and not m.needs_project], names
+
+
 def _in_default(metric: Metric, *, run_tests: bool) -> bool:
     if metric.name in OPT_IN_METRICS:
         return False
@@ -222,4 +262,5 @@ __all__ = [
     "OPT_IN_METRICS",
     "metric_check",
     "resolve_metric_selection",
+    "stop_stage_selection",
 ]

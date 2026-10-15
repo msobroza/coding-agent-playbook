@@ -22,13 +22,15 @@ from coding_agent_playbook.hook_runtime.config import (
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.escape import EscapeHatches
 from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, Harness
+from coding_agent_playbook.hook_runtime.handlers.docstring_nonregression import DocstringsStage
 from coding_agent_playbook.hook_runtime.handlers.quality_metrics import QualityMetricsStage
 from coding_agent_playbook.hook_runtime.registry import HandlerContext, load_builtin
 from coding_agent_playbook.hook_runtime.session import SessionState
 from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
-from tests.hook_runtime.fakes import FakeClock, FakeProc
+from tests.hook_runtime.fakes import FakeClock, FakeProc, FakeRuff, ruff_row
 from tests.hook_runtime.guard_repo import SESSION_ID
 from tests.hooks.pack_repo import engine_hook
+from tests.hooks.ruff_kit import pin_ruff, value_of
 from tests.hooks.stop_kit import HEAD_TREE, changed_git, reason_lines, stop, stop_payload
 
 if TYPE_CHECKING:
@@ -183,15 +185,101 @@ def test_without_the_coordinator_the_stage_notes_alone(
     assert report.trace.combined.user_notes == (f"[quality-metrics] {CC_LINE}",)
 
 
+# --- ruff_violations' quality family (§F.2.2) ---------------------------------------------------
+
+#: A new function over the configured statement budget, its def on line 5.
+LONG: Final = BASE + "\n\ndef build():\n    return 1\n"
+PLR0915: Final = ruff_row("PLR0915", 5, "Too many statements (60 > 50)")
+PLR_LINE: Final = '"src/x.py" ruff:quality 0 -> 1 (PLR0915 build)'
+
+
+def _ruff_stop(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path, program: Path
+) -> tuple[SimulateReport, FakeRuff]:
+    pin_ruff(repo, program)
+    ruff = FakeRuff(by_stdin={LONG.encode(): [PLR0915]})
+    report = stop(
+        repo,
+        deps,
+        stop_payload(repo, message="Done."),
+        git=_touched(SRC),
+        state=tmp_path,
+        proc=ruff,
+    )
+    return report, ruff
+
+
+def test_plr0915_over_limit_context_when_quality_selected(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path, ruff_program: Path
+) -> None:
+    repo.write(SRC, LONG)
+    _install(repo, metrics='select = ["quality"]\n')
+
+    report, ruff = _ruff_stop(repo, deps, tmp_path, ruff_program)
+
+    assert report.trace.combined.decision is Decision.NONE
+    assert f"[quality-metrics] {PLR_LINE}" in report.trace.combined.user_notes
+    assert {value_of(args, "--stdin-filename") for args in ruff.argvs("metrics")} == {SRC}
+
+
+@pytest.mark.parametrize(("selected", "decision"), [(False, "none"), (True, "deny")])
+def test_ruff_findings_deny_only_when_consumer_selects_ruff_violations(
+    repo: PackRepo,
+    deps: Callable[..., RuntimeDeps],
+    tmp_path: Path,
+    ruff_program: Path,
+    selected: bool,
+    decision: str,
+) -> None:
+    repo.write(SRC, LONG)
+    _install(repo, precommit=True, metrics='extend_select = ["ruff_violations"]\n' * selected)
+
+    report, _ = _ruff_stop(repo, deps, tmp_path, ruff_program)
+
+    assert report.trace.combined.decision.value == decision
+    if selected:
+        assert reason_lines(report)[1:] == [f"[quality-metrics] {PLR_LINE}"]
+    else:
+        assert f"[quality-metrics] {PLR_LINE}" in report.trace.combined.user_notes
+
+
+def test_quality_and_docstrings_share_one_gate_pass_per_fingerprint(repo: PackRepo) -> None:
+    _install(repo)
+    calls: list[Any] = []
+
+    def spy(request: Any, gate_deps: Any) -> Any:
+        calls.append(request)
+        from coding_agent_playbook.evaluators.metrics_gate import run_metrics_gate
+
+        return run_metrics_gate(request, deps=gate_deps)
+
+    ctx = _ctx(repo, _touched(SRC))
+    quality = QualityMetricsStage(ctx=ctx, root=str(repo.root), gate=spy)
+    docstrings = DocstringsStage(ctx=ctx, root=str(repo.root), gate=spy)
+    plan = _plan(repo, quality)
+
+    statuses = [stage.run(plan, ctx.deadline).status for stage in (quality, docstrings)]
+
+    assert statuses == ["warn", "green"]
+    [request] = calls
+    assert "ruff_violations" in request.select and request.run_tests is False
+
+
 def test_shipped_hook_matches_its_pack_row() -> None:
     fm = engine_hook(HOOK_ID).frontmatter
-    assert fm.handler is not None and fm.handler.builtin is not None
+    stop_handler, post_edit = fm.handlers["stop"], fm.handlers["post_tool_use"]
+    assert stop_handler.builtin is not None and post_edit.builtin is not None
 
-    declaration = load_builtin(fm.handler.builtin)
+    declaration = load_builtin(stop_handler.builtin)
 
-    assert (fm.tier, tuple(fm.events), fm.on_error) == ("default", ("stop",), "open")
-    assert fm.handler.config == {"stage": "quality-metrics"}
-    assert set(fm.handler.config) <= set(declaration.config_schema)
+    assert (fm.tier, tuple(fm.events), fm.on_error) == (
+        "default",
+        ("stop", "post_tool_use"),
+        "open",
+    )
+    assert stop_handler.config == {"stage": "quality-metrics"}
+    assert set(stop_handler.config) <= set(declaration.config_schema)
+    assert post_edit.config == {"lint_feedback": False}  # the companion is opt-in (§E.2)
 
 
 def _ctx(repo: PackRepo, git: FakeGit) -> HandlerContext:

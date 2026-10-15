@@ -1,60 +1,46 @@
 """Ruff-shaped metric selection (specs/prK-hook-pack.md §F.0.3 item 2).
 
 :func:`resolve_metric_selection` is pure over the metric list it is handed, so
-these tests build that list from the real registry plus named fakes standing in
-for the opt-in metrics later steps register (``ruff_violations``,
-``file_sloc``). The default selection must stay exactly today's gated set.
+these tests build that list from the real registry, whose static metrics now
+include the opt-in ``ruff_violations``, ``file_sloc`` and ``docstring_example``
+(prK §F.2-§F.3). The default selection must stay exactly the pre-opt-in gated set.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import pytest
 
 from coding_agent_playbook.evaluators.metric import (
-    Metric,
     all_metrics,
     execution_metrics,
     static_metrics,
 )
-from coding_agent_playbook.evaluators.normalizer import Identity
 from coding_agent_playbook.evaluators.policy import (
     METRIC_FAMILIES,
     OPT_IN_METRICS,
     resolve_metric_selection,
 )
-from coding_agent_playbook.evaluators.scope import Scope
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.evaluators.types import EvalContext, Measurement
+    from collections.abc import Sequence
 
-
-@dataclass
-class FakeOptInMetric(Metric):
-    """A static metric registered under an opt-in name; it measures nothing."""
-
-    name: str = "ruff_violations"
-    scope = Scope.FILE
-    normalizer = Identity()
-
-    def measure(self, ctx: EvalContext) -> list[Measurement]:
-        return []
+    from coding_agent_playbook.evaluators.metric import Metric
 
 
 def _available() -> list[Metric]:
-    """Today's registry plus two opt-in stand-ins, static first, execution last."""
-    opt_ins: list[Metric] = [FakeOptInMetric("ruff_violations"), FakeOptInMetric("file_sloc")]
-    return [*static_metrics(), *opt_ins, *execution_metrics()]
+    """The registry, static first (the opt-in metrics among them), execution last."""
+    return [*static_metrics(), *execution_metrics()]
 
 
-def _names(metrics: list[Metric]) -> list[str]:
+def _names(metrics: Sequence[Metric]) -> list[str]:
     return [metric.name for metric in metrics]
 
 
-def _static_names() -> list[str]:
-    return _names(static_metrics())
+def _static_names(*, plus: frozenset[str] = frozenset()) -> list[str]:
+    """The default static set (no opt-ins) plus the opt-ins in ``plus``, in registry order."""
+    return [n for n in _names(static_metrics()) if n not in OPT_IN_METRICS or n in plus]
 
 
 def test_default_selection_equals_static_minus_opt_ins() -> None:
@@ -78,7 +64,7 @@ def test_extend_select_enables_opt_in_only_by_name() -> None:
     by_name = resolve_metric_selection(_available(), extend_select=["ruff_violations"])
 
     assert "ruff_violations" not in _names(by_family)
-    assert _names(by_name) == [*_static_names(), "ruff_violations"]
+    assert _names(by_name) == _static_names(plus=frozenset({"ruff_violations"}))
 
 
 def test_family_expands_to_non_opt_in_members() -> None:
@@ -109,7 +95,7 @@ def test_ignore_removes_metric_and_family(ignore: list[str], removed: set[str]) 
     )
 
     assert removed.isdisjoint(_names(chosen))
-    kept = [n for n in [*_static_names(), "ruff_violations"] if n not in removed]
+    kept = [n for n in _static_names(plus=frozenset({"ruff_violations"})) if n not in removed]
     assert _names(chosen) == kept
 
 
@@ -138,8 +124,8 @@ def test_execution_metric_without_run_tests_raises(kwargs: dict[str, list[str]])
 
 
 def test_unregistered_family_member_is_skipped_silently() -> None:
-    """``docstring_example`` is a family member no step has registered yet."""
-    chosen = resolve_metric_selection(static_metrics(), select=["docstring_example", "wmc"])
+    """``diff_coverage`` is a family member this (static) list does not hold."""
+    chosen = resolve_metric_selection(static_metrics(), select=["diff_coverage", "wmc"])
 
     assert _names(chosen) == ["wmc"]
 
@@ -148,6 +134,20 @@ def test_selection_keeps_the_available_order() -> None:
     chosen = resolve_metric_selection(_available(), select=["wmc", "cyclomatic_complexity"])
 
     assert _names(chosen) == ["cyclomatic_complexity", "wmc"]
+
+
+def test_stop_stage_selection_keeps_families_plus_ruff_by_name() -> None:
+    """prK §F.2.2: the Stop pass is ``[metrics]`` within quality/docstrings, plus ruff by name."""
+    from coding_agent_playbook.evaluators.policy import stop_stage_selection
+    from coding_agent_playbook.evaluators.types import MetricConfig
+
+    config = MetricConfig(select=("wmc", "testing"), extend_select=("docstring_example",))
+
+    picked, own = stop_stage_selection(_available(), config)
+
+    wanted = {"wmc", "docstring_example", "ruff_violations"}
+    assert _names(picked) == [n for n in _names(static_metrics()) if n in wanted]
+    assert own == {"wmc", "docstring_example", "coverage", "test_pass_rate"}
 
 
 def test_family_and_metric_names_are_disjoint() -> None:

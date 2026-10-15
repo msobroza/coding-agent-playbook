@@ -33,6 +33,7 @@ Example::
 
 from __future__ import annotations
 
+import shutil
 import tempfile
 import tomllib
 from contextlib import ExitStack
@@ -72,7 +73,8 @@ from coding_agent_playbook.evaluators.metric import execution_metrics, static_me
 from coding_agent_playbook.evaluators.parse import parse_module
 from coding_agent_playbook.evaluators.policy import metric_check, resolve_metric_selection
 from coding_agent_playbook.evaluators.rubric import Rubric
-from coding_agent_playbook.evaluators.types import EvalContext, MetricConfig
+from coding_agent_playbook.evaluators.tool_runner import MemoToolRunner, subprocess_tool_runner
+from coding_agent_playbook.evaluators.types import EvalContext, MetricConfig, ToolSetup
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -80,6 +82,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.baseline_git import BaselineGit, GitRunner
     from coding_agent_playbook.evaluators.check import Check
     from coding_agent_playbook.evaluators.metric import Metric
+    from coding_agent_playbook.evaluators.tool_runner import ToolRunner
     from coding_agent_playbook.evaluators.types import EvaluationReport, Measurement, Mode
 
 #: The committed config file whose ``[metrics]`` table seeds the gate.
@@ -96,8 +99,10 @@ __all__ = [
     "MetricsGateResult",
     "MetricsGateUsageError",
     "build_rubric",
+    "cli_tool_paths",
     "load_metrics_config",
     "run_metrics_gate",
+    "tool_setup",
 ]
 
 
@@ -179,12 +184,17 @@ class MetricsGateDeps:
     ``git_factory`` builds the git client for a ``git:`` baseline from
     ``[metrics] git_timeout_s``, and ``git_runner_factory`` the working-tree
     reader ``changed_only`` lists files with (a hook passes its ``SafeGit``).
+    ``tool_runner`` runs a subprocess-backed metric's tool (a hook passes one
+    over its ``ProcPort``); the gate memoizes it per run. ``which`` is how the
+    CLI finds ``ruff`` for :attr:`MetricsGateRequest.tool_paths`.
     """
 
     project_factory: ProjectFactory = ProjectHandle.create
     load_static_metrics: Callable[[], list[Metric]] = static_metrics
     git_factory: Callable[[float], BaselineGit] = SubprocessBaselineGit
     git_runner_factory: Callable[[Path, float], GitRunner] = SubprocessGitRunner
+    tool_runner: ToolRunner = subprocess_tool_runner
+    which: Callable[[str], str | None] = shutil.which
 
 
 @dataclass
@@ -197,6 +207,7 @@ class _Measured:
     baseline: list[Measurement] | None
     skipped: list[tuple[str, str]]
     measured_count: int
+    tool_paths: Mapping[str, str] = field(default_factory=dict)
 
 
 def load_metrics_config(repo_root: Path) -> MetricConfig:
@@ -256,7 +267,9 @@ def _measure(request: MetricsGateRequest, deps: MetricsGateDeps) -> _Measured:
     """Static candidate + baseline measurements, the suite when selected, then the snapshot."""
     git = deps.git_factory(request.config.git_timeout_s)
     static, execution = _selected_metrics(request, deps)
-    meter = SourceMeter(static, request.tool_paths, request.max_file_bytes)
+    meter = SourceMeter(
+        static, request.tool_paths, request.max_file_bytes, tool_setup(request, deps)
+    )
     targets = _targets(request, deps, git)
     baseline = _baseline(request, targets, meter, git)
     candidates = measure_candidates(targets, request.repo_root, meter)
@@ -267,12 +280,44 @@ def _measure(request: MetricsGateRequest, deps: MetricsGateDeps) -> _Measured:
         baseline,
         candidates.skipped,
         candidates.measured_count,
+        request.tool_paths,
     )
     if measured.execution:
         _measure_suites(request, measured, deps.project_factory, git)
     if request.emit_measurements is not None:
         _emit(request.emit_measurements, measured.candidate, request.snapshot_tree)
     return measured
+
+
+def tool_setup(request: MetricsGateRequest, deps: MetricsGateDeps) -> ToolSetup:
+    """How this run's subprocess-backed metrics run: memoized runner, repo root, ``[metrics]`` ruff.
+
+    The memo is per run: an unchanged file's identical candidate and baseline
+    text costs one ruff call.
+
+    Example::
+
+        >>> tool_setup(request, MetricsGateDeps()).cwd == request.repo_root  # doctest: +SKIP
+        True
+    """
+    return ToolSetup(
+        cwd=request.repo_root,
+        runner=MemoToolRunner(deps.tool_runner),
+        timeout_s=request.config.git_timeout_s,
+        ruff=request.config.ruff_settings,
+    )
+
+
+def cli_tool_paths(which: Callable[[str], str | None]) -> dict[str, str]:
+    """The consumer-toolchain binaries ``which`` finds on ``PATH`` (``ruff``), for the CLI.
+
+    Example::
+
+        >>> cli_tool_paths(lambda name: None)
+        {}
+    """
+    found = which("ruff")
+    return {} if found is None else {"ruff": found}
 
 
 def _selected_metrics(
@@ -419,7 +464,8 @@ def _grading_ctx(measured: _Measured, repo_root: Path, stack: ExitStack) -> Eval
     """An :class:`EvalContext` whose slots satisfy the metric checks' availability.
 
     The metric-backed checks gate availability on the slot the metric does
-    (``ctx.module`` for static, ``ctx.project`` for execution). A parsed empty
+    (``ctx.module`` for static, ``ctx.project`` for execution, the measuring
+    ``tool_paths`` for ``ruff_violations``). A parsed empty
     module and a lazy :class:`ProjectHandle` flip them on; the handle only runs
     pytest when :meth:`ProjectHandle.run` is called, which grading never does,
     and its throwaway report dir is removed when ``stack`` exits. The
@@ -439,4 +485,5 @@ def _grading_ctx(measured: _Measured, repo_root: Path, stack: ExitStack) -> Eval
         project=project,
         candidate_measurements=measured.candidate,
         baseline_measurements=measured.baseline,
+        tool_paths=measured.tool_paths,
     )

@@ -25,7 +25,9 @@ effect, so its builtin alone holds the ``mutates_edited_file`` capability
 **pytest-conventions-feedback** (``ruff_lint_feedback``, one handler
 parameterized by the linked rule's ``lint_codes`` that sync resolved into its
 config): warn-only buckets 2-4 on the shared D1; pytest's opt-in
-``ast_heuristics`` add the checks no ruff code covers.
+``ast_heuristics`` add the checks no ruff code covers. §F's post-edit
+companions (the ``quality`` and ``docstrings`` buckets) run the same flow
+through :func:`bucket_feedback`.
 
 ``on_error: open``: no pin, a changed ruff, a timeout or unreadable output
 skips with one note per session (shared by every consumer); never blocks.
@@ -50,7 +52,9 @@ from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import (
     edited_python_files,
     enabled_consumers,
     file_codes,
+    file_preview_codes,
     file_report,
+    file_ruff_config,
     head_blob,
     ruff_runner,
     skip_note,
@@ -74,6 +78,7 @@ __all__ = [
     "CONFIG_SCHEMA",
     "DEFAULT_MAX_PROJECT_LINES",
     "LINT_CONFIG_SCHEMA",
+    "bucket_feedback",
     "ruff_lint_feedback",
     "ruff_post_edit",
 ]
@@ -128,6 +133,19 @@ def ruff_lint_feedback(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult
     return _feedback(ev, ctx, rewrite=False, rule_id=rule if isinstance(rule, str) else "lint")
 
 
+def bucket_feedback(
+    ev: CanonicalEvent, ctx: HandlerContext, *, rule_id: str
+) -> HandlerResult | None:
+    """A report-only consumer's bucket of the shared D1 (the §F companions); never rewrites.
+
+    Example::
+
+        >>> bucket_feedback(edit_adding_load, ctx, rule_id="python-docstrings")  # doctest: +SKIP
+        HandlerResult(decision=<Decision.CONTEXT: 'context'>, ...)
+    """
+    return _feedback(ev, ctx, rewrite=False, rule_id=rule_id)
+
+
 def _feedback(
     ev: CanonicalEvent, ctx: HandlerContext, *, rewrite: bool, rule_id: str
 ) -> HandlerResult | None:
@@ -167,7 +185,15 @@ def _reports(
         head = head_blob(ctx, edited)
         if rewrite and (head is None or _clean_at_head(runner, ctx.session.store, edited, head)):
             _rewrite(runner, ctx, edited)
-        report = file_report(runner, ctx, edited, head, file_codes(consumers, edited))
+        report = file_report(
+            runner,
+            ctx,
+            edited,
+            head,
+            file_codes(consumers, edited),
+            config=file_ruff_config(consumers, edited),
+            preview=file_preview_codes(consumers, edited, runner.pin.drop),
+        )
         if report is not None:
             reports.append(report)
     return reports
