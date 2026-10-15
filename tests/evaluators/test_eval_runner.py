@@ -304,7 +304,7 @@ def test_capture_includes_new_files_in_diff_and_changed(tmp_path: Path) -> None:
 
 
 def test_render_prompt_falls_back_for_unresolvable_prompt(tmp_path: Path) -> None:
-    """A synthetic task with no ``resources/`` root resolves to a placeholder."""
+    """A synthetic task outside any ``eval_tasks/`` layer resolves to a placeholder."""
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
     task = _make_task(

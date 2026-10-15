@@ -17,7 +17,11 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.evals.loader import load_eval_task_from_dir
-from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
+from coding_agent_playbook.evals.prompting import (
+    PromptResolutionError,
+    _infer_prompts_dir,
+    render_prompt,
+)
 from coding_agent_playbook.evals.task import EvalTask, TaskInvocation, TaskSetup
 from tests._content import CORE_ROOT
 
@@ -80,6 +84,45 @@ def test_authored_project_kind_is_the_mock_detector_fact() -> None:
     """``[setup].project_kind`` overrides what the detector infers from setup/."""
     prompt = render_prompt(_shipped("generate-tests-happy-path"), strict=True)
     assert "`python-application` project" in prompt
+
+
+# --------------------------------------------------------------------------- #
+# Prompt directory — found by layer, not by a ``resources`` path segment
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "layer_parts",
+    [("content", "core"), ("pkg", "resources"), ("playbook",)],
+    ids=["bundled-content", "overlay-resources", "repo-local"],
+)
+def test_infer_prompts_dir_layers(tmp_path: Path, layer_parts: tuple[str, ...]) -> None:
+    """``<layer>/eval_tasks/<dir>/task.toml`` finds ``<layer>/prompts`` in every layer.
+
+    The bundled layer (``content/core``) has no ``resources`` segment, and a
+    repo-local task never found its prompts before.
+    """
+    layer = tmp_path.joinpath(*layer_parts)
+    task_toml = layer / "eval_tasks" / "t" / "task.toml"
+    assert _infer_prompts_dir(task_toml) == layer / "prompts"
+
+
+def test_infer_prompts_dir_non_task_path(tmp_path: Path) -> None:
+    """A task dir whose parent is not ``eval_tasks`` has no prompts layer."""
+    assert _infer_prompts_dir(tmp_path / "t" / "task.toml") is None
+
+
+def test_infer_prompts_dir_does_not_resolve_symlinks(tmp_path: Path) -> None:
+    """A symlinked task dir maps to the layer it is reached through, not its target's."""
+    target = tmp_path / "target_layer" / "eval_tasks" / "t"
+    target.mkdir(parents=True)
+    (target / "task.toml").write_text("", encoding="utf-8")
+    link_layer = tmp_path / "link_layer"
+    (link_layer / "eval_tasks").mkdir(parents=True)
+    (link_layer / "eval_tasks" / "t").symlink_to(target, target_is_directory=True)
+
+    task_toml = link_layer / "eval_tasks" / "t" / "task.toml"
+    assert _infer_prompts_dir(task_toml) == link_layer / "prompts"
 
 
 # --------------------------------------------------------------------------- #
