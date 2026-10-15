@@ -48,7 +48,15 @@ if TYPE_CHECKING:
 
     type StageFactory = Callable[[CanonicalEvent, HandlerContext], Stage | None]
 
-__all__ = ["CONFIG_SCHEMA", "STAGE_FACTORIES", "coordinator_deps", "stop_ci_parity_gate"]
+__all__ = [
+    "CONFIG_SCHEMA",
+    "STAGE_FACTORIES",
+    "WRITE_MARGIN_S",
+    "build_stage",
+    "coordinator_deps",
+    "stop_ci_parity_gate",
+    "trust_opener",
+]
 
 #: ``[hooks.stop-ci-parity-gate]`` (§B.1). Sync renders them into ``stop_gate``.
 CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
@@ -68,12 +76,14 @@ STAGE_FACTORIES: Final[Mapping[str, str]] = MappingProxyType(
         "quality-metrics": f"{_HANDLERS}.quality_metrics:quality_metrics_stage",
         "gate-integrity": f"{_HANDLERS}.gate_weakening:gate_integrity_stage",
         "verify-claim": f"{_HANDLERS}._verify_claim:verify_claim_stage",
+        "output-contract": f"{_HANDLERS}.output_contract:output_contract_stage",
+        "tests-nudge": f"{_HANDLERS}.tests_nudge:tests_nudge_stage",
         "typecheck": f"{_HANDLERS}._exec_stages:typecheck_stage",
         "tests": f"{_HANDLERS}._exec_stages:tests_stage",
     }
 )
 #: Leaves the dispatcher time to compose and write before the watchdog fires.
-_WRITE_MARGIN_S: Final = 0.25
+WRITE_MARGIN_S: Final = 0.25
 
 
 @register_hook_handler(
@@ -110,8 +120,7 @@ def coordinator_deps(ev: CanonicalEvent, ctx: HandlerContext, repo: RepoInfo) ->
     stages: list[Stage] = []
     timeouts: dict[str, float] = {}
     for name, timeout_s in _own_stages(ctx):  # first: a stage hook never replaces them
-        own = _factory(name)
-        stage = None if own is None else own(ev, ctx)
+        stage = build_stage(name, ev, ctx)
         if stage is not None:
             stages.append(stage)
             timeouts[name] = timeout_s
@@ -127,11 +136,21 @@ def coordinator_deps(ev: CanonicalEvent, ctx: HandlerContext, repo: RepoInfo) ->
         store=ctx.session.store,
         session=ctx.session,
         clock=ctx.clock,
-        deadline=ctx.deadline - _WRITE_MARGIN_S,
-        trust=_trust(repo, ctx),
+        deadline=ctx.deadline - WRITE_MARGIN_S,
+        trust=trust_opener(repo, ctx),
         ledger=tuple(ctx.ledger.read()) if ctx.ledger is not None else (),
         gate_off=ctx.hatches.gate_off,
     )
+
+
+def build_stage(name: str, ev: CanonicalEvent, ctx: HandlerContext) -> Stage | None:
+    """Stage ``name`` built by its :data:`STAGE_FACTORIES` row with ``ctx``; ``None`` if unknown.
+
+    subagent-stop-verify builds its scoped stage list this way (§D.5.6).
+    Example: ``build_stage("lint", ev, ctx).name == "lint"``.
+    """
+    factory = _factory(name)
+    return None if factory is None else factory(ev, ctx)
 
 
 def _build(record: HookRecord, ev: CanonicalEvent, ctx: HandlerContext) -> Stage | None:
@@ -167,8 +186,11 @@ def _own_stages(ctx: HandlerContext) -> list[tuple[str, float]]:
     return owned
 
 
-def _trust(repo: RepoInfo, ctx: HandlerContext) -> Callable[[], TrustPort | None]:
-    """Opens the user-local trust store only when an execution stage is planned."""
+def trust_opener(repo: RepoInfo, ctx: HandlerContext) -> Callable[[], TrustPort | None]:
+    """Opens the user-local trust store only when an execution stage is planned.
+
+    Example: ``CoordinatorDeps(..., trust=trust_opener(ev.repo, ctx))``.
+    """
 
     def opened() -> TrustPort | None:
         return None if ctx.deps is None else open_trust_store(repo, ctx.deps)

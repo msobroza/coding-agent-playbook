@@ -10,6 +10,9 @@ includes_rules:
 eval_tasks:
   - review-spot-the-bug
   - review-style-only-no-changes-needed
+output_contract:
+  # The one-line verdict the Output format asks for (prompt-output-contract-on-stop).
+  - '(?im)^\W*(verdict\W*)?(approve with comments|approve|request changes)\W*$'
 ---
 
 # Review

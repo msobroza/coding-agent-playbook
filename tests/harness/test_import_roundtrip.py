@@ -245,6 +245,23 @@ def test_lossless_prompt_round_trips_including_includes_rules(tmp_path):
     assert prompt.frontmatter.slash == "review"
 
 
+def test_lossless_prompt_output_contract_survives_emit_then_import(tmp_path):
+    """``output_contract`` rides the sidecar: emit -> import gives the same regexes."""
+    contract = [r"(?i)\bCWE-\d+\b|no (reachable|exploitable)"]
+    prompt = _make_prompt()
+    prompt.frontmatter.output_contract = list(contract)
+    repo = tmp_path / "harness"
+    repo.mkdir()
+    adapter = AgentHarnessAdapter(rule_registry=_StubRegistry())
+    adapter.write_prompt(prompt, repo)
+    adapter.finalize(repo)
+
+    [imported] = import_harness(repo).prompts
+
+    assert imported.frontmatter.output_contract == contract
+    assert _semantic(imported) == _semantic(prompt)
+
+
 def test_lossless_prompt_body_recovers_original_uninlined_body(tmp_path):
     """HARD CASE (defect #2): the harness leaf inlines ``includes_rules`` (the
     registry fragment is genuinely written into ``prompts/review/SKILL.md``), so

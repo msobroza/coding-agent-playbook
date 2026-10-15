@@ -30,12 +30,14 @@ from coding_agent_playbook.guard_config import (
     DetectInputs,
     GuardConfigInputs,
     ProtectInputs,
+    RepoLayout,
     adapter_output_dirs,
     applicability_rows,
     copy_hook_scripts,
     precommit_hook_ids,
     protected_rows,
     render_guard_config,
+    repo_layout,
     resource_root_ids,
     serialize_guard_config,
     write_guard_config,
@@ -666,3 +668,67 @@ def test_stop_deadline_formula_includes_exec_timeouts() -> None:
     assert deadlines["stop"] == 64_000  # 1000 * (budget_s 4.0 + the coverage stage's 60 s)
     assert deadlines == resolved_deadlines_ms(hooks)
     assert resolved_deadlines_ms(slow)["stop"] == 595_000  # the engine cap
+
+
+# --- the verify-pack tables (specs/prK-hook-pack.md §E.0.5, §E.2) --------------------------
+
+
+def _contract_prompt(prompt_id: str, slash: str, contract: list[str]) -> Prompt:
+    fm = PromptFrontmatter(
+        id=prompt_id, name=prompt_id, description="d", slash=slash, output_contract=contract
+    )
+    return Prompt(fm, "Body\n", "Body\n", False, None, "coding_agent_playbook")
+
+
+def test_prompts_table_maps_slash_to_contract() -> None:
+    verdict = r"(?im)^\W*(approve|request changes)\W*$"
+    prompts = [
+        _contract_prompt("review", "review", [verdict]),
+        _contract_prompt("explain", "explain", []),
+        _contract_prompt(
+            "review-overlay", "review", ["shadowed"]
+        ),  # the first prompt per slash wins
+    ]
+    inputs = dataclasses.replace(_inputs([]), prompts=prompts)
+
+    table = render_guard_config(inputs)["prompts"]
+
+    assert table == {
+        "review": {"id": "review", "output_contract": [verdict]},
+        "explain": {"id": "explain", "output_contract": []},
+    }
+    parsed = parse_guard_config(serialize_guard_config(render_guard_config(inputs)))
+    assert isinstance(parsed, GuardConfig) and parsed.tables["prompts"] == table
+    assert render_guard_config(_inputs([]))["prompts"] == {}
+
+
+def _nudge_hook(config: dict[str, Any] | None = None) -> ResolvedHook:
+    hook = resolved_hook("tests-with-source-nudge", events=("stop",), config=config)
+    handler = dataclasses.replace(hook.handlers["stop"], name="tests_with_source_nudge")
+    return dataclasses.replace(hook, handlers={"stop": handler})
+
+
+def test_tests_nudge_roots_from_src_and_testpaths(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.pytest.ini_options]\ntestpaths = ["tests/unit", "integration/"]\n', "utf-8"
+    )
+    bare = tmp_path / "bare"
+    bare.mkdir()
+
+    layout = repo_layout(tmp_path)
+    inputs = dataclasses.replace(_inputs([_nudge_hook(), resolved_hook()]), layout=layout)
+    hooks = render_guard_config(inputs)["hooks"]
+    consumer = dataclasses.replace(
+        _inputs([_nudge_hook({"test_roots": ["checks"]})]), layout=layout
+    )
+
+    assert layout == RepoLayout(source_roots=("src",), test_roots=("tests/unit", "integration"))
+    assert repo_layout(bare) == RepoLayout(source_roots=(".",), test_roots=("tests",))
+    assert hooks["tests-with-source-nudge"]["handlers"]["stop"]["config"] == {
+        "source_roots": ["src"],
+        "test_roots": ["tests/unit", "integration"],
+    }
+    assert "source_roots" not in hooks["guard-x"]["handlers"]["pre_tool_use"]["config"]
+    rendered = render_guard_config(consumer)["hooks"]["tests-with-source-nudge"]
+    assert rendered["handlers"]["stop"]["config"]["test_roots"] == ["checks"]  # consumer wins

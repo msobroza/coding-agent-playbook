@@ -261,6 +261,7 @@ class AgentHarnessAdapter(Adapter):
                     input_variables=[dict(v) for v in fm.input_variables],
                     includes_rules=list(fm.includes_rules),
                     eval_tasks=list(fm.eval_tasks),
+                    output_contract=list(fm.output_contract),
                 )
             )
         written.append(

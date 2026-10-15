@@ -140,6 +140,56 @@ def test_validate_flags_orphan_eval_task(tmp_path, make_synthetic_repo, capsys):
     assert "deleted-prompt" in out
 
 
+def test_invalid_output_contract_regex_fails_validate(tmp_path, make_synthetic_repo, capsys):
+    """A contract that does not compile fails closed, naming the pattern and the shape."""
+    repo = make_synthetic_repo(tmp_path)
+    prompts_dir = repo / "playbook" / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+    (prompts_dir / "bad-contract.md").write_text(
+        "---\n"
+        "id: bad-contract\n"
+        "name: Bad\n"
+        "description: Bad\n"
+        "slash: bad-contract\n"
+        "output_contract:\n"
+        "  - '(?i)verdict: (approve'\n"
+        "---\n"
+        "Review it.\n",
+        encoding="utf-8",
+    )
+
+    rc = _validate.run(_ns(repo))
+
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "output_contract pattern '(?i)verdict: (approve'" in out
+    assert "expected a list of Python regular expressions" in out
+
+
+def test_shipped_prompt_contracts_compile() -> None:
+    """The engine's review, security-review and find-injected-vulnerability contracts compile."""
+    import re
+
+    from coding_agent_playbook.types import Prompt
+
+    root = Path(coding_agent_playbook.__file__).parent / "resources" / "prompts"
+    contracts = {
+        path.name.split(".")[0]: Prompt.from_markdown(path, "pkg").frontmatter.output_contract
+        for path in sorted(root.glob("*.md*"))
+    }
+
+    with_contract = {name for name, contract in contracts.items() if contract}
+    assert with_contract == {"review", "security-review", "find-injected-vulnerability"}
+    for contract in contracts.values():
+        assert all(re.compile(pattern) for pattern in contract)
+    assert (
+        _validate._check_output_contracts(  # the validate rule itself agrees
+            [Prompt.from_markdown(path, "pkg") for path in sorted(root.glob("*.md*"))]
+        )
+        == []
+    )
+
+
 def test_validate_flags_missing_eval_task_for_prompt(tmp_path, make_synthetic_repo, capsys):
     """A prompt declares eval_tasks: [...] but the task dir doesn't exist."""
     repo = make_synthetic_repo(tmp_path)

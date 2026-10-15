@@ -236,18 +236,22 @@ class StateStore:
             raise StateUnavailable(f"cannot append to {rel!r}: {exc.strerror}") from exc
 
     @contextmanager
-    def lock(self, rel: str) -> Iterator[None]:
-        """Hold the lock of document ``rel``; :class:`StateUnavailable` after the bounded wait."""
+    def lock(self, rel: str, *, timeout_s: float | None = None) -> Iterator[None]:
+        """Hold the lock of document ``rel``; :class:`StateUnavailable` after the bounded wait.
+
+        ``timeout_s`` replaces the 200 ms document wait, for a lock that
+        serializes long work (``locks/exec-stage.lock``, §D.5.6).
+        """
+        wait = self._lock_timeout_s if timeout_s is None else timeout_s
         lock_file = self.lock_path(rel)
         try:
             descriptor = os.open(lock_file, _LOCK_FLAGS, FILE_MODE)
         except OSError as exc:
             raise StateUnavailable(f"cannot open lock {lock_file.name}: {exc.strerror}") from exc
         try:
-            if not acquire_lock(descriptor, self._lock_timeout_s):
+            if not acquire_lock(descriptor, wait):
                 raise StateUnavailable(
-                    f"state lock for {rel!r} busy for {self._lock_timeout_s} s; "
-                    "running this operation stateless"
+                    f"state lock for {rel!r} busy for {wait} s; running this operation stateless"
                 )
             try:
                 yield

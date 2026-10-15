@@ -77,6 +77,10 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         "clean_code_metrics_nonregression": f"{_HANDLERS}.quality_metrics",
         "gate_weakening_guard": f"{_HANDLERS}.gate_weakening",
         "gate_weakening_guard:pre_edit": f"{_HANDLERS}.gate_weakening_edit",
+        "block_precommit_bypass": f"{_HANDLERS}.precommit_bypass",
+        "tests_with_source_nudge": f"{_HANDLERS}.tests_nudge",
+        "subagent_stop_verify": f"{_HANDLERS}.subagent_verify",
+        "prompt_output_contract_on_stop": f"{_HANDLERS}.output_contract",
     }
 )
 

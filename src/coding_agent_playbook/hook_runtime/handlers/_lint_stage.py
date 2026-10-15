@@ -71,6 +71,11 @@ class LintSnapshot:
         """Nothing to attribute: no finding and no unformatted file."""
         return not self.findings and not self.unformatted
 
+    def restricted(self, paths: frozenset[str]) -> LintSnapshot:
+        """Only what ruff reported about ``paths`` (a subagent's edited files, §D.5.6)."""
+        findings = {key: row for key, row in self.findings.items() if key[0] in paths}
+        return LintSnapshot(findings, self.unformatted & paths)
+
     def to_json(self) -> dict[str, Any]:
         """The cached baseline document."""
         rows = [[*key, row] for key, row in sorted(self.findings.items())]
@@ -104,6 +109,9 @@ def baseline_doc(head_tree: str) -> str | None:
 class LintStage:
     """The ``lint`` stage of one Stop; every collaborator is injected.
 
+    ``only`` scopes the verdict to those repo paths (subagent-stop-verify);
+    ruff still runs over the whole tree, exactly as CI does.
+
     Example::
 
         >>> stage = lint_stage(stop_event, ctx)  # doctest: +SKIP
@@ -119,6 +127,7 @@ class LintStage:
     tool: str
     check_args: tuple[str, ...]
     skip_path: Callable[[str], bool]
+    only: frozenset[str] | None = None
     name: str = STAGE_NAME
     cost: StageCost = StageCost.DETERMINISTIC
     needs_diff: bool = True
@@ -133,6 +142,8 @@ class LintStage:
         current = self._snapshot(None, deadline)
         if isinstance(current, StageResult):
             return current
+        if self.only is not None:
+            current = current.restricted(self.only)
         if current.clean:  # nothing to attribute: the baseline is never needed
             return _green()
         baseline = self._baseline(plan.head_tree, deadline)

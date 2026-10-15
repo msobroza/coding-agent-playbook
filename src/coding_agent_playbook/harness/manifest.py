@@ -87,6 +87,8 @@ class ManifestEntry:
     input_variables: list[dict[str, Any]] = field(default_factory=list)
     includes_rules: list[str] = field(default_factory=list)
     eval_tasks: list[str] = field(default_factory=list)
+    # Emitted only when non-empty, so manifests of contract-free prompts stay byte-identical.
+    output_contract: list[str] = field(default_factory=list)
     # Skill-only.
     extra_frontmatter: dict[str, Any] = field(default_factory=dict)
     # Skill and hook.
@@ -139,6 +141,8 @@ def _entry_to_table(entry: ManifestEntry) -> dict[str, Any]:
     table: dict[str, Any] = {"kind": entry.kind, "path": entry.path, "id": entry.id}
     for name in _KIND_FIELDS[entry.kind]:
         table[name] = getattr(entry, name)
+    if entry.kind == "prompt" and entry.output_contract:
+        table["output_contract"] = entry.output_contract
     if entry.kind in ("rule", "prompt"):
         table["applies_if"] = entry.applies_if
     if entry.kind == "skill":
@@ -171,6 +175,7 @@ def _entry_from_table(table: dict[str, Any]) -> ManifestEntry:
         input_variables=list(table.get("input_variables", [])),
         includes_rules=list(table.get("includes_rules", [])),
         eval_tasks=list(table.get("eval_tasks", [])),
+        output_contract=list(table.get("output_contract", [])),
         extra_frontmatter=dict(table.get("extra_frontmatter", {})),
         scripts=scripts,
         hook_frontmatter=dict(table.get("hook_frontmatter", {})),

@@ -24,7 +24,8 @@ runtime's regex so control-plane-guard and sync never disagree; ``facts`` and
 ``_guard_config_detect``, ``eval`` is the fixture-glob engine constant and
 ``auto_sync`` mirrors ``[hooks] auto_sync``. ``stop_gate`` (K6) is the Stop
 coordinator's table from ``hook_registrations.stop_gate``: its stage records,
-budget and verify commands, also machine-independent.
+budget and verify commands, also machine-independent; ``prompts`` and the
+tests-with-source-nudge layout come from ``_guard_config_verify``.
 """
 
 from __future__ import annotations
@@ -48,6 +49,12 @@ from coding_agent_playbook._guard_config_protect import (
     protected_table,
     resolve_resource_roots,
     resource_root_ids,
+)
+from coding_agent_playbook._guard_config_verify import (
+    RepoLayout,
+    bake_layout,
+    prompts_table,
+    repo_layout,
 )
 from coding_agent_playbook._sentinel import SENTINEL
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
@@ -73,6 +80,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
+    from coding_agent_playbook.types import Prompt
 
 __all__ = [
     "GUARD_CONFIG_PATH",
@@ -85,12 +93,14 @@ __all__ = [
     "GuardConfigInputs",
     "ProtectInputs",
     "ProtectedRow",
+    "RepoLayout",
     "adapter_output_dirs",
     "applicability_rows",
     "copy_hook_scripts",
     "precommit_hook_ids",
     "protected_rows",
     "render_guard_config",
+    "repo_layout",
     "resolve_resource_roots",
     "resource_root_ids",
     "serialize_guard_config",
@@ -155,8 +165,10 @@ class GuardConfigInputs:
 
     ``generated`` holds the enabled adapters' ``output_locations``;
     ``protected`` the written set, scan dirs and layer packages;
-    ``precommit_ids`` the repo's playbook pre-commit hook ids and ``detect``
-    the detector facts and applicability rows (§E.0.5).
+    ``precommit_ids`` the repo's playbook pre-commit hook ids, ``detect``
+    the detector facts and applicability rows (§E.0.5), ``prompts`` the
+    resolved prompts (the ``prompts`` table) and ``layout`` the source and
+    test roots baked into tests-with-source-nudge's config (§E.2).
 
     Example::
 
@@ -171,6 +183,8 @@ class GuardConfigInputs:
     protected: ProtectInputs = field(default_factory=ProtectInputs)
     precommit_ids: Sequence[str] = ()
     detect: DetectInputs = field(default_factory=DetectInputs)
+    prompts: Sequence[Prompt] = ()
+    layout: RepoLayout = field(default_factory=RepoLayout)
 
 
 @dataclass(frozen=True)
@@ -187,8 +201,8 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
     ``allow_code_from`` and ``state_ttl_days`` are the runtime keys beyond the
     §D.8.2 table that ``hook_runtime.config`` reads (it cannot read ``[hooks]``);
     ``sentinel``, ``protected``, ``control_plane``, ``precommit``, ``facts``,
-    ``applicability``, ``eval``, ``auto_sync`` and ``stop_gate`` are §E.0.5
-    pack keys (``GuardConfig.tables``).
+    ``applicability``, ``eval``, ``auto_sync``, ``stop_gate`` and ``prompts``
+    are §E.0.5 pack keys (``GuardConfig.tables``).
 
     Example::
 
@@ -201,7 +215,7 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
     return {
         "schema_version": GUARD_CONFIG_SCHEMA,
         "engine_version": inputs.engine_version,
-        "hooks": {hook.id: hook.to_json() for hook in inputs.hooks},
+        "hooks": {hook.id: bake_layout(hook.to_json(), inputs.layout) for hook in inputs.hooks},
         "deadlines_ms": resolved_deadlines_ms(inputs.hooks),
         "unattended_ask": cfg.unattended_ask,
         "logging": {
@@ -226,6 +240,7 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
         "eval": {"fixture_globs": list(FIXTURE_GLOBS)},
         "auto_sync": cfg.auto_sync,
         "stop_gate": stop_gate_table(inputs.hooks, inputs.detect.facts),
+        "prompts": prompts_table(inputs.prompts),
     }
 
 

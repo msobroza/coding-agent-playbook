@@ -6,6 +6,8 @@ Validates:
   :func:`coding_agent_playbook.detector.evaluate_predicate` and treats a
   ``ValueError`` raised for an unknown key as an error).
 - Prompts that call ``{{ rule("X") }}`` declare ``X`` in ``includes_rules:``.
+- Every prompt ``output_contract`` entry compiles as a Python regex (fail-closed,
+  like ``AnswerMatchesCheck``; specs/prK-hook-pack.md §E.2).
 - Rule templates never call ``{{ rule(...) }}`` (rules cannot include rules,
   SPEC invariants).
 - Eval-task back-references resolve both directions, via the canonical
@@ -41,6 +43,7 @@ stderr and never fail validation.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -154,6 +157,48 @@ def _check_prompt_rule_calls(prompts: list[Prompt]) -> list[ValidationError]:
                     )
                 )
     return errors
+
+
+_CONTRACT_SHAPE = (
+    "expected a list of Python regular expressions, e.g. "
+    "['(?im)^\\W*(approve|request changes)\\W*$']"
+)
+
+
+def _check_output_contracts(prompts: list[Prompt]) -> list[ValidationError]:
+    """One error per ``output_contract`` entry that is not a compilable regex.
+
+    Fail-closed like ``AnswerMatchesCheck``: a malformed pattern is an authoring
+    error caught here, never a Stop stage that silently matches nothing.
+    """
+    errors: list[ValidationError] = []
+    for prompt in prompts:
+        contract: object = prompt.frontmatter.output_contract
+        where = str(prompt.source_path or prompt.frontmatter.id)
+        if not isinstance(contract, list):
+            errors.append(
+                ValidationError(
+                    path=where, message=f"output_contract {contract!r}: {_CONTRACT_SHAPE}"
+                )
+            )
+            continue
+        errors.extend(
+            ValidationError(path=where, message=f"output_contract pattern {pattern!r}: {problem}")
+            for pattern in contract
+            if (problem := _regex_problem(pattern)) is not None
+        )
+    return errors
+
+
+def _regex_problem(pattern: object) -> str | None:
+    """Why ``pattern`` is no usable contract regex, else ``None``."""
+    if not isinstance(pattern, str) or not pattern:
+        return _CONTRACT_SHAPE
+    try:
+        re.compile(pattern)
+    except re.error as exc:
+        return f"is not a valid Python regular expression ({exc}); {_CONTRACT_SHAPE}"
+    return None
 
 
 def _check_rule_bodies_do_not_include_rules(rules: list[Rule]) -> list[ValidationError]:
@@ -342,6 +387,7 @@ def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationE
     errors = [] if config_less else _check_overlays_usable(ctx.config.overlays_enabled)
     errors.extend(_check_applies_if(rules, prompts, ctx.facts, ctx.repo_root))
     errors.extend(_check_prompt_rule_calls(prompts))
+    errors.extend(_check_output_contracts(prompts))
     errors.extend(_check_rule_bodies_do_not_include_rules(rules))
     errors.extend(_check_jinja_compiles(rules, prompts))
     errors.extend(_check_eval_tasks(ctx))

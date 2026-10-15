@@ -14,10 +14,12 @@ read no worktree content and skip filter discovery, like ``symbolic_ref``.
 A revision is refused before git sees it when it could be read as an option
 (``--output=...``) or would break the ``cat-file --batch`` line protocol.
 
-The Stop stages add two working-tree forms: ``diff_worktree`` (the
-gate-integrity scan's added and removed lines) and ``archive_to`` (the lint
+The Stop stages add three working-tree forms: ``diff_worktree`` (the
+gate-integrity scan's added and removed lines), ``archive_to`` (the lint
 baseline's ``git archive`` export, extracted with ``tarfile``'s ``data``
-filter so no member lands outside the export or keeps a special mode).
+filter so no member lands outside the export or keeps a special mode) and
+``grep_word`` (tests-nudge's "is this name used by any test" probe).
+``rev_commit`` resolves one revision for subagent-stop-verify's report.
 """
 
 from __future__ import annotations
@@ -80,6 +82,10 @@ class RangePort(Protocol):
     def diff_worktree(self, base: str) -> DiffLines: ...
 
     def archive_to(self, rev: str, dest: str, *, skip: Callable[[str], bool]) -> int: ...
+
+    def grep_word(self, word: str, roots: Sequence[str]) -> bool: ...
+
+    def rev_commit(self, rev: str) -> str | None: ...
 
 
 class _Runner(Protocol):
@@ -168,6 +174,24 @@ class RangeQueries:
                 written += 1
         return written
 
+    def grep_word(self: _Runner, word: str, roots: Sequence[str]) -> bool:
+        """Whether ``word`` occurs as a whole word in a tracked or untracked text file under ``roots``.
+
+        A fixed string, never a regex (``-F``); ignored files and binaries are skipped.
+        """
+        if not word or "\n" in word or not roots:
+            return False
+        pathspecs = [_literal(root) for root in roots]
+        argv = ["grep", "--untracked", "-I", "-q", "-w", "-F", "-e", word, "--", *pathspecs]
+        return self.run(argv, ok_codes=(0, 1)).ok
+
+    def rev_commit(self: _Runner, rev: str) -> str | None:
+        """The commit ``rev`` names, ``None`` when it names none (no worktree read)."""
+        argv = ["rev-parse", "--verify", "--quiet", f"{checked_rev(rev)}^{{commit}}"]
+        result = self.bare_run(argv, ok_codes=(0, 1))
+        sha = _decoded(result.stdout)
+        return sha if result.ok and sha else None
+
 
 def pick_default_branch(refs: Iterable[str]) -> str | None:
     """The preferred existing candidate of :data:`DEFAULT_BRANCH_REFS`, short, or ``None``.
@@ -201,6 +225,11 @@ def checked_rev(rev: str) -> str:
         f"refusing revision {rev!r}: expected a branch, tag, sha or rev expression "
         "that does not start with '-' and has no whitespace or ':'"
     )
+
+
+def _literal(root: str) -> str:
+    """``root`` as a literal pathspec (no glob or magic); the repo root is ``.``."""
+    return f":(literal){root.strip('/') or '.'}"
 
 
 def _decoded(output: bytes) -> str:

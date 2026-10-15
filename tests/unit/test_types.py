@@ -314,6 +314,44 @@ def test_prompt_markdown_roundtrip_with_blank_optional_fields(tmp_path):
     assert Prompt.from_markdown(path, "pkg") == prompt
 
 
+VERDICT = r"(?im)^\W*(verdict\W*)?(approve with comments|approve|request changes)\W*$"
+
+
+def test_prompt_output_contract_none_coerced():
+    """A blank ``output_contract:`` line parses as None and must read back as []."""
+    fm = PromptFrontmatter(
+        id="x",
+        name="x",
+        description="x",
+        slash="x",
+        output_contract=None,  # type: ignore[arg-type]
+    )
+    assert fm.output_contract == []
+
+
+def test_prompt_output_contract_round_trips_markdown(tmp_path):
+    """Regex backslashes survive the YAML frontmatter both ways (specs/prK-hook-pack.md §E.2)."""
+    text = PROMPT_MD.replace("---\n# Task", f"output_contract:\n  - '{VERDICT}'\n---\n# Task")
+    path = tmp_path / "review.md"
+    path.write_text(text, encoding="utf-8")
+
+    prompt = Prompt.from_markdown(path, "pkg")
+    path.write_text(prompt.to_markdown(), encoding="utf-8")
+
+    assert prompt.frontmatter.output_contract == [VERDICT]
+    assert Prompt.from_markdown(path, "pkg") == prompt
+
+
+def test_prompt_without_output_contract_markdown_unchanged(tmp_path):
+    """No contract, no key: existing prompts serialize byte-identically."""
+    path = tmp_path / "generate-tests.md"
+    path.write_text(PROMPT_MD, encoding="utf-8")
+
+    markdown = Prompt.from_markdown(path, "pkg").to_markdown()
+
+    assert "output_contract" not in markdown
+
+
 # ---------------------------------------------------------------------------
 # Skill
 # ---------------------------------------------------------------------------

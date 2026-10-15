@@ -282,9 +282,12 @@ def test_needs_diff_false_stage_runs_on_unchanged_tree(tmp_path: Path) -> None:
     contract = ScriptedStage("output-contract", needs_diff=False)
     lint = ScriptedStage("lint")
 
-    rig.run([lint, contract])
+    outcome = rig.run([lint, contract])
 
     assert (len(contract.calls), lint.calls) == (1, [])
+    # Nothing CI-parity ran on a settled tree: green is not "verified locally" anew.
+    assert outcome == StopOutcome()
+    assert read_last_green(rig.store) is None
 
 
 def test_green_records_last_green_and_first_green_note(tmp_path: Path) -> None:

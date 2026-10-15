@@ -180,6 +180,7 @@ def test_handler_approval_mirrors_the_runtime_record(repo: Path, tmp_path: Path)
     builtins = [hook for hook in resolved if hook.id != "guard-ext"]
     assert {hook.id for hook in builtins} == {
         "guard-x",
+        "block-precommit-bypass",
         "clean-code-metrics-nonregression",
         "gate-weakening-guard",
         "guard-generated-outputs",

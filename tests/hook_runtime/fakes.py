@@ -136,6 +136,7 @@ class FakeGit:
     ``range_diffs[(base, head)]`` (empty when absent), ``revision_blobs[(rev, path)]``.
     ``worktree_diffs[base]`` is ``diff_worktree``'s answer; ``archives[rev]`` maps
     repo paths to the bytes ``archive_to`` writes (``skip`` honoured, as in git).
+    ``grep_word`` finds exactly the ``test_words``; ``rev_commit`` reads ``commits``.
     """
 
     head_tree_id: str | None = None
@@ -151,6 +152,8 @@ class FakeGit:
     revision_blobs: dict[tuple[str, str], bytes] = field(default_factory=dict)
     worktree_diffs: dict[str, DiffLines] = field(default_factory=dict)
     archives: dict[str, dict[str, bytes]] = field(default_factory=dict)
+    test_words: set[str] = field(default_factory=set)
+    commits: dict[str, str] = field(default_factory=dict)
     errors: dict[str, Exception] = field(default_factory=dict)
     calls: list[tuple[str, tuple[str, ...]]] = field(default_factory=list)
 
@@ -218,6 +221,14 @@ class FakeGit:
             target.write_bytes(data)
             written += 1
         return written
+
+    def grep_word(self, word: str, roots: Sequence[str]) -> bool:
+        self._record("grep_word", word, *roots)
+        return word in self.test_words
+
+    def rev_commit(self, rev: str) -> str | None:
+        self._record("rev_commit", rev)
+        return self.commits.get(rev)
 
 
 @dataclass

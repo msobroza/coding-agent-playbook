@@ -124,6 +124,31 @@ def test_roundtrip_prompt(tmp_path: Path) -> None:
     assert manifest.entries == [_prompt_entry()]
 
 
+VERDICT = r"(?im)^\W*(verdict\W*)?(approve with comments|approve|request changes)\W*$"
+
+
+def test_roundtrip_prompt_output_contract(tmp_path: Path) -> None:
+    """Regex backslashes survive the TOML sidecar (specs/prK-hook-pack.md §E.2)."""
+    entry = _prompt_entry()
+    entry.output_contract = [VERDICT, r"(?i)\bCWE-\d+\b|no (reachable|exploitable)"]
+    write_manifest(tmp_path, [entry])
+
+    manifest = read_manifest(tmp_path)
+
+    assert manifest is not None
+    assert manifest.entries == [entry]
+    assert _tables(tmp_path)[0]["output_contract"][0] == VERDICT
+
+
+def test_prompt_without_output_contract_emits_no_key(tmp_path: Path) -> None:
+    """Existing manifests stay byte-identical: no empty ``output_contract`` key."""
+    write_manifest(tmp_path, [_prompt_entry()])
+
+    text = (tmp_path / ".playbook" / "manifest.toml").read_text(encoding="utf-8")
+
+    assert "output_contract" not in text
+
+
 def test_roundtrip_records_name_body_and_is_templated(tmp_path: Path) -> None:
     """The canonical reconstruction payload (``name`` + un-rendered source
     ``body`` + ``is_templated``) round-trips for rules, prompts and skills —

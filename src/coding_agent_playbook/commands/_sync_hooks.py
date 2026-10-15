@@ -49,6 +49,7 @@ from coding_agent_playbook.guard_config import (
     precommit_hook_ids,
     protected_rows,
     render_guard_config,
+    repo_layout,
     resolve_resource_roots,
     write_guard_config,
 )
@@ -184,6 +185,8 @@ def write_runtime_outputs(
         # The real repo's config in every mode: --check renders into an empty scratch dir.
         precommit_ids=precommit_hook_ids(ctx.repo_root),
         detect=_detect_inputs(ctx, hooks),
+        prompts=ctx.prompts_resolved,
+        layout=repo_layout(ctx.repo_root),
     )
     path = write_guard_config(out_root, render_guard_config(inputs))
     recorder.record([path], Provenance(kind="runtime"))

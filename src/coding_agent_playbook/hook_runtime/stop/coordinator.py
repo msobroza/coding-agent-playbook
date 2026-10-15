@@ -16,8 +16,9 @@ stop-ci-parity-gate owns it; every other Stop hook is a stage it plans. One
    execution stages only when nothing is red **and** the user approved this
    exact stage list (§B.4);
 5. any red gives **one** deny with the combined reason (§D.5.4); all green
-   records the tree as last green. A skipped stage is ``NOT verified``, never
-   green, and every stage failure fails open.
+   records the tree as last green (a tree that was already settled ran no
+   diff stage, so it gets no new "verified locally" note). A skipped stage is
+   ``NOT verified``, never green, and every stage failure fails open.
 
 ``StopScope(can_block=False)`` (OpenCode, whose ``session.idle`` cannot
 block) returns the red result without spending budget; an ``agent_id`` scope
@@ -164,6 +165,7 @@ class _Stop:
     chain: StopChain
     document: str
     fingerprint: Fingerprint | None
+    settled: bool = False  # the tree is HEAD's or the last green one: no diff stage ran
 
     @property
     def tree(self) -> str | None:
@@ -193,17 +195,23 @@ class StopCoordinator:
         document = chains.chain_document(ev.session_id, self.scope.agent_id)
         chain = chains.load_chain(deps.store, document).for_event(ev)
         fingerprint = _quiet(deps.git.fingerprint)
-        plan = self._plan(ev, deps, fingerprint)
+        settled = fingerprint is not None and _settled(fingerprint, deps.store)
+        plan = self._plan(ev, deps, fingerprint, settled=settled)
         if not plan.stages:
             return StopOutcome()
         held = self._held(chain, fingerprint)
         if held is not None:
             return held
         results = self._run_stages(plan, deps)
-        return self._compose(results, _Stop(deps, chain, document, fingerprint))
+        return self._compose(results, _Stop(deps, chain, document, fingerprint, settled))
 
     def _plan(
-        self, ev: CanonicalEvent, deps: CoordinatorDeps, fingerprint: Fingerprint | None
+        self,
+        ev: CanonicalEvent,
+        deps: CoordinatorDeps,
+        fingerprint: Fingerprint | None,
+        *,
+        settled: bool,
     ) -> StopPlan:
         plan = StopPlan(
             event=ev,
@@ -212,7 +220,7 @@ class StopCoordinator:
             ledger=deps.ledger,
             budget_s=self.policy.budget_s,
         )
-        if fingerprint is not None and _settled(fingerprint, deps.store):
+        if settled:
             plan = plan.only(needs_diff=False)
         applicable = tuple(stage for stage in plan.stages if _applies(stage, plan))
         head = _quiet(deps.git.head_tree) if applicable else None
@@ -261,7 +269,8 @@ class StopCoordinator:
         notes.extend(
             f"[{r.stage}] {line}" for r in results if r.status == "warn" for line in r.lines
         )
-        if stop.fingerprint is not None and all(_counts_green(r) for r in results):
+        # A settled tree ran no CI-parity stage, so it is not "verified locally" anew.
+        if stop.fingerprint is not None and not stop.settled and all(map(_counts_green, results)):
             notes.extend(self._record_green(results, stop.fingerprint, stop.deps))
         return StopOutcome(notes=tuple(notes))
 

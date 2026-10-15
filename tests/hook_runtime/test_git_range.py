@@ -274,6 +274,47 @@ def test_archive_to_skips_secrets_and_anything_leaving_the_export(tmp_path: Path
     assert proc.calls[-1].argv[-3:] == ("archive", "--format=tar", "HEAD")
 
 
+def test_grep_word_finds_whole_words_in_tracked_and_untracked_tests(
+    branchy: Path, real_git: Callable[..., str], real_proc: SubprocessProc
+) -> None:
+    tests = branchy / "tests"
+    tests.mkdir()
+    (tests / "test_a.py").write_text("from pkg import parse_all\n", encoding="utf-8")
+    real_git("add", "tests/test_a.py", cwd=branchy)
+    (tests / "test_new.py").write_text("assert feed(1)\n", encoding="utf-8")  # untracked
+    (branchy / "src.py").write_text("def parse(): ...\n", encoding="utf-8")
+    git = _stateless(branchy, real_proc)
+
+    assert git.grep_word("parse_all", ["tests"]) is True
+    assert git.grep_word("feed", ["tests/"]) is True
+    assert git.grep_word("parse", ["tests"]) is False  # only part of ``parse_all``
+    assert git.grep_word("parse", ["."]) is True  # the repo root as a root
+    assert git.grep_word("a.b", ["tests"]) is False  # a fixed string, never a regex
+    assert git.grep_word("", ["tests"]) is False
+
+
+def test_grep_word_pathspecs_are_literal(tmp_path: Path) -> None:
+    proc = _hardened_proc()
+    proc.script(["git", "grep"], returncode=1)
+
+    found = _fake_safe_git(tmp_path, proc).grep_word("foo", ["tests/*", "."])
+
+    assert found is False
+    assert proc.calls[-1].argv[-3:] == ("--", ":(literal)tests/*", ":(literal).")
+    assert ("-F" in proc.calls[-1].argv) and ("-w" in proc.calls[-1].argv)
+
+
+def test_rev_commit_resolves_a_branch_or_none(
+    branchy: Path, real_git: Callable[..., str], real_proc: SubprocessProc
+) -> None:
+    git = _stateless(branchy, real_proc)
+
+    assert git.rev_commit("main") == real_git("rev-parse", "main", cwd=branchy)
+    assert git.rev_commit("no-such-branch") is None
+    with pytest.raises(GitError, match="refusing revision"):
+        git.rev_commit("--output=/tmp/x")
+
+
 # --- ports -----------------------------------------------------------------------------------
 
 
@@ -285,6 +326,8 @@ def test_lazy_git_delegates_the_range_queries(
         merge_bases={("origin/main", "HEAD"): "abc"},
         range_diffs={("abc", "HEAD"): DiffLines(paths=("a.py",))},
         revision_blobs={("abc", "a.py"): b"x"},
+        test_words={"foo"},
+        commits={"main": "c0ffee"},
     )
     lazy = LazyGit(
         GuardRepo.create(tmp_path).repo, runtime_deps(git=fake), state=None, secret_paths=None
@@ -297,9 +340,11 @@ def test_lazy_git_delegates_the_range_queries(
         lazy.show("abc", "a.py"),
         lazy.diff_worktree("HEAD").paths,
         lazy.archive_to("HEAD", str(tmp_path), skip=lambda rel: False),
+        lazy.grep_word("foo", ["tests"]),
+        lazy.rev_commit("main"),
     )
 
-    assert answers == ("origin/main", "abc", ("a.py",), b"x", (), 0)
+    assert answers == ("origin/main", "abc", ("a.py",), b"x", (), 0, True, "c0ffee")
     assert [method for method, _ in fake.calls] == [
         "default_branch",
         "merge_base",
@@ -307,4 +352,6 @@ def test_lazy_git_delegates_the_range_queries(
         "show",
         "diff_worktree",
         "archive_to",
+        "grep_word",
+        "rev_commit",
     ]

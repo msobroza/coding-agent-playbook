@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from coding_agent_playbook.hook_runtime._git_parse import DiffLines
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps, TrustPort
@@ -114,6 +114,14 @@ class LazyGit:
     def archive_to(self, rev: str, dest: str, *, skip: Callable[[str], bool]) -> int:
         """See ``GitPort.archive_to``."""
         return self._port().archive_to(rev, dest, skip=skip)
+
+    def grep_word(self, word: str, roots: Sequence[str]) -> bool:
+        """See ``GitPort.grep_word``."""
+        return self._port().grep_word(word, roots)
+
+    def rev_commit(self, rev: str) -> str | None:
+        """See ``GitPort.rev_commit``."""
+        return self._port().rev_commit(rev)
 
 
 def open_trust_store(repo: RepoInfo, deps: RuntimeDeps) -> TrustPort | None:

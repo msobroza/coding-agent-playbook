@@ -197,6 +197,7 @@ def _prompt_from_entry(path: Path, entry: ManifestEntry) -> Prompt:
             input_variables=[dict(v) for v in entry.input_variables],
             includes_rules=list(entry.includes_rules),
             eval_tasks=list(entry.eval_tasks),
+            output_contract=list(entry.output_contract),
         ),
         body=body,
         template_body=body,

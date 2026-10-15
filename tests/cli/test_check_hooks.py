@@ -65,16 +65,20 @@ def _report(repo: Path, capsys: pytest.CaptureFixture[str]) -> str:
 
 #: The engine pack's hooks shipped so far (Tracks K5, K6), in check's sorted order.
 _ENGINE_PACK = (
+    "block-precommit-bypass",
     "clean-code-metrics-nonregression",
     "control-plane-guard",
     "eval-task-authoring-lint",
     "gate-weakening-guard",
     "guard-eval-fixtures",
     "guard-generated-outputs",
+    "prompt-output-contract-on-stop",
     "resync-on-detector-input-change",
     "session-start-playbook-briefing",
     "stop-ci-parity-gate",
     "stop-drift-and-orphan-gate",
+    "subagent-stop-verify",
+    "tests-with-source-nudge",
     "validate-then-sync-on-canonical-edit",
 )
 _OPT_IN_SKIP = (
@@ -100,10 +104,12 @@ def test_hooks_block_labels_per_adapter(
 
     assert lines == [
         "  [hooks]: on",
-        "  Hooks (12 on / 14 total):",
+        "  Hooks (13 on / 18 total):",
         # The engine pack (Track K5): OpenCode has no notebook tool, so guard-generated-outputs
         # is degraded there; control-plane-guard matches no notebook edit. OpenCode's Stop is
         # evidence-only (§C.3.6), so every Stop-stage hook is degraded there (K6).
+        "    [✓] block-precommit-bypass (agents_md: advisory, claude_code: enforced, "
+        "continue: advisory, opencode: enforced)",
         "    [✓] clean-code-metrics-nonregression (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: degraded)",
         "    [✓] control-plane-guard (agents_md: advisory, claude_code: enforced, "
@@ -119,6 +125,7 @@ def test_hooks_block_labels_per_adapter(
         "    [✓] guard-x (agents_md: advisory, claude_code: enforced, continue: advisory, "
         "opencode: advisory)",
         _OPT_IN_SKIP.format(hook_id="guard-y"),
+        _OPT_IN_SKIP.format(hook_id="prompt-output-contract-on-stop"),
         "    [✓] resync-on-detector-input-change (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
         # No advisory body (a hookless harness has no heartbeat); OpenCode's session_start
@@ -129,6 +136,8 @@ def test_hooks_block_labels_per_adapter(
         "continue: advisory, opencode: degraded)",
         "    [✓] stop-drift-and-orphan-gate (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: degraded)",
+        _OPT_IN_SKIP.format(hook_id="subagent-stop-verify"),
+        _OPT_IN_SKIP.format(hook_id="tests-with-source-nudge"),
         "    [✓] validate-then-sync-on-canonical-edit (agents_md: advisory, "
         "claude_code: enforced, continue: advisory, opencode: enforced)",
     ]
@@ -144,10 +153,10 @@ def test_hooks_block_when_the_table_is_absent(
 
     assert lines == [
         "  [hooks]: off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')",
-        "  Hooks (0 on / 12 total):",
-        *_off(_ENGINE_PACK[:6]),
+        "  Hooks (0 on / 16 total):",
+        *_off(_ENGINE_PACK[:7]),
         "    [✗] guard-x (skipped: hooks are off)",
-        *_off(_ENGINE_PACK[6:]),
+        *_off(_ENGINE_PACK[7:]),
     ]
 
 
@@ -164,7 +173,7 @@ def test_hooks_block_when_hooks_are_switched_off_or_unreadable(
 
     assert off_lines == [
         "  [hooks]: off — [hooks] enabled is not true",
-        "  Hooks (0 on / 11 total):",
+        "  Hooks (0 on / 15 total):",
         *_off(_ENGINE_PACK),
     ]
     assert bad_lines[-1] == "  [hooks] cannot be read; run 'playbook validate'."

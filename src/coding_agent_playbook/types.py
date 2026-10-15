@@ -152,6 +152,10 @@ class PromptFrontmatter:
     input_variables: list[dict[str, Any]] = field(default_factory=list)
     includes_rules: list[str] = field(default_factory=list)
     eval_tasks: list[str] = field(default_factory=list)
+    # Regexes the agent's final message must match while this prompt is active
+    # (specs/prK-hook-pack.md §E.2 prompt-output-contract-on-stop); compiled by
+    # ``playbook validate``, dropped from markdown when empty.
+    output_contract: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         # YAML parses 'key:' (blank value) as None; the dataclass default does
@@ -169,6 +173,8 @@ class PromptFrontmatter:
             self.includes_rules = []
         if self.eval_tasks is None:
             self.eval_tasks = []
+        if self.output_contract is None:
+            self.output_contract = []
 
 
 @dataclass

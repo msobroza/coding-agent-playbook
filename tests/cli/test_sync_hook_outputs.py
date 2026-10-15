@@ -107,6 +107,7 @@ def test_first_sync_writes_every_hook_output(synced: Path) -> None:
     config = json.loads((synced / GUARD_CONFIG).read_bytes())
     # The engine pack's default-tier hooks (Tracks K5, K6); guard-eval-fixtures is opt-in.
     assert sorted(config["hooks"]) == [
+        "block-precommit-bypass",
         "clean-code-metrics-nonregression",
         "control-plane-guard",
         "eval-task-authoring-lint",
@@ -341,12 +342,12 @@ def test_summary_lines_counts_and_hand_edit_warning(
     repo = make_hook_repo(tmp_path / "repo", make_synthetic_repo)
     assert _sync_repo(repo, tmp_path) == 0
     out = capsys.readouterr().out
-    # guard-x, guard-ext and the engine pack's ten default-tier hooks (seven protect, the
-    # Stop coordinator and two of its stage hooks); the briefing has no advisory body, so
-    # Continue gets one fewer
-    assert "✓ Hooks: 12 enabled, 1 skipped (" in out
-    assert "claude_code: 12 enforced" in out
-    assert "continue: 11 advisory" in out
+    # guard-x, guard-ext and the engine pack's eleven default-tier hooks (seven protect, the
+    # Stop coordinator, two of its stage hooks and block-precommit-bypass); the briefing has
+    # no advisory body, so Continue gets one fewer. The four opt-in ones are skipped.
+    assert "✓ Hooks: 13 enabled, 4 skipped (" in out
+    assert "claude_code: 13 enforced" in out
+    assert "continue: 12 advisory" in out
     assert f"✓ {SETTINGS}: 4 managed entries updated, 0 removed (user keys untouched)" in out
 
     _edit_managed_group(repo)
