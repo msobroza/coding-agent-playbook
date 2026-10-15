@@ -200,6 +200,7 @@ def test_handler_approval_mirrors_the_runtime_record(repo: Path, tmp_path: Path)
         "clean-code-metrics-nonregression",
         "docstring-nonregression",
         "gate-weakening-guard",
+        "tests-with-source-nudge",
         "guard-generated-outputs",
         "control-plane-guard",
         "validate-then-sync-on-canonical-edit",

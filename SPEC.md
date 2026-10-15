@@ -2120,7 +2120,7 @@ The query is `git --literal-pathspecs ls-files -z -- <paths>` (arg-list, no shel
 **Hooks (v0.18).** Without a `[hooks]` table, every mode renders byte for byte what v0.17 rendered and write mode prints one line, `hooks available: add [hooks] enabled = true or re-run playbook init`. With `[hooks] enabled = true`, every mode resolves the on hooks (`hook_policy.resolve_effective_hooks`, §7.1.1), dispatches them to the adapters (§10.1), and writes the sync-level `.coding-agent-playbook/hooks/guard_config.json` and the copied external-handler scripts beside it whenever a hook-capable adapter is enabled. Write mode then, after the `Summary:` line, pins the interpreter (§10.3.2) and prints:
 ```
 ✓ Pinned the hook interpreter for this worktree: /repo/.venv/bin/python
-✓ Hooks: 28 enabled, 15 skipped (claude_code: 28 enforced; opencode: 21 enforced, 2 degraded, 5 advisory; continue: 24 advisory; agents_md: 28 advisory)
+✓ Hooks: 29 enabled, 14 skipped (claude_code: 29 enforced; opencode: 21 enforced, 3 degraded, 5 advisory; continue: 25 advisory; agents_md: 29 advisory)
 ✓ .claude/settings.json: 9 managed entries updated, 0 removed (user keys untouched)
 ! .opencode/plugins/playbook-hooks.js changed: restart OpenCode to load it
 ```
@@ -2208,7 +2208,7 @@ Each overlay in `overlays_enabled` that `playbook sync` would refuse (the shared
 ```
 === Hooks ===
   [hooks]: on
-  Hooks (28 on / 43 total):
+  Hooks (29 on / 43 total):
     [✓] block-precommit-bypass (agents_md: advisory, claude_code: enforced, continue: advisory, opencode: enforced)
     [✓] session-start-playbook-briefing (agents_md: advisory, claude_code: enforced, continue: advisory, opencode: degraded)
     [✗] coverage-diff-gate (skipped: tier 'opt-in' is not in [hooks] tiers ['default'] and [hooks] enable does not name it)

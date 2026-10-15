@@ -137,7 +137,7 @@ def test_hooks_block_labels_per_adapter(
 
     assert lines == [
         "  [hooks]: on",
-        "  Hooks (28 on / 44 total):",
+        "  Hooks (29 on / 44 total):",
         # The engine pack (Track K5): OpenCode has no notebook tool, so guard-generated-outputs
         # is degraded there; control-plane-guard matches no notebook edit. OpenCode's Stop is
         # evidence-only (§C.3.6), so every Stop-stage hook is degraded there (K6).
@@ -220,7 +220,8 @@ def test_hooks_block_labels_per_adapter(
         "continue: advisory, opencode: degraded)",
         _OPT_IN_SKIP.format(hook_id="subagent-stop-verify"),
         _OPT_IN_SKIP.format(hook_id="taint-escalation"),
-        _OPT_IN_SKIP.format(hook_id="tests-with-source-nudge"),
+        "    [✓] tests-with-source-nudge (agents_md: advisory, claude_code: enforced, "
+        "continue: advisory, opencode: degraded)",
         # OpenCode has no tool-failure event (OQ-43): reachable, but weaker.
         "    [✓] toolchain-missing-hint (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: degraded)",

@@ -35,8 +35,8 @@ The pack is the 38 non-rejected entries of the hook catalog, grouped into five f
 
 | Tier | Shipped state | Who turns it on | Hooks |
 | --- | --- | --- | --- |
-| `default` | on in any repo that has enabled hooks | nobody; the user can disable per id in `[hooks]` (that key is guarded by control-plane-guard) | 26 |
-| `opt-in` | shipped, off | the user, per id, in `[hooks]` | 9 |
+| `default` | on in any repo that has enabled hooks | nobody; the user can disable per id in `[hooks]` (that key is guarded by control-plane-guard) | 27 |
+| `opt-in` | shipped, off | the user, per id, in `[hooks]` | 8 |
 | `overlay` | mechanism shipped `enabled: true` with inert data (`mode: off`, empty tables) and **not on**: `tier: overlay` is never in `[hooks] tiers` | a regulated overlay, by a same-id override that promotes it to `tier: default` (optionally `mandatory: true`) and supplies data (patterns, allowlists, mode) per L2 (§A.6, §E.5) | 3 |
 
 - **"Default" never means "on after an engine upgrade".** Default-tier hooks run only in a repo that has opted into hooks through the `[hooks]` master switch, which `playbook init` writes (§B.1). An engine upgrade therefore never injects executable hooks into a repo that has not opted in.
@@ -98,7 +98,7 @@ The stage names are the strings §F registers against. The order below is the en
 | 6 | `notebooks` | notebook-output-hygiene (E.3) | deterministic | opt-in | `context` |
 | 7 | `verify-claim` | stop-ci-parity-gate (E.2) | deterministic, under 10ms | default | `deny` |
 | 8 | `output-contract` | prompt-output-contract-on-stop (E.2) | under 10ms | opt-in | `context` (deny-once is configurable) |
-| 9 | `tests-nudge` | tests-with-source-nudge (E.2); runs only when stages 0–7 are green | 0.1–0.3s | opt-in | `context` |
+| 9 | `tests-nudge` | tests-with-source-nudge (E.2); runs only when stages 0–7 are green | 0.1–0.3s | default | `context` |
 | 10 | `typecheck` | stop-ci-parity-gate (E.2) | execution | opt-in + trust | `deny` |
 | 11 | `tests` | stop-ci-parity-gate (E.2) | execution | opt-in + trust | `deny` |
 | 12 | `coverage` | coverage-diff-gate (§F.1) | execution | opt-in + trust | `deny` (configurable `context`) |
@@ -152,7 +152,7 @@ The stage names are the strings §F registers against. The order below is the en
 | 10 | clean-code-metrics-nonregression | Verify | stop (`quality-metrics`); post_tool_use companion (ruff C901/PLR codes in the shared D1 call) | block → deny / context | default (companion opt-in) | 0.1–1s at Stop when .py files were touched; about 0 extra per edit (companion shares D1) |
 | 11 | block-precommit-bypass | Verify | pre_tool_use | block → deny | default | ≤100ms p95; early exit for non-git commands |
 | 12 | gate-weakening-guard | Verify | stop (`gate-integrity`); pre_tool_use companion | block → deny; companion ask | default | about 100ms per Stop with a diff; 50–100ms per test-file edit |
-| 13 | tests-with-source-nudge | Verify | stop (`tests-nudge`) | warn → context | opt-in | 0.1–0.3s, only on Stops with a src diff |
+| 13 | tests-with-source-nudge | Verify | stop (`tests-nudge`) | warn → context | default | 0.1–0.3s, only on Stops with a src diff |
 | 14 | subagent-stop-verify | Verify | subagent_stop | block → deny | opt-in | seconds per editing subagent; tens of seconds with execution stages |
 | 15 | prompt-output-contract-on-stop | Verify | stop (`output-contract`) | warn → context | opt-in | under 10ms |
 | 16 | post-edit-ruff-format | Feedback | post_tool_use | auto_fix → none (context when diagnostics remain) | default | 50–150ms per .py edit |
@@ -701,7 +701,7 @@ These hooks make "done" mean "the checks pass", not "the agent stopped". stop-ci
 
 #### tests-with-source-nudge — Stage `tests-nudge`: new public API without a test
 
-`opt-in` · `stop` (stage 9; runs only when stages 0–7 are green and source roots differ from HEAD) · `context`
+`default` · `stop` (stage 9; runs only when stages 0–7 are green and source roots differ from HEAD) · `context`
 
 - **Behavior.**
   - For each changed file under the source roots, it compares `ast` of the working tree against `git show HEAD:<path>` and collects **new** public symbols: top-level functions and classes, and methods of public classes.
@@ -717,6 +717,7 @@ These hooks make "done" mean "the checks pass", not "the agent stopped". stop-ci
     - test roots: `[tool.pytest.ini_options] testpaths` if set, else `tests/`.
   - At most 20 parsed files per stop.
 - **Budget & failure.** 0.1–0.3s, only on Stops with a source diff. Fails open.
+- **Tier.** `default`, promoted from `opt-in` after the pack eval: it is warn-only (context lines; a deny only under `block = true`), costs about 115 ms per Stop with a source diff and added no agent turns. `[hooks] disable` turns it off per repo.
 - **Guards.** Context only by default. New symbols only. Skipped on questions.
 - **Portability.** Git-state input, so any stop-like event works. OpenCode: evidence-only.
 - **Off-workstation twin.** §F's `coverage` tool (coverage non-regression in CI) catches untested new code in aggregate. This stage is the per-symbol complement that `--cov-fail-under=80` cannot see.

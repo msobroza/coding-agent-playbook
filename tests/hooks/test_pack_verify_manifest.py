@@ -47,7 +47,8 @@ VERIFY_PACK: dict[str, PackRow] = {
     "gate-weakening-guard": PackRow(
         "default", ("stop", "pre_tool_use"), ("deny", "ask", "none"), "ask"
     ),
-    "tests-with-source-nudge": PackRow("opt-in", ("stop",), ("deny", "none"), "open"),
+    # Promoted to default: warn-only (context), ~115 ms per Stop with a source diff.
+    "tests-with-source-nudge": PackRow("default", ("stop",), ("deny", "none"), "open"),
     "subagent-stop-verify": PackRow("opt-in", ("subagent_stop",), ("deny", "none"), "open"),
     "prompt-output-contract-on-stop": PackRow("opt-in", ("stop",), ("deny", "none"), "open"),
     # §F.1.2: the trust-gated coverage stage (execution, opt-in).

@@ -3,7 +3,7 @@ id: tests-with-source-nudge
 name: New public API needs a test
 description: The tests-nudge Stop stage; name each new public function, class or method under the source roots that no test mentions.
 version: 1
-tier: opt-in
+tier: default
 priority: 40
 events: [stop]
 handler:
