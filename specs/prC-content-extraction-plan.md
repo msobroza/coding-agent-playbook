@@ -533,7 +533,12 @@ together.
 - [ ] **Step 1: Write the failing tests.**
   - `test_config_canonicalizes_deprecated_overlays` (in `test_config.py`):
     ```python
-    c = Config.from_dict({**_FULL, "overlays_enabled": ["coding_agent_playbook.packs.x", "coding_agent_playbook.plugins.x"]})
+    c = Config.from_dict(
+        {
+            **_FULL,
+            "overlays_enabled": ["coding_agent_playbook.packs.x", "coding_agent_playbook.plugins.x"],
+        }
+    )
     assert c.overlays_enabled == ["coding_agent_playbook.plugins.x", "coding_agent_playbook.plugins.x"]
     assert c.deprecated_overlay_names == ("coding_agent_playbook.packs.x",)
     assert "deprecated_overlay_names" not in c.to_dict()
