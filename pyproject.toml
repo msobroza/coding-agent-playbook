@@ -215,3 +215,13 @@ exclude_lines = [
     "raise NotImplementedError",
     "^\\s*\\.\\.\\.\\s*$",
 ]
+
+# --- commitizen (the commit-message convention; dogfooded, prK §K OQ-6) ---
+# Read by `cz check` in the playbook-ci job, which runs the `commit-convention` step
+# of `playbook ci` (the history before .coding-agent-playbook.toml's cutover_date is
+# skipped). It sets no version or bump keys, because hatch's [project] version
+# stays the only version source. commitizen is not a dev extra: only that CI job
+# installs it, so the CI-parity gate is unchanged.
+
+[tool.commitizen]
+name = "cz_conventional_commits"

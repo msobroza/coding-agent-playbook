@@ -2805,7 +2805,7 @@ K11 applies every row; rows marked P ride with their Track P code fix.
 
 Each question has one owner; the per-section lists (§B.7, §C.8, §D.12, the §E lists, §F.9) point here. The proposed default applies unless the user decides otherwise.
 
-**Status (2026-10-14).** The user accepted the proposed default for all 45 questions; every default below is now a decision, and the body text reflects them (OQ-19, OQ-43, OQ-45 and OQ-5 edited in place). No question remains open; only the commitizen start-up figure below still needs measuring.
+**Status (2026-10-14).** The user accepted the proposed default for all 45 questions; every default below is now a decision, and the body text reflects them (OQ-19, OQ-43, OQ-45 and OQ-5 edited in place). No question remains open. The commitizen start-up figure below is explicitly deferred (K11), and the note after it records how OQ-6 was applied.
 
 | ID | Question | Proposed default | Source | Status |
 | --- | --- | --- | --- | --- |
@@ -2855,6 +2855,13 @@ Each question has one owner; the per-section lists (§B.7, §C.8, §D.12, the §
 | OQ-44 | **(new) L9 commit convention.** Confirm that D-Q2/D-Q3 close L9: commitizen's default `cz_conventional_commits`, a `cz_customize` `schema_pattern` for scoped or custom conventions, and the committer-date cut-over, with no engine-side `conventional \| scoped \| regex` setting. | Confirm; ship no preset beyond commitizen's default. | L9, D-Q2, D-Q3 | Accepted |
 | OQ-45 | **(new)** The `user_prompt_submit` active-prompt record is bound only as prompt-write-scope-guard's `prompt_scope_guard:ledger` companion, so disabling that guard silently makes the prompt-output-contract-on-stop stage inert. | Make the record a dispatcher branch, active whenever either hook is enabled. | §E.0.4, §E.2, §E.3 | Accepted |
 
-**Unverified figure (measure before GA):** the commitizen start-up cost on `git commit` / `git push` segments (0.1–0.3 s, an estimate in F.4.2) is measured in K10.
+**Deferred figure (measure before GA):** the commitizen start-up cost on `git commit` / `git push` segments (0.1–0.3 s, an estimate in F.4.2) is still unmeasured. K10 found no `cz` on the implementation machine, and installing one needs the package index, so neither K10 nor K11 has a number. The measurement is ready to run: `tests/hooks/test_commit_message_convention.py::test_cz_startup_latency`, gated on `PLAYBOOK_LATENCY_TESTS=1` with `cz` on PATH, prints the median of five `cz check --message` runs and asserts that it stays under the hook's 3 s `cz` timeout. Until it has run, F.4.2's figure remains an estimate. The cost lands only on `git commit` / `git push` segments, and the hook fails open on a timeout.
+
+**OQ-6 as applied (K11).**
+- **The committed `.coding-agent-playbook.toml`.** It carries `[hooks.commit_convention] cutover_date` as a quoted string, plus the `schema_version` / `[engine]` / `[project]` identity that every loadable config needs. `Config.from_dict` requires that identity: with a hooks-only file, `playbook validate` at the engine root fails with a `KeyError`. With it, validate leaves config-less mode and runs H15/H16/H21. The file has no `[hooks]` key besides the cut-over, so hooks stay off.
+- **`pyproject.toml`** gains `[tool.commitizen] name = "cz_conventional_commits"` with no version or bump keys.
+- **`.github/workflows/ci.yml`** gains a pull-request-only `playbook-ci` job. It checks out with `fetch-depth: 0`, installs `-e .` plus `commitizen>=3`, and runs `playbook ci --steps commit-convention --base origin/main`, with `PLAYBOOK_PR_TITLE` set only in `env:`. The test matrix and its `.[dev]` install are unchanged.
+- **`tests/integration/test_dogfood_config.py`** pins all three.
+- **The cut-over date.** `cutover_date` is `"2026-10-15"`: set it to the merge date before landing. The hooks PR's title must itself pass `cz check`, because the job also checks `PLAYBOOK_PR_TITLE`.
 
 **Resolved during editing (kept for traceability):** QC-5, QC-6, QC-9, QC-12, Q-D2 (→ OQ-18), Q-D7, Q-D8, Q-D9, E-Q1 (→ OQ-19), E-Q2, E-Q3, E-Q6 (→ OQ-18), E-Q7, E-Q10, §B.7 Q6 (D-Q3), §B.7 Q10, §E OQ4/OQ5/OQ9/OQ11 (§E OQ10 is a citation note, not a question), Q-F1, Q-F2, Q-F8.

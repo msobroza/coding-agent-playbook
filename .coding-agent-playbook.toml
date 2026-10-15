@@ -1,0 +1,29 @@
+# The engine repo's own playbook config: DOGFOODING ONLY (specs/prK-lifecycle-hooks.md §K OQ-6).
+#
+# It exists so that the `commit-convention` step of `playbook ci` (the playbook-ci
+# job in .github/workflows/ci.yml) skips the history that predates the commitizen
+# convention ([tool.commitizen] in pyproject.toml). Nothing else belongs here.
+#
+# - Lifecycle hooks stay OFF: no `[hooks] enabled`, and no wrapper_prefixes,
+#   convention or trailer rows. Those stay in each developer's untracked setup;
+#   a `.coding-agent-playbook.local.toml` cannot carry them ([hooks] is ignored there).
+# - Do NOT run `playbook sync`, `playbook init` or `playbook check --refresh` in
+#   this repo. The engine's AGENTS.md and CLAUDE.md are hand-maintained local
+#   files, and init and check --refresh rewrite this file.
+# - schema_version, [engine] and [project] are only the identity that every
+#   loadable config needs (Config.from_dict requires them). With them,
+#   `playbook validate` here also runs the H15/H16/H21 policy checks.
+schema_version = 1
+
+[engine]
+version = "0.1.0a0"
+
+[project]
+name = "coding-agent-playbook"
+kind = "python-library"
+
+[hooks.commit_convention]
+# A quoted "YYYY-MM-DD" (an unquoted TOML date is an error). Range checks skip
+# commits whose committer date is earlier. It is the merge date of the hooks PR:
+# move it if the PR lands on another day.
+cutover_date = "2026-10-15"
