@@ -208,6 +208,10 @@ def test_selection_order_is_class_rank_priority_id(
         ({"tools": ["edit"]}, "Edit", True),
         ({"tools": ["edit"]}, "Bash", False),
         ({"tool_names": ["Ed.*"]}, "Edit", True),
+        # tools and tool_names are one OR-ed dimension (§A.2): either selects the call.
+        ({"tools": ["edit"], "tool_names": ["Skill"]}, "Edit", True),
+        ({"tools": ["edit"], "tool_names": ["Skill"]}, "Skill", True),
+        ({"tools": ["edit"], "tool_names": ["Skill"]}, "Bash", False),
         ({"paths": ["src/**"]}, "Edit", True),
         ({"paths": ["docs/**"]}, "Edit", False),
         ({"command": [r"\bls\b"]}, "Bash", True),

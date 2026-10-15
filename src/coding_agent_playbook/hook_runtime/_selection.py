@@ -171,16 +171,25 @@ def matcher_accepts(spec: MatcherSpec | None, ev: CanonicalEvent) -> bool:
 
 
 def _tool_accepts(spec: MatcherSpec, tool: ToolCall) -> bool:
-    """The tool dimensions, ANDed: classes, names, paths, command regexes."""
-    if spec.tools and not tool.tool_classes & {_class(name) for name in spec.tools}:
-        return False
-    if spec.tool_names and not _any_fullmatch(spec.tool_names, (tool.name, tool.native_name)):
+    """The tool dimensions, ANDed: the tool (classes OR names), paths, command regexes."""
+    if (spec.tools or spec.tool_names) and not _tool_named(spec, tool):
         return False
     if spec.paths.patterns and not any(
         spec.paths.matches(p.key) for p in (*tool.paths, *tool.write_paths)
     ):
         return False
     return not spec.command or _command_matches(spec.command, tool)
+
+
+def _tool_named(spec: MatcherSpec, tool: ToolCall) -> bool:
+    """``tools`` and ``tool_names`` are one OR-ed dimension (§A.2), as both prefilters render it.
+
+    So ``tools: [edit]`` plus ``tool_names: [Skill]`` selects an Edit and a
+    ``Skill`` call alike (prompt-write-scope-guard, specs/prK-hook-pack.md §E.3).
+    """
+    if tool.tool_classes & {_class(name) for name in spec.tools}:
+        return True
+    return _any_fullmatch(spec.tool_names, (tool.name, tool.native_name))
 
 
 def _class(name: str) -> ToolClass | None:

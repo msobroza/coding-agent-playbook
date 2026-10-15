@@ -152,6 +152,11 @@ class PromptFrontmatter:
     input_variables: list[dict[str, Any]] = field(default_factory=list)
     includes_rules: list[str] = field(default_factory=list)
     eval_tasks: list[str] = field(default_factory=list)
+    # Exactly one of {"read_only": True} or {"globs": [...]} (specs/prK-hook-pack.md
+    # §E.3). A dict on purpose: ``_without_empty`` drops ``[]``, so an empty-list
+    # "read-only" would round-trip to "unrestricted", and a defaulted bool would
+    # add ``read_only: false`` to every prompt's markdown.
+    write_scope: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         # YAML parses 'key:' (blank value) as None; the dataclass default does
@@ -169,6 +174,8 @@ class PromptFrontmatter:
             self.includes_rules = []
         if self.eval_tasks is None:
             self.eval_tasks = []
+        if self.write_scope is None:
+            self.write_scope = {}
 
 
 @dataclass

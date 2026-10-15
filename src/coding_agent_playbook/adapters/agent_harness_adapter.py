@@ -261,6 +261,7 @@ class AgentHarnessAdapter(Adapter):
                     input_variables=[dict(v) for v in fm.input_variables],
                     includes_rules=list(fm.includes_rules),
                     eval_tasks=list(fm.eval_tasks),
+                    write_scope=dict(fm.write_scope),
                 )
             )
         written.append(
@@ -276,11 +277,16 @@ class AgentHarnessAdapter(Adapter):
         ``## Reference rules`` appendix). Input variables are noted so the agent
         knows what to substitute.
         """
+        # Without write_scope: the leaf is pure markdown under SKILL.md's own
+        # frontmatter, so the Claude command's ``disallowed-tools`` block (and its
+        # body-line sentinel) must never be nested into it.
+        frontmatter = dataclasses.asdict(prompt.frontmatter)
+        frontmatter.pop("write_scope", None)
         rendered = render_for(
             prompt.source_path or Path("inline"),
             prompt.body,
             "prompt_claude_command",
-            frontmatter=dataclasses.asdict(prompt.frontmatter),
+            frontmatter=frontmatter,
             rule_registry=self._rule_registry,
         )
         # The claude-command renderer prepends its own sentinel comment; drop it

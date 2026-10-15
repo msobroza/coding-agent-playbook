@@ -34,6 +34,7 @@ TOOL_INPUTS: dict[str, dict[str, Any]] = {
     "Edit": {"file_path": "src/app.py", "old_string": "a", "new_string": "b"},
     "Write": {"file_path": "src/new.py", "content": "x = 1\n"},
     "Read": {"file_path": "README.md"},
+    "Skill": {"skill": "review"},
 }
 
 

@@ -40,6 +40,7 @@ from coding_agent_playbook._guard_config_detect import (
     applicability_table,
     facts_table,
 )
+from coding_agent_playbook._guard_config_prompts import prompt_scopes, with_prompt_scopes
 from coding_agent_playbook._guard_config_protect import (
     ProtectedRow,
     ProtectInputs,
@@ -73,6 +74,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
+    from coding_agent_playbook.types import Prompt
 
 __all__ = [
     "GUARD_CONFIG_PATH",
@@ -156,7 +158,9 @@ class GuardConfigInputs:
     ``generated`` holds the enabled adapters' ``output_locations``;
     ``protected`` the written set, scan dirs and layer packages;
     ``precommit_ids`` the repo's playbook pre-commit hook ids and ``detect``
-    the detector facts and applicability rows (§E.0.5).
+    the detector facts and applicability rows (§E.0.5); ``prompts`` the
+    rendered prompts, whose ``write_scope`` becomes prompt-write-scope-guard's
+    ``scopes`` (specs/prK-hook-pack.md §E.3).
 
     Example::
 
@@ -171,6 +175,7 @@ class GuardConfigInputs:
     protected: ProtectInputs = field(default_factory=ProtectInputs)
     precommit_ids: Sequence[str] = ()
     detect: DetectInputs = field(default_factory=DetectInputs)
+    prompts: Sequence[Prompt] = ()
 
 
 @dataclass(frozen=True)
@@ -198,10 +203,11 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
     """
     cfg = inputs.hooks_config
     on = {hook.id for hook in inputs.hooks}
+    scopes = prompt_scopes(inputs.prompts)
     return {
         "schema_version": GUARD_CONFIG_SCHEMA,
         "engine_version": inputs.engine_version,
-        "hooks": {hook.id: hook.to_json() for hook in inputs.hooks},
+        "hooks": {hook.id: with_prompt_scopes(hook.to_json(), scopes) for hook in inputs.hooks},
         "deadlines_ms": resolved_deadlines_ms(inputs.hooks),
         "unattended_ask": cfg.unattended_ask,
         "logging": {

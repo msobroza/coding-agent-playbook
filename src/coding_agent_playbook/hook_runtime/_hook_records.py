@@ -34,6 +34,9 @@ _ON_ERROR_VALUES: Final[tuple[OnError, ...]] = ("ask", "deny", "open")
 class MatcherSpec:
     """One event's matcher (§A.2): present dimensions are ANDed; empty means any.
 
+    ``tools`` and ``tool_names`` form one dimension, OR-ed: a call matches it
+    by its class or by its name.
+
     ``paths`` is compiled; ``command`` stays as written (regexes the dispatcher
     compiles lazily, only for shell events).
     """

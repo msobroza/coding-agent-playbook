@@ -6,6 +6,8 @@ slash: explain
 version: 1
 eval_tasks:
   - explain-pure-function
+write_scope:
+  read_only: true
 ---
 
 # Explain

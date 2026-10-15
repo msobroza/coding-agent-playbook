@@ -47,8 +47,9 @@ _NOTICE = "hooks available: add [hooks] enabled = true or re-run playbook init"
 
 
 #: The Claude events the engine pack registers (Track K5: the briefing, the guards,
-#: the source-changed hooks and the ``drift`` Stop stage).
-ENGINE_PACK_EVENTS = ["SessionStart", "PreToolUse", "PostToolUse", "Stop"]
+#: the source-changed hooks and the ``drift`` Stop stage; K7: the active-prompt
+#: record of prompt-write-scope-guard, a member-less ``UserPromptSubmit``).
+ENGINE_PACK_EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]
 
 
 def _sync_repo(repo: Path, tmp_path: Path, **kwargs: Any) -> int:
@@ -105,13 +106,15 @@ def test_first_sync_writes_every_hook_output(synced: Path) -> None:
     assert list(doc["hooks"]) == ENGINE_PACK_EVENTS
     assert (synced / LAUNCHER).is_file()
     config = json.loads((synced / GUARD_CONFIG).read_bytes())
-    # The engine pack's default-tier protect hooks (Track K5); guard-eval-fixtures is opt-in.
+    # The engine pack's default-tier protect hooks (Track K5) and prompt-write-scope-guard
+    # (K7); guard-eval-fixtures is opt-in.
     assert sorted(config["hooks"]) == [
         "control-plane-guard",
         "eval-task-authoring-lint",
         "guard-ext",
         "guard-generated-outputs",
         "guard-x",
+        "prompt-write-scope-guard",
         "resync-on-detector-input-change",
         "session-start-playbook-briefing",
         "stop-ci-parity-gate",
@@ -339,12 +342,13 @@ def test_summary_lines_counts_and_hand_edit_warning(
     repo = make_hook_repo(tmp_path / "repo", make_synthetic_repo)
     assert _sync_repo(repo, tmp_path) == 0
     out = capsys.readouterr().out
-    # guard-x, guard-ext and the engine pack's eight default-tier hooks (seven protect,
-    # the Stop coordinator); the briefing has no advisory body, so Continue gets one fewer
-    assert "✓ Hooks: 10 enabled, 1 skipped (" in out
-    assert "claude_code: 10 enforced" in out
-    assert "continue: 9 advisory" in out
-    assert f"✓ {SETTINGS}: 4 managed entries updated, 0 removed (user keys untouched)" in out
+    # guard-x, guard-ext and the engine pack's nine default-tier hooks (seven protect,
+    # the Stop coordinator, prompt-write-scope-guard); the briefing has no advisory body,
+    # so Continue gets one fewer. The member-less UserPromptSubmit group is the fifth entry.
+    assert "✓ Hooks: 11 enabled, 1 skipped (" in out
+    assert "claude_code: 11 enforced" in out
+    assert "continue: 10 advisory" in out
+    assert f"✓ {SETTINGS}: 5 managed entries updated, 0 removed (user keys untouched)" in out
 
     _edit_managed_group(repo)
     assert _sync_repo(repo, tmp_path) == 0

@@ -208,6 +208,18 @@ class StateStore:
             temp.unlink(missing_ok=True)
             raise StateUnavailable(f"cannot write state file {rel!r}: {exc.strerror}") from exc
 
+    def remove(self, rel: str) -> None:
+        """Delete ``rel`` if it exists; an absent file is no error.
+
+        A document whose absence is its meaning (the active-prompt record)
+        is removed rather than emptied, so readers decide on one ``stat``.
+        """
+        self._require_usable()
+        try:
+            self.path(rel).unlink(missing_ok=True)
+        except OSError as exc:
+            raise StateUnavailable(f"cannot remove state file {rel!r}: {exc.strerror}") from exc
+
     def update_json[T](self, rel: str, change: Callable[[dict[str, Any]], T]) -> T:
         """Run ``change`` on document ``rel`` under its lock and persist what it did.
 

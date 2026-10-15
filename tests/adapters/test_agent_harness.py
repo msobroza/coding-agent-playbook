@@ -378,6 +378,26 @@ def test_prompt_leaf_is_skill_shaped(tmp_path):
     assert "description: Review code" in content
 
 
+def test_read_only_prompt_leaf_has_no_claude_frontmatter(tmp_path):
+    """The leaf reuses the Claude command renderer without ``write_scope``: one fence pair only."""
+    prompt = _make_prompt()
+    prompt.frontmatter.write_scope = {"read_only": True}
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    adapter = AgentHarnessAdapter()
+    _populate(adapter, prompt, repo_root=repo)
+    adapter.finalize(repo)
+
+    content = (repo / "prompts" / "review" / "SKILL.md").read_text(encoding="utf-8")
+
+    assert "disallowed-tools" not in content
+    assert [line for line in content.splitlines() if line == "---"] == ["---", "---"]
+    sidecar = read_manifest(repo)
+    assert sidecar is not None
+    entry = sidecar.index_by_path()["prompts/review/SKILL.md"]
+    assert entry.write_scope == {"read_only": True}
+
+
 def test_prompt_includes_rules_inlined_via_registry(tmp_path):
     class _StubRegistry:
         def render_for_inclusion(self, rule_id: str, context: dict[str, object]) -> str:

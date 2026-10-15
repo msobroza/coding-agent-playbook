@@ -57,6 +57,7 @@ from coding_agent_playbook.commands._validate_context import (
     config_less_notes,
     has_consumer_config,
 )
+from coding_agent_playbook.commands._validate_frontmatter import check_write_scope
 from coding_agent_playbook.commands._validate_hooks import check_hooks
 from coding_agent_playbook.commands._validate_links import check_markdown_links, load_links_config
 from coding_agent_playbook.commands._validation import (
@@ -342,6 +343,7 @@ def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationE
     errors = [] if config_less else _check_overlays_usable(ctx.config.overlays_enabled)
     errors.extend(_check_applies_if(rules, prompts, ctx.facts, ctx.repo_root))
     errors.extend(_check_prompt_rule_calls(prompts))
+    errors.extend(check_write_scope(prompts))
     errors.extend(_check_rule_bodies_do_not_include_rules(rules))
     errors.extend(_check_jinja_compiles(rules, prompts))
     errors.extend(_check_eval_tasks(ctx))

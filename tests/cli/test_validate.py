@@ -18,7 +18,7 @@ from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 
 def _ns(repo: Path) -> argparse.Namespace:
@@ -81,6 +81,46 @@ def test_validate_flags_prompt_rule_call_not_in_includes_rules(
     out = capsys.readouterr().out
     assert "python-style" in out
     assert "includes_rules" in out
+
+
+@pytest.mark.parametrize(
+    ("scope_yaml", "expected"),
+    [
+        ("  read_only: true\n  globs: [tests/**]\n", "got both keys"),
+        ("  {}\n", None),
+        ("  read_only: false\n", "read_only must be true, got False"),
+        ("  globs: []\n", "globs must be a non-empty list"),
+        ("  mode: read\n", "unknown key(s) ['mode']"),
+        ("  globs: [tests/**, '']\n", "globs entries must be non-empty strings"),
+    ],
+    ids=["both", "neither", "read_only_false", "empty_globs", "unknown_key", "blank_glob"],
+)
+def test_write_scope_requires_exactly_one_of_read_only_or_globs(
+    tmp_path: Path,
+    make_synthetic_repo: Callable[..., Path],
+    capsys: pytest.CaptureFixture[str],
+    scope_yaml: str,
+    expected: str | None,
+) -> None:
+    """specs/prK-hook-pack.md §E.3: each malformed scope is one field-precise finding."""
+    repo = make_synthetic_repo(tmp_path)
+    prompts_dir = repo / "playbook" / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+    (prompts_dir / "scoped.md").write_text(
+        "---\nid: scoped\nname: Scoped\ndescription: d\nslash: scoped\n"
+        f"write_scope:\n{scope_yaml}---\nBody\n",
+        encoding="utf-8",
+    )
+
+    rc = _validate.run(_ns(repo))
+
+    out = capsys.readouterr().out
+    if expected is None:  # an empty mapping is "no scope": valid
+        assert rc == 0, out
+        return
+    assert rc == 1
+    assert f"write_scope: {expected}" in out
+    assert "scoped.md" in out
 
 
 def test_validate_flags_rule_calling_rule_helper(tmp_path, make_synthetic_repo, capsys):

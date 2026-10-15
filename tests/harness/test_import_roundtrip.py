@@ -245,6 +245,25 @@ def test_lossless_prompt_round_trips_including_includes_rules(tmp_path):
     assert prompt.frontmatter.slash == "review"
 
 
+def test_lossless_prompt_write_scope_round_trips(tmp_path):
+    """specs/prK-lifecycle-hooks.md §A.7: ``write_scope`` survives emit -> sidecar -> import."""
+    scoped = [_make_prompt(), _make_prompt()]
+    scoped[0].frontmatter.write_scope = {"read_only": True}
+    scoped[1].frontmatter.id = scoped[1].frontmatter.slash = "generate-tests"
+    scoped[1].frontmatter.write_scope = {"globs": ["tests/**", "**/conftest.py"]}
+    repo = tmp_path / "harness"
+    repo.mkdir()
+    adapter = AgentHarnessAdapter(rule_registry=_StubRegistry())
+    for prompt in scoped:
+        adapter.write_prompt(prompt, repo)
+    adapter.finalize(repo)
+
+    result = import_harness(repo)
+
+    by_id = {prompt.frontmatter.id: prompt for prompt in result.prompts}
+    assert [_semantic(by_id[p.frontmatter.id]) for p in scoped] == [_semantic(p) for p in scoped]
+
+
 def test_lossless_prompt_body_recovers_original_uninlined_body(tmp_path):
     """HARD CASE (defect #2): the harness leaf inlines ``includes_rules`` (the
     registry fragment is genuinely written into ``prompts/review/SKILL.md``), so

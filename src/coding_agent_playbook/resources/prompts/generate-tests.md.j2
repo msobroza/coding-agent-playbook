@@ -17,6 +17,10 @@ eval_tasks:
   - generate-tests-happy-path
   - generate-tests-edge-cases
   - generate-tests-async-code
+write_scope:
+  globs:
+    - tests/**
+    - "**/conftest.py"
 ---
 
 # Generate tests

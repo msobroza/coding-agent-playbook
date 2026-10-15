@@ -63,12 +63,13 @@ def _report(repo: Path, capsys: pytest.CaptureFixture[str]) -> str:
 
 # --- the Hooks block -------------------------------------------------------------------
 
-#: The engine pack's hooks shipped so far (Tracks K5, K6), in check's sorted order.
+#: The engine pack's hooks shipped so far (Tracks K5, K6, K7), in check's sorted order.
 _ENGINE_PACK = (
     "control-plane-guard",
     "eval-task-authoring-lint",
     "guard-eval-fixtures",
     "guard-generated-outputs",
+    "prompt-write-scope-guard",
     "resync-on-detector-input-change",
     "session-start-playbook-briefing",
     "stop-ci-parity-gate",
@@ -98,7 +99,7 @@ def test_hooks_block_labels_per_adapter(
 
     assert lines == [
         "  [hooks]: on",
-        "  Hooks (10 on / 12 total):",
+        "  Hooks (11 on / 13 total):",
         # The engine pack (Track K5): OpenCode has no notebook tool, so guard-generated-outputs
         # is degraded there; control-plane-guard matches no notebook edit.
         "    [✓] control-plane-guard (agents_md: advisory, claude_code: enforced, "
@@ -112,6 +113,9 @@ def test_hooks_block_labels_per_adapter(
         "    [✓] guard-x (agents_md: advisory, claude_code: enforced, continue: advisory, "
         "opencode: advisory)",
         _OPT_IN_SKIP.format(hook_id="guard-y"),
+        # Claude Code only (K7): the native read-only constraints cover OpenCode.
+        "    [✓] prompt-write-scope-guard (agents_md: advisory, claude_code: enforced, "
+        "continue: advisory, opencode: advisory)",
         "    [✓] resync-on-detector-input-change (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
         # No advisory body (a hookless harness has no heartbeat); OpenCode's session_start
@@ -137,7 +141,7 @@ def test_hooks_block_when_the_table_is_absent(
 
     assert lines == [
         "  [hooks]: off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')",
-        "  Hooks (0 on / 10 total):",
+        "  Hooks (0 on / 11 total):",
         *_off(_ENGINE_PACK[:4]),
         "    [✗] guard-x (skipped: hooks are off)",
         *_off(_ENGINE_PACK[4:]),
@@ -157,7 +161,7 @@ def test_hooks_block_when_hooks_are_switched_off_or_unreadable(
 
     assert off_lines == [
         "  [hooks]: off — [hooks] enabled is not true",
-        "  Hooks (0 on / 9 total):",
+        "  Hooks (0 on / 10 total):",
         *_off(_ENGINE_PACK),
     ]
     assert bad_lines[-1] == "  [hooks] cannot be read; run 'playbook validate'."

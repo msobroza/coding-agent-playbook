@@ -23,6 +23,7 @@ from coding_agent_playbook.hook_runtime._ports import LazyGit, open_trust_store
 from coding_agent_playbook.hook_runtime._post_write import PostWrite, record_after_write
 from coding_agent_playbook.hook_runtime._selection import select_hooks
 from coding_agent_playbook.hook_runtime._tail import DispatchTrace
+from coding_agent_playbook.hook_runtime.active_prompt import observe as observe_active_prompt
 from coding_agent_playbook.hook_runtime.config import ConfigFault, load_guard_config
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import EventName
@@ -92,6 +93,8 @@ def run_configured(
         store, ev, now=deps.clock.time, enabled=cfg.logging.decisions, canary=shared.canary
     )
     log.write(_escape_lines(hatches, session))
+    # Before any hook: a guard's deny must not skip recording the prompt (OQ-45).
+    observe_active_prompt(ev, cfg, store)
     selection = select_hooks(cfg, ev, hatches)
     progress = Progress(selection.selected)
     dog = _watchdog(ev, cfg, progress, log, shared)

@@ -38,7 +38,7 @@ from coding_agent_playbook.hook_runtime.simulate import SimulateArgs, run
 from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
-from coding_agent_playbook.types import Hook
+from coding_agent_playbook.types import Hook, Prompt
 from tests.hook_payloads import PROJECT_DIR, HookPayloadCase
 from tests.hook_runtime.guard_repo import GuardRepo
 
@@ -68,6 +68,13 @@ def engine_hook_paths() -> dict[str, Path]:
 def engine_hook(hook_id: str) -> Hook:
     """The engine's shipped definition of ``hook_id``."""
     return Hook.from_markdown(engine_hook_paths()[hook_id], ENGINE_PACKAGE)
+
+
+def engine_prompts() -> list[Prompt]:
+    """Every engine prompt as shipped (frontmatter as authored, body unrendered)."""
+    root = ENGINE_HOOKS.parent / "prompts"
+    paths = sorted(p for p in root.iterdir() if p.name.endswith((".md", ".md.j2")))
+    return [Prompt.from_markdown(path, ENGINE_PACKAGE) for path in paths]
 
 
 def resolve_engine_hooks(
@@ -123,12 +130,14 @@ class PackRepo(GuardRepo):
         per_hook: Mapping[str, dict[str, Any]] | None = None,
         auto_sync: bool = False,
         detect: DetectInputs | None = None,
+        prompts: Sequence[Prompt] = (),
     ) -> bytes:
         """Render ``guard_config.json`` for the engine hooks ``hook_ids``; vouch for it in the lock.
 
         The decision log is switched on (guard-decision-log would, K9), so a test
         can read what the dispatch recorded, e.g. that canary lines are tagged.
-        ``auto_sync`` is ``[hooks] auto_sync``; ``detect`` the facts and rows.
+        ``auto_sync`` is ``[hooks] auto_sync``; ``detect`` the facts and rows;
+        ``prompts`` the rendered prompts (their ``write_scope``, §E.3).
         """
         hooks = resolve_engine_hooks(hook_ids, self.root, per_hook=per_hook)
         protect = ProtectInputs(rows, fixture_output_dirs(self.root), packages)
@@ -139,6 +148,7 @@ class PackRepo(GuardRepo):
             engine_version="0.1.0a0",
             protected=protect,
             detect=detect or DetectInputs(),
+            prompts=prompts,
         )
         document = render_guard_config(inputs)
         document["logging"]["decisions"] = True
