@@ -1,0 +1,23 @@
+{
+  "_fixture": {
+    "harness_version": "1.19.0",
+    "source": "docs"
+  },
+  "hook_event_name": "PostToolUse",
+  "session_id": "ses_7a1b2c3d4e5f",
+  "cwd": "/playbook-fixture/proj",
+  "tool_use_id": "call_02",
+  "tool_name": "Edit",
+  "tool_input": {
+    "filePath": "/playbook-fixture/proj/src/app.py",
+    "oldString": "a",
+    "newString": "b",
+    "file_path": "/playbook-fixture/proj/src/app.py",
+    "old_string": "a",
+    "new_string": "b"
+  },
+  "tool_response": {
+    "output": "Edit applied successfully.",
+    "title": "src/app.py"
+  }
+}

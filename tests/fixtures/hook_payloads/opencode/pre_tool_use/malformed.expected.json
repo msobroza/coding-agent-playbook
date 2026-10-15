@@ -1,0 +1,7 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "fault": "not valid JSON"
+}

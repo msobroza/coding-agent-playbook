@@ -1,0 +1,18 @@
+{
+  "_fixture": {
+    "harness_version": "2.1.296",
+    "source": "docs"
+  },
+  "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+  "transcript_path": "C:\\Users\\dev\\t.jsonl",
+  "cwd": "C:\\proj",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "prompt_id": "pr_10",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "C:\\proj\\.CLAUDE\\settings.json",
+    "content": "{}"
+  },
+  "tool_use_id": "toolu_01Win"
+}

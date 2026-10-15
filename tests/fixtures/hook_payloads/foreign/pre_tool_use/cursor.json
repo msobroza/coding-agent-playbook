@@ -1,0 +1,18 @@
+{
+  "_fixture": {
+    "harness": "cursor",
+    "harness_version": "3.24.9",
+    "source": "docs"
+  },
+  "conversation_id": "conv-1",
+  "generation_id": "gen-1",
+  "hook_event_name": "preToolUse",
+  "cursor_version": "3.24.9",
+  "workspace_roots": [
+    "/playbook-fixture/proj"
+  ],
+  "tool_name": "Shell",
+  "tool_input": {
+    "command": "rm -rf build"
+  }
+}

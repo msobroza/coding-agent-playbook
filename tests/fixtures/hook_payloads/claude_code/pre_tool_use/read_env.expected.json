@@ -1,0 +1,43 @@
+{
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "turn_id": "pr_07",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "default",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "Read",
+      "native_name": "Read",
+      "tool_class": "read",
+      "tool_classes": [
+        "read"
+      ],
+      "use_id": "toolu_01Read",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/.env.prod",
+          "repo_rel": ".env.prod",
+          "key": ".env.prod"
+        }
+      ],
+      "write_paths": [],
+      "content": []
+    }
+  },
+  "result": {
+    "decision": "deny",
+    "reason": "Reading secret files is blocked.\nAsk the user for the value you need."
+  },
+  "wire": {
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Reading secret files is blocked.\\nAsk the user for the value you need.\"}}\n",
+    "stderr": "Reading secret files is blocked.\nAsk the user for the value you need.\n",
+    "exit_code": 10
+  }
+}

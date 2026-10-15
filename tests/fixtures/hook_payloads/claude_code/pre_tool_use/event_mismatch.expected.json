@@ -1,0 +1,8 @@
+{
+  "foreign": "event_mismatch",
+  "wire": {
+    "stdout": "",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

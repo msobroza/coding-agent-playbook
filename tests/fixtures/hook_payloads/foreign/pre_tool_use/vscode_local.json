@@ -1,0 +1,18 @@
+{
+  "_fixture": {
+    "harness": "vscode",
+    "harness_version": "1.107",
+    "source": "docs"
+  },
+  "timestamp": "2026-10-14T10:30:00.123Z",
+  "hook_event_name": "PreToolUse",
+  "session_id": "vsc-1",
+  "transcript_path": "/playbook-fixture/home/t.json",
+  "cwd": "/playbook-fixture/proj",
+  "tool_name": "editFiles",
+  "tool_input": {
+    "files": [
+      "src/app.py"
+    ]
+  }
+}

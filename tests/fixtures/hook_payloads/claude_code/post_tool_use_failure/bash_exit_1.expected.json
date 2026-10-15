@@ -1,0 +1,59 @@
+{
+  "parsed": {
+    "name": "post_tool_use_failure",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "turn_id": "pr_16",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "default",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PostToolUseFailure",
+    "tool": {
+      "name": "Bash",
+      "native_name": "Bash",
+      "tool_class": "shell",
+      "tool_classes": [
+        "shell"
+      ],
+      "use_id": "toolu_01Ruff",
+      "paths": [],
+      "write_paths": [],
+      "content": [],
+      "response": {
+        "ok": false,
+        "exit_code": 1,
+        "error": "Exit code 1\nsrc/app.py:3:8: F401 `os` imported but unused",
+        "is_interrupt": false
+      },
+      "command": {
+        "kind": "posix",
+        "parse_error": null,
+        "segments": [
+          [
+            [
+              "ruff",
+              "check",
+              "."
+            ],
+            "/playbook-fixture/proj"
+          ]
+        ]
+      }
+    }
+  },
+  "result": {
+    "decision": "context",
+    "context": [
+      "ruff is installed; run it through the project venv."
+    ]
+  },
+  "wire": {
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUseFailure\",\"additionalContext\":\"ruff is installed; run it through the project venv.\"}}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

@@ -26,6 +26,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
     from pathlib import Path
 
+    from tests.hook_payloads import HookPayloadCase
+
 
 _DEFAULT_CONFIG = """\
 schema_version = 1
@@ -244,3 +246,18 @@ def make_hook() -> Callable[..., Path]:
     :func:`tests.hook_samples.write_hook`).
     """
     return write_hook
+
+
+@pytest.fixture
+def hook_payload() -> Callable[[str, str, str], HookPayloadCase]:
+    """Return the loader of the golden harness payloads (specs/prK-lifecycle-hooks.md §D.9).
+
+    ``hook_payload("claude_code", "pre_tool_use", "bash_rm_root")`` reads
+    ``tests/fixtures/hook_payloads/claude_code/pre_tool_use/bash_rm_root.json``
+    and its ``.expected.json``; shared by ``tests/hook_runtime``, ``tests/hooks``
+    and ``tests/security``. See :mod:`tests.hook_payloads` for the file format.
+    """
+    # Imported here so that only the suites using payloads load the hook runtime.
+    from tests.hook_payloads import load_hook_payload
+
+    return load_hook_payload
