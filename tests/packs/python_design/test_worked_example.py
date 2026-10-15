@@ -12,14 +12,13 @@ from __future__ import annotations
 
 import ast
 import re
-from pathlib import Path
 
 import pytest
 
+from tests._content import plugin_root
+
 EXAMPLE = (
-    Path(__file__).resolve().parents[3]
-    / "src/coding_agent_playbook/packs/python_design/resources/skills"
-    / "python-architecture/references/worked-example.md"
+    plugin_root("python_design") / "skills" / "python-architecture/references/worked-example.md"
 )
 #: A fenced Python block whose first line names the module it holds.
 _MODULE_BLOCK_RE = re.compile(r"```python\n# (?P<path>\S+\.py)\n(?P<body>.*?)```", re.S)

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import sys
 import textwrap
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -20,13 +19,14 @@ import pytest
 from coding_agent_playbook.evals.loader import load_eval_task_from_dir
 from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
 from coding_agent_playbook.evals.task import EvalTask, TaskInvocation, TaskSetup
+from tests._content import CORE_ROOT
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from pathlib import Path
 
 _ENGINE = "coding_agent_playbook"
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_SHIPPED_TASKS = _REPO_ROOT / "src" / "coding_agent_playbook" / "resources" / "eval_tasks"
+_SHIPPED_TASKS = CORE_ROOT / "eval_tasks"
 
 
 def _shipped_task_dirs() -> list[Path]:

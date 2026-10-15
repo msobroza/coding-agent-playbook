@@ -15,19 +15,17 @@ import shutil
 import subprocess
 import sys
 import textwrap
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from tests._content import plugin_root
+
 if TYPE_CHECKING:
+    from pathlib import Path
     from types import ModuleType
 
-SCRIPT = (
-    Path(__file__).resolve().parents[3]
-    / "src/coding_agent_playbook/packs/python_design/resources/skills"
-    / "python-design-review/scripts/lcom4_clusters.py"
-)
+SCRIPT = plugin_root("python_design") / "skills" / "python-design-review/scripts/lcom4_clusters.py"
 RESULT_KEYS = {"class", "file", "line", "lcom4", "clusters"}
 
 

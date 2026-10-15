@@ -7,12 +7,10 @@ eval_tasks: entry to resolve on-disk — that whole-suite green lands in C4).
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from coding_agent_playbook.types import Prompt
+from tests._content import CORE_ROOT
 
-_SRC_ROOT = Path(__file__).resolve().parents[2] / "src" / "coding_agent_playbook"
-_PROMPT = _SRC_ROOT / "resources" / "prompts" / "find-injected-vulnerability.md.j2"
+_PROMPT = CORE_ROOT / "prompts" / "find-injected-vulnerability.md.j2"
 
 _EXPECTED_EVAL_TASKS = [
     "find-injected-vuln-modoboa-cmdi",

@@ -23,15 +23,13 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from tests._content import plugin_root
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from types import ModuleType
 
-SCRIPT = (
-    Path(__file__).resolve().parents[3]
-    / "src/coding_agent_playbook/packs/python_design/resources/skills"
-    / "python-design-review/scripts/detect_smells.py"
-)
+SCRIPT = plugin_root("python_design") / "skills" / "python-design-review/scripts/detect_smells.py"
 HIT_KEYS = {"smell", "file", "line", "evidence"}
 
 

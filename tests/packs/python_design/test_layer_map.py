@@ -15,26 +15,19 @@ import subprocess
 import sys
 import textwrap
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from tests._content import plugin_root
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
+    from pathlib import Path
     from types import ModuleType
 
 SCRIPT = (
-    Path(__file__).resolve().parents[3]
-    / "src"
-    / "coding_agent_playbook"
-    / "packs"
-    / "python_design"
-    / "resources"
-    / "skills"
-    / "python-architecture"
-    / "scripts"
-    / "layer_map.py"
+    plugin_root("python_design") / "skills" / "python-architecture" / "scripts" / "layer_map.py"
 )
 
 ROOT_FILE_NAMES = (

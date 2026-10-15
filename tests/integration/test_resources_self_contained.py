@@ -38,13 +38,14 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from tests._content import CORE_ROOT, plugin_files_root
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-_ENGINE_ROOT = Path(__file__).resolve().parents[2] / "src" / "coding_agent_playbook"
-_RESOURCES_ROOT = _ENGINE_ROOT / "resources"
+_RESOURCES_ROOT = CORE_ROOT
 #: The distilled opt-in pack (SPEC §11.5.2): all of it ships, so all of it is scanned.
-_PYTHON_DESIGN_ROOT = _ENGINE_ROOT / "packs" / "python_design"
+_PYTHON_DESIGN_ROOT = plugin_files_root("python_design")
 _PYTHON_DESIGN_PREFIX = "packs/python_design/"
 
 _EVAL_TASKS_SUBDIR = "eval_tasks"

@@ -29,7 +29,6 @@ per-fixture behaviour of that gate is covered in
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -45,9 +44,12 @@ from coding_agent_playbook.evals.scoring import score
 from coding_agent_playbook.evals.task import Verdict
 from coding_agent_playbook.evals.validator import validate_tasks
 from coding_agent_playbook.types import Prompt
+from tests._content import CORE_ROOT
 from tests.integration.ccv_answers import ALL_CLASSES_ANSWER
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from coding_agent_playbook.evals.task import EvalTask
 
 
@@ -74,9 +76,8 @@ def stub_uv_sync(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-_SRC_ROOT = Path(__file__).resolve().parents[2] / "src" / "coding_agent_playbook"
-_TASKS_ROOT = _SRC_ROOT / "resources" / "eval_tasks"
-_PROMPTS_ROOT = _SRC_ROOT / "resources" / "prompts"
+_TASKS_ROOT = CORE_ROOT / "eval_tasks"
+_PROMPTS_ROOT = CORE_ROOT / "prompts"
 
 
 def _shipped_tasks() -> list[EvalTask]:
