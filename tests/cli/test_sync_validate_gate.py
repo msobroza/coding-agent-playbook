@@ -1,7 +1,7 @@
 """``playbook sync`` refuses to write while ``playbook validate`` fails (prK §P P8b).
 
 Write mode and ``--check`` run the full validate rule set
-(``collect_validation_errors``) after the environment preflight and before any
+(``sync_gate_errors``) after the environment preflight and before any
 render: a finding prints its ``FAIL`` lines and the abort line on stderr, exits
 1 and writes nothing. ``--check-staged`` — the ``commit = false`` pre-commit
 hot path — is not gated.

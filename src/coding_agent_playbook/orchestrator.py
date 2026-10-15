@@ -477,8 +477,21 @@ def _resolve_hooks(
     hook raises unless ``tolerate`` records it (P8c).
     """
     hooks, errors = source.collect_hooks() if tolerate else (source.list_hooks(), [])
-    engine_package = (
-        source.engine_package if isinstance(source, FileSystemArtifactSource) else ENGINE_PACKAGE
-    )
-    layers = split_hook_layers(hooks, engine_package=engine_package)
+    layers = split_hook_layers(hooks, engine_package=engine_package_of(source))
     return resolver.resolve_hooks(*layers), errors
+
+
+def engine_package_of(source: ArtifactSource) -> str:
+    """The ``source_package`` of ``source``'s engine layer; hooks from it are engine-sourced.
+
+    A filesystem source can be pointed at another engine package (tests do);
+    any other source is assumed to serve the real one.
+
+    Example::
+
+        >>> engine_package_of(FileSystemArtifactSource(repo_root=Path(".")))  # doctest: +SKIP
+        'coding_agent_playbook'
+    """
+    if isinstance(source, FileSystemArtifactSource):
+        return source.engine_package
+    return ENGINE_PACKAGE

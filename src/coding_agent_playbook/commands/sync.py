@@ -25,11 +25,12 @@ import or ships no ``resources/`` directory (``_sync_preflight``) —
 rendering without it would silently drop the org rules and un-ignore their
 output. A config the engine would misread fails even earlier, while loading
 (:class:`~coding_agent_playbook.config.ConfigError`). Write mode and
-``--check`` then run the full ``playbook validate`` rule set
-(:func:`~coding_agent_playbook.commands.validate.collect_validation_errors`)
+``--check`` then run the full ``playbook validate`` rule set, the hook trust
+contract H1-H21 included (:func:`~coding_agent_playbook.commands.validate.sync_gate_errors`),
 and exit 1 on any finding, printing its ``FAIL`` lines to stderr and writing
-nothing (§P P8); ``--check-staged`` is the pre-commit hot path and is not
-gated. A template the Jinja sandbox rejects aborts every mode with exit 1,
+nothing (§P P8, §B.5). Validate's warnings print as ``warning:`` lines, and a
+``[hooks]`` / ``[guardrails]`` table in ``.local.toml`` is only one of them
+here (§B.1). ``--check-staged`` is the pre-commit hot path and is not gated. A template the Jinja sandbox rejects aborts every mode with exit 1,
 naming the source file, before any adapter writes (specs/prK-lifecycle-hooks.md
 §P P1).
 """
@@ -56,7 +57,7 @@ from coding_agent_playbook.commands._sync_lockfile import (
 )
 from coding_agent_playbook.commands._sync_render import render_artifacts, report_sandbox_violation
 from coding_agent_playbook.commands._validation import report_validation_errors
-from coding_agent_playbook.commands.validate import collect_validation_errors
+from coding_agent_playbook.commands.validate import sync_gate_errors
 from coding_agent_playbook.git_client import SubprocessGitClient
 from coding_agent_playbook.gitignore import LOCKFILE_NAME, ignore_entries
 from coding_agent_playbook.orchestrator import (
@@ -139,7 +140,7 @@ def execute(
     check: bool = False,
     check_staged: bool = False,
     git: GitClient | None = None,
-    validate: ValidateFn = collect_validation_errors,
+    validate: ValidateFn = sync_gate_errors,
 ) -> int:
     """Execute the sync pipeline in write, ``--check`` or ``--check-staged`` mode.
 

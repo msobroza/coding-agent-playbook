@@ -1,7 +1,7 @@
 """``playbook validate``'s self-contained-markdown-links rule (SPEC §12.6, PR L).
 
-Every markdown link in every rule, prompt and skill (``references/`` included)
-must be self-contained: a relative target resolves inside the artifact's own
+Every markdown link in every rule, prompt, skill (``references/`` included) and
+hook must be self-contained: a relative target resolves inside the artifact's own
 source layer, and an external link passes only through the consumer's
 ``[links] allowed_domains`` allowlist. Split out of ``commands/validate.py`` to
 keep that module under the 500-line budget.
@@ -23,9 +23,10 @@ if TYPE_CHECKING:
     from coding_agent_playbook.sources.base import ArtifactSource
 
 # Artifact kinds whose markdown bodies (and, for skills, references/) are
-# link-checked. Eval-task setup/ trees are task *inputs*, not rendered
-# artifacts, so they stay out of scope (specs/prL-markdown-links.md).
-_LINK_CHECKED_SUBDIRS = ("rules", "prompts", "skills")
+# link-checked; a hook body degrades into advisory text, so it is too (H19,
+# specs/prK-lifecycle-hooks.md §B.5). Eval-task setup/ trees are task *inputs*,
+# not rendered artifacts, so they stay out of scope (specs/prL-markdown-links.md).
+_LINK_CHECKED_SUBDIRS = ("rules", "prompts", "skills", "hooks")
 
 _CONFIG_FILENAME = ".coding-agent-playbook.toml"
 
@@ -99,8 +100,8 @@ def check_markdown_links(
 
     Filesystem sources are walked per layer (:meth:`FileSystemArtifactSource.layer_roots`)
     because skill ``references/`` files are not carried as paths on the
-    canonical :class:`Skill` type. The walk covers rules, prompts, and skills
-    in every layer — engine package, overlays, extra checkout roots and
+    canonical :class:`Skill` type. The walk covers rules, prompts, skills and
+    hooks in every layer — engine package, overlays, extra checkout roots and
     repo-local ``playbook/``; the containment root is the layer's
     ``resources/`` (respectively ``playbook/``) so links may cross artifact
     kinds within their layer but never leave the shipped bundle.
@@ -127,7 +128,7 @@ def check_markdown_links(
 def _scan_source_bodies(
     artifact_source: ArtifactSource, links_config: LinksConfig
 ) -> list[ValidationError]:
-    """Scan every rule, prompt and skill body of a source with no on-disk layout.
+    """Scan every rule, prompt, skill and hook body of a source with no on-disk layout.
 
     Relative targets cannot be resolved without one, so only the external-link
     policy applies.
@@ -142,6 +143,10 @@ def _scan_source_bodies(
             for p in artifact_source.list_prompts()
         ),
         *((str(s.frontmatter.get("name", "skill")), s.body) for s in artifact_source.list_skills()),
+        *(
+            (str(h.source_path or h.frontmatter.id), h.template_body)
+            for h in artifact_source.collect_hooks()[0]
+        ),
     ]
     return [
         error

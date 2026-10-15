@@ -25,10 +25,12 @@ __all__ = [
     "ADVISORY_RULE_PREFIX",
     "ADVISORY_RULE_PRIORITY",
     "DEGRADED_EVENTS",
+    "ENGINE_DEADLINE_CAP_MS",
     "HOOK_CAPABLE_ADAPTERS",
     "HOOK_EVENTS",
     "HOOK_SCRIPTS_DIR",
     "HOOK_SUPPORT",
+    "MATCHER_VALUES",
     "ON_ERROR_STRENGTH",
     "TOOL_CLASS_NAMES",
     "EventSpec",
@@ -81,6 +83,35 @@ HOOK_EVENTS: Final[Mapping[str, EventSpec]] = MappingProxyType(
         "subagent_stop": _spec("SubagentStop", "deny context none", "open", "agent_types"),
         "pre_compact": _spec("PreCompact", "none", "open", "triggers"),
         "session_end": _spec("SessionEnd", "none", "open"),
+    }
+)
+
+
+#: The matcher fields with a closed vocabulary (§A.2): an authored value outside
+#: it could never match, so validate rejects it (H4). The other fields are open.
+MATCHER_VALUES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
+    {
+        "sources": frozenset({"startup", "resume", "clear", "compact", "fork"}),
+        "triggers": frozenset({"manual", "auto"}),
+    }
+)
+
+#: The most a whole event may take, per event (the §D.4 timeout formula):
+#: ``deadline_ms = min(cap, Σ timeout_ms of its enabled hooks)``. A hook timeout
+#: above its event's cap is clamped, with a validate warning (H9).
+ENGINE_DEADLINE_CAP_MS: Final[Mapping[str, int]] = MappingProxyType(
+    {
+        "session_start": 15_000,
+        "user_prompt_submit": 30_000,
+        "pre_tool_use": 30_000,
+        "post_tool_use": 60_000,
+        "post_tool_use_failure": 30_000,
+        # The stop budget formula's upper bound; the per-sync value is K3's.
+        "stop": 595_000,
+        "subagent_stop": 595_000,
+        "pre_compact": 30_000,
+        # Above Claude's shared 1.5 s SessionEnd budget: the registration raises it.
+        "session_end": 8_000,
     }
 )
 

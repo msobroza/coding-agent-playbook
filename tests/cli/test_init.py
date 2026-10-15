@@ -11,6 +11,7 @@ import yaml
 
 from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.gitignore import BLOCK_START
+from tests.hook_samples import write_hook
 from tests.unit.test_precommit_merge import LEGACY_APPENDED, LEGACY_STARTER
 
 if TYPE_CHECKING:
@@ -411,16 +412,19 @@ version = "0.1.0a0"
 docstring_style = "numpy"
 """
 
+# [hooks] is validated before init's final sync (H21): its ids name the
+# repo-local hook the test writes. Quoted dotted keys ride an unvalidated table.
 _EXTENSION_TABLES = """\
 
 [hooks]
-disabled = ["stop-ci-parity-gate"]
+enabled = true
+disable = ["some-hook"]
 
 [hooks.some-hook]
-enabled = false
-timeout = 2.5
+budget_s = 2.5
+limits = { paths = ["src/"], depth = { max = 3 } }
 
-[hooks."a.b"]
+[acme."a.b"]
 config = { paths = ["src/"], depth = { max = 3 } }
 
 [guardrails.secrets]
@@ -452,6 +456,7 @@ def _committed_config(tmp_path: Path) -> dict[str, object]:
 
 def test_init_rerun_preserves_hooks_guardrails_links_metrics(tmp_path):
     _pyproject(tmp_path)
+    write_hook(tmp_path / "playbook" / "hooks", "some-hook")
     (tmp_path / ".coding-agent-playbook.toml").write_text(_PLAIN_CONFIG + _EXTENSION_TABLES)
     expected = tomllib.loads(_EXTENSION_TABLES)
     args = _ns(tmp_path, name="x", kind="python-library")

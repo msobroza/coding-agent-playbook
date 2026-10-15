@@ -32,11 +32,13 @@ from coding_agent_playbook.sources.filesystem import (
     FileSystemStateSource,
 )
 
-#: The checks config-less validate skips, one note line each. K1 appends the
-#: consumer-only hook rules (H16, H21) behind the same ``config_less`` flag.
+#: The checks config-less validate skips, one note line each. The hook policy
+#: rules need the consumer's [hooks] table, which a config-less context has none of.
 CONSUMER_CONFIG_CHECKS: Final = (
     "overlays_enabled usability (no overlay list to check)",
     "[links] allowed_domains (no allowlist to read; external links fail the strict default)",
+    "[hooks] / [guardrails] policy: H15 switches, H16 allow_code_from, H21 tables "
+    "(no consumer config to read)",
 )
 
 # The stand-in project kind: the detector's own fallback for an unknown project.
@@ -106,7 +108,7 @@ def config_less_context(repo_root: Path) -> SyncContext:
 
     A stand-in :class:`Config` with no overlays and no adapters beyond the
     always-on ``agents_md``; the artifact source adds the checkout's own
-    ``src/*/resources/`` layers.
+    ``src/*/resources/`` layers. A malformed hook is recorded, not raised (P8c).
 
     Example::
 
@@ -118,7 +120,7 @@ def config_less_context(repo_root: Path) -> SyncContext:
         extra_resource_roots=checkout_resource_roots(repo_root, engine_package=ENGINE_PACKAGE),
     )
     return SyncContext.from_config(
-        repo_root, _config_less_config(repo_root), artifact_source=source
+        repo_root, _config_less_config(repo_root), artifact_source=source, tolerate_hook_errors=True
     )
 
 

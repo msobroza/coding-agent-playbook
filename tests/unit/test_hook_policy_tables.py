@@ -15,10 +15,12 @@ from coding_agent_playbook._hook_schema import MATCHER_KEYS
 from coding_agent_playbook.hook_policy import (
     ADVISORY_RULE_PREFIX,
     DEGRADED_EVENTS,
+    ENGINE_DEADLINE_CAP_MS,
     HOOK_CAPABLE_ADAPTERS,
     HOOK_EVENTS,
     HOOK_SCRIPTS_DIR,
     HOOK_SUPPORT,
+    MATCHER_VALUES,
     ON_ERROR_STRENGTH,
     TOOL_CLASS_NAMES,
 )
@@ -121,6 +123,29 @@ def test_on_error_strength_orders_open_ask_deny() -> None:
     assert ON_ERROR_STRENGTH["open"] < ON_ERROR_STRENGTH["ask"] < ON_ERROR_STRENGTH["deny"]
 
 
+def test_deadline_caps_match_d4() -> None:
+    assert tuple(ENGINE_DEADLINE_CAP_MS) == tuple(HOOK_EVENTS)
+    assert dict(ENGINE_DEADLINE_CAP_MS) == {
+        "session_start": 15_000,
+        "user_prompt_submit": 30_000,
+        "pre_tool_use": 30_000,
+        "post_tool_use": 60_000,
+        "post_tool_use_failure": 30_000,
+        "stop": 595_000,
+        "subagent_stop": 595_000,
+        "pre_compact": 30_000,
+        "session_end": 8_000,
+    }
+
+
+def test_matcher_values_are_closed_vocabularies_of_their_fields() -> None:
+    assert dict(MATCHER_VALUES) == {
+        "sources": frozenset({"startup", "resume", "clear", "compact", "fork"}),
+        "triggers": frozenset({"manual", "auto"}),
+    }
+    assert set(MATCHER_VALUES) <= set(MATCHER_KEYS)
+
+
 def test_constants() -> None:
     assert ADVISORY_RULE_PREFIX == "guardrail-"
     path = PurePosixPath(HOOK_SCRIPTS_DIR)
@@ -129,7 +154,15 @@ def test_constants() -> None:
 
 
 def test_tables_are_read_only() -> None:
-    for table in (HOOK_EVENTS, TOOL_CLASS_NAMES, HOOK_SUPPORT, DEGRADED_EVENTS, ON_ERROR_STRENGTH):
+    for table in (
+        HOOK_EVENTS,
+        TOOL_CLASS_NAMES,
+        HOOK_SUPPORT,
+        DEGRADED_EVENTS,
+        ON_ERROR_STRENGTH,
+        ENGINE_DEADLINE_CAP_MS,
+        MATCHER_VALUES,
+    ):
         assert not hasattr(table, "__setitem__")
     assert not hasattr(HOOK_SUPPORT["opencode"], "__setitem__")
 
@@ -165,6 +198,10 @@ def test_hook_policy_imports_only_the_stdlib() -> None:
         "coding_agent_playbook._hook_schema",
         "coding_agent_playbook._layers",
         "coding_agent_playbook.hook_policy",
+        "coding_agent_playbook.hook_policy._contract_handlers",
+        "coding_agent_playbook.hook_policy._findings",
+        "coding_agent_playbook.hook_policy.contract",
+        "coding_agent_playbook.hook_policy.contract_set",
         "coding_agent_playbook.hook_policy.effective",
         "coding_agent_playbook.hook_policy.merge",
         "coding_agent_playbook.hook_policy.override_rules",
