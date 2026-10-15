@@ -815,3 +815,35 @@ def test_secret_rules_table_rendered() -> None:
     parsed = parse_guard_config(serialize_guard_config(cfg))
     assert isinstance(parsed, GuardConfig)
     assert parsed.tables["secret_rules"] == rules
+
+
+def test_facts_carry_the_package_manager_when_detected() -> None:
+    """dependency-allowlist-guard's tier (a) reads ``facts.package_manager`` (§E.4)."""
+    detected = dataclasses.replace(
+        _inputs([]), detect=DetectInputs(facts={"package_manager": "uv"})
+    )
+
+    assert render_guard_config(detected)["facts"]["package_manager"] == "uv"
+    assert "package_manager" not in render_guard_config(_inputs([]))["facts"]
+
+
+def test_allowlists_table_rendered_from_the_guards_configs() -> None:
+    """§D.8.2 ``allowlists``: the dependency allowlist, its index and the egress hosts."""
+    deps = resolved_hook(
+        "dependency-allowlist-guard",
+        config={"allowlist": ["Foo_Bar", "numpy"], "required_index": "https://pypi.corp/simple"},
+    )
+    egress = resolved_hook("exfil-channel-guard", config={"allowed_hosts": ["Corp.Example"]})
+
+    table = render_guard_config(_inputs([deps, egress]))["allowlists"]
+
+    assert table == {
+        "dependencies": ["foo-bar", "numpy"],
+        "required_index": "https://pypi.corp/simple",
+        "egress_hosts": ["corp.example"],
+    }
+    assert render_guard_config(_inputs([]))["allowlists"] == {
+        "dependencies": [],
+        "required_index": "",
+        "egress_hosts": [],
+    }

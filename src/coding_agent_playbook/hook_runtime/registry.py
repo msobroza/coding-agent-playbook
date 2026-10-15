@@ -100,6 +100,12 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         "destructive_command_guard": f"{_HANDLERS}.destructive",
         "git_policy_guard": f"{_HANDLERS}.git_policy",
         "command_convention_guard": f"{_HANDLERS}.conventions",
+        "dependency_guard": f"{_HANDLERS}.dependencies",
+        "exfil_guard": f"{_HANDLERS}.exfil",
+        "exfil_guard:session_start": f"{_HANDLERS}.exfil",
+        "taint_escalation": f"{_HANDLERS}.taint",
+        "taint_escalation:marker": f"{_HANDLERS}.taint",
+        "taint_escalation:session_start": f"{_HANDLERS}.taint",
     }
 )
 #: The only handlers that may rewrite the file the tool just edited (specs/prK-hook-pack.md

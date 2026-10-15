@@ -1,7 +1,9 @@
-"""``SessionState.debounce``: the source-changed branch's per-session window (specs/prK-hook-pack.md §E.0.4).
+"""``SessionState.debounce`` and its flags (specs/prK-hook-pack.md §E.0.4, §E.4).
 
 The stamp is the store clock's wall time, so a ``FakeClock`` drives it and a
 second hook process (a new ``SessionState`` on the same store) sees it too.
+Flags (taint-escalation's ``taint:*``) last for the session; only
+``clear_flag`` drops one, stored or kept in memory while stateless.
 """
 
 from __future__ import annotations
@@ -59,6 +61,33 @@ def test_debounce_keeps_the_newest_keys_and_reopens_when_the_clock_goes_back(
 
     assert len(stored) == MAX_DEBOUNCE_KEYS and "k0" not in stored
     assert session.debounce(f"k{MAX_DEBOUNCE_KEYS}", 2.0) is True
+
+
+def test_flags_persist_across_processes_until_cleared(tmp_path: Path) -> None:
+    clock = FakeClock()
+    _session(tmp_path, clock).set_flag("taint:web")
+    _session(tmp_path, clock).set_flag("taint:read")
+
+    later = _session(tmp_path, clock)  # a later hook process
+    before = (later.flags(), later.flag("taint:web"), _session(tmp_path, clock, "s-2").flags())
+    later.clear_flag("taint:web")
+    later.clear_flag("taint:read")
+
+    assert before == (("taint:web", "taint:read"), True, ())
+    assert _session(tmp_path, clock).flags() == ()
+    assert "flags" not in session_document(tmp_path, later)
+
+
+def test_clear_flag_also_clears_the_in_memory_flag_when_stateless(tmp_path: Path) -> None:
+    blocked = tmp_path / "file"
+    blocked.write_text("not a directory\n", encoding="utf-8")
+    stateless = SessionState(StateStore(blocked, clock=FakeClock()), "s-1")
+    stateless.set_flag("taint:web")
+    kept = stateless.flags()
+
+    stateless.clear_flag("taint:web")
+
+    assert (kept, stateless.flags()) == (("taint:web",), ())
 
 
 def session_document(tmp_path: Path, session: SessionState) -> dict[str, Any]:

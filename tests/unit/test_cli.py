@@ -210,14 +210,25 @@ def test_metrics_subparser_defaults():
 
 def test_twin_subcommands_close_the_canonical_list():
     """prK K6-K8: the off-workstation twins are registered, and no argument is required."""
-    assert _SUBCOMMANDS[-6:] == (
+    assert _SUBCOMMANDS[-7:] == (
         "gate-scan",
         "ci",
         "scan-sinks",
         "check-notebooks",
         "scan-secrets",
         "check-commit-trailers",
+        "check-deps",
     )
+
+
+def test_check_deps_accepts_base():
+    """prK §E.4: ``check-deps [--base REF]``; without one the default branch is the base."""
+    parser = build_parser()
+    default = parser.parse_args(["check-deps"])
+    based = parser.parse_args(["check-deps", "--base", "origin/main", "--repo-root", "/r"])
+
+    assert (default.command, default.base, default.repo_root) == ("check-deps", None, None)
+    assert (based.base, based.repo_root) == ("origin/main", "/r")
 
 
 def test_check_commit_trailers_accepts_msgfile_or_range():

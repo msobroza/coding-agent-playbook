@@ -35,7 +35,9 @@ pyproject into those hooks' config (``_guard_config_toolchain``).
 one is reported unparsed), shared by the notebook-reading hooks. The K8
 secret tables (``secret_path_exempt``, ``secret_glob_exempt``,
 ``secret_rules``) come from ``_guard_config_secrets``: the exemptions beside
-``secret_path_globs`` and the content ruleset with its overlay patterns.
+``secret_path_globs`` and the content ruleset with its overlay patterns; the
+``allowlists`` table (dependency allowlist, required index, egress hosts) from
+``_guard_config_allowlists``.
 """
 
 from __future__ import annotations
@@ -45,6 +47,7 @@ import shutil
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook._guard_config_allowlists import allowlists_table
 from coding_agent_playbook._guard_config_detect import (
     DetectInputs,
     applicability_rows,
@@ -229,7 +232,7 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
     §D.8.2 table that ``hook_runtime.config`` reads (it cannot read ``[hooks]``);
     ``sentinel``, ``protected``, ``control_plane``, ``precommit``, ``facts``,
     ``applicability``, ``eval``, ``auto_sync``, ``stop_gate``, ``prompts``,
-    ``ruff``, ``notebooks`` and the §E.4 secret tables are pack keys
+    ``ruff``, ``notebooks``, the §E.4 secret tables and ``allowlists`` are pack keys
     (``GuardConfig.tables``).
 
     Example::
@@ -280,6 +283,7 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
         "ruff": ruff_table(inputs.ruff),
         "notebooks": {"max_bytes": NOTEBOOK_MAX_BYTES},
         **secret_tables(inputs.hooks, inputs.guardrails),
+        "allowlists": allowlists_table(inputs.hooks),
     }
 
 

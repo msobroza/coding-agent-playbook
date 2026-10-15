@@ -135,6 +135,10 @@ class LazyGit:
         """See ``GitPort.porcelain_status``."""
         return self._port().porcelain_status()
 
+    def remote_urls(self) -> tuple[tuple[str, str], ...]:
+        """See ``GitPort.remote_urls``."""
+        return self._port().remote_urls()
+
 
 def open_trust_store(repo: RepoInfo, deps: RuntimeDeps) -> TrustPort | None:
     """``deps.trust``, else the user-local store of ``repo``; ``None`` when it cannot be used.

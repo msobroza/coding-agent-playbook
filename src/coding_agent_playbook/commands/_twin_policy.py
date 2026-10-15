@@ -1,6 +1,7 @@
 """The policy rows an off-workstation twin enforces, whatever ``[hooks]`` says (specs/prK-hook-pack.md §E.4).
 
-A twin (``check-commit-trailers`` in commit-msg and CI) must apply a hook's data
+A twin (``check-commit-trailers`` in commit-msg and CI, ``check-deps`` in CI)
+must apply a hook's data
 rows even in a repository that keeps ``[hooks]`` off, or where the hook is
 disabled for the agent: humans and CI commit too. So it reads the hook's merged
 handler config straight from the same layers sync merges (the engine
@@ -17,11 +18,21 @@ from coding_agent_playbook.security.commit_trailers import GitPolicy
 if TYPE_CHECKING:
     from pathlib import Path
 
-__all__ = ["CONFIG_FILE", "GIT_POLICY_HOOK", "commit_trailer_policy", "twin_hook_config"]
+__all__ = [
+    "CONFIG_FILE",
+    "DEPENDENCY_HOOK",
+    "GIT_POLICY_HOOK",
+    "commit_trailer_policy",
+    "dependency_policy_configured",
+    "dependency_twin_config",
+    "twin_hook_config",
+]
 
 CONFIG_FILE: Final = ".coding-agent-playbook.toml"
 #: The hook whose trailer rows ``check-commit-trailers`` runs.
 GIT_POLICY_HOOK: Final = "git-commit-push-policy-guard"
+#: The hook whose allowlist and index rules ``check-deps`` applies.
+DEPENDENCY_HOOK: Final = "dependency-allowlist-guard"
 
 
 def twin_hook_config(
@@ -67,3 +78,29 @@ def commit_trailer_policy(repo_root: Path) -> GitPolicy:
     if not (repo_root / CONFIG_FILE).is_file():
         return GitPolicy()
     return GitPolicy.from_config(twin_hook_config(repo_root, GIT_POLICY_HOOK) or {})
+
+
+def dependency_twin_config(repo_root: Path) -> dict[str, Any]:
+    """dependency-allowlist-guard's merged config; ``{}`` (the defaults) without a config file.
+
+    Example::
+
+        >>> dependency_twin_config(Path("."))  # doctest: +SKIP
+        {'index_mode': 'ask', 'allowlist': [], 'required_index': ''}
+    """
+    if not (repo_root / CONFIG_FILE).is_file():
+        return {}
+    return twin_hook_config(repo_root, DEPENDENCY_HOOK) or {}
+
+
+def dependency_policy_configured(repo_root: Path) -> bool:
+    """Whether a dependency policy is set: an allowlist, a required index or ``index_mode = deny``.
+
+    Example::
+
+        >>> dependency_policy_configured(Path("."))  # doctest: +SKIP
+        False
+    """
+    config = dependency_twin_config(repo_root)
+    modes = (config.get("index_mode"), config.get("mode"))
+    return bool(config.get("allowlist") or config.get("required_index") or "deny" in modes)

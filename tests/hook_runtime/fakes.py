@@ -142,7 +142,8 @@ class FakeGit:
     repo paths to the bytes ``archive_to`` writes (``skip`` honoured, as in git).
     ``grep_word`` finds exactly the ``test_words``; ``rev_commit`` reads ``commits``.
     ``upstream`` answers ``upstream_ref``; ``unpushed_lines`` the ``unpushed`` patch;
-    ``porcelain_status`` the ``status`` entries (``(XY, path)``).
+    ``porcelain_status`` the ``status`` entries (``(XY, path)``); ``remote_urls`` the
+    ``remotes`` map (name -> URL), as ``git remote -v`` lists it.
     """
 
     head_tree_id: str | None = None
@@ -163,6 +164,7 @@ class FakeGit:
     upstream_ref: str | None = None
     unpushed: DiffLines = field(default_factory=DiffLines)
     status: tuple[tuple[str, str], ...] = ()
+    remotes: dict[str, str] = field(default_factory=dict)
     errors: dict[str, Exception] = field(default_factory=dict)
     calls: list[tuple[str, tuple[str, ...]]] = field(default_factory=list)
 
@@ -250,6 +252,10 @@ class FakeGit:
     def porcelain_status(self) -> tuple[tuple[str, str], ...]:
         self._record("porcelain_status")
         return self.status
+
+    def remote_urls(self) -> tuple[tuple[str, str], ...]:
+        self._record("remote_urls")
+        return tuple(self.remotes.items())
 
 
 @dataclass

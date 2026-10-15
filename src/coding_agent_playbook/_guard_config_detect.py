@@ -5,7 +5,8 @@ path is one ``tomllib`` read and a set comparison:
 
 - ``facts``: the detector's dependency names (runtime and dev groups) and the
   presence flags (``has_dockerfile``, ``has_ci``, ``has_notebooks``), the
-  subset of ``detect()`` a mid-session edit can change;
+  subset of ``detect()`` a mid-session edit can change, plus the detected
+  ``package_manager`` (dependency-allowlist-guard, §E.4);
 - ``applicability``: ``{kind, id, applies_if, source, active}`` for every
   merged rule and prompt and every hook that only applicability keeps off.
   ``applies_if`` is a list of predicates that must all hold (a hook's own,
@@ -95,7 +96,7 @@ class DetectInputs:
 
 
 def facts_table(facts: Mapping[str, Any]) -> dict[str, Any]:
-    """The ``facts`` table: sorted dependency names and the three presence flags.
+    """The ``facts`` table: sorted dependency names, the presence flags, the package manager.
 
     Example::
 
@@ -107,6 +108,9 @@ def facts_table(facts: Mapping[str, Any]) -> dict[str, Any]:
         "dev_dependencies": sorted(facts.get("dev_dependencies", {})),
     }
     table.update({flag: bool(facts.get(flag, False)) for flag in _FLAGS})
+    manager = facts.get("package_manager")
+    if isinstance(manager, str):  # dependency-allowlist-guard's tier (a), §E.4
+        table["package_manager"] = manager
     return table
 
 

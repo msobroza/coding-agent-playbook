@@ -73,6 +73,8 @@ def test_ci_steps_table_rows_and_owners() -> None:
         ("gate-scan", "E.2"),
         ("scan-secrets", "E.4"),
         ("commit-trailers", "E.4"),
+        ("check-deps", "E.4"),
+        ("scan-sinks", "E.3"),
     ]
 
 
@@ -113,7 +115,8 @@ def test_aggregated_exit_1_when_any_step_fails(
     out = capsys.readouterr().out
     assert "validate said hello" in out
     assert "FAIL validate (exit 1" in out
-    assert "playbook ci: 3 passed, 1 failed, 1 skipped" in out  # commit-trailers: no rows
+    # commit-trailers (no rows), check-deps (no policy) and the opt-in scan-sinks
+    assert "playbook ci: 3 passed, 1 failed, 3 skipped" in out
 
 
 @pytest.mark.parametrize("steps", ["validate,nope", "", ",,"])
@@ -184,6 +187,22 @@ def test_json_records_step_argv_exit_duration(
             "duration_s": 0.0,
             "status": "skipped",
             "note": "no trailer row in [hooks.git-commit-push-policy-guard]",
+        },
+        {
+            "step": "check-deps",
+            "argv": [],
+            "exit": None,
+            "duration_s": 0.0,
+            "status": "skipped",
+            "note": "no dependency policy (allowlist, required_index or index_mode = deny)",
+        },
+        {
+            "step": "scan-sinks",
+            "argv": [],
+            "exit": None,
+            "duration_s": 0.0,
+            "status": "skipped",
+            "note": "opt-in: run with --steps scan-sinks",
         },
     ]
     assert "gate-scan said hello" in captured.err  # child output stays off the JSON stream
@@ -364,3 +383,47 @@ def test_commit_trailers_step_enabled_only_with_rows(
     root = str(tmp_path.resolve())
     ran = [(*CLI_PREFIX, "check-commit-trailers", "--range", "abc123..HEAD", "--repo-root", root)]
     assert runner.calls == (ran if expected == "passed" else [])
+
+
+_DEPENDENCY_POLICY = '\n[hooks.dependency-allowlist-guard]\nallowlist = ["requests"]\n'
+
+
+@pytest.mark.parametrize(
+    ("tables", "steps", "expected"),
+    [
+        ("", "check-deps,scan-sinks", ["skipped", "passed"]),
+        (_DEPENDENCY_POLICY, "check-deps,scan-sinks", ["passed", "passed"]),
+        (_DEPENDENCY_POLICY, "check-deps", ["passed"]),
+    ],
+)
+def test_check_deps_and_scan_sinks_rows(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    tables: str,
+    steps: str,
+    expected: list[str],
+) -> None:
+    """prK §E.4/§E.3: check-deps runs with a dependency policy; scan-sinks only on request."""
+    (tmp_path / ".coding-agent-playbook.toml").write_text(_DEFAULT_CONFIG + tables, "utf-8")
+    runner = FakeCiStepRunner()
+
+    code = _run(tmp_path, "--steps", steps, "--format", "json", runner=runner)
+
+    records = json.loads(capsys.readouterr().out)["steps"]
+    assert (code, [record["status"] for record in records]) == (0, expected)
+    root = str(tmp_path.resolve())
+    rows = {
+        "check-deps": (*CLI_PREFIX, "check-deps", "--base", "abc123", "--repo-root", root),
+        "scan-sinks": (*CLI_PREFIX, "scan-sinks", "--range", "abc123..HEAD", "--repo-root", root),
+    }
+    ran = [r["step"] for r in records if r["status"] == "passed"]
+    assert runner.calls == [rows[name] for name in ran]
+
+
+def test_unreadable_dependency_policy_runs_check_deps_so_it_reports(tmp_path: Path) -> None:
+    (tmp_path / ".coding-agent-playbook.toml").write_text("not [toml", encoding="utf-8")
+    runner = FakeCiStepRunner()
+
+    _run(tmp_path, "--steps", "check-deps", runner=runner)
+
+    assert _subcommands(runner) == ["check-deps"]

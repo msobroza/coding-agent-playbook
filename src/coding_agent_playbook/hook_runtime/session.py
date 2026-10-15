@@ -128,8 +128,35 @@ class SessionState:
         return name in self._read("flags")
 
     def set_flag(self, name: str) -> None:
-        """Set flag ``name`` until the session ends; flags never clear within a session."""
+        """Set flag ``name`` until the session ends (or :meth:`clear_flag` drops it)."""
         self._write(lambda doc: _add_capped(doc, "flags", name, MAX_ONCE_KEYS))
+
+    def flags(self) -> tuple[str, ...]:
+        """Every flag set this session, read once (taint-escalation's ``taint:*`` sources)."""
+        return tuple(dict.fromkeys(self._read("flags")))
+
+    def clear_flag(self, name: str) -> None:
+        """Drop flag ``name``; only a ``session_start`` with source ``clear`` does (§E.4).
+
+        ``/clear`` empties the conversation, so the content that set the flag is
+        gone from the context even when a harness keeps the session id.
+
+        Example::
+
+            >>> session.set_flag("taint:web"); session.clear_flag("taint:web")  # doctest: +SKIP
+            >>> session.flag("taint:web")  # doctest: +SKIP
+            False
+        """
+
+        def drop(document: dict[str, Any]) -> None:
+            kept = [item for item in _strings(document, "flags") if item != name]
+            if kept:
+                document["flags"] = kept
+            else:
+                document.pop("flags", None)
+
+        self._write(drop)
+        drop(self._memory)  # a flag kept in memory while stateless goes too
 
     def mark_asked(self, tool_use_id: str, hook_id: str = "") -> None:
         """Remember that ``hook_id`` (or some hook) answered the tool call ``tool_use_id`` with an ask."""

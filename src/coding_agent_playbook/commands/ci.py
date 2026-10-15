@@ -19,6 +19,11 @@ secrets and dependency twins) instead of adding a second CI entry point.
 - ``commit-trailers`` (E.4) checks every commit of that range against
   git-commit-push-policy-guard's trailer rows, and runs only when one is
   configured (a policy that does not load runs it anyway, to report why).
+- ``check-deps`` (E.4) diffs the manifests from the merge base against
+  dependency-allowlist-guard's allowlist and index rules, and runs only when a
+  dependency policy is configured (same fail-closed rule).
+- ``scan-sinks`` (E.3, K7's tool) is opt-in: it runs only when ``--steps``
+  names it.
 
 Exit codes: 0 every run step passed, 1 any failed or timed out, 2 a usage
 error or an unresolvable base (nothing ran). ``--format json`` prints one
@@ -78,7 +83,8 @@ class CiContext:
     until a selected step needs it. ``requested`` are the names ``--steps``
     named explicitly (empty: none), for rows enabled only on request.
     ``trailer_rows`` says whether a commit-trailer row is configured (read
-    only when the ``commit-trailers`` row is selected).
+    only when the ``commit-trailers`` row is selected); ``dependency_policy``
+    the same for the ``check-deps`` row.
     """
 
     repo_root: Path
@@ -86,6 +92,7 @@ class CiContext:
     requested: frozenset[str] = frozenset()
     merge_base: str = ""
     trailer_rows: bool = False
+    dependency_policy: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +170,16 @@ def _commit_trailers_skip(ctx: CiContext) -> str | None:
     return "no trailer row in [hooks.git-commit-push-policy-guard]"
 
 
+def _check_deps_skip(ctx: CiContext) -> str | None:
+    if ctx.dependency_policy:
+        return None
+    return "no dependency policy (allowlist, required_index or index_mode = deny)"
+
+
+def _scan_sinks_skip(ctx: CiContext) -> str | None:
+    return None if "scan-sinks" in ctx.requested else "opt-in: run with --steps scan-sinks"
+
+
 CI_STEPS: Final[tuple[CiStep, ...]] = (
     CiStep("sync-check", "prerequisites", lambda ctx: ["sync", "--check"], _sync_check_skip),
     CiStep("validate", "existing", lambda ctx: ["validate"]),
@@ -183,6 +200,20 @@ CI_STEPS: Final[tuple[CiStep, ...]] = (
         "E.4",
         lambda ctx: ["check-commit-trailers", "--range", f"{ctx.merge_base}..HEAD"],
         _commit_trailers_skip,
+        needs_base=True,
+    ),
+    CiStep(
+        "check-deps",
+        "E.4",
+        lambda ctx: ["check-deps", "--base", ctx.merge_base],
+        _check_deps_skip,
+        needs_base=True,
+    ),
+    CiStep(
+        "scan-sinks",
+        "E.3",
+        lambda ctx: ["scan-sinks", "--range", f"{ctx.merge_base}..HEAD"],
+        _scan_sinks_skip,
         needs_base=True,
     ),
 )
@@ -234,11 +265,13 @@ def run(
     repo_root = Path(args.repo_root or ".").resolve()
     try:
         steps = select_steps(args.steps)
+        names = {step.name for step in steps}
         ctx = CiContext(
             repo_root,
             _output_committed(repo_root),
             _requested(args.steps),
-            trailer_rows=any(s.name == "commit-trailers" for s in steps) and _trailers(repo_root),
+            trailer_rows="commit-trailers" in names and _trailers(repo_root),
+            dependency_policy="check-deps" in names and _dependency_policy(repo_root),
         )
         ctx = _with_base(ctx, steps, args.base, git)
     except (GitError, ValueError) as exc:  # GitBaseError is a ValueError
@@ -359,6 +392,16 @@ def _trailers(repo_root: Path) -> bool:
         return commit_trailer_policy(repo_root).has_rows
     except (ValueError, OSError, KeyError, TypeError):
         return True  # check-commit-trailers then reports the broken config itself
+
+
+def _dependency_policy(repo_root: Path) -> bool:
+    """Whether a dependency policy is set; ``True`` when it does not load (fail closed)."""
+    from coding_agent_playbook.commands._twin_policy import dependency_policy_configured
+
+    try:
+        return dependency_policy_configured(repo_root)
+    except (ValueError, OSError, KeyError, TypeError):
+        return True  # check-deps then reports the broken config itself
 
 
 def _requested(text: str | None) -> frozenset[str]:

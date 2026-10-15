@@ -23,7 +23,8 @@ filter so no member lands outside the export or keeps a special mode) and
 secret-content-guard's push scan (§E.4) adds ``upstream`` and
 ``unpushed_lines``: the commits a ``git push`` would publish, as ``log -p``.
 The §E.4 git guards add ``porcelain_status``: whether a lossy command would
-lose work, and which paths a commit would record.
+lose work, and which paths a commit would record. exfil-channel-guard adds
+``remote_urls``: the configured remotes (``git remote -v``, config only).
 """
 
 from __future__ import annotations
@@ -97,6 +98,8 @@ class RangePort(Protocol):
     def unpushed_lines(self, upstream: str | None) -> DiffLines: ...
 
     def porcelain_status(self) -> tuple[tuple[str, str], ...]: ...
+
+    def remote_urls(self) -> tuple[tuple[str, str], ...]: ...
 
 
 class _Runner(Protocol):
@@ -232,6 +235,18 @@ class RangeQueries:
         argv = ["status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=normal"]
         entries = split_z(self.run(argv).stdout)
         return tuple((entry[:2], entry[3:]) for entry in entries if len(entry) > 3)
+
+    def remote_urls(self: _Runner) -> tuple[tuple[str, str], ...]:
+        """``(name, url)`` of every configured remote, fetch and push URLs, deduplicated.
+
+        ``git remote -v`` reads config only (no worktree content, so no filter
+        can run) and shows each URL after ``insteadOf`` rewriting, the one a
+        push would contact.
+        """
+        lines = _decoded(self.bare_run(["remote", "-v"]).stdout).splitlines()
+        pairs = (line.split("\t", 1) for line in lines if "\t" in line)
+        found = ((name, rest.rsplit(" (", 1)[0].strip()) for name, rest in pairs)
+        return tuple(dict.fromkeys(pair for pair in found if pair[0] and pair[1]))
 
 
 def pick_default_branch(refs: Iterable[str]) -> str | None:

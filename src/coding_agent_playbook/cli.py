@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook import __version__
 from coding_agent_playbook.commands import check as check_cmd
 from coding_agent_playbook.commands import check_commit_trailers as check_commit_trailers_cmd
+from coding_agent_playbook.commands import check_deps as check_deps_cmd
 from coding_agent_playbook.commands import check_notebooks as check_notebooks_cmd
 from coding_agent_playbook.commands import ci as ci_cmd
 from coding_agent_playbook.commands import eval as eval_cmd
@@ -58,6 +59,7 @@ _SUBCOMMANDS: tuple[str, ...] = (
     "check-notebooks",
     "scan-secrets",
     "check-commit-trailers",
+    "check-deps",
 )
 
 
@@ -267,7 +269,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _add_twin_parsers(subcommands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """The hooks' off-workstation twins: ``gate-scan``, ``ci`` (prK §E.2, §F.5), ``scan-sinks``,
-    ``check-notebooks`` (§E.3), ``scan-secrets`` and ``check-commit-trailers`` (§E.4)."""
+    ``check-notebooks`` (§E.3), ``scan-secrets``, ``check-commit-trailers`` and ``check-deps``
+    (§E.4)."""
     gate_p = subcommands.add_parser(
         _SUBCOMMANDS[9], help="flag gate-weakening changes in a commit range (prK §E.2)"
     )
@@ -357,6 +360,19 @@ def _add_check_commit_trailers_parser(
     )
     trailers_p.add_argument("--repo-root", help="repo whose policy applies (defaults to cwd)")
     trailers_p.set_defaults(func=check_commit_trailers_cmd.run)
+    _add_check_deps_parser(subcommands)
+
+
+def _add_check_deps_parser(
+    subcommands: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """``check-deps [--base REF]`` (prK §E.4)."""
+    deps_p = subcommands.add_parser(
+        _SUBCOMMANDS[15], help="flag new dependencies and package indexes since a base (prK §E.4)"
+    )
+    deps_p.add_argument("--base", help="base ref (default: the default branch, origin/HEAD first)")
+    deps_p.add_argument("--repo-root", help="repo to check (defaults to cwd)")
+    deps_p.set_defaults(func=check_deps_cmd.run)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

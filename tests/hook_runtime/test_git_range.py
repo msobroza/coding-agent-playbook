@@ -339,6 +339,23 @@ def test_porcelain_status_lists_staged_unstaged_and_untracked(
     ]
 
 
+def test_remote_urls_lists_fetch_and_push_urls_once(
+    branchy: Path, real_git: Callable[..., str], real_proc: SubprocessProc
+) -> None:
+    """exfil-channel-guard's snapshot (§E.4): ``git remote -v``, insteadOf applied."""
+    git = _stateless(branchy, real_proc)
+    assert git.remote_urls() == ()
+
+    real_git("remote", "add", "origin", "https://example.invalid/r.git", cwd=branchy)
+    real_git("remote", "set-url", "--push", "origin", "gh:org/r.git", cwd=branchy)
+    real_git("config", "url.git@github.com:.insteadOf", "gh:", cwd=branchy)
+
+    assert git.remote_urls() == (
+        ("origin", "https://example.invalid/r.git"),
+        ("origin", "git@github.com:org/r.git"),
+    )
+
+
 # --- ports -----------------------------------------------------------------------------------
 
 
@@ -353,6 +370,7 @@ def test_lazy_git_delegates_the_range_queries(
         test_words={"foo"},
         commits={"main": "c0ffee"},
         status=((" M", "a.py"),),
+        remotes={"origin": "https://example.invalid/r.git"},
     )
     lazy = LazyGit(
         GuardRepo.create(tmp_path).repo, runtime_deps(git=fake), state=None, secret_paths=None
@@ -368,6 +386,7 @@ def test_lazy_git_delegates_the_range_queries(
         lazy.grep_word("foo", ["tests"]),
         lazy.rev_commit("main"),
         lazy.porcelain_status(),
+        lazy.remote_urls(),
     )
 
     assert answers == (
@@ -380,6 +399,7 @@ def test_lazy_git_delegates_the_range_queries(
         True,
         "c0ffee",
         ((" M", "a.py"),),
+        (("origin", "https://example.invalid/r.git"),),
     )
     assert [method for method, _ in fake.calls] == [
         "default_branch",
@@ -391,4 +411,5 @@ def test_lazy_git_delegates_the_range_queries(
         "grep_word",
         "rev_commit",
         "porcelain_status",
+        "remote_urls",
     ]

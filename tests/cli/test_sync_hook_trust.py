@@ -201,6 +201,8 @@ def test_handler_approval_mirrors_the_runtime_record(repo: Path, tmp_path: Path)
         "destructive-command-guard",
         "git-commit-push-policy-guard",
         "stop-diff-sweep",
+        "dependency-allowlist-guard",
+        "exfil-channel-guard",
     }
     assert all(handler_approval(hook) is None for hook in builtins)
 

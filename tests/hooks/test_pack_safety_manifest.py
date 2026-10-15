@@ -1,10 +1,11 @@
-"""The safety pack as shipped so far (specs/prK-hook-pack.md §E.0.6, §E.4, Track K8).
+"""The safety pack as shipped (specs/prK-hook-pack.md §E.0.6, §E.4, Track K8).
 
 Every ``resources/hooks/safety/<id>/HOOK.md`` matches its §E.0.6 row (tier,
 events, decisions, ``on_error``), passes the H1-H21 contract in a config-less
-``playbook validate`` with no warning, and binds builtins that declare their
-config keys (a ``regex`` key screened like an overlay's) and never mutate tool
-input. stop-diff-sweep names the ``secrets`` stage the coordinator plans.
+``playbook validate`` with no warning, and binds builtins (one per event for
+the hooks with companions) that declare their config keys (a ``regex`` key
+screened like an overlay's) and never mutate tool input. stop-diff-sweep
+names the ``secrets`` stage the coordinator plans.
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ class PackRow(NamedTuple):
     on_error: str
 
 
-#: K8 ships the rest of §E.4 in its later steps; each adds its row here.
+#: The nine §E.4 rows (taint-escalation's marker and the exfil snapshot are companions).
 SAFETY_PACK: dict[str, PackRow] = {
     "secrets-path-guard": PackRow(
         "default", ("pre_tool_use",), ("deny", "ask", "context", "none"), "ask"
@@ -48,6 +49,15 @@ SAFETY_PACK: dict[str, PackRow] = {
     ),
     "command-convention-guard": PackRow(
         "opt-in", ("pre_tool_use",), ("deny", "context", "none"), "open"
+    ),
+    "dependency-allowlist-guard": PackRow(
+        "default", ("pre_tool_use",), ("deny", "ask", "none"), "ask"
+    ),
+    "exfil-channel-guard": PackRow(
+        "default", ("pre_tool_use", "session_start"), ("deny", "ask", "none"), "ask"
+    ),
+    "taint-escalation": PackRow(
+        "opt-in", ("pre_tool_use", "post_tool_use", "session_start"), ("ask", "none"), "ask"
     ),
 }
 
@@ -81,14 +91,17 @@ def test_safety_hooks_validate_clean(tmp_path: Path, capsys: pytest.CaptureFixtu
 @pytest.mark.parametrize("hook_id", sorted(SAFETY_PACK))
 def test_handlers_declare_config_schema_and_no_input_mutation(hook_id: str) -> None:
     fm = engine_hook(hook_id).frontmatter
-    assert fm.handler is not None and fm.handler.builtin is not None
+    single = fm.handler
+    handlers = fm.handlers or {event: single for event in fm.events if single is not None}
+    assert set(handlers) == set(fm.events)
 
-    declaration = load_builtin(fm.handler.builtin)
-
-    assert declaration.mutates_input is False
-    assert set(fm.handler.config) <= set(declaration.config_schema)
-    assert all(declaration.config_schema[k].accepts(v) for k, v in fm.handler.config.items())
-    assert set(fm.events) <= {e.value for e in declaration.events}
+    for event, handler in handlers.items():
+        assert handler.builtin is not None
+        declaration = load_builtin(handler.builtin)
+        assert declaration.mutates_input is False
+        assert set(handler.config) <= set(declaration.config_schema)
+        assert all(declaration.config_schema[k].accepts(v) for k, v in handler.config.items())
+        assert event in {e.value for e in declaration.events}
 
 
 def test_stop_diff_sweep_names_a_planned_stage() -> None:
@@ -105,6 +118,17 @@ def test_guardrails_domains_feed_the_secret_hooks() -> None:
     assert load_builtin("secret_content_guard").config_domain is None
 
 
+def test_guardrails_dependencies_domain_feeds_the_dependency_guard() -> None:
+    """``[guardrails.dependencies]`` mode (strictest) and allowlist (relax) reach the guard (§B.3)."""
+    declaration = load_builtin("dependency_guard")
+
+    assert declaration.config_domain == "dependencies"
+    assert declaration.config_schema["mode"].policy == "strictest"
+    assert declaration.config_schema["index_mode"].order == ("ask", "deny")
+    assert declaration.config_schema["allowlist"].policy == "relax"
+    assert load_builtin("exfil_guard").config_schema["allowed_hosts"].policy == "relax"
+
+
 def test_guardrails_git_domain_feeds_destructive_command_guard() -> None:
     """``[guardrails.git] protected_branches`` extends the guard's own list (§B.3)."""
     declaration = load_builtin("destructive_command_guard")
@@ -118,6 +142,7 @@ def test_guardrails_git_domain_feeds_destructive_command_guard() -> None:
     [
         ("destructive_command_guard", {"rm", "git", "mkfs*", "curl", "dd"}),
         ("git_policy_guard", {"git", "gh", "export"}),
+        ("exfil_guard", {"git", "gh", "curl", "wget", "scp", "rsync", "sftp"}),
     ],
 )
 def test_bash_guards_declare_their_prefilter_argv0s(builtin: str, argv0s: set[str]) -> None:
@@ -125,3 +150,7 @@ def test_bash_guards_declare_their_prefilter_argv0s(builtin: str, argv0s: set[st
 
     assert declared is not None and argv0s <= declared
     assert load_builtin("command_convention_guard").argv0s is None  # rows are data: no prefilter
+    # Runner launchers hide the install from the effective argv0 (``uvx ruff`` runs ``ruff``),
+    # and taint escalates on any outbound client: neither can be prefiltered by argv0.
+    assert load_builtin("dependency_guard").argv0s is None
+    assert load_builtin("taint_escalation").argv0s is None
