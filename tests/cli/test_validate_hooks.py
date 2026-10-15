@@ -19,6 +19,7 @@ import pytest
 
 from coding_agent_playbook.commands import _validate_context
 from coding_agent_playbook.commands import validate as _validate
+from tests.hooks.pack_repo import engine_hook_paths
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -39,6 +40,12 @@ kind = "python-library"
 [engine]
 version = "0.1.0a0"
 {extra}"""
+
+#: What ``screen_regex`` says about the classic catastrophic-backtracking shape (§E.4).
+REDOS = (
+    "regex '(a+)+$' nests unbounded quantifiers (like (a+)+), which can backtrack "
+    "catastrophically; bound the inner or the outer repeat"
+)
 
 # The sample hooks bind builtins guard_x/guard_y/guard_z, which validate (H6)
 # resolves through the handler registry: install them as a real entry point.
@@ -256,6 +263,14 @@ _SET_LEVEL: list[tuple[str, Callable[[Path, HookFactory, PackageFactory], tuple[
         ),
     ),
     (
+        "H21-redos-extra-pattern",
+        _h21(
+            "\n[hooks]\nenabled = true\n\n[hooks.secret-content-guard]\n"
+            'extra_patterns = [{id = "x", regex = "(a+)+$"}]\n',
+            f"[hooks.secret-content-guard] extra_patterns: {REDOS}",
+        ),
+    ),
+    (
         "H21-cutover-date",
         _h21(
             "\n[hooks.commit_convention]\ncutover_date = 2026-10-15\n",
@@ -419,4 +434,28 @@ def test_mutates_edited_file_rejected_for_external_handlers(
     assert _fail_lines(capsys.readouterr().out) == [
         f"FAIL {path}: handler.mutates_edited_file: unknown key 'mutates_edited_file'; "
         "allowed: builtin, command, script, args, config"
+    ]
+
+
+def test_overlay_extra_pattern_redos_rejected(
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    make_package: PackageFactory,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An overlay's secret ``extra_patterns`` run on agent text: validate screens each one (§E.4)."""
+    repo = make_synthetic_repo(tmp_path)
+    name, hooks = _overlay_hooks(make_package)
+    shipped = engine_hook_paths()["secret-content-guard"].read_text(encoding="utf-8")
+    assert "    extra_patterns: []\n" in shipped
+    override = hooks / "safety" / "secret-content-guard" / "HOOK.md"
+    override.parent.mkdir(parents=True)
+    bad = '    extra_patterns:\n      - {id: acme-token, regex: "(a+)+$"}\n'
+    override.write_text(shipped.replace("    extra_patterns: []\n", bad), encoding="utf-8")
+    (repo / ".coding-agent-playbook.toml").write_text(_config(overlays=(name,)), encoding="utf-8")
+
+    assert _run(repo) == 1
+
+    assert _fail_lines(capsys.readouterr().out) == [
+        f"FAIL {override}: handler.config.extra_patterns: {REDOS}"
     ]

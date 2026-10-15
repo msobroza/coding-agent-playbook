@@ -36,6 +36,7 @@ __all__ = [
     "MAX_REGEX_CHARS",
     "MAX_SCAN_BYTES",
     "PARTIAL_WINDOW_BYTES",
+    "SECRET_ADVICE",
     "AddedText",
     "BoundedScan",
     "SecretFinding",
@@ -50,6 +51,8 @@ __all__ = [
     "screen_regex",
 ]
 
+#: The safe alternative every secret finding names (guard reasons, Stop lines, the twin).
+SECRET_ADVICE: Final = "Use an env var or the secret manager and reference it by name."
 #: Text above this is scanned only at its head and tail (secret-content-guard's cap).
 MAX_SCAN_BYTES: Final = 1024 * 1024
 #: The head and the tail an oversized text keeps.

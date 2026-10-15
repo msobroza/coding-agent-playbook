@@ -43,7 +43,12 @@ from coding_agent_playbook.hook_runtime.git import GitError
 from coding_agent_playbook.hooks_config import parse_guardrails_config
 from coding_agent_playbook.security.files import user_home
 from coding_agent_playbook.security.paths import DEFAULT_PATH_POLICY, PathPolicy
-from coding_agent_playbook.security.secrets import SecretFinding, scan_added_lines, scan_text
+from coding_agent_playbook.security.secrets import (
+    SECRET_ADVICE,
+    SecretFinding,
+    scan_added_lines,
+    scan_text,
+)
 
 if TYPE_CHECKING:
     import argparse
@@ -55,7 +60,7 @@ __all__ = ["SecretHit", "SecretReport", "load_path_policy", "run", "scan_scope"]
 CONFIG_FILE: Final = ".coding-agent-playbook.toml"
 #: Larger working-tree files are noted, never read (a CLI may be slow, not unbounded).
 MAX_FILE_BYTES: Final = 32 * 1024 * 1024
-ADVICE: Final = "Use an env var or the secret manager and reference it by name."
+ADVICE: Final = SECRET_ADVICE
 SECRET_PATH_RULE: Final = "secret-path"
 SECRET_PATH_DETAIL: Final = (
     "a credential file; gitignore it and commit only an .env.example of variable names"

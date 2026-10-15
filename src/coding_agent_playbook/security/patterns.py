@@ -136,6 +136,12 @@ SECRET_GLOB_EXEMPT: "Final[dict[str, tuple[str, ...]]]" = {
 # (40 ms against 0.7 ms per rule, measured on CPython 3.13). All rules together
 # scan 512 KiB of source in about 3 ms.
 
+#: The engine ruleset's identity in ``guard_config.secret_rules``: bump the version
+#: whenever a rule is added, removed or changed, so a synced config names the
+#: ruleset its guards were reviewed against.
+SECRET_RULESET_ID: "Final[str]" = "engine-secrets"
+SECRET_RULESET_VERSION: "Final[int]" = 1
+
 SECRET_CONTENT_RULES: "Final[tuple[tuple[str, str, str], ...]]" = (
     (
         "private-key",
@@ -222,6 +228,13 @@ SECRET_SCAN_SKIP_NAMES: "Final[frozenset[str]]" = frozenset(
         "go.sum",
         "flake.lock",
     }
+)
+
+#: Directories a repository walk never enters: the detector's and the secret
+#: guards' (the secrets-path-guard inode index). Virtualenvs hold uv's hard
+#: links, which must not read as copies of a credential file.
+WALK_SKIP_DIRS: "Final[frozenset[str]]" = frozenset(
+    {".venv", "venv", "node_modules", ".git", "__pycache__", ".tox", ".mypy_cache"}
 )
 
 #: ``# playbook: allow-secret <rule-id>[, <rule-id>...]`` waives the named rules on its

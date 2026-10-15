@@ -161,6 +161,11 @@ def test_one_name_from_two_modules_is_refused(make_package: PackageFactory) -> N
         (ConfigKey("table"), {"a": 1}, True),
         (ConfigKey("string", order=("warn", "block")), "off", False),
         (ConfigKey("boolean"), 0, False),
+        (ConfigKey("regex"), ["^uv run\\b", {"id": "x", "regex": "x_[0-9]+"}], True),
+        (ConfigKey("regex"), [], True),
+        (ConfigKey("regex"), "^uv run\\b", False),  # a list of patterns, never one bare string
+        (ConfigKey("regex"), [{"id": "x"}], False),
+        (ConfigKey("regex"), [3], False),
     ],
 )
 def test_config_key_accepts_its_kind(key: ConfigKey, value: object, accepted: bool) -> None:

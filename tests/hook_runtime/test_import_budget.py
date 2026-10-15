@@ -538,3 +538,52 @@ def test_python_edit_branch_imports_no_forbidden_module(
     assert _forbidden(imported) == []
     assert "subprocess" not in imported
     assert "coding_agent_playbook._guard_config_ruff" not in imported  # sync-time (tomllib)
+
+
+_SECRET_POLICY: Final = "coding_agent_playbook.hook_runtime.handlers._secret_policy"
+
+
+@pytest.fixture
+def secrets_guarded(tmp_path: Path, real_proc: SubprocessProc) -> GuardRepo:
+    """A synced repo with the two §E.4 pre-write secret guards on their real builtins."""
+    repo = GuardRepo.create(tmp_path)
+    (repo.root / ".env").write_text("TOKEN=x\n", encoding="utf-8")
+    paths = hook_record(
+        "secrets-path-guard",
+        handler={"kind": "builtin", "name": "secret_path_guard"},
+        matcher={"pre_tool_use": {"tools": ["read", "edit", "write", "shell"]}},
+    )
+    content = hook_record(
+        "secret-content-guard",
+        decisions=("deny", "ask", "none"),
+        handler={"kind": "builtin", "name": "secret_content_guard"},
+        matcher={"pre_tool_use": {"tools": ["edit", "write", "shell"]}},
+    )
+    repo.install(paths, content)
+    _imports(real_proc, repo, EventName.SESSION_START, repo.payload(EventName.SESSION_START))
+    return repo
+
+
+@pytest.mark.parametrize(
+    ("tool", "tool_input"),
+    [
+        ("Read", {"file_path": ".env"}),
+        ("Bash", {"command": "cat .env"}),
+        ("Write", {"file_path": "src/aws.py", "content": "KEY = '" + "AKIA" + "Z7Q2" * 4 + "'\n"}),
+    ],
+    ids=["read-env", "bash-cat-env", "write-aws-key"],
+)
+def test_secret_guards_deny_from_paths_and_bytes_alone(
+    secrets_guarded: GuardRepo, real_proc: SubprocessProc, tool: str, tool_input: dict[str, str]
+) -> None:
+    """Path-only and content-only (specs/prK-hook-pack.md §E.4): no git, no process, no TOML."""
+    payload = secrets_guarded.payload(EventName.PRE_TOOL_USE, tool_name=tool, tool_input=tool_input)
+
+    imported = _imports(
+        real_proc, secrets_guarded, EventName.PRE_TOOL_USE, payload, exit_code=DENY_EXIT
+    )
+
+    assert _SECRET_POLICY in imported  # a secret guard ran (and denied: exit 10)
+    assert _forbidden(imported) == []
+    assert "subprocess" not in imported
+    assert "coding_agent_playbook.hook_runtime.git" not in imported

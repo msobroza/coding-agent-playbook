@@ -20,6 +20,8 @@ baseline's ``git archive`` export, extracted with ``tarfile``'s ``data``
 filter so no member lands outside the export or keeps a special mode) and
 ``grep_word`` (tests-nudge's "is this name used by any test" probe).
 ``rev_commit`` resolves one revision for subagent-stop-verify's report.
+secret-content-guard's push scan (§E.4) adds ``upstream`` and
+``unpushed_lines``: the commits a ``git push`` would publish, as ``log -p``.
 """
 
 from __future__ import annotations
@@ -86,6 +88,10 @@ class RangePort(Protocol):
     def grep_word(self, word: str, roots: Sequence[str]) -> bool: ...
 
     def rev_commit(self, rev: str) -> str | None: ...
+
+    def upstream(self) -> str | None: ...
+
+    def unpushed_lines(self, upstream: str | None) -> DiffLines: ...
 
 
 class _Runner(Protocol):
@@ -191,6 +197,26 @@ class RangeQueries:
         result = self.bare_run(argv, ok_codes=(0, 1))
         sha = _decoded(result.stdout)
         return sha if result.ok and sha else None
+
+    def upstream(self: _Runner) -> str | None:
+        """The current branch's upstream ref (``refs/remotes/origin/x``); ``None`` without one.
+
+        git exits 128 for "no upstream configured" even with ``--quiet``.
+        """
+        argv = ["rev-parse", "--verify", "--quiet", "--symbolic-full-name", "@{u}"]
+        result = self.bare_run(argv, ok_codes=(0, 1, 128))
+        ref = _decoded(result.stdout)
+        return ref if result.ok and ref else None
+
+    def unpushed_lines(self: _Runner, upstream: str | None) -> DiffLines:
+        """The ``-U0`` patches of the commits a push publishes, parsed.
+
+        ``<upstream>..HEAD``; without an upstream, ``HEAD --not --remotes``, so a
+        new branch's first push is scanned too (every commit no remote has).
+        """
+        revs = [f"{checked_rev(upstream)}..HEAD"] if upstream else ["HEAD", "--not", "--remotes"]
+        result = self.run(["log", "-p", "--format=", *PATCH_FLAGS, *revs])
+        return parse_diff_lines(result.stdout)
 
 
 def pick_default_branch(refs: Iterable[str]) -> str | None:

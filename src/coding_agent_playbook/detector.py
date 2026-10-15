@@ -21,13 +21,13 @@ from packaging.version import InvalidVersion, Version
 from coding_agent_playbook._pyproject_deps import dependency_specs
 from coding_agent_playbook.security.files import user_home
 from coding_agent_playbook.security.paths import is_secret_path
+from coding_agent_playbook.security.patterns import WALK_SKIP_DIRS
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-_IGNORE_DIRS: frozenset[str] = frozenset(
-    {".venv", "venv", "node_modules", ".git", "__pycache__", ".tox", ".mypy_cache"}
-)
+#: One source with the secret guards' repository walk (``security.patterns``).
+_IGNORE_DIRS: frozenset[str] = WALK_SKIP_DIRS
 
 
 # All entries are optional — the detector only sets keys it can determine.

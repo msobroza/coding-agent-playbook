@@ -196,6 +196,9 @@ def test_handler_approval_mirrors_the_runtime_record(repo: Path, tmp_path: Path)
         "error-handling-lint-feedback",
         "typing-lint-feedback",
         "toolchain-missing-hint",
+        "secrets-path-guard",
+        "secret-content-guard",
+        "stop-diff-sweep",
     }
     assert all(handler_approval(hook) is None for hook in builtins)
 

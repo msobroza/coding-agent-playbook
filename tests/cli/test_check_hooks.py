@@ -63,7 +63,7 @@ def _report(repo: Path, capsys: pytest.CaptureFixture[str]) -> str:
 
 # --- the Hooks block -------------------------------------------------------------------
 
-#: The engine pack's hooks shipped so far (Tracks K5, K6, K7), in check's sorted order.
+#: The engine pack's hooks shipped so far (Tracks K5-K8), in check's sorted order.
 _ENGINE_PACK = (
     "block-precommit-bypass",
     "clean-code-metrics-nonregression",
@@ -80,8 +80,11 @@ _ENGINE_PACK = (
     "prompt-write-scope-guard",
     "pytest-conventions-feedback",
     "resync-on-detector-input-change",
+    "secret-content-guard",
+    "secrets-path-guard",
     "session-start-playbook-briefing",
     "stop-ci-parity-gate",
+    "stop-diff-sweep",
     "stop-drift-and-orphan-gate",
     "subagent-stop-verify",
     "tests-with-source-nudge",
@@ -112,7 +115,7 @@ def test_hooks_block_labels_per_adapter(
 
     assert lines == [
         "  [hooks]: on",
-        "  Hooks (18 on / 26 total):",
+        "  Hooks (21 on / 29 total):",
         # The engine pack (Track K5): OpenCode has no notebook tool, so guard-generated-outputs
         # is degraded there; control-plane-guard matches no notebook edit. OpenCode's Stop is
         # evidence-only (§C.3.6), so every Stop-stage hook is degraded there (K6).
@@ -151,11 +154,18 @@ def test_hooks_block_labels_per_adapter(
         "    [✗] pytest-conventions-feedback (skipped: linked rule 'pytest' not applicable)",
         "    [✓] resync-on-detector-input-change (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
+        # K8: OpenCode has no notebook tool and forwards no MCP call; its Stop is evidence-only.
+        "    [✓] secret-content-guard (agents_md: advisory, claude_code: enforced, "
+        "continue: advisory, opencode: degraded)",
+        "    [✓] secrets-path-guard (agents_md: advisory, claude_code: enforced, "
+        "continue: advisory, opencode: degraded)",
         # No advisory body (a hookless harness has no heartbeat); OpenCode's session_start
         # rides an experimental API and its Stop is evidence-only (§C.3.6): degraded.
         "    [✓] session-start-playbook-briefing (agents_md: —, claude_code: enforced, "
         "continue: —, opencode: degraded)",
         "    [✓] stop-ci-parity-gate (agents_md: advisory, claude_code: enforced, "
+        "continue: advisory, opencode: degraded)",
+        "    [✓] stop-diff-sweep (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: degraded)",
         "    [✓] stop-drift-and-orphan-gate (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: degraded)",
@@ -181,7 +191,7 @@ def test_hooks_block_when_the_table_is_absent(
 
     assert lines == [
         "  [hooks]: off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')",
-        "  Hooks (0 on / 24 total):",
+        "  Hooks (0 on / 27 total):",
         *_off(_ENGINE_PACK[:8]),
         "    [✗] guard-x (skipped: hooks are off)",
         *_off(_ENGINE_PACK[8:]),
@@ -201,7 +211,7 @@ def test_hooks_block_when_hooks_are_switched_off_or_unreadable(
 
     assert off_lines == [
         "  [hooks]: off — [hooks] enabled is not true",
-        "  Hooks (0 on / 23 total):",
+        "  Hooks (0 on / 26 total):",
         *_off(_ENGINE_PACK),
     ]
     assert bad_lines[-1] == "  [hooks] cannot be read; run 'playbook validate'."

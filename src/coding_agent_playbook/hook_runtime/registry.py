@@ -92,6 +92,9 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         "deser_sink_guard": f"{_HANDLERS}.deser",
         "notebook_hygiene": f"{_HANDLERS}.notebooks",
         "notebook_hygiene:stop_stage": f"{_HANDLERS}.notebooks",
+        "secret_path_guard": f"{_HANDLERS}.secret_paths",
+        "secret_content_guard": f"{_HANDLERS}.secret_content",
+        "stop_secret_sweep": f"{_HANDLERS}.stop_sweep",
     }
 )
 #: The only handlers that may rewrite the file the tool just edited (specs/prK-hook-pack.md

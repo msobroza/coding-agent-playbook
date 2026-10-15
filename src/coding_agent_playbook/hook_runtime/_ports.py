@@ -123,6 +123,14 @@ class LazyGit:
         """See ``GitPort.rev_commit``."""
         return self._port().rev_commit(rev)
 
+    def upstream(self) -> str | None:
+        """See ``GitPort.upstream``."""
+        return self._port().upstream()
+
+    def unpushed_lines(self, upstream: str | None) -> DiffLines:
+        """See ``GitPort.unpushed_lines``."""
+        return self._port().unpushed_lines(upstream)
+
 
 def open_trust_store(repo: RepoInfo, deps: RuntimeDeps) -> TrustPort | None:
     """``deps.trust``, else the user-local store of ``repo``; ``None`` when it cannot be used.

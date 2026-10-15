@@ -12,7 +12,8 @@ From the declarations, validate closes the two halves K1 deferred:
   ones the handler declares; ``MUTATES_INPUT`` is ``False``;
   ``mutates_edited_file`` only on an in-tree builtin of the engine's
   allowlist bound to ``post_tool_use`` (specs/prK-hook-pack.md §E.3); the
-  authored ``handler.config`` keys are in its ``CONFIG_SCHEMA`` with the right kinds;
+  authored ``handler.config`` keys are in its ``CONFIG_SCHEMA`` with the right kinds,
+  and every pattern of a ``regex`` key passes ``screen_regex`` (specs/prK-hook-pack.md §E.4);
 - H21: each consumer ``[hooks.<hook-id>]`` key is in that schema too.
 
 :class:`RegistryCatalog` also implements ``ConfigSchemaLookup``, so the layer
@@ -29,6 +30,7 @@ from coding_agent_playbook.hook_policy._contract_handlers import handler_slots
 from coding_agent_playbook.hook_policy._findings import error
 from coding_agent_playbook.hook_policy.merge import ConfigKeySpec
 from coding_agent_playbook.hook_policy.tables import HOOK_EVENTS
+from coding_agent_playbook.hook_runtime._config_keys import regex_of
 from coding_agent_playbook.hook_runtime.registry import (
     HandlerResolutionError,
     builtin_handler_modules,
@@ -272,7 +274,24 @@ def _config_problems(
             )
         elif not spec.accepts(value):
             choices = f" one of {list(spec.order)}" if spec.kind == "string" and spec.order else ""
-            yield error(f"{where}.{key}: expected a {spec.kind}{choices}, got {value!r}")
+            shape = " list of patterns or {regex = ...} rows" if spec.kind == "regex" else ""
+            yield error(f"{where}.{key}: expected a {spec.kind}{choices}{shape}, got {value!r}")
+        elif spec.kind == "regex":
+            yield from _regex_problems(f"{where}.{key}", value)
+
+
+def _regex_problems(where: str, patterns: Iterable[object]) -> Iterator[Finding]:
+    """H6/H21 for a ``regex`` key: every pattern must pass ``screen_regex`` (§E.4).
+
+    The hooks run these patterns on agent-controlled text, so a pattern that
+    backtracks catastrophically, or does not compile, is refused at validate.
+    """
+    from coding_agent_playbook.security.secrets import screen_regex
+
+    for item in patterns:
+        problem = screen_regex(regex_of(item) or "")
+        if problem is not None:
+            yield error(f"{where}: {problem}")
 
 
 # --- H21: the consumer's [hooks.<hook-id>] against the schema --------------------------------

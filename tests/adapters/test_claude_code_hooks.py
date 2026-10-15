@@ -8,6 +8,7 @@ only the hooks it cannot enforce into ``CLAUDE.md``.
 
 from __future__ import annotations
 
+import fnmatch
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -15,6 +16,11 @@ import pytest
 
 from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._claude_hooks import CLAUDE_HEARTBEAT_LINE, REMEDIATION_ALLOW
+from coding_agent_playbook.adapters._secret_native import (
+    DENY_POINTER,
+    SECRETS_PATH_GUARD,
+    secret_native_rows,
+)
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.claude_settings import CLAUDE_SETTINGS_PATH, SettingsMergeError
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT
@@ -325,3 +331,60 @@ def test_invalid_settings_raise_and_write_nothing(tmp_path: Path) -> None:
         adapter.finalize(tmp_path)
 
     assert settings.read_text("utf-8") == '{"a": 1,}\n'
+
+
+def _secrets_guard(**config: Any) -> ResolvedHook:
+    return resolved_hook(
+        SECRETS_PATH_GUARD, config={"extra_globs": [], "allow_paths": [], **config}
+    )
+
+
+def test_secret_native_deny_rows_follow_guard(tmp_path: Path) -> None:
+    """secrets-path-guard's native twin (§E.4): rows appear with the guard and leave with it."""
+    settings = tmp_path / CLAUDE_SETTINGS_PATH
+    settings.parent.mkdir(parents=True)
+    user = '{\n  "permissions": {\n    "deny": ["Bash(rm -rf /)", "Read(./.env)"]\n  }\n}\n'
+    settings.write_text(user, encoding="utf-8")
+
+    on, _ = _sync(tmp_path, [resolved_hook(), _secrets_guard(extra_globs=["~/.vault/**"])])
+    rows = secret_native_rows([_secrets_guard(extra_globs=["~/.vault/**"])])
+    deny = _settings(tmp_path)["permissions"]["deny"]
+
+    assert deny == ["Bash(rm -rf /)", "Read(./.env)", *rows[DENY_POINTER]]
+    assert "Read(**/.env*)" in deny and "Edit(**/.env*)" in deny
+    deny_read = _settings(tmp_path)["sandbox"]["filesystem"]["denyRead"]
+    assert deny_read == ["~/.aws", "~/.ssh", *deny_read[2:]] and "~/.vault" in deny_read
+    assert "~/.kube/config" in deny_read
+
+    _sync(tmp_path, [resolved_hook()], prior=_lock(on))  # the guard is off now
+
+    after = _settings(tmp_path)
+    assert after["permissions"]["deny"] == ["Bash(rm -rf /)", "Read(./.env)"]
+    assert "sandbox" not in after  # the objects the rows needed go with them
+    assert '"deny": ["Bash(rm -rf /)", "Read(./.env)"' in settings.read_text("utf-8")
+
+
+def _denied(rows: Sequence[str], rel: str) -> bool:
+    """gitignore's last-match-wins over ``Read(...)`` rows, for the catalog's ``**/`` globs."""
+    verdict = False
+    for row in rows:
+        pattern = row[len("Read(") : -1]
+        negated = pattern.startswith("!")
+        glob = pattern.lstrip("!").removeprefix("**/")
+        if fnmatch.fnmatchcase(rel.rsplit("/", 1)[-1], glob):
+            verdict = not negated
+    return verdict
+
+
+def test_scoped_negation_ordering_keeps_env_credentials_py_denied() -> None:
+    rows = [
+        r for r in secret_native_rows([_secrets_guard()])[DENY_POINTER] if r.startswith("Read(")
+    ]
+
+    assert rows[:2] == ["Read(**/*credentials*)", "Read(!**/*credentials*.py)"]
+    assert _denied(rows, ".env.credentials.py")
+    assert _denied(rows, "config/credentials.json")
+    assert _denied(rows, "deploy/.env")
+    assert not _denied(rows, "src/auth/credentials.py")
+    assert not _denied(rows, ".env.example")
+    assert not _denied(rows, "keys/id_rsa.pub")

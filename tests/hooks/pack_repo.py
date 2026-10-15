@@ -154,6 +154,7 @@ class PackRepo(GuardRepo):
         wrapper_prefixes: Sequence[str] = (),
         rules: Sequence[Rule] = (),
         extra_tables: Mapping[str, Any] | None = None,
+        handler_config: Mapping[str, Mapping[str, Any]] | None = None,
     ) -> bytes:
         """Render ``guard_config.json`` for the engine hooks ``hook_ids``; vouch for it in the lock.
 
@@ -167,7 +168,9 @@ class PackRepo(GuardRepo):
         ``rules`` the rules a ``linked_rule`` names. The layout (source and test
         roots), the ``ruff`` table and the toolchain inputs are read from the
         repository, as sync does; ``extra_tables`` replace top-level tables
-        (e.g. a ``stop_gate`` with a typecheck stage).
+        (e.g. a ``stop_gate`` with a typecheck stage). ``handler_config`` sets
+        keys of a hook's rendered handler configs outright, as a repo-local
+        override would (no strictest merge: e.g. stop-diff-sweep's ``mode = warn``).
         """
         detect = detect or DetectInputs()
         hooks = resolve_engine_hooks(
@@ -191,6 +194,9 @@ class PackRepo(GuardRepo):
         )
         document = render_guard_config(inputs)
         document.update(extra_tables or {})
+        for hook_id, keys in (handler_config or {}).items():
+            for handler in document["hooks"][hook_id]["handlers"].values():
+                handler["config"].update(keys)
         document["logging"]["decisions"] = True
         data = serialize_guard_config(document)
         path = self.root / GUARD_CONFIG_REL

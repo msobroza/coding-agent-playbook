@@ -141,6 +141,7 @@ class FakeGit:
     ``worktree_diffs[base]`` is ``diff_worktree``'s answer; ``archives[rev]`` maps
     repo paths to the bytes ``archive_to`` writes (``skip`` honoured, as in git).
     ``grep_word`` finds exactly the ``test_words``; ``rev_commit`` reads ``commits``.
+    ``upstream`` answers ``upstream_ref``; ``unpushed_lines`` the ``unpushed`` patch.
     """
 
     head_tree_id: str | None = None
@@ -158,6 +159,8 @@ class FakeGit:
     archives: dict[str, dict[str, bytes]] = field(default_factory=dict)
     test_words: set[str] = field(default_factory=set)
     commits: dict[str, str] = field(default_factory=dict)
+    upstream_ref: str | None = None
+    unpushed: DiffLines = field(default_factory=DiffLines)
     errors: dict[str, Exception] = field(default_factory=dict)
     calls: list[tuple[str, tuple[str, ...]]] = field(default_factory=list)
 
@@ -233,6 +236,14 @@ class FakeGit:
     def rev_commit(self, rev: str) -> str | None:
         self._record("rev_commit", rev)
         return self.commits.get(rev)
+
+    def upstream(self) -> str | None:
+        self._record("upstream")
+        return self.upstream_ref
+
+    def unpushed_lines(self, upstream: str | None) -> DiffLines:
+        self._record("unpushed_lines", upstream or "")
+        return self.unpushed
 
 
 @dataclass

@@ -9,6 +9,7 @@ back through ``hook_runtime.config``, so the schema is pinned against that parse
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import os
 import stat
@@ -60,7 +61,14 @@ from coding_agent_playbook.hooks_config import (
     SecretsGuardrails,
 )
 from coding_agent_playbook.lockfile import LockEntry, Provenance
-from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
+from coding_agent_playbook.security.patterns import (
+    SECRET_CONTENT_RULES,
+    SECRET_GLOB_EXEMPT,
+    SECRET_PATH_EXEMPT,
+    SECRET_PATH_GLOBS,
+    SECRET_RULESET_ID,
+    SECRET_RULESET_VERSION,
+)
 from coding_agent_playbook.types import Prompt, PromptFrontmatter, Rule, RuleFrontmatter
 from tests.hook_samples import resolved_from_disk, resolved_hook, sample_hook
 
@@ -777,3 +785,33 @@ def test_runtime_reads_the_scopes_back() -> None:
     assert isinstance(parsed, GuardConfig)
     spec = parsed.hooks["prompt-write-scope-guard"].handlers[EventName.PRE_TOOL_USE]
     assert spec.config["scopes"] == {"x": {"read_only": True}}
+
+
+def test_secret_rules_table_rendered() -> None:
+    """The §E.4 secret tables: exemptions beside the globs, the ruleset and overlay rows."""
+    acme = {"id": "acme-token", "regex": "acme_[0-9a-f]{32}", "label": "Acme token"}
+    content = resolved_hook(
+        "secret-content-guard",
+        config={"extra_patterns": [acme, "corp_[A-Z0-9]{20}", "(a+)+$"]},
+    )
+    sweep = resolved_hook("stop-diff-sweep", events=("stop",), config={"extra_patterns": [acme]})
+    inputs = dataclasses.replace(
+        _inputs([content, sweep]),
+        guardrails=GuardrailsConfig(secrets=SecretsGuardrails(allow_paths=("tests/fixtures/**",))),
+    )
+
+    cfg = render_guard_config(inputs)
+
+    assert cfg["secret_path_exempt"] == [*SECRET_PATH_EXEMPT, "tests/fixtures/**"]
+    assert cfg["secret_glob_exempt"] == {g: list(e) for g, e in SECRET_GLOB_EXEMPT.items()}
+    rules = cfg["secret_rules"]
+    assert (rules["ruleset"], rules["version"]) == (SECRET_RULESET_ID, SECRET_RULESET_VERSION)
+    assert rules["rule_ids"] == [rule_id for rule_id, _, _ in SECRET_CONTENT_RULES]
+    corp_id = "extra-" + hashlib.sha256(b"corp_[A-Z0-9]{20}").hexdigest()[:8]
+    assert rules["extra_patterns"] == [  # deduped across both hooks; the ReDoS row dropped
+        acme,
+        {"id": corp_id, "regex": "corp_[A-Z0-9]{20}", "label": "overlay secret pattern"},
+    ]
+    parsed = parse_guard_config(serialize_guard_config(cfg))
+    assert isinstance(parsed, GuardConfig)
+    assert parsed.tables["secret_rules"] == rules

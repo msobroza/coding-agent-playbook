@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.adapters._secret_native import SECRETS_PATH_GUARD, secret_native_rows
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.lockfile import Lockfile, compute_hash
 from tests.cli.hook_repo import (
@@ -32,6 +33,7 @@ from tests.cli.hook_repo import (
     tree,
 )
 from tests.fakes import FakeGitClient, FakePinWriter
+from tests.hook_samples import resolved_hook
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -58,6 +60,11 @@ ENGINE_PACK_EVENTS = [
     "PostToolUseFailure",
     "Stop",
 ]
+
+
+def _guard() -> Any:
+    """secrets-path-guard as sync resolves it here: no extra globs or allowed paths."""
+    return resolved_hook(SECRETS_PATH_GUARD, config={})
 
 
 def _sync_repo(repo: Path, tmp_path: Path, **kwargs: Any) -> int:
@@ -114,8 +121,9 @@ def test_first_sync_writes_every_hook_output(synced: Path) -> None:
     assert list(doc["hooks"]) == ENGINE_PACK_EVENTS
     assert (synced / LAUNCHER).is_file()
     config = json.loads((synced / GUARD_CONFIG).read_bytes())
-    # The engine pack's default-tier hooks (Tracks K5, K6) and K7's feedback hooks;
-    # guard-eval-fixtures is opt-in, and the fixture detects no pytest (its lint hook is off).
+    # The engine pack's default-tier hooks (Tracks K5, K6), K7's feedback hooks and K8's
+    # secret hooks; guard-eval-fixtures is opt-in, and the fixture detects no pytest (its
+    # lint hook is off).
     assert sorted(config["hooks"]) == [
         "block-precommit-bypass",
         "clean-code-metrics-nonregression",
@@ -129,8 +137,11 @@ def test_first_sync_writes_every_hook_output(synced: Path) -> None:
         "post-edit-ruff-format",
         "prompt-write-scope-guard",
         "resync-on-detector-input-change",
+        "secret-content-guard",
+        "secrets-path-guard",
         "session-start-playbook-briefing",
         "stop-ci-parity-gate",
+        "stop-diff-sweep",
         "stop-drift-and-orphan-gate",
         "toolchain-missing-hint",
         "typing-lint-feedback",
@@ -204,9 +215,11 @@ def test_user_keys_and_user_groups_byte_stable_across_syncs(
     assert _sync_repo(repo, tmp_path) == 0
 
     assert (repo / SETTINGS).read_text(encoding="utf-8") == first
-    assert '        "allow": ["Bash(make test)"]\n' in first
+    # K8's native deny rows join the user's permissions object after the user's own key.
+    assert '        "allow": ["Bash(make test)"],\n' in first
     assert '{"matcher": "Bash", "hooks": [{"type": "command", "command": "rtk hook"}]}' in first
-    assert first.rstrip().endswith('"model": "opus"\n}')
+    # The user's last member keeps its bytes; the native denyRead twin is appended after it.
+    assert '    "model": "opus",\n    "sandbox": {' in first
     assert len(_settings(repo)["hooks"]["PreToolUse"]) == 2
 
 
@@ -224,8 +237,9 @@ def test_check_merges_against_real_settings_not_empty_scratch(
 
 
 def _edit_permissions(repo: Path) -> None:
+    """The user's own key of the co-owned object (the managed deny rows stay)."""
     doc = _settings(repo)
-    doc["permissions"] = {"allow": ["Bash(ls)"]}
+    doc["permissions"]["allow"] = ["Bash(ls)"]
     _write_settings(repo, doc)
 
 
@@ -312,7 +326,12 @@ def test_lockfile_has_scoped_settings_entries_and_no_whole_file_entry(synced: Pa
     entries = _lock_entries(synced)
 
     scopes = sorted(entry.scope for entry in entries if entry.path == SETTINGS)
-    assert scopes == sorted(f"json:/hooks/{event}" for event in ENGINE_PACK_EVENTS)
+    hook_scopes = [scope for scope in scopes if scope.startswith("json:/hooks/")]
+    assert hook_scopes == sorted(f"json:/hooks/{event}" for event in ENGINE_PACK_EVENTS)
+    # secrets-path-guard's native twin (K8): one scoped entry per managed string.
+    rows = secret_native_rows([_guard()])
+    assert sorted(set(scopes) - set(hook_scopes)) == sorted(f"json:{p}" for p in rows)
+    assert len(scopes) - len(hook_scopes) == sum(len(strings) for strings in rows.values())
     by_path = {entry.path: entry for entry in entries if entry.is_whole_file}
     config = by_path[GUARD_CONFIG]
     assert (config.kind, config.adapter) == ("runtime", "")
@@ -357,18 +376,21 @@ def test_summary_lines_counts_and_hand_edit_warning(
     repo = make_hook_repo(tmp_path / "repo", make_synthetic_repo)
     assert _sync_repo(repo, tmp_path) == 0
     out = capsys.readouterr().out
-    # guard-x, guard-ext and the engine pack's sixteen default-tier hooks on here (seven
+    # guard-x, guard-ext and the engine pack's nineteen default-tier hooks on here (seven
     # protect, the Stop coordinator, two of its stage hooks, block-precommit-bypass (K6),
     # post-edit-ruff-format, prompt-write-scope-guard, the error-handling and typing lint
-    # hooks, toolchain-missing-hint (K7)); pytest's is off (no pytest detected), and so is
-    # the ML deserialization guard (no ML stack); the opt-in ones (guard-eval-fixtures, three
-    # K6 Stop hooks, the notebook hook) are skipped. The briefing and the two lint hooks
-    # have no advisory body, so Continue gets three fewer. The member-less UserPromptSubmit
-    # group is one entry, toolchain-missing-hint's PostToolUseFailure another.
-    assert "✓ Hooks: 18 enabled, 7 skipped (" in out
-    assert "claude_code: 18 enforced" in out
-    assert "continue: 15 advisory" in out
-    assert f"✓ {SETTINGS}: 6 managed entries updated, 0 removed (user keys untouched)" in out
+    # hooks, toolchain-missing-hint (K7), the three secret hooks (K8)); pytest's is off (no
+    # pytest detected), and so is the ML deserialization guard (no ML stack); the opt-in
+    # ones (guard-eval-fixtures, three K6 Stop hooks, the notebook hook) are skipped. The
+    # briefing and the two lint hooks have no advisory body, so Continue gets three fewer.
+    # The member-less UserPromptSubmit group is one entry, toolchain-missing-hint's
+    # PostToolUseFailure another, and each native secret deny row one more.
+    native = sum(len(rows) for rows in secret_native_rows([_guard()]).values())
+    assert "✓ Hooks: 21 enabled, 7 skipped (" in out
+    assert "claude_code: 21 enforced" in out
+    assert "continue: 18 advisory" in out
+    updated = f"{6 + native} managed entries updated, 0 removed (user keys untouched)"
+    assert f"✓ {SETTINGS}: {updated}" in out
 
     _edit_managed_group(repo)
     assert _sync_repo(repo, tmp_path) == 0
