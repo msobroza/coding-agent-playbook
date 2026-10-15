@@ -46,6 +46,10 @@ pytestmark = pytest.mark.usefixtures("sample_hook_handlers")
 _NOTICE = "hooks available: add [hooks] enabled = true or re-run playbook init"
 
 
+#: The Claude events the engine pack registers (Track K5 adds post_tool_use hooks).
+ENGINE_PACK_EVENTS = ["SessionStart", "PreToolUse", "PostToolUse"]
+
+
 def _sync_repo(repo: Path, tmp_path: Path, **kwargs: Any) -> int:
     kwargs.setdefault("git", FakeGitClient())
     kwargs.setdefault("hook_deps", hook_deps(tmp_path / "state"))
@@ -97,15 +101,18 @@ def test_absent_hooks_table_is_byte_identical_and_prints_notice(
 
 def test_first_sync_writes_every_hook_output(synced: Path) -> None:
     doc = _settings(synced)
-    assert list(doc["hooks"]) == ["SessionStart", "PreToolUse"]
+    assert list(doc["hooks"]) == ENGINE_PACK_EVENTS
     assert (synced / LAUNCHER).is_file()
     config = json.loads((synced / GUARD_CONFIG).read_bytes())
-    # The engine pack's protect guards are default-tier hooks (Track K5).
+    # The engine pack's default-tier protect hooks (Track K5); guard-eval-fixtures is opt-in.
     assert sorted(config["hooks"]) == [
         "control-plane-guard",
+        "eval-task-authoring-lint",
         "guard-ext",
         "guard-generated-outputs",
         "guard-x",
+        "resync-on-detector-input-change",
+        "validate-then-sync-on-canonical-edit",
     ]
     assert (synced / SCRIPT).read_bytes() == SCRIPT_BYTES
     if os.name == "posix":
@@ -134,7 +141,7 @@ def test_templated_body_renders_and_advisory_false_suppresses_it(
     assert _sync_repo(repo, tmp_path) == 0
     assert "Guardrails" not in (repo / "AGENTS.md").read_text(encoding="utf-8")
     assert not guardrail.exists()
-    assert list(_settings(repo)["hooks"]) == ["SessionStart", "PreToolUse"]
+    assert list(_settings(repo)["hooks"]) == ENGINE_PACK_EVENTS
 
 
 def test_enabled_second_sync_writes_nothing(synced: Path, tmp_path: Path) -> None:
@@ -283,7 +290,7 @@ def test_lockfile_has_scoped_settings_entries_and_no_whole_file_entry(synced: Pa
     entries = _lock_entries(synced)
 
     scopes = sorted(entry.scope for entry in entries if entry.path == SETTINGS)
-    assert scopes == ["json:/hooks/PreToolUse", "json:/hooks/SessionStart"]
+    assert scopes == sorted(f"json:/hooks/{event}" for event in ENGINE_PACK_EVENTS)
     by_path = {entry.path: entry for entry in entries if entry.is_whole_file}
     config = by_path[GUARD_CONFIG]
     assert (config.kind, config.adapter) == ("runtime", "")
@@ -328,11 +335,11 @@ def test_summary_lines_counts_and_hand_edit_warning(
     repo = make_hook_repo(tmp_path / "repo", make_synthetic_repo)
     assert _sync_repo(repo, tmp_path) == 0
     out = capsys.readouterr().out
-    # guard-x, guard-ext and the engine pack's guard-generated-outputs, control-plane-guard
-    assert "✓ Hooks: 4 enabled (" in out
-    assert "claude_code: 4 enforced" in out
-    assert "continue: 4 advisory" in out
-    assert f"✓ {SETTINGS}: 2 managed entries updated, 0 removed (user keys untouched)" in out
+    # guard-x, guard-ext and the engine pack's five default-tier protect hooks
+    assert "✓ Hooks: 7 enabled, 1 skipped (" in out
+    assert "claude_code: 7 enforced" in out
+    assert "continue: 7 advisory" in out
+    assert f"✓ {SETTINGS}: 3 managed entries updated, 0 removed (user keys untouched)" in out
 
     _edit_managed_group(repo)
     assert _sync_repo(repo, tmp_path) == 0

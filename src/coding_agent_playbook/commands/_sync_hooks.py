@@ -7,8 +7,10 @@
   copied scripts, into the output root in every mode (so ``--check`` compares
   them), whenever hooks are enabled and a hook-capable adapter is on. Its
   ``protected`` table is this sync's written set as lock rows, the adapters'
-  scan dirs and the layer packages, and its ``precommit`` table the playbook
-  hook ids of the repo's pre-commit config (specs/prK-hook-pack.md §E.0.5);
+  scan dirs and the layer packages, its ``precommit`` table the playbook
+  hook ids of the repo's pre-commit config, and its ``facts`` /
+  ``applicability`` tables the detector facts and every rule, prompt and
+  applicability-gated hook with its predicates (specs/prK-hook-pack.md §E.0.5);
 - :func:`check_settings_readable`: refuses a ``settings.json`` the Claude Code
   merge would choke on *before* any adapter writes;
 - :func:`finish_write`: write mode's pins, summary lines and approvals;
@@ -38,9 +40,11 @@ from coding_agent_playbook.commands._sync_lockfile import HookDispatch
 from coding_agent_playbook.commands._sync_output import shared_outputs
 from coding_agent_playbook.guard_config import (
     SYNC_OUTPUT_LOCATIONS,
+    DetectInputs,
     GuardConfigInputs,
     ProtectInputs,
     adapter_output_dirs,
+    applicability_rows,
     copy_hook_scripts,
     precommit_hook_ids,
     protected_rows,
@@ -179,6 +183,7 @@ def write_runtime_outputs(
         protected=_protect_inputs(ctx, out_root, recorder),
         # The real repo's config in every mode: --check renders into an empty scratch dir.
         precommit_ids=precommit_hook_ids(ctx.repo_root),
+        detect=_detect_inputs(ctx, hooks),
     )
     path = write_guard_config(out_root, render_guard_config(inputs))
     recorder.record([path], Provenance(kind="runtime"))
@@ -195,6 +200,19 @@ def _protect_inputs(
         recorder.provenance, recorder.managed, out_root, shared=shared_outputs(ctx.adapters)
     )
     return ProtectInputs(rows, adapter_output_dirs(ctx.adapters, out_root), layer_packages(ctx))
+
+
+def _detect_inputs(ctx: SyncContext, hooks: SyncHooks) -> DetectInputs:
+    """The ``facts`` / ``applicability`` inputs: this sync's facts, every merged artifact."""
+    rows = applicability_rows(
+        rules=ctx.rules_resolved,
+        prompts=ctx.prompts_resolved,
+        hooks=ctx.hooks_resolved,
+        view=hooks,
+        facts=ctx.facts,
+        repo_root=ctx.repo_root,
+    )
+    return DetectInputs(facts=ctx.facts, applicability=rows)
 
 
 def layer_packages(ctx: SyncContext) -> tuple[str, ...]:

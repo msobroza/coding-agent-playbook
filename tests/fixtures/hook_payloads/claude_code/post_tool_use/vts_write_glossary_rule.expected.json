@@ -1,0 +1,60 @@
+{
+  "parsed": {
+    "name": "post_tool_use",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "acceptEdits",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PostToolUse",
+    "tool": {
+      "name": "Write",
+      "native_name": "Write",
+      "tool_class": "write",
+      "tool_classes": [
+        "write"
+      ],
+      "use_id": "toolu_01VtsWrite",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/playbook/rules/glossary.md",
+          "repo_rel": "playbook/rules/glossary.md",
+          "key": "playbook/rules/glossary.md"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/playbook/rules/glossary.md",
+          "repo_rel": "playbook/rules/glossary.md",
+          "key": "playbook/rules/glossary.md"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/playbook/rules/glossary.md",
+          "content",
+          "---\nid: glossary\nname: Glossary\ndescription: Terms.\nscope: always\n---\nSee [missing](missing.md).\n"
+        ]
+      ],
+      "response": {
+        "ok": true,
+        "is_interrupt": false
+      }
+    }
+  },
+  "result": {
+    "decision": "context",
+    "context": [
+      "playbook validate fails for \"playbook/rules/glossary.md\"; resolve before finishing:\n\"FAIL playbook/rules/glossary.md: link target 'missing.md' does not exist\"\n\"FAIL playbook/prompts/triage.md: rule() names 'glossary', which is not in includes_rules\""
+    ]
+  },
+  "wire": {
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"playbook validate fails for \\\"playbook/rules/glossary.md\\\"; resolve before finishing:\\n\\\"FAIL playbook/rules/glossary.md: link target 'missing.md' does not exist\\\"\\n\\\"FAIL playbook/prompts/triage.md: rule() names 'glossary', which is not in includes_rules\\\"\"}}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

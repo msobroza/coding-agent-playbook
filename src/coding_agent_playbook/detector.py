@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypedDict
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
+from coding_agent_playbook._pyproject_deps import dependency_specs
 from coding_agent_playbook.security.files import user_home
 from coding_agent_playbook.security.paths import is_secret_path
 
@@ -102,13 +103,6 @@ KNOWN_DEV_TOOLS: frozenset[str] = frozenset(
     }
 )
 
-# Optional-dependency / dependency-group names whose contents we count as
-# dev dependencies. Conservative but extensible — adding e.g. "docs" here
-# would extend coverage to documentation tooling.
-_DEV_GROUP_NAMES: frozenset[str] = frozenset(
-    {"dev", "test", "tests", "lint", "type", "typecheck", "dev-deps"}
-)
-
 
 def _parse_python_version(requires_python: str | None) -> str | None:
     """Extract a ``"major.minor"`` python_version from ``requires-python``.
@@ -132,45 +126,6 @@ def _parse_python_version(requires_python: str | None) -> str | None:
                 if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
                     return f"{parts[0]}.{parts[1]}"
     return None
-
-
-def _parse_dep_name(spec: str) -> str:
-    """Return the canonical package name from a PEP 508 dependency spec."""
-    # Strip extras and version specifiers; lower-case for case-insensitive matches.
-    name = spec.strip()
-    for sep in ("[", " ", ">", "<", "=", "!", "~", ";"):
-        idx = name.find(sep)
-        if idx >= 0:
-            name = name[:idx]
-    return name.strip().lower()
-
-
-def _parse_dep_spec(spec: str) -> tuple[str, str]:
-    """Return ``(name, version_constraint)`` for a PEP 508 dependency spec.
-
-    Version constraint preserves everything after the name (operator + value).
-    Empty string when no constraint was provided.
-    """
-    name = _parse_dep_name(spec)
-    rest = spec.strip()
-    # Find where the name ends in the original spec (case-insensitive).
-    lower = rest.lower()
-    idx = lower.find(name)
-    if idx < 0:
-        return name, ""
-    tail = rest[idx + len(name) :].strip()
-    # Drop an environment marker like "; python_version >= '3.10'".
-    semi = tail.find(";")
-    if semi >= 0:
-        tail = tail[:semi].rstrip()
-    # Drop extras block.
-    if tail.startswith("["):
-        close = tail.find("]")
-        if close >= 0:
-            tail = tail[close + 1 :].lstrip()
-    # Defensive: ensure no leading whitespace leaks into the version constraint
-    # (e.g. "fastapi == 0.110" must yield "== 0.110", not " == 0.110").
-    return name, tail.lstrip()
 
 
 def _detect_package_manager(
@@ -214,27 +169,6 @@ def _read_pyproject(repo_root: Path) -> dict[str, Any] | None:
     except tomllib.TOMLDecodeError:
         # Malformed TOML — fall back to python-unknown as if no pyproject existed.
         return None
-
-
-def _collect_dev_dependencies(pyproject: dict[str, Any]) -> dict[str, str]:
-    """Aggregate dev dependencies from PEP 621 optional-deps + PEP 735 groups."""
-    collected: dict[str, str] = {}
-    sources: tuple[dict[str, Any], ...] = (
-        pyproject.get("project", {}).get("optional-dependencies", {}) or {},
-        pyproject.get("dependency-groups", {}) or {},
-    )
-    for source in sources:
-        for group_name, deps in source.items():
-            if group_name not in _DEV_GROUP_NAMES:
-                # Only inspect dev-shaped groups. Conservative but extensible.
-                continue
-            for raw in deps or []:
-                if not isinstance(raw, str):
-                    continue
-                name, version = _parse_dep_spec(raw)
-                if name:
-                    collected[name] = version
-    return collected
 
 
 def _dev_tools_from_config_sections(pyproject: dict[str, Any]) -> set[str]:
@@ -323,17 +257,11 @@ def detect(repo_root: Path) -> Facts:
         if python_version is not None:
             facts["python_version"] = python_version
 
-        dependencies: dict[str, str] = {}
-        for raw in project.get("dependencies", []) or []:
-            if not isinstance(raw, str):
-                continue
-            name, version = _parse_dep_spec(raw)
-            if name:
-                dependencies[name] = version
+        # One parser with the resync hook's cheap comparison (_pyproject_deps).
+        dependencies, dev_dependencies = dependency_specs(pyproject)
         if dependencies:
             facts["dependencies"] = dependencies
 
-        dev_dependencies = _collect_dev_dependencies(pyproject)
         if dev_dependencies:
             facts["dev_dependencies"] = dev_dependencies
 

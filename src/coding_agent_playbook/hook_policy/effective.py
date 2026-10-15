@@ -108,11 +108,11 @@ def resolve_effective_hooks(
     skipped: list[SkippedHook] = []
     for hook in hooks:
         warnings.extend(_switch_warnings(hook, hooks_cfg))
-        reason = _skip_reason(hook, inputs)
-        if reason is None:
+        gated = _skip_reason(hook, inputs)
+        if gated is None:
             resolved.append(_resolve(hook, inputs, warnings))
         else:
-            skipped.append(SkippedHook(hook.frontmatter.id, reason))
+            skipped.append(SkippedHook(hook.frontmatter.id, gated[1], gate=gated[0]))
     # Handlers bound to several events share a consumer layer: warn once.
     return EffectiveHooks(resolved, skipped, list(dict.fromkeys(warnings)))
 
@@ -162,8 +162,12 @@ def _switch_warnings(hook: Hook, cfg: HooksConfig) -> Iterator[str]:
         )
 
 
-def _skip_reason(hook: Hook, inputs: _Inputs) -> str | None:
-    return next((reason for gate in _GATES if (reason := gate(hook, inputs)) is not None), None)
+def _skip_reason(hook: Hook, inputs: _Inputs) -> tuple[str, str] | None:
+    """``(gate, reason)`` of the first gate that turns ``hook`` off, else ``None``."""
+    return next(
+        ((name, reason) for name, gate in _GATES if (reason := gate(hook, inputs)) is not None),
+        None,
+    )
 
 
 def _definition_off(hook: Hook, inputs: _Inputs) -> str | None:
@@ -221,13 +225,37 @@ def _no_target_adapter(hook: Hook, inputs: _Inputs) -> str | None:
     )
 
 
-_GATES: Final[tuple[Callable[[Hook, _Inputs], str | None], ...]] = (
-    _definition_off,
-    _switched_off,
-    _applies_if_fails,
-    _linked_rule_fails,
-    _no_target_adapter,
+_GATES: Final[tuple[tuple[str, Callable[[Hook, _Inputs], str | None]], ...]] = (
+    ("definition", _definition_off),
+    ("switch", _switched_off),
+    ("applies_if", _applies_if_fails),
+    ("linked_rule", _linked_rule_fails),
+    ("adapters", _no_target_adapter),
 )
+
+
+def effective_applies_if(
+    hook: Hook, rules: Mapping[str, Rule]
+) -> tuple[dict[str, Any], ...] | None:
+    """The predicates that must all hold for ``hook`` to apply: its own, then its linked rule's.
+
+    Empty predicates are left out (``()`` means always); ``None`` when the
+    linked rule is missing, so the hook can never apply. The same AND the
+    ``applies_if`` and ``linked_rule`` gates evaluate (§A.7 item 1).
+
+    Example::
+
+        >>> effective_applies_if(hook_linked_to_ml_rule, {"ml": ml_rule})  # doctest: +SKIP
+        ({'any_ml_stack': ['torch']},)
+    """
+    predicates = [dict(hook.frontmatter.applies_if or {})]
+    rule_id = hook.frontmatter.linked_rule
+    if rule_id is not None:
+        rule = rules.get(rule_id)
+        if rule is None:
+            return None
+        predicates.append(dict(rule.frontmatter.applies_if or {}))
+    return tuple(predicate for predicate in predicates if predicate)
 
 
 def _predicate_holds(predicate: Mapping[str, Any], inputs: _Inputs) -> bool:

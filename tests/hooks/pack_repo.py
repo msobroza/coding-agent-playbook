@@ -23,6 +23,7 @@ from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
 from coding_agent_playbook.guard_config import (
+    DetectInputs,
     GuardConfigInputs,
     ProtectedRow,
     ProtectInputs,
@@ -40,12 +41,13 @@ from tests.hook_payloads import PROJECT_DIR, HookPayloadCase
 from tests.hook_runtime.guard_repo import GuardRepo
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Mapping, Sequence
 
     from coding_agent_playbook.detector import Facts
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from tests.hook_runtime.fakes import FakeProc
 
 ENGINE_PACKAGE = "coding_agent_playbook"
 ENGINE_HOOKS = Path(coding_agent_playbook.__file__).resolve().parent / "resources" / "hooks"
@@ -114,20 +116,24 @@ class PackRepo(GuardRepo):
         rows: Sequence[ProtectedRow] = (),
         packages: Sequence[str] = (ENGINE_PACKAGE,),
         per_hook: Mapping[str, dict[str, Any]] | None = None,
+        auto_sync: bool = False,
+        detect: DetectInputs | None = None,
     ) -> bytes:
         """Render ``guard_config.json`` for the engine hooks ``hook_ids``; vouch for it in the lock.
 
         The decision log is switched on (guard-decision-log would, K9), so a test
         can read what the dispatch recorded, e.g. that canary lines are tagged.
+        ``auto_sync`` is ``[hooks] auto_sync``; ``detect`` the facts and rows.
         """
         hooks = resolve_engine_hooks(hook_ids, self.root, per_hook=per_hook)
         protect = ProtectInputs(rows, fixture_output_dirs(self.root), packages)
         inputs = GuardConfigInputs(
             hooks=hooks,
-            hooks_config=HooksConfig(enabled=True),
+            hooks_config=HooksConfig(enabled=True, auto_sync=auto_sync),
             guardrails=GuardrailsConfig(),
             engine_version="0.1.0a0",
             protected=protect,
+            detect=detect or DetectInputs(),
         )
         document = render_guard_config(inputs)
         document["logging"]["decisions"] = True
@@ -155,9 +161,11 @@ class PackRepo(GuardRepo):
     ) -> SimulateReport:
         """Run ``payload`` through ``playbook-hook simulate`` against this repository.
 
-        ``state`` keeps session state across calls (``--state``); without it
-        every simulation starts from an ephemeral state root.
+        ``state`` keeps session state across calls (``--state``, created when
+        missing); without it every simulation starts from an ephemeral root.
         """
+        if state is not None:
+            state.mkdir(parents=True, exist_ok=True)
         args = SimulateArgs(
             event=event,
             harness=harness,
@@ -167,10 +175,22 @@ class PackRepo(GuardRepo):
         )
         return run(args, payload, deps=deps)
 
-    def tool_payload(self, tool: str, tool_input: Mapping[str, Any], **fields: Any) -> bytes:
-        """A Claude-shaped ``pre_tool_use`` payload for ``tool`` with ``tool_input``."""
-        body = json.loads(self.payload(EventName.PRE_TOOL_USE))
+    def tool_payload(
+        self,
+        tool: str,
+        tool_input: Mapping[str, Any],
+        *,
+        event: EventName = EventName.PRE_TOOL_USE,
+        **fields: Any,
+    ) -> bytes:
+        """A Claude-shaped ``event`` payload for ``tool`` with ``tool_input``.
+
+        A ``post_tool_use`` payload carries a successful ``tool_response``.
+        """
+        body = json.loads(self.payload(event))
         body.update(tool_name=tool, tool_input=dict(tool_input), tool_use_id="toolu_ggo")
+        if event is EventName.POST_TOOL_USE:
+            body["tool_response"] = {"success": True}
         body.update(fields)
         return json.dumps(body).encode("utf-8")
 
@@ -185,3 +205,21 @@ def rows_of(*rows: tuple[str, str, str, str]) -> list[ProtectedRow]:
 def with_scope(row: ProtectedRow, scope: str, sha256: str) -> ProtectedRow:
     """``row`` as a scoped (managed JSON element) row."""
     return dataclasses.replace(row, scope=scope, sha256=sha256)
+
+
+#: The argv prefix of a ``playbook`` child process after the interpreter.
+PLAYBOOK_CHILD = ("-I", "-m", "coding_agent_playbook.cli")
+
+
+def playbook_child(subcommand: str) -> Callable[[tuple[str, ...]], bool]:
+    """A ``FakeProc`` matcher for ``<python> -I -m coding_agent_playbook.cli <subcommand> ...``."""
+
+    def match(argv: tuple[str, ...]) -> bool:
+        return argv[1:4] == PLAYBOOK_CHILD and argv[4:5] == (subcommand,)
+
+    return match
+
+
+def playbook_calls(proc: FakeProc) -> list[tuple[str, ...]]:
+    """The ``playbook`` arguments of every child ``proc`` ran, in order."""
+    return [call.argv[4:] for call in proc.calls if call.argv[1:4] == PLAYBOOK_CHILD]

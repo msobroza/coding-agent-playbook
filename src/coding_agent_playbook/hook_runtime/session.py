@@ -5,7 +5,8 @@ Every list is capped, because the document is read on every dispatch:
 
 - ``once`` keys (context dedupe, one-note-per-session): the newest 1,024;
 - ``asked`` tool_use ids (drive the ``override`` log line): the newest 64;
-- deferred notes (drained into the next user-facing channel): the newest 5.
+- deferred notes (drained into the next user-facing channel): the newest 5;
+- ``debounce`` stamps (the source-changed branch's 2 s window): the newest 64.
 
 When the store is stateless (or a lock stays busy), ``once`` answers True —
 dedupe is off, so nothing is silently suppressed — while flags, asked ids and
@@ -24,9 +25,16 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.state import StateStore
 
-__all__ = ["MAX_ASKED_IDS", "MAX_DEFERRED_NOTES", "MAX_ONCE_KEYS", "SessionState"]
+__all__ = [
+    "MAX_ASKED_IDS",
+    "MAX_DEBOUNCE_KEYS",
+    "MAX_DEFERRED_NOTES",
+    "MAX_ONCE_KEYS",
+    "SessionState",
+]
 
 MAX_ASKED_IDS: Final = 64
+MAX_DEBOUNCE_KEYS: Final = 64
 MAX_DEFERRED_NOTES: Final = 5
 MAX_ONCE_KEYS: Final = 1024
 #: Joins a tool_use id and the hook that asked about it in the ``asked`` list.
@@ -45,6 +53,23 @@ def _add_capped(document: dict[str, Any], key: str, item: str, cap: int) -> bool
     if item in items:
         return False
     document[key] = [*items, item][-cap:]
+    return True
+
+
+def _stamp(document: dict[str, Any], key: str, now: float, window_s: float) -> bool:
+    """Stamp ``key`` at ``now`` unless its last stamp is under ``window_s`` old; keep the newest."""
+    raw = document.get("debounce")
+    stamps = {
+        k: v
+        for k, v in (raw.items() if isinstance(raw, dict) else ())
+        if isinstance(k, str) and isinstance(v, int | float) and not isinstance(v, bool)
+    }
+    last = stamps.get(key)
+    if last is not None and 0 <= now - last < window_s:
+        return False
+    stamps[key] = now
+    newest = sorted(stamps.items(), key=lambda item: item[1])[-MAX_DEBOUNCE_KEYS:]
+    document["debounce"] = dict(newest)
     return True
 
 
@@ -68,6 +93,27 @@ class SessionState:
         try:
             return self._store.update_json(
                 self.document, lambda doc: _add_capped(doc, "once", key, MAX_ONCE_KEYS)
+            )
+        except StateUnavailable:
+            return True
+
+    def debounce(self, key: str, window_s: float) -> bool:
+        """True unless ``key`` already passed less than ``window_s`` seconds ago this session.
+
+        The window is on the store clock's wall time (stamps outlive the hook
+        process); a clock that went back reopens it. Stateless, it is always
+        True: like :meth:`once`, nothing is silently dropped.
+
+        Example::
+
+            >>> session.debounce("validate", 2.0), session.debounce("validate", 2.0)
+            ... # doctest: +SKIP
+            (True, False)
+        """
+        now = self._store.clock.time()
+        try:
+            return self._store.update_json(
+                self.document, lambda doc: _stamp(doc, key, now, window_s)
             )
         except StateUnavailable:
             return True

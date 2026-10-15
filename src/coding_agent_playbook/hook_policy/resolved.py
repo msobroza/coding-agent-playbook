@@ -18,7 +18,7 @@ import dataclasses
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple
+from typing import TYPE_CHECKING, Any, Final, Literal, NamedTuple
 
 from coding_agent_playbook._hook_schema import MATCHER_KEYS
 from coding_agent_playbook.hook_policy.advisory import advisory_text
@@ -154,15 +154,25 @@ class ResolvedHook:
         }
 
 
+#: The ``SkippedHook.gate`` values of the applicability gates (§A.7 item 1): a hook
+#: off only because of them turns on once the facts change (resync-on-detector-input-change).
+APPLICABILITY_GATES: Final = frozenset({"applies_if", "linked_rule"})
+
+
 @dataclass(frozen=True)
 class SkippedHook:
     """A hook that is off, and why; feeds ``playbook check`` and the sync summary.
+
+    ``gate`` names the first gate that turned it off (``definition``,
+    ``switch``, ``applies_if``, ``linked_rule``, ``adapters``); it is not
+    compared, so a test may build one from its id and reason alone.
 
     Example: ``SkippedHook("guard-x", "disabled by [hooks] disable")``.
     """
 
     id: str
     reason: str
+    gate: str = field(default="", compare=False)
 
 
 class EffectiveHooks(NamedTuple):

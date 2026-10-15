@@ -1,0 +1,20 @@
+{
+  "_fixture": {
+    "harness_version": "1.19.0",
+    "source": "k5-eval-task-authoring-lint"
+  },
+  "hook_event_name": "PostToolUse",
+  "session_id": "ses_7a1b2c3d4e5f",
+  "cwd": "/playbook-fixture/proj",
+  "tool_use_id": "call_etl_01",
+  "tool_name": "Write",
+  "tool_input": {
+    "filePath": "/playbook-fixture/proj/playbook/eval_tasks/demo-task/task.toml",
+    "content": "id = \"demo-task\"\npattern = \"\\s+\"\n",
+    "file_path": "/playbook-fixture/proj/playbook/eval_tasks/demo-task/task.toml"
+  },
+  "tool_response": {
+    "output": "Wrote file successfully.",
+    "title": "playbook/eval_tasks/demo-task/task.toml"
+  }
+}

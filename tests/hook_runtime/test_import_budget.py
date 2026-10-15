@@ -11,7 +11,10 @@ stdlib, ``hook_runtime.*`` and ``security.*``; ``tomllib`` loads only on
 pack guard (guard-generated-outputs, Track K5) denies a protected edit from the
 rendered tables alone: no TOML, no render, no subprocess. control-plane-guard
 loads its JSON/TOML/text verdict modules only on their branch, and ``tomllib``
-only for an edit of a ``.toml`` policy file (§D.1's branch-local row).
+only for an edit of a ``.toml`` policy file (§D.1's branch-local row). On the
+source-changed branch, ``detector`` (and ``packaging``) loads only after the
+dependency comparison found a change, and ``evals.*`` / ``sources.filesystem``
+(yaml) only on an ``eval_tasks/*/task.toml`` edit; jinja2 never loads.
 """
 
 from __future__ import annotations
@@ -287,3 +290,138 @@ def test_tomllib_loads_only_for_a_toml_policy_edit(
     assert "tomllib" not in on_json
     assert f"{_CPG_PREFIX}json" in on_json
     assert _forbidden(on_json) == []
+
+
+# --- K5 step 3: the source-changed branch (§D.1 branch-local rows) --------------------
+
+_TASK_DIR: Final = "playbook/eval_tasks/demo-task"
+_UNBOUND_TASK: Final = """\
+id = "demo-task"
+prompt_id = "demo"
+description = "Demo."
+
+[setup]
+files = []
+
+[invocation]
+prompt_args = "x"
+
+[gate]
+expr = "missing"
+
+[gate.bind]
+untouched = { check = "file_unchanged", path = "x.py" }
+"""
+_DEPS_BASE: Final = '[project]\nname = "demo"\ndependencies = ["fastapi"]\n'
+
+
+@pytest.fixture
+def source_changed(tmp_path: Path, real_proc: SubprocessProc) -> GuardRepo:
+    """A synced repo with resync-on-detector-input-change and eval-task-authoring-lint on."""
+    repo = GuardRepo.create(tmp_path)
+    (repo.root / "src").mkdir()
+    (repo.root / "src" / "app.py").write_text("x = 1\n", encoding="utf-8")
+    (repo.root / "pyproject.toml").write_text(_DEPS_BASE, encoding="utf-8")
+    task = repo.root / _TASK_DIR
+    task.mkdir(parents=True)
+    (task / "task.toml").write_text(_UNBOUND_TASK, encoding="utf-8")
+    resync = hook_record(
+        "resync-on-detector-input-change",
+        events=["post_tool_use"],
+        decisions=("context", "none"),
+        on_error="open",
+        matcher={"post_tool_use": {"tools": ["edit", "write", "shell"]}},
+    )
+    lint = hook_record(
+        "eval-task-authoring-lint",
+        events=["post_tool_use"],
+        decisions=("context", "none"),
+        on_error="open",
+        matcher={
+            "post_tool_use": {"tools": ["edit", "write"], "paths": ["**/eval_tasks/*/task.toml"]}
+        },
+    )
+    torch_rule = {
+        "kind": "rule",
+        "id": "ml-serialization-security",
+        "applies_if": [{"any_ml_stack": ["torch"]}],
+        "source": "coding_agent_playbook",
+        "active": False,
+    }
+    facts = {
+        "dependencies": ["fastapi"],
+        "dev_dependencies": [],
+        "has_ci": False,
+        "has_dockerfile": False,
+        "has_notebooks": False,
+    }
+    protected = {"entries": [], "resource_roots": ["pkg:coding_agent_playbook/resources"]}
+    repo.install(resync, lint, facts=facts, applicability=[torch_rule], protected=protected)
+    start = repo.payload(EventName.SESSION_START, source="startup")
+    _imports(real_proc, repo, EventName.SESSION_START, start)
+    return repo
+
+
+def _post_edit(repo: GuardRepo, rel: str) -> bytes:
+    tool_input = {"file_path": rel, "old_string": "a", "new_string": "b"}
+    return repo.payload(
+        EventName.POST_TOOL_USE,
+        tool_name="Edit",
+        tool_input=tool_input,
+        tool_response={"success": True},
+    )
+
+
+def test_source_changed_hooks_load_nothing_new_on_a_python_edit(
+    source_changed: GuardRepo, real_proc: SubprocessProc
+) -> None:
+    payload = _post_edit(source_changed, "src/app.py")
+
+    imported = _imports(real_proc, source_changed, EventName.POST_TOOL_USE, payload)
+
+    assert "coding_agent_playbook.hook_runtime.handlers._detector_inputs" in imported
+    assert _forbidden(imported) == []
+    assert "subprocess" not in imported
+
+
+def test_detector_loads_only_after_the_dependency_comparison_found_a_change(
+    source_changed: GuardRepo, real_proc: SubprocessProc
+) -> None:
+    pyproject = source_changed.root / "pyproject.toml"
+    payload = _post_edit(source_changed, "pyproject.toml")
+
+    pyproject.write_text(_DEPS_BASE + "\n[tool.ruff]\nline-length = 100\n", encoding="utf-8")
+    unchanged = _imports(real_proc, source_changed, EventName.POST_TOOL_USE, payload)
+    pyproject.write_text(_DEPS_BASE.replace('"fastapi"', '"fastapi", "torch"'), encoding="utf-8")
+    changed = _imports(real_proc, source_changed, EventName.POST_TOOL_USE, payload)
+
+    assert "tomllib" in unchanged
+    assert _forbidden(unchanged, allowed=("tomllib",)) == []
+    assert "coding_agent_playbook.detector" in changed
+    assert (
+        _forbidden(changed, allowed=("tomllib", "packaging", "coding_agent_playbook.detector"))
+        == []
+    )
+
+
+def test_evals_and_yaml_load_only_on_an_eval_task_edit(
+    source_changed: GuardRepo, real_proc: SubprocessProc
+) -> None:
+    payload = _post_edit(source_changed, f"{_TASK_DIR}/task.toml")
+
+    imported = _imports(real_proc, source_changed, EventName.POST_TOOL_USE, payload)
+
+    assert "coding_agent_playbook.evals.validator" in imported
+    assert "yaml" in imported and "coding_agent_playbook.sources.filesystem" in imported
+    # The compile resolves check/gate/metric entry points (importlib.metadata), never
+    # the runner or judge groups; the prompts come from sources.filesystem (yaml).
+    branch_local = (
+        "tomllib",
+        "yaml",
+        "importlib.metadata",
+        "coding_agent_playbook.evals",
+        "coding_agent_playbook.evaluators",
+        "coding_agent_playbook.sources",
+    )
+    assert _forbidden(imported, allowed=branch_local) == []
+    assert "jinja2" not in imported

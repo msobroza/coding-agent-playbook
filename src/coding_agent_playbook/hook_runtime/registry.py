@@ -65,6 +65,12 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
     {
         "guard_generated_outputs": f"{_HANDLERS}.guard_generated_outputs",
         "control_plane_guard": f"{_HANDLERS}.control_plane_guard",
+        "validate_then_sync_on_canonical_edit": (
+            f"{_HANDLERS}.validate_then_sync_on_canonical_edit"
+        ),
+        "resync_on_detector_input_change": f"{_HANDLERS}.resync_on_detector_input_change",
+        "eval_task_authoring_lint": f"{_HANDLERS}.eval_task_authoring_lint",
+        "guard_eval_fixtures": f"{_HANDLERS}.guard_eval_fixtures",
     }
 )
 

@@ -19,7 +19,10 @@ dir instead (``hook_runtime.pin``). The §E.0.5 pack tables land with K5: the
 ``sentinel`` and ``protected`` tables are built by ``_guard_config_protect``;
 ``control_plane`` is the runtime's own engine constant and ``precommit`` the
 playbook hook ids of the repo's ``.pre-commit-config.yaml``, scanned with the
-runtime's regex so control-plane-guard and sync never disagree.
+runtime's regex so control-plane-guard and sync never disagree; ``facts`` and
+``applicability`` (resync-on-detector-input-change) come from
+``_guard_config_detect``, ``eval`` is the fixture-glob engine constant and
+``auto_sync`` mirrors ``[hooks] auto_sync``.
 """
 
 from __future__ import annotations
@@ -29,6 +32,12 @@ import shutil
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook._guard_config_detect import (
+    DetectInputs,
+    applicability_rows,
+    applicability_table,
+    facts_table,
+)
 from coding_agent_playbook._guard_config_protect import (
     ProtectedRow,
     ProtectInputs,
@@ -52,6 +61,7 @@ from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import CON
 from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
     playbook_precommit_ids,
 )
+from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 
 if TYPE_CHECKING:
@@ -68,10 +78,12 @@ __all__ = [
     "HOOK_ARTIFACTS",
     "SYNC_OUTPUT_LOCATIONS",
     "CopiedScripts",
+    "DetectInputs",
     "GuardConfigInputs",
     "ProtectInputs",
     "ProtectedRow",
     "adapter_output_dirs",
+    "applicability_rows",
     "copy_hook_scripts",
     "precommit_hook_ids",
     "protected_rows",
@@ -127,7 +139,7 @@ _PATH_CLASSES: Final[Mapping[str, tuple[str, ...]]] = {
         "requirements.in",
         ".pre-commit-config.yaml",
     ),
-    "eval_fixture": ("**/eval_tasks/*/setup/**",),
+    "eval_fixture": FIXTURE_GLOBS,
     "notebook": ("*.ipynb",),
     "py": ("*.py",),
     "test": ("tests/", "test_*.py", "*_test.py", "conftest.py"),
@@ -140,7 +152,8 @@ class GuardConfigInputs:
 
     ``generated`` holds the enabled adapters' ``output_locations``;
     ``protected`` the written set, scan dirs and layer packages;
-    ``precommit_ids`` the repo's playbook pre-commit hook ids (§E.0.5).
+    ``precommit_ids`` the repo's playbook pre-commit hook ids and ``detect``
+    the detector facts and applicability rows (§E.0.5).
 
     Example::
 
@@ -154,6 +167,7 @@ class GuardConfigInputs:
     generated: Sequence[str] = ()
     protected: ProtectInputs = field(default_factory=ProtectInputs)
     precommit_ids: Sequence[str] = ()
+    detect: DetectInputs = field(default_factory=DetectInputs)
 
 
 @dataclass(frozen=True)
@@ -169,8 +183,9 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
 
     ``allow_code_from`` and ``state_ttl_days`` are the runtime keys beyond the
     §D.8.2 table that ``hook_runtime.config`` reads (it cannot read ``[hooks]``);
-    ``sentinel``, ``protected``, ``control_plane`` and ``precommit`` are §E.0.5
-    pack tables (``GuardConfig.tables``).
+    ``sentinel``, ``protected``, ``control_plane``, ``precommit``, ``facts``,
+    ``applicability``, ``eval`` and ``auto_sync`` are §E.0.5 pack keys
+    (``GuardConfig.tables``).
 
     Example::
 
@@ -203,6 +218,10 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
         "protected": protected_table(inputs.protected, HOOK_ARTIFACTS),
         "control_plane": {key: list(rows) for key, rows in CONTROL_PLANE.items()},
         "precommit": {"playbook_hook_ids": sorted(set(inputs.precommit_ids))},
+        "facts": facts_table(inputs.detect.facts),
+        "applicability": applicability_table(inputs.detect.applicability),
+        "eval": {"fixture_globs": list(FIXTURE_GLOBS)},
+        "auto_sync": cfg.auto_sync,
     }
 
 

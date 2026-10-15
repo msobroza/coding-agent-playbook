@@ -3,7 +3,8 @@
 ``deps`` (autouse) is a factory of ``RuntimeDeps`` on the named fakes: an empty
 env, a ``FakeProc`` that fails the test on any subprocess, ``FakeClock`` and
 ``FakeTrustStore``. Every pack hook is driven through ``simulate.run``, the
-exact dispatch pipeline, so no handler is ever called directly.
+exact dispatch pipeline, so no handler is ever called directly. ``real_proc``
+is the real ``ProcPort``, for the fresh-interpreter probes only.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+from coding_agent_playbook.hook_runtime.proc import SubprocessProc
 from tests.hook_runtime.fakes import FakeClock, FakeProc, FakeTrustStore
 from tests.hooks.pack_repo import PackRepo
 
@@ -50,3 +52,9 @@ def deps() -> Callable[..., RuntimeDeps]:
 def pack_repo(tmp_path: Path) -> PackRepo:
     """An empty fixture repository (``.git/`` only) to install pack hooks into."""
     return PackRepo.create(tmp_path)
+
+
+@pytest.fixture
+def real_proc() -> SubprocessProc:
+    """The real ``ProcPort``: only the fresh-interpreter import probes spawn."""
+    return SubprocessProc()

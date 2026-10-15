@@ -63,6 +63,24 @@ def _report(repo: Path, capsys: pytest.CaptureFixture[str]) -> str:
 
 # --- the Hooks block -------------------------------------------------------------------
 
+#: The engine pack's protect hooks shipped so far (Track K5), in check's sorted order.
+_ENGINE_PACK = (
+    "control-plane-guard",
+    "eval-task-authoring-lint",
+    "guard-eval-fixtures",
+    "guard-generated-outputs",
+    "resync-on-detector-input-change",
+    "validate-then-sync-on-canonical-edit",
+)
+_OPT_IN_SKIP = (
+    "    [✗] {hook_id} (skipped: tier 'opt-in' is not in [hooks] tiers ['default'] and "
+    "[hooks] enable does not name it)"
+)
+
+
+def _off(hook_ids: tuple[str, ...]) -> list[str]:
+    return [f"    [✗] {hook_id} (skipped: hooks are off)" for hook_id in hook_ids]
+
 
 def test_hooks_block_labels_per_adapter(
     tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
@@ -77,18 +95,24 @@ def test_hooks_block_labels_per_adapter(
 
     assert lines == [
         "  [hooks]: on",
-        "  Hooks (4 on / 5 total):",
+        "  Hooks (7 on / 9 total):",
         # The engine pack (Track K5): OpenCode has no notebook tool, so guard-generated-outputs
         # is degraded there; control-plane-guard matches no notebook edit.
         "    [✓] control-plane-guard (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
+        "    [✓] eval-task-authoring-lint (agents_md: advisory, claude_code: enforced, "
+        "continue: advisory, opencode: enforced)",
+        _OPT_IN_SKIP.format(hook_id="guard-eval-fixtures"),
         "    [✓] guard-generated-outputs (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: degraded)",
         "    [✓] guard-quiet (agents_md: —, claude_code: enforced, continue: —, opencode: —)",
         "    [✓] guard-x (agents_md: advisory, claude_code: enforced, continue: advisory, "
         "opencode: advisory)",
-        "    [✗] guard-y (skipped: tier 'opt-in' is not in [hooks] tiers ['default'] and "
-        "[hooks] enable does not name it)",
+        _OPT_IN_SKIP.format(hook_id="guard-y"),
+        "    [✓] resync-on-detector-input-change (agents_md: advisory, claude_code: enforced, "
+        "continue: advisory, opencode: enforced)",
+        "    [✓] validate-then-sync-on-canonical-edit (agents_md: advisory, "
+        "claude_code: enforced, continue: advisory, opencode: enforced)",
     ]
 
 
@@ -102,10 +126,10 @@ def test_hooks_block_when_the_table_is_absent(
 
     assert lines == [
         "  [hooks]: off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')",
-        "  Hooks (0 on / 3 total):",
-        "    [✗] control-plane-guard (skipped: hooks are off)",
-        "    [✗] guard-generated-outputs (skipped: hooks are off)",
+        "  Hooks (0 on / 7 total):",
+        *_off(_ENGINE_PACK[:4]),
         "    [✗] guard-x (skipped: hooks are off)",
+        *_off(_ENGINE_PACK[4:]),
     ]
 
 
@@ -122,9 +146,8 @@ def test_hooks_block_when_hooks_are_switched_off_or_unreadable(
 
     assert off_lines == [
         "  [hooks]: off — [hooks] enabled is not true",
-        "  Hooks (0 on / 2 total):",
-        "    [✗] control-plane-guard (skipped: hooks are off)",
-        "    [✗] guard-generated-outputs (skipped: hooks are off)",
+        "  Hooks (0 on / 6 total):",
+        *_off(_ENGINE_PACK),
     ]
     assert bad_lines[-1] == "  [hooks] cannot be read; run 'playbook validate'."
     assert bad_lines[0].startswith("  ✗ [hooks] tiers")

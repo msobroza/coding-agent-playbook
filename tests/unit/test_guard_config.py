@@ -13,7 +13,7 @@ import json
 import os
 import stat
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -27,9 +27,11 @@ from coding_agent_playbook.guard_config import (
     GUARD_CONFIG_PATH,
     HOOK_ARTIFACTS,
     SYNC_OUTPUT_LOCATIONS,
+    DetectInputs,
     GuardConfigInputs,
     ProtectInputs,
     adapter_output_dirs,
+    applicability_rows,
     copy_hook_scripts,
     precommit_hook_ids,
     protected_rows,
@@ -38,6 +40,7 @@ from coding_agent_playbook.guard_config import (
     serialize_guard_config,
     write_guard_config,
 )
+from coding_agent_playbook.hook_policy import resolve_effective_hooks
 from coding_agent_playbook.hook_registrations import resolved_deadlines_ms
 from coding_agent_playbook.hook_runtime.config import (
     GUARD_CONFIG_REL,
@@ -55,11 +58,13 @@ from coding_agent_playbook.hooks_config import (
 )
 from coding_agent_playbook.lockfile import LockEntry, Provenance
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
-from tests.hook_samples import resolved_from_disk, resolved_hook
+from coding_agent_playbook.types import Prompt, PromptFrontmatter, Rule, RuleFrontmatter
+from tests.hook_samples import resolved_from_disk, resolved_hook, sample_hook
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from coding_agent_playbook.detector import Facts
     from coding_agent_playbook.hook_policy import ResolvedHook
 
 
@@ -376,3 +381,143 @@ def test_runtime_reads_the_control_plane_tables_back() -> None:
     assert isinstance(parsed, GuardConfig), parsed
     assert parsed.tables["precommit"] == {"playbook_hook_ids": ["playbook-sync-check"]}
     assert parsed.tables["control_plane"]["mcp"] == [".mcp.json"]
+
+
+# --- K5 step 3: facts, applicability, eval, auto_sync (§E.0.5) -------------------------
+
+_ML_RULE = Rule(
+    RuleFrontmatter(
+        id="ml-serialization-security",
+        name="ML serialization",
+        description="Never unpickle untrusted data.",
+        scope="always",
+        applies_if={"any_ml_stack": ["torch"]},
+    ),
+    "Use safetensors.\n",
+    "Use safetensors.\n",
+    False,
+    None,
+    "coding_agent_playbook",
+)
+
+
+def _prompt(prompt_id: str, applies_if: dict[str, Any] | None = None) -> Prompt:
+    frontmatter = PromptFrontmatter(
+        id=prompt_id, name=prompt_id, description="d", slash=prompt_id, applies_if=applies_if or {}
+    )
+    return Prompt(frontmatter, "Body.\n", "Body.\n", False, None, "<repo-local>")
+
+
+def test_facts_carry_dependency_names_and_presence_flags() -> None:
+    facts: Facts = {
+        "dependencies": {"torch": ">=2", "fastapi": ""},
+        "dev_dependencies": {"pytest": ">=8"},
+        "ml_stack": {"torch": ">=2"},
+        "has_dockerfile": True,
+        "has_ci": False,
+        "python_version": "3.12",
+    }
+    inputs = dataclasses.replace(_inputs([]), detect=DetectInputs(facts=facts))
+
+    rendered = render_guard_config(inputs)["facts"]
+
+    assert rendered == {
+        "dependencies": ["fastapi", "torch"],
+        "dev_dependencies": ["pytest"],
+        "has_ci": False,
+        "has_dockerfile": True,
+        "has_notebooks": False,
+    }
+
+
+def test_applicability_rows_cover_rules_prompts_and_skipped_hooks(tmp_path: Path) -> None:
+    linked = sample_hook(
+        "coding_agent_playbook", id="ml-guard", linked_rule=_ML_RULE.frontmatter.id
+    )
+    gated = sample_hook(id="nb-guard", applies_if={"has_notebooks": True})
+    opt_in = sample_hook(id="later", tier="opt-in", applies_if={"has_notebooks": True})
+    always = sample_hook(id="guard-x")
+    hooks = [linked, gated, opt_in, always]
+    view = resolve_effective_hooks(
+        hooks,
+        [_ML_RULE],
+        HooksConfig(enabled=True),
+        GuardrailsConfig(),
+        {},
+        tmp_path,
+        adapters_enabled=["claude_code"],
+    )
+    rows = applicability_rows(
+        rules=[_ML_RULE],
+        prompts=[_prompt("security-review", {"any_ml_stack": ["torch"]}), _prompt("explain")],
+        hooks=hooks,
+        view=view,
+        facts={},
+        repo_root=tmp_path,
+    )
+
+    table = render_guard_config(
+        dataclasses.replace(_inputs([]), detect=DetectInputs(applicability=rows))
+    )["applicability"]
+
+    torch = [{"any_ml_stack": ["torch"]}]
+    assert table == [
+        {
+            "kind": "hook",
+            "id": "guard-x",
+            "applies_if": [],
+            "source": "<repo-local>",
+            "active": True,
+        },
+        {
+            "kind": "hook",
+            "id": "ml-guard",
+            "applies_if": torch,
+            "source": "coding_agent_playbook",
+            "active": False,
+        },
+        {
+            "kind": "hook",
+            "id": "nb-guard",
+            "applies_if": [{"has_notebooks": True}],
+            "source": "<repo-local>",
+            "active": False,
+        },
+        {
+            "kind": "prompt",
+            "id": "explain",
+            "applies_if": [],
+            "source": "<repo-local>",
+            "active": True,
+        },
+        {
+            "kind": "prompt",
+            "id": "security-review",
+            "applies_if": torch,
+            "source": "<repo-local>",
+            "active": False,
+        },
+        {
+            "kind": "rule",
+            "id": "ml-serialization-security",
+            "applies_if": torch,
+            "source": "coding_agent_playbook",
+            "active": False,
+        },
+    ]  # the opt-in hook is off by tier: new facts can never turn it on
+
+
+def test_eval_fixture_globs_default() -> None:
+    rendered = render_guard_config(_inputs([]))
+
+    assert rendered["eval"] == {"fixture_globs": ["**/eval_tasks/*/setup/**"]}
+    assert rendered["path_classes"]["eval_fixture"] == rendered["eval"]["fixture_globs"]
+
+
+def test_auto_sync_rendered_from_hooks_table() -> None:
+    on = dataclasses.replace(_inputs([]), hooks_config=HooksConfig(enabled=True, auto_sync=True))
+
+    assert render_guard_config(_inputs([]))["auto_sync"] is False
+    assert render_guard_config(on)["auto_sync"] is True
+    parsed = parse_guard_config(serialize_guard_config(render_guard_config(on)))
+    assert isinstance(parsed, GuardConfig) and parsed.tables["auto_sync"] is True

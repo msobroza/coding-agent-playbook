@@ -19,11 +19,13 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.hook_policy import (
+    APPLICABILITY_GATES,
     NO_HANDLER_SCHEMAS,
     ConfigKeySpec,
     ConfigSchemaLookup,
     EffectiveHooks,
     SkippedHook,
+    effective_applies_if,
     resolve_effective_hooks,
 )
 from coding_agent_playbook.hooks_config import (
@@ -228,6 +230,39 @@ def test_dangling_linked_rule_is_skipped() -> None:
     skipped = _only_skip(_resolve([sample_hook(linked_rule="no-such-rule")]))
 
     assert skipped.reason == "linked rule 'no-such-rule' not found"
+
+
+def test_skipped_hook_names_the_gate_that_turned_it_off() -> None:
+    """resync-on-detector-input-change keeps rows only for the applicability gates (K5)."""
+    rule = _rule(applies_if={"has_framework": ["fastapi"]})
+    hooks = [
+        sample_hook(id="by-applies-if", applies_if={"has_framework": ["flask"]}),
+        sample_hook(id="by-linked-rule", linked_rule="pii-handling"),
+        sample_hook(id="by-tier", tier="opt-in"),
+        sample_hook(id="by-definition", enabled=False),
+    ]
+
+    gates = {skip.id: skip.gate for skip in _resolve(hooks, rules=[rule]).skipped}
+
+    assert gates == {
+        "by-applies-if": "applies_if",
+        "by-linked-rule": "linked_rule",
+        "by-tier": "switch",
+        "by-definition": "definition",
+    }
+    assert {"applies_if", "linked_rule"} == APPLICABILITY_GATES
+
+
+def test_effective_applies_if_ands_the_linked_rule_predicate() -> None:
+    rule = _rule(applies_if={"has_framework": ["fastapi"]})
+    both = sample_hook(linked_rule="pii-handling", applies_if={"has_file": ["Dockerfile"]})
+
+    assert effective_applies_if(both, {"pii-handling": rule}) == (
+        {"has_file": ["Dockerfile"]},
+        {"has_framework": ["fastapi"]},
+    )
+    assert effective_applies_if(sample_hook(), {}) == ()
+    assert effective_applies_if(sample_hook(linked_rule="gone"), {}) is None
 
 
 @pytest.mark.parametrize(

@@ -1,0 +1,54 @@
+{
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "default",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "Edit",
+      "native_name": "Edit",
+      "tool_class": "edit",
+      "tool_classes": [
+        "edit"
+      ],
+      "use_id": "toolu_01GefLoader",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
+          "repo_rel": "src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
+          "key": "src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
+          "repo_rel": "src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
+          "key": "src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
+          "new_string",
+          "return torch.load(p, weights_only=True)"
+        ]
+      ]
+    }
+  },
+  "result": {
+    "decision": "ask",
+    "reason": "\"setup/app/loader.py\" is a frozen fixture of eval task \"find-injected-vuln-pytorch-deserial\".\nsetup/ is the frozen starting state; find-injected-vuln fixtures are intentionally vulnerable and file_unchanged gates compare against it."
+  },
+  "wire": {
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"\\\"setup/app/loader.py\\\" is a frozen fixture of eval task \\\"find-injected-vuln-pytorch-deserial\\\".\\nsetup/ is the frozen starting state; find-injected-vuln fixtures are intentionally vulnerable and file_unchanged gates compare against it.\"}}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

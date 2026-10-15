@@ -37,6 +37,14 @@ PROTECT_PACK: dict[str, PackRow] = {
         "default", ("pre_tool_use",), ("deny", "ask", "none"), "ask"
     ),
     "control-plane-guard": PackRow("default", ("pre_tool_use",), ("deny", "ask", "none"), "ask"),
+    "validate-then-sync-on-canonical-edit": PackRow(
+        "default", ("post_tool_use",), ("context", "none"), "open"
+    ),
+    "resync-on-detector-input-change": PackRow(
+        "default", ("post_tool_use",), ("context", "none"), "open"
+    ),
+    "eval-task-authoring-lint": PackRow("default", ("post_tool_use",), ("context", "none"), "open"),
+    "guard-eval-fixtures": PackRow("opt-in", ("pre_tool_use",), ("ask", "none"), "open"),
 }
 
 
@@ -84,3 +92,26 @@ def test_handlers_declare_config_schema_and_no_input_mutation(hook_id: str) -> N
     )
     assert {e.value for e in declaration.events} >= set(fm.events)
     assert {d.value for d in declaration.decisions} >= set(fm.decisions)
+
+
+def test_validate_matcher_paths_are_the_handler_canonical_globs() -> None:
+    """The matcher selects the hook; the handler re-checks with the same globs."""
+    from coding_agent_playbook.hook_runtime.handlers.validate_then_sync_on_canonical_edit import (
+        CANONICAL_GLOBS,
+    )
+
+    fm = engine_hook("validate-then-sync-on-canonical-edit").frontmatter
+
+    assert tuple(fm.matcher["post_tool_use"].paths) == CANONICAL_GLOBS
+
+
+def test_source_changed_child_timeout_nests_under_the_hook_timeout() -> None:
+    """OQ-27: the 8 s child timeout stays below each source-changed hook's ``timeout``."""
+    from coding_agent_playbook.hook_runtime.handlers._source_changed import CHILD_TIMEOUT_S
+
+    for hook_id in (
+        "validate-then-sync-on-canonical-edit",
+        "resync-on-detector-input-change",
+        "eval-task-authoring-lint",
+    ):
+        assert engine_hook(hook_id).frontmatter.timeout > CHILD_TIMEOUT_S

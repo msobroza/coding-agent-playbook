@@ -29,7 +29,10 @@ from coding_agent_playbook.hook_policy.advisory import (
 )
 from coding_agent_playbook.hook_policy.contract import HookCheckContext, classify_hook
 from coding_agent_playbook.hook_policy.contract_set import HookSetInputs, classify_hook_set
-from coding_agent_playbook.hook_policy.effective import resolve_effective_hooks
+from coding_agent_playbook.hook_policy.effective import (
+    effective_applies_if,
+    resolve_effective_hooks,
+)
 from coding_agent_playbook.hook_policy.handler_catalog import (
     CatalogEntry,
     HandlerCatalog,
@@ -50,6 +53,7 @@ from coding_agent_playbook.hook_policy.merge import (
     split_hook_layers,
 )
 from coding_agent_playbook.hook_policy.resolved import (
+    APPLICABILITY_GATES,
     EffectiveHooks,
     HandlerKind,
     ResolvedHandler,
@@ -75,6 +79,7 @@ __all__ = [
     "ADAPTER_LABELS",
     "ADVISORY_RULE_PREFIX",
     "ADVISORY_RULE_PRIORITY",
+    "APPLICABILITY_GATES",
     "DEGRADED_EVENTS",
     "ENGINE_DEADLINE_CAP_MS",
     "HOOK_CAPABLE_ADAPTERS",
@@ -111,6 +116,7 @@ __all__ = [
     "classify_hook",
     "classify_hook_set",
     "config_findings",
+    "effective_applies_if",
     "enforcement_line",
     "enforcement_targets",
     "merge_config",
