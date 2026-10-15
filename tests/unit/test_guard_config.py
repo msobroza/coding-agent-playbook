@@ -8,6 +8,7 @@ back through ``hook_runtime.config``, so the schema is pinned against that parse
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import stat
@@ -30,6 +31,7 @@ from coding_agent_playbook.guard_config import (
     ProtectInputs,
     adapter_output_dirs,
     copy_hook_scripts,
+    precommit_hook_ids,
     protected_rows,
     render_guard_config,
     resource_root_ids,
@@ -41,6 +43,10 @@ from coding_agent_playbook.hook_runtime.config import (
     GUARD_CONFIG_REL,
     GuardConfig,
     parse_guard_config,
+)
+from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import CONTROL_PLANE
+from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
+    playbook_precommit_ids,
 )
 from coding_agent_playbook.hooks_config import (
     GuardrailsConfig,
@@ -325,3 +331,48 @@ def test_runtime_reads_the_protect_tables_back(tmp_path: Path) -> None:
     assert parsed.tables["sentinel"] == renderer.SENTINEL
     paths = [row["path"] for row in parsed.tables["protected"]["entries"]]
     assert paths == sorted(paths)
+
+
+def test_control_plane_rows_are_engine_constants(tmp_path: Path) -> None:
+    """Rendered from the runtime's own constants; no input changes them (overlays: extra_paths)."""
+    bare = render_guard_config(_inputs([]))["control_plane"]
+    other = render_guard_config(_inputs(_two_hooks(tmp_path), ProtectInputs()))["control_plane"]
+
+    assert bare == {key: list(rows) for key, rows in CONTROL_PLANE.items()}
+    assert other == bare
+    assert ".claude/settings.json" in bare["settings"]
+    assert bare["toml_deny"] == ["hooks", "guardrails"]
+
+
+_PRECOMMIT = """\
+repos:
+  - repo: local
+    hooks:
+      - id: playbook-sync-check
+      - id: "coding-agent-playbook-sync"
+      - id: ruff
+#     - id: playbook-switched-off
+"""
+
+
+def test_precommit_ids_use_the_runtime_regex(tmp_path: Path) -> None:
+    (tmp_path / ".pre-commit-config.yaml").write_text(_PRECOMMIT, encoding="utf-8")
+
+    ids = precommit_hook_ids(tmp_path)
+    rendered = render_guard_config(dataclasses.replace(_inputs([]), precommit_ids=ids))
+
+    assert ids == playbook_precommit_ids(_PRECOMMIT)
+    assert rendered["precommit"] == {
+        "playbook_hook_ids": ["coding-agent-playbook-sync", "playbook-sync-check"]
+    }
+    assert precommit_hook_ids(tmp_path / "no-such-repo") == []
+
+
+def test_runtime_reads_the_control_plane_tables_back() -> None:
+    inputs = dataclasses.replace(_inputs([]), precommit_ids=["playbook-sync-check"])
+
+    parsed = parse_guard_config(serialize_guard_config(render_guard_config(inputs)))
+
+    assert isinstance(parsed, GuardConfig), parsed
+    assert parsed.tables["precommit"] == {"playbook_hook_ids": ["playbook-sync-check"]}
+    assert parsed.tables["control_plane"]["mcp"] == [".mcp.json"]

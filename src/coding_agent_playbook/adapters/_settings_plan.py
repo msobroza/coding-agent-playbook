@@ -14,6 +14,7 @@ import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, Literal
 
+from coding_agent_playbook._canonical_json import canonical_json
 from coding_agent_playbook.adapters._json_edits import ArrayEdit
 from coding_agent_playbook.lockfile import LockEntry, compute_hash
 
@@ -83,20 +84,6 @@ class SettingsPlan:
     notes: list[str] = field(default_factory=list)
     updated: int = 0
     removed: int = 0
-
-
-def canonical_json(value: object) -> bytes:
-    """The bytes a scoped lock entry hashes: sorted keys, no whitespace, UTF-8.
-
-    Key order and the file's own formatting never change the hash (§C.1.4).
-
-    Example::
-
-        >>> canonical_json({"b": 1, "a": "é"})
-        b'{"a":"\\xc3\\xa9","b":1}'
-    """
-    text = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return text.encode("utf-8", errors="surrogatepass")
 
 
 def json_pointer(keys: Iterable[str]) -> str:

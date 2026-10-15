@@ -16,6 +16,8 @@ fixture only seeds repo-local content when callers ask for it.
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -139,6 +141,39 @@ def hermetic_git_env(
     apply_hermetic_git_env(
         monkeypatch, ceiling=tmp_path.parent, config_home=tmp_path_factory.mktemp("xdg-config")
     )
+
+
+#: Bound on each fixture-building ``git`` call of :func:`real_git`.
+GIT_TIMEOUT_S = 30
+
+
+@pytest.fixture
+def real_git(hermetic_git_env: None) -> Callable[..., str]:
+    """Return ``run(*args, cwd=path) -> stdout`` for the real git, or skip without one.
+
+    Shared by the hook runtime and the pack hook suites; git is isolated from
+    the developer's machine through :func:`hermetic_git_env`.
+
+    Example::
+
+        def test_x(real_git, tmp_path):
+            real_git("init", "-q", cwd=tmp_path)
+    """
+    if shutil.which("git") is None:
+        pytest.skip("git not on PATH")
+
+    def _run(*args: str, cwd: Path) -> str:
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT_S,
+        )
+        return completed.stdout.strip()
+
+    return _run
 
 
 @pytest.fixture

@@ -1,0 +1,57 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "opencode",
+    "session_id": "ses_7a1b2c3d4e5f",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "unattended": true,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "apply_patch",
+      "native_name": "apply_patch",
+      "tool_class": "edit",
+      "tool_classes": [
+        "edit",
+        "write"
+      ],
+      "use_id": "call_cpg_02",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/.claude/settings.json",
+          "repo_rel": ".claude/settings.json",
+          "key": ".claude/settings.json"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/.claude/settings.json",
+          "repo_rel": ".claude/settings.json",
+          "key": ".claude/settings.json"
+        }
+      ],
+      "content": [
+        [
+          ".claude/settings.json",
+          "patch",
+          "  \"disableAllHooks\": true,\n  \"model\": \"sonnet\","
+        ]
+      ]
+    }
+  },
+  "result": {
+    "decision": "deny",
+    "reason": "Needs user approval (OpenCode cannot ask): Guardrail configuration is user-owned; ask the user to change it."
+  },
+  "wire": {
+    "stdout": "{\"v\":1,\"decision\":\"deny\",\"reason\":\"Needs user approval (OpenCode cannot ask): Guardrail configuration is user-owned; ask the user to change it.\",\"context\":[],\"notice\":\"\"}\n",
+    "stderr": "",
+    "exit_code": 10
+  }
+}

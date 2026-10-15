@@ -100,8 +100,13 @@ def test_first_sync_writes_every_hook_output(synced: Path) -> None:
     assert list(doc["hooks"]) == ["SessionStart", "PreToolUse"]
     assert (synced / LAUNCHER).is_file()
     config = json.loads((synced / GUARD_CONFIG).read_bytes())
-    # The engine pack's guard-generated-outputs is a default-tier hook (Track K5).
-    assert sorted(config["hooks"]) == ["guard-ext", "guard-generated-outputs", "guard-x"]
+    # The engine pack's protect guards are default-tier hooks (Track K5).
+    assert sorted(config["hooks"]) == [
+        "control-plane-guard",
+        "guard-ext",
+        "guard-generated-outputs",
+        "guard-x",
+    ]
     assert (synced / SCRIPT).read_bytes() == SCRIPT_BYTES
     if os.name == "posix":
         assert (synced / SCRIPT).stat().st_mode & 0o100
@@ -323,9 +328,10 @@ def test_summary_lines_counts_and_hand_edit_warning(
     repo = make_hook_repo(tmp_path / "repo", make_synthetic_repo)
     assert _sync_repo(repo, tmp_path) == 0
     out = capsys.readouterr().out
-    assert "✓ Hooks: 3 enabled (" in out  # guard-x, guard-ext, guard-generated-outputs
-    assert "claude_code: 3 enforced" in out
-    assert "continue: 3 advisory" in out
+    # guard-x, guard-ext and the engine pack's guard-generated-outputs, control-plane-guard
+    assert "✓ Hooks: 4 enabled (" in out
+    assert "claude_code: 4 enforced" in out
+    assert "continue: 4 advisory" in out
     assert f"✓ {SETTINGS}: 2 managed entries updated, 0 removed (user keys untouched)" in out
 
     _edit_managed_group(repo)
@@ -387,3 +393,21 @@ def test_write_mode_pins_resource_roots_in_machine_json(
 
     engine = os.path.join(os.path.dirname(coding_agent_playbook.__file__), "resources")
     assert pins.resource_roots == {"pkg:coding_agent_playbook/resources": engine}
+
+
+def test_guard_config_precommit_ids_follow_the_repo_config(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory
+) -> None:
+    """Both modes scan the real repo's pre-commit config (Track K5): --check sees an edit."""
+    repo = make_hook_repo(tmp_path / "repo", make_synthetic_repo)
+    precommit = repo / ".pre-commit-config.yaml"
+    precommit.write_text("repos:\n  - hooks:\n      - id: playbook-sync-check\n", encoding="utf-8")
+
+    assert _sync_repo(repo, tmp_path) == 0
+    config = json.loads((repo / GUARD_CONFIG).read_bytes())
+    assert config["precommit"] == {"playbook_hook_ids": ["playbook-sync-check"]}
+    assert config["control_plane"]["settings"] == [SETTINGS, ".claude/settings.local.json"]
+    assert _sync_repo(repo, tmp_path, check=True) == 0
+
+    precommit.write_text("repos: []\n", encoding="utf-8")
+    assert _sync_repo(repo, tmp_path, check=True) == 1

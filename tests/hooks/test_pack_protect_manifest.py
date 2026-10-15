@@ -36,6 +36,7 @@ PROTECT_PACK: dict[str, PackRow] = {
     "guard-generated-outputs": PackRow(
         "default", ("pre_tool_use",), ("deny", "ask", "none"), "ask"
     ),
+    "control-plane-guard": PackRow("default", ("pre_tool_use",), ("deny", "ask", "none"), "ask"),
 }
 
 

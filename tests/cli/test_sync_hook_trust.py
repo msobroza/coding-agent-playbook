@@ -146,5 +146,9 @@ def test_handler_approval_mirrors_the_runtime_record(repo: Path, tmp_path: Path)
     [hook] = [hook for hook in resolved if hook.id == "guard-ext"]
     assert handler_approval(hook) == approval_of(config.hooks["guard-ext"])
     builtins = [hook for hook in resolved if hook.id != "guard-ext"]
-    assert {hook.id for hook in builtins} == {"guard-x", "guard-generated-outputs"}
+    assert {hook.id for hook in builtins} == {
+        "guard-x",
+        "guard-generated-outputs",
+        "control-plane-guard",
+    }
     assert all(handler_approval(hook) is None for hook in builtins)

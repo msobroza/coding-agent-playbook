@@ -533,6 +533,7 @@ def test_claude_settings_imports_only_the_stdlib() -> None:
     assert foreign == []
     assert ours == [
         "coding_agent_playbook._atomic_io",
+        "coding_agent_playbook._canonical_json",
         "coding_agent_playbook.adapters",
         "coding_agent_playbook.adapters._json_edits",
         "coding_agent_playbook.adapters._json_spans",

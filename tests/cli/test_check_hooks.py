@@ -77,8 +77,11 @@ def test_hooks_block_labels_per_adapter(
 
     assert lines == [
         "  [hooks]: on",
-        "  Hooks (3 on / 4 total):",
-        # The engine pack (Track K5): OpenCode has no notebook tool, so it is degraded there.
+        "  Hooks (4 on / 5 total):",
+        # The engine pack (Track K5): OpenCode has no notebook tool, so guard-generated-outputs
+        # is degraded there; control-plane-guard matches no notebook edit.
+        "    [✓] control-plane-guard (agents_md: advisory, claude_code: enforced, "
+        "continue: advisory, opencode: enforced)",
         "    [✓] guard-generated-outputs (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: degraded)",
         "    [✓] guard-quiet (agents_md: —, claude_code: enforced, continue: —, opencode: —)",
@@ -99,7 +102,8 @@ def test_hooks_block_when_the_table_is_absent(
 
     assert lines == [
         "  [hooks]: off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')",
-        "  Hooks (0 on / 2 total):",
+        "  Hooks (0 on / 3 total):",
+        "    [✗] control-plane-guard (skipped: hooks are off)",
         "    [✗] guard-generated-outputs (skipped: hooks are off)",
         "    [✗] guard-x (skipped: hooks are off)",
     ]
@@ -118,7 +122,8 @@ def test_hooks_block_when_hooks_are_switched_off_or_unreadable(
 
     assert off_lines == [
         "  [hooks]: off — [hooks] enabled is not true",
-        "  Hooks (0 on / 1 total):",
+        "  Hooks (0 on / 2 total):",
+        "    [✗] control-plane-guard (skipped: hooks are off)",
         "    [✗] guard-generated-outputs (skipped: hooks are off)",
     ]
     assert bad_lines[-1] == "  [hooks] cannot be read; run 'playbook validate'."

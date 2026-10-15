@@ -97,12 +97,17 @@ def test_static_module_map_equals_decorator_registry() -> None:
 
 
 def test_every_in_tree_handler_module_is_in_the_static_map() -> None:
+    """Public handler modules are mapped; ``_``-prefixed ones are helpers registering nothing."""
     names = {
         f"{handlers_package.__name__}.{info.name}"
         for info in pkgutil.iter_modules(handlers_package.__path__)
     }
+    helpers = {name for name in names if name.rsplit(".", 1)[1].startswith("_")}
+    for module in sorted(names):
+        importlib.import_module(module)
 
-    assert names <= set(builtin_handler_modules().values())
+    assert names - helpers <= set(builtin_handler_modules().values())
+    assert not {d.module for d in registered_handlers().values()} & helpers
 
 
 @register_hook_handler(

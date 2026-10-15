@@ -64,6 +64,7 @@ _HANDLERS: Final = "coding_agent_playbook.hook_runtime.handlers"
 _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
     {
         "guard_generated_outputs": f"{_HANDLERS}.guard_generated_outputs",
+        "control_plane_guard": f"{_HANDLERS}.control_plane_guard",
     }
 )
 
@@ -103,7 +104,9 @@ class HandlerContext:
     ``hook`` is its ``guard_config.hooks.<id>`` record and ``config`` the merged
     ``handler.config`` of the firing event. ``git`` is ``SafeGit`` (built on
     first use); ``ledger`` is ``None`` when the state root is unusable.
-    ``deadline`` is the event's watchdog deadline on ``clock.monotonic()``.
+    ``deadline`` is the event's watchdog deadline on ``clock.monotonic()``;
+    ``env`` is the hook process environment (``CLAUDE_CONFIG_DIR``,
+    ``XDG_STATE_HOME``: where user-level files live), never a command's prefix.
     """
 
     hook: HookRecord
@@ -118,6 +121,7 @@ class HandlerContext:
     hatches: EscapeHatches
     platform: str = sys.platform
     home: str | None = None
+    env: Mapping[str, str] = field(default_factory=dict)
 
 
 class HandlerResolutionError(Exception):

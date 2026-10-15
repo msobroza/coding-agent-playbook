@@ -29,8 +29,10 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import clean_text, quote_data
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.event import ToolClass
-from coding_agent_playbook.hook_runtime.paths import normalize_path
+from coding_agent_playbook.hook_runtime.handlers._targets import (
+    file_write_paths,
+    shell_write_targets,
+)
 from coding_agent_playbook.hook_runtime.protected import classify, protected_paths
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 
@@ -53,7 +55,6 @@ CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
 #: The engine's restore commands; ``HOOK.md`` ships them and overlays may add more.
 DEFAULT_RESTORE_COMMANDS: Final = ("playbook sync", "playbook init", "git checkout", "git restore")
 
-_FILE_CLASSES: Final = frozenset({ToolClass.EDIT, ToolClass.WRITE, ToolClass.NOTEBOOK_EDIT})
 _TAIL: Final = "then run playbook validate && playbook sync"
 _ARTIFACT_KINDS: Final = frozenset({"rule", "prompt", "skill", "hook"})
 _PATH_CHARS: Final = 80
@@ -162,21 +163,10 @@ def _targets(ev: CanonicalEvent, ctx: HandlerContext) -> list[NormalizedPath]:
     tool = ev.tool
     if tool is None:
         return []
-    found = list(tool.write_paths) if tool.tool_classes & _FILE_CLASSES else []
-    command = tool.command
-    if command is not None:
+    found = file_write_paths(tool)
+    if tool.command is not None:
         restore = _restore_commands(ctx.config)
-        found.extend(
-            normalize_path(
-                raw,
-                base=segment.cwd or ev.cwd,
-                repo=ev.repo,
-                home=ctx.home,
-                platform=ctx.platform,
-            )
-            for segment in command.segments
-            for raw in _segment_targets(segment, restore)
-        )
+        found.extend(shell_write_targets(ev, ctx, lambda s: _segment_targets(s, restore)))
     return found
 
 

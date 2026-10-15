@@ -151,10 +151,19 @@ class PackRepo(GuardRepo):
         harness: Harness = Harness.CLAUDE_CODE,
         env: Mapping[str, str] | None = None,
         event: EventName = EventName.PRE_TOOL_USE,
+        state: Path | None = None,
     ) -> SimulateReport:
-        """Run ``payload`` through ``playbook-hook simulate`` against this repository."""
+        """Run ``payload`` through ``playbook-hook simulate`` against this repository.
+
+        ``state`` keeps session state across calls (``--state``); without it
+        every simulation starts from an ephemeral state root.
+        """
         args = SimulateArgs(
-            event=event, harness=harness, repo=str(self.root), env=tuple((env or {}).items())
+            event=event,
+            harness=harness,
+            repo=str(self.root),
+            env=tuple((env or {}).items()),
+            state=None if state is None else str(state),
         )
         return run(args, payload, deps=deps)
 

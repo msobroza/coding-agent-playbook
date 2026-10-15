@@ -16,7 +16,10 @@ Both are committed and byte-compared by ``sync --check`` on every machine, so
 nothing here may read the machine: no absolute path, no ``sys.prefix``, no
 ``$HOME`` (§D.8.3). Absolute tool and interpreter paths are pins under the git
 dir instead (``hook_runtime.pin``). The §E.0.5 pack tables land with K5: the
-``sentinel`` and ``protected`` tables are built by ``_guard_config_protect``.
+``sentinel`` and ``protected`` tables are built by ``_guard_config_protect``;
+``control_plane`` is the runtime's own engine constant and ``precommit`` the
+playbook hook ids of the repo's ``.pre-commit-config.yaml``, scanned with the
+runtime's regex so control-plane-guard and sync never disagree.
 """
 
 from __future__ import annotations
@@ -45,6 +48,10 @@ from coding_agent_playbook.hook_registrations import (
 )
 from coding_agent_playbook.hook_runtime._shell_wrappers import DEFAULT_RUNNER_WRAPPERS
 from coding_agent_playbook.hook_runtime.config import GUARD_CONFIG_REL
+from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import CONTROL_PLANE
+from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
+    playbook_precommit_ids,
+)
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 
 if TYPE_CHECKING:
@@ -66,6 +73,7 @@ __all__ = [
     "ProtectedRow",
     "adapter_output_dirs",
     "copy_hook_scripts",
+    "precommit_hook_ids",
     "protected_rows",
     "render_guard_config",
     "resolve_resource_roots",
@@ -90,6 +98,11 @@ HOOK_ARTIFACTS: Final[tuple[str, ...]] = (
     f"{LAUNCHER_PATH.rsplit('/', 1)[0]}/",
     OPENCODE_SHIM_PATH,
 )
+
+#: The pre-commit config whose playbook hook ids control-plane-guard keeps (§E.1).
+PRECOMMIT_CONFIG: Final = ".pre-commit-config.yaml"
+#: Pre-commit configs are small; a larger one is not scanned.
+_PRECOMMIT_MAX_BYTES: Final = 1024 * 1024
 
 #: The hooks whose presence switches the local logs on (§D.6.2); K9 ships them.
 _DECISION_LOG_HOOK: Final = "guard-decision-log"
@@ -126,7 +139,8 @@ class GuardConfigInputs:
     """Everything ``guard_config.json`` is rendered from; all of it machine-independent.
 
     ``generated`` holds the enabled adapters' ``output_locations``;
-    ``protected`` the written set, scan dirs and layer packages (§E.0.5).
+    ``protected`` the written set, scan dirs and layer packages;
+    ``precommit_ids`` the repo's playbook pre-commit hook ids (§E.0.5).
 
     Example::
 
@@ -139,6 +153,7 @@ class GuardConfigInputs:
     engine_version: str
     generated: Sequence[str] = ()
     protected: ProtectInputs = field(default_factory=ProtectInputs)
+    precommit_ids: Sequence[str] = ()
 
 
 @dataclass(frozen=True)
@@ -154,7 +169,8 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
 
     ``allow_code_from`` and ``state_ttl_days`` are the runtime keys beyond the
     §D.8.2 table that ``hook_runtime.config`` reads (it cannot read ``[hooks]``);
-    ``sentinel`` and ``protected`` are §E.0.5 pack tables (``GuardConfig.tables``).
+    ``sentinel``, ``protected``, ``control_plane`` and ``precommit`` are §E.0.5
+    pack tables (``GuardConfig.tables``).
 
     Example::
 
@@ -185,7 +201,30 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
         "state_ttl_days": cfg.state_ttl_days,
         "sentinel": SENTINEL,
         "protected": protected_table(inputs.protected, HOOK_ARTIFACTS),
+        "control_plane": {key: list(rows) for key, rows in CONTROL_PLANE.items()},
+        "precommit": {"playbook_hook_ids": sorted(set(inputs.precommit_ids))},
     }
+
+
+def precommit_hook_ids(repo_root: Path) -> list[str]:
+    """The playbook hook ids of ``<repo_root>/.pre-commit-config.yaml`` (``[]`` without one).
+
+    The runtime's own regex, never ``yaml``: control-plane-guard denies the
+    removal of exactly these ids.
+
+    Example::
+
+        >>> precommit_hook_ids(Path("/no/such/repo"))
+        []
+    """
+    try:
+        with (repo_root / PRECOMMIT_CONFIG).open("rb") as handle:
+            data = handle.read(_PRECOMMIT_MAX_BYTES + 1)
+    except OSError:
+        return []
+    if len(data) > _PRECOMMIT_MAX_BYTES:
+        return []
+    return playbook_precommit_ids(data.decode("utf-8", errors="replace"))
 
 
 def serialize_guard_config(cfg: Mapping[str, Any]) -> bytes:

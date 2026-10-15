@@ -10,9 +10,9 @@ The runtime reaches processes, git, clocks and the trust store only through
   probes and the ``real_git`` rows spawn interpreters and git legitimately.
 - ``real_proc`` is the plain real ``ProcPort``, requested by the tests that
   must spawn (concurrency, timeouts, ``SafeGit`` against a real repo).
-- ``real_git`` runs the real ``git`` binary to build fixture repositories; it
-  skips when git is not on PATH and isolates git from the developer's machine
-  through the root ``hermetic_git_env`` fixture.
+- ``real_git`` (root conftest) runs the real ``git`` binary to build fixture
+  repositories; it skips when git is not on PATH and isolates git from the
+  developer's machine through the root ``hermetic_git_env`` fixture.
 - ``repo``, ``resolver`` and ``make_deps`` set up an in-process dispatch: a
   synced fixture repository, a scripted handler table, and deps whose watchdog
   timer and exit are fakes (helpers in ``dispatch_kit``).
@@ -20,8 +20,6 @@ The runtime reaches processes, git, clocks and the trust store only through
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -41,8 +39,6 @@ from tests.hook_runtime.guard_repo import GuardRepo, streams
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
-
-GIT_TIMEOUT_S = 30
 
 
 @pytest.fixture(autouse=True)
@@ -73,32 +69,6 @@ def runtime_deps() -> Callable[..., RuntimeDeps]:
 def real_proc() -> SubprocessProc:
     """The real ``ProcPort``, for the tests that must start processes."""
     return SubprocessProc()
-
-
-@pytest.fixture
-def real_git(hermetic_git_env: None) -> Callable[..., str]:
-    """Return ``run(*args, cwd=path) -> stdout`` for the real git, or skip without one.
-
-    Example::
-
-        def test_x(real_git, tmp_path):
-            real_git("init", "-q", cwd=tmp_path)
-    """
-    if shutil.which("git") is None:
-        pytest.skip("git not on PATH")
-
-    def _run(*args: str, cwd: Path) -> str:
-        completed = subprocess.run(
-            ["git", *args],
-            cwd=cwd,
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=GIT_TIMEOUT_S,
-        )
-        return completed.stdout.strip()
-
-    return _run
 
 
 @pytest.fixture

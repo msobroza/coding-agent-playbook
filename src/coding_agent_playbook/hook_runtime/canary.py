@@ -6,7 +6,9 @@ an edit of a protected file) and comparing the combined decision with the one
 expected. Each row of :data:`DEFAULT_CANARIES` names the guard it proves
 (``hook_id``), so the heartbeat runs only the rows of enabled guards; the
 pack tracks add a row with each pre_tool_use guard (K5: an edit of the
-lockfile must be denied by guard-generated-outputs).
+lockfile must be denied by guard-generated-outputs, and a Write of
+``disableAllHooks`` into ``.claude/settings.json`` by control-plane-guard).
+Pre_tool_use canaries are never executed: only the hooks see the tool call.
 
 Canary runs never pollute a real session: they use the session id
 ``playbook-doctor-<pid>``, every decision line is tagged ``canary: true``, and
@@ -92,6 +94,19 @@ DEFAULT_CANARIES: Final[tuple[Canary, ...]] = (
                 "file_path": LOCKFILE_REL,
                 "old_string": "schema_version",
                 "new_string": "schema_version",
+            },
+        },
+    ),
+    Canary(
+        name="settings-disable-all-hooks",
+        hook_id="control-plane-guard",
+        event=EventName.PRE_TOOL_USE,
+        expect=Decision.DENY,
+        fields={
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": ".claude/settings.json",
+                "content": '{"disableAllHooks": true}\n',
             },
         },
     ),
