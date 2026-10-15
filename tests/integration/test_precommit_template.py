@@ -134,3 +134,45 @@ def test_commit_trailers_entry_only_when_rows_configured(
     # Hooks without their own stages must not run again at commit-msg.
     assert parsed["default_stages"] == ["pre-commit"]
     assert "https://" not in rendered
+
+
+@pytest.mark.parametrize("output_commit", [False, True])
+def test_commit_msg_twin_only_when_commitizen_opted_in(output_commit: bool) -> None:
+    """prK §F.4.3: ``cz check`` at commit-msg only for a repo with a commitizen convention.
+
+    Rendering it unconditionally would break every commit of a consumer without cz.
+    """
+    without = yaml.safe_load(_render_fresh_pre_commit(output_commit=output_commit))
+    parsed = yaml.safe_load(_render_fresh_pre_commit(output_commit=output_commit, commitizen=True))
+
+    assert "coding-agent-playbook-commit-msg" not in _hooks(without)
+    entry = _hooks(parsed)["coding-agent-playbook-commit-msg"]
+    assert (entry["entry"], entry["language"], entry["stages"]) == (
+        "cz check --commit-msg-file",
+        "system",
+        ["commit-msg"],
+    )
+
+
+@pytest.mark.parametrize(
+    ("output_commit", "install_types"),
+    [
+        (False, ["pre-commit", "post-checkout", "post-merge", "commit-msg"]),
+        (True, ["pre-commit", "commit-msg"]),
+    ],
+)
+def test_default_install_hook_types_includes_commit_msg(
+    output_commit: bool, install_types: list[str]
+) -> None:
+    """A plain ``pre-commit install`` installs the commit-msg stage the cz twin runs at."""
+    rendered = _render_fresh_pre_commit(
+        output_commit=output_commit, commitizen=True, commit_trailers=True
+    )
+    parsed = yaml.safe_load(rendered)
+
+    assert parsed["default_install_hook_types"] == install_types
+    assert parsed["default_stages"] == ["pre-commit"]
+    hooks = _hooks(parsed)
+    assert {"coding-agent-playbook-commit-msg", "coding-agent-playbook-commit-trailers"} <= set(
+        hooks
+    )

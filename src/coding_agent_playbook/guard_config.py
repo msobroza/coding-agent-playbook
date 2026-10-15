@@ -33,7 +33,9 @@ pytest-conventions-feedback's asyncio flag are derived from the repo's
 pyproject into those hooks' config (``_guard_config_toolchain``), and the
 quality companion's codes and ``--config`` thresholds from the committed
 ``[metrics.ruff_violations]`` into clean-code-metrics-nonregression's
-(``_guard_config_quality``, §F.2.2).
+(``_guard_config_quality``, §F.2.2); ``[hooks.commit_convention] cutover_date``
+into commit-message-convention's (§F.4.2: one source for the push scan and the
+``playbook ci`` step).
 ``notebooks.max_bytes`` is the engine's parse cap for a notebook (a larger
 one is reported unparsed), shared by the notebook-reading hooks. The K8
 secret tables (``secret_path_exempt``, ``secret_glob_exempt``,
@@ -160,6 +162,8 @@ PRECOMMIT_CONFIG: Final = ".pre-commit-config.yaml"
 #: Pre-commit configs are small; a larger one is not scanned.
 _PRECOMMIT_MAX_BYTES: Final = 1024 * 1024
 
+#: The hook whose push scan reads ``[hooks.commit_convention] cutover_date`` (§F.4.2).
+COMMIT_CONVENTION_HOOK_ID: Final = "commit-message-convention"
 #: The hooks whose presence switches the local logs on (§D.6.2); K9 ships them.
 _DECISION_LOG_HOOK: Final = "guard-decision-log"
 _AUDIT_LOG_HOOK: Final = "local-audit-log"
@@ -257,6 +261,7 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
     derived = {
         **derived_hook_config(inputs.toolchain),
         QUALITY_HOOK_ID: quality_hook_config(inputs.quality, inputs.ruff),
+        COMMIT_CONVENTION_HOOK_ID: {"cutover_date": cfg.commit_convention.cutover_date or ""},
     }
     return {
         "schema_version": GUARD_CONFIG_SCHEMA,

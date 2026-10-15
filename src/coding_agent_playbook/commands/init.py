@@ -305,7 +305,9 @@ def _append_to_gitignore(repo_root: Path) -> Path:
     return gitignore
 
 
-def _render_fresh_pre_commit(*, output_commit: bool = False, commit_trailers: bool = False) -> str:
+def _render_fresh_pre_commit(
+    *, output_commit: bool = False, commit_trailers: bool = False, commitizen: bool = False
+) -> str:
     """Render the packaged starter ``.pre-commit-config.yaml`` template.
 
     The template (``resources/precommit/config.yaml.j2``) is air-gapped: every
@@ -315,8 +317,11 @@ def _render_fresh_pre_commit(*, output_commit: bool = False, commit_trailers: bo
     post-merge auto-sync plus the staged-output guard for ``false``.
     ``commit_trailers`` (a trailer row is configured, prK §E.4) adds the
     ``coding-agent-playbook-commit-trailers`` commit-msg entry and installs that
-    stage. We still stash an empty facts dict to honour the renderer's helper
-    contract (SPEC §9.4).
+    stage; ``commitizen`` (the repo opted into a commitizen convention, prK §F.4.3)
+    adds ``coding-agent-playbook-commit-msg`` (``cz check``) the same way, so a
+    consumer without commitizen never gets a commit hook that cannot run. We
+    still stash an empty facts dict to honour the renderer's helper contract
+    (SPEC §9.4).
 
     Example::
 
@@ -328,7 +333,11 @@ def _render_fresh_pre_commit(*, output_commit: bool = False, commit_trailers: bo
     template_path = precommit_dir / "config.yaml.j2"
     env = build_environment([precommit_dir])
     env.globals["_facts"] = {}
-    variables = {"output_commit": output_commit, "commit_trailers": commit_trailers}
+    variables = {
+        "output_commit": output_commit,
+        "commit_trailers": commit_trailers,
+        "commitizen": commitizen,
+    }
     return render_artifact_body(template_path, variables, env=env)
 
 
@@ -347,7 +356,9 @@ def _write_pre_commit(
     target = repo_root / ".pre-commit-config.yaml"
     if not target.is_file():
         starter = _render_fresh_pre_commit(
-            output_commit=output_commit, commit_trailers=_has_trailer_rows(repo_root)
+            output_commit=output_commit,
+            commit_trailers=_has_trailer_rows(repo_root),
+            commitizen=_uses_commitizen(repo_root),
         )
         target.write_text(starter, encoding="utf-8")
         return target, ()
@@ -370,6 +381,16 @@ def _has_trailer_rows(repo_root: Path) -> bool:
         return commit_trailer_policy(repo_root).has_rows
     except (ValueError, OSError, KeyError, TypeError):
         return False
+
+
+def _uses_commitizen(repo_root: Path) -> bool:
+    """Whether the repo opted into a commitizen convention (``playbook ci``'s predicate, §F.5).
+
+    An unreadable ``pyproject.toml`` or config counts as opted in, as for CI.
+    """
+    from coding_agent_playbook.commands._ci_policy import commit_convention_configured
+
+    return commit_convention_configured(repo_root)
 
 
 def _effective_overlays(answers: _Answers, local: Mapping[str, Any]) -> tuple[list[str], str]:

@@ -25,7 +25,13 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-__all__ = ["SNAPSHOT_SCHEMA", "SnapshotError", "read_snapshot", "write_snapshot"]
+__all__ = [
+    "SNAPSHOT_SCHEMA",
+    "SnapshotError",
+    "read_snapshot",
+    "snapshot_document",
+    "write_snapshot",
+]
 
 #: The only snapshot layout this engine writes and reads.
 SNAPSHOT_SCHEMA: Final = 1
@@ -50,7 +56,21 @@ def write_snapshot(path: Path, measurements: Sequence[Measurement], *, tree: str
 
         >>> write_snapshot(Path("cov.json"), [Measurement("coverage", "a.py", 90.0)], tree=None)
     """
-    document = {
+    text = json.dumps(snapshot_document(measurements, tree=tree), indent=2, sort_keys=True)
+    atomic_write_bytes(path, (text + "\n").encode("utf-8"))
+
+
+def snapshot_document(measurements: Sequence[Measurement], *, tree: str | None) -> dict[str, Any]:
+    """The schema-1 snapshot of ``measurements`` for ``tree``, as a JSON-ready dict.
+
+    The coverage Stop stage writes it through the hook state store instead of a path.
+
+    Example::
+
+        >>> snapshot_document([], tree="ab12")
+        {'schema': 1, 'tree': 'ab12', 'measurements': []}
+    """
+    return {
         "schema": SNAPSHOT_SCHEMA,
         "tree": tree,
         "measurements": [
@@ -58,8 +78,6 @@ def write_snapshot(path: Path, measurements: Sequence[Measurement], *, tree: str
             for m in measurements
         ],
     }
-    text = json.dumps(document, indent=2, sort_keys=True) + "\n"
-    atomic_write_bytes(path, text.encode("utf-8"))
 
 
 def read_snapshot(path: Path) -> list[Measurement]:

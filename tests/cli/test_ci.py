@@ -75,6 +75,7 @@ def test_ci_steps_table_rows_and_owners() -> None:
         ("coverage", "F.1"),
         ("gate-scan", "E.2"),
         ("scan-secrets", "E.4"),
+        ("commit-convention", "F.4"),
         ("commit-trailers", "E.4"),
         ("check-deps", "E.4"),
         ("scan-sinks", "E.3"),
@@ -159,9 +160,9 @@ def test_aggregated_exit_1_when_any_step_fails(
     out = capsys.readouterr().out
     assert "validate said hello" in out
     assert "FAIL validate (exit 1" in out
-    # coverage (run_tests off), commit-trailers (no rows), check-deps (no policy)
-    # and the opt-in scan-sinks
-    assert "playbook ci: 4 passed, 1 failed, 4 skipped" in out
+    # coverage (run_tests off), commit-convention (no commitizen), commit-trailers
+    # (no rows), check-deps (no policy) and the opt-in scan-sinks
+    assert "playbook ci: 4 passed, 1 failed, 5 skipped" in out
 
 
 @pytest.mark.parametrize("steps", ["validate,nope", "", ",,"])
@@ -239,6 +240,14 @@ def test_json_records_step_argv_exit_duration(
             "exit": 0,
             "duration_s": 0.125,
             "status": "passed",
+        },
+        {
+            "step": "commit-convention",
+            "argv": [],
+            "exit": None,
+            "duration_s": 0.0,
+            "status": "skipped",
+            "note": "no [tool.commitizen] in pyproject.toml and no [hooks.commit_convention]",
         },
         {
             "step": "commit-trailers",

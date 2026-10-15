@@ -17,9 +17,15 @@
 # The commit-trailer rows of [hooks.git-commit-push-policy-guard] are checked at
 # the commit-msg stage too, so `default_install_hook_types` installs it.
 {% endif %}
-{% if not output_commit or commit_trailers %}
+{% if commitizen %}
+#
+# This repo uses a commitizen convention ([tool.commitizen] or
+# [hooks.commit_convention]): `cz check` runs at the commit-msg stage, so
+# `default_install_hook_types` installs it. Install commitizen with your dev tools.
+{% endif %}
+{% if not output_commit or commit_trailers or commitizen %}
 minimum_pre_commit_version: "3.2.0"
-default_install_hook_types: [pre-commit{% if not output_commit %}, post-checkout, post-merge{% endif %}{% if commit_trailers %}, commit-msg{% endif %}]
+default_install_hook_types: [pre-commit{% if not output_commit %}, post-checkout, post-merge{% endif %}{% if commit_trailers or commitizen %}, commit-msg{% endif %}]
 default_stages: [pre-commit]
 {% endif %}
 default_language_version:
@@ -99,6 +105,15 @@ repos:
       - id: coding-agent-playbook-commit-trailers
         name: coding-agent-playbook commit trailers
         entry: playbook check-commit-trailers
+        language: system
+        stages: [commit-msg]
+{% endif %}
+{% if commitizen %}
+      # Commit-message convention: commitizen's own check of every commit message
+      # (your [tool.commitizen]; no cut-over here: every new commit conforms).
+      - id: coding-agent-playbook-commit-msg
+        name: commit message convention (commitizen)
+        entry: cz check --commit-msg-file
         language: system
         stages: [commit-msg]
 {% endif %}

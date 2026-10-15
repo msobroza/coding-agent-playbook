@@ -78,6 +78,22 @@ def test_stop_stage_tools_join_the_pin_list(repo: Path, tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="a POSIX venv layout")
+def test_machine_json_pins_cz_and_project_python_when_present(repo: Path, tmp_path: Path) -> None:
+    """prK §F.4.1/§F.1.2: cz comes from the project venv first (commitizen in the dev extras)."""
+    venv_cz = repo / ".venv" / "bin" / "cz"
+    venv_cz.parent.mkdir(parents=True)
+    venv_cz.write_bytes(b"#!/bin/sh\n")
+    venv_cz.chmod(0o755)
+    pins = FakePinWriter()
+    which = {"cz": "/usr/local/bin/cz", "python3": "/usr/bin/python3"}.get
+    deps = hook_deps(tmp_path / "state", pins=pins, which=which)
+
+    write_pins(repo, deps, engine_version="0.2.0", stage_tools=["project_python"])
+
+    assert pins.tools == {"cz": [str(venv_cz)], "project_python": ["/usr/bin/python3"]}
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="a POSIX venv layout")
 def test_project_python_prefers_the_repo_venv_unresolved(repo: Path) -> None:
     venv_python = repo / ".venv" / "bin" / "python"
     venv_python.parent.mkdir(parents=True)
@@ -201,6 +217,7 @@ def test_handler_approval_mirrors_the_runtime_record(repo: Path, tmp_path: Path)
         "secret-content-guard",
         "destructive-command-guard",
         "git-commit-push-policy-guard",
+        "commit-message-convention",
         "stop-diff-sweep",
         "dependency-allowlist-guard",
         "exfil-channel-guard",

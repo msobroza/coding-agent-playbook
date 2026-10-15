@@ -50,6 +50,8 @@ VERIFY_PACK: dict[str, PackRow] = {
     "tests-with-source-nudge": PackRow("opt-in", ("stop",), ("deny", "none"), "open"),
     "subagent-stop-verify": PackRow("opt-in", ("subagent_stop",), ("deny", "none"), "open"),
     "prompt-output-contract-on-stop": PackRow("opt-in", ("stop",), ("deny", "none"), "open"),
+    # §F.1.2: the trust-gated coverage stage (execution, opt-in).
+    "coverage-diff-gate": PackRow("opt-in", ("stop",), ("deny", "none"), "open"),
 }
 #: Claude only: OpenCode has no subagent event and no final message text (§E.2 Portability).
 CLAUDE_ONLY = frozenset({"subagent-stop-verify", "prompt-output-contract-on-stop"})
@@ -105,6 +107,7 @@ def test_handlers_declare_config_schema_and_no_input_mutation(hook_id: str) -> N
         ("gate-weakening-guard", "gate-integrity"),
         ("tests-with-source-nudge", "tests-nudge"),
         ("prompt-output-contract-on-stop", "output-contract"),
+        ("coverage-diff-gate", "coverage"),
     ],
 )
 def test_stage_hooks_name_a_planned_stage(hook_id: str, stage: str) -> None:

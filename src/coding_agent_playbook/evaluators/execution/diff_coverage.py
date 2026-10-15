@@ -199,15 +199,20 @@ def _measure(ctx: EvalContext) -> list[Measurement]:
     """One MODULE measurement (key ``ctx.label``): the changed-line coverage percentage.
 
     Nothing without a project or a diff base (a baseline handle has none), and
-    nothing, without running the suite, when no scored file changed.
+    nothing, without running the suite, when no scored file changed. The
+    changed lines come from ``tool_setup.changed_lines`` when a caller supplies
+    them, else from git.
     """
     project = ctx.project
     base = getattr(project, "diff_base", None)
     if project is None or base is None:
         return []
     setup = ctx.tool_setup
-    git = None if setup.git is None else setup.git(project.root, setup.timeout_s)
-    found = changed_lines(project.root, base, timeout_s=setup.timeout_s, git=git)
+    if setup.changed_lines is not None:
+        found: Mapping[str, frozenset[int]] = setup.changed_lines(project.root, base)
+    else:
+        git = None if setup.git is None else setup.git(project.root, setup.timeout_s)
+        found = changed_lines(project.root, base, timeout_s=setup.timeout_s, git=git)
     changed = scored_changes(found, exclude=setup.exclude)
     if not changed:
         return []

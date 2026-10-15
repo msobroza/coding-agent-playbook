@@ -83,6 +83,7 @@ STAGE_FACTORIES: Final[Mapping[str, str]] = MappingProxyType(
         "typecheck": f"{_HANDLERS}._exec_stages:typecheck_stage",
         "tests": f"{_HANDLERS}._exec_stages:tests_stage",
         "notebooks": f"{_HANDLERS}.notebooks:notebooks_stage",
+        "coverage": f"{_HANDLERS}.coverage_diff_gate:coverage_stage",
     }
 )
 #: Leaves the dispatcher time to compose and write before the watchdog fires.

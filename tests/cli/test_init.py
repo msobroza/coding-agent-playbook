@@ -497,3 +497,21 @@ def test_init_output_policy_comes_from_committed_config(tmp_path):
     text = (tmp_path / ".pre-commit-config.yaml").read_text()
     assert "--check-staged" in text
     assert "entry: playbook sync --check\n" not in text
+
+
+@pytest.mark.parametrize("commitizen", [False, True])
+def test_fresh_starter_adds_the_cz_twin_only_for_a_commitizen_repo(
+    tmp_path: Path, commitizen: bool
+) -> None:
+    """prK §F.4.3: the commit-msg ``cz check`` twin follows the CI step's predicate."""
+    pyproject = '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n'
+    if commitizen:
+        pyproject += "\n[tool.commitizen]\nname = 'cz_conventional_commits'\n"
+    (tmp_path / "pyproject.toml").write_text(pyproject)
+
+    path, _ = _init._write_pre_commit(tmp_path)
+
+    parsed = yaml.safe_load(path.read_text())
+    hooks = {hook["id"] for repo in parsed["repos"] for hook in repo["hooks"]}
+    assert ("coding-agent-playbook-commit-msg" in hooks) is commitizen
+    assert ("commit-msg" in parsed["default_install_hook_types"]) is commitizen

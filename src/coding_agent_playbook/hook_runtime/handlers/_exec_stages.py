@@ -14,7 +14,9 @@ no path args) through the pinned project interpreter.
   (:func:`._verify_claim.completion_claim`). With ``tests_scope = "touched"`` it
   runs the session's edited test files with ``--no-cov``, because an
   ``addopts`` ``--cov-fail-under`` fails any subset; with none edited it runs
-  the whole suite.
+  the whole suite. With coverage-diff-gate on (a ``coverage`` stage record) it
+  reads the one full run it shares with the ``coverage`` stage instead
+  (``stop.suite``; ``tests_scope`` is then ``all``, §F.1.2).
 
 Red output is trimmed to the failing lines plus the summary.
 """
@@ -45,8 +47,18 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.runner import StageRunner
     from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
+    from coding_agent_playbook.hook_runtime.stop.suite import SuiteOutcome
 
-__all__ = ["PLUGINS_CHANGED", "ExecStage", "mypy_plugins_changed", "tests_stage", "typecheck_stage"]
+    type SharedRun = Callable[[StopPlan, float], SuiteOutcome]
+
+__all__ = [
+    "PLUGINS_CHANGED",
+    "ExecStage",
+    "mypy_plugins_changed",
+    "shared_verdict",
+    "tests_stage",
+    "typecheck_stage",
+]
 
 PLUGINS_CHANGED: Final = (
     "typecheck skipped: [tool.mypy] plugins changed since HEAD; commit them to re-enable it"
@@ -76,6 +88,7 @@ class ExecStage:
     args: tuple[str, ...]
     wanted: bool = True
     plugins_changed: Callable[[], bool] | None = None
+    shared: SharedRun | None = None
     cost: StageCost = StageCost.EXECUTION
     needs_diff: bool = True
     mode: str = "block"
@@ -90,6 +103,8 @@ class ExecStage:
             return StageResult(
                 self.name, "skipped", user_lines=(PLUGINS_CHANGED,), skip_category="tool_changed"
             )
+        if self.shared is not None:
+            return shared_verdict(self.name, self.shared(plan, deadline))
         left = seconds_left(self.clock, deadline)
         if left <= 0:
             return StageResult(self.name, "skipped", skip_category="timeout")
@@ -127,19 +142,47 @@ def tests_stage(ev: CanonicalEvent, ctx: HandlerContext) -> ExecStage | None:
     under ``tests_scope = "touched"``.
     """
     command = stage_command(ctx.cfg, "tests")
-    if ev.repo is None or command is None:
+    repo = ev.repo
+    if repo is None or command is None:
         return None
+    shared: SharedRun | None = None
     args = command[1]
-    if ctx.config.get("tests_scope") == "touched":
-        args = _targeted(args, ev.repo.worktree_root, ctx)
+    if stage_command(ctx.cfg, "coverage") is not None:
+
+        def shared(plan: StopPlan, deadline: float) -> SuiteOutcome:
+            from coding_agent_playbook.hook_runtime.stop.suite import shared_suite
+
+            return shared_suite(plan, ctx, repo).outcome(deadline)
+
+    elif ctx.config.get("tests_scope") == "touched":
+        args = _targeted(args, repo.worktree_root, ctx)
     return ExecStage(
         name="tests",
-        runner=runner_of(ctx, ev.repo),
+        runner=runner_of(ctx, repo),
         clock=ctx.clock,
         tool=command[0],
         args=args,
         wanted=completion_claim(ev, ctx.cfg) is not None,
+        shared=shared,
     )
+
+
+def shared_verdict(stage: str, outcome: SuiteOutcome) -> StageResult:
+    """``stage``'s verdict from the shared suite run: green, red with its failures, or skipped.
+
+    Example: ``shared_verdict("tests", outcome).status == "red"`` after a failing test.
+    """
+    problem = outcome.problem
+    if problem is not None:
+        notes = (problem.advice,) if problem.advice else ()
+        return StageResult(stage, "skipped", user_lines=notes, skip_category=problem.category)
+    found = outcome.artifacts
+    if found is None or not outcome.red:
+        return StageResult(stage, "green")
+    lines = _failure_lines(outcome.output) if outcome.output.strip() else ()
+    junit = found.junit
+    summary = f"{junit.failed} failed, {junit.errors} errors (pytest exit {found.returncode})"
+    return StageResult(stage, "red", lines=lines or (summary,))
 
 
 def mypy_plugins_changed(root: str, git: GitPort) -> bool:

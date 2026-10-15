@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.evaluators.baseline_git import GitRunner
 
-__all__ = ["changed_lines", "parse_unified_zero"]
+__all__ = ["changed_lines", "every_line", "parse_unified_zero"]
 
 #: Only Python files: ``*`` crosses ``/`` in a git pathspec, so this matches at any depth.
 _PY_PATHSPEC: Final = "*.py"
@@ -94,7 +94,7 @@ def changed_lines(
         raise RuntimeError(f"cannot list the lines changed since {base!r}: {exc}") from exc
     changed = parse_unified_zero(os.fsdecode(diff))
     for rel in (os.fsdecode(name) for name in untracked.split(b"\0") if name):
-        lines = _every_line(root / rel)
+        lines = every_line(root / rel)
         if lines:
             changed[rel] = lines
     return changed
@@ -161,8 +161,16 @@ def _c_unquote(quoted: str) -> str:
     return os.fsdecode(_C_ESCAPE.sub(one, body))
 
 
-def _every_line(path: Path) -> frozenset[int]:
-    """Lines ``1..n`` of an untracked regular file; nothing for a symlink or an unreadable file."""
+def every_line(path: Path) -> frozenset[int]:
+    """Lines ``1..n`` of an untracked regular file; nothing for a symlink or an unreadable file.
+
+    The coverage Stop stage counts an untracked file the same way.
+
+    Example::
+
+        >>> every_line(Path("/no/such/file.py"))
+        frozenset()
+    """
     if path.is_symlink() or not path.is_file():
         return frozenset()
     try:

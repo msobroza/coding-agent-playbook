@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime._git_parse import DiffLines
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps, TrustPort
     from coding_agent_playbook.hook_runtime.event import RepoInfo
-    from coding_agent_playbook.hook_runtime.git import AddedLine, Fingerprint, GitPort
+    from coding_agent_playbook.hook_runtime.git import AddedLine, Fingerprint, GitPort, LoggedCommit
     from coding_agent_playbook.hook_runtime.globs import GlobSet
     from coding_agent_playbook.hook_runtime.state import StateStore
 
@@ -138,6 +138,10 @@ class LazyGit:
     def remote_urls(self) -> tuple[tuple[str, str], ...]:
         """See ``GitPort.remote_urls``."""
         return self._port().remote_urls()
+
+    def commit_log(self, rev_range: str, *, limit: int) -> tuple[LoggedCommit, ...]:
+        """See ``GitPort.commit_log``."""
+        return self._port().commit_log(rev_range, limit=limit)
 
 
 def open_trust_store(repo: RepoInfo, deps: RuntimeDeps) -> TrustPort | None:

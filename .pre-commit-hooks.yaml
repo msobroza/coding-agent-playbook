@@ -19,6 +19,8 @@
 # git hook types (`default_install_hook_types` above makes a plain
 # `pre-commit install` do it; explicit `--hook-type` flags REPLACE that list, so
 # name all three): pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge
+# With `playbook-commit-msg` (a commitizen convention), add commit-msg to the list:
+#   pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge --hook-type commit-msg
 # Stage names follow the hook-type names introduced in pre-commit 3.2.0.
 #
 # These hooks are `language: python`: pre-commit runs them in its OWN venv, which
@@ -141,3 +143,18 @@
   pass_filenames: false
   always_run: true
   stages: [pre-commit]
+
+# Commit-message convention (prK §F.4.3): commitizen's own `cz check` on every commit
+# message, editor-composed and human ones included. The convention is your
+# [tool.commitizen] (default cz_conventional_commits); there is no playbook wrapper
+# and no cut-over here (every new commit conforms). `language: system`: cz comes from
+# your project environment, and a machine without it fails loudly ("executable not
+# found"), the intended signal once you opted into commitizen. Needs the commit-msg
+# hook type installed (see the recipe above).
+- id: playbook-commit-msg
+  name: commit message convention (commitizen)
+  description: Fail a commit whose message breaks the repo's commitizen convention (cz check)
+  entry: cz check --commit-msg-file
+  language: system
+  stages: [commit-msg]
+  minimum_pre_commit_version: "3.2.0"

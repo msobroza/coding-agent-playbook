@@ -297,3 +297,20 @@ def test_json_baseline_rows_of_diff_based_metrics_are_dropped(tmp_path: Path) ->
         ("diff_coverage", 100.0, "new")
     ]
     assert [r.diff_base for r in factory.requests] == ["HEAD"]
+
+
+def test_changed_lines_seam_replaces_the_git_read(tmp_path: Path) -> None:
+    """A caller that already lists the change (the coverage Stop stage) skips git entirely."""
+    git = FakeGitRunner(outputs={"diff": _diff("src/a.py", "@@ -0,0 +1 @@")})
+    handle = _handle(tmp_path, "base0", _report({"src/a.py": {1: 1, 2: 0}}))
+    asked: list[tuple[Path, str]] = []
+
+    def listed(root: Path, base: str) -> dict[str, frozenset[int]]:
+        asked.append((root, base))
+        return {"src/a.py": frozenset({1, 2})}
+
+    setup = ToolSetup(git=git.factory, changed_lines=listed)
+    ctx = EvalContext(module=None, source="", label="suite", project=handle, tool_setup=setup)
+
+    assert DiffCoverageMetric().measure(ctx) == [Measurement("diff_coverage", "suite", 50.0)]
+    assert (asked, git.calls) == ([(tmp_path, "base0")], [])

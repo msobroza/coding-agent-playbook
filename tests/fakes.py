@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import sys
 import unicodedata
 from dataclasses import dataclass, field
@@ -320,17 +321,24 @@ class FakeCiStepRunner:
     """In-memory :class:`~coding_agent_playbook.commands.ci.CiStepRunner`.
 
     ``exits`` maps a step's subcommand (``validate``, ``sync``, ``gate-scan``)
-    to its exit code, ``None`` for a timeout; unlisted steps exit 0. ``calls``
-    records each argv, ``timeouts`` each per-step timeout, in order.
+    to its exit code, ``None`` for a timeout; unlisted steps exit 0. Any other
+    program (the ``cz`` the ``commit-convention`` row runs) is keyed by its
+    basename, or by ``cz_exits[<the call's last argument>]`` when listed there.
+    ``calls`` records each argv, ``timeouts`` each per-step timeout, in order.
     """
 
     exits: dict[str, int | None] = field(default_factory=dict)
+    cz_exits: dict[str, int | None] = field(default_factory=dict)
     calls: list[tuple[str, ...]] = field(default_factory=list)
     timeouts: list[float] = field(default_factory=list)
 
     def run(self, argv: Sequence[str], *, cwd: Path, timeout_s: float) -> StepRun:
         self.calls.append(tuple(argv))
         self.timeouts.append(timeout_s)
+        if tuple(argv[1:3]) != ("-m", "coding_agent_playbook.cli"):
+            program = os.path.basename(argv[0])
+            code = self.cz_exits.get(argv[-1], self.exits.get(program, 0))
+            return StepRun(code, f"{program} said hello\n")
         subcommand = argv[3]  # after <python> -m coding_agent_playbook.cli
         return StepRun(self.exits.get(subcommand, 0), f"{subcommand} said hello\n")
 

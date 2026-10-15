@@ -82,7 +82,10 @@ class ToolSetup:
     builds a reader for a project root and bound (``None``: a plain ``git``
     subprocess; a hook passes its hardened ``SafeGit``), and never scores a
     path matching ``exclude`` (``[metrics] exclude``). ``timeout_s`` bounds
-    those git reads too.
+    those git reads too. ``changed_lines`` replaces that git read outright:
+    ``(root, base) -> {root-relative path: line numbers}``, for a caller that
+    already lists the change (the coverage Stop stage, through its hardened
+    ``GitPort``, prK §F.1.2).
 
     Example::
 
@@ -96,6 +99,7 @@ class ToolSetup:
     ruff: RuffSettings = field(default_factory=RuffSettings)
     git: Callable[[Path, float], GitRunner] | None = None
     exclude: tuple[str, ...] = ()
+    changed_lines: Callable[[Path, str], Mapping[str, frozenset[int]]] | None = None
 
 
 @dataclass(frozen=True)

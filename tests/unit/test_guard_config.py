@@ -597,12 +597,12 @@ def test_stop_gate_derived_from_hook_config_and_dev_tools() -> None:
             "needs_diff": True,
             "mode": "block",
         },
-        {
+        {  # K10: the coverage stage runs the project's pytest (STAGE_HOOK_COMMANDS)
             "name": "coverage",
             "owner": "coverage-diff-gate",
             "cost": "execution",
-            "tool": "",
-            "args": [],
+            "tool": "project_python",
+            "args": ["-m", "pytest", "-o", "addopts=", "-p", "no:cacheprovider", "-q"],
             "timeout_s": 60.0,
             "needs_diff": True,
             "mode": "block",

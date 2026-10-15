@@ -126,8 +126,23 @@ def test_no_unexpected_hooks():
         "playbook-notebooks",
         "playbook-scan-sinks",
         "playbook-secrets",
+        "playbook-commit-msg",
     }
     assert ids == expected, f"unexpected hook IDs: {ids - expected}"
+
+
+def test_commit_msg_hook_stage_and_language_system():
+    """prK §F.4.3: commitizen from the consumer's environment, at the commit-msg stage."""
+    hook = _hook("playbook-commit-msg")
+    assert hook["entry"] == "cz check --commit-msg-file"
+    assert hook["language"] == "system"
+    assert hook["stages"] == ["commit-msg"]
+    assert hook.get("pass_filenames", True) is True  # pre-commit appends the message file
+
+
+def test_header_recipe_names_the_commit_msg_hook_type():
+    """The commit-msg twin needs its hook type installed; the recipe says how."""
+    assert "--hook-type commit-msg" in _header_comment()
 
 
 def test_coverage_hook_is_manual_only():

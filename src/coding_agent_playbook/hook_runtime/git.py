@@ -41,6 +41,7 @@ from coding_agent_playbook.hook_runtime._git_parse import (
     parse_diff_added,
     split_z,
 )
+from coding_agent_playbook.hook_runtime.git_log import LoggedCommit, LogPort, LogQueries
 from coding_agent_playbook.hook_runtime.git_range import PATCH_FLAGS, RangePort, RangeQueries
 from coding_agent_playbook.hook_runtime.proc import ProcTimeout
 
@@ -62,6 +63,7 @@ __all__ = [
     "GitError",
     "GitPort",
     "GitTimeout",
+    "LoggedCommit",
     "SafeGit",
 ]
 
@@ -110,7 +112,7 @@ class Fingerprint:
         return self.tree_id if not self.aux else f"{self.tree_id}:{self.aux[:12]}"
 
 
-class GitPort(RangePort, Protocol):
+class GitPort(RangePort, LogPort, Protocol):
     """What handlers, the Stop coordinator and the CLI twins ask of git; ``FakeGit`` scripts it."""
 
     def head_tree(self) -> str | None: ...
@@ -128,14 +130,14 @@ class GitPort(RangePort, Protocol):
     def config_value(self, key: str) -> str | None: ...
 
 
-class SafeGit(RangeQueries):
+class SafeGit(RangeQueries, LogQueries):
     """Hardened git for one worktree; every call runs at its root through ``proc``.
 
     ``env`` is the hook process environment (scrubbed per call); ``state``
     holds the discovery caches and the temp index (``None``: no caches, a
     system temp dir, as in CI); ``secret_paths`` and ``max_file_bytes`` decide
     what the fingerprint folds in by stat. The revision queries come from
-    ``git_range.RangeQueries``.
+    ``git_range.RangeQueries``, the commit log from ``git_log.LogQueries``.
 
     Example::
 

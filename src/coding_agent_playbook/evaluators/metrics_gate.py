@@ -198,6 +198,9 @@ class MetricsGateDeps:
     ``tool_runner`` runs a subprocess-backed metric's tool (a hook passes one
     over its ``ProcPort``); the gate memoizes it per run. ``which`` is how the
     CLI finds ``ruff`` for :attr:`MetricsGateRequest.tool_paths`.
+    ``changed_lines`` lists the lines changed since a diff base for
+    ``diff_coverage`` instead of a git read (``None``: git through
+    ``git_runner_factory``); the coverage Stop stage passes its own listing.
     """
 
     project_factory: ProjectFactory = ProjectHandle.create
@@ -206,6 +209,7 @@ class MetricsGateDeps:
     git_runner_factory: Callable[[Path, float], GitRunner] = SubprocessGitRunner
     tool_runner: ToolRunner = subprocess_tool_runner
     which: Callable[[str], str | None] = shutil.which
+    changed_lines: Callable[[Path, str], Mapping[str, frozenset[int]]] | None = None
 
 
 @dataclass
@@ -322,6 +326,7 @@ def tool_setup(request: MetricsGateRequest, deps: MetricsGateDeps) -> ToolSetup:
         ruff=request.config.ruff_settings,
         git=deps.git_runner_factory,
         exclude=request.config.exclude,
+        changed_lines=deps.changed_lines,
     )
 
 

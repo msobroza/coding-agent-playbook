@@ -8,8 +8,9 @@ lockfile is saved, in write mode only, when hooks are live:
   argv and the layers' absolute ``resources/`` dirs (the guards resolve
   ``guard_config.json``'s ``pkg:`` ids through them), both under the git dir
   (``hook_runtime.pin``). Outside git there is no pin, so the hooks stay
-  inactive and sync says so. ``ruff`` is the project venv's own first
-  (``.venv/bin/ruff``: version parity with the project's pin), else the one on
+  inactive and sync says so. ``ruff`` and ``cz`` are the project venv's own
+  first (``.venv/bin/ruff``: version parity with the project's pin; commitizen
+  in the dev extras, specs/prK-hook-pack.md §F.4.1), else the one on
   ``PATH``, never ``uv run`` (L8); when hooks ask D1 for extra rule codes, the
   pinned ruff is probed for them once per signature and the ones it cannot
   run become ``tools.ruff.drop`` (specs/prK-hook-pack.md §E.3, OQ-37);
@@ -73,7 +74,7 @@ PINNED_TOOLS: Final = ("ruff", "cz")
 #: The project's own interpreter (the execution stages' tool), not a program on PATH.
 PROJECT_PYTHON: Final = "project_python"
 #: Tools taken from the project's own ``.venv`` before ``PATH`` (§E.3: version parity).
-VENV_FIRST_TOOLS: Final = frozenset({"ruff"})
+VENV_FIRST_TOOLS: Final = frozenset({"ruff", "cz"})
 _PROMPT: Final = "Approve it? [y/N]: "
 _YES: Final = frozenset({"y", "yes"})
 
