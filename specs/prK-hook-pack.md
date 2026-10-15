@@ -550,7 +550,7 @@ These hooks make "done" mean "the checks pass", not "the agent stopped". stop-ci
     - a file that became unformatted;
 
     both measured against a baseline computed once per `HEAD^{tree}`. The baseline comes from the same argv run over a `git archive HEAD` export in a temp dir (secret globs excluded) and is cached in state. Legacy red therefore never fails every turn.
-  - **`verify-claim`.** Fires when `last_assistant_message` matches a `claim_patterns` entry ("tests pass", "mypy clean", "green", "ready to merge", …) **and** the ledger has no green run of any `verify_commands` entry after the last `.py` edit. A green run is a `post_tool_use` event, not `_failure`. It contributes `You said "<claim>"; no passing <cmd> since your last edit. Run it and report the result.`
+  - **`verify-claim`.** Fires when `last_assistant_message` matches a `claim_patterns` entry ("tests pass", "mypy clean", "green", "ready to merge", …) **and** the ledger has no green run of any `verify_commands` entry after the last `.py` edit. A green run is a `post_tool_use` event, not `_failure`; a run behind a launcher counts, since the ledger tags it after the guards' own unwrapping (§D.6.3). It contributes `You said "<claim>"; no passing <cmd> since your last edit. Run it and report the result.`
   - **`typecheck` / `tests`** (opt-in, and only with a user-local trust entry stored outside the repo). They run `python -m mypy` and `python -m pytest -q`, again with no path args. A hook that runs pytest executes agent-written `conftest.py` without a permission prompt, which is an edit-to-exec escalation; hence the trust requirement.
     - mypy is skipped when `[tool.mypy] plugins` differ from HEAD.
     - pytest runs only when completion is claimed.

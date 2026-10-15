@@ -2354,7 +2354,7 @@ The log never blocks, never prints to the model, and never touches the network. 
 
 - **Paths** are repo-relative. A path outside the repo is recorded as `"<outside>"`, and a path matching `secret_path_globs` as `"<secret-path>"`. Absolute paths and secret paths are never written.
 - **`cats`** come from `guard_config.path_classes`: `canonical`, `detector_input`, `generated`, `control_plane`, `py`, `test`, `notebook`, `eval_fixture`, `secret`.
-- **`verify`** is the `stop_gate.verify_commands` id matched against the segment's effective argv (§E verify-claim). Green runs arrive on `post_tool_use`. Red runs arrive on `post_tool_use_failure`, whose Bash error begins `Exit code N`.
+- **`verify`** is the `stop_gate.verify_commands` id matched against the segment's effective argv (§E verify-claim). The command and every row are unwrapped with `guard_config.shell`, the same unwrapping the guards judge a command by (§D.2.5: configured `wrapper_prefixes`, `runner_wrappers`, the built-in launcher table), then a leading `python -m` is dropped; so `proxy uv run pytest -q` counts as `pytest` once `proxy` is a wrapper, and a row written as `timeout 900 pytest -x` matches `pytest -x`. Green runs arrive on `post_tool_use`. Red runs arrive on `post_tool_use_failure`, whose Bash error begins `Exit code N`.
 - **Caps.** At most 2,000 lines per session. Beyond that the ledger compacts to a path-set summary.
 
 #### §D.6.4 Session flags and deferred notes
