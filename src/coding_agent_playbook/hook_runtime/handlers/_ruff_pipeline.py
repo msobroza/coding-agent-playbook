@@ -1,8 +1,8 @@
 """The shared §E.3 post-edit pipeline: one ruff diagnostics call per edited file (specs/prK-hook-pack.md §E.3).
 
-Every ruff consumer hook (post-edit-ruff-format now; the rule-linked lint
-hooks, the quality and docstring companions later) runs these steps per
-edited file, in-process, sharing their work through the event memo:
+Every ruff consumer hook (post-edit-ruff-format, the three rule-linked lint
+hooks; §F's companions later) runs these steps per edited file, in-process,
+sharing their work through the event memo:
 
 1. **eligibility** (:func:`edited_python_files`): a ``.py``/``.pyi`` file
    tool write whose realpath is inside this worktree, not a secret path, not
@@ -13,14 +13,13 @@ edited file, in-process, sharing their work through the event memo:
    a new or untracked file;
 4. M1/M2 (post-edit-ruff-format only, in ``ruff_feedback``);
 5. **D1** (:func:`file_report`): ``_ruff.ruff_diagnostics_for``, the
-   project's selection plus the consumers' codes (:func:`extended_codes`);
+   project's selection plus ``U`` (:func:`file_codes`): the codes of the
+   consumers that are on for this event **and** whose paths take this file.
+   Every consumer computes the same ``U`` for a file, so D1 runs once;
 6. **changed lines**: diagnostics outside the lines the edit inserted or
    replaced are dropped, so legacy code is never flooded; a parse error is
    always kept (the edit caused it, wherever ruff points);
-7. **partition, dedupe, cap, emit** (:data:`BUCKETS`, :func:`bucket_lines`):
-   first matching row wins; a line seen this session (``sha256(rel, code,
-   stripped source line)``: line numbers shift, text does not) is not
-   repeated; the cap stops before a key is burned.
+7. partition, dedupe, cap, emit: ``_ruff_buckets``.
 
 A private module: it registers no handler.
 """
@@ -41,13 +40,12 @@ from coding_agent_playbook.hook_runtime._ruff import (
     ruff_diagnostics_for,
     ruff_pin,
 )
-from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Sequence
+    from collections.abc import Iterable
 
     from coding_agent_playbook.hook_runtime._ruff import PinProblem, RuffDiagnostic
     from coding_agent_playbook.hook_runtime.config import GuardConfig, HookRecord
@@ -56,31 +54,29 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
 __all__ = [
-    "BUCKETS",
     "POST_EDIT_HOOK_ID",
     "RUFF_CONSUMERS",
-    "BucketRow",
     "EditedFile",
     "FileReport",
     "HeadBlob",
+    "accepts_file",
     "blob_oid",
-    "bucket_lines",
     "edited_python_files",
     "enabled_consumers",
-    "extended_codes",
+    "file_codes",
     "file_report",
     "head_blob",
+    "lint_codes_of",
     "ruff_runner",
     "skip_note",
 ]
 
 POST_EDIT_HOOK_ID: Final = "post-edit-ruff-format"
 #: The builtins that read D1; every one of them computes the same codes, so D1 runs once.
-RUFF_CONSUMERS: Final = frozenset({"ruff_post_edit"})
+RUFF_CONSUMERS: Final = frozenset({"ruff_post_edit", "ruff_lint_feedback"})
 #: A file larger than this gets no ruff work: 2 s per call would not cover it.
 MAX_FILE_BYTES: Final = 2 * 1024 * 1024
 _PY_SUFFIXES: Final = (".py", ".pyi")
-_LINE_CHARS: Final = 240
 _SKIP_NOTES: Final[Mapping[str, str]] = {
     "changed": (
         "ruff changed since the last `playbook sync`; post-edit checks skipped until it is "
@@ -97,10 +93,12 @@ _SKIP_NOTES: Final[Mapping[str, str]] = {
 
 @dataclass(frozen=True, slots=True)
 class EditedFile:
-    """One eligible edited file: the realpath ruff runs on and its repo-relative POSIX name."""
+    """One eligible edited file: the realpath ruff runs on, its repo-relative POSIX name and
+    its glob key (``NormalizedPath.key``: what a matcher's ``paths`` match)."""
 
     path: str
     rel: str
+    key: str
 
 
 def edited_python_files(ev: CanonicalEvent, ctx: HandlerContext) -> list[EditedFile]:
@@ -133,7 +131,7 @@ def _eligible(path: NormalizedPath, root: str, cfg: GuardConfig) -> EditedFile |
     for key in (path.key, rel):
         if cfg.secret_paths.matches(key) or (fixtures is not None and fixtures.matches(key)):
             return None
-    return EditedFile(real, rel)
+    return EditedFile(real, rel, path.key)
 
 
 # --- 2. the pin ----------------------------------------------------------------------------------
@@ -224,15 +222,28 @@ def head_blob(ctx: HandlerContext, edited: EditedFile) -> HeadBlob | None:
 
 @dataclass(frozen=True, slots=True)
 class FileReport:
-    """D1's diagnostics of one file on the lines the edit changed, and the file's lines."""
+    """D1's diagnostics of one file on the lines the edit changed, and what they judge by.
+
+    ``sha`` is the sha256 of the bytes D1 saw (after M1/M2), ``changed`` the
+    lines the edit inserted or replaced, ``is_new`` whether the file has no
+    HEAD blob (created this session or untracked).
+    """
 
     edited: EditedFile
     diagnostics: tuple[RuffDiagnostic, ...]
     source: tuple[str, ...]
+    sha: str = ""
+    changed: frozenset[int] = frozenset()
+    is_new: bool = False
 
     def line_text(self, row: int) -> str:
         """Line ``row`` (1-based) of the file as ruff saw it, stripped."""
         return self.source[row - 1].strip() if 0 < row <= len(self.source) else ""
+
+    @property
+    def text(self) -> str:
+        """The file as ruff saw it (line endings normalized), for an ``ast.parse``."""
+        return "\n".join(self.source) + "\n"
 
 
 def file_report(
@@ -244,16 +255,26 @@ def file_report(
 ) -> FileReport | None:
     """D1 on ``edited`` as it is on disk now, kept to the changed lines; ``None`` if unreadable.
 
-    Raises :class:`RuffFailure` when ruff cannot answer.
+    Memoized per ``(path, content sha256)``: every consumer of the event gets
+    the same report (one D1, one diff). Raises :class:`RuffFailure` when ruff
+    cannot answer.
     """
     data = _read(edited.path)
     if data is None:
         return None
-    found = ruff_diagnostics_for(runner, ctx.memo, edited.path, data, codes)
-    text = data.decode("utf-8", errors="replace")
-    changed = changed_lines(None if head is None else head.text, text)
-    kept = tuple(d for d in found if d.is_syntax_error or d.row in changed)
-    return FileReport(edited, kept, tuple(text.splitlines()))
+    sha = hashlib.sha256(data).hexdigest()
+    wanted = frozenset(codes)
+
+    def build() -> FileReport:
+        found = ruff_diagnostics_for(runner, ctx.memo, edited.path, data, wanted)
+        text = data.decode("utf-8", errors="replace")
+        changed = frozenset(changed_lines(None if head is None else head.text, text))
+        kept = tuple(d for d in found if d.is_syntax_error or d.row in changed)
+        lines = tuple(text.splitlines())
+        return FileReport(edited, kept, lines, sha, changed, is_new=head is None)
+
+    report: FileReport = ctx.memo.get_or_compute(("ruff-report", edited.path, sha, wanted), build)
+    return report
 
 
 def _read(path: str) -> bytes | None:
@@ -269,109 +290,72 @@ def _read(path: str) -> bytes | None:
 # --- the consumers and their codes ----------------------------------------------------------------
 
 
-def enabled_consumers(ev: CanonicalEvent, cfg: GuardConfig) -> dict[str, HookRecord]:
-    """The enabled hooks whose ``post_tool_use`` handler reads D1 and whose matcher takes ``ev``.
+def enabled_consumers(ev: CanonicalEvent, ctx: HandlerContext) -> dict[str, HookRecord]:
+    """The ruff consumers the dispatcher runs on ``ev``: D1 serves exactly these.
+
+    The selection's own tests: a builtin of :data:`RUFF_CONSUMERS` on
+    ``post_tool_use``, this harness in its ``supports``, not switched off by
+    ``PLAYBOOK_HOOKS_DISABLE``, its matcher taking the event. A hook D1 served
+    but the dispatcher skipped would burn its findings' dedupe keys unseen.
 
     Example::
 
-        >>> sorted(enabled_consumers(ev, cfg))  # doctest: +SKIP
-        ['post-edit-ruff-format']
+        >>> sorted(enabled_consumers(ev, ctx))  # doctest: +SKIP
+        ['error-handling-lint-feedback', 'post-edit-ruff-format']
     """
     from coding_agent_playbook.hook_runtime._selection import matcher_accepts
 
     found: dict[str, HookRecord] = {}
-    for hook_id, record in cfg.hooks.items():
+    for hook_id, record in ctx.cfg.hooks.items():
         spec = record.handlers.get(EventName.POST_TOOL_USE)
         if spec is None or spec.kind != "builtin" or spec.name not in RUFF_CONSUMERS:
+            continue
+        if ev.harness.value not in record.supports:
+            continue
+        if ctx.hatches.skips(hook_id, mandatory=record.mandatory):
             continue
         if matcher_accepts(record.matcher.get(EventName.POST_TOOL_USE), ev):
             found[hook_id] = record
     return found
 
 
-def extended_codes(consumers: Mapping[str, HookRecord]) -> frozenset[str]:
-    """``U``: the sorted union of the consumers' ``lint_codes`` (D1's ``--extend-select``).
+def accepts_file(record: HookRecord, edited: EditedFile) -> bool:
+    """Whether ``record``'s ``post_tool_use`` paths take ``edited`` (no paths: every file).
+
+    The event matcher passes when *any* written path matches; a multi-file
+    write needs the per-file answer.
+    """
+    spec = record.matcher.get(EventName.POST_TOOL_USE)
+    return spec is None or not spec.paths.patterns or spec.paths.matches(edited.key)
+
+
+def lint_codes_of(record: HookRecord) -> frozenset[str]:
+    """The codes a consumer asks D1 to add: its ``config["lint_codes"]`` (list or ``{warn}``).
 
     Example::
 
-        >>> extended_codes({})
+        >>> lint_codes_of(post_edit_record)  # doctest: +SKIP
+        frozenset()
+    """
+    spec = record.handlers.get(EventName.POST_TOOL_USE)
+    listed = None if spec is None else spec.config.get("lint_codes")
+    if isinstance(listed, Mapping):
+        listed = listed.get("warn")
+    if not isinstance(listed, list):
+        return frozenset()
+    return frozenset(code for code in listed if isinstance(code, str))
+
+
+def file_codes(consumers: Mapping[str, HookRecord], edited: EditedFile) -> frozenset[str]:
+    """``U`` for ``edited``: the union of the codes of the consumers whose paths take it.
+
+    Example::
+
+        >>> file_codes({}, edited)  # doctest: +SKIP
         frozenset()
     """
     codes: set[str] = set()
     for record in consumers.values():
-        spec = record.handlers[EventName.POST_TOOL_USE]
-        listed = spec.config.get("lint_codes")
-        if isinstance(listed, Mapping):
-            listed = listed.get("warn")
-        if isinstance(listed, list):
-            codes.update(code for code in listed if isinstance(code, str))
+        if accepts_file(record, edited):
+            codes.update(lint_codes_of(record))
     return frozenset(codes)
-
-
-# --- 7. partition, dedupe, cap, emit --------------------------------------------------------------
-
-
-@dataclass(frozen=True, slots=True)
-class BucketRow:
-    """One §E.3 bucket: the hook that reports it, its line prefix, which diagnostics it claims."""
-
-    hook_id: str
-    prefix: str
-    claims: Callable[[RuffDiagnostic, frozenset[str]], bool]
-
-
-def _project_selected(diagnostic: RuffDiagnostic, extended: frozenset[str]) -> bool:
-    """D1 adds only ``extended`` to the project's own selection: any other code is CI's."""
-    return diagnostic.is_syntax_error or diagnostic.code not in extended
-
-
-#: First match wins; the rule-linked lint hooks (K7 step 3) and §F's companions add rows.
-BUCKETS: Final[tuple[BucketRow, ...]] = (
-    BucketRow(POST_EDIT_HOOK_ID, "ruff (CI fails on this):", _project_selected),
-)
-
-
-def bucket_lines(
-    ctx: HandlerContext,
-    reports: Sequence[FileReport],
-    row: BucketRow,
-    *,
-    enabled: frozenset[str],
-    extended: frozenset[str],
-    cap: int,
-) -> list[str]:
-    """``row``'s lines, by file then line number: each new this session, at most ``cap``.
-
-    A diagnostic belongs to the first enabled row claiming it.
-
-    Example::
-
-        >>> bucket_lines(ctx, reports, BUCKETS[0], enabled=frozenset({POST_EDIT_HOOK_ID}),
-        ...     extended=frozenset(), cap=5)  # doctest: +SKIP
-        ['ruff (CI fails on this): "src/app.py:3 F821 Undefined name `x`"']
-    """
-    rows = [r for r in BUCKETS if r.hook_id in enabled]
-    mine = [
-        (report, d)
-        for report in sorted(reports, key=lambda r: r.edited.rel)
-        for d in sorted(report.diagnostics, key=lambda d: d.row)
-        if next((r for r in rows if r.claims(d, extended)), None) is row
-    ]
-    lines: list[str] = []
-    for report, diagnostic in mine:
-        if len(lines) == cap:
-            break  # before the dedupe: a line past the cap is not marked as shown
-        if ctx.session.once(_dedupe_key(report, diagnostic)):
-            lines.append(f"{row.prefix} {_shown(report, diagnostic)}")
-    return lines
-
-
-def _dedupe_key(report: FileReport, diagnostic: RuffDiagnostic) -> str:
-    parts = (report.edited.rel, diagnostic.label, report.line_text(diagnostic.row))
-    digest = hashlib.sha256("\0".join(parts).encode("utf-8", "surrogatepass")).hexdigest()
-    return f"ruff:{digest[:16]}"
-
-
-def _shown(report: FileReport, diagnostic: RuffDiagnostic) -> str:
-    text = f"{report.edited.rel}:{diagnostic.row} {diagnostic.label} {diagnostic.message}"
-    return quote_data(text, _LINE_CHARS)

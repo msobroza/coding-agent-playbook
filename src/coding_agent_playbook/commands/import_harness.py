@@ -166,6 +166,7 @@ def _rule_from_entry(path: Path, entry: ManifestEntry) -> Rule:
             applies_if=dict(entry.applies_if),
             priority=entry.priority if entry.priority is not None else 50,
             tags=list(entry.tags),
+            lint_codes=dict(entry.lint_codes),
         ),
         body=body,
         template_body=body,

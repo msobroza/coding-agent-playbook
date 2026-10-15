@@ -15,12 +15,13 @@ from typing import TYPE_CHECKING, Final
 import pytest
 
 from coding_agent_playbook.commands import validate as _validate
+from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
-from coding_agent_playbook.hook_runtime.pin import write_machine_pins
 from coding_agent_playbook.hook_runtime.registry import load_builtin
-from tests.hook_runtime.fakes import FakeGit, FakeRuff, ruff_row
-from tests.hooks.pack_repo import PackRepo, engine_hook, engine_hook_paths
+from tests.hook_runtime.fakes import FakeRuff, ruff_row
+from tests.hooks.pack_repo import PackRepo, engine_hook, engine_hook_paths, engine_rules
+from tests.hooks.ruff_kit import context, edit, head_git, pin_ruff, value_of
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.simulate import SimulateReport
     from tests.hook_payloads import HookPayloadCase
+    from tests.hook_runtime.fakes import FakeGit
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
@@ -42,15 +44,6 @@ PREFIX: Final = "ruff (CI fails on this): "
 
 
 @pytest.fixture
-def ruff_program(tmp_path: Path) -> Path:
-    """The stub file ``machine.json`` pins as ruff (FakeRuff answers its calls)."""
-    program = tmp_path / "tools" / "ruff"
-    program.parent.mkdir()
-    program.write_bytes(b"#!/bin/sh\n")
-    return program
-
-
-@pytest.fixture
 def repo(pack_repo: PackRepo, ruff_program: Path) -> PackRepo:
     """post-edit-ruff-format on, the project selecting E/F/I/UP, ruff pinned."""
     pack_repo.write("pyproject.toml", PYPROJECT)
@@ -61,29 +54,21 @@ def repo(pack_repo: PackRepo, ruff_program: Path) -> PackRepo:
 
 
 def _pin(repo: PackRepo, program: Path) -> None:
-    git_dir = str(repo.root / ".git")
-    write_machine_pins(tools={"ruff": [str(program)]}, engine_version="0.1.0a0", git_dir=git_dir)
+    pin_ruff(repo, program)
 
 
 def _git(head: str | None = HEAD, rel: str = APP) -> FakeGit:
-    return FakeGit(head_blobs={} if head is None else {rel: head.encode()})
+    return head_git(head, rel)
 
 
 def _edit(
     repo: PackRepo, deps: RuntimeDeps, rel: str = APP, *, state: Path | None = None
 ) -> SimulateReport:
-    path = rel if rel.startswith("/") else str(repo.root / rel)
-    tool_input = {"file_path": path, "old_string": "a", "new_string": "b"}
-    payload = repo.tool_payload("Edit", tool_input, event=EventName.POST_TOOL_USE)
-    return repo.simulate(payload, deps, event=EventName.POST_TOOL_USE, state=state)
+    return edit(repo, deps, rel, state=state)
 
 
-def _context(report: SimulateReport) -> list[str]:
-    return list(report.trace.combined.context)
-
-
-def _value(args: tuple[str, ...], flag: str) -> str:
-    return args[args.index(flag) + 1]
+_context = context
+_value = value_of
 
 
 # --- M1 / M2: anti-churn ---------------------------------------------------------------------
@@ -243,6 +228,77 @@ def test_syntax_error_code_null_lands_in_bucket_1(
 
     assert _context(report) == [
         f"{PREFIX}\"src/app.py:5 syntax-error Expected ')', found newline\""
+    ]
+
+
+# --- the shared-call invariant: every consumer on, one D1 ------------------------------------
+
+#: Every §E.3 ruff consumer shipped so far.
+ALL_CONSUMERS: Final = (
+    HOOK_ID,
+    "error-handling-lint-feedback",
+    "typing-lint-feedback",
+    "pytest-conventions-feedback",
+)
+
+
+def _install_all(repo: PackRepo, program: Path, select: str = '["E", "F", "I", "UP"]') -> None:
+    repo.write("pyproject.toml", f"[tool.ruff.lint]\nselect = {select}\n")
+    facts = {"python_version": "3.12", "frameworks": {"pytest": ">=8"}}
+    repo.install_pack(list(ALL_CONSUMERS), rules=engine_rules(), detect=DetectInputs(facts=facts))
+    _pin(repo, program)
+
+
+@pytest.mark.parametrize(("rel", "consumers"), [("tests/test_app.py", 4), ("src/app.py", 3)])
+def test_one_d1_argv_per_event_with_all_consumers_enabled(
+    pack_repo: PackRepo,
+    deps: Callable[..., RuntimeDeps],
+    ruff_program: Path,
+    rel: str,
+    consumers: int,
+) -> None:
+    """§E.3 Done-when: exactly one D1 per edited file, whatever the number of consumers."""
+    _install_all(pack_repo, ruff_program)
+    pack_repo.write(rel, "x = 1\n")
+    ruff = FakeRuff()
+
+    report = _edit(pack_repo, deps(proc=ruff, git=_git(None, rel)), rel)
+
+    [d1] = ruff.argvs("d1")
+    extended = _value(d1, "--extend-select").split(",")
+    ran = [o.hook_id for o in report.trace.combined.outcomes]
+    assert len(ran) == consumers and ran[0] == HOOK_ID  # M1/M2 first, then the lint hooks
+    assert ruff.kinds() == ["fix", "format", "d1"]
+    assert ("PT009" in extended) is rel.startswith("tests/")  # U is per file
+    assert {"E722", "ANN001", "UP046"} <= set(extended)
+
+
+def test_eight_line_total_cap_bucket_1_first(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], ruff_program: Path
+) -> None:
+    """At most 5 lines from bucket 1 and 8 per event: bucket 1 first, then by line.
+
+    The cap keeps lines 8-10 and drops line 11; each hook then shows its own
+    lines, in handler order (post-edit first).
+    """
+    _install_all(pack_repo, ruff_program, select='["F"]')
+    pack_repo.write(APP, "".join(f"v{i} = {i}\n" for i in range(12)))
+    rows = [ruff_row("F821", row, f"Undefined name `u{row}`") for row in range(7, 0, -1)]
+    rows += [
+        ruff_row("TRY401", 11, "Redundant exception object"),
+        ruff_row("S110", 10, "`try`-`except`-`pass` detected"),
+        ruff_row("B006", 9, "Do not use mutable data structures for argument defaults"),
+        ruff_row("BLE001", 8, "Do not catch blind exception"),
+    ]
+
+    report = _edit(pack_repo, deps(proc=FakeRuff(diagnostics=rows), git=_git(None)))
+
+    shown = [(line.split(":")[0], line.split(":")[2].split()[0]) for line in _context(report)]
+    assert shown == [
+        *[("ruff (CI fails on this)", str(row)) for row in range(1, 6)],
+        ("rule python-error-handling", "8"),
+        ("rule python-error-handling", "10"),
+        ("rule python-typing", "9"),
     ]
 
 

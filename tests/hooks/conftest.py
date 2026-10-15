@@ -58,3 +58,12 @@ def pack_repo(tmp_path: Path) -> PackRepo:
 def real_proc() -> SubprocessProc:
     """The real ``ProcPort``: only the fresh-interpreter import probes spawn."""
     return SubprocessProc()
+
+
+@pytest.fixture
+def ruff_program(tmp_path: Path) -> Path:
+    """The stub file ``machine.json`` pins as ruff (``FakeRuff`` answers its calls)."""
+    program = tmp_path / "tools" / "ruff"
+    program.parent.mkdir()
+    program.write_bytes(b"#!/bin/sh\n")
+    return program

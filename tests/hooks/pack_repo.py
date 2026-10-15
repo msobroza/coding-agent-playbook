@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import coding_agent_playbook
 from coding_agent_playbook._guard_config_ruff import read_project_ruff_selection
+from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
@@ -39,7 +40,7 @@ from coding_agent_playbook.hook_runtime.simulate import SimulateArgs, run
 from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
-from coding_agent_playbook.types import Hook, Prompt
+from coding_agent_playbook.types import Hook, Prompt, Rule
 from tests.hook_payloads import PROJECT_DIR, HookPayloadCase
 from tests.hook_runtime.guard_repo import GuardRepo
 
@@ -78,16 +79,32 @@ def engine_prompts() -> list[Prompt]:
     return [Prompt.from_markdown(path, ENGINE_PACKAGE) for path in paths]
 
 
+def engine_rules() -> list[Rule]:
+    """Every engine rule as shipped (the linked rules of the §E.3 lint hooks among them)."""
+    root = ENGINE_HOOKS.parent / "rules"
+    paths = sorted(p for p in root.rglob("*") if p.name.endswith((".md", ".md.j2")))
+    return [Rule.from_markdown(path, ENGINE_PACKAGE) for path in paths]
+
+
 def resolve_engine_hooks(
-    hook_ids: Iterable[str], root: Path, *, per_hook: Mapping[str, dict[str, Any]] | None = None
+    hook_ids: Iterable[str],
+    root: Path,
+    *,
+    per_hook: Mapping[str, dict[str, Any]] | None = None,
+    rules: Sequence[Rule] = (),
+    facts: Mapping[str, Any] | None = None,
 ) -> list[ResolvedHook]:
-    """The engine hooks ``hook_ids`` through the real effective view, ``[hooks]`` on."""
+    """The engine hooks ``hook_ids`` through the real effective view, ``[hooks]`` on.
+
+    ``rules`` are the merged rules a ``linked_rule`` resolves against (its
+    ``applies_if`` gate and ``lint_codes``), ``facts`` the detector facts.
+    """
     view = resolve_effective_hooks(
         [engine_hook(hook_id) for hook_id in hook_ids],
-        [],
+        list(rules),
         HooksConfig(enabled=True, tiers=("default", "opt-in"), per_hook=dict(per_hook or {})),
         GuardrailsConfig(),
-        cast("Facts", {}),
+        cast("Facts", dict(facts or {})),
         root,
         adapters_enabled=["claude_code", "opencode"],
         handlers=RegistryCatalog(),
@@ -132,16 +149,24 @@ class PackRepo(GuardRepo):
         auto_sync: bool = False,
         detect: DetectInputs | None = None,
         prompts: Sequence[Prompt] = (),
+        rules: Sequence[Rule] = (),
+        extra_tables: Mapping[str, Any] | None = None,
     ) -> bytes:
         """Render ``guard_config.json`` for the engine hooks ``hook_ids``; vouch for it in the lock.
 
         The decision log is switched on (guard-decision-log would, K9), so a test
         can read what the dispatch recorded, e.g. that canary lines are tagged.
-        ``auto_sync`` is ``[hooks] auto_sync``; ``detect`` the facts and rows;
-        ``prompts`` the rendered prompts (their ``write_scope``, §E.3). The
-        ``ruff`` table is read from the repository's own ruff config, as sync does.
+        ``auto_sync`` is ``[hooks] auto_sync``; ``detect`` the facts and rows
+        (its facts also resolve ``applies_if`` and a linked rule's ``lint_codes``);
+        ``prompts`` the rendered prompts (their ``write_scope``, §E.3); ``rules``
+        the rules a ``linked_rule`` names. The ``ruff`` table and the toolchain
+        inputs are read from the repository, as sync does; ``extra_tables``
+        replace top-level tables (e.g. a ``stop_gate`` with a typecheck stage).
         """
-        hooks = resolve_engine_hooks(hook_ids, self.root, per_hook=per_hook)
+        detect = detect or DetectInputs()
+        hooks = resolve_engine_hooks(
+            hook_ids, self.root, per_hook=per_hook, rules=rules, facts=detect.facts
+        )
         protect = ProtectInputs(rows, fixture_output_dirs(self.root), packages)
         inputs = GuardConfigInputs(
             hooks=hooks,
@@ -149,11 +174,13 @@ class PackRepo(GuardRepo):
             guardrails=GuardrailsConfig(),
             engine_version="0.1.0a0",
             protected=protect,
-            detect=detect or DetectInputs(),
+            detect=detect,
             prompts=prompts,
             ruff=read_project_ruff_selection(self.root),
+            toolchain=read_toolchain_inputs(self.root, detect.facts),
         )
         document = render_guard_config(inputs)
+        document.update(extra_tables or {})
         document["logging"]["decisions"] = True
         data = serialize_guard_config(document)
         path = self.root / GUARD_CONFIG_REL

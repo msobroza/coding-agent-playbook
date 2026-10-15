@@ -468,6 +468,72 @@ def test_per_event_handlers_each_get_the_layers() -> None:
     assert resolved.handlers["pre_tool_use"].config == {"rows": ["b"]}
 
 
+# --- the linked rule's lint_codes (§A.7 item 3) ---------------------------------------
+
+_TYPING_CODES: dict[str, Any] = {
+    "warn": ["ANN001", "B006"],
+    "when": [{"applies_if": {"python_version": ">=3.12"}, "warn": ["UP046", "B006"]}],
+}
+
+
+def _linted_rule(lint_codes: dict[str, Any], **fields: Any) -> Rule:
+    rule = _rule("python-typing", **fields)
+    rule.frontmatter.lint_codes = copy.deepcopy(lint_codes)
+    return rule
+
+
+@pytest.mark.parametrize(
+    ("python_version", "codes"),
+    [("3.11", ["ANN001", "B006"]), ("3.12", ["ANN001", "B006", "UP046"])],
+)
+def test_linked_rule_lint_codes_merged_into_handler_config(
+    python_version: str, codes: list[str]
+) -> None:
+    """The rule is the one source: its ``when`` blocks resolve at sync against the facts."""
+    hook = sample_hook(linked_rule="python-typing", handler={"builtin": "guard_x"})
+    facts: Facts = {"python_version": python_version}
+
+    config = _config(_resolve([hook], rules=[_linted_rule(_TYPING_CODES)], facts=facts))
+
+    assert config == {"lint_codes": {"rule": "python-typing", "warn": codes}}
+
+
+def test_lint_codes_replace_any_layer_value_and_skip_external_handlers() -> None:
+    builtin = sample_hook(linked_rule="python-typing", handler={"builtin": "guard_x"})
+    external = sample_hook(
+        OVERLAY,
+        id="ext",
+        linked_rule="python-typing",
+        handler={"command": "python", "script": "scripts/check.py"},
+    )
+    cfg = HooksConfig(enabled=True, per_hook={"guard-x": {"lint_codes": ["E501"]}})
+
+    view = _resolve([builtin, external], cfg=cfg, rules=[_linted_rule({"warn": ["E722"]})])
+
+    configs = {hook.id: hook.handlers["pre_tool_use"].config for hook in view.resolved}
+    assert configs["guard-x"]["lint_codes"] == {"rule": "python-typing", "warn": ["E722"]}
+    assert "lint_codes" not in configs["ext"]
+
+
+def test_invalid_when_predicate_contributes_nothing() -> None:
+    codes = {"warn": ["E722"], "when": [{"applies_if": {"pyver": "3"}, "warn": ["UP046"]}]}
+    hook = sample_hook(linked_rule="python-typing", handler={"builtin": "guard_x"})
+
+    config = _config(_resolve([hook], rules=[_linted_rule(codes)]))
+
+    assert config["lint_codes"]["warn"] == ["E722"]
+
+
+def test_hook_not_rendered_when_linked_rule_filtered() -> None:
+    """A rule filtered out at sync takes its lint hook with it (no codes, no record)."""
+    rule = _linted_rule(_TYPING_CODES, applies_if={"python_version": ">=3.11"})
+    hook = sample_hook(linked_rule="python-typing", handler={"builtin": "guard_x"})
+
+    skipped = _only_skip(_resolve([hook], rules=[rule], facts={"python_version": "3.10"}))
+
+    assert skipped.reason == "linked rule 'python-typing' not applicable"
+
+
 # --- purity ------------------------------------------------------------------------
 
 

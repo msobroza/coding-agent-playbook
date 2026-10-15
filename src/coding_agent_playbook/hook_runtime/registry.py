@@ -80,6 +80,8 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         "stop_ci_parity_gate": f"{_HANDLERS}.stop_ci_parity_gate",
         "prompt_scope_guard": f"{_HANDLERS}.prompt_scope",
         "ruff_post_edit": f"{_HANDLERS}.ruff_feedback",
+        "ruff_lint_feedback": f"{_HANDLERS}.ruff_feedback",
+        "toolchain_hint": f"{_HANDLERS}.toolchain",
     }
 )
 #: The only handlers that may rewrite the file the tool just edited (specs/prK-hook-pack.md

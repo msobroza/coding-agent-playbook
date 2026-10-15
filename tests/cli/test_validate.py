@@ -123,6 +123,61 @@ def test_write_scope_requires_exactly_one_of_read_only_or_globs(
     assert "scoped.md" in out
 
 
+@pytest.mark.parametrize(
+    ("codes_yaml", "expected"),
+    [
+        ("  warn: [E722]\n  block: [S101]\n", "lint_codes: unknown key(s) ['block']"),
+        ("  warn: E722\n", "lint_codes.warn: expected a list of ruff rule codes, got 'E722'"),
+        ("  warn: [E722, e7]\n", "lint_codes.warn: 'e7' is not a ruff rule code"),
+        (
+            "  warn: [ANN001]\n  when:\n    - applies_if: {pyver: '3.12'}\n      warn: [UP046]\n",
+            "lint_codes.when[0].applies_if: ",
+        ),
+        (
+            "  warn: [ANN001]\n  when:\n    - applies_if: {python_version: '>=3.12'}\n",
+            "lint_codes.when[0]: expected exactly the keys ['applies_if', 'warn']",
+        ),
+        ("  warn: [ANN001]\n  when: {python_version: '>=3.12'}\n", "lint_codes.when: expected a"),
+        ("  {}\n", None),
+    ],
+    ids=[
+        "block_key",
+        "warn_not_list",
+        "bad_code",
+        "unknown_predicate",
+        "when_without_warn",
+        "when_not_list",
+        "empty",
+    ],
+)
+def test_lint_codes_shape_errors_are_field_precise(
+    tmp_path: Path,
+    make_synthetic_repo: Callable[..., Path],
+    capsys: pytest.CaptureFixture[str],
+    codes_yaml: str,
+    expected: str | None,
+) -> None:
+    """specs/prK-lifecycle-hooks.md §A.7: each malformed ``lint_codes`` names the field and value."""
+    repo = make_synthetic_repo(tmp_path)
+    rules_dir = repo / "playbook" / "rules"
+    rules_dir.mkdir(parents=True, exist_ok=True)
+    (rules_dir / "linted.md").write_text(
+        "---\nid: linted\nname: Linted\ndescription: d\nscope: always\n"
+        f"lint_codes:\n{codes_yaml}---\nBody\n",
+        encoding="utf-8",
+    )
+
+    rc = _validate.run(_ns(repo))
+
+    out = capsys.readouterr().out
+    if expected is None:  # an empty mapping is "no codes": valid
+        assert rc == 0, out
+        return
+    assert rc == 1
+    assert expected in out
+    assert "linted.md" in out
+
+
 def test_validate_flags_rule_calling_rule_helper(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path)
     rules_dir = repo / "playbook" / "rules"

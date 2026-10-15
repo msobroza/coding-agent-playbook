@@ -80,6 +80,10 @@ class RuleFrontmatter:
     applies_if: dict[str, Any] = field(default_factory=dict)
     priority: int = 50
     tags: list[str] = field(default_factory=list)
+    # The ruff codes a rule-linked lint hook reports (specs/prK-lifecycle-hooks.md
+    # §A.7): ``{warn: [...], when: [{applies_if, warn}]}``, resolved at sync.
+    # ``_without_empty`` drops it when ``{}``, so unlinked rules stay byte-identical.
+    lint_codes: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         # YAML parses 'key:' (blank value) as None; the dataclass default does
@@ -97,6 +101,8 @@ class RuleFrontmatter:
             self.priority = 50
         if self.tags is None:
             self.tags = []
+        if self.lint_codes is None:
+            self.lint_codes = {}
 
 
 @dataclass

@@ -12,7 +12,8 @@ layer merge produced (§A.6) into what sync renders (§C.1.3 calls it):
    events that declare none), the per-event ``on_error`` clamp, and the config
    layers after §A.6's: the handler's ``[guardrails]`` domain, then the
    consumer's ``[hooks.<hook-id>]``, each merged with the handler's key policies,
-   minus its ``relax`` keys for a mandatory hook.
+   minus its ``relax`` keys for a mandatory hook; last, a builtin's
+   ``lint_codes`` from the linked rule, its ``when`` blocks resolved (§A.7 item 3).
 
 Pure: it never mutates its inputs and never raises for a bad hook. Validate
 (H3-H21) gates sync first; a value it would reject is skipped here with a reason
@@ -27,6 +28,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook._hook_schema import HookMatcher
+from coding_agent_playbook.hook_policy.lint_codes import (
+    LINT_CODES_KEY,
+    linked_lint_config,
+    resolve_lint_codes,
+)
 from coding_agent_playbook.hook_policy.merge import NO_HANDLER_SCHEMAS, merge_config
 from coding_agent_playbook.hook_policy.override_rules import bound_handler
 from coding_agent_playbook.hook_policy.resolved import (
@@ -336,10 +342,26 @@ def _resolve_handler(
     for label, layer in _consumer_layers(hook, handler, inputs):
         config = merge_config(config, _without_relaxed(layer, specs, hook, label, warnings), specs)
     if handler.builtin is not None:
+        config.update(_linked_lint_codes(hook, inputs))
         return _builtin(handler.builtin, config, inputs.handlers)
     return ResolvedHandler(
         "external", argv=external_argv(hook.frontmatter.id, handler), config=config
     )
+
+
+def _linked_lint_codes(hook: Hook, inputs: _Inputs) -> dict[str, Any]:
+    """``{"lint_codes": ...}`` from the linked rule's ``lint_codes`` (§A.7 item 3), else ``{}``.
+
+    The rule is the one source: it replaces any value, and the key is no
+    handler's ``CONFIG_SCHEMA`` key, so no layer can set it.
+    """
+    rule = inputs.rules.get(hook.frontmatter.linked_rule or "")
+    if rule is None or not rule.frontmatter.lint_codes:
+        return {}
+    codes = resolve_lint_codes(
+        rule.frontmatter.lint_codes, inputs.facts, lambda p, _facts: _predicate_holds(p, inputs)
+    )
+    return {LINT_CODES_KEY: linked_lint_config(rule.frontmatter.id, codes)}
 
 
 def _builtin(name: str, config: dict[str, Any], handlers: HandlerCatalog | None) -> ResolvedHandler:

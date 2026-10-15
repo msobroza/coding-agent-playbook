@@ -374,6 +374,7 @@ class AgentHarnessAdapter(Adapter):
                 applies_if=dict(fm.applies_if),
                 tags=list(fm.tags),
                 version=fm.version,
+                lint_codes=dict(fm.lint_codes),
             )
         )
         return target

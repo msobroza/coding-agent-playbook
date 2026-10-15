@@ -8,6 +8,8 @@ globs:
   - "**/*.py"
 priority: 55
 tags: [python, errors]
+lint_codes:
+  warn: [E722, BLE001, S110, S112, B904, TRY400, TRY401, S101]
 ---
 
 # Python error handling

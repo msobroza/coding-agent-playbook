@@ -66,15 +66,19 @@ def _report(repo: Path, capsys: pytest.CaptureFixture[str]) -> str:
 #: The engine pack's hooks shipped so far (Tracks K5, K6, K7), in check's sorted order.
 _ENGINE_PACK = (
     "control-plane-guard",
+    "error-handling-lint-feedback",
     "eval-task-authoring-lint",
     "guard-eval-fixtures",
     "guard-generated-outputs",
     "post-edit-ruff-format",
     "prompt-write-scope-guard",
+    "pytest-conventions-feedback",
     "resync-on-detector-input-change",
     "session-start-playbook-briefing",
     "stop-ci-parity-gate",
     "stop-drift-and-orphan-gate",
+    "toolchain-missing-hint",
+    "typing-lint-feedback",
     "validate-then-sync-on-canonical-edit",
 )
 _OPT_IN_SKIP = (
@@ -100,11 +104,14 @@ def test_hooks_block_labels_per_adapter(
 
     assert lines == [
         "  [hooks]: on",
-        "  Hooks (12 on / 14 total):",
+        "  Hooks (15 on / 18 total):",
         # The engine pack (Track K5): OpenCode has no notebook tool, so guard-generated-outputs
         # is degraded there; control-plane-guard matches no notebook edit.
         "    [✓] control-plane-guard (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
+        # K7: a rule-linked lint hook has no body (its rule carries the practice).
+        "    [✓] error-handling-lint-feedback (agents_md: —, claude_code: enforced, "
+        "continue: —, opencode: enforced)",
         "    [✓] eval-task-authoring-lint (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
         _OPT_IN_SKIP.format(hook_id="guard-eval-fixtures"),
@@ -120,6 +127,8 @@ def test_hooks_block_labels_per_adapter(
         # Claude Code only (K7): the native read-only constraints cover OpenCode.
         "    [✓] prompt-write-scope-guard (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: advisory)",
+        # The synthetic repo detects no pytest: the linked rule, and so the hook, is off.
+        "    [✗] pytest-conventions-feedback (skipped: linked rule 'pytest' not applicable)",
         "    [✓] resync-on-detector-input-change (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
         # No advisory body (a hookless harness has no heartbeat); OpenCode's session_start
@@ -130,6 +139,11 @@ def test_hooks_block_labels_per_adapter(
         "continue: advisory, opencode: degraded)",
         "    [✓] stop-drift-and-orphan-gate (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: degraded)",
+        # OpenCode has no tool-failure event (OQ-43): reachable, but weaker.
+        "    [✓] toolchain-missing-hint (agents_md: advisory, claude_code: enforced, "
+        "continue: advisory, opencode: degraded)",
+        "    [✓] typing-lint-feedback (agents_md: —, claude_code: enforced, continue: —, "
+        "opencode: enforced)",
         "    [✓] validate-then-sync-on-canonical-edit (agents_md: advisory, "
         "claude_code: enforced, continue: advisory, opencode: enforced)",
     ]
@@ -145,10 +159,10 @@ def test_hooks_block_when_the_table_is_absent(
 
     assert lines == [
         "  [hooks]: off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')",
-        "  Hooks (0 on / 12 total):",
-        *_off(_ENGINE_PACK[:4]),
+        "  Hooks (0 on / 16 total):",
+        *_off(_ENGINE_PACK[:5]),
         "    [✗] guard-x (skipped: hooks are off)",
-        *_off(_ENGINE_PACK[4:]),
+        *_off(_ENGINE_PACK[5:]),
     ]
 
 
@@ -165,7 +179,7 @@ def test_hooks_block_when_hooks_are_switched_off_or_unreadable(
 
     assert off_lines == [
         "  [hooks]: off — [hooks] enabled is not true",
-        "  Hooks (0 on / 11 total):",
+        "  Hooks (0 on / 15 total):",
         *_off(_ENGINE_PACK),
     ]
     assert bad_lines[-1] == "  [hooks] cannot be read; run 'playbook validate'."

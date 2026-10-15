@@ -5,7 +5,8 @@ package so each concern stays under the file-size budget; import from here,
 not from the submodules. Today it carries the one home of the event, tool-class
 and adapter-support tables (:mod:`.tables`), the additive layer merge
 (:mod:`.merge`, with the H14 override rules in :mod:`.override_rules`), the
-effective view (:mod:`.effective`) with its ``guard_config.json`` hook records
+effective view (:mod:`.effective`, a linked rule's ``lint_codes`` resolved by
+:mod:`.lint_codes`) with its ``guard_config.json`` hook records
 (:mod:`.resolved`), their advisory projection (:mod:`.advisory`) and their
 per-adapter labels (:mod:`.labels`), and the
 trust contract ``playbook validate`` enforces: per hook (:mod:`.contract`),
@@ -41,6 +42,11 @@ from coding_agent_playbook.hook_policy.handler_catalog import (
     registry_findings,
 )
 from coding_agent_playbook.hook_policy.labels import HOOK_LABELS, HookLabel, adapter_label
+from coding_agent_playbook.hook_policy.lint_codes import (
+    LINT_CODES_KEY,
+    linked_lint_config,
+    resolve_lint_codes,
+)
 from coding_agent_playbook.hook_policy.merge import (
     NO_HANDLER_SCHEMAS,
     ConfigKeySpec,
@@ -87,6 +93,7 @@ __all__ = [
     "HOOK_LABELS",
     "HOOK_SCRIPTS_DIR",
     "HOOK_SUPPORT",
+    "LINT_CODES_KEY",
     "MATCHER_VALUES",
     "NO_HANDLER_SCHEMAS",
     "ON_ERROR_STRENGTH",
@@ -119,9 +126,11 @@ __all__ = [
     "effective_applies_if",
     "enforcement_line",
     "enforcement_targets",
+    "linked_lint_config",
     "merge_config",
     "merge_hook_layers",
     "registry_findings",
     "resolve_effective_hooks",
+    "resolve_lint_codes",
     "split_hook_layers",
 ]

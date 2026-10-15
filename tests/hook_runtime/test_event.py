@@ -19,6 +19,7 @@ from coding_agent_playbook.hook_runtime.event import (
     SESSION_ID_MAX_CHARS,
     STOP_MESSAGE_MAX_CHARS,
     TOOL_ERROR_MAX_CHARS,
+    TOOL_OUTPUT_TAIL_CHARS,
     CanonicalEvent,
     ContentFragment,
     EventName,
@@ -164,6 +165,15 @@ def test_tool_response_error_is_capped_to_2000_chars() -> None:
 
     assert response.error == "e" * TOOL_ERROR_MAX_CHARS
     assert ToolResponse(ok=True).error is None
+
+
+def test_tool_response_output_keeps_its_last_8_kib() -> None:
+    """The tail: a later segment's ``command not found`` lands there (§E.3 toolchain hint)."""
+    response = ToolResponse(ok=True, output="o" * TOOL_OUTPUT_TAIL_CHARS + "tail")
+
+    assert response.output is not None and response.output.endswith("tail")
+    assert len(response.output) == TOOL_OUTPUT_TAIL_CHARS
+    assert ToolResponse(ok=True).output is None
 
 
 # --- ToolCall -------------------------------------------------------------------------

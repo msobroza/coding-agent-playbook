@@ -231,6 +231,32 @@ def test_rule_markdown_roundtrip_with_blank_optional_fields(tmp_path):
     assert Rule.from_markdown(path, "pkg") == rule
 
 
+def test_rule_lint_codes_none_coerced_and_dropped_when_empty(tmp_path: Path) -> None:
+    """specs/prK-lifecycle-hooks.md §A.7: blank ``lint_codes:`` is ``{}`` and never rendered."""
+    blank = RuleFrontmatter(
+        id="x",
+        name="x",
+        description="x",
+        scope="always",
+        lint_codes=None,  # type: ignore[arg-type]
+    )
+    path = tmp_path / "rule.md.j2"
+    path.write_text(RULE_MD, encoding="utf-8")
+    rule = Rule.from_markdown(path, "pkg")
+    unchanged = rule.to_markdown()
+    rule.frontmatter.lint_codes = {
+        "warn": ["ANN001", "B006"],
+        "when": [{"applies_if": {"python_version": ">=3.12"}, "warn": ["UP046"]}],
+    }
+
+    path.write_text(rule.to_markdown(), encoding="utf-8")
+
+    assert blank.lint_codes == {}
+    assert "lint_codes" not in unchanged
+    assert Rule.from_markdown(path, "pkg") == rule
+    assert Rule.from_dict(rule.to_dict()) == rule
+
+
 # ---------------------------------------------------------------------------
 # Prompt and PromptFrontmatter
 # ---------------------------------------------------------------------------

@@ -27,7 +27,9 @@ coordinator's table from ``hook_registrations.stop_gate``: its stage records,
 budget and verify commands, also machine-independent. ``ruff`` (K7) is the
 repo's own ruff selection and the safe-fix rules the post-edit pipeline may
 apply (``_guard_config_ruff``); the pinned ruff's version-specific facts live
-in ``machine.json`` instead.
+in ``machine.json`` instead. toolchain-missing-hint's install hint and
+pytest-conventions-feedback's asyncio flag are derived from the repo's
+pyproject into those hooks' config (``_guard_config_toolchain``).
 """
 
 from __future__ import annotations
@@ -54,6 +56,11 @@ from coding_agent_playbook._guard_config_protect import (
     resource_root_ids,
 )
 from coding_agent_playbook._guard_config_ruff import RuffSelection, ruff_table
+from coding_agent_playbook._guard_config_toolchain import (
+    ToolchainInputs,
+    derived_hook_config,
+    with_derived_config,
+)
 from coding_agent_playbook._sentinel import SENTINEL
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.hook_policy import HOOK_SCRIPTS_DIR
@@ -166,7 +173,9 @@ class GuardConfigInputs:
     the detector facts and applicability rows (§E.0.5); ``prompts`` the
     rendered prompts, whose ``write_scope`` becomes prompt-write-scope-guard's
     ``scopes`` (specs/prK-hook-pack.md §E.3); ``ruff`` the repo's ruff
-    selection (``read_project_ruff_selection``).
+    selection (``read_project_ruff_selection``); ``toolchain`` the hook config
+    derived from its pyproject (``read_toolchain_inputs``: the install hint,
+    pytest's asyncio marks).
 
     Example::
 
@@ -183,6 +192,7 @@ class GuardConfigInputs:
     detect: DetectInputs = field(default_factory=DetectInputs)
     prompts: Sequence[Prompt] = ()
     ruff: RuffSelection = field(default_factory=RuffSelection)
+    toolchain: ToolchainInputs = field(default_factory=ToolchainInputs)
 
 
 @dataclass(frozen=True)
@@ -211,10 +221,14 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
     cfg = inputs.hooks_config
     on = {hook.id for hook in inputs.hooks}
     scopes = prompt_scopes(inputs.prompts)
+    derived = derived_hook_config(inputs.toolchain)
     return {
         "schema_version": GUARD_CONFIG_SCHEMA,
         "engine_version": inputs.engine_version,
-        "hooks": {hook.id: with_prompt_scopes(hook.to_json(), scopes) for hook in inputs.hooks},
+        "hooks": {
+            hook.id: with_derived_config(with_prompt_scopes(hook.to_json(), scopes), derived)
+            for hook in inputs.hooks
+        },
         "deadlines_ms": resolved_deadlines_ms(inputs.hooks),
         "unattended_ask": cfg.unattended_ask,
         "logging": {

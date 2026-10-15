@@ -34,6 +34,7 @@ from coding_agent_playbook._guard_config_ruff import (
     read_project_ruff_selection,
     ruff_candidate_codes,
 )
+from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.claude_settings import (
     CLAUDE_SETTINGS_PATH,
@@ -200,6 +201,7 @@ def write_runtime_outputs(
         detect=_detect_inputs(ctx, hooks),
         prompts=prompts,
         ruff=read_project_ruff_selection(ctx.repo_root),
+        toolchain=read_toolchain_inputs(ctx.repo_root, ctx.facts),
     )
     path = write_guard_config(out_root, render_guard_config(inputs))
     recorder.record([path], Provenance(kind="runtime"))

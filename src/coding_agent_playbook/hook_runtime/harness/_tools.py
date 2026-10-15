@@ -132,7 +132,7 @@ def build_tool_call(
         write_paths=write_paths,
         content=content,
         mcp_server=_mcp_server(payload, name) if classes[0] is ToolClass.MCP else None,
-        response=_response(payload, ev.name),
+        response=_response(payload, ev.name, shell=classes[0] is ToolClass.SHELL),
         raw_input=tool_input,
         shell=shell,
     )
@@ -220,12 +220,17 @@ def _mcp_server(payload: Payload, name: str) -> str | None:
     return parts[1] if len(parts) >= 3 and parts[1] else None
 
 
-def _response(payload: Payload, event: EventName) -> ToolResponse | None:
-    """What a post event reports about the finished call; ``None`` before it ran."""
+def _response(payload: Payload, event: EventName, *, shell: bool) -> ToolResponse | None:
+    """What a post event reports about the finished call; ``None`` before it ran.
+
+    A successful shell call keeps its output text (only a shell's: a Read's
+    response is file content no hook needs).
+    """
     if event is EventName.POST_TOOL_USE:
         output = payload.get("tool_response")
         interrupted = isinstance(output, dict) and output.get("interrupted") is True
-        return ToolResponse(ok=True, is_interrupt=interrupted)
+        text = _shell_output(output) if shell else None
+        return ToolResponse(ok=True, is_interrupt=interrupted, output=text)
     if event is EventName.POST_TOOL_USE_FAILURE:
         error = opt_str(payload, "error")
         match = _EXIT_CODE.match(error or "")
@@ -236,3 +241,14 @@ def _response(payload: Payload, event: EventName) -> ToolResponse | None:
             is_interrupt=payload.get("is_interrupt") is True,
         )
     return None
+
+
+def _shell_output(response: object) -> str | None:
+    """Claude's ``stdout`` + ``stderr``, OpenCode's ``output``; ``None`` when neither is text."""
+    if isinstance(response, str):
+        return response
+    if not isinstance(response, dict):
+        return None
+    parts = [response.get(key) for key in ("stdout", "stderr", "output")]
+    texts = [part for part in parts if isinstance(part, str) and part]
+    return "\n".join(texts) if texts else None
