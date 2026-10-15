@@ -35,7 +35,7 @@ class PackRow(NamedTuple):
 
 VERIFY_PACK: dict[str, PackRow] = {
     "stop-ci-parity-gate": PackRow("default", ("stop",), ("deny", "none"), "open"),
-    # §E.2 + §F.2.2: the stage plus its opt-in post-edit companion (the quality bucket).
+    # §E.2 + §F.2.2: the stage plus its post-edit companion (the quality bucket).
     "clean-code-metrics-nonregression": PackRow(
         "default", ("stop", "post_tool_use"), ("deny", "context", "none"), "open"
     ),

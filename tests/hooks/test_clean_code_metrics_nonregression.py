@@ -279,7 +279,7 @@ def test_shipped_hook_matches_its_pack_row() -> None:
     )
     assert stop_handler.config == {"stage": "quality-metrics"}
     assert set(stop_handler.config) <= set(declaration.config_schema)
-    assert post_edit.config == {"lint_feedback": False}  # the companion is opt-in (§E.2)
+    assert post_edit.config == {"lint_feedback": True}  # the companion is default (§E.2)
 
 
 def _ctx(repo: PackRepo, git: FakeGit) -> HandlerContext:

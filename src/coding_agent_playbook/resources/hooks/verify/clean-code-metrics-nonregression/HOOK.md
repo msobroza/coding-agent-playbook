@@ -1,7 +1,7 @@
 ---
 id: clean-code-metrics-nonregression
 name: No metrics regressions at Stop
-description: The quality-metrics Stop stage; measure touched Python files against HEAD with the repo's static metrics gate and ruff's complexity budgets (opt-in post-edit companion).
+description: The quality-metrics Stop stage; measure touched Python files against HEAD with the repo's static metrics gate and ruff's complexity budgets, plus a post-edit companion on changed lines.
 version: 1
 tier: default
 priority: 60
@@ -18,7 +18,7 @@ handlers:
   post_tool_use:
     builtin: clean_code_metrics_nonregression:post_edit
     config:
-      lint_feedback: false
+      lint_feedback: true
 decisions: [deny, context, none]
 timeout: 3
 on_error: open

@@ -332,7 +332,7 @@ def enabled_consumers(ev: CanonicalEvent, ctx: HandlerContext) -> dict[str, Hook
         if spec is None or spec.kind != "builtin" or spec.name not in RUFF_CONSUMERS:
             continue
         if spec.config.get("lint_feedback") is False:
-            continue  # a companion switched off (the quality one is opt-in): no codes, no lines
+            continue  # a companion switched off by its consumer: no codes, no lines
         if ev.harness.value not in record.supports:
             continue
         if ctx.hatches.skips(hook_id, mandatory=record.mandatory):

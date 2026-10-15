@@ -277,7 +277,7 @@ def test_one_d1_argv_per_event_with_all_consumers_enabled(
 
 QUALITY_ID: Final = "clean-code-metrics-nonregression"
 DOCSTRINGS_ID: Final = "docstring-nonregression"
-QUALITY_ON: Final = {QUALITY_ID: {"lint_feedback": True}}
+QUALITY_CODES: Final = {"C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915"}
 
 
 def _install_companions(
@@ -287,7 +287,7 @@ def _install_companions(
     repo.write(".coding-agent-playbook.toml", metrics)
     repo.write(APP, EDITED)
     hooks = [HOOK_ID, QUALITY_ID, DOCSTRINGS_ID]
-    repo.install_pack(hooks, rules=engine_rules(), per_hook=QUALITY_ON)
+    repo.install_pack(hooks, rules=engine_rules())  # both companions as shipped: on
     pin_ruff(repo, program, drops={"ruff": drops} if drops else None)
 
 
@@ -306,7 +306,7 @@ def test_one_d1_argv_carries_quality_and_docstring_codes_and_config_override(
 
     [d1] = ruff.argvs("d1")
     extended = set(_value(d1, "--extend-select").split(","))
-    assert {"C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "D100", "D107"} <= extended
+    assert {*QUALITY_CODES, "D100", "D107"} <= extended
     assert _config_flags(d1) == ["lint.mccabe.max-complexity=10"]
     assert ruff.kinds().count("preview") == 0
     assert _context(report) == ['quality: "src/app.py:6 C901 `f` is too complex (12 > 10)"']
@@ -352,12 +352,30 @@ def test_plr1702_only_via_separate_preview_call(
     assert _context(report) == ['quality: "src/app.py:6 PLR1702 Too many nested blocks (6 > 5)"']
 
 
-def test_quality_companion_off_by_default_adds_nothing(
+def test_quality_companion_on_by_default_without_preview(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], ruff_program: Path
+) -> None:
+    """The shipped companion rides D1 with the quality codes; PLR1702 stays opt-in (preview)."""
+    pack_repo.write("pyproject.toml", '[tool.ruff.lint]\nselect = ["E", "F"]\n')
+    pack_repo.write(APP, EDITED)
+    pack_repo.install_pack([HOOK_ID, QUALITY_ID])
+    _pin(pack_repo, ruff_program)
+    ruff = FakeRuff(diagnostics=[ruff_row("PLR0913", 6, "Too many arguments (6 > 5)")])
+
+    report = _edit(pack_repo, deps(proc=ruff, git=_git()))
+
+    [d1] = ruff.argvs("d1")
+    assert set(_value(d1, "--extend-select").split(",")) == QUALITY_CODES
+    assert "--preview" not in d1 and ruff.kinds().count("preview") == 0
+    assert _context(report) == ['quality: "src/app.py:6 PLR0913 Too many arguments (6 > 5)"']
+
+
+def test_quality_companion_lint_feedback_false_adds_nothing(
     pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], ruff_program: Path
 ) -> None:
     pack_repo.write("pyproject.toml", '[tool.ruff.lint]\nselect = ["E", "F"]\n')
     pack_repo.write(APP, EDITED)
-    pack_repo.install_pack([HOOK_ID, QUALITY_ID])
+    pack_repo.install_pack([HOOK_ID, QUALITY_ID], per_hook={QUALITY_ID: {"lint_feedback": False}})
     _pin(pack_repo, ruff_program)
     ruff = FakeRuff()
 

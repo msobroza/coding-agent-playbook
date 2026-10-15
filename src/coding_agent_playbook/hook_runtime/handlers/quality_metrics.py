@@ -16,11 +16,13 @@ measured twice per Stop.
   error is a context line too, never a crash;
 - at most :data:`MAX_LINES` lines, then ``+N more (playbook metrics ...)``.
 
-The opt-in **post-edit companion** (``lint_feedback = true``) is the
-``quality`` bucket of the §E.3 shared D1 ruff call: no metric code, the
-family's codes and the ``[metrics.ruff_violations] config`` thresholds that
-sync renders into its config. The registered stop handler runs the stage alone
-when the coordinator is not selected.
+The **post-edit companion** (on by default; ``[hooks.clean-code-metrics-nonregression]
+lint_feedback = false`` turns it off) is the ``quality`` bucket of the §E.3
+shared D1 ruff call: no metric code, the family's codes and the
+``[metrics.ruff_violations] config`` thresholds that sync renders into its
+config. PLR1702 stays opt-in: it runs only under ``[metrics.ruff_violations]
+preview = true``, in its own ``--preview`` call. The registered stop handler
+runs the stage alone when the coordinator is not selected.
 """
 
 from __future__ import annotations
@@ -193,15 +195,15 @@ def clean_code_metrics_nonregression(
     config_schema=POST_EDIT_CONFIG_SCHEMA,
 )
 def clean_code_metrics_post_edit(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult | None:
-    """The opt-in ``quality`` bucket of the shared D1 ruff call, on the lines an edit changed.
+    """The ``quality`` bucket of the shared D1 ruff call, on the lines an edit changed.
 
     Example::
 
         >>> clean_code_metrics_post_edit(edit_growing_parse, ctx).context  # doctest: +SKIP
         ('quality: "src/x.py:3 C901 `parse` is too complex (12 > 10)"',)
     """
-    if ctx.config.get("lint_feedback") is not True:
-        return None  # opt-in: off, it adds no code to D1 and spawns nothing
+    if ctx.config.get("lint_feedback") is False:
+        return None  # switched off: it adds no code to D1 and spawns nothing
     from coding_agent_playbook.hook_runtime.handlers.ruff_feedback import bucket_feedback
 
     return bucket_feedback(ev, ctx, rule_id=FAMILY)

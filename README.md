@@ -584,7 +584,7 @@ reason, at most `max_blocks` times per stop chain.
 | Hook | Tier | Enforced on | What it does |
 | --- | --- | --- | --- |
 | `stop-ci-parity-gate` | `default` | Claude Code; checked on OpenCode | The Stop coordinator: lint and verify the "done" claim; with an approved stage list, also typecheck and run the tests. |
-| `clean-code-metrics-nonregression` | `default` | Claude Code, OpenCode | Stage `quality-metrics`: touched Python must not worsen against `HEAD` under your `[metrics]`. |
+| `clean-code-metrics-nonregression` | `default` | Claude Code, OpenCode | Stage `quality-metrics`: touched Python must not worsen against `HEAD` under your `[metrics]`; after each edit, report ruff's complexity codes (C901, PLR0911, PLR0912, PLR0913, PLR0915) on the changed lines. |
 | `docstring-nonregression` | `default` | Claude Code, OpenCode | Stage `docstrings`: removed docstrings and new undocumented public symbols. |
 | `gate-weakening-guard` | `default` | Claude Code, OpenCode | Stage `gate-integrity`: new suppressions, skipped or deleted tests, loosened checker config. |
 | `block-precommit-bypass` | `default` | Claude Code, OpenCode | Deny skipping the playbook pre-commit hooks (`--no-verify`, `SKIP=`, `core.hooksPath`). |
@@ -793,7 +793,7 @@ into the gate, without editing your own ruff configuration:
 [metrics]
 extend_select = ["ruff_violations", "file_sloc", "docstring_example"]   # opt-in, by name
 
-[metrics.ruff_violations]   # passed as --config to the gate's own ruff call only
+[metrics.ruff_violations]   # --config for the gate's and the post-edit feedback's ruff calls only
 config = { "lint.mccabe.max-complexity" = 10, "lint.pylint.max-args" = 5, "lint.pylint.max-statements" = 20 }
 
 [metrics.thresholds.file_sloc]   # 1.0 up to 300 source lines, 0.0 at 800
