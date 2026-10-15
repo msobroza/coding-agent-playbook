@@ -63,6 +63,14 @@ def test_packaged_without_core_is_not_accepted(tmp_path: Path) -> None:
     assert caught.value.tried == (pkg / "_content", tmp_path / "content")
 
 
+def test_checkout_without_core_is_not_accepted(tmp_path: Path) -> None:
+    pkg = tmp_path / "src" / "pkg"
+    pkg.mkdir(parents=True)
+    (tmp_path / "content" / "plugins" / "superpowers").mkdir(parents=True)
+    with pytest.raises(BundledContentMissingError):
+        bundled_content_root(pkg)
+
+
 def test_fallback_requires_src_parent(tmp_path: Path) -> None:
     pkg = tmp_path / "lib" / "pkg"
     pkg.mkdir(parents=True)
