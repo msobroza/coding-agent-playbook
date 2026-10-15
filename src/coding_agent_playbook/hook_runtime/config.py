@@ -57,6 +57,7 @@ __all__ = [
     "HookRecord",
     "LoggingConfig",
     "load_guard_config",
+    "parse_guard_config",
 ]
 
 GUARD_CONFIG_REL: Final = ".coding-agent-playbook/hooks/guard_config.json"
@@ -182,6 +183,22 @@ def load_guard_config(
     if expected != digest:
         return ConfigFault(kind="digest_mismatch", detail="sha256 differs from the lock entry")
     return _parse(data, digest, platform=platform, home=home)
+
+
+def parse_guard_config(
+    data: bytes, *, platform: str = sys.platform, home: str | None = None
+) -> GuardConfig | ConfigFault:
+    """Parse ``guard_config.json`` bytes **without** the lockfile digest check.
+
+    Only for ``playbook-hook simulate --config`` and tests: the dispatcher
+    always goes through :func:`load_guard_config`, which vouches for the bytes.
+
+    Example::
+
+        >>> parse_guard_config(b'{"schema_version": 1, "hooks": {}}').hooks
+        mappingproxy({})
+    """
+    return _parse(data, hashlib.sha256(data).hexdigest(), platform=platform, home=home)
 
 
 def _parse(

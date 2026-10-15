@@ -1,0 +1,106 @@
+"""The repo-bound ports a dispatch builds on demand: git and the trust store (§D.9).
+
+``RuntimeDeps.git`` and ``RuntimeDeps.trust`` are ``None`` in production: the
+dispatcher learns the repository only from the payload. Both are built
+lazily, because most events never touch them: an Edit or a non-git Bash call
+must import no git module and spawn no process (D-6), and the user-local
+trust file is read only when an external handler fires.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps, TrustPort
+    from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.git import AddedLine, Fingerprint, GitPort
+    from coding_agent_playbook.hook_runtime.globs import GlobSet
+    from coding_agent_playbook.hook_runtime.state import StateStore
+
+__all__ = ["LazyGit", "open_trust_store"]
+
+
+class LazyGit:
+    """A ``GitPort`` that builds the hardened ``SafeGit`` on its first call.
+
+    Example::
+
+        >>> git = LazyGit(repo, deps, state=store, secret_paths=cfg.secret_paths)  # doctest: +SKIP
+        >>> git.head_tree()  # the first call imports git.py and spawns git
+        '4b825dc6...'
+    """
+
+    def __init__(
+        self,
+        repo: RepoInfo,
+        deps: RuntimeDeps,
+        *,
+        state: StateStore | None,
+        secret_paths: GlobSet | None,
+    ) -> None:
+        self._repo = repo
+        self._deps = deps
+        self._state = state
+        self._secret_paths = secret_paths
+        self._git: GitPort | None = deps.git
+
+    def _port(self) -> GitPort:
+        if self._git is None:
+            from coding_agent_playbook.hook_runtime.git import SafeGit
+
+            self._git = SafeGit(
+                self._repo,
+                proc=self._deps.proc,
+                env=self._deps.env,
+                state=self._state,
+                secret_paths=self._secret_paths,
+                platform=self._deps.platform,
+            )
+        return self._git
+
+    def head_tree(self) -> str | None:
+        """See ``GitPort.head_tree``."""
+        return self._port().head_tree()
+
+    def fingerprint(self) -> Fingerprint | None:
+        """See ``GitPort.fingerprint``."""
+        return self._port().fingerprint()
+
+    def diff_added(self) -> tuple[AddedLine, ...]:
+        """See ``GitPort.diff_added``."""
+        return self._port().diff_added()
+
+    def cat_head(self, repo_rel: str) -> bytes | None:
+        """See ``GitPort.cat_head``."""
+        return self._port().cat_head(repo_rel)
+
+    def ls_untracked(self) -> tuple[str, ...]:
+        """See ``GitPort.ls_untracked``."""
+        return self._port().ls_untracked()
+
+
+def open_trust_store(repo: RepoInfo, deps: RuntimeDeps) -> TrustPort | None:
+    """``deps.trust``, else the user-local store of ``repo``; ``None`` when it cannot be used.
+
+    A store resolving inside the repository grants nothing (``TrustStoreError``).
+
+    Example::
+
+        >>> open_trust_store(repo, deps)  # doctest: +SKIP
+        <coding_agent_playbook.security.trust.TrustStore object at ...>
+    """
+    if deps.trust is not None:
+        return deps.trust
+    from coding_agent_playbook.security.trust import (
+        TrustStore,
+        TrustStoreError,
+        default_trust_store_path,
+    )
+
+    path = default_trust_store_path(environ=deps.env, platform=deps.platform, home=Path(deps.home))
+    try:
+        return TrustStore(path, repo_root=Path(repo.worktree_root), now=deps.clock.time)
+    except TrustStoreError:
+        return None

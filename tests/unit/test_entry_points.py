@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import tomllib
 from importlib import metadata
 from pathlib import Path
@@ -45,7 +46,11 @@ def test_hook_handlers_group_declared_in_pyproject() -> None:
     assert _project_table()["entry-points"][_HOOK_HANDLERS_GROUP] == {}
 
 
-def test_no_playbook_hook_script_before_k2() -> None:
-    # The console script lands with its module in K2, so no installed script
-    # ever points at a module that does not exist yet (§D.11, P-D5).
-    assert "playbook-hook" not in _project_table()["scripts"]
+def test_playbook_hook_script_points_at_the_runtime_cli() -> None:
+    # The console script landed with its module in K2 (§D.1), so it never
+    # points at a module that does not exist; the target must stay importable.
+    target = _project_table()["scripts"]["playbook-hook"]
+
+    assert target == "coding_agent_playbook.hook_runtime.cli:main"
+    module, _, attr = target.partition(":")
+    assert callable(getattr(importlib.import_module(module), attr))

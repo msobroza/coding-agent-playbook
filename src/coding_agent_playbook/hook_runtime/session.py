@@ -29,6 +29,8 @@ __all__ = ["MAX_ASKED_IDS", "MAX_DEFERRED_NOTES", "MAX_ONCE_KEYS", "SessionState
 MAX_ASKED_IDS: Final = 64
 MAX_DEFERRED_NOTES: Final = 5
 MAX_ONCE_KEYS: Final = 1024
+#: Joins a tool_use id and the hook that asked about it in the ``asked`` list.
+_ASKER_SEP: Final = "\x1f"
 
 
 def _strings(document: dict[str, Any], key: str) -> list[str]:
@@ -78,13 +80,25 @@ class SessionState:
         """Set flag ``name`` until the session ends; flags never clear within a session."""
         self._write(lambda doc: _add_capped(doc, "flags", name, MAX_ONCE_KEYS))
 
-    def mark_asked(self, tool_use_id: str) -> None:
-        """Remember that the tool call ``tool_use_id`` was answered with an ask."""
-        self._write(lambda doc: _add_capped(doc, "asked", tool_use_id, MAX_ASKED_IDS))
+    def mark_asked(self, tool_use_id: str, hook_id: str = "") -> None:
+        """Remember that ``hook_id`` (or some hook) answered the tool call ``tool_use_id`` with an ask."""
+        item = f"{tool_use_id}{_ASKER_SEP}{hook_id}" if hook_id else tool_use_id
+        self._write(lambda doc: _add_capped(doc, "asked", item, MAX_ASKED_IDS))
 
     def was_asked(self, tool_use_id: str) -> bool:
         """Whether ``tool_use_id`` was asked: its post-tool event is then a user override."""
-        return tool_use_id in self._read("asked")
+        prefix = f"{tool_use_id}{_ASKER_SEP}"
+        return any(i == tool_use_id or i.startswith(prefix) for i in self._read("asked"))
+
+    def askers(self, tool_use_id: str) -> tuple[str, ...]:
+        """The hooks that asked about ``tool_use_id``, in the order they were marked.
+
+        The ``override`` decision-log line names them, because the override
+        rate is per hook (the evidence for flipping an ask to a deny).
+        """
+        prefix = f"{tool_use_id}{_ASKER_SEP}"
+        hooks = (i[len(prefix) :] for i in self._read("asked") if i.startswith(prefix))
+        return tuple(dict.fromkeys(hooks))
 
     def push_note(self, text: str) -> None:
         """Queue a user note for the next dispatch that can show one."""

@@ -9,20 +9,28 @@ never patches a module:
 - ``FakeGit`` for ``git.SafeGit``: scripted answers, every call recorded.
 - ``FakeClock`` for ``deps.SystemClock``: time moves only when told to.
 - ``FakeTrustStore`` for ``security.trust.TrustStore``: in-memory approvals.
+- ``FakeHandlerResolver`` for ``registry.resolve_handler``: hook id -> handler.
+- ``FakeTimer`` for ``deps.thread_timer`` (fires only when told, or on start)
+  and ``FakeExit`` / ``fake_exit`` for ``os._exit``: the watchdog runs
+  in-process and its exit surfaces as an exception.
 """
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 
 from coding_agent_playbook.hook_runtime.proc import ProcResult, ProcTimeout
+from coding_agent_playbook.hook_runtime.registry import HandlerResolutionError, Untrusted
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
+    from coding_agent_playbook.hook_runtime.config import HookRecord
+    from coding_agent_playbook.hook_runtime.event import EventName
     from coding_agent_playbook.hook_runtime.git import AddedLine, Fingerprint
+    from coding_agent_playbook.hook_runtime.registry import HandlerFn, ResolveContext
     from coding_agent_playbook.security.trust import HandlerApproval
 
 type ArgvMatch = Sequence[str] | Callable[[tuple[str, ...]], bool]
@@ -184,3 +192,94 @@ class FakeTrustStore:
 
     def allows_execution(self, stages_sha256: str) -> bool:
         return stages_sha256 in self.executions
+
+
+@dataclass
+class FakeHandlerResolver:
+    """``HandlerResolver`` from a table: hook id -> handler, ``Untrusted`` or an exception.
+
+    A hook missing from the table fails resolution, as an unregistered builtin does.
+    ``calls`` records ``(hook_id, event)`` in order.
+    """
+
+    handlers: dict[str, HandlerFn | Untrusted | Exception] = field(default_factory=dict)
+    calls: list[tuple[str, str]] = field(default_factory=list)
+
+    def __call__(
+        self, record: HookRecord, event: EventName, ctx: ResolveContext
+    ) -> HandlerFn | Untrusted:
+        self.calls.append((record.id, event.value))
+        found = self.handlers.get(record.id)
+        if found is None:
+            raise HandlerResolutionError(f"no handler scripted for {record.id!r}")
+        if isinstance(found, Exception):
+            raise found
+        return found
+
+
+@dataclass
+class FakeTimer:
+    """A ``TimerHandle`` that fires only through :meth:`fire` (or at start, when asked)."""
+
+    interval: float
+    function: Callable[[], None]
+    fire_on_start: bool = False
+    started: bool = False
+    cancelled: bool = False
+    daemon: bool = True
+
+    def start(self) -> None:
+        self.started = True
+        if self.fire_on_start:
+            self.fire()
+
+    def fire(self) -> None:
+        """Run the timer's function now, as the real thread would at the deadline."""
+        if not self.cancelled:
+            self.function()
+
+    def cancel(self) -> None:
+        self.cancelled = True
+
+    def join(self, timeout: float | None = None) -> None:
+        return None
+
+
+@dataclass
+class FakeTimers:
+    """A ``TimerFactory`` recording every ``FakeTimer`` it made."""
+
+    fire_on_start: bool = False
+    made: list[FakeTimer] = field(default_factory=list)
+
+    def __call__(self, interval: float, function: Callable[[], None]) -> FakeTimer:
+        timer = FakeTimer(interval, function, fire_on_start=self.fire_on_start)
+        self.made.append(timer)
+        return timer
+
+
+class FakeExit(BaseException):
+    """Raised by :func:`fake_exit`: a ``BaseException`` so no handler ``except`` swallows it."""
+
+    def __init__(self, code: int) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+def fake_exit(code: int) -> NoReturn:
+    """``os._exit`` for in-process tests: raises :class:`FakeExit`."""
+    raise FakeExit(code)
+
+
+__all__ = [
+    "FakeCall",
+    "FakeClock",
+    "FakeExit",
+    "FakeGit",
+    "FakeHandlerResolver",
+    "FakeProc",
+    "FakeTimer",
+    "FakeTimers",
+    "FakeTrustStore",
+    "fake_exit",
+]

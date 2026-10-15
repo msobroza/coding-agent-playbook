@@ -23,7 +23,6 @@ from coding_agent_playbook.hook_runtime.event import (
     ToolClass,
     ToolResponse,
 )
-from coding_agent_playbook.hook_runtime.harness._patch import parse_patch
 from coding_agent_playbook.hook_runtime.harness._payload import host_path, opt_str
 from coding_agent_playbook.hook_runtime.paths import NormalizedPath, normalize_path
 
@@ -164,6 +163,9 @@ def _patch_targets(
     text = opt_str(tool_input, "patch_text") or opt_str(tool_input, "patchText")
     if text is None:
         return "tool_input.patch_text missing or not a string"
+    # Imported here: only OpenCode's apply_patch carries an envelope to parse.
+    from coding_agent_playbook.hook_runtime.harness._patch import parse_patch
+
     envelope = parse_patch(text)
     paths = tuple(_normalize(raw, ev, ctx) for raw in envelope.paths)
     content = tuple(

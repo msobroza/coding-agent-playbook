@@ -24,8 +24,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
     from typing import TextIO
 
+    from coding_agent_playbook.hook_runtime.config import GuardConfig
     from coding_agent_playbook.hook_runtime.git import GitPort
     from coding_agent_playbook.hook_runtime.proc import ProcResult
+    from coding_agent_playbook.hook_runtime.registry import HandlerResolver
     from coding_agent_playbook.hook_runtime.state import StateStore
     from coding_agent_playbook.security.trust import HandlerApproval
 
@@ -133,7 +135,11 @@ class RuntimeDeps:
     escape hatches are read from (§D.7). ``git``, ``state`` and ``trust`` are
     ``None`` until the dispatcher builds them for the event's repository (a
     ``SafeGit`` over ``proc``, the per-worktree ``StateStore``, the user-local
-    trust store); a test passes fakes instead. ``exit`` ends the process from
+    trust store); a test passes fakes instead. ``resolve_handler`` finds a
+    hook's handler (``None``: ``registry.resolve_handler``; ``simulate``'s
+    goldens pass a ``FakeHandlerResolver``). ``guard_config`` replaces the
+    repo's verified config (``simulate --config`` only; ``None``: load and
+    check the digest). ``exit`` ends the process from
     the watchdog without unwinding (``os._exit``); ``timer_factory`` makes its
     timer. ``home`` and ``platform`` feed path normalization.
 
@@ -149,9 +155,22 @@ class RuntimeDeps:
     git: GitPort | None = None
     state: StateStore | None = None
     trust: TrustPort | None = None
+    resolve_handler: HandlerResolver | None = None
+    guard_config: GuardConfig | None = None
     out: TextIO | None = None
     err: TextIO | None = None
     exit: Callable[[int], NoReturn] = os._exit
     timer_factory: TimerFactory = thread_timer
     home: str = field(default_factory=lambda: os.path.expanduser("~"))
     platform: str = sys.platform
+
+    @classmethod
+    def default(cls, *, out: TextIO | None = None, err: TextIO | None = None) -> RuntimeDeps:
+        """The real deps of a hook process, writing to ``out`` / ``err`` (default: sys streams).
+
+        Example::
+
+            >>> RuntimeDeps.default().err is sys.stderr
+            True
+        """
+        return cls(out=sys.stdout if out is None else out, err=sys.stderr if err is None else err)

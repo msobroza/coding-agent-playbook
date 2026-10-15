@@ -46,3 +46,6 @@ jobs:
 
       - name: coding-agent-playbook --version smoke test
         run: coding-agent-playbook --version
+
+      - name: playbook-hook --version smoke test
+        run: playbook-hook --version

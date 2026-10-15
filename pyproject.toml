@@ -46,6 +46,9 @@ dev = [
 [project.scripts]
 playbook = "coding_agent_playbook.cli:main"
 coding-agent-playbook = "coding_agent_playbook.cli:main"
+# The human entry of the hook runtime (simulate, doctor, --version). Harnesses never
+# use it: they run "<pin> -I -m coding_agent_playbook.hook_runtime" (prK §D.1).
+playbook-hook = "coding_agent_playbook.hook_runtime.cli:main"
 
 # --- Extension-point tables. PR 1 declares them empty; future PRs populate. ---
 
