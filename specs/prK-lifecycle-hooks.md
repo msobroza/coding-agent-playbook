@@ -561,7 +561,7 @@ Parsed by `config.parse_hooks_config(data) -> HooksConfig` (frozen dataclass; un
 | `unattended_ask` | `"deny"` \| `"warn"` | `"deny"` | What `ask` (decision or `on_error`) becomes when no human can answer (headless `claude -p`, SDK, CI, runner evals, OpenCode; detection in §D.3.6). `warn` = `context` + proceed + a user note. This is the only value set; §D.3.6 and `guard_config.unattended_ask` use it verbatim. |
 | `allow_code_from` | `list[str]` | `[]` | Source packages whose external-command or entry-point handlers may run: overlay names from `overlays_enabled`, and/or `"<repo-local>"`. The engine package is implicit. |
 | `auto_sync` | `bool` | `false` | Lets validate-then-sync-on-canonical-edit run `playbook sync` itself (never for edits to hooks, `[hooks]`, `[guardrails]`, `overlays_enabled`, `adapters_enabled`). |
-| `wrapper_prefixes` | `list[str]` | `[]` | (shared name — proposed) Extra command prefixes the dispatcher strips before shell matching (e.g. `["rtk"]`), beyond the built-in `env`/`sudo`/`timeout`/`nice`/`nohup`; rendered to `guard_config.shell.wrapper_prefixes` (§D.8.2). |
+| `wrapper_prefixes` | `list[str]` | `[]` | (shared name — proposed) Extra command prefixes the dispatcher strips before shell matching (e.g. `["proxy"]` for a command-rewriting launcher), beyond the built-in `env`/`sudo`/`timeout`/`nice`/`nohup`; rendered to `guard_config.shell.wrapper_prefixes` (§D.8.2). |
 | `state_ttl_days` | `int` | `7` | (shared name — proposed) Age after which per-session state is swept (§D.6.1). |
 | `render_remediation_allow` | `bool` | `false` | (shared name — proposed) Render the fixed engine list of remediation commands into `permissions.allow` (§C.2.8). Off by default: an allow list is a committed privilege grant. |
 
@@ -897,7 +897,7 @@ Example (user-owned keys and the user's own hook group are preserved as-is; mana
   "permissions": { "deny": ["Read(./.env)"] },
   "hooks": {
     "PreToolUse": [
-      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "~/.claude/hooks/rtk-rewrite.sh" } ] },
+      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "~/.claude/hooks/command-rewrite.sh" } ] },
       { "matcher": "Bash|Edit|Glob|Grep|MultiEdit|NotebookEdit|PowerShell|Read|Write",
         "hooks": [ { "type": "command",
                      "command": "sh \"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}/.claude/hooks/playbook/launch.sh\" dispatch pre_tool_use --harness claude_code",
@@ -1158,7 +1158,7 @@ exit 0
   - Supported only with Git Bash, which is what Claude Code uses for the Bash tool and for shell-form hooks.
   - A PowerShell-only install runs `sh …` under PowerShell, the command fails, and Claude shows its non-blocking "hook error" notice: fail-open (QC-4).
   - `tool_input.file_path` arrives with backslashes. Normalization is the dispatcher's job (§D.2.4).
-- **Concurrent handlers.** All matching handlers run in parallel, including the user's own (for example the `rtk` rewriter). The playbook group sees the original `tool_input`, never another hook's `updatedInput`. **Known gap:** any user, plugin or skill hook that returns `updatedInput` can change the executed input after the playbook verdict (the last `updatedInput` to finish wins); ordering cannot close this because Claude runs hooks in parallel. control-plane-guard treats the creation of new hook carriers as a policy edit (§E.1).
+- **Concurrent handlers.** All matching handlers run in parallel, including the user's own (for example a command-rewriting hook). The playbook group sees the original `tool_input`, never another hook's `updatedInput`. **Known gap:** any user, plugin or skill hook that returns `updatedInput` can change the executed input after the playbook verdict (the last `updatedInput` to finish wins); ordering cannot close this because Claude runs hooks in parallel. control-plane-guard treats the creation of new hook carriers as a policy edit (§E.1).
 
 ### §C.3 OpenCode V1 (L5)
 
@@ -1916,7 +1916,7 @@ class Segment:
     argv: tuple[str, ...]  # effective argv after env-prefix strip + wrapper unwrap
     raw_argv: tuple[str, ...]  # as written (post-shlex)
     env: tuple[tuple[str, str], ...]  # NAME=value prefixes, incl. those consumed by `env`
-    wrappers: tuple[str, ...]  # unwrapped chain, e.g. ("rtk", "timeout")
+    wrappers: tuple[str, ...]  # unwrapped chain, e.g. ("proxy", "timeout")
     redirects: tuple[Redirect, ...]
     heredoc_bodies: tuple[str, ...]  # data only, never parsed as commands
     cwd: str | None  # resolved cwd (after `cd X &&`, git -C, workdir); None = unknown
@@ -1952,7 +1952,7 @@ class ShellCommand:
 | `bash`/`sh`/`zsh`/`dash`/`ksh` | `-c SCRIPT` (including combined `-lc`, `-ec`, `-xc`, `-euc`) → recursive parse (`origin="bash_c"`). `bash file.sh` is opaque, not unwrapped |
 | `eval` | args joined → recursive parse |
 | `find … -exec/-execdir/-ok CMD … ;` | CMD extracted as an extra segment (`args_open=True`); `find` itself stays a segment (for `-delete`) |
-| `guard_config.shell.wrapper_prefixes` | longest-prefix token strip, e.g. `["rtk proxy", "rtk"]`. The user's `rtk hook claude` rewriter runs in parallel on the *original* input, but agents also type `rtk …` literally (catalog principle 18) |
+| `guard_config.shell.wrapper_prefixes` | longest-prefix token strip, e.g. `["proxy run", "proxy"]` for a command-rewriting launcher. A user's own rewriting hook runs in parallel on the *original* input, but agents also type `proxy …` literally (catalog principle 18) |
 | `guard_config.shell.runner_wrappers` | default `uv run`, `uvx`, `poetry run`, `pdm run`, `hatch run`, `pipx run`, with their own options skipped. Kept in `wrappers`, so command-convention-guard still sees `uv run mypy` |
 
 **Limits and degradation.**
@@ -2470,7 +2470,7 @@ Escape hatches are read **only from the dispatcher process environment** (`os.en
 
 **Parametrized red-team tables** (`tests/hook_runtime/test_shell.py`, `test_paths.py`, `test_combine.py`, `test_render_*.py`):
 - **Shell parsing, mapping input to effective `argv`/`wrappers`/`dynamic`:**
-  - `rtk git push --force origin main`;
+  - `proxy git push --force origin main`;
   - `env FOO=1 sudo -u root timeout 5 rm -rf /`;
   - `bash -lc 'rm -rf ~'`;
   - `xargs rm -rf < list`;
@@ -2816,7 +2816,7 @@ Each question has one owner; the per-section lists (§B.7, §C.8, §D.12, the §
 | OQ-3 | Absent `[hooks]` ⇒ off, or on for every consumer on upgrade? | Off; `playbook init` asks (default yes), `--no-hooks` opts out, and sync prints one notice line. | §B.7 Q3 | Accepted |
 | OQ-4 | Keep P6–P9 in Track P? P8's validate-gated sync may break consumers whose content fails `playbook validate` today. | Keep in P; gate sync on the full validate set, with a MIGRATION note to run `playbook validate` before upgrading. | §B.7 Q4 | Accepted |
 | OQ-5 | Commit the CLAUDE.md edits, or keep them local under the harness-files policy? | Keep them local (the harness-files policy); SPEC §4.3 and the README carry the sentinel wording and the invariants. | §B.7 Q5 | Accepted |
-| OQ-6 | **Dogfooding.** D-Q3 says this repo sets `cutover_date` to the date the hooks PR lands, which needs a committed `.coding-agent-playbook.toml`; that flips the engine repo out of config-less validate (H16/H21 apply) and puts `sync --check` and `playbook ci` into its CI. Commit it, or keep the settings in the user's untracked setup? | Honor D-Q3 minimally: commit only `[hooks.commit_convention] cutover_date` (and `[tool.commitizen]` in `pyproject.toml`) and add the `playbook ci` job; keep `[hooks] wrapper_prefixes = ["rtk"]`, the command-convention rows and the trailer rows in the user's untracked setup. `.local.toml` cannot hold `[hooks]` (§B.1). | §F.4.1, §F.5, §E.4 | Accepted |
+| OQ-6 | **Dogfooding.** D-Q3 says this repo sets `cutover_date` to the date the hooks PR lands, which needs a committed `.coding-agent-playbook.toml`; that flips the engine repo out of config-less validate (H16/H21 apply) and puts `sync --check` and `playbook ci` into its CI. Commit it, or keep the settings in the user's untracked setup? | Honor D-Q3 minimally: commit only `[hooks.commit_convention] cutover_date` (and `[tool.commitizen]` in `pyproject.toml`) and add the `playbook ci` job; keep the developer's own wrapper prefixes, the command-convention rows and the trailer rows in the user's untracked setup. `.local.toml` cannot hold `[hooks]` (§B.1). | §F.4.1, §F.5, §E.4 | Accepted |
 | OQ-7 | TTY-only trust approvals acceptable for scripted machine bootstrap? | Accept; document "one interactive `playbook sync` per machine". | §B.7 Q7 | Accepted |
 | OQ-8 | TOFU on (distribution, version) for entry-point handlers? | Not in v1: `allow_code_from` plus the consumer's dependency lock; revisit when an overlay ships one. | §B.7 Q8, §D.3.1 | Accepted |
 | OQ-9 | Align skills to recursive marker discovery? | Keep the difference; align skills in a separate PR if wanted. | §B.7 Q9 | Accepted |

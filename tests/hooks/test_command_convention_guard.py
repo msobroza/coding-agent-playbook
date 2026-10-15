@@ -90,10 +90,10 @@ def test_warn_row_once_per_session(pack_repo: PackRepo, deps: Deps, tmp_path: Pa
     assert second.trace.combined.decision is Decision.NONE
 
 
-def test_rtk_prefix_unwrapped(pack_repo: PackRepo, deps: Deps) -> None:
-    repo = _install(pack_repo, DENY_ROW, prefixes=("rtk",))
+def test_proxy_prefix_unwrapped(pack_repo: PackRepo, deps: Deps) -> None:
+    repo = _install(pack_repo, DENY_ROW, prefixes=("proxy",))
 
-    report = _bash(repo, deps, "rtk uv run mypy")
+    report = _bash(repo, deps, "proxy uv run mypy")
 
     assert report.trace.combined.decision is Decision.DENY
 

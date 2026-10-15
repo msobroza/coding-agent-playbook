@@ -1244,7 +1244,7 @@ tiers = ["default"]                   # add "opt-in" to turn every opt-in hook o
 enable = ["coverage-diff-gate"]       # single hooks, whatever their tier
 disable = ["typing-lint-feedback"]     # wins over enable; never a mandatory hook
 allow_code_from = ["<repo-local>"]    # whose external handlers may run (plus a trust approval)
-wrapper_prefixes = ["rtk"]            # extra command prefixes stripped before shell matching
+wrapper_prefixes = ["proxy"]          # extra command prefixes stripped before shell matching
 
 [hooks.stop-ci-parity-gate]           # [hooks.<hook-id>]: the consumer layer of that hook's config
 max_blocks = 2

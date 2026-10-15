@@ -3,7 +3,7 @@
 Every case runs the shipped ``HOOK.md`` through ``playbook-hook simulate
 pre_tool_use`` against a fixture repo whose ``guard_config.precommit`` lists
 playbook hook ids (as sync renders them from ``.pre-commit-config.yaml``) and
-whose ``[hooks] wrapper_prefixes`` is ``["rtk"]``. ``FakeProc`` fails the test
+whose ``[hooks] wrapper_prefixes`` is ``["proxy"]``. ``FakeProc`` fails the test
 on any spawn: the guard parses argv, it never runs git.
 """
 
@@ -37,7 +37,7 @@ GIT_CONFIG: Final = "[core]\n\tbare = false\n"
 def repo(pack_repo: PackRepo) -> PackRepo:
     (pack_repo.root / ".git" / "hooks").mkdir(parents=True, exist_ok=True)
     (pack_repo.root / ".git" / "config").write_text(GIT_CONFIG, "utf-8")
-    pack_repo.install_pack([HOOK_ID], precommit_ids=IDS, wrapper_prefixes=("rtk",))
+    pack_repo.install_pack([HOOK_ID], precommit_ids=IDS, wrapper_prefixes=("proxy",))
     return pack_repo
 
 
@@ -84,7 +84,7 @@ E2_TABLE: Final = [
     ("chmod -x .git/hooks/pre-commit", Decision.DENY),
     ("echo exit 0 > .git/hooks/pre-commit", Decision.DENY),
     ("cat .git/hooks/pre-commit", Decision.NONE),
-    ("rtk git commit --no-verify", Decision.DENY),
+    ("proxy git commit --no-verify", Decision.DENY),
     ("echo git commit --no-verify", Decision.NONE),
     ("git status && git commit -m done", Decision.NONE),
 ]
@@ -98,7 +98,7 @@ def test_e2_table(
 
 
 def test_no_playbook_ids_inactive(pack_repo: PackRepo, deps: Callable[..., RuntimeDeps]) -> None:
-    pack_repo.install_pack([HOOK_ID], wrapper_prefixes=("rtk",))
+    pack_repo.install_pack([HOOK_ID], wrapper_prefixes=("proxy",))
 
     for command in ("git commit --no-verify -m x", "rm .git/hooks/pre-commit"):
         assert _decision(_bash(pack_repo, deps, command)) is Decision.NONE

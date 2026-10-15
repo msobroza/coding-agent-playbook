@@ -658,7 +658,7 @@ These hooks make "done" mean "the checks pass", not "the agent stopped". stop-ci
   - `git config alias.ci 'commit --no-verify'`: deny.
   - `rm .git/hooks/pre-commit`: deny.
   - A config with no playbook ids: inactive.
-  - A wrapper prefix (`rtk git commit --no-verify`): deny.
+  - A wrapper prefix (`proxy git commit --no-verify`, `proxy` a declared wrapper): deny.
 
 #### gate-weakening-guard — Stage `gate-integrity`: new suppressions, skipped/deleted tests, loosened checker config
 
@@ -1023,7 +1023,7 @@ Nine guards on reads, writes and shell commands. They share one pre-tool dispatc
 
 #### Shared: Bash parsing, path policy and the secret library
 
-- **Shell and git parsing are §D's** (`hook_runtime/shell.py`: `parse_shell(text, kind, cwd, cfg) -> ShellCommand` with `Segment`s and `write_targets`; `hook_runtime/gitargv.py`: `parse_git(segment) -> GitInvocation`, §D.2.5). This section only adds `gitargv.commit_message_sources(inv) -> list[str] | Uninspectable` (`-m` values joined as git does, heredoc bodies, `-F <file>` inside the worktree; `-F <(...)` and editor-composed messages are `Uninspectable`). Tokens, never substrings, so `echo git commit --author` is not a git command. Wrapper prefixes come from `guard_config.shell.wrapper_prefixes` (`[hooks] wrapper_prefixes`, §B.1): empty in the engine; a consumer that runs the `rtk` rewriter sets `["rtk"]` — the user's `rtk hook claude` runs **in parallel** and rewrites the *executed* input while the guard sees the original, and agents also type `rtk …` literally (a rewriter can change what executes after the guard's verdict, §C.2.9). **Degradation follows §D.2.5:** a set `ShellCommand.parse_error` sends every guard to its conservative raw-regex branch (there is no exception type). Shared by destructive-command-guard, git-commit-push-policy-guard, exfil-channel-guard, block-precommit-bypass (E.2) and §F's commit-message-convention.
+- **Shell and git parsing are §D's** (`hook_runtime/shell.py`: `parse_shell(text, kind, cwd, cfg) -> ShellCommand` with `Segment`s and `write_targets`; `hook_runtime/gitargv.py`: `parse_git(segment) -> GitInvocation`, §D.2.5). This section only adds `gitargv.commit_message_sources(inv) -> list[str] | Uninspectable` (`-m` values joined as git does, heredoc bodies, `-F <file>` inside the worktree; `-F <(...)` and editor-composed messages are `Uninspectable`). Tokens, never substrings, so `echo git commit --author` is not a git command. Wrapper prefixes come from `guard_config.shell.wrapper_prefixes` (`[hooks] wrapper_prefixes`, §B.1): empty in the engine; a consumer that runs a command-rewriting launcher (say `proxy`) declares it, `["proxy"]` — a user's own rewriting hook runs **in parallel** and rewrites the *executed* input while the guard sees the original, and agents also type `proxy …` literally (a rewriter can change what executes after the guard's verdict, §C.2.9). **Degradation follows §D.2.5:** a set `ShellCommand.parse_error` sends every guard to its conservative raw-regex branch (there is no exception type). Shared by destructive-command-guard, git-commit-push-policy-guard, exfil-channel-guard, block-precommit-bypass (E.2) and §F's commit-message-convention.
 - **`hook_runtime/_hosts.py` (NEW).** `extract_hosts(segment) -> list[str]` (URL args, scp-style `user@host:path`, git remotes via local `git remote get-url`, index flags, `git+https` requirements) as strings only, never DNS or connect probes (a lookup is itself egress; principle 10); `is_loopback(host)` via `ipaddress` plus `localhost` (no implicit RFC1918 trust); suffix matching. Shared by exfil-channel-guard and network-egress-guard.
 - **`security/patterns.py` (NEW).** `SECRET_PATH_GLOBS`, `SECRET_PATH_EXEMPT`, `SECRET_CONTENT_RULES` (id, compiled regex, label), `EXAMPLE_SECRET_ALLOWLIST`, `WEAKENING_PRAGMAS`, and `screen_regex(pattern: str) -> str | None` (rejects nested unbounded quantifiers and over-long patterns; used by `playbook validate` for every overlay- or repo-supplied regex in this section).
 - **`security/paths.py` (NEW).** `PathPolicy(deny: tuple[str, ...], allow: tuple[str, ...], mode: Literal["deny", "ask"])` with `classify(key: str, *, nlink: int) -> Literal["deny", "ask"] | None`, operating on the `NormalizedPath.key` that §D.2.4's `normalize_path` already produced (realpath, case-folding on darwin/win32, the `nlink` hard-link fact) — the caller normalizes, so `security` never imports `hook_runtime`. Also `is_secret_path(path, *, home)` (P7). Shared by secrets-path-guard, sensitive-data-read-guard and the detector.
@@ -1047,7 +1047,7 @@ Nine guards on reads, writes and shell commands. They share one pre-tool dispatc
 
 **Off-workstation twin.** None can exist for reads: the leak is the read itself (the content reaches the model endpoint and the transcript). The commit side is covered by stop-diff-sweep and `playbook-secrets`.
 
-**Tests.** `tests/hooks/test_secrets_path_guard.py`, parametrized: `Read .env` → deny; `Read .ENV` with platform darwin → deny; `Read .env.example` → none; `Read src/auth/credentials.py` → none; `Read config/credentials.json` → deny; symlink `notes.txt -> .env` → deny; hard link `notes2.txt` → ask; `cat .env`, `git show HEAD:.env`, `rtk cat ~/.aws/credentials` (with `wrapper_prefixes=["rtk"]`), `bash -c 'source .env'` → deny; `mcp__filesystem__read_file {path: ".env"}` → deny; `printenv` → context. Plus `tests/unit/test_detector.py`: a filesystem spy proves no secret-glob file is ever opened by `detect()`.
+**Tests.** `tests/hooks/test_secrets_path_guard.py`, parametrized: `Read .env` → deny; `Read .ENV` with platform darwin → deny; `Read .env.example` → none; `Read src/auth/credentials.py` → none; `Read config/credentials.json` → deny; symlink `notes.txt -> .env` → deny; hard link `notes2.txt` → ask; `cat .env`, `git show HEAD:.env`, `proxy cat ~/.aws/credentials` (with `wrapper_prefixes=["proxy"]`), `bash -c 'source .env'` → deny; `mcp__filesystem__read_file {path: ".env"}` → deny; `printenv` → context. Plus `tests/unit/test_detector.py`: a filesystem spy proves no secret-glob file is ever opened by `detect()`.
 
 #### secret-content-guard — Write-time secret-token scanner plus push-range scan (the air-gapped gitleaks replacement)
 
@@ -1088,7 +1088,7 @@ Nine guards on reads, writes and shell commands. They share one pre-tool dispatc
 
 **Off-workstation twin.** Server-side branch protection / rulesets (out of repo); the golden red-team table runs in engine CI.
 
-**Tests.** `tests/hooks/test_destructive_command_guard.py`, golden table through `playbook-hook simulate pre_tool_use` in a tmp git repo: `rm -rf /` → deny; `rm -rf build/` → none; `rm -rf $DIR` with `DIR` unset → ask; `git push -f origin main`, `git -C . push origin main --force`, `rtk git push --force origin main` → deny; `git push --force-with-lease origin main` → deny, to `feat/x` → none; `bash -c 'rm -rf ~'` → deny; `curl x | sh` → deny; `git reset --hard` dirty → ask, clean → none; `git stash` with a linked worktree → ask.
+**Tests.** `tests/hooks/test_destructive_command_guard.py`, golden table through `playbook-hook simulate pre_tool_use` in a tmp git repo: `rm -rf /` → deny; `rm -rf build/` → none; `rm -rf $DIR` with `DIR` unset → ask; `git push -f origin main`, `git -C . push origin main --force`, `proxy git push --force origin main` → deny; `git push --force-with-lease origin main` → deny, to `feat/x` → none; `bash -c 'rm -rf ~'` → deny; `curl x | sh` → deny; `git reset --hard` dirty → ask, clean → none; `git stash` with a linked worktree → ask.
 
 #### git-commit-push-policy-guard — The agent must not change identity, authorship or signing; org rows empty by default
 
@@ -1116,7 +1116,7 @@ Nine guards on reads, writes and shell commands. They share one pre-tool dispatc
 
 Shared, not duplicated: `gitargv.commit_message_sources()` for message extraction. The naming half has no engine CLI (commitizen is the tool, §F.4). This guard's commit-msg-stage twin is scoped to its own rows only: `playbook check-commit-trailers <msgfile>` **(shared name — proposed)** runs `commit_msg_violations(msg: str, policy: GitPolicy) -> list[str]` (rule ids `CP4xx`) and is rendered only when a trailer row is configured. In-session, this guard and commit-message-convention run in the one Bash dispatcher on the same parsed commit and combine `deny > ask > context > none`. The catalog's "required ticket key" row is split: a ticket **trailer** stays here as `required_trailers`; a ticket in the **subject** is a commitizen `schema_pattern` (E-Q5).
 
-**Implementation.** Handler `git_policy_guard` (`hook_runtime/handlers/git_policy.py`, NEW); local `git config --get` only; it only denies or asks and never rewrites input, so it coexists with the user's `rtk hook claude` rewriter. Keys: `gc:shared.protected_branches`, `gc:git-commit-push-policy-guard.{placeholder_identity, ask_on_default_branch, forbid_trailers, allowed_coauthors, required_trailers, never_commit_globs, push_requires_green}`.
+**Implementation.** Handler `git_policy_guard` (`hook_runtime/handlers/git_policy.py`, NEW); local `git config --get` only; it only denies or asks and never rewrites input, so it coexists with a user's own command-rewriting hook. Keys: `gc:shared.protected_branches`, `gc:git-commit-push-policy-guard.{placeholder_identity, ask_on_default_branch, forbid_trailers, allowed_coauthors, required_trailers, never_commit_globs, push_requires_green}`.
 
 **Budget & failure mode.** ~50 ms prefilter per Bash call; ~150-250 ms (4-6 local git subprocesses) when a commit, push, PR or config command is detected. `on_error: ask`.
 
@@ -1208,9 +1208,9 @@ Shared, not duplicated: `gitargv.commit_message_sources()` for message extractio
 
 #### command-convention-guard — Data-driven Bash convention rows; the engine ships zero rows
 
-`opt-in` · `pre_tool_use` · `Bash`, each unwrapped segment (wrapper prefixes stripped, so `rtk uv run mypy` matches) · warn → `context` (deny rows → `deny`) · label: **speed bump** (convention, not security)
+`opt-in` · `pre_tool_use` · `Bash`, each unwrapped segment (wrapper prefixes stripped, so `proxy uv run mypy` matches) · warn → `context` (deny rows → `deny`) · label: **speed bump** (convention, not security)
 
-**Behavior.** Rows `config.rules: [{pattern, decision: deny | warn, message}]`. A `deny` row returns `deny` carrying the corrected command; a `warn` row returns `context` with no permission decision, once per session per row. Never `updatedInput` (L6): the user already runs `rtk hook claude` as an input rewriter, and two rewriters on one call race. Example rows for a consumer config with this repo's conventions (`[hooks.command-convention-guard] rules`, from this repo's CLAUDE.md "Working in this repo" and subagent policy; whether this repo dogfoods them is the §K dogfooding question): `^uv run (mypy|pytest)\b` → deny, "use `uv run python -m mypy` / `uv run python -m pytest -q`"; `(mypy|ruff check|pytest)\s+\S+\.py` → warn, "subset run: fine for iteration, not CI parity".
+**Behavior.** Rows `config.rules: [{pattern, decision: deny | warn, message}]`. A `deny` row returns `deny` carrying the corrected command; a `warn` row returns `context` with no permission decision, once per session per row. Never `updatedInput` (L6): a user may already run their own command-rewriting hook, and two rewriters on one call race. Example rows for a consumer config with this repo's conventions (`[hooks.command-convention-guard] rules`, from this repo's CLAUDE.md "Working in this repo" and subagent policy; whether this repo dogfoods them is the §K dogfooding question): `^uv run (mypy|pytest)\b` → deny, "use `uv run python -m mypy` / `uv run python -m pytest -q`"; `(mypy|ruff check|pytest)\s+\S+\.py` → warn, "subset run: fine for iteration, not CI parity".
 
 **Implementation.** Handler `command_convention_guard` (`hook_runtime/handlers/conventions.py`, NEW), a step in the shared Bash dispatcher; rows come only from the consumer layer `[hooks.command-convention-guard] rules`, a repo-local override or an overlay, compiled and `screen_regex`-checked at `playbook validate`; rendered to `gc:command-convention-guard.rules`.
 
@@ -1222,7 +1222,7 @@ Shared, not duplicated: `gitargv.commit_message_sources()` for message extractio
 
 **Off-workstation twin.** None needed: CI already runs the canonical commands.
 
-**Tests.** With a row for `uv run mypy`: deny carrying the correction; without rows: no handler work; a warn row fires once per session; `rtk uv run mypy` matches with `[hooks] wrapper_prefixes = ["rtk"]` (`guard_config.shell.wrapper_prefixes`); a ReDoS-shaped row fails `playbook validate`.
+**Tests.** With a row for `uv run mypy`: deny carrying the correction; without rows: no handler work; a warn row fires once per session; `proxy uv run mypy` matches with `[hooks] wrapper_prefixes = ["proxy"]` (`guard_config.shell.wrapper_prefixes`); a ReDoS-shaped row fails `playbook validate`.
 
 ### E.5 Audit and overlay mechanisms
 
@@ -1717,7 +1717,7 @@ No new hook id.
 
 #### F.4.2 Hook: `commit-message-convention`
 
-`default` · `pre_tool_use`, bash branch (§E.0.4), on the shared `shell.parse_shell` / `gitargv.parse_git` parse with wrapper prefixes such as `rtk` unwrapped · segments `git [-C <dir>] commit …` with an inspectable message; `git push …` (range scan, `config.check_push`) · `deny`
+`default` · `pre_tool_use`, bash branch (§E.0.4), on the shared `shell.parse_shell` / `gitargv.parse_git` parse with wrapper prefixes such as a declared `proxy` unwrapped · segments `git [-C <dir>] commit …` with an inspectable message; `git push …` (range scan, `config.check_push`) · `deny`
 
 - **Behavior.**
   - **Message.** `gitargv.commit_message_sources` (§E.4): `-m/--message` repeated (paragraphs joined by a blank line, as git does); `-F/--file <path>` inside the worktree, at most 64 KiB; heredoc bodies, including the `-m "$(cat <<'EOF' … EOF)"` form Claude Code uses.
@@ -1725,7 +1725,7 @@ No new hook id.
   - **Commit.** `proc.run([<cz>, "check", "--message", msg], cwd=<repo root>, timeout=3)`; cz reads `[tool.commitizen]` itself. A non-zero exit → `deny`. The reason is cz's error output, sanitized (control characters stripped, at most 3 lines, the subject quoted as data and capped at 100 characters), plus `Rewrite the message to this repo's commit convention and retry.` It never points at `[tool.commitizen]` or `cutover_date`, which would teach a bypass.
   - **Push** (`check_push`, default `true`). It resolves the destination (an explicit `src:dst` refspec, else the upstream `git rev-parse --abbrev-ref @{upstream}`, else the current branch), lists `git log --format='%H %cI' <remote>/<dst>..<src>` from **local** refs only (at most 200, 3 s timeout; never a fetch), keeps the commits whose committer date is ≥ `cutover_date`, then runs one `cz check --rev-range <range>` when the kept commits are the contiguous tail of the range, else `cz check --message` per kept commit (up to 20; beyond that, one note — CI checks the full range). A missing tracking ref fails open (the CI twin covers it).
   - **cz missing** (no pin, or its signature changed) → `none` plus the once-per-session toolchain hint (§E.3).
-  - It never returns `ask` (a convention is not a judgment call) and never `updatedInput` (L6), so it coexists with the user's `rtk` input rewriter.
+  - It never returns `ask` (a convention is not a judgment call) and never `updatedInput` (L6), so it coexists with a user's own command-rewriting hook.
 - **Implementation.** Builtin `commit_message_convention` in `hook_runtime/handlers/commit_convention.py`; `cutover_date` is rendered from `[hooks.commit_convention]` into the hook's config, `check_push` from `[hooks.commit-message-convention]`. cz runs as a subprocess, so the dispatcher imports nothing new.
 - **Budget & failure.** Under 1 ms for non-matching segments (the shared prefilter). A commit costs one cz process (a Python CLI: one interpreter start, roughly 0.1–0.3 s, not yet measured); that exceeds the ≤ 100 ms pre-tool p95 only on `git commit` / `git push` segments, which are rare. 3 s timeout. Quality class: `on_error: open`, one note per session.
 - **Ownership split with git-commit-push-policy-guard (E.4).** Both run on the same bash event against one shared parse, and the dispatcher folds their decisions (deny wins).
@@ -1742,7 +1742,7 @@ No new hook id.
   - `git commit -m "Add thing."` with FakeCz rejecting → deny carrying the sanitized cz text and no mention of `[tool.commitizen]`;
   - the heredoc form → FakeCz receives the exact message;
   - `-F msg.txt` → read;
-  - `rtk git commit -m "feat: y"` → none (wrapper unwrapped; FakeCz accepts);
+  - `proxy git commit -m "feat: y"` → none (wrapper unwrapped; FakeCz accepts);
   - `git commit --amend --no-edit`, `-m "$X"`, `echo git commit -m "bad."` → none with zero cz calls;
   - no cz pin → none plus one hint per session;
   - push with `cutover_date`: commits committed before the cut-over are not passed to cz; a rebased commit (new committer date) is; a non-contiguous kept set → per-commit `--message` calls.
@@ -1915,7 +1915,7 @@ The 9 `rejected` catalog entries stay rejected.
 | scoped-rule-injection | post_tool_use | A rendering problem, not a lifecycle one: it would fire on every Read (the most frequent call), and 3 of the 4 scoped starter rules glob `**/*.py`, so a Python repo saves nothing. | The adapters: Claude Code renders scoped rules natively (`.claude/rules/<id>.md` with `paths:`), Continue honors globs, AGENTS.md keeps the advisory note. |
 | guardrail-self-test | session_start | Circular: a broken interpreter, entry point or runtime fails the self-test open silently too. | The briefing heartbeat line plus the CLAUDE.md line that reports its absence (§E.1, §C.4.2), and `playbook-hook doctor` (§D.9). |
 | auto-commit-checkpoint | post_tool_use | Rewrites the user-owned authorship and commit policy, fills history with WIP commits, and turns commit-time gates into per-turn side effects. | The harness's own undo/rewind or the user's VCS workflow. |
-| input-rewriting-hooks | pre_tool_use | L6 forbids `updatedInput`: rewriters race (last writer wins; the user already runs `rtk`), hide the correction from the model, and an overlay rewriter can change what the user approved. | Deny-with-correction (command-convention-guard, §E.4); `playbook validate` rejects input rewriting (H8). |
+| input-rewriting-hooks | pre_tool_use | L6 forbids `updatedInput`: rewriters race (last writer wins; a user may already run their own rewriting hook), hide the correction from the model, and an overlay rewriter can change what the user approved. | Deny-with-correction (command-convention-guard, §E.4); `playbook validate` rejects input rewriting (H8). |
 | permission-auto-approve | pre_tool_use | L6 forbids `allow`: a hook-issued allow bypasses the harness permission system, so any overlay or malicious PR shipping one is a privilege escalation. | Reviewed, opt-in `permissions.allow` rendering of the remediation commands (§C.2.8, OQ-16). |
 | http-audit-exporter | post_tool_use | L8: no HTTP hooks, no telemetry, air-gapped. | An org's own log shipper pointed at the local decision/audit logs (§E.5), or an explicit opt-in overlay exporter per SPEC §17.4. |
 | prompt-injection-regex-scanner | post_tool_use | Evadable by rewording and noisy on security code and docs; hooks are not a security boundary. | taint-escalation (§E.4), the deterministic, content-free alternative; a regex scanner may live in an org overlay as an explicit opt-in. |

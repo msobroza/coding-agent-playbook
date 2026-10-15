@@ -52,7 +52,7 @@ def cz_program(tmp_path: Path) -> Path:
 @pytest.fixture
 def repo(pack_repo: PackRepo, cz_program: Path) -> PackRepo:
     pack_repo.install_pack(
-        [HOOK_ID], wrapper_prefixes=("rtk",), handler_config={HOOK_ID: {"cutover_date": ""}}
+        [HOOK_ID], wrapper_prefixes=("proxy",), handler_config={HOOK_ID: {"cutover_date": ""}}
     )
     _pin(pack_repo, cz_program)
     return pack_repo
@@ -151,10 +151,10 @@ def test_dash_F_file_read_within_64k(repo: PackRepo, deps: Deps) -> None:
     assert big.trace.combined.decision is Decision.NONE
 
 
-def test_rtk_wrapper_unwrapped_accepts(repo: PackRepo, deps: Deps) -> None:
+def test_proxy_wrapper_unwrapped_accepts(repo: PackRepo, deps: Deps) -> None:
     cz = FakeCz()
 
-    report = _bash(repo, deps, 'rtk git commit -m "feat: y"', cz=cz)
+    report = _bash(repo, deps, 'proxy git commit -m "feat: y"', cz=cz)
 
     assert (report.trace.combined.decision, cz.messages) == (Decision.NONE, ["feat: y"])
 

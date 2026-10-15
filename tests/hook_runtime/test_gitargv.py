@@ -1,6 +1,6 @@
 """Git argv parsing shared by the git guards (specs/prK-lifecycle-hooks.md §D.1, §E.4).
 
-``parse_git`` reads a parsed shell ``Segment``, so wrappers (``rtk``, ``sudo``,
+``parse_git`` reads a parsed shell ``Segment``, so wrappers (``proxy``, ``sudo``,
 ``env``) are already gone and env prefixes are already split out.
 """
 
@@ -21,11 +21,11 @@ from coding_agent_playbook.hook_runtime.shell import ShellConfig, parse_shell
 if TYPE_CHECKING:
     from pathlib import Path
 
-_RTK = ShellConfig(wrapper_prefixes=("rtk",))
+_PROXY = ShellConfig(wrapper_prefixes=("proxy",))
 
 
 def _git(text: str, *, cwd: str | None = "/r") -> GitInvocation | None:
-    return parse_git(parse_shell(text, "posix", cwd, _RTK).segments[-1])
+    return parse_git(parse_shell(text, "posix", cwd, _PROXY).segments[-1])
 
 
 def _parsed(text: str, *, cwd: str | None = "/r") -> GitInvocation:
@@ -95,7 +95,7 @@ def test_non_git_segment_returns_none() -> None:
 
 
 def test_wrappers_and_paths_still_reach_git() -> None:
-    assert _parsed("rtk git push --force").subcommand == "push"
+    assert _parsed("proxy git push --force").subcommand == "push"
     assert _parsed("sudo /usr/bin/git status").subcommand == "status"
     assert _parsed("git.exe status").subcommand == "status"
 

@@ -258,16 +258,16 @@ def test_a_non_shell_call_has_no_command() -> None:
     call = ToolCall(name="Read", native_name="Read", tool_class=ToolClass.READ)
 
     assert call.command is None
-    assert call.with_shell_config(ShellConfig(wrapper_prefixes=("rtk",))) is call
+    assert call.with_shell_config(ShellConfig(wrapper_prefixes=("proxy",))) is call
 
 
 def test_with_shell_config_reparses_with_the_new_config() -> None:
-    call = _bash("rtk git status")
-    configured = call.with_shell_config(ShellConfig(wrapper_prefixes=("rtk",)))
+    call = _bash("proxy git status")
+    configured = call.with_shell_config(ShellConfig(wrapper_prefixes=("proxy",)))
 
     assert call.command is not None
     assert configured.command is not None
-    assert call.command.segments[0].argv[0] == "rtk"
+    assert call.command.segments[0].argv[0] == "proxy"
     assert configured.command.segments[0].argv == ("git", "status")
 
 

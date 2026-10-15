@@ -4,7 +4,7 @@
 effective argv, not its launcher. ``unwrap`` strips launchers, matching each on
 the basename of ``argv[0]``, up to ``MAX_UNWRAP`` times:
 
-- the configured ``wrapper_prefixes`` (longest token prefix first, e.g. ``rtk proxy``);
+- the configured ``wrapper_prefixes`` (longest token prefix first, e.g. ``proxy run``);
 - the ``runner_wrappers`` (``uv run``, ...), skipping their own options;
 - the §D.2.5 table: ``env``, ``sudo``/``doas``, ``command``, ``exec``,
   ``nohup``, ``time``, ``nice``, ``ionice``, ``stdbuf``, ``timeout`` and ``xargs``.
@@ -49,7 +49,7 @@ class ShellConfig:
 
     Example::
 
-        >>> ShellConfig(wrapper_prefixes=("rtk",)).runner_wrappers[0]
+        >>> ShellConfig(wrapper_prefixes=("proxy",)).runner_wrappers[0]
         'uv run'
     """
 

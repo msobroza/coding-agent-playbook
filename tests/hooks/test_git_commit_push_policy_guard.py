@@ -37,7 +37,7 @@ HEREDOC_COMMIT: Final = (
 
 @pytest.fixture
 def repo(pack_repo: PackRepo) -> PackRepo:
-    pack_repo.install_pack([HOOK_ID], wrapper_prefixes=("rtk",))
+    pack_repo.install_pack([HOOK_ID], wrapper_prefixes=("proxy",))
     return pack_repo
 
 
@@ -92,7 +92,7 @@ GOLDEN: Final[list[tuple[str, Decision]]] = [
     ),
     ("GIT_AUTHOR_NAME=x git commit -m m", Decision.DENY),
     ("export GIT_COMMITTER_EMAIL=x", Decision.DENY),
-    ("rtk git commit --author=x -m m", Decision.DENY),
+    ("proxy git commit --author=x -m m", Decision.DENY),
     ("git status && git commit -m 'feat: x'", Decision.NONE),
     ("echo git commit --author", Decision.NONE),
     ("git log --author=me", Decision.NONE),

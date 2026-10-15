@@ -2,7 +2,7 @@
 
 The golden red-team table runs the shipped ``HOOK.md`` through ``playbook-hook
 simulate pre_tool_use`` against a fixture repo whose ``[hooks]
-wrapper_prefixes`` is ``["rtk"]``. ``FakeGit`` answers the local git queries
+wrapper_prefixes`` is ``["proxy"]``. ``FakeGit`` answers the local git queries
 (current branch ``feat/x``, default ``main``, a status per case); ``FakeProc``
 fails the test on any spawn.
 """
@@ -35,7 +35,7 @@ UNTRACKED: Final = (("??", "notes.txt"),)
 
 @pytest.fixture
 def repo(pack_repo: PackRepo) -> PackRepo:
-    pack_repo.install_pack([HOOK_ID], wrapper_prefixes=("rtk",))
+    pack_repo.install_pack([HOOK_ID], wrapper_prefixes=("proxy",))
     return pack_repo
 
 
@@ -86,7 +86,7 @@ GOLDEN: Final[list[tuple[str, Decision]]] = [
     ("rm build.log", Decision.NONE),
     ("git push -f origin main", Decision.DENY),
     ("git -C . push origin main --force", Decision.DENY),
-    ("rtk git push --force origin main", Decision.DENY),
+    ("proxy git push --force origin main", Decision.DENY),
     ("git push origin +main", Decision.DENY),
     ("git push origin --delete release/1.2", Decision.DENY),
     ("git push --mirror backup", Decision.DENY),

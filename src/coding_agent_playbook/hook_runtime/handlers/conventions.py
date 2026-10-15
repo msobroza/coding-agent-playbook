@@ -5,15 +5,15 @@ security). Rows come only from the consumer's ``[hooks.command-convention-guard]
 rules``, a repo-local override or an overlay: ``{regex, decision, message}``
 (``regex`` is the screened ``regex`` config kind; ``id`` is optional). Each
 row's regex is searched in every segment as written, minus its ``NAME=value``
-prefixes and the configured ``wrapper_prefixes`` (so ``rtk uv run mypy`` is
+prefixes and the configured ``wrapper_prefixes`` (so ``proxy uv run mypy`` is
 ``uv run mypy``; runner wrappers such as ``uv run`` stay, since conventions are
 usually about them):
 
 - a ``deny`` row denies, its message carrying the corrected command;
 - a ``warn`` row adds its message as context, once per session per row.
 
-It never rewrites the command (L6): a user's ``rtk hook claude`` already
-rewrites input, and two rewriters on one call race. Without rows it returns
+It never rewrites the command (L6): a user's own command-rewriting hook may
+already rewrite input, and two rewriters on one call race. Without rows it returns
 before reading the command, so it costs nothing.
 """
 

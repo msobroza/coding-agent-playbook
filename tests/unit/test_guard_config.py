@@ -139,7 +139,7 @@ def test_envelope_and_k3_tables_present(tmp_path: Path) -> None:
         hooks_config=HooksConfig(
             enabled=True,
             unattended_ask="warn",
-            wrapper_prefixes=("rtk",),
+            wrapper_prefixes=("proxy",),
             allow_code_from=("<repo-local>",),
             state_ttl_days=3,
         ),
@@ -154,7 +154,7 @@ def test_envelope_and_k3_tables_present(tmp_path: Path) -> None:
     assert cfg["engine_version"] == "0.2.0"
     assert cfg["unattended_ask"] == "warn"
     assert cfg["logging"] == {"decisions": False, "audit": False, "audit_mode": ""}
-    assert cfg["shell"]["wrapper_prefixes"] == ["rtk"]
+    assert cfg["shell"]["wrapper_prefixes"] == ["proxy"]
     assert "uv run" in cfg["shell"]["runner_wrappers"]
     assert cfg["secret_path_globs"] == [*SECRET_PATH_GLOBS, "*.vault"]
     assert cfg["allow_code_from"] == ["<repo-local>"]

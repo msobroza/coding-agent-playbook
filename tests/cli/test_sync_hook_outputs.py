@@ -218,7 +218,7 @@ _USER_SETTINGS = """\
     },
     "hooks": {
         "PreToolUse": [
-            {"matcher": "Bash", "hooks": [{"type": "command", "command": "rtk hook"}]}
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": "proxy hook"}]}
         ]
     },
     "model": "opus"
@@ -240,7 +240,7 @@ def test_user_keys_and_user_groups_byte_stable_across_syncs(
     assert (repo / SETTINGS).read_text(encoding="utf-8") == first
     # K8's native deny rows join the user's permissions object after the user's own key.
     assert '        "allow": ["Bash(make test)"],\n' in first
-    assert '{"matcher": "Bash", "hooks": [{"type": "command", "command": "rtk hook"}]}' in first
+    assert '{"matcher": "Bash", "hooks": [{"type": "command", "command": "proxy hook"}]}' in first
     # The user's last member keeps its bytes; the native denyRead twin is appended after it.
     assert '    "model": "opus",\n    "sandbox": {' in first
     assert len(_settings(repo)["hooks"]["PreToolUse"]) == 2

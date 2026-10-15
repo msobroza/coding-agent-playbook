@@ -22,10 +22,10 @@ from coding_agent_playbook.hook_runtime.shell import (
 )
 from tests.import_probe import new_modules_after
 
-_RTK = ShellConfig(wrapper_prefixes=("rtk proxy", "rtk"))
+_PROXY = ShellConfig(wrapper_prefixes=("proxy run", "proxy"))
 
 
-def _parse(text: str, *, cwd: str | None = "/r", cfg: ShellConfig = _RTK) -> ShellCommand:
+def _parse(text: str, *, cwd: str | None = "/r", cfg: ShellConfig = _PROXY) -> ShellCommand:
     return parse_shell(text, "posix", cwd, cfg)
 
 
@@ -33,7 +33,7 @@ def _argvs(text: str) -> list[tuple[str, ...]]:
     return [segment.argv for segment in _parse(text).segments]
 
 
-def _only(text: str, *, cfg: ShellConfig = _RTK) -> Segment:
+def _only(text: str, *, cfg: ShellConfig = _PROXY) -> Segment:
     command = _parse(text, cfg=cfg)
     assert command.parse_error is None
     assert len(command.segments) == 1, command.segments
@@ -47,10 +47,10 @@ def _only(text: str, *, cfg: ShellConfig = _RTK) -> Segment:
     ("text", "index", "expected"),
     [
         pytest.param(
-            "rtk git push --force origin main",
+            "proxy git push --force origin main",
             0,
-            {"argv": ("git", "push", "--force", "origin", "main"), "wrappers": ("rtk",)},
-            id="rtk-prefix",
+            {"argv": ("git", "push", "--force", "origin", "main"), "wrappers": ("proxy",)},
+            id="proxy-prefix",
         ),
         pytest.param(
             "env FOO=1 sudo -u root timeout 5 rm -rf /",
@@ -288,7 +288,7 @@ def test_more_than_256_segments_sets_limit() -> None:
     "text",
     [
         "echo $(echo $(echo $(echo $(echo $(echo deep)))))",
-        "rtk env sudo nice timeout 5 nohup rm -rf /",
+        "proxy env sudo nice timeout 5 nohup rm -rf /",
         "x" * (MAX_TEXT_BYTES + 1),
     ],
     ids=["nesting", "wrappers", "text"],
@@ -317,7 +317,7 @@ def test_four_levels_of_nesting_are_within_the_limit() -> None:
 
 
 def test_powershell_is_never_shlex_parsed() -> None:
-    command = parse_shell("Remove-Item -Recurse -Force C:\\proj", "powershell", "C:/proj", _RTK)
+    command = parse_shell("Remove-Item -Recurse -Force C:\\proj", "powershell", "C:/proj", _PROXY)
 
     assert (command.segments, command.parse_error, command.kind) == ((), None, "powershell")
     assert command.text == "Remove-Item -Recurse -Force C:\\proj"
@@ -326,17 +326,17 @@ def test_powershell_is_never_shlex_parsed() -> None:
 # --- wrappers -------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("prefixes", [("rtk proxy", "rtk"), ("rtk", "rtk proxy")])
+@pytest.mark.parametrize("prefixes", [("proxy run", "proxy"), ("proxy", "proxy run")])
 def test_wrapper_prefixes_longest_prefix_strip(prefixes: tuple[str, ...]) -> None:
     cfg = ShellConfig(wrapper_prefixes=prefixes)
 
-    proxy = _only("rtk proxy git push", cfg=cfg)
-    plain = _only("/opt/bin/rtk git status", cfg=cfg)
+    proxy = _only("proxy run git push", cfg=cfg)
+    plain = _only("/opt/bin/proxy git status", cfg=cfg)
 
-    assert (proxy.argv, proxy.wrappers) == (("git", "push"), ("rtk proxy",))
-    assert (plain.argv, plain.wrappers) == (("git", "status"), ("rtk",))
-    assert _only("rtk git status", cfg=ShellConfig()).argv[0] == "rtk"
-    assert _only("rtk", cfg=cfg).argv == ("rtk",)
+    assert (proxy.argv, proxy.wrappers) == (("git", "push"), ("proxy run",))
+    assert (plain.argv, plain.wrappers) == (("git", "status"), ("proxy",))
+    assert _only("proxy git status", cfg=ShellConfig()).argv[0] == "proxy"
+    assert _only("proxy", cfg=cfg).argv == ("proxy",)
 
 
 @pytest.mark.parametrize(

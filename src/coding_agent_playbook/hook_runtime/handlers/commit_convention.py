@@ -1,7 +1,7 @@
 """commit-message-convention: ``cz check`` on what a ``git commit`` or ``git push`` records (specs/prK-hook-pack.md §F.4.2).
 
 Default, ``pre_tool_use`` on shell calls running ``git`` (the argv0
-prefilter), on the shared parse with wrapper prefixes such as ``rtk``
+prefilter), on the shared parse with wrapper prefixes such as ``proxy``
 unwrapped. The convention is the consumer's commitizen config
 (``[tool.commitizen]``, default ``cz_conventional_commits``), which ``cz``
 reads itself: the engine has no linter, only D-Q3's cut-over (``cutover``).
@@ -22,7 +22,7 @@ reads itself: the engine has no linter, only D-Q3's cut-over (``cutover``).
   binary the check is ``none`` plus one user note per session.
 
 It never asks and never rewrites the command (L6): a convention is not a
-judgment call, and an input rewriter such as ``rtk`` keeps working.
+judgment call, and a user's own command-rewriting hook keeps working.
 git-commit-push-policy-guard owns identity, signing and trailers on the same
 parse; the dispatcher folds both decisions (deny wins).
 """

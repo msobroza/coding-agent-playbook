@@ -181,7 +181,7 @@ _USER_TEXT = """\
     "permissions": {"deny": ["Read(./.env)"]},
     "hooks": {
         "PreToolUse": [
-            {"matcher": "Bash", "hooks": [{"type": "command", "command": "~/rtk.sh"}]}
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": "~/rewrite.sh"}]}
         ]
     }
 }
@@ -198,7 +198,9 @@ def test_user_keys_and_user_groups_byte_stable(tmp_path: Path) -> None:
     second, written = _sync(tmp_path, [resolved_hook()], prior=_lock(first))
 
     assert '    "permissions": {"deny": ["Read(./.env)"]},\n' in merged
-    assert '{"matcher": "Bash", "hooks": [{"type": "command", "command": "~/rtk.sh"}]}' in merged
+    assert (
+        '{"matcher": "Bash", "hooks": [{"type": "command", "command": "~/rewrite.sh"}]}' in merged
+    )
     pre_tool_use = _settings(tmp_path)["hooks"]["PreToolUse"]
     assert pre_tool_use[0]["matcher"] == "Bash"  # the user's group keeps its index
     assert settings not in written

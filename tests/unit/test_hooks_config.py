@@ -56,7 +56,7 @@ def test_full_hooks_table_parses() -> None:
         "unattended_ask": "warn",
         "allow_code_from": ["playbook_rules_bnp", "<repo-local>"],
         "auto_sync": True,
-        "wrapper_prefixes": ["rtk"],
+        "wrapper_prefixes": ["proxy"],
         "state_ttl_days": 3,
         "render_remediation_allow": True,
     }
@@ -71,7 +71,7 @@ def test_full_hooks_table_parses() -> None:
         unattended_ask="warn",
         allow_code_from=("playbook_rules_bnp", "<repo-local>"),
         auto_sync=True,
-        wrapper_prefixes=("rtk",),
+        wrapper_prefixes=("proxy",),
         state_ttl_days=3,
         render_remediation_allow=True,
     )

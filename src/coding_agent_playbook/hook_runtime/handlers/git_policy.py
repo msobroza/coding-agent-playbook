@@ -3,7 +3,7 @@
 ``pre_tool_use`` on shell calls running ``git``, ``gh`` or ``export`` (the
 argv0 prefilter); a speed bump, since a server-side push rule is the
 authoritative control. It only denies or asks, never rewrites the command, so
-it coexists with an input rewriter such as ``rtk hook claude``.
+it coexists with a user's own command-rewriting hook.
 
 Default rows (on): the identity and signing rows of ``_git_identity`` deny;
 before a ``git commit``, an empty or placeholder identity

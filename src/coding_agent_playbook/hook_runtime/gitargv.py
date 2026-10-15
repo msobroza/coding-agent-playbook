@@ -1,7 +1,7 @@
 """Git argv parsing shared by the git guards (specs/prK-lifecycle-hooks.md §D.1, §E.4).
 
-``parse_git`` reads one parsed shell ``Segment``, so launchers (``rtk``,
-``sudo``, ``env``) are already stripped and env prefixes already split out. It
+``parse_git`` reads one parsed shell ``Segment``, so launchers (a configured
+``proxy``, ``sudo``, ``env``) are already stripped and env prefixes already split out. It
 finds git's global options, the subcommand, the effective cwd (``-C``, applied
 cumulatively) and the runtime config that ``-c``, ``--config-env`` and
 ``GIT_CONFIG_COUNT`` / ``GIT_CONFIG_KEY_<n>`` / ``GIT_CONFIG_VALUE_<n>`` inject.

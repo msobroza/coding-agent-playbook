@@ -45,7 +45,7 @@ def repo(pack_repo: PackRepo) -> PackRepo:
     aws = _home(pack_repo) / ".aws" / "credentials"
     aws.parent.mkdir(parents=True)
     aws.write_text("[default]\n", encoding="utf-8")
-    pack_repo.install_pack([HOOK_ID], wrapper_prefixes=["rtk"])
+    pack_repo.install_pack([HOOK_ID], wrapper_prefixes=["proxy"])
     return pack_repo
 
 
@@ -87,7 +87,7 @@ GOLDEN: Final[list[tuple[str, Callable[[PackRepo], tuple[str, dict[str, Any]]], 
     ("read-hard-link-to-env", lambda r: _read(r, "notes2.txt"), "linux", "ask"),
     ("cat-env", lambda r: _bash("cat .env"), "linux", "deny"),
     ("git-show-env", lambda r: _bash("git show HEAD:.env"), "linux", "deny"),
-    ("rtk-cat-aws", lambda r: _bash("rtk cat ~/.aws/credentials"), "linux", "deny"),
+    ("proxy-cat-aws", lambda r: _bash("proxy cat ~/.aws/credentials"), "linux", "deny"),
     ("bash-c-source", lambda r: _bash("bash -c 'source .env'"), "linux", "deny"),
     (
         "mcp-read-env",

@@ -72,7 +72,7 @@ def _document(**overrides: Any) -> dict[str, Any]:
         "deadlines_ms": {"pre_tool_use": 2000},
         "unattended_ask": "warn",
         "logging": {"decisions": True, "audit": False, "audit_mode": ""},
-        "shell": {"wrapper_prefixes": ["rtk"], "runner_wrappers": ["uv run"]},
+        "shell": {"wrapper_prefixes": ["proxy"], "runner_wrappers": ["uv run"]},
         "path_classes": {"py": ["*.py"], "generated": ["AGENTS.md"]},
         "secret_path_globs": [".env*", "*.pem"],
         "allow_code_from": ["acme_rules"],
@@ -367,7 +367,7 @@ def test_runtime_keys_and_pack_tables(tmp_path: Path) -> None:
     assert cfg.unattended_ask == "warn"
     assert cfg.deadlines_ms[EventName.PRE_TOOL_USE] == 2000
     assert cfg.deadlines_ms[EventName.STOP] == ENGINE_DEADLINE_CAP_MS[EventName.STOP]
-    assert cfg.shell == ShellConfig(wrapper_prefixes=("rtk",), runner_wrappers=("uv run",))
+    assert cfg.shell == ShellConfig(wrapper_prefixes=("proxy",), runner_wrappers=("uv run",))
     assert (cfg.logging.decisions, cfg.logging.audit) == (True, False)
     assert cfg.path_classes["py"].matches("src/a.py")
     assert cfg.secret_paths.matches("deploy/.env.prod")
