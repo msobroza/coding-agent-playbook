@@ -228,14 +228,14 @@ def _rotate_if_full(path: Path, rotate_bytes: int, lock_timeout_s: float) -> Non
         return
     lock = os.open(rotation_lock_path(path), _LOCK_FLAGS, _FILE_MODE)
     try:
-        if not _acquire(lock, lock_timeout_s):
+        if not acquire_lock(lock, lock_timeout_s):
             return  # busy: append to the current file; a later append rotates
         try:
             # Re-check under the lock: a concurrent writer may have rotated already.
             if _is_full(path, rotate_bytes):
                 _rotate(path)
         finally:
-            _release(lock)
+            release_lock(lock)
     finally:
         os.close(lock)
 
@@ -259,7 +259,18 @@ def _free_rotation_target(path: Path) -> Path | None:
     return None
 
 
-def _acquire(descriptor: int, timeout_s: float) -> bool:
+def acquire_lock(descriptor: int, timeout_s: float) -> bool:
+    """Take an exclusive lock on the open ``descriptor``, waiting at most ``timeout_s``.
+
+    Returns False when the lock stays busy: a hook must never stall a tool
+    call on a lock (§D.6.1), so the caller skips the locked step instead. The
+    hook runtime's state store shares this one lock implementation.
+
+    Example::
+
+        >>> acquire_lock(os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600), 0.2)  # doctest: +SKIP
+        True
+    """
     deadline = time.monotonic() + timeout_s
     while not _try_lock(descriptor):
         if time.monotonic() >= deadline:
@@ -282,7 +293,13 @@ def _try_lock(descriptor: int) -> bool:
     return True
 
 
-def _release(descriptor: int) -> None:
+def release_lock(descriptor: int) -> None:
+    """Release a lock :func:`acquire_lock` took on ``descriptor``.
+
+    Example::
+
+        >>> release_lock(descriptor)  # doctest: +SKIP
+    """
     if sys.platform == "win32":  # pragma: no cover - CI is POSIX-only (Q-D6)
         msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
         return
