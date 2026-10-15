@@ -9,7 +9,8 @@ that ships skills natively delegates here, differing only in the root:
 
 Because the bytes never depend on the root, the same skill is byte-identical in
 every root. Each directory holds ``SKILL.md`` plus byte-copies (copies, not
-symlinks) of the canonical ``scripts/`` and ``references/`` subtrees.
+symlinks) of the canonical ``scripts/`` and ``references/`` subtrees, minus
+Python bytecode caches (:mod:`coding_agent_playbook.adapters._skill_files`).
 
 ``SKILL.md`` follows the Agent Skills standard read by Claude Code and OpenCode:
 frontmatter ``name`` is forced to the skill id (= the directory name) and must
@@ -46,6 +47,7 @@ from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.adapters._prior_output import PriorOutput
+from coding_agent_playbook.adapters._skill_files import skill_subtree_files
 from coding_agent_playbook.harness.emitter import with_sentinel_body
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.types import format_frontmatter
@@ -481,14 +483,16 @@ def _copy_subtree(
     """Byte-copy every file under ``src`` into ``dst_root`` (``shutil.copy2``).
 
     Returns the destination files in sorted source order; ``[]`` when ``src``
-    is absent. Source symlinks are dereferenced (copies, not symlinks). Each
-    recorded path is the file ``copy2`` actually wrote, never a directory; a
-    destination blocked by user files is skipped (see :func:`_prepare_destination`).
+    is absent. Source symlinks are dereferenced (copies, not symlinks); bytecode
+    caches (``__pycache__/``, ``*.pyc``/``*.pyo``) are skipped, so they never
+    reach a skills root or the lockfile. Each recorded path is the file
+    ``copy2`` actually wrote, never a directory; a destination blocked by user
+    files is skipped (see :func:`_prepare_destination`).
     """
     if src is None or not src.is_dir():
         return []
     written: list[Path] = []
-    for source_file in sorted(path for path in src.rglob("*") if path.is_file()):
+    for source_file in skill_subtree_files(src):
         dst = dst_root / source_file.relative_to(src)
         if _prepare_destination(dst, skill_dir, prior):
             written.append(Path(shutil.copy2(source_file, dst)))
