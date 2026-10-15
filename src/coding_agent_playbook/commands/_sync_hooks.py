@@ -8,7 +8,10 @@
   them), whenever hooks are enabled and a hook-capable adapter is on;
 - :func:`check_settings_readable`: refuses a ``settings.json`` the Claude Code
   merge would choke on *before* any adapter writes;
-- :func:`finish_write`: write mode's pins, summary lines and approvals.
+- :func:`finish_write`: write mode's pins, summary lines and approvals;
+- :func:`opencode_restart_notice`: the §C.1.5 restart line, from the previous
+  and the new lockfile's whole-file shim entry (both ``[output] commit``
+  settings; never in a check, where no lockfile is written).
 
 An absent ``[hooks]`` table means zero byte change plus one notice line: an
 engine upgrade never switches executable hooks on.
@@ -43,6 +46,7 @@ from coding_agent_playbook.hook_policy import (
     adapter_label,
     resolve_effective_hooks,
 )
+from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH
 from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.lockfile import Provenance
 
@@ -64,6 +68,7 @@ __all__ = [
     "SyncHooks",
     "check_settings_readable",
     "finish_write",
+    "opencode_restart_notice",
     "report_settings_error",
     "resolve_sync_hooks",
     "runtime_enabled",
@@ -260,10 +265,15 @@ def settings_merge(adapters: Mapping[str, Adapter]) -> MergeResult | None:
     return adapter.settings_merge if isinstance(adapter, ClaudeCodeAdapter) else None
 
 
-def finish_write(ctx: SyncContext, hooks: SyncHooks, deps: SyncHookDeps) -> None:
+def finish_write(
+    ctx: SyncContext, hooks: SyncHooks, deps: SyncHookDeps, *, restart_notice: str | None = None
+) -> None:
     """Write mode, after the lockfile is saved: pins, summary lines and warnings, approvals.
 
-    Example: ``finish_write(ctx, hooks, SyncHookDeps())``.
+    ``restart_notice`` (from :func:`opencode_restart_notice`) prints after the
+    summary lines, before any warning or trust question.
+
+    Example: ``finish_write(ctx, hooks, SyncHookDeps(), restart_notice=None)``.
     """
     live = runtime_enabled(ctx, hooks)
     if live:
@@ -271,8 +281,38 @@ def finish_write(ctx: SyncContext, hooks: SyncHooks, deps: SyncHookDeps) -> None
         _sync_hook_local.write_pins(ctx.repo_root, deps, engine_version=version)
     for line in summary_lines(hooks, ctx.adapters):
         print(line)
+    if restart_notice is not None:
+        print(restart_notice)
     merge = settings_merge(ctx.adapters)
     for warning in [*hooks.warnings, *(merge.warnings if merge is not None else ())]:
         print(f"warning: {warning}", file=sys.stderr)
     if live:
         _sync_hook_local.approve_pending(hooks.resolved, ctx.repo_root, deps)
+
+
+def opencode_restart_notice(previous: Lockfile | None, current: Lockfile) -> str | None:
+    """The restart line when this sync wrote, changed or removed the OpenCode shim, else None.
+
+    OpenCode V1 has no plugin hot reload, so new shim bytes (a ``REG``
+    change) wait for a restart; ``guard_config.json`` is read on every
+    dispatch and never needs one (§C.3.2 "Reload behavior").
+
+    Example::
+
+        >>> opencode_restart_notice(None, Lockfile(2, "1.0", "", [])) is None
+        True
+    """
+    before, after = _shim_sha256(previous), _shim_sha256(current)
+    if before == after:
+        return None
+    if after is None:
+        return f"! {OPENCODE_SHIM_PATH} removed: restart OpenCode to unload it"
+    return f"! {OPENCODE_SHIM_PATH} changed: restart OpenCode to load it"
+
+
+def _shim_sha256(lock: Lockfile | None) -> str | None:
+    """The sha256 of ``lock``'s whole-file shim entry; a scoped entry never vouches for bytes."""
+    entries = lock.entries if lock is not None else ()
+    return next(
+        (e.sha256 for e in entries if e.path == OPENCODE_SHIM_PATH and e.is_whole_file), None
+    )

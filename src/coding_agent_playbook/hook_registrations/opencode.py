@@ -39,7 +39,10 @@ from coding_agent_playbook.hook_registrations.plan import (
     resolved_deadlines_ms,
 )
 from coding_agent_playbook.hook_runtime.event import Harness
-from coding_agent_playbook.hook_runtime.harness.opencode import NATIVE_TOOL_NAMES
+from coding_agent_playbook.hook_runtime.harness.opencode import (
+    NATIVE_TOOL_NAMES,
+    OPENCODE_SHIM_REL,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -62,7 +65,7 @@ __all__ = [
 #: The one generated OpenCode V1 plugin, repo-relative (§C.3.1). V1's
 #: non-recursive ``{plugin,plugins}/*.{ts,js}`` scan finds it, so ``opencode.json``
 #: is never touched; every other file under ``.opencode/plugin(s)/`` is the user's.
-OPENCODE_SHIM_PATH: Final = ".opencode/plugins/playbook-hooks.js"
+OPENCODE_SHIM_PATH: Final = OPENCODE_SHIM_REL  # one value: doctor reads it from the runtime
 #: Where ``REG`` goes in the template: a JS comment, never code an author controls.
 REG_PLACEHOLDER: Final = "/*@@REG@@*/"
 _SHIM_TEMPLATE: Final = "opencode-plugin.js"

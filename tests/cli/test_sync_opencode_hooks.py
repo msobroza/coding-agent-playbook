@@ -5,7 +5,9 @@ With ``[hooks] enabled`` and a hook that supports ``opencode``, one sync writes
 lock entry; a second sync rewrites identical bytes. The shim is deleted once no
 hook needs it, a hand edit is ``--check`` drift, and a since-disabled
 ``opencode`` adapter's pristine shim goes through the lockfile leftover policy.
-Every other file under ``.opencode/plugin(s)/`` belongs to the user.
+Every other file under ``.opencode/plugin(s)/`` belongs to the user. Write mode
+asks for an OpenCode restart whenever the shim's bytes change (V1 has no plugin
+hot reload), never for a ``guard_config.json``-only change and never in a check.
 """
 
 from __future__ import annotations
@@ -19,7 +21,15 @@ from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH
 from coding_agent_playbook.lockfile import Lockfile, compute_hash
-from tests.cli.hook_repo import CONFIG, HOOKS_ON, LAUNCHER, hook_deps, make_hook_repo, tree
+from tests.cli.hook_repo import (
+    CONFIG,
+    GUARD_CONFIG,
+    HOOKS_ON,
+    LAUNCHER,
+    hook_deps,
+    make_hook_repo,
+    tree,
+)
 from tests.fakes import FakeGitClient
 from tests.hook_samples import write_hook
 
@@ -182,3 +192,83 @@ def test_disabled_opencode_adapter_keeps_a_hand_edited_shim(synced: Path, tmp_pa
 
     assert shim.read_text(encoding="utf-8") == edited
     assert OPENCODE_SHIM_PATH in _lock_entries(synced)  # carried: still owned, never committable
+
+
+# --- §C.1.5 / §C.3.2 "Reload behavior": V1 has no plugin hot reload -----------------
+
+_RESTART = f"! {OPENCODE_SHIM_PATH} changed: restart OpenCode to load it"
+_UNLOAD = f"! {OPENCODE_SHIM_PATH} removed: restart OpenCode to unload it"
+
+
+def _narrow_guard_oc(repo: Path) -> None:
+    """Rewrite ``guard-oc`` to match shell calls only: its REG ``tools`` change."""
+    write_hook(
+        repo / "playbook" / "hooks",
+        "guard-oc",
+        supports=["claude_code", "opencode"],
+        handler={"builtin": "guard_y"},
+        matcher={"pre_tool_use": {"tools": ["shell"]}},
+    )
+
+
+def test_first_sync_prints_restart_notice_beside_hook_summary(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = _opencode_repo(tmp_path, make_synthetic_repo)
+
+    assert _sync_repo(repo, tmp_path) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert _sync_repo(repo, tmp_path) == 0
+
+    hooks_line = next(i for i, line in enumerate(lines) if line.startswith("✓ Hooks:"))
+    assert lines.index(_RESTART) > hooks_line
+    assert "restart OpenCode" not in capsys.readouterr().out  # identical bytes: no restart
+
+
+def test_reg_change_prints_restart_notice(
+    synced: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    shim = synced / OPENCODE_SHIM_PATH
+    before = shim.read_bytes()
+    _narrow_guard_oc(synced)
+
+    assert _sync_repo(synced, tmp_path) == 0
+
+    assert shim.read_bytes() != before
+    assert _RESTART in capsys.readouterr().out.splitlines()
+
+
+def test_guard_config_only_change_prints_no_restart_notice(
+    synced: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    shim, guard = synced / OPENCODE_SHIM_PATH, synced / GUARD_CONFIG
+    shim_before, guard_before = shim.read_bytes(), guard.read_bytes()
+    _set_config(synced, f"{CONFIG}\n{HOOKS_ON}state_ttl_days = 14\n")
+
+    assert _sync_repo(synced, tmp_path) == 0
+
+    assert guard.read_bytes() != guard_before  # the dispatcher reads it per call
+    assert shim.read_bytes() == shim_before
+    assert "restart OpenCode" not in capsys.readouterr().out
+
+
+def test_shim_removal_prints_unload_notice(
+    synced: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _set_config(synced, f"{CONFIG}\n[hooks]\nenabled = false\n")
+
+    assert _sync_repo(synced, tmp_path) == 0
+
+    assert _UNLOAD in capsys.readouterr().out.splitlines()
+
+
+def test_sync_check_never_prints_restart_notice(
+    synced: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _narrow_guard_oc(synced)
+    staged = FakeGitClient(staged=[OPENCODE_SHIM_PATH])
+
+    assert _sync_repo(synced, tmp_path, check=True) == 1
+    assert _sync_repo(synced, tmp_path, git=staged, check_staged=True) == 1
+
+    assert "restart OpenCode" not in capsys.readouterr().out

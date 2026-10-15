@@ -1,12 +1,13 @@
 """The environment checks of ``playbook-hook doctor`` (specs/prK-lifecycle-hooks.md §D.9, §C.2.7).
 
 Each check reads, never writes: a missing state root is reported, not
-created (the first hook event creates it). Severity is ``ok``, ``degraded``
-(hooks run, with a gap: stateless mode, a changed tool, an unapproved
-external handler) or ``broken`` (hooks cannot run as synced: no pin, a pin
-that cannot import the engine, a ``guard_config.json`` the runtime refuses).
-The registration canaries (§C.2.1 settings, the OpenCode shim) come with
-K3 and K4, which render what they would execute.
+created (the first hook event creates it). Severity is ``ok``, ``warning``
+(worth knowing, but nothing this worktree's hooks need is missing: exit 0),
+``degraded`` (hooks run, with a gap: stateless mode, a changed tool, an
+unapproved external handler) or ``broken`` (hooks cannot run as synced: no
+pin, a pin that cannot import the engine, a ``guard_config.json`` the runtime
+refuses). The OpenCode checks live in ``_doctor_opencode``; registration
+canaries through the harness argv are not run yet.
 """
 
 from __future__ import annotations
@@ -36,11 +37,11 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import RepoInfo
     from coding_agent_playbook.hook_runtime.pin import MachinePins
 
-__all__ = ["SEVERITY", "Check", "Severity", "environment_checks"]
+__all__ = ["SEVERITY", "Check", "Severity", "environment_checks", "read_regular_file"]
 
-type Severity = Literal["ok", "degraded", "broken"]
-#: Severity -> doctor's exit code: 0 healthy, 1 degraded, 2 broken.
-SEVERITY: Final = {"ok": 0, "degraded": 1, "broken": 2}
+type Severity = Literal["ok", "warning", "degraded", "broken"]
+#: Severity -> doctor's exit code: 0 healthy (a warning included), 1 degraded, 2 broken.
+SEVERITY: Final = {"ok": 0, "warning": 0, "degraded": 1, "broken": 2}
 MIN_PYTHON: Final = (3, 12)
 PROBE_TIMEOUT_S: Final = 30.0
 _MAX_READ: Final = 1024 * 1024
@@ -187,13 +188,13 @@ def _trust_check(repo: RepoInfo, deps: RuntimeDeps, cfg: GuardConfig | ConfigFau
 
 def _first_line(path: Path) -> str | None:
     """The first line of a small regular file (read only, symlinks refused), or ``None``."""
-    data = _read(path)
+    data = read_regular_file(path)
     lines = data.decode("utf-8", "replace").splitlines() if data else []
     return lines[0].strip() or None if lines else None
 
 
 def _pins(path: Path) -> MachinePins | None:
-    data = _read(path)
+    data = read_regular_file(path)
     try:
         document = json.loads(data or b"")
     except ValueError:
@@ -201,7 +202,14 @@ def _pins(path: Path) -> MachinePins | None:
     return parse_machine_pins(document) if isinstance(document, dict) else None
 
 
-def _read(path: Path) -> bytes | None:
+def read_regular_file(path: Path) -> bytes | None:
+    """The bytes of a regular file of at most 1 MiB (``path`` itself no symlink), else ``None``.
+
+    Example::
+
+        >>> read_regular_file(Path("/no/such/file")) is None
+        True
+    """
     try:
         info = os.lstat(path)
         if not stat.S_ISREG(info.st_mode) or info.st_size > _MAX_READ:

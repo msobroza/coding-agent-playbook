@@ -52,6 +52,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "NATIVE_TOOL_NAMES",
+    "OPENCODE_SHIM_REL",
     "V1_ARG_ALIASES",
     "WIRE_VERSION",
     "parse_opencode",
@@ -59,6 +60,11 @@ __all__ = [
 ]
 
 WIRE_VERSION: Final = 1
+
+#: The generated V1 shim that spawns this dispatcher, repo-relative (§C.3.1). The
+#: runtime owns the value so ``doctor`` can check the shim without importing the
+#: engine; ``hook_registrations.OPENCODE_SHIM_PATH`` is this same constant.
+OPENCODE_SHIM_REL: Final = ".opencode/plugins/playbook-hooks.js"
 
 #: The inverse of the shim's ``TOOL`` map (§C.3.2): Claude-shaped -> OpenCode V1 name.
 #: ``Task`` is accepted beside ``Agent`` (PR #52765 uses it).

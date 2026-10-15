@@ -39,7 +39,8 @@ adapters (each told the real repo and the prior lockfile) plus the sync-level
 ``guard_config.json`` and script copies. ``.claude/settings.json`` is a shared
 output: merged against the real file even into the ``--check`` scratch dir,
 and never whole-file locked, gitignored or flagged as staged output. Write mode
-then pins the interpreter and asks the TTY-only trust questions.
+then pins the interpreter, says when OpenCode must restart (the shim's lock
+entry changed), and asks the TTY-only trust questions.
 """
 
 from __future__ import annotations
@@ -291,7 +292,10 @@ def _run_write(ctx: SyncContext, git: GitClient, hook_deps: SyncHookDeps) -> int
     else:
         _sync_output.warn_tracked_output(ctx.repo_root, owned, git)
     print(f"Summary: {len(written)} files written, {len(removed)} removed")
-    _sync_hooks.finish_write(ctx, result.hooks or _sync_hooks.SyncHooks(), hook_deps)
+    restart = _sync_hooks.opencode_restart_notice(policy.previous, lockfile)
+    _sync_hooks.finish_write(
+        ctx, result.hooks or _sync_hooks.SyncHooks(), hook_deps, restart_notice=restart
+    )
     return 0
 
 

@@ -5,7 +5,10 @@ production, because a harness fails open on every launcher or interpreter
 error (§D.4): the ``guard_config.json`` digest against its lock entry, the
 interpreter pin (it exists, is executable, runs ``-I`` on Python >= 3.12 and
 imports this engine), the state root's mode and owner, the ``machine.json``
-tool signatures and the external handlers' trust approvals.
+tool signatures and the external handlers' trust approvals. Then OpenCode
+(``_doctor_opencode``): the ``opencode --version`` floor (>= 1.18.29),
+``OPENCODE_DISABLE_PROJECT_CONFIG`` and the shim's lockfile digest and
+registrations. A shim that does not match its lockfile entry is never read.
 
 ``--repin [PYTHON]`` is the one write: it overwrites the interpreter pin
 (default: this interpreter, unresolved) before checking. Exit codes: 0
@@ -24,6 +27,7 @@ from coding_agent_playbook.hook_runtime._doctor_checks import (
     Check,
     environment_checks,
 )
+from coding_agent_playbook.hook_runtime._doctor_opencode import opencode_checks
 from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
 from coding_agent_playbook.hook_runtime.paths import find_repo
 from coding_agent_playbook.hook_runtime.pin import ensure_interpreter_pin
@@ -42,7 +46,7 @@ def run_doctor(repo_dir: str, *, deps: RuntimeDeps, repin: str | None = None) ->
     Example::
 
         >>> [c.name for c in run_doctor(".", deps=RuntimeDeps())]  # doctest: +SKIP
-        ['guard_config', 'pin', 'state', 'machine.json', 'trust']
+        ['guard_config', 'pin', 'state', 'machine.json', 'trust', 'opencode', 'opencode-shim']
     """
     repo = find_repo(repo_dir)
     if repo is None:
@@ -52,7 +56,7 @@ def run_doctor(repo_dir: str, *, deps: RuntimeDeps, repin: str | None = None) ->
     checks: list[Check] = []
     if repin is not None:
         checks.append(_repin(repo.git_dir, repin))
-    return [*checks, *environment_checks(repo, deps)]
+    return [*checks, *environment_checks(repo, deps), *opencode_checks(repo, deps)]
 
 
 def _repin(git_dir: str, interpreter: str) -> Check:
@@ -65,7 +69,7 @@ def _repin(git_dir: str, interpreter: str) -> Check:
 
 
 def exit_code(checks: Sequence[Check]) -> int:
-    """0 healthy, 1 degraded, 2 broken: the worst check decides.
+    """0 healthy, 1 degraded, 2 broken: the worst check decides (a warning is healthy).
 
     Example::
 
