@@ -11,8 +11,10 @@ Hooks (specs/prK-lifecycle-hooks.md §C.1.3): every adapter first gets
 ``begin_sync`` with the real repo and the prior lockfile, receives
 ``write_hook`` after the skills and before ``finalize``, and then hands back its
 scoped (per-JSON-element) lock entries. A co-owned file (an adapter's
-``shared_outputs``) never gets a whole-file entry, and a copied hook script
-records its exec bit (§B.6).
+``shared_outputs``) never gets a whole-file entry, a ``finalize`` output the
+adapter declares in ``runtime_outputs`` (the launcher, the OpenCode shim) is
+``kind = "runtime"`` rather than ``composite``, and a copied hook script records
+its exec bit (§B.6).
 """
 
 from __future__ import annotations
@@ -163,9 +165,29 @@ def dispatch_to_adapters(
         _write_artifacts(recorder, name, adapter, (rules, prompts, skills), output_root)
         for hook in plan.hooks:
             recorder.record(adapter.write_hook(hook, output_root), _hook_provenance(hook, name))
-        recorder.record(adapter.finalize(output_root), Provenance(kind="composite", adapter=name))
+        _record_finalize(recorder, name, adapter, output_root)
         recorder.managed.extend(adapter.managed_lock_entries())
     return recorder
+
+
+def _record_finalize(
+    recorder: ProvenanceRecorder, name: str, adapter: Adapter, output_root: Path
+) -> None:
+    """``finalize`` output: ``runtime`` for a declared ``runtime_outputs`` file, else ``composite``."""
+    runtime = frozenset(type(adapter).runtime_outputs)
+    for path in adapter.finalize(output_root):
+        declared = _spelled_relative(path, output_root) in runtime
+        kind: ProvenanceKind = "runtime" if declared else "composite"
+        recorder.record([path], Provenance(kind=kind, adapter=name))
+
+
+def _spelled_relative(path: Path, root: Path) -> str:
+    """``path`` relative to ``root`` as spelled, POSIX (``""`` outside it): a symlinked
+    output dir must not hide a declared runtime file, so nothing is resolved."""
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return ""
 
 
 def _write_artifacts(

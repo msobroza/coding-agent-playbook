@@ -1,7 +1,7 @@
-"""OpenCode V1 rendering of a registration plan: the shim's ``REG`` (specs/prK-lifecycle-hooks.md §C.3.2).
+"""OpenCode V1 rendering of a registration plan: the shim and its ``REG`` (specs/prK-lifecycle-hooks.md §C.3).
 
 :func:`to_opencode_reg` turns a plan into the one object the packaged shim
-template embeds in place of its ``/*@@REG@@*/`` placeholder:
+template embeds in place of its :data:`REG_PLACEHOLDER`:
 ``{event: {"timeout_ms": int, "tools": [V1 name, ...] | "*"}}``. The shim's
 ``wants()`` pre-filters on it, its kill timer reads ``timeout_ms``, and
 ``session_start`` is always present for the bootstrap and the inactive notice.
@@ -12,7 +12,9 @@ names, :data:`OPENCODE_V1_TOOLS`, ``"*"``), never from a hook author: a
 ``str.replace`` placeholder can never carry JS. :func:`plan_opencode_reg` is the
 adapter's one call; it takes the deadlines over every enabled hook, exactly as
 ``guard_config.json`` does, so the shim never kills the dispatcher before its
-watchdog has written a decided result (§D.4).
+watchdog has written a decided result (§D.4). :func:`render_opencode_shim`
+fills the template into the one file the OpenCode adapter owns,
+:data:`OPENCODE_SHIM_PATH` (§C.3.1).
 """
 
 from __future__ import annotations
@@ -22,7 +24,13 @@ import re
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, Literal, NotRequired, TypedDict
 
+from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.hook_policy import HOOK_EVENTS, TOOL_CLASS_NAMES
+from coding_agent_playbook.hook_registrations._templates import (
+    SENTINEL_PLACEHOLDER,
+    fill_placeholder,
+    shim_template,
+)
 from coding_agent_playbook.hook_registrations.plan import (
     BOOTSTRAP_DEADLINE_MS,
     HookRegistration,
@@ -41,12 +49,23 @@ if TYPE_CHECKING:
 
 __all__ = [
     "OPENCODE_REG_EVENTS",
+    "OPENCODE_SHIM_PATH",
     "OPENCODE_V1_TOOLS",
+    "REG_PLACEHOLDER",
     "OpenCodeRegEntry",
     "opencode_reg_json",
     "plan_opencode_reg",
+    "render_opencode_shim",
     "to_opencode_reg",
 ]
+
+#: The one generated OpenCode V1 plugin, repo-relative (§C.3.1). V1's
+#: non-recursive ``{plugin,plugins}/*.{ts,js}`` scan finds it, so ``opencode.json``
+#: is never touched; every other file under ``.opencode/plugin(s)/`` is the user's.
+OPENCODE_SHIM_PATH: Final = ".opencode/plugins/playbook-hooks.js"
+#: Where ``REG`` goes in the template: a JS comment, never code an author controls.
+REG_PLACEHOLDER: Final = "/*@@REG@@*/"
+_SHIM_TEMPLATE: Final = "opencode-plugin.js"
 
 #: The events the shim forwards, in canonical order: the keys of its ``EVENT``
 #: table. ``pre_compact`` has no V1 hook, so it is never one (§C.1.2, §C.5).
@@ -138,6 +157,24 @@ def opencode_reg_json(reg: Mapping[str, OpenCodeRegEntry]) -> str:
     Example: ``opencode_reg_json({"stop": {"timeout_ms": 5000}}) == '{"stop":{"timeout_ms":5000}}'``.
     """
     return json.dumps(reg, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
+def render_opencode_shim(
+    reg: Mapping[str, OpenCodeRegEntry], *, template: str | None = None
+) -> str:
+    """The text of :data:`OPENCODE_SHIM_PATH` for ``reg`` (§C.3.1, §C.3.2).
+
+    The packaged template's line-1 placeholder becomes the ``//`` sentinel line
+    and :data:`REG_PLACEHOLDER` the :func:`opencode_reg_json` bytes; ``template``
+    replaces the packaged text (tests). Raises ValueError unless each
+    placeholder occurs exactly once. Pure: no shebang, LF only, nothing
+    machine-specific, so every clone renders the same bytes.
+
+    Example: ``render_opencode_shim(reg).splitlines()[0] == sentinel_line("slash")``.
+    """
+    text = shim_template(_SHIM_TEMPLATE) if template is None else template
+    text = fill_placeholder(text, SENTINEL_PLACEHOLDER, sentinel_line("slash"))
+    return fill_placeholder(text, REG_PLACEHOLDER, opencode_reg_json(reg))
 
 
 def _bootstrap() -> HookRegistration:

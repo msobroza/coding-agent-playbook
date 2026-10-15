@@ -12,10 +12,12 @@ without running a suite, and ``FakeBaselineGit`` stands in for
 (K2) behind :class:`coding_agent_playbook.hook_policy.ConfigSchemaLookup`.
 ``FakePinWriter`` stands in for the ``hook_runtime.pin`` writers ``playbook sync``
 calls (the interpreter pin and ``machine.json`` under the git dir).
+:func:`record_opens` spies on every ``open`` so a scan test can prove a file was never read.
 """
 
 from __future__ import annotations
 
+import io
 import sys
 import unicodedata
 from dataclasses import dataclass, field
@@ -28,6 +30,8 @@ from coding_agent_playbook.hook_runtime.pin import PinResult
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+
+    import pytest
 
     from coding_agent_playbook.commands._validation import ValidationError
     from coding_agent_playbook.hook_policy import ConfigKeySpec
@@ -206,3 +210,21 @@ class FakePinWriter:
         self.calls.append(("write_machine_pins", repo_root))
         self.tools = {name: list(argv) for name, argv in tools.items()}
         return Path("/fake/.git/playbook-hooks/machine.json") if self.git else None
+
+
+def record_opens(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
+    """Record every path opened through ``open``/``Path.open`` (read or write).
+
+    Example: ``opened = record_opens(monkeypatch); scan(); assert secret not in opened``.
+    """
+    opened: list[Path] = []
+    real_open = io.open
+
+    def spy(file: object, *args: object, **kwargs: object) -> object:
+        if isinstance(file, str | Path):
+            opened.append(Path(file))
+        return real_open(file, *args, **kwargs)  # type: ignore[call-overload]
+
+    monkeypatch.setattr(io, "open", spy)
+    monkeypatch.setattr("builtins.open", spy)
+    return opened

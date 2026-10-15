@@ -59,6 +59,12 @@ class Adapter(ABC):
     #: gitignores it, flags it as staged output, or deletes it.
     shared_outputs: ClassVar[tuple[str, ...]] = ()
 
+    #: Repo-relative files :meth:`finalize` writes that are hook runtime plumbing
+    #: (the Claude Code launcher, the OpenCode shim), not composed artifacts: their
+    #: lock entries get ``kind = "runtime"`` and no artifact id (§B.6), which tells
+    #: guard-generated-outputs there is no source artifact to point an editor at.
+    runtime_outputs: ClassVar[tuple[str, ...]] = ()
+
     @abstractmethod
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
         """Write a rendered rule to the harness-specific location(s).

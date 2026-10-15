@@ -136,6 +136,40 @@ def test_dispatch_records_hook_provenance(tmp_path: Path) -> None:
     assert adapter.began is not None and adapter.began[0] == tmp_path / "out"
 
 
+class FakeRuntimeAdapter(Adapter):
+    """``finalize`` writes one declared runtime file (a shim) and one composed file."""
+
+    name = "fake_runtime"
+    runtime_outputs = ("plugins/shim.js",)
+
+    def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
+        return []
+
+    def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
+        return []
+
+    def finalize(self, repo_root: Path) -> list[Path]:
+        written = [repo_root / "plugins" / "shim.js", repo_root / "COMPOSED.md"]
+        for path in written:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("x\n", encoding="utf-8")
+        return written
+
+
+def test_dispatch_tags_declared_runtime_outputs_runtime_and_the_rest_composite(
+    tmp_path: Path,
+) -> None:
+    assert Adapter.runtime_outputs == ()
+    recorder = dispatch_to_adapters({"fake_runtime": FakeRuntimeAdapter()}, [], [], [], tmp_path)
+
+    shim, composed = recorder.written
+    # §B.6: the shim (like the launcher) is runtime plumbing, not a composed artifact.
+    assert recorder.provenance[shim.resolve()] == Provenance(kind="runtime", adapter="fake_runtime")
+    assert recorder.provenance[composed.resolve()] == Provenance(
+        kind="composite", adapter="fake_runtime"
+    )
+
+
 def test_build_lockfile_skips_shared_outputs_without_scoped_entries(tmp_path: Path) -> None:
     # The last managed element was removed: settings.json was rewritten, but it is
     # co-owned, so a whole-file entry would let the leftover policy delete it later.

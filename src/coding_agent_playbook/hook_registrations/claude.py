@@ -9,12 +9,16 @@ one-placeholder template (``str.replace``, never Jinja: L7).
 from __future__ import annotations
 
 import re
-from importlib import resources
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters.claude_settings import LAUNCHER_TOKEN
 from coding_agent_playbook.hook_policy import TOOL_CLASS_NAMES
+from coding_agent_playbook.hook_registrations._templates import (
+    SENTINEL_PLACEHOLDER,
+    fill_placeholder,
+    shim_template,
+)
 from coding_agent_playbook.hook_registrations.plan import (
     STOP_EVENTS,
     deadlines_ms,
@@ -56,8 +60,7 @@ _REGEX_META: Final = re.compile(r"([.^$*+?()\[\]{}|\\/])")
 _PROJECT_ROOT: Final = (
     "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}"
 )
-_LAUNCHER_TEMPLATE: Final = ("resources", "hook_shims", "claude-launch.sh")
-_SENTINEL_PLACEHOLDER: Final = "@@SENTINEL_LINE@@"
+_LAUNCHER_TEMPLATE: Final = "claude-launch.sh"
 _CLAUDE: Final = Harness.CLAUDE_CODE.value
 
 
@@ -184,7 +187,5 @@ def render_claude_launcher() -> str:
 
     Example: ``render_claude_launcher().splitlines()[0] == sentinel_line("hash")``.
     """
-    template = resources.files("coding_agent_playbook").joinpath(*_LAUNCHER_TEMPLATE)
-    return template.read_text(encoding="utf-8").replace(
-        _SENTINEL_PLACEHOLDER, sentinel_line("hash"), 1
-    )
+    template = shim_template(_LAUNCHER_TEMPLATE)
+    return fill_placeholder(template, SENTINEL_PLACEHOLDER, sentinel_line("hash"))

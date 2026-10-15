@@ -76,6 +76,9 @@ class ClaudeCodeAdapter(Adapter):
     #: ours (scoped lock entries), so the file is never deleted or gitignored.
     shared_outputs: ClassVar[tuple[str, ...]] = (CLAUDE_SETTINGS_PATH,)
 
+    #: The launcher carries no artifact of its own: a ``kind = "runtime"`` lock entry (§B.6).
+    runtime_outputs: ClassVar[tuple[str, ...]] = (LAUNCHER_PATH,)
+
     def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
         # Buffer of (priority, rule_id, rendered_section) tuples populated by
         # ``write_rule``. ``finalize`` sorts by (priority, rule_id) and joins.

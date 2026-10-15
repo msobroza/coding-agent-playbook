@@ -8,7 +8,13 @@ adapter. This adapter writes OpenCode's own native outputs:
 - skills  -> ``.opencode/skills/<id>/`` (``SKILL.md`` + ``scripts/`` +
   ``references/``) through the shared
   :class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter`, so OpenCode
-  no longer depends on the ``claude_code`` adapter being enabled for skills.
+  no longer depends on the ``claude_code`` adapter being enabled for skills;
+- hooks   -> exactly one generated V1 plugin, ``.opencode/plugins/playbook-hooks.js``
+  (specs/prK-lifecycle-hooks.md §C.3), which forwards the events OpenCode can
+  enforce to ``playbook-hook``. It is the one exception to SPEC §10.6.4's "never
+  touch ``.opencode/plugin(s)/``": the adapter owns that single path, every
+  other file there stays the user's, and ``opencode.json`` is never touched.
+  Hook advisories reach OpenCode through ``AGENTS.md``, like rules.
 
 OpenCode *also* scans ``.claude/skills/`` (Claude-compatibility discovery), so
 with ``claude_code`` enabled the same skill is found twice. That is safe:
@@ -23,19 +29,27 @@ import dataclasses
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
+from coding_agent_playbook._file_identity import FileSet
 from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.hook_policy import HOOK_SUPPORT
+from coding_agent_playbook.hook_registrations import (
+    OPENCODE_SHIM_PATH,
+    plan_opencode_reg,
+    render_opencode_shim,
+)
 from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
 
     from coding_agent_playbook._typing import Prompt, Rule, Skill
+    from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.renderer import RuleRegistry
 
 
 class OpenCodeAdapter(Adapter):
-    """Translate canonical prompts and skills into OpenCode's native layout.
+    """Translate canonical prompts, skills and hooks into OpenCode's native layout.
 
     Rules are an intentional no-op on this adapter: OpenCode picks them up from
     the AGENTS.md adapter's output (``AGENTS.md`` at repo root). See SPEC.md
@@ -47,6 +61,9 @@ class OpenCodeAdapter(Adapter):
     when callers (or tests) omit it, prompts render with no auto-appendix —
     ``includes_rules:`` becomes purely declarative. Mirrors the
     ``ContinueAdapter`` plumbing pattern.
+
+    Hooks are buffered by :meth:`write_hook` and rendered by :meth:`finalize`
+    into the one shim; with no hook OpenCode enforces, nothing is written.
     """
 
     name = "opencode"
@@ -54,10 +71,24 @@ class OpenCodeAdapter(Adapter):
     #: Native skills root; OpenCode discovers ``.opencode/skills/<name>/SKILL.md``.
     _SKILL_WRITER: ClassVar[SkillWriter] = SkillWriter(Path(".opencode") / "skills")
 
-    output_locations: ClassVar[tuple[str, ...]] = (".opencode/command/", _SKILL_WRITER.location)
+    #: The shim is declared as a file, never its directory: the leftover policy
+    #: may delete a pristine stale shim but never prunes the user's plugins dir.
+    output_locations: ClassVar[tuple[str, ...]] = (
+        ".opencode/command/",
+        _SKILL_WRITER.location,
+        OPENCODE_SHIM_PATH,
+    )
+
+    #: pre_tool_use, post_tool_use, session_start (degraded), stop (evidence-only).
+    #: pre_compact is not registered: its only decision is ``none`` (§C.1.2).
+    hook_support: ClassVar[Mapping[str, frozenset[str]]] = HOOK_SUPPORT["opencode"]
+
+    #: The shim carries no artifact of its own: a ``kind = "runtime"`` lock entry (§B.6).
+    runtime_outputs: ClassVar[tuple[str, ...]] = (OPENCODE_SHIM_PATH,)
 
     def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
         self._rule_registry = rule_registry
+        self._hooks: list[ResolvedHook] = []
 
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
         """Return ``[]`` — OpenCode reads ``AGENTS.md`` natively.
@@ -107,6 +138,59 @@ class OpenCodeAdapter(Adapter):
         """
         return self._SKILL_WRITER.write(skill, repo_root)
 
+    def write_hook(self, hook: ResolvedHook, repo_root: Path) -> list[Path]:
+        """Buffer ``hook`` for :meth:`finalize`; write nothing, return ``[]``.
+
+        Every hook is kept, whatever its ``supports``: the shim's timeouts are
+        planned against the deadlines ``guard_config.json`` gets over all of them
+        (§D.4). There is no advisory channel here: OpenCode reads ``AGENTS.md``,
+        which carries every hook's advisory (§C.1.2).
+
+        Example: ``adapter.write_hook(hook, repo_root)`` -> ``[]``.
+        """
+        del repo_root
+        self._hooks.append(hook)
+        return []
+
+    def finalize(self, repo_root: Path) -> list[Path]:
+        """Write the shim when any buffered hook is enforced on OpenCode; return it.
+
+        The bytes are UTF-8 with LF endings (``write_text`` would emit CRLF on
+        Windows) and depend only on the hooks, never on their order. An empty
+        ``REG`` writes nothing, and a stale shim is left to :meth:`stale_outputs`.
+
+        Example: ``adapter.finalize(repo_root)`` -> ``[repo_root / OPENCODE_SHIM_PATH]``.
+        """
+        reg = plan_opencode_reg(self._hooks)
+        if not reg:
+            return []
+        shim = repo_root / OPENCODE_SHIM_PATH
+        shim.parent.mkdir(parents=True, exist_ok=True)
+        shim.write_bytes(render_opencode_shim(reg).encode("utf-8"))
+        return [shim]
+
+    def stale_outputs(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
+        """Stale commands (the ABC's sentinel scan) plus a shim this sync did not write.
+
+        The shim is checked as one path, never by walking ``.opencode/plugins/``:
+        that dir holds the user's plugins and V2 plugin packages (with their
+        ``node_modules``), and a sentinel there does not make a file ours. A shim
+        reached through a symlink, or lacking the line-1 sentinel, is the user's.
+        Deletes nothing.
+        """
+        stale = self._stale_by_sentinel(written_paths, repo_root)
+        shim = repo_root / OPENCODE_SHIM_PATH
+        if self._is_stale_shim(shim, FileSet.of(written_paths), repo_root):
+            stale.append(shim)
+        return stale
+
+    def _is_stale_shim(self, shim: Path, written: FileSet, repo_root: Path) -> bool:
+        """Engine-owned (sentinel, reached without a symlink, not a secret) and not written."""
+        spelled = repo_root.resolve().joinpath(OPENCODE_SHIM_PATH)
+        if spelled.resolve() != spelled or written.holds(shim):
+            return False
+        return bool(self._scan_targets([shim], repo_root)) and self._carries_sentinel(shim)
+
     def _output_directories(self, repo_root: Path) -> Iterable[Path]:
         """``.opencode/command/`` is scanned by the ABC's anchored sentinel scan.
 
@@ -115,9 +199,10 @@ class OpenCodeAdapter(Adapter):
 
         ``.opencode/skills/`` is never scanned: stale skill output is settled by
         ``playbook sync``'s lockfile leftover policy (SPEC §4.2 step 9, §10.8).
-        Per SPEC.md §10.6.4, the OpenCode adapter must not touch
-        ``.opencode/agent/``, ``.opencode/plugin/``, ``opencode.json``,
-        ``AGENTS.md``, or ``.claude/`` — those belong to the user or to
-        sibling adapters.
+        ``.opencode/plugins/`` is never scanned either: :meth:`stale_outputs`
+        checks the one shim path. Per SPEC.md §10.6.4, the OpenCode adapter must
+        not touch ``.opencode/agent/``, any other file in ``.opencode/plugin(s)/``,
+        ``opencode.json``, ``AGENTS.md``, or ``.claude/`` — those belong to the
+        user or to sibling adapters.
         """
         return [repo_root / ".opencode" / "command"]
