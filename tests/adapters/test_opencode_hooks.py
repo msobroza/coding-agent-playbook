@@ -14,7 +14,6 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -30,8 +29,10 @@ from coding_agent_playbook.hook_registrations import (
     plan_opencode_reg,
     render_opencode_shim,
 )
+from coding_agent_playbook.resources.hook_shims.opencode_wire_port import WIRE_BEGIN, WIRE_END
 from tests.fakes import record_opens
 from tests.hook_samples import resolved_hook
+from tests.node_kit import needs_node, run_node
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -42,9 +43,6 @@ posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks"
 
 _BOTH = ("claude_code", "opencode")
 _GOLDEN = Path(__file__).resolve().parents[1] / "fixtures" / "opencode" / "playbook-hooks.golden.js"
-_WIRE_BEGIN = "// @@wire-parse:begin"
-_WIRE_END = "// @@wire-parse:end"
-_NODE_TIMEOUT_S = 30
 
 
 def _pack() -> list[ResolvedHook]:
@@ -206,8 +204,8 @@ def test_shim_embeds_reg_as_one_json_line(tmp_path: Path) -> None:
 def test_shim_marks_the_wire_parse_slice_once(tmp_path: Path) -> None:
     lines = _shim_text(tmp_path).splitlines()
 
-    assert lines.count(_WIRE_BEGIN) == 1 and lines.count(_WIRE_END) == 1
-    wire = "\n".join(lines[lines.index(_WIRE_BEGIN) + 1 : lines.index(_WIRE_END)])
+    assert lines.count(WIRE_BEGIN) == 1 and lines.count(WIRE_END) == 1
+    wire = "\n".join(lines[lines.index(WIRE_BEGIN) + 1 : lines.index(WIRE_END)])
     for definition in ("const CAP = ", "function inactive(", "function parse("):
         assert definition in wire
 
@@ -300,19 +298,6 @@ def test_shim_symlink_is_never_opened_or_deleted(
 # --- node, when present ------------------------------------------------------------------------
 
 
-def _node() -> str | None:
-    """An executable ``node`` on PATH, found without ``shutil.which`` (CLI tests stub it)."""
-    for directory in os.environ.get("PATH", "").split(os.pathsep):
-        candidate = Path(directory or ".") / ("node.exe" if sys.platform == "win32" else "node")
-        if candidate.is_file() and os.access(candidate, os.X_OK):
-            return str(candidate)
-    return None
-
-
-_NODE = _node()
-needs_node = pytest.mark.skipif(_NODE is None, reason="node is not on PATH")
-
-
 def _as_module(tmp_path: Path) -> Path:
     """The rendered shim copied to ``.mjs``: node 18 parses a bare ``.js`` as CommonJS."""
     _finalize(tmp_path / "repo", _pack())
@@ -323,12 +308,9 @@ def _as_module(tmp_path: Path) -> Path:
 
 @needs_node
 def test_node_check_accepts_rendered_shim(tmp_path: Path) -> None:
-    assert _NODE is not None
     module = _as_module(tmp_path)
 
-    done = subprocess.run(
-        [_NODE, "--check", str(module)], capture_output=True, text=True, timeout=_NODE_TIMEOUT_S
-    )
+    done = run_node(["--check", str(module)])
 
     assert done.returncode == 0, done.stderr
 
@@ -344,15 +326,9 @@ console.log(JSON.stringify({names: Object.keys(ns), keys: Object.keys(ns.default
 
 @needs_node
 def test_node_loads_one_default_export_with_the_v1_server_hooks(tmp_path: Path) -> None:
-    assert _NODE is not None
     module = _as_module(tmp_path)
 
-    done = subprocess.run(
-        [_NODE, "--input-type=module", "-e", _LOAD_PROBE, "--", module.as_uri()],
-        capture_output=True,
-        text=True,
-        timeout=_NODE_TIMEOUT_S,
-    )
+    done = run_node(["--input-type=module", "-e", _LOAD_PROBE, "--", module.as_uri()])
 
     assert done.returncode == 0, done.stderr
     assert json.loads(done.stdout) == {

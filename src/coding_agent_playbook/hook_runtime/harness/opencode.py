@@ -50,7 +50,13 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.harness import ParseContext, ParseOutcome
     from coding_agent_playbook.hook_runtime.harness._payload import Payload
 
-__all__ = ["NATIVE_TOOL_NAMES", "WIRE_VERSION", "parse_opencode", "render_opencode"]
+__all__ = [
+    "NATIVE_TOOL_NAMES",
+    "V1_ARG_ALIASES",
+    "WIRE_VERSION",
+    "parse_opencode",
+    "render_opencode",
+]
 
 WIRE_VERSION: Final = 1
 
@@ -71,6 +77,21 @@ NATIVE_TOOL_NAMES: Final[Mapping[str, str]] = MappingProxyType(
         "TodoWrite": "todowrite",
         "AskUserQuestion": "question",
         "Skill": "skill",
+    }
+)
+
+#: The shim's ``ALIAS`` table (§C.3.3, §D.2.2): V1 native argument -> the
+#: snake_case alias the shim adds beside it. Both spellings reach the
+#: normalizer, which reads either; a glob/grep ``path`` is a search directory
+#: and is never aliased to ``file_path``. test_wire_contract pins the template to it.
+V1_ARG_ALIASES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "filePath": "file_path",
+        "oldString": "old_string",
+        "newString": "new_string",
+        "replaceAll": "replace_all",
+        "patchText": "patch_text",
+        "include": "glob",
     }
 )
 

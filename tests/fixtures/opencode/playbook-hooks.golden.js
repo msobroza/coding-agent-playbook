@@ -35,6 +35,10 @@ function inactive(why) {   // fail open; say so once per process
   return { decision: "none", reason: "", context: "", notice: "", failed: why }
 }
 
+// wire/1 fields are strings: anything else is dropped, never String()-coerced, which can throw
+// (an object with a non-callable toString) inside the child's close listener, past every catch.
+const str = (v) => (typeof v === "string" ? v : "")
+
 function parse(code, out) {   // exit 10 = decided deny; a raw 2 (usage, interpreter error) is not a deny
   if (code !== 0 && code !== 10) return inactive(`dispatcher exited ${code}`)
   const text = out.trim()
@@ -46,9 +50,9 @@ function parse(code, out) {   // exit 10 = decided deny; a raw 2 (usage, interpr
   const deny = code === 10 || j.decision === "deny"   // ask was already degraded to deny (§D.3.6); "allow" does not exist (L6)
   return {
     decision: deny ? "deny" : "none",
-    reason: String(j.reason ?? "").trim() || (deny ? "Blocked by a playbook hook." : ""),
-    context: (Array.isArray(j.context) ? j.context.join("\n") : "").slice(0, CAP),
-    notice: String(j.notice ?? "").slice(0, CAP),
+    reason: str(j.reason).trim() || (deny ? "Blocked by a playbook hook." : ""),
+    context: (Array.isArray(j.context) ? j.context.filter((c) => typeof c === "string").join("\n") : "").slice(0, CAP),
+    notice: str(j.notice).slice(0, CAP),
   }
 }
 // @@wire-parse:end

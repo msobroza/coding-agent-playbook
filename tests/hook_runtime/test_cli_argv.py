@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import shlex
 import sys
 from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.hook_registrations import OPENCODE_REG_EVENTS
+from coding_agent_playbook.hook_registrations._templates import shim_template
 from coding_agent_playbook.hook_runtime.cli import DispatchArgs, main, parse_dispatch_argv
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.harness import DENY_EXIT
@@ -71,6 +74,30 @@ def test_parses_opencode_shim_argv_with_project_dir() -> None:
     parsed = parse_dispatch_argv(SHIM_ARGV[4:])
 
     assert parsed == DispatchArgs(EventName.POST_TOOL_USE, Harness.OPENCODE, "/work/proj", None)
+
+
+def _shim_spawn_argv(event: str, root: str) -> list[str]:
+    """The argv array the packaged shim template passes to ``spawn`` after the pin.
+
+    The template's literal is read as written: quoted strings stay, the
+    ``event`` and ``ROOT`` identifiers take the given values.
+    """
+    match = re.search(r"spawn\(py, \[(.*?)\]", shim_template("opencode-plugin.js"), re.DOTALL)
+    assert match is not None, "no spawn(py, [...]) call in the shim template"
+    values = {"event": event, "ROOT": root}
+    words = [word.strip() for word in match.group(1).split(",")]
+    return [word[1:-1] if word.startswith('"') else values[word] for word in words]
+
+
+@pytest.mark.parametrize("event", OPENCODE_REG_EVENTS)
+def test_shim_spawn_argv_parses_with_hook_runtime_cli(event: str) -> None:
+    argv = _shim_spawn_argv(event, "/work/proj")
+
+    assert _shim_spawn_argv("post_tool_use", "/work/proj") == SHIM_ARGV
+    assert argv[:4] == ["-I", "-m", "coding_agent_playbook.hook_runtime", "dispatch"]
+    assert parse_dispatch_argv(argv[4:]) == DispatchArgs(
+        EventName(event), Harness.OPENCODE, "/work/proj", None
+    )
 
 
 @pytest.mark.parametrize(
