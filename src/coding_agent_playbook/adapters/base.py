@@ -20,7 +20,7 @@ from coding_agent_playbook._sentinel import file_has_sentinel
 from coding_agent_playbook.security.files import is_secret_file, user_home
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Mapping, Sequence
     from pathlib import Path
 
     from coding_agent_playbook._typing import Prompt, Rule, Skill
@@ -57,6 +57,8 @@ class Adapter(ABC):
     #: (the Claude Code launcher, the OpenCode shim), not composed artifacts: their
     #: lock entries get ``kind = "runtime"`` and no artifact id (§B.6), which tells
     #: guard-generated-outputs there is no source artifact to point an editor at.
+    #: Each is written whole at a fixed path, so sync refuses one the user holds
+    #: (:meth:`planned_runtime_outputs`, ``_owned_files``) instead of overwriting it.
     runtime_outputs: ClassVar[tuple[str, ...]] = ()
 
     @abstractmethod
@@ -114,6 +116,22 @@ class Adapter(ABC):
         """
         rule = hook.advisory
         return [] if rule is None else self.write_rule(rule, repo_root)
+
+    def planned_runtime_outputs(self, hooks: Sequence[ResolvedHook]) -> tuple[str, ...]:
+        """The :attr:`runtime_outputs` :meth:`finalize` will write for ``hooks`` (repo-relative).
+
+        ``playbook sync`` checks each one on the real repo before any adapter
+        writes and exits 1 when it is the user's (``_owned_files``: a same-named
+        file without the sentinel line, or a symlink on the way). The default is
+        conservative, so declaring a runtime output is enough to guard it: every
+        declared file once any hook lists this adapter in ``supports``. Adapters
+        that know exactly when they write override it with the same plan
+        :meth:`finalize` uses.
+
+        Example: ``adapter.planned_runtime_outputs(hooks.resolved)`` -> ``(LAUNCHER_PATH,)``.
+        """
+        targeted = any(self.name in hook.supports for hook in hooks)
+        return type(self).runtime_outputs if targeted else ()
 
     def managed_lock_entries(self) -> list[LockEntry]:
         """Sub-file ownership records (scoped lock entries) of the last :meth:`finalize`.

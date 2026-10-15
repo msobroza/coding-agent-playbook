@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import re
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -24,6 +25,7 @@ from coding_agent_playbook.adapters._overlay_native import (
     network_native_rows,
     sensitive_read_native_rows,
 )
+from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters._secret_native import (
     DENY_POINTER,
     DENY_READ_POINTER,
@@ -247,6 +249,37 @@ def test_launcher_written_with_line1_sentinel_and_cleaned_when_stale(tmp_path: P
     adapter.cleanup_stale({p.resolve() for p in written}, tmp_path)
     assert not launcher.exists()
     assert (tmp_path / CLAUDE_SETTINGS_PATH).is_file()
+
+
+def test_user_owned_launcher_is_refused_before_settings_json_is_merged(tmp_path: Path) -> None:
+    """Review #2: the launcher used to be written with no ownership check."""
+    launcher = tmp_path / LAUNCHER_PATH
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text("echo 'my own launcher'\n", encoding="utf-8")
+
+    with pytest.raises(UserOwnedFileError, match=re.escape(LAUNCHER_PATH)):
+        _sync(tmp_path, [resolved_hook()])
+
+    assert launcher.read_text("utf-8") == "echo 'my own launcher'\n"
+    assert not (tmp_path / CLAUDE_SETTINGS_PATH).exists()
+
+
+def test_engine_owned_launcher_is_rewritten(tmp_path: Path) -> None:
+    launcher = tmp_path / LAUNCHER_PATH
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text(f"{sentinel_line('hash')}\nold\n", encoding="utf-8")
+
+    _sync(tmp_path, [resolved_hook()])
+
+    assert launcher.read_bytes() == render_claude_launcher().encode("utf-8")
+
+
+def test_planned_runtime_outputs_name_the_launcher_only_when_emit_writes_it() -> None:
+    adapter = ClaudeCodeAdapter()
+
+    assert adapter.planned_runtime_outputs([resolved_hook()]) == (LAUNCHER_PATH,)
+    assert adapter.planned_runtime_outputs([resolved_hook(supports=("opencode",))]) == ()
+    assert adapter.planned_runtime_outputs([]) == ()
 
 
 def test_settings_json_never_reported_stale(tmp_path: Path) -> None:

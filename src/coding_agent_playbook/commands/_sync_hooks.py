@@ -14,6 +14,9 @@
   and its ``ruff`` table the repo's own ruff selection (§E.3);
 - :func:`check_settings_readable`: refuses a ``settings.json`` the Claude Code
   merge would choke on *before* any adapter writes;
+- :func:`check_runtime_outputs_owned`: refuses, just as early, a user file (or
+  a symlink) where an adapter is about to write a runtime output whole — the
+  launcher, the OpenCode shim (``adapters._owned_files``);
 - :func:`finish_write`: write mode's pins, summary lines and approvals;
 - :func:`opencode_restart_notice`: the §C.1.5 restart line, from the previous
   and the new lockfile's whole-file shim entry (both ``[output] commit``
@@ -36,6 +39,7 @@ from coding_agent_playbook._guard_config_ruff import (
     ruff_candidate_codes,
 )
 from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
+from coding_agent_playbook.adapters._owned_files import check_engine_owned
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.claude_settings import (
     CLAUDE_SETTINGS_PATH,
@@ -76,6 +80,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
 
+    from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
     from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.adapters.claude_settings import MergeResult, SettingsMergeError
     from coding_agent_playbook.commands._sync_hook_local import SyncHookDeps
@@ -89,10 +94,12 @@ __all__ = [
     "HOOKS_NOTICE",
     "HookPolicyError",
     "SyncHooks",
+    "check_runtime_outputs_owned",
     "check_settings_readable",
     "finish_write",
     "layer_packages",
     "opencode_restart_notice",
+    "report_owned_file_error",
     "report_settings_error",
     "resolve_sync_hooks",
     "runtime_enabled",
@@ -274,6 +281,40 @@ def check_settings_readable(ctx: SyncContext, hooks: SyncHooks, prior: Lockfile 
     except FileNotFoundError:
         return
     parse_settings(decode_settings(data))
+
+
+def check_runtime_outputs_owned(
+    repo_root: Path, adapters: Mapping[str, Adapter], hooks: SyncHooks
+) -> None:
+    """Raise ``UserOwnedFileError`` now if a runtime output this sync writes whole is the user's.
+
+    Each adapter names the ``runtime_outputs`` its ``finalize`` will write for
+    the on hooks (``planned_runtime_outputs``); each is checked on the real repo
+    in every mode (``--check`` renders into an empty scratch dir, where nothing
+    could be in the way). Called before any adapter writes, like
+    :func:`check_settings_readable`, so a user's same-named file or a symlink
+    on the way stops the sync with nothing written (review findings #1, #2).
+
+    Example: ``check_runtime_outputs_owned(ctx.repo_root, adapters, rendered.hooks)``.
+    """
+    for adapter in adapters.values():
+        for relative in adapter.planned_runtime_outputs(hooks.resolved):
+            check_engine_owned(repo_root / relative, repo_root)
+
+
+def report_owned_file_error(exc: UserOwnedFileError, *, check: bool) -> int:
+    """Explain an engine-owned path the user holds; return 1 (never a traceback).
+
+    Example: ``return report_owned_file_error(exc, check=False)``.
+    """
+    if check:
+        print(f"Cannot verify {exc}.")
+        print(f"{exc.remedy}, then re-run 'playbook sync --check'.")
+        return 1
+    print(f"error: {exc}", file=sys.stderr)
+    print(f"error: playbook sync stopped; {exc.path} was not changed.", file=sys.stderr)
+    print(f"error: {exc.remedy}, then re-run 'playbook sync'.", file=sys.stderr)
+    return 1
 
 
 def report_settings_error(exc: SettingsMergeError, *, check: bool) -> int:

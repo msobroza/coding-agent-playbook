@@ -188,7 +188,7 @@ local output. `AGENTS.md` never carries it, and it goes away with the hook.
 
 ### 10. Out-of-tree adapters: the hook members, and `stale_outputs`
 
-`Adapter` gains six hook members. Each is a concrete default, like
+`Adapter` gains seven hook members. Each is a concrete default, like
 `write_skill`, so an adapter written before hooks keeps working unchanged and
 is an advisory-only target:
 
@@ -197,8 +197,14 @@ is an advisory-only target:
 - `shared_outputs` (class attribute): files co-owned with the user, such as
   `.claude/settings.json`, which get scoped lock entries for their managed
   elements and never a whole-file one.
-- `runtime_outputs` (class attribute): hook plumbing that `finalize` writes,
-  locked as `kind = "runtime"`.
+- `runtime_outputs` (class attribute): hook plumbing that `finalize` writes
+  whole, locked as `kind = "runtime"`. Sync refuses to write one over a user
+  file of the same name (no sentinel on line 1) or through a symlink: it exits
+  1 naming the file before any adapter writes.
+- `planned_runtime_outputs(hooks)`: which `runtime_outputs` this sync's
+  `finalize` will write, for that check. The default (every declared one once a
+  hook lists your adapter in `supports`) is safe; override it only to name
+  exactly what `finalize` writes.
 - `begin_sync(repo_root, prior_lock, *, hooks_config=None)`: called once per
   sync before any `write_*`, always with the real repository, `--check` included.
 - `write_hook(hook, repo_root)`: called for every on hook, after the skills. The

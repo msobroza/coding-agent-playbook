@@ -14,6 +14,8 @@ adapter. This adapter writes OpenCode's own native outputs:
   enforce to ``playbook-hook``. It is the one exception to SPEC §10.6.4's "never
   touch ``.opencode/plugin(s)/``": the adapter owns that single path, every
   other file there stays the user's, and ``opencode.json`` is never touched.
+  A user file already at that path (no sentinel line) or a symlink on the way
+  is refused, never overwritten (``_owned_files``).
   Hook advisories reach OpenCode through ``AGENTS.md``, like rules.
 
 OpenCode *also* scans ``.claude/skills/`` (Claude-compatibility discovery), so
@@ -30,6 +32,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._file_identity import FileSet
+from coding_agent_playbook.adapters._owned_files import write_engine_owned
 from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT
@@ -41,7 +44,7 @@ from coding_agent_playbook.hook_registrations import (
 from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Mapping, Sequence
 
     from coding_agent_playbook._typing import Prompt, Rule, Skill
     from coding_agent_playbook.hook_policy import ResolvedHook
@@ -152,22 +155,33 @@ class OpenCodeAdapter(Adapter):
         self._hooks.append(hook)
         return []
 
+    def planned_runtime_outputs(self, hooks: Sequence[ResolvedHook]) -> tuple[str, ...]:
+        """``(OPENCODE_SHIM_PATH,)`` exactly when :meth:`finalize` writes the shim for ``hooks``.
+
+        Same plan as :meth:`finalize` (a non-empty ``REG``), so ``playbook sync``
+        refuses a user's same-named plugin only when it would overwrite it.
+
+        Example: ``adapter.planned_runtime_outputs([])`` -> ``()``.
+        """
+        return (OPENCODE_SHIM_PATH,) if plan_opencode_reg(hooks) else ()
+
     def finalize(self, repo_root: Path) -> list[Path]:
         """Write the shim when any buffered hook is enforced on OpenCode; return it.
 
         The bytes are UTF-8 with LF endings (``write_text`` would emit CRLF on
         Windows) and depend only on the hooks, never on their order. An empty
         ``REG`` writes nothing, and a stale shim is left to :meth:`stale_outputs`.
+        A same-named user plugin (no sentinel line) or a symlink on the way raises
+        :class:`~._owned_files.UserOwnedFileError` and is never overwritten;
+        ``playbook sync`` reports it before any adapter writes.
 
         Example: ``adapter.finalize(repo_root)`` -> ``[repo_root / OPENCODE_SHIM_PATH]``.
         """
         reg = plan_opencode_reg(self._hooks)
         if not reg:
             return []
-        shim = repo_root / OPENCODE_SHIM_PATH
-        shim.parent.mkdir(parents=True, exist_ok=True)
-        shim.write_bytes(render_opencode_shim(reg).encode("utf-8"))
-        return [shim]
+        shim = render_opencode_shim(reg).encode("utf-8")
+        return [write_engine_owned(repo_root / OPENCODE_SHIM_PATH, repo_root, shim)]
 
     def stale_outputs(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
         """Stale commands (the ABC's sentinel scan) plus a shim this sync did not write.

@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._sentinel import sentinel_line
-from coding_agent_playbook.adapters._claude_hooks import ClaudeHookEmitter
+from coding_agent_playbook.adapters._claude_hooks import ClaudeHookEmitter, plans_launcher
 from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_settings import CLAUDE_SETTINGS_PATH
@@ -33,7 +33,7 @@ from coding_agent_playbook.hook_registrations import LAUNCHER_PATH
 from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Mapping, Sequence
 
     from coding_agent_playbook.adapters.claude_settings import MergeResult
     from coding_agent_playbook.hook_policy import ResolvedHook
@@ -111,6 +111,16 @@ class ClaudeCodeAdapter(Adapter):
         if self._hooks.add(hook):
             return []
         return super().write_hook(hook, repo_root)
+
+    def planned_runtime_outputs(self, hooks: Sequence[ResolvedHook]) -> tuple[str, ...]:
+        """``(LAUNCHER_PATH,)`` exactly when :meth:`finalize` writes the launcher for ``hooks``.
+
+        Same plan as the emitter (any registration), so ``playbook sync``
+        refuses a user's same-named file only when it would overwrite it.
+
+        Example: ``adapter.planned_runtime_outputs([])`` -> ``()``.
+        """
+        return (LAUNCHER_PATH,) if plans_launcher(hooks, self.name, self.hook_support) else ()
 
     def managed_lock_entries(self) -> list[LockEntry]:
         """One scoped entry per managed ``settings.json`` element, unchanged ones included."""

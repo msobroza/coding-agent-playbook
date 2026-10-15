@@ -38,9 +38,11 @@ Hooks (§C.1.3, ``_sync_hooks``): every mode renders the on hooks through the
 adapters (each told the real repo and the prior lockfile) plus the sync-level
 ``guard_config.json`` and script copies. ``.claude/settings.json`` is a shared
 output: merged against the real file even into the ``--check`` scratch dir,
-and never whole-file locked, gitignored or flagged as staged output. Write mode
-then pins the interpreter, says when OpenCode must restart (the shim's lock
-entry changed), and asks the TTY-only trust questions.
+and never whole-file locked, gitignored or flagged as staged output. The
+launcher and the OpenCode shim are written whole, so every mode first refuses
+(exit 1, naming the file) a user file or a symlink at either path it is about
+to write. Write mode then pins the interpreter, says when OpenCode must
+restart (the shim's lock entry changed), and asks the TTY-only trust questions.
 """
 
 from __future__ import annotations
@@ -52,6 +54,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
 from coding_agent_playbook.adapters._skill_writer import deciding_ownership_against
 from coding_agent_playbook.adapters.base import Adapter
@@ -113,8 +116,9 @@ def _render_into(
     ``settings.json`` — are read from the real repo through ``ctx``; only the
     writes go to ``output_root``. So ``--check`` modes render into an empty
     scratch dir without copying the working tree. Every template runs, and a
-    ``settings.json`` the merge would refuse is rejected, before the first
-    write. Returns the written paths with their provenance, and the hooks.
+    ``settings.json`` the merge would refuse or a user file where a runtime
+    output (the launcher, the OpenCode shim) goes is rejected, before the
+    first write. Returns the written paths with their provenance, and the hooks.
     """
     rendered = render_artifacts(ctx)
     _sync_hooks.check_settings_readable(ctx, rendered.hooks, prior)
@@ -122,6 +126,7 @@ def _render_into(
     # includes_rules appendix can resolve through the registry.
     adapters = discover_adapters(ctx.config, rule_registry=rendered.registry)
     ctx.adapters = adapters
+    _sync_hooks.check_runtime_outputs_owned(ctx.repo_root, adapters, rendered.hooks)
     recorder = dispatch_to_adapters(
         adapters,
         rendered.rules,
@@ -178,8 +183,9 @@ def execute(
     validate`` rule set; tests inject a fake). ``hook_deps`` holds write
     mode's machine-local hook seams (pins, trust store, TTY); tests inject
     fakes. Returns 1, having written nothing, on any validate finding, when a
-    template is rejected by the Jinja sandbox, or when ``settings.json`` is
-    not valid JSON.
+    template is rejected by the Jinja sandbox, when ``settings.json`` is
+    not valid JSON, or when a user file (or a symlink) holds the path of the
+    launcher or the OpenCode shim.
 
     Example::
 
@@ -206,6 +212,8 @@ def execute(
         return report_sandbox_violation(exc, ctx.repo_root, outcome=_ABORT_OUTCOME)
     except SettingsMergeError as exc:
         return _sync_hooks.report_settings_error(exc, check=check or check_staged)
+    except UserOwnedFileError as exc:
+        return _sync_hooks.report_owned_file_error(exc, check=check or check_staged)
     except _sync_hooks.HookPolicyError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

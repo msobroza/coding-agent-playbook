@@ -7,7 +7,8 @@ the output root only when the merge changed something, never unlinked), the
 opt-in ``permissions.allow`` remediation strings, the native deny rows of the
 §E.4 guards that are on (``_secret_native``, ``_destructive_native``; rows for
 the same pointer are concatenated) and of the §E.5 overlay guards an overlay
-activated (``_overlay_native``), and the committed launcher.
+activated (``_overlay_native``), and the committed launcher — written whole, so a
+user file at its path or a symlink on the way is refused (``_owned_files``).
 Hooks Claude Code cannot enforce go back to the adapter's ``CLAUDE.md`` path.
 """
 
@@ -21,6 +22,7 @@ from coding_agent_playbook.adapters._overlay_native import (
     network_native_rows,
     sensitive_read_native_rows,
 )
+from coding_agent_playbook.adapters._owned_files import check_engine_owned, write_engine_owned
 from coding_agent_playbook.adapters._secret_native import secret_native_rows
 from coding_agent_playbook.adapters.claude_settings import (
     CLAUDE_SETTINGS_PATH,
@@ -38,7 +40,7 @@ from coding_agent_playbook.hook_registrations import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
     from coding_agent_playbook.hook_policy import ResolvedHook
@@ -51,6 +53,7 @@ __all__ = [
     "CLAUDE_HEARTBEAT_LINE",
     "REMEDIATION_ALLOW",
     "ClaudeHookEmitter",
+    "plans_launcher",
 ]
 
 #: The hook whose session-start output the heartbeat line checks for (§E.1).
@@ -121,17 +124,31 @@ class ClaudeHookEmitter:
         return CLAUDE_HEARTBEAT_LINE if briefed else None
 
     def emit(self, out: Path) -> list[Path]:
-        """Merge ``settings.json`` (raising before any write on a bad file), then the launcher."""
-        registrations = plan_registrations(
+        """Merge ``settings.json``, then write the launcher; raise before any write when refused.
+
+        A ``settings.json`` that cannot be merged raises ``SettingsMergeError``;
+        a user file at the launcher path (no sentinel line) or a symlink on the
+        way raises :class:`~._owned_files.UserOwnedFileError` and is never
+        overwritten. ``playbook sync`` checks both before any adapter writes.
+        """
+        registrations = self.registrations()
+        launcher = out / LAUNCHER_PATH
+        if registrations:
+            check_engine_owned(launcher, out)  # before the merge: nothing half-written
+        written = self._merge_settings(out, registrations)
+        if registrations:
+            launch_sh = render_claude_launcher().encode("utf-8")  # bytes: LF on Windows too
+            written.append(write_engine_owned(launcher, out, launch_sh))
+        return written
+
+    def registrations(self) -> list[HookRegistration]:
+        """The registrations of the hooks Claude Code enforces, timed on every hook's deadlines."""
+        return plan_registrations(
             self.enforced,
             self.adapter,
             {self.adapter: self.support},
             deadlines=resolved_deadlines_ms(self.every_hook),
         )
-        written = self._merge_settings(out, registrations)
-        if registrations:
-            written.append(_write_launcher(out))
-        return written
 
     def entries(self) -> list[LockEntry]:
         """The scoped lock entries of the last merge (no-op groups included), else []."""
@@ -183,9 +200,14 @@ def _joined(*parts: Mapping[str, tuple[str, ...]]) -> dict[str, tuple[str, ...]]
     return joined
 
 
-def _write_launcher(out: Path) -> Path:
-    """The committed launcher, as bytes: ``write_text`` would turn LF into CRLF on Windows."""
-    path = out / LAUNCHER_PATH
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(render_claude_launcher().encode("utf-8"))
-    return path
+def plans_launcher(
+    hooks: Sequence[ResolvedHook], adapter: str, support: Mapping[str, frozenset[str]]
+) -> bool:
+    """Whether :meth:`ClaudeHookEmitter.emit` writes the launcher for ``hooks`` (any registration).
+
+    Example: ``plans_launcher([], "claude_code", HOOK_SUPPORT["claude_code"])`` -> ``False``.
+    """
+    emitter = ClaudeHookEmitter(adapter, support)
+    for hook in hooks:
+        emitter.add(hook)
+    return bool(emitter.registrations())

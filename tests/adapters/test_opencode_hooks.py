@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook._sentinel import has_sentinel, sentinel_line
+from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT
 from coding_agent_playbook.hook_registrations import (
@@ -287,6 +288,47 @@ def test_shim_without_sentinel_is_user_owned(tmp_path: Path) -> None:
 
     assert OpenCodeAdapter().cleanup_stale(set(), tmp_path) == []
     assert shim.is_file()
+
+
+def test_finalize_refuses_a_same_named_user_file(tmp_path: Path) -> None:
+    """Review #1: finalize used to overwrite a user's plugin of the same name."""
+    shim = _write(tmp_path / OPENCODE_SHIM_PATH, "export default { id: 'mine' }\n")
+
+    with pytest.raises(UserOwnedFileError, match=re.escape(OPENCODE_SHIM_PATH)):
+        _finalize(tmp_path, _pack())
+
+    assert shim.read_text(encoding="utf-8") == "export default { id: 'mine' }\n"
+
+
+@posix_only
+def test_finalize_refuses_a_symlinked_plugins_dir(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    repo = tmp_path / "repo"
+    (repo / ".opencode").mkdir(parents=True)
+    (repo / ".opencode" / "plugins").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(UserOwnedFileError, match="symbolic link"):
+        _finalize(repo, _pack())
+
+    assert list(outside.iterdir()) == []
+
+
+def test_finalize_rewrites_an_engine_owned_shim(tmp_path: Path) -> None:
+    shim = _write(tmp_path / OPENCODE_SHIM_PATH, _tagged("old"))
+
+    _finalize(tmp_path, _pack())
+
+    assert shim.read_text(encoding="utf-8") == render_opencode_shim(plan_opencode_reg(_pack()))
+
+
+def test_planned_runtime_outputs_name_the_shim_only_when_finalize_writes_it() -> None:
+    adapter = OpenCodeAdapter()
+    claude_only = resolved_hook("claude-only", supports=("claude_code",))
+
+    assert adapter.planned_runtime_outputs(_pack()) == (OPENCODE_SHIM_PATH,)
+    assert adapter.planned_runtime_outputs([claude_only]) == ()
+    assert adapter.planned_runtime_outputs([]) == ()
 
 
 @posix_only
