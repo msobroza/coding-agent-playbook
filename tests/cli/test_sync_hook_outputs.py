@@ -17,6 +17,10 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.adapters._destructive_native import (
+    DESTRUCTIVE_COMMAND_GUARD,
+    destructive_native_rows,
+)
 from coding_agent_playbook.adapters._secret_native import SECRETS_PATH_GUARD, secret_native_rows
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.lockfile import Lockfile, compute_hash
@@ -65,6 +69,16 @@ ENGINE_PACK_EVENTS = [
 def _guard() -> Any:
     """secrets-path-guard as sync resolves it here: no extra globs or allowed paths."""
     return resolved_hook(SECRETS_PATH_GUARD, config={})
+
+
+def _native_rows() -> dict[str, tuple[str, ...]]:
+    """The K8 native twins on here: secrets-path-guard's rows, then destructive-command-guard's."""
+    rows = dict(secret_native_rows([_guard()]))
+    for pointer, extra in destructive_native_rows(
+        [resolved_hook(DESTRUCTIVE_COMMAND_GUARD)]
+    ).items():
+        rows[pointer] = (*rows.get(pointer, ()), *extra)
+    return rows
 
 
 def _sync_repo(repo: Path, tmp_path: Path, **kwargs: Any) -> int:
@@ -122,15 +136,17 @@ def test_first_sync_writes_every_hook_output(synced: Path) -> None:
     assert (synced / LAUNCHER).is_file()
     config = json.loads((synced / GUARD_CONFIG).read_bytes())
     # The engine pack's default-tier hooks (Tracks K5, K6), K7's feedback hooks and K8's
-    # secret hooks; guard-eval-fixtures is opt-in, and the fixture detects no pytest (its
-    # lint hook is off).
+    # secret and Bash guards; guard-eval-fixtures and command-convention-guard are opt-in,
+    # and the fixture detects no pytest (its lint hook is off).
     assert sorted(config["hooks"]) == [
         "block-precommit-bypass",
         "clean-code-metrics-nonregression",
         "control-plane-guard",
+        "destructive-command-guard",
         "error-handling-lint-feedback",
         "eval-task-authoring-lint",
         "gate-weakening-guard",
+        "git-commit-push-policy-guard",
         "guard-ext",
         "guard-generated-outputs",
         "guard-x",
@@ -328,8 +344,8 @@ def test_lockfile_has_scoped_settings_entries_and_no_whole_file_entry(synced: Pa
     scopes = sorted(entry.scope for entry in entries if entry.path == SETTINGS)
     hook_scopes = [scope for scope in scopes if scope.startswith("json:/hooks/")]
     assert hook_scopes == sorted(f"json:/hooks/{event}" for event in ENGINE_PACK_EVENTS)
-    # secrets-path-guard's native twin (K8): one scoped entry per managed string.
-    rows = secret_native_rows([_guard()])
+    # The K8 native twins: one scoped entry per managed string.
+    rows = _native_rows()
     assert sorted(set(scopes) - set(hook_scopes)) == sorted(f"json:{p}" for p in rows)
     assert len(scopes) - len(hook_scopes) == sum(len(strings) for strings in rows.values())
     by_path = {entry.path: entry for entry in entries if entry.is_whole_file}
@@ -376,19 +392,20 @@ def test_summary_lines_counts_and_hand_edit_warning(
     repo = make_hook_repo(tmp_path / "repo", make_synthetic_repo)
     assert _sync_repo(repo, tmp_path) == 0
     out = capsys.readouterr().out
-    # guard-x, guard-ext and the engine pack's nineteen default-tier hooks on here (seven
+    # guard-x, guard-ext and the engine pack's twenty-one default-tier hooks on here (seven
     # protect, the Stop coordinator, two of its stage hooks, block-precommit-bypass (K6),
     # post-edit-ruff-format, prompt-write-scope-guard, the error-handling and typing lint
-    # hooks, toolchain-missing-hint (K7), the three secret hooks (K8)); pytest's is off (no
-    # pytest detected), and so is the ML deserialization guard (no ML stack); the opt-in
-    # ones (guard-eval-fixtures, three K6 Stop hooks, the notebook hook) are skipped. The
-    # briefing and the two lint hooks have no advisory body, so Continue gets three fewer.
-    # The member-less UserPromptSubmit group is one entry, toolchain-missing-hint's
-    # PostToolUseFailure another, and each native secret deny row one more.
-    native = sum(len(rows) for rows in secret_native_rows([_guard()]).values())
-    assert "✓ Hooks: 21 enabled, 7 skipped (" in out
-    assert "claude_code: 21 enforced" in out
-    assert "continue: 18 advisory" in out
+    # hooks, toolchain-missing-hint (K7), the three secret hooks and the two Bash guards
+    # (K8)); pytest's is off (no pytest detected), and so is the ML deserialization guard
+    # (no ML stack); the opt-in ones (guard-eval-fixtures, three K6 Stop hooks, the notebook
+    # hook, command-convention-guard) are skipped. The briefing and the two lint hooks have
+    # no advisory body, so Continue gets three fewer. The member-less UserPromptSubmit group
+    # is one entry, toolchain-missing-hint's PostToolUseFailure another, and each native
+    # deny row (secrets and destructive prefixes) one more.
+    native = sum(len(rows) for rows in _native_rows().values())
+    assert "✓ Hooks: 23 enabled, 8 skipped (" in out
+    assert "claude_code: 23 enforced" in out
+    assert "continue: 20 advisory" in out
     updated = f"{6 + native} managed entries updated, 0 removed (user keys untouched)"
     assert f"✓ {SETTINGS}: {updated}" in out
 

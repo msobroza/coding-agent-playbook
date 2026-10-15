@@ -131,6 +131,10 @@ class LazyGit:
         """See ``GitPort.unpushed_lines``."""
         return self._port().unpushed_lines(upstream)
 
+    def porcelain_status(self) -> tuple[tuple[str, str], ...]:
+        """See ``GitPort.porcelain_status``."""
+        return self._port().porcelain_status()
+
 
 def open_trust_store(repo: RepoInfo, deps: RuntimeDeps) -> TrustPort | None:
     """``deps.trust``, else the user-local store of ``repo``; ``None`` when it cannot be used.

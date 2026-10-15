@@ -6,10 +6,20 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
-from coding_agent_playbook.hook_runtime.gitargv import GitInvocation, parse_git
+from coding_agent_playbook.hook_runtime.gitargv import (
+    GitInvocation,
+    Uninspectable,
+    commit_message_sources,
+    parse_git,
+)
 from coding_agent_playbook.hook_runtime.shell import ShellConfig, parse_shell
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _RTK = ShellConfig(wrapper_prefixes=("rtk",))
 
@@ -143,3 +153,42 @@ def test_git_without_a_subcommand(
         (),
         global_args,
     )
+
+
+_HEREDOC_M = "git commit -m \"$(cat <<'EOF'\nfeat: x\n\nRefs: AB-1\nEOF\n)\""
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("git commit -m a -m b", ["a\n\nb"]),
+        ("git commit -am 'fix -n handling'", ["fix -n handling"]),
+        ("git commit --message=one --message two", ["one\n\ntwo"]),
+        (_HEREDOC_M, ["feat: x\n\nRefs: AB-1"]),
+        ("git commit -F - <<EOF\nfeat: y\nEOF\n", ["feat: y\n"]),
+        ("git commit -F msg.txt", ["feat: from file\n"]),
+        ("git commit -F sub/../msg.txt", ["feat: from file\n"]),
+        ("git commit -F /etc/hostname", "outside the worktree"),
+        ("git commit -F <(printf x)", "process substitution"),
+        ("git commit -m \"$(printf 'feat: x')\"", "command substitution"),
+        ("git commit", "an editor composes"),
+        ("git commit --amend --no-edit", "reused"),
+        ("git commit -C HEAD", "reused"),
+    ],
+)
+def test_commit_message_sources(tmp_path: Path, text: str, expected: list[str] | str) -> None:
+    (tmp_path / "msg.txt").write_text("feat: from file\n", encoding="utf-8")
+    (tmp_path / "sub").mkdir()
+    invocation = _parsed(text, cwd=str(tmp_path))
+
+    found = commit_message_sources(invocation, root=str(tmp_path))
+
+    if isinstance(expected, list):
+        assert found == expected
+    else:
+        assert isinstance(found, Uninspectable)
+        assert expected in found.why
+
+
+def test_echo_git_commit_is_not_a_git_invocation() -> None:
+    assert _git("echo git commit --author=x -m y") is None

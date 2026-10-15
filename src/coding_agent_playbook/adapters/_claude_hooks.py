@@ -5,7 +5,8 @@ Code enforces natively: one managed matcher group per event, merged into the
 co-owned ``.claude/settings.json`` (§C.2.4: read from the real repo, written to
 the output root only when the merge changed something, never unlinked), the
 opt-in ``permissions.allow`` remediation strings, the native deny rows of the
-§E.4 guards that are on (``_secret_native``), and the committed launcher.
+§E.4 guards that are on (``_secret_native``, ``_destructive_native``; rows for
+the same pointer are concatenated), and the committed launcher.
 Hooks Claude Code cannot enforce go back to the adapter's ``CLAUDE.md`` path.
 """
 
@@ -14,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.adapters._destructive_native import destructive_native_rows
 from coding_agent_playbook.adapters._secret_native import secret_native_rows
 from coding_agent_playbook.adapters.claude_settings import (
     CLAUDE_SETTINGS_PATH,
@@ -140,7 +142,11 @@ class ClaudeHookEmitter:
             reg.claude_event: [DesiredGroup(reg.artifact_id, to_claude_group(reg))]
             for reg in registrations
         }
-        strings = {**self._remediation_strings(), **secret_native_rows(self.every_hook)}
+        strings = _joined(
+            self._remediation_strings(),
+            secret_native_rows(self.every_hook),
+            destructive_native_rows(self.every_hook),
+        )
         if not (desired or strings or self.prior):
             return []
         target = out / CLAUDE_SETTINGS_PATH
@@ -157,6 +163,15 @@ class ClaudeHookEmitter:
         if cfg is None or not (cfg.enabled and cfg.render_remediation_allow):
             return {}
         return {_ALLOW_POINTER: REMEDIATION_ALLOW}
+
+
+def _joined(*parts: Mapping[str, tuple[str, ...]]) -> dict[str, tuple[str, ...]]:
+    """The managed strings per pointer, each part's rows after the previous ones (deduped)."""
+    joined: dict[str, tuple[str, ...]] = {}
+    for part in parts:
+        for pointer, rows in part.items():
+            joined[pointer] = tuple(dict.fromkeys((*joined.get(pointer, ()), *rows)))
+    return joined
 
 
 def _write_launcher(out: Path) -> Path:

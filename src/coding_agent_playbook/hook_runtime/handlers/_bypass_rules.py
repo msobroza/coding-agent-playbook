@@ -22,6 +22,7 @@ import posixpath
 import re
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.hook_runtime._git_options import config_words, git_args
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.gitargv import parse_git
 
@@ -39,48 +40,6 @@ __all__ = ["BYPASS_SUBCOMMANDS", "PLUMBING", "alias_bypasses", "segment_verdict"
 BYPASS_SUBCOMMANDS: Final = frozenset({"commit", "push", "merge", "rebase", "cherry-pick", "am"})
 #: Plumbing that writes commits or refs without running any hook.
 PLUMBING: Final = frozenset({"commit-tree", "update-ref"})
-#: Short options that take a value, per subcommand: the value is data, not flags.
-_VALUE_SHORTS: Final = {
-    "commit": frozenset("mFCct"),
-    "merge": frozenset("mFsX"),
-    "rebase": frozenset("sxX"),
-    "cherry-pick": frozenset("mX"),
-    "push": frozenset("o"),
-}
-#: Long options that take the next word as their value (when not glued with ``=``).
-_VALUE_LONGS: Final = frozenset(
-    {
-        "--message",
-        "--file",
-        "--reuse-message",
-        "--reedit-message",
-        "--author",
-        "--date",
-        "--template",
-        "--cleanup",
-        "--fixup",
-        "--squash",
-        "--trailer",
-        "--pathspec-from-file",
-        "--strategy",
-        "--strategy-option",
-        "--exec",
-        "--onto",
-        "--push-option",
-        "--repo",
-        "--mainline",
-    }
-)
-_CONFIG_READS: Final = frozenset(
-    {"--get", "--get-all", "--get-regexp", "--get-urlmatch", "-l", "--list", "get", "list"}
-)
-_CONFIG_VERBS: Final = frozenset(
-    {"set", "unset", "--unset", "--unset-all", "--add", "--replace-all"}
-)
-#: ``git config`` options whose value is the next word (``--file .git/config``).
-_CONFIG_VALUE_OPTIONS: Final = frozenset(
-    {"-f", "--file", "--blob", "--type", "--default", "--comment", "--value"}
-)
 _CONFIG_KEY: Final = re.compile(r"GIT_CONFIG_KEY_\d+")
 _HOOKS_PATH: Final = "core.hookspath"
 
@@ -125,7 +84,7 @@ def alias_bypasses(value: str) -> bool:
     words = value.split()
     if "commit" not in words:
         return False
-    return "n" in _short_flags(words[words.index("commit") + 1 :], "commit")
+    return "n" in git_args(words[words.index("commit") + 1 :], "commit").shorts
 
 
 def _env_verdict(
@@ -165,9 +124,10 @@ def _git_verdict(git: GitInvocation, in_rebase: bool) -> Verdict | None:
     sub = git.subcommand or ""
     if sub == "config":
         return _config_verdict(git.args)
-    if sub in BYPASS_SUBCOMMANDS and "--no-verify" in _long_flags(git.args, sub):
+    parsed = git_args(git.args, sub)
+    if sub in BYPASS_SUBCOMMANDS and parsed.has("--no-verify"):
         return Decision.DENY, "no_verify"
-    if sub == "commit" and "n" in _short_flags(git.args, sub):
+    if sub == "commit" and parsed.has("n"):
         return Decision.DENY, "no_verify"
     if sub in PLUMBING and not in_rebase:
         return Decision.ASK, "plumbing"
@@ -176,9 +136,7 @@ def _git_verdict(git: GitInvocation, in_rebase: bool) -> Verdict | None:
 
 def _config_verdict(args: Sequence[str]) -> Verdict | None:
     """``git config [set] core.hooksPath ...`` and ``git config alias.<x> <bypass>``."""
-    if any(arg in _CONFIG_READS for arg in args):
-        return None
-    words = _config_words(args)
+    words = config_words(args)
     if not words:
         return None
     key, value = words[0].lower(), " ".join(words[1:])
@@ -187,60 +145,3 @@ def _config_verdict(args: Sequence[str]) -> Verdict | None:
     if key.startswith("alias.") and alias_bypasses(value):
         return Decision.DENY, "alias"
     return None
-
-
-def _config_words(args: Sequence[str]) -> list[str]:
-    """The key and value words of ``git config``: options, their values and verbs dropped."""
-    words: list[str] = []
-    skip_next = False
-    for arg in args:
-        if skip_next:
-            skip_next = False
-        elif arg in _CONFIG_VALUE_OPTIONS:
-            skip_next = True
-        elif not arg.startswith("-") and arg not in _CONFIG_VERBS:
-            words.append(arg)
-    return words
-
-
-def _long_flags(args: Sequence[str], sub: str) -> set[str]:
-    return {flag for flag in _flags(args, sub) if flag.startswith("--")}
-
-
-def _short_flags(args: Sequence[str], sub: str) -> set[str]:
-    return {flag for flag in _flags(args, sub) if not flag.startswith("--")}
-
-
-def _flags(args: Sequence[str], sub: str) -> list[str]:
-    """The options of ``args``: ``--long`` names and single short letters; values skipped."""
-    shorts = _VALUE_SHORTS.get(sub, frozenset())
-    flags: list[str] = []
-    index = 0
-    while index < len(args) and args[index] != "--":
-        arg = args[index]
-        if arg.startswith("--"):
-            name = arg.split("=", 1)[0]
-            flags.append(name)
-            index += 1 if "=" in arg or name not in _VALUE_LONGS else 2
-            continue
-        if arg.startswith("-") and len(arg) > 1:
-            letters, takes_next = _cluster(arg[1:], shorts)
-            flags.extend(letters)
-            index += 2 if takes_next else 1
-            continue
-        index += 1
-    return flags
-
-
-def _cluster(text: str, value_shorts: frozenset[str]) -> tuple[list[str], bool]:
-    """The flag letters of one ``-abc`` cluster, and whether the next word is a value.
-
-    Letters stop at the first one that takes a value: the rest of the cluster
-    (``-mfoo``) or, when it is last (``-nm x``), the next word is that value.
-    """
-    letters: list[str] = []
-    for position, letter in enumerate(text):
-        if letter in value_shorts:
-            return letters, position == len(text) - 1
-        letters.append(letter)
-    return letters, False

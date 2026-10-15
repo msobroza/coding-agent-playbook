@@ -32,6 +32,7 @@ from coding_agent_playbook.hook_policy.contract import HookCheckContext, classif
 from coding_agent_playbook.hook_policy.contract_set import HookSetInputs, classify_hook_set
 from coding_agent_playbook.hook_policy.effective import (
     effective_applies_if,
+    merged_handler_config,
     resolve_effective_hooks,
 )
 from coding_agent_playbook.hook_policy.handler_catalog import (
@@ -129,6 +130,7 @@ __all__ = [
     "linked_lint_config",
     "merge_config",
     "merge_hook_layers",
+    "merged_handler_config",
     "registry_findings",
     "resolve_effective_hooks",
     "resolve_lint_codes",

@@ -11,8 +11,15 @@
 # install all three hook types — a plain `pre-commit install` honours
 # `default_install_hook_types` below. `default_stages` keeps every other hook
 # (ruff, mypy, metrics) on pre-commit only. Stage names need pre-commit >= 3.2.
+{% endif %}
+{% if commit_trailers %}
+#
+# The commit-trailer rows of [hooks.git-commit-push-policy-guard] are checked at
+# the commit-msg stage too, so `default_install_hook_types` installs it.
+{% endif %}
+{% if not output_commit or commit_trailers %}
 minimum_pre_commit_version: "3.2.0"
-default_install_hook_types: [pre-commit, post-checkout, post-merge]
+default_install_hook_types: [pre-commit{% if not output_commit %}, post-checkout, post-merge{% endif %}{% if commit_trailers %}, commit-msg{% endif %}]
 default_stages: [pre-commit]
 {% endif %}
 default_language_version:
@@ -73,6 +80,16 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
+{% if commit_trailers %}
+      # The playbook — commit-message trailer rows (CP4xx: forbidden, co-author and
+      # required trailers) from [hooks.git-commit-push-policy-guard], for every
+      # commit, editor-composed and human ones included. Subject form is commitizen's.
+      - id: coding-agent-playbook-commit-trailers
+        name: coding-agent-playbook commit trailers
+        entry: playbook check-commit-trailers
+        language: system
+        stages: [commit-msg]
+{% endif %}
       # Linting and formatting (ruff must be installed)
       - id: ruff
         name: ruff (lint + autofix)

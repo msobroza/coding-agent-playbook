@@ -40,6 +40,15 @@ SAFETY_PACK: dict[str, PackRow] = {
     ),
     "secret-content-guard": PackRow("default", ("pre_tool_use",), ("deny", "ask", "none"), "ask"),
     "stop-diff-sweep": PackRow("default", ("stop",), ("deny", "none"), "open"),
+    "destructive-command-guard": PackRow(
+        "default", ("pre_tool_use",), ("deny", "ask", "none"), "ask"
+    ),
+    "git-commit-push-policy-guard": PackRow(
+        "default", ("pre_tool_use",), ("deny", "ask", "none"), "ask"
+    ),
+    "command-convention-guard": PackRow(
+        "opt-in", ("pre_tool_use",), ("deny", "context", "none"), "open"
+    ),
 }
 
 
@@ -94,3 +103,25 @@ def test_guardrails_domains_feed_the_secret_hooks() -> None:
     assert load_builtin("secret_path_guard").config_domain == "secrets"
     assert load_builtin("stop_secret_sweep").config_domain == "stop_sweep"
     assert load_builtin("secret_content_guard").config_domain is None
+
+
+def test_guardrails_git_domain_feeds_destructive_command_guard() -> None:
+    """``[guardrails.git] protected_branches`` extends the guard's own list (§B.3)."""
+    declaration = load_builtin("destructive_command_guard")
+
+    assert declaration.config_domain == "git"
+    assert declaration.config_schema["protected_branches"].policy == "extend"
+
+
+@pytest.mark.parametrize(
+    ("builtin", "argv0s"),
+    [
+        ("destructive_command_guard", {"rm", "git", "mkfs*", "curl", "dd"}),
+        ("git_policy_guard", {"git", "gh", "export"}),
+    ],
+)
+def test_bash_guards_declare_their_prefilter_argv0s(builtin: str, argv0s: set[str]) -> None:
+    declared = load_builtin(builtin).argv0s
+
+    assert declared is not None and argv0s <= declared
+    assert load_builtin("command_convention_guard").argv0s is None  # rows are data: no prefilter

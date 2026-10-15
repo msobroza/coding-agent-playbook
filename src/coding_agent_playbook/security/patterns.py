@@ -241,3 +241,25 @@ WALK_SKIP_DIRS: "Final[frozenset[str]]" = frozenset(
 #: line, and only when that line is already committed at the base revision. The
 #: ``rules`` group runs to the next ``#``; ``security.secrets`` splits the ids.
 ALLOW_SECRET_PRAGMA: "Final[str]" = r"playbook:\s*allow-secret\b(?P<rules>[^#\n]*)"
+
+#: destructive-command-guard's literal-prefix shapes (specs/prK-hook-pack.md §E.4), each
+#: catastrophic whatever follows it. While the guard is on, the claude_code adapter also
+#: renders them as native ``permissions.deny`` ``Bash(<prefix> *)`` rows, which still hold
+#: when the hook interpreter is missing; the guard's predicate rows (realpath'd targets,
+#: dirty-tree checks, protected-branch globs) have no native form. No prefix may hold a
+#: ``*``: Claude reads one as a wildcard anywhere in the rule (``rm -rf /*`` would deny
+#: every ``rm -rf /tmp/...``).
+DESTRUCTIVE_NATIVE_PREFIXES: "Final[tuple[str, ...]]" = (
+    "rm -rf /",
+    "rm -fr /",
+    "rm -rf ~",
+    "rm -fr ~",
+    "rm -rf $HOME",
+    "mkfs",
+    "git push --force origin main",
+    "git push -f origin main",
+    "git push --force origin master",
+    "git push -f origin master",
+    "git push --mirror",
+    "chmod -R 777 /",
+)

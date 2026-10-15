@@ -72,6 +72,7 @@ def test_ci_steps_table_rows_and_owners() -> None:
         ("validate", "existing"),
         ("gate-scan", "E.2"),
         ("scan-secrets", "E.4"),
+        ("commit-trailers", "E.4"),
     ]
 
 
@@ -112,7 +113,7 @@ def test_aggregated_exit_1_when_any_step_fails(
     out = capsys.readouterr().out
     assert "validate said hello" in out
     assert "FAIL validate (exit 1" in out
-    assert "playbook ci: 3 passed, 1 failed, 0 skipped" in out
+    assert "playbook ci: 3 passed, 1 failed, 1 skipped" in out  # commit-trailers: no rows
 
 
 @pytest.mark.parametrize("steps", ["validate,nope", "", ",,"])
@@ -175,6 +176,14 @@ def test_json_records_step_argv_exit_duration(
             "exit": 0,
             "duration_s": 0.125,
             "status": "passed",
+        },
+        {
+            "step": "commit-trailers",
+            "argv": [],
+            "exit": None,
+            "duration_s": 0.0,
+            "status": "skipped",
+            "note": "no trailer row in [hooks.git-commit-push-policy-guard]",
         },
     ]
     assert "gate-scan said hello" in captured.err  # child output stays off the JSON stream
@@ -329,3 +338,29 @@ def test_one_real_child_process_step(
     assert record["argv"][:4] == [*CLI_PREFIX, "validate"]
     assert record["duration_s"] > 0
     assert "validate" in captured.err.lower()
+
+
+_TRAILER_ROWS = '\n[hooks.git-commit-push-policy-guard]\nforbid_trailers = ["Co-Authored-By"]\n'
+
+
+@pytest.mark.parametrize(
+    ("tables", "expected"),
+    [
+        ("", "skipped"),
+        (_TRAILER_ROWS, "passed"),
+    ],
+)
+def test_commit_trailers_step_enabled_only_with_rows(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], tables: str, expected: str
+) -> None:
+    """prK §E.4: the trailer twin runs over <merge base>..HEAD only when a row is configured."""
+    (tmp_path / ".coding-agent-playbook.toml").write_text(_DEFAULT_CONFIG + tables, "utf-8")
+    runner = FakeCiStepRunner()
+
+    code = _run(tmp_path, "--steps", "commit-trailers", "--format", "json", runner=runner)
+
+    (record,) = json.loads(capsys.readouterr().out)["steps"]
+    assert (code, record["status"]) == (0, expected)
+    root = str(tmp_path.resolve())
+    ran = [(*CLI_PREFIX, "check-commit-trailers", "--range", "abc123..HEAD", "--repo-root", root)]
+    assert runner.calls == (ran if expected == "passed" else [])

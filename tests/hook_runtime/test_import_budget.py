@@ -587,3 +587,47 @@ def test_secret_guards_deny_from_paths_and_bytes_alone(
     assert _forbidden(imported) == []
     assert "subprocess" not in imported
     assert "coding_agent_playbook.hook_runtime.git" not in imported
+
+
+@pytest.fixture
+def bash_guarded(tmp_path: Path, real_proc: SubprocessProc) -> GuardRepo:
+    """A synced repo with the §E.4 Bash guards on their real builtins (K8 step 3)."""
+    repo = GuardRepo.create(tmp_path)
+    shell = {"pre_tool_use": {"tools": ["shell"]}}
+    destructive = hook_record(
+        "destructive-command-guard",
+        decisions=("deny", "ask", "none"),
+        handler={"kind": "builtin", "name": "destructive_command_guard"},
+        matcher=shell,
+    )
+    policy = hook_record(
+        "git-commit-push-policy-guard",
+        decisions=("deny", "ask", "none"),
+        handler={"kind": "builtin", "name": "git_policy_guard"},
+        matcher=shell,
+    )
+    repo.install(destructive, policy)
+    _imports(real_proc, repo, EventName.SESSION_START, repo.payload(EventName.SESSION_START))
+    return repo
+
+
+@pytest.mark.parametrize(
+    ("command", "exit_code"),
+    [("ls -la && echo done", 0), ("rm -rf /", DENY_EXIT)],
+    ids=["no-argv0-match", "rm-root-deny"],
+)
+def test_bash_guards_need_no_git_and_no_process_off_git_segments(
+    bash_guarded: GuardRepo, real_proc: SubprocessProc, command: str, exit_code: int
+) -> None:
+    """The argv0 prefilter and the path rows (specs/prK-hook-pack.md §E.4): git loads on git only."""
+    payload = bash_guarded.payload(
+        EventName.PRE_TOOL_USE, tool_name="Bash", tool_input={"command": command}
+    )
+
+    imported = _imports(
+        real_proc, bash_guarded, EventName.PRE_TOOL_USE, payload, exit_code=exit_code
+    )
+
+    assert _forbidden(imported) == []
+    assert "subprocess" not in imported
+    assert "coding_agent_playbook.hook_runtime.git" not in imported

@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import io
 import json
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
@@ -23,12 +24,12 @@ from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS, Decisio
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.simulate import SimulateArgs, main, run
 from coding_agent_playbook.hook_runtime.state import session_key
+from tests.hook_payloads import load_hook_payload
 from tests.hook_runtime.fakes import FakeHandlerResolver
 from tests.hook_runtime.guard_repo import GuardRepo, canonical, hook_record
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
@@ -287,3 +288,51 @@ def test_canaries_run_the_pipeline_and_leave_no_session(repo: GuardRepo, deps: R
 
 def test_canary_session_id_names_the_process() -> None:
     assert canary_session_id(7) == "playbook-doctor-7"
+
+
+#: The committed guard_config the CI ``simulate`` smoke step runs (.github/workflows/ci.yml):
+#: the engine repo has no config of its own, so the step passes this one with ``--config``.
+SMOKE_CONFIG: Final = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "hook_guard_config" / "destructive.json"
+)
+
+
+def smoke_guard_config_bytes() -> bytes:
+    """``render_guard_config`` for the shipped destructive-command-guard, canonical bytes."""
+    from coding_agent_playbook.guard_config import (
+        GuardConfigInputs,
+        render_guard_config,
+        serialize_guard_config,
+    )
+    from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
+    from tests.hooks.pack_repo import ENGINE_VERSION, resolve_engine_hooks
+
+    hooks = resolve_engine_hooks(["destructive-command-guard"], Path("/playbook-fixture/proj"))
+    inputs = GuardConfigInputs(hooks, HooksConfig(enabled=True), GuardrailsConfig(), ENGINE_VERSION)
+    return serialize_guard_config(render_guard_config(inputs))
+
+
+def test_smoke_fixture_is_the_rendered_default_destructive_guard() -> None:
+    """Regenerate with ``SMOKE_CONFIG.write_bytes(smoke_guard_config_bytes())`` after a change."""
+    assert SMOKE_CONFIG.read_bytes() == smoke_guard_config_bytes()
+
+
+def test_bash_rm_root_fixture_reports_exit_code_2(
+    repo: GuardRepo, runtime_deps: Callable[..., RuntimeDeps]
+) -> None:
+    """Pins the CI smoke step hermetically: the real guard denies ``rm -rf /`` (exit 2)."""
+    golden = load_hook_payload("claude_code", "pre_tool_use", "bash_rm_root")
+    out = io.StringIO()
+    argv = ["pre_tool_use", "--format", "json", "--config", str(SMOKE_CONFIG)]
+
+    code = main(
+        [*argv, "--repo", str(repo.root)],
+        deps=runtime_deps(),
+        stdin=io.BytesIO(golden.raw),
+        stdout=out,
+    )
+
+    report = json.loads(out.getvalue())
+    assert (code, report["exit_code"]) == (0, 2)
+    assert report["combined"]["reason"] == golden.expected["result"]["reason"]
+    assert [d["rule_id"] for d in report["decisions"]] == ["rm_root"]

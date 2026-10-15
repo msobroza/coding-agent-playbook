@@ -141,7 +141,8 @@ class FakeGit:
     ``worktree_diffs[base]`` is ``diff_worktree``'s answer; ``archives[rev]`` maps
     repo paths to the bytes ``archive_to`` writes (``skip`` honoured, as in git).
     ``grep_word`` finds exactly the ``test_words``; ``rev_commit`` reads ``commits``.
-    ``upstream`` answers ``upstream_ref``; ``unpushed_lines`` the ``unpushed`` patch.
+    ``upstream`` answers ``upstream_ref``; ``unpushed_lines`` the ``unpushed`` patch;
+    ``porcelain_status`` the ``status`` entries (``(XY, path)``).
     """
 
     head_tree_id: str | None = None
@@ -161,6 +162,7 @@ class FakeGit:
     commits: dict[str, str] = field(default_factory=dict)
     upstream_ref: str | None = None
     unpushed: DiffLines = field(default_factory=DiffLines)
+    status: tuple[tuple[str, str], ...] = ()
     errors: dict[str, Exception] = field(default_factory=dict)
     calls: list[tuple[str, tuple[str, ...]]] = field(default_factory=list)
 
@@ -244,6 +246,10 @@ class FakeGit:
     def unpushed_lines(self, upstream: str | None) -> DiffLines:
         self._record("unpushed_lines", upstream or "")
         return self.unpushed
+
+    def porcelain_status(self) -> tuple[tuple[str, str], ...]:
+        self._record("porcelain_status")
+        return self.status
 
 
 @dataclass

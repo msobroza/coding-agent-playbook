@@ -198,6 +198,8 @@ def test_handler_approval_mirrors_the_runtime_record(repo: Path, tmp_path: Path)
         "toolchain-missing-hint",
         "secrets-path-guard",
         "secret-content-guard",
+        "destructive-command-guard",
+        "git-commit-push-policy-guard",
         "stop-diff-sweep",
     }
     assert all(handler_approval(hook) is None for hook in builtins)

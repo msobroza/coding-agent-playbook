@@ -1,8 +1,10 @@
 """The handler registry: builtin declarations, the static module map, run-time resolution (§D.3.1).
 
 :func:`register_hook_handler` records a builtin's :class:`HandlerDeclaration`
-(events, decisions, ``CONFIG_SCHEMA``, ``MUTATES_INPUT``, and the builtin-only
-``mutates_edited_file`` capability of :data:`MUTATES_EDITED_FILE_HANDLERS`). The
+(events, decisions, ``CONFIG_SCHEMA``, ``MUTATES_INPUT``, the builtin-only
+``mutates_edited_file`` capability of :data:`MUTATES_EDITED_FILE_HANDLERS`, and
+the ``argv0s`` a shell guard inspects, which the dispatcher's prefilter reads,
+specs/prK-hook-pack.md §E.4). The
 dispatcher stays import-light: :data:`_BUILTIN_HANDLER_MODULES` maps each name to its module, so
 only the modules bound to the current event are imported (no scan; a test
 checks map and decorators agree), and an out-of-tree handler, resolved at sync
@@ -95,6 +97,9 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         "secret_path_guard": f"{_HANDLERS}.secret_paths",
         "secret_content_guard": f"{_HANDLERS}.secret_content",
         "stop_secret_sweep": f"{_HANDLERS}.stop_sweep",
+        "destructive_command_guard": f"{_HANDLERS}.destructive",
+        "git_policy_guard": f"{_HANDLERS}.git_policy",
+        "command_convention_guard": f"{_HANDLERS}.conventions",
     }
 )
 #: The only handlers that may rewrite the file the tool just edited (specs/prK-hook-pack.md
@@ -124,6 +129,8 @@ class HandlerDeclaration:
     mutates_input: bool = False
     mutates_edited_file: bool = False
     config_domain: str | None = None
+    argv0s: frozenset[str] | None = None
+    argv0_rows: str | None = None
     fn: HandlerFn = field(compare=False, repr=False)
 
 
@@ -215,6 +222,8 @@ def register_hook_handler[F: Callable[..., Any]](
     mutates_input: bool = False,
     mutates_edited_file: bool = False,
     config_domain: str | None = None,
+    argv0s: Iterable[str] | None = None,
+    argv0_rows: str | None = None,
 ) -> Callable[[F], F]:
     """Register the decorated function as builtin handler ``name``; returns it unchanged.
 
@@ -222,6 +231,9 @@ def register_hook_handler[F: Callable[..., Any]](
     return; ``config_schema`` is its ``CONFIG_SCHEMA`` (empty: no config keys).
     ``mutates_edited_file`` is honored only for :data:`MUTATES_EDITED_FILE_HANDLERS`
     (validate reports any other declaration; resolution refuses it).
+    ``argv0s`` are the commands a shell guard inspects (``mkfs*``: a prefix),
+    plus the ``argv0`` of each row of its ``argv0_rows`` config key: on a
+    shell call none of whose segments runs one, the guard is not called.
 
     Example::
 
@@ -243,6 +255,8 @@ def register_hook_handler[F: Callable[..., Any]](
             mutates_input=mutates_input,
             mutates_edited_file=mutates_edited_file,
             config_domain=config_domain,
+            argv0s=None if argv0s is None else frozenset(argv0s),
+            argv0_rows=argv0_rows,
             fn=fn,
         )
         _remember(declaration)

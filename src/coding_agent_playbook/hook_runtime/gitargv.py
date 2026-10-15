@@ -6,21 +6,37 @@ finds git's global options, the subcommand, the effective cwd (``-C``, applied
 cumulatively) and the runtime config that ``-c``, ``--config-env`` and
 ``GIT_CONFIG_COUNT`` / ``GIT_CONFIG_KEY_<n>`` / ``GIT_CONFIG_VALUE_<n>`` inject.
 It matches tokens, never substrings, so ``echo git commit --no-verify`` is not
-a git command. K6 and K8 build on it (``commit_message_sources``, ...).
+a git command. K6 and K8 build on it.
+
+``commit_message_sources`` (specs/prK-hook-pack.md §E.4) is the message a
+commit will record, read without running anything: ``-m`` values joined by a
+blank line as git joins them, a ``$(cat <<EOF ... EOF)`` body, a ``-F -``
+heredoc and a ``-F <file>`` inside the worktree. A process substitution, a
+file outside the worktree or an editor-composed message is
+:class:`Uninspectable`; the message rows then decide what that means.
 """
 
 from __future__ import annotations
 
+import os
 import posixpath
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
+
+from coding_agent_playbook.hook_runtime._git_options import git_args
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from coding_agent_playbook.hook_runtime.shell import Segment
 
-__all__ = ["GitInvocation", "parse_git"]
+__all__ = [
+    "MESSAGE_MAX_BYTES",
+    "GitInvocation",
+    "Uninspectable",
+    "commit_message_sources",
+    "parse_git",
+]
 
 _GIT_NAMES = frozenset({"git", "git.exe"})
 #: Global options whose value is the next word unless glued with ``=``.
@@ -37,6 +53,12 @@ _WITH_VALUE = frozenset(
         "--attr-source",
     }
 )
+#: A ``-F`` message file larger than this is not read (a message is a few lines).
+MESSAGE_MAX_BYTES: Final = 64 * 1024
+_MESSAGE_OPTIONS: Final = ("-m", "--message")
+_FILE_OPTIONS: Final = ("-F", "--file")
+#: Options that take the message from another commit or an editor template.
+_REUSED_MESSAGE: Final = ("-C", "-c", "--reuse-message", "--reedit-message", "-t", "--template")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -169,3 +191,87 @@ def _change_dir(cwd: str | None, path: str, *, dynamic: bool) -> str | None:
     if path.startswith("/"):
         return posixpath.normpath(path)
     return None if cwd is None else posixpath.normpath(posixpath.join(cwd, path))
+
+
+@dataclass(frozen=True, slots=True)
+class Uninspectable:
+    """The message cannot be read before the command runs; ``why`` says which source.
+
+    Example: ``Uninspectable("-F reads a process substitution")``.
+    """
+
+    why: str
+
+
+def commit_message_sources(inv: GitInvocation, *, root: str) -> list[str] | Uninspectable:
+    """The message(s) ``inv`` will record, or why they cannot be read beforehand.
+
+    ``root`` is the session's worktree root: a ``-F`` file outside it is not
+    read. ``-m`` values are joined by a blank line, as git joins them.
+
+    Example::
+
+        >>> from coding_agent_playbook.hook_runtime.shell import parse_shell
+        >>> seg = parse_shell("git commit -m a -m b", "posix", "/r").segments[0]
+        >>> commit_message_sources(parse_git(seg), root="/r")
+        ['a\\n\\nb']
+    """
+    parsed = git_args(inv.args, inv.subcommand or "")
+    messages = [_inline(value) for value in parsed.values_of(*_MESSAGE_OPTIONS)]
+    found: list[str] = []
+    if messages:
+        if any(isinstance(m, Uninspectable) for m in messages):
+            return next(m for m in messages if isinstance(m, Uninspectable))
+        found.append("\n\n".join(m for m in messages if isinstance(m, str)))
+    for path in parsed.values_of(*_FILE_OPTIONS):
+        read = _message_file(inv, path, root)
+        if isinstance(read, Uninspectable):
+            return read
+        found.append(read)
+    if found:
+        return found
+    if parsed.values_of(*_REUSED_MESSAGE) or parsed.has("--amend"):
+        return Uninspectable("the message is reused from another commit or a template")
+    return Uninspectable("no -m or -F: an editor composes the message")
+
+
+def _inline(value: str) -> str | Uninspectable:
+    """One ``-m`` value: literal text, or the body of a ``$(cat <<EOF ... EOF)``."""
+    if not value.startswith("$(") or not value.endswith(")"):
+        return value if "$(" not in value and "`" not in value else _dynamic()
+    from coding_agent_playbook.hook_runtime.shell import parse_shell
+
+    inner = parse_shell(value[2:-1], "posix", None)
+    segments = inner.segments
+    if inner.parse_error is None and len(segments) == 1 and segments[0].argv == ("cat",):
+        bodies = segments[0].heredoc_bodies
+        if len(bodies) == 1:
+            return bodies[0].rstrip("\n")
+    return _dynamic()
+
+
+def _dynamic() -> Uninspectable:
+    return Uninspectable("the message is computed by a command substitution")
+
+
+def _message_file(inv: GitInvocation, path: str, root: str) -> str | Uninspectable:
+    """A ``-F`` source: stdin's heredoc for ``-`` or a small file inside ``root``."""
+    if path == "-":
+        bodies = inv.segment.heredoc_bodies
+        return bodies[-1] if bodies else Uninspectable("-F - reads stdin")
+    if path.startswith(("<(", "$", "`")) or inv.cwd is None:
+        return Uninspectable("-F reads a computed path or a process substitution")
+    full = os.path.realpath(os.path.join(inv.cwd, path))
+    base = os.path.realpath(root)
+    if os.path.commonpath([full, base]) != base:
+        return Uninspectable("-F reads a file outside the worktree")
+    if not os.path.isfile(full):  # a FIFO or device would block the hook
+        return Uninspectable("-F names something that is not a regular file")
+    try:
+        with open(full, "rb") as handle:
+            data = handle.read(MESSAGE_MAX_BYTES + 1)
+    except OSError:
+        return Uninspectable("-F names a file that cannot be read")
+    if len(data) > MESSAGE_MAX_BYTES:
+        return Uninspectable("-F names a file larger than a commit message")
+    return data.decode("utf-8", errors="replace")

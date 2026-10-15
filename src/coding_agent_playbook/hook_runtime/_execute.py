@@ -9,7 +9,9 @@ Each selected hook resolves its handler, runs it, and leaves one :class:`Ran`:
   ``deny`` unattended), an overlay's strict guard denies, a quality hook adds
   nothing but one note per session;
 - an untrusted external or entry-point handler is skipped with one note per
-  session, never as a failure.
+  session, never as a failure;
+- a shell guard whose declared argv0s no segment runs is not called at all
+  (``_prefilter``, specs/prK-hook-pack.md §E.4): its result is ``NONE``.
 
 The first guard-class deny ends the fan-out: a deny is final. :class:`Progress`
 is shared with the watchdog, which reuses :func:`failure_result` for the hooks
@@ -22,12 +24,13 @@ import dataclasses
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, Literal
 
+from coding_agent_playbook.hook_runtime._prefilter import skips_call
 from coding_agent_playbook.hook_runtime.decision import (
     Decision,
     HandlerResult,
     supported_decision,
 )
-from coding_agent_playbook.hook_runtime.registry import Untrusted
+from coding_agent_playbook.hook_runtime.registry import Untrusted, declaration_of
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -155,6 +158,9 @@ def _run_one(
         handler = resolve(selected)
         if isinstance(handler, Untrusted):
             return _untrusted(selected, handler, once), "untrusted"
+        spec = selected.record.handlers.get(ev.name)
+        if skips_call(declaration_of(handler), ev, {} if spec is None else spec.config):
+            return HandlerResult(decision=Decision.NONE, hook_id=selected.record.id), "ok"
         raw = handler(ev, context(selected))
     except Exception:
         return failure_result(selected, once=once), "degraded"

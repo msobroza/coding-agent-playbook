@@ -333,14 +333,48 @@ def _clamped_on_error(declared: str, event: str) -> str:
     return declared if spec is not None and declared in spec.on_error_allowed else "open"
 
 
-def _resolve_handler(
+def merged_handler_config(
+    hook: Hook,
+    handler: HookHandler,
+    hooks_cfg: HooksConfig,
+    guardrails_cfg: GuardrailsConfig,
+    *,
+    schemas: ConfigSchemaLookup = NO_HANDLER_SCHEMAS,
+) -> dict[str, Any]:
+    """``handler``'s config with the consumer layers merged, whatever the §B.1 on-formula says.
+
+    The off-workstation twins (specs/prK-hook-pack.md §E.4: ``check-commit-trailers``)
+    read a hook's policy rows even when ``[hooks]`` is off, from the same merge
+    as sync: the ``[guardrails]`` domain, then ``[hooks.<hook-id>]``, with the
+    handler's key policies (a mandatory hook's ``relax`` keys left out).
+
+    Example::
+
+        >>> merged_handler_config(hook, hook.frontmatter.handler, hooks_cfg, guardrails_cfg,
+        ...                       schemas=RegistryCatalog())  # doctest: +SKIP
+        {'forbid_trailers': ['Co-Authored-By'], ...}
+    """
+    from pathlib import Path
+
+    inputs = _Inputs({}, hooks_cfg, guardrails_cfg, {}, Path("."), (), schemas, None)
+    return _merged_config(hook, handler, inputs, [])
+
+
+def _merged_config(
     hook: Hook, handler: HookHandler, inputs: _Inputs, warnings: list[str]
-) -> ResolvedHandler:
-    """``handler`` with the consumer layers merged into a copy of its config."""
+) -> dict[str, Any]:
     specs = {} if handler.builtin is None else inputs.schemas.key_specs(handler.builtin)
     config = copy.deepcopy(handler.config)
     for label, layer in _consumer_layers(hook, handler, inputs):
         config = merge_config(config, _without_relaxed(layer, specs, hook, label, warnings), specs)
+    return config
+
+
+def _resolve_handler(
+    hook: Hook, handler: HookHandler, inputs: _Inputs, warnings: list[str]
+) -> ResolvedHandler:
+    """``handler`` with the consumer layers merged into a copy of its config."""
+    config = _merged_config(hook, handler, inputs, warnings)
     if handler.builtin is not None:
         config.update(_linked_lint_codes(hook, inputs))
         return _builtin(handler.builtin, config, inputs.handlers)

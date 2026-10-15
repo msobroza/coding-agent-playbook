@@ -85,3 +85,31 @@ def test_starter_runs_secret_scan(output_commit: bool) -> None:
     assert secrets["pass_filenames"] is False
     assert secrets["always_run"] is True
     assert secrets["stages"] == ["pre-commit"]
+
+
+@pytest.mark.parametrize(
+    ("output_commit", "install_types"),
+    [
+        (False, ["pre-commit", "post-checkout", "post-merge", "commit-msg"]),
+        (True, ["pre-commit", "commit-msg"]),
+    ],
+)
+def test_commit_trailers_entry_only_when_rows_configured(
+    output_commit: bool, install_types: list[str]
+) -> None:
+    """prK §E.4: the commit-msg twin and its stage are rendered only with a trailer row."""
+    without = yaml.safe_load(_render_fresh_pre_commit(output_commit=output_commit))
+    rendered = _render_fresh_pre_commit(output_commit=output_commit, commit_trailers=True)
+    parsed = yaml.safe_load(rendered)
+
+    assert "coding-agent-playbook-commit-trailers" not in _hooks(without)
+    entry = _hooks(parsed)["coding-agent-playbook-commit-trailers"]
+    assert (entry["entry"], entry["language"], entry["stages"]) == (
+        "playbook check-commit-trailers",
+        "system",
+        ["commit-msg"],
+    )
+    assert parsed["default_install_hook_types"] == install_types
+    # Hooks without their own stages must not run again at commit-msg.
+    assert parsed["default_stages"] == ["pre-commit"]
+    assert "https://" not in rendered

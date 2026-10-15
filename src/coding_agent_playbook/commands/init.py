@@ -305,15 +305,18 @@ def _append_to_gitignore(repo_root: Path) -> Path:
     return gitignore
 
 
-def _render_fresh_pre_commit(*, output_commit: bool = False) -> str:
+def _render_fresh_pre_commit(*, output_commit: bool = False, commit_trailers: bool = False) -> str:
     """Render the packaged starter ``.pre-commit-config.yaml`` template.
 
     The template (``resources/precommit/config.yaml.j2``) is air-gapped: every
     hook is ``repo: local`` + ``language: system`` so pre-commit never clones a
     remote hook repo. ``output_commit`` (the ``[output] commit`` policy) selects
     the playbook hooks: the legacy drift check for ``true``; the post-checkout /
-    post-merge auto-sync plus the staged-output guard for ``false``. We still
-    stash an empty facts dict to honour the renderer's helper contract (SPEC §9.4).
+    post-merge auto-sync plus the staged-output guard for ``false``.
+    ``commit_trailers`` (a trailer row is configured, prK §E.4) adds the
+    ``coding-agent-playbook-commit-trailers`` commit-msg entry and installs that
+    stage. We still stash an empty facts dict to honour the renderer's helper
+    contract (SPEC §9.4).
 
     Example::
 
@@ -325,7 +328,8 @@ def _render_fresh_pre_commit(*, output_commit: bool = False) -> str:
     template_path = precommit_dir / "config.yaml.j2"
     env = build_environment([precommit_dir])
     env.globals["_facts"] = {}
-    return render_artifact_body(template_path, {"output_commit": output_commit}, env=env)
+    variables = {"output_commit": output_commit, "commit_trailers": commit_trailers}
+    return render_artifact_body(template_path, variables, env=env)
 
 
 def _write_pre_commit(
@@ -342,13 +346,30 @@ def _write_pre_commit(
     """
     target = repo_root / ".pre-commit-config.yaml"
     if not target.is_file():
-        target.write_text(_render_fresh_pre_commit(output_commit=output_commit), encoding="utf-8")
+        starter = _render_fresh_pre_commit(
+            output_commit=output_commit, commit_trailers=_has_trailer_rows(repo_root)
+        )
+        target.write_text(starter, encoding="utf-8")
         return target, ()
     content = target.read_text(encoding="utf-8")
     merged = merge_pre_commit(content, output_commit=output_commit)
     if merged.content != content:
         target.write_text(merged.content, encoding="utf-8")
     return target, merged.messages
+
+
+def _has_trailer_rows(repo_root: Path) -> bool:
+    """Whether the committed config sets a commit-trailer row (prK §E.4); ``False`` if unreadable.
+
+    The final sync reports a config it cannot read; the starter simply leaves the
+    commit-msg entry out (an existing ``.pre-commit-config.yaml`` is never touched).
+    """
+    from coding_agent_playbook.commands._twin_policy import commit_trailer_policy
+
+    try:
+        return commit_trailer_policy(repo_root).has_rows
+    except (ValueError, OSError, KeyError, TypeError):
+        return False
 
 
 def _effective_overlays(answers: _Answers, local: Mapping[str, Any]) -> tuple[list[str], str]:

@@ -49,3 +49,15 @@ jobs:
 
       - name: playbook-hook --version smoke test
         run: playbook-hook --version
+
+      # The engine repo has no hooks config of its own, so the step passes the
+      # committed fixture config (tests/hook_runtime/test_simulate.py pins it to
+      # the rendered destructive-command-guard): rm -rf / must exit 2 (deny).
+      - name: playbook-hook simulate smoke test (rm -rf / is denied)
+        run: |
+          playbook-hook simulate pre_tool_use --format json \
+            --config tests/fixtures/hook_guard_config/destructive.json \
+            < tests/fixtures/hook_payloads/claude_code/pre_tool_use/bash_rm_root.json \
+            > "$RUNNER_TEMP/simulate.json"
+          cat "$RUNNER_TEMP/simulate.json"
+          python -c "import json, os; r = json.load(open(os.path.join(os.environ['RUNNER_TEMP'], 'simulate.json'))); assert r['exit_code'] == 2, r"

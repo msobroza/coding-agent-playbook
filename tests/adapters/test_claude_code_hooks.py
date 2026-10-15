@@ -16,6 +16,10 @@ import pytest
 
 from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._claude_hooks import CLAUDE_HEARTBEAT_LINE, REMEDIATION_ALLOW
+from coding_agent_playbook.adapters._destructive_native import (
+    DESTRUCTIVE_COMMAND_GUARD,
+    destructive_native_rows,
+)
 from coding_agent_playbook.adapters._secret_native import (
     DENY_POINTER,
     SECRETS_PATH_GUARD,
@@ -32,6 +36,7 @@ from coding_agent_playbook.hook_registrations import (
 )
 from coding_agent_playbook.hooks_config import HooksConfig
 from coding_agent_playbook.lockfile import Lockfile
+from coding_agent_playbook.security.patterns import DESTRUCTIVE_NATIVE_PREFIXES
 from coding_agent_playbook.types import Rule, RuleFrontmatter
 from tests.hook_samples import resolved_hook
 
@@ -388,3 +393,26 @@ def test_scoped_negation_ordering_keeps_env_credentials_py_denied() -> None:
     assert not _denied(rows, "src/auth/credentials.py")
     assert not _denied(rows, ".env.example")
     assert not _denied(rows, "keys/id_rsa.pub")
+
+
+def test_destructive_literal_prefix_rows_follow_guard(tmp_path: Path) -> None:
+    """destructive-command-guard's native twin (§E.4): Bash(<prefix> *) rows join the secret
+    rows under one pointer while the guard is on, and leave with it; user rows stay."""
+    settings = tmp_path / CLAUDE_SETTINGS_PATH
+    settings.parent.mkdir(parents=True)
+    settings.write_text('{"permissions": {"deny": ["Bash(rm -rf /)"]}}\n', encoding="utf-8")
+    guard = resolved_hook(DESTRUCTIVE_COMMAND_GUARD)
+
+    on, _ = _sync(tmp_path, [resolved_hook(), _secrets_guard(), guard])
+    deny = _settings(tmp_path)["permissions"]["deny"]
+
+    native = destructive_native_rows([guard])[DENY_POINTER]
+    secret = secret_native_rows([_secrets_guard()])[DENY_POINTER]
+    assert deny == ["Bash(rm -rf /)", *secret, *native]
+    assert native == tuple(f"Bash({prefix} *)" for prefix in DESTRUCTIVE_NATIVE_PREFIXES)
+    assert "Bash(git push --force origin main *)" in native
+    assert not any("*" in prefix for prefix in DESTRUCTIVE_NATIVE_PREFIXES)  # wildcard-free
+
+    _sync(tmp_path, [resolved_hook(), _secrets_guard()], prior=_lock(on))  # the guard is off
+
+    assert _settings(tmp_path)["permissions"]["deny"] == ["Bash(rm -rf /)", *secret]

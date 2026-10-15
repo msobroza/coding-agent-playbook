@@ -16,6 +16,9 @@ secrets and dependency twins) instead of adding a second CI entry point.
   change for secret tokens and credential files) diff ``<merge base>..HEAD``;
   the base is ``--base`` or the default branch (``_git_base``), resolved only
   when a selected step needs it.
+- ``commit-trailers`` (E.4) checks every commit of that range against
+  git-commit-push-policy-guard's trailer rows, and runs only when one is
+  configured (a policy that does not load runs it anyway, to report why).
 
 Exit codes: 0 every run step passed, 1 any failed or timed out, 2 a usage
 error or an unresolvable base (nothing ran). ``--format json`` prints one
@@ -74,12 +77,15 @@ class CiContext:
     ``output_committed`` is ``None`` without a config; ``merge_base`` is ``""``
     until a selected step needs it. ``requested`` are the names ``--steps``
     named explicitly (empty: none), for rows enabled only on request.
+    ``trailer_rows`` says whether a commit-trailer row is configured (read
+    only when the ``commit-trailers`` row is selected).
     """
 
     repo_root: Path
     output_committed: bool | None
     requested: frozenset[str] = frozenset()
     merge_base: str = ""
+    trailer_rows: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,6 +157,12 @@ def _sync_check_skip(ctx: CiContext) -> str | None:
     return None
 
 
+def _commit_trailers_skip(ctx: CiContext) -> str | None:
+    if ctx.trailer_rows:
+        return None
+    return "no trailer row in [hooks.git-commit-push-policy-guard]"
+
+
 CI_STEPS: Final[tuple[CiStep, ...]] = (
     CiStep("sync-check", "prerequisites", lambda ctx: ["sync", "--check"], _sync_check_skip),
     CiStep("validate", "existing", lambda ctx: ["validate"]),
@@ -164,6 +176,13 @@ CI_STEPS: Final[tuple[CiStep, ...]] = (
         "scan-secrets",
         "E.4",
         lambda ctx: ["scan-secrets", "--range", f"{ctx.merge_base}..HEAD"],
+        needs_base=True,
+    ),
+    CiStep(
+        "commit-trailers",
+        "E.4",
+        lambda ctx: ["check-commit-trailers", "--range", f"{ctx.merge_base}..HEAD"],
+        _commit_trailers_skip,
         needs_base=True,
     ),
 )
@@ -215,7 +234,12 @@ def run(
     repo_root = Path(args.repo_root or ".").resolve()
     try:
         steps = select_steps(args.steps)
-        ctx = CiContext(repo_root, _output_committed(repo_root), _requested(args.steps))
+        ctx = CiContext(
+            repo_root,
+            _output_committed(repo_root),
+            _requested(args.steps),
+            trailer_rows=any(s.name == "commit-trailers" for s in steps) and _trailers(repo_root),
+        )
         ctx = _with_base(ctx, steps, args.base, git)
     except (GitError, ValueError) as exc:  # GitBaseError is a ValueError
         print(f"error: {exc}", file=sys.stderr)
@@ -325,6 +349,16 @@ def _output_committed(repo_root: Path) -> bool | None:
         return FileSystemStateSource(repo_root=repo_root).load_config().commit_output
     except (ValueError, OSError, KeyError, TypeError):
         return True  # sync --check then reports the broken config itself
+
+
+def _trailers(repo_root: Path) -> bool:
+    """Whether a trailer row is configured; ``True`` when the policy does not load (fail closed)."""
+    from coding_agent_playbook.commands._twin_policy import commit_trailer_policy
+
+    try:
+        return commit_trailer_policy(repo_root).has_rows
+    except (ValueError, OSError, KeyError, TypeError):
+        return True  # check-commit-trailers then reports the broken config itself
 
 
 def _requested(text: str | None) -> frozenset[str]:

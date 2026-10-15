@@ -22,6 +22,8 @@ filter so no member lands outside the export or keeps a special mode) and
 ``rev_commit`` resolves one revision for subagent-stop-verify's report.
 secret-content-guard's push scan (§E.4) adds ``upstream`` and
 ``unpushed_lines``: the commits a ``git push`` would publish, as ``log -p``.
+The §E.4 git guards add ``porcelain_status``: whether a lossy command would
+lose work, and which paths a commit would record.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from coding_agent_playbook.hook_runtime._git_parse import (
     DiffLines,
     parse_batch_blob,
     parse_diff_lines,
+    split_z,
 )
 
 if TYPE_CHECKING:
@@ -92,6 +95,8 @@ class RangePort(Protocol):
     def upstream(self) -> str | None: ...
 
     def unpushed_lines(self, upstream: str | None) -> DiffLines: ...
+
+    def porcelain_status(self) -> tuple[tuple[str, str], ...]: ...
 
 
 class _Runner(Protocol):
@@ -217,6 +222,16 @@ class RangeQueries:
         revs = [f"{checked_rev(upstream)}..HEAD"] if upstream else ["HEAD", "--not", "--remotes"]
         result = self.run(["log", "-p", "--format=", *PATCH_FLAGS, *revs])
         return parse_diff_lines(result.stdout)
+
+    def porcelain_status(self: _Runner) -> tuple[tuple[str, str], ...]:
+        """``(XY, path)`` per changed or untracked path (``??``), as ``git status --porcelain``.
+
+        ``X`` is the index column, ``Y`` the worktree one. Renames are listed as
+        their new path (``--no-renames``); ignored files are left out.
+        """
+        argv = ["status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=normal"]
+        entries = split_z(self.run(argv).stdout)
+        return tuple((entry[:2], entry[3:]) for entry in entries if len(entry) > 3)
 
 
 def pick_default_branch(refs: Iterable[str]) -> str | None:

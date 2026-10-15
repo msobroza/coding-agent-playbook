@@ -315,6 +315,30 @@ def test_rev_commit_resolves_a_branch_or_none(
         git.rev_commit("--output=/tmp/x")
 
 
+def test_porcelain_status_lists_staged_unstaged_and_untracked(
+    branchy: Path, real_git: Callable[..., str], real_proc: SubprocessProc
+) -> None:
+    """The §E.4 git guards' one status query: (XY, path), renames as their new path."""
+    git = _stateless(branchy, real_proc)
+    (branchy / "f.txt").write_text("f\n", encoding="utf-8")
+    real_git("add", "f.txt", cwd=branchy)
+    _commit(real_git, branchy, "track f")
+    assert git.porcelain_status() == ()
+
+    (branchy / "staged.txt").write_text("s\n", encoding="utf-8")
+    real_git("add", "staged.txt", cwd=branchy)
+    (branchy / "f.txt").write_text("changed\n", encoding="utf-8")
+    (branchy / "new dir").mkdir()
+    (branchy / "new dir" / "n.txt").write_text("n\n", encoding="utf-8")
+    real_git("mv", "staged.txt", "moved.txt", cwd=branchy)
+
+    assert sorted(git.porcelain_status()) == [
+        (" M", "f.txt"),
+        ("??", "new dir/"),
+        ("A ", "moved.txt"),
+    ]
+
+
 # --- ports -----------------------------------------------------------------------------------
 
 
@@ -328,6 +352,7 @@ def test_lazy_git_delegates_the_range_queries(
         revision_blobs={("abc", "a.py"): b"x"},
         test_words={"foo"},
         commits={"main": "c0ffee"},
+        status=((" M", "a.py"),),
     )
     lazy = LazyGit(
         GuardRepo.create(tmp_path).repo, runtime_deps(git=fake), state=None, secret_paths=None
@@ -342,9 +367,20 @@ def test_lazy_git_delegates_the_range_queries(
         lazy.archive_to("HEAD", str(tmp_path), skip=lambda rel: False),
         lazy.grep_word("foo", ["tests"]),
         lazy.rev_commit("main"),
+        lazy.porcelain_status(),
     )
 
-    assert answers == ("origin/main", "abc", ("a.py",), b"x", (), 0, True, "c0ffee")
+    assert answers == (
+        "origin/main",
+        "abc",
+        ("a.py",),
+        b"x",
+        (),
+        0,
+        True,
+        "c0ffee",
+        ((" M", "a.py"),),
+    )
     assert [method for method, _ in fake.calls] == [
         "default_branch",
         "merge_base",
@@ -354,4 +390,5 @@ def test_lazy_git_delegates_the_range_queries(
         "archive_to",
         "grep_word",
         "rev_commit",
+        "porcelain_status",
     ]

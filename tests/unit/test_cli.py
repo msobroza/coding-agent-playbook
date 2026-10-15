@@ -210,7 +210,24 @@ def test_metrics_subparser_defaults():
 
 def test_twin_subcommands_close_the_canonical_list():
     """prK K6-K8: the off-workstation twins are registered, and no argument is required."""
-    assert _SUBCOMMANDS[-5:] == ("gate-scan", "ci", "scan-sinks", "check-notebooks", "scan-secrets")
+    assert _SUBCOMMANDS[-6:] == (
+        "gate-scan",
+        "ci",
+        "scan-sinks",
+        "check-notebooks",
+        "scan-secrets",
+        "check-commit-trailers",
+    )
+
+
+def test_check_commit_trailers_accepts_msgfile_or_range():
+    """prK §E.4: the commit-msg stage passes a file; CI passes --range (the command checks one)."""
+    parser = build_parser()
+    msgfile = parser.parse_args(["check-commit-trailers", ".git/COMMIT_EDITMSG"])
+    ranged = parser.parse_args(["check-commit-trailers", "--range", "A..B", "--repo-root", "/r"])
+
+    assert (msgfile.msgfile, msgfile.rev_range) == (".git/COMMIT_EDITMSG", None)
+    assert (ranged.msgfile, ranged.rev_range, ranged.repo_root) == (None, "A..B", "/r")
 
 
 def test_scan_secrets_modes_are_mutually_exclusive():
