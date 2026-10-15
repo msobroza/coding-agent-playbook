@@ -12,9 +12,11 @@ scan applies no masking and reads every text file.
 
 Scope: every file under ``resources/`` and every file of the ``python_design``
 pack (its ``resources/`` plus ``ATTRIBUTIONS.md`` and ``__init__.py``; ids are
-prefixed ``packs/python_design/``), dot dirs and bytecode caches aside. The pack's
-files are all fully scanned except its ``ATTRIBUTIONS.md``, which is URL-free but
-must name the plugin (:func:`pack_policy_for`). For ``resources/`` the checks are
+prefixed ``packs/python_design/``), dot dirs and bytecode caches aside. The
+engine's pre-commit template (ids prefixed ``templates/precommit/``) ships too and
+gets both checks. The pack's files are all fully scanned except its
+``ATTRIBUTIONS.md``, which is URL-free but must name the plugin
+(:func:`pack_policy_for`). For ``resources/`` the checks are
 decided per file by :func:`policy_for`:
 
 * by default -> URLs and plugin markers are both violations. That includes the
@@ -38,7 +40,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from tests._content import CORE_ROOT, plugin_files_root
+from tests._content import CORE_ROOT, PRECOMMIT_TEMPLATE_DIR, plugin_files_root
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -47,6 +49,8 @@ _RESOURCES_ROOT = CORE_ROOT
 #: The distilled opt-in pack (SPEC §11.5.2): all of it ships, so all of it is scanned.
 _PYTHON_DESIGN_ROOT = plugin_files_root("python_design")
 _PYTHON_DESIGN_PREFIX = "packs/python_design/"
+#: The engine-owned pre-commit template (engine wiring, not content) ships too.
+_PRECOMMIT_TEMPLATE_PREFIX = "templates/precommit/"
 
 _EVAL_TASKS_SUBDIR = "eval_tasks"
 #: Per-task fixture trees: ``eval_tasks/<id>/setup/**`` and ``eval_tasks/<id>/solution/**``.
@@ -192,8 +196,14 @@ def scan_file(target: ScanTarget) -> list[Violation]:
     return scan_text(text, target.rel, target.policy)
 
 
-_TARGETS = scan_targets(_RESOURCES_ROOT) + scan_targets(
-    _PYTHON_DESIGN_ROOT, prefix=_PYTHON_DESIGN_PREFIX, policy=pack_policy_for
+_TARGETS = (
+    scan_targets(_RESOURCES_ROOT)
+    + scan_targets(_PYTHON_DESIGN_ROOT, prefix=_PYTHON_DESIGN_PREFIX, policy=pack_policy_for)
+    + scan_targets(
+        PRECOMMIT_TEMPLATE_DIR,
+        prefix=_PRECOMMIT_TEMPLATE_PREFIX,
+        policy=lambda _: ScanPolicy(urls=True, markers=True),
+    )
 )
 
 
@@ -211,7 +221,12 @@ def test_shipped_resource_is_self_contained(target: ScanTarget) -> None:
 def test_scan_covers_every_artifact_kind() -> None:
     """Guard against a walker that silently scans nothing."""
     rels = {t.rel for t in _TARGETS}
-    for prefix in ("rules/", "prompts/", "precommit/", f"{_PYTHON_DESIGN_PREFIX}resources/skills/"):
+    for prefix in (
+        "rules/",
+        "prompts/",
+        _PRECOMMIT_TEMPLATE_PREFIX,
+        f"{_PYTHON_DESIGN_PREFIX}resources/skills/",
+    ):
         assert any(r.startswith(prefix) for r in rels), f"nothing scanned under {prefix}"
     for part in ("/task.toml", "/setup/", "/solution/"):
         assert any(part in r for r in rels), f"no eval-task file matching {part} scanned"

@@ -8,6 +8,7 @@ here, so a change to the content layout edits this one module.
 
 from __future__ import annotations
 
+from importlib import resources
 from pathlib import Path
 
 #: The repository checkout this test suite runs from.
@@ -16,6 +17,12 @@ REPO_ROOT: Path = Path(__file__).resolve().parents[1]
 CORE_ROOT: Path = REPO_ROOT / "src/coding_agent_playbook/resources"
 #: The parent of every bundled plugin's directory.
 PLUGINS_ROOT: Path = REPO_ROOT / "src/coding_agent_playbook/packs"
+#: The pre-commit template's directory. It is engine wiring, not content, so it
+#: stays inside the package and resolves through the imported package rather
+#: than ``REPO_ROOT``: it must ship wherever the engine's code does.
+PRECOMMIT_TEMPLATE_DIR: Path = Path(
+    str(resources.files("coding_agent_playbook") / "templates" / "precommit")
+)
 
 
 def plugin_root(name: str) -> Path:
