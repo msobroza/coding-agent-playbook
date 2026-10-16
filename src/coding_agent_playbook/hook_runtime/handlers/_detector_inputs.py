@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import ToolCall
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
 
-__all__ = ["DEPENDENCIES", "FLAGS", "detector_triggers", "inputs_changed"]
+__all__ = ["DEPENDENCIES", "FLAGS", "INSTALL_PROGRAMS", "detector_triggers", "inputs_changed"]
 
 DEPENDENCIES: Final = "dependencies"
 FLAGS: Final = ("has_dockerfile", "has_ci", "has_notebooks")
@@ -44,6 +44,8 @@ _INSTALLS: Final = frozenset(
         ("pip3", "install"),
     }
 )
+#: The argv0s of :data:`_INSTALLS`: the dispatcher's prefilter skips any other shell call.
+INSTALL_PROGRAMS: Final = frozenset(program for program, _ in _INSTALLS)
 #: The detector's ignored dirs: a notebook there never sets ``has_notebooks``.
 _IGNORED: Final = frozenset({".venv", "venv", "node_modules", ".git", "__pycache__", ".tox"})
 _PYPROJECT_MAX_BYTES: Final = 1024 * 1024

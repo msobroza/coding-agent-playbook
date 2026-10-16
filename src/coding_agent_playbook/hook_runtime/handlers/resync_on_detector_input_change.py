@@ -19,6 +19,11 @@ process; a change that would turn anything off never syncs. It builds no
 ``SyncContext`` (``orchestrator`` imports jinja2). No debounce: a debounced
 detector check would miss a dependency added within 2 s for good (a hook has
 no trailing edge), and the comparison alone costs about 5 ms.
+
+A shell call reaches the handler only through an install segment (a shell
+tool carries no ``write_paths``), so it declares those programs as its
+``argv0s``: the dispatcher's prefilter skips ``ls``, ``pytest`` or ``git
+status`` before the handler runs (review finding #7).
 """
 
 from __future__ import annotations
@@ -29,6 +34,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.handlers._detector_inputs import (
+    INSTALL_PROGRAMS,
     detector_triggers,
     inputs_changed,
 )
@@ -77,6 +83,7 @@ class _Row:
     "resync_on_detector_input_change",
     events=["post_tool_use"],
     decisions=["context", "none"],
+    argv0s=INSTALL_PROGRAMS,
 )
 def resync_on_detector_input_change(
     ev: CanonicalEvent, ctx: HandlerContext

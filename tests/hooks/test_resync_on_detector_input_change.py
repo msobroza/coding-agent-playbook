@@ -19,6 +19,8 @@ from coding_agent_playbook.guard_config import DetectInputs, applicability_rows
 from coding_agent_playbook.hook_policy import EffectiveHooks
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.handlers import resync_on_detector_input_change as resync
+from coding_agent_playbook.hook_runtime.handlers._detector_inputs import detector_triggers
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import Rule
 from tests.hook_runtime.fakes import FakeProc
@@ -30,6 +32,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.detector import Facts
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.event import ToolCall
     from coding_agent_playbook.hook_runtime.simulate import SimulateReport
     from tests.hook_payloads import HookPayloadCase
 
@@ -55,6 +58,25 @@ class DetectSpy:
     def __call__(self, repo_root: Path) -> Facts:
         self.calls += 1
         return self._real(repo_root)
+
+
+class TriggerSpy:
+    """Counts the handler's ``detector_triggers`` calls: the handler body ran."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self._real = detector_triggers
+
+    def __call__(self, tool: ToolCall) -> frozenset[str]:
+        self.calls += 1
+        return self._real(tool)
+
+
+@pytest.fixture
+def trigger_spy(monkeypatch: pytest.MonkeyPatch) -> TriggerSpy:
+    spy = TriggerSpy()
+    monkeypatch.setattr(resync, "detector_triggers", spy)
+    return spy
 
 
 @pytest.fixture
@@ -209,6 +231,30 @@ def test_successful_uv_add_reports(
 
     assert ML_RULE in report.trace.combined.context[0]
     assert detect_spy.calls == 1
+
+
+@pytest.mark.parametrize("command", ["ls -la", "pytest -q", "git status", "python -c 'import x'"])
+def test_non_install_command_never_runs_the_handler(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], trigger_spy: TriggerSpy, command: str
+) -> None:
+    """Finding #7: the argv0 prefilter skips every shell call that runs no install program."""
+    repo.write("pyproject.toml", _WITH_TORCH)  # a change the handler would report if it ran
+
+    report = _post(repo, deps(), "Bash", {"command": command})
+
+    assert report.trace.combined.decision is Decision.NONE
+    assert trigger_spy.calls == 0
+
+
+@pytest.mark.parametrize(
+    "command", ["uv add torch", "cd sub && poetry add torch", "pip3 install x"]
+)
+def test_install_command_passes_the_prefilter(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], trigger_spy: TriggerSpy, command: str
+) -> None:
+    _post(repo, deps(), "Bash", {"command": command})
+
+    assert trigger_spy.calls == 1
 
 
 def test_newly_active_id_injected_once_per_session(

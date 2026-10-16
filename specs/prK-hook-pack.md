@@ -410,7 +410,8 @@ These hooks keep the playbook's own invariants true while the agent works:
   - Builtin handler `resync_on_detector_input_change`.
   - It uses `detector.detect()` (`detector.py:288`) and `detector.evaluate_predicate()` (`detector.py:386`) in-process (jinja2-free, verified; `detector` imports `packaging`, so this is a §D.1 branch-local row: imported only on the source-changed branch, and only after the cheap tomllib comparison found a change). It does **not** build a `SyncContext`, because `orchestrator` imports jinja2.
   - Keys read: `facts`, `applicability`, `protected.entries`.
-- **Budget & failure.** About 5ms when unchanged; about 0.5s when the applicable set changes. Fails open.
+  - It declares the install programs (`uv`, `poetry`, `pip`, `pip3`) as its `argv0s`, so the shared shell prefilter (§E.4) never calls it for a Bash command none of whose segments runs one (`ls`, `pytest`, `git status`). A shell call has no `write_paths`, so only an install segment could trigger it; Edit/Write calls are never prefiltered.
+- **Budget & failure.** About 5ms when unchanged; about 0.5s when the applicable set changes; nothing past the shared prefilter for a non-install Bash command. Fails open.
 - **Guards.** Once per newly activated id per session. Auto-sync never removes or relaxes anything.
 - **Portability.**
   - Claude PostToolUse; OpenCode `tool.execute.after` (success only, matching the exit-0 condition).
