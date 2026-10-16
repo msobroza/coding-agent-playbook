@@ -53,9 +53,11 @@ def test_no_resources_reason_for_third_party(name: str) -> None:
 @pytest.mark.parametrize("name", [PLUGIN_NAMESPACE, DEPRECATED_PACK_NAMESPACE])
 def test_plugin_namespace_reason(name: str) -> None:
     (problem,) = unusable_overlays([name])
+    # Built from the discovered list, so adding a plugin under content/ needs no
+    # edit here (acceptance 5).
     assert problem.reason == (
         "the bundled plugin namespace, not a plugin (bundled plugins: "
-        "coding_agent_playbook.plugins.python_design, coding_agent_playbook.plugins.superpowers)"
+        f"{', '.join(bundled_plugins())})"
     )
 
 

@@ -2,8 +2,7 @@
 
 The sets are hardcoded on purpose: deriving them from the on-disk tree would let
 an accidentally dropped skill, script, or reference file pass every test. Shared
-by the ``tests/plugins/`` suite and the PR-L link gate in
-``tests/cli/test_validate_links.py``.
+by the ``tests/plugins/`` suite and every other test that names the plugin.
 """
 
 from __future__ import annotations

@@ -27,6 +27,21 @@ PRECOMMIT_TEMPLATE_DIR: Path = Path(
 )
 
 
+def bundled_plugin_dirs() -> list[Path]:
+    """Return every directory directly under :data:`PLUGINS_ROOT`, sorted.
+
+    Content gates iterate this listing rather than naming plugins, so a new
+    ``content/plugins/<name>/`` is gated with no test edit (acceptance 5). It is
+    not filtered by the leaf rule: a misnamed directory is still scanned, and the
+    leaf-rule guard in ``test_content_layout.py`` fails on its name.
+
+    Example::
+
+        [path.name for path in bundled_plugin_dirs()]  # ['python_design', 'superpowers']
+    """
+    return sorted(entry for entry in PLUGINS_ROOT.iterdir() if entry.is_dir())
+
+
 def plugin_root(name: str) -> Path:
     """Return bundled plugin *name*'s content root, the directory holding ``skills/``.
 

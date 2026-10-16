@@ -35,17 +35,22 @@ consumer repo, and CI refuses it.
 
 Two rules keep the content self-contained:
 
-- **No URLs, and links stay in their layer.** No file anywhere in this tree
-  holds a URL of any scheme. The one exception is the license URI in
-  `core/eval_tasks/ATTRIBUTIONS.md`. A markdown link must resolve to a file
-  inside the same layer (`core/`, or `plugins/<name>/`).
+- **No URLs, and links stay in their layer.** No file in this tree holds a
+  URL: no `scheme://`, `www.`, `mailto:` or `git@host:` form, and no bare domain
+  followed by a path. The exceptions are the license URI in
+  `core/eval_tasks/ATTRIBUTIONS.md` and a vendored plugin's upstream text (see
+  "Add a bundled plugin"). A markdown link in a rule, prompt or skill must
+  resolve to a file inside the same layer (`core/`, or `plugins/<name>/`).
 - **Distilled content never names its source plugin.** When rules, prompts or
   skills distill ideas from a third-party plugin (the engine's own `core/`, or a
   distilled plugin such as `python_design`), the credit goes in the layer
   root's `ATTRIBUTIONS.md` and nowhere else. CI scans every other file of
-  `core/` and `plugins/python_design/` for the source plugin's name. A vendored
-  plugin such as `superpowers` is exempt: it keeps its upstream wording, source
-  name included.
+  `core/` and of every bundled plugin for the names of the sources the scan
+  knows (today, `python_design`'s source). Distilling from a new source means
+  adding its name to `_PLUGIN_MARKER_RE` in
+  `tests/integration/test_resources_self_contained.py`. A vendored plugin such
+  as `superpowers` is exempt: it keeps its upstream wording, source name
+  included.
 
 Rule, prompt and skill sources use `.md` when the body is plain text, and
 `.md.j2` only when the body needs Jinja (detector facts such as
@@ -155,9 +160,29 @@ with no change outside `content/`.
   the upstream `LICENSE` when the text is vendored.
 
 To try it, run `playbook init --non-interactive --name demo --kind python-library --overlays coding_agent_playbook.plugins.<name> </dev/null`
-in an empty scratch directory. A new plugin also changes the bundled-plugin list
-that the preflight prints in its hint, so update the tests that pin that list
-(search `tests/` for `bundled plugins:`).
+in an empty scratch directory.
+
+CI gates every directory under `plugins/` with no test edit, because the gates
+read the directory listing rather than a list of plugin names:
+
+- **URL and source-name scan:** every file of the plugin, its root files
+  included, must hold no URL. Every file except its root `ATTRIBUTIONS.md` must
+  also name none of the distilled sources the scan knows.
+- **Link gate:** the suite runs `playbook validate`'s link check with every
+  bundled plugin enabled. Each markdown link in the plugin's `rules/`,
+  `prompts/` and `skills/` must resolve inside `plugins/<name>/`, so a link into
+  `core/` or into another plugin fails.
+- **Layout guards:** the leaf rule, at least one kind directory, and no link to
+  a layer-root file.
+
+A vendored plugin, whose upstream text must stay byte-identical, may be left out
+of the URL and source-name scan only through one commented allowlist:
+`_VENDORED_PLUGIN_GATES` in `tests/integration/test_resources_self_contained.py`.
+Each entry names the dedicated test that scans that plugin instead, and that
+test must check every file for URLs. Today the only entry is `superpowers`,
+whose upstream markdown holds bare-domain URLs in code samples; its gate is
+`tests/plugins/test_superpowers_self_contained.py`. The link gate has no
+allowlist.
 
 ## Run the gate
 
@@ -174,5 +199,6 @@ Run them inside the dev environment (`uv sync --extra dev`, then prefix each
 with `uv run`). It takes four commands rather than one because local pre-commit
 ruff-formats only Python files, while CI's `ruff format --check .` also formats
 the Python code blocks inside markdown, this guide's included. The pytest suite
-validates the shipped content: link containment, self-containment, every eval
-task's gate, and each plugin's inventory.
+validates the shipped content: link containment and self-containment for `core/`
+and every bundled plugin (see "Add a bundled plugin"), every eval task's gate,
+and the skill inventory that `python_design` and `superpowers` each pin.

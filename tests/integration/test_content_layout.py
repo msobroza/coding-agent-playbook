@@ -29,7 +29,7 @@ import pytest
 
 from coding_agent_playbook.bundled_content import _PACKAGE_DIR, bundled_content_root
 from coding_agent_playbook.links import extract_markdown_links
-from tests._content import CORE_ROOT, PLUGINS_ROOT, REPO_ROOT
+from tests._content import CORE_ROOT, PLUGINS_ROOT, REPO_ROOT, bundled_plugin_dirs
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -78,11 +78,6 @@ def test_no_tracked_file_matches_gitignore() -> None:
 # --- bundled plugin directories -----------------------------------------------
 
 
-def _plugin_dirs() -> list[Path]:
-    """Every directory directly under ``content/plugins/``, sorted."""
-    return sorted(entry for entry in PLUGINS_ROOT.iterdir() if entry.is_dir())
-
-
 def _leaf_rule_problems(plugin_dir: Path) -> list[str]:
     """Why ``plugin_dir`` is not a valid bundled plugin; empty when it is."""
     name = plugin_dir.name
@@ -97,7 +92,7 @@ def _leaf_rule_problems(plugin_dir: Path) -> list[str]:
 
 
 def test_plugin_dirs_follow_the_leaf_rule() -> None:
-    plugin_dirs = _plugin_dirs()
+    plugin_dirs = bundled_plugin_dirs()
     assert plugin_dirs, f"found no bundled plugin directory under {PLUGINS_ROOT}"
     problems = [problem for path in plugin_dirs for problem in _leaf_rule_problems(path)]
     assert not problems, f"bundled plugin dirs under {PLUGINS_ROOT} break the leaf rule: {problems}"
@@ -108,7 +103,7 @@ def test_plugin_dirs_follow_the_leaf_rule() -> None:
 
 def _layer_roots() -> list[Path]:
     """Where layer-root files sit: the core root and every bundled plugin's root."""
-    return [CORE_ROOT, *_plugin_dirs()]
+    return [CORE_ROOT, *bundled_plugin_dirs()]
 
 
 def _synced_markdown_files() -> list[Path]:
