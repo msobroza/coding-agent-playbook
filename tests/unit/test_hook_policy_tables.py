@@ -228,6 +228,8 @@ def test_hook_policy_imports_only_the_stdlib() -> None:
         "coding_agent_playbook.hook_runtime.paths",
         "coding_agent_playbook.hook_runtime.policy",
         "coding_agent_playbook.hook_runtime.registry",
+        # H21's wrapper-prefix rule, one source with the dispatcher's env check
+        "coding_agent_playbook.hook_runtime.wrapper_policy",
     ]
     assert foreign == []
 
