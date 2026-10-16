@@ -109,10 +109,19 @@ A bundled-plugin name in `overlays_enabled` is now checked against
 coding_agent_playbook.plugins.superpower: no such bundled plugin (bundled plugins: coding_agent_playbook.plugins.python_design, coding_agent_playbook.plugins.superpowers)
 ```
 
-A typo under the old namespace prints the deprecation warning (recommending the
-new spelling) and then this error for the new spelling. Overlay packages keep
-their reasons (`not importable`, with the import error when there is one, or no
-`resources/` directory).
+In `overlays_enabled`, a typo under the old namespace prints the deprecation
+warning (recommending the new spelling) and then this error for the new
+spelling. `init --overlays` warns only after its check passes, so it reports
+such a typo under the new spelling alone. Overlay packages keep their reasons
+(`not importable`, with the import error when there is one, or no `resources/`
+directory).
+
+The refusal headers now call each entry an overlay package or bundled plugin:
+
+| Command | Before | Now |
+|---|---|---|
+| `sync` | `error: overlay package(s) in overlays_enabled are not usable here:` | `error: overlay package(s) or bundled plugin(s) in overlays_enabled are not usable here:` |
+| `init` | `error: --overlays names package(s) that cannot be used as overlays here; nothing was written:` | `error: --overlays names overlay package(s) or bundled plugin(s) that cannot be used here; nothing was written:` |
 
 ### 5. The bundled `eval --show` label
 
@@ -130,16 +139,18 @@ repo-local task under `playbook/eval_tasks/` now finds its prompt in
 
 ### 6. A broken install fails loudly
 
-If the engine's bundled content cannot be found, every command now exits 2 with:
+If the engine's bundled content cannot be found, every command that loads it
+(`init`, `sync`, `check`, `validate`, `render`, `eval`) now exits 2 with:
 
 ```text
 error: the engine's bundled content was not found (looked in <a>, <b>); reinstall coding-agent-playbook
 ```
 
-Before, a lookup miss silently rendered zero engine artifacts. If you build the
-engine yourself, build releases from the sdist (`uv build` or `python -m build`),
-never with `--wheel`: the wheel copies `content/` in with a force-include that
-ignores `.gitignore`.
+`--version`, `metrics`, `validate-harness` and `import-harness` never look for
+the content, so they still run. Before, a lookup miss silently rendered zero
+engine artifacts. If you build the engine yourself, build releases from the
+sdist (`uv build` or `python -m build`), never with `--wheel`: the wheel copies
+`content/` in with a force-include that ignores `.gitignore`.
 
 ### Not changed (v0.19)
 

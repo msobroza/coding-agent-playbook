@@ -105,7 +105,8 @@ def _placeholder(task: EvalTask, *, strict: bool) -> str:
         raise PromptResolutionError(
             f"prompt_id {task.prompt_id!r} for task {task.id!r} resolved to no "
             "shipped prompt; a real runner cannot be driven with a placeholder. "
-            "Check the task's prompt_id and that resources/prompts/ is reachable."
+            "Check the task's prompt_id and that the prompts/ directory next to the "
+            "task's eval_tasks/ holds that prompt."
         )
     return f"[prompt:{task.prompt_id}] {task.invocation.prompt_args}".strip()
 

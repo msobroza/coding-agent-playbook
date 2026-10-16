@@ -408,8 +408,8 @@ def _refuse_unusable_overlays(overlays: list[str], origin: str) -> bool:
         return False
     listed = "".join(f"\n  {problem}" for problem in unusable)
     print(
-        f"error: {origin} names package(s) that cannot be used as overlays here; "
-        f"nothing was written:{listed}",
+        f"error: {origin} names overlay package(s) or bundled plugin(s) that cannot be used "
+        f"here; nothing was written:{listed}",
         file=sys.stderr,
     )
     return True
@@ -443,7 +443,10 @@ def run(args: argparse.Namespace) -> int:
     ``ConfigError``) a config file the engine would misread. Both files are read
     and checked here — the local one on its own, the committed one on its own,
     then the config the final sync will load (:func:`_plan_config`) — so a broken
-    file of either kind leaves the repo untouched. A deprecated
+    file of either kind leaves the repo untouched. A broken install exits 2
+    before writing too: :func:`bundled_content_root` raises
+    ``BundledContentMissingError`` when the engine's bundled content is missing,
+    and ``cli.main`` reports it. A deprecated
     ``coding_agent_playbook.packs.*`` name in ``--overlays`` is written in its
     canonical ``plugins`` spelling (on a re-run too: the migration path for the
     committed file) and warned about once the overlay preflight passes.

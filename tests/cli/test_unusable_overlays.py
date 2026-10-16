@@ -258,7 +258,9 @@ def test_init_refuses_an_unusable_overlay_before_writing(
     assert _init.run(_init_ns(tmp_path, overlays=f"{overlay}")) == 2
 
     err = capsys.readouterr().err
-    assert err.startswith("error: --overlays names package(s) that cannot be used as overlays")
+    assert err.startswith(
+        "error: --overlays names overlay package(s) or bundled plugin(s) that cannot be used here"
+    )
     assert f"\n  {reason}" in err
     assert sorted(path.name for path in tmp_path.iterdir()) == ["pyproject.toml"]
 
@@ -294,8 +296,8 @@ def test_init_checks_the_local_files_overlays_which_replace_the_flag(
 
     err = capsys.readouterr().err
     assert err.startswith(
-        "error: overlays_enabled in .coding-agent-playbook.local.toml names package(s) "
-        "that cannot be used as overlays here; nothing was written:"
+        "error: overlays_enabled in .coding-agent-playbook.local.toml names overlay package(s) "
+        "or bundled plugin(s) that cannot be used here; nothing was written:"
     )
     assert f"\n  {_TYPO}: no such bundled plugin {_plugins_hint()}" in err
     assert sorted(path.name for path in tmp_path.iterdir()) == [local.name, "pyproject.toml"]
@@ -314,7 +316,10 @@ def test_init_refuses_unknown_bundled_plugin_in_local_file(
     assert main([*argv, "--repo-root", str(tmp_path)]) == 2
 
     err = capsys.readouterr().err
-    assert "error: overlays_enabled in .coding-agent-playbook.local.toml names package(s)" in err
+    assert (
+        "error: overlays_enabled in .coding-agent-playbook.local.toml names overlay package(s) "
+        "or bundled plugin(s)"
+    ) in err
     assert f"\n  {unknown}: no such bundled plugin {_plugins_hint()}\n" in err
     assert not (tmp_path / ".coding-agent-playbook.toml").exists()
     assert sorted(path.name for path in tmp_path.iterdir()) == [local.name, "pyproject.toml"]
@@ -335,8 +340,8 @@ def test_init_checks_the_flag_too_when_the_local_file_replaces_it(
 
     err = capsys.readouterr().err
     assert err.startswith(
-        "error: --overlays names package(s) that cannot be used as overlays here; "
-        "nothing was written:"
+        "error: --overlays names overlay package(s) or bundled plugin(s) that cannot be used "
+        "here; nothing was written:"
     )
     assert f"\n  {_TYPO}: no such bundled plugin {_plugins_hint()}" in err
     assert "overlays_enabled in" not in err  # the local list is usable
@@ -353,8 +358,11 @@ def test_init_reports_both_unusable_lists_at_once(
     assert _init.run(_init_ns(tmp_path, overlays=_TYPO)) == 2
 
     err = capsys.readouterr().err
-    assert err.startswith("error: --overlays names package(s)")
-    assert "\nerror: overlays_enabled in .coding-agent-playbook.local.toml names package(s)" in err
+    assert err.startswith("error: --overlays names overlay package(s) or bundled plugin(s)")
+    assert (
+        "\nerror: overlays_enabled in .coding-agent-playbook.local.toml names overlay package(s) "
+        "or bundled plugin(s)"
+    ) in err
     assert sorted(path.name for path in tmp_path.iterdir()) == [local.name, "pyproject.toml"]
 
 

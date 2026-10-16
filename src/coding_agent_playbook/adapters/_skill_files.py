@@ -8,8 +8,8 @@ the skip rule lives in exactly one place.
 The rule: **Python bytecode caches are never copied** — any path with a
 ``__pycache__`` component and any ``*.pyc``/``*.pyo`` file. They are
 interpreter-tagged by-products, not content: ``pip install`` byte-compiles every
-``.py`` in the engine wheel (pack scripts included), and importing a script
-in-process writes ``scripts/__pycache__/``. Copying them made the synced output
+``.py`` in the engine wheel (bundled-plugin scripts included), and importing a
+script in-process writes ``scripts/__pycache__/``. Copying them made the synced output
 (and its lockfile entries) depend on how, and under which Python, the engine was
 installed, so files were added and removed from one sync to the next.
 

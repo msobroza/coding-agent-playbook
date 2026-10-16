@@ -224,8 +224,10 @@ def _find_skill_md(skill_dir: Path) -> Path | None:
 
 
 class FileSystemArtifactSource(ArtifactSource):
-    """Walks importlib.resources for the engine + overlay packages, plus
-    <repo>/playbook/ for repo-local artifacts (SPEC §20.3, §11)."""
+    """Walks the engine's bundled content (``content/core/`` and the enabled
+    ``content/plugins/<name>/``, located by ``bundled_content``), importlib.resources
+    for overlay packages, plus <repo>/playbook/ for repo-local artifacts
+    (SPEC §20.3, §11)."""
 
     name = "filesystem"
 
@@ -308,15 +310,19 @@ class FileSystemArtifactSource(ArtifactSource):
     def list_eval_tasks(self) -> list[EvalTask]:
         """Walk engine + overlay packages + repo-local for ``eval_tasks/<id>/``.
 
-        Mirrors the rules/prompts walking pattern: each layer's
-        ``resources/eval_tasks/`` is scanned via :func:`_resource_subdir`, then
+        Mirrors the rules/prompts walking pattern: each layer's ``eval_tasks/``
+        (``content/core/eval_tasks/`` for the engine,
+        ``content/plugins/<name>/eval_tasks/`` for a bundled plugin,
+        ``<pkg>/resources/eval_tasks/`` for an overlay package) is scanned via
+        :func:`_resource_subdir`, then
         ``<repo>/playbook/eval_tasks/`` is appended. Later layers do NOT
         override earlier ones here — the orchestrator's :class:`OverlayResolver`
         handles ID-based collision semantics for rules/prompts/skills, but eval
         tasks are aggregated as-is in v1 (no per-layer override pass yet; the
         collision-by-id pattern is identical and lands when first overlay
         ships eval tasks). All entries are returned with their ``source_package``
-        set to the importable package name or ``"<repo-local>"``.
+        set to the layer's name (the engine package, a bundled-plugin or
+        overlay-package name) or ``"<repo-local>"``.
         """
         tasks: list[EvalTask] = []
         for package in (self._engine_package, *self._overlay_packages):

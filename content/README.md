@@ -33,13 +33,19 @@ outside every kind directory, so sync never copies them into a consumer repo.
 Never link to one from a rule, prompt or skill: the link would break in every
 consumer repo, and CI refuses it.
 
-Two rules hold for every file in this tree:
+Two rules keep the content self-contained:
 
-- **Self-contained.** No URL of any scheme, anywhere. The one exception is the
-  licence URI in `core/eval_tasks/ATTRIBUTIONS.md`. A markdown link must
-  resolve to a file inside the same layer (`core/`, or `plugins/<name>/`).
-- **No source-plugin names in artifacts.** Credit for distilled ideas goes in
-  that layer's `ATTRIBUTIONS.md` and nowhere else.
+- **No URLs, and links stay in their layer.** No file anywhere in this tree
+  holds a URL of any scheme. The one exception is the license URI in
+  `core/eval_tasks/ATTRIBUTIONS.md`. A markdown link must resolve to a file
+  inside the same layer (`core/`, or `plugins/<name>/`).
+- **Distilled content never names its source plugin.** When rules, prompts or
+  skills distill ideas from a third-party plugin (the engine's own `core/`, or a
+  distilled plugin such as `python_design`), the credit goes in the layer
+  root's `ATTRIBUTIONS.md` and nowhere else. CI scans every other file of
+  `core/` and `plugins/python_design/` for the source plugin's name. A vendored
+  plugin such as `superpowers` is exempt: it keeps its upstream wording, source
+  name included.
 
 Rule, prompt and skill sources use `.md` when the body is plain text, and
 `.md.j2` only when the body needs Jinja (detector facts such as

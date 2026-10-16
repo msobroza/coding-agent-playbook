@@ -254,9 +254,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     Commands load the config first, so either one stops them before they write.
 
     A broken install also exits 2, without a traceback. Engine content found in
-    neither home (:class:`BundledContentMissingError`) prints the spec's
-    missing-content line naming both paths tried; it used to render zero engine
-    artifacts silently. A missing pre-commit template
+    neither home (:class:`BundledContentMissingError`) prints
+    ``error: the engine's bundled content was not found (looked in <a>, <b>);
+    reinstall coding-agent-playbook`` on one line, where ``<a>`` and ``<b>`` are
+    the wheel's ``<package>/_content`` and the checkout's ``<repo>/content``, in
+    that order; it used to render zero engine artifacts silently. Only commands
+    that load the content raise it (``init``, ``sync``, ``check``, ``validate``,
+    ``render``, ``eval``). A missing pre-commit template
     (:class:`~coding_agent_playbook.commands.init.PrecommitTemplateMissingError`)
     prints ``error: <message>``.
 
@@ -282,7 +286,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _missing_content_line(exc: BundledContentMissingError) -> str:
-    """The spec's missing-content error line, naming every content home tried, in order."""
+    """The missing-content error line, naming every content home tried, in order."""
     looked_in = ", ".join(str(path) for path in exc.tried)
     return (
         f"error: the engine's bundled content was not found (looked in {looked_in}); "

@@ -301,8 +301,9 @@ The engine wheel bundles **opt-in bundled plugins** (called *packs* before
 v0.19). They layer exactly like an overlay package but need no extra install,
 and they stay **off** until you list them. Each one is a plain content
 directory, `content/plugins/<name>/` in the engine repository, enabled as
-`coding_agent_playbook.plugins.<name>`. The first is `superpowers`: a near-verbatim, self-contained port of
-the Superpowers skills library (v7.0.0, MIT, by Jesse Vincent) with 15 skills:
+`coding_agent_playbook.plugins.<name>`. The first is `superpowers`: a
+near-verbatim, self-contained port of the Superpowers skills library (v7.0.0,
+MIT, by Jesse Vincent) with 15 skills:
 brainstorming, writing-plans, executing-plans, subagent-driven-development,
 test-driven-development, systematic-debugging, verification-before-completion,
 requesting/receiving-code-review, using-git-worktrees,
@@ -482,9 +483,9 @@ repos:
 > runs them in its **own** virtualenv holding only the engine at `rev:` — not your
 > project environment. List every overlay package (and any out-of-tree adapter)
 > under `additional_dependencies` and keep `rev` on the engine version you pin.
-> Otherwise `playbook sync` refuses to run ("overlay package(s) in
-> overlays_enabled are not usable here", each one `not importable`) instead of
-> silently re-rendering without your org's rules. The
+> Otherwise `playbook sync` refuses to run ("overlay package(s) or bundled
+> plugin(s) in overlays_enabled are not usable here", each overlay package
+> `not importable`) instead of silently re-rendering without your org's rules. The
 > simpler option: use the `repo: local` + `language: system` hooks `playbook init`
 > writes (below), which run the `playbook` from your project environment.
 

@@ -125,6 +125,33 @@ def test_infer_prompts_dir_does_not_resolve_symlinks(tmp_path: Path) -> None:
     assert _infer_prompts_dir(task_toml) == link_layer / "prompts"
 
 
+def test_strict_unresolved_prompt_hint_points_at_the_layers_prompts_dir(tmp_path: Path) -> None:
+    """The strict-mode hint names where the lookup really happens.
+
+    Regression: it said to check "that resources/prompts/ is reachable", but the
+    engine's own content has no ``resources/`` since v0.19, and every layer's
+    prompts are found next to its ``eval_tasks/`` (:func:`_infer_prompts_dir`).
+    """
+    task_dir = tmp_path / "content" / "core" / "eval_tasks" / "orphan-task"
+    (task_dir / "setup").mkdir(parents=True)
+    task = EvalTask(
+        id="orphan-task",
+        prompt_id="no-such-prompt",
+        description="A task whose prompt is not shipped.",
+        source_path=task_dir / "task.toml",
+        source_package=_ENGINE,
+        setup=TaskSetup(),
+        invocation=TaskInvocation(prompt_args="go"),
+    )
+
+    with pytest.raises(PromptResolutionError) as raised:
+        render_prompt(task, strict=True)
+
+    message = str(raised.value)
+    assert "resources/prompts" not in message
+    assert "the prompts/ directory next to the task's eval_tasks/" in message
+
+
 # --------------------------------------------------------------------------- #
 # Synthetic resources tree — failure modes
 # --------------------------------------------------------------------------- #

@@ -14,10 +14,12 @@ Validates:
 - Every markdown link in every artifact is self-contained (PR L): relative
   targets resolve inside the artifact's source layer, external links only
   pass through the ``[links] allowed_domains`` allowlist.
-- Every package in ``overlays_enabled`` is usable here: it imports without error
-  and ships a ``resources/`` directory — the same check ``playbook sync`` refuses
-  to run without (``_sync_preflight.unusable_overlays``), so a misspelled pack
-  fails here too instead of validating the engine layer alone.
+- Every ``overlays_enabled`` entry is usable here: an overlay package imports
+  without error and ships a ``resources/`` directory, and a bundled-plugin name
+  matches a ``content/plugins/<leaf>/`` directory — the same check ``playbook
+  sync`` refuses to run without (``_sync_preflight.unusable_overlays``), so a
+  misspelled bundled plugin fails here too instead of validating the engine
+  layer alone.
 - Every skill is a valid Agent Skill (SPEC §6.3): it declares an ``id`` string
   (id-less skills all collapse into one skill named ``skill``), its id — emitted
   as the ``SKILL.md`` ``name`` and the output directory — matches
@@ -334,10 +336,12 @@ def _check_markdown_links(
     Filesystem sources are walked per package — the same pattern as
     :func:`_load_eval_tasks_for_validation` — because skill ``references/``
     files are not carried as paths on the canonical :class:`Skill` type. The
-    walk covers rules, prompts, and skills across the engine package, overlay
-    packages, and repo-local ``playbook/``; the containment root is the
-    package's ``resources/`` (respectively ``playbook/``) so links may cross
-    artifact kinds within their layer but never leave the shipped bundle.
+    walk covers rules, prompts, and skills across the engine, each overlay
+    package or bundled plugin, and repo-local ``playbook/``; the containment
+    root is the layer's root — ``content/core/`` for the engine,
+    ``content/plugins/<name>/`` for a bundled plugin, an overlay package's
+    ``resources/``, or ``playbook/`` — so links may cross artifact kinds within
+    their layer but never leave the shipped bundle.
 
     Non-filesystem sources have no on-disk layout to resolve relative targets
     against, so only the external-link policy applies to their bodies.
