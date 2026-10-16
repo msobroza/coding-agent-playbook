@@ -9,8 +9,11 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.hooks_config import HooksConfig
+from coding_agent_playbook.lockfile import Lockfile
 from coding_agent_playbook.renderer import SENTINEL
-from coding_agent_playbook.types import Prompt, Skill
+from coding_agent_playbook.types import Prompt, Rule, Skill
+from tests.hook_samples import resolved_hook
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -172,3 +175,86 @@ def test_default_cleanup_never_deletes_a_written_file_under_another_name(tmp_pat
 
     assert adapter.cleanup_stale({written.resolve()}, tmp_path) == []
     assert written.read_text(encoding="utf-8").endswith("fresh\n")
+
+
+# --- the hook additions (specs/prK-lifecycle-hooks.md §C.1.1) ---------------------------
+
+
+_LOCK = Lockfile(schema_version=2, engine_version="0.1.0", rendered_at="2026-10-15T00:00:00Z")
+
+
+class _RuleRecordingAdapter(_DummyAdapter):
+    """Records every rule ``write_rule`` receives and reports one path per rule."""
+
+    name = "recording"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.written_rules: list[Rule] = []
+
+    def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
+        self.written_rules.append(rule)
+        return [repo_root / f"{rule.frontmatter.id}.md"]
+
+
+def test_write_hook_default_routes_advisory_to_write_rule(tmp_path: Path) -> None:
+    adapter = _RuleRecordingAdapter()
+    hook = resolved_hook(body="Never edit generated files.\n")
+
+    written = adapter.write_hook(hook, tmp_path)
+
+    assert written == [tmp_path / "guardrail-guard-x.md"]
+    (rule,) = adapter.written_rules
+    assert rule is hook.advisory
+    assert rule.frontmatter.priority == 30
+    assert rule.body.startswith("Never edit generated files.\n\n*Enforced by")
+
+
+def test_write_hook_default_writes_nothing_for_none_advisory(tmp_path: Path) -> None:
+    adapter = _RuleRecordingAdapter()
+    hook = resolved_hook(body="   \n")
+
+    assert hook.advisory is None
+    assert adapter.write_hook(hook, tmp_path) == []
+    assert adapter.written_rules == []
+
+
+def test_begin_sync_and_managed_lock_entries_defaults(tmp_path: Path) -> None:
+    adapter = _DummyAdapter()
+
+    adapter.begin_sync(tmp_path, None)
+    adapter.begin_sync(tmp_path, _LOCK, hooks_config=HooksConfig(enabled=True))
+
+    assert adapter.managed_lock_entries() == []
+    assert adapter.finalize(tmp_path) == []
+    assert dict(Adapter.hook_support) == {}
+    assert Adapter.shared_outputs == ()
+
+
+def test_hook_support_default_is_read_only() -> None:
+    with pytest.raises(TypeError):
+        Adapter.hook_support["pre_tool_use"] = frozenset({"deny"})  # type: ignore[index]
+
+
+def test_third_party_adapter_without_hook_overrides_still_works(tmp_path: Path) -> None:
+    """An adapter written against the pre-hook ABC (rules + prompts only) still syncs hooks."""
+
+    class _LegacyAdapter(Adapter):
+        name = "legacy"
+
+        def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
+            target = repo_root / "legacy" / f"{rule.frontmatter.id}.md"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(rule.body, encoding="utf-8")
+            return [target]
+
+        def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
+            return []
+
+    adapter = _LegacyAdapter()
+    adapter.begin_sync(tmp_path, None)
+    written = adapter.write_hook(resolved_hook(), tmp_path)
+
+    assert written == [tmp_path / "legacy" / "guardrail-guard-x.md"]
+    assert adapter.finalize(tmp_path) == []
+    assert adapter.managed_lock_entries() == []

@@ -12,22 +12,27 @@ from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from coding_agent_playbook._atomic_io import atomic_write_bytes
+from coding_agent_playbook._layers import ENGINE_PACKAGE as ENGINE_PACKAGE
+from coding_agent_playbook._layers import REPO_LOCAL_SOURCE as REPO_LOCAL_SOURCE
 from coding_agent_playbook._toml import dump_toml
-from coding_agent_playbook.bundled_content import bundled_layer_root, is_bundled_layer
+from coding_agent_playbook.catalog import catalog_layer_root, is_bundled_layer
 from coding_agent_playbook.config import Config, ConfigError, check_config_file
 from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
 )
 from coding_agent_playbook.lockfile import Lockfile
+from coding_agent_playbook.sources._hook_walk import walk_hook_layer
 from coding_agent_playbook.sources.base import ArtifactSource, StateSource
 from coding_agent_playbook.types import Prompt, Rule, Skill, split_frontmatter
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping
+    from collections.abc import Callable, Iterator, Mapping, Sequence
     from typing import TypeVar
 
     from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.types import Hook, HookSchemaError
 
     _T = TypeVar("_T")
 
@@ -58,18 +63,18 @@ def _resource_subdir(package: str, subdir: str) -> Path | None:
     """Resolve a layer's ``<subdir>`` kind directory, or ``None`` when it ships none.
 
     A bundled layer (the engine, or a bundled plugin under either namespace)
-    reads ``<subdir>`` from its directory in the content root
-    (``bundled_content.bundled_layer_root``) and is never imported. Every other
+    reads ``<subdir>`` from its directory in the catalog root
+    (``catalog.catalog_layer_root``) and is never imported. Every other
     package resolves ``<package>/resources/<subdir>`` via importlib.resources.
 
     Returns ``None`` if the package is not importable, has no ``resources/``
     directory, or has no matching subdirectory, so sources silently skip
     packages that ship no artifacts of a given kind (SPEC §20.3). The one raise
-    is :class:`BundledContentMissingError` for a bundled layer when the engine's
-    content root is missing: a broken install must fail loudly, not render
+    is :class:`CatalogMissingError` for a bundled layer when the engine's
+    catalog root is missing: a broken install must fail loudly, not render
     without the engine's artifacts.
     """
-    # Outside the ``except Exception`` guard below on purpose: a missing content
+    # Outside the ``except Exception`` guard below on purpose: a missing catalog
     # root must propagate, never read as "this layer ships nothing".
     if is_bundled_layer(package):
         return _bundled_subdir(package, subdir)
@@ -102,14 +107,14 @@ def _bundled_subdir(layer: str, subdir: str) -> Path | None:
 
     ``layer`` is the engine or a bundled-plugin name (either namespace); an
     unknown plugin leaf resolves to ``None`` like a missing kind directory.
-    Raises :class:`BundledContentMissingError` when the content root is missing.
+    Raises :class:`CatalogMissingError` when the catalog root is missing.
 
     Example::
 
         >>> _bundled_subdir("coding_agent_playbook", "rules")  # doctest: +SKIP
-        PosixPath('/repo/content/core/rules')
+        PosixPath('/repo/catalog/core/rules')
     """
-    layer_root = bundled_layer_root(layer)
+    layer_root = catalog_layer_root(layer)
     if layer_root is None:
         return None
     candidate = layer_root / subdir
@@ -155,17 +160,15 @@ def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
 
 
 def _atomic_write_text(target: Path, content: str) -> None:
-    """Write ``content`` to ``target`` atomically.
+    """Write ``content`` to ``target`` atomically, as UTF-8 bytes.
 
-    Writes to ``target + ".tmp"`` first, then renames over the target. A SIGKILL
-    or power loss mid-write leaves either the old file intact or the new file
-    fully written — never a half-written one. Used for both
+    A SIGKILL or power loss mid-write leaves either the old file intact or the
+    new file fully written — never a half-written one. Used for both
     ``.coding-agent-playbook.toml`` and ``.coding-agent-playbook.lock`` so a
-    crashed ``playbook sync`` can be safely retried.
+    crashed ``playbook sync`` can be safely retried. It delegates to the byte
+    writer because ``Path.write_text`` translates ``\\n`` on Windows.
     """
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(content, encoding="utf-8")
-    tmp.replace(target)
+    atomic_write_bytes(target, content.encode("utf-8"))
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:
@@ -224,10 +227,16 @@ def _find_skill_md(skill_dir: Path) -> Path | None:
 
 
 class FileSystemArtifactSource(ArtifactSource):
-    """Walks the engine's bundled content (``content/core/`` and the enabled
-    ``content/plugins/<name>/``, located by ``bundled_content``), importlib.resources
+    """Walks the engine's catalog (``catalog/core/`` and the enabled
+    ``catalog/plugins/<name>/``, located by the ``catalog`` module), importlib.resources
     for overlay packages, plus <repo>/playbook/ for repo-local artifacts
-    (SPEC §20.3, §11)."""
+    (SPEC §20.3, §11).
+
+    ``extra_resource_roots`` adds ``resources/`` directories found by path
+    rather than by package name — config-less ``playbook validate`` passes an
+    overlay checkout's ``<root>/src/<pkg>/resources/`` (prK §P P8). Every
+    walker, and validate's per-layer checks, go through :meth:`layer_roots`.
+    """
 
     name = "filesystem"
 
@@ -235,22 +244,23 @@ class FileSystemArtifactSource(ArtifactSource):
         self,
         *,
         repo_root: Path,
-        engine_package: str = "coding_agent_playbook",
+        engine_package: str = ENGINE_PACKAGE,
         overlay_packages: list[str] | None = None,
+        extra_resource_roots: Sequence[Path] = (),
     ) -> None:
         self._repo_root = repo_root
         self._engine_package = engine_package
         self._overlay_packages = overlay_packages or []
+        self._extra_resource_roots = tuple(extra_resource_roots)
 
     @property
     def engine_package(self) -> str:
         """Public read-only accessor for the engine package name.
 
         Callers that need to walk the same package set this source walks
-        (e.g. ``commands/validate.py``'s per-task loader-error aggregator)
-        should use this and :attr:`overlay_packages` instead of reaching
-        into the private ``_engine_package`` / ``_overlay_packages``
-        attributes, so a future rename can't silently degrade them.
+        should prefer :meth:`layer_roots`; this and :attr:`overlay_packages`
+        stay public so nobody reaches into the private ``_engine_package`` /
+        ``_overlay_packages`` attributes, which a rename would silently degrade.
         """
         return self._engine_package
 
@@ -263,6 +273,37 @@ class FileSystemArtifactSource(ArtifactSource):
         :meth:`list_rules` / :meth:`list_prompts` / :meth:`list_eval_tasks`.
         """
         return tuple(self._overlay_packages)
+
+    @property
+    def extra_resource_roots(self) -> tuple[Path, ...]:
+        """The path-based ``resources/`` layers, walked after the overlays."""
+        return self._extra_resource_roots
+
+    def layer_roots(self, subdir: str) -> list[tuple[str, Path]]:
+        """``(source_package, <layer>/<subdir>)`` for each layer that has ``subdir``.
+
+        Layers come in resolution order (later wins, SPEC §11): the engine
+        package, the overlays in ``overlays_enabled`` order, the extra
+        ``resources/`` roots, then repo-local ``playbook/``. The label is what
+        artifacts found there carry as ``source_package``: the package name,
+        the extra root's parent directory name, or ``"<repo-local>"``. A
+        layer's containment root for links is ``root.parent``.
+
+        Example::
+
+            >>> FileSystemArtifactSource(repo_root=Path("/repo")).layer_roots("rules")[0][0]
+            'coding_agent_playbook'
+        """
+        candidates: list[tuple[str, Path | None]] = [
+            *((package, _resource_subdir(package, subdir)) for package in self._packages()),
+            *((root.parent.name, root / subdir) for root in self._extra_resource_roots),
+            (REPO_LOCAL_SOURCE, self._repo_root / "playbook" / subdir),
+        ]
+        return [(label, root) for label, root in candidates if root is not None and root.is_dir()]
+
+    def _packages(self) -> tuple[str, ...]:
+        """The importable layers: the engine package, then the overlays."""
+        return (self._engine_package, *self._overlay_packages)
 
     def list_rules(self) -> list[Rule]:
         return self._walk_artifacts(
@@ -277,16 +318,37 @@ class FileSystemArtifactSource(ArtifactSource):
         )
 
     def list_skills(self) -> list[Skill]:
-        skills: list[Skill] = []
-        for package in (self._engine_package, *self._overlay_packages):
-            root = _resource_subdir(package, "skills")
-            if root is None:
-                continue
-            skills.extend(_iter_skills(root, package))
-        repo_local_root = self._repo_root / "playbook" / "skills"
-        if repo_local_root.is_dir():
-            skills.extend(_iter_skills(repo_local_root, "<repo-local>"))
-        return skills
+        return [
+            skill
+            for label, root in self.layer_roots("skills")
+            for skill in _iter_skills(root, label)
+        ]
+
+    def list_hooks(self) -> list[Hook]:
+        """Every hook directory of every layer, in :meth:`layer_roots` order (prK §A.5).
+
+        Fails loudly, like ``Rule.from_markdown``: raises the first
+        :class:`~coding_agent_playbook.types.HookSchemaError` that
+        :meth:`collect_hooks` finds.
+        """
+        hooks, errors = self.collect_hooks()
+        if errors:
+            raise errors[0]
+        return hooks
+
+    def collect_hooks(self) -> tuple[list[Hook], list[HookSchemaError]]:
+        """Every well-formed hook plus every malformed one's error, never raising.
+
+        What ``SyncContext.from_repo(..., tolerate_hook_errors=True)`` reads, so
+        ``playbook validate`` reports each malformed hook (prK §P P8c).
+
+        Example::
+
+            >>> FileSystemArtifactSource(repo_root=Path("/no/such/repo")).collect_hooks()
+            ([], [])
+        """
+        walks = [walk_hook_layer(root, label) for label, root in self.layer_roots("hooks")]
+        return [h for walk in walks for h in walk.hooks], [e for walk in walks for e in walk.errors]
 
     def _walk_artifacts(
         self,
@@ -294,47 +356,32 @@ class FileSystemArtifactSource(ArtifactSource):
         subdir: str,
         builder: Callable[[Path, str], _T],
     ) -> list[_T]:
-        items: list[_T] = []
-        for package in (self._engine_package, *self._overlay_packages):
-            root = _resource_subdir(package, subdir)
-            if root is None:
-                continue
-            for md in _iter_md_files(root):
-                items.append(builder(md, package))
-        repo_local_root = self._repo_root / "playbook" / subdir
-        if repo_local_root.is_dir():
-            for md in _iter_md_files(repo_local_root):
-                items.append(builder(md, "<repo-local>"))
-        return items
+        return [
+            builder(md, label)
+            for label, root in self.layer_roots(subdir)
+            for md in _iter_md_files(root)
+        ]
 
     def list_eval_tasks(self) -> list[EvalTask]:
-        """Walk engine + overlay packages + repo-local for ``eval_tasks/<id>/``.
+        """Walk every layer's ``eval_tasks/<id>/`` (:meth:`layer_roots` order).
 
-        Mirrors the rules/prompts walking pattern: each layer's ``eval_tasks/``
-        (``content/core/eval_tasks/`` for the engine,
-        ``content/plugins/<name>/eval_tasks/`` for a bundled plugin,
-        ``<pkg>/resources/eval_tasks/`` for an overlay package) is scanned via
-        :func:`_resource_subdir`, then
-        ``<repo>/playbook/eval_tasks/`` is appended. Later layers do NOT
-        override earlier ones here — the orchestrator's :class:`OverlayResolver`
-        handles ID-based collision semantics for rules/prompts/skills, but eval
-        tasks are aggregated as-is in v1 (no per-layer override pass yet; the
-        collision-by-id pattern is identical and lands when first overlay
-        ships eval tasks). All entries are returned with their ``source_package``
-        set to the layer's name (the engine package, a bundled-plugin or
-        overlay-package name) or ``"<repo-local>"``.
+        Each layer's ``eval_tasks/`` (``catalog/core/eval_tasks/`` for the
+        engine, ``catalog/plugins/<name>/eval_tasks/`` for a bundled plugin,
+        ``<pkg>/resources/eval_tasks/`` for an overlay package, then
+        ``<repo>/playbook/eval_tasks/``). Later layers do NOT override earlier
+        ones here — the orchestrator's :class:`OverlayResolver` handles ID-based
+        collision semantics for rules/prompts/skills, but eval tasks are
+        aggregated as-is in v1 (no per-layer override pass yet; the
+        collision-by-id pattern is identical and lands when first overlay ships
+        eval tasks). Each task's ``source_package`` is its layer's label (the
+        engine package, a bundled-plugin or overlay-package name, or
+        ``"<repo-local>"``).
         """
-        tasks: list[EvalTask] = []
-        for package in (self._engine_package, *self._overlay_packages):
-            root = _resource_subdir(package, "eval_tasks")
-            if root is None:
-                continue
-            for task_dir in discover_eval_task_dirs(root):
-                tasks.append(load_eval_task_from_dir(task_dir, source_package=package))
-        repo_local = self._repo_root / "playbook" / "eval_tasks"
-        for task_dir in discover_eval_task_dirs(repo_local):
-            tasks.append(load_eval_task_from_dir(task_dir, source_package="<repo-local>"))
-        return tasks
+        return [
+            load_eval_task_from_dir(task_dir, source_package=label)
+            for label, root in self.layer_roots("eval_tasks")
+            for task_dir in discover_eval_task_dirs(root)
+        ]
 
 
 class FileSystemStateSource(StateSource):
@@ -395,9 +442,9 @@ class FileSystemStateSource(StateSource):
         """The checked, decoded ``.coding-agent-playbook.toml`` alone — no local overrides.
 
         Holds every top-level key, including those ``Config`` does not manage
-        (``[links]``, ``[metrics]``, …), so a rewrite of the committed file can
-        carry them over (``config_entries.unmanaged_config_entries``). Raises
-        :class:`FileNotFoundError` without the file and
+        (``[links]``, ``[metrics]``, ``[hooks]``, …), so a rewrite of the committed
+        file can carry them over (``config_entries.unmanaged_config_entries``).
+        Raises :class:`FileNotFoundError` without the file and
         :class:`~coding_agent_playbook.config.ConfigError` naming it for a shape
         ``Config`` would misread, like :meth:`load_config`.
 
@@ -413,6 +460,24 @@ class FileSystemStateSource(StateSource):
         if not primary.is_file():
             raise FileNotFoundError(f"missing {primary.name}; run `playbook init`")
         return _read_config_file(primary)
+
+    def load_primary_config(self) -> Config:
+        """The committed config alone, as a ``Config``: never merging ``.local.toml`` (P6).
+
+        :meth:`read_committed_config_table` through ``Config.from_dict``, so its
+        ``extra_tables`` hold the committed ``[hooks]``/``[guardrails]`` the hook
+        policy reads (:meth:`StateSource.load_policy_tables`). Raises like
+        :meth:`load_config` for a missing or misread committed file. Rewrites of
+        the committed file go through ``commands/_committed_config``.
+
+        Example::
+
+            >>> FileSystemStateSource(repo_root=Path("/no/such/repo")).load_primary_config()
+            Traceback (most recent call last):
+            ...
+            FileNotFoundError: missing .coding-agent-playbook.toml; run `playbook init`
+        """
+        return Config.from_dict(self.read_committed_config_table(), source=self._CONFIG_FILENAME)
 
     def has_committed_config(self) -> bool:
         """Whether ``.coding-agent-playbook.toml`` exists (a first ``init`` has none).
@@ -439,12 +504,12 @@ class FileSystemStateSource(StateSource):
         return _read_config_file(local) if local.is_file() else {}
 
     def save_config(self, config: Config) -> None:
-        """Atomically write ``config.to_dict()`` — and nothing else — to the committed file.
+        """Atomically write ``config.to_dict()`` (``extra_tables`` included) to the committed file.
 
-        The :class:`StateSource` contract. It drops every entry ``Config`` does not
-        own (``[links]``, ``[metrics]``, ``[project] homepage``), so no command
-        calls it: ``init`` and ``check --refresh`` write through
-        :meth:`save_config_table`, from ``commands/_committed_config``.
+        The :class:`StateSource` contract. A ``Config`` from :meth:`load_config`
+        has the local file merged in, so saving it would commit personal
+        overrides: no command calls this. ``init`` and ``check --refresh`` write
+        through :meth:`save_config_table`, from ``commands/_committed_config``.
 
         Example::
 

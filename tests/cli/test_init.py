@@ -15,8 +15,9 @@ from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.config import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.gitignore import BLOCK_START
+from tests.hook_samples import write_hook
 from tests.toml_equality import assert_toml_identical
-from tests.unit.test_cli import break_bundled_content
+from tests.unit.test_cli import break_catalog
 from tests.unit.test_precommit_merge import LEGACY_APPENDED, LEGACY_STARTER
 
 if TYPE_CHECKING:
@@ -150,6 +151,7 @@ def test_init_interactive_uses_input(tmp_path, monkeypatch):
             "python-library",  # kind
             "",  # adapters: blank => defaults
             "",  # overlays: blank => defaults
+            "",  # lifecycle hooks: blank => yes (prK §B.1)
         ]
     )
     monkeypatch.setattr("builtins.input", lambda *_args, **_kw: next(answers))
@@ -400,6 +402,127 @@ def test_init_warns_about_a_hand_edited_legacy_hook(tmp_path, capsys):
     assert "legacy 'coding-agent-playbook-sync' hook" in capsys.readouterr().err
 
 
+# --- P6: re-runs keep unmodelled tables and never persist .local.toml ---------
+
+_PLAIN_CONFIG = """\
+schema_version = 1
+adapters_enabled = ["continue"]
+
+[project]
+name = "x"
+kind = "python-library"
+
+[engine]
+version = "0.1.0a0"
+
+[user_choices]
+docstring_style = "numpy"
+"""
+
+# [hooks] is validated before init's final sync (H21): its ids name the
+# repo-local hook the test writes. Quoted dotted keys ride an unvalidated table.
+_EXTENSION_TABLES = """\
+
+[hooks]
+enabled = true
+disable = ["some-hook"]
+
+[hooks.some-hook]
+budget_s = 2.5
+limits = { paths = ["src/"], depth = { max = 3 } }
+
+[acme."a.b"]
+config = { paths = ["src/"], depth = { max = 3 } }
+
+[guardrails.secrets]
+extra_globs = ["*.vault"]
+
+[links]
+allowed_domains = ["agentharnesses.io"]
+
+[metrics]
+mode = "both"
+test_cmd = ["python", "-m", "pytest"]
+
+[metrics.thresholds.maintainability_index]
+warn = 0.65
+fail = 0.5
+
+[metrics.regression.coverage]
+max_worsening = 0.5
+
+[metrics.weights]
+x = 1.0
+"""
+
+
+def _committed_config(tmp_path: Path) -> dict[str, object]:
+    with (tmp_path / ".coding-agent-playbook.toml").open("rb") as f:
+        return tomllib.load(f)
+
+
+@pytest.mark.usefixtures("sample_hook_handlers")
+def test_init_rerun_preserves_hooks_guardrails_links_metrics(tmp_path):
+    _pyproject(tmp_path)
+    write_hook(tmp_path / "playbook" / "hooks", "some-hook")
+    (tmp_path / ".coding-agent-playbook.toml").write_text(_PLAIN_CONFIG + _EXTENSION_TABLES)
+    expected = tomllib.loads(_EXTENSION_TABLES)
+    args = _ns(tmp_path, name="x", kind="python-library")
+    for _ in range(2):  # the second run re-reads the first run's inline tables
+        assert _init.run(args) == 0
+        data = _committed_config(tmp_path)
+        assert {key: data[key] for key in expected} == expected
+    metrics = data["metrics"]
+    assert isinstance(metrics, dict)
+    assert repr(metrics["regression"]["coverage"]["max_worsening"]) == "0.5"
+    assert repr(metrics["weights"]["x"]) == "1.0"
+    assert data["user_choices"] == {"docstring_style": "numpy"}
+
+
+def test_init_rerun_never_persists_local_overrides(tmp_path):
+    _pyproject(tmp_path)
+    (tmp_path / ".coding-agent-playbook.toml").write_text(_PLAIN_CONFIG)
+    local = '[user_choices]\npersonal = "mine"\n\n[metrics]\nmode = "absolute"\n'
+    (tmp_path / ".coding-agent-playbook.local.toml").write_text(local)
+    assert _init.run(_ns(tmp_path, name="x", kind="python-library")) == 0
+    data = _committed_config(tmp_path)
+    assert data["user_choices"] == {"docstring_style": "numpy"}
+    assert "metrics" not in data
+    assert (tmp_path / ".coding-agent-playbook.local.toml").read_text() == local
+
+
+def test_init_output_policy_comes_from_committed_config(tmp_path):
+    """Behaviour change (P6): a local ``[output] commit = true`` no longer
+    leaks into the committed file, so it no longer selects the committed
+    ``.pre-commit-config.yaml`` hook set either."""
+    _pyproject(tmp_path)
+    (tmp_path / ".coding-agent-playbook.toml").write_text(_PLAIN_CONFIG)
+    (tmp_path / ".coding-agent-playbook.local.toml").write_text("[output]\ncommit = true\n")
+    assert _init.run(_ns(tmp_path, name="x", kind="python-library")) == 0
+    assert _committed_config(tmp_path)["output"] == {"commit": False}
+    text = (tmp_path / ".pre-commit-config.yaml").read_text()
+    assert "--check-staged" in text
+    assert "entry: playbook sync --check\n" not in text
+
+
+@pytest.mark.parametrize("commitizen", [False, True])
+def test_fresh_starter_adds_the_cz_twin_only_for_a_commitizen_repo(
+    tmp_path: Path, commitizen: bool
+) -> None:
+    """prK §F.4.3: the commit-msg ``cz check`` twin follows the CI step's predicate."""
+    pyproject = '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n'
+    if commitizen:
+        pyproject += "\n[tool.commitizen]\nname = 'cz_conventional_commits'\n"
+    (tmp_path / "pyproject.toml").write_text(pyproject)
+
+    path, _ = _init._write_pre_commit(tmp_path)
+
+    parsed = yaml.safe_load(path.read_text())
+    hooks = {hook["id"] for repo in parsed["repos"] for hook in repo["hooks"]}
+    assert ("coding-agent-playbook-commit-msg" in hooks) is commitizen
+    assert ("commit-msg" in parsed["default_install_hook_types"]) is commitizen
+
+
 # --- re-runs: the committed config is rewritten from itself alone (SPEC §7.2/§12.1)
 
 #: Every personal override a teammate might keep in the gitignored local file:
@@ -430,12 +553,20 @@ note = "mine only"
 
 
 def _init_then_add_committed_user_choice(tmp_path: Path) -> argparse.Namespace:
-    """First ``init`` run, plus a hand-added committed ``[user_choices]`` entry."""
+    """First ``init`` run, plus a hand-added committed ``[user_choices]`` entry.
+
+    Added where the writer puts it, after the tables ``Config`` owns and before the
+    ``[hooks]`` table init writes (unmanaged entries come last), so a faithful
+    rewrite is byte-identical.
+    """
     _pyproject(tmp_path)
     args = _ns(tmp_path, name="r", kind="python-library")
     assert _init.run(args) == 0
     primary = tmp_path / ".coding-agent-playbook.toml"
-    primary.write_text(primary.read_text() + '\n[user_choices]\ndocstring_style = "numpy"\n')
+    text = primary.read_text()
+    assert text.count("\n[hooks]\n") == 1  # the first run wrote the hooks answer
+    choice = '\n[user_choices]\ndocstring_style = "numpy"\n'
+    primary.write_text(text.replace("\n[hooks]\n", f"{choice}\n[hooks]\n", 1))
     return args
 
 
@@ -464,6 +595,7 @@ def test_init_rerun_never_writes_local_overrides_into_the_committed_config(
     assert data["output"] == {"commit": False}
     assert {"metrics", "personal_table"}.isdisjoint(data)
     assert "homepage" not in data["project"]
+    assert data["hooks"] == {"enabled": True}  # the committed answer, kept by the re-run
 
 
 def test_init_rerun_hooks_follow_the_committed_output_policy_not_the_local_one(
@@ -664,7 +796,12 @@ def test_apply_answers_replaces_answered_fields_and_keeps_the_rest(
         output=committed_output,
     )
     answers = _init._Answers(
-        name="new", kind="python-application", description="", adapters=["continue"], overlays=[]
+        name="new",
+        kind="python-application",
+        description="",
+        adapters=["continue"],
+        overlays=[],
+        hooks=None,
     )
     updated = _init._apply_answers(committed, answers, {"fresh": True})
     assert updated == Config(
@@ -804,11 +941,11 @@ def test_init_rerun_refuses_a_committed_non_table_the_local_file_hides(
     assert _snapshot(tmp_path) == before
 
 
-def test_init_writes_nothing_when_bundled_content_missing(
+def test_init_writes_nothing_when_catalog_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A broken install exits 2 in init's preflight, never leaving a half-initialized repo."""
-    expected = break_bundled_content(monkeypatch, tmp_path)
+    expected = break_catalog(monkeypatch, tmp_path)
     repo = tmp_path / "repo"
     repo.mkdir()
     before = _snapshot(repo)

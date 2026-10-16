@@ -21,21 +21,27 @@ Two fidelity tiers are exercised (``specs/prH-agent-harness.md`` §C):
 from __future__ import annotations
 
 import os
+import shutil
 import stat
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
+from coding_agent_playbook.commands import import_harness as _import
 from coding_agent_playbook.commands.import_harness import import_harness
 from coding_agent_playbook.types import (
+    Hook,
     Prompt,
     PromptFrontmatter,
     Rule,
     RuleFrontmatter,
     Skill,
 )
+from tests.hook_samples import resolved_from_disk
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from coding_agent_playbook.hook_policy import ResolvedHook
 
 # --- builders --------------------------------------------------------------
 
@@ -239,6 +245,67 @@ def test_lossless_prompt_round_trips_including_includes_rules(tmp_path):
     assert prompt.frontmatter.slash == "review"
 
 
+def test_lossless_prompt_output_contract_survives_emit_then_import(tmp_path):
+    """``output_contract`` rides the sidecar: emit -> import gives the same regexes."""
+    contract = [r"(?i)\bCWE-\d+\b|no (reachable|exploitable)"]
+    prompt = _make_prompt()
+    prompt.frontmatter.output_contract = list(contract)
+    repo = tmp_path / "harness"
+    repo.mkdir()
+    adapter = AgentHarnessAdapter(rule_registry=_StubRegistry())
+    adapter.write_prompt(prompt, repo)
+    adapter.finalize(repo)
+
+    [imported] = import_harness(repo).prompts
+
+    assert imported.frontmatter.output_contract == contract
+    assert _semantic(imported) == _semantic(prompt)
+
+
+def test_lossless_prompt_write_scope_round_trips(tmp_path):
+    """specs/prK-lifecycle-hooks.md §A.7: ``write_scope`` survives emit -> sidecar -> import."""
+    scoped = [_make_prompt(), _make_prompt()]
+    scoped[0].frontmatter.write_scope = {"read_only": True}
+    scoped[1].frontmatter.id = scoped[1].frontmatter.slash = "generate-tests"
+    scoped[1].frontmatter.write_scope = {"globs": ["tests/**", "**/conftest.py"]}
+    repo = tmp_path / "harness"
+    repo.mkdir()
+    adapter = AgentHarnessAdapter(rule_registry=_StubRegistry())
+    for prompt in scoped:
+        adapter.write_prompt(prompt, repo)
+    adapter.finalize(repo)
+
+    result = import_harness(repo)
+
+    by_id = {prompt.frontmatter.id: prompt for prompt in result.prompts}
+    assert [_semantic(by_id[p.frontmatter.id]) for p in scoped] == [_semantic(p) for p in scoped]
+
+
+def test_lossless_rule_lint_codes_round_trip(tmp_path):
+    """specs/prK-lifecycle-hooks.md §A.7: ``lint_codes`` survives emit -> sidecar -> import.
+
+    Both rule placements (an always rule's ``rules/`` leaf, a scoped rule's
+    ``references/`` leaf) record it.
+    """
+    linked = [_make_always_rule(), _make_scoped_rule()]
+    linked[0].frontmatter.lint_codes = {"warn": ["E722", "BLE001"]}
+    linked[1].frontmatter.lint_codes = {
+        "warn": ["ANN001"],
+        "when": [{"applies_if": {"python_version": ">=3.12"}, "warn": ["UP046"]}],
+    }
+    repo = tmp_path / "harness"
+    repo.mkdir()
+    adapter = AgentHarnessAdapter(rule_registry=_StubRegistry())
+    for rule in linked:
+        adapter.write_rule(rule, repo)
+    adapter.finalize(repo)
+
+    result = import_harness(repo)
+
+    by_id = {rule.frontmatter.id: rule for rule in result.rules}
+    assert [_semantic(by_id[r.frontmatter.id]) for r in linked] == [_semantic(r) for r in linked]
+
+
 def test_lossless_prompt_body_recovers_original_uninlined_body(tmp_path):
     """HARD CASE (defect #2): the harness leaf inlines ``includes_rules`` (the
     registry fragment is genuinely written into ``prompts/review/SKILL.md``), so
@@ -308,10 +375,7 @@ def test_lossless_reference_round_trips(tmp_path):
 
 
 def _strip_sidecar(repo: Path) -> None:
-    sidecar = repo / ".playbook"
-    for child in sorted(sidecar.iterdir()):
-        child.unlink()
-    sidecar.rmdir()
+    shutil.rmtree(repo / ".playbook")  # a foreign harness: no sidecar, no hook copies
 
 
 def test_best_effort_infers_structure_and_warns(tmp_path):
@@ -384,3 +448,79 @@ def test_best_effort_raw_asset_and_opaque_leaf_warn(tmp_path):
     joined = "\n".join(result.warnings)
     assert "logo.png" in joined
     assert "opaque" in joined
+
+
+# --- hooks (specs/prK-lifecycle-hooks.md §C.6) -------------------------------
+
+
+def _emit_hook_harness(tmp_path: Path) -> tuple[Path, ResolvedHook]:
+    hook = resolved_from_disk(tmp_path / "src", body="Advice {{ x }}.\n", templated=True)
+    repo = tmp_path / "harness"
+    adapter = AgentHarnessAdapter()
+    adapter.write_hook(hook, repo)
+    adapter.finalize(repo)
+    return repo, hook
+
+
+def test_lossless_hook_import_restores_frontmatter_body_exec_bits(tmp_path):
+    repo, hook = _emit_hook_harness(tmp_path)
+    copied = repo / ".playbook" / "hooks" / "guard-x" / "scripts" / "check.sh"
+    copied.chmod(0o644)  # a transport (zip, Windows checkout) that drops exec bits
+
+    result = import_harness(repo)
+
+    assert result.warnings == []
+    [imported] = result.hooks
+    source = hook.definition
+    assert source is not None
+    assert imported.frontmatter == source.frontmatter
+    assert (imported.template_body, imported.is_templated) == (source.template_body, True)
+    if os.name == "posix":
+        assert copied.stat().st_mode & stat.S_IXUSR
+    into = tmp_path / "playbook"
+    _import._write_result(result, into)
+    written = into / "hooks" / "guard-x" / "HOOK.md.j2"
+    reread = Hook.from_markdown(written, "<repo-local>")
+    assert (reread.frontmatter, reread.template_body) == (source.frontmatter, source.template_body)
+    script = into / "hooks" / "guard-x" / "scripts" / "check.sh"
+    assert script.read_bytes() == b"#!/bin/sh\nexit 0\n"
+    assert (into / "hooks" / "guard-x" / "scripts" / "lib" / "data.txt").is_file()
+    if os.name == "posix":
+        assert script.stat().st_mode & stat.S_IXUSR
+
+
+def test_guardrail_file_not_imported_as_rule_in_lossless_mode(tmp_path):
+    repo, _ = _emit_hook_harness(tmp_path)
+    assert (repo / "rules" / "30-guardrail-guard-x.md").is_file()
+
+    result = import_harness(repo)
+
+    assert result.rules == []
+    assert [hook.frontmatter.id for hook in result.hooks] == ["guard-x"]
+
+
+def test_best_effort_guardrail_warns_lossy(tmp_path):
+    repo, _ = _emit_hook_harness(tmp_path)
+    _strip_sidecar(repo)
+
+    result = import_harness(repo)
+
+    assert result.hooks == []
+    assert [rule.frontmatter.id for rule in result.rules] == ["guardrail-guard-x"]
+    assert (
+        "rule 'guardrail-guard-x': looks like a degraded hook advisory; the canonical hook "
+        "cannot be reconstructed without .playbook/manifest.toml"
+    ) in result.warnings
+
+
+def test_lossless_import_skips_a_hook_entry_that_no_longer_parses(tmp_path):
+    repo, _ = _emit_hook_harness(tmp_path)
+    manifest = repo / ".playbook" / "manifest.toml"
+    manifest.write_text(manifest.read_text("utf-8").replace("timeout = 2.0", 'timeout = "2s"'))
+
+    result = import_harness(repo)
+
+    assert result.hooks == []
+    [warning] = result.warnings
+    assert warning.startswith("manifest entry '.playbook/hooks/guard-x/HOOK.md': ")
+    assert warning.endswith("; skipped")

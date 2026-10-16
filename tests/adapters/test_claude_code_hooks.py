@@ -1,0 +1,653 @@
+"""Claude Code native hook emission (specs/prK-lifecycle-hooks.md §C.1.2, §C.2, §C.4.2).
+
+The adapter merges one managed group per event into ``.claude/settings.json``
+(read from the input root, written to the output root, as ``sync --check``
+does with its empty scratch dir), writes the committed launcher, and degrades
+only the hooks it cannot enforce into ``CLAUDE.md``.
+"""
+
+from __future__ import annotations
+
+import fnmatch
+import json
+import re
+from typing import TYPE_CHECKING, Any
+
+import pytest
+
+from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.adapters._claude_hooks import CLAUDE_HEARTBEAT_LINE, REMEDIATION_ALLOW
+from coding_agent_playbook.adapters._destructive_native import (
+    DESTRUCTIVE_COMMAND_GUARD,
+    destructive_native_rows,
+)
+from coding_agent_playbook.adapters._overlay_native import (
+    network_native_rows,
+    sensitive_read_native_rows,
+)
+from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
+from coding_agent_playbook.adapters._secret_native import (
+    DENY_POINTER,
+    DENY_READ_POINTER,
+    SECRETS_PATH_GUARD,
+    secret_native_rows,
+)
+from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
+from coding_agent_playbook.adapters.claude_settings import CLAUDE_SETTINGS_PATH, SettingsMergeError
+from coding_agent_playbook.hook_policy import HOOK_SUPPORT
+from coding_agent_playbook.hook_registrations import (
+    LAUNCHER_PATH,
+    claude_command,
+    registration_timeout_s,
+    render_claude_launcher,
+)
+from coding_agent_playbook.hooks_config import HooksConfig
+from coding_agent_playbook.lockfile import Lockfile
+from coding_agent_playbook.security.patterns import DESTRUCTIVE_NATIVE_PREFIXES
+from coding_agent_playbook.types import Rule, RuleFrontmatter
+from tests.hook_samples import resolved_hook
+from tests.hooks.pack_repo import install_fixture_overlay, resolve_engine_hooks
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+    from pathlib import Path
+
+    from coding_agent_playbook.hook_policy import ResolvedHook
+
+_ON = HooksConfig(enabled=True)
+_BRIEFING = "session-start-playbook-briefing"
+
+
+def _rule(body: str = "Use type hints.\n") -> Rule:
+    fm = RuleFrontmatter(id="typing", name="Typing", description="d", scope="always")
+    return Rule(fm, body, body, False, None, "test")
+
+
+def _sync(
+    out: Path,
+    hooks: Sequence[ResolvedHook] = (),
+    *,
+    source: Path | None = None,
+    prior: Lockfile | None = None,
+    cfg: HooksConfig | None = _ON,
+    rules: Sequence[Rule] = (),
+) -> tuple[ClaudeCodeAdapter, list[Path]]:
+    """One adapter pass as sync drives it: begin_sync, rules, hooks, finalize."""
+    adapter = ClaudeCodeAdapter()
+    adapter.begin_sync(source or out, prior, hooks_config=cfg)
+    written = [path for rule in rules for path in adapter.write_rule(rule, out)]
+    written += [path for hook in hooks for path in adapter.write_hook(hook, out)]
+    return adapter, written + adapter.finalize(out)
+
+
+def _lock(adapter: ClaudeCodeAdapter) -> Lockfile:
+    return Lockfile(2, "0", "", entries=adapter.managed_lock_entries())
+
+
+def _settings(root: Path) -> dict[str, Any]:
+    loaded: dict[str, Any] = json.loads((root / CLAUDE_SETTINGS_PATH).read_text("utf-8"))
+    return loaded
+
+
+def test_class_declares_hook_support_shared_settings_and_the_launcher_dir() -> None:
+    assert ClaudeCodeAdapter.hook_support == HOOK_SUPPORT["claude_code"]
+    assert ClaudeCodeAdapter.shared_outputs == (CLAUDE_SETTINGS_PATH,)
+    assert ".claude/hooks/playbook/" in ClaudeCodeAdapter.output_locations
+    # Co-owned with the user: never inside a location the leftover policy may delete in.
+    assert not any(
+        CLAUDE_SETTINGS_PATH.startswith(loc) or loc == CLAUDE_SETTINGS_PATH
+        for loc in ClaudeCodeAdapter.output_locations
+    )
+
+
+def test_creates_settings_when_absent(tmp_path: Path) -> None:
+    _, written = _sync(tmp_path, [resolved_hook()])
+
+    settings = tmp_path / CLAUDE_SETTINGS_PATH
+    assert settings in written
+    text = settings.read_text("utf-8")
+    assert text.startswith('{\n  "hooks": {\n') and text.endswith("}\n")
+    hooks = _settings(tmp_path)["hooks"]
+    assert list(hooks) == ["SessionStart", "PreToolUse"]
+    handler = hooks["PreToolUse"][0]["hooks"][0]
+    assert hooks["PreToolUse"][0]["matcher"] == "*"
+    assert handler == {
+        "type": "command",
+        "command": claude_command("pre_tool_use"),
+        "timeout": registration_timeout_s(2000),
+    }
+
+
+def test_hooks_only_repo_registers_without_rules(tmp_path: Path) -> None:
+    _, written = _sync(tmp_path, [resolved_hook()])
+
+    assert sorted(written) == sorted([tmp_path / CLAUDE_SETTINGS_PATH, tmp_path / LAUNCHER_PATH])
+    assert not (tmp_path / ".claude" / "CLAUDE.md").exists()
+
+
+def test_second_sync_noop_returns_no_settings_path(tmp_path: Path) -> None:
+    first, _ = _sync(tmp_path, [resolved_hook()])
+    before = (tmp_path / CLAUDE_SETTINGS_PATH).read_bytes()
+
+    second, written = _sync(tmp_path, [resolved_hook()], prior=_lock(first))
+
+    assert tmp_path / CLAUDE_SETTINGS_PATH not in written
+    assert (tmp_path / CLAUDE_SETTINGS_PATH).read_bytes() == before
+    # The sync summary's counts (§C.1.5) come from the merge each pass ran.
+    assert first.settings_merge is not None and second.settings_merge is not None
+    assert (first.settings_merge.updated, first.settings_merge.removed) == (2, 0)
+    assert (second.settings_merge.changed, second.settings_merge.updated) == (False, 0)
+    assert ClaudeCodeAdapter().settings_merge is None
+
+
+def test_disabling_last_hook_strips_groups_and_never_unlinks(tmp_path: Path) -> None:
+    settings = tmp_path / CLAUDE_SETTINGS_PATH
+    settings.parent.mkdir(parents=True)
+    settings.write_text('{\n  "model": "opus"\n}\n', encoding="utf-8")
+    first, _ = _sync(tmp_path, [resolved_hook()])
+
+    _, written = _sync(tmp_path, [], prior=_lock(first))
+
+    assert settings in written
+    assert settings.read_text("utf-8") == '{\n  "model": "opus"\n}\n'
+
+
+def test_disabling_hooks_leaves_an_empty_object_not_a_deleted_file(tmp_path: Path) -> None:
+    first, _ = _sync(tmp_path, [resolved_hook()])
+
+    _sync(tmp_path, [], prior=_lock(first), cfg=HooksConfig(enabled=False))
+
+    assert _settings(tmp_path) == {}
+
+
+def test_merges_base_from_input_root_into_output_root(tmp_path: Path) -> None:
+    source, out = tmp_path / "repo", tmp_path / "scratch"
+    base = source / CLAUDE_SETTINGS_PATH
+    base.parent.mkdir(parents=True)
+    base.write_text('{\n    "env": {"A": "1"}\n}\n', encoding="utf-8")
+    out.mkdir()
+
+    _, written = _sync(out, [resolved_hook()], source=source)
+
+    assert written and all(path.is_relative_to(out) for path in written)
+    assert base.read_text("utf-8") == '{\n    "env": {"A": "1"}\n}\n'
+    merged = _settings(out)
+    assert merged["env"] == {"A": "1"}
+    assert "PreToolUse" in merged["hooks"]
+
+
+_USER_TEXT = """\
+{
+    "permissions": {"deny": ["Read(./.env)"]},
+    "hooks": {
+        "PreToolUse": [
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": "~/rewrite.sh"}]}
+        ]
+    }
+}
+"""
+
+
+def test_user_keys_and_user_groups_byte_stable(tmp_path: Path) -> None:
+    settings = tmp_path / CLAUDE_SETTINGS_PATH
+    settings.parent.mkdir(parents=True)
+    settings.write_text(_USER_TEXT, encoding="utf-8")
+
+    first, _ = _sync(tmp_path, [resolved_hook()])
+    merged = settings.read_text("utf-8")
+    second, written = _sync(tmp_path, [resolved_hook()], prior=_lock(first))
+
+    assert '    "permissions": {"deny": ["Read(./.env)"]},\n' in merged
+    assert (
+        '{"matcher": "Bash", "hooks": [{"type": "command", "command": "~/rewrite.sh"}]}' in merged
+    )
+    pre_tool_use = _settings(tmp_path)["hooks"]["PreToolUse"]
+    assert pre_tool_use[0]["matcher"] == "Bash"  # the user's group keeps its index
+    assert settings not in written
+    assert settings.read_text("utf-8") == merged
+    _, off = _sync(tmp_path, [], prior=_lock(second))
+    assert settings in off
+    assert json.loads(settings.read_text("utf-8")) == json.loads(_USER_TEXT)
+
+
+def test_managed_lock_entries_include_noop_groups(tmp_path: Path) -> None:
+    first, _ = _sync(tmp_path, [resolved_hook()])
+
+    second, written = _sync(tmp_path, [resolved_hook()], prior=_lock(first))
+
+    assert tmp_path / CLAUDE_SETTINGS_PATH not in written
+    entries = second.managed_lock_entries()
+    assert [(e.scope, e.artifact_id) for e in entries] == [
+        ("json:/hooks/SessionStart", "registration:session_start"),
+        ("json:/hooks/PreToolUse", "registration:pre_tool_use"),
+    ]
+    assert {(e.path, e.kind, e.adapter) for e in entries} == {
+        (CLAUDE_SETTINGS_PATH, "runtime", "claude_code")
+    }
+    assert entries == first.managed_lock_entries()
+
+
+def test_registration_timeouts_follow_every_hooks_deadline(tmp_path: Path) -> None:
+    """guard_config.json holds one deadline per event for all harnesses (§D.4)."""
+    claude = resolved_hook("guard-a", timeout=2.0)
+    elsewhere = resolved_hook("guard-b", timeout=3.0, supports=("opencode",))
+
+    _sync(tmp_path, [claude, elsewhere])
+
+    handler = _settings(tmp_path)["hooks"]["PreToolUse"][0]["hooks"][0]
+    assert handler["timeout"] == registration_timeout_s(5000)
+
+
+def test_launcher_written_with_line1_sentinel_and_cleaned_when_stale(tmp_path: Path) -> None:
+    first, _ = _sync(tmp_path, [resolved_hook()])
+    launcher = tmp_path / LAUNCHER_PATH
+    assert launcher.read_bytes() == render_claude_launcher().encode("utf-8")
+    assert launcher.read_text("utf-8").splitlines()[0] == sentinel_line("hash")
+
+    adapter, written = _sync(tmp_path, [], prior=_lock(first))
+
+    assert launcher not in written
+    assert adapter.stale_outputs({p.resolve() for p in written}, tmp_path) == [launcher]
+    adapter.cleanup_stale({p.resolve() for p in written}, tmp_path)
+    assert not launcher.exists()
+    assert (tmp_path / CLAUDE_SETTINGS_PATH).is_file()
+
+
+def test_user_owned_launcher_is_refused_before_settings_json_is_merged(tmp_path: Path) -> None:
+    """Review #2: the launcher used to be written with no ownership check."""
+    launcher = tmp_path / LAUNCHER_PATH
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text("echo 'my own launcher'\n", encoding="utf-8")
+
+    with pytest.raises(UserOwnedFileError, match=re.escape(LAUNCHER_PATH)):
+        _sync(tmp_path, [resolved_hook()])
+
+    assert launcher.read_text("utf-8") == "echo 'my own launcher'\n"
+    assert not (tmp_path / CLAUDE_SETTINGS_PATH).exists()
+
+
+def test_engine_owned_launcher_is_rewritten(tmp_path: Path) -> None:
+    launcher = tmp_path / LAUNCHER_PATH
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text(f"{sentinel_line('hash')}\nold\n", encoding="utf-8")
+
+    _sync(tmp_path, [resolved_hook()])
+
+    assert launcher.read_bytes() == render_claude_launcher().encode("utf-8")
+
+
+def test_planned_runtime_outputs_name_the_launcher_only_when_emit_writes_it() -> None:
+    adapter = ClaudeCodeAdapter()
+
+    assert adapter.planned_runtime_outputs([resolved_hook()]) == (LAUNCHER_PATH,)
+    assert adapter.planned_runtime_outputs([resolved_hook(supports=("opencode",))]) == ()
+    assert adapter.planned_runtime_outputs([]) == ()
+
+
+def test_settings_json_never_reported_stale(tmp_path: Path) -> None:
+    _sync(tmp_path, [resolved_hook()])
+
+    adapter = ClaudeCodeAdapter()
+
+    assert tmp_path / CLAUDE_SETTINGS_PATH not in adapter.stale_outputs(set(), tmp_path)
+
+
+def test_unenforced_hook_advisory_goes_to_claude_md(tmp_path: Path) -> None:
+    elsewhere = resolved_hook("guard-b", name="Guard B", supports=("opencode",))
+
+    _, written = _sync(tmp_path, [elsewhere, resolved_hook()])
+
+    claude_md = (tmp_path / ".claude" / "CLAUDE.md").read_text("utf-8")
+    assert tmp_path / ".claude" / "CLAUDE.md" in written
+    assert (
+        "## Guardrail: Guard B\n\nAdvice.\n\n*Enforced by lifecycle hooks on: OpenCode."
+        in claude_md
+    )
+    assert "Guard X" not in claude_md  # enforced natively: nothing to advise
+
+
+def test_heartbeat_line_only_with_briefing_hook(tmp_path: Path) -> None:
+    briefing = resolved_hook(_BRIEFING, events=("session_start",))
+    _sync(tmp_path / "plain", [resolved_hook()])
+    _sync(tmp_path / "solo", [briefing])
+    _sync(tmp_path / "rules", [briefing], rules=[_rule()])
+
+    assert not (tmp_path / "plain" / ".claude" / "CLAUDE.md").exists()
+    solo = (tmp_path / "solo" / ".claude" / "CLAUDE.md").read_text("utf-8")
+    assert solo.endswith(f"generated by coding-agent-playbook.\n\n{CLAUDE_HEARTBEAT_LINE}\n")
+    with_rules = (tmp_path / "rules" / ".claude" / "CLAUDE.md").read_text("utf-8")
+    assert with_rules.endswith(f"Use type hints.\n\n---\n\n{CLAUDE_HEARTBEAT_LINE}\n")
+    assert with_rules.count(CLAUDE_HEARTBEAT_LINE) == 1
+
+
+def test_heartbeat_needs_the_briefing_enforced_on_claude(tmp_path: Path) -> None:
+    briefing = resolved_hook(_BRIEFING, events=("session_start",), supports=("opencode",))
+
+    _sync(tmp_path, [briefing])
+
+    assert CLAUDE_HEARTBEAT_LINE not in (tmp_path / ".claude" / "CLAUDE.md").read_text("utf-8")
+
+
+@pytest.mark.parametrize("cfg", [None, _ON, HooksConfig(enabled=False)])
+def test_rules_only_output_byte_identical(tmp_path: Path, cfg: HooksConfig | None) -> None:
+    plain = ClaudeCodeAdapter()
+    plain.write_rule(_rule(), tmp_path / "plain")
+    expected = plain.finalize(tmp_path / "plain")
+    out = tmp_path / "out"
+    broken = out / CLAUDE_SETTINGS_PATH
+    broken.parent.mkdir(parents=True)
+    broken.write_text("{ // not JSON\n", encoding="utf-8")
+
+    _, written = _sync(out, rules=[_rule()], cfg=cfg)
+
+    assert written == [out / ".claude" / "CLAUDE.md"]
+    assert written[0].read_bytes() == expected[0].read_bytes()
+    assert broken.read_text("utf-8") == "{ // not JSON\n"  # never read, never rewritten
+    assert not (out / LAUNCHER_PATH).exists()
+
+
+def test_remediation_allow_opt_in_only_fixed_list(tmp_path: Path) -> None:
+    opted = HooksConfig(enabled=True, render_remediation_allow=True)
+    settings = tmp_path / "on" / CLAUDE_SETTINGS_PATH
+    settings.parent.mkdir(parents=True)
+    settings.write_text('{"permissions": {"allow": ["Bash(git status)"]}}\n', encoding="utf-8")
+
+    adapter, _ = _sync(tmp_path / "on", [resolved_hook()], cfg=opted)
+    _sync(tmp_path / "off", [resolved_hook()])
+
+    allow = _settings(tmp_path / "on")["permissions"]["allow"]
+    assert allow == ["Bash(git status)", *REMEDIATION_ALLOW]
+    assert not any("pytest" in cmd or "mypy" in cmd for cmd in REMEDIATION_ALLOW)
+    assert "permissions" not in _settings(tmp_path / "off")
+    allow_scopes = [
+        e for e in adapter.managed_lock_entries() if e.scope == "json:/permissions/allow"
+    ]
+    assert len(allow_scopes) == len(REMEDIATION_ALLOW)
+
+
+def test_invalid_settings_raise_and_write_nothing(tmp_path: Path) -> None:
+    settings = tmp_path / CLAUDE_SETTINGS_PATH
+    settings.parent.mkdir(parents=True)
+    settings.write_text('{"a": 1,}\n', encoding="utf-8")
+    adapter = ClaudeCodeAdapter()
+    adapter.begin_sync(tmp_path, None, hooks_config=_ON)
+    adapter.write_hook(resolved_hook(), tmp_path)
+
+    with pytest.raises(SettingsMergeError, match=r"^\.claude/settings\.json:1:"):
+        adapter.finalize(tmp_path)
+
+    assert settings.read_text("utf-8") == '{"a": 1,}\n'
+
+
+def _secrets_guard(**config: Any) -> ResolvedHook:
+    return resolved_hook(
+        SECRETS_PATH_GUARD, config={"extra_globs": [], "allow_paths": [], **config}
+    )
+
+
+def test_secret_native_deny_rows_follow_guard(tmp_path: Path) -> None:
+    """secrets-path-guard's native twin (§E.4): rows appear with the guard and leave with it."""
+    settings = tmp_path / CLAUDE_SETTINGS_PATH
+    settings.parent.mkdir(parents=True)
+    user = '{\n  "permissions": {\n    "deny": ["Bash(rm -rf /)", "Read(./.env)"]\n  }\n}\n'
+    settings.write_text(user, encoding="utf-8")
+
+    on, _ = _sync(tmp_path, [resolved_hook(), _secrets_guard(extra_globs=["~/.vault/**"])])
+    rows = secret_native_rows([_secrets_guard(extra_globs=["~/.vault/**"])])
+    deny = _settings(tmp_path)["permissions"]["deny"]
+
+    assert deny == ["Bash(rm -rf /)", "Read(./.env)", *rows[DENY_POINTER]]
+    assert "Read(**/.env*)" in deny and "Edit(**/.env*)" in deny
+    deny_read = _settings(tmp_path)["sandbox"]["filesystem"]["denyRead"]
+    assert deny_read == ["~/.aws", "~/.ssh", *deny_read[2:]] and "~/.vault" in deny_read
+    assert "~/.kube/config" in deny_read
+
+    _sync(tmp_path, [resolved_hook()], prior=_lock(on))  # the guard is off now
+
+    after = _settings(tmp_path)
+    assert after["permissions"]["deny"] == ["Bash(rm -rf /)", "Read(./.env)"]
+    assert "sandbox" not in after  # the objects the rows needed go with them
+    assert '"deny": ["Bash(rm -rf /)", "Read(./.env)"' in settings.read_text("utf-8")
+
+
+def _denied(rows: Sequence[str], rel: str) -> bool:
+    """gitignore's last-match-wins over ``Read(...)`` rows, for the catalog's ``**/`` globs."""
+    verdict = False
+    for row in rows:
+        pattern = row[len("Read(") : -1]
+        negated = pattern.startswith("!")
+        glob = pattern.lstrip("!").removeprefix("**/")
+        if fnmatch.fnmatchcase(rel.rsplit("/", 1)[-1], glob):
+            verdict = not negated
+    return verdict
+
+
+def test_scoped_negation_ordering_keeps_env_credentials_py_denied() -> None:
+    rows = [
+        r for r in secret_native_rows([_secrets_guard()])[DENY_POINTER] if r.startswith("Read(")
+    ]
+
+    assert rows[:2] == ["Read(**/*credentials*)", "Read(!**/*credentials*.py)"]
+    assert _denied(rows, ".env.credentials.py")
+    assert _denied(rows, "config/credentials.json")
+    assert _denied(rows, "deploy/.env")
+    assert not _denied(rows, "src/auth/credentials.py")
+    assert not _denied(rows, ".env.example")
+    assert not _denied(rows, "keys/id_rsa.pub")
+
+
+def test_destructive_literal_prefix_rows_follow_guard(tmp_path: Path) -> None:
+    """destructive-command-guard's native twin (§E.4): Bash(<prefix> *) rows join the secret
+    rows under one pointer while the guard is on, and leave with it; user rows stay."""
+    settings = tmp_path / CLAUDE_SETTINGS_PATH
+    settings.parent.mkdir(parents=True)
+    settings.write_text('{"permissions": {"deny": ["Bash(rm -rf /)"]}}\n', encoding="utf-8")
+    guard = resolved_hook(DESTRUCTIVE_COMMAND_GUARD)
+
+    on, _ = _sync(tmp_path, [resolved_hook(), _secrets_guard(), guard])
+    deny = _settings(tmp_path)["permissions"]["deny"]
+
+    native = destructive_native_rows([guard])[DENY_POINTER]
+    secret = secret_native_rows([_secrets_guard()])[DENY_POINTER]
+    assert deny == ["Bash(rm -rf /)", *secret, *native]
+    assert native == tuple(f"Bash({prefix} *)" for prefix in DESTRUCTIVE_NATIVE_PREFIXES)
+    assert "Bash(git push --force origin main *)" in native
+    assert not any("*" in prefix for prefix in DESTRUCTIVE_NATIVE_PREFIXES)  # wildcard-free
+
+    _sync(tmp_path, [resolved_hook(), _secrets_guard()], prior=_lock(on))  # the guard is off
+
+    assert _settings(tmp_path)["permissions"]["deny"] == ["Bash(rm -rf /)", *secret]
+
+
+# --- K9: OQ-19's async PostToolUse group and the decision sink (§C.2.1, §E.5) ----------
+
+
+def _audit_hooks(tmp_path: Path, *, audit: bool) -> list[ResolvedHook]:
+    """A synchronous post-edit hook, the decision sink and (``audit``) local-audit-log."""
+    ids = ["guard-decision-log", *(["local-audit-log"] if audit else [])]
+    engine = resolve_engine_hooks(ids, tmp_path / "engine")
+    lint = resolved_hook("lint-q", events=("post_tool_use",), timeout=3.0)
+    return [lint, *engine]
+
+
+def _post_tool_use(root: Path) -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = _settings(root)["hooks"]["PostToolUse"]
+    return groups
+
+
+@pytest.mark.catalog
+def test_local_audit_log_adds_exactly_one_async_post_tool_use_entry(tmp_path: Path) -> None:
+    before, _ = _sync(tmp_path / "off", _audit_hooks(tmp_path, audit=False))
+    after, _ = _sync(tmp_path / "on", _audit_hooks(tmp_path, audit=True))
+
+    sync_group, async_group = _post_tool_use(tmp_path / "on")
+    assert _post_tool_use(tmp_path / "off") == [sync_group]  # byte-identical sync entry
+    (handler,) = async_group["hooks"]
+    assert async_group["matcher"] == "*"
+    assert handler["async"] is True
+    assert handler["command"].endswith("dispatch post_tool_use --harness claude_code --async")
+    async_entries = [e for e in after.managed_lock_entries() if e.artifact_id.endswith(":async")]
+    assert [(e.scope, e.artifact_id) for e in async_entries] == [
+        ("json:/hooks/PostToolUse", "registration:post_tool_use:async")
+    ]
+    # The decision sink registers nothing: the lint hook alone renders the same entries.
+    lint_only, _ = _sync(tmp_path / "lint", _audit_hooks(tmp_path, audit=False)[:1])
+    assert before.managed_lock_entries() == lint_only.managed_lock_entries()
+
+
+@pytest.mark.catalog
+def test_second_sync_with_async_entry_writes_nothing(tmp_path: Path) -> None:
+    hooks = _audit_hooks(tmp_path, audit=True)
+    first, _ = _sync(tmp_path, hooks)
+    before = (tmp_path / CLAUDE_SETTINGS_PATH).read_bytes()
+
+    second, written = _sync(tmp_path, hooks, prior=_lock(first))
+
+    assert tmp_path / CLAUDE_SETTINGS_PATH not in written
+    assert (tmp_path / CLAUDE_SETTINGS_PATH).read_bytes() == before
+    assert second.settings_merge is not None and not second.settings_merge.changed
+    assert second.managed_lock_entries() == first.managed_lock_entries()
+
+
+@pytest.mark.catalog
+def test_disabling_local_audit_log_removes_only_the_async_entry(tmp_path: Path) -> None:
+    on, _ = _sync(tmp_path, _audit_hooks(tmp_path, audit=True))
+    sync_group, _ = _post_tool_use(tmp_path)
+
+    off, _ = _sync(tmp_path, _audit_hooks(tmp_path, audit=False), prior=_lock(on))
+
+    assert _post_tool_use(tmp_path) == [sync_group]
+    assert off.settings_merge is not None and off.settings_merge.removed >= 1
+    assert not [e for e in off.managed_lock_entries() if e.artifact_id.endswith(":async")]
+
+
+# --- K9: overlay strict mode (OQ-18, §C.2.1, §E.5 pii-prompt-guard) -----------------------
+
+_PII = "pii-prompt-guard"
+
+
+@pytest.fixture
+def regulated_overlay(make_package: Callable[..., str]) -> str:
+    """The regulated fixture overlay, which activates pii-prompt-guard with ``on_error: deny``."""
+    return install_fixture_overlay(make_package, "regulated", "playbook_rules_regulated")
+
+
+def _prompt_handler(root: Path) -> dict[str, Any]:
+    (group,) = _settings(root)["hooks"]["UserPromptSubmit"]
+    (handler,) = group["hooks"]
+    loaded: dict[str, Any] = handler
+    return loaded
+
+
+@pytest.mark.catalog
+def test_strict_mode_only_when_pii_guard_enabled(tmp_path: Path, regulated_overlay: str) -> None:
+    """``onFailure: block`` + ``--strict-launch`` follow the activated guard, on its event only."""
+    ledger = resolved_hook("ledger-q", events=("user_prompt_submit",), on_error="open")
+    active = resolve_engine_hooks([_PII], tmp_path / "engine", overlays=(regulated_overlay,))
+    inert = resolve_engine_hooks([_PII], tmp_path / "engine")
+
+    _sync(tmp_path / "on", [ledger, *active])
+    _sync(tmp_path / "off", [ledger, *inert])
+
+    assert inert == []  # the engine's tier-overlay definition renders nothing
+    on, off = _prompt_handler(tmp_path / "on"), _prompt_handler(tmp_path / "off")
+    assert on["onFailure"] == "block"
+    assert on["command"] == claude_command("user_prompt_submit", strict=True)
+    assert "--strict-launch dispatch user_prompt_submit" in on["command"]
+    assert "onFailure" not in off
+    assert off["command"] == claude_command("user_prompt_submit")
+
+
+def test_on_failure_never_rendered_on_pre_tool_use(tmp_path: Path) -> None:
+    """No overlay key opts ``pre_tool_use`` into strict mode, so the adapter never does (OQ-18)."""
+    strict = resolved_hook(
+        "guard-s", events=("pre_tool_use", "user_prompt_submit"), on_error="deny"
+    )
+
+    _sync(tmp_path, [strict])
+
+    (pre_group,) = _settings(tmp_path)["hooks"]["PreToolUse"]
+    (pre,) = pre_group["hooks"]
+    assert "onFailure" not in pre
+    assert pre["command"] == claude_command("pre_tool_use")
+    assert _prompt_handler(tmp_path)["onFailure"] == "block"
+
+
+# --- K9: the §E.5 overlay guards' native twins (managed-array rows) -----------------------
+
+_NETWORK = "network-egress-guard"
+_DATA = "sensitive-data-read-guard"
+#: The fixture overlay's hosts (allowed, then the gateway) and its data globs, anchored.
+_DOMAINS = ["artifactory.bank.example", "git.bank.example", "litellm.bank.example"]
+_DENY_READ = ["./data/raw", "./exports", "**/*.parquet", "**/*.sqlite", "**/*.db", "**/*.xlsx"]
+
+
+def _overlay_guards(tmp_path: Path, overlay: str) -> list[ResolvedHook]:
+    """network-egress-guard (enforce) and sensitive-data-read-guard (ask), overlay-activated."""
+    return resolve_engine_hooks([_NETWORK, _DATA], tmp_path / "engine", overlays=(overlay,))
+
+
+@pytest.mark.catalog
+def test_overlay_native_rows_added_and_removed_with_guard(
+    tmp_path: Path, regulated_overlay: str
+) -> None:
+    """Rows appear with the activated guards and leave with them; ``ask`` renders no deny row."""
+    active = _overlay_guards(tmp_path, regulated_overlay)
+
+    on, _ = _sync(tmp_path, [resolved_hook(), *active])
+    settings = _settings(tmp_path)
+
+    assert settings["permissions"]["deny"] == ["WebSearch"]  # enforce; the data guard asks
+    assert settings["sandbox"]["network"]["allowedDomains"] == _DOMAINS
+    assert settings["sandbox"]["filesystem"]["denyRead"] == _DENY_READ
+
+    _sync(tmp_path, [resolved_hook()], prior=_lock(on))  # the overlay is gone
+
+    after = _settings(tmp_path)
+    assert "permissions" not in after and "sandbox" not in after
+
+
+def test_enforce_mode_renders_read_deny_rows_for_deny_globs() -> None:
+    data = resolved_hook(
+        _DATA, config={"mode": "enforce", "deny_globs": ["data/raw/**", "*.parquet"]}
+    )
+    asking = resolved_hook(_DATA, config={"mode": "ask", "deny_globs": ["data/raw/**"]})
+
+    assert sensitive_read_native_rows([data]) == {
+        DENY_READ_POINTER: ("./data/raw", "**/*.parquet"),
+        DENY_POINTER: ("Read(./data/raw/**)", "Read(**/*.parquet)"),
+    }
+    assert DENY_POINTER not in sensitive_read_native_rows([asking])
+    assert network_native_rows([resolved_hook(_NETWORK, config={"mode": "ask"})]) == {}
+
+
+@pytest.mark.catalog
+def test_inert_engine_definitions_render_no_native_rows(tmp_path: Path) -> None:
+    inert = resolve_engine_hooks([_NETWORK, _DATA], tmp_path / "engine")
+
+    assert inert == []
+    assert network_native_rows(inert) == sensitive_read_native_rows(inert) == {}
+
+
+@pytest.mark.catalog
+def test_user_permission_entries_untouched_by_overlay_rows(
+    tmp_path: Path, regulated_overlay: str
+) -> None:
+    settings = tmp_path / CLAUDE_SETTINGS_PATH
+    settings.parent.mkdir(parents=True)
+    deny, domains = ["WebSearch", "Bash(curl *)"], ["github.com"]
+    user = {"permissions": {"deny": deny}, "sandbox": {"network": {"allowedDomains": domains}}}
+    settings.write_text(json.dumps(user, indent=2) + "\n", encoding="utf-8")
+
+    on, _ = _sync(tmp_path, [resolved_hook(), *_overlay_guards(tmp_path, regulated_overlay)])
+    with_guards = _settings(tmp_path)
+    _sync(tmp_path, [resolved_hook()], prior=_lock(on))
+    after = _settings(tmp_path)
+
+    # The user's WebSearch row is theirs: neither duplicated nor claimed by the lock.
+    assert with_guards["permissions"]["deny"] == ["WebSearch", "Bash(curl *)"]
+    assert with_guards["sandbox"]["network"]["allowedDomains"] == ["github.com", *_DOMAINS]
+    claimed = {e.artifact_id for e in on.managed_lock_entries() if e.scope}
+    assert "permission:deny:WebSearch" not in claimed
+    assert after["permissions"] == {"deny": deny}
+    assert after["sandbox"]["network"] == {"allowedDomains": domains}

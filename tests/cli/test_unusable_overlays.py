@@ -3,7 +3,7 @@
 "Unusable" is the one shared preflight check (``_sync_preflight``): importing an
 overlay package fails (it is missing, or its own code raises), or it imports but
 ships no ``resources/`` directory (``json``, say). A bundled-plugin name is never
-imported: it is unusable when no ``content/plugins/<leaf>/`` matches it ("no
+imported: it is unusable when no ``catalog/plugins/<leaf>/`` matches it ("no
 such bundled plugin"), and the bare plugin namespace is never a plugin.
 ``sync`` refuses (exit 1), ``validate`` fails (exit 1), ``check`` flags it and
 stops claiming a clean state (exit 0, it is a diagnostic), and ``init`` refuses
@@ -393,7 +393,15 @@ def test_sync_refuses_a_package_without_resources(
 ) -> None:
     repo = _repo(tmp_path, make_synthetic_repo, _NO_RES)
 
-    assert _sync.execute(repo, git=FakeGitClient(staged=["AGENTS.md"]), **mode) == 1
+    assert (
+        _sync.execute(
+            repo,
+            git=FakeGitClient(staged=["AGENTS.md"]),
+            check=mode.get("check", False),
+            check_staged=mode.get("check_staged", False),
+        )
+        == 1
+    )
 
     err = capsys.readouterr().err
     assert f"\n  {_NO_RES}: {_NO_RES_REASON}\n" in err
@@ -414,7 +422,15 @@ def test_sync_refuses_packages_that_raise_at_import(
     rendering without them would drop their artifacts (it used to be a traceback)."""
     repo = _repo(tmp_path, make_synthetic_repo, *_raising_overlays(make_package))
 
-    assert _sync.execute(repo, git=FakeGitClient(staged=["AGENTS.md"]), **mode) == 1
+    assert (
+        _sync.execute(
+            repo,
+            git=FakeGitClient(staged=["AGENTS.md"]),
+            check=mode.get("check", False),
+            check_staged=mode.get("check_staged", False),
+        )
+        == 1
+    )
 
     err = capsys.readouterr().err
     assert "".join(f"\n  {reason}" for reason in _BOOM_REASONS) in err

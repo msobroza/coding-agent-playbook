@@ -1,0 +1,37 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "opencode",
+    "session_id": "ses_7a1b2c3d4e5f",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "unattended": true,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "Agent",
+      "native_name": "task",
+      "tool_class": "subagent",
+      "tool_classes": [
+        "subagent"
+      ],
+      "use_id": "call_07",
+      "paths": [],
+      "write_paths": [],
+      "content": []
+    }
+  },
+  "result": {
+    "decision": "none"
+  },
+  "wire": {
+    "stdout": "{\"v\":1,\"decision\":\"none\",\"reason\":\"\",\"context\":[],\"notice\":\"\"}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

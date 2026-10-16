@@ -36,6 +36,7 @@ import shutil
 import subprocess
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.evals.agent_env import unattended_agent_env
 from coding_agent_playbook.evals.runner import AgentRun, HarnessRunner
 
 if TYPE_CHECKING:
@@ -102,11 +103,13 @@ class ClaudeCodeRunner(HarnessRunner):
         stdout and stderr are merged into the transcript; the process return code
         is recorded (``0`` = the agent loop completed). No shell is used — the
         command is an explicit arg-list — and the working directory is the agent's
-        scratch repo so any edits land in the tree the scoring layers read.
+        scratch repo so any edits land in the tree the scoring layers read. The
+        child env is marked unattended, so lifecycle-hook asks degrade to deny.
         """
         completed = subprocess.run(
             self._build_command(prompt),
             cwd=scratch_dir,
+            env=unattended_agent_env(),
             capture_output=True,
             text=True,
             timeout=self._timeout,

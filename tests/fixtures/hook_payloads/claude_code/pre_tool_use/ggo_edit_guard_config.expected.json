@@ -1,0 +1,54 @@
+{
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "default",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "Edit",
+      "native_name": "Edit",
+      "tool_class": "edit",
+      "tool_classes": [
+        "edit"
+      ],
+      "use_id": "toolu_01GgoGuardConfig",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/.coding-agent-playbook/hooks/guard_config.json",
+          "repo_rel": ".coding-agent-playbook/hooks/guard_config.json",
+          "key": ".coding-agent-playbook/hooks/guard_config.json"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/.coding-agent-playbook/hooks/guard_config.json",
+          "repo_rel": ".coding-agent-playbook/hooks/guard_config.json",
+          "key": ".coding-agent-playbook/hooks/guard_config.json"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/.coding-agent-playbook/hooks/guard_config.json",
+          "new_string",
+          "false"
+        ]
+      ]
+    }
+  },
+  "result": {
+    "decision": "deny",
+    "reason": "\".coding-agent-playbook/hooks/guard_config.json\" is a playbook guardrail file (hook configuration); only the user may change it.\nDo not edit it; ask the user."
+  },
+  "wire": {
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"\\\".coding-agent-playbook/hooks/guard_config.json\\\" is a playbook guardrail file (hook configuration); only the user may change it.\\nDo not edit it; ask the user.\"}}\n",
+    "stderr": "\".coding-agent-playbook/hooks/guard_config.json\" is a playbook guardrail file (hook configuration); only the user may change it.\nDo not edit it; ask the user.\n",
+    "exit_code": 10
+  }
+}

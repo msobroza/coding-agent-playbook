@@ -1,0 +1,44 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "opencode",
+    "session_id": "ses_7a1b2c3d4e5f",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "unattended": true,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "Read",
+      "native_name": "read",
+      "tool_class": "read",
+      "tool_classes": [
+        "read"
+      ],
+      "use_id": "call_k905",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/data/raw/customers.csv",
+          "repo_rel": "data/raw/customers.csv",
+          "key": "data/raw/customers.csv"
+        }
+      ],
+      "write_paths": [],
+      "content": []
+    }
+  },
+  "result": {
+    "decision": "deny",
+    "reason": "Needs user approval (OpenCode cannot ask): \"data/raw/customers.csv\" is raw data under this repository's data policy.\nWork from a fixture or synthetic sample instead, or confirm with the user."
+  },
+  "wire": {
+    "stdout": "{\"v\":1,\"decision\":\"deny\",\"reason\":\"Needs user approval (OpenCode cannot ask): \\\"data/raw/customers.csv\\\" is raw data under this repository's data policy.\\nWork from a fixture or synthetic sample instead, or confirm with the user.\",\"context\":[],\"notice\":\"\"}\n",
+    "stderr": "",
+    "exit_code": 10
+  }
+}

@@ -9,11 +9,17 @@ its output under the commit policy:
   unreadable lockfile and a stale/missing/malformed block;
 - ``--check-staged`` lists staged paths that are generated output.
 
+A **shared output** (an adapter's ``shared_outputs``: ``.claude/settings.json``,
+co-owned with the user and the harness) is never generated output here: it is
+dropped before the managed block, the tracked-output warning and the staged
+guard (specs/prK-lifecycle-hooks.md §C.0, §B.6).
+
 It never mutates git state — it only prints the ``git rm --cached`` command.
 """
 
 from __future__ import annotations
 
+import os
 import shlex
 import sys
 from pathlib import Path
@@ -32,9 +38,10 @@ from coding_agent_playbook.gitignore import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Mapping, Sequence
     from typing import TextIO
 
+    from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.git_client import GitClient
 
 #: ``sync --check`` wording for an orphan (specs/prK-lifecycle-hooks.md §P P2).
@@ -98,7 +105,47 @@ def file_drift(written: Sequence[Path], scratch: Path, repo_root: Path) -> list[
                 "    Generated content differs from on-disk content.\n"
                 "    Run 'playbook sync' to regenerate."
             )
+        elif _lost_exec_bit(path, actual_path):
+            drift.append(
+                f"  {rel.as_posix()}\n"
+                "    Mode differs: generated as executable.\n"
+                "    Run 'playbook sync' to restore it."
+            )
     return drift
+
+
+def _lost_exec_bit(rendered: Path, actual: Path) -> bool:
+    """POSIX only: the render is executable (a copied script) but the on-disk file is not.
+
+    Only this direction: a text file the user made executable is never rewritten
+    with a new mode by ``write_text``, so the reverse could never be cleared.
+    """
+    if os.name != "posix":
+        return False
+    return bool(rendered.stat().st_mode & 0o111) and not actual.stat().st_mode & 0o111
+
+
+def shared_outputs(adapters: Mapping[str, Adapter]) -> frozenset[str]:
+    """The repo-relative files ``adapters`` co-own with the user (their ``shared_outputs``).
+
+    Example::
+
+        >>> shared_outputs({"claude_code": ClaudeCodeAdapter()})  # doctest: +SKIP
+        frozenset({'.claude/settings.json'})
+    """
+    return frozenset(path for adapter in adapters.values() for path in type(adapter).shared_outputs)
+
+
+def without_shared(paths: Iterable[Path], repo_root: Path, shared: Iterable[str]) -> list[Path]:
+    """``paths`` minus every shared output (compared resolved, so a symlinked dir still matches).
+
+    Example::
+
+        >>> without_shared([Path("/r/AGENTS.md")], Path("/r"), {".claude/settings.json"})
+        [PosixPath('/r/AGENTS.md')]
+    """
+    excluded = {(repo_root / rel).resolve() for rel in shared}
+    return [path for path in paths if path.resolve() not in excluded]
 
 
 def orphan_drift(orphans: Sequence[Path], repo_root: Path) -> list[str]:

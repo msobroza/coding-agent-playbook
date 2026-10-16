@@ -15,7 +15,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.evaluators.execution.project import ProjectHandle
+from coding_agent_playbook.evaluators.execution.project import (
+    ProjectHandle,
+    default_test_cmd,
+    import_roots,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -166,3 +170,104 @@ def test_no_tests_collected_exit5_is_not_an_error(tmp_path: Path) -> None:
     artifacts = handle.run()
     assert artifacts.junit.total == 0
     assert artifacts.junit.pass_rate() == 1.0
+
+
+# --------------------------------------------------------------------------- #
+# prK §F.1.1: timeout, environment, interpreter and --cov sources
+# --------------------------------------------------------------------------- #
+
+
+def test_timeout_maps_to_runtime_error(tmp_path: Path) -> None:
+    handle = ProjectHandle(
+        root=tmp_path,
+        test_cmd=[sys.executable, "-c", "import time; time.sleep(30)"],
+        report_dir=tmp_path / "reports",
+        timeout_s=0.2,
+    )
+
+    with pytest.raises(RuntimeError, match=r"timed out after 0\.2s"):
+        handle.run()
+
+
+def test_env_overrides_passed_to_subprocess(tmp_path: Path) -> None:
+    """The overrides sit on top of the inherited environment (``PATH`` survives)."""
+    out = tmp_path / "env.txt"
+    script = (
+        "import os, pathlib; "
+        "pathlib.Path(os.environ['PLAYBOOK_OUT']).write_text("
+        "os.environ['COVERAGE_FILE'] + '|' + str(bool(os.environ.get('PATH'))))"
+    )
+    handle = ProjectHandle.create(
+        tmp_path,
+        tmp_path / "reports",
+        test_cmd=[sys.executable, "-c", script],
+        env_overrides={"PLAYBOOK_OUT": str(out), "COVERAGE_FILE": "/state/.coverage"},
+    )
+
+    assert handle.run().returncode == 0
+    assert out.read_text(encoding="utf-8") == "/state/.coverage|True"
+
+
+def test_default_test_cmd_unchanged_without_kwargs(tmp_path: Path) -> None:
+    reports = tmp_path / "reports"
+
+    assert default_test_cmd(reports) == [
+        sys.executable,
+        "-m",
+        "pytest",
+        f"--junitxml={reports / 'junit.xml'}",
+        "--cov",
+        f"--cov-report=xml:{reports / 'coverage.xml'}",
+        f"--cov-config={reports / 'coveragerc'}",
+        "-o",
+        "addopts=",
+        "-p",
+        "no:cacheprovider",
+        "-q",
+    ]
+
+
+def test_default_test_cmd_python_and_cov_sources_argv(tmp_path: Path) -> None:
+    reports = tmp_path / "reports"
+
+    argv = default_test_cmd(reports, python="/proj/.venv/bin/python", cov_sources=["src", "lib"])
+
+    assert argv[:3] == ["/proj/.venv/bin/python", "-m", "pytest"]
+    assert "--cov" not in argv
+    assert argv[4:6] == ["--cov=src", "--cov=lib"]
+    assert argv[6:] == default_test_cmd(reports)[5:]
+
+
+def test_create_threads_diff_base_timeout_python_and_sources(tmp_path: Path) -> None:
+    handle = ProjectHandle.create(
+        tmp_path,
+        tmp_path / "reports",
+        diff_base="HEAD",
+        timeout_s=300.0,
+        python="py",
+        cov_sources=["src"],
+    )
+
+    assert (handle.diff_base, handle.timeout_s, handle.env_overrides) == ("HEAD", 300.0, {})
+    assert handle.test_cmd[:5] == ["py", "-m", "pytest", handle.test_cmd[3], "--cov=src"]
+    # An explicit command runs exactly as given.
+    explicit = ProjectHandle.create(tmp_path, tmp_path / "r2", test_cmd=["make"], python="py")
+    assert explicit.test_cmd == ["make"]
+
+
+@pytest.mark.parametrize(
+    ("files", "expected"),
+    [
+        (["src/pkg/__init__.py"], ("src",)),
+        (["src/tool.py"], ("src",)),
+        (["pkg/__init__.py", "src/README.md"], (".",)),
+        (["mod.py"], (".",)),
+    ],
+    ids=["src-package", "src-module", "src-without-python", "flat"],
+)
+def test_import_roots(tmp_path: Path, files: list[str], expected: tuple[str, ...]) -> None:
+    for rel in files:
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text("", encoding="utf-8")
+
+    assert import_roots(tmp_path) == expected

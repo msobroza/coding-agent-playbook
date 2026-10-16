@@ -1,0 +1,8 @@
+{
+  "foreign": "foreign_marker:conversation_id",
+  "wire": {
+    "stdout": "",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

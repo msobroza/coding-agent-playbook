@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.config import Config, ProjectMeta
+from coding_agent_playbook.config import Config, ConfigError, ProjectMeta
 from coding_agent_playbook.lockfile import LockEntry, Lockfile
 from coding_agent_playbook.sources.filesystem import (
     FileSystemArtifactSource,
@@ -209,6 +209,33 @@ def test_load_config_missing_raises_fnf(tmp_path: Path) -> None:
         source.load_config()
 
 
+def test_load_primary_config_ignores_local_overrides(tmp_path: Path) -> None:
+    """The hook policy reads its tables from this (``load_policy_tables``), so
+    ``.local.toml`` values must never reach it (P6); unmodelled tables do."""
+    (tmp_path / ".coding-agent-playbook.toml").write_text(
+        CONFIG_PRIMARY + '\n[links]\nallowed_domains = ["example.com"]\n'
+    )
+    (tmp_path / ".coding-agent-playbook.local.toml").write_text(
+        CONFIG_LOCAL_OVERRIDE + '\n[links]\nallowed_domains = ["personal.dev"]\n'
+    )
+    source = FileSystemStateSource(repo_root=tmp_path)
+    primary = source.load_primary_config()
+    assert primary.user_choices == {"banking_mode": False}
+    assert primary.extra_tables == {"links": {"allowed_domains": ["example.com"]}}
+    assert source.load_config().user_choices["banking_mode"] is True
+
+
+def test_load_primary_config_checks_the_committed_file(tmp_path: Path) -> None:
+    source = FileSystemStateSource(repo_root=tmp_path)
+    with pytest.raises(FileNotFoundError, match=r"\.coding-agent-playbook\.toml"):
+        source.load_primary_config()
+    (tmp_path / ".coding-agent-playbook.toml").write_text(
+        CONFIG_PRIMARY + '\n[adapters]\nenabled = ["claude_code"]\n'
+    )
+    with pytest.raises(ConfigError, match=r"^\.coding-agent-playbook\.toml: the \[adapters\]"):
+        source.load_primary_config()
+
+
 def test_save_config_emits_valid_toml(tmp_path: Path) -> None:
     source = FileSystemStateSource(repo_root=tmp_path)
     config = Config(
@@ -361,8 +388,8 @@ def test_filesystem_artifact_source_overlay_packages_is_read_only(tmp_path: Path
 
 
 def test_list_rules_walks_engine_package_resources(tmp_path: Path) -> None:
-    # The engine ships rules under content/core/rules/ (resolved through
-    # bundled_content). Confirm the walker picks them up and tags them with
+    # The engine ships rules under catalog/core/rules/ (resolved through
+    # catalog). Confirm the walker picks them up and tags them with
     # source_package="coding_agent_playbook".
     source = FileSystemArtifactSource(repo_root=tmp_path)
     rules = source.list_rules()
@@ -711,9 +738,10 @@ def test_save_config_table_writes_every_entry_back_verbatim(tmp_path: Path) -> N
     assert_toml_identical(source.read_committed_config_table(), table)
 
 
-def test_save_config_writes_only_what_config_owns(tmp_path: Path) -> None:
-    """The ``StateSource`` method drops ``[links]``/``[metrics]``: carrying them over
-    is ``commands/_committed_config``'s job, so no command calls it (§7.2)."""
+def test_save_config_writes_exactly_config_to_dict(tmp_path: Path) -> None:
+    """The ``StateSource`` method writes ``config.to_dict()`` and nothing else —
+    ``extra_tables`` (``[links]``/``[metrics]``) included. No command calls it:
+    rewrites go through ``commands/_committed_config`` (§7.2)."""
     (tmp_path / _PRIMARY_NAME).write_text(CONFIG_WITH_UNMANAGED_TABLES)
     source = FileSystemStateSource(repo_root=tmp_path)
     config = Config.from_dict(source.read_committed_config_table())

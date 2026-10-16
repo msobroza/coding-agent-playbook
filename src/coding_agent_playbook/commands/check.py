@@ -6,6 +6,10 @@ re-serialized (comments and layout are lost) and no local override is written.
 A diagnostic, so it exits 0 whatever it finds (drift included). An overlay in
 ``overlays_enabled`` that ``playbook sync`` would refuse (``_sync_preflight``) is
 flagged under Environment, and the Drift section then never reports a clean state.
+The Hooks block comes from :mod:`._check_hooks` (specs/prK-lifecycle-hooks.md
+§A.8). The Drift lines are ``lockfile.drift_entries``, the definition the
+``drift`` Stop stage shares (specs/prK-hook-pack.md §E.1), with Claude's strict
+settings parser for the scoped (``json:<pointer>``) entries (§C.2.6).
 """
 
 from __future__ import annotations
@@ -15,9 +19,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
+from coding_agent_playbook.adapters._settings_drift import settings_document, stray_launcher_edited
 from coding_agent_playbook.commands import _committed_config, _sync_preflight
+from coding_agent_playbook.commands._check_hooks import format_hooks_section
 from coding_agent_playbook.detector import detect, evaluate_predicate
-from coding_agent_playbook.lockfile import compute_hash
+from coding_agent_playbook.lockfile import drift_entries
 from coding_agent_playbook.orchestrator import SyncContext
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 
@@ -75,27 +81,28 @@ def _format_detected_section(ctx: SyncContext) -> str:
     return "\n".join(lines)
 
 
+#: List-valued ``applies_if`` keys the skip reason quotes as written.
+_LIST_PREDICATE_KEYS = frozenset(
+    {"has_framework", "any_framework", "has_file", "has_dev_dependency"}
+)
+
+
 def _format_skip_reason(predicate: dict[str, object], facts: dict[str, object]) -> str:
     """Render a SPEC §12.4-style ``(skipped: ...)`` suffix for the first
     predicate key that fails. Mirrors the canonical examples:
 
     * boolean fact: ``(skipped: has_notebooks=False)``
     * framework check: ``(skipped: applies_if has_framework=['great-expectations'])``
+    * dev dependency: ``(skipped: applies_if has_dev_dependency=['pytest-cov'])``
 
     We deliberately don't try to be exhaustive — we surface the first failing
     key in the order the predicate dict iterates (insertion order), since
     that's what the example shows and it's the most actionable for the user.
     """
     for key, value in predicate.items():
-        if key == "has_framework":
+        if key in _LIST_PREDICATE_KEYS:
             wanted = value if isinstance(value, list) else [value]
-            return f"(skipped: applies_if has_framework={wanted!r})"
-        if key == "any_framework":
-            wanted = value if isinstance(value, list) else [value]
-            return f"(skipped: applies_if any_framework={wanted!r})"
-        if key == "has_file":
-            wanted = value if isinstance(value, list) else [value]
-            return f"(skipped: applies_if has_file={wanted!r})"
+            return f"(skipped: applies_if {key}={wanted!r})"
         if key == "python_version":
             return f"(skipped: applies_if python_version={value!r})"
         # Boolean facts (has_notebooks, has_dockerfile, has_ci, banking_mode).
@@ -183,15 +190,15 @@ def _format_drift_section(ctx: SyncContext, unusable: Sequence[UnusableOverlay] 
 
 
 def _lockfile_drift(ctx: SyncContext, lockfile: Lockfile) -> list[str]:
-    """One line per lockfile entry whose file is missing or no longer matches its hash."""
-    drift: list[str] = []
-    for entry in lockfile.entries:
-        path = ctx.repo_root / entry.path
-        if not path.is_file():
-            drift.append(f"  missing: {entry.path}")
-        elif compute_hash(path.read_bytes()) != entry.sha256:
-            drift.append(f"  hash mismatch: {entry.path}")
-    return drift
+    """One line per lockfile entry whose file is missing, changed, or lost its exec bit.
+
+    A scoped entry (one managed element of a file shared with the user) is
+    judged by its element, never by the whole file's hash.
+    """
+    items = drift_entries(
+        lockfile, ctx.repo_root, parse_scoped=settings_document, edited=stray_launcher_edited
+    )
+    return [f"  {item.line()}" for item in items]
 
 
 def _refresh(repo_root: Path) -> None:
@@ -233,6 +240,7 @@ def run(args: argparse.Namespace) -> int:
     print(_format_env_section(ctx, unusable))
     print(_format_detected_section(ctx))
     print(_format_artifacts_section(ctx))
+    print(format_hooks_section(ctx))
     print(_format_drift_section(ctx, unusable))
     # A diagnostic: problems are reported above, never through the exit code
     # (drift exits 0 too). `playbook validate` and `playbook sync` are the gates.

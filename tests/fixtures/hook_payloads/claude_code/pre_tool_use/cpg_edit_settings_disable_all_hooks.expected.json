@@ -1,0 +1,54 @@
+{
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "default",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "Edit",
+      "native_name": "Edit",
+      "tool_class": "edit",
+      "tool_classes": [
+        "edit"
+      ],
+      "use_id": "toolu_01CpgDisableAll",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/.claude/settings.json",
+          "repo_rel": ".claude/settings.json",
+          "key": ".claude/settings.json"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/.claude/settings.json",
+          "repo_rel": ".claude/settings.json",
+          "key": ".claude/settings.json"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/.claude/settings.json",
+          "new_string",
+          "\"disableAllHooks\": true,\n  \"model\": \"sonnet\""
+        ]
+      ]
+    }
+  },
+  "result": {
+    "decision": "deny",
+    "reason": "Guardrail configuration is user-owned; ask the user to change it."
+  },
+  "wire": {
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Guardrail configuration is user-owned; ask the user to change it.\"}}\n",
+    "stderr": "Guardrail configuration is user-owned; ask the user to change it.\n",
+    "exit_code": 10
+  }
+}

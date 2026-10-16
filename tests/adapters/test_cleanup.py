@@ -14,20 +14,19 @@ never through a symlink and never a secret path, and reads only the head
 
 from __future__ import annotations
 
-import io
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook._sentinel import has_sentinel, sentinel_line
-from coding_agent_playbook.adapters import base as adapter_base
+from coding_agent_playbook._sentinel import SENTINEL_HEAD_BYTES, has_sentinel, sentinel_line
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
+from tests.fakes import record_opens
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -194,21 +193,6 @@ def test_cleanup_stale_tolerates_an_override_reporting_a_file_twice(tmp_path: Pa
     assert not stale.exists()
 
 
-def _record_opens(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
-    """Record every path opened through ``open``/``Path.open`` (read or write)."""
-    opened: list[Path] = []
-    real_open = io.open
-
-    def spy(file: object, *args: object, **kwargs: object) -> object:
-        if isinstance(file, str | Path):
-            opened.append(Path(file))
-        return real_open(file, *args, **kwargs)  # type: ignore[call-overload]
-
-    monkeypatch.setattr(io, "open", spy)
-    monkeypatch.setattr("builtins.open", spy)
-    return opened
-
-
 @posix_only
 @pytest.mark.parametrize(
     ("make_adapter", "out_dir"),
@@ -241,7 +225,7 @@ def test_scan_never_opens_secrets_or_symlinks(
     secrets.append(_write(repo, f"{out_dir}/id_ed25519", tagged))
     link = repo / out_dir / "aws-notes.md"
     link.symlink_to(secret_store)
-    opened = _record_opens(monkeypatch)
+    opened = record_opens(monkeypatch)
 
     stale = make_adapter().stale_outputs(set(), repo)
 
@@ -274,15 +258,16 @@ def test_sentinel_head_verdict_matches_a_whole_file_read(tmp_path: Path, text: s
 
 
 def test_sentinel_head_read_is_bounded(tmp_path: Path) -> None:
-    """Only line 1 (or a frontmatter block + one line) is read, never the whole file."""
-    big_body = "x" * (2 * adapter_base._SENTINEL_HEAD_BYTES) + "\n"
-    plain = tmp_path / "plain.md"
-    plain.write_text(f"# Title\n{big_body}", encoding="utf-8")
+    """Only line 1 (or a frontmatter block + one line) is read, never the whole file.
+
+    The bounded read itself lives in ``_sentinel.file_has_sentinel`` (shared
+    with the hook guards); this pins that adapters still go through it.
+    """
+    big_body = "x" * (2 * SENTINEL_HEAD_BYTES) + "\n"
     fronted = tmp_path / "fronted.md"
     fronted.write_text(f"{_FRONTMATTER}{sentinel_line('html')}\n{big_body}", encoding="utf-8")
+    plain = tmp_path / "plain.md"
+    plain.write_text(f"# Title\n{big_body}", encoding="utf-8")
 
-    assert adapter_base._sentinel_head(plain) == b"# Title\n"
-    assert adapter_base._sentinel_head(fronted) == (
-        f"{_FRONTMATTER}{sentinel_line('html')}\n".encode()
-    )
     assert ContinueAdapter._carries_sentinel(fronted) is True
+    assert ContinueAdapter._carries_sentinel(plain) is False

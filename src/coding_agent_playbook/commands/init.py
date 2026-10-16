@@ -1,5 +1,10 @@
 """`playbook init` — interactive (or flag-driven) bootstrap for a fresh repo
-(SPEC §12.1)."""
+(SPEC §12.1).
+
+It also asks whether to enable assistant lifecycle hooks and writes the answer
+as ``[hooks] enabled`` (specs/prK-lifecycle-hooks.md §B.1, OQ-3): an absent
+table means off, so an engine upgrade never switches executable hooks on.
+"""
 
 from __future__ import annotations
 
@@ -10,11 +15,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from coding_agent_playbook import __version__ as _engine_version
-from coding_agent_playbook.bundled_content import (
+from coding_agent_playbook.catalog import (
     ENGINE_PACKAGE,
-    bundled_content_root,
     canonical_overlay_list,
     canonical_overlay_name,
+    catalog_root,
 )
 from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands import sync as _sync
@@ -47,6 +52,9 @@ class _Answers(TypedDict):
     description: str
     adapters: list[str]
     overlays: list[str]
+    # ``[hooks] enabled``; None = no explicit choice (non-interactive without
+    # --no-hooks): keep a value the config already has, else enable.
+    hooks: bool | None
 
 
 # ``shared_skills`` (the cross-agent skills hub, SPEC §10.8) is on by default but,
@@ -66,6 +74,10 @@ _HOOK_INSTALL_COMMAND = (
 )
 
 _GITIGNORE_LINE = ".coding-agent-playbook.local.toml"
+
+_HOOKS_QUESTION = "Enable assistant lifecycle hooks?"
+_YES = frozenset({"y", "yes"})
+_NO = frozenset({"n", "no"})
 
 
 def _prompt(question: str, default: str | None = None) -> str:
@@ -100,6 +112,27 @@ def _prompt_multi_select(question: str, choices: list[str], defaults: list[str])
     return selected or list(defaults)
 
 
+def _prompt_yes_no(question: str, *, default: bool = True) -> bool:
+    """Ask a yes/no question until the reply is clear; an empty reply takes ``default``.
+
+    Example: ``_prompt_yes_no("Enable assistant lifecycle hooks?")`` asks ``... [Y/n]: ``.
+    """
+    suffix = "[Y/n]" if default else "[y/N]"
+    while True:
+        answer = input(f"{question} {suffix}: ").strip().lower()
+        if not answer:
+            return default
+        if answer in _YES or answer in _NO:
+            return answer in _YES
+
+
+def _hooks_answer(args: argparse.Namespace, *, interactive: bool) -> bool | None:
+    """``False`` for ``--no-hooks``; the user's answer when interactive; else no choice (None)."""
+    if getattr(args, "no_hooks", False):
+        return False
+    return _prompt_yes_no(_HOOKS_QUESTION) if interactive else None
+
+
 def _collect_answers(args: argparse.Namespace) -> _Answers:
     """Resolve the project parameters from flags (non-interactive) or prompts
     (interactive). Returns a typed mapping the writer functions consume."""
@@ -128,6 +161,7 @@ def _collect_answers(args: argparse.Namespace) -> _Answers:
             description=str(getattr(args, "description", "") or ""),
             adapters=adapters,
             overlays=overlays,
+            hooks=_hooks_answer(args, interactive=False),
         )
     # Interactive path.
     name = _prompt("Project name")
@@ -154,6 +188,7 @@ def _collect_answers(args: argparse.Namespace) -> _Answers:
         description=description,
         adapters=adapters,
         overlays=overlays,
+        hooks=_hooks_answer(args, interactive=True),
     )
 
 
@@ -173,9 +208,12 @@ def _plan_config(state: FileSystemStateSource, repo_root: Path, answers: _Answer
       ``config_entries.CONFIG_MANAGED_KEYS``, ``[detector_cache]`` and ``[user_choices]``
       whole, and the keys ``Config`` reads inside ``[project]``/``[engine]``/
       ``[storage]``/``[output]`` (``config_entries.CONFIG_MANAGED_TABLE_KEYS``);
-    * everything else is written back as parsed: other top-level keys
-      (``[links]``, ``[metrics]``, future tables, which their commands read from
-      the raw TOML) and unknown keys inside those four tables (``[project] homepage``).
+    * everything else is written back as parsed (it rides along in
+      ``Config.extra_tables``, P6): other top-level keys (``[hooks]``,
+      ``[guardrails]``, ``[links]``, ``[metrics]``, future tables, which their
+      commands read from the raw TOML) and unknown keys inside those four tables
+      (``[project] homepage``) — except ``[hooks] enabled``, which takes the hooks
+      answer (:func:`_with_hooks_answer`).
 
     Values survive; comments and layout do not (the file is re-serialized).
     ``[output] commit`` is always written explicitly (``false`` unless the file
@@ -191,10 +229,15 @@ def _plan_config(state: FileSystemStateSource, repo_root: Path, answers: _Answer
     --refresh`` shares.
     """
     detector_cache = detector_cache_table(detect(repo_root))
+    hooks = answers["hooks"]
     if not state.has_committed_config():
-        return plan_first_config(state, _fresh_config(answers, detector_cache))
+        fresh = _fresh_config(answers, detector_cache)
+        return plan_first_config(state, _with_hooks_answer(fresh, hooks))
     return plan_committed_update(
-        state, lambda committed: _apply_answers(committed, answers, detector_cache)
+        state,
+        lambda committed: _with_hooks_answer(
+            _apply_answers(committed, answers, detector_cache), hooks
+        ),
     )
 
 
@@ -203,6 +246,24 @@ def _project_meta(answers: _Answers) -> ProjectMeta:
     return ProjectMeta(
         name=answers["name"], kind=answers["kind"], description=answers["description"]
     )
+
+
+def _with_hooks_answer(config: Config, answer: bool | None) -> Config:
+    """``config`` with ``[hooks] enabled`` set through ``extra_tables`` (P6), other keys kept.
+
+    No explicit ``answer`` keeps an ``enabled`` the committed table already
+    has (a re-run never flips an earlier choice), else enables hooks.
+
+    Example::
+
+        _with_hooks_answer(config, False).extra_tables["hooks"]["enabled"]  # False
+    """
+    existing = config.extra_tables.get("hooks")
+    table = dict(existing) if isinstance(existing, dict) else {}
+    if answer is None and "enabled" in table:
+        return config
+    table["enabled"] = True if answer is None else answer
+    return dataclasses.replace(config, extra_tables={**config.extra_tables, "hooks": table})
 
 
 def _fresh_config(answers: _Answers, detector_cache: dict[str, object]) -> Config:
@@ -309,7 +370,7 @@ def precommit_template_dir(templates_root: Path | None = None) -> Path:
 
     The template is engine wiring, not playbook content (its hook ids are
     duplicated in ``_precommit_merge``), so it lives in the package's
-    ``templates/precommit/`` rather than the bundled content. ``templates_root``
+    ``templates/precommit/`` rather than the catalog. ``templates_root``
     defaults to the engine's ``templates/``; tests pass another root. Raises
     :class:`PrecommitTemplateMissingError` when the directory or
     ``config.yaml.j2`` is missing.
@@ -327,15 +388,23 @@ def precommit_template_dir(templates_root: Path | None = None) -> Path:
     return template_dir
 
 
-def _render_fresh_pre_commit(*, output_commit: bool = False) -> str:
+def _render_fresh_pre_commit(
+    *, output_commit: bool = False, commit_trailers: bool = False, commitizen: bool = False
+) -> str:
     """Render the packaged starter ``.pre-commit-config.yaml`` template.
 
     The template (``templates/precommit/config.yaml.j2``) is air-gapped: every
     hook is ``repo: local`` + ``language: system`` so pre-commit never clones a
     remote hook repo. ``output_commit`` (the ``[output] commit`` policy) selects
     the playbook hooks: the legacy drift check for ``true``; the post-checkout /
-    post-merge auto-sync plus the staged-output guard for ``false``. We still
-    stash an empty facts dict to honour the renderer's helper contract (SPEC §9.4).
+    post-merge auto-sync plus the staged-output guard for ``false``.
+    ``commit_trailers`` (a trailer row is configured, prK §E.4) adds the
+    ``coding-agent-playbook-commit-trailers`` commit-msg entry and installs that
+    stage; ``commitizen`` (the repo opted into a commitizen convention, prK §F.4.3)
+    adds ``coding-agent-playbook-commit-msg`` (``cz check``) the same way, so a
+    consumer without commitizen never gets a commit hook that cannot run. We
+    still stash an empty facts dict to honour the renderer's helper contract
+    (SPEC §9.4).
 
     Example::
 
@@ -346,7 +415,12 @@ def _render_fresh_pre_commit(*, output_commit: bool = False) -> str:
     template_path = precommit_dir / _PRECOMMIT_TEMPLATE_NAME
     env = build_environment([precommit_dir])
     env.globals["_facts"] = {}
-    return render_artifact_body(template_path, {"output_commit": output_commit}, env=env)
+    variables = {
+        "output_commit": output_commit,
+        "commit_trailers": commit_trailers,
+        "commitizen": commitizen,
+    }
+    return render_artifact_body(template_path, variables, env=env)
 
 
 def _write_pre_commit(
@@ -363,13 +437,42 @@ def _write_pre_commit(
     """
     target = repo_root / ".pre-commit-config.yaml"
     if not target.is_file():
-        target.write_text(_render_fresh_pre_commit(output_commit=output_commit), encoding="utf-8")
+        starter = _render_fresh_pre_commit(
+            output_commit=output_commit,
+            commit_trailers=_has_trailer_rows(repo_root),
+            commitizen=_uses_commitizen(repo_root),
+        )
+        target.write_text(starter, encoding="utf-8")
         return target, ()
     content = target.read_text(encoding="utf-8")
     merged = merge_pre_commit(content, output_commit=output_commit)
     if merged.content != content:
         target.write_text(merged.content, encoding="utf-8")
     return target, merged.messages
+
+
+def _has_trailer_rows(repo_root: Path) -> bool:
+    """Whether the committed config sets a commit-trailer row (prK §E.4); ``False`` if unreadable.
+
+    The final sync reports a config it cannot read; the starter simply leaves the
+    commit-msg entry out (an existing ``.pre-commit-config.yaml`` is never touched).
+    """
+    from coding_agent_playbook.commands._twin_policy import commit_trailer_policy
+
+    try:
+        return commit_trailer_policy(repo_root).has_rows
+    except (ValueError, OSError, KeyError, TypeError):
+        return False
+
+
+def _uses_commitizen(repo_root: Path) -> bool:
+    """Whether the repo opted into a commitizen convention (``playbook ci``'s predicate, §F.5).
+
+    An unreadable ``pyproject.toml`` or config counts as opted in, as for CI.
+    """
+    from coding_agent_playbook.commands._ci_policy import commit_convention_configured
+
+    return commit_convention_configured(repo_root)
 
 
 def _overlay_lists_to_check(
@@ -444,8 +547,8 @@ def run(args: argparse.Namespace) -> int:
     and checked here — the local one on its own, the committed one on its own,
     then the config the final sync will load (:func:`_plan_config`) — so a broken
     file of either kind leaves the repo untouched. A broken install exits 2
-    before writing too: :func:`bundled_content_root` raises
-    ``BundledContentMissingError`` when the engine's bundled content is missing,
+    before writing too: :func:`catalog_root` raises
+    ``CatalogMissingError`` when the engine's catalog is missing,
     and ``cli.main`` reports it. A deprecated
     ``coding_agent_playbook.packs.*`` name in ``--overlays`` is written in its
     canonical ``plugins`` spelling (on a re-run too: the migration path for the
@@ -456,7 +559,7 @@ def run(args: argparse.Namespace) -> int:
     answers["overlays"], deprecated_flags = canonical_overlay_list(answers["overlays"])
     state = FileSystemStateSource(repo_root=repo_root)
     local = state.load_local_overrides()
-    bundled_content_root()  # a broken install raises here: never a half-initialized repo
+    catalog_root()  # a broken install raises here: never a half-initialized repo
     refused = [
         _refuse_unusable_overlays(overlays, origin)
         for overlays, origin in _overlay_lists_to_check(answers, local)

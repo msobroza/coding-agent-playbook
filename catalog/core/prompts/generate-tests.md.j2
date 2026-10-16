@@ -1,0 +1,62 @@
+---
+id: generate-tests
+name: Generate tests
+description: Generate pytest tests for a function, class, or module, following the project's testing conventions.
+slash: generate-tests
+version: 1
+applies_if:
+  has_framework: ["pytest"]
+input_variables:
+  - name: target
+    description: File or function to test (e.g. "src/foo/bar.py" or "src/foo/bar.py::baz")
+    required: false
+includes_rules:
+  - python-typing
+  - pytest
+eval_tasks:
+  - generate-tests-happy-path
+  - generate-tests-edge-cases
+  - generate-tests-async-code
+write_scope:
+  globs:
+    - tests/**
+    - "**/conftest.py"
+---
+
+# Generate tests
+
+Your task is to write pytest tests for {{ project_name }} — a `{{ project_kind }}` project. The user has pointed you at a piece of code: read it first, plan the test surface, then write the tests.
+
+## Conventions
+
+- Test framework: **pytest**{% if has_framework("pytest-asyncio") %} (with `pytest-asyncio` available for coroutine tests){% endif %}.
+- Test files live under `tests/`, mirroring the source layout from `src/`. `src/foo/bar.py` is tested by `tests/test_bar.py` (or `tests/foo/test_bar.py` for deeper trees).
+- Use `pytest.mark.parametrize` for table-driven cases. Loops inside a test body hide which case failed.
+- Mock external services with `pytest-mock`'s `mocker` fixture; do not patch globals directly.
+- For pure functions, mock nothing — construct real inputs.
+
+## Workflow
+
+1. **Read the target.** Open the file. Identify the public surface (functions, classes, module-level callables). Skip private helpers — they're tested through their public callers.
+2. **List the branches.** For each public function, write down (mentally or in a scratch buffer) every distinct branch and edge case: happy path, each conditional, each error path, boundary inputs (empty, max-size, `None` where allowed).
+3. **Draft the test file.** One `def test_<unit>_<scenario>` per branch. Group related cases with `parametrize`. Name fixtures after what they return.
+4. **Run the tests.** `pytest -q tests/<path-to-new-file>`. They must pass — if they don't, either the test is wrong or you found a bug in the code under test. **Do not silently "fix" the code to make the test pass.** Report the failure; let the user decide.
+5. **Report coverage.** State which branches you covered and which you intentionally skipped (e.g., "I left the network-timeout branch for an integration test — it needs a real socket").
+
+## Output format
+
+Produce one or more files under `tests/` at the correct mirror location. After writing, run `pytest -q tests/<path>` and report the result. End with the coverage summary from step 5.
+
+## What not to do
+
+- Don't write a test that calls the function with arbitrary inputs and asserts whatever it returned. That tests nothing.
+- Don't use `unittest.TestCase`. The repo is pytest-native — mixing styles loses fixture injection and `parametrize`.
+- Don't add new dependencies. If a test needs `pytest-asyncio` or `pytest-mock` and the project doesn't have it, stop and ask first.
+- Don't mock the function you are testing. If you find yourself doing that, the test is wrong.
+
+## Reference rules
+
+These project rules govern anything you write in the test file. Read them before you start; align your tests to them.
+
+{{ rule("python-typing") }}
+{{ rule("pytest") }}

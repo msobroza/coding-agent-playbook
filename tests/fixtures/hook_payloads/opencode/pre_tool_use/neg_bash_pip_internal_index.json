@@ -1,0 +1,15 @@
+{
+  "_fixture": {
+    "harness_version": "1.19.0",
+    "source": "docs"
+  },
+  "hook_event_name": "PreToolUse",
+  "session_id": "ses_7a1b2c3d4e5f",
+  "cwd": "/playbook-fixture/proj",
+  "tool_use_id": "call_k902",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "pip install -i https://artifactory.bank.example/simple requests",
+    "timeout": 120000
+  }
+}

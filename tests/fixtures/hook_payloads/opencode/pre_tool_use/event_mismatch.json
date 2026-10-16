@@ -1,0 +1,14 @@
+{
+  "_fixture": {
+    "harness_version": "1.19.0",
+    "source": "docs"
+  },
+  "hook_event_name": "PostToolUse",
+  "session_id": "ses_7a1b2c3d4e5f",
+  "cwd": "/playbook-fixture/proj",
+  "tool_use_id": "call_08",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "ls"
+  }
+}

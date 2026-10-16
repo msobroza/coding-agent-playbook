@@ -3,7 +3,9 @@
 
 Supports ``--format <fmt>`` (defaults to the artifact's natural format),
 ``--show-source`` (template path + overrides), and ``--show-rules`` (for
-prompts, lists the inclusion graph with applies_if outcomes).
+prompts, lists the inclusion graph with applies_if outcomes). A hook id
+renders ``hook_advisory`` by default, or ``hook_claude_settings``
+(specs/prK-lifecycle-hooks.md §C.4.1).
 """
 
 from __future__ import annotations
@@ -13,11 +15,15 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from jinja2.exceptions import UndefinedError
+
 from coding_agent_playbook.commands._sync_render import (
     build_jinja_context,
+    render_hook_body,
     render_prompt_body,
     render_rule_body,
     report_sandbox_violation,
+    report_template_error,
 )
 from coding_agent_playbook.detector import evaluate_predicate
 from coding_agent_playbook.orchestrator import SyncContext, artifact_id_of, build_prompt_environment
@@ -28,7 +34,7 @@ from coding_agent_playbook.renderer import (
     build_environment,
     render_for,
 )
-from coding_agent_playbook.types import Prompt, Rule, Skill
+from coding_agent_playbook.types import Hook, Prompt, Rule, Skill
 
 if TYPE_CHECKING:
     import argparse
@@ -36,9 +42,17 @@ if TYPE_CHECKING:
 
 _RULE_FORMATS = {"continue_rule", "claude_md_section", "agents_md_section"}
 _PROMPT_FORMATS = {"prompt_continue", "prompt_claude_command", "prompt_opencode_command"}
+_HOOK_FORMATS = {"hook_advisory", "hook_claude_settings"}
+#: Formats valid per artifact kind (skills render as prompts).
+_KIND_FORMATS = {
+    "rule": ("rules", _RULE_FORMATS),
+    "prompt": ("prompts", _PROMPT_FORMATS),
+    "skill": ("prompts", _PROMPT_FORMATS),
+    "hook": ("hooks", _HOOK_FORMATS),
+}
 
-# Either of the three artifact dataclasses can come back from _find_artifact.
-_Artifact = Rule | Prompt | Skill
+# Any of the four artifact dataclasses can come back from _find_artifact.
+_Artifact = Rule | Prompt | Skill | Hook
 
 
 def _find_artifact(ctx: SyncContext, artifact_id: str) -> tuple[str | None, _Artifact | None]:
@@ -57,16 +71,33 @@ def _find_artifact(ctx: SyncContext, artifact_id: str) -> tuple[str | None, _Art
         )
         if skill_id == artifact_id:
             return "skill", skill
+    for hook in ctx.hooks_resolved:
+        if hook.frontmatter.id == artifact_id:
+            return "hook", hook
     return None, None
 
 
 def _resolve_format(fmt: str | None, kind: str) -> str:
     """Apply :data:`FORMAT_ALIASES` and default to a sensible format."""
     if fmt is None:
-        return {"rule": "continue_rule", "prompt": "prompt_continue", "skill": "prompt_continue"}[
-            kind
-        ]
+        return {
+            "rule": "continue_rule",
+            "prompt": "prompt_continue",
+            "skill": "prompt_continue",
+            "hook": "hook_advisory",
+        }[kind]
     return FORMAT_ALIASES.get(fmt, fmt)
+
+
+def _format_error(kind: str, resolved_format: str) -> str | None:
+    """Why ``resolved_format`` cannot render a ``kind`` artifact, or None when it can."""
+    label, formats = _KIND_FORMATS[kind]
+    if resolved_format in formats:
+        return None
+    return (
+        f"format {resolved_format!r} not valid for {label}; "
+        f"use one of: {', '.join(sorted(formats))}"
+    )
 
 
 def _show_source(artifact: _Artifact, kind: str, ctx: SyncContext) -> str:
@@ -172,7 +203,27 @@ def _render_prompt(ctx: SyncContext, prompt: Prompt, resolved_format: str) -> st
     )
 
 
+def _render_hook(ctx: SyncContext, hook: Hook, resolved_format: str) -> str:
+    """The hook's advisory markdown, or its Claude registration JSON (§C.4.1).
+
+    Only the body renders, in the sandboxed base environment, where ``rule()``
+    is undefined (H19); both formats read the declared frontmatter.
+    """
+    base_env = build_environment([], is_prompt_context=False)
+    base_env.globals["_facts"] = dict(ctx.facts)
+    body = render_hook_body(hook, build_jinja_context(ctx), base_env)
+    return render_for(
+        hook.source_path or Path("inline"),
+        body,
+        resolved_format,
+        frontmatter=hook.frontmatter.to_mapping(),
+    )
+
+
 def _render_artifact(ctx: SyncContext, kind: str, artifact: _Artifact, resolved_format: str) -> str:
+    if kind == "hook":
+        assert isinstance(artifact, Hook)
+        return _render_hook(ctx, artifact, resolved_format)
     if kind == "rule":
         assert isinstance(artifact, Rule)
         return _render_rule(ctx, artifact, resolved_format)
@@ -213,19 +264,9 @@ def run(args: argparse.Namespace) -> int:
         valid = ", ".join(sorted(BUILTIN_FORMATS | set(FORMAT_ALIASES.keys())))
         print(f"unknown format {resolved_format!r}; valid: {valid}", file=sys.stderr)
         return 1
-    if kind == "rule" and resolved_format not in _RULE_FORMATS:
-        print(
-            f"format {resolved_format!r} not valid for rules; "
-            f"use one of: {', '.join(sorted(_RULE_FORMATS))}",
-            file=sys.stderr,
-        )
-        return 1
-    if kind in ("prompt", "skill") and resolved_format not in _PROMPT_FORMATS:
-        print(
-            f"format {resolved_format!r} not valid for prompts; "
-            f"use one of: {', '.join(sorted(_PROMPT_FORMATS))}",
-            file=sys.stderr,
-        )
+    problem = _format_error(kind, resolved_format)
+    if problem is not None:
+        print(problem, file=sys.stderr)
         return 1
 
     try:
@@ -234,4 +275,12 @@ def run(args: argparse.Namespace) -> int:
         # Every resolved rule renders here, so one escaping template anywhere
         # names its file instead of dumping a traceback (prK §P1).
         return report_sandbox_violation(exc, ctx.repo_root, outcome="playbook render aborted.")
+    except UndefinedError as exc:
+        if not isinstance(artifact, Hook):
+            raise
+        # A hook body cannot call rule() (H19): name the file, not a traceback.
+        source = str(artifact.source_path or artifact.frontmatter.id)
+        return report_template_error(
+            source, str(exc), ctx.repo_root, outcome="playbook render aborted."
+        )
     return 0

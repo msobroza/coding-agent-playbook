@@ -1,0 +1,19 @@
+{
+  "_fixture": {
+    "harness_version": "1.19.0",
+    "source": "k5-guard-eval-fixtures"
+  },
+  "hook_event_name": "PreToolUse",
+  "session_id": "ses_7a1b2c3d4e5f",
+  "cwd": "/playbook-fixture/proj",
+  "tool_use_id": "call_gef_01",
+  "tool_name": "Edit",
+  "tool_input": {
+    "filePath": "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
+    "oldString": "return torch.load(p)",
+    "newString": "return torch.load(p, weights_only=True)",
+    "file_path": "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
+    "old_string": "return torch.load(p)",
+    "new_string": "return torch.load(p, weights_only=True)"
+  }
+}

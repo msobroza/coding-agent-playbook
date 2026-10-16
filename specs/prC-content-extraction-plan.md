@@ -1,19 +1,25 @@
 # PR C — Content extraction Implementation Plan
 
+> **Rename note (v0.20).** This design shipped the tree as `content/`; v0.20 renamed it
+> `catalog/`: the wheel's `_content/` is `_catalog/`, `bundled_content.py` is `catalog.py`
+> (`catalog_root`, `catalog_layer_root`, `CatalogMissingError`, `catalog_dir=`),
+> `tests/_content.py` is `tests/_catalog.py`, and the `content` pytest marker is
+> `catalog`. The text below uses the current names; test-file names it cites may predate the rename.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Move every rule, prompt, eval task and bundled skill out of
-`src/coding_agent_playbook/` into a top-level `content/` tree, and rename
+`src/coding_agent_playbook/` into a top-level `catalog/` tree, and rename
 packs to bundled plugins (old names keep working as a deprecated alias).
 Installed-wheel behaviour must not change.
 
 **Architecture:**
-- A new leaf module, `bundled_content.py`, is the only code that knows where
-  `content/` lives: in the installed wheel it is `<pkg>/_content`, and in a
-  source checkout it is `<repo>/content`.
+- A new leaf module, `catalog.py`, is the only code that knows where
+  `catalog/` lives: in the installed wheel it is `<pkg>/_catalog`, and in a
+  source checkout it is `<repo>/catalog`.
 - `_resource_subdir` routes the engine and plugin names to it. Third-party
   overlays keep today's `importlib.resources` path untouched.
-- Hatch force-includes `content/` into the wheel as `coding_agent_playbook/_content`.
+- Hatch force-includes `catalog/` into the wheel as `coding_agent_playbook/_catalog`.
 - Bundled plugins are directories, not Python modules.
 
 **Tech Stack:** Python 3.12+, hatchling, pytest, ruff, mypy (strict), pip-only CI.
@@ -60,15 +66,15 @@ the authority for every string, rule and acceptance criterion this plan cites.
 | `ENGINE_PACKAGE` | `"coding_agent_playbook"` |
 | `PLUGIN_NAMESPACE` | `"coding_agent_playbook.plugins"` |
 | `DEPRECATED_PACK_NAMESPACE` | `"coding_agent_playbook.packs"` |
-| `PACKAGED_CONTENT_DIRNAME` | `"_content"` |
-| `CHECKOUT_CONTENT_DIRNAME` | `"content"` |
+| `PACKAGED_CATALOG_DIRNAME` | `"_catalog"` |
+| `CHECKOUT_CATALOG_DIRNAME` | `"catalog"` |
 | Namespace reason | `the bundled plugin namespace, not a plugin` |
 | Unknown plugin reason | `no such bundled plugin` |
 | Hint | `" (bundled plugins: <comma-separated sorted dotted names>)"` |
 | Config warning | `warning: <file>: overlays_enabled: '<old>' is deprecated; use '<new>'` |
 | Flag warning | `warning: --overlays: '<old>' is deprecated; use '<new>'` |
-| Missing-content error | `error: the engine's bundled content was not found (looked in <a>, <b>); reinstall coding-agent-playbook` |
-| Wheel force-include | `"content" = "coding_agent_playbook/_content"` |
+| Missing-content error | `error: the engine's catalog was not found (looked in <a>, <b>); reinstall coding-agent-playbook` |
+| Wheel force-include | `"catalog" = "coding_agent_playbook/_catalog"` |
 
 **Baselines (session scratchpad, outside the repo):**
 - Output-parity baseline: `parity-baseline/manifest.txt` (476 lines, 40 at
@@ -127,7 +133,7 @@ anything moves.
 ### Task 2: One helper for content paths in tests (current locations)
 
 **Files:**
-- Create: `tests/_content.py`
+- Create: `tests/_catalog.py`
 - Modify (replace their own `parents[N] / "src" / "coding_agent_playbook" …` roots):
   - `tests/evals/test_prompting.py:28-29`
   - `tests/integration/test_find_injected_vuln_prompt.py:14`
@@ -143,7 +149,7 @@ anything moves.
   - `tests/packs/python_design/test_worked_example.py:19`
 
 **Interfaces:**
-- Produces, in `tests/_content.py`, all of type `Path`, anchored on
+- Produces, in `tests/_catalog.py`, all of type `Path`, anchored on
   `REPO_ROOT = Path(__file__).resolve().parents[1]`:
   - `CORE_ROOT`: today `REPO_ROOT / "src/coding_agent_playbook/resources"`.
   - `PLUGINS_ROOT`: today `REPO_ROOT / "src/coding_agent_playbook/packs"`.
@@ -152,54 +158,54 @@ anything moves.
   - `plugin_files_root(name: str) -> Path`: today `PLUGINS_ROOT / name`. This
     is the directory holding `LICENSE` and `ATTRIBUTIONS.md`.
 
-  Task 6 repoints these to `content/` without changing any caller.
+  Task 6 repoints these to `catalog/` without changing any caller.
 
-- [ ] **Step 1:** Create `tests/_content.py` with the names above and a module
+- [ ] **Step 1:** Create `tests/_catalog.py` with the names above and a module
   docstring. Its rationale: anchored on the checkout, not on the production
   resolver, so path pins stay independent of the code under test.
-- [ ] **Step 2:** Switch each listed module to import from `tests._content`.
+- [ ] **Step 2:** Switch each listed module to import from `tests._catalog`.
   Keep the local constant names (e.g. `_SHIPPED_TASKS = CORE_ROOT / "eval_tasks"`)
   so diffs stay small.
 - [ ] **Step 3:** Run `grep -rn '"src" / "coding_agent_playbook"' tests`.
   Expected: no hits.
 - [ ] **Step 4:** Run the full gate. Expected: green, same test count.
-- [ ] **Step 5:** Commit: `tests: centralize shipped-content paths in tests/_content.py`.
+- [ ] **Step 5:** Commit: `tests: centralize shipped-content paths in tests/_catalog.py`.
 
 ---
 
-### Task 3: `bundled_content.py` resolver (pure, not yet wired)
+### Task 3: `catalog.py` resolver (pure, not yet wired)
 
 **Files:**
-- Create: `src/coding_agent_playbook/bundled_content.py`
-- Test: `tests/unit/test_bundled_content.py`
+- Create: `src/coding_agent_playbook/catalog.py`
+- Test: `tests/unit/test_catalog.py`
 
 **Interfaces:**
 - Produces the constants and functions listed below, exactly as the spec's
-  "`bundled_content.py` (new)" section defines them.
+  "`catalog.py` (new)" section defines them.
   - `_PACKAGE_DIR: Path = Path(__file__).resolve().parent`.
-  - `class BundledContentMissingError(RuntimeError)`, with
+  - `class CatalogMissingError(RuntimeError)`, with
     `tried: tuple[Path, ...]` and a `str()` that lists the paths.
-  - `bundled_content_root(package_dir: Path | None = None) -> Path`
-  - `bundled_plugins(content_root: Path | None = None) -> list[str]`
+  - `catalog_root(package_dir: Path | None = None) -> Path`
+  - `bundled_plugins(catalog_dir: Path | None = None) -> list[str]`
   - `canonical_overlay_name(name: str) -> str`
   - `canonical_overlay_list(names: Iterable[str]) -> tuple[list[str], tuple[str, ...]]`
   - `is_plugin_namespace(name: str) -> bool`
   - `is_bundled_layer(name: str) -> bool`
-  - `bundled_layer_root(name: str, *, content_root: Path | None = None) -> Path | None`
+  - `catalog_layer_root(name: str, *, catalog_dir: Path | None = None) -> Path | None`
 - The module imports nothing from `coding_agent_playbook`, because
   `config.py` and `config_schema.py` will import it.
 
 - [ ] **Step 1: Write the failing tests.** Build roots in `tmp_path` with a
   helper `_make_tree(root, plugins=("superpowers",))` that creates
   `core/rules/` and `plugins/<p>/skills/`. Tests:
-  - `test_packaged_root_wins`: `pkg/_content/core` and `pkg/../../content/core`
-    both exist, under `src/pkg`. Expect `bundled_content_root(pkg) == pkg / "_content"`.
-  - `test_checkout_fallback`: only `<tmp>/content/core` exists, with
+  - `test_packaged_root_wins`: `pkg/_catalog/core` and `pkg/../../catalog/core`
+    both exist, under `src/pkg`. Expect `catalog_root(pkg) == pkg / "_catalog"`.
+  - `test_checkout_fallback`: only `<tmp>/catalog/core` exists, with
     `pkg = <tmp>/src/coding_agent_playbook`. Expect `<tmp>/content`.
-  - `test_packaged_without_core_is_not_accepted`: `pkg/_content/plugins` exists
+  - `test_packaged_without_core_is_not_accepted`: `pkg/_catalog/plugins` exists
     but `core` does not, and there is no checkout. Expect
-    `BundledContentMissingError`, with both candidate paths in `.tried`.
-  - `test_fallback_requires_src_parent`: `<tmp>/lib/pkg` with `<tmp>/content/core`
+    `CatalogMissingError`, with both candidate paths in `.tried`.
+  - `test_fallback_requires_src_parent`: `<tmp>/lib/pkg` with `<tmp>/catalog/core`
     raises.
   - `test_missing_root_message_names_both_paths`: `str(err)` contains both
     paths.
@@ -230,18 +236,18 @@ anything moves.
     `"superpowers.skills"`, `"superpowers/skills"`, `"Superpowers"`,
     `"__pycache__"`. Each gives `None`.
   - `test_bundled_layer_root_raises_when_root_missing`: called with no
-    `content_root` while `_PACKAGE_DIR` is monkeypatched to an empty tmp dir,
-    it raises `BundledContentMissingError`.
-- [ ] **Step 2:** Run `.venv/bin/pytest tests/unit/test_bundled_content.py -q -p no:cacheprovider`.
+    `catalog_dir` while `_PACKAGE_DIR` is monkeypatched to an empty tmp dir,
+    it raises `CatalogMissingError`.
+- [ ] **Step 2:** Run `.venv/bin/pytest tests/unit/test_catalog.py -q -p no:cacheprovider`.
   Expected: FAIL (module missing).
 - [ ] **Step 3:** Implement the module.
-  - `bundled_layer_root` compares the canonical name against the
+  - `catalog_layer_root` compares the canonical name against the
     `bundled_plugins(...)` list. It never builds a path from unchecked text.
   - `_PACKAGE_DIR` is read at call time, as the default when `package_dir` is
     `None`, so tests can monkeypatch it.
-  - The checkout root is `package_dir.parent.parent / "content"`.
+  - The checkout root is `package_dir.parent.parent / "catalog"`.
 - [ ] **Step 4:** Run the module tests, then the full gate. Expected: green.
-- [ ] **Step 5:** Commit: `feat: bundled_content resolver for engine and plugin content`.
+- [ ] **Step 5:** Commit: `feat: catalog resolver for engine and plugin content`.
 
 ---
 
@@ -256,14 +262,14 @@ lookup for every engine task.
 - Test: `tests/evals/test_prompting.py`, `tests/cli/test_eval.py:330-410`
 
 **Interfaces:**
-- Consumes: `bundled_content.is_bundled_layer(name) -> bool`.
+- Consumes: `catalog.is_bundled_layer(name) -> bool`.
 - Produces: `_infer_prompts_dir(task_toml: Path) -> Path | None` (same
   signature), and `_display_source_path(task: EvalTask) -> str` (same
   signature).
 
 - [ ] **Step 1: Write the failing tests.**
   - `test_infer_prompts_dir_layers`, parametrized over
-    `<x>/content/core/eval_tasks/t/task.toml`,
+    `<x>/catalog/core/eval_tasks/t/task.toml`,
     `<x>/pkg/resources/eval_tasks/t/task.toml` and
     `<x>/playbook/eval_tasks/t/task.toml`. Each returns `<layer>/prompts`
     (`parents[2] / "prompts"`).
@@ -301,7 +307,7 @@ lookup for every engine task.
 - Produces: `commands/init.py: precommit_template_dir(templates_root: Path | None = None) -> Path`, plus a
   `PrecommitTemplateMissingError(RuntimeError)` that carries the expected path.
   It is raised when the directory or `config.yaml.j2` is missing.
-- Produces: `tests/_content.py: PRECOMMIT_TEMPLATE_DIR: Path`, computed as
+- Produces: `tests/_catalog.py: PRECOMMIT_TEMPLATE_DIR: Path`, computed as
   `Path(str(resources.files("coding_agent_playbook") / "templates" / "precommit"))`.
 
 - [ ] **Step 1: Write the failing tests.**
@@ -326,27 +332,27 @@ lookup for every engine task.
 
 ---
 
-### Task 6: Move content to `content/` and route bundled lookups through the resolver
+### Task 6: Move content to `catalog/` and route bundled lookups through the resolver
 
 This is one atomic task. Content moving and lookups switching must land
 together.
 
 **Files:**
 - Move (`git mv`, whole subtrees):
-  - `src/coding_agent_playbook/resources/{ATTRIBUTIONS.md,rules,prompts,eval_tasks}` → `content/core/`
-  - `src/coding_agent_playbook/packs/superpowers/resources/skills` → `content/plugins/superpowers/skills`
-  - `src/coding_agent_playbook/packs/superpowers/{LICENSE,ATTRIBUTIONS.md}` → `content/plugins/superpowers/`
-  - `src/coding_agent_playbook/packs/python_design/resources/skills` → `content/plugins/python_design/skills`
-  - `src/coding_agent_playbook/packs/python_design/ATTRIBUTIONS.md` → `content/plugins/python_design/`
+  - `src/coding_agent_playbook/resources/{ATTRIBUTIONS.md,rules,prompts,eval_tasks}` → `catalog/core/`
+  - `src/coding_agent_playbook/packs/superpowers/resources/skills` → `catalog/plugins/superpowers/skills`
+  - `src/coding_agent_playbook/packs/superpowers/{LICENSE,ATTRIBUTIONS.md}` → `catalog/plugins/superpowers/`
+  - `src/coding_agent_playbook/packs/python_design/resources/skills` → `catalog/plugins/python_design/skills`
+  - `src/coding_agent_playbook/packs/python_design/ATTRIBUTIONS.md` → `catalog/plugins/python_design/`
 - Modify: `src/coding_agent_playbook/sources/filesystem.py:56-79` (`_resource_subdir`; fix the comment at :72-75)
 - Modify: `src/coding_agent_playbook/commands/_sync_preflight.py:139-149` (`_unusable_reason`: bundled-layer branch)
 - Modify: `pyproject.toml` (force-include; ruff `extend-exclude`, `per-file-target-version`; mypy `exclude`)
-- Modify: `src/coding_agent_playbook/packs/{superpowers,python_design}/__init__.py` docstrings (point to `content/plugins/<n>/`). They are deleted in Task 7.
+- Modify: `src/coding_agent_playbook/packs/{superpowers,python_design}/__init__.py` docstrings (point to `catalog/plugins/<n>/`). They are deleted in Task 7.
 - Modify content path text:
-  - the 10 `content/core/eval_tasks/find-injected-vuln-*/task.toml`;
-  - `content/plugins/superpowers/ATTRIBUTIONS.md:3`.
+  - the 10 `catalog/core/eval_tasks/find-injected-vuln-*/task.toml`;
+  - `catalog/plugins/superpowers/ATTRIBUTIONS.md:3`.
 - Modify tests:
-  - `tests/_content.py`: repoint to `REPO_ROOT / "content" / ...`. `plugin_root`
+  - `tests/_catalog.py`: repoint to `REPO_ROOT / "catalog" / ...`. `plugin_root`
     and `plugin_files_root` both become `PLUGINS_ROOT / name`.
   - `tests/packs/superpowers_expectations.py:139-141, 202-224`.
   - `tests/packs/python_design/test_pack.py:43-44, 112`.
@@ -354,11 +360,11 @@ together.
 - Create tests: `tests/unit/test_sources_filesystem_bundled.py`
 
 **Interfaces:**
-- Consumes: `bundled_content.is_bundled_layer`, `bundled_layer_root`, and
-  `BundledContentMissingError` (Task 3).
+- Consumes: `catalog.is_bundled_layer`, `catalog_layer_root`, and
+  `CatalogMissingError` (Task 3).
 - Produces:
   - `_resource_subdir(package: str, subdir: str) -> Path | None` (same
-    signature). For bundled layers it may raise `BundledContentMissingError`.
+    signature). For bundled layers it may raise `CatalogMissingError`.
   - `superpowers_expectations`: `PLUGIN_ROOT = plugin_files_root("superpowers")`,
     `SKILLS_ROOT = PLUGIN_ROOT / "skills"`. `RESOURCES_ROOT` is deleted.
     `resource_files()` is scoped to `SKILLS_ROOT`, and `pack_files()` scans
@@ -373,15 +379,15 @@ together.
   - `test_pack_names_resolve_to_content_plugins`: with
     `overlay_packages=["coding_agent_playbook.packs.superpowers"]`,
     `list_skills()` holds 15 skills attributed to that name, with `scripts_dir`
-    under `content/plugins/superpowers/skills`.
+    under `catalog/plugins/superpowers/skills`.
   - `test_two_portion_namespace_overlay_still_resolves`. Make `nsov` a
     namespace package across two `tmp_path` portions on `sys.path`: portion a
     has `nsov/resources/rules/r.md` and portion b has
     `nsov/resources/skills/s1/SKILL.md`. Both `_resource_subdir("nsov","rules")`
     and `("nsov","skills")` resolve. Use `monkeypatch.syspath_prepend`.
   - `test_plugin_with_eval_tasks_and_prompts` (Review Focus 2). Monkeypatch
-    `bundled_content._PACKAGE_DIR` to `tmp/src/coding_agent_playbook`. Build a
-    tmp `content/` with `core/rules/`, `plugins/demo/eval_tasks/t1/task.toml`
+    `catalog._PACKAGE_DIR` to `tmp/src/coding_agent_playbook`. Build a
+    tmp `catalog/` with `core/rules/`, `plugins/demo/eval_tasks/t1/task.toml`
     (copy a minimal valid shipped task.toml) and `plugins/demo/prompts/<its prompt>.md`.
     Expect `list_eval_tasks()` with `overlay_packages=["coding_agent_playbook.plugins.demo"]`
     to contain `t1` with that `source_package`. Expect `_infer_prompts_dir`
@@ -400,18 +406,18 @@ together.
   before and outside the `try`. The non-bundled body stays verbatim.
 - [ ] **Step 5: Implement the bundled branch in `_unusable_reason`.** If
   `is_bundled_layer(name)` and `name != ENGINE_PACKAGE`, return `None` when
-  `bundled_layer_root(name)` resolves, else `"no such bundled plugin"`. Bare
+  `catalog_layer_root(name)` resolves, else `"no such bundled plugin"`. Bare
   parent names still take the import path in this task.
 - [ ] **Step 6: Update `pyproject.toml`.** Make the spec's
   "Packaging and tooling" pyproject edits exactly:
-  - `"content" = "coding_agent_playbook/_content"` under
+  - `"catalog" = "coding_agent_playbook/_catalog"` under
     `[tool.hatch.build.targets.wheel.force-include]`;
-  - `extend-exclude = ["content/plugins/superpowers", "content/plugins/python_design/**/*.md"]`;
-  - `per-file-target-version = { "content/plugins/*/skills/*/scripts/*.py" = "py310" }`;
+  - `extend-exclude = ["catalog/plugins/superpowers", "catalog/plugins/python_design/**/*.md"]`;
+  - `per-file-target-version = { "catalog/plugins/*/skills/*/scripts/*.py" = "py310" }`;
   - delete the three mypy `exclude` patterns and their comment block; drop the
     key if it ends up empty.
 - [ ] **Step 7: Make the content path-text edits.** Then check that
-  `git diff -M --stat content/` shows only those 11 files with line changes.
+  `git diff -M --stat catalog/` shows only those 11 files with line changes.
 - [ ] **Step 8: Update the test roots listed above.** Then run
   `grep -rn "resources\" / \"skills\"\|/ \"resources\"" tests/packs tests/integration`.
   Expected: only third-party overlay fixtures remain.
@@ -419,7 +425,7 @@ together.
   - Engine rules, prompts and tasks are discovered (Task 1's guards).
   - `tests/packs/python_design/test_pack.py` runs mypy on the scripts at their
     new paths.
-- [ ] **Step 10:** Commit: `refactor: move bundled content to content/ and resolve it through bundled_content`.
+- [ ] **Step 10:** Commit: `refactor: move bundled content to catalog/ and resolve it through catalog`.
 
 ---
 
@@ -427,15 +433,15 @@ together.
 
 **Files:**
 - Delete: `src/coding_agent_playbook/packs/` (all three `__init__.py`)
-- Create: `content/plugins/superpowers/README.md` and
-  `content/plugins/python_design/README.md`. Each carries its deleted
+- Create: `catalog/plugins/superpowers/README.md` and
+  `catalog/plugins/python_design/README.md`. Each carries its deleted
   docstring's prose with paths reworded and the enable line
   `overlays_enabled = ["coding_agent_playbook.plugins.<n>"]`. No URLs. The
   superpowers one has no `superpowers:<skill>`; the python_design one does not
   name its source plugin.
 - Modify: `src/coding_agent_playbook/commands/_sync_preflight.py`:
   - drop `from coding_agent_playbook import packs`;
-  - `_ENGINE_PACKAGE` comes from `bundled_content`;
+  - `_ENGINE_PACKAGE` comes from `catalog`;
   - in `_unusable_reason`, `is_plugin_namespace` comes first;
   - `bundled_packs` → `bundled_plugins`; `_pack_hint` → `_plugin_hint`;
     `_looks_like_pack` → `_looks_like_plugin`;
@@ -460,10 +466,10 @@ together.
     `plugins/python_design/`; `README.md` replaces `__init__.py`)
 
 **Interfaces:**
-- Consumes: `bundled_content.bundled_plugins`, `is_plugin_namespace`,
+- Consumes: `catalog.bundled_plugins`, `is_plugin_namespace`,
   `ENGINE_PACKAGE`.
 - Produces: `_sync_preflight.bundled_plugins`, re-exported from
-  `bundled_content`. The `bundled_packs` name is removed.
+  `catalog`. The `bundled_packs` name is removed.
 - Produces: test constant `PLUGIN_NAME`, in
   `tests/plugins/superpowers_expectations.py`, with a sibling in `test_pack.py`.
 
@@ -500,7 +506,7 @@ together.
   `# alias regression: init checks the local list as written (SPEC v0.19)`.
 - [ ] **Step 4:** Run `grep -rn "coding_agent_playbook\.packs\|tests\.packs\|bundled_packs\|PACK_NAME" src tests`.
   Expected hits:
-  - `bundled_content.py` (`DEPRECATED_PACK_NAMESPACE`);
+  - `catalog.py` (`DEPRECATED_PACK_NAMESPACE`);
   - `test_init.py:410`;
   - deliberate alias tests only.
 - [ ] **Step 5:** Run the full gate. Expected: green.
@@ -524,7 +530,7 @@ together.
   - `tests/unit/test_committed_config.py` (refresh pin).
 
 **Interfaces:**
-- Consumes: `bundled_content.canonical_overlay_list`, `canonical_overlay_name`.
+- Consumes: `catalog.canonical_overlay_list`, `canonical_overlay_name`.
 - Produces: `Config.deprecated_overlay_names: tuple[str, ...]`, declared as
   `field(default=(), init=False, compare=False, repr=False)`.
 - Produces: `orchestrator._warn_deprecated_overlays(config: Config, state: FileSystemStateSource) -> None`.
@@ -596,30 +602,30 @@ together.
 ### Task 9: Fail loudly when bundled content is missing
 
 **Files:**
-- Modify: `src/coding_agent_playbook/cli.py:265-270` (catch `BundledContentMissingError`; extend the docstring)
-- Modify: `src/coding_agent_playbook/commands/init.py:370-388` (call `bundled_content_root()` next to `_refuse_unusable_overlays`, before `_plan_config`)
+- Modify: `src/coding_agent_playbook/cli.py:265-270` (catch `CatalogMissingError`; extend the docstring)
+- Modify: `src/coding_agent_playbook/commands/init.py:370-388` (call `catalog_root()` next to `_refuse_unusable_overlays`, before `_plan_config`)
 - Test: `tests/unit/test_cli.py`, `tests/cli/test_init.py`
 
 **Interfaces:**
-- Consumes: `BundledContentMissingError` and `bundled_content._PACKAGE_DIR`
+- Consumes: `CatalogMissingError` and `catalog._PACKAGE_DIR`
   (Task 3).
 
 - [ ] **Step 1: Write the failing tests.** Monkeypatch
-  `coding_agent_playbook.bundled_content._PACKAGE_DIR` to
+  `coding_agent_playbook.catalog._PACKAGE_DIR` to
   `tmp_path / "src" / "coding_agent_playbook"` (empty). Build a configured
   repo with `make_synthetic_repo` (`tests/conftest.py:141`).
-  - `test_sync_exits_2_when_bundled_content_missing`: `main(["sync", "--repo-root", repo])`
+  - `test_sync_exits_2_when_catalog_missing`: `main(["sync", "--repo-root", repo])`
     returns 2. stderr equals the spec's missing-content error line with the two
     tried paths.
-  - `test_eval_list_exits_2_when_bundled_content_missing`: the same for
+  - `test_eval_list_exits_2_when_catalog_missing`: the same for
     `["eval", "--list", "--repo-root", repo]`.
-  - `test_init_writes_nothing_when_bundled_content_missing`: on an empty repo,
+  - `test_init_writes_nothing_when_catalog_missing`: on an empty repo,
     `init --non-interactive --name x --kind python-library` returns 2, and the
     repo directory listing is unchanged.
 - [ ] **Step 2:** Run them. Expected: FAIL (silent zero artifacts, or a
   traceback).
 - [ ] **Step 3:** Implement.
-  - `cli.main` adds `except BundledContentMissingError as exc:` and prints
+  - `cli.main` adds `except CatalogMissingError as exc:` and prints
     exactly the spec string. Build the message from `exc.tried`.
   - In `init`, the call sits before `# Nothing is written above this line.`.
 - [ ] **Step 4:** Run the full gate. Expected: green.
@@ -630,12 +636,12 @@ together.
 ### Task 10: Repository guards and the wheel-smoke CI job
 
 **Files:**
-- Create: `tests/integration/test_content_layout.py`
+- Create: `tests/integration/test_catalog_layout.py`
 - Modify: `.github/workflows/ci.yml` (new `wheel-smoke` job)
 
 **Interfaces:** none new.
 
-- [ ] **Step 1: Write the tests** in `test_content_layout.py`:
+- [ ] **Step 1: Write the tests** in `test_catalog_layout.py`:
   - `test_no_tracked_file_matches_gitignore`. Run
     `git ls-files -ci --exclude-standard` with `cwd=REPO_ROOT` and a 30 s
     timeout. Skip when git is missing or `REPO_ROOT/.git` is absent. Assert
@@ -652,8 +658,8 @@ together.
     no files match `*.md`, `*.md.j2`, `task.toml` or `SKILL.md*`, except
     `templates/precommit/config.yaml.j2` (acceptance 2).
   - `test_editable_checkout_resolves_repo_content`: skip if
-    `(_PACKAGE_DIR / "_content").exists()`. Otherwise assert
-    `bundled_content_root() == REPO_ROOT / "content"`.
+    `(_PACKAGE_DIR / "_catalog").exists()`. Otherwise assert
+    `catalog_root() == REPO_ROOT / "catalog"`.
 - [ ] **Step 2:** Run them. Expected: PASS. These are guards over already-correct
   state. Prove each one bites by planting a violation locally (a non-identifier
   plugin dir, a link to `../../LICENSE`, a stray `.md` under `src/`), seeing it
@@ -662,7 +668,7 @@ together.
   Python 3.12, using pip only. Its steps are the spec's five numbered
   `wheel-smoke` steps in order.
   - Step 2 of the job is a short inline `python -c` that compares the wheel's
-    `coding_agent_playbook/_content/` names with `git ls-files content`.
+    `coding_agent_playbook/_catalog/` names with `git ls-files catalog`.
   - Run every `playbook` call with `</dev/null` and a `timeout 120` prefix.
 - [ ] **Step 4:** Validate the job locally by running the same shell lines in a
   scratch venv: `uv venv`, then `uv pip install pip build`. Expected: all
@@ -692,10 +698,10 @@ together.
   - paths at :310 and :342;
   - the preflight passage at :283-294;
   - a new "Editing content" section;
-  - a Mermaid overview of `content/` vs `src/`.
+  - a Mermaid overview of `catalog/` vs `src/`.
 - Modify: `MIGRATION.md` (new v0.19 section, with every bullet from the spec's
   Docs list)
-- Create: `content/README.md`. Cover where each kind lives, how to add a rule,
+- Create: `catalog/README.md`. Cover where each kind lives, how to add a rule,
   prompt, eval task, skill or bundled plugin (with the leaf rule), and the four
   gate commands. Any python code block in it must pass `ruff format --check`.
 - Modify: remaining docstrings that mention `resources/` or packs for the
@@ -708,14 +714,14 @@ together.
 - [ ] **Step 1:** Update the version pins in `test_docs_check_rubric_refactor.py`.
   Run it. Expected: FAIL.
 - [ ] **Step 2:** Edit SPEC.md. Run the pin test. Expected: PASS.
-- [ ] **Step 3:** Edit README.md and MIGRATION.md, create `content/README.md`,
+- [ ] **Step 3:** Edit README.md and MIGRATION.md, create `catalog/README.md`,
   and sweep the docstrings.
 - [ ] **Step 4:** Run `grep -n "src/coding_agent_playbook/resources\|packs/<\|coding_agent_playbook.packs" README.md SPEC.md MIGRATION.md`.
   Expected: hits only in the changelog history, the alias text and MIGRATION's
   rename section.
 - [ ] **Step 5:** Run the full gate. Expected: green (`ruff format --check .`
   covers the new markdown).
-- [ ] **Step 6:** Commit: `docs: SPEC v0.19, README, MIGRATION and content/README for content/ and bundled plugins`.
+- [ ] **Step 6:** Commit: `docs: SPEC v0.19, README, MIGRATION and catalog/README for catalog/ and bundled plugins`.
 
 ---
 
@@ -750,11 +756,11 @@ the task that owns it, with a regression test.
      and the masked `rendered_at` line.
 
   Expected: no other differences.
-- [ ] **Step 4: Acceptance 5.** In a scratch copy of the repo, `mkdir -p content/plugins/demo/skills/hello`
+- [ ] **Step 4: Acceptance 5.** In a scratch copy of the repo, `mkdir -p catalog/plugins/demo/skills/hello`
   and add a minimal `SKILL.md`. Expected:
   `playbook init --non-interactive --name x --kind python-library --overlays coding_agent_playbook.plugins.demo`
   writes `.claude/skills/hello/SKILL.md`.
-- [ ] **Step 5: Acceptance 6.** Run `git log --follow --oneline content/core/rules/always/10-python-house-style.md`.
+- [ ] **Step 5: Acceptance 6.** Run `git log --follow --oneline catalog/core/rules/always/10-python-house-style.md`.
   Expected: it shows commits from before this branch.
 - [ ] **Step 6:** Dispatch the whole-branch review (`superpowers:requesting-code-review`)
   against the spec and this plan. Fix confirmed findings in their owning

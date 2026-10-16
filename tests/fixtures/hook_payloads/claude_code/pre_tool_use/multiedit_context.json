@@ -1,0 +1,28 @@
+{
+  "_fixture": {
+    "harness_version": "2.1.296",
+    "source": "docs"
+  },
+  "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+  "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+  "cwd": "/playbook-fixture/proj",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "prompt_id": "pr_05",
+  "tool_name": "MultiEdit",
+  "tool_input": {
+    "file_path": "/playbook-fixture/proj/src/util.py",
+    "edits": [
+      {
+        "old_string": "a",
+        "new_string": "import os"
+      },
+      {
+        "old_string": "b",
+        "new_string": "def f():\n    return 1",
+        "replace_all": true
+      }
+    ]
+  },
+  "tool_use_id": "toolu_01Multi"
+}

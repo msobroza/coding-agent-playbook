@@ -4,7 +4,8 @@ Builds a synthetic consumer repo, runs sync programmatically, and asserts
 adapter outputs landed in the expected places plus the lockfile carries
 the right entries — schema 2, with provenance on every entry
 (specs/prK-lifecycle-hooks.md §P P4). ``--check`` orphans live in
-``test_sync_check.py``; the Jinja sandbox in ``test_sync_sandbox.py``.
+``test_sync_check.py``; the Jinja sandbox in ``test_sync_sandbox.py``; the
+validate gate (§P P8) in ``test_sync_validate_gate.py``.
 """
 
 from __future__ import annotations
@@ -42,7 +43,9 @@ def test_sync_writes_continue_rules_and_agents_md(tmp_path, make_synthetic_repo)
     repo = make_synthetic_repo(
         tmp_path,
         rules=[("style-guide", "Use spaces, not tabs.\n")],
-        prompts=[("refactor", {"slash": "refactor", "body": "Refactor the code.\n"})],
+        # Not an engine prompt id: overriding one (``refactor``) without its
+        # eval_tasks fails validate, so sync would refuse to write (prK §P P8).
+        prompts=[("tidy-up", {"slash": "tidy-up", "body": "Tidy up the code.\n"})],
     )
     rc = _sync.run(_ns(repo))
     assert rc == 0
@@ -53,13 +56,13 @@ def test_sync_writes_continue_rules_and_agents_md(tmp_path, make_synthetic_repo)
     agents_md = repo / "AGENTS.md"
     assert agents_md.is_file()
     # Continue prompt landed under .continue/prompts.
-    continue_prompt = repo / ".continue" / "prompts" / "refactor.md"
+    continue_prompt = repo / ".continue" / "prompts" / "tidy-up.md"
     assert continue_prompt.is_file()
     # claude code prompt slash command
-    claude_command = repo / ".claude" / "commands" / "refactor.md"
+    claude_command = repo / ".claude" / "commands" / "tidy-up.md"
     assert claude_command.is_file()
     # opencode prompt slash command
-    opencode_command = repo / ".opencode" / "command" / "refactor.md"
+    opencode_command = repo / ".opencode" / "command" / "tidy-up.md"
     assert opencode_command.is_file()
 
 
@@ -259,7 +262,7 @@ def test_run_sync_returns_frozen_sync_result(
     tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory
 ) -> None:
     """``_run_sync`` returns one frozen ``SyncResult``; ``managed`` is empty
-    until hook-capable adapters contribute scoped entries."""
+    without hooks (only hook-capable adapters contribute scoped entries)."""
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
     ctx = SyncContext.from_repo(repo)
     result = _sync._run_sync(ctx, _sync._leftover_policy(ctx, FakeGitClient(), None))
@@ -527,21 +530,24 @@ def test_sync_shipped_review_command_inlines_each_rule_once(tmp_path, make_synth
 
 def test_sync_migrates_legacy_opencode_commands_to_frontmatter_first(tmp_path, make_synthetic_repo):
     """Commands written with the sentinel on line 1 (older engines) are rewritten
-    in place with the envelope first, and a stale legacy command is still cleaned."""
+    in place with the envelope first, and a stale legacy command is still cleaned.
+
+    A new prompt id: overriding the engine's ``refactor`` without its ``eval_tasks``
+    fails the validate gate ``playbook sync`` runs first (prK §P P8b)."""
     repo = make_synthetic_repo(
-        tmp_path, prompts=[("refactor", {"slash": "refactor", "body": "Refactor the code.\n"})]
+        tmp_path, prompts=[("tidy-up", {"slash": "tidy-up", "body": "Tidy the code.\n"})]
     )
     commands = repo / ".opencode" / "command"
     commands.mkdir(parents=True)
     legacy = "<!-- {s} -->\n---\ndescription: old\n---\nold body\n"
     from coding_agent_playbook.renderer import SENTINEL
 
-    (commands / "refactor.md").write_text(legacy.format(s=SENTINEL), encoding="utf-8")
+    (commands / "tidy-up.md").write_text(legacy.format(s=SENTINEL), encoding="utf-8")
     (commands / "gone.md").write_text(legacy.format(s=SENTINEL), encoding="utf-8")
 
     assert _sync.run(_ns(repo)) == 0
 
-    refactor = (commands / "refactor.md").read_text(encoding="utf-8")
-    assert refactor.startswith("---\ndescription:")
-    assert refactor.count(SENTINEL) == 1
+    tidy_up = (commands / "tidy-up.md").read_text(encoding="utf-8")
+    assert tidy_up.startswith("---\ndescription:")
+    assert tidy_up.count(SENTINEL) == 1
     assert not (commands / "gone.md").exists()

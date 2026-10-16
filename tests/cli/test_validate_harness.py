@@ -27,6 +27,7 @@ from coding_agent_playbook.types import (
     RuleFrontmatter,
     Skill,
 )
+from tests.hook_samples import resolved_from_disk
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -310,3 +311,21 @@ def test_nonexistent_path_exits_two(tmp_path, capsys):
     rc = _validate_harness.run(_ns(tmp_path / "does-not-exist"))
     assert rc == 2
     assert capsys.readouterr().err
+
+
+def test_emitted_tree_with_hooks_has_zero_findings(tmp_path, capsys):
+    """The hook sidecar is opaque and the guardrail advisory a described content file (§C.6)."""
+    repo = tmp_path / "emitted"
+    adapter = AgentHarnessAdapter()
+    adapter.write_hook(resolved_from_disk(tmp_path / "src"), repo)
+    adapter.write_hook(resolved_from_disk(tmp_path / "src", "guard-y", body=""), repo)
+    adapter.finalize(repo)
+    assert (repo / ".playbook" / "hooks" / "guard-x" / "scripts" / "check.sh").is_file()
+    assert (repo / "rules" / "30-guardrail-guard-x.md").is_file()
+
+    rc = _validate_harness.run(_ns(repo, strict=True))
+
+    captured = capsys.readouterr()
+    assert rc == 0, captured.err
+    assert "warning" not in captured.err.lower()
+    assert "error" not in captured.err.lower()

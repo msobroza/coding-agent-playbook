@@ -1,10 +1,10 @@
 """Tests for the shared TOML writer primitives (``coding_agent_playbook._toml``).
 
-These pin the behaviour the two call sites (``sources/filesystem.py`` flat
-Config/Lockfile path and ``harness/manifest.py`` inline-table path) share, so a
-future change to the escape ladder, ``bool``-before-``int`` ordering, key
-quoting, or the ``TypeError`` semantics breaks here rather than silently in a
-round-trip elsewhere.
+These pin the behaviour the two call sites (the ``sources/filesystem.py``
+Config/Lockfile writer and ``harness/manifest.py``) share, so a future change to
+the escape ladder, ``bool``-before-``int`` ordering, key quoting, the float and
+date/time forms (P6), or the ``TypeError`` semantics breaks here rather than
+silently in a round-trip elsewhere.
 """
 
 from __future__ import annotations
@@ -139,6 +139,13 @@ def test_format_scalar_date_and_time(value: dt.date | dt.time, literal: str) -> 
     assert _toml.format_scalar(value) == literal
     # Strict: ``==`` would accept the right instant at the wrong offset.
     assert_toml_identical(tomllib.loads(f"x = {literal}")["x"], value)
+
+
+def test_format_scalar_datetime_checked_before_date() -> None:
+    """``datetime`` subclasses ``date``: it must keep its time part (P6)."""
+    value = dt.datetime(2026, 10, 14, 9, 0)
+    assert _toml.format_scalar(value) == "2026-10-14T09:00:00"
+    assert _toml.format_scalar([value.date(), value]) == "[2026-10-14, 2026-10-14T09:00:00]"
 
 
 def test_format_scalar_rejects_a_time_with_an_offset() -> None:
@@ -289,12 +296,12 @@ def test_format_scalar_inline_table_output_is_valid_toml() -> None:
     assert parsed["x"] == {"note": 'a "quoted" value', "n": 3}
 
 
-# --- dict rejection (flat Config/Lockfile path) ----------------------------
+# --- dict rejection (inline tables off, the default) -----------------------
 
 
 def test_format_scalar_dict_rejected_when_inline_tables_disabled() -> None:
-    """The flat Config/Lockfile path must keep rejecting dicts exactly as the
-    original ``_format_toml_scalar`` did."""
+    """Inline tables are opt-in: without ``allow_inline_table`` a dict is
+    refused exactly as the original ``_format_toml_scalar`` did."""
     with pytest.raises(TypeError, match=r"does not support value of type dict"):
         _toml.format_scalar({"a": 1})
 

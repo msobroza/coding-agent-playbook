@@ -9,9 +9,12 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.adapters._settings_drift import settings_document, stray_launcher_edited
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands import check as _check
 from coding_agent_playbook.commands import sync as _sync
+from coding_agent_playbook.lockfile import drift_entries
+from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from tests.plugins.superpowers_expectations import PLUGIN_NAME
 from tests.toml_equality import assert_toml_identical
 
@@ -73,6 +76,32 @@ def test_check_artifact_section_marks_applies_if(tmp_path, make_synthetic_repo, 
     assert "some-framework-that-isnt-installed" in out
 
 
+def test_skip_reason_names_has_dev_dependency(tmp_path, make_synthetic_repo, capsys):
+    """prK §F.1.2: a rule gated on a missing dev dependency says which one."""
+    repo = make_synthetic_repo(tmp_path)
+    rules_dir = repo / "playbook" / "rules"
+    rules_dir.mkdir(parents=True, exist_ok=True)
+    (rules_dir / "coverage.md").write_text(
+        "---\n"
+        "id: coverage-rule\n"
+        "name: Coverage Rule\n"
+        "description: Only where pytest-cov is a dev dependency\n"
+        "scope: scoped\n"
+        "priority: 50\n"
+        "applies_if:\n"
+        "  has_dev_dependency:\n"
+        "    - pytest-cov\n"
+        "---\n"
+        "Body\n",
+        encoding="utf-8",
+    )
+
+    assert _check.run(_ns(repo)) == 0
+
+    out = capsys.readouterr().out
+    assert "(skipped: applies_if has_dev_dependency=['pytest-cov'])" in out
+
+
 def test_check_drift_section_reports_drift(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
     sync_args = argparse.Namespace(repo_root=str(repo), check=False)
@@ -85,6 +114,26 @@ def test_check_drift_section_reports_drift(tmp_path, make_synthetic_repo, capsys
     out = capsys.readouterr().out
     assert "hash mismatch" in out
     assert "AGENTS.md" in out
+
+
+def test_check_drift_section_unchanged_after_extraction(tmp_path, make_synthetic_repo, capsys):
+    """The Drift section is exactly ``lockfile.drift_entries``, the drift stage's definition."""
+    repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
+    _sync.run(argparse.Namespace(repo_root=str(repo), check=False))
+    (repo / "AGENTS.md").write_text("MUTATED\n", encoding="utf-8")
+    (repo / ".continue" / "rules" / "50-x.md").unlink()
+    capsys.readouterr()
+
+    _check.run(_ns(repo))
+
+    lines = capsys.readouterr().out.split("=== Drift ===\n", 1)[1].splitlines()
+    lockfile = FileSystemStateSource(repo_root=repo).load_lockfile()
+    assert lockfile is not None
+    shared = drift_entries(
+        lockfile, repo, parse_scoped=settings_document, edited=stray_launcher_edited
+    )
+    assert lines == [f"  {item.line()}" for item in shared]
+    assert sorted(lines) == ["  hash mismatch: AGENTS.md", "  missing: .continue/rules/50-x.md"]
 
 
 def test_check_refresh_updates_detector_cache(tmp_path, make_synthetic_repo):
@@ -103,6 +152,49 @@ def test_check_refresh_updates_detector_cache(tmp_path, make_synthetic_repo):
     assert "fastapi" in (cache.get("dependencies") or {}) or "fastapi" in (
         cache.get("frameworks") or {}
     )
+
+
+_COMMITTED_WITH_TABLES = """\
+schema_version = 1
+adapters_enabled = ["continue"]
+
+[project]
+name = "synthetic"
+kind = "python-library"
+
+[engine]
+version = "0.1.0a0"
+
+[user_choices]
+docstring_style = "numpy"
+
+[hooks.some-hook]
+enabled = false
+timeout = 2.5
+
+[links]
+allowed_domains = ["agentharnesses.io"]
+
+[metrics.regression.coverage]
+max_worsening = 0.5
+
+[metrics.weights]
+x = 1.0
+"""
+
+
+def test_refresh_preserves_tables_and_never_persists_local_overrides(tmp_path, make_synthetic_repo):
+    repo = make_synthetic_repo(tmp_path, config_text=_COMMITTED_WITH_TABLES)
+    (repo / ".coding-agent-playbook.local.toml").write_text(
+        '[user_choices]\npersonal = "mine"\n\n[metrics]\nmode = "absolute"\n'
+    )
+    assert _check.run(_ns(repo, refresh=True)) == 0
+    with (repo / ".coding-agent-playbook.toml").open("rb") as f:
+        data = tomllib.load(f)
+    committed = tomllib.loads(_COMMITTED_WITH_TABLES)
+    for key in ("hooks", "links", "metrics", "user_choices"):
+        assert data[key] == committed[key], key
+    assert "python_version" in data["detector_cache"]
 
 
 # --- --refresh rewrites [detector_cache] in the committed config, nothing else (SPEC §7.2)

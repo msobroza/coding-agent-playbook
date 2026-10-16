@@ -1,0 +1,60 @@
+{
+  "parsed": {
+    "name": "post_tool_use",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "acceptEdits",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PostToolUse",
+    "tool": {
+      "name": "Edit",
+      "native_name": "Edit",
+      "tool_class": "edit",
+      "tool_classes": [
+        "edit"
+      ],
+      "use_id": "toolu_01RdcTorch",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/pyproject.toml",
+          "repo_rel": "pyproject.toml",
+          "key": "pyproject.toml"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/pyproject.toml",
+          "repo_rel": "pyproject.toml",
+          "key": "pyproject.toml"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/pyproject.toml",
+          "new_string",
+          "dependencies = [\"fastapi>=0.110\", \"torch>=2\"]"
+        ]
+      ],
+      "response": {
+        "ok": true,
+        "is_interrupt": false
+      }
+    }
+  },
+  "result": {
+    "decision": "context",
+    "context": [
+      "Detector inputs changed; now applicable but not synced yet: prompt \"security-review\" (source \"coding_agent_playbook\"), rule \"ml-serialization-security\" (source \"coding_agent_playbook\").\nThen ask the user to run playbook validate && playbook sync."
+    ]
+  },
+  "wire": {
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Detector inputs changed; now applicable but not synced yet: prompt \\\"security-review\\\" (source \\\"coding_agent_playbook\\\"), rule \\\"ml-serialization-security\\\" (source \\\"coding_agent_playbook\\\").\\nThen ask the user to run playbook validate && playbook sync.\"}}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

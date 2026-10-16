@@ -18,7 +18,8 @@ byte-for-byte from the original call sites.
 
 Floats and dates/times are rendered too (v0.18): ``playbook init`` and
 ``playbook check --refresh`` write the committed entries ``Config`` does not
-manage back verbatim, and those may hold any value :mod:`tomllib` parses — inline
+manage back verbatim (``Config.extra_tables``: ``[hooks]``, ``[guardrails]``,
+``[metrics]``…), and those may hold any value :mod:`tomllib` parses — inline
 values nested to any depth (the walk is iterative, so it never hits Python's
 recursion limit), a NaN's sign, and integers too long for ``str`` (written in
 hex). Four latent writer bugs were fixed on the way. Two wrote TOML ``tomllib``

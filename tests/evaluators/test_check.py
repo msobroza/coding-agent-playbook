@@ -30,6 +30,7 @@ from coding_agent_playbook.evaluators.check import (
     NonRegressionCheck,
     ThresholdCheck,
 )
+from coding_agent_playbook.evaluators.checks.execution import CoverageCheck
 from coding_agent_playbook.evaluators.checks.files import (
     FileContainsCheck,
     FileExistsCheck,
@@ -229,6 +230,21 @@ def test_threshold_coverage_percent_levels() -> None:
     one = _details(check.grade(_ctx(), _ms([_cov("a.py", 70)])))[0]
     assert one.value == 70
     assert one.score == pytest.approx(0.7)
+
+
+@pytest.mark.parametrize(("raw", "level"), [(100.0, "ok"), (80.0, "ok"), (79.0, "warn")])
+def test_coverage_check_at_100_percent_is_ok(raw: float, level: str) -> None:
+    """prK §F.1.1 regression: the default bound is the 0-1 cutoff 0.8, not raw 80.0.
+
+    ``PercentNormalizer`` never exceeds 1.0, so the old ``warn=80.0`` warned
+    even at 100% coverage.
+    """
+    check = CoverageCheck()
+
+    detail = _details(check.grade(_ctx(), _ms([_cov("a.py", raw)])))[0]
+
+    assert detail.level == level
+    assert detail.bound == (0.8 if level == "warn" else None)
 
 
 def test_threshold_min_score_sugar_sets_fail() -> None:

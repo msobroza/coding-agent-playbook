@@ -1,0 +1,30 @@
+{
+  "parsed": {
+    "name": "subagent_stop",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "default",
+    "agent_id": "agent_42",
+    "agent_type": "code-reviewer",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "SubagentStop",
+    "stop": {
+      "stop_hook_active": false,
+      "last_assistant_message": "Review complete.",
+      "agent_transcript_path": "/playbook-fixture/home/.claude/projects/proj/agent_42.jsonl"
+    }
+  },
+  "result": {
+    "decision": "none"
+  },
+  "wire": {
+    "stdout": "",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

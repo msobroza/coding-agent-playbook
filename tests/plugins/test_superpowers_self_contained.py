@@ -34,7 +34,7 @@ from tests.plugins.superpowers_expectations import (
 if TYPE_CHECKING:
     from pathlib import Path
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 # Any `scheme://`, `mailto:` or bare `www.` form: the policy is "no URL", not "no http".
 _URL_RE = re.compile(rb"(?i)(?:\b[a-z][a-z0-9+.-]*://|\bmailto:|\bwww\.)")

@@ -44,7 +44,9 @@ def repo(tmp_path: Path, make_synthetic_repo: Callable[..., Path]) -> Path:
     built = make_synthetic_repo(
         tmp_path,
         rules=[("style-guide", "Use spaces.\n")],
-        prompts=[("refactor", {"slash": "refactor", "body": "Refactor.\n"})],
+        # Not an engine prompt id: overriding one (``refactor``) without its
+        # eval_tasks fails validate, so sync would refuse to write (prK §P P8).
+        prompts=[("tidy-up", {"slash": "tidy-up", "body": "Tidy up.\n"})],
     )
     _add_skill(built)
     return built
@@ -73,9 +75,9 @@ def test_write_mode_writes_managed_block_by_default(
     for entry in (
         "/AGENTS.md",
         "/.claude/CLAUDE.md",
-        "/.claude/commands/refactor.md",
+        "/.claude/commands/tidy-up.md",
         "/.continue/rules/50-style-guide.md",
-        "/.opencode/command/refactor.md",
+        "/.opencode/command/tidy-up.md",
         "/.coding-agent-playbook.lock",
         f"/.claude/skills/{_SKILL}/",
     ):

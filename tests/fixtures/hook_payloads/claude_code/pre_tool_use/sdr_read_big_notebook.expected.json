@@ -1,0 +1,43 @@
+{
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "turn_id": "pr_09",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "default",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "Read",
+      "native_name": "Read",
+      "tool_class": "read",
+      "tool_classes": [
+        "read"
+      ],
+      "use_id": "toolu_01K907",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/notebooks/big.ipynb",
+          "repo_rel": "notebooks/big.ipynb",
+          "key": "notebooks/big.ipynb"
+        }
+      ],
+      "write_paths": [],
+      "content": []
+    }
+  },
+  "result": {
+    "decision": "ask",
+    "reason": "\"notebooks/big.ipynb\" is over 5 MiB and was not parsed: its outputs may embed customer rows.\nRead it with outputs stripped, or confirm with the user."
+  },
+  "wire": {
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"\\\"notebooks/big.ipynb\\\" is over 5 MiB and was not parsed: its outputs may embed customer rows.\\nRead it with outputs stripped, or confirm with the user.\"}}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

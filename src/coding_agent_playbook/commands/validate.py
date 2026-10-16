@@ -6,6 +6,8 @@ Validates:
   :func:`coding_agent_playbook.detector.evaluate_predicate` and treats a
   ``ValueError`` raised for an unknown key as an error).
 - Prompts that call ``{{ rule("X") }}`` declare ``X`` in ``includes_rules:``.
+- Every prompt ``output_contract`` entry compiles as a Python regex (fail-closed,
+  like ``AnswerMatchesCheck``; specs/prK-hook-pack.md §E.2).
 - Rule templates never call ``{{ rule(...) }}`` (rules cannot include rules,
   SPEC invariants).
 - Eval-task back-references resolve both directions, via the canonical
@@ -13,10 +15,10 @@ Validates:
 - Each Jinja-templated artifact compiles cleanly.
 - Every markdown link in every artifact is self-contained (PR L): relative
   targets resolve inside the artifact's source layer, external links only
-  pass through the ``[links] allowed_domains`` allowlist.
+  pass through the ``[links] allowed_domains`` allowlist (``_validate_links``).
 - Every ``overlays_enabled`` entry is usable here: an overlay package imports
   without error and ships a ``resources/`` directory, and a bundled-plugin name
-  matches a ``content/plugins/<leaf>/`` directory — the same check ``playbook
+  matches a ``catalog/plugins/<leaf>/`` directory — the same check ``playbook
   sync`` refuses to run without (``_sync_preflight.unusable_overlays``), so a
   misspelled bundled plugin fails here too instead of validating the engine
   layer alone.
@@ -26,8 +28,16 @@ Validates:
   ``^[a-z0-9]+(-[a-z0-9]+)*$`` (1-64 chars), and it has a 1-1024 char
   ``description``. OpenCode silently drops a skill that fails these, so authors
   learn here instead.
+- Every hook honours the trust contract H1-H21 (specs/prK-lifecycle-hooks.md
+  §B.5, ``_validate_hooks``): a malformed ``HOOK.md`` is a ``FAIL`` line, not a
+  traceback (P8c); degraded cells and clamped timeouts are ``warning:`` lines.
 
-All errors aggregate before a single non-zero exit; success prints one line.
+All errors aggregate before a single non-zero exit; success prints one line,
+counting rules, prompts and hooks. :func:`collect_validation_findings` is the
+rule set; ``playbook sync`` runs it first (:func:`sync_gate_errors`) and
+refuses to write on any error (prK §P P8b). Without a consumer
+config, validate checks the engine, the checkout's ``src/*/resources/`` and
+``playbook/``, skipping the consumer-config checks (``_validate_context``).
 Skill files no sync will ever copy — a secret path, or a link leaving the
 skill's source dir (SPEC §10.8, §17.3) — are reported as ``warning:`` lines on
 stderr and never fail validation.
@@ -35,14 +45,10 @@ stderr and never fail validation.
 
 from __future__ import annotations
 
+import re
 import sys
-import tomllib
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-from jinja2 import StrictUndefined, TemplateSyntaxError
-from jinja2.sandbox import SandboxedEnvironment
 
 from coding_agent_playbook.adapters._skill_sources import refused_skill_files
 from coding_agent_playbook.adapters._skill_writer import (
@@ -51,21 +57,34 @@ from coding_agent_playbook.adapters._skill_writer import (
     skill_id_of,
 )
 from coding_agent_playbook.commands import _sync_preflight
-from coding_agent_playbook.config import parse_links_config
+from coding_agent_playbook.commands._validate_context import (
+    config_less_context,
+    config_less_notes,
+    has_consumer_config,
+)
+from coding_agent_playbook.commands._validate_frontmatter import (
+    check_lint_codes,
+    check_write_scope,
+)
+from coding_agent_playbook.commands._validate_hooks import check_hooks
+from coding_agent_playbook.commands._validate_links import check_markdown_links, load_links_config
+from coding_agent_playbook.commands._validation import (
+    RULE_CALL_RE,
+    ValidationError,
+    ValidationFindings,
+    jinja_syntax_error,
+    report_validation_errors,
+    report_validation_warnings,
+)
 from coding_agent_playbook.detector import evaluate_predicate
 from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
 )
 from coding_agent_playbook.evals.validator import validate_tasks
-from coding_agent_playbook.links import LinksConfig, classify_link, extract_markdown_links
+from coding_agent_playbook.links import LinksConfig
 from coding_agent_playbook.orchestrator import SyncContext
-from coding_agent_playbook.renderer import RULE_CALL_RE
-from coding_agent_playbook.sources.filesystem import (
-    FileSystemArtifactSource,
-    _iter_md_files,
-    _resource_subdir,
-)
+from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 
 if TYPE_CHECKING:
     import argparse
@@ -73,14 +92,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.detector import Facts
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.sources.base import ArtifactSource
     from coding_agent_playbook.types import Prompt, Rule, Skill
-
-
-@dataclass(frozen=True)
-class ValidationError:
-    path: str
-    message: str
 
 
 def _check_overlays_usable(overlays: Sequence[str]) -> list[ValidationError]:
@@ -153,6 +165,48 @@ def _check_prompt_rule_calls(prompts: list[Prompt]) -> list[ValidationError]:
     return errors
 
 
+_CONTRACT_SHAPE = (
+    "expected a list of Python regular expressions, e.g. "
+    "['(?im)^\\W*(approve|request changes)\\W*$']"
+)
+
+
+def _check_output_contracts(prompts: list[Prompt]) -> list[ValidationError]:
+    """One error per ``output_contract`` entry that is not a compilable regex.
+
+    Fail-closed like ``AnswerMatchesCheck``: a malformed pattern is an authoring
+    error caught here, never a Stop stage that silently matches nothing.
+    """
+    errors: list[ValidationError] = []
+    for prompt in prompts:
+        contract: object = prompt.frontmatter.output_contract
+        where = str(prompt.source_path or prompt.frontmatter.id)
+        if not isinstance(contract, list):
+            errors.append(
+                ValidationError(
+                    path=where, message=f"output_contract {contract!r}: {_CONTRACT_SHAPE}"
+                )
+            )
+            continue
+        errors.extend(
+            ValidationError(path=where, message=f"output_contract pattern {pattern!r}: {problem}")
+            for pattern in contract
+            if (problem := _regex_problem(pattern)) is not None
+        )
+    return errors
+
+
+def _regex_problem(pattern: object) -> str | None:
+    """Why ``pattern`` is no usable contract regex, else ``None``."""
+    if not isinstance(pattern, str) or not pattern:
+        return _CONTRACT_SHAPE
+    try:
+        re.compile(pattern)
+    except re.error as exc:
+        return f"is not a valid Python regular expression ({exc}); {_CONTRACT_SHAPE}"
+    return None
+
+
 def _check_rule_bodies_do_not_include_rules(rules: list[Rule]) -> list[ValidationError]:
     errors: list[ValidationError] = []
     for rule in rules:
@@ -167,35 +221,17 @@ def _check_rule_bodies_do_not_include_rules(rules: list[Rule]) -> list[Validatio
 
 
 def _check_jinja_compiles(rules: list[Rule], prompts: list[Prompt]) -> list[ValidationError]:
-    # Syntax-only parse — no rule_registry/no facts needed. Sandboxed like the
-    # renderer's environment so no Jinja construction site is unsandboxed (prK §P1).
-    env = SandboxedEnvironment(autoescape=False, undefined=StrictUndefined)
-    errors: list[ValidationError] = []
-    for rule in rules:
-        if not rule.is_templated:
-            continue
-        try:
-            env.parse(rule.template_body)
-        except TemplateSyntaxError as exc:
-            errors.append(
-                ValidationError(
-                    path=str(rule.source_path or rule.frontmatter.id),
-                    message=f"Jinja syntax error: {exc.message}",
-                )
-            )
-    for prompt in prompts:
-        if not prompt.is_templated:
-            continue
-        try:
-            env.parse(prompt.template_body)
-        except TemplateSyntaxError as exc:
-            errors.append(
-                ValidationError(
-                    path=str(prompt.source_path or prompt.frontmatter.id),
-                    message=f"Jinja syntax error: {exc.message}",
-                )
-            )
-    return errors
+    """One error per templated rule or prompt whose body does not parse."""
+    artifacts: list[Rule | Prompt] = [*rules, *prompts]
+    return [
+        ValidationError(
+            path=str(artifact.source_path or artifact.frontmatter.id),
+            message=f"Jinja syntax error: {problem}",
+        )
+        for artifact in artifacts
+        if artifact.is_templated
+        and (problem := jinja_syntax_error(artifact.template_body)) is not None
+    ]
 
 
 def _load_eval_tasks_for_validation(
@@ -215,44 +251,24 @@ def _load_eval_tasks_for_validation(
     and accept that those sources cannot surface per-file loader errors here —
     that's their responsibility, not ours.
     """
-    tasks: list[EvalTask] = []
-    errors: list[ValidationError] = []
-    repo_root = ctx.repo_root
     artifact_source = ctx.artifact_source
-    # Reach for the source's package list via its public read-only properties.
-    # Non-filesystem sources skip the per-package loader-error aggregation and
-    # delegate to ``list_eval_tasks()`` instead, so the validator still sees
-    # the task set even when the source isn't filesystem-backed.
     if not isinstance(artifact_source, FileSystemArtifactSource):
-        return list(artifact_source.list_eval_tasks()), errors
-    engine_package = artifact_source.engine_package
-    overlay_packages = list(artifact_source.overlay_packages)
-    for package in (engine_package, *overlay_packages):
-        root = _resource_subdir(package, "eval_tasks")
-        if root is None:
-            continue
-        for task_dir in discover_eval_task_dirs(root):
-            try:
-                tasks.append(load_eval_task_from_dir(task_dir, source_package=package))
-            except (FileNotFoundError, ValueError) as exc:
-                errors.append(
-                    ValidationError(
-                        path=str(task_dir / "task.toml"),
-                        message=str(exc),
-                    )
-                )
-    repo_local = repo_root / "playbook" / "eval_tasks"
-    for task_dir in discover_eval_task_dirs(repo_local):
-        try:
-            tasks.append(load_eval_task_from_dir(task_dir, source_package="<repo-local>"))
-        except (FileNotFoundError, ValueError) as exc:
-            errors.append(
-                ValidationError(
-                    path=str(task_dir / "task.toml"),
-                    message=str(exc),
-                )
-            )
-    return tasks, errors
+        return list(artifact_source.list_eval_tasks()), []
+    loaded = [
+        _load_eval_task(task_dir, label)
+        for label, root in artifact_source.layer_roots("eval_tasks")
+        for task_dir in discover_eval_task_dirs(root)
+    ]
+    tasks = [item for item in loaded if not isinstance(item, ValidationError)]
+    return tasks, [item for item in loaded if isinstance(item, ValidationError)]
+
+
+def _load_eval_task(task_dir: Path, source_package: str) -> EvalTask | ValidationError:
+    """Load one ``task.toml``, or return its loader failure as a finding."""
+    try:
+        return load_eval_task_from_dir(task_dir, source_package=source_package)
+    except (FileNotFoundError, ValueError) as exc:
+        return ValidationError(path=str(task_dir / "task.toml"), message=str(exc))
 
 
 def _check_eval_tasks(ctx: SyncContext) -> list[ValidationError]:
@@ -268,145 +284,6 @@ def _check_eval_tasks(ctx: SyncContext) -> list[ValidationError]:
         *load_errors,
         *[ValidationError(path=str(e.path), message=e.message) for e in cross_errors],
     ]
-
-
-# Artifact kinds whose markdown bodies (and, for skills, references/) are
-# link-checked. Eval-task setup/ trees are task *inputs*, not rendered
-# artifacts, so they stay out of scope (specs/prL-markdown-links.md).
-_LINK_CHECKED_SUBDIRS = ("rules", "prompts", "skills")
-
-_CONFIG_FILENAME = ".coding-agent-playbook.toml"
-
-
-def _load_links_config(repo_root: Path) -> tuple[LinksConfig, list[ValidationError]]:
-    """Parse the ``[links]`` table of ``.coding-agent-playbook.toml``.
-
-    A malformed table degrades to the strict default plus one
-    :class:`ValidationError` — the rest of validation still runs.
-    """
-    config_path = repo_root / _CONFIG_FILENAME
-    if not config_path.is_file():
-        return LinksConfig(), []
-    try:
-        with config_path.open("rb") as handle:
-            data = tomllib.load(handle)
-        return parse_links_config(data.get("links", {})), []
-    except (tomllib.TOMLDecodeError, ValueError) as exc:
-        return LinksConfig(), [ValidationError(path=str(config_path), message=f"[links]: {exc}")]
-
-
-def _scan_markdown_text(
-    text: str,
-    *,
-    path: str,
-    base_dir: Path | None,
-    root_dir: Path | None,
-    links_config: LinksConfig,
-) -> list[ValidationError]:
-    return [
-        ValidationError(
-            path=path,
-            message=f"markdown link {link.target!r} (line {link.line}): {verdict}",
-        )
-        for link in extract_markdown_links(text)
-        if (
-            verdict := classify_link(
-                link.target,
-                base_dir=base_dir,
-                root_dir=root_dir,
-                allowed_domains=links_config.allowed_domains,
-            )
-        )
-        is not None
-    ]
-
-
-def _scan_markdown_file(
-    md: Path, *, root_dir: Path, links_config: LinksConfig
-) -> list[ValidationError]:
-    return _scan_markdown_text(
-        md.read_text(encoding="utf-8"),
-        path=str(md),
-        base_dir=md.parent,
-        root_dir=root_dir,
-        links_config=links_config,
-    )
-
-
-def _check_markdown_links(
-    artifact_source: ArtifactSource,
-    repo_root: Path,
-    links_config: LinksConfig,
-) -> list[ValidationError]:
-    """Every markdown link in every artifact must be self-contained (PR L).
-
-    Filesystem sources are walked per package — the same pattern as
-    :func:`_load_eval_tasks_for_validation` — because skill ``references/``
-    files are not carried as paths on the canonical :class:`Skill` type. The
-    walk covers rules, prompts, and skills across the engine, each overlay
-    package or bundled plugin, and repo-local ``playbook/``; the containment
-    root is the layer's root — ``content/core/`` for the engine,
-    ``content/plugins/<name>/`` for a bundled plugin, an overlay package's
-    ``resources/``, or ``playbook/`` — so links may cross artifact kinds within
-    their layer but never leave the shipped bundle.
-
-    Non-filesystem sources have no on-disk layout to resolve relative targets
-    against, so only the external-link policy applies to their bodies.
-    """
-    errors: list[ValidationError] = []
-    if not isinstance(artifact_source, FileSystemArtifactSource):
-        for rule in artifact_source.list_rules():
-            errors.extend(
-                _scan_markdown_text(
-                    rule.template_body,
-                    path=str(rule.source_path or rule.frontmatter.id),
-                    base_dir=None,
-                    root_dir=None,
-                    links_config=links_config,
-                )
-            )
-        for prompt in artifact_source.list_prompts():
-            errors.extend(
-                _scan_markdown_text(
-                    prompt.template_body,
-                    path=str(prompt.source_path or prompt.frontmatter.id),
-                    base_dir=None,
-                    root_dir=None,
-                    links_config=links_config,
-                )
-            )
-        for skill in artifact_source.list_skills():
-            errors.extend(
-                _scan_markdown_text(
-                    skill.body,
-                    path=str(skill.frontmatter.get("name", "skill")),
-                    base_dir=None,
-                    root_dir=None,
-                    links_config=links_config,
-                )
-            )
-        return errors
-
-    packages = (artifact_source.engine_package, *artifact_source.overlay_packages)
-    for package in packages:
-        for subdir in _LINK_CHECKED_SUBDIRS:
-            root = _resource_subdir(package, subdir)
-            if root is None:
-                continue
-            for md in _iter_md_files(root):
-                errors.extend(
-                    _scan_markdown_file(md, root_dir=root.parent, links_config=links_config)
-                )
-    repo_local_root = repo_root / "playbook"
-    for subdir in _LINK_CHECKED_SUBDIRS:
-        subdir_path = repo_local_root / subdir
-        if not subdir_path.is_dir():
-            continue
-        for md in _iter_md_files(subdir_path):
-            errors.extend(
-                _scan_markdown_file(md, root_dir=repo_local_root, links_config=links_config)
-            )
-    return errors
 
 
 def _check_agent_skills(resolved: list[Skill], loaded: list[Skill]) -> list[ValidationError]:
@@ -457,27 +334,107 @@ def _warn_refused_skill_files(skills: list[Skill]) -> list[str]:
     return lines
 
 
-def run(args: argparse.Namespace) -> int:
-    repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
-    ctx = SyncContext.from_repo(repo_root)
-    errors: list[ValidationError] = []
-    errors.extend(_check_overlays_usable(ctx.config.overlays_enabled))
-    errors.extend(_check_applies_if(ctx.rules_resolved, ctx.prompts_resolved, ctx.facts, repo_root))
-    errors.extend(_check_prompt_rule_calls(ctx.prompts_resolved))
-    errors.extend(_check_rule_bodies_do_not_include_rules(ctx.rules_resolved))
-    errors.extend(_check_jinja_compiles(ctx.rules_resolved, ctx.prompts_resolved))
-    errors.extend(_check_eval_tasks(ctx))
-    links_config, links_errors = _load_links_config(repo_root)
-    errors.extend(links_errors)
-    errors.extend(_check_markdown_links(ctx.artifact_source, repo_root, links_config))
-    errors.extend(_check_agent_skills(ctx.skills_resolved, ctx.artifact_source.list_skills()))
-    _warn_refused_skill_files(ctx.skills_resolved)
+def collect_validation_findings(
+    ctx: SyncContext, *, config_less: bool = False, local_policy_is_error: bool = True
+) -> ValidationFindings:
+    """Run every validate rule against ``ctx``; every error and warning, in check order.
 
-    if errors:
-        for err in errors:
-            print(f"FAIL {err.path}: {err.message}")
-        print(f"validation failed with {len(errors)} error(s)")
+    The single rule set behind ``playbook validate`` and the gate in front of
+    ``playbook sync`` (prK §P P8b). ``config_less`` skips the checks that read
+    the consumer config (:data:`_validate_context.CONSUMER_CONFIG_CHECKS`):
+    overlay usability, and the ``[links]`` allowlist — external links then
+    meet the strict default. ``local_policy_is_error=False`` (the sync gate)
+    downgrades a ``[hooks]`` / ``[guardrails]`` table in ``.local.toml`` to a
+    warning (H21, §B.1). Prints nothing; never raises for a finding.
+
+    Example::
+
+        >>> collect_validation_findings(SyncContext.from_repo(Path("."))).errors  # doctest: +SKIP
+        []
+    """
+    errors = _artifact_errors(ctx, config_less=config_less)
+    hook_errors, hook_warnings = check_hooks(ctx, local_policy_is_error=local_policy_is_error)
+    return ValidationFindings([*errors, *hook_errors], hook_warnings)
+
+
+def collect_validation_errors(
+    ctx: SyncContext, *, config_less: bool = False
+) -> list[ValidationError]:
+    """The errors of :func:`collect_validation_findings` (validate's own severities).
+
+    Example::
+
+        >>> collect_validation_errors(SyncContext.from_repo(Path(".")))  # doctest: +SKIP
+        []
+    """
+    return collect_validation_findings(ctx, config_less=config_less).errors
+
+
+def sync_gate_errors(ctx: SyncContext) -> list[ValidationError]:
+    """The validate gate of ``playbook sync``: validate's errors, its warnings on stderr.
+
+    Unlike ``playbook validate``, a ``.local.toml`` ``[hooks]`` / ``[guardrails]``
+    table only warns here: it is ignored, and a developer's own local file must
+    not block their sync (§B.1).
+
+    Example::
+
+        >>> sync_gate_errors(SyncContext.from_repo(Path(".")))  # doctest: +SKIP
+        []
+    """
+    findings = collect_validation_findings(ctx, local_policy_is_error=False)
+    report_validation_warnings(findings.warnings, sys.stderr)
+    return findings.errors
+
+
+def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationError]:
+    """The rule, prompt, eval-task, link and skill checks (everything but hooks)."""
+    rules, prompts = ctx.rules_resolved, ctx.prompts_resolved
+    errors = [] if config_less else _check_overlays_usable(ctx.config.overlays_enabled)
+    errors.extend(_check_applies_if(rules, prompts, ctx.facts, ctx.repo_root))
+    errors.extend(_check_prompt_rule_calls(prompts))
+    errors.extend(_check_output_contracts(prompts))
+    errors.extend(check_write_scope(prompts))
+    errors.extend(
+        check_lint_codes(
+            rules,
+            lambda predicate: evaluate_predicate(predicate, ctx.facts, repo_root=ctx.repo_root),
+        )
+    )
+    errors.extend(_check_rule_bodies_do_not_include_rules(rules))
+    errors.extend(_check_jinja_compiles(rules, prompts))
+    errors.extend(_check_eval_tasks(ctx))
+    links_config, links_errors = (
+        (LinksConfig(), []) if config_less else load_links_config(ctx.repo_root)
+    )
+    errors.extend(links_errors)
+    errors.extend(check_markdown_links(ctx.artifact_source, ctx.repo_root, links_config))
+    errors.extend(_check_agent_skills(ctx.skills_resolved, ctx.artifact_source.list_skills()))
+    return errors
+
+
+def run(args: argparse.Namespace) -> int:
+    """``playbook validate``: exit 0 printing ``OK <n> artifacts validated``, else 1.
+
+    Without a ``.coding-agent-playbook.toml`` (an engine or overlay checkout)
+    it validates a config-less context and first prints which consumer-config
+    checks it skipped (:mod:`._validate_context`).
+    """
+    repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
+    config_less = not has_consumer_config(repo_root)
+    if config_less:
+        print("\n".join(config_less_notes(repo_root)))
+    ctx = (
+        config_less_context(repo_root)
+        if config_less
+        else SyncContext.from_repo(repo_root, tolerate_hook_errors=True)
+    )
+    findings = collect_validation_findings(ctx, config_less=config_less)
+    _warn_refused_skill_files(ctx.skills_resolved)
+    report_validation_warnings(findings.warnings, sys.stderr)
+    if findings.errors:
+        report_validation_errors(findings.errors, sys.stdout)
         return 1
-    artifact_count = len(ctx.rules_resolved) + len(ctx.prompts_resolved)
+    artifact_count = len(ctx.rules_resolved) + len(ctx.prompts_resolved) + len(ctx.hooks_resolved)
     print(f"OK {artifact_count} artifacts validated")
     return 0

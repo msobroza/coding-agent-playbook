@@ -24,7 +24,15 @@ import argparse
 import json
 from typing import TYPE_CHECKING
 
+import pytest
+
 from coding_agent_playbook.commands import metrics as _metrics
+from coding_agent_playbook.evaluators.metrics_gate import (
+    CONFIG_FILENAME,
+    MetricsGateDeps,
+    build_rubric,
+)
+from tests.fakes import FakeBaselineGit
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -83,6 +91,11 @@ def classify(value):
 
 
 def _ns(**kwargs: object) -> argparse.Namespace:
+    """The parsed ``playbook metrics`` argv, with the parser's defaults.
+
+    ``run_tests`` is tri-state like ``--run-tests/--no-run-tests``: ``None``
+    defers to ``[metrics] run_tests``.
+    """
     base: dict[str, object] = {
         "paths": [],
         "baseline": None,
@@ -90,8 +103,13 @@ def _ns(**kwargs: object) -> argparse.Namespace:
         "strict": False,
         "format": "text",
         "repo_root": None,
-        "run_tests": False,
+        "run_tests": None,
         "test_cmd": None,
+        "select": None,
+        "extend_select": None,
+        "ignore": None,
+        "changed": False,
+        "emit_measurements": None,
     }
     base.update(kwargs)
     return argparse.Namespace(**base)
@@ -292,7 +310,7 @@ def test_report_has_per_check_subresults_shape(tmp_path):
             candidate.extend(metric.measure(ctx))
 
     config = MetricConfig(mode="absolute")
-    rubric = _metrics._build_rubric(static, config)
+    rubric = build_rubric(static, config)
     grading_ctx = EvalContext(module=parse_module("", "metrics"), source="", label="metrics")
     report = rubric.evaluate(grading_ctx, MeasurementSet(candidate, None), fail_fast=False)
 
@@ -385,7 +403,7 @@ def test_malformed_config_exits_two(tmp_path, capsys):
     assert rc == 2
     err = capsys.readouterr().err
     assert "error" in err.lower()
-    assert _metrics._CONFIG_FILENAME in err
+    assert CONFIG_FILENAME in err
 
 
 def test_invalid_config_mode_exits_two(tmp_path, capsys):
@@ -400,7 +418,7 @@ def test_invalid_config_mode_exits_two(tmp_path, capsys):
     assert rc == 2
     err = capsys.readouterr().err
     assert "error" in err.lower()
-    assert _metrics._CONFIG_FILENAME in err
+    assert CONFIG_FILENAME in err
 
 
 # --------------------------------------------------------------------------- #
@@ -418,6 +436,25 @@ def test_unparseable_file_is_skipped_not_crashed(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "broken.py" in out
     assert "skip" in out.lower()
+
+
+def test_hostile_candidates_are_skipped_with_exit_zero(tmp_path, capsys):
+    """A NUL byte, a non-UTF-8 file, a file over the 1 MB cap and a parser-overflowing
+    nest are each skipped with a note; the clean sibling still passes (exit 0)."""
+    _write(tmp_path / "nul.py", "x = 1\0\n")
+    (tmp_path / "latin1.py").write_bytes(b"x = '\xff'\n")
+    _write(tmp_path / "huge.py", "#\n" * 500_001)
+    _write(tmp_path / "deep.py", "-" * 200_000 + "1\n")
+    _write(tmp_path / "clean.py", _CLEAN_SOURCE)
+
+    rc = _metrics.run(_ns(paths=[str(tmp_path)], mode="absolute", repo_root=str(tmp_path)))
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "  skipped huge.py: too large (1000002 bytes, over the 1000000-byte cap)" in out
+    for label in ("nul.py", "latin1.py", "deep.py"):
+        assert f"  skipped {label}: " in out
+    assert "OK — 1 file(s) measured" in out
 
 
 # --------------------------------------------------------------------------- #
@@ -531,6 +568,43 @@ def test_git_baseline_new_file_treated_as_all_new(tmp_path, capsys):
         )
     )
     assert rc == 0
+
+
+@pytest.mark.parametrize(
+    ("config", "seconds"),
+    [(None, "10s"), ("[metrics]\ngit_timeout_s = 2.5\n", "2.5s")],
+    ids=["default", "configured"],
+)
+def test_git_timeout_maps_to_exit_two(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], config: str | None, seconds: str
+) -> None:
+    """A wedged git (lock contention, network FS) is a usage error, never a hang."""
+    target = _write(tmp_path / "mod.py", _BASELINE_SOURCE)
+    if config is not None:
+        (tmp_path / CONFIG_FILENAME).write_text(config, encoding="utf-8")
+    fake = FakeBaselineGit(timeout_on={"rev-parse"})
+
+    def git_factory(timeout_s: float) -> FakeBaselineGit:
+        fake.timeout_s = timeout_s
+        return fake
+
+    rc = _metrics.run(
+        _ns(paths=[str(target)], baseline="git:HEAD", repo_root=str(tmp_path)),
+        deps=MetricsGateDeps(git_factory=git_factory),
+    )
+
+    assert rc == 2
+    assert f"error: git rev-parse timed out after {seconds}" in capsys.readouterr().err
+
+
+def test_invalid_git_timeout_exits_two(tmp_path, capsys):
+    target = _write(tmp_path / "mod.py", _CLEAN_SOURCE)
+    (tmp_path / CONFIG_FILENAME).write_text("[metrics]\ngit_timeout_s = 0\n", encoding="utf-8")
+
+    rc = _metrics.run(_ns(paths=[str(target)], repo_root=str(tmp_path)))
+
+    assert rc == 2
+    assert "git_timeout_s must be a positive number of seconds, got 0" in capsys.readouterr().err
 
 
 # --------------------------------------------------------------------------- #

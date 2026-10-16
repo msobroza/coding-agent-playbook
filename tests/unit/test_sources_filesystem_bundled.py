@@ -1,11 +1,11 @@
-"""Bundled layers (the engine and the bundled plugins) resolve through ``bundled_content``.
+"""Bundled layers (the engine and the bundled plugins) resolve through ``catalog``.
 
-``sources.filesystem._resource_subdir`` reads the engine's ``content/core/`` and
-each ``content/plugins/<leaf>/`` straight from the content root, never through
+``sources.filesystem._resource_subdir`` reads the engine's ``catalog/core/`` and
+each ``catalog/plugins/<leaf>/`` straight from the catalog root, never through
 ``importlib.resources``. Third-party overlays keep the ``<pkg>/resources/<kind>``
 contract, including a namespace overlay whose ``resources/`` spans two portions.
 The preflight (``_sync_preflight.unusable_overlays``) accepts a bundled plugin
-under either namespace by checking the content tree, without importing it.
+under either namespace by checking the catalog tree, without importing it.
 """
 
 from __future__ import annotations
@@ -15,18 +15,19 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook import bundled_content
-from coding_agent_playbook.bundled_content import ENGINE_PACKAGE, BundledContentMissingError
+from coding_agent_playbook import catalog
+from coding_agent_playbook.catalog import ENGINE_PACKAGE, CatalogMissingError
+from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands._sync_preflight import unusable_overlays
-from coding_agent_playbook.evals.prompting import _infer_prompts_dir
+from coding_agent_playbook.evals.prompting import _infer_prompts_dir, _resolve_prompt
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, _resource_subdir
-from tests._content import CORE_ROOT, plugin_root
+from tests._catalog import CORE_ROOT, plugin_root
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 _SUPERPOWERS_PACK_NAME = "coding_agent_playbook.packs.superpowers"
 _SUPERPOWERS_PLUGIN_NAME = "coding_agent_playbook.plugins.superpowers"
@@ -34,11 +35,14 @@ _DEMO_PLUGIN_NAME = "coding_agent_playbook.plugins.demo"
 #: The shipped task copied into the synthetic plugin, and the prompt it names.
 _SHIPPED_TASK_ID = "explain-pure-function"
 _SHIPPED_PROMPT_FILE = "explain.md"
-_ENGINE_RULE_COUNT = 12
+#: The id the shipped prompt declares, and the plugin task's id (distinctive, for output scans).
+_SHIPPED_PROMPT_ID = "explain"
+_DEMO_TASK_ID = "demo-plugin-eval-task"
+_ENGINE_RULE_COUNT = 13
 _SUPERPOWERS_SKILL_COUNT = 15
 
 
-def test_engine_rules_come_from_content_core(tmp_path: Path) -> None:
+def test_engine_rules_come_from_catalog_core(tmp_path: Path) -> None:
     rules = FileSystemArtifactSource(repo_root=tmp_path).list_rules()
     engine_rules = [rule for rule in rules if rule.source_package == ENGINE_PACKAGE]
     assert len(engine_rules) == _ENGINE_RULE_COUNT
@@ -48,7 +52,7 @@ def test_engine_rules_come_from_content_core(tmp_path: Path) -> None:
         assert rule.source_path.resolve().is_relative_to(rules_root), rule.source_path
 
 
-def test_pack_names_resolve_to_content_plugins(tmp_path: Path) -> None:
+def test_pack_names_resolve_to_catalog_plugins(tmp_path: Path) -> None:
     source = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[_SUPERPOWERS_PACK_NAME])
     skills = [s for s in source.list_skills() if s.source_package == _SUPERPOWERS_PACK_NAME]
     assert len(skills) == _SUPERPOWERS_SKILL_COUNT
@@ -87,22 +91,41 @@ def test_two_portion_namespace_overlay_still_resolves(
     assert _resource_subdir("nsov", "skills") == skill_dir.parent
 
 
-def _write_demo_content(content: Path) -> Path:
-    """Write a content root whose ``demo`` plugin ships one eval task and its prompt.
+def _write_demo_catalog(catalog_dir: Path) -> Path:
+    """Write a catalog root whose ``demo`` plugin ships one eval task and its prompt.
 
-    Returns the plugin's directory. The task is a shipped one, renamed ``t1``.
+    Returns the plugin's directory. The task is a shipped one, renamed
+    :data:`_DEMO_TASK_ID`. ``core/prompts/`` holds a second copy of the prompt
+    (same id, no task of its own), so a lookup that leaves the task's layer finds
+    the wrong file.
     """
-    (content / "core" / "rules").mkdir(parents=True)
-    plugin = content / "plugins" / "demo"
-    task_dir = plugin / "eval_tasks" / "t1"
+    (catalog_dir / "core" / "rules").mkdir(parents=True)
+    (catalog_dir / "core" / "prompts").mkdir()
+    plugin = catalog_dir / "plugins" / "demo"
+    task_dir = plugin / "eval_tasks" / _DEMO_TASK_ID
     task_dir.mkdir(parents=True)
     (plugin / "prompts").mkdir()
     shipped = (CORE_ROOT / "eval_tasks" / _SHIPPED_TASK_ID / "task.toml").read_text("utf-8")
-    renamed = shipped.replace(f'id = "{_SHIPPED_TASK_ID}"', 'id = "t1"', 1)
+    renamed = shipped.replace(f'id = "{_SHIPPED_TASK_ID}"', f'id = "{_DEMO_TASK_ID}"', 1)
     assert renamed != shipped, f"no id line to rename in the shipped {_SHIPPED_TASK_ID} task"
     (task_dir / "task.toml").write_text(renamed, encoding="utf-8")
     prompt = (CORE_ROOT / "prompts" / _SHIPPED_PROMPT_FILE).read_text("utf-8")
-    (plugin / "prompts" / _SHIPPED_PROMPT_FILE).write_text(prompt, encoding="utf-8")
+    for layer in (plugin, catalog_dir / "core"):
+        (layer / "prompts" / _SHIPPED_PROMPT_FILE).write_text(prompt, encoding="utf-8")
+    return plugin
+
+
+def _use_demo_catalog(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Make ``<tmp_path>/catalog`` the engine's catalog (a source checkout); return the plugin dir.
+
+    Example::
+
+        plugin = _use_demo_catalog(tmp_path, monkeypatch)
+    """
+    plugin = _write_demo_catalog(tmp_path / "catalog")
+    package_dir = tmp_path / "src" / "coding_agent_playbook"
+    package_dir.mkdir(parents=True)
+    monkeypatch.setattr(catalog, "_PACKAGE_DIR", package_dir)
     return plugin
 
 
@@ -110,29 +133,76 @@ def test_plugin_with_eval_tasks_and_prompts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A bundled plugin may ship eval tasks; each finds its plugin's own ``prompts/``."""
-    plugin = _write_demo_content(tmp_path / "content")
-    package_dir = tmp_path / "src" / "coding_agent_playbook"
-    package_dir.mkdir(parents=True)
-    monkeypatch.setattr(bundled_content, "_PACKAGE_DIR", package_dir)
+    plugin = _use_demo_catalog(tmp_path, monkeypatch)
 
     source = FileSystemArtifactSource(
         repo_root=tmp_path / "repo", overlay_packages=[_DEMO_PLUGIN_NAME]
     )
     tasks = {task.id: task for task in source.list_eval_tasks()}
 
-    assert set(tasks) == {"t1"}
-    assert tasks["t1"].source_package == _DEMO_PLUGIN_NAME
-    source_path = tasks["t1"].source_path
-    assert source_path is not None
-    assert _infer_prompts_dir(source_path) == plugin / "prompts"
+    assert set(tasks) == {_DEMO_TASK_ID}
+    task = tasks[_DEMO_TASK_ID]
+    assert task.source_package == _DEMO_PLUGIN_NAME
+    assert task.source_path is not None
+    assert _infer_prompts_dir(task.source_path) == plugin / "prompts"
+    prompt = _resolve_prompt(task)
+    assert prompt is not None
+    assert prompt.source_path == plugin / "prompts" / _SHIPPED_PROMPT_FILE
 
 
-def test_bundled_lookup_raises_when_the_content_root_is_missing(
+def _config_text(overlays: list[str]) -> str:
+    """A minimal committed config enabling ``overlays``."""
+    listed = ", ".join(f'"{name}"' for name in overlays)
+    return (
+        "schema_version = 1\n"
+        'adapters_enabled = ["claude_code"]\n'
+        f"overlays_enabled = [{listed}]\n\n"
+        '[project]\nname = "synthetic"\nkind = "python-library"\n\n'
+        '[engine]\nversion = "0.1.0a0"\n\n'
+        '[storage]\nartifact_source = "filesystem"\nstate_source = "filesystem"\n'
+    )
+
+
+@pytest.mark.parametrize(
+    ("overlays", "enabled"), [([_DEMO_PLUGIN_NAME], True), ([], False)], ids=["enabled", "off"]
+)
+def test_eval_list_shows_a_plugin_task_only_when_the_plugin_is_enabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_synthetic_repo: Callable[..., Path],
+    overlays: list[str],
+    enabled: bool,
+) -> None:
+    """``playbook eval --list`` walks a bundled plugin's ``eval_tasks/`` only for an enabled plugin.
+
+    Enabled, the task sits under the plugin's own copy of its prompt (the plugin
+    layer wins the id); off, the core copy is listed with no task at all.
+    """
+    _use_demo_catalog(tmp_path, monkeypatch)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    make_synthetic_repo(repo, config_text=_config_text(overlays))
+
+    assert main(["eval", "--list", "--repo-root", str(repo)]) == 0
+    out = capsys.readouterr().out
+
+    assert (_DEMO_TASK_ID in out) is enabled
+    if enabled:
+        assert f"{_SHIPPED_PROMPT_ID} (overlay {_DEMO_PLUGIN_NAME})" in out
+        assert ", 1 eval task," in out
+    else:
+        assert f"{_SHIPPED_PROMPT_ID} (engine)" in out
+        assert _DEMO_PLUGIN_NAME not in out
+        assert ", 0 eval tasks," in out
+
+
+def test_bundled_lookup_raises_when_the_catalog_root_is_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The bundled branch sits outside the never-raise guard: a broken install is loud."""
-    monkeypatch.setattr(bundled_content, "_PACKAGE_DIR", tmp_path / "src" / "coding_agent_playbook")
-    with pytest.raises(BundledContentMissingError):
+    monkeypatch.setattr(catalog, "_PACKAGE_DIR", tmp_path / "src" / "coding_agent_playbook")
+    with pytest.raises(CatalogMissingError):
         _resource_subdir(ENGINE_PACKAGE, "rules")
 
 

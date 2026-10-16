@@ -1,0 +1,61 @@
+{
+  "context": {
+    "env": {
+      "CLAUDE_PROJECT_DIR": "C:\\proj"
+    },
+    "platform": "win32"
+  },
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "turn_id": "pr_10",
+    "cwd": "C:/proj",
+    "project_dir": "C:/proj",
+    "repo_root": "C:/proj",
+    "permission_mode": "default",
+    "transcript_path": "C:\\Users\\dev\\t.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "Write",
+      "native_name": "Write",
+      "tool_class": "write",
+      "tool_classes": [
+        "write"
+      ],
+      "use_id": "toolu_01Win",
+      "paths": [
+        {
+          "path": "C:/proj/.CLAUDE/settings.json",
+          "repo_rel": ".CLAUDE/settings.json",
+          "key": ".claude/settings.json"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "C:/proj/.CLAUDE/settings.json",
+          "repo_rel": ".CLAUDE/settings.json",
+          "key": ".claude/settings.json"
+        }
+      ],
+      "content": [
+        [
+          "C:\\proj\\.CLAUDE\\settings.json",
+          "content",
+          "{}"
+        ]
+      ]
+    }
+  },
+  "result": {
+    "decision": "deny",
+    "reason": "Edit .claude/settings.json through playbook sync."
+  },
+  "wire": {
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Edit .claude/settings.json through playbook sync.\"}}\n",
+    "stderr": "Edit .claude/settings.json through playbook sync.\n",
+    "exit_code": 10
+  }
+}

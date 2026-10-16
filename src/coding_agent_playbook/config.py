@@ -6,7 +6,10 @@ of its tables. The checks that turn a config the engine would misread into a
 :class:`ConfigError` live in ``config_schema`` (re-exported here, with
 :func:`check_config_file` running every per-file one); which entries ``Config``
 owns, and carrying the others over when the committed file is rewritten, is
-``config_entries``.
+``config_entries``: those entries (``[hooks]``, ``[guardrails]``, ``[links]``,
+``[metrics]``…) ride along verbatim in ``Config.extra_tables``.
+:func:`parse_metrics_config` lives in ``metrics_config`` and the ``[hooks]`` /
+``[guardrails]`` parsers in ``hooks_config``; both are re-exported here.
 """
 
 from __future__ import annotations
@@ -14,16 +17,25 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.bundled_content import canonical_overlay_list
+from coding_agent_playbook.catalog import canonical_overlay_list
+from coding_agent_playbook.config_entries import (
+    copy_toml_value,
+    unmanaged_config_entries,
+    with_unmanaged_entries,
+)
 from coding_agent_playbook.config_schema import ConfigError as ConfigError
 from coding_agent_playbook.config_schema import check_config_tables as check_config_tables
 from coding_agent_playbook.config_schema import check_enabled_keys as check_enabled_keys
 from coding_agent_playbook.config_schema import required_value
+from coding_agent_playbook.hooks_config import GuardrailsConfig as GuardrailsConfig
+from coding_agent_playbook.hooks_config import HooksConfig as HooksConfig
+from coding_agent_playbook.hooks_config import parse_guardrails_config as parse_guardrails_config
+from coding_agent_playbook.hooks_config import parse_hooks_config as parse_hooks_config
+from coding_agent_playbook.metrics_config import parse_metrics_config as parse_metrics_config
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.evaluators.types import MetricConfig
     from coding_agent_playbook.links import LinksConfig
 
 
@@ -81,6 +93,16 @@ class OutputConfig:
 
 @dataclass
 class Config:
+    """``.coding-agent-playbook.toml`` in memory (SPEC §7.1).
+
+    ``extra_tables`` holds, deep copied, everything the file has that ``Config``
+    does not own (``config_entries.unmanaged_config_entries``): every other
+    top-level key — ``[hooks]``, ``[guardrails]``, ``[links]``, ``[metrics]``… —
+    and, under the table's name, the unknown keys of ``[project]``/``[engine]``/
+    ``[storage]``/``[output]``. ``to_dict`` writes them back, so a rewrite of the
+    committed file keeps them (P6, SPEC §7.2).
+    """
+
     schema_version: int
     project: ProjectMeta
     engine_version: str
@@ -93,6 +115,7 @@ class Config:
     # explicit ``OutputConfig()`` so ``to_dict`` round-trips sparsely while
     # ``playbook init`` can still write ``commit = false`` for discoverability.
     output: OutputConfig | None = None
+    extra_tables: dict[str, Any] = field(default_factory=dict)
     # The deprecated ``coding_agent_playbook.packs.*`` names ``overlays_enabled``
     # was given (SPEC v0.19). Derived in ``__post_init__``; read only by
     # ``SyncContext.from_repo``'s deprecation warning; never written by ``to_dict``.
@@ -137,7 +160,8 @@ class Config:
         shape :func:`check_config_file` refuses (``FileSystemStateSource`` checks
         each file before merging them, so this re-check matters for other callers)
         or a missing required key (``schema_version``, ``[project] name``/``kind``,
-        ``[engine] version``), which used to be a ``KeyError``.
+        ``[engine] version``), which used to be a ``KeyError``. What ``Config``
+        does not own is deep-copied into ``extra_tables``.
 
         Example::
 
@@ -164,9 +188,22 @@ class Config:
             detector_cache=dict(data.get("detector_cache", {})),
             user_choices=dict(data.get("user_choices", {})),
             output=parse_output_config(data["output"], source=source) if "output" in data else None,
+            extra_tables=copy_toml_value(unmanaged_config_entries(data)),
         )
 
     def to_dict(self) -> dict[str, Any]:
+        """The TOML table to save: the owned keys (empty optional ones omitted),
+        then ``extra_tables`` (``config_entries.with_unmanaged_entries``).
+
+        An owned field always wins over an extra of the same name: only what
+        ``unmanaged_config_entries`` keeps of ``extra_tables`` is written back, so
+        ``extra_tables={"project": {"name": "x"}}`` cannot rename the project.
+
+        Example::
+
+            >>> Config(1, ProjectMeta("x", "python-library"), "0.1").to_dict()["engine"]
+            {'version': '0.1'}
+        """
         project: dict[str, Any] = {
             "name": self.project.name,
             "kind": self.project.kind,
@@ -193,77 +230,8 @@ class Config:
             result["detector_cache"] = dict(self.detector_cache)
         if self.user_choices:
             result["user_choices"] = dict(self.user_choices)
-        return result
-
-
-_VALID_METRIC_MODES = ("regression", "absolute", "both")
-
-
-def parse_metrics_config(data: dict[str, Any]) -> MetricConfig:
-    """Parse a ``[metrics]`` table (already decoded from TOML) into a
-    :class:`~coding_agent_playbook.evaluators.types.MetricConfig` (PR-M §E).
-
-    The table shape mirrors the dataclass::
-
-        [metrics]
-        mode = "regression"          # regression | absolute | both
-        fail_on_breach = true
-        strict = false
-        run_tests = false            # reserved for M4 (execution evaluators)
-        test_cmd = ["python", "-m", "pytest"]
-
-        [metrics.thresholds.cyclomatic_complexity]
-        warn = 10
-        fail = 20
-
-        [metrics.regression.coverage]
-        max_worsening = 0
-
-        [metrics.weights]
-        cyclomatic_complexity = 1.0
-
-    Unknown keys are ignored; ``thresholds``/``regression``/``weights`` are
-    per-evaluator-name dicts. The import is local to avoid a config→evaluators
-    import cycle (``evaluators.types`` is a leaf the command layer imports).
-    """
-    from coding_agent_playbook.evaluators.types import (
-        AbsoluteThreshold,
-        MetricConfig,
-        RegressionPolicy,
-    )
-
-    mode = data.get("mode", "regression")
-    if mode not in _VALID_METRIC_MODES:
-        raise ValueError(f"[metrics] mode must be one of {_VALID_METRIC_MODES!r}, got {mode!r}")
-
-    thresholds: dict[str, AbsoluteThreshold] = {}
-    for name, raw in (data.get("thresholds") or {}).items():
-        thresholds[name] = AbsoluteThreshold(
-            warn=_as_optional_float(raw.get("warn")),
-            fail=_as_optional_float(raw.get("fail")),
-        )
-
-    regression: dict[str, RegressionPolicy] = {}
-    for name, raw in (data.get("regression") or {}).items():
-        regression[name] = RegressionPolicy(max_worsening=float(raw.get("max_worsening", 0.0)))
-
-    weights: dict[str, float] = {
-        name: float(value) for name, value in (data.get("weights") or {}).items()
-    }
-
-    test_cmd_raw = data.get("test_cmd")
-    test_cmd = [str(part) for part in test_cmd_raw] if test_cmd_raw is not None else None
-
-    return MetricConfig(
-        mode=mode,
-        fail_on_breach=bool(data.get("fail_on_breach", True)),
-        strict=bool(data.get("strict", False)),
-        run_tests=bool(data.get("run_tests", False)),
-        test_cmd=test_cmd,
-        thresholds=thresholds,
-        regression=regression,
-        weights=weights,
-    )
+        extras = unmanaged_config_entries(self.extra_tables)
+        return with_unmanaged_entries(result, copy_toml_value(extras))
 
 
 def parse_links_config(data: dict[str, Any]) -> LinksConfig:
@@ -316,7 +284,3 @@ def parse_output_config(data: object, *, source: str | None = None) -> OutputCon
             f"{where}[output] commit must be a boolean (true or false), got {commit!r}"
         )
     return OutputConfig(commit=commit)
-
-
-def _as_optional_float(value: Any) -> float | None:
-    return None if value is None else float(value)

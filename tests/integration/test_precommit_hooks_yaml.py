@@ -95,15 +95,19 @@ def test_cap_validate_hook_is_manual_only():
 
 def test_cap_metrics_hook_is_static_only():
     """PR-M Track M3: the default metrics hook runs the *static* gate against
-    HEAD and must never opt into execution evaluators (`--run-tests`)."""
+    HEAD and must never opt into execution evaluators (`--run-tests`).
+
+    prK §F.0.3 item 6: ``--no-run-tests`` keeps it static even when the
+    consumer's ``[metrics] run_tests = true``.
+    """
     hooks = _load_hooks()
     metrics = next((h for h in hooks if h["id"] == "playbook-metrics"), None)
     assert metrics is not None, "missing playbook-metrics hook"
-    assert metrics["entry"] == "playbook metrics --baseline git:HEAD"
+    assert metrics["entry"] == "playbook metrics --baseline git:HEAD --no-run-tests"
     assert metrics["language"] == "python"
     # STATIC ONLY — execution evaluators (cost + side effects) stay out of the
     # default hook.
-    assert "--run-tests" not in metrics["entry"]
+    assert "--run-tests" not in metrics["entry"].split()
     # Runs on staged Python only (not always_run).
     assert metrics["types_or"] == ["python", "pyi"]
     assert metrics.get("always_run") in (None, False)
@@ -118,8 +122,68 @@ def test_no_unexpected_hooks():
         "playbook-sync-check",
         "playbook-validate",
         "playbook-metrics",
+        "playbook-coverage",
+        "playbook-notebooks",
+        "playbook-scan-sinks",
+        "playbook-secrets",
+        "playbook-commit-msg",
     }
     assert ids == expected, f"unexpected hook IDs: {ids - expected}"
+
+
+def test_commit_msg_hook_stage_and_language_system():
+    """prK §F.4.3: commitizen from the consumer's environment, at the commit-msg stage."""
+    hook = _hook("playbook-commit-msg")
+    assert hook["entry"] == "cz check --commit-msg-file"
+    assert hook["language"] == "system"
+    assert hook["stages"] == ["commit-msg"]
+    assert hook.get("pass_filenames", True) is True  # pre-commit appends the message file
+
+
+def test_header_recipe_names_the_commit_msg_hook_type():
+    """The commit-msg twin needs its hook type installed; the recipe says how."""
+    assert "--hook-type commit-msg" in _header_comment()
+
+
+def test_coverage_hook_is_manual_only():
+    """prK §F.1.3: it runs the consumer's suite, so never on an ordinary commit (SPEC §21.7)."""
+    hook = _hook("playbook-coverage")
+    assert hook["entry"] == "playbook metrics --run-tests --select testing --baseline git:HEAD"
+    assert hook["language"] == "python"
+    assert hook["stages"] == ["manual"]
+    assert hook["pass_filenames"] is False
+    assert hook["types_or"] == ["python"]
+    assert hook["require_serial"] is True
+
+
+def test_notebooks_hook_types_jupyter_language_python():
+    """prK §E.3: the stdlib twin of notebook-output-hygiene, on staged notebooks only."""
+    hook = _hook("playbook-notebooks")
+    assert hook["entry"] == "playbook check-notebooks"
+    assert hook["language"] == "python"
+    assert hook["types"] == ["jupyter"]
+    assert hook.get("pass_filenames", True) is True  # the staged notebooks are its PATHS
+    assert hook.get("always_run") in (None, False)
+
+
+def test_scan_sinks_hook_scans_the_index_once():
+    """prK §E.3: the guard's twin reads the index itself, so it takes no filenames."""
+    hook = _hook("playbook-scan-sinks")
+    assert hook["entry"] == "playbook scan-sinks --staged"
+    assert hook["language"] == "python"
+    assert hook["types_or"] == ["python", "jupyter"]
+    assert hook["pass_filenames"] is False
+    assert hook["stages"] == ["pre-commit"]
+
+
+def test_secrets_hook_scans_staged():
+    """prK §E.4: the stdlib gitleaks stand-in; every commit, reading the index itself."""
+    hook = _hook("playbook-secrets")
+    assert hook["entry"] == "playbook scan-secrets --staged"
+    assert hook["language"] == "python"
+    assert hook["pass_filenames"] is False
+    assert hook["always_run"] is True
+    assert hook["stages"] == ["pre-commit"]
 
 
 def _header_comment() -> str:

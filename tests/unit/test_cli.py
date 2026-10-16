@@ -7,30 +7,30 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook import __version__, bundled_content
+from coding_agent_playbook import __version__, catalog
 from coding_agent_playbook.cli import _SUBCOMMANDS, build_parser, main
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-def break_bundled_content(monkeypatch: pytest.MonkeyPatch, root: Path) -> str:
+def break_catalog(monkeypatch: pytest.MonkeyPatch, root: Path) -> str:
     """Point the engine at an empty ``<root>/src/coding_agent_playbook``.
 
-    Neither content home exists then, as in a wheel whose force-include was
+    Neither catalog home exists then, as in a wheel whose force-include was
     lost. Returns the exact stderr ``main`` must print: the packaged candidate
-    first, then the checkout one (the spec's missing-content error line).
+    first, then the checkout one (the spec's missing-catalog error line).
 
     Example::
 
-        expected = break_bundled_content(monkeypatch, tmp_path)
+        expected = break_catalog(monkeypatch, tmp_path)
     """
     package_dir = root / "src" / "coding_agent_playbook"
     package_dir.mkdir(parents=True)
-    monkeypatch.setattr(bundled_content, "_PACKAGE_DIR", package_dir)
+    monkeypatch.setattr(catalog, "_PACKAGE_DIR", package_dir)
     return (
-        "error: the engine's bundled content was not found "
-        f"(looked in {package_dir / '_content'}, {root / 'content'}); "
+        "error: the engine's catalog was not found "
+        f"(looked in {package_dir / '_catalog'}, {root / 'catalog'}); "
         "reinstall coding-agent-playbook\n"
     )
 
@@ -233,6 +233,153 @@ def test_metrics_subparser_defaults():
     assert args.mode is None
     assert args.strict is False
     assert args.format == "text"
+    assert (args.select, args.extend_select, args.ignore) == (None, None, None)
+    assert (args.changed, args.emit_measurements) == (False, None)
+
+
+def test_metrics_subparser_new_flags():
+    """prK §F.0.3 items 2-4: selection, --changed and the measurement snapshot."""
+    args = build_parser().parse_args(
+        [
+            "metrics",
+            "--select",
+            "quality",
+            "--extend-select",
+            "ruff_violations,file_sloc",
+            "--ignore",
+            "lcom4",
+            "--changed",
+            "--emit-measurements",
+            "cov.json",
+            "--baseline",
+            "json:base.json",
+        ]
+    )
+    assert args.select == "quality"
+    assert args.extend_select == "ruff_violations,file_sloc"
+    assert args.ignore == "lcom4"
+    assert args.changed is True
+    assert args.emit_measurements == "cov.json"
+    assert args.baseline == "json:base.json"
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [([], None), (["--run-tests"], True), (["--no-run-tests"], False)],
+)
+def test_metrics_run_tests_is_tristate_default_none(argv, expected):
+    """``None`` defers to ``[metrics] run_tests``; ``--no-run-tests`` overrides it (§F.0.3 item 6)."""
+    assert build_parser().parse_args(["metrics", *argv]).run_tests is expected
+
+
+def test_twin_subcommands_close_the_canonical_list():
+    """prK K6-K8: the off-workstation twins are registered, and no argument is required."""
+    assert _SUBCOMMANDS[-7:] == (
+        "gate-scan",
+        "ci",
+        "scan-sinks",
+        "check-notebooks",
+        "scan-secrets",
+        "check-commit-trailers",
+        "check-deps",
+    )
+
+
+def test_check_deps_accepts_base():
+    """prK §E.4: ``check-deps [--base REF]``; without one the default branch is the base."""
+    parser = build_parser()
+    default = parser.parse_args(["check-deps"])
+    based = parser.parse_args(["check-deps", "--base", "origin/main", "--repo-root", "/r"])
+
+    assert (default.command, default.base, default.repo_root) == ("check-deps", None, None)
+    assert (based.base, based.repo_root) == ("origin/main", "/r")
+
+
+def test_check_commit_trailers_accepts_msgfile_or_range():
+    """prK §E.4: the commit-msg stage passes a file; CI passes --range (the command checks one)."""
+    parser = build_parser()
+    msgfile = parser.parse_args(["check-commit-trailers", ".git/COMMIT_EDITMSG"])
+    ranged = parser.parse_args(["check-commit-trailers", "--range", "A..B", "--repo-root", "/r"])
+
+    assert (msgfile.msgfile, msgfile.rev_range) == (".git/COMMIT_EDITMSG", None)
+    assert (ranged.msgfile, ranged.rev_range, ranged.repo_root) == (None, "A..B", "/r")
+
+
+def test_scan_secrets_modes_are_mutually_exclusive():
+    """prK §E.4: one of --staged / --range / --worktree, or PATHS (checked by the command)."""
+    parser = build_parser()
+    staged = parser.parse_args(["scan-secrets", "--staged"])
+    worktree = parser.parse_args(["scan-secrets", "--worktree", "--format", "json"])
+    ranged = parser.parse_args(["scan-secrets", "--range", "A..B"])
+    paths = parser.parse_args(["scan-secrets", "a.py", "b/.env"])
+
+    assert (staged.staged, staged.worktree, staged.rev_range, staged.paths) == (
+        True,
+        False,
+        None,
+        [],
+    )
+    assert (worktree.worktree, worktree.format) == (True, "json")
+    assert ranged.rev_range == "A..B"
+    assert paths.paths == ["a.py", "b/.env"]
+    for pair in (
+        ["--staged", "--worktree"],
+        ["--staged", "--range", "A..B"],
+        ["--worktree", "--range", "A..B"],
+    ):
+        with pytest.raises(SystemExit):
+            parser.parse_args(["scan-secrets", *pair])
+
+
+def test_scan_sinks_subparser_accepts_staged_or_range():
+    parser = build_parser()
+    staged = parser.parse_args(["scan-sinks", "--staged", "--format", "json"])
+    ranged = parser.parse_args(["scan-sinks", "--range", "A..B", "--repo-root", "/tmp/x"])
+    defaults = parser.parse_args(["scan-sinks"])
+
+    assert (staged.staged, staged.rev_range, staged.format) == (True, None, "json")
+    assert (ranged.staged, ranged.rev_range, ranged.repo_root) == (False, "A..B", "/tmp/x")
+    assert (defaults.staged, defaults.rev_range, defaults.format) == (False, None, "text")
+    with pytest.raises(SystemExit):
+        parser.parse_args(["scan-sinks", "--staged", "--range", "A..B"])
+
+
+def test_check_notebooks_subparser_takes_paths():
+    parser = build_parser()
+    args = parser.parse_args(["check-notebooks", "a.ipynb", "nb/b.ipynb"])
+
+    assert (args.command, args.paths) == ("check-notebooks", ["a.ipynb", "nb/b.ipynb"])
+    assert parser.parse_args(["check-notebooks"]).paths == []
+
+
+def test_gate_scan_subparser_accepts_range_and_format():
+    parser = build_parser()
+    args = parser.parse_args(
+        ["gate-scan", "--range", "HEAD~1..HEAD", "--format", "json", "--repo-root", "/tmp/x"]
+    )
+    assert (args.command, args.rev_range, args.format, args.repo_root) == (
+        "gate-scan",
+        "HEAD~1..HEAD",
+        "json",
+        "/tmp/x",
+    )
+    defaults = parser.parse_args(["gate-scan"])
+    assert (defaults.rev_range, defaults.format, defaults.repo_root) == (None, "text", None)
+
+
+def test_ci_subparser_accepts_base_steps_format():
+    parser = build_parser()
+    args = parser.parse_args(
+        ["ci", "--base", "origin/main", "--steps", "validate,gate-scan", "--format", "json"]
+    )
+    assert (args.command, args.base, args.steps, args.format) == (
+        "ci",
+        "origin/main",
+        "validate,gate-scan",
+        "json",
+    )
+    defaults = parser.parse_args(["ci"])
+    assert (defaults.base, defaults.steps, defaults.format) == (None, None, "text")
 
 
 def test_main_returns_func_exit_code(monkeypatch, tmp_path):
@@ -291,27 +438,27 @@ def test_main_translates_missing_precommit_template_to_exit_2(
     )
 
 
-def test_sync_exits_2_when_bundled_content_missing(
+def test_sync_exits_2_when_catalog_missing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     make_synthetic_repo: Callable[..., Path],
 ) -> None:
     """A lookup miss used to render zero engine artifacts silently."""
-    expected = break_bundled_content(monkeypatch, tmp_path)
+    expected = break_catalog(monkeypatch, tmp_path)
     repo = make_synthetic_repo(tmp_path)
 
     assert main(["sync", "--repo-root", str(repo)]) == 2
     assert capsys.readouterr().err == expected
 
 
-def test_eval_list_exits_2_when_bundled_content_missing(
+def test_eval_list_exits_2_when_catalog_missing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     make_synthetic_repo: Callable[..., Path],
 ) -> None:
-    expected = break_bundled_content(monkeypatch, tmp_path)
+    expected = break_catalog(monkeypatch, tmp_path)
     repo = make_synthetic_repo(tmp_path)
 
     assert main(["eval", "--list", "--repo-root", str(repo)]) == 2

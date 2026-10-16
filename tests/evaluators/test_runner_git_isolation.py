@@ -2,7 +2,7 @@
 
 Git exports absolute ``GIT_DIR``/``GIT_INDEX_FILE`` to hooks run in a linked
 worktree, and pre-commit passes them on to ``language: system`` hooks (the dev
-``content-checks`` hook, or a consumer's ``playbook eval --run``). ``materialize``
+``catalog-checks`` hook, or a consumer's ``playbook eval --run``). ``materialize``
 runs ``git init``/``add -A``/``commit`` with ``cwd`` set to the scratch dir, so
 with those variables inherited it committed the scratch tree onto the caller's
 branch and overwrote the caller's index.

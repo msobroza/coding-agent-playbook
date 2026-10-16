@@ -1,6 +1,6 @@
-"""The engine's own dev loop (``.pre-commit-config.yaml``) gives CI's verdict on content edits.
+"""The engine's own dev loop (``.pre-commit-config.yaml``) gives CI's verdict on catalog edits.
 
-A maintainer who edits ``content/`` must not pass ``pre-commit`` locally and then
+A maintainer who edits ``catalog/`` must not pass ``pre-commit`` locally and then
 fail CI. Each pin guards one way that has happened or would happen silently:
 
 * CI runs ``ruff format --check .``, which formats code blocks inside markdown
@@ -10,7 +10,7 @@ fail CI. Each pin guards one way that has happened or would happen silently:
   vendored superpowers markdown, which must stay byte-identical;
 * an unpinned ruff that starts formatting markdown turns CI red with no change
   in this repository;
-* the content tests run only through the ``content`` marker, which
+* the catalog tests run only through the ``catalog`` marker, which
   ``--strict-markers`` requires to be registered.
 """
 
@@ -21,7 +21,7 @@ from typing import Any
 
 import yaml
 
-from tests._content import REPO_ROOT
+from tests._catalog import REPO_ROOT
 
 _PRECOMMIT_CONFIG = REPO_ROOT / ".pre-commit-config.yaml"
 _PYPROJECT = REPO_ROOT / "pyproject.toml"
@@ -53,13 +53,13 @@ def test_ruff_format_hook_formats_markdown_like_ci() -> None:
     assert _hooks()["ruff-format"]["types_or"] == ["python", "pyi", "markdown"]
 
 
-def test_content_checks_hook_runs_the_registered_content_marker() -> None:
-    hook = _hooks()["content-checks"]
-    assert hook["entry"] == "pytest -q --no-cov -p no:cacheprovider -m content"
-    assert hook["files"] == "^content/"
+def test_catalog_checks_hook_runs_the_registered_catalog_marker() -> None:
+    hook = _hooks()["catalog-checks"]
+    assert hook["entry"] == "pytest -q --no-cov -p no:cacheprovider -m catalog"
+    assert hook["files"] == "^catalog/"
     assert hook["pass_filenames"] is False
     markers = _pyproject()["tool"]["pytest"]["ini_options"]["markers"]
-    assert any(marker.startswith("content:") for marker in markers), markers
+    assert any(marker.startswith("catalog:") for marker in markers), markers
 
 
 def test_dev_extra_pins_ruff_exactly() -> None:

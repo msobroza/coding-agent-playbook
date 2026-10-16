@@ -1,0 +1,52 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "opencode",
+    "session_id": "ses_7a1b2c3d4e5f",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "unattended": true,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "Bash",
+      "native_name": "bash",
+      "tool_class": "shell",
+      "tool_classes": [
+        "shell"
+      ],
+      "use_id": "call_01",
+      "paths": [],
+      "write_paths": [],
+      "content": [],
+      "command": {
+        "kind": "posix",
+        "parse_error": null,
+        "segments": [
+          [
+            [
+              "rm",
+              "-rf",
+              "build"
+            ],
+            "/playbook-fixture/proj/pkg"
+          ]
+        ]
+      }
+    }
+  },
+  "result": {
+    "decision": "deny",
+    "reason": "rm -rf build removes tracked files; run `make clean`."
+  },
+  "wire": {
+    "stdout": "{\"v\":1,\"decision\":\"deny\",\"reason\":\"rm -rf build removes tracked files; run `make clean`.\",\"context\":[],\"notice\":\"\"}\n",
+    "stderr": "",
+    "exit_code": 10
+  }
+}

@@ -11,13 +11,21 @@ aggregate *report* (``EvaluationReport``). ``MetricConfig`` is the parsed
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Final, Literal, Protocol, runtime_checkable
+
+# The eval-fixture globs are defined once, for the hooks' ``eval_fixture`` path
+# class; ``_eval_paths`` imports only ``re``, so the evaluators stay light.
+from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
     from pathlib import Path
 
+    from coding_agent_playbook.evaluators.baseline_git import GitRunner
     from coding_agent_playbook.evaluators.parse import ModuleModel
     from coding_agent_playbook.evaluators.scope import CostTier, Determinism
+    from coding_agent_playbook.evaluators.tool_runner import ToolRunner
 
 #: Levels a finding can carry.
 Level = Literal["ok", "warn", "fail"]
@@ -25,6 +33,73 @@ Level = Literal["ok", "warn", "fail"]
 Kind = Literal["absolute", "regression", "new"]
 #: Grading modes.
 Mode = Literal["regression", "absolute", "both"]
+
+#: Default ``[metrics] git_timeout_s``: every baseline git call is a local read,
+#: so one slower than this means a wedged repository (lock contention, network FS).
+DEFAULT_GIT_TIMEOUT_S = 10.0
+
+#: Default ``[metrics.ruff_violations] families`` (prK §F.2.1): the Clean Code
+#: budget codes and pydocstyle's missing-docstring codes, all stable in ruff 0.15.
+DEFAULT_RUFF_FAMILIES: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
+    {
+        "quality": ("C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915"),
+        "docstrings": ("D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107"),
+    }
+)
+
+
+@dataclass(frozen=True)
+class RuffSettings:
+    """``[metrics.ruff_violations]``: which codes count per family, and how ruff runs.
+
+    ``config`` holds the rendered per-invocation ``--config`` overrides
+    (``"lint.mccabe.max-complexity=10"``); ``preview`` adds ``--preview`` to
+    this call only, never to the consumer's ruff config.
+
+    Example::
+
+        >>> RuffSettings().codes()[:2]
+        ('C901', 'D100')
+    """
+
+    families: Mapping[str, tuple[str, ...]] = DEFAULT_RUFF_FAMILIES
+    config: tuple[str, ...] = ()
+    preview: bool = False
+
+    def codes(self) -> tuple[str, ...]:
+        """Every family's codes, sorted and once each: what ``--select`` gets."""
+        return tuple(sorted({code for codes in self.families.values() for code in codes}))
+
+
+@dataclass(frozen=True)
+class ToolSetup:
+    """How a subprocess-backed metric runs its tool: where, through what, for how long.
+
+    ``runner`` ``None`` means a plain subprocess; ``cwd`` is the repository root,
+    so the project's own config, ``per-file-ignores`` and ``# noqa`` apply.
+
+    A diff-based metric (``diff_coverage``) reads git through ``git``, which
+    builds a reader for a project root and bound (``None``: a plain ``git``
+    subprocess; a hook passes its hardened ``SafeGit``), and never scores a
+    path matching ``exclude`` (``[metrics] exclude``). ``timeout_s`` bounds
+    those git reads too. ``changed_lines`` replaces that git read outright:
+    ``(root, base) -> {root-relative path: line numbers}``, for a caller that
+    already lists the change (the coverage Stop stage, through its hardened
+    ``GitPort``, prK §F.1.2).
+
+    Example::
+
+        >>> ToolSetup().timeout_s
+        10.0
+    """
+
+    cwd: Path | None = None
+    runner: ToolRunner | None = None
+    timeout_s: float = DEFAULT_GIT_TIMEOUT_S
+    ruff: RuffSettings = field(default_factory=RuffSettings)
+    git: Callable[[Path, float], GitRunner] | None = None
+    exclude: tuple[str, ...] = ()
+    changed_lines: Callable[[Path, str], Mapping[str, frozenset[int]]] | None = None
 
 
 @dataclass(frozen=True)
@@ -208,6 +283,17 @@ class MetricConfig:
     ``mode`` selects the comparison strategy; ``fail_on_breach`` controls the
     process exit code; ``strict`` promotes warnings to gate failures. The three
     dicts are per-evaluator overrides keyed by evaluator ``name``.
+    ``git_timeout_s`` bounds every git call a ``git:`` baseline makes (prK
+    §F.0.3 item 7).
+
+    ``select`` / ``extend_select`` / ``ignore`` are the ruff-shaped metric
+    selection (metric or family names; ``select=None`` is the default set, see
+    :func:`~coding_agent_playbook.evaluators.policy.resolve_metric_selection`).
+    ``exclude`` lists repo-relative globs never measured; it defaults to the
+    frozen eval fixtures. ``test_timeout_s`` bounds a suite run (``None``: no
+    bound). ``ruff_families`` / ``ruff_config`` / ``ruff_preview`` are
+    ``[metrics.ruff_violations]`` (``ruff_config`` keeps the TOML values;
+    :attr:`ruff_settings` renders them as flags).
     """
 
     mode: Mode = "regression"
@@ -218,6 +304,28 @@ class MetricConfig:
     thresholds: dict[str, AbsoluteThreshold] = field(default_factory=dict)
     regression: dict[str, RegressionPolicy] = field(default_factory=dict)
     weights: dict[str, float] = field(default_factory=dict)
+    git_timeout_s: float = DEFAULT_GIT_TIMEOUT_S
+    select: tuple[str, ...] | None = None
+    extend_select: tuple[str, ...] = ()
+    ignore: tuple[str, ...] = ()
+    exclude: tuple[str, ...] = FIXTURE_GLOBS
+    test_timeout_s: float | None = None
+    ruff_families: Mapping[str, tuple[str, ...]] = field(
+        default_factory=lambda: dict(DEFAULT_RUFF_FAMILIES)
+    )
+    ruff_config: Mapping[str, Any] = field(default_factory=dict)
+    ruff_preview: bool = False
+
+    @property
+    def ruff_settings(self) -> RuffSettings:
+        """The ``ruff_violations`` settings: families, rendered ``--config`` flags, preview."""
+        from coding_agent_playbook.metrics_config import ruff_config_flags
+
+        return RuffSettings(
+            families=dict(self.ruff_families),
+            config=tuple(ruff_config_flags(self.ruff_config)),
+            preview=self.ruff_preview,
+        )
 
 
 @dataclass
@@ -253,6 +361,13 @@ class EvalContext:
     trials, collects one :class:`TrialResult` per trial, and grades the compiled
     aggregate layer over a context carrying them; every other family ignores it
     and it defaults to ``None`` (a single-trial run sets no aggregate context).
+
+    ``tool_paths`` maps a consumer-toolchain binary name (``"ruff"``) to the
+    executable a subprocess-backed metric must run (prK §F.0.3 item 1). The
+    metrics gate fills it from its request: ``machine.json`` pins inside hooks,
+    ``shutil.which`` for the CLI. ``tool_setup`` says how that tool runs (the
+    runner, the repository root, the timeout, the ruff settings); only
+    ``ruff_violations`` reads either.
     """
 
     module: ModuleModel | None
@@ -267,3 +382,5 @@ class EvalContext:
     candidate_measurements: list[Measurement] | None = None
     baseline_measurements: list[Measurement] | None = None
     trials: list[TrialResult] | None = None
+    tool_paths: Mapping[str, str] = field(default_factory=dict)
+    tool_setup: ToolSetup = field(default_factory=ToolSetup)

@@ -1,0 +1,8 @@
+{
+  "foreign": "foreign_marker:cursor_version",
+  "wire": {
+    "stdout": "",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

@@ -289,15 +289,15 @@ def _infer_prompts_dir(task_toml: Path) -> Path | None:
 
     Every layer keeps its kind directories side by side, so a task at
     ``<layer>/eval_tasks/<dir>/task.toml`` has its prompts at
-    ``<layer>/prompts``, whatever ``<layer>`` is (``content/core``,
+    ``<layer>/prompts``, whatever ``<layer>`` is (``catalog/core``,
     ``<pkg>/resources``, ``playbook``). Returns ``None`` when the task dir's
     parent is not ``eval_tasks`` (e.g. a synthetic test task). The path is not
     resolved, so a symlinked task dir maps to the layer it is reached through.
 
     Example::
 
-        >>> _infer_prompts_dir(Path("content/core/eval_tasks/t/task.toml"))
-        PosixPath('content/core/prompts')
+        >>> _infer_prompts_dir(Path("catalog/core/eval_tasks/t/task.toml"))
+        PosixPath('catalog/core/prompts')
     """
     if task_toml.parent.parent.name != "eval_tasks":
         return None

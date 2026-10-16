@@ -1,9 +1,10 @@
 """Jinja rendering of the canonical artifacts for ``playbook sync`` / ``render`` (SPEC §9.4).
 
 Every template a sync executes runs here, **before any adapter writes**: rule
-bodies, prompt bodies, and every rule a prompt inlines through
-``includes_rules`` (pre-rendered — adapters repeat that render inside
-``write_prompt``, after earlier files are on disk). So a template the Jinja
+bodies, prompt bodies, every rule a prompt inlines through ``includes_rules``
+(pre-rendered — adapters repeat that render inside ``write_prompt``, after
+earlier files are on disk), and the advisory body of every on hook (resolved
+by ``_sync_hooks``, specs/prK-lifecycle-hooks.md §C.1.3). So a template the Jinja
 sandbox rejects aborts the sync with nothing written and the offending file
 named (:class:`~coding_agent_playbook.renderer.TemplateSecurityError`,
 specs/prK-lifecycle-hooks.md §P1).
@@ -13,11 +14,12 @@ from __future__ import annotations
 
 import dataclasses
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
+from coding_agent_playbook.commands._sync_hooks import SyncHooks, resolve_sync_hooks
 from coding_agent_playbook.orchestrator import (
     build_prompt_environment,
     filter_applies_if,
@@ -33,8 +35,9 @@ from coding_agent_playbook.renderer import (
 if TYPE_CHECKING:
     from jinja2 import Environment
 
+    from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.orchestrator import RuleRegistryImpl, SyncContext
-    from coding_agent_playbook.types import Prompt, Rule, Skill
+    from coding_agent_playbook.types import Hook, Prompt, Rule, Skill
 
 
 @dataclass(frozen=True)
@@ -43,6 +46,7 @@ class RenderedArtifacts:
 
     ``registry`` resolves ``includes_rules`` for the adapters (already
     exercised once per included rule, so the adapters' repeat cannot fail).
+    ``hooks`` holds the ``[hooks]`` policy and the on hooks, bodies rendered.
 
     Example::
 
@@ -54,6 +58,7 @@ class RenderedArtifacts:
     prompts: list[Prompt]
     skills: list[Skill]
     registry: RuleRegistryImpl
+    hooks: SyncHooks = field(default_factory=SyncHooks)
 
 
 def build_jinja_context(ctx: SyncContext) -> dict[str, object]:
@@ -106,6 +111,25 @@ def render_prompt_body(prompt: Prompt, context: dict[str, object], env: Environm
     return dataclasses.replace(prompt, body=rendered)
 
 
+def render_hook_body(hook: Hook, context: dict[str, object], env: Environment) -> str:
+    """The advisory body of ``hook``: ``HOOK.md`` verbatim, ``HOOK.md.j2`` rendered (§C.1.3).
+
+    Renders ``template_body`` through ``env``, the sandboxed *base* environment
+    (``is_prompt_context=False``): ``rule()`` is undefined there, so a body
+    cannot include a rule (H19). Only the body renders; frontmatter, handler
+    commands and scripts never do (L7). A sandbox violation raises
+    :class:`TemplateSecurityError` naming the hook's file (its id without one).
+
+    Example::
+
+        hook = resolved.with_rendered_body(render_hook_body(resolved.definition, ctx, env))
+    """
+    if not hook.is_templated:
+        return hook.body
+    source = str(hook.source_path) if hook.source_path is not None else hook.frontmatter.id
+    return render_sandboxed(hook.template_body, dict(context), env=env, source=source)
+
+
 def filter_skills(skills: list[Skill]) -> list[Skill]:
     """Skills are unconditional in v1 (no ``applies_if`` in the SKILL.md
     schema). Returned unchanged; kept as a hook for v2 to filter on a
@@ -117,8 +141,9 @@ def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
     """Filter by ``applies_if`` and run every template a sync needs; write nothing.
 
     Inputs (``applies_if`` file checks included) are read from the real repo
-    through ``ctx``. Raises :class:`TemplateSecurityError` before any adapter
-    has written a file.
+    through ``ctx``. Raises :class:`TemplateSecurityError` (or, for a malformed
+    ``[hooks]`` table, ``_sync_hooks.HookPolicyError``) before any adapter has
+    written a file.
 
     Example::
 
@@ -135,12 +160,21 @@ def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
     registry, prompt_env = build_prompt_environment(rendered_rules, ctx.facts)
     rendered_prompts = [render_prompt_body(p, base_context, prompt_env) for p in prompts]
     _prerender_inclusions(rendered_prompts, registry)
+    hooks = resolve_sync_hooks(ctx, lambda hook: _with_body(hook, base_context, base_env))
     return RenderedArtifacts(
         rules=rendered_rules,
         prompts=rendered_prompts,
         skills=filter_skills(ctx.skills_resolved),
         registry=registry,
+        hooks=hooks,
     )
+
+
+def _with_body(hook: ResolvedHook, context: dict[str, object], env: Environment) -> ResolvedHook:
+    """``hook`` with its ``HOOK.md.j2`` body rendered (a hook built in memory has none)."""
+    if hook.definition is None:
+        return hook
+    return hook.with_rendered_body(render_hook_body(hook.definition, context, env))
 
 
 def _prerender_inclusions(prompts: list[Prompt], registry: RuleRegistryImpl) -> None:
@@ -169,9 +203,24 @@ def report_sandbox_violation(exc: TemplateSecurityError, repo_root: Path, *, out
 
         return report_sandbox_violation(exc, ctx.repo_root, outcome="playbook render aborted.")
     """
-    source = Path(exc.source)
-    shown = _repo_relative(source, repo_root) if source.is_absolute() else exc.source
-    print(f"error: {TemplateSecurityError(shown, exc.detail)}", file=sys.stderr)
+    detail = f"template rejected by the Jinja sandbox: {exc.detail}"
+    return report_template_error(exc.source, detail, repo_root, outcome=outcome)
+
+
+def report_template_error(source: str, detail: str, repo_root: Path, *, outcome: str) -> int:
+    """Print ``error: <source>: <detail>`` and ``error: <outcome>`` to stderr; return 1.
+
+    An absolute ``source`` is shown relative to ``repo_root``; anything else
+    (an artifact id) is shown as given.
+
+    Example::
+
+        return report_template_error(str(hook.source_path), "'rule' is undefined", repo_root,
+                                     outcome="playbook render aborted.")
+    """
+    path = Path(source)
+    shown = _repo_relative(path, repo_root) if path.is_absolute() else source
+    print(f"error: {shown}: {detail}", file=sys.stderr)
     print(f"error: {outcome}", file=sys.stderr)
     return 1
 

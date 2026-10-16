@@ -1,0 +1,4 @@
+=== Metrics ===
+  OK — 1 file(s) measured, no warnings or failures.
+  skipped pkg/broken.py: unparseable (invalid syntax)
+  summary: PASS — 0 fail, 0 warn, composite=n/a

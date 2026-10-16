@@ -1,0 +1,26 @@
+{
+  "parsed": {
+    "name": "user_prompt_submit",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "turn_id": "pr_31",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "default",
+    "prompt": "Refund the client, IBAN FR76 3000 6000 0112 3456 7890 189, by Friday.",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "UserPromptSubmit"
+  },
+  "result": {
+    "decision": "deny",
+    "reason": "Prompt not sent: it contains personal data.\niban at offset 24: FR** **** **** **** **** **** *89\nResubmit with a placeholder such as <IBAN> instead of the value, or use the override."
+  },
+  "wire": {
+    "stdout": "{\"decision\":\"block\",\"reason\":\"Prompt not sent: it contains personal data.\\niban at offset 24: FR** **** **** **** **** **** *89\\nResubmit with a placeholder such as <IBAN> instead of the value, or use the override.\"}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}
