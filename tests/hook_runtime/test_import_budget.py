@@ -26,7 +26,9 @@ remote name must be resolved, ``ipaddress`` only for an address-shaped host.
 
 from __future__ import annotations
 
+import functools
 import re
+import subprocess
 import sys
 from typing import TYPE_CHECKING, Final
 
@@ -95,6 +97,34 @@ def _imports(
     assert result.returncode == exit_code, result.stderr.decode()
     lines = result.stderr.decode("utf-8", "replace").splitlines()
     return {m.group(1) for line in lines if (m := _IMPORT_LINE.match(line))}
+
+
+@functools.cache
+def _interpreter_baseline() -> frozenset[str]:
+    """Modules a bare ``import pathlib`` loads on this interpreter.
+
+    The dispatcher needs ``pathlib``, so whatever it drags in cannot be
+    attributed to an engine branch. On CPython 3.12 that includes ``ipaddress``
+    (``pathlib`` -> ``urllib.parse`` -> ``ipaddress``); 3.13 dropped the
+    ``urllib.parse`` import, so there the branch-local checks stay strict.
+
+    Example: ``"ipaddress" in _interpreter_baseline()`` is True on 3.12 only.
+    """
+    code = "import pathlib, sys; print('\\n'.join(sys.modules))"
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=PROBE_TIMEOUT_S,
+        env=probe_env(),
+        check=True,
+    )
+    return frozenset(result.stdout.split())
+
+
+def _attributable(module: str) -> bool:
+    """Whether loading ``module`` can be pinned on a dispatcher branch here."""
+    return module not in _interpreter_baseline()
 
 
 def _forbidden(imported: set[str], allowed: tuple[str, ...] = ()) -> list[str]:
@@ -695,7 +725,8 @@ def test_supply_chain_guards_load_branch_modules_only_on_their_branch(
 
     assert _INSTALL_CMDS in imported
     assert _EGRESS in imported or tool != "Bash"
-    assert sorted(m for m in _BRANCH_LOCAL if m in imported) == sorted(loaded)
+    expected = sorted(m for m in loaded if _attributable(m))
+    assert sorted(m for m in _BRANCH_LOCAL if m in imported and _attributable(m)) == expected
     assert _forbidden(imported, allowed=("tomllib",)) == []
     assert "subprocess" not in imported
     assert "socket" not in imported  # hosts are strings: no lookup can happen
@@ -711,7 +742,7 @@ def test_difflib_loads_only_with_an_allowlist(tmp_path: Path, real_proc: Subproc
 
     assert "difflib" in imported
     assert "tomllib" not in imported
-    assert "ipaddress" not in imported
+    assert not _attributable("ipaddress") or "ipaddress" not in imported
 
 
 @pytest.fixture
@@ -800,7 +831,8 @@ def test_network_guard_bash_branch_imports_nothing_forbidden(
     )
 
     assert _NET_TARGETS in imported  # the guard's module loaded
-    assert ("ipaddress" in imported) is bool(loaded)
+    if _attributable("ipaddress"):  # 3.12: pathlib already loads it (_interpreter_baseline)
+        assert ("ipaddress" in imported) is bool(loaded)
     assert _forbidden(imported) == []
     assert "subprocess" not in imported
     assert "socket" not in imported
