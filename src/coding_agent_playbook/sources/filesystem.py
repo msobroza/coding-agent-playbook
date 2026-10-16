@@ -12,11 +12,11 @@ from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook import _toml
 from coding_agent_playbook._atomic_io import atomic_write_bytes
 from coding_agent_playbook._layers import ENGINE_PACKAGE as ENGINE_PACKAGE
 from coding_agent_playbook._layers import REPO_LOCAL_SOURCE as REPO_LOCAL_SOURCE
-from coding_agent_playbook.config import Config, check_enabled_keys
+from coding_agent_playbook._toml import dump_toml
+from coding_agent_playbook.config import Config, ConfigError, check_config_file
 from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
@@ -27,7 +27,7 @@ from coding_agent_playbook.sources.base import ArtifactSource, StateSource
 from coding_agent_playbook.types import Prompt, Rule, Skill, split_frontmatter
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Sequence
+    from collections.abc import Callable, Iterator, Mapping, Sequence
     from typing import TypeVar
 
     from coding_agent_playbook.evals.task import EvalTask
@@ -44,10 +44,10 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     ``.coding-agent-playbook.toml`` per SPEC §7.2.
 
     On type mismatch (one side dict, the other a scalar/list), override
-    wins silently — there is no warning. This means a typo'd ``.local.toml``
-    that turns ``[user_choices]`` from a table into a scalar will overwrite
-    the entire section. Acceptable for v1; a future ``playbook validate`` pass
-    should flag suspicious overrides.
+    wins silently. For the tables ``Config`` reads that cannot happen: each file
+    is checked on its own first (``config.check_config_file``), so a
+    ``user_choices = "x"`` in either file is refused, naming that file, before
+    any merge. Other unknown keys may still be replaced whole.
     """
     result: dict[str, Any] = dict(base)
     for key, value in override.items():
@@ -56,104 +56,6 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
         else:
             result[key] = value
     return result
-
-
-#: Table-header depth the writer emits (``[detector_cache.frameworks]``, SPEC
-#: §8.2). A table nested deeper is an inline table under its parent header, so
-#: the engine's own Config/Lockfile shapes serialize exactly as before P6 while
-#: any table a user writes in ``extra_tables`` still round-trips.
-_MAX_HEADER_DEPTH = 2
-
-
-def _format_toml_scalar(value: Any) -> str:
-    """Render a value as a TOML literal: a scalar, an array or an inline table.
-
-    Delegates to :mod:`coding_agent_playbook._toml` for the shared escape
-    ladder, preserving the historical ``_dump_toml …`` error wording. Dicts are
-    inline tables (P6): they only reach here below :data:`_MAX_HEADER_DEPTH`,
-    inside an array or inside a ``[[x]]`` entry.
-    """
-    return _toml.format_scalar(value, allow_inline_table=True, type_error_prefix="_dump_toml")
-
-
-def _dump_toml(data: dict[str, Any]) -> str:
-    """Serialize ``data`` to a TOML document.
-
-    Top-level scalars and arrays come first, then each mapping as a
-    ``[section]`` (sub-mappings as ``[parent.child]`` headers, deeper ones as
-    inline tables, see :func:`_emit_table`) and each non-empty list of mappings
-    as ``[[key]]`` entries (the lockfile's ``entries``). Every key and header
-    segment goes through :func:`_toml.format_key`, so ``[hooks."a.b"]`` and
-    non-ASCII keys parse back.
-
-    Example::
-
-        >>> print(_dump_toml({"v": 1, "a": {"x": 2, "b": {"c": {"d": 0.5}}}}), end="")
-        v = 1
-        <BLANKLINE>
-        [a]
-        x = 2
-        <BLANKLINE>
-        [a.b]
-        c = { d = 0.5 }
-    """
-    lines: list[str] = []
-    sections: list[tuple[str, Any]] = []
-    # Emit scalars before section headers — TOML requires top-level keys to
-    # appear above any [section] headers, otherwise the parser puts them
-    # under the previous section.
-    for key, value in data.items():
-        if isinstance(value, dict) or _is_array_of_tables(value):
-            sections.append((key, value))
-        else:
-            lines.append(_key_value_line(key, value))
-    for key, value in sections:
-        if isinstance(value, dict):
-            _emit_table(lines, [key], value)
-        else:
-            _emit_array_of_tables(lines, key, value)
-    return "\n".join(lines) + "\n"
-
-
-def _is_array_of_tables(value: object) -> bool:
-    """True for a non-empty list whose every item is a mapping (``[[key]]`` form)."""
-    return isinstance(value, list) and bool(value) and all(isinstance(v, dict) for v in value)
-
-
-def _key_value_line(key: str, value: Any) -> str:
-    """``key = value`` with the key quoted when it is not a bare TOML key."""
-    return f"{_toml.format_key(key)} = {_format_toml_scalar(value)}"
-
-
-def _emit_array_of_tables(lines: list[str], key: str, entries: list[dict[str, Any]]) -> None:
-    """Emit one ``[[key]]`` table per entry; nested values are inline."""
-    for entry in entries:
-        if lines:
-            lines.append("")
-        lines.append(f"[[{_toml.format_key(key)}]]")
-        lines.extend(_key_value_line(subkey, subvalue) for subkey, subvalue in entry.items())
-
-
-def _emit_table(lines: list[str], path: list[str], table: dict[str, Any]) -> None:
-    """Emit a TOML ``[a.b]`` table header plus its key/value lines, then
-    recurse into any dict-valued children as ``[a.b.subkey]`` sub-tables.
-
-    Headers go at most :data:`_MAX_HEADER_DEPTH` levels deep: inside a
-    ``[section.child]`` table a dict value is written as an inline table on its
-    key's line, never as an error (P6 — a preserved ``[metrics.thresholds]``
-    holds one table per metric).
-    """
-    if lines:
-        lines.append("")
-    lines.append(f"[{'.'.join(_toml.format_key(part) for part in path)}]")
-    nested: list[tuple[str, dict[str, Any]]] = []
-    for subkey, subvalue in table.items():
-        if isinstance(subvalue, dict) and len(path) < _MAX_HEADER_DEPTH:
-            nested.append((subkey, subvalue))
-        else:
-            lines.append(_key_value_line(subkey, subvalue))
-    for subkey, subtable in nested:
-        _emit_table(lines, [*path, subkey], subtable)
 
 
 def _resource_subdir(package: str, subdir: str) -> Path | None:
@@ -233,16 +135,49 @@ def _atomic_write_text(target: Path, content: str) -> None:
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:
-    """Parse one config file, refusing enabled-list shapes ``Config`` would misread.
+    """Parse one config file, refusing every shape ``Config`` would misread (SPEC §7.1).
 
     Each file is checked on its own, before the SPEC §7.2 deep merge, so a
     :class:`~coding_agent_playbook.config.ConfigError` names the file that holds
-    the mistake (``.coding-agent-playbook.local.toml: the [adapters] table …``).
+    the mistake (``.coding-agent-playbook.local.toml: [project] must be a table …``):
+    a file ``tomllib`` cannot read (:func:`_decode_config_file`), an enabled-list
+    shape, a table ``Config`` reads that is not one, or a malformed ``[output]``
+    (``config.check_config_file``). Checked merged instead, a local
+    ``project = "x"`` was reported against the committed file.
     """
-    with path.open("rb") as f:
-        data = tomllib.load(f)
-    check_enabled_keys(data, source=path.name)
+    data = _decode_config_file(path)
+    check_config_file(data, source=path.name)
     return data
+
+
+def _decode_config_file(path: Path) -> dict[str, Any]:
+    """``tomllib.load`` of ``path``, a file it cannot read raised as a ``ConfigError`` naming it.
+
+    Bad syntax, a non-UTF-8 byte and values nested past Python's recursion limit
+    (``tomllib`` recurses into inline arrays/tables) each ended every command
+    with a traceback (exit 1); the CLI now prints ``error: <file>: …`` (exit 2).
+
+    Example::
+
+        >>> _decode_config_file(Path("broken.toml"))  # doctest: +SKIP
+        Traceback (most recent call last):
+        ...
+        coding_agent_playbook.config.ConfigError: broken.toml: invalid TOML: Invalid value (at end of document)
+    """
+    try:
+        with path.open("rb") as f:
+            return tomllib.load(f)
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"{path.name}: invalid TOML: {exc}") from exc
+    except UnicodeDecodeError as exc:
+        raise ConfigError(
+            f"{path.name}: not UTF-8 text ({exc.reason} at byte {exc.start}); save it as UTF-8"
+        ) from exc
+    except RecursionError as exc:
+        raise ConfigError(
+            f"{path.name}: inline arrays/tables nested too deeply for Python's TOML reader "
+            "(it hit the recursion limit); flatten them"
+        ) from exc
 
 
 def _find_skill_md(skill_dir: Path) -> Path | None:
@@ -422,20 +357,74 @@ class FileSystemStateSource(StateSource):
     def load_config(self) -> Config:
         """Read the committed config with the local overrides merged on top (SPEC §7.2).
 
+        This is the *effective* config every command runs with, and it is never
+        saved: writing it back would commit one engineer's personal overrides for
+        the whole team (what ``init`` and ``check --refresh`` did before v0.18).
+        Rewrites of the committed file go through ``commands/_committed_config``,
+        which starts from the committed table alone (SPEC §7.2).
+
         Raises :class:`FileNotFoundError` without the committed file and
-        :class:`~coding_agent_playbook.config.ConfigError` (naming the file) for
-        a shape ``Config`` would misread — before anything else runs.
+        :class:`~coding_agent_playbook.config.ConfigError` for a shape ``Config``
+        would misread — before anything else runs. Each file is checked on its
+        own first, so the error names the file at fault; what only the merged
+        table can lack (a required key missing from both files) names the
+        committed file, where it belongs.
         """
-        primary = self._primary_config_path()
-        data = _deep_merge(_read_config_file(primary), self.load_local_overrides())
-        return Config.from_dict(data, source=primary.name)
+        return self._merged_config(self.read_committed_config_table(), source=self._CONFIG_FILENAME)
+
+    def preview_config(self, table: Mapping[str, Any]) -> Config:
+        """What :meth:`load_config` will return once ``save_config_table(table)`` ran.
+
+        ``table`` with the checked local file merged on top (SPEC §7.2), through
+        ``Config.from_dict`` — and nothing written. ``init`` and ``check
+        --refresh`` call it before writing, so their final guard is the config the
+        next command will load. The local file's own shape is refused when it is
+        read, naming it (``.coding-agent-playbook.local.toml: [project] must be a
+        table …``); ``table`` is checked by the caller, so a ``ConfigError`` raised
+        by the merge itself names the local file too.
+
+        Example::
+
+            >>> state.preview_config(rewrite.table).commit_output  # doctest: +SKIP
+            False
+        """
+        return self._merged_config(dict(table), source=self._CONFIG_LOCAL_FILENAME)
+
+    def _merged_config(self, committed: dict[str, Any], *, source: str) -> Config:
+        """``Config`` of ``committed`` with the checked local file merged on top (SPEC §7.2)."""
+        return Config.from_dict(_deep_merge(committed, self.load_local_overrides()), source=source)
+
+    def read_committed_config_table(self) -> dict[str, Any]:
+        """The checked, decoded ``.coding-agent-playbook.toml`` alone — no local overrides.
+
+        Holds every top-level key, including those ``Config`` does not manage
+        (``[links]``, ``[metrics]``, ``[hooks]``, …), so a rewrite of the committed
+        file can carry them over (``config_entries.unmanaged_config_entries``).
+        Raises :class:`FileNotFoundError` without the file and
+        :class:`~coding_agent_playbook.config.ConfigError` naming it for a shape
+        ``Config`` would misread, like :meth:`load_config`.
+
+        Example::
+
+            >>> source = FileSystemStateSource(repo_root=Path("/no/such/repo"))
+            >>> source.read_committed_config_table()  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+            ...
+            FileNotFoundError: missing .coding-agent-playbook.toml; run `playbook init`
+        """
+        primary = self._repo_root / self._CONFIG_FILENAME
+        if not primary.is_file():
+            raise FileNotFoundError(f"missing {primary.name}; run `playbook init`")
+        return _read_config_file(primary)
 
     def load_primary_config(self) -> Config:
-        """Read the committed config alone, never merging ``.local.toml`` (P6).
+        """The committed config alone, as a ``Config``: never merging ``.local.toml`` (P6).
 
-        What ``playbook init`` and ``playbook check --refresh`` modify and save:
-        the merged view would bake personal overrides into the committed file.
-        Raises like :meth:`load_config` for a missing or misread committed file.
+        :meth:`read_committed_config_table` through ``Config.from_dict``, so its
+        ``extra_tables`` hold the committed ``[hooks]``/``[guardrails]`` the hook
+        policy reads (:meth:`StateSource.load_policy_tables`). Raises like
+        :meth:`load_config` for a missing or misread committed file. Rewrites of
+        the committed file go through ``commands/_committed_config``.
 
         Example::
 
@@ -444,21 +433,23 @@ class FileSystemStateSource(StateSource):
             ...
             FileNotFoundError: missing .coding-agent-playbook.toml; run `playbook init`
         """
-        primary = self._primary_config_path()
-        return Config.from_dict(_read_config_file(primary), source=primary.name)
+        return Config.from_dict(self.read_committed_config_table(), source=self._CONFIG_FILENAME)
 
-    def _primary_config_path(self) -> Path:
-        """The committed config's path; :class:`FileNotFoundError` when it is absent."""
-        primary = self._repo_root / self._CONFIG_FILENAME
-        if not primary.is_file():
-            raise FileNotFoundError(f"missing {primary.name}; run `playbook init`")
-        return primary
+    def has_committed_config(self) -> bool:
+        """Whether ``.coding-agent-playbook.toml`` exists (a first ``init`` has none).
+
+        Example::
+
+            >>> FileSystemStateSource(repo_root=Path("/no/such/repo")).has_committed_config()
+            False
+        """
+        return (self._repo_root / self._CONFIG_FILENAME).is_file()
 
     def load_local_overrides(self) -> dict[str, Any]:
         """The checked ``.coding-agent-playbook.local.toml`` table, ``{}`` when absent.
 
-        ``playbook init`` calls it before writing anything, since it writes a
-        fresh committed config without loading one.
+        ``playbook init`` calls it up front, before writing anything: to check the
+        local file on its own and to read the overlays its final sync will use.
 
         Example::
 
@@ -469,10 +460,33 @@ class FileSystemStateSource(StateSource):
         return _read_config_file(local) if local.is_file() else {}
 
     def save_config(self, config: Config) -> None:
-        _atomic_write_text(
-            self._repo_root / self._CONFIG_FILENAME,
-            _dump_toml(config.to_dict()),
-        )
+        """Atomically write ``config.to_dict()`` (``extra_tables`` included) to the committed file.
+
+        The :class:`StateSource` contract. A ``Config`` from :meth:`load_config`
+        has the local file merged in, so saving it would commit personal
+        overrides: no command calls this. ``init`` and ``check --refresh`` write
+        through :meth:`save_config_table`, from ``commands/_committed_config``.
+
+        Example::
+
+            >>> state.save_config(config)  # doctest: +SKIP
+        """
+        self.save_config_table(config.to_dict())
+
+    def save_config_table(self, table: Mapping[str, Any]) -> None:
+        """Atomically write the decoded ``table`` to the committed file, every entry as is.
+
+        The committed file's only writer. Production code calls it only from
+        ``commands/_committed_config.ConfigRewrite.save``, whose table is built
+        from the committed file alone (pinned by
+        ``tests/unit/test_committed_config.py``): never write :meth:`load_config`'s
+        merged config back (SPEC §7.2). Values survive; comments and layout do not.
+
+        Example::
+
+            >>> state.save_config_table({**state.read_committed_config_table(), "detector_cache": {}})  # doctest: +SKIP
+        """
+        _atomic_write_text(self._repo_root / self._CONFIG_FILENAME, dump_toml(table))
 
     def load_lockfile(self) -> Lockfile | None:
         """Read the lockfile. Returns ``None`` if no lockfile exists (= first
@@ -488,5 +502,5 @@ class FileSystemStateSource(StateSource):
     def save_lockfile(self, lockfile: Lockfile) -> None:
         _atomic_write_text(
             self._repo_root / self._LOCKFILE_FILENAME,
-            _dump_toml(lockfile.to_dict()),
+            dump_toml(lockfile.to_dict()),
         )

@@ -9,7 +9,8 @@ that ships skills natively delegates here, differing only in the root:
 
 Because the bytes never depend on the root, the same skill is byte-identical in
 every root. Each directory holds ``SKILL.md`` plus byte-copies (copies, not
-symlinks) of the canonical ``scripts/`` and ``references/`` subtrees.
+symlinks) of the canonical ``scripts/`` and ``references/`` subtrees, minus
+Python bytecode caches (:mod:`coding_agent_playbook.adapters._skill_files`).
 
 ``SKILL.md`` follows the Agent Skills standard read by Claude Code and OpenCode:
 frontmatter ``name`` is forced to the skill id (= the directory name) and must
@@ -489,10 +490,12 @@ def _copy_subtree(
 
     Returns the destination files in sorted source order; ``[]`` when ``src``
     is absent. Source symlinks inside the skill are dereferenced (copies, not
-    symlinks); a secret path or a link leaving the skill's source dir is never
-    copied (:func:`_skill_sources.copyable_skill_files` warns instead). Each
-    recorded path is the file ``copy2`` actually wrote, never a directory; a
-    destination blocked by user files is skipped (see :func:`_prepare_destination`).
+    symlinks); bytecode caches (``__pycache__/``, ``*.pyc``/``*.pyo``) are
+    skipped, so they never reach a skills root or the lockfile; a secret path or
+    a link leaving the skill's source dir is never copied
+    (:func:`_skill_sources.copyable_skill_files` warns instead). Each recorded
+    path is the file ``copy2`` actually wrote, never a directory; a destination
+    blocked by user files is skipped (see :func:`_prepare_destination`).
     """
     if src is None:
         return []

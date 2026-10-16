@@ -294,6 +294,44 @@ def test_init_checks_the_local_files_overlays_which_replace_the_flag(
     assert sorted(path.name for path in tmp_path.iterdir()) == [local.name, "pyproject.toml"]
 
 
+@pytest.mark.parametrize("local_overlays", ["[]", f'["{PACK_NAME}"]'])
+def test_init_checks_the_flag_too_when_the_local_file_replaces_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], local_overlays: str
+) -> None:
+    """Regression: with a local ``overlays_enabled`` only that list was checked, so
+    an unusable ``--overlays`` was written to the committed file (exit 0) and every
+    teammate without the local file then failed ``playbook sync``."""
+    _write_pyproject(tmp_path)
+    local = tmp_path / ".coding-agent-playbook.local.toml"
+    local.write_text(f"overlays_enabled = {local_overlays}\n", encoding="utf-8")
+
+    assert _init.run(_init_ns(tmp_path, overlays=_TYPO)) == 2
+
+    err = capsys.readouterr().err
+    assert err.startswith(
+        "error: --overlays names package(s) that cannot be used as overlays here; "
+        "nothing was written:"
+    )
+    assert f"\n  {_TYPO}: not importable {_packs_hint()}" in err
+    assert "overlays_enabled in" not in err  # the local list is usable
+    assert sorted(path.name for path in tmp_path.iterdir()) == [local.name, "pyproject.toml"]
+
+
+def test_init_reports_both_unusable_lists_at_once(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write_pyproject(tmp_path)
+    local = tmp_path / ".coding-agent-playbook.local.toml"
+    local.write_text(f'overlays_enabled = ["{_NOT_A_PACK}"]\n', encoding="utf-8")
+
+    assert _init.run(_init_ns(tmp_path, overlays=_TYPO)) == 2
+
+    err = capsys.readouterr().err
+    assert err.startswith("error: --overlays names package(s)")
+    assert "\nerror: overlays_enabled in .coding-agent-playbook.local.toml names package(s)" in err
+    assert sorted(path.name for path in tmp_path.iterdir()) == [local.name, "pyproject.toml"]
+
+
 def test_init_accepts_the_bundled_pack_and_writes_the_top_level_key(tmp_path: Path) -> None:
     _write_pyproject(tmp_path)
 

@@ -19,7 +19,7 @@ lint_codes:
 
 # Python typing conventions
 
-Type hints aren't decoration — they're the cheapest documentation you can ship. Annotate every public signature; mypy or pyright keeps you honest.
+Type hints aren't decoration — they're the cheapest documentation you can ship. Annotate every function signature, public and private; mypy or pyright keeps you honest.
 
 ## Generics
 
@@ -56,18 +56,17 @@ def first(items: list[T]) -> T | None:
 ## Optional types
 
 - Write `X | None`, not `Optional[X]`. They mean the same thing; the `|` form is shorter and reads top-to-bottom.
-- Don't default a mutable container to `None` to dodge typing — default to an empty container:
+- Never use a mutable default (`[]`, `{}`, `set()`): it is evaluated once, at definition time, and shared by every call. For a read-only input, default to an immutable empty value typed with the abstract type. When the function needs its own mutable copy, default to `None` and copy explicitly. In a dataclass, use `field(default_factory=list)`.
 
 ```python
-def push(items: list[int] | None = None) -> list[int]:   # avoid
-    items = items or []
+def push(items: list[int] = []) -> list[int]:            # avoid: one list shared by all calls
     ...
 
-def push(items: list[int] = []) -> list[int]:            # avoid (mutable default!)
+def total(items: Sequence[int] = ()) -> int:             # read-only input: immutable default
     ...
 
-def push(items: list[int] | None = None) -> list[int]:   # accept, but ...
-    items = list(items) if items is not None else []     # ... copy explicitly
+def push(items: list[int] | None = None) -> list[int]:   # needs its own copy
+    items = [] if items is None else list(items)         # never `items or []`
     ...
 ```
 

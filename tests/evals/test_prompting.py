@@ -402,3 +402,35 @@ def test_sandbox_violation_in_prompt_body_raises_prompt_resolution_error(
     task = _synthetic_task(tmp_path, "{{ lipsum.__globals__['os'].__name__ }}\n")
     with pytest.raises(PromptResolutionError, match=r"synthetic-task.*__globals__"):
         render_prompt(task, strict=False)
+
+
+@pytest.mark.parametrize("with_dockerfile", [False, True])
+def test_has_file_rule_gate_resolves_against_the_setup_tree(
+    tmp_path: Path, with_dockerfile: bool
+) -> None:
+    """``has_file`` paths are checked inside ``setup/`` (the project the agent works in),
+    never against the eval process's working directory."""
+    task = _synthetic_task(tmp_path, '{{ rule("needs-dockerfile") }}\n')
+    setup = task.source_path.parent / "setup"
+    rules = setup / "playbook" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "needs-dockerfile.md").write_text(
+        textwrap.dedent(
+            """\
+            ---
+            id: needs-dockerfile
+            name: Needs Dockerfile
+            description: Gated on a Dockerfile.
+            scope: always
+            applies_if:
+              has_file: ["Dockerfile"]
+            ---
+            DOCKERFILE RULE BODY
+            """
+        ),
+        encoding="utf-8",
+    )
+    if with_dockerfile:
+        (setup / "Dockerfile").write_text("FROM python:3.12\n", encoding="utf-8")
+
+    assert ("DOCKERFILE RULE BODY" in render_prompt(task, strict=True)) is with_dockerfile

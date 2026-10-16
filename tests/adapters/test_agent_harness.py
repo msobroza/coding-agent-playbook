@@ -698,6 +698,48 @@ def test_skill_nested_script_and_reference_dirs_only_copy_files(tmp_path):
     assert deep_ref.read_text(encoding="utf-8") == "# deep ref\n"
 
 
+def _seed_files(root: Path, files: dict[str, bytes]) -> Path:
+    for rel, content in files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_bytes(content)
+    return root
+
+
+def test_skill_bytecode_caches_are_never_copied_or_recorded(tmp_path: Path) -> None:
+    """Regression (review finding 8): ``scripts/__pycache__`` (``pip install`` byte-compiles
+    pack scripts; an in-process import writes one) and stray ``*.pyc``/``*.pyo`` files are
+    neither copied, returned as written, nor recorded as manifest script entries."""
+    scripts_src = _seed_files(
+        tmp_path / "scripts",
+        {
+            "run.py": b"print('x')\n",
+            "__pycache__/run.cpython-312.pyc": b"\x00pyc",
+            "sub/__pycache__/deep.cpython-313.pyc": b"\x00pyc",
+            "stray.pyo": b"\x00pyo",
+        },
+    )
+    refs_src = _seed_files(
+        tmp_path / "refs",
+        {"guide.md": b"# guide\n", "__pycache__/x.cpython-312.pyc": b"\x00", "old.pyc": b"\x00"},
+    )
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    adapter = AgentHarnessAdapter()
+    skill = _make_skill(skill_id="cached", scripts_dir=scripts_src, references_dir=refs_src)
+    _populate(adapter, skill, repo_root=repo)
+
+    written = adapter.finalize(repo)
+
+    skill_dir = repo / "skills" / "cached"
+    on_disk = sorted(p.relative_to(skill_dir).as_posix() for p in skill_dir.rglob("*"))
+    assert on_disk == ["SKILL.md", "references", "references/guide.md", "scripts", "scripts/run.py"]
+    assert [p for p in written if "__pycache__" in p.parts or p.suffix in {".pyc", ".pyo"}] == []
+    manifest = read_manifest(repo)
+    assert manifest is not None
+    entry = manifest.index_by_path()["skills/cached/SKILL.md"]
+    assert [script.path for script in entry.scripts] == ["skills/cached/scripts/run.py"]
+
+
 # --- entry-point discoverability -------------------------------------------
 
 

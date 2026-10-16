@@ -8,20 +8,20 @@ calling ``rule()``, a Jinja syntax error), without importing each other.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
 from jinja2 import StrictUndefined, TemplateSyntaxError
 from jinja2.sandbox import SandboxedEnvironment
 
+# The one ``{{ rule("<id>") }}`` pattern (group 1 is the rule id), shared with
+# sync's appendix decision: rules and hook bodies may never make such a call, and
+# a prompt only for a rule in its ``includes_rules``.
+from coding_agent_playbook.renderer import RULE_CALL_RE as RULE_CALL_RE
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import TextIO
-
-#: A ``{{ rule("<id>") }}`` call; group 1 is the rule id. Rules and hook bodies
-#: may never make one, and a prompt only for a rule in its ``includes_rules``.
-RULE_CALL_RE: Final = re.compile(r"\{\{\s*rule\(\s*['\"]([^'\"]+)['\"]\s*\)\s*\}\}")
 
 
 @dataclass(frozen=True)

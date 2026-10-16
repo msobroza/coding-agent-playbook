@@ -204,7 +204,19 @@ def _format_scalar(value: Any) -> str:
     Thin wrapper over :func:`coding_agent_playbook._toml.format_scalar` with
     inline tables enabled: bool before int (``isinstance(True, int)``),
     control-char-safe basic strings, inline arrays, and inline tables for dicts.
-    Preserves the historical ``manifest TOML …`` ``TypeError`` wording.
+    Since v0.18 it also writes floats and dates/datetimes/times, which YAML
+    frontmatter yields (``ratio: 1.5``, ``released: 2024-01-02``) in
+    ``applies_if``, ``input_variables`` or a skill's extra frontmatter; those
+    used to stop ``playbook sync`` with a ``TypeError``. An unsupported type keeps
+    the historical ``manifest TOML …`` ``TypeError`` wording; a time TOML cannot
+    hold (one with a UTC offset, or a sub-minute offset — YAML yields neither)
+    raises ``ValueError``.
+
+    Example::
+
+        >>> import datetime
+        >>> _format_scalar({"ratio": 1.5, "released": datetime.date(2024, 1, 2)})
+        '{ ratio = 1.5, released = 2024-01-02 }'
     """
     return _toml.format_scalar(value, allow_inline_table=True, type_error_prefix="manifest TOML")
 

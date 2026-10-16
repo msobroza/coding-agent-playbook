@@ -88,6 +88,7 @@ def copy_scripts(
 ) -> tuple[list[manifest.ScriptEntry], list[Path]]:
     """Byte-copy ``source``'s publishable files (never a secret or an escaping link).
 
+    Bytecode caches are skipped too (``_skill_files.skill_subtree_files``).
     Returns their manifest ``ScriptEntry`` records (repo-relative, with the
     source's exec bit) and the copied paths. Shared by skills and hooks.
 

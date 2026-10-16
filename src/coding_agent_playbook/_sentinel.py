@@ -46,6 +46,10 @@ _FENCE_BYTES = b"---"
 #: far below this; a scan never reads a large file whole.
 SENTINEL_HEAD_BYTES = 64 * 1024
 
+#: The UTF-8 byte-order mark some editors prepend on save; it never hides a sentinel.
+_BOM = "\ufeff"
+_BOM_BYTES = _BOM.encode("utf-8")
+
 
 def sentinel_line(style: "SentinelStyle") -> str:
     """Return the sentinel wrapped in ``style``'s comment syntax, without a newline.
@@ -74,6 +78,7 @@ def has_sentinel(text: str, *, sentinel: str = SENTINEL) -> bool:
     ``\\r`` ignored), which is all the engine ever writes. A sentinel anywhere
     else, or quoted inside prose on one of those lines, is user text (``SPEC.md``
     and test fixtures quote it), so it never marks a file as engine-generated.
+    A leading UTF-8 BOM (some editors add one on save) is ignored.
     ``sentinel`` is the text to look for: a hook guard passes the one its
     ``guard_config.json`` was rendered with.
 
@@ -89,7 +94,7 @@ def has_sentinel(text: str, *, sentinel: str = SENTINEL) -> bool:
         False
     """
     accepted = _sentinel_lines(sentinel)
-    lines = text.split("\n")
+    lines = text.removeprefix(_BOM).split("\n")
     if _is_sentinel_line(lines[0], accepted):
         return True
     body_line = _first_body_line(lines)
@@ -148,13 +153,13 @@ def _sentinel_head(path: "str | PathLike[str]") -> bytes:
 
     Reads at most :data:`SENTINEL_HEAD_BYTES`. Lines split on ``\\n`` only,
     exactly as :func:`has_sentinel` splits, so the verdict matches a whole-file
-    read. A frontmatter block longer than the cap reads as unterminated, so the
-    file counts as user-owned.
+    read (a leading UTF-8 BOM included). A frontmatter block longer than the cap
+    reads as unterminated, so the file counts as user-owned.
     """
     budget = SENTINEL_HEAD_BYTES
     with open(path, "rb") as handle:
         first = handle.readline(budget)
-        if first.rstrip(b"\n").rstrip(b"\r") != _FENCE_BYTES:
+        if first.removeprefix(_BOM_BYTES).rstrip(b"\n").rstrip(b"\r") != _FENCE_BYTES:
             return first
         head = [first]
         budget -= len(first)

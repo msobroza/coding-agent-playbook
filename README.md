@@ -228,7 +228,12 @@ Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
    ```
 
    (`playbook init` writes this file for you, plus `[storage]` and
-   `[detector_cache]` tables; keep its `[engine]` table.)
+   `[detector_cache]` tables; keep its `[engine]` table. Re-running
+   `playbook init`, or `playbook check --refresh` after adding a dependency,
+   rewrites it from the committed file alone: init's answers and the fresh
+   `[detector_cache]` replace their keys, every other value is kept (tables
+   the engine does not manage, such as `[hooks]`, `[links]` and `[metrics]`,
+   included), but comments and layout are not.)
 
    The enabled lists are top-level keys only, so they go **above the first
    `[table]` header**. Every command that loads the config (`sync`, `check`,
@@ -240,7 +245,9 @@ Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
    appended to the end of the file); a misspelled key such as
    `overlay_enabled`; or a value that is not a list of non-empty strings. A
    personal `.coding-agent-playbook.local.toml` can set `adapters_enabled` too,
-   above its `[user_choices]` header; its list replaces the committed one.
+   above its `[user_choices]` header; its list replaces the committed one for
+   your checkout only — no command writes the local file into the committed
+   config.
 
 3. **Repo-local `playbook/`** — drop in per-repo rules, prompts, skills, or eval
    tasks; anything here wins on `id` collision:
@@ -281,6 +288,9 @@ playbook/skills/<dir>/  ──►  SkillWriter  ──┬──►  .claude/skil
   one; `playbook validate` reports each of them.
 - `shared_skills/` is the agent-neutral hub: on by default, but not
   force-enabled — drop `shared_skills` from `adapters_enabled` to opt out.
+- `scripts/` and `references/` are copied whole, except Python bytecode caches
+  (any `__pycache__/` directory and `*.pyc`/`*.pyo` files), which are never
+  synced into a skills root or listed in the lockfile. Dot-files are copied.
 - Emitted `SKILL.md` follows the Agent Skills standard: frontmatter `name` is
   the skill `id` (= directory name). `playbook validate` flags ids that don't
   match `^[a-z0-9]+(-[a-z0-9]+)*$` (max 64 chars) and skills without a
@@ -305,7 +315,7 @@ playbook/skills/<dir>/  ──►  SkillWriter  ──┬──►  .claude/skil
   until you move it. A path you re-point through a symlink, or a skill dir whose
   `SKILL.md` you rewrote, is yours from then on.
 
-## Bundled packs: superpowers
+## Bundled packs: superpowers, python_design
 
 The engine wheel bundles **opt-in content packs**. They layer exactly like an
 overlay package but need no extra install, and they stay **off** until you
@@ -339,7 +349,7 @@ that last one is a no-op) exits 1 naming the package and writes nothing,
 and `playbook init` refuses it before writing (from `--overlays`, or from a
 local file's `overlays_enabled`, which replaces it). A name that looks
 like a pack typo also lists the bundled packs:
-`coding_agent_playbook.packs.superpower: not importable (bundled packs: coding_agent_playbook.packs.superpowers)`.
+`coding_agent_playbook.packs.superpower: not importable (bundled packs: coding_agent_playbook.packs.python_design, coding_agent_playbook.packs.superpowers)`.
 The same goes for a package that imports but ships no `resources/` directory,
 such as the parent `coding_agent_playbook.packs`, and for one whose import
 raises (the reason then quotes the error).
@@ -382,6 +392,31 @@ skill's `scripts/` or `references/` that your override does not ship is
 removed. An override of `subagent-driven-development` must therefore ship
 `scripts/task-brief` and `scripts/sdd-workspace`, which executing-plans calls
 (SPEC §11.5.1). See SPEC §11.5 and §4.2 step 9.
+
+**The `python_design` pack** (`coding_agent_playbook.packs.python_design`) adds
+two skills for Python design work: `python-design-review` (smells, principles
+and patterns; its `detect_smells.py` and `lcom4_clusters.py` scripts print JSON
+candidates) and `python-architecture` (layers, composition root, dependency
+injection, testability and persistence; its `layer_map.py` script reports
+imports that cross layers the wrong way, and import cycles). Its content is
+distilled, not vendored: written fresh, with the credit in
+`src/coding_agent_playbook/packs/python_design/ATTRIBUTIONS.md`. Each `SKILL.md`
+works on its own, so the degraded Continue prompt keeps the decision tables, and
+the scripts are stdlib-only and run on Python 3.10+. Enable it the same way,
+alone or next to superpowers:
+`overlays_enabled = ["coding_agent_playbook.packs.python_design"]`. See SPEC
+§11.5.2.
+
+Those three scripts are `.py` files, and sync writes them as such under
+`.claude/skills/`, `.opencode/skills/` and `shared_skills/` (and `skills/`
+with `agent_harness`). `mypy .` skips dot-directories but ignores `.gitignore`,
+so it type-checks the `shared_skills/` (and `skills/`) copies; with both of
+those on, the same script sits in two directories and mypy stops on a duplicate
+module.
+`ruff check .` skips them in a git repository while they are gitignored (the
+default `commit = false`) and lints every copy under `commit = true`. If you run
+these tools over the repository root, exclude the generated skill roots (for
+example `exclude` under `[tool.mypy]`, `extend-exclude` under `[tool.ruff]`).
 
 ## Agent Harness support (opt-in)
 

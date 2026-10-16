@@ -14,15 +14,18 @@ from jinja2.sandbox import ImmutableSandboxedEnvironment, SandboxedEnvironment
 from packaging.requirements import Requirement
 from packaging.version import Version
 
+from coding_agent_playbook._sentinel import has_sentinel
 from coding_agent_playbook.renderer import (
     SENTINEL,
     TemplateSecurityError,
     appendix_rule_ids,
     build_environment,
+    includes_rules_appendix,
     render_artifact_body,
     render_for,
     render_sandboxed,
     render_string,
+    with_sentinel_body,
 )
 
 
@@ -575,10 +578,19 @@ def test_render_sandboxed_names_the_source_on_a_violation(tmp_path: Path) -> Non
     assert render_sandboxed("{{ x }}", {"x": "ok"}, env=env, source="s") == "ok"
 
 
-def test_appendix_rule_ids_follow_includes_rules_unless_body_inlines_them() -> None:
+def test_appendix_rule_ids_follow_includes_rules_unless_template_inlines_them() -> None:
     assert appendix_rule_ids(["a", "b"], "Refactor.\n") == ["a", "b"]
     assert appendix_rule_ids(["a"], "{{ rule('a') }}\n") == []
+    assert appendix_rule_ids(["a"], "{{- rule('a') -}}\n") == []
     assert appendix_rule_ids([], "body") == []
+
+
+def test_appendix_rule_ids_agree_with_includes_rules_appendix() -> None:
+    """Sync's pre-render and ``render_for`` decide the appendix on the same template body."""
+    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
+    for template_body in ('Intro\n{{rule("x")}}\n', "Plain body\n"):
+        has_appendix = includes_rules_appendix(template_body, _INLINE_FRONTMATTER, registry) != ""
+        assert bool(appendix_rule_ids(["x"], template_body)) is has_appendix
 
 
 #: The jinja2 release closing the published sandbox escapes (CVE-2024-56326,
@@ -598,3 +610,125 @@ def test_pyproject_pins_the_jinja_sandbox_floor() -> None:
     [jinja] = [Requirement(dep) for dep in dependencies if dep.startswith("jinja2")]
     assert jinja.specifier.contains(str(_JINJA_SANDBOX_FLOOR))
     assert not jinja.specifier.contains("3.1.5")
+
+
+# --- includes_rules appendix is decided on the template body (SPEC §6.2.5) ---
+
+_PROMPT_FORMATS = ["prompt_continue", "prompt_claude_command", "prompt_opencode_command"]
+_INLINE_FRONTMATTER = {"name": "P", "description": "D", "includes_rules": ["x"]}
+
+
+@pytest.mark.parametrize("fmt", _PROMPT_FORMATS)
+def test_render_for_no_appendix_when_template_inlines_an_already_rendered_rule(
+    tmp_path: Path, fmt: str
+) -> None:
+    """Regression: sync hands render_for the RENDERED body, where the ``rule()``
+    call is already expanded. Deciding on it emitted every inlined rule twice."""
+    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
+    out = render_for(
+        tmp_path / "p.md.j2",
+        "Intro\n### X\n\nrule body\n",
+        fmt,
+        frontmatter=_INLINE_FRONTMATTER,
+        rule_registry=registry,
+        template_body='Intro\n{{ rule("x") }}\n',
+    )
+    assert out.count("rule body") == 1
+    assert "## Reference rules" not in out
+
+
+@pytest.mark.parametrize("fmt", _PROMPT_FORMATS)
+def test_render_for_appends_appendix_when_template_has_no_rule_call(
+    tmp_path: Path, fmt: str
+) -> None:
+    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
+    out = render_for(
+        tmp_path / "p.md",
+        "Plain body\n",
+        fmt,
+        frontmatter=_INLINE_FRONTMATTER,
+        rule_registry=registry,
+        template_body="Plain body\n",
+    )
+    assert out.count("rule body") == 1
+    assert "## Reference rules" in out
+
+
+@pytest.mark.parametrize(
+    "template_body",
+    [
+        '{{rule("x")}}',
+        "{{- rule('x') }}",
+        '{{  rule ( "x" ) }}',
+        '{% raw %}{{ rule("x") }}{% endraw %}',
+    ],
+)
+def test_includes_rules_appendix_suppressed_for_any_rule_call_spelling(template_body: str) -> None:
+    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
+
+    assert includes_rules_appendix(template_body, _INLINE_FRONTMATTER, registry) == ""
+
+
+def test_includes_rules_appendix_lists_rules_for_a_template_without_calls() -> None:
+    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
+
+    appendix = includes_rules_appendix("no calls here", _INLINE_FRONTMATTER, registry)
+
+    assert appendix == "\n## Reference rules\n\n### X\n\nrule body\n"
+
+
+# --- engine-output detection (sentinel position) ----------------------------
+
+_BODY_FIRST = with_sentinel_body("---\ndescription: d\n---", "body\n")
+
+
+@pytest.mark.parametrize(
+    ("text", "owned"),
+    [
+        (f"<!-- {SENTINEL} -->\n# Title\n", True),
+        (f"<!-- {SENTINEL} -->\n---\ndescription: d\n---\nbody\n", True),
+        (_BODY_FIRST, True),
+        ("\ufeff" + _BODY_FIRST, True),
+        (f"\ufeff<!-- {SENTINEL} -->\n# Title\n", True),
+        (f"---\ndescription: d\n---\nFiles saying {SENTINEL} are generated.\n", False),
+        ("---\ndescription: d\n---\nbody\n", False),
+        (f"---\ndescription: d\n---\nintro\n<!-- {SENTINEL} -->\n", False),
+        (f"intro\n<!-- {SENTINEL} -->\n", False),
+        (f"---\ndescription: {SENTINEL}\n---\nbody\n", False),
+        ("", False),
+    ],
+    ids=[
+        "line-1",
+        "legacy-line-1-before-frontmatter",
+        "first-body-line",
+        "bom-first-body-line",
+        "bom-line-1",
+        "first-body-line-quotes-it-in-prose",
+        "no-sentinel",
+        "deeper-in-body",
+        "line-2-no-frontmatter",
+        "inside-frontmatter",
+        "empty",
+    ],
+)
+def test_with_sentinel_body_output_is_engine_owned_only_at_the_anchored_positions(
+    text: str, owned: bool
+) -> None:
+    """``with_sentinel_body`` writes the second position ``has_sentinel`` accepts.
+
+    One detector decides ownership for every scanner (prK §P3), so the layout
+    the renderer writes for OpenCode commands and skills is recognised without
+    a per-adapter opt-in; a file that merely quotes the sentinel stays the user's.
+    """
+    assert has_sentinel(text) is owned
+
+
+def test_opencode_command_starts_with_its_frontmatter(tmp_path: Path) -> None:
+    """OpenCode's gray-matter needs ``---`` at offset 0; the sentinel follows the envelope."""
+    out = render_for(
+        tmp_path / "p.md",
+        "Body\n",
+        "prompt_opencode_command",
+        frontmatter={"name": "P", "description": "D"},
+    )
+    assert out == f"---\ndescription: D\n---\n<!-- {SENTINEL} -->\n\nBody\n"

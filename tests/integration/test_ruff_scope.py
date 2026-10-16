@@ -24,7 +24,14 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _FIXTURE_GLOB = "src/coding_agent_playbook/resources/eval_tasks/*/setup"
-_PACKS_GLOB = "src/coding_agent_playbook/packs/*/resources"
+#: The vendored pack stays byte-faithful; the distilled python_design pack only
+#: keeps ruff off its markdown, because its stdlib scripts are our own code (SPEC §11.5.2).
+_VENDORED_PACK_GLOB = "src/coding_agent_playbook/packs/superpowers/resources"
+_DISTILLED_PACK_MD_GLOB = "src/coding_agent_playbook/packs/python_design/resources/**/*.md"
+_DISTILLED_PACK_SCRIPT = (
+    "src/coding_agent_playbook/packs/python_design/resources/skills/"
+    "python-architecture/scripts/layer_map.py"
+)
 _ENGINE_MODULE = "src/coding_agent_playbook/__init__.py"
 _NO_FILES = "No Python files found"
 _RUFF_TIMEOUT_S = 60
@@ -60,7 +67,8 @@ def _run_ruff(*args: str) -> subprocess.CompletedProcess[str]:
 def test_ruff_config_excludes_fixtures_and_packs_with_force_exclude() -> None:
     table = _ruff_table()
     assert _FIXTURE_GLOB in table["extend-exclude"]
-    assert _PACKS_GLOB in table["extend-exclude"]
+    assert _VENDORED_PACK_GLOB in table["extend-exclude"]
+    assert _DISTILLED_PACK_MD_GLOB in table["extend-exclude"]
     assert table["force-exclude"] is True
 
 
@@ -94,4 +102,5 @@ def test_ruff_still_checks_engine_sources() -> None:
     assert _ENGINE_MODULE in listed
     assert "src/coding_agent_playbook/packs/superpowers/__init__.py" in listed
     assert not [path for path in listed if "/eval_tasks/" in path and "/setup/" in path]
-    assert not [path for path in listed if "/packs/" in path and "/resources/" in path]
+    assert not [path for path in listed if path.startswith(f"{_VENDORED_PACK_GLOB}/")]
+    assert _DISTILLED_PACK_SCRIPT in listed

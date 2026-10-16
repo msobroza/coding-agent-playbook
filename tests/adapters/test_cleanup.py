@@ -239,6 +239,8 @@ _HEAD_CASES = {
     "sentinel-line-1-crlf": f"{sentinel_line('html')}\r\nbody\r\n",
     "frontmatter-then-sentinel": f"{_FRONTMATTER}{sentinel_line('html')}\nbody\n",
     "frontmatter-crlf": f"---\r\nname: x\r\n---\r\n{sentinel_line('html')}\r\n",
+    "bom-line-1": f"\ufeff{sentinel_line('html')}\nbody\n",
+    "bom-frontmatter-then-sentinel": f"\ufeff{_FRONTMATTER}{sentinel_line('html')}\nbody\n",
     "quoted-below-body": _QUOTED_SENTINEL_TEXT,
     "lone-cr-after-sentinel": f"{sentinel_line('html')}\rjunk\nbody\n",
     "unclosed-frontmatter": f"---\nname: x\n{sentinel_line('html')}\n",

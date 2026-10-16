@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.adapters import _skill_writer
+from coding_agent_playbook.adapters import _skill_files, _skill_writer
 from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
 from coding_agent_playbook.adapters._skill_writer import (
     SKILL_FILENAME,
@@ -23,8 +23,10 @@ from coding_agent_playbook.adapters._skill_writer import (
     render_skill_md,
     skill_id_of,
 )
+from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands._output_locations import OutputLocations
 from coding_agent_playbook.commands._sync_orphans import LeftoverPolicy
+from coding_agent_playbook.harness.manifest import read_manifest
 from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
 from coding_agent_playbook.orchestrator import installed_output_locations
 from coding_agent_playbook.renderer import SENTINEL
@@ -33,7 +35,7 @@ from coding_agent_playbook.types import Skill, split_frontmatter
 from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 _ROOTS = (Path(".claude") / "skills", Path(".opencode") / "skills", Path("shared_skills"))
 
@@ -223,6 +225,37 @@ def test_write_is_byte_identical_across_roots(tmp_path: Path) -> None:
     trees = [_tree_bytes(repo / root / "demo") for root in _ROOTS]
     assert trees[0] == trees[1] == trees[2]
     assert set(trees[0]) == {"SKILL.md", "scripts/helper.py"}
+
+
+def test_write_never_copies_bytecode_caches(tmp_path: Path) -> None:
+    """Regression (review finding 8): ``pip install`` byte-compiles a pack's scripts and an
+    in-process import writes ``scripts/__pycache__/``; neither may reach a skills root.
+    Dot-files are authored content and still copied."""
+    scripts = _seed_tree(
+        tmp_path / "src" / "scripts",
+        {
+            "run.py": b"print('hi')\n",
+            ".tool-config": b"k = 1\n",
+            "__pycache__/run.cpython-312.pyc": b"\x00pyc",
+            "sub/__pycache__/deep.cpython-313.opt-1.pyc": b"\x00pyc",
+            "stray.pyc": b"\x00pyc",
+            "stray.pyo": b"\x00pyo",
+        },
+    )
+    refs = _seed_tree(
+        tmp_path / "src" / "references",
+        {"guide.md": b"# Guide\n", "__pycache__/guide.cpython-312.pyc": b"\x00pyc"},
+    )
+    skill = _make_skill(skill_id="demo", scripts_dir=scripts, references_dir=refs)
+    repo = tmp_path / "repo"
+    expected = {"SKILL.md", "scripts/run.py", "scripts/.tool-config", "references/guide.md"}
+
+    for root in _ROOTS:
+        written = SkillWriter(root).write(skill, repo)
+        skill_dir = repo / root / "demo"
+        assert set(_tree_bytes(skill_dir)) == expected, root
+        assert {path.relative_to(skill_dir).as_posix() for path in written} == expected, root
+    assert list(repo.rglob("__pycache__")) == []
 
 
 @pytest.mark.parametrize("skill_id", ["../escape", "nested/dir", "/abs"])
@@ -801,3 +834,90 @@ def test_check_mode_ownership_honours_the_real_lockfile_legacy_claim(tmp_path: P
 
     assert written == [scratch / ".claude" / "skills" / "demo" / SKILL_FILENAME]
     assert b"old" in (real / ".claude" / "skills" / "demo" / SKILL_FILENAME).read_bytes()
+
+
+# --- bytecode caches never reach a skills root (review finding 8) ------------
+
+_CONFIG_EVERY_SKILL_ROOT = """\
+schema_version = 1
+adapters_enabled = ["claude_code", "opencode", "shared_skills", "agent_harness"]
+overlays_enabled = []
+
+[project]
+name = "synthetic"
+kind = "python-library"
+
+[engine]
+version = "0.1.0a0"
+
+[storage]
+artifact_source = "filesystem"
+state_source = "filesystem"
+"""
+
+#: Every root a skill lands in with all skill-writing adapters on (``skills/`` = agent_harness).
+_EVERY_SKILL_ROOT = (*(root.as_posix() for root in _ROOTS), "skills")
+
+
+def _seed_skill_with_bytecode(repo: Path) -> None:
+    """A repo-local skill whose ``scripts/`` holds bytecode, as an in-process import leaves it."""
+    _seed_tree(
+        repo / "playbook" / "skills" / "query-db",
+        {
+            "SKILL.md": b"---\nid: query-db\nname: query-db\ndescription: Query helper\n---\n"
+            b"Run scripts/run.py.\n",
+            "scripts/run.py": b"print('query')\n",
+            "scripts/__pycache__/run.cpython-312.pyc": b"\x00pyc",
+            "scripts/stale.pyc": b"\x00pyc",
+        },
+    )
+
+
+def _is_bytecode_path(rel: str) -> bool:
+    return "__pycache__" in rel.split("/") or rel.endswith((".pyc", ".pyo"))
+
+
+def _bytecode_paths_anywhere(repo: Path) -> list[str]:
+    """Every cache path in a skills root (files or dirs), the lockfile or the harness manifest."""
+    on_disk = [
+        path.relative_to(repo).as_posix()
+        for root in _EVERY_SKILL_ROOT
+        for path in (repo / root).rglob("*")
+    ]
+    lockfile = FileSystemStateSource(repo_root=repo).load_lockfile()
+    manifest = read_manifest(repo)
+    assert lockfile is not None and manifest is not None
+    locked = [entry.path for entry in lockfile.entries]
+    scripts = [script.path for entry in manifest.entries for script in entry.scripts]
+    return sorted(rel for rel in [*on_disk, *locked, *scripts] if _is_bytecode_path(rel))
+
+
+def test_sync_never_copies_bytecode_caches_into_any_root_lockfile_or_manifest(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path]
+) -> None:
+    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_EVERY_SKILL_ROOT)
+    _seed_skill_with_bytecode(repo)
+
+    assert _sync.execute(repo, git=FakeGitClient()) == 0
+
+    for root in _EVERY_SKILL_ROOT:
+        assert (repo / root / "query-db" / "scripts" / "run.py").is_file(), root
+    assert _bytecode_paths_anywhere(repo) == []
+    assert _sync.execute(repo, check=True, git=FakeGitClient()) == 0
+
+
+def test_sync_removes_bytecode_an_earlier_engine_copied(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Caches an older engine synced (and listed in the lockfile) are settled as leftovers."""
+    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_EVERY_SKILL_ROOT)
+    _seed_skill_with_bytecode(repo)
+    with monkeypatch.context() as patch:  # the pre-fix engine: copy every file
+        patch.setattr(_skill_files, "is_bytecode_cache", lambda _relative: False)
+        assert _sync.execute(repo, git=FakeGitClient()) == 0
+    assert _bytecode_paths_anywhere(repo) != []
+
+    assert _sync.execute(repo, git=FakeGitClient()) == 0
+
+    assert _bytecode_paths_anywhere(repo) == []
+    assert _sync.execute(repo, check=True, git=FakeGitClient()) == 0

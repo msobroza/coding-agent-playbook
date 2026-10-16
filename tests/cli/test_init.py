@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import argparse
+import re
 import tomllib
 from typing import TYPE_CHECKING
 
 import pytest
 import yaml
 
+from coding_agent_playbook._toml import dump_toml
+from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands import init as _init
+from coding_agent_playbook.config import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.gitignore import BLOCK_START
 from tests.hook_samples import write_hook
+from tests.toml_equality import assert_toml_identical
 from tests.unit.test_precommit_merge import LEGACY_APPENDED, LEGACY_STARTER
 
 if TYPE_CHECKING:
@@ -515,3 +520,420 @@ def test_fresh_starter_adds_the_cz_twin_only_for_a_commitizen_repo(
     hooks = {hook["id"] for repo in parsed["repos"] for hook in repo["hooks"]}
     assert ("coding-agent-playbook-commit-msg" in hooks) is commitizen
     assert ("commit-msg" in parsed["default_install_hook_types"]) is commitizen
+
+
+# --- re-runs: the committed config is rewritten from itself alone (SPEC §7.2/§12.1)
+
+#: Every personal override a teammate might keep in the gitignored local file:
+#: keys ``Config`` owns, an unknown key inside a table it owns (``[project]
+#: homepage``), and tables it does not manage at all (``[metrics]``, a personal
+#: one). ``init`` writes back what the *committed* file holds outside ``Config``;
+#: computing that from the merged files would commit the last three.
+_LOCAL_OVERRIDES = """\
+adapters_enabled = ["claude_code"]
+overlays_enabled = ["coding_agent_playbook.packs.superpowers"]
+
+[project]
+homepage = "https://mine.example"
+
+[user_choices]
+style = "google"
+
+[output]
+commit = true
+
+[metrics]
+mode = "regression"
+
+[personal_table]
+note = "mine only"
+"""
+
+
+def _init_then_add_committed_user_choice(tmp_path: Path) -> argparse.Namespace:
+    """First ``init`` run, plus a hand-added committed ``[user_choices]`` entry.
+
+    Added where the writer puts it, after the tables ``Config`` owns and before the
+    ``[hooks]`` table init writes (unmanaged entries come last), so a faithful
+    rewrite is byte-identical.
+    """
+    _pyproject(tmp_path)
+    args = _ns(tmp_path, name="r", kind="python-library")
+    assert _init.run(args) == 0
+    primary = tmp_path / ".coding-agent-playbook.toml"
+    text = primary.read_text()
+    assert text.count("\n[hooks]\n") == 1  # the first run wrote the hooks answer
+    choice = '\n[user_choices]\ndocstring_style = "numpy"\n'
+    primary.write_text(text.replace("\n[hooks]\n", f"{choice}\n[hooks]\n", 1))
+    return args
+
+
+def test_init_rerun_never_writes_local_overrides_into_the_committed_config(
+    tmp_path: Path,
+) -> None:
+    """Regression: a re-run loaded the config *merged* with the gitignored
+    ``.local.toml`` and saved it to the committed file, so a teammate's personal
+    adapters list (reordered too), overlays, ``[user_choices]`` and ``[output]``
+    got committed for the whole team. The committed file is now rewritten from
+    itself only: here it comes back byte-identical, committed choices included."""
+    args = _init_then_add_committed_user_choice(tmp_path)
+    primary = tmp_path / ".coding-agent-playbook.toml"
+    committed = primary.read_bytes()
+    local = tmp_path / ".coding-agent-playbook.local.toml"
+    local.write_text(_LOCAL_OVERRIDES)
+
+    assert _init.run(args) == 0
+
+    assert primary.read_bytes() == committed
+    assert local.read_text() == _LOCAL_OVERRIDES  # the local file is never rewritten
+    data = tomllib.loads(primary.read_text())
+    assert data["user_choices"] == {"docstring_style": "numpy"}
+    assert data["adapters_enabled"] == list(_init._DEFAULT_ADAPTERS)
+    assert "overlays_enabled" not in data
+    assert data["output"] == {"commit": False}
+    assert {"metrics", "personal_table"}.isdisjoint(data)
+    assert "homepage" not in data["project"]
+    assert data["hooks"] == {"enabled": True}  # the committed answer, kept by the re-run
+
+
+def test_init_rerun_hooks_follow_the_committed_output_policy_not_the_local_one(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The committed ``.pre-commit-config.yaml`` follows the committed ``[output]``:
+    a personal ``commit = true`` used to swap in the legacy drift hook for everyone."""
+    args = _init_then_add_committed_user_choice(tmp_path)
+    pre_commit = tmp_path / ".pre-commit-config.yaml"
+    hooks_before = pre_commit.read_text()
+    (tmp_path / ".coding-agent-playbook.local.toml").write_text(_LOCAL_OVERRIDES)
+    capsys.readouterr()
+
+    assert _init.run(args) == 0
+
+    assert pre_commit.read_text() == hooks_before
+    assert "--hook-type post-checkout" in capsys.readouterr().out
+
+
+_UNMANAGED_COMMITTED_TABLES = """
+[links]
+allowed_domains = ["example.com", "docs.example.org"]
+
+[metrics]
+mode = "both"
+fail_on_breach = false
+test_cmd = ["python", "-m", "pytest", "-q"]
+
+[metrics.thresholds.cyclomatic_complexity]
+warn = 10
+fail = 20.5
+
+[metrics.thresholds.maintainability_index]
+fail = 70.0
+
+[metrics.regression.coverage]
+max_worsening = 0.0
+
+[metrics.weights]
+cyclomatic_complexity = 1.0
+coverage = 0.25
+
+[future_feature]
+since = 2026-10-14
+stamp = 1979-05-27T00:32:00-07:00
+ratio = 1e-05
+labels = ["a", 1, { nested = true }]
+
+[future_feature.deep.deeper]
+leaf = "kept"
+
+[[future_feature.rules]]
+id = "r1"
+"""
+
+
+def test_init_rerun_preserves_committed_tables_config_does_not_manage(tmp_path: Path) -> None:
+    """Regression: ``[links]`` and ``[metrics]`` are read from the raw TOML by
+    ``validate`` / ``metrics``, not carried by ``Config``, so the round trip
+    through ``Config`` deleted them (and any future table) although init promised
+    to preserve what it does not know. Every such key now comes back as the same
+    parsed value — floats, 3-level tables, arrays of tables and top-level keys too."""
+    _pyproject(tmp_path)
+    args = _ns(tmp_path, name="r", kind="python-library")
+    assert _init.run(args) == 0
+    primary = tmp_path / ".coding-agent-playbook.toml"
+    text = primary.read_text().replace(
+        "schema_version = 1\n", 'schema_version = 1\nfuture_top_level = "kept"\n', 1
+    )
+    primary.write_text(text + _UNMANAGED_COMMITTED_TABLES)
+    before = tomllib.loads(primary.read_text())
+
+    assert _init.run(args) == 0
+
+    after = tomllib.loads(primary.read_text())
+    # Type-strict: ``==`` would let ``1.0`` come back as ``1`` or the stamp at +00:00.
+    assert_toml_identical(after, before)
+    assert after["metrics"]["thresholds"]["cyclomatic_complexity"] == {"warn": 10, "fail": 20.5}
+    assert after["future_top_level"] == "kept"
+
+
+_STALE_COMMITTED = """\
+schema_version = 1
+overlays_enabled = ["coding_agent_playbook.packs.superpowers"]
+adapters_enabled = ["continue"]
+
+[project]
+name = "old-name"
+kind = "python-library"
+description = "an old description"
+
+[engine]
+version = "0.1.0a0"
+
+[detector_cache]
+python_version = "3.11"
+
+[detector_cache.frameworks]
+stale_framework = "1.0"
+"""
+
+
+def test_init_rerun_replaces_the_tables_config_manages_without_resurrecting(
+    tmp_path: Path,
+) -> None:
+    """Keys ``Config`` manages are replaced wholesale, never deep-merged with the
+    committed table: an emptied ``--overlays``, a dropped description and a stale
+    detector entry must not come back from the file being rewritten."""
+    _pyproject(tmp_path)
+    (tmp_path / ".coding-agent-playbook.toml").write_text(_STALE_COMMITTED)
+
+    assert _init.run(_ns(tmp_path, name="r", kind="python-library", overlays="")) == 0
+
+    with (tmp_path / ".coding-agent-playbook.toml").open("rb") as f:
+        data = tomllib.load(f)
+    assert "overlays_enabled" not in data
+    assert data["project"] == {"name": "r", "kind": "python-library"}
+    assert "stale_framework" not in data["detector_cache"].get("frameworks", {})
+    assert data["detector_cache"]["python_version"] != "3.11"
+    assert data["adapters_enabled"] == [
+        "continue",
+        *(name for name in _init._DEFAULT_ADAPTERS if name != "continue"),
+    ]
+
+
+_COMMITTED_WITH_UNKNOWN_SUB_KEYS = """\
+schema_version = 1
+
+[project]
+name = "old-name"
+kind = "python-library"
+description = "an old description"
+homepage = "https://r.example"
+
+[project.urls]
+docs = "https://docs.r.example"
+
+[engine]
+version = "0.1.0a0"
+channel = "beta"
+
+[storage]
+artifact_source = "filesystem"
+state_source = "filesystem"
+cache_dir = ".cache"
+
+[output]
+commit = false
+reviewed = 2026-10-14
+"""
+
+
+def test_init_rerun_keeps_unknown_keys_inside_the_tables_config_manages(tmp_path: Path) -> None:
+    """Regression: a re-run replaced ``[project]``/``[engine]``/``[storage]``/``[output]``
+    whole, silently deleting a hand-added ``[project] homepage`` and the like.
+    ``Config``'s own keys are still replaced — the dropped description stays
+    dropped — and the rest of each table is written back as parsed."""
+    _pyproject(tmp_path)
+    primary = tmp_path / ".coding-agent-playbook.toml"
+    primary.write_text(_COMMITTED_WITH_UNKNOWN_SUB_KEYS)
+
+    assert _init.run(_ns(tmp_path, name="r", kind="python-library")) == 0
+
+    data = tomllib.loads(primary.read_text())
+    before = tomllib.loads(_COMMITTED_WITH_UNKNOWN_SUB_KEYS)
+    expected_project = {"name": "r", "kind": "python-library"}
+    expected_project |= {key: before["project"][key] for key in ("homepage", "urls")}
+    assert_toml_identical(data["project"], expected_project)
+    for table in ("engine", "storage", "output"):
+        assert_toml_identical(data[table], before[table])
+
+
+def test_adapters_union_keeps_the_committed_order_then_appends_new_answers() -> None:
+    answered = ["claude_code", "continue", "claude_code"]
+    assert _init._adapters_union(["continue", "custom"], answered) == [
+        "continue",
+        "custom",
+        "claude_code",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("committed_output", "written_output"),
+    [(OutputConfig(commit=True), OutputConfig(commit=True)), (None, OutputConfig(commit=False))],
+)
+def test_apply_answers_replaces_answered_fields_and_keeps_the_rest(
+    committed_output: OutputConfig | None, written_output: OutputConfig
+) -> None:
+    committed = Config(
+        schema_version=1,
+        project=ProjectMeta("old", "python-library", "old description"),
+        engine_version="0.1.0a0",
+        overlays_enabled=["some_overlay"],
+        adapters_enabled=["custom"],
+        storage=StorageConfig(artifact_source="custom"),
+        detector_cache={"stale": True},
+        user_choices={"docstring_style": "numpy"},
+        output=committed_output,
+    )
+    answers = _init._Answers(
+        name="new",
+        kind="python-application",
+        description="",
+        adapters=["continue"],
+        overlays=[],
+        hooks=None,
+    )
+    updated = _init._apply_answers(committed, answers, {"fresh": True})
+    assert updated == Config(
+        schema_version=1,
+        project=ProjectMeta("new", "python-application"),
+        engine_version="0.1.0a0",
+        overlays_enabled=[],
+        adapters_enabled=["custom", "continue"],
+        storage=StorageConfig(artifact_source="custom"),
+        detector_cache={"fresh": True},
+        user_choices={"docstring_style": "numpy"},
+        output=written_output,
+    )
+    assert committed.project.name == "old"  # a new Config; the committed one is untouched
+
+
+# --- a config file init would misread stops it before its first write (SPEC §7.1)
+
+
+def _snapshot(repo: Path) -> dict[str, bytes | None]:
+    """Every path under ``repo`` (directories map to ``None``): catches any write."""
+    return {
+        path.relative_to(repo).as_posix(): path.read_bytes() if path.is_file() else None
+        for path in sorted(repo.rglob("*"))
+    }
+
+
+def _main_init(repo: Path) -> int:
+    """``playbook init`` through the CLI, so a ``ConfigError`` maps to ``error:`` + exit 2."""
+    argv = ["init", "--repo-root", str(repo), "--non-interactive", "--name", "r2"]
+    return main([*argv, "--kind", "ml-research", "--adapters", "claude_code,agent_harness"])
+
+
+@pytest.mark.parametrize("rerun", [True, False], ids=["rerun", "first-run"])
+@pytest.mark.parametrize(
+    ("local", "error"),
+    [
+        pytest.param(
+            '[output]\ncommit = "yes"\n',
+            "error: .coding-agent-playbook.local.toml: "
+            "[output] commit must be a boolean (true or false), got 'yes'\n",
+            id="output-not-a-bool",
+        ),
+        pytest.param(
+            'project = "x"\n',
+            "error: .coding-agent-playbook.local.toml: [project] must be a table, got 'x'; ",
+            id="project-not-a-table",
+        ),
+        pytest.param(
+            "[user_choices\n",
+            "error: .coding-agent-playbook.local.toml: invalid TOML: ",
+            id="invalid-toml",
+        ),
+    ],
+)
+def test_init_refuses_a_local_file_config_rejects_before_writing_anything(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], rerun: bool, local: str, error: str
+) -> None:
+    """Regression: the up-front local check only ran the enabled-list check, and
+    the re-run stopped loading the merged config, so these local files surfaced
+    from init's final sync — after it had rewritten the committed config (new
+    name, kind, adapters) and merged ``.pre-commit-config.yaml``; a TOML syntax
+    error was a traceback. The local file is now checked whole, up front, naming
+    it — on a first run too."""
+    _pyproject(tmp_path)
+    if rerun:
+        assert _init.run(_ns(tmp_path, name="r", kind="python-library")) == 0
+    (tmp_path / ".coding-agent-playbook.local.toml").write_text(local)
+    before = _snapshot(tmp_path)
+    capsys.readouterr()
+
+    assert _main_init(tmp_path) == 2
+
+    assert capsys.readouterr().err.startswith(error)
+    assert _snapshot(tmp_path) == before
+
+
+def test_init_refuses_a_committed_config_missing_a_key_only_the_local_file_supplies(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression: with ``[engine] version`` only in the gitignored local file
+    (``sync``, which merges both, still works), a re-run crashed with a bare
+    ``KeyError: 'version'`` traceback, exit 1. Init must neither copy that
+    personal value into the committed file (as before v0.18) nor guess a
+    team-wide one, so it refuses — naming the committed file and the line to
+    add, exit 2 like every other config error — before writing anything."""
+    _pyproject(tmp_path)
+    assert _init.run(_ns(tmp_path, name="r", kind="python-library")) == 0
+    primary = tmp_path / ".coding-agent-playbook.toml"
+    without_engine = re.sub(r'\[engine\]\nversion = "[^"]*"\n\n', "", primary.read_text())
+    assert "[engine]" not in without_engine  # the fixture took
+    primary.write_text(without_engine)
+    local = '[engine]\nversion = "0.1.0a0"\n'
+    (tmp_path / ".coding-agent-playbook.local.toml").write_text(local)
+    before = _snapshot(tmp_path)
+    capsys.readouterr()
+
+    assert _main_init(tmp_path) == 2
+
+    assert capsys.readouterr().err == (
+        "error: .coding-agent-playbook.toml: the required key engine.version is missing; "
+        'write version = "<engine version>" under the [engine] header\n'
+    )
+    assert _snapshot(tmp_path) == before
+
+
+@pytest.mark.parametrize(
+    ("committed", "table"),
+    [
+        pytest.param('user_choices = "x"', "user_choices", id="user-choices"),
+        pytest.param('storage = "x"', "storage", id="storage"),
+        pytest.param('detector_cache = ["x"]', "detector_cache", id="detector-cache"),
+    ],
+)
+def test_init_rerun_refuses_a_committed_non_table_the_local_file_hides(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], committed: str, table: str
+) -> None:
+    """Regression: the local table replaced the committed scalar in the merge (the
+    ``[user_choices]`` local file init itself creates always hid one), so ``sync``
+    ran, but a re-run — reading the committed file alone — crashed with a
+    ``ValueError``/``AttributeError`` traceback (exit 1). It is now a
+    ``ConfigError`` naming the committed file, exit 2, nothing written."""
+    _pyproject(tmp_path)
+    assert _init.run(_ns(tmp_path, name="r", kind="python-library")) == 0
+    primary = tmp_path / ".coding-agent-playbook.toml"
+    data = tomllib.loads(primary.read_text(encoding="utf-8"))
+    data.pop(table, None)
+    primary.write_text(f"{committed}\n{dump_toml(data)}", encoding="utf-8")
+    (tmp_path / ".coding-agent-playbook.local.toml").write_text(f"[{table}]\n")
+    before = _snapshot(tmp_path)
+    capsys.readouterr()
+
+    assert _main_init(tmp_path) == 2
+
+    err = capsys.readouterr().err
+    assert err.startswith(f"error: .coding-agent-playbook.toml: [{table}] must be a table, got ")
+    assert _snapshot(tmp_path) == before

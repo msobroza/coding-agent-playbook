@@ -83,19 +83,18 @@ class StateSource(ABC):
     def load_config(self) -> Config: ...
 
     def load_primary_config(self) -> Config:
-        """The config to modify and save back: the committed file alone.
+        """The committed config alone, never merged with personal local overrides (P6).
 
-        ``playbook init`` and ``playbook check --refresh`` load with this
-        before :meth:`save_config`, so personal local overrides are never
-        written into the committed file (P6). Concrete, defaulting to
-        :meth:`load_config`, so a third-party source that predates it still
-        instantiates; such a source keeps saving whatever it loads.
+        What :meth:`load_policy_tables` reads ``[hooks]``/``[guardrails]`` from
+        (its ``extra_tables``), so committed output never depends on a gitignored
+        file. Concrete, defaulting to :meth:`load_config`, so a third-party source
+        that predates it still instantiates. Rewrites of the committed file go
+        through ``commands/_committed_config``, which starts from
+        ``FileSystemStateSource.read_committed_config_table``.
 
         Example::
 
-            config = state_source.load_primary_config()
-            config.detector_cache = fresh_cache
-            state_source.save_config(config)
+            hooks_table = state_source.load_primary_config().extra_tables.get("hooks", {})
         """
         return self.load_config()
 

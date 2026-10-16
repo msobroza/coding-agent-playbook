@@ -20,8 +20,11 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.commands._sync_hooks import SyncHooks, resolve_sync_hooks
-from coding_agent_playbook.detector import evaluate_predicate
-from coding_agent_playbook.orchestrator import RuleRegistryImpl, template_source
+from coding_agent_playbook.orchestrator import (
+    build_prompt_environment,
+    filter_applies_if,
+    template_source,
+)
 from coding_agent_playbook.renderer import (
     TemplateSecurityError,
     appendix_rule_ids,
@@ -32,9 +35,8 @@ from coding_agent_playbook.renderer import (
 if TYPE_CHECKING:
     from jinja2 import Environment
 
-    from coding_agent_playbook.detector import Facts
     from coding_agent_playbook.hook_policy import ResolvedHook
-    from coding_agent_playbook.orchestrator import SyncContext
+    from coding_agent_playbook.orchestrator import RuleRegistryImpl, SyncContext
     from coding_agent_playbook.types import Hook, Prompt, Rule, Skill
 
 
@@ -128,22 +130,6 @@ def render_hook_body(hook: Hook, context: dict[str, object], env: Environment) -
     return render_sandboxed(hook.template_body, dict(context), env=env, source=source)
 
 
-def filter_applies_if[T: "Rule | Prompt"](
-    artifacts: list[T],
-    facts: Facts,
-    repo_root: Path,
-) -> list[T]:
-    """Apply :func:`evaluate_predicate` to each artifact and drop the ones
-    whose ``applies_if`` evaluates to False. Empty predicate → always pass.
-    """
-    kept: list[T] = []
-    for artifact in artifacts:
-        predicate = artifact.frontmatter.applies_if or {}
-        if not predicate or evaluate_predicate(predicate, facts, repo_root=repo_root):
-            kept.append(artifact)
-    return kept
-
-
 def filter_skills(skills: list[Skill]) -> list[Skill]:
     """Skills are unconditional in v1 (no ``applies_if`` in the SKILL.md
     schema). Returned unchanged; kept as a hook for v2 to filter on a
@@ -171,9 +157,7 @@ def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
     # Render rule bodies first (their template_body may also be re-rendered
     # by the registry when a prompt asks to inline them).
     rendered_rules = [render_rule_body(rule, base_context, base_env) for rule in rules]
-    registry = RuleRegistryImpl(rendered_rules, ctx.facts, base_env)
-    prompt_env = build_environment([], is_prompt_context=True, rule_registry=registry)
-    prompt_env.globals["_facts"] = dict(ctx.facts)
+    registry, prompt_env = build_prompt_environment(rendered_rules, ctx.facts)
     rendered_prompts = [render_prompt_body(p, base_context, prompt_env) for p in prompts]
     _prerender_inclusions(rendered_prompts, registry)
     hooks = resolve_sync_hooks(ctx, lambda hook: _with_body(hook, base_context, base_env))
@@ -199,10 +183,12 @@ def _prerender_inclusions(prompts: list[Prompt], registry: RuleRegistryImpl) -> 
     The adapters render the appendix inside ``write_prompt`` with the very
     same call (``render_for_inclusion(rule_id, {})``) — after AGENTS.md and
     earlier commands are on disk. Running it here first makes a sandbox
-    violation in an included rule abort the sync with nothing written.
+    violation in an included rule abort the sync with nothing written. Whether a
+    prompt gets the appendix is decided on its un-rendered ``template_body``,
+    exactly as ``render_for`` decides it.
     """
     for prompt in prompts:
-        for rule_id in appendix_rule_ids(prompt.frontmatter.includes_rules, prompt.body):
+        for rule_id in appendix_rule_ids(prompt.frontmatter.includes_rules, prompt.template_body):
             registry.render_for_inclusion(rule_id, {})
 
 
