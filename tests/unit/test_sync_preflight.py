@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
-import types
 from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook import bundled_content
+from coding_agent_playbook.bundled_content import DEPRECATED_PACK_NAMESPACE, PLUGIN_NAMESPACE
+from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands._sync_preflight import (
     UnusableOverlay,
-    bundled_packs,
+    bundled_plugins,
     missing_adapters,
     report_unusable_overlays,
     unusable_overlays,
     warn_missing_adapters,
 )
-from coding_agent_playbook.packs.superpowers import PACK_NAME
+from tests.plugins.superpowers_expectations import PLUGIN_NAME
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -27,7 +29,7 @@ def _names(problems: Sequence[UnusableOverlay]) -> list[str]:
 
 
 def test_unusable_overlays_lists_unimportable_names_in_order() -> None:
-    names = ["coding_agent_playbook", "no_such_overlay_b", PACK_NAME, "no_such_overlay_a"]
+    names = ["coding_agent_playbook", "no_such_overlay_b", PLUGIN_NAME, "no_such_overlay_a"]
     problems = unusable_overlays(names)
     assert _names(problems) == ["no_such_overlay_b", "no_such_overlay_a"]
     assert [problem.reason for problem in problems] == ["not importable", "not importable"]
@@ -40,50 +42,84 @@ def test_unusable_overlays_treats_invalid_names_as_not_importable() -> None:
     assert _names(unusable_overlays(names)) == names
 
 
-@pytest.mark.parametrize("name", ["json", "os", "coding_agent_playbook.packs"])
-def test_an_importable_package_without_resources_is_unusable(name: str) -> None:
-    """It would contribute nothing, exactly like an unimportable one."""
+@pytest.mark.parametrize("name", ["json", "os"])
+def test_no_resources_reason_for_third_party(name: str) -> None:
+    """It would contribute nothing, exactly like an unimportable one; no plugin hint."""
     (problem,) = unusable_overlays([name])
     assert problem.name == name
-    assert problem.reason.startswith("importable, but ships no resources/ directory")
+    assert problem.reason == _sync_preflight._NO_RESOURCES
 
 
-def test_bundled_packs_are_discovered_not_hardcoded() -> None:
-    packs = bundled_packs()
-    assert PACK_NAME in packs
-    assert packs == sorted(packs)
-    assert all(name.startswith("coding_agent_playbook.packs.") for name in packs)
+@pytest.mark.parametrize("name", [PLUGIN_NAMESPACE, DEPRECATED_PACK_NAMESPACE])
+def test_plugin_namespace_reason(name: str) -> None:
+    (problem,) = unusable_overlays([name])
+    assert problem.reason == (
+        "the bundled plugin namespace, not a plugin (bundled plugins: "
+        "coding_agent_playbook.plugins.python_design, coding_agent_playbook.plugins.superpowers)"
+    )
+
+
+@pytest.mark.parametrize("name", [PLUGIN_NAMESPACE, DEPRECATED_PACK_NAMESPACE])
+def test_plugin_namespace_never_imported(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A leftover ``packs/`` dir holding only ``__pycache__`` cannot change the result."""
+
+    def _refuse_import(module: str, package: str | None = None) -> object:
+        raise AssertionError(f"imported {module!r}")
+
+    # The string target: mypy rejects the attribute path (``importlib`` is not re-exported).
+    monkeypatch.setattr(f"{_sync_preflight.__name__}.importlib.import_module", _refuse_import)
+    (problem,) = unusable_overlays([name])
+    assert problem.reason.startswith("the bundled plugin namespace, not a plugin (")
+
+
+def test_bundled_plugins_are_discovered_not_hardcoded() -> None:
+    plugins = bundled_plugins()
+    assert PLUGIN_NAME in plugins
+    assert plugins == sorted(plugins)
+    assert all(name.startswith(f"{PLUGIN_NAMESPACE}.") for name in plugins)
 
 
 @pytest.mark.parametrize(
     "typo",
     [
-        "coding_agent_playbook.packs.superpower",
-        "coding_agent_playbook.pack.superpowers",
-        "coding-agent-playbook.packs.superpowers",
+        "coding_agent_playbook.plugins.superpower",
+        "coding_agent_playbook.plugin.superpowers",
+        "coding-agent-playbook.plugins.superpowers",
         # Only the engine-prefix branch matches this one, and only once "-" reads as "_".
-        "coding-agent-playbook.packs.foo",
+        "coding-agent-playbook.plugins.foo",
         "superpowers",
-        "coding_agent_playbook.packs",
+        # Deprecated alias: a typo under the old namespace gets the same hint.
+        "coding_agent_playbook.packs.superpower",
     ],
 )
-def test_a_pack_like_name_lists_the_bundled_packs(typo: str) -> None:
+def test_a_plugin_like_name_lists_the_bundled_plugins(typo: str) -> None:
     (problem,) = unusable_overlays([typo])
-    assert problem.reason.endswith(f"(bundled packs: {', '.join(bundled_packs())})")
+    assert problem.reason.endswith(f"(bundled plugins: {', '.join(bundled_plugins())})")
 
 
-def test_bundled_packs_lists_only_subpackages(tmp_path: Path) -> None:
-    """A helper module next to the packs (``packs/_common.py``) is not a pack."""
-    (tmp_path / "real_pack").mkdir()
-    (tmp_path / "real_pack" / "__init__.py").write_text("", encoding="utf-8")
-    (tmp_path / "_common.py").write_text("", encoding="utf-8")
-    parent = types.ModuleType("fake_packs")
-    parent.__path__ = [str(tmp_path)]
+def test_bundled_plugins_is_sorted_dotted_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Re-exported from ``bundled_content``: identifier dirs only, sorted, never cached."""
+    root = tmp_path / "content"
+    (root / "core").mkdir(parents=True)
+    for leaf in ("superpowers", "python_design", ".hidden", "_private", "__pycache__", "bad-name"):
+        (root / "plugins" / leaf / "skills").mkdir(parents=True)
+    (root / "plugins" / "README.md").write_text("stray file\n", encoding="utf-8")
 
-    assert bundled_packs(parent) == ["fake_packs.real_pack"]
+    assert _sync_preflight.bundled_plugins is bundled_content.bundled_plugins
+    assert bundled_plugins(root) == [
+        f"{PLUGIN_NAMESPACE}.python_design",
+        f"{PLUGIN_NAMESPACE}.superpowers",
+    ]
+    # Acceptance 5: a new plugin dir is listed and usable with no code change.
+    (root / "plugins" / "new_one" / "skills").mkdir(parents=True)
+    assert f"{PLUGIN_NAMESPACE}.new_one" in bundled_plugins(root)
+    monkeypatch.setattr(bundled_content, "_PACKAGE_DIR", tmp_path / "src" / "coding_agent_playbook")
+    assert unusable_overlays([f"{PLUGIN_NAMESPACE}.new_one"]) == []
 
 
-def test_an_unrelated_name_gets_no_pack_hint() -> None:
+def test_an_unrelated_name_gets_no_plugin_hint() -> None:
     (problem,) = unusable_overlays(["playbook_rules_bnpp"])
     assert problem.reason == "not importable"
 

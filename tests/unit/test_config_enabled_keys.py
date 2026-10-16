@@ -76,11 +76,11 @@ def test_table_form_is_refused_with_the_top_level_replacement(table: str, key: s
 
 
 def test_dotted_key_form_parses_as_the_same_table_and_is_refused() -> None:
-    data = _data(top='overlays.enabled = ["coding_agent_playbook.packs.superpowers"]\n')
+    data = _data(top='overlays.enabled = ["coding_agent_playbook.plugins.superpowers"]\n')
     with pytest.raises(ConfigError) as exc:
         check_enabled_keys(data, source="cfg.toml")
     assert str(exc.value).startswith("cfg.toml: the [overlays] table is not read")
-    assert 'overlays_enabled = ["coding_agent_playbook.packs.superpowers"]' in str(exc.value)
+    assert 'overlays_enabled = ["coding_agent_playbook.plugins.superpowers"]' in str(exc.value)
 
 
 def test_table_without_an_enabled_list_is_refused_too() -> None:
@@ -312,7 +312,7 @@ def test_to_dict_passes_the_check_and_round_trips() -> None:
         schema_version=1,
         project=ProjectMeta(name="x", kind="python-library"),
         engine_version="0.1.0a0",
-        overlays_enabled=["coding_agent_playbook.packs.superpowers"],
+        overlays_enabled=["coding_agent_playbook.plugins.superpowers"],
         adapters_enabled=["continue", "claude_code"],
         output=OutputConfig(commit=False),
     )

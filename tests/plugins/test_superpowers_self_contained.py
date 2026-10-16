@@ -1,11 +1,12 @@
-"""Self-containment gate for the bundled ``superpowers`` pack (SPEC §11.5).
+"""Self-containment gate for the bundled ``superpowers`` plugin (SPEC §11.5).
 
-The pack must work with nothing installed beyond the engine: no URLs of any
+The plugin must work with nothing installed beyond the engine: no URLs of any
 scheme, no ``superpowers:<skill>`` plugin-namespace references (the upstream
 plugin is never installed), no upstream-plugin markers, ``references/`` and
-``scripts/`` path mentions that resolve inside the pack, and scripts that stay
-executable and parse. The URL and namespace scans cover every file in the pack
-(``skills/`` plus ``LICENSE`` and ``ATTRIBUTIONS.md``), not just markdown.
+``scripts/`` path mentions that resolve inside the plugin, and scripts that stay
+executable and parse. The URL and namespace scans cover every file in the
+plugin (``skills/`` plus ``README.md``, ``LICENSE`` and ``ATTRIBUTIONS.md``),
+not just markdown.
 """
 
 from __future__ import annotations
@@ -19,11 +20,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from tests.packs.superpowers_expectations import (
+from tests.plugins.superpowers_expectations import (
     EXPECTED_SCRIPT_SUPPORT_FILES,
     EXPECTED_SCRIPTS,
     EXPECTED_SKILL_IDS,
-    PACK_ROOT,
+    PLUGIN_ROOT,
     SKILLS_ROOT,
     UNRESOLVED_PATH_MENTIONS,
     pack_files,
@@ -69,7 +70,7 @@ def _offending_lines(pattern: re.Pattern[bytes], files: list[Path]) -> list[str]
     for path in files:
         for lineno, line in enumerate(path.read_bytes().splitlines(), 1):
             if pattern.search(line):
-                hits.append(f"{path.relative_to(PACK_ROOT)}:{lineno}")
+                hits.append(f"{path.relative_to(PLUGIN_ROOT)}:{lineno}")
     return hits
 
 
@@ -102,9 +103,11 @@ def _is_shell_script(path: Path) -> bool:
     return first_line.startswith("#!") and ("bash" in first_line or first_line.endswith("sh"))
 
 
-def test_scans_cover_the_whole_pack() -> None:
-    scanned = {path.relative_to(PACK_ROOT).as_posix() for path in pack_files()}
-    assert {"LICENSE", "ATTRIBUTIONS.md"} <= scanned
+def test_scans_cover_the_whole_plugin() -> None:
+    scanned = {path.relative_to(PLUGIN_ROOT).as_posix() for path in pack_files()}
+    # The plugin-root files ship in the wheel but are never synced; scanning them
+    # keeps the README's enable instructions URL- and namespace-free too.
+    assert {rel for rel in scanned if "/" not in rel} == {"LICENSE", "ATTRIBUTIONS.md", "README.md"}
     assert set(resource_files()) <= set(pack_files())
 
 

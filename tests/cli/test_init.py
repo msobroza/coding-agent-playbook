@@ -406,6 +406,7 @@ def test_init_warns_about_a_hand_edited_legacy_hook(tmp_path, capsys):
 #: homepage``), and tables it does not manage at all (``[metrics]``, a personal
 #: one). ``init`` writes back what the *committed* file holds outside ``Config``;
 #: computing that from the merged files would commit the last three.
+# alias regression: init checks the local list as written (SPEC v0.19)
 _LOCAL_OVERRIDES = """\
 adapters_enabled = ["claude_code"]
 overlays_enabled = ["coding_agent_playbook.packs.superpowers"]
@@ -545,7 +546,7 @@ def test_init_rerun_preserves_committed_tables_config_does_not_manage(tmp_path: 
 
 _STALE_COMMITTED = """\
 schema_version = 1
-overlays_enabled = ["coding_agent_playbook.packs.superpowers"]
+overlays_enabled = ["coding_agent_playbook.plugins.superpowers"]
 adapters_enabled = ["continue"]
 
 [project]

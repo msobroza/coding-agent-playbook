@@ -1,8 +1,8 @@
-"""Structure, self-containment and opt-in sync tests for the ``python_design`` pack.
+"""Structure, self-containment and opt-in sync tests for the ``python_design`` plugin.
 
-SPEC §11.5.2. The pack is distilled (written fresh), not vendored, so apart from
+SPEC §11.5.2. The plugin is distilled (written fresh), not vendored, so apart from
 the fixed contracts (the two skill ids and the three scripts) its files are
-discovered rather than pinned. The checks: the pack is a bundled pack that stays
+discovered rather than pinned. The checks: the plugin is a bundled plugin that stays
 off by default; each ``SKILL.md`` has ``id == name ==`` its directory, a bounded
 description, no Jinja and no markdown links (Continue keeps only that body);
 every ``references/…`` / ``scripts/…`` path the docs name resolves inside the
@@ -29,19 +29,20 @@ import pytest
 from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands import validate as _validate
-from coding_agent_playbook.commands._sync_preflight import bundled_packs, unusable_overlays
+from coding_agent_playbook.commands._sync_preflight import bundled_plugins, unusable_overlays
 from coding_agent_playbook.links import LinksConfig, extract_markdown_links
-from coding_agent_playbook.packs.python_design import PACK_NAME
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, _resource_subdir
 from coding_agent_playbook.types import split_frontmatter
 from tests._content import plugin_root
 from tests.conftest import apply_hermetic_git_env
 from tests.fakes import FakeGitClient
-from tests.packs.superpowers_expectations import NATIVE_SKILL_ROOTS, SYNCED_SKILL_ENTRIES
+from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS, SYNCED_SKILL_ENTRIES
 
-PACK_ROOT = plugin_root("python_design")
-SKILLS_ROOT = PACK_ROOT / "skills"
+#: The dotted name a consumer lists in ``overlays_enabled`` to turn the plugin on.
+PLUGIN_NAME = "coding_agent_playbook.plugins.python_design"
+PLUGIN_ROOT = plugin_root("python_design")
+SKILLS_ROOT = PLUGIN_ROOT / "skills"
 EXPECTED_SKILL_IDS = frozenset({"python-design-review", "python-architecture"})
 #: The fixed script contracts, as ``<skill-id>/scripts/<file>``.
 EXPECTED_SCRIPTS = frozenset(
@@ -104,21 +105,22 @@ def _split(skill_id: str) -> tuple[dict[str, object], str]:
 # --- identity and opt-in ------------------------------------------------------
 
 
-def test_pack_is_a_usable_bundled_pack() -> None:
-    assert PACK_NAME == "coding_agent_playbook.packs.python_design"
-    assert PACK_NAME in bundled_packs()
-    assert unusable_overlays([PACK_NAME]) == []
+def test_plugin_is_a_usable_bundled_plugin() -> None:
+    assert PLUGIN_NAME in bundled_plugins()
+    assert unusable_overlays([PLUGIN_NAME]) == []
 
 
-def test_pack_ships_only_the_two_skills() -> None:
-    assert sorted(p.name for p in PACK_ROOT.iterdir() if p.is_dir()) == ["skills"]
+def test_plugin_ships_only_the_two_skills() -> None:
+    # Pure content: the plugin-root files next to ``skills/``, and nothing else.
+    assert {p.name for p in PLUGIN_ROOT.iterdir()} == {"ATTRIBUTIONS.md", "README.md", "skills"}
+    assert SKILLS_ROOT.is_dir()
     assert {p.name for p in SKILLS_ROOT.iterdir() if p.is_dir()} == EXPECTED_SKILL_IDS
 
 
 def test_pack_is_off_by_default_and_adds_only_skills(tmp_path: Path) -> None:
     plain = FileSystemArtifactSource(repo_root=tmp_path)
-    with_pack = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PACK_NAME])
-    assert not [s for s in plain.list_skills() if s.source_package == PACK_NAME]
+    with_pack = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PLUGIN_NAME])
+    assert not [s for s in plain.list_skills() if s.source_package == PLUGIN_NAME]
     pack_ids = {s.frontmatter.get("id") for s in with_pack.list_skills()} - {
         s.frontmatter.get("id") for s in plain.list_skills()
     }
@@ -252,12 +254,12 @@ def opted_in_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
     with pytest.MonkeyPatch.context() as patch:
         config_home = tmp_path_factory.mktemp("xdg-config")
         apply_hermetic_git_env(patch, ceiling=repo.parent, config_home=config_home)
-        return _init_probe(repo, overlays=PACK_NAME)
+        return _init_probe(repo, overlays=PLUGIN_NAME)
 
 
 def test_init_writes_the_top_level_overlay_key(opted_in_repo: Path) -> None:
     config = tomllib.loads((opted_in_repo / ".coding-agent-playbook.toml").read_text("utf-8"))
-    assert config["overlays_enabled"] == [PACK_NAME]
+    assert config["overlays_enabled"] == [PLUGIN_NAME]
 
 
 @pytest.mark.parametrize("root", NATIVE_SKILL_ROOTS)
@@ -306,9 +308,9 @@ def test_validate_and_sync_check_pass_with_the_pack_enabled(
 
 
 def test_link_gate_walks_and_passes_over_the_pack(tmp_path: Path) -> None:
-    walked = _resource_subdir(PACK_NAME, "skills")
+    walked = _resource_subdir(PLUGIN_NAME, "skills")
     assert walked is not None and walked.resolve() == SKILLS_ROOT.resolve()
-    source = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PACK_NAME])
+    source = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PLUGIN_NAME])
     errors = _validate._check_markdown_links(source, tmp_path, LinksConfig())
     assert errors == [], "\n".join(f"{e.path}: {e.message}" for e in errors)
 
@@ -346,7 +348,7 @@ def test_init_without_the_overlay_writes_no_pack_skills(tmp_path: Path) -> None:
 
 @pytest.mark.usefixtures("hermetic_git_env")
 def test_skills_land_only_in_the_roots_of_enabled_adapters(tmp_path: Path) -> None:
-    repo = _init_probe(tmp_path, overlays=PACK_NAME, adapters="claude_code")
+    repo = _init_probe(tmp_path, overlays=PLUGIN_NAME, adapters="claude_code")
     for skill_id in sorted(EXPECTED_SKILL_IDS):
         assert (repo / ".claude" / "skills" / skill_id / "SKILL.md").is_file()
         assert not (repo / ".opencode" / "skills" / skill_id).exists()

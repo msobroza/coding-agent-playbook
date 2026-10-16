@@ -1,27 +1,27 @@
-"""Structure + opt-in tests for the bundled ``superpowers`` pack (SPEC §11.5).
+"""Structure + opt-in tests for the bundled ``superpowers`` plugin (SPEC §11.5).
 
-The pack is an importable subpackage layered like an overlay package. These
-tests pin its identity, that it is **off by default**, the per-skill shape the
-engine's skill sync relies on (including the full ``references/`` inventory),
-and the MIT attribution files that must ship with every copy.
+The plugin is a directory under ``content/plugins/``, layered like an overlay
+package but never imported. These tests pin its layout and listing, that it is
+**off by default**, the per-skill shape the engine's skill sync relies on
+(including the full ``references/`` inventory), and the MIT attribution files
+that must ship with every copy.
 """
 
 from __future__ import annotations
 
-import importlib
 import re
 from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.packs.superpowers import PACK_NAME
+from coding_agent_playbook.bundled_content import bundled_plugins
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import split_frontmatter
-from tests.packs.superpowers_expectations import (
+from tests.plugins.superpowers_expectations import (
     EXPECTED_LICENSE_COPIES,
     EXPECTED_REFERENCE_FILES,
     EXPECTED_SKILL_IDS,
-    PACK_ROOT,
+    PLUGIN_NAME,
     PLUGIN_ROOT,
     SKILLS_ROOT,
     SYNCED_SKILL_ENTRIES,
@@ -39,16 +39,15 @@ _MAX_DESCRIPTION_LENGTH = 1024
 
 
 def _pack_skills(skills: list[Skill]) -> list[Skill]:
-    return [skill for skill in skills if skill.source_package == PACK_NAME]
+    return [skill for skill in skills if skill.source_package == PLUGIN_NAME]
 
 
-def test_pack_name_is_the_dotted_package_name() -> None:
-    assert PACK_NAME == "coding_agent_playbook.packs.superpowers"
-    assert importlib.import_module(PACK_NAME).PACK_NAME == PACK_NAME
-
-
-def test_pack_ships_only_skills() -> None:
-    assert sorted(path.name for path in PLUGIN_ROOT.iterdir() if path.is_dir()) == ["skills"]
+def test_superpowers_plugin_layout() -> None:
+    """Pure content: ``skills/`` plus the plugin-root files, listed by directory name."""
+    entries = list(PLUGIN_ROOT.iterdir())
+    assert sorted(path.name for path in entries if path.is_dir()) == ["skills"]
+    assert {"LICENSE", "ATTRIBUTIONS.md", "README.md"} <= {p.name for p in entries if p.is_file()}
+    assert PLUGIN_NAME in bundled_plugins()
 
 
 def test_pack_is_off_by_default(tmp_path: Path) -> None:
@@ -59,7 +58,7 @@ def test_pack_is_off_by_default(tmp_path: Path) -> None:
 
 
 def test_overlay_yields_exactly_the_expected_skills(tmp_path: Path) -> None:
-    source = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PACK_NAME])
+    source = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PLUGIN_NAME])
     pack_ids = [skill.frontmatter.get("id") for skill in _pack_skills(source.list_skills())]
     assert len(pack_ids) == len(EXPECTED_SKILL_IDS)
     assert set(pack_ids) == EXPECTED_SKILL_IDS
@@ -67,7 +66,7 @@ def test_overlay_yields_exactly_the_expected_skills(tmp_path: Path) -> None:
 
 def test_overlay_adds_no_rules_or_prompts(tmp_path: Path) -> None:
     plain = FileSystemArtifactSource(repo_root=tmp_path)
-    with_pack = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PACK_NAME])
+    with_pack = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PLUGIN_NAME])
     assert len(with_pack.list_rules()) == len(plain.list_rules())
     assert len(with_pack.list_prompts()) == len(plain.list_prompts())
 
@@ -118,7 +117,7 @@ def test_every_skill_carries_the_mit_notice(license_copy: str) -> None:
     # MIT: the notice must be in every copy; sync copies each skill directory
     # (with references/) into consumer repos, so each skill carries its own.
     copy = (SKILLS_ROOT / license_copy).read_bytes()
-    assert copy == (PACK_ROOT / "LICENSE").read_bytes(), f"{license_copy} drifted from LICENSE"
+    assert copy == (PLUGIN_ROOT / "LICENSE").read_bytes(), f"{license_copy} drifted from LICENSE"
 
 
 def test_diagnosing_pack_attribution_note_lists_every_skill() -> None:
@@ -132,7 +131,7 @@ def test_diagnosing_pack_attribution_note_lists_every_skill() -> None:
 
 
 def test_license_keeps_mit_copyright_and_permission_notice() -> None:
-    text = " ".join((PACK_ROOT / "LICENSE").read_text(encoding="utf-8").split())
+    text = " ".join((PLUGIN_ROOT / "LICENSE").read_text(encoding="utf-8").split())
     assert "MIT License" in text
     assert "Copyright (c) 2025 Jesse Vincent" in text
     assert "Permission is hereby granted, free of charge" in text
@@ -143,7 +142,7 @@ def test_license_keeps_mit_copyright_and_permission_notice() -> None:
 
 
 def test_attributions_are_plain_text_and_list_every_skill() -> None:
-    text = (PACK_ROOT / "ATTRIBUTIONS.md").read_text(encoding="utf-8")
+    text = (PLUGIN_ROOT / "ATTRIBUTIONS.md").read_text(encoding="utf-8")
     assert "http://" not in text.lower()
     assert "https://" not in text.lower()
     assert "bb92a77741419a4ab5f06e711a283343f1ada0c3" in text

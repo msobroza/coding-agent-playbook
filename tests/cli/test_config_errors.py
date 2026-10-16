@@ -19,9 +19,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.cli import main
-from coding_agent_playbook.packs.superpowers import PACK_NAME
 from tests.conftest import _DEFAULT_CONFIG
-from tests.packs.superpowers_expectations import write_consumer_repo
+from tests.plugins.superpowers_expectations import PLUGIN_NAME, write_consumer_repo
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -49,7 +48,7 @@ kind = "python-library"
 version = "0.1.0a0"
 
 [overlays]
-enabled = ["{PACK_NAME}"]
+enabled = ["{PLUGIN_NAME}"]
 
 [adapters]
 enabled = ["continue", "claude_code", "opencode", "shared_skills"]
@@ -60,18 +59,18 @@ _ADAPTERS_LINE = 'adapters_enabled = ["continue", "claude_code", "opencode", "sh
 #: The fix-it hint applied line for line where each table stood: TOML then reads
 #: both keys as part of the [engine] table above them, so neither is top-level.
 _IN_PLACE_FIX_CONFIG = _TABLE_FORM_CONFIG.replace(
-    f'[overlays]\nenabled = ["{PACK_NAME}"]', f'overlays_enabled = ["{PACK_NAME}"]'
+    f'[overlays]\nenabled = ["{PLUGIN_NAME}"]', f'overlays_enabled = ["{PLUGIN_NAME}"]'
 ).replace(f"[adapters]\nenabled = {_ADAPTERS_LINE.partition(' = ')[2]}", _ADAPTERS_LINE)
 
 #: The top-level keys appended after the last table ([output] here).
 _APPENDED_CONFIG = (
     _TABLE_FORM_CONFIG.partition("[overlays]")[0]
-    + f'[output]\ncommit = false\n\noverlays_enabled = ["{PACK_NAME}"]\n{_ADAPTERS_LINE}\n'
+    + f'[output]\ncommit = false\n\noverlays_enabled = ["{PLUGIN_NAME}"]\n{_ADAPTERS_LINE}\n'
 )
 
 #: The keys at the top level, but misspelled.
 _MISSPELLED_CONFIG = (
-    f'overlay_enabled = ["{PACK_NAME}"]\n{_ADAPTERS_LINE}\n'
+    f'overlay_enabled = ["{PLUGIN_NAME}"]\n{_ADAPTERS_LINE}\n'
     + _TABLE_FORM_CONFIG.partition("[overlays]")[0]
 )
 
@@ -136,7 +135,7 @@ def test_every_command_refuses_the_table_form_before_writing(
 
     captured = capsys.readouterr()
     assert captured.err.startswith(f"error: {_PRIMARY}: the [overlays] table is not read")
-    assert f'{_HINT}overlays_enabled = ["{PACK_NAME}"]' in captured.err
+    assert f'{_HINT}overlays_enabled = ["{PLUGIN_NAME}"]' in captured.err
     assert f"\n{_PRIMARY}: the [adapters] table is not read" in captured.err
     assert captured.out == ""
     assert _snapshot(repo) == before
@@ -178,7 +177,7 @@ def test_every_command_refuses_a_nested_or_misspelled_enabled_key(
 
     captured = capsys.readouterr()
     assert captured.err.startswith(first_line)
-    assert f'{_HINT}overlays_enabled = ["{PACK_NAME}"]' in captured.err
+    assert f'{_HINT}overlays_enabled = ["{PLUGIN_NAME}"]' in captured.err
     assert captured.out == ""
     assert _snapshot(repo) == before
 
@@ -221,7 +220,7 @@ def test_a_table_in_the_local_file_names_the_local_file(
 def test_a_string_overlays_enabled_is_refused(
     tmp_path: Path, make_synthetic_repo: Callable[..., Path], capsys: pytest.CaptureFixture[str]
 ) -> None:
-    config = _DEFAULT_CONFIG.replace("overlays_enabled = []", f'overlays_enabled = "{PACK_NAME}"')
+    config = _DEFAULT_CONFIG.replace("overlays_enabled = []", f'overlays_enabled = "{PLUGIN_NAME}"')
     repo = make_synthetic_repo(tmp_path, config_text=config)
     before = _snapshot(repo)
 
@@ -229,7 +228,7 @@ def test_a_string_overlays_enabled_is_refused(
 
     err = capsys.readouterr().err
     assert err.startswith(f"error: {_PRIMARY}: overlays_enabled must be a list of strings")
-    assert f'write overlays_enabled = ["{PACK_NAME}"]' in err
+    assert f'write overlays_enabled = ["{PLUGIN_NAME}"]' in err
     assert _snapshot(repo) == before
 
 
@@ -347,7 +346,7 @@ def test_a_pack_synced_repo_is_untouched_when_the_config_switches_to_the_table_f
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    repo = write_consumer_repo(tmp_path, overlays=[PACK_NAME])
+    repo = write_consumer_repo(tmp_path, overlays=[PLUGIN_NAME])
     _git(repo, "init", "-q")
     assert _run(["sync"], repo) == 0
     _git(repo, "add", "-A")

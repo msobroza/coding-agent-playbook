@@ -12,11 +12,10 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.links import LinksConfig
-from coding_agent_playbook.packs.superpowers import PACK_NAME
 from coding_agent_playbook.sources.base import ArtifactSource
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, _resource_subdir
 from coding_agent_playbook.types import Prompt, PromptFrontmatter
-from tests.packs.superpowers_expectations import SKILLS_ROOT
+from tests.plugins.superpowers_expectations import PLUGIN_NAME, SKILLS_ROOT
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -229,13 +228,13 @@ def test_superpowers_pack_has_self_contained_links(
     walked only when enabled, so the engine-only gate above never sees it."""
     # The validator silently skips a package whose skills/ does not resolve, so
     # pin that it resolves to the shipped tree: otherwise this gate is vacuous.
-    walked = _resource_subdir(PACK_NAME, "skills")
+    walked = _resource_subdir(PLUGIN_NAME, "skills")
     assert walked is not None
     assert walked.resolve() == SKILLS_ROOT.resolve()
     assert any(walked.glob("*/SKILL.md"))
-    source = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PACK_NAME])
+    source = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PLUGIN_NAME])
     errors, visited = _check_links_recording_visits(source, tmp_path, monkeypatch)
     assert any(md.name == "SKILL.md" for md in visited), (
-        f"the link gate visited no SKILL.md of {PACK_NAME} ({len(visited)} files scanned)"
+        f"the link gate visited no SKILL.md of {PLUGIN_NAME} ({len(visited)} files scanned)"
     )
     assert errors == [], "\n".join(f"{e.path}: {e.message}" for e in errors)

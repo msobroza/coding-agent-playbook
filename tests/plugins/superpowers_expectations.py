@@ -1,8 +1,8 @@
-"""Single source of truth for what the bundled ``superpowers`` pack must ship.
+"""Single source of truth for what the bundled ``superpowers`` plugin must ship.
 
 The sets are hardcoded on purpose: deriving them from the on-disk tree would let
 an accidentally dropped skill, script, or reference file pass every test. Shared
-by the ``tests/packs/`` suite and the PR-L link gate in
+by the ``tests/plugins/`` suite and the PR-L link gate in
 ``tests/cli/test_validate_links.py``.
 """
 
@@ -15,7 +15,7 @@ from tests._content import plugin_files_root
 if TYPE_CHECKING:
     from pathlib import Path
 
-#: The 15 upstream Superpowers skills (v7.0.0) vendored into the pack.
+#: The 15 upstream Superpowers skills (v7.0.0) vendored into the plugin.
 EXPECTED_SKILL_IDS: frozenset[str] = frozenset(
     {
         "brainstorming",
@@ -36,7 +36,7 @@ EXPECTED_SKILL_IDS: frozenset[str] = frozenset(
     }
 )
 
-#: Every executable the pack ships, as ``<skill-id>/scripts/<file>``.
+#: Every executable the plugin ships, as ``<skill-id>/scripts/<file>``.
 EXPECTED_SCRIPTS: frozenset[str] = frozenset(
     {
         "executing-plans/scripts/task-done",
@@ -114,7 +114,7 @@ EXPECTED_REFERENCE_FILES: frozenset[str] = EXPECTED_LICENSE_COPIES | frozenset(
 )
 
 #: ``references/…`` / ``scripts/…`` path mentions that intentionally resolve to no
-#: pack file, keyed by the mentioning file (relative to the skills root). They
+#: plugin file, keyed by the mentioning file (relative to the skills root). They
 #: are illustrative examples of *some* skill's layout, or name another skill's
 #: template by that skill ("subagent-driven-development's ./references/…").
 UNRESOLVED_PATH_MENTIONS: frozenset[tuple[str, str]] = frozenset(
@@ -138,10 +138,12 @@ UNRESOLVED_PATH_MENTIONS: frozenset[tuple[str, str]] = frozenset(
 #: anything else at a skill root would be silently dropped by ``playbook sync``.
 SYNCED_SKILL_ENTRIES: frozenset[str] = frozenset({"SKILL.md", "scripts", "references"})
 
-#: The plugin's directory in the checkout: ``LICENSE``, ``ATTRIBUTIONS.md`` and ``skills/``.
+#: The dotted name a consumer lists in ``overlays_enabled`` to turn the plugin on.
+PLUGIN_NAME = "coding_agent_playbook.plugins.superpowers"
+
+#: The plugin's directory in the checkout: ``README.md``, ``LICENSE``,
+#: ``ATTRIBUTIONS.md`` and ``skills/``.
 PLUGIN_ROOT: Path = plugin_files_root("superpowers")
-#: Alias of :data:`PLUGIN_ROOT` until this module is renamed with ``tests/plugins/``.
-PACK_ROOT: Path = PLUGIN_ROOT
 SKILLS_ROOT: Path = PLUGIN_ROOT / "skills"
 
 #: The native skill roots the default adapters write through the shared
@@ -156,10 +158,10 @@ def consumer_config(*, overlays: list[str], adapters: tuple[str, ...] = DEFAULT_
     """Return a ``.coding-agent-playbook.toml`` enabling ``adapters`` (top-level keys).
 
     The default is the adapter set ``playbook init`` enables (``agents_md`` is
-    always on), so a pack skill lands in every :data:`NATIVE_SKILL_ROOTS` root
+    always on), so a plugin skill lands in every :data:`NATIVE_SKILL_ROOTS` root
     and as a degraded Continue prompt. Example::
 
-        consumer_config(overlays=[PACK_NAME])  # opt the consumer into the pack
+        consumer_config(overlays=[PLUGIN_NAME])  # opt the consumer into the plugin
         consumer_config(overlays=[], adapters=(*DEFAULT_ADAPTERS, "agent_harness"))
     """
     overlay_list = ", ".join(f'"{name}"' for name in overlays)
@@ -190,7 +192,7 @@ def write_consumer_repo(
     Usable from a module-scoped fixture, unlike the function-scoped
     ``make_synthetic_repo``. Example::
 
-        repo = write_consumer_repo(tmp_path_factory.mktemp("consumer"), overlays=[PACK_NAME])
+        repo = write_consumer_repo(tmp_path_factory.mktemp("consumer"), overlays=[PLUGIN_NAME])
     """
     repo.mkdir(parents=True, exist_ok=True)
     (repo / "pyproject.toml").write_text(
@@ -204,8 +206,8 @@ def write_consumer_repo(
 
 
 def pack_files() -> list[Path]:
-    """Return every regular file in the plugin (``skills/``, ``LICENSE``,
-    ``ATTRIBUTIONS.md``), sorted, skipping ``__pycache__``.
+    """Return every regular file in the plugin (``skills/``, ``README.md``,
+    ``LICENSE``, ``ATTRIBUTIONS.md``), sorted, skipping ``__pycache__``.
 
     Example::
 

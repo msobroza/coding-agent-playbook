@@ -35,18 +35,18 @@ import pytest
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.harness.manifest import read_manifest
-from coding_agent_playbook.packs.superpowers import PACK_NAME
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from coding_agent_playbook.types import split_frontmatter
 from tests.fakes import FakeGitClient
-from tests.packs.superpowers_expectations import (
+from tests.plugins.superpowers_expectations import (
     DEFAULT_ADAPTERS,
     EXPECTED_LICENSE_COPIES,
     EXPECTED_SCRIPTS,
     EXPECTED_SKILL_IDS,
     NATIVE_SKILL_ROOTS,
-    PACK_ROOT,
+    PLUGIN_NAME,
+    PLUGIN_ROOT,
     SKILLS_ROOT,
     consumer_config,
     write_consumer_repo,
@@ -83,7 +83,7 @@ def synced_pack_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
     renders into its own scratch dir and ``validate`` writes nothing). A first
     sync has no leftovers to judge, so a ``FakeGitClient`` stands in for git.
     """
-    repo = write_consumer_repo(tmp_path_factory.mktemp("pack-consumer"), overlays=[PACK_NAME])
+    repo = write_consumer_repo(tmp_path_factory.mktemp("pack-consumer"), overlays=[PLUGIN_NAME])
     assert _sync.execute(repo, git=FakeGitClient()) == 0
     return repo
 
@@ -102,7 +102,7 @@ def git_pack_repo(tmp_path: Path, hermetic_git_env: None) -> Path:
 
 def _init_git_pack_repo(repo: Path, *, adapters: tuple[str, ...]) -> Path:
     """Write, ``git init``, sync and commit the sources of an opted-in consumer repo."""
-    write_consumer_repo(repo, overlays=[PACK_NAME], adapters=adapters)
+    write_consumer_repo(repo, overlays=[PLUGIN_NAME], adapters=adapters)
     _git(repo, "init", "-q")
     assert _sync.run(_ns(repo)) == 0
     _git(repo, "add", "-A")
@@ -191,7 +191,7 @@ def test_synced_skill_carries_the_mit_notice(
 ) -> None:
     # MIT requires the notice in every copy; each synced skill dir is one.
     synced = synced_pack_repo / root / license_copy
-    assert synced.read_bytes() == (PACK_ROOT / "LICENSE").read_bytes()
+    assert synced.read_bytes() == (PLUGIN_ROOT / "LICENSE").read_bytes()
 
 
 @pytest.mark.parametrize("root", NATIVE_SKILL_ROOTS)
@@ -383,7 +383,7 @@ def test_agent_harness_renders_the_pack_and_opting_out_removes_it(
         claude.pop("SKILL.md")
         assert harness == claude, f"skills/{skill_id} differs from .claude/skills/{skill_id}"
         # MIT: the notice travels into the harness copy too.
-        assert harness["references/LICENSE"] == (PACK_ROOT / "LICENSE").read_bytes(), skill_id
+        assert harness["references/LICENSE"] == (PLUGIN_ROOT / "LICENSE").read_bytes(), skill_id
     manifest = read_manifest(repo)
     assert manifest is not None
     flagged = {

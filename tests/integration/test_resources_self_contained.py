@@ -6,18 +6,19 @@ shipped bundle and must never name the third-party source some of them were
 distilled from. Credit for that source lives in exactly two places:
 ``content/core/ATTRIBUTIONS.md`` for the engine's own artifacts and
 ``content/plugins/python_design/ATTRIBUTIONS.md`` for the distilled
-``python_design`` pack.
+``python_design`` bundled plugin.
 The PR-L link gate (``links.py``) cannot enforce this: it recognizes only
 markdown link syntax, masks code spans, and reads only ``.md``/``.md.j2``. This
 scan applies no masking and reads every text file.
 
 Scope: every file under ``content/core/`` (ids relative to it) and every file of
-the ``python_design`` pack (its ``skills/`` plus ``ATTRIBUTIONS.md``; ids are
-prefixed ``plugins/python_design/``, its path relative to ``content/``), dot dirs
-and bytecode caches aside. The engine's pre-commit template (ids prefixed
-``templates/precommit/``) ships too and gets both checks. The pack's files are
-all fully scanned except its ``ATTRIBUTIONS.md``, which is URL-free but must name
-the plugin (:func:`pack_policy_for`). For ``content/core/`` the checks are
+the ``python_design`` plugin (its ``skills/`` plus ``README.md`` and
+``ATTRIBUTIONS.md``; ids are prefixed ``plugins/python_design/``, its path
+relative to ``content/``), dot dirs and bytecode caches aside. The engine's
+pre-commit template (ids prefixed ``templates/precommit/``) ships too and gets
+both checks. The plugin's files are all fully scanned except its
+``ATTRIBUTIONS.md``, which is URL-free but must name the source plugin
+(:func:`pack_policy_for`). For ``content/core/`` the checks are
 decided per file by :func:`policy_for`:
 
 * by default -> URLs and plugin markers are both violations. That includes the
@@ -234,6 +235,9 @@ def test_scan_covers_every_artifact_kind() -> None:
     assert _ATTRIBUTIONS_NAME in rels
     assert f"{_EVAL_TASKS_SUBDIR}/{_ATTRIBUTIONS_NAME}" in rels
     assert f"{_PYTHON_DESIGN_PREFIX}{_ATTRIBUTIONS_NAME}" in rels
+    # The plugin's README ships in the wheel; its enable instructions must name
+    # neither a URL nor the source plugin.
+    assert f"{_PYTHON_DESIGN_PREFIX}README.md" in rels
 
 
 def test_pack_scan_exempts_only_the_pack_attributions_from_the_marker_check() -> None:
