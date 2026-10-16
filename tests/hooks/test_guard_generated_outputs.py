@@ -339,6 +339,32 @@ def test_internal_error_asks_and_denies_headless(
     assert _decision(headless) is Decision.DENY
 
 
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        ("ls -la src", Decision.NONE),
+        ("git status && pytest -q | tail -5", Decision.NONE),
+        ("echo x > AGENTS.md", Decision.ASK),
+    ],
+)
+def test_command_without_write_target_exits_before_reading_its_rules(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], command: str, expected: Decision
+) -> None:
+    """Finding #8: no segment writes anything, so the guard stops before its config and targets.
+
+    A malformed ``restore_commands`` is the witness: only a writing command reaches it (and asks).
+    """
+    pack_repo.write("AGENTS.md", f"{_HTML}\n")
+    broken = {
+        "kind": "builtin",
+        "name": "guard_generated_outputs",
+        "config": {"restore_commands": 3},
+    }
+    pack_repo.install(hook_record(HOOK_ID, decisions=("deny", "ask", "none"), handler=broken))
+
+    assert _decision(_bash(pack_repo, deps(), command)) is expected
+
+
 def test_installed_overlay_resource_denied_via_machine_json(
     pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path
 ) -> None:

@@ -159,15 +159,28 @@ def _generic_fix() -> str:
 
 
 def _targets(ev: CanonicalEvent, ctx: HandlerContext) -> list[NormalizedPath]:
-    """Every path the call writes: file-tool write paths, then the Bash write targets."""
+    """Every path the call writes: file-tool write paths, then the Bash write targets.
+
+    A Bash command none of whose segments writes anything (``ls``, ``pytest``,
+    ``git status``: most of them) stops here, before the restore rules are read
+    and any target is normalized (review finding #8); a restore exemption only
+    removes targets, so it could not add one.
+    """
     tool = ev.tool
     if tool is None:
         return []
     found = file_write_paths(tool)
-    if tool.command is not None:
+    command = tool.command
+    if command is not None and _any_write_target(command.segments):
         restore = _restore_commands(ctx.config)
         found.extend(shell_write_targets(ev, ctx, lambda s: _segment_targets(s, restore)))
     return found
+
+
+def _any_write_target(segments: Sequence[Segment]) -> bool:
+    from coding_agent_playbook.hook_runtime.shell import write_targets  # Bash branch only
+
+    return any(write_targets(segment) for segment in segments)
 
 
 def _segment_targets(segment: Segment, restore: Sequence[tuple[str, ...]]) -> list[str]:
