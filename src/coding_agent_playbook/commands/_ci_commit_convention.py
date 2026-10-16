@@ -1,14 +1,16 @@
 """``playbook ci``'s ``commit-convention`` step: commitizen over the branch's commits (specs/prK-hook-pack.md §F.4.3, §F.5).
 
 The authoritative twin of commit-message-convention. It reads ``git log
-<merge base>..HEAD`` with committer dates, keeps the commits on or after
-``[hooks.commit_convention] cutover_date`` (``hook_runtime.cutover``, the plan
-the hook's push scan uses) and runs ``cz`` directly (D-Q2: no ``playbook``
-wrapper):
+<merge base>..HEAD`` with parents and committer dates, keeps the commits on or
+after ``[hooks.commit_convention] cutover_date`` (``hook_runtime.cutover``, the
+plan the hook's push scan uses) and runs ``cz`` directly (D-Q2: no
+``playbook`` wrapper). One ``--rev-range`` covers exactly the kept commits or
+is not used:
 
 - every commit kept: ``cz check --rev-range <merge base>..HEAD``;
-- the newest commits only: ``cz check --rev-range <oldest kept>^..HEAD``;
-- otherwise ``cz check --message <message>`` per kept commit.
+- a linear newest tail (no merge): ``cz check --rev-range <oldest kept>^..HEAD``;
+- otherwise ``cz check --message <message>`` per kept commit, so a branch
+  that merged main never has main's own commits checked.
 
 In squash-merge repositories the PR title becomes the commit subject, so with
 ``PLAYBOOK_PR_TITLE`` set the step also runs ``cz check --message <title>``:

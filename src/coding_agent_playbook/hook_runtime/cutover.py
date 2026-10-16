@@ -8,13 +8,19 @@ committer date) must conform while old ones are left alone. Unset, every
 commit is checked. A single new commit (the ``pre_tool_use`` commit check, the
 commit-msg twin) is always checked.
 
-:func:`plan_cz_checks` turns a range's commits into what to ask ``cz check``:
+:func:`plan_cz_checks` turns a range's commits into what to ask ``cz check``.
+A single ``--rev-range`` is used only when it names exactly the kept commits:
 
-- every commit kept: one ``--rev-range <base>..<head>``;
-- the kept commits are the newest ones (a contiguous tail of history): one
-  ``--rev-range <oldest kept>^..<head>``;
+- every commit kept: one ``--rev-range <base>..<head>``, the range just listed;
+- the kept commits are a linear tail (``head`` back through single parents,
+  no merge): one ``--rev-range <oldest kept>^..<head>``;
 - otherwise ``--message`` per kept commit, at most ``max_messages``, with a
   note naming how many more CI checks.
+
+A merge among the kept commits rules the tail range out: ``<oldest kept>^``
+does not exclude what the merge brought in, so a branch that merged main
+would have ``cz`` check main's own commits, which ``<base>..<head>`` excludes
+(PR #32: main's non-conventional squash subjects failed the CI step).
 
 Pure and stdlib-only, so the hook (hot path: no ``tomllib``, no evaluators)
 and the CI step share it.
@@ -24,6 +30,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
+from itertools import pairwise
 from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
@@ -110,8 +117,8 @@ def plan_cz_checks(
     """What to ask ``cz check`` about ``commits`` (``git log <base>..<head>``, newest first).
 
     ``truncated`` says the log stopped at its limit, so "every commit kept"
-    cannot vouch for the commits beyond it: the range then starts at the
-    oldest kept commit instead of ``base``.
+    cannot vouch for the commits beyond it: a linear tail then starts the
+    range at the oldest kept commit instead of ``base``.
 
     Example::
 
@@ -123,7 +130,7 @@ def plan_cz_checks(
         return CzPlan()
     if len(kept) == len(commits) and not truncated:
         return CzPlan(rev_range=f"{base}..{head}")
-    if list(commits[: len(kept)]) == kept:  # the newest commits: a contiguous tail
+    if _is_linear_tail(commits, kept):
         return CzPlan(rev_range=f"{kept[-1].sha}^..{head}")
     oldest_first = tuple(reversed(kept))
     extra = len(oldest_first) - max_messages
@@ -133,3 +140,19 @@ def plan_cz_checks(
         else ""
     )
     return CzPlan(commits=oldest_first[:max_messages], note=note)
+
+
+def _is_linear_tail(commits: Sequence[LoggedCommit], kept: Sequence[LoggedCommit]) -> bool:
+    """Whether ``<oldest kept>^..<head>`` names exactly ``kept``.
+
+    ``git log <base>..<head>`` lists ``head`` first, so ``kept`` must open the
+    listing and each kept commit must have one parent: the next kept commit,
+    then the oldest one's parent, where the range stops. A merge, a root commit
+    or a commit whose parent is not the next kept one (a backdated commit in
+    between) fails.
+    """
+    if list(commits[: len(kept)]) != list(kept):
+        return False
+    if any(len(commit.parents) != 1 for commit in kept):
+        return False
+    return all(newer.parents[0] == older.sha for newer, older in pairwise(kept))

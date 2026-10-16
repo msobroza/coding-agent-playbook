@@ -57,6 +57,29 @@ def test_commit_log_reads_committer_dates_and_messages(
     assert len(_safe_git(root, real_proc).commit_log("upstream..HEAD", limit=1)) == 1
 
 
+def test_commit_log_reads_each_commit_parents(
+    tmp_path: Path, real_git: Callable[..., str], real_proc: SubprocessProc
+) -> None:
+    """A merge lists both parents (first parent first): the cut-over plan reads the topology."""
+    root = Path(os.path.realpath(tmp_path)) / "repo"
+    root.mkdir()
+    real_git("init", "-q", "-b", "main", cwd=root)
+    real_git("commit", "-q", "--allow-empty", "-m", "base", cwd=root)
+    real_git("checkout", "-q", "-b", "feat", cwd=root)
+    real_git("commit", "-q", "--allow-empty", "-m", "feat: one", cwd=root)
+    feat = real_git("rev-parse", "HEAD", cwd=root)
+    real_git("checkout", "-q", "main", cwd=root)
+    real_git("commit", "-q", "--allow-empty", "-m", "Main squash (#1)", cwd=root)
+    main = real_git("rev-parse", "HEAD", cwd=root)
+    real_git("checkout", "-q", "feat", cwd=root)
+    real_git("merge", "-q", "--no-ff", "-m", "Merge branch 'main' into feat", "main", cwd=root)
+
+    merge, one = _safe_git(root, real_proc).commit_log("main..HEAD", limit=10)
+
+    assert (merge.parents, one.sha) == ((feat, main), feat)
+    assert len(one.parents) == 1
+
+
 def test_commit_log_refuses_an_option_shaped_range(
     tmp_path: Path, real_git: Callable[..., str], real_proc: SubprocessProc
 ) -> None:

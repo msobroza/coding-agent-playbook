@@ -4,8 +4,10 @@ commit-message-convention's push scan and the ``playbook ci``
 ``commit-convention`` step read the commits of a range with their
 **committer** date and message, so D-Q3's cut-over (``cutover_date``) can
 grandfather legacy history while a rebased or amended commit (a new committer
-date) still has to conform. One ``git log -z`` call gives all three fields;
-it reads no worktree content, and ``SafeGit.run`` adds the hardening flags.
+date) still has to conform. The parents say whether one ``cz check --rev-range``
+covers exactly the kept commits (``hook_runtime.cutover``). One ``git log -z``
+call gives every field; it reads no worktree content, and ``SafeGit.run`` adds
+the hardening flags.
 
 :class:`LogQueries` is a mixin of ``SafeGit`` beside ``git_range``'s
 ``RangeQueries`` (each stays under §D.1's 300-line module rule).
@@ -25,21 +27,26 @@ if TYPE_CHECKING:
 
 __all__ = ["LOG_FORMAT", "LogPort", "LogQueries", "LoggedCommit", "parse_commit_log"]
 
-#: ``%H`` sha, ``%cI`` strict ISO 8601 committer date, ``%B`` raw message, unit-separated.
-LOG_FORMAT: Final = "--format=%H%x1f%cI%x1f%B"
+#: ``%H %P`` sha and space-separated parents, ``%cI`` strict ISO 8601 committer
+#: date, ``%B`` raw message, unit-separated.
+LOG_FORMAT: Final = "--format=%H %P%x1f%cI%x1f%B"
 _FIELD: Final = "\x1f"
 
 
 @dataclass(frozen=True, slots=True)
 class LoggedCommit:
-    """One commit of a range: its sha, committer date (``%cI``) and raw message.
+    """One commit of a range: its sha, committer date (``%cI``), raw message and parents.
 
-    Example: ``LoggedCommit("9f2c...", "2026-10-15T09:12:00+02:00", "feat: x\\n")``.
+    ``parents`` lists the first parent first: two or more for a merge, none for
+    a root commit (or a log read without them).
+
+    Example: ``LoggedCommit("9f2c...", "2026-10-15T09:12:00+02:00", "feat: x\\n", ("41ab...",))``.
     """
 
     sha: str
     committed: str
     message: str
+    parents: tuple[str, ...] = ()
 
 
 class LogPort(Protocol):
@@ -81,12 +88,17 @@ def parse_commit_log(output: bytes) -> tuple[LoggedCommit, ...]:
 
     Example::
 
-        >>> parse_commit_log(b"ab\\x1f2026-10-15T09:00:00Z\\x1ffeat: x\\n\\x00")
-        (LoggedCommit(sha='ab', committed='2026-10-15T09:00:00Z', message='feat: x\\n'),)
+        >>> parse_commit_log(b"ab cd\\x1f2026-10-15T09:00:00Z\\x1ffeat: x\\n\\x00")[0].parents
+        ('cd',)
     """
-    commits: list[LoggedCommit] = []
-    for record in output.decode("utf-8", errors="replace").split("\x00"):
-        parts = record.lstrip("\n").split(_FIELD, 2)
-        if len(parts) == 3 and parts[0] and parts[1]:
-            commits.append(LoggedCommit(parts[0], parts[1], parts[2]))
-    return tuple(commits)
+    records = output.decode("utf-8", errors="replace").split("\x00")
+    return tuple(commit for commit in map(_logged_commit, records) if commit is not None)
+
+
+def _logged_commit(record: str) -> LoggedCommit | None:
+    """One :data:`LOG_FORMAT` record; ``None`` when it lacks a sha or a date."""
+    parts = record.lstrip("\n").split(_FIELD, 2)
+    ids = parts[0].split()
+    if len(parts) != 3 or not ids or not parts[1]:
+        return None
+    return LoggedCommit(ids[0], parts[1], parts[2], tuple(ids[1:]))

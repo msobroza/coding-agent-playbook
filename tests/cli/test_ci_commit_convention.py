@@ -4,7 +4,8 @@ A real git history (isolated through the hermetic git env) with backdated
 ``GIT_COMMITTER_DATE``s; ``FakeCiStepRunner`` records every ``cz`` argv, so
 commitizen never runs. Only commits on or after ``[hooks.commit_convention]
 cutover_date`` reach cz: one ``--rev-range`` for the whole range or a newest
-tail, else ``--message`` per commit; the PR title is one more argv element.
+linear tail, else ``--message`` per commit (a merge of main in the tail would
+widen a range to main's own commits); the PR title is one more argv element.
 """
 
 from __future__ import annotations
@@ -84,6 +85,32 @@ def test_commit_convention_cutover_filter(
     assert _convention(root, runner) == 0
 
     assert runner.calls == [(_CZ, "check", "--rev-range", f"{shas[1]}^..HEAD")]
+
+
+def test_commit_convention_after_merging_main_checks_only_the_branch_commits(
+    tmp_path: Path, real_git: Callable[..., str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression (PR #32): main's post-cut-over squash commits, merged in, are not the branch's.
+
+    ``<merge base>..HEAD`` is ``msg 2``, the merge and the legacy ``msg 0``; the old
+    ``<oldest kept>^..HEAD`` range also reached main's ``Main squash (#27)``.
+    """
+    root, _ = _history(tmp_path, real_git, monkeypatch, (_OLD,), cutover="2026-10-15")
+    monkeypatch.setenv("GIT_COMMITTER_DATE", _NEW)
+    real_git("checkout", "-q", "main", cwd=root)
+    _commit(real_git, root, "Main squash (#27)")
+    real_git("checkout", "-q", "feat", cwd=root)
+    real_git("merge", "-q", "--no-ff", "-m", "Merge branch 'main' into feat", "main", cwd=root)
+    _commit(real_git, root, "msg 2")
+    monkeypatch.delenv("GIT_COMMITTER_DATE")
+    runner = FakeCiStepRunner()
+
+    assert _convention(root, runner) == 0
+
+    assert runner.calls == [
+        (_CZ, "check", "--message", "Merge branch 'main' into feat\n"),
+        (_CZ, "check", "--message", "msg 2\n"),
+    ]
 
 
 def test_commit_convention_unset_cutover_checks_the_whole_range(

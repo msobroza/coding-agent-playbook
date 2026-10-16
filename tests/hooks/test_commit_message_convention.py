@@ -9,6 +9,7 @@ program fails the test) and ``FakeGit`` answers the push scan's refs and log.
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Final
 
 import pytest
@@ -210,11 +211,22 @@ def test_changed_cz_binary_is_not_run(repo: PackRepo, deps: Deps, cz_program: Pa
     assert "changed since sync" in report.trace.combined.user_notes[0]
 
 
-def _commit(sha: str, when: str, message: str) -> LoggedCommit:
-    return LoggedCommit(sha, when, message)
+def _commit(sha: str, when: str, message: str, *parents: str) -> LoggedCommit:
+    return LoggedCommit(sha, when, message, parents)
 
 
-def _pushed(*commits: LoggedCommit) -> FakeGit:
+def _pushed(*commits: LoggedCommit, linear: bool = True) -> FakeGit:
+    """The tracking ref at ``base0`` and ``commits`` (newest first) on top of it.
+
+    ``linear`` chains each commit to the next one and the oldest to ``base0``, as
+    a history without merges logs; otherwise each commit keeps its own parents.
+    """
+    if linear:
+        below = [*(commit.sha for commit in commits[1:]), "base0"]
+        commits = tuple(
+            replace(commit, parents=(parent,))
+            for commit, parent in zip(commits, below, strict=True)
+        )
     return _git(
         upstream_ref=TRACKING,
         commits={TRACKING: "base0"},
@@ -251,6 +263,26 @@ def test_push_skips_pre_cutover_commits(repo: PackRepo, deps: Deps) -> None:
 
     assert report.trace.combined.decision is Decision.NONE
     assert (cz.ranges, cz.messages) == (["c0^..HEAD"], [])
+
+
+def test_push_tail_through_a_merge_checks_each_commit(repo: PackRepo, deps: Deps) -> None:
+    """Regression (PR #32): ``c1^..HEAD`` would also reach main's commits behind the merge."""
+    _checking_push(repo, "2026-10-15")
+    cz = FakeCz(accepts=lambda message: True)
+    git = _pushed(
+        _commit("c0", NEW, "feat: after the merge\n", "c1"),
+        _commit("c1", NEW, "Merge branch 'main' into feat\n", "c2", "m0"),
+        _commit("c2", OLD, "Legacy subject\n", "base0"),
+        linear=False,
+    )
+
+    report = _bash(repo, deps, "git push", cz=cz, git=git)
+
+    assert report.trace.combined.decision is Decision.NONE
+    assert (cz.ranges, cz.messages) == (
+        [],
+        ["Merge branch 'main' into feat\n", "feat: after the merge\n"],
+    )
 
 
 def test_push_rebased_commit_with_new_committer_date_is_checked(repo: PackRepo, deps: Deps) -> None:
