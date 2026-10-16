@@ -16,7 +16,7 @@ import coding_agent_playbook
 from coding_agent_playbook.commands import _validate_context
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
-from tests._content import CORE_ROOT
+from tests._catalog import CORE_ROOT
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -280,7 +280,7 @@ def test_invalid_output_contract_regex_fails_validate(tmp_path, make_synthetic_r
     assert "expected a list of Python regular expressions" in out
 
 
-@pytest.mark.content
+@pytest.mark.catalog
 def test_shipped_prompt_contracts_compile() -> None:
     """The engine's review, security-review and find-injected-vulnerability contracts compile."""
     import re
@@ -517,7 +517,7 @@ def test_checkout_resource_roots_without_src_is_empty(tmp_path):
 def test_config_less_context_in_the_engine_checkout_walks_the_engine_once(tmp_path, capsys):
     """A checkout whose ``src/coding_agent_playbook`` IS the engine package walks
     the engine once: before v0.19 its ``resources/`` was the engine's content and
-    needed the resolved-path dedupe; the content now lives in ``content/``, so
+    needed the resolved-path dedupe; the content now lives in ``catalog/``, so
     no ``src/*/resources/`` layer may appear at all."""
     engine_dir = Path(coding_agent_playbook.__file__).parent
     (tmp_path / "src").mkdir()

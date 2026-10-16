@@ -50,7 +50,7 @@ from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from coding_agent_playbook.types import Hook, Prompt, Rule
-from tests._content import CORE_ROOT
+from tests._catalog import CORE_ROOT
 from tests.hook_payloads import PROJECT_DIR, HookPayloadCase
 from tests.hook_runtime.guard_repo import GuardRepo
 

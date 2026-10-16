@@ -4,17 +4,17 @@ The engine's artifacts load straight into an agent's context, often in an
 air-gapped deployment, so a rule, prompt or skill must never point outside the
 shipped bundle and must never name the third-party source some of them were
 distilled from. Credit for that source lives only in a layer root's
-``ATTRIBUTIONS.md``: ``content/core/ATTRIBUTIONS.md`` for the engine's own
-artifacts and ``content/plugins/<name>/ATTRIBUTIONS.md`` for a bundled plugin
+``ATTRIBUTIONS.md``: ``catalog/core/ATTRIBUTIONS.md`` for the engine's own
+artifacts and ``catalog/plugins/<name>/ATTRIBUTIONS.md`` for a bundled plugin
 (today the distilled ``python_design``).
 The PR-L link gate (``links.py``) cannot enforce this: it recognizes only
 markdown link syntax, masks code spans, and reads only ``.md``/``.md.j2``. This
 scan applies no masking and reads every text file.
 
-Scope: every file under ``content/core/`` (ids relative to it) and every file of
-every bundled plugin under ``content/plugins/`` (its kind directories plus root
+Scope: every file under ``catalog/core/`` (ids relative to it) and every file of
+every bundled plugin under ``catalog/plugins/`` (its kind directories plus root
 files such as ``README.md`` and ``ATTRIBUTIONS.md``; ids are prefixed
-``plugins/<name>/``, its path relative to ``content/``), dot dirs and bytecode
+``plugins/<name>/``, its path relative to ``catalog/``), dot dirs and bytecode
 caches aside. The plugin set is the directory listing, never a list of names, so
 a new plugin is scanned with no edit here (acceptance 5). The one exception is
 :data:`_VENDORED_PLUGIN_GATES`, the commented allowlist of vendored plugins whose
@@ -22,7 +22,7 @@ upstream text has known, reviewed exceptions; each entry names the dedicated
 gate that covers it instead. The engine's pre-commit template (ids prefixed
 ``templates/precommit/``) ships too and gets both checks. A plugin's files are
 all fully scanned except its root ``ATTRIBUTIONS.md``, which is URL-free but may
-name its source (:func:`plugin_policy_for`). For ``content/core/`` the checks
+name its source (:func:`plugin_policy_for`). For ``catalog/core/`` the checks
 are decided per file by :func:`policy_for`:
 
 * by default -> URLs and plugin markers are both violations. That includes the
@@ -30,7 +30,7 @@ are decided per file by :func:`policy_for`:
   the wheel and are copied into the agent's scratch repo. No fixture needs a URL
   today; if one ever does, allow only a reserved example host (``example.com``,
   ``*.test``, ``*.invalid``, ``localhost``) for that one path;
-* ``content/core/ATTRIBUTIONS.md`` -> URL-free, but it *must* name the plugin, so
+* ``catalog/core/ATTRIBUTIONS.md`` -> URL-free, but it *must* name the plugin, so
   the marker scan is off;
 * ``eval_tasks/**/ATTRIBUTIONS.md`` outside fixture trees -> markers only: the
   CC BY 4.0 licence requires its licence URI (pinned by
@@ -46,7 +46,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from tests._content import (
+from tests._catalog import (
     CORE_ROOT,
     PRECOMMIT_TEMPLATE_DIR,
     REPO_ROOT,
@@ -57,16 +57,16 @@ from tests._content import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
-#: Every bundled plugin's ids start here: its path relative to ``content/``.
+#: Every bundled plugin's ids start here: its path relative to ``catalog/``.
 _PLUGINS_PREFIX = "plugins/"
 #: The distilled opt-in plugin (SPEC §11.5.2), whose ``ATTRIBUTIONS.md`` must credit the source.
 _PYTHON_DESIGN_ROOT = plugin_files_root("python_design")
 _PYTHON_DESIGN_PREFIX = f"{_PLUGINS_PREFIX}python_design/"
 #: The one allowlist: vendored bundled plugins this scan skips, each mapped to the
 #: dedicated gate (a test file) that covers it instead. Every other directory under
-#: ``content/plugins/`` is scanned. Add an entry only for vendored upstream text
+#: ``catalog/plugins/`` is scanned. Add an entry only for vendored upstream text
 #: with known, reviewed exceptions, and only when the named gate scans every file
 #: of the plugin for URLs.
 #: * ``superpowers``: its upstream markdown legitimately holds bare-domain URLs in
@@ -136,7 +136,7 @@ class Violation:
 
 
 def policy_for(rel: Path) -> ScanPolicy:
-    """Return the checks for ``rel`` (a path relative to ``content/core/``).
+    """Return the checks for ``rel`` (a path relative to ``catalog/core/``).
 
     >>> policy_for(Path("ATTRIBUTIONS.md"))
     ScanPolicy(urls=True, markers=False)
@@ -283,7 +283,7 @@ def test_scan_covers_every_artifact_kind() -> None:
 
 
 def test_scan_covers_every_bundled_plugin_but_the_allowlisted_vendored_ones() -> None:
-    """Acceptance 5: a new ``content/plugins/<name>/`` is scanned with no edit here."""
+    """Acceptance 5: a new ``catalog/plugins/<name>/`` is scanned with no edit here."""
     scanned = {t.rel.split("/")[1] for t in _TARGETS if t.rel.startswith(_PLUGINS_PREFIX)}
     on_disk = {path.name for path in bundled_plugin_dirs()}
     assert scanned == on_disk - set(_VENDORED_PLUGIN_GATES)

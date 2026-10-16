@@ -5,7 +5,7 @@ sync that cannot use one silently renders *without* it:
 ``FileSystemArtifactSource`` treats an overlay package that fails to import
 (missing, or raising at import time) — or an importable one with no
 ``resources/`` directory — and a bundled-plugin name with no
-``content/plugins/<leaf>/`` directory like a layer that ships no artifacts. The
+``catalog/plugins/<leaf>/`` directory like a layer that ships no artifacts. The
 import failure is exactly what happens when the remote ``language: python``
 pre-commit hooks run in pre-commit's isolated venv, which holds only the engine
 at ``rev:`` — the post-checkout auto-sync would delete the org rules and shrink
@@ -27,15 +27,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.bundled_content import (
+from coding_agent_playbook.catalog import (
     ENGINE_PACKAGE,
-    bundled_layer_root,
+    catalog_layer_root,
     is_bundled_layer,
     is_plugin_namespace,
 )
 
 # Re-exported: the preflight's callers and tests list the bundled plugins from here.
-from coding_agent_playbook.bundled_content import bundled_plugins as bundled_plugins
+from coding_agent_playbook.catalog import bundled_plugins as bundled_plugins
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -82,7 +82,7 @@ def unusable_overlays(overlays: Sequence[str]) -> list[UnusableOverlay]:
     silently drop it. It is imported, as rendering's ``importlib.resources.files``
     would, so a package that raises at import time is reported here — with its
     error — instead of crashing later. A bundled-plugin name is never imported:
-    it is unusable when no ``content/plugins/<leaf>/`` matches it, and the bare
+    it is unusable when no ``catalog/plugins/<leaf>/`` matches it, and the bare
     plugin namespace is never a plugin. A name that reads like a mistyped bundled
     plugin gets the plugin list in its reason.
 
@@ -158,15 +158,15 @@ def _unusable_reason(name: str) -> str | None:
     The first two checks import nothing. The bare plugin namespace (either
     spelling) is never a plugin, so a leftover ``packs/`` directory holding only
     bytecode caches cannot change the result. A bundled layer is checked against
-    the content tree: the engine resolves to ``core/``, and a plugin name (either
+    the catalog tree: the engine resolves to ``core/``, and a plugin name (either
     namespace) resolves only when its leaf is a directory under
-    ``content/plugins/``. Every other name is imported and must ship a
+    ``catalog/plugins/``. Every other name is imported and must ship a
     ``resources/`` directory.
     """
     if is_plugin_namespace(name):
         return _PLUGIN_NAMESPACE_REASON
     if is_bundled_layer(name):
-        return None if bundled_layer_root(name) is not None else _NO_SUCH_PLUGIN
+        return None if catalog_layer_root(name) is not None else _NO_SUCH_PLUGIN
     try:
         module = importlib.import_module(name)
     except Exception as exc:

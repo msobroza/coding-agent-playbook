@@ -1,13 +1,18 @@
-"""Where the engine's own content lives (stdlib-only leaf; imports nothing from the engine).
+"""Where the engine's catalog lives (stdlib-only leaf; imports nothing from the engine).
 
-The engine's rules, prompts, eval tasks and bundled plugins sit in one content
-root with two homes:
+The catalog is the engine's own content: its rules, prompts, eval tasks, hooks
+and bundled plugins, in one root with two homes:
 
-- installed wheel: ``<package>/_content`` (hatch force-includes ``content/``);
-- source checkout: ``<repo>/content`` (an editable install finds it next to ``src/``).
+- installed wheel: ``<package>/_catalog`` (hatch force-includes ``catalog/``);
+- source checkout: ``<repo>/catalog`` (an editable install finds it next to ``src/``).
 
 This module is the only code that knows those homes. ``config.py`` and
 ``config_schema.py`` import it, which is why it must stay a leaf.
+
+Naming: a function that returns a directory of the catalog says ``catalog``
+(:func:`catalog_root`, :func:`catalog_layer_root`); a predicate or listing of
+what ships says ``bundled`` (:func:`is_bundled_layer`, :func:`bundled_plugins`),
+the user-facing term for a layer the engine ships.
 
 It also owns the bundled-plugin naming: ``coding_agent_playbook.plugins.<leaf>``
 is canonical and ``coding_agent_playbook.packs.<leaf>`` is a deprecated alias.
@@ -29,8 +34,8 @@ if TYPE_CHECKING:
 ENGINE_PACKAGE = "coding_agent_playbook"
 PLUGIN_NAMESPACE = "coding_agent_playbook.plugins"
 DEPRECATED_PACK_NAMESPACE = "coding_agent_playbook.packs"
-PACKAGED_CONTENT_DIRNAME = "_content"  # inside the installed package
-CHECKOUT_CONTENT_DIRNAME = "content"  # at the repository root
+PACKAGED_CATALOG_DIRNAME = "_catalog"  # inside the installed package
+CHECKOUT_CATALOG_DIRNAME = "catalog"  # at the repository root
 
 # The one module-level seam end-to-end tests may monkeypatch. Functions read it
 # at call time (never as a default argument value), so a patch takes effect.
@@ -44,51 +49,51 @@ _PLUGIN_PREFIX = PLUGIN_NAMESPACE + "."
 _DEPRECATED_PREFIX = DEPRECATED_PACK_NAMESPACE + "."
 
 
-class BundledContentMissingError(RuntimeError):
-    """The engine's content root was found in neither home.
+class CatalogMissingError(RuntimeError):
+    """The engine's catalog root was found in neither home.
 
     ``tried`` holds every candidate root, in lookup order, so the CLI can name
     them in its error line.
 
     Example::
 
-        >>> err = BundledContentMissingError((Path("/a/_content"), Path("/content")))
+        >>> err = CatalogMissingError((Path("/a/_catalog"), Path("/catalog")))
         >>> err.tried
-        (PosixPath('/a/_content'), PosixPath('/content'))
+        (PosixPath('/a/_catalog'), PosixPath('/catalog'))
     """
 
     def __init__(self, tried: tuple[Path, ...]) -> None:
         self.tried = tried
         looked_in = ", ".join(str(path) for path in tried)
-        super().__init__(f"bundled content not found (looked in {looked_in})")
+        super().__init__(f"catalog not found (looked in {looked_in})")
 
 
-def bundled_content_root(package_dir: Path | None = None) -> Path:
-    """Return the content root: the wheel's ``_content`` first, then the checkout's ``content``.
+def catalog_root(package_dir: Path | None = None) -> Path:
+    """Return the catalog root: the wheel's ``_catalog`` first, then the checkout's ``catalog``.
 
     ``package_dir`` defaults to ``_PACKAGE_DIR``. Each candidate must hold a
     ``core/`` directory: a wheel whose force-include was mis-scoped would
     otherwise load zero engine artifacts silently. The checkout candidate counts
     only when the package sits directly under ``src/``.
 
-    Raises :class:`BundledContentMissingError` naming both candidates.
+    Raises :class:`CatalogMissingError` naming both candidates.
 
     Example::
 
-        >>> bundled_content_root(Path("/repo/src/coding_agent_playbook"))  # doctest: +SKIP
-        PosixPath('/repo/content')
+        >>> catalog_root(Path("/repo/src/coding_agent_playbook"))  # doctest: +SKIP
+        PosixPath('/repo/catalog')
     """
     package = _PACKAGE_DIR if package_dir is None else package_dir
-    packaged = package / PACKAGED_CONTENT_DIRNAME
-    checkout = package.parent.parent / CHECKOUT_CONTENT_DIRNAME
+    packaged = package / PACKAGED_CATALOG_DIRNAME
+    checkout = package.parent.parent / CHECKOUT_CATALOG_DIRNAME
     if (packaged / _CORE_DIRNAME).is_dir():
         return packaged
     if package.parent.name == _CHECKOUT_PACKAGE_PARENT and (checkout / _CORE_DIRNAME).is_dir():
         return checkout
-    raise BundledContentMissingError((packaged, checkout))
+    raise CatalogMissingError((packaged, checkout))
 
 
-def bundled_plugins(content_root: Path | None = None) -> list[str]:
+def bundled_plugins(catalog_dir: Path | None = None) -> list[str]:
     """Sorted dotted names of the bundled plugins under ``<root>/plugins``.
 
     A directory counts when its name is an identifier not starting with ``.``
@@ -100,7 +105,7 @@ def bundled_plugins(content_root: Path | None = None) -> list[str]:
         >>> bundled_plugins()  # doctest: +SKIP
         ['coding_agent_playbook.plugins.python_design', 'coding_agent_playbook.plugins.superpowers']
     """
-    root = bundled_content_root() if content_root is None else content_root
+    root = catalog_root() if catalog_dir is None else catalog_dir
     plugins_dir = root / _PLUGINS_DIRNAME
     if not plugins_dir.is_dir():
         return []
@@ -168,7 +173,7 @@ def is_bundled_layer(name: str) -> bool:
     """True for the engine and for any name under either plugin namespace.
 
     Membership is not checked here: ``coding_agent_playbook.plugins.typo`` is
-    a bundled layer that :func:`bundled_layer_root` then resolves to ``None``.
+    a bundled layer that :func:`catalog_layer_root` then resolves to ``None``.
 
     Example::
 
@@ -180,7 +185,7 @@ def is_bundled_layer(name: str) -> bool:
     return name == ENGINE_PACKAGE or name.startswith((_PLUGIN_PREFIX, _DEPRECATED_PREFIX))
 
 
-def bundled_layer_root(name: str, *, content_root: Path | None = None) -> Path | None:
+def catalog_layer_root(name: str, *, catalog_dir: Path | None = None) -> Path | None:
     """Return the directory holding a bundled layer's kind directories, or ``None``.
 
     The engine maps to ``<root>/core``. A plugin name (either namespace) maps to
@@ -188,36 +193,36 @@ def bundled_layer_root(name: str, *, content_root: Path | None = None) -> Path |
     of :func:`bundled_plugins`; an empty leaf, ``..``, ``/``, nested dots, the
     wrong case or ``__pycache__`` give ``None``, as does any non-bundled name.
 
-    Raises :class:`BundledContentMissingError` when ``content_root`` is omitted
-    and no content root is found.
+    Raises :class:`CatalogMissingError` when ``catalog_dir`` is omitted
+    and no catalog root is found.
 
     Example::
 
-        >>> bundled_layer_root("coding_agent_playbook.packs.superpowers")  # doctest: +SKIP
-        PosixPath('/repo/content/plugins/superpowers')
+        >>> catalog_layer_root("coding_agent_playbook.packs.superpowers")  # doctest: +SKIP
+        PosixPath('/repo/catalog/plugins/superpowers')
     """
     if not is_bundled_layer(name):
         return None
-    root = bundled_content_root() if content_root is None else content_root
+    root = catalog_root() if catalog_dir is None else catalog_dir
     if name == ENGINE_PACKAGE:
-        return engine_layer_root(content_root=root)
+        return engine_layer_root(catalog_dir=root)
     return _plugin_dir(root, canonical_overlay_name(name))
 
 
-def engine_layer_root(*, content_root: Path | None = None) -> Path:
+def engine_layer_root(*, catalog_dir: Path | None = None) -> Path:
     """``<root>/core``: the engine's own layer, which every consumer repo gets.
 
-    :func:`bundled_layer_root` for the engine, typed as never ``None``, for
+    :func:`catalog_layer_root` for the engine, typed as never ``None``, for
     callers that read one known engine file (``commands/scan_sinks`` reads a
-    shipped ``HOOK.md``). Raises :class:`BundledContentMissingError` when
-    ``content_root`` is omitted and no content root is found.
+    shipped ``HOOK.md``). Raises :class:`CatalogMissingError` when
+    ``catalog_dir`` is omitted and no catalog root is found.
 
     Example::
 
-        >>> engine_layer_root(content_root=Path("/repo/content"))
-        PosixPath('/repo/content/core')
+        >>> engine_layer_root(catalog_dir=Path("/repo/catalog"))
+        PosixPath('/repo/catalog/core')
     """
-    root = bundled_content_root() if content_root is None else content_root
+    root = catalog_root() if catalog_dir is None else catalog_dir
     return root / _CORE_DIRNAME
 
 

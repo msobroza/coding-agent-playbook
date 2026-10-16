@@ -40,7 +40,7 @@ from coding_agent_playbook.hook_runtime.policy import UNATTENDED_ENV_VAR
 from coding_agent_playbook.hooks_config import parse_guardrails_config, parse_hooks_config
 from coding_agent_playbook.metrics_config import parse_metrics_config
 from coding_agent_playbook.types import HookFrontmatter, split_frontmatter
-from tests._content import CORE_ROOT
+from tests._catalog import CORE_ROOT
 from tests.unit.test_docs_lifecycle_hooks_cli import _metric_names, _precommit_ids
 from tests.unit.test_docs_lifecycle_hooks_spec import _HOOK_INVARIANTS
 
@@ -130,7 +130,7 @@ def test_readme_precommit_table_lists_every_shipped_precommit_hook(hook_id: str)
     assert f"| `{hook_id}` |" in _section("### Pre-commit hooks")
 
 
-@pytest.mark.content
+@pytest.mark.catalog
 @pytest.mark.parametrize("hook", _shipped_hooks(), ids=lambda hook: hook.id)
 def test_readme_lists_every_shipped_lifecycle_hook_with_its_tier(hook: HookFrontmatter) -> None:
     row = f"| `{hook.id}` | `{hook.tier}` | {_enforced_on(hook)} |"

@@ -5,8 +5,8 @@ Each write target is routed to its control-plane row (``_control_plane_paths``):
 - rows decided by the path alone: the hook state dir and the trust store
   (any write denies), ``extra_paths`` (deny), the hook sources
   (``playbook/hooks/**``, an overlay checkout's ``src/*/resources/hooks/**``,
-  the engine checkout's ``content/core/hooks/**`` and
-  ``content/plugins/*/hooks/**``) and plugin carriers (any creation or edit asks);
+  the engine checkout's ``catalog/core/hooks/**`` and
+  ``catalog/plugins/*/hooks/**``) and plugin carriers (any creation or edit asks);
 - new files under the hook-artifact dirs that no lock row vouches for deny
   (an agent-created ``fnmatch.py`` would shadow the stdlib inside the guard);
   existing generated files are guard-generated-outputs';

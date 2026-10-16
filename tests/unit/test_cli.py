@@ -7,30 +7,30 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook import __version__, bundled_content
+from coding_agent_playbook import __version__, catalog
 from coding_agent_playbook.cli import _SUBCOMMANDS, build_parser, main
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-def break_bundled_content(monkeypatch: pytest.MonkeyPatch, root: Path) -> str:
+def break_catalog(monkeypatch: pytest.MonkeyPatch, root: Path) -> str:
     """Point the engine at an empty ``<root>/src/coding_agent_playbook``.
 
-    Neither content home exists then, as in a wheel whose force-include was
+    Neither catalog home exists then, as in a wheel whose force-include was
     lost. Returns the exact stderr ``main`` must print: the packaged candidate
-    first, then the checkout one (the spec's missing-content error line).
+    first, then the checkout one (the spec's missing-catalog error line).
 
     Example::
 
-        expected = break_bundled_content(monkeypatch, tmp_path)
+        expected = break_catalog(monkeypatch, tmp_path)
     """
     package_dir = root / "src" / "coding_agent_playbook"
     package_dir.mkdir(parents=True)
-    monkeypatch.setattr(bundled_content, "_PACKAGE_DIR", package_dir)
+    monkeypatch.setattr(catalog, "_PACKAGE_DIR", package_dir)
     return (
-        "error: the engine's bundled content was not found "
-        f"(looked in {package_dir / '_content'}, {root / 'content'}); "
+        "error: the engine's catalog was not found "
+        f"(looked in {package_dir / '_catalog'}, {root / 'catalog'}); "
         "reinstall coding-agent-playbook\n"
     )
 
@@ -438,27 +438,27 @@ def test_main_translates_missing_precommit_template_to_exit_2(
     )
 
 
-def test_sync_exits_2_when_bundled_content_missing(
+def test_sync_exits_2_when_catalog_missing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     make_synthetic_repo: Callable[..., Path],
 ) -> None:
     """A lookup miss used to render zero engine artifacts silently."""
-    expected = break_bundled_content(monkeypatch, tmp_path)
+    expected = break_catalog(monkeypatch, tmp_path)
     repo = make_synthetic_repo(tmp_path)
 
     assert main(["sync", "--repo-root", str(repo)]) == 2
     assert capsys.readouterr().err == expected
 
 
-def test_eval_list_exits_2_when_bundled_content_missing(
+def test_eval_list_exits_2_when_catalog_missing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     make_synthetic_repo: Callable[..., Path],
 ) -> None:
-    expected = break_bundled_content(monkeypatch, tmp_path)
+    expected = break_catalog(monkeypatch, tmp_path)
     repo = make_synthetic_repo(tmp_path)
 
     assert main(["eval", "--list", "--repo-root", str(repo)]) == 2

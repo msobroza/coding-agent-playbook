@@ -23,7 +23,7 @@ from tests.hooks.pack_repo import ENGINE_HOOKS, engine_hook, engine_hook_paths, 
 if TYPE_CHECKING:
     from pathlib import Path
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 
 class PackRow(NamedTuple):

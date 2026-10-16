@@ -1,6 +1,6 @@
 """The protect pack as shipped (specs/prK-hook-pack.md §E.0.6, §E.1, Track K5).
 
-Every ``content/core/hooks/protect/<id>/HOOK.md`` matches its §E.0.6 row (id,
+Every ``catalog/core/hooks/protect/<id>/HOOK.md`` matches its §E.0.6 row (id,
 tier, events, decisions, ``on_error``), passes the H1-H21 contract in a
 config-less ``playbook validate`` with no warning, and binds a builtin that
 declares its config keys and never mutates tool input. Each K5 step adds its
@@ -21,7 +21,7 @@ from tests.hooks.pack_repo import ENGINE_HOOKS, engine_hook, engine_hook_paths
 if TYPE_CHECKING:
     from pathlib import Path
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 
 class PackRow(NamedTuple):

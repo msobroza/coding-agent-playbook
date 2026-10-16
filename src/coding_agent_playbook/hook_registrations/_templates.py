@@ -4,7 +4,7 @@ The Claude Code launcher and the OpenCode plugin are rendered by ``str.replace``
 of fixed placeholders, never Jinja (L7): shell and JS braces would fight it, and
 nothing a hook author writes ever reaches a template. Like the pre-commit
 template (``templates/precommit/``), they are engine wiring, not playbook
-content: they stay in the package, outside the bundled ``content/`` tree, so
+content: they stay in the package, outside the bundled ``catalog/`` tree, so
 ``FileSystemArtifactSource`` never walks them and no layer can override them.
 """
 

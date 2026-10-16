@@ -110,10 +110,10 @@ def run(args: argparse.Namespace, *, git: SafeGit | None = None) -> int:
 def shipped_table() -> SinkTable:
     """The sink table of the engine's own ``HOOK.md`` (its ``handler.config``).
 
-    The ``HOOK.md`` is engine content (``content/core/hooks/``), found through
-    ``bundled_content``; a broken install raises ``BundledContentMissingError``.
+    The ``HOOK.md`` is in the engine's catalog (``catalog/core/hooks/``), found
+    through the ``catalog`` module; a broken install raises ``CatalogMissingError``.
     """
-    from coding_agent_playbook.bundled_content import ENGINE_PACKAGE, engine_layer_root
+    from coding_agent_playbook.catalog import ENGINE_PACKAGE, engine_layer_root
     from coding_agent_playbook.types import Hook
 
     path = engine_layer_root().joinpath(*_HOOK_MD)

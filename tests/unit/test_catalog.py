@@ -1,7 +1,7 @@
-"""Unit tests for the bundled-content resolver (``bundled_content.py``).
+"""Unit tests for the catalog resolver (``catalog.py``).
 
-Every test builds its own content tree under ``tmp_path``: the resolver must
-not depend on where (or whether) the repository's own ``content/`` exists.
+Every test builds its own catalog tree under ``tmp_path``: the resolver must
+not depend on where (or whether) the repository's own ``catalog/`` exists.
 """
 
 from __future__ import annotations
@@ -10,17 +10,17 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook import bundled_content
-from coding_agent_playbook.bundled_content import (
+from coding_agent_playbook import catalog
+from coding_agent_playbook.catalog import (
     DEPRECATED_PACK_NAMESPACE,
     ENGINE_PACKAGE,
     PLUGIN_NAMESPACE,
-    BundledContentMissingError,
-    bundled_content_root,
-    bundled_layer_root,
+    CatalogMissingError,
     bundled_plugins,
     canonical_overlay_list,
     canonical_overlay_name,
+    catalog_layer_root,
+    catalog_root,
     is_bundled_layer,
     is_plugin_namespace,
 )
@@ -31,73 +31,73 @@ if TYPE_CHECKING:
 
 
 def _make_tree(root: Path, plugins: Iterable[str] = ("superpowers",)) -> Path:
-    """Create a minimal content root: ``core/rules/`` and ``plugins/<p>/skills/``."""
+    """Create a minimal catalog root: ``core/rules/`` and ``plugins/<p>/skills/``."""
     (root / "core" / "rules").mkdir(parents=True)
     for plugin in plugins:
         (root / "plugins" / plugin / "skills").mkdir(parents=True)
     return root
 
 
-# --- bundled_content_root ---------------------------------------------------
+# --- catalog_root ---------------------------------------------------
 
 
 def test_packaged_root_wins(tmp_path: Path) -> None:
     pkg = tmp_path / "src" / "pkg"
-    _make_tree(pkg / "_content")
-    _make_tree(tmp_path / "content")
-    assert bundled_content_root(pkg) == pkg / "_content"
+    _make_tree(pkg / "_catalog")
+    _make_tree(tmp_path / "catalog")
+    assert catalog_root(pkg) == pkg / "_catalog"
 
 
 def test_checkout_fallback(tmp_path: Path) -> None:
     pkg = tmp_path / "src" / "coding_agent_playbook"
     pkg.mkdir(parents=True)
-    _make_tree(tmp_path / "content")
-    assert bundled_content_root(pkg) == tmp_path / "content"
+    _make_tree(tmp_path / "catalog")
+    assert catalog_root(pkg) == tmp_path / "catalog"
 
 
 def test_packaged_without_core_is_not_accepted(tmp_path: Path) -> None:
     pkg = tmp_path / "src" / "pkg"
-    (pkg / "_content" / "plugins").mkdir(parents=True)
-    with pytest.raises(BundledContentMissingError) as caught:
-        bundled_content_root(pkg)
-    assert caught.value.tried == (pkg / "_content", tmp_path / "content")
+    (pkg / "_catalog" / "plugins").mkdir(parents=True)
+    with pytest.raises(CatalogMissingError) as caught:
+        catalog_root(pkg)
+    assert caught.value.tried == (pkg / "_catalog", tmp_path / "catalog")
 
 
 def test_checkout_without_core_is_not_accepted(tmp_path: Path) -> None:
     pkg = tmp_path / "src" / "pkg"
     pkg.mkdir(parents=True)
-    (tmp_path / "content" / "plugins" / "superpowers").mkdir(parents=True)
-    with pytest.raises(BundledContentMissingError):
-        bundled_content_root(pkg)
+    (tmp_path / "catalog" / "plugins" / "superpowers").mkdir(parents=True)
+    with pytest.raises(CatalogMissingError):
+        catalog_root(pkg)
 
 
 def test_fallback_requires_src_parent(tmp_path: Path) -> None:
     pkg = tmp_path / "lib" / "pkg"
     pkg.mkdir(parents=True)
-    _make_tree(tmp_path / "content")
-    with pytest.raises(BundledContentMissingError):
-        bundled_content_root(pkg)
+    _make_tree(tmp_path / "catalog")
+    with pytest.raises(CatalogMissingError):
+        catalog_root(pkg)
 
 
 def test_missing_root_message_names_both_paths(tmp_path: Path) -> None:
     pkg = tmp_path / "src" / "pkg"
-    with pytest.raises(BundledContentMissingError) as caught:
-        bundled_content_root(pkg)
+    with pytest.raises(CatalogMissingError) as caught:
+        catalog_root(pkg)
     message = str(caught.value)
-    assert str(pkg / "_content") in message
-    assert str(tmp_path / "content") in message
+    assert str(pkg / "_catalog") in message
+    assert str(tmp_path / "catalog") in message
 
 
 def test_defaults_follow_the_monkeypatched_package_dir(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Later tasks' end-to-end tests rely on this seam being read at call time.
-    _make_tree(tmp_path / "content")
-    monkeypatch.setattr(bundled_content, "_PACKAGE_DIR", tmp_path / "src" / "coding_agent_playbook")
-    assert bundled_content_root() == tmp_path / "content"
+    _make_tree(tmp_path / "catalog")
+    monkeypatch.setattr(catalog, "_PACKAGE_DIR", tmp_path / "src" / "coding_agent_playbook")
+    assert catalog_root() == tmp_path / "catalog"
     assert bundled_plugins() == [f"{PLUGIN_NAMESPACE}.superpowers"]
-    assert bundled_layer_root(f"{PLUGIN_NAMESPACE}.superpowers") == (
-        tmp_path / "content" / "plugins" / "superpowers"
+    assert catalog_layer_root(f"{PLUGIN_NAMESPACE}.superpowers") == (
+        tmp_path / "catalog" / "plugins" / "superpowers"
     )
 
 
@@ -106,7 +106,7 @@ def test_defaults_follow_the_monkeypatched_package_dir(
 
 def test_bundled_plugins_lists_identifier_dirs_only(tmp_path: Path) -> None:
     root = _make_tree(
-        tmp_path / "content",
+        tmp_path / "catalog",
         plugins=("superpowers", "python_design", ".hidden", "_private", "__pycache__", "bad-name"),
     )
     (root / "plugins" / "README.md").write_text("stray file\n")
@@ -119,14 +119,14 @@ def test_bundled_plugins_lists_identifier_dirs_only(tmp_path: Path) -> None:
 def test_bundled_plugins_sees_new_dir_without_caching(tmp_path: Path) -> None:
     # Review Focus 3: a plugin dir added by `git pull` in an editable install is
     # visible on the next call, without reinstalling.
-    root = _make_tree(tmp_path / "content")
+    root = _make_tree(tmp_path / "catalog")
     assert bundled_plugins(root) == [f"{PLUGIN_NAMESPACE}.superpowers"]
     (root / "plugins" / "new_one" / "skills").mkdir(parents=True)
     assert f"{PLUGIN_NAMESPACE}.new_one" in bundled_plugins(root)
 
 
 def test_bundled_plugins_without_plugins_dir_is_empty(tmp_path: Path) -> None:
-    root = _make_tree(tmp_path / "content", plugins=())
+    root = _make_tree(tmp_path / "catalog", plugins=())
     assert bundled_plugins(root) == []
 
 
@@ -198,16 +198,16 @@ def test_is_bundled_layer(name: str, expected: bool) -> None:
     assert is_bundled_layer(name) is expected
 
 
-# --- bundled_layer_root -------------------------------------------------------
+# --- catalog_layer_root -------------------------------------------------------
 
 
-def test_bundled_layer_root_engine_and_plugin(tmp_path: Path) -> None:
-    root = _make_tree(tmp_path / "content")
-    assert bundled_layer_root(ENGINE_PACKAGE, content_root=root) == root / "core"
+def test_catalog_layer_root_engine_and_plugin(tmp_path: Path) -> None:
+    root = _make_tree(tmp_path / "catalog")
+    assert catalog_layer_root(ENGINE_PACKAGE, catalog_dir=root) == root / "core"
     plugin_dir = root / "plugins" / "superpowers"
-    assert bundled_layer_root(f"{PLUGIN_NAMESPACE}.superpowers", content_root=root) == plugin_dir
+    assert catalog_layer_root(f"{PLUGIN_NAMESPACE}.superpowers", catalog_dir=root) == plugin_dir
     assert (
-        bundled_layer_root(f"{DEPRECATED_PACK_NAMESPACE}.superpowers", content_root=root)
+        catalog_layer_root(f"{DEPRECATED_PACK_NAMESPACE}.superpowers", catalog_dir=root)
         == plugin_dir
     )
 
@@ -226,24 +226,24 @@ def test_bundled_layer_root_engine_and_plugin(tmp_path: Path) -> None:
         "__pycache__",
     ],
 )
-def test_bundled_layer_root_rejects_unsafe_leaves(
+def test_catalog_layer_root_rejects_unsafe_leaves(
     tmp_path: Path, namespace: str, leaf: str
 ) -> None:
     # `__pycache__` exists on disk here, so only the leaf rule can reject it.
-    root = _make_tree(tmp_path / "content", plugins=("superpowers", "__pycache__"))
-    assert bundled_layer_root(f"{namespace}.{leaf}", content_root=root) is None
+    root = _make_tree(tmp_path / "catalog", plugins=("superpowers", "__pycache__"))
+    assert catalog_layer_root(f"{namespace}.{leaf}", catalog_dir=root) is None
 
 
 @pytest.mark.parametrize("name", [PLUGIN_NAMESPACE, DEPRECATED_PACK_NAMESPACE, "acme"])
-def test_bundled_layer_root_is_none_for_non_bundled_names(tmp_path: Path, name: str) -> None:
-    root = _make_tree(tmp_path / "content")
-    assert bundled_layer_root(name, content_root=root) is None
+def test_catalog_layer_root_is_none_for_non_bundled_names(tmp_path: Path, name: str) -> None:
+    root = _make_tree(tmp_path / "catalog")
+    assert catalog_layer_root(name, catalog_dir=root) is None
 
 
 @pytest.mark.parametrize("name", [ENGINE_PACKAGE, f"{PLUGIN_NAMESPACE}.superpowers"])
-def test_bundled_layer_root_raises_when_root_missing(
+def test_catalog_layer_root_raises_when_root_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
 ) -> None:
-    monkeypatch.setattr(bundled_content, "_PACKAGE_DIR", tmp_path)
-    with pytest.raises(BundledContentMissingError):
-        bundled_layer_root(name)
+    monkeypatch.setattr(catalog, "_PACKAGE_DIR", tmp_path)
+    with pytest.raises(CatalogMissingError):
+        catalog_layer_root(name)

@@ -32,7 +32,7 @@ _POSIX_ONLY = pytest.mark.skipif(sys.platform == "win32", reason="symlinks need 
 
 
 #: An importable engine stand-in without a ``resources/`` tree (the stdlib's ``json``):
-#: the real engine ships the §E hook pack (Track K5) in ``content/core/hooks/``,
+#: the real engine ships the §E hook pack (Track K5) in ``catalog/core/hooks/``,
 #: which these discovery tests must not see.
 _HOOKLESS_ENGINE = "json"
 

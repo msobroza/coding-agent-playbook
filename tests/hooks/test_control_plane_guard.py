@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     type Payload = Callable[[str, str, str], HookPayloadCase]
     type Deps = Callable[..., RuntimeDeps]
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID = "control-plane-guard"
 GGO = "guard-generated-outputs"
@@ -326,9 +326,9 @@ def test_new_opencode_plugin_file_asks(repo: PackRepo, deps: Deps, target: str) 
     [
         "playbook/hooks/mine/HOOK.md",
         "src/acme_overlay/resources/hooks/mine/HOOK.md",
-        # The engine checkout's hooks are bundled content (SPEC v0.19).
-        "content/core/hooks/safety/mine/HOOK.md",
-        "content/plugins/demo/hooks/mine/HOOK.md",
+        # The engine checkout's hooks live in its catalog (SPEC v0.19).
+        "catalog/core/hooks/safety/mine/HOOK.md",
+        "catalog/plugins/demo/hooks/mine/HOOK.md",
     ],
 )
 def test_hook_source_edit_asks(repo: PackRepo, deps: Deps, target: str) -> None:

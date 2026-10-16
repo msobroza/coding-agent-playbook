@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "ml-unsafe-deserialization-guard"
 ML_FACTS: Final[Mapping[str, Any]] = {"ml_stack": {"torch": ">=2.3"}}

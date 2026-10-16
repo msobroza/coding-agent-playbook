@@ -18,7 +18,7 @@ so the hot path never renders a template or spawns ``playbook``:
   here. The id keeps that spelling for every layer, so the rendered table did
   not change when the engine's content left the package: an overlay package's
   id names its ``resources/``, a bundled layer's names its directory in the
-  bundled content (``content/core/``, ``content/plugins/<leaf>/``).
+  catalog (``catalog/core/``, ``catalog/plugins/<leaf>/``).
 
 Everything is machine-independent (§D.8.3): ``sync --check`` byte-compares it.
 Split out of ``guard_config`` for the module-size budget.
@@ -179,13 +179,13 @@ def resolve_resource_roots(packages: Iterable[str]) -> dict[str, str]:
     ``importlib.resources``; one that cannot be imported, or ships no
     ``resources/``, is left out (the preflight already refused such an
     overlay). A bundled layer (the engine, a bundled plugin) resolves to its
-    directory in the bundled content and is never imported; an unknown plugin
+    directory in the catalog and is never imported; an unknown plugin
     leaf is left out the same way. Sync-time only.
 
     Example::
 
         >>> resolve_resource_roots(["coding_agent_playbook"])  # doctest: +SKIP
-        {'pkg:coding_agent_playbook/resources': '/v/site-packages/coding_agent_playbook/_content/core'}
+        {'pkg:coding_agent_playbook/resources': '/v/site-packages/coding_agent_playbook/_catalog/core'}
     """
     found: dict[str, str] = {}
     for package in dict.fromkeys(packages):
@@ -199,10 +199,10 @@ def _layer_dir(package: str) -> str | None:
     """The directory holding ``package``'s kind dirs, or ``None`` when it has none."""
     from importlib import resources
 
-    from coding_agent_playbook.bundled_content import bundled_layer_root, is_bundled_layer
+    from coding_agent_playbook.catalog import catalog_layer_root, is_bundled_layer
 
     if is_bundled_layer(package):
-        bundled = bundled_layer_root(package)
+        bundled = catalog_layer_root(package)
         return str(bundled) if bundled is not None and bundled.is_dir() else None
     try:
         root = resources.files(package).joinpath("resources")

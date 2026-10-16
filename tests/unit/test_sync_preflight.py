@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook import bundled_content
-from coding_agent_playbook.bundled_content import DEPRECATED_PACK_NAMESPACE, PLUGIN_NAMESPACE
+from coding_agent_playbook import catalog
+from coding_agent_playbook.catalog import DEPRECATED_PACK_NAMESPACE, PLUGIN_NAMESPACE
 from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands._sync_preflight import (
     UnusableOverlay,
@@ -53,7 +53,7 @@ def test_no_resources_reason_for_third_party(name: str) -> None:
 @pytest.mark.parametrize("name", [PLUGIN_NAMESPACE, DEPRECATED_PACK_NAMESPACE])
 def test_plugin_namespace_reason(name: str) -> None:
     (problem,) = unusable_overlays([name])
-    # Built from the discovered list, so adding a plugin under content/ needs no
+    # Built from the discovered list, so adding a plugin under catalog/ needs no
     # edit here (acceptance 5).
     assert problem.reason == (
         "the bundled plugin namespace, not a plugin (bundled plugins: "
@@ -107,14 +107,14 @@ def test_a_plugin_like_name_lists_the_bundled_plugins(typo: str) -> None:
 def test_bundled_plugins_is_sorted_dotted_names(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Re-exported from ``bundled_content``: identifier dirs only, sorted, never cached."""
-    root = tmp_path / "content"
+    """Re-exported from ``catalog``: identifier dirs only, sorted, never cached."""
+    root = tmp_path / "catalog"
     (root / "core").mkdir(parents=True)
     for leaf in ("superpowers", "python_design", ".hidden", "_private", "__pycache__", "bad-name"):
         (root / "plugins" / leaf / "skills").mkdir(parents=True)
     (root / "plugins" / "README.md").write_text("stray file\n", encoding="utf-8")
 
-    assert _sync_preflight.bundled_plugins is bundled_content.bundled_plugins
+    assert _sync_preflight.bundled_plugins is catalog.bundled_plugins
     assert bundled_plugins(root) == [
         f"{PLUGIN_NAMESPACE}.python_design",
         f"{PLUGIN_NAMESPACE}.superpowers",
@@ -122,7 +122,7 @@ def test_bundled_plugins_is_sorted_dotted_names(
     # Acceptance 5: a new plugin dir is listed and usable with no code change.
     (root / "plugins" / "new_one" / "skills").mkdir(parents=True)
     assert f"{PLUGIN_NAMESPACE}.new_one" in bundled_plugins(root)
-    monkeypatch.setattr(bundled_content, "_PACKAGE_DIR", tmp_path / "src" / "coding_agent_playbook")
+    monkeypatch.setattr(catalog, "_PACKAGE_DIR", tmp_path / "src" / "coding_agent_playbook")
     assert unusable_overlays([f"{PLUGIN_NAMESPACE}.new_one"]) == []
 
 

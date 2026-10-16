@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "dependency-allowlist-guard"
 _HANDLERS: Final = "coding_agent_playbook.hook_runtime.handlers."

@@ -1,8 +1,8 @@
-"""Repository guards over the content layout: what the build and consumer repos rely on.
+"""Repository guards over the catalog layout: what the build and consumer repos rely on.
 
 Each pin guards a mistake that would otherwise pass silently:
 
-* a tracked file matching ``.gitignore``: hatch's force-include of ``content/``
+* a tracked file matching ``.gitignore``: hatch's force-include of ``catalog/``
   ignores ``.gitignore``, so a wheel built from the tree ships the file while
   one built from the sdist drops it;
 * a bundled plugin directory that breaks the leaf rule (:func:`bundled_plugins`
@@ -14,8 +14,8 @@ Each pin guards a mistake that would otherwise pass silently:
   includes them, still passes;
 * content left inside the Python package, which must hold logic only
   (acceptance 2);
-* an editable checkout resolving content anywhere but the repository's
-  ``content/``.
+* an editable checkout resolving the catalog anywhere but the repository's
+  ``catalog/``.
 """
 
 from __future__ import annotations
@@ -28,14 +28,14 @@ from urllib.parse import unquote, urlsplit
 
 import pytest
 
-from coding_agent_playbook.bundled_content import _PACKAGE_DIR, bundled_content_root
+from coding_agent_playbook.catalog import _PACKAGE_DIR, catalog_root
 from coding_agent_playbook.links import extract_markdown_links
-from tests._content import CORE_ROOT, PLUGINS_ROOT, REPO_ROOT, bundled_plugin_dirs
+from tests._catalog import CATALOG_ROOT, CORE_ROOT, PLUGINS_ROOT, REPO_ROOT, bundled_plugin_dirs
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 _GIT_TIMEOUT_SECONDS = 30
 #: A bundled plugin needs at least one of these, or it ships nothing.
@@ -158,21 +158,21 @@ def test_no_bundled_artifact_links_to_a_layer_root_file() -> None:
 
 
 def test_src_package_holds_no_content() -> None:
-    """Acceptance 2: content lives in ``content/``, never in the package.
+    """Acceptance 2: content lives in ``catalog/``, never in the package.
 
     The package's only non-Python files, ``templates/precommit/config.yaml.j2``
     (engine wiring) and ``py.typed``, match none of the patterns.
     """
     matches = {path for pattern in _CONTENT_FILE_PATTERNS for path in _SRC_PACKAGE.rglob(pattern)}
     stray = sorted(str(path.relative_to(REPO_ROOT)) for path in matches if path.is_file())
-    assert not stray, f"content files inside the package belong under content/: {stray}"
+    assert not stray, f"content files inside the package belong under catalog/: {stray}"
 
 
-# --- the editable checkout's content root -------------------------------------
+# --- the editable checkout's catalog root -------------------------------------
 
 
 @pytest.mark.skipif(
-    (_PACKAGE_DIR / "_content").exists(), reason="installed wheel: content ships in the package"
+    (_PACKAGE_DIR / "_catalog").exists(), reason="installed wheel: the catalog ships in the package"
 )
-def test_editable_checkout_resolves_repo_content() -> None:
-    assert bundled_content_root() == REPO_ROOT / "content"
+def test_editable_checkout_resolves_repo_catalog() -> None:
+    assert catalog_root() == CATALOG_ROOT

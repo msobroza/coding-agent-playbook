@@ -103,8 +103,8 @@ def check_markdown_links(
     canonical :class:`Skill` type. The walk covers rules, prompts, skills and
     hooks in every layer — the engine, each overlay package or bundled plugin,
     extra checkout roots and repo-local ``playbook/``; the containment root is
-    the layer's root — ``content/core/`` for the engine,
-    ``content/plugins/<name>/`` for a bundled plugin, an overlay package's
+    the layer's root — ``catalog/core/`` for the engine,
+    ``catalog/plugins/<name>/`` for a bundled plugin, an overlay package's
     ``resources/``, or ``playbook/`` — so links may cross artifact kinds within
     their layer but never leave the shipped bundle.
 

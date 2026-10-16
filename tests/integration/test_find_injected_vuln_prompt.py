@@ -10,9 +10,9 @@ from __future__ import annotations
 import pytest
 
 from coding_agent_playbook.types import Prompt
-from tests._content import CORE_ROOT
+from tests._catalog import CORE_ROOT
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 _PROMPT = CORE_ROOT / "prompts" / "find-injected-vulnerability.md.j2"
 

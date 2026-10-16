@@ -53,14 +53,14 @@ from coding_agent_playbook.evals.scoring import score
 from coding_agent_playbook.evals.validator import validate_tasks
 from coding_agent_playbook.evaluators.types import CheckResult
 from coding_agent_playbook.types import Prompt, PromptFrontmatter
-from tests._content import CORE_ROOT
+from tests._catalog import CORE_ROOT
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from coding_agent_playbook.evals.task import EvalTask
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 _TASKS_ROOT = CORE_ROOT / "eval_tasks"
 _SOLUTION_DIR = "solution"

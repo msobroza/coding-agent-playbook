@@ -119,7 +119,7 @@ packages = ["src/coding_agent_playbook"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/coding_agent_playbook/py.typed" = "coding_agent_playbook/py.typed"
-"content" = "coding_agent_playbook/_content"
+"catalog" = "coding_agent_playbook/_catalog"
 
 # --- Ruff (lint + format) ---
 
@@ -138,9 +138,9 @@ src = ["src", "tests"]
 # find-injected-vuln-* bugs live there), so `ruff check --fix` / `ruff format`
 # must never rewrite them either (specs/prK-lifecycle-hooks.md §P9).
 extend-exclude = [
-    "content/plugins/superpowers",
-    "content/plugins/python_design/**/*.md",
-    "content/core/eval_tasks/*/setup",
+    "catalog/plugins/superpowers",
+    "catalog/plugins/python_design/**/*.md",
+    "catalog/core/eval_tasks/*/setup",
 ]
 # Pre-commit and the hook/Stop stages pass file names explicitly, and ruff
 # ignores the excludes above for an explicitly passed path unless force-exclude
@@ -149,7 +149,7 @@ extend-exclude = [
 force-exclude = true
 # Skill scripts run in consumer repos on Python 3.10+, so pyupgrade must not
 # suggest 3.12-only syntax there (PEP 695 aliases/generics).
-per-file-target-version = { "content/plugins/*/skills/*/scripts/*.py" = "py310" }
+per-file-target-version = { "catalog/plugins/*/skills/*/scripts/*.py" = "py310" }
 
 [tool.ruff.lint]
 select = [
@@ -208,7 +208,7 @@ addopts = [
 ]
 xfail_strict = true
 filterwarnings = ["error"]
-markers = ["content: checks over the bundled content tree under content/ (pre-commit content-checks hook)"]
+markers = ["catalog: checks over the engine catalog under catalog/ (pre-commit catalog-checks hook)"]
 
 # --- coverage ---
 

@@ -1,6 +1,6 @@
 """ruff must never lint or reformat eval-fixture ``setup/`` trees (specs/prK-lifecycle-hooks.md §P9).
 
-The fixtures under ``content/core/eval_tasks/*/setup`` are deliberately unclean
+The fixtures under ``catalog/core/eval_tasks/*/setup`` are deliberately unclean
 needle material (the ``find-injected-vuln-*`` tasks hide a bug in them), so a
 pre-commit ``ruff check --fix`` or a hook's post-edit ``ruff format`` must not
 rewrite them. ``extend-exclude`` alone does not stop ruff from touching a path
@@ -22,17 +22,17 @@ from typing import Any
 
 import pytest
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_FIXTURE_GLOB = "content/core/eval_tasks/*/setup"
+_FIXTURE_GLOB = "catalog/core/eval_tasks/*/setup"
 #: The vendored bundled plugin stays byte-faithful; the distilled python_design
 #: plugin only keeps ruff off its markdown, because its stdlib scripts are our own
 #: code (SPEC §11.5.2).
-_VENDORED_PACK_GLOB = "content/plugins/superpowers"
-_DISTILLED_PACK_MD_GLOB = "content/plugins/python_design/**/*.md"
+_VENDORED_PACK_GLOB = "catalog/plugins/superpowers"
+_DISTILLED_PACK_MD_GLOB = "catalog/plugins/python_design/**/*.md"
 _DISTILLED_PACK_SCRIPT = (
-    "content/plugins/python_design/skills/python-architecture/scripts/layer_map.py"
+    "catalog/plugins/python_design/skills/python-architecture/scripts/layer_map.py"
 )
 _ENGINE_MODULE = "src/coding_agent_playbook/__init__.py"
 _NO_FILES = "No Python files found"

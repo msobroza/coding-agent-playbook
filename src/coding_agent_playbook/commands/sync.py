@@ -22,7 +22,7 @@ that policy would delete (``_prior_output.judging_leftovers_with``).
 
 Every mode first refuses to run when a configured overlay package fails to
 import or ships no ``resources/`` directory, or a bundled-plugin name matches no
-``content/plugins/<leaf>/`` (``_sync_preflight``) — rendering without it would
+``catalog/plugins/<leaf>/`` (``_sync_preflight``) — rendering without it would
 silently drop the org rules and un-ignore their output. A config the engine
 would misread fails even earlier, while loading
 (:class:`~coding_agent_playbook.config.ConfigError`). Write mode and

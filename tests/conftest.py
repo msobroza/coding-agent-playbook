@@ -38,7 +38,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
     """Drop the inherited variables that pin a git repository, for the whole run.
 
     Git exports absolute ``GIT_DIR``/``GIT_INDEX_FILE`` to hooks in a linked
-    worktree, and pre-commit passes them on to the ``content-checks`` hook. Any
+    worktree, and pre-commit passes them on to the ``catalog-checks`` hook. Any
     test running real git without ``hermetic_git_env`` (``materialize`` in the
     shipped-task tests) would then commit onto the developer's branch and
     overwrite their index. Runs before collection, so collection-time git is

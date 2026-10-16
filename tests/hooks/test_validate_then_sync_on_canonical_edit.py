@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "validate-then-sync-on-canonical-edit"
 GLOSSARY: Final = "playbook/rules/glossary.md"
@@ -141,9 +141,9 @@ def test_auto_sync_valid_edit_runs_sync_child(
     [
         "playbook/hooks/guard-x/HOOK.md",
         ".coding-agent-playbook.toml",
-        # The engine checkout's own hooks are bundled content (SPEC v0.19).
-        "content/core/hooks/protect/guard-x/HOOK.md",
-        "content/plugins/demo/hooks/guard-x/HOOK.md",
+        # The engine checkout's own hooks live in its catalog (SPEC v0.19).
+        "catalog/core/hooks/protect/guard-x/HOOK.md",
+        "catalog/plugins/demo/hooks/guard-x/HOOK.md",
     ],
 )
 def test_auto_sync_hooks_table_edit_advises_instead(
@@ -206,9 +206,9 @@ def test_output_filtered_to_edited_file_capped_15(
     "rel",
     [
         "src/acme_rules/resources/prompts/triage.md",
-        # The engine checkout's prompts are bundled content (SPEC v0.19).
-        "content/core/prompts/triage.md",
-        "content/plugins/demo/prompts/triage.md",
+        # The engine checkout's prompts live in its catalog (SPEC v0.19).
+        "catalog/core/prompts/triage.md",
+        "catalog/plugins/demo/prompts/triage.md",
     ],
 )
 def test_engine_resource_edit_is_canonical(

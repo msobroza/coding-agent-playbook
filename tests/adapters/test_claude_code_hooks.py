@@ -475,7 +475,7 @@ def _post_tool_use(root: Path) -> list[dict[str, Any]]:
     return groups
 
 
-@pytest.mark.content
+@pytest.mark.catalog
 def test_local_audit_log_adds_exactly_one_async_post_tool_use_entry(tmp_path: Path) -> None:
     before, _ = _sync(tmp_path / "off", _audit_hooks(tmp_path, audit=False))
     after, _ = _sync(tmp_path / "on", _audit_hooks(tmp_path, audit=True))
@@ -495,7 +495,7 @@ def test_local_audit_log_adds_exactly_one_async_post_tool_use_entry(tmp_path: Pa
     assert before.managed_lock_entries() == lint_only.managed_lock_entries()
 
 
-@pytest.mark.content
+@pytest.mark.catalog
 def test_second_sync_with_async_entry_writes_nothing(tmp_path: Path) -> None:
     hooks = _audit_hooks(tmp_path, audit=True)
     first, _ = _sync(tmp_path, hooks)
@@ -509,7 +509,7 @@ def test_second_sync_with_async_entry_writes_nothing(tmp_path: Path) -> None:
     assert second.managed_lock_entries() == first.managed_lock_entries()
 
 
-@pytest.mark.content
+@pytest.mark.catalog
 def test_disabling_local_audit_log_removes_only_the_async_entry(tmp_path: Path) -> None:
     on, _ = _sync(tmp_path, _audit_hooks(tmp_path, audit=True))
     sync_group, _ = _post_tool_use(tmp_path)
@@ -539,7 +539,7 @@ def _prompt_handler(root: Path) -> dict[str, Any]:
     return loaded
 
 
-@pytest.mark.content
+@pytest.mark.catalog
 def test_strict_mode_only_when_pii_guard_enabled(tmp_path: Path, regulated_overlay: str) -> None:
     """``onFailure: block`` + ``--strict-launch`` follow the activated guard, on its event only."""
     ledger = resolved_hook("ledger-q", events=("user_prompt_submit",), on_error="open")
@@ -587,7 +587,7 @@ def _overlay_guards(tmp_path: Path, overlay: str) -> list[ResolvedHook]:
     return resolve_engine_hooks([_NETWORK, _DATA], tmp_path / "engine", overlays=(overlay,))
 
 
-@pytest.mark.content
+@pytest.mark.catalog
 def test_overlay_native_rows_added_and_removed_with_guard(
     tmp_path: Path, regulated_overlay: str
 ) -> None:
@@ -621,7 +621,7 @@ def test_enforce_mode_renders_read_deny_rows_for_deny_globs() -> None:
     assert network_native_rows([resolved_hook(_NETWORK, config={"mode": "ask"})]) == {}
 
 
-@pytest.mark.content
+@pytest.mark.catalog
 def test_inert_engine_definitions_render_no_native_rows(tmp_path: Path) -> None:
     inert = resolve_engine_hooks([_NETWORK, _DATA], tmp_path / "engine")
 
@@ -629,7 +629,7 @@ def test_inert_engine_definitions_render_no_native_rows(tmp_path: Path) -> None:
     assert network_native_rows(inert) == sensitive_read_native_rows(inert) == {}
 
 
-@pytest.mark.content
+@pytest.mark.catalog
 def test_user_permission_entries_untouched_by_overlay_rows(
     tmp_path: Path, regulated_overlay: str
 ) -> None:

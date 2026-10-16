@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "command-convention-guard"
 CORRECTION: Final = "Use `uv run python -m mypy` / `uv run python -m pytest -q`."

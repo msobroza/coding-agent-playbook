@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
     SyntheticRepoFactory = Callable[..., Path]
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 OVERLAY_IDS: Final = ("network-egress-guard", "pii-prompt-guard", "sensitive-data-read-guard")
 NETWORK: Final = "network-egress-guard"

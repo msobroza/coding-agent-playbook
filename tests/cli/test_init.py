@@ -17,7 +17,7 @@ from coding_agent_playbook.config import Config, OutputConfig, ProjectMeta, Stor
 from coding_agent_playbook.gitignore import BLOCK_START
 from tests.hook_samples import write_hook
 from tests.toml_equality import assert_toml_identical
-from tests.unit.test_cli import break_bundled_content
+from tests.unit.test_cli import break_catalog
 from tests.unit.test_precommit_merge import LEGACY_APPENDED, LEGACY_STARTER
 
 if TYPE_CHECKING:
@@ -941,11 +941,11 @@ def test_init_rerun_refuses_a_committed_non_table_the_local_file_hides(
     assert _snapshot(tmp_path) == before
 
 
-def test_init_writes_nothing_when_bundled_content_missing(
+def test_init_writes_nothing_when_catalog_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A broken install exits 2 in init's preflight, never leaving a half-initialized repo."""
-    expected = break_bundled_content(monkeypatch, tmp_path)
+    expected = break_catalog(monkeypatch, tmp_path)
     repo = tmp_path / "repo"
     repo.mkdir()
     before = _snapshot(repo)

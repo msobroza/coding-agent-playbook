@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     type Deps = Callable[..., RuntimeDeps]
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "precompact-checkpoint"
 TRANSCRIPTS: Final = Path(__file__).parents[1] / "fixtures" / "transcripts" / "claude_code"

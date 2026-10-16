@@ -1,6 +1,6 @@
 """Integration test: the shipped eval tasks under the C7 schema.
 
-Loads every ``content/core/eval_tasks/<id>/task.toml`` the engine ships, asserts the
+Loads every ``catalog/core/eval_tasks/<id>/task.toml`` the engine ships, asserts the
 whole set validates clean (compile-based rules), and runs each task end-to-end
 through :func:`~coding_agent_playbook.evals.scoring.score` — once deterministic-only
 (no judge ⇒ the judged rubric layer skips, so the verdict reduces to the gate) and
@@ -44,7 +44,7 @@ from coding_agent_playbook.evals.scoring import score
 from coding_agent_playbook.evals.task import Verdict
 from coding_agent_playbook.evals.validator import validate_tasks
 from coding_agent_playbook.types import Prompt
-from tests._content import CORE_ROOT
+from tests._catalog import CORE_ROOT
 from tests.integration.ccv_answers import ALL_CLASSES_ANSWER
 
 if TYPE_CHECKING:
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.evals.task import EvalTask
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 
 @pytest.fixture

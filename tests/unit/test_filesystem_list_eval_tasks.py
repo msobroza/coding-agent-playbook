@@ -1,8 +1,8 @@
 """Tests for ``FileSystemArtifactSource.list_eval_tasks`` (PR 11).
 
 PR 5 shipped this method as a stub returning ``[]``; PR 11 makes it walk the
-engine's ``content/core/eval_tasks/`` tree, each overlay's (a bundled plugin's
-``content/plugins/<name>/eval_tasks/``, a third-party overlay package's
+engine's ``catalog/core/eval_tasks/`` tree, each overlay's (a bundled plugin's
+``catalog/plugins/<name>/eval_tasks/``, a third-party overlay package's
 ``resources/eval_tasks/``), and the consumer repo's ``playbook/eval_tasks/``.
 """
 
@@ -64,8 +64,8 @@ def overlay_cleanup(tmp_path: Path) -> Iterator[None]:
 
 
 def test_list_eval_tasks_walks_engine_resources(tmp_path: Path) -> None:
-    """The engine ships eval tasks under ``content/core/eval_tasks/``
-    (resolved through ``bundled_content``). Confirm
+    """The engine ships eval tasks under ``catalog/core/eval_tasks/``
+    (resolved through ``catalog``). Confirm
     the walker picks them up and tags them with
     ``source_package="coding_agent_playbook"``."""
     source = FileSystemArtifactSource(repo_root=tmp_path)

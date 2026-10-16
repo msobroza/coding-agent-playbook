@@ -2,8 +2,8 @@
 
 After an Edit or Write of a canonical source (``playbook/{rules,prompts,
 skills,hooks}/**``, ``.coding-agent-playbook.toml``, an overlay checkout's
-``src/*/resources/...``, or the engine checkout's bundled content
-``content/core/...`` and ``content/plugins/*/...``), it runs ``playbook validate`` as a child
+``src/*/resources/...``, or the engine checkout's catalog
+``catalog/core/...`` and ``catalog/plugins/*/...``), it runs ``playbook validate`` as a child
 process and returns the ``FAIL`` lines that name the edited file or its id
 (the cross-references the edit broke included), at most 15, as context:
 ``resolve before finishing``. Context, never a block: a prompt written before
@@ -12,8 +12,8 @@ the hard gate.
 
 With ``[hooks] auto_sync`` (``guard_config.auto_sync``) and a clean validate
 it runs ``playbook sync`` too, except after an edit of ``playbook/hooks/**``,
-a checkout's ``src/*/resources/hooks/**``, the engine's ``content/core/hooks/**``
-or a bundled plugin's ``content/plugins/*/hooks/**``, ``.coding-agent-playbook.toml`` or a hook
+a checkout's ``src/*/resources/hooks/**``, the engine's ``catalog/core/hooks/**``
+or a bundled plugin's ``catalog/plugins/*/hooks/**``, ``.coding-agent-playbook.toml`` or a hook
 artifact: the runtime cannot tell which keys a config edit touched, so this
 conservative superset covers ``[hooks]``, ``overlays_enabled`` and
 ``adapters_enabled``. Then it says ``ask the user to run playbook sync``.
@@ -52,21 +52,21 @@ if TYPE_CHECKING:
 __all__ = ["CANONICAL_GLOBS", "NO_AUTO_SYNC_GLOBS", "validate_then_sync_on_canonical_edit"]
 
 _KINDS: Final = ("rules", "prompts", "skills", "hooks")
-#: The engine checkout's own layers: its bundled content (SPEC v0.19), which
-#: left ``src/coding_agent_playbook/resources/`` for ``content/``.
-_CONTENT_LAYERS: Final = ("content/core", "content/plugins/*")
+#: The engine checkout's own layers: its catalog, which left
+#: ``src/coding_agent_playbook/resources/`` in SPEC v0.19 (as ``content/``, now ``catalog/``).
+_CATALOG_LAYERS: Final = ("catalog/core", "catalog/plugins/*")
 #: The canonical sources; ``HOOK.md``'s matcher lists the same globs (a test pins them).
 CANONICAL_GLOBS: Final[tuple[str, ...]] = (
     *(f"playbook/{kind}/**" for kind in _KINDS),
     ".coding-agent-playbook.toml",
     *(f"src/*/resources/{kind}/**" for kind in _KINDS),
-    *(f"{layer}/{kind}/**" for layer in _CONTENT_LAYERS for kind in _KINDS),
+    *(f"{layer}/{kind}/**" for layer in _CATALOG_LAYERS for kind in _KINDS),
 )
 #: Edits after which auto-sync never runs: hook sources and the config (§E.1).
 NO_AUTO_SYNC_GLOBS: Final[tuple[str, ...]] = (
     "playbook/hooks/**",
     "src/*/resources/hooks/**",
-    *(f"{layer}/hooks/**" for layer in _CONTENT_LAYERS),
+    *(f"{layer}/hooks/**" for layer in _CATALOG_LAYERS),
     ".coding-agent-playbook.toml",
 )
 _ADVICE: Final = "ask the user to run playbook sync"

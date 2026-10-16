@@ -232,7 +232,7 @@ def test_handler_approval_mirrors_the_runtime_record(repo: Path, tmp_path: Path)
 _GATE = "stop-ci-parity-gate"
 
 
-@pytest.mark.content
+@pytest.mark.catalog
 def test_execution_digest_is_the_one_the_runtime_checks(tmp_path: Path) -> None:
     hooks = resolve_engine_hooks([_GATE], tmp_path, per_hook={_GATE: {"stages": ["tests"]}})
     runtime = GatePolicy.from_table(stop_gate_table(hooks, {})).stages_sha256()
@@ -241,7 +241,7 @@ def test_execution_digest_is_the_one_the_runtime_checks(tmp_path: Path) -> None:
     assert execution_digest(resolve_engine_hooks([_GATE], tmp_path)) is None  # nothing to run
 
 
-@pytest.mark.content
+@pytest.mark.catalog
 def test_execution_stages_need_an_interactive_approval(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

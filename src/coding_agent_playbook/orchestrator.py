@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from importlib import metadata
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.bundled_content import canonical_overlay_name
+from coding_agent_playbook.catalog import canonical_overlay_name
 from coding_agent_playbook.detector import detect, evaluate_predicate
 from coding_agent_playbook.hook_policy import (
     NO_HANDLER_SCHEMAS,
@@ -86,7 +86,7 @@ class OverlayResolver:
     """Merge engine + overlay + repo-local artifact lists by ID (SPEC §11).
 
     Resolution order (later wins on ID collision):
-      1. Engine artifacts (the bundled ``content/core/``).
+      1. Engine artifacts (the bundled ``catalog/core/``).
       2. Each overlay package or bundled plugin, in ``config.overlays_enabled`` order.
       3. Repo-local artifacts under ``<repo>/playbook/``.
 
@@ -509,7 +509,7 @@ class SyncContext:
                 overlay_packages=list(config.overlays_enabled),
             )
         # FileSystemArtifactSource walks the engine and bundled-plugin artifacts
-        # in the bundled content (``content/core/``, ``content/plugins/<name>/``)
+        # in the catalog (``catalog/core/``, ``catalog/plugins/<name>/``)
         # and each overlay package's ``resources/`` tree via importlib.resources;
         # repo-local artifacts come from ``<repo>/playbook/``. v1 walks all of
         # those in a single ``list_*`` call — sufficient for PR 10. PRs 13+

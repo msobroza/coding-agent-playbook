@@ -3,7 +3,7 @@
 "Unusable" is the one shared preflight check (``_sync_preflight``): importing an
 overlay package fails (it is missing, or its own code raises), or it imports but
 ships no ``resources/`` directory (``json``, say). A bundled-plugin name is never
-imported: it is unusable when no ``content/plugins/<leaf>/`` matches it ("no
+imported: it is unusable when no ``catalog/plugins/<leaf>/`` matches it ("no
 such bundled plugin"), and the bare plugin namespace is never a plugin.
 ``sync`` refuses (exit 1), ``validate`` fails (exit 1), ``check`` flags it and
 stops claiming a clean state (exit 0, it is a diagnostic), and ``init`` refuses

@@ -55,7 +55,7 @@ from tests.plugins.superpowers_expectations import (
 if TYPE_CHECKING:
     from pathlib import Path
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 #: What the ``SkillWriter`` puts between the frontmatter and the vendored body:
 #: the sentinel HTML comment as the first body line, then one blank separator

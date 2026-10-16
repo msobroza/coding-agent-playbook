@@ -18,7 +18,7 @@ Validates:
   pass through the ``[links] allowed_domains`` allowlist (``_validate_links``).
 - Every ``overlays_enabled`` entry is usable here: an overlay package imports
   without error and ships a ``resources/`` directory, and a bundled-plugin name
-  matches a ``content/plugins/<leaf>/`` directory — the same check ``playbook
+  matches a ``catalog/plugins/<leaf>/`` directory — the same check ``playbook
   sync`` refuses to run without (``_sync_preflight.unusable_overlays``), so a
   misspelled bundled plugin fails here too instead of validating the engine
   layer alone.

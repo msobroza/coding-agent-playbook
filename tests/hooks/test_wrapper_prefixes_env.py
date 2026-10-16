@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 GUARD: Final = "destructive-command-guard"
 GATE: Final = "stop-ci-parity-gate"

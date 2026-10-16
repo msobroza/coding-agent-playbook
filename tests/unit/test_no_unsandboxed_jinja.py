@@ -34,7 +34,7 @@ from jinja2.sandbox import SandboxedEnvironment
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.evals.loader import load_eval_task_from_dir
 from coding_agent_playbook.evals.prompting import render_prompt
-from tests._content import CORE_ROOT
+from tests._catalog import CORE_ROOT
 from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:
@@ -180,7 +180,7 @@ def built_environments(monkeypatch: pytest.MonkeyPatch) -> list[type]:
     return built
 
 
-@pytest.mark.content
+@pytest.mark.catalog
 def test_sync_and_eval_prompts_build_only_sandboxed_environments(
     tmp_path: Path,
     make_synthetic_repo: SyntheticRepoFactory,

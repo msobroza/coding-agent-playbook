@@ -21,7 +21,7 @@ from coding_agent_playbook.commands import init as init_cmd
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from coding_agent_playbook.types import Prompt, Rule
-from tests._content import CORE_ROOT
+from tests._catalog import CORE_ROOT
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -87,7 +87,7 @@ def _rendered_artifact_ids(repo: Path) -> set[str]:
     return {entry.artifact_id for entry in lockfile.entries if entry.artifact_id}
 
 
-@pytest.mark.content
+@pytest.mark.catalog
 def test_shipped_templates_render_byte_identical_under_sandbox(
     tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:

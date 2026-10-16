@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "block-precommit-bypass"
 IDS: Final = ("playbook-metrics", "playbook-validate")

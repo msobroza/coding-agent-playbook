@@ -23,13 +23,13 @@ from coding_agent_playbook.evals.prompting import (
     render_prompt,
 )
 from coding_agent_playbook.evals.task import EvalTask, TaskInvocation, TaskSetup
-from tests._content import CORE_ROOT
+from tests._catalog import CORE_ROOT
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 _ENGINE = "coding_agent_playbook"
 _SHIPPED_TASKS = CORE_ROOT / "eval_tasks"
@@ -95,13 +95,13 @@ def test_authored_project_kind_is_the_mock_detector_fact() -> None:
 
 @pytest.mark.parametrize(
     "layer_parts",
-    [("content", "core"), ("pkg", "resources"), ("playbook",)],
-    ids=["bundled-content", "overlay-resources", "repo-local"],
+    [("catalog", "core"), ("pkg", "resources"), ("playbook",)],
+    ids=["catalog", "overlay-resources", "repo-local"],
 )
 def test_infer_prompts_dir_layers(tmp_path: Path, layer_parts: tuple[str, ...]) -> None:
     """``<layer>/eval_tasks/<dir>/task.toml`` finds ``<layer>/prompts`` in every layer.
 
-    The bundled layer (``content/core``) has no ``resources`` segment, and a
+    The bundled layer (``catalog/core``) has no ``resources`` segment, and a
     repo-local task never found its prompts before.
     """
     layer = tmp_path.joinpath(*layer_parts)
@@ -134,7 +134,7 @@ def test_strict_unresolved_prompt_hint_points_at_the_layers_prompts_dir(tmp_path
     engine's own content has no ``resources/`` since v0.19, and every layer's
     prompts are found next to its ``eval_tasks/`` (:func:`_infer_prompts_dir`).
     """
-    task_dir = tmp_path / "content" / "core" / "eval_tasks" / "orphan-task"
+    task_dir = tmp_path / "catalog" / "core" / "eval_tasks" / "orphan-task"
     (task_dir / "setup").mkdir(parents=True)
     task = EvalTask(
         id="orphan-task",

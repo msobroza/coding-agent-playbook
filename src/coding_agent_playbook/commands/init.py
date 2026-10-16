@@ -15,11 +15,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from coding_agent_playbook import __version__ as _engine_version
-from coding_agent_playbook.bundled_content import (
+from coding_agent_playbook.catalog import (
     ENGINE_PACKAGE,
-    bundled_content_root,
     canonical_overlay_list,
     canonical_overlay_name,
+    catalog_root,
 )
 from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands import sync as _sync
@@ -370,7 +370,7 @@ def precommit_template_dir(templates_root: Path | None = None) -> Path:
 
     The template is engine wiring, not playbook content (its hook ids are
     duplicated in ``_precommit_merge``), so it lives in the package's
-    ``templates/precommit/`` rather than the bundled content. ``templates_root``
+    ``templates/precommit/`` rather than the catalog. ``templates_root``
     defaults to the engine's ``templates/``; tests pass another root. Raises
     :class:`PrecommitTemplateMissingError` when the directory or
     ``config.yaml.j2`` is missing.
@@ -547,8 +547,8 @@ def run(args: argparse.Namespace) -> int:
     and checked here — the local one on its own, the committed one on its own,
     then the config the final sync will load (:func:`_plan_config`) — so a broken
     file of either kind leaves the repo untouched. A broken install exits 2
-    before writing too: :func:`bundled_content_root` raises
-    ``BundledContentMissingError`` when the engine's bundled content is missing,
+    before writing too: :func:`catalog_root` raises
+    ``CatalogMissingError`` when the engine's catalog is missing,
     and ``cli.main`` reports it. A deprecated
     ``coding_agent_playbook.packs.*`` name in ``--overlays`` is written in its
     canonical ``plugins`` spelling (on a re-run too: the migration path for the
@@ -559,7 +559,7 @@ def run(args: argparse.Namespace) -> int:
     answers["overlays"], deprecated_flags = canonical_overlay_list(answers["overlays"])
     state = FileSystemStateSource(repo_root=repo_root)
     local = state.load_local_overrides()
-    bundled_content_root()  # a broken install raises here: never a half-initialized repo
+    catalog_root()  # a broken install raises here: never a half-initialized repo
     refused = [
         _refuse_unusable_overlays(overlays, origin)
         for overlays, origin in _overlay_lists_to_check(answers, local)

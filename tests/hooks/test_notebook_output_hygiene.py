@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.simulate import SimulateReport
     from tests.hooks.pack_repo import PackRepo
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "notebook-output-hygiene"
 COORDINATOR: Final = "stop-ci-parity-gate"

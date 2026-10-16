@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "sensitive-data-read-guard"
 BIG_NOTEBOOK_BYTES: Final = 300 * 1024 * 1024

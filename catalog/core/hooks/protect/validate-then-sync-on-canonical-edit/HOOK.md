@@ -19,14 +19,14 @@ matcher:
       - src/*/resources/prompts/**
       - src/*/resources/skills/**
       - src/*/resources/hooks/**
-      - content/core/rules/**
-      - content/core/prompts/**
-      - content/core/skills/**
-      - content/core/hooks/**
-      - content/plugins/*/rules/**
-      - content/plugins/*/prompts/**
-      - content/plugins/*/skills/**
-      - content/plugins/*/hooks/**
+      - catalog/core/rules/**
+      - catalog/core/prompts/**
+      - catalog/core/skills/**
+      - catalog/core/hooks/**
+      - catalog/plugins/*/rules/**
+      - catalog/plugins/*/prompts/**
+      - catalog/plugins/*/skills/**
+      - catalog/plugins/*/hooks/**
 handler:
   builtin: validate_then_sync_on_canonical_edit
 decisions: [context, none]

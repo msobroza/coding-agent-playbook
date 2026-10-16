@@ -5,8 +5,8 @@
 # (.github/workflows/ci.yml): ruff formats the code blocks inside markdown as
 # well as Python, as CI's `ruff format --check .` does, and `--force-exclude`
 # keeps pyproject's extend-exclude (the vendored superpowers markdown) in force
-# even though pre-commit passes file names explicitly. The content checks (the
-# `content` pytest marker) run only when a commit touches content/. The full
+# even though pre-commit passes file names explicitly. The catalog checks (the
+# `catalog` pytest marker) run only when a commit touches catalog/. The full
 # test suite stays CI's job. Consumer-facing hooks are in .pre-commit-hooks.yaml.
 default_language_version:
   python: python3.12
@@ -32,9 +32,9 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-      - id: content-checks
-        name: bundled content checks
-        entry: pytest -q --no-cov -p no:cacheprovider -m content
+      - id: catalog-checks
+        name: catalog checks
+        entry: pytest -q --no-cov -p no:cacheprovider -m catalog
         language: system
-        files: ^content/
+        files: ^catalog/
         pass_filenames: false

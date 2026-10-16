@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "git-commit-push-policy-guard"
 IDENTITY: Final = {"user.name": "Dev Eloper", "user.email": "dev@corp.test"}

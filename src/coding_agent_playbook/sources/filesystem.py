@@ -16,7 +16,7 @@ from coding_agent_playbook._atomic_io import atomic_write_bytes
 from coding_agent_playbook._layers import ENGINE_PACKAGE as ENGINE_PACKAGE
 from coding_agent_playbook._layers import REPO_LOCAL_SOURCE as REPO_LOCAL_SOURCE
 from coding_agent_playbook._toml import dump_toml
-from coding_agent_playbook.bundled_content import bundled_layer_root, is_bundled_layer
+from coding_agent_playbook.catalog import catalog_layer_root, is_bundled_layer
 from coding_agent_playbook.config import Config, ConfigError, check_config_file
 from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
@@ -63,15 +63,15 @@ def _resource_subdir(package: str, subdir: str) -> Path | None:
     """Resolve a layer's ``<subdir>`` kind directory, or ``None`` when it ships none.
 
     A bundled layer (the engine, or a bundled plugin under either namespace)
-    reads ``<subdir>`` from its directory in the content root
-    (``bundled_content.bundled_layer_root``) and is never imported. Every other
+    reads ``<subdir>`` from its directory in the catalog root
+    (``catalog.catalog_layer_root``) and is never imported. Every other
     package resolves ``<package>/resources/<subdir>`` via importlib.resources.
 
     Returns ``None`` if the package is not importable, has no ``resources/``
     directory, or has no matching subdirectory, so sources silently skip
     packages that ship no artifacts of a given kind (SPEC §20.3). The one raise
-    is :class:`BundledContentMissingError` for a bundled layer when the engine's
-    content root is missing: a broken install must fail loudly, not render
+    is :class:`CatalogMissingError` for a bundled layer when the engine's
+    catalog root is missing: a broken install must fail loudly, not render
     without the engine's artifacts.
     """
     # Outside the ``except Exception`` guard below on purpose: a missing content
@@ -107,14 +107,14 @@ def _bundled_subdir(layer: str, subdir: str) -> Path | None:
 
     ``layer`` is the engine or a bundled-plugin name (either namespace); an
     unknown plugin leaf resolves to ``None`` like a missing kind directory.
-    Raises :class:`BundledContentMissingError` when the content root is missing.
+    Raises :class:`CatalogMissingError` when the catalog root is missing.
 
     Example::
 
         >>> _bundled_subdir("coding_agent_playbook", "rules")  # doctest: +SKIP
-        PosixPath('/repo/content/core/rules')
+        PosixPath('/repo/catalog/core/rules')
     """
-    layer_root = bundled_layer_root(layer)
+    layer_root = catalog_layer_root(layer)
     if layer_root is None:
         return None
     candidate = layer_root / subdir
@@ -227,8 +227,8 @@ def _find_skill_md(skill_dir: Path) -> Path | None:
 
 
 class FileSystemArtifactSource(ArtifactSource):
-    """Walks the engine's bundled content (``content/core/`` and the enabled
-    ``content/plugins/<name>/``, located by ``bundled_content``), importlib.resources
+    """Walks the engine's catalog (``catalog/core/`` and the enabled
+    ``catalog/plugins/<name>/``, located by the ``catalog`` module), importlib.resources
     for overlay packages, plus <repo>/playbook/ for repo-local artifacts
     (SPEC §20.3, §11).
 
@@ -365,8 +365,8 @@ class FileSystemArtifactSource(ArtifactSource):
     def list_eval_tasks(self) -> list[EvalTask]:
         """Walk every layer's ``eval_tasks/<id>/`` (:meth:`layer_roots` order).
 
-        Each layer's ``eval_tasks/`` (``content/core/eval_tasks/`` for the
-        engine, ``content/plugins/<name>/eval_tasks/`` for a bundled plugin,
+        Each layer's ``eval_tasks/`` (``catalog/core/eval_tasks/`` for the
+        engine, ``catalog/plugins/<name>/eval_tasks/`` for a bundled plugin,
         ``<pkg>/resources/eval_tasks/`` for an overlay package, then
         ``<repo>/playbook/eval_tasks/``). Later layers do NOT override earlier
         ones here — the orchestrator's :class:`OverlayResolver` handles ID-based

@@ -23,7 +23,7 @@ sync rendered: nothing is rendered and nothing is spawned here. The order of
    symlink, on a secret path or when it is not a regular file.
 
 Stdlib, ``hook_runtime``, the zero-import ``_sentinel`` and the stdlib-only
-``bundled_content`` leaf only (§D.1).
+``catalog`` module (a leaf) only (§D.1).
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ __all__ = [
     "protected_paths",
 ]
 
-#: The engine's own layer (its bundled ``content/core/``); resolvable without
+#: The engine's own layer (its bundled ``catalog/core/``); resolvable without
 #: ``machine.json``, from this package. The id keeps its ``resources`` spelling
 #: (``_guard_config_protect.resource_root_ids``).
 ENGINE_RESOURCES_ID: Final = "pkg:coding_agent_playbook/resources"
@@ -234,19 +234,19 @@ def _resource_roots(ids: Iterable[str], machine: MachinePins | None) -> tuple[st
 
 
 def _engine_layer_dir() -> str:
-    """This package's ``content/core/``, or ``""`` (protects nothing) when the content is missing.
+    """This package's ``catalog/core/``, or ``""`` (protects nothing) when the catalog is missing.
 
-    ``bundled_content`` is a stdlib-only leaf (``pathlib``, which the dispatcher
+    The ``catalog`` module is a stdlib-only leaf (``pathlib``, which the dispatcher
     already loads), so the hot path stays import-light (§D.1).
     """
-    from coding_agent_playbook.bundled_content import (
-        BundledContentMissingError,
+    from coding_agent_playbook.catalog import (
+        CatalogMissingError,
         engine_layer_root,
     )
 
     try:
         return str(engine_layer_root())
-    except BundledContentMissingError:
+    except CatalogMissingError:
         return ""
 
 

@@ -35,12 +35,12 @@ from coding_agent_playbook.links import LinksConfig, extract_markdown_links
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, _resource_subdir
 from coding_agent_playbook.types import split_frontmatter
-from tests._content import plugin_root
+from tests._catalog import plugin_root
 from tests.conftest import apply_hermetic_git_env
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS, SYNCED_SKILL_ENTRIES
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 #: The dotted name a consumer lists in ``overlays_enabled`` to turn the plugin on.
 PLUGIN_NAME = "coding_agent_playbook.plugins.python_design"

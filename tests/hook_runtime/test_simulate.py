@@ -337,7 +337,7 @@ def smoke_guard_config_bytes() -> bytes:
     return serialize_guard_config(render_guard_config(inputs))
 
 
-@pytest.mark.content
+@pytest.mark.catalog
 def test_smoke_fixture_is_the_rendered_default_destructive_guard() -> None:
     """Regenerate with ``SMOKE_CONFIG.write_bytes(smoke_guard_config_bytes())`` after a change."""
     assert SMOKE_CONFIG.read_bytes() == smoke_guard_config_bytes()

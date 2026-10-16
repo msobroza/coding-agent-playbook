@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.simulate import SimulateReport
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "stop-ci-parity-gate"
 DRIFT_ID: Final = "stop-drift-and-orphan-gate"

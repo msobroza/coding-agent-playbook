@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "local-audit-log"
 LEAKY: Final = "mysql -pS3cret db"

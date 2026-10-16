@@ -120,7 +120,7 @@ def classify_link(
 
     ``base_dir`` is the directory the containing artifact lives in;
     ``root_dir`` is the artifact root the target must stay inside (the layer
-    root: ``content/core/`` or ``content/plugins/<name>/`` for a bundled layer,
+    root: ``catalog/core/`` or ``catalog/plugins/<name>/`` for a bundled layer,
     an overlay package's ``resources/``, or the repo-local ``playbook/``). Pass
     ``base_dir=None`` for artifacts with no on-disk location (non-filesystem
     sources): relative targets are then skipped, but the external-link policy

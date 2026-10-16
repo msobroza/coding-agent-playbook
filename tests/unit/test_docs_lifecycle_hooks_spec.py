@@ -47,7 +47,7 @@ from coding_agent_playbook.types import (
 _ROOT = Path(__file__).resolve().parents[2]
 _SPEC = _ROOT / "SPEC.md"
 _SRC = _ROOT / "src" / "coding_agent_playbook"
-_CONTENT = _ROOT / "content"
+_CATALOG = _ROOT / "catalog"
 _HEADER_VERSION = re.compile(r"^\| Version \| (\d+\.\d+) \(draft\) \|$", re.MULTILINE)
 
 #: Config fields whose TOML spelling is a (sub-)table, not a ``key`` of the table.
@@ -98,8 +98,8 @@ _ENGINE_PATHS = (
     "gate_scan.py",
     "templates/hook_shims/",
 )
-#: Bundled-content paths §5.1 must show, under ``content/`` (SPEC v0.19: content left the package).
-_CONTENT_PATHS = ("core/hooks/",)
+#: Catalog paths §5.1 must show, under ``catalog/`` (SPEC v0.19: content left the package).
+_CATALOG_PATHS = ("core/hooks/",)
 _CONSUMER_PATHS = (
     "playbook/hooks/",
     ".coding-agent-playbook/hooks/",
@@ -183,7 +183,7 @@ def test_design_recap_carries_hook_invariants(phrase: str) -> None:
 
 @pytest.mark.parametrize(
     ("root", "path"),
-    [*((_SRC, path) for path in _ENGINE_PATHS), *((_CONTENT, path) for path in _CONTENT_PATHS)],
+    [*((_SRC, path) for path in _ENGINE_PATHS), *((_CATALOG, path) for path in _CATALOG_PATHS)],
 )
 def test_engine_layout_shows_every_hook_module(root: Path, path: str) -> None:
     assert (root / path.rstrip("/")).exists(), f"{path} is not in {root}"

@@ -1,6 +1,6 @@
 """Structure + opt-in tests for the bundled ``superpowers`` plugin (SPEC §11.5).
 
-The plugin is a directory under ``content/plugins/``, layered like an overlay
+The plugin is a directory under ``catalog/plugins/``, layered like an overlay
 package but never imported. These tests pin its layout and listing, that it is
 **off by default**, the per-skill shape the engine's skill sync relies on
 (including the full ``references/`` inventory), and the MIT attribution files
@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.bundled_content import bundled_plugins
+from coding_agent_playbook.catalog import bundled_plugins
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import split_frontmatter
 from tests.plugins.superpowers_expectations import (
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.types import Skill
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 # Agent Skills naming rule: lowercase alphanumerics separated by single hyphens.
 _SKILL_ID_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")

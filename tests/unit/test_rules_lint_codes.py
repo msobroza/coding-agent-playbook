@@ -23,7 +23,7 @@ from coding_agent_playbook.commands._validate_frontmatter import lint_codes_prob
 from coding_agent_playbook.detector import evaluate_predicate
 from coding_agent_playbook.hook_policy import resolve_lint_codes
 from coding_agent_playbook.types import Rule
-from tests._content import CORE_ROOT
+from tests._catalog import CORE_ROOT
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.detector import Facts
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 ENGINE_RULES: Final = CORE_ROOT / "rules"
 SIDECAR: Final = ".playbook/manifest.toml"

@@ -22,7 +22,7 @@ from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.git import Fingerprint
 from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME, StateStore
 from coding_agent_playbook.types import Prompt
-from tests._content import CORE_ROOT
+from tests._catalog import CORE_ROOT
 from tests.hook_runtime.fakes import FakeGit, FakeStageRunner
 from tests.hook_runtime.transcript_kit import SessionTranscript
 from tests.hooks.stop_kit import HEAD_TREE, changed_git, session_of, stop, stop_payload
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "prompt-output-contract-on-stop"
 GATE_ID: Final = "stop-ci-parity-gate"

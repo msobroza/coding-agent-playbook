@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "resync-on-detector-input-change"
 ML_RULE: Final = "ml-serialization-security"

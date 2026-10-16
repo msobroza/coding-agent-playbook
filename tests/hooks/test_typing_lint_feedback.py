@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.simulate import SimulateReport
     from tests.hooks.pack_repo import PackRepo
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "typing-lint-feedback"
 APP: Final = "src/app.py"

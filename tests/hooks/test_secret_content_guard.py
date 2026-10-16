@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "secret-content-guard"
 #: Real-shaped (AKIA + 16) but not a key anyone issued; built so no scanner flags this file.
