@@ -2,6 +2,8 @@
 
 > **Resolves SPEC §19 Q8** (OpenCode plugin generation): the engine ships one generated OpenCode plugin shim that delegates to the same dispatcher as Claude Code, not hook *patterns* in docs. **Amends** §2.2 (the "no OpenCode plugins" non-goal narrows to *user-authored* plugins — the engine owns exactly one generated plugin file), §2.3 (the "OpenCode plugin generation from canonical hook descriptions" aspiration is delivered), §3 (**Hook** becomes the 4th emitted canonical kind; the "supported by … Continue CLI" claim is corrected — see P5), §10.6.2 (the hook gap is closed for the OpenCode V1 plugin API) and §17.1 (HTTP hook handlers are *rejected by `playbook validate`*, not merely "not shipped"). **Partially answers** §19 Q1 for executable overlay content (`allow_code_from` + trust-on-first-use, §B.4). The `Metric`/`Check`/`Rubric` engine (§21, `specs/prR6-check-rubric.md`) is reused unchanged by the new tools; no evaluator abstraction changes.
 >
+> **Layout note (SPEC v0.19, PR C).** This design predates the move of the engine's content out of the Python package. The engine's `src/coding_agent_playbook/resources/{rules,prompts,eval_tasks,hooks}/` now live in `content/core/{rules,prompts,eval_tasks,hooks}/`, the hook shim templates (`resources/hook_shims/`) in the package's `src/coding_agent_playbook/templates/hook_shims/`, and the bundled packs (`coding_agent_playbook.packs.<name>`) are bundled plugins under `content/plugins/<name>/` (`coding_agent_playbook.plugins.<name>`). Overlay packages keep `<pkg>/resources/…`. Older paths in the track file lists below read through this mapping; SPEC.md is authoritative.
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development; checkbox steps.
 >
 > **Commit policy (overrides any tooling default):** commits authored **solely by `msobroza`** — no `Co-Authored-By`, no `--author`, no signing, no `git config` edits. Subagents `cd <worktree>` as their first tool call, default `opus`, **no `git push` / `gh pr create` until the user gate approves the diff**. Run the **full cache-free, no-optional-extras CI-parity gate** (`uv pip uninstall radon -y; rm -rf .mypy_cache; ruff check . && ruff format --check . && mypy && pytest -q`, no path args; invoke as `uv run python -m mypy` / `uv run python -m pytest -q` per CLAUDE.md) before claiming green — see [[ci-parity-gate-pitfalls]].
@@ -141,13 +143,14 @@ Track P is pure engine hardening: no hook ships in it, every item is independent
 A hook is a **directory containing `HOOK.md` or `HOOK.md.j2`** (shared name — proposed), with an optional `scripts/` subdirectory for the external-command form. The directory name **is** the hook id. Category folders above hook directories are allowed and carry no meaning:
 
 ```
-src/coding_agent_playbook/resources/hooks/            # engine (builtin handlers only)
+content/core/hooks/                                   # engine (builtin handlers only)
 ├── protect/
 │   ├── guard-generated-outputs/HOOK.md
 │   └── control-plane-guard/HOOK.md
 ├── verify/stop-ci-parity-gate/HOOK.md
 └── ...
 <overlay_pkg>/resources/hooks/<category>/<id>/HOOK.md  # overlay layer
+content/plugins/<name>/hooks/<category>/<id>/HOOK.md   # bundled-plugin layer (an overlay)
 <repo>/playbook/hooks/<id>/                            # repo-local layer
 ├── HOOK.md
 └── scripts/
@@ -1173,10 +1176,10 @@ exit 0
 - **Exactly one export**: the default object. OpenCode loads every export as a plugin ("Plugin export is not a function"), so helpers and constants stay unexported.
 - **Never** subdirectories or helper files in `.opencode/plugins/`. V2 loads immediate subdirectories as plugin packages.
 - **Sentinel.** Line 1 is `// ` + the reconciled `renderer.SENTINEL` (L7). The `.opencode/plugins` entry in `_output_directories` therefore makes the inherited first-line scan clean up a stale shim. The duplicate `_default_cleanup` in opencode_adapter.py:106-131 should be deleted in favor of the ABC's (base.py:74-100); it is byte-identical.
-- **Rendering.** The shim is rendered from a packaged static template, `src/coding_agent_playbook/resources/hook_shims/opencode-plugin.js` *(proposed)*. A single placeholder, `/*@@REG@@*/`, is replaced (via `str.replace`) by `json.dumps(reg, sort_keys=True, separators=(",", ":"))`.
+- **Rendering.** The shim is rendered from a packaged static template, `src/coding_agent_playbook/templates/hook_shims/opencode-plugin.js`. A single placeholder, `/*@@REG@@*/`, is replaced (via `str.replace`) by `json.dumps(reg, sort_keys=True, separators=(",", ":"))`.
   - **Not Jinja**: JS braces would fight it, and L7 limits Jinja to bodies.
-  - The launcher (§C.2.7) uses the same mechanism from `resources/hook_shims/claude-launch.sh`.
-  - `resources/hook_shims/` is not an artifact subdir, so `FileSystemArtifactSource` never walks it.
+  - The launcher (§C.2.7) uses the same mechanism from `templates/hook_shims/claude-launch.sh`.
+  - `templates/hook_shims/` is engine wiring outside the bundled content, so `FileSystemArtifactSource` never walks it.
 - **SPEC amendments.** §2.2 (the "No OpenCode plugins" non-goal), §10.6.2 and §10.6.4 change from "users author plugins" to "the adapter owns exactly `plugins/playbook-hooks.js`; every other file in `.opencode/plugin(s)/` is user-owned". Q8 in §19 is resolved. The catalog's control-plane-guard path `.opencode/plugin/playbook-*` is corrected to `.opencode/plugins/playbook-hooks.js`.
 
 #### §C.3.2 Shim skeleton (rendered; `REG` shown for a typical default pack)
@@ -2442,7 +2445,7 @@ Escape hatches are read **only from the dispatcher process environment** (`os.en
  "tools":{"ruff":{"argv":["/abs/.venv/bin/ruff"],"sig":[31457280,1728900000000000000,1234567]},
           "cz":{"argv":["/abs/.venv/bin/cz"],"sig":[…]},
           "project_python":{"argv":["/abs/.venv/bin/python3.13"],"sig":[…]}},
- "resource_roots":{"pkg:coding_agent_playbook/resources":"/abs/site-packages/coding_agent_playbook/resources"}}
+ "resource_roots":{"pkg:coding_agent_playbook/resources":"/abs/site-packages/coding_agent_playbook/_content/core"}}
 ```
 
 - `sig` is `[st_size, st_mtime_ns, st_ino]`, captured at sync. `project_python` is the project's interpreter for test/coverage stages (§F.1), distinct from the engine pin.

@@ -24,7 +24,6 @@ Usage::
 from __future__ import annotations
 
 import tomllib
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import yaml
@@ -42,6 +41,8 @@ from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import Prompt
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from jinja2 import Environment
 
     from coding_agent_playbook.detector import Facts
@@ -120,7 +121,8 @@ def _placeholder(task: EvalTask, *, strict: bool) -> str:
         raise PromptResolutionError(
             f"prompt_id {task.prompt_id!r} for task {task.id!r} resolved to no "
             "shipped prompt; a real runner cannot be driven with a placeholder. "
-            "Check the task's prompt_id and that resources/prompts/ is reachable."
+            "Check the task's prompt_id and that the prompts/ directory next to the "
+            "task's eval_tasks/ holds that prompt."
         )
     return f"[prompt:{task.prompt_id}] {task.invocation.prompt_args}".strip()
 
@@ -259,12 +261,12 @@ def _applicable_rules(task: EvalTask, facts: Facts) -> list[Rule]:
 def _resolve_prompt(task: EvalTask) -> Prompt | None:
     """Best-effort lookup of the :class:`Prompt` for ``task.prompt_id``.
 
-    Scans the ``resources/prompts/`` directory that sits alongside the task's
-    ``resources/eval_tasks/`` tree (engine or overlay). This deliberately reads
-    the prompt markdown directly rather than through ``SyncContext``: resolution
-    must work for the engine's own resources, which carry no
-    ``.coding-agent-playbook.toml``. Returns ``None`` when the prompts directory
-    cannot be located or no prompt matches.
+    Scans the ``prompts/`` directory of the layer the task belongs to (engine,
+    bundled plugin, overlay or repo-local; see :func:`_infer_prompts_dir`). This
+    deliberately reads the prompt markdown directly rather than through
+    ``SyncContext``: resolution must work for the engine's own content, which
+    carries no ``.coding-agent-playbook.toml``. Returns ``None`` when the
+    prompts directory cannot be located or no prompt matches.
     """
     prompts_dir = _infer_prompts_dir(task.source_path)
     if prompts_dir is None or not prompts_dir.is_dir():
@@ -283,17 +285,23 @@ def _resolve_prompt(task: EvalTask) -> Prompt | None:
 
 
 def _infer_prompts_dir(task_toml: Path) -> Path | None:
-    """Locate the ``resources/prompts/`` dir sibling to the task's ``eval_tasks/``.
+    """Locate the ``prompts/`` dir of the layer holding the task's ``eval_tasks/``.
 
-    A task lives at ``<…>/resources/eval_tasks/<id>/task.toml``; the prompts live
-    at ``<…>/resources/prompts/``. Returns ``None`` when the path has no
-    ``resources`` component (e.g. a synthetic test task).
+    Every layer keeps its kind directories side by side, so a task at
+    ``<layer>/eval_tasks/<dir>/task.toml`` has its prompts at
+    ``<layer>/prompts``, whatever ``<layer>`` is (``content/core``,
+    ``<pkg>/resources``, ``playbook``). Returns ``None`` when the task dir's
+    parent is not ``eval_tasks`` (e.g. a synthetic test task). The path is not
+    resolved, so a symlinked task dir maps to the layer it is reached through.
+
+    Example::
+
+        >>> _infer_prompts_dir(Path("content/core/eval_tasks/t/task.toml"))
+        PosixPath('content/core/prompts')
     """
-    parts = task_toml.resolve().parts
-    if "resources" not in parts:
+    if task_toml.parent.parent.name != "eval_tasks":
         return None
-    idx = parts.index("resources")
-    return Path(*parts[: idx + 1]) / "prompts"
+    return task_toml.parents[2] / "prompts"
 
 
 __all__ = ["PromptResolutionError", "render_prompt"]

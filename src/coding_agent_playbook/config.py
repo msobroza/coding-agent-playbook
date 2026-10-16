@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from coding_agent_playbook.bundled_content import canonical_overlay_list
 from coding_agent_playbook.config_entries import (
     copy_toml_value,
     unmanaged_config_entries,
@@ -115,6 +116,30 @@ class Config:
     # ``playbook init`` can still write ``commit = false`` for discoverability.
     output: OutputConfig | None = None
     extra_tables: dict[str, Any] = field(default_factory=dict)
+    # The deprecated ``coding_agent_playbook.packs.*`` names ``overlays_enabled``
+    # was given (SPEC v0.19). Derived in ``__post_init__``; read only by
+    # ``SyncContext.from_repo``'s deprecation warning; never written by ``to_dict``.
+    deprecated_overlay_names: tuple[str, ...] = field(
+        default=(), init=False, compare=False, repr=False
+    )
+
+    def __post_init__(self) -> None:
+        """Rewrite deprecated ``packs`` names in ``overlays_enabled`` to ``plugins``.
+
+        Runs for ``from_dict``, direct construction and ``dataclasses.replace``
+        alike, so ``deprecated_overlay_names`` always matches the list it came
+        from. ``Config`` never prints; the warning is ``SyncContext.from_repo``'s.
+
+        Example::
+
+            >>> c = Config(1, ProjectMeta("x", "python-library"), "0.1",
+            ...            overlays_enabled=["coding_agent_playbook.packs.superpowers"])
+            >>> c.overlays_enabled, c.deprecated_overlay_names
+            (['coding_agent_playbook.plugins.superpowers'], ('coding_agent_playbook.packs.superpowers',))
+        """
+        canonical, deprecated = canonical_overlay_list(self.overlays_enabled)
+        self.overlays_enabled = canonical
+        self.deprecated_overlay_names = deprecated
 
     @property
     def commit_output(self) -> bool:

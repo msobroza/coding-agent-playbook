@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 __all__ = ["SinkChange", "SinkFinding", "range_changes", "run", "scan_changes", "shipped_table"]
 
 HOOK_ID: Final = "ml-unsafe-deserialization-guard"
-_HOOK_MD: Final = ("resources", "hooks", "feedback", HOOK_ID, "HOOK.md")
+_HOOK_MD: Final = ("hooks", "feedback", HOOK_ID, "HOOK.md")
 _SUFFIXES: Final = (".py", ".ipynb")
 
 type Status = Literal["blocking", "warn", "new_pragma"]
@@ -108,13 +108,16 @@ def run(args: argparse.Namespace, *, git: SafeGit | None = None) -> int:
 
 
 def shipped_table() -> SinkTable:
-    """The sink table of the engine's own ``HOOK.md`` (its ``handler.config``)."""
-    from importlib import resources
+    """The sink table of the engine's own ``HOOK.md`` (its ``handler.config``).
 
+    The ``HOOK.md`` is engine content (``content/core/hooks/``), found through
+    ``bundled_content``; a broken install raises ``BundledContentMissingError``.
+    """
+    from coding_agent_playbook.bundled_content import ENGINE_PACKAGE, engine_layer_root
     from coding_agent_playbook.types import Hook
 
-    path = Path(str(resources.files("coding_agent_playbook").joinpath(*_HOOK_MD)))
-    handler = Hook.from_markdown(path, "coding_agent_playbook").frontmatter.handler
+    path = engine_layer_root().joinpath(*_HOOK_MD)
+    handler = Hook.from_markdown(path, ENGINE_PACKAGE).frontmatter.handler
     return SinkTable.from_config({} if handler is None else handler.config)
 
 

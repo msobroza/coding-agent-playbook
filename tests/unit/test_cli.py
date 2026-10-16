@@ -2,10 +2,37 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import TYPE_CHECKING
+
 import pytest
 
-from coding_agent_playbook import __version__
+from coding_agent_playbook import __version__, bundled_content
 from coding_agent_playbook.cli import _SUBCOMMANDS, build_parser, main
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+
+def break_bundled_content(monkeypatch: pytest.MonkeyPatch, root: Path) -> str:
+    """Point the engine at an empty ``<root>/src/coding_agent_playbook``.
+
+    Neither content home exists then, as in a wheel whose force-include was
+    lost. Returns the exact stderr ``main`` must print: the packaged candidate
+    first, then the checkout one (the spec's missing-content error line).
+
+    Example::
+
+        expected = break_bundled_content(monkeypatch, tmp_path)
+    """
+    package_dir = root / "src" / "coding_agent_playbook"
+    package_dir.mkdir(parents=True)
+    monkeypatch.setattr(bundled_content, "_PACKAGE_DIR", package_dir)
+    return (
+        "error: the engine's bundled content was not found "
+        f"(looked in {package_dir / '_content'}, {root / 'content'}); "
+        "reinstall coding-agent-playbook\n"
+    )
 
 
 def test_version_flag_prints_name_and_version(capsys):
@@ -390,3 +417,49 @@ def test_main_translates_config_error_to_exit_2(monkeypatch, capsys):
     monkeypatch.setattr(sync_cmd, "run", raising_run)
     assert main(["sync"]) == 2
     assert capsys.readouterr().err == "error: x.toml: the [overlays] table is not read\n"
+
+
+def test_main_translates_missing_precommit_template_to_exit_2(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A broken install missing the pre-commit template exits 2 with no traceback."""
+    from coding_agent_playbook.commands import init as init_cmd
+
+    missing = Path("/broken/templates/precommit/config.yaml.j2")
+
+    def raising_run(args: object) -> int:
+        raise init_cmd.PrecommitTemplateMissingError(missing)
+
+    monkeypatch.setattr(init_cmd, "run", raising_run)
+    assert main(["init"]) == 2
+    assert capsys.readouterr().err == (
+        f"error: the engine's pre-commit template was not found at {missing}; "
+        "reinstall coding-agent-playbook\n"
+    )
+
+
+def test_sync_exits_2_when_bundled_content_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_synthetic_repo: Callable[..., Path],
+) -> None:
+    """A lookup miss used to render zero engine artifacts silently."""
+    expected = break_bundled_content(monkeypatch, tmp_path)
+    repo = make_synthetic_repo(tmp_path)
+
+    assert main(["sync", "--repo-root", str(repo)]) == 2
+    assert capsys.readouterr().err == expected
+
+
+def test_eval_list_exits_2_when_bundled_content_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_synthetic_repo: Callable[..., Path],
+) -> None:
+    expected = break_bundled_content(monkeypatch, tmp_path)
+    repo = make_synthetic_repo(tmp_path)
+
+    assert main(["eval", "--list", "--repo-root", str(repo)]) == 2
+    assert capsys.readouterr().err == expected

@@ -13,7 +13,8 @@ After an Edit or Write of ``**/eval_tasks/<id>/task.toml`` or its
    files, ``prompt_id`` and the prompt/task back-reference), keeping only
    errors anchored at this task. Prompts come from ``FileSystemArtifactSource``
    (engine, ``overlays_enabled`` from ``protected.resource_roots``, the task's
-   own ``resources/`` layer, repo-local). Errors are context, not a block: a
+   own layer — ``content/core/``, ``content/plugins/<name>/`` or an overlay
+   checkout's ``resources/`` — and repo-local). Errors are context, not a block: a
    task written before its setup files is normal;
 3. on the first clean compile per task per session, echoes ``playbook eval
    --show <id>`` (a child process: ``commands.eval`` imports jinja2), capped

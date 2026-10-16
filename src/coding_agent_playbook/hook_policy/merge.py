@@ -142,7 +142,7 @@ def split_hook_layers(
     """Split a source's flat hook list into ``(engine, overlays, repo_local)`` layers.
 
     The engine layer is ``source_package == engine_package`` exactly: a
-    bundled pack such as ``coding_agent_playbook.packs.superpowers`` is an
+    bundled plugin such as ``coding_agent_playbook.plugins.superpowers`` is an
     overlay. Overlays keep their first-appearance order, which
     ``FileSystemArtifactSource.layer_roots`` makes the resolution order.
 

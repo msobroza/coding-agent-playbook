@@ -45,6 +45,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.bundled_content import is_bundled_layer
 from coding_agent_playbook.evals.judge import JudgeError
 from coding_agent_playbook.evals.prompting import PromptResolutionError
 from coding_agent_playbook.evaluators.scope import Determinism
@@ -632,42 +633,28 @@ def _short_source(source_package: str) -> str:
 
 
 def _display_source_path(task: EvalTask) -> str:
-    """Format ``task.source_path`` for human reading on the ``Source:`` line.
+    """Label the task's directory for the ``Source:`` line, by its layer.
 
-    SPEC §12.8 shows the path as package-relative for engine/overlay tasks
-    (``coding_agent_playbook/resources/eval_tasks/<id>/``) and repo-relative
-    for repo-local tasks (``playbook/eval_tasks/<id>/``). Absolute
-    filesystem paths would leak the local workspace layout into the output,
-    which is both noisy and unhelpful — package-relative paths are the
-    canonical reference users grep for when jumping to the task source.
+    SPEC §12.8 shows a layer-relative path, never the absolute filesystem path,
+    which would leak the local workspace layout into the output. The label is
+    built from the layer kind and ``<dir>``, the task directory's name
+    (``task.source_path.parent.name``, never ``task.id``, which nothing ties to
+    the directory). No path segment is searched for, so an unusual layout can
+    neither crash ``playbook eval --show`` nor change the label:
 
-    Strategy:
+    - bundled layers (engine, bundled plugins): ``<source_package>/eval_tasks/<dir>/``;
+    - third-party overlays: ``<source_package>/resources/eval_tasks/<dir>/``,
+      still a real package-relative path;
+    - repo-local tasks: ``playbook/eval_tasks/<dir>/``.
 
-    - For engine/overlay sources (any ``source_package`` other than
-      ``"<repo-local>"``), find the ``resources/`` segment in the path and
-      prefix the parts from there with the package name.
-    - For repo-local sources, find the ``playbook/`` segment and emit the
-      path starting from there.
-    - If the expected segment is missing (e.g. unusual layout, or the source
-      was constructed by a non-filesystem implementation), fall back to the
-      task directory's basename prefixed with the package name so the output
-      is still attributable. Never raise — ``playbook eval --show`` should never
-      crash on a path-formatting issue.
-
-    The trailing ``/`` is appended so the output always reads as a directory
-    (matching the SPEC example).
+    The trailing ``/`` makes the label read as a directory (the SPEC example).
     """
-    parts = task.source_path.parent.parts
+    task_dir = task.source_path.parent.name
     if task.source_package == "<repo-local>":
-        if "playbook" in parts:
-            idx = parts.index("playbook")
-            return str(Path(*parts[idx:])) + "/"
-        return task.source_path.parent.name + "/"
-    # Engine or overlay package.
-    if "resources" in parts:
-        idx = parts.index("resources")
-        return f"{task.source_package}/" + str(Path(*parts[idx:])) + "/"
-    return f"{task.source_package}/{task.source_path.parent.name}/"
+        return f"playbook/eval_tasks/{task_dir}/"
+    if is_bundled_layer(task.source_package):
+        return f"{task.source_package}/eval_tasks/{task_dir}/"
+    return f"{task.source_package}/resources/eval_tasks/{task_dir}/"
 
 
 def _count_gate_checks(task: EvalTask) -> int:

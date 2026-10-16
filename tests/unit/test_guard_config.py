@@ -70,6 +70,7 @@ from coding_agent_playbook.security.patterns import (
     SECRET_RULESET_VERSION,
 )
 from coding_agent_playbook.types import Prompt, PromptFrontmatter, Rule, RuleFrontmatter
+from tests._content import CORE_ROOT, plugin_root
 from tests.hook_samples import resolved_from_disk, resolved_hook, sample_hook
 from tests.hooks.pack_repo import resolve_engine_hooks
 
@@ -83,7 +84,7 @@ if TYPE_CHECKING:
 _PROTECT = ProtectInputs(
     entries=(),
     output_dirs=(".claude/commands/", "AGENTS.md"),
-    packages=("coding_agent_playbook", "coding_agent_playbook.packs.superpowers"),
+    packages=("coding_agent_playbook", "coding_agent_playbook.plugins.superpowers"),
 )
 
 
@@ -314,13 +315,13 @@ def test_protected_output_dirs_match_adapter_stale_scan_dirs(tmp_path: Path) -> 
 
 
 def test_resource_roots_are_package_relative_ids() -> None:
-    packages = ("coding_agent_playbook", "coding_agent_playbook.packs.superpowers")
+    packages = ("coding_agent_playbook", "coding_agent_playbook.plugins.superpowers")
 
     table = render_guard_config(_inputs([]))["protected"]
 
     assert resource_root_ids(packages) == [
         "pkg:coding_agent_playbook/resources",
-        "pkg:coding_agent_playbook.packs.superpowers/resources",
+        "pkg:coding_agent_playbook.plugins.superpowers/resources",
     ]
     assert table["resource_roots"] == resource_root_ids(packages)
     assert table["hook_artifacts"] == list(HOOK_ARTIFACTS)
@@ -330,6 +331,27 @@ def test_resource_roots_are_package_relative_ids() -> None:
         ".opencode/plugins/playbook-hooks.js",
     ]
     assert table["output_dirs"] == [".claude/commands/", "AGENTS.md"]
+
+
+def test_bundled_layers_resolve_to_their_content_dirs_never_importing() -> None:
+    """The engine and a bundled plugin resolve through ``bundled_content`` (SPEC v0.19):
+    the ids keep their ``resources`` spelling, the paths are the layers' content dirs,
+    and an unknown plugin leaf is left out like an unimportable overlay."""
+    from coding_agent_playbook._guard_config_protect import resolve_resource_roots
+
+    roots = resolve_resource_roots(
+        [
+            "coding_agent_playbook",
+            "coding_agent_playbook.plugins.superpowers",
+            "coding_agent_playbook.plugins.no_such_plugin",
+            "json",  # importable, ships no resources/
+        ]
+    )
+
+    assert roots == {
+        "pkg:coding_agent_playbook/resources": str(CORE_ROOT),
+        "pkg:coding_agent_playbook.plugins.superpowers/resources": str(plugin_root("superpowers")),
+    }
 
 
 def test_sentinel_key_is_renderer_sentinel() -> None:

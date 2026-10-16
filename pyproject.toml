@@ -117,6 +117,7 @@ packages = ["src/coding_agent_playbook"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/coding_agent_playbook/py.typed" = "coding_agent_playbook/py.typed"
+"content" = "coding_agent_playbook/_content"
 
 # --- Ruff (lint + format) ---
 
@@ -125,8 +126,8 @@ target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
 # A vendored opt-in pack (SPEC §11.5: superpowers) ships upstream text that must
-# stay byte-faithful to its source, so ruff never lints or reformats its
-# resources/. The distilled python_design pack (SPEC §11.5.2) is our own code:
+# stay byte-faithful to its source, so ruff never lints or reformats any of its
+# files. The distilled python_design pack (SPEC §11.5.2) is our own code:
 # its stdlib scripts ARE linted and formatted. Only its markdown is excluded,
 # because newer, unpinned ruff versions also reformat code blocks inside
 # markdown (CI has gone red on that before), and its fenced examples include
@@ -135,16 +136,16 @@ src = ["src", "tests"]
 # find-injected-vuln-* bugs live there), so `ruff check --fix` / `ruff format`
 # must never rewrite them either (specs/prK-lifecycle-hooks.md §P9).
 extend-exclude = [
-    "src/coding_agent_playbook/packs/superpowers/resources",
-    "src/coding_agent_playbook/packs/python_design/resources/**/*.md",
-    "src/coding_agent_playbook/resources/eval_tasks/*/setup",
+    "content/plugins/superpowers",
+    "content/plugins/python_design/**/*.md",
+    "content/core/eval_tasks/*/setup",
 ]
 # Pre-commit and the hook/Stop stages pass explicit paths, and ruff ignores the
 # excludes above for an explicitly passed path unless force-exclude is set.
 force-exclude = true
 # Skill scripts run in consumer repos on Python 3.10+, so pyupgrade must not
 # suggest 3.12-only syntax there (PEP 695 aliases/generics).
-per-file-target-version = { "src/coding_agent_playbook/packs/*/resources/skills/*/scripts/*.py" = "py310" }
+per-file-target-version = { "content/plugins/*/skills/*/scripts/*.py" = "py310" }
 
 [tool.ruff.lint]
 select = [
@@ -175,22 +176,6 @@ namespace_packages = true
 explicit_package_bases = true
 mypy_path = "src"
 files = ["src", "tests"]
-# Eval-task fixtures ship intentionally-standalone app code under `setup/`. Each
-# fixture is materialized into its own scratch repo at run time, so its intra-tree
-# imports (e.g. `from app.db import ...`) resolve there but have no package base in
-# this source tree, and the code is deliberately un-annotated needle material. It
-# is test *data*, not library code, so it must not gate the strict type-check.
-# `solution/` holds each task's reference agent edits (overlaid on `setup/` by the
-# gate-proof test), so it is the same kind of data.
-# A pack skill's `scripts/` (and `references/`) live under hyphenated skill dirs
-# (`python-design-review/`), which are not valid package paths, and the scripts
-# are standalone Python 3.10 programs: tests/packs/python_design/test_pack.py runs
-# `mypy --strict --python-version 3.10` on each script by path instead.
-exclude = [
-    'resources/eval_tasks/.*/setup/',
-    'resources/eval_tasks/.*/solution/',
-    'packs/.*/resources/skills/.*/(scripts|references)/',
-]
 
 [[tool.mypy.overrides]]
 module = "tests.*"

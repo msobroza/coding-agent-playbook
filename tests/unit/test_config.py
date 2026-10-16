@@ -494,9 +494,13 @@ def _fields_left_at_default(obj: Any, prefix: str = "") -> list[str]:
     """Dotted names of ``obj``'s dataclass fields (nested ones too) still at their default.
 
     Required fields (no default) never count: ``from_dict`` cannot leave them out.
+    Derived diagnostics (``compare=False``, e.g. ``deprecated_overlay_names``) never
+    count either: they are computed from other fields and never written.
     """
     left: list[str] = []
     for spec in dataclasses.fields(obj):
+        if not spec.compare:
+            continue
         value = getattr(obj, spec.name)
         name = f"{prefix}{spec.name}"
         if dataclasses.is_dataclass(value):
@@ -519,6 +523,32 @@ def test_full_fixture_sets_every_config_field_off_its_default() -> None:
     key fills: it carries the unmanaged entries (P6), so ``_FULL`` leaves it empty.
     """
     assert _fields_left_at_default(Config.from_dict(dict(_FULL))) == ["extra_tables"]
+
+
+def test_config_canonicalizes_deprecated_overlays() -> None:
+    """``coding_agent_playbook.packs.<leaf>`` is a deprecated alias (SPEC v0.19).
+
+    ``__post_init__`` rewrites it, so ``from_dict``, direct construction and
+    ``dataclasses.replace`` agree; the rewritten names are a derived diagnostic
+    that is never written back.
+    """
+    c = Config.from_dict(
+        {
+            **_FULL,
+            "overlays_enabled": [
+                "coding_agent_playbook.packs.x",
+                "coding_agent_playbook.plugins.x",
+            ],
+        }
+    )
+    assert c.overlays_enabled == [
+        "coding_agent_playbook.plugins.x",
+        "coding_agent_playbook.plugins.x",
+    ]
+    assert c.deprecated_overlay_names == ("coding_agent_playbook.packs.x",)
+    assert "deprecated_overlay_names" not in c.to_dict()
+    assert set(c.to_dict()) == CONFIG_MANAGED_KEYS
+    assert dataclasses.replace(c, overlays_enabled=["a"]).deprecated_overlay_names == ()
 
 
 def test_config_managed_keys_are_exactly_what_to_dict_writes() -> None:

@@ -1,6 +1,6 @@
 """The safety pack as shipped (specs/prK-hook-pack.md §E.0.6, §E.4, §E.5, Tracks K8-K9).
 
-Every ``resources/hooks/safety/<id>/HOOK.md`` matches its §E.0.6 row (tier,
+Every ``content/core/hooks/safety/<id>/HOOK.md`` matches its §E.0.6 row (tier,
 events, decisions, ``on_error``, ``supports``), passes the H1-H21 contract in a
 config-less ``playbook validate`` with no warning, and binds builtins (one per
 event for the hooks with companions) that declare their config keys (a

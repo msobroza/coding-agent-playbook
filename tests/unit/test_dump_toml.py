@@ -47,7 +47,7 @@ def _representative_config() -> Config:
             description='Say "hi"\tto\nC:\\x and \x00',
         ),
         engine_version="0.17.0",
-        overlays_enabled=["playbook_rules_bnp", "coding_agent_playbook.packs.superpowers"],
+        overlays_enabled=["playbook_rules_bnp", "coding_agent_playbook.plugins.superpowers"],
         adapters_enabled=["continue", "claude_code", "opencode", "shared_skills"],
         storage=StorageConfig(),
         detector_cache={
@@ -66,7 +66,7 @@ def _representative_config() -> Config:
 
 _GOLDEN_CONFIG = (
     "schema_version = 1\n"
-    'overlays_enabled = ["playbook_rules_bnp", "coding_agent_playbook.packs.superpowers"]\n'
+    'overlays_enabled = ["playbook_rules_bnp", "coding_agent_playbook.plugins.superpowers"]\n'
     'adapters_enabled = ["continue", "claude_code", "opencode", "shared_skills"]\n'
     "\n"
     "[project]\n"

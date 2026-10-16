@@ -123,9 +123,9 @@ def test_resolve_hooks_hands_its_schemas_to_the_merge():
 def test_bundled_pack_hook_is_an_overlay_layer():
     """A bundled pack's package name starts with the engine's; it is still an overlay."""
     engine = _make_hook("guard-x", ENGINE_PACKAGE)
-    pack = _make_hook("guard-x", "coding_agent_playbook.packs.x")
+    pack = _make_hook("guard-x", "coding_agent_playbook.plugins.x")
     other = _make_hook("guard-y", "acme")
-    pack_y = _make_hook("guard-y", "coding_agent_playbook.packs.x")
+    pack_y = _make_hook("guard-y", "coding_agent_playbook.plugins.x")
     repo = _make_hook("guard-x", "<repo-local>")
 
     layers = split_hook_layers([engine, pack, pack_y, other, repo], engine_package=ENGINE_PACKAGE)

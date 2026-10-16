@@ -33,7 +33,7 @@ from coding_agent_playbook.hook_runtime.harness.opencode import (
     V1_ARG_ALIASES,
     render_opencode,
 )
-from coding_agent_playbook.resources.hook_shims.opencode_wire_port import (
+from coding_agent_playbook.templates.hook_shims.opencode_wire_port import (
     CAP,
     DEFAULT_REASON,
     PARSE_JS_SHA256,
@@ -190,7 +190,7 @@ def test_inactive_warns_once_per_process() -> None:
 
 def test_port_is_pinned_to_template_parse_slice() -> None:
     assert slice_sha256(_TEMPLATE) == PARSE_JS_SHA256, (
-        "parse() in resources/hook_shims/opencode-plugin.js changed: review "
+        "parse() in templates/hook_shims/opencode-plugin.js changed: review "
         "opencode_wire_port.py line for line, then update PARSE_JS_SHA256"
     )
 

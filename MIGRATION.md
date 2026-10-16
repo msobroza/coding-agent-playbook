@@ -1,8 +1,8 @@
 # Migration guide
 
-> **Heads-up:** **v0.18** (assistant lifecycle hooks, below) asks one thing of every
+> **Heads-up:** **v0.20** (assistant lifecycle hooks, below) asks one thing of every
 > consumer: run `playbook validate` before upgrading, because `playbook sync` now
-> refuses content that validate rejects. Everything else in v0.18 is opt-in or a
+> refuses content that validate rejects. Everything else in v0.20 is opt-in or a
 > one-time diff; its TL;DR says who must act.
 >
 > Older: the **v0.13 task-config redesign** supersedes parts of the
@@ -12,16 +12,16 @@
 > `Normalizer`. Read the v0.13 section before the v0.12 one; the v0.12 section still
 > applies to the engine `Metric`/`Check`/`Rubric` API and the entry-point group renames.
 
-## v0.18 — Assistant lifecycle hooks (PR K)
+## v0.20 — Assistant lifecycle hooks (PR K)
 
-v0.18 adds **lifecycle hooks**, the fourth canonical kind: rendered natively for
+v0.20 adds **lifecycle hooks**, the fourth canonical kind: rendered natively for
 Claude Code and OpenCode and as advisory text for every other assistant, and run
 by one dispatcher, `playbook-hook` (README "Assistant lifecycle hooks", SPEC
 §6.6.7). It also adds the off-workstation checks behind them (`playbook ci`,
 `scan-secrets`, `gate-scan`, …), new pre-commit hooks and new opt-in metrics.
 Hooks are opt-in: a repo that does not enable them renders what it rendered
 before. Authoritative design: `specs/prK-lifecycle-hooks.md` and
-`specs/prK-hook-pack.md`; the SPEC changelog entry is v0.18.
+`specs/prK-hook-pack.md`; the SPEC changelog entry is v0.20.
 
 ### TL;DR — who needs to do anything
 
@@ -33,7 +33,8 @@ before. Authoritative design: `specs/prK-lifecycle-hooks.md` and
 | A **`playbook metrics`** user | The engine's pre-commit hook: nothing. An `init`-written `repo: local` hook with `[metrics] run_tests = true`: add `--no-run-tests` (§5). `--run-tests` with a `git:` baseline now also grades `diff_coverage` (§7). |
 | Code calling **`CoverageCheck(warn=80.0)`** | Pass the 0–1 cutoff, `warn=0.8` (§6). |
 | A repo whose **dependency names** use `_`, `.` or capitals | Commit the one-time `[detector_cache]` change (§8). |
-| An **overlay author** | Nothing required. Overlays may now ship hooks, which only add to the engine's (SPEC §11.6), and `playbook validate` runs in an overlay checkout with no consumer config (§2). |
+| An **overlay author** | Nothing required. Overlays may now ship hooks under `<pkg>/resources/hooks/`, which only add to the engine's (SPEC §11.6), and `playbook validate` runs in an overlay checkout with no consumer config (§2). |
+| An **engine content contributor** | The engine's hooks are content: `content/core/hooks/<category>/<id>/HOOK.md`, and a bundled plugin may ship `content/plugins/<name>/hooks/` (`content/README.md`). The launcher and OpenCode shim templates are engine wiring and stay in `src/coding_agent_playbook/templates/hook_shims/`. |
 | An **out-of-tree adapter** author | Nothing required; read §10 (the hook members, and `stale_outputs` over `cleanup_stale`). |
 
 ### 1. Lockfile schema 2
@@ -64,18 +65,19 @@ its contract) never reaches disk. A repo whose content fails validate today
 stops syncing on upgrade, the post-checkout auto-sync included, and its
 generated output goes stale until the content is fixed. So run
 `playbook validate` with your current engine and fix every `FAIL` before you
-bump; after the bump, run it once more before the first sync, since v0.18 adds
+bump; after the bump, run it once more before the first sync, since v0.20 adds
 the hook rules H1–H21 (SPEC §12.6). Warnings never stop a sync, and
 `playbook sync --check-staged` (the pre-commit guard) is not gated.
 
 `playbook validate` also runs without a `.coding-agent-playbook.toml` now: in an
-engine or overlay checkout it validates the package's own `resources/` and
-`playbook/`, and first names the consumer-config checks it skips.
+engine or overlay checkout it validates the engine's content, the checkout's own
+`src/<pkg>/resources/` and `playbook/`, and first names the consumer-config
+checks it skips.
 
 ### 3. `[hooks]`: opt in through `playbook init`, or not at all
 
 An engine upgrade never enables hooks. Without a `[hooks]` table every mode of
-`playbook sync` renders byte for byte what v0.17 rendered, and write mode prints
+`playbook sync` renders byte for byte what v0.19 rendered, and write mode prints
 one line:
 
 ```text
@@ -233,7 +235,7 @@ entry-point group) that override `cleanup_stale`. Rule/prompt/skill authors and
 built-in adapter users need nothing.
 
 ```python
-# before (SPEC §10.1 up to v0.17)
+# before (SPEC §10.1 up to v0.19)
 def cleanup_stale(self, written_paths, repo_root):
     return self._default_cleanup(written_paths, repo_root)
 
@@ -249,6 +251,173 @@ An adapter that still overrides only `cleanup_stale` keeps working in write mode
 reports no sentinel orphans for it. Scan helpers to reuse: `_stale_by_sentinel`
 (the default), `_scan_targets` (each file once, never a symlink or a secret path)
 and `_carries_sentinel` (bounded, anchored sentinel check).
+
+## v0.19 — Bundled content moves to `content/`; packs become bundled plugins
+
+The engine's own rules, prompts, eval tasks and skills move out of the Python
+package into a top-level `content/` tree, and the opt-in **packs** are renamed
+**bundled plugins**. Rendered output is unchanged, and old names keep working
+with a warning. Authoritative design: `specs/prC-content-extraction.md`.
+
+### TL;DR — who needs to do anything
+
+| You are… | Migration |
+|---|---|
+| A **consumer** with `coding_agent_playbook.packs.<name>` in `overlays_enabled` | **Nothing breaks.** Rename it to `coding_agent_playbook.plugins.<name>` when convenient to silence the warning (below). |
+| A **consumer** without bundled plugins | **Nothing.** |
+| Code that imports **`coding_agent_playbook.packs`** or **`PACK_NAME`** | Use the dotted string instead (no shim). |
+| An **overlay author** (`<pkg>/resources/…`) | **Nothing.** The overlay contract is unchanged. |
+| An **engine content contributor** | Edit under `content/` instead of `src/coding_agent_playbook/resources/` or `packs/<name>/resources/`. See `content/README.md`. |
+| A **script that parses `playbook eval --show`** | The bundled `Source:` label lost its `resources/` segment (below). |
+
+### 1. `packs` → bundled plugins, and the deprecated alias
+
+| Old | New |
+|---|---|
+| `coding_agent_playbook.packs.superpowers` | `coding_agent_playbook.plugins.superpowers` |
+| `coding_agent_playbook.packs.python_design` | `coding_agent_playbook.plugins.python_design` |
+| `src/coding_agent_playbook/resources/…` | `content/core/…` |
+| `src/coding_agent_playbook/packs/<name>/resources/skills/…` | `content/plugins/<name>/skills/…` |
+| `src/coding_agent_playbook/packs/<name>/{LICENSE,ATTRIBUTIONS.md}` | `content/plugins/<name>/{LICENSE,ATTRIBUTIONS.md}` (plus a new `README.md`) |
+| `src/coding_agent_playbook/resources/precommit/config.yaml.j2` | `src/coding_agent_playbook/templates/precommit/config.yaml.j2` |
+
+```toml
+# .coding-agent-playbook.toml — before
+overlays_enabled = ["coding_agent_playbook.packs.superpowers"]
+
+# after
+overlays_enabled = ["coding_agent_playbook.plugins.superpowers"]
+```
+
+- **The old spelling is a deprecated alias.** `coding_agent_playbook.packs.<name>`
+  is rewritten to `coding_agent_playbook.plugins.<name>` when the config loads, so
+  it renders exactly as before and causes no `sync --check` drift (the lockfile
+  stores only paths and hashes). Diagnostics (`check`, `render`, `eval` labels,
+  collisions) print the new name.
+- **The alias stays through 0.x.** Its removal will be announced in this file one
+  release ahead.
+- **Nothing rewrites the committed file for you.** A deprecated name stays in
+  `.coding-agent-playbook.toml` until you re-run `playbook init` with
+  `--overlays …` (it writes the new names, on a first run and on a re-run) or edit
+  the file. `sync` never rewrites the config, and `check --refresh` writes the
+  name back as it was parsed. `.coding-agent-playbook.local.toml` is never
+  rewritten by any command: edit it by hand.
+- **Bundled plugins are pure content.** A plugin is just the directory
+  `content/plugins/<name>/`, with no Python file. Both namespaces,
+  `coding_agent_playbook.plugins.*` and `coding_agent_playbook.packs.*`, are
+  reserved for bundled plugins.
+
+### 2. The new warning lines
+
+Every command that loads the config (`sync`, `check`, `validate`, `render`,
+`eval`, and `init`'s final sync) prints exactly one stderr line per deprecated
+name. `<file>` is `.coding-agent-playbook.local.toml` when that file sets
+`overlays_enabled`, else `.coding-agent-playbook.toml`:
+
+```text
+warning: <file>: overlays_enabled: '<old>' is deprecated; use '<new>'
+warning: .coding-agent-playbook.toml: overlays_enabled: 'coding_agent_playbook.packs.superpowers' is deprecated; use 'coding_agent_playbook.plugins.superpowers'
+```
+
+`playbook init --overlays coding_agent_playbook.packs.<name>` accepts the old
+name, writes the new one, and prints once per deprecated argument, after its
+overlay check passes:
+
+```text
+warning: --overlays: '<old>' is deprecated; use '<new>'
+```
+
+These are plain `warning:` lines on stderr, not a Python `DeprecationWarning`,
+and the exit code is unchanged.
+
+### 3. Removed with no shim: `coding_agent_playbook.packs` and `PACK_NAME`
+
+The `coding_agent_playbook.packs` package, its `coding_agent_playbook.packs.<name>`
+subpackages and their `PACK_NAME` constants are deleted. There is no import shim,
+because a bundled plugin no longer has any Python module. Use the dotted string
+instead:
+
+```python
+# before
+# from coding_agent_playbook.packs.superpowers import PACK_NAME
+
+# after
+PLUGIN_NAME = "coding_agent_playbook.plugins.superpowers"
+```
+
+### 4. New preflight reasons and hint
+
+A bundled-plugin name in `overlays_enabled` is now checked against
+`content/plugins/<name>/` and never imported. `sync`, `validate`, `check` and
+`init` report it with new texts:
+
+| Entry | Before | Now |
+|---|---|---|
+| Unknown plugin, e.g. `coding_agent_playbook.plugins.superpower` | `not importable` | `no such bundled plugin` |
+| The bare namespace `coding_agent_playbook.plugins` or `coding_agent_playbook.packs` | `importable, but ships no resources/ directory, …` (for `…packs`) | `the bundled plugin namespace, not a plugin` |
+| Hint for a plugin-like typo | ` (bundled packs: …)` | ` (bundled plugins: <comma-separated sorted dotted names>)` |
+
+```text
+coding_agent_playbook.plugins.superpower: no such bundled plugin (bundled plugins: coding_agent_playbook.plugins.python_design, coding_agent_playbook.plugins.superpowers)
+```
+
+In `overlays_enabled`, a typo under the old namespace prints the deprecation
+warning (recommending the new spelling) and then this error for the new
+spelling. `init --overlays` warns only after its check passes, so it reports
+such a typo under the new spelling alone. Overlay packages keep their reasons
+(`not importable`, with the import error when there is one, or no `resources/`
+directory).
+
+The refusal headers now call each entry an overlay package or bundled plugin:
+
+| Command | Before | Now |
+|---|---|---|
+| `sync` | `error: overlay package(s) in overlays_enabled are not usable here:` | `error: overlay package(s) or bundled plugin(s) in overlays_enabled are not usable here:` |
+| `init` | `error: --overlays names package(s) that cannot be used as overlays here; nothing was written:` | `error: --overlays names overlay package(s) or bundled plugin(s) that cannot be used here; nothing was written:` |
+
+### 5. The bundled `eval --show` label
+
+The `Source:` line of `playbook eval --show` is built from the task's layer:
+
+| Layer | Before | Now |
+|---|---|---|
+| Engine and bundled plugins | `coding_agent_playbook/resources/eval_tasks/<dir>/` | `<source_package>/eval_tasks/<dir>/`, e.g. `coding_agent_playbook/eval_tasks/<dir>/` |
+| Third-party overlay | `<pkg>/resources/eval_tasks/<dir>/` | unchanged |
+| Repo-local | `playbook/eval_tasks/<dir>/` | unchanged |
+
+`<dir>` is the task directory's name, never the task id. Related fix: a
+repo-local task under `playbook/eval_tasks/` now finds its prompt in
+`playbook/prompts/` (it never found one before).
+
+Caveat: when `playbook eval` renders a repo-local prompt, its
+`{{ rule("<id>") }}` includes resolve only the engine's rules and the task's own
+`setup/playbook/rules/`. A repo-local prompt that includes a rule from your
+`playbook/rules/` or from an overlay renders that rule as empty text during
+`playbook eval`, while `playbook sync` writes the full body. Widening that scope
+is a follow-up.
+
+### 6. A broken install fails loudly
+
+If the engine's bundled content cannot be found, every command that loads it
+(`init`, `sync`, `check`, `validate`, `render`, `eval`) now exits 2 with:
+
+```text
+error: the engine's bundled content was not found (looked in <a>, <b>); reinstall coding-agent-playbook
+```
+
+`--version`, `metrics`, `validate-harness` and `import-harness` never look for
+the content, so they still run. Before, a lookup miss silently rendered zero
+engine artifacts. If you build the engine yourself, build releases from the
+sdist (`uv build` or `python -m build`), never with `--wheel`: the wheel copies
+`content/` in with a force-include that ignores `.gitignore`.
+
+### Not changed (v0.19)
+
+- The third-party overlay contract: `<pkg>/resources/{rules,prompts,skills,eval_tasks}`
+  and the entry-point groups.
+- Rendered output, the lockfile format and the generated file set, for both the
+  old and the new plugin names.
+- `pip install coding-agent-playbook`: still one wheel, with the content inside.
 
 ## v0.13 — Task config v2 (gate / rubric / verdict / aggregate)
 

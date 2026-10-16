@@ -5,10 +5,11 @@ An engine or overlay checkout has no ``.coding-agent-playbook.toml``, so
 overlay authors could not validate their own artifacts. Config-less validate
 walks three layers instead:
 
-- the engine package;
+- the engine (its bundled ``content/core/``);
 - the checkout's own ``<root>/src/<pkg>/resources/`` (an overlay checkout),
-  minus the engine package's resources — in the engine checkout that path IS
-  the engine package, which would otherwise be walked twice;
+  minus the engine package's own ``resources/``: the engine ships its content
+  in ``content/`` since v0.19, but a checkout whose ``src/<pkg>`` resolves to an
+  engine package with a ``resources/`` tree would otherwise walk it twice;
 - ``<root>/playbook/``.
 
 Installed overlays are not discovered: overlays resolve by package name from

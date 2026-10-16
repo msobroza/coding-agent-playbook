@@ -10,10 +10,17 @@ from __future__ import annotations
 
 import dataclasses
 import sys
+from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from coding_agent_playbook import __version__ as _engine_version
+from coding_agent_playbook.bundled_content import (
+    ENGINE_PACKAGE,
+    bundled_content_root,
+    canonical_overlay_list,
+    canonical_overlay_name,
+)
 from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands._committed_config import (
@@ -26,7 +33,7 @@ from coding_agent_playbook.commands._precommit_merge import merge_pre_commit
 from coding_agent_playbook.config import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.detector import detect
 from coding_agent_playbook.renderer import build_environment, render_artifact_body
-from coding_agent_playbook.sources.filesystem import FileSystemStateSource, _resource_subdir
+from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 
 if TYPE_CHECKING:
     import argparse
@@ -339,12 +346,54 @@ def _append_to_gitignore(repo_root: Path) -> Path:
     return gitignore
 
 
+_PRECOMMIT_TEMPLATE_NAME = "config.yaml.j2"
+
+
+class PrecommitTemplateMissingError(RuntimeError):
+    """The engine's packaged pre-commit template is not where the install put it.
+
+    ``path`` is the template file that was expected. An explicit error, not an
+    ``assert``: ``python -O`` strips asserts, which would turn a broken install
+    into a confusing failure deep inside the renderer.
+    """
+
+    def __init__(self, path: Path) -> None:
+        super().__init__(
+            f"the engine's pre-commit template was not found at {path}; "
+            "reinstall coding-agent-playbook"
+        )
+        self.path = path
+
+
+def precommit_template_dir(templates_root: Path | None = None) -> Path:
+    """Return the directory holding the engine's pre-commit template.
+
+    The template is engine wiring, not playbook content (its hook ids are
+    duplicated in ``_precommit_merge``), so it lives in the package's
+    ``templates/precommit/`` rather than the bundled content. ``templates_root``
+    defaults to the engine's ``templates/``; tests pass another root. Raises
+    :class:`PrecommitTemplateMissingError` when the directory or
+    ``config.yaml.j2`` is missing.
+
+    Example::
+
+        >>> (precommit_template_dir() / "config.yaml.j2").is_file()
+        True
+    """
+    if templates_root is None:
+        templates_root = Path(str(resources.files(ENGINE_PACKAGE) / "templates"))
+    template_dir = templates_root / "precommit"
+    if not (template_dir / _PRECOMMIT_TEMPLATE_NAME).is_file():
+        raise PrecommitTemplateMissingError(template_dir / _PRECOMMIT_TEMPLATE_NAME)
+    return template_dir
+
+
 def _render_fresh_pre_commit(
     *, output_commit: bool = False, commit_trailers: bool = False, commitizen: bool = False
 ) -> str:
     """Render the packaged starter ``.pre-commit-config.yaml`` template.
 
-    The template (``resources/precommit/config.yaml.j2``) is air-gapped: every
+    The template (``templates/precommit/config.yaml.j2``) is air-gapped: every
     hook is ``repo: local`` + ``language: system`` so pre-commit never clones a
     remote hook repo. ``output_commit`` (the ``[output] commit`` policy) selects
     the playbook hooks: the legacy drift check for ``true``; the post-checkout /
@@ -362,9 +411,8 @@ def _render_fresh_pre_commit(
         >>> "--check-staged" in _render_fresh_pre_commit()
         True
     """
-    precommit_dir = _resource_subdir("coding_agent_playbook", "precommit")
-    assert precommit_dir is not None, "packaged resources/precommit/ is missing"
-    template_path = precommit_dir / "config.yaml.j2"
+    precommit_dir = precommit_template_dir()
+    template_path = precommit_dir / _PRECOMMIT_TEMPLATE_NAME
     env = build_environment([precommit_dir])
     env.globals["_facts"] = {}
     variables = {
@@ -463,11 +511,30 @@ def _refuse_unusable_overlays(overlays: list[str], origin: str) -> bool:
         return False
     listed = "".join(f"\n  {problem}" for problem in unusable)
     print(
-        f"error: {origin} names package(s) that cannot be used as overlays here; "
-        f"nothing was written:{listed}",
+        f"error: {origin} names overlay package(s) or bundled plugin(s) that cannot be used "
+        f"here; nothing was written:{listed}",
         file=sys.stderr,
     )
     return True
+
+
+def _warn_deprecated_flag_overlays(deprecated: tuple[str, ...]) -> None:
+    """Print one stderr ``warning: --overlays:`` line per distinct deprecated name.
+
+    ``deprecated`` is what ``canonical_overlay_list`` rewrote in ``--overlays``
+    (SPEC v0.19). The local file's list is not warned about here: init's final
+    sync goes through ``SyncContext.from_repo``, which does that.
+
+    Example::
+
+        >>> _warn_deprecated_flag_overlays(deprecated)  # doctest: +SKIP
+        warning: --overlays: '<old>' is deprecated; use '<new>'
+    """
+    for old in dict.fromkeys(deprecated):
+        print(
+            f"warning: --overlays: '{old}' is deprecated; use '{canonical_overlay_name(old)}'",
+            file=sys.stderr,
+        )
 
 
 def run(args: argparse.Namespace) -> int:
@@ -479,18 +546,27 @@ def run(args: argparse.Namespace) -> int:
     ``ConfigError``) a config file the engine would misread. Both files are read
     and checked here — the local one on its own, the committed one on its own,
     then the config the final sync will load (:func:`_plan_config`) — so a broken
-    file of either kind leaves the repo untouched.
+    file of either kind leaves the repo untouched. A broken install exits 2
+    before writing too: :func:`bundled_content_root` raises
+    ``BundledContentMissingError`` when the engine's bundled content is missing,
+    and ``cli.main`` reports it. A deprecated
+    ``coding_agent_playbook.packs.*`` name in ``--overlays`` is written in its
+    canonical ``plugins`` spelling (on a re-run too: the migration path for the
+    committed file) and warned about once the overlay preflight passes.
     """
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     answers = _collect_answers(args)
+    answers["overlays"], deprecated_flags = canonical_overlay_list(answers["overlays"])
     state = FileSystemStateSource(repo_root=repo_root)
     local = state.load_local_overrides()
+    bundled_content_root()  # a broken install raises here: never a half-initialized repo
     refused = [
         _refuse_unusable_overlays(overlays, origin)
         for overlays, origin in _overlay_lists_to_check(answers, local)
     ]
     if any(refused):
         return 2
+    _warn_deprecated_flag_overlays(deprecated_flags)
     plan = _plan_config(state, repo_root, answers)
 
     # Nothing is written above this line.

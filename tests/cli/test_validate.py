@@ -16,6 +16,7 @@ import coding_agent_playbook
 from coding_agent_playbook.commands import _validate_context
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
+from tests._content import CORE_ROOT
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -285,7 +286,7 @@ def test_shipped_prompt_contracts_compile() -> None:
 
     from coding_agent_playbook.types import Prompt
 
-    root = Path(coding_agent_playbook.__file__).parent / "resources" / "prompts"
+    root = CORE_ROOT / "prompts"
     contracts = {
         path.name.split(".")[0]: Prompt.from_markdown(path, "pkg").frontmatter.output_contract
         for path in sorted(root.glob("*.md*"))
@@ -513,9 +514,10 @@ def test_checkout_resource_roots_without_src_is_empty(tmp_path):
 
 @pytest.mark.skipif(sys.platform == "win32", reason="needs a directory symlink")
 def test_config_less_context_in_the_engine_checkout_walks_the_engine_once(tmp_path, capsys):
-    """In the engine repo ``src/coding_agent_playbook/resources`` IS the engine
-    package: without the resolved-path dedupe every engine artifact was walked
-    twice, colliding with itself and reporting each finding twice."""
+    """A checkout whose ``src/coding_agent_playbook`` IS the engine package walks
+    the engine once: before v0.19 its ``resources/`` was the engine's content and
+    needed the resolved-path dedupe; the content now lives in ``content/``, so
+    no ``src/*/resources/`` layer may appear at all."""
     engine_dir = Path(coding_agent_playbook.__file__).parent
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "coding_agent_playbook").symlink_to(engine_dir, target_is_directory=True)

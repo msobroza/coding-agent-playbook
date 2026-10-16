@@ -388,8 +388,8 @@ def test_filesystem_artifact_source_overlay_packages_is_read_only(tmp_path: Path
 
 
 def test_list_rules_walks_engine_package_resources(tmp_path: Path) -> None:
-    # The engine ships rules under coding_agent_playbook/resources/rules/
-    # (PR 13 onwards). Confirm the walker picks them up and tags them with
+    # The engine ships rules under content/core/rules/ (resolved through
+    # bundled_content). Confirm the walker picks them up and tags them with
     # source_package="coding_agent_playbook".
     source = FileSystemArtifactSource(repo_root=tmp_path)
     rules = source.list_rules()

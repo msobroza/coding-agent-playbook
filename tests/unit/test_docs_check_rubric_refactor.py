@@ -109,14 +109,17 @@ def test_spec_section_21_body_drops_deleted_symbols(symbol: str) -> None:
 
 def test_spec_version_bumped_and_changelog_preserved() -> None:
     spec = _read("SPEC.md")
-    # v0.18 (init and check --refresh never commit local overrides, unmanaged
-    # entries preserved; assistant lifecycle hooks, PR K) is the current header,
-    # on top of v0.17 (bundled opt-in packs), v0.16 (gitignored generated output)
-    # and v0.15 (native skills + shared_skills); the guard cares that the
-    # refactor's changelog entries survive later revisions.
-    assert "| Version | 0.18 (draft) |" in spec
-    assert "*End of SPEC.md v0.18.*" in spec
-    assert "### v0.18" in spec  # the changelog entry: committed-config rewrite and hooks
+    # v0.20 (assistant lifecycle hooks, PR K) is the current header, on top of
+    # v0.19 (bundled content moves to content/; packs become bundled plugins),
+    # v0.18 (init and check --refresh never commit local overrides), v0.17
+    # (bundled opt-in packs), v0.16 (gitignored generated output) and v0.15
+    # (native skills + shared_skills); the guard cares that the refactor's
+    # changelog entries survive later revisions.
+    assert "| Version | 0.20 (draft) |" in spec
+    assert "*End of SPEC.md v0.20.*" in spec
+    assert "### v0.20" in spec  # the changelog appendix entry for lifecycle hooks
+    assert "### v0.19" in spec  # the changelog appendix entry for content/ and bundled plugins
+    assert "### v0.18" in spec  # the changelog appendix entry for the committed-config rewrite
     assert "### v0.17" in spec  # the changelog appendix entry for bundled opt-in packs
     assert "### v0.16" in spec  # the changelog appendix entry for gitignored output
     assert "### v0.15" in spec  # the changelog appendix entry for native skills

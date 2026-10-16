@@ -477,9 +477,10 @@ def test_write_mode_pins_resource_roots_in_machine_json(
 
     assert _sync_repo(repo, tmp_path, hook_deps=hook_deps(tmp_path / "state", pins=pins)) == 0
 
-    import coding_agent_playbook
+    from coding_agent_playbook.bundled_content import engine_layer_root
 
-    engine = os.path.join(os.path.dirname(coding_agent_playbook.__file__), "resources")
+    # The id keeps its spelling; the engine's layer is its bundled content/core (SPEC v0.19).
+    engine = str(engine_layer_root())
     assert pins.resource_roots == {"pkg:coding_agent_playbook/resources": engine}
 
 

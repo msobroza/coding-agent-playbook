@@ -15,6 +15,7 @@ import difflib
 from typing import TYPE_CHECKING, Any, TypeGuard
 
 from coding_agent_playbook import _toml
+from coding_agent_playbook.bundled_content import canonical_overlay_name
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -44,10 +45,12 @@ class ConfigError(ValueError):
     """
 
 
+_OVERLAYS_KEY = "overlays_enabled"
+
 #: The top-level list keys ``Config`` reads, with the placeholder a fix-it hint
 #: shows when there is no usable value to quote back.
 _ENABLED_KEYS: dict[str, str] = {
-    "overlays_enabled": "[<package names>]",
+    _OVERLAYS_KEY: "[<package names>]",
     "adapters_enabled": "[<adapter names>]",
 }
 
@@ -207,12 +210,15 @@ def _replacement(key: str, listed: object) -> str:
     """The value to show in ``key = …``: ``listed`` itself when usable, else a placeholder.
 
     A lone string is the common slip, so it is quoted back as the one-element list.
+    Overlay names are shown canonical, so the hint never recommends the deprecated
+    ``coding_agent_playbook.packs.*`` spelling (SPEC v0.19).
     """
-    if _is_str_list(listed):
-        return _toml.format_scalar(listed)
-    if isinstance(listed, str):
-        return _toml.format_scalar([listed])
-    return _ENABLED_KEYS[key]
+    names = [listed] if isinstance(listed, str) else listed
+    if not _is_str_list(names):
+        return _ENABLED_KEYS[key]
+    if key == _OVERLAYS_KEY:
+        names = [canonical_overlay_name(name) for name in names]
+    return _toml.format_scalar(names)
 
 
 def _is_str_list(value: object) -> TypeGuard[list[str]]:

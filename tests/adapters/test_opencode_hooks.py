@@ -30,7 +30,7 @@ from coding_agent_playbook.hook_registrations import (
     plan_opencode_reg,
     render_opencode_shim,
 )
-from coding_agent_playbook.resources.hook_shims.opencode_wire_port import WIRE_BEGIN, WIRE_END
+from coding_agent_playbook.templates.hook_shims.opencode_wire_port import WIRE_BEGIN, WIRE_END
 from tests.fakes import record_opens
 from tests.hook_samples import resolved_hook
 from tests.hooks.pack_repo import resolve_engine_hooks

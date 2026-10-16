@@ -319,8 +319,18 @@ def test_new_opencode_plugin_file_asks(repo: PackRepo, deps: Deps, target: str) 
     assert _verdict(report) == ("ask", "plugin_carrier")
 
 
-def test_playbook_hooks_source_edit_asks(repo: PackRepo, deps: Deps) -> None:
-    report = _write(repo, deps(), "playbook/hooks/mine/HOOK.md", "---\nid: mine\n---\n")
+@pytest.mark.parametrize(
+    "target",
+    [
+        "playbook/hooks/mine/HOOK.md",
+        "src/acme_overlay/resources/hooks/mine/HOOK.md",
+        # The engine checkout's hooks are bundled content (SPEC v0.19).
+        "content/core/hooks/safety/mine/HOOK.md",
+        "content/plugins/demo/hooks/mine/HOOK.md",
+    ],
+)
+def test_hook_source_edit_asks(repo: PackRepo, deps: Deps, target: str) -> None:
+    report = _write(repo, deps(), target, "---\nid: mine\n---\n")
 
     assert _verdict(report) == ("ask", "hook_source")
 

@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse
 from typing import TYPE_CHECKING, Any
 
+import pytest
+
 from coding_agent_playbook.commands import eval as _eval
 
 if TYPE_CHECKING:
@@ -326,16 +328,16 @@ def test_show_uses_prompt_slash_not_id_when_they_differ(tmp_path, make_synthetic
 
 
 def test_display_source_path_uses_package_prefix_for_engine_tasks(tmp_path):
-    """The ``_display_source_path`` helper renders engine/overlay tasks as
-    ``<package>/resources/eval_tasks/<id>/`` (the canonical SPEC §12.8 form).
+    """A bundled layer's task is labelled ``<package>/eval_tasks/<dir>/``.
 
-    Unit-level test because the engine ships zero tasks in v1, so no
-    integration test through ``playbook eval --show`` exercises this branch."""
+    The label comes from the layer, not from the path: even a bundled task whose
+    path holds ``resources/eval_tasks/`` gets no ``resources/`` in its label."""
     from coding_agent_playbook.commands.eval import _display_source_path
     from coding_agent_playbook.evals.task import EvalTask
 
-    # Synthesize a task that looks like it came from importlib.resources
-    # (typical layout: <package>/resources/eval_tasks/<id>/task.toml).
+    # Synthesize an engine task under the pre-v0.19 layout
+    # (<package>/resources/eval_tasks/<id>/task.toml), so only the layer can
+    # explain a label without ``resources/``.
     task_dir = tmp_path / "coding_agent_playbook" / "resources" / "eval_tasks" / "task-a"
     task_dir.mkdir(parents=True)
     task = EvalTask(
@@ -345,12 +347,12 @@ def test_display_source_path_uses_package_prefix_for_engine_tasks(tmp_path):
         source_path=task_dir / "task.toml",
         source_package="coding_agent_playbook",
     )
-    assert _display_source_path(task) == "coding_agent_playbook/resources/eval_tasks/task-a/"
+    assert _display_source_path(task) == "coding_agent_playbook/eval_tasks/task-a/"
 
 
 def test_display_source_path_uses_package_prefix_for_overlay_tasks(tmp_path):
-    """Overlay packages get the same treatment, with the overlay's name as
-    the prefix instead of the engine's."""
+    """A third-party overlay keeps its real package-relative path,
+    ``<package>/resources/eval_tasks/<dir>/``."""
     from coding_agent_playbook.commands.eval import _display_source_path
     from coding_agent_playbook.evals.task import EvalTask
 
@@ -366,38 +368,65 @@ def test_display_source_path_uses_package_prefix_for_overlay_tasks(tmp_path):
     assert _display_source_path(task) == "playbook_rules_bnp/resources/eval_tasks/pii-scan/"
 
 
-def test_display_source_path_falls_back_gracefully_for_unusual_paths(tmp_path):
-    """If the path doesn't contain the expected segment (``resources`` for
-    engine/overlay; ``playbook`` for repo-local), the helper falls back to
-    the directory basename so the line is still attributable but doesn't
-    crash."""
+@pytest.mark.parametrize(
+    ("source_package", "task_dir_parts", "expected"),
+    [
+        (
+            "coding_agent_playbook.plugins.x",
+            ("content", "plugins", "x", "eval_tasks", "t"),
+            "coding_agent_playbook.plugins.x/eval_tasks/t/",
+        ),
+        ("some_overlay", ("weird_root", "task-x"), "some_overlay/resources/eval_tasks/task-x/"),
+        ("<repo-local>", ("no_playbook_dir", "task-y"), "playbook/eval_tasks/task-y/"),
+    ],
+    ids=["bundled-plugin", "overlay-odd-layout", "repo-local-odd-layout"],
+)
+def test_display_source_path_depends_only_on_layer_and_dir(
+    tmp_path: Path, source_package: str, task_dir_parts: tuple[str, ...], expected: str
+) -> None:
+    """The label is built from the layer kind and the task dir's name alone.
+
+    No segment of the path is searched for, so an unusual parent layout
+    (no ``resources/``, no ``playbook/``) still yields the canonical label."""
     from coding_agent_playbook.commands.eval import _display_source_path
     from coding_agent_playbook.evals.task import EvalTask
 
-    # No "resources" segment in the path.
-    weird = tmp_path / "weird_root" / "task-x"
-    weird.mkdir(parents=True)
+    task_dir = tmp_path.joinpath(*task_dir_parts)
     task = EvalTask(
-        id="task-x",
+        id=task_dir.name,
         prompt_id="p",
         description="d",
-        source_path=weird / "task.toml",
-        source_package="some_overlay",
+        source_path=task_dir / "task.toml",
+        source_package=source_package,
     )
-    # Falls back to <package>/<basename>/ — still meaningful.
-    assert _display_source_path(task) == "some_overlay/task-x/"
+    assert _display_source_path(task) == expected
 
-    # No "playbook" segment for repo-local — also doesn't crash.
-    weird2 = tmp_path / "no_playbook_dir" / "task-y"
-    weird2.mkdir(parents=True)
-    task2 = EvalTask(
-        id="task-y",
+
+@pytest.mark.parametrize(
+    ("source_package", "expected"),
+    [
+        ("coding_agent_playbook", "coding_agent_playbook/eval_tasks/task-dir/"),
+        ("some_overlay", "some_overlay/resources/eval_tasks/task-dir/"),
+        ("<repo-local>", "playbook/eval_tasks/task-dir/"),
+    ],
+    ids=["bundled", "overlay", "repo-local"],
+)
+def test_display_source_path_uses_directory_not_task_id(
+    tmp_path: Path, source_package: str, expected: str
+) -> None:
+    """``<dir>`` is the task directory's name; nothing ties ``task.id`` to it."""
+    from coding_agent_playbook.commands.eval import _display_source_path
+    from coding_agent_playbook.evals.task import EvalTask
+
+    task_dir = tmp_path / "eval_tasks" / "task-dir"
+    task = EvalTask(
+        id="declared-id",
         prompt_id="p",
         description="d",
-        source_path=weird2 / "task.toml",
-        source_package="<repo-local>",
+        source_path=task_dir / "task.toml",
+        source_package=source_package,
     )
-    assert _display_source_path(task2) == "task-y/"
+    assert _display_source_path(task) == expected
 
 
 def test_show_source_path_is_repo_relative_for_repo_local_tasks(
@@ -407,7 +436,7 @@ def test_show_source_path_is_repo_relative_for_repo_local_tasks(
     at ``playbook/eval_tasks/...``, not an absolute filesystem path.
 
     SPEC §12.8 example uses package-relative paths
-    (``coding_agent_playbook/resources/eval_tasks/.../``); the repo-local
+    (``coding_agent_playbook/eval_tasks/.../``); the repo-local
     analogue should anchor at ``playbook/`` so the output is reproducible
     across user machines (no leak of ``$HOME``/scratch-dir layouts).
 

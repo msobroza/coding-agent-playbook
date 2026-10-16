@@ -22,7 +22,8 @@ sync rendered: nothing is rendered and nothing is spawned here. The order of
    position (``_sentinel.file_has_sentinel``), never read when it is a
    symlink, on a secret path or when it is not a regular file.
 
-Stdlib, ``hook_runtime`` and the zero-import ``_sentinel`` only (§D.1).
+Stdlib, ``hook_runtime``, the zero-import ``_sentinel`` and the stdlib-only
+``bundled_content`` leaf only (§D.1).
 """
 
 from __future__ import annotations
@@ -59,16 +60,15 @@ __all__ = [
     "protected_paths",
 ]
 
-#: The engine's own resources; resolvable without ``machine.json`` (this package).
+#: The engine's own layer (its bundled ``content/core/``); resolvable without
+#: ``machine.json``, from this package. The id keeps its ``resources`` spelling
+#: (``_guard_config_protect.resource_root_ids``).
 ENGINE_RESOURCES_ID: Final = "pkg:coding_agent_playbook/resources"
 #: Used when ``guard_config.json`` predates the table (``guard_config.HOOK_ARTIFACTS``).
 DEFAULT_HOOK_ARTIFACTS: Final = (
     ".coding-agent-playbook/hooks/",
     ".claude/hooks/playbook/",
     ".opencode/plugins/playbook-hooks.js",
-)
-_ENGINE_RESOURCES: Final = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "resources"
 )
 
 type HitKind = Literal["lockfile", "hook_artifact", "entry", "extra", "sentinel", "resource"]
@@ -227,9 +227,27 @@ def _entry(row: TableReader) -> ProtectedEntry:
 def _resource_roots(ids: Iterable[str], machine: MachinePins | None) -> tuple[str, ...]:
     """Each ``pkg:`` id's real path on this machine; an unresolvable id protects nothing."""
     known = dict(machine.resource_roots) if machine is not None else {}
-    known.setdefault(ENGINE_RESOURCES_ID, _ENGINE_RESOURCES)
+    if ENGINE_RESOURCES_ID not in known:
+        known[ENGINE_RESOURCES_ID] = _engine_layer_dir()
     found = (known.get(resource_id) for resource_id in ids)
     return tuple(dict.fromkeys(os.path.realpath(path) for path in found if path))
+
+
+def _engine_layer_dir() -> str:
+    """This package's ``content/core/``, or ``""`` (protects nothing) when the content is missing.
+
+    ``bundled_content`` is a stdlib-only leaf (``pathlib``, which the dispatcher
+    already loads), so the hot path stays import-light (§D.1).
+    """
+    from coding_agent_playbook.bundled_content import (
+        BundledContentMissingError,
+        engine_layer_root,
+    )
+
+    try:
+        return str(engine_layer_root())
+    except BundledContentMissingError:
+        return ""
 
 
 def _resource_hit(pset: ProtectedSet, npath: NormalizedPath) -> ProtectedHit | None:

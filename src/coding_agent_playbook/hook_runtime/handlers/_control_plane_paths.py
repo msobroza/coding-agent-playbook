@@ -12,8 +12,9 @@ names the row one ``NormalizedPath`` belongs to, first match wins:
    and the main checkout's ``settings.local.json`` (``settings``), then the
    user-local trust store's directory (``trust_store``);
 3. in the repository: the hook artifacts (``protected.hook_artifacts``), the
-   settings, config, MCP, OpenCode and pre-commit files, ``playbook/hooks/``
-   and engine/overlay ``resources/hooks/`` sources, plugin carriers, then the
+   settings, config, MCP, OpenCode and pre-commit files, ``playbook/hooks/``,
+   overlay ``src/*/resources/hooks/`` and engine ``content/{core,plugins/*}/hooks/``
+   sources, plugin carriers, then the
    ``hooks:`` frontmatter carriers (markdown only);
 4. the ``extra_paths`` rows.
 
@@ -78,7 +79,13 @@ CONTROL_PLANE: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
         "mcp": (".mcp.json",),
         "opencode_config": ("opencode.json", "opencode.jsonc"),
         "precommit": (".pre-commit-config.yaml",),
-        "hook_sources": ("playbook/hooks/", "src/*/resources/hooks/"),
+        # The engine checkout's hooks are bundled content (SPEC v0.19).
+        "hook_sources": (
+            "playbook/hooks/",
+            "src/*/resources/hooks/",
+            "content/core/hooks/",
+            "content/plugins/*/hooks/",
+        ),
         "plugin_carriers": (
             ".claude/skills/*/.claude-plugin/",
             "**/hooks/hooks.json",

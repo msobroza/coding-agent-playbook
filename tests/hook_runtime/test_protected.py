@@ -222,12 +222,23 @@ def test_resource_root_inside_worktree_not_protected(root: Path, tmp_path: Path)
 
 
 def test_engine_resources_fall_back_to_the_runtime_package_without_machine_json() -> None:
+    """Without ``machine.json`` the engine id resolves to this package's bundled ``content/core``."""
     pset = _pset(_cfg())
 
-    import coding_agent_playbook
+    from coding_agent_playbook.bundled_content import engine_layer_root
 
-    package = os.path.dirname(os.path.realpath(coding_agent_playbook.__file__))
-    assert pset.resource_roots == (os.path.join(package, "resources"),)
+    assert pset.resource_roots == (os.path.realpath(engine_layer_root()),)
+
+
+def test_engine_resources_protect_nothing_when_the_bundled_content_is_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A broken install leaves the engine id unresolved: it protects nothing, never raises."""
+    from coding_agent_playbook import bundled_content
+
+    monkeypatch.setattr(bundled_content, "_PACKAGE_DIR", tmp_path / "pkg")
+
+    assert _pset(_cfg()).resource_roots == ()
 
 
 def test_missing_path_is_creation_not_protected(root: Path) -> None:

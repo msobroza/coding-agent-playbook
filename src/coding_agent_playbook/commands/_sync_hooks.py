@@ -246,7 +246,7 @@ def _detect_inputs(ctx: SyncContext, hooks: SyncHooks) -> DetectInputs:
 
 
 def layer_packages(ctx: SyncContext) -> tuple[str, ...]:
-    """The importable artifact layers: the engine package, then ``overlays_enabled`` (packs too).
+    """The artifact layers: the engine package, then ``overlays_enabled`` (bundled plugins too).
 
     Example: ``layer_packages(ctx) == ("coding_agent_playbook",)`` without overlays.
     """

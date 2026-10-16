@@ -52,7 +52,9 @@ def twin_hook_config(
     from coding_agent_playbook.hook_policy.override_rules import bound_handler
     from coding_agent_playbook.orchestrator import SyncContext
 
-    ctx = SyncContext.from_repo(repo_root)
+    # An internal policy read: the command that owns the config (sync, init's final
+    # sync) prints the deprecated-overlay warning once (SPEC v0.19), not this helper.
+    ctx = SyncContext.from_repo(repo_root, warn_deprecated=False)
     hook = next((h for h in ctx.hooks_resolved if h.frontmatter.id == hook_id), None)
     handler = None if hook is None else bound_handler(hook.frontmatter, event)
     if hook is None or handler is None:

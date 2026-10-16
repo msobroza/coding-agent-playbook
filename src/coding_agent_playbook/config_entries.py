@@ -21,11 +21,13 @@ if TYPE_CHECKING:
 
 #: The top-level keys :class:`~coding_agent_playbook.config.Config` owns: exactly
 #: what ``Config.from_dict`` reads and a fully populated ``Config.to_dict`` writes
-#: (pinned against the dataclass fields by ``tests/unit/test_config.py``). Every
-#: other top-level key is parsed from the raw TOML by its own command; ``Config``
-#: only carries it, verbatim, in ``extra_tables`` (:func:`unmanaged_config_entries`),
-#: so a rewrite of the committed file keeps it (``playbook init`` and ``playbook
-#: check --refresh``, through ``commands/_committed_config``).
+#: (pinned against the dataclass fields by ``tests/unit/test_config.py``). Derived
+#: ``compare=False`` fields (``deprecated_overlay_names``) are exempt: ``Config``
+#: computes them from other fields and never writes them. Every other top-level
+#: key is parsed from the raw TOML by its own command; ``Config`` only carries it,
+#: verbatim, in ``extra_tables`` (:func:`unmanaged_config_entries`), so a rewrite
+#: of the committed file keeps it (``playbook init`` and ``playbook check
+#: --refresh``, through ``commands/_committed_config``).
 CONFIG_MANAGED_KEYS: frozenset[str] = frozenset(
     {
         "schema_version",

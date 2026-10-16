@@ -13,23 +13,23 @@ from __future__ import annotations
 
 import builtins
 import json
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
-import coding_agent_playbook
 from coding_agent_playbook.hook_runtime.active_prompt import TurnRecord, write_turn_record
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.git import Fingerprint
 from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME, StateStore
 from coding_agent_playbook.types import Prompt
+from tests._content import CORE_ROOT
 from tests.hook_runtime.fakes import FakeGit, FakeStageRunner
 from tests.hook_runtime.transcript_kit import SessionTranscript
 from tests.hooks.stop_kit import HEAD_TREE, changed_git, session_of, stop, stop_payload
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.simulate import SimulateReport
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 HOOK_ID: Final = "prompt-output-contract-on-stop"
 GATE_ID: Final = "stop-ci-parity-gate"
-PROMPTS: Final = Path(coding_agent_playbook.__file__).parent / "resources" / "prompts"
+PROMPTS: Final = CORE_ROOT / "prompts"
 REVIEW_NO_VERDICT: Final = "Two findings:\n- src/app.py:3 shadows `os`.\n- a nit on naming."
 MISS_LINE: Final = (
     '[output-contract] "/review": no final answer matches '

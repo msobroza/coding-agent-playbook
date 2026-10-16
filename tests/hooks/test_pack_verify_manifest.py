@@ -1,6 +1,6 @@
 """The verify pack as shipped (specs/prK-hook-pack.md §E.0.6, §E.2, Track K6).
 
-Every ``resources/hooks/verify/<id>/HOOK.md`` matches its §E.0.6 row (tier,
+Every ``content/core/hooks/verify/<id>/HOOK.md`` matches its §E.0.6 row (tier,
 events, decisions, ``on_error``), passes the H1-H21 contract in a config-less
 ``playbook validate`` with no warning, and binds builtins that declare their
 config keys and never mutate tool input. A Stop-stage hook names its stage in

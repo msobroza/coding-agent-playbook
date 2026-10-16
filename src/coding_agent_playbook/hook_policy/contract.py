@@ -83,8 +83,8 @@ class HookCheckContext:
     ``applies_if`` (H17); ``definitions`` holds every layer's definition of each
     hook id, in layer order (H12); ``handlers`` is the handler catalog for H6's
     registry half (``None``: skipped, as before K2). A hook is engine-sourced when its
-    ``source_package`` equals ``engine_package`` exactly, so a bundled pack
-    (``coding_agent_playbook.packs.*``) is an overlay.
+    ``source_package`` equals ``engine_package`` exactly, so a bundled plugin
+    (``coding_agent_playbook.plugins.*``) is an overlay.
 
     Example::
 
@@ -104,7 +104,7 @@ class HookCheckContext:
         return hook.source_package == self.engine_package
 
     def is_overlay(self, hook: Hook) -> bool:
-        """True for an overlay's hook (a bundled pack included): neither engine nor repo-local."""
+        """True for an overlay's hook (a bundled plugin included): neither engine nor repo-local."""
         return not self.is_engine(hook) and hook.source_package != REPO_LOCAL_SOURCE
 
 

@@ -24,7 +24,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-import coding_agent_playbook
 from coding_agent_playbook._guard_config_quality import read_quality_lint
 from coding_agent_playbook._guard_config_ruff import read_project_ruff_selection
 from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
@@ -51,6 +50,7 @@ from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from coding_agent_playbook.types import Hook, Prompt, Rule
+from tests._content import CORE_ROOT
 from tests.hook_payloads import PROJECT_DIR, HookPayloadCase
 from tests.hook_runtime.guard_repo import GuardRepo
 
@@ -64,7 +64,7 @@ if TYPE_CHECKING:
     from tests.hook_runtime.fakes import FakeProc
 
 ENGINE_PACKAGE = "coding_agent_playbook"
-ENGINE_HOOKS = Path(coding_agent_playbook.__file__).resolve().parent / "resources" / "hooks"
+ENGINE_HOOKS = CORE_ROOT / "hooks"
 #: Data-only overlay trees (``<name>/resources/hooks/...``), copied into a package per test.
 FIXTURE_OVERLAYS = Path(__file__).resolve().parent.parent / "fixtures" / "overlays"
 #: Every enabled adapter of the fixture consumer.
@@ -125,7 +125,7 @@ def _resources(package: str) -> Path:
 
 def engine_prompts() -> list[Prompt]:
     """Every engine prompt as shipped (frontmatter as authored, body unrendered)."""
-    root = ENGINE_HOOKS.parent / "prompts"
+    root = CORE_ROOT / "prompts"
     paths = sorted(p for p in root.iterdir() if p.name.endswith((".md", ".md.j2")))
     return [Prompt.from_markdown(path, ENGINE_PACKAGE) for path in paths]
 

@@ -17,6 +17,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__
+from coding_agent_playbook.bundled_content import BundledContentMissingError
 from coding_agent_playbook.commands import check as check_cmd
 from coding_agent_playbook.commands import check_commit_trailers as check_commit_trailers_cmd
 from coding_agent_playbook.commands import check_deps as check_deps_cmd
@@ -428,6 +429,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     2. Commands load the config and the artifacts first, so each one stops them
     before they write.
 
+    A broken install also exits 2, without a traceback. Engine content found in
+    neither home (:class:`BundledContentMissingError`) prints
+    ``error: the engine's bundled content was not found (looked in <a>, <b>);
+    reinstall coding-agent-playbook`` on one line, where ``<a>`` and ``<b>`` are
+    the wheel's ``<package>/_content`` and the checkout's ``<repo>/content``, in
+    that order; it used to render zero engine artifacts silently. Only commands
+    that load the content raise it (``init``, ``sync``, ``check``, ``validate``,
+    ``render``, ``eval``). A missing pre-commit template
+    (:class:`~coding_agent_playbook.commands.init.PrecommitTemplateMissingError`)
+    prints ``error: <message>``.
+
     Example::
 
         >>> main(["--repo-root", "."])  # doctest: +SKIP
@@ -441,9 +453,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         return int(args.func(args))
     except SystemExit:
         raise
-    except (FileNotFoundError, ConfigError, HookSchemaError) as exc:
+    except (
+        FileNotFoundError,
+        ConfigError,
+        HookSchemaError,
+        init_cmd.PrecommitTemplateMissingError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    except BundledContentMissingError as exc:
+        print(_missing_content_line(exc), file=sys.stderr)
+        return 2
+
+
+def _missing_content_line(exc: BundledContentMissingError) -> str:
+    """The missing-content error line, naming every content home tried, in order."""
+    looked_in = ", ".join(str(path) for path in exc.tried)
+    return (
+        f"error: the engine's bundled content was not found (looked in {looked_in}); "
+        "reinstall coding-agent-playbook"
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover

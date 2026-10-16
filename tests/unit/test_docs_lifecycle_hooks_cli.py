@@ -1,4 +1,4 @@
-"""Docs-consistency guard: SPEC.md v0.18 documents the hook adapters, CLI and runtime (prK §J).
+"""Docs-consistency guard: SPEC.md v0.20 documents the hook adapters, CLI and runtime (prK §J).
 
 Track K11 applies the §J SPEC amendment rows; ``test_docs_lifecycle_hooks_spec``
 covers the model, config and architecture rows, and this module the rest: the

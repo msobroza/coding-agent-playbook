@@ -10,27 +10,26 @@ same kwargs) and once sandboxed, and compares the bytes.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import jinja2
 from jinja2.sandbox import SandboxedEnvironment
 
-import coding_agent_playbook
 from coding_agent_playbook import renderer
 from coding_agent_playbook.commands import init as init_cmd
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from coding_agent_playbook.types import Prompt, Rule
+from tests._content import CORE_ROOT
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     import pytest
 
     SyntheticRepoFactory = Callable[..., Path]
 
-_RESOURCES = Path(coding_agent_playbook.__file__).parent / "resources"
 _LOCKFILE = ".coding-agent-playbook.lock"  # carries a render timestamp
 
 #: Facts that switch on every shipped template's ``applies_if`` and branches:
@@ -74,11 +73,11 @@ def _shipped_templated_ids() -> set[str]:
     """Ids of every engine-shipped ``.md.j2`` rule and prompt."""
     rules = {
         Rule.from_markdown(p, "coding_agent_playbook").frontmatter.id
-        for p in (_RESOURCES / "rules").rglob("*.md.j2")
+        for p in (CORE_ROOT / "rules").rglob("*.md.j2")
     }
     prompts = {
         Prompt.from_markdown(p, "coding_agent_playbook").frontmatter.id
-        for p in (_RESOURCES / "prompts").rglob("*.md.j2")
+        for p in (CORE_ROOT / "prompts").rglob("*.md.j2")
     }
     return rules | prompts
 

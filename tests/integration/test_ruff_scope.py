@@ -1,6 +1,6 @@
 """ruff must never lint or reformat eval-fixture ``setup/`` trees (specs/prK-lifecycle-hooks.md §P9).
 
-The fixtures under ``resources/eval_tasks/*/setup`` are deliberately unclean
+The fixtures under ``content/core/eval_tasks/*/setup`` are deliberately unclean
 needle material (the ``find-injected-vuln-*`` tasks hide a bug in them), so a
 pre-commit ``ruff check --fix`` or a hook's post-edit ``ruff format`` must not
 rewrite them. ``extend-exclude`` alone does not stop ruff from touching a path
@@ -23,14 +23,14 @@ from typing import Any
 import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_FIXTURE_GLOB = "src/coding_agent_playbook/resources/eval_tasks/*/setup"
-#: The vendored pack stays byte-faithful; the distilled python_design pack only
-#: keeps ruff off its markdown, because its stdlib scripts are our own code (SPEC §11.5.2).
-_VENDORED_PACK_GLOB = "src/coding_agent_playbook/packs/superpowers/resources"
-_DISTILLED_PACK_MD_GLOB = "src/coding_agent_playbook/packs/python_design/resources/**/*.md"
+_FIXTURE_GLOB = "content/core/eval_tasks/*/setup"
+#: The vendored bundled plugin stays byte-faithful; the distilled python_design
+#: plugin only keeps ruff off its markdown, because its stdlib scripts are our own
+#: code (SPEC §11.5.2).
+_VENDORED_PACK_GLOB = "content/plugins/superpowers"
+_DISTILLED_PACK_MD_GLOB = "content/plugins/python_design/**/*.md"
 _DISTILLED_PACK_SCRIPT = (
-    "src/coding_agent_playbook/packs/python_design/resources/skills/"
-    "python-architecture/scripts/layer_map.py"
+    "content/plugins/python_design/skills/python-architecture/scripts/layer_map.py"
 )
 _ENGINE_MODULE = "src/coding_agent_playbook/__init__.py"
 _NO_FILES = "No Python files found"
@@ -100,7 +100,6 @@ def test_ruff_still_checks_engine_sources() -> None:
     assert completed.returncode == 0, completed.stderr
     listed = [_repo_relative(line) for line in completed.stdout.splitlines()]
     assert _ENGINE_MODULE in listed
-    assert "src/coding_agent_playbook/packs/superpowers/__init__.py" in listed
     assert not [path for path in listed if "/eval_tasks/" in path and "/setup/" in path]
     assert not [path for path in listed if path.startswith(f"{_VENDORED_PACK_GLOB}/")]
     assert _DISTILLED_PACK_SCRIPT in listed

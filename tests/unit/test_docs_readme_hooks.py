@@ -40,11 +40,12 @@ from coding_agent_playbook.hook_runtime.policy import UNATTENDED_ENV_VAR
 from coding_agent_playbook.hooks_config import parse_guardrails_config, parse_hooks_config
 from coding_agent_playbook.metrics_config import parse_metrics_config
 from coding_agent_playbook.types import HookFrontmatter, split_frontmatter
+from tests._content import CORE_ROOT
 from tests.unit.test_docs_lifecycle_hooks_cli import _metric_names, _precommit_ids
 from tests.unit.test_docs_lifecycle_hooks_spec import _HOOK_INVARIANTS
 
 _ROOT = Path(__file__).resolve().parents[2]
-_HOOKS_ROOT = _ROOT / "src" / "coding_agent_playbook" / "resources" / "hooks"
+_HOOKS_ROOT = CORE_ROOT / "hooks"
 _LIFECYCLE = "## Assistant lifecycle hooks"
 _FENCE = re.compile(r"^\s*```(\w*)\s*$")
 _HEADING = re.compile(r"^(#{1,6}) ")

@@ -101,10 +101,12 @@ def check_markdown_links(
     Filesystem sources are walked per layer (:meth:`FileSystemArtifactSource.layer_roots`)
     because skill ``references/`` files are not carried as paths on the
     canonical :class:`Skill` type. The walk covers rules, prompts, skills and
-    hooks in every layer — engine package, overlays, extra checkout roots and
-    repo-local ``playbook/``; the containment root is the layer's
-    ``resources/`` (respectively ``playbook/``) so links may cross artifact
-    kinds within their layer but never leave the shipped bundle.
+    hooks in every layer — the engine, each overlay package or bundled plugin,
+    extra checkout roots and repo-local ``playbook/``; the containment root is
+    the layer's root — ``content/core/`` for the engine,
+    ``content/plugins/<name>/`` for a bundled plugin, an overlay package's
+    ``resources/``, or ``playbook/`` — so links may cross artifact kinds within
+    their layer but never leave the shipped bundle.
 
     Non-filesystem sources have no on-disk layout to resolve relative targets
     against, so only the external-link policy applies to their bodies.

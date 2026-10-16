@@ -41,6 +41,7 @@ from coding_agent_playbook.evals.scoring import score
 from coding_agent_playbook.evals.task import EvalTask, TaskInvocation
 from coding_agent_playbook.evaluators import EvaluationReport
 from coding_agent_playbook.evaluators.types import CheckResult, ScopeDetail
+from tests._content import CORE_ROOT
 
 # A long, high-complexity function: lots of branches => high cyclomatic complexity.
 _LONG_FN = textwrap.dedent(
@@ -303,7 +304,7 @@ def test_capture_includes_new_files_in_diff_and_changed(tmp_path: Path) -> None:
 
 
 def test_render_prompt_falls_back_for_unresolvable_prompt(tmp_path: Path) -> None:
-    """A synthetic task with no ``resources/`` root resolves to a placeholder."""
+    """A synthetic task outside any ``eval_tasks/`` layer resolves to a placeholder."""
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
     task = _make_task(
@@ -319,9 +320,7 @@ def test_render_prompt_falls_back_for_unresolvable_prompt(tmp_path: Path) -> Non
 
 def test_render_prompt_resolves_a_real_shipped_prompt() -> None:
     """A task pointing at a shipped (non-templated) prompt renders its real body."""
-    repo_root = Path(__file__).resolve().parents[2]
-    src_root = repo_root / "src" / "coding_agent_playbook"
-    task_dir = src_root / "resources" / "eval_tasks" / "refactor-extract-helper"
+    task_dir = CORE_ROOT / "eval_tasks" / "refactor-extract-helper"
     assert (task_dir / "task.toml").is_file()
 
     task = EvalTask(
@@ -834,9 +833,7 @@ def test_static_measurements_recurse_subdirs_and_skip_unparseable(tmp_path: Path
 
 def test_render_prompt_skips_non_matching_prompts() -> None:
     """Resolution scans every prompt md and returns only the id-matching one."""
-    repo_root = Path(__file__).resolve().parents[2]
-    src_root = repo_root / "src" / "coding_agent_playbook"
-    task_dir = src_root / "resources" / "eval_tasks" / "explain-pure-function"
+    task_dir = CORE_ROOT / "eval_tasks" / "explain-pure-function"
 
     task = EvalTask(
         id="explain-pure-function",

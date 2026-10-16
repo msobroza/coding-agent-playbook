@@ -16,10 +16,12 @@ Validates:
 - Every markdown link in every artifact is self-contained (PR L): relative
   targets resolve inside the artifact's source layer, external links only
   pass through the ``[links] allowed_domains`` allowlist (``_validate_links``).
-- Every package in ``overlays_enabled`` is usable here: it imports without error
-  and ships a ``resources/`` directory — the same check ``playbook sync`` refuses
-  to run without (``_sync_preflight.unusable_overlays``), so a misspelled pack
-  fails here too instead of validating the engine layer alone.
+- Every ``overlays_enabled`` entry is usable here: an overlay package imports
+  without error and ships a ``resources/`` directory, and a bundled-plugin name
+  matches a ``content/plugins/<leaf>/`` directory — the same check ``playbook
+  sync`` refuses to run without (``_sync_preflight.unusable_overlays``), so a
+  misspelled bundled plugin fails here too instead of validating the engine
+  layer alone.
 - Every skill is a valid Agent Skill (SPEC §6.3): it declares an ``id`` string
   (id-less skills all collapse into one skill named ``skill``), its id — emitted
   as the ``SKILL.md`` ``name`` and the output directory — matches

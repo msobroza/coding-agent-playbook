@@ -21,18 +21,19 @@ around its render, so a file/folder swap inside a skill dir displaces only what
 that policy would delete (``_prior_output.judging_leftovers_with``).
 
 Every mode first refuses to run when a configured overlay package fails to
-import or ships no ``resources/`` directory (``_sync_preflight``) —
-rendering without it would silently drop the org rules and un-ignore their
-output. A config the engine would misread fails even earlier, while loading
+import or ships no ``resources/`` directory, or a bundled-plugin name matches no
+``content/plugins/<leaf>/`` (``_sync_preflight``) — rendering without it would
+silently drop the org rules and un-ignore their output. A config the engine
+would misread fails even earlier, while loading
 (:class:`~coding_agent_playbook.config.ConfigError`). Write mode and
 ``--check`` then run the full ``playbook validate`` rule set, the hook trust
 contract H1-H21 included (:func:`~coding_agent_playbook.commands.validate.sync_gate_errors`),
 and exit 1 on any finding, printing its ``FAIL`` lines to stderr and writing
 nothing (§P P8, §B.5). Validate's warnings print as ``warning:`` lines, and a
 ``[hooks]`` / ``[guardrails]`` table in ``.local.toml`` is only one of them
-here (§B.1). ``--check-staged`` is the pre-commit hot path and is not gated. A template the Jinja sandbox rejects aborts every mode with exit 1,
-naming the source file, before any adapter writes (specs/prK-lifecycle-hooks.md
-§P P1).
+here (§B.1). ``--check-staged`` is the pre-commit hot path and is not gated. A
+template the Jinja sandbox rejects aborts every mode with exit 1, naming the
+source file, before any adapter writes (specs/prK-lifecycle-hooks.md §P P1).
 
 Hooks (§C.1.3, ``_sync_hooks``): every mode renders the on hooks through the
 adapters (each told the real repo and the prior lockfile) plus the sync-level

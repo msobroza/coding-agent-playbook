@@ -11,12 +11,10 @@ from __future__ import annotations
 
 import copy
 import dataclasses
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, cast
 
 import pytest
 
-import coding_agent_playbook
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
@@ -25,14 +23,16 @@ from coding_agent_playbook.commands._validate_frontmatter import lint_codes_prob
 from coding_agent_playbook.detector import evaluate_predicate
 from coding_agent_playbook.hook_policy import resolve_lint_codes
 from coding_agent_playbook.types import Rule
+from tests._content import CORE_ROOT
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
+    from pathlib import Path
 
     from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.detector import Facts
 
-ENGINE_RULES: Final = Path(coding_agent_playbook.__file__).resolve().parent / "resources" / "rules"
+ENGINE_RULES: Final = CORE_ROOT / "rules"
 SIDECAR: Final = ".playbook/manifest.toml"
 #: §E.3's codes per linked rule, verbatim.
 SPEC_CODES: Final[Mapping[str, dict[str, Any]]] = {

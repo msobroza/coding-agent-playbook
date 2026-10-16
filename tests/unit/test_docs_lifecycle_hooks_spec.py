@@ -1,4 +1,4 @@
-"""Docs-consistency guard: SPEC.md v0.18 documents the lifecycle-hooks model (prK §J).
+"""Docs-consistency guard: SPEC.md v0.20 documents the lifecycle-hooks model (prK §J).
 
 Track K11 applies the §J SPEC amendment rows. These tests cover the model,
 config and architecture rows: the version bump, the non-goals, the glossary,
@@ -47,6 +47,7 @@ from coding_agent_playbook.types import (
 _ROOT = Path(__file__).resolve().parents[2]
 _SPEC = _ROOT / "SPEC.md"
 _SRC = _ROOT / "src" / "coding_agent_playbook"
+_CONTENT = _ROOT / "content"
 _HEADER_VERSION = re.compile(r"^\| Version \| (\d+\.\d+) \(draft\) \|$", re.MULTILINE)
 
 #: Config fields whose TOML spelling is a (sub-)table, not a ``key`` of the table.
@@ -95,9 +96,10 @@ _ENGINE_PATHS = (
     "_sentinel.py",
     "_pep503.py",
     "gate_scan.py",
-    "resources/hooks/",
-    "resources/hook_shims/",
+    "templates/hook_shims/",
 )
+#: Bundled-content paths §5.1 must show, under ``content/`` (SPEC v0.19: content left the package).
+_CONTENT_PATHS = ("core/hooks/",)
 _CONSUMER_PATHS = (
     "playbook/hooks/",
     ".coding-agent-playbook/hooks/",
@@ -137,10 +139,10 @@ def test_spec_footer_matches_header_version() -> None:
     assert f"\n### v{version} (" in text
 
 
-def test_spec_top_changelog_has_v0_18_bullet() -> None:
+def test_spec_top_changelog_has_v0_20_bullet() -> None:
     top = _spec_section("**Changelog**", "## 1. Context")
-    assert "- **0.18** —" in top
-    assert top.index("- **0.18** —") < top.index("- **0.17** —")
+    assert "- **0.20** —" in top
+    assert top.index("- **0.20** —") < top.index("- **0.19** —") < top.index("- **0.18** —")
 
 
 def test_spec_non_goals_allow_exactly_one_generated_opencode_plugin() -> None:
@@ -179,9 +181,12 @@ def test_design_recap_carries_hook_invariants(phrase: str) -> None:
     assert phrase in recap
 
 
-@pytest.mark.parametrize("path", _ENGINE_PATHS)
-def test_engine_layout_shows_every_hook_module(path: str) -> None:
-    assert (_SRC / path.rstrip("/")).exists(), f"{path} is not in the engine package"
+@pytest.mark.parametrize(
+    ("root", "path"),
+    [*((_SRC, path) for path in _ENGINE_PATHS), *((_CONTENT, path) for path in _CONTENT_PATHS)],
+)
+def test_engine_layout_shows_every_hook_module(root: Path, path: str) -> None:
+    assert (root / path.rstrip("/")).exists(), f"{path} is not in {root}"
     layout = _spec_section("### 5.1 The engine repo", "### 5.2 An overlay repo")
     # The layout is a tree: each entry shows its last path segment only.
     entry = Path(path).name + ("/" if path.endswith("/") else "")
@@ -299,8 +304,8 @@ def test_section_11_documents_hook_merge_policies(policy: str) -> None:
 def test_section_19_marks_q8_resolved() -> None:
     questions = _spec_section("## 19. Open questions", "## 20. Storage sources")
     lines = {line.split(".", 1)[0]: line for line in questions.splitlines() if line[:1].isdigit()}
-    assert "Resolved in v0.18" in lines["8"]
-    assert "Partially answered in v0.18" in lines["1"]
+    assert "Resolved in v0.20" in lines["8"]
+    assert "Partially answered in v0.20" in lines["1"]
 
 
 def test_section_20_documents_list_hooks_and_manifest_hook_kind() -> None:

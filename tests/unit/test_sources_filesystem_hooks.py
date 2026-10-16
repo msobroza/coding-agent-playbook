@@ -31,9 +31,10 @@ if TYPE_CHECKING:
 _POSIX_ONLY = pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges")
 
 
-#: An importable engine stand-in without a ``resources/`` tree: the real engine ships
-#: the §E hook pack (Track K5), which these discovery tests must not see.
-_HOOKLESS_ENGINE = "coding_agent_playbook.packs"
+#: An importable engine stand-in without a ``resources/`` tree (the stdlib's ``json``):
+#: the real engine ships the §E hook pack (Track K5) in ``content/core/hooks/``,
+#: which these discovery tests must not see.
+_HOOKLESS_ENGINE = "json"
 
 
 def _hooks_root(repo: Path) -> Path:

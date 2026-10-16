@@ -53,19 +53,14 @@ from coding_agent_playbook.evals.scoring import score
 from coding_agent_playbook.evals.validator import validate_tasks
 from coding_agent_playbook.evaluators.types import CheckResult
 from coding_agent_playbook.types import Prompt, PromptFrontmatter
+from tests._content import CORE_ROOT
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from coding_agent_playbook.evals.task import EvalTask
 
-_TASKS_ROOT = (
-    Path(__file__).resolve().parents[2]
-    / "src"
-    / "coding_agent_playbook"
-    / "resources"
-    / "eval_tasks"
-)
+_TASKS_ROOT = CORE_ROOT / "eval_tasks"
 _SOLUTION_DIR = "solution"
 #: ``solution/negatives/`` holds known-wrong attempts; the reference overlay skips it.
 _NEGATIVES_DIR = "negatives"
@@ -232,6 +227,11 @@ def describe(result: CheckResult) -> str:
 
 def _shipped_task_dirs() -> list[Path]:
     return list(discover_eval_task_dirs(_TASKS_ROOT))
+
+
+# Fail collection loudly: an empty or mis-pointed root would turn every gate proof
+# below into a silent "empty parameter set" skip.
+assert _shipped_task_dirs(), f"no shipped eval tasks found under {_TASKS_ROOT}"
 
 
 def _solved_task_dirs() -> list[Path]:

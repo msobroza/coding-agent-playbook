@@ -1,27 +1,52 @@
 """The packaged air-gapped pre-commit starter renders to valid, all-local YAML.
 
-Guards two things: the ``resources/precommit/config.yaml.j2`` template is
-actually shipped (resolvable via ``importlib.resources``), and it renders
-through the Jinja environment without a ``StrictUndefined`` error to a config
-whose every hook is ``repo: local`` + ``language: system`` (so pre-commit never
-clones a remote hook repo).
+Guards three things: the engine-owned ``templates/precommit/config.yaml.j2``
+template is actually shipped (resolvable via ``importlib.resources``), a missing
+template fails with an explicit error rather than an ``assert`` (which ``-O``
+strips), and it renders through the Jinja environment without a
+``StrictUndefined`` error to a config whose every hook is ``repo: local`` +
+``language: system`` (so pre-commit never clones a remote hook repo).
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import yaml
 
-from coding_agent_playbook.commands.init import _render_fresh_pre_commit
+from coding_agent_playbook.commands.init import (
+    PrecommitTemplateMissingError,
+    _render_fresh_pre_commit,
+    precommit_template_dir,
+)
 from coding_agent_playbook.sources.filesystem import _resource_subdir
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
-def test_precommit_template_is_packaged():
-    precommit_dir = _resource_subdir("coding_agent_playbook", "precommit")
-    assert precommit_dir is not None
-    assert (precommit_dir / "config.yaml.j2").is_file()
+
+def test_precommit_template_is_packaged() -> None:
+    assert (precommit_template_dir() / "config.yaml.j2").is_file()
+
+
+def test_precommit_template_dir_missing_raises(tmp_path: Path) -> None:
+    with pytest.raises(PrecommitTemplateMissingError) as excinfo:
+        precommit_template_dir(templates_root=tmp_path)
+    assert str(tmp_path / "precommit") in str(excinfo.value)
+
+
+def test_precommit_template_dir_without_the_template_file_raises(tmp_path: Path) -> None:
+    """The directory alone is not enough: ``config.yaml.j2`` itself must be there."""
+    (tmp_path / "precommit").mkdir()
+    with pytest.raises(PrecommitTemplateMissingError) as excinfo:
+        precommit_template_dir(templates_root=tmp_path)
+    assert excinfo.value.path == tmp_path / "precommit" / "config.yaml.j2"
+
+
+def test_resource_subdir_has_no_engine_precommit() -> None:
+    """The template is engine wiring, not content: it left ``resources/`` by design."""
+    assert _resource_subdir("coding_agent_playbook", "precommit") is None
 
 
 def _hooks(parsed: dict[str, Any]) -> dict[str, dict[str, Any]]:

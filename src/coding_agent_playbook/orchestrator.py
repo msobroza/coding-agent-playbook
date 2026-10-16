@@ -26,10 +26,12 @@ PR 10's invariants:
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from importlib import metadata
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.bundled_content import canonical_overlay_name
 from coding_agent_playbook.detector import detect, evaluate_predicate
 from coding_agent_playbook.hook_policy import (
     NO_HANDLER_SCHEMAS,
@@ -84,8 +86,8 @@ class OverlayResolver:
     """Merge engine + overlay + repo-local artifact lists by ID (SPEC §11).
 
     Resolution order (later wins on ID collision):
-      1. Engine package artifacts (``coding_agent_playbook.resources.rules/*``).
-      2. Each overlay package in ``config.overlays_enabled`` order.
+      1. Engine artifacts (the bundled ``content/core/``).
+      2. Each overlay package or bundled plugin, in ``config.overlays_enabled`` order.
       3. Repo-local artifacts under ``<repo>/playbook/``.
 
     For each ``(kind, id)`` pair the winner is kept; losers are recorded for
@@ -378,6 +380,34 @@ def installed_output_locations() -> tuple[str, ...]:
     return tuple(locations)
 
 
+def _warn_deprecated_overlays(config: Config, state: FileSystemStateSource) -> None:
+    """Print one stderr ``warning:`` per distinct deprecated overlay name (SPEC v0.19).
+
+    The line names the file to fix: the local file when it sets
+    ``overlays_enabled`` (lists replace whole in the SPEC §7.2 merge), else the
+    committed one. A print, not ``warnings.warn``: CLI users never see a
+    ``DeprecationWarning``, and pytest runs with ``filterwarnings = error``.
+    Called only from :meth:`SyncContext.from_repo`, so a directly built
+    ``SyncContext`` (or ``Config``) stays silent.
+
+    Example::
+
+        >>> _warn_deprecated_overlays(config, state)  # doctest: +SKIP
+        warning: <file>: overlays_enabled: '<old>' is deprecated; use '<new>'
+    """
+    if not config.deprecated_overlay_names:
+        return
+    local_sets_list = "overlays_enabled" in state.load_local_overrides()
+    source = state._CONFIG_LOCAL_FILENAME if local_sets_list else state._CONFIG_FILENAME
+    # Listed twice, a name is walked twice (canonical_overlay_list keeps it), but warned once.
+    for old in dict.fromkeys(config.deprecated_overlay_names):
+        print(
+            f"warning: {source}: overlays_enabled: '{old}' is deprecated; "
+            f"use '{canonical_overlay_name(old)}'",
+            file=sys.stderr,
+        )
+
+
 @dataclass
 class SyncContext:
     """Bundle of state every CLI command needs after reading the config.
@@ -415,6 +445,7 @@ class SyncContext:
         *,
         rule_registry: RuleRegistry | None = None,
         tolerate_hook_errors: bool = False,
+        warn_deprecated: bool = True,
     ) -> SyncContext:
         """Discovery: load config → detect facts → instantiate sources → resolve overlays.
 
@@ -428,11 +459,20 @@ class SyncContext:
         eval fail loudly); ``tolerate_hook_errors=True`` records each one on
         ``hook_load_errors`` instead, so ``playbook validate`` can report them
         all (prK §P P8c).
+
+        Prints one ``warning:`` line per deprecated ``coding_agent_playbook.packs.*``
+        overlay name, before anything else runs (:func:`_warn_deprecated_overlays`).
+        ``warn_deprecated=False`` is for an internal re-read inside a command that
+        already built its own context (the hook twins' policy read during
+        ``init``), so the user sees each warning once.
         """
         state_source = FileSystemStateSource(repo_root=repo_root)
+        config = state_source.load_config()
+        if warn_deprecated:
+            _warn_deprecated_overlays(config, state_source)
         return cls.from_config(
             repo_root,
-            state_source.load_config(),
+            config,
             rule_registry=rule_registry,
             tolerate_hook_errors=tolerate_hook_errors,
             policy_tables=state_source.load_policy_tables(),
@@ -468,8 +508,9 @@ class SyncContext:
                 repo_root=repo_root,
                 overlay_packages=list(config.overlays_enabled),
             )
-        # Engine + overlay artifacts come from importlib.resources via the
-        # FileSystemArtifactSource walking each package's ``resources/`` tree;
+        # FileSystemArtifactSource walks the engine and bundled-plugin artifacts
+        # in the bundled content (``content/core/``, ``content/plugins/<name>/``)
+        # and each overlay package's ``resources/`` tree via importlib.resources;
         # repo-local artifacts come from ``<repo>/playbook/``. v1 walks all of
         # those in a single ``list_*`` call — sufficient for PR 10. PRs 13+
         # may split per-layer if we need fine-grained source provenance.
@@ -481,8 +522,8 @@ class SyncContext:
         # (engine, overlays, repo-local) for the three-layer merge in
         # SPEC §11, but ``FileSystemArtifactSource`` currently returns a
         # single flattened list across all sources.
-        # v1: source already flattened; per-layer wiring lands when first
-        # overlay pack lands. See SPEC §11 for layer order.
+        # v1: source already flattened; per-layer wiring lands when the first
+        # overlay package needs it. See SPEC §11 for layer order.
         # ID collisions across the merged list still flag winners vs losers
         # via insertion-order semantics, which is enough for the engine-only
         # v1 we ship today.

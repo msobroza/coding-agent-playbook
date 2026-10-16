@@ -1,15 +1,18 @@
 """Environment checks run before ``playbook sync`` renders (SPEC §12.2, §13.1).
 
-A sync that cannot use every configured overlay package silently renders
-*without* it: ``FileSystemArtifactSource`` treats a package that fails to import
+Every ``overlays_enabled`` entry is an overlay package or bundled plugin, and a
+sync that cannot use one silently renders *without* it:
+``FileSystemArtifactSource`` treats an overlay package that fails to import
 (missing, or raising at import time) — or an importable one with no
-``resources/`` directory — like one that ships no artifacts. That is exactly what happens when the remote ``language: python``
+``resources/`` directory — and a bundled-plugin name with no
+``content/plugins/<leaf>/`` directory like a layer that ships no artifacts. The
+import failure is exactly what happens when the remote ``language: python``
 pre-commit hooks run in pre-commit's isolated venv, which holds only the engine
 at ``rev:`` — the post-checkout auto-sync would delete the org rules and shrink
-the managed ``.gitignore`` block on every checkout. So an unusable overlay is a
-hard error (non-zero exit, package and reason named, nothing written). A missing
-*adapter* is only warned about: its old output is kept and stays ignored (see
-``_sync_orphans``), so nothing is lost or published.
+the managed ``.gitignore`` block on every checkout. So an unusable overlay
+package or bundled plugin is a hard error (non-zero exit, name and reason given,
+nothing written). A missing *adapter* is only warned about: its old output is
+kept and stays ignored (see ``_sync_orphans``), so nothing is lost or published.
 
 :func:`unusable_overlays` is the one overlay check every command shares:
 ``sync`` refuses, ``validate`` fails, ``check`` flags, ``init --overlays`` refuses.
@@ -19,13 +22,20 @@ from __future__ import annotations
 
 import difflib
 import importlib
-import pkgutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook import packs as _packs
+from coding_agent_playbook.bundled_content import (
+    ENGINE_PACKAGE,
+    bundled_layer_root,
+    is_bundled_layer,
+    is_plugin_namespace,
+)
+
+# Re-exported: the preflight's callers and tests list the bundled plugins from here.
+from coding_agent_playbook.bundled_content import bundled_plugins as bundled_plugins
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -39,17 +49,16 @@ _HOOK_VENV_HINT = (
 
 _NOT_IMPORTABLE = "not importable"
 _NO_RESOURCES = "importable, but ships no resources/ directory, so it is not an overlay package"
+_NO_SUCH_PLUGIN = "no such bundled plugin"
+_PLUGIN_NAMESPACE_REASON = "the bundled plugin namespace, not a plugin"
 
-#: The engine's top-level package; a name starting with it reads like a pack typo.
-_ENGINE_PACKAGE = _packs.__name__.partition(".")[0]
-
-#: How close a name's last segment must be to a bundled pack's to earn the hint.
-_PACK_NAME_SIMILARITY = 0.75
+#: How close a name's last segment must be to a bundled plugin's to earn the hint.
+_PLUGIN_NAME_SIMILARITY = 0.75
 
 
 @dataclass(frozen=True)
 class UnusableOverlay:
-    """A configured overlay package that cannot contribute artifacts here.
+    """A configured overlay package or bundled plugin that cannot contribute artifacts here.
 
     Example::
 
@@ -67,12 +76,15 @@ class UnusableOverlay:
 def unusable_overlays(overlays: Sequence[str]) -> list[UnusableOverlay]:
     """Return, in order, the configured overlays that cannot contribute artifacts here.
 
-    An overlay is unusable when importing it fails, or when it imports but ships
-    no ``resources/`` directory (e.g. the parent ``coding_agent_playbook.packs``):
-    either way rendering would silently drop it. Each overlay is imported, as
-    rendering's ``importlib.resources.files`` would, so a package that raises at
-    import time is reported here — with its error — instead of crashing later. A
-    name that reads like a mistyped bundled pack gets the pack list in its reason.
+    Each entry is an overlay package or bundled plugin. An overlay package is
+    unusable when importing it fails, or when it imports but ships no
+    ``resources/`` directory (e.g. ``json``): either way rendering would
+    silently drop it. It is imported, as rendering's ``importlib.resources.files``
+    would, so a package that raises at import time is reported here — with its
+    error — instead of crashing later. A bundled-plugin name is never imported:
+    it is unusable when no ``content/plugins/<leaf>/`` matches it, and the bare
+    plugin namespace is never a plugin. A name that reads like a mistyped bundled
+    plugin gets the plugin list in its reason.
 
     Example::
 
@@ -83,24 +95,8 @@ def unusable_overlays(overlays: Sequence[str]) -> list[UnusableOverlay]:
     for name in overlays:
         reason = _unusable_reason(name)
         if reason is not None:
-            found.append(UnusableOverlay(name, reason + _pack_hint(name)))
+            found.append(UnusableOverlay(name, reason + _plugin_hint(name)))
     return found
-
-
-def bundled_packs(parent: ModuleType = _packs) -> list[str]:
-    """Dotted names of the packs bundled in the engine wheel, sorted.
-
-    Discovered with :mod:`pkgutil` under ``parent`` (the engine's ``packs``
-    package; injectable for tests), so adding a pack needs no list update here.
-    Only subpackages count: a helper module there would not be a pack.
-
-    Example::
-
-        >>> "coding_agent_playbook.packs.superpowers" in bundled_packs()
-        True
-    """
-    prefix = f"{parent.__name__}."
-    return sorted(info.name for info in pkgutil.iter_modules(parent.__path__, prefix) if info.ispkg)
 
 
 def missing_adapters(enabled: Iterable[str], discovered: Iterable[str]) -> list[str]:
@@ -118,9 +114,10 @@ def report_unusable_overlays(problems: Sequence[UnusableOverlay]) -> None:
     """Explain on stderr why the sync refused to run, one overlay per line."""
     listed = "".join(f"  {problem}\n" for problem in problems)
     print(
-        f"error: overlay package(s) in overlays_enabled are not usable here:\n{listed}"
+        "error: overlay package(s) or bundled plugin(s) in overlays_enabled are not usable "
+        f"here:\n{listed}"
         "Rendering without them would drop their rules and un-ignore their output, so nothing\n"
-        "was written. Fix the name, or install the package where 'playbook' runs.\n"
+        "was written. Fix the name, or install the overlay package where 'playbook' runs.\n"
         f"{_HOOK_VENV_HINT}",
         file=sys.stderr,
     )
@@ -156,7 +153,20 @@ def warn_legacy_cleanup(name: str) -> None:
 
 
 def _unusable_reason(name: str) -> str | None:
-    """Why ``name`` cannot serve as an overlay, or ``None`` when it can."""
+    """Why ``name`` cannot serve as an overlay, or ``None`` when it can.
+
+    The first two checks import nothing. The bare plugin namespace (either
+    spelling) is never a plugin, so a leftover ``packs/`` directory holding only
+    bytecode caches cannot change the result. A bundled layer is checked against
+    the content tree: the engine resolves to ``core/``, and a plugin name (either
+    namespace) resolves only when its leaf is a directory under
+    ``content/plugins/``. Every other name is imported and must ship a
+    ``resources/`` directory.
+    """
+    if is_plugin_namespace(name):
+        return _PLUGIN_NAMESPACE_REASON
+    if is_bundled_layer(name):
+        return None if bundled_layer_root(name) is not None else _NO_SUCH_PLUGIN
     try:
         module = importlib.import_module(name)
     except Exception as exc:
@@ -200,22 +210,22 @@ def _ships_resources(module: ModuleType) -> bool:
     return any((Path(location) / "resources").is_dir() for location in locations)
 
 
-def _pack_hint(name: str) -> str:
-    """`` (bundled packs: …)`` when ``name`` reads like a mistyped bundled pack, else ``""``."""
-    available = bundled_packs()
-    if not available or not _looks_like_pack(name, available):
+def _plugin_hint(name: str) -> str:
+    """`` (bundled plugins: …)`` when ``name`` reads like a mistyped bundled plugin, else ``""``."""
+    available = bundled_plugins()
+    if not available or not _looks_like_plugin(name, available):
         return ""
-    return f" (bundled packs: {', '.join(available)})"
+    return f" (bundled plugins: {', '.join(available)})"
 
 
-def _looks_like_pack(name: str, available: Sequence[str]) -> bool:
-    """True for a name under the engine package, or whose last segment is near a pack's.
+def _looks_like_plugin(name: str, available: Sequence[str]) -> bool:
+    """True for a name under the engine package, or whose last segment is near a plugin's.
 
     Hyphens count as underscores, so a distribution-style spelling still matches.
     """
     normalized = name.replace("-", "_")
-    if normalized.partition(".")[0] == _ENGINE_PACKAGE:
+    if normalized.partition(".")[0] == ENGINE_PACKAGE:
         return True
-    leaves = [pack.rpartition(".")[2] for pack in available]
+    leaves = [plugin.rpartition(".")[2] for plugin in available]
     leaf = normalized.rpartition(".")[2]
-    return bool(difflib.get_close_matches(leaf, leaves, n=1, cutoff=_PACK_NAME_SIMILARITY))
+    return bool(difflib.get_close_matches(leaf, leaves, n=1, cutoff=_PLUGIN_NAME_SIMILARITY))

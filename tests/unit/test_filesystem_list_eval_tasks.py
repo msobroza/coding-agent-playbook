@@ -1,8 +1,9 @@
 """Tests for ``FileSystemArtifactSource.list_eval_tasks`` (PR 11).
 
 PR 5 shipped this method as a stub returning ``[]``; PR 11 makes it walk the
-engine package's ``resources/eval_tasks/`` tree, each overlay's, and the
-consumer repo's ``playbook/eval_tasks/``.
+engine's ``content/core/eval_tasks/`` tree, each overlay's (a bundled plugin's
+``content/plugins/<name>/eval_tasks/``, a third-party overlay package's
+``resources/eval_tasks/``), and the consumer repo's ``playbook/eval_tasks/``.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ def _make_overlay_with_eval_task(
     prompt_id: str = "demo",
     description: str = "An overlay task",
 ) -> None:
-    """Create a tiny on-disk package with one eval task under resources/eval_tasks/."""
+    """Create a tiny third-party overlay package with one eval task under resources/eval_tasks/."""
     pkg_dir = tmp_path / package_name
     pkg_dir.mkdir(parents=True, exist_ok=True)
     (pkg_dir / "__init__.py").write_text("")
@@ -63,8 +64,8 @@ def overlay_cleanup(tmp_path: Path) -> Iterator[None]:
 
 
 def test_list_eval_tasks_walks_engine_resources(tmp_path: Path) -> None:
-    """The engine ships eval tasks under
-    ``coding_agent_playbook/resources/eval_tasks/`` (PR 13 onwards). Confirm
+    """The engine ships eval tasks under ``content/core/eval_tasks/``
+    (resolved through ``bundled_content``). Confirm
     the walker picks them up and tags them with
     ``source_package="coding_agent_playbook"``."""
     source = FileSystemArtifactSource(repo_root=tmp_path)

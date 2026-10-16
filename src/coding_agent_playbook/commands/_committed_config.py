@@ -36,7 +36,11 @@ class ConfigRewrite:
 
     Built only by :func:`plan_first_config`, :func:`plan_committed_update` and
     :func:`plan_detector_cache_refresh`, each of which has already checked that
-    ``table``, with the local file merged on top, loads.
+    ``table``, with the local file merged on top, loads. For a refresh, ``table``
+    keeps every other key as parsed (SPEC §12.5), so ``config`` is the
+    canonicalized view of ``table``: a deprecated ``coding_agent_playbook.packs.*``
+    overlay name stays in ``table`` but is ``plugins.*`` in ``config.overlays_enabled``
+    (and listed in ``config.deprecated_overlay_names``).
     """
 
     config: Config

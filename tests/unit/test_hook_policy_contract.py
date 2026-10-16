@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 ENGINE = "coding_agent_playbook"
 OVERLAY = "acme_rules"
 REPO_LOCAL = "<repo-local>"
-PACK = "coding_agent_playbook.packs.superpowers"
+PACK = "coding_agent_playbook.plugins.superpowers"
 _EXTERNAL = {"command": "python", "script": "scripts/check.py"}
 
 

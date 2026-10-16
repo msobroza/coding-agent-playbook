@@ -16,6 +16,7 @@ from coding_agent_playbook._atomic_io import atomic_write_bytes
 from coding_agent_playbook._layers import ENGINE_PACKAGE as ENGINE_PACKAGE
 from coding_agent_playbook._layers import REPO_LOCAL_SOURCE as REPO_LOCAL_SOURCE
 from coding_agent_playbook._toml import dump_toml
+from coding_agent_playbook.bundled_content import bundled_layer_root, is_bundled_layer
 from coding_agent_playbook.config import Config, ConfigError, check_config_file
 from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
@@ -59,12 +60,24 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 
 
 def _resource_subdir(package: str, subdir: str) -> Path | None:
-    """Resolve ``<package>/resources/<subdir>`` via importlib.resources.
+    """Resolve a layer's ``<subdir>`` kind directory, or ``None`` when it ships none.
+
+    A bundled layer (the engine, or a bundled plugin under either namespace)
+    reads ``<subdir>`` from its directory in the content root
+    (``bundled_content.bundled_layer_root``) and is never imported. Every other
+    package resolves ``<package>/resources/<subdir>`` via importlib.resources.
 
     Returns ``None`` if the package is not importable, has no ``resources/``
-    directory, or has no matching subdirectory. Never raises — sources should
-    silently skip packages that ship no artifacts of a given kind (SPEC §20.3).
+    directory, or has no matching subdirectory, so sources silently skip
+    packages that ship no artifacts of a given kind (SPEC §20.3). The one raise
+    is :class:`BundledContentMissingError` for a bundled layer when the engine's
+    content root is missing: a broken install must fail loudly, not render
+    without the engine's artifacts.
     """
+    # Outside the ``except Exception`` guard below on purpose: a missing content
+    # root must propagate, never read as "this layer ships nothing".
+    if is_bundled_layer(package):
+        return _bundled_subdir(package, subdir)
     try:
         resource_root = resources.files(package).joinpath("resources", subdir)
     except Exception:
@@ -75,13 +88,37 @@ def _resource_subdir(package: str, subdir: str) -> Path | None:
         # error, so discovery must not crash before that check can report it.
         return None
     # We need a ``Path`` for ``rglob``-based walking, not just a
-    # ``Traversable``. The on-disk backend used by
-    # ``resources.files(<importable-package>)`` always materializes as a
-    # ``PosixPath``/``MultiplexedPath``, so ``Path(str(...))`` is safe.
+    # ``Traversable``. On the on-disk backend, ``resources.files(<package>)`` is a
+    # ``PosixPath``, or a ``MultiplexedPath`` for a namespace package spread over
+    # several portions. ``str()`` of a ``MultiplexedPath`` is not a filesystem
+    # path, so the conversion is safe only because it happens after the full
+    # two-segment join, which descends into the one portion holding ``<subdir>``.
+    # The limit (pre-existing, not supported): a kind directory that itself spans
+    # portions stays a ``MultiplexedPath``, ``Path(str(...))`` is not a directory,
+    # and that overlay's artifacts of this kind are skipped.
     candidate = Path(str(resource_root))
     if not candidate.is_dir():
         return None
     return candidate
+
+
+def _bundled_subdir(layer: str, subdir: str) -> Path | None:
+    """``<layer root>/<subdir>`` for a bundled layer, or ``None`` when it has no such dir.
+
+    ``layer`` is the engine or a bundled-plugin name (either namespace); an
+    unknown plugin leaf resolves to ``None`` like a missing kind directory.
+    Raises :class:`BundledContentMissingError` when the content root is missing.
+
+    Example::
+
+        >>> _bundled_subdir("coding_agent_playbook", "rules")  # doctest: +SKIP
+        PosixPath('/repo/content/core/rules')
+    """
+    layer_root = bundled_layer_root(layer)
+    if layer_root is None:
+        return None
+    candidate = layer_root / subdir
+    return candidate if candidate.is_dir() else None
 
 
 def _iter_md_files(root: Path) -> Iterator[Path]:
@@ -190,8 +227,10 @@ def _find_skill_md(skill_dir: Path) -> Path | None:
 
 
 class FileSystemArtifactSource(ArtifactSource):
-    """Walks importlib.resources for the engine + overlay packages, plus
-    <repo>/playbook/ for repo-local artifacts (SPEC §20.3, §11).
+    """Walks the engine's bundled content (``content/core/`` and the enabled
+    ``content/plugins/<name>/``, located by ``bundled_content``), importlib.resources
+    for overlay packages, plus <repo>/playbook/ for repo-local artifacts
+    (SPEC §20.3, §11).
 
     ``extra_resource_roots`` adds ``resources/`` directories found by path
     rather than by package name — config-less ``playbook validate`` passes an
@@ -326,12 +365,17 @@ class FileSystemArtifactSource(ArtifactSource):
     def list_eval_tasks(self) -> list[EvalTask]:
         """Walk every layer's ``eval_tasks/<id>/`` (:meth:`layer_roots` order).
 
-        Later layers do NOT override earlier ones here — the orchestrator's
-        :class:`OverlayResolver` handles ID-based collision semantics for
-        rules/prompts/skills, but eval tasks are aggregated as-is in v1 (no
-        per-layer override pass yet; the collision-by-id pattern is identical
-        and lands when first overlay ships eval tasks). Each task's
-        ``source_package`` is its layer's label.
+        Each layer's ``eval_tasks/`` (``content/core/eval_tasks/`` for the
+        engine, ``content/plugins/<name>/eval_tasks/`` for a bundled plugin,
+        ``<pkg>/resources/eval_tasks/`` for an overlay package, then
+        ``<repo>/playbook/eval_tasks/``). Later layers do NOT override earlier
+        ones here — the orchestrator's :class:`OverlayResolver` handles ID-based
+        collision semantics for rules/prompts/skills, but eval tasks are
+        aggregated as-is in v1 (no per-layer override pass yet; the
+        collision-by-id pattern is identical and lands when first overlay ships
+        eval tasks). Each task's ``source_package`` is its layer's label (the
+        engine package, a bundled-plugin or overlay-package name, or
+        ``"<repo-local>"``).
         """
         return [
             load_eval_task_from_dir(task_dir, source_package=label)

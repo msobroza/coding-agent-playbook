@@ -14,8 +14,8 @@ from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands import check as _check
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.lockfile import drift_entries
-from coding_agent_playbook.packs.superpowers import PACK_NAME
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from tests.plugins.superpowers_expectations import PLUGIN_NAME
 from tests.toml_equality import assert_toml_identical
 
 if TYPE_CHECKING:
@@ -226,7 +226,7 @@ left = true
 #: owns and tables it does not manage. None of them may reach the committed file.
 _LOCAL_OVERRIDES = f"""\
 adapters_enabled = ["claude_code"]
-overlays_enabled = ["{PACK_NAME}"]
+overlays_enabled = ["{PLUGIN_NAME}"]
 
 [user_choices]
 style = "google"
@@ -306,7 +306,7 @@ def test_check_refresh_never_writes_local_overrides_into_the_committed_config(
     assert local.read_bytes() == local_bytes
     out = capsys.readouterr().out
     assert out.startswith(f"Refreshed detector_cache in {_PRIMARY}.\n")
-    assert f"\n  Overlays: {PACK_NAME}\n" in out  # the local overlay list, as sync would run
+    assert f"\n  Overlays: {PLUGIN_NAME}\n" in out  # the local overlay list, as sync would run
 
 
 @pytest.mark.usefixtures("hermetic_git_env")
