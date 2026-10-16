@@ -93,9 +93,9 @@ class Config:
     # explicit ``OutputConfig()`` so ``to_dict`` round-trips sparsely while
     # ``playbook init`` can still write ``commit = false`` for discoverability.
     output: OutputConfig | None = None
-    # Derived in ``__post_init__``, never read or written: the deprecated
-    # ``coding_agent_playbook.packs.*`` names ``overlays_enabled`` was given, kept
-    # so ``SyncContext.from_repo`` can warn about them (SPEC v0.19).
+    # The deprecated ``coding_agent_playbook.packs.*`` names ``overlays_enabled``
+    # was given (SPEC v0.19). Derived in ``__post_init__``; read only by
+    # ``SyncContext.from_repo``'s deprecation warning; never written by ``to_dict``.
     deprecated_overlay_names: tuple[str, ...] = field(
         default=(), init=False, compare=False, repr=False
     )
