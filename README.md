@@ -232,7 +232,9 @@ which adapters are enabled (as long as at least one rule or hook advisory applie
 Claude Code gets the same rule sections in `.claude/rules/coding-agent-playbook.md`,
 which it loads natively; the generated `.claude/CLAUDE.md` is a rule-free stub, so
 OpenCode v1 (which attaches that file when it reads under `.claude/`) never loads
-the rules twice (SPEC §10.3.1). Any other `.claude/rules/` file is yours.
+the rules twice (SPEC §10.3.1). Any other `.claude/rules/` file is yours, and
+`sync` exits 1 rather than overwrite a file of yours already named
+`coding-agent-playbook.md` there or write through a symlinked `.claude/rules`.
 
 What `sync` does with git, by `[output] commit` in `.coding-agent-playbook.toml`:
 
@@ -621,9 +623,11 @@ their own (SPEC §6.6.7).
 
 Hooks are **off until a repo opts in**, and an engine upgrade never turns them
 on: with no `[hooks] enabled = true`, every mode of `playbook sync` renders byte
-for byte what it rendered before, and write mode prints one line, `hooks
-available: add [hooks] enabled = true or re-run playbook init`. `playbook init`
-asks `Enable assistant lifecycle hooks? [Y/n]` and writes your answer;
+for byte what it rendered before (apart from the Claude Code rules' one-time
+move to `.claude/rules/coding-agent-playbook.md`, SPEC §10.3.1), and write mode
+prints one line, `hooks available: add [hooks] enabled = true or re-run playbook
+init`. `playbook init` asks `Enable assistant lifecycle hooks? [Y/n]` and writes
+your answer;
 `playbook init --no-hooks` writes `enabled = false` without asking. Or edit the
 committed config yourself:
 
@@ -838,7 +842,8 @@ Claude to tell you when that heartbeat is missing.
   broken install fails open instead of blocking your assistant (unless an
   overlay opted into its strict mode).
 - An engine upgrade never adds executable hooks: an absent `[hooks]` table (or
-  one without `enabled = true`) means zero byte change.
+  one without `enabled = true`) means no hook output: no settings entries,
+  launcher, shim or advisory text.
 - `.local.toml` never carries policy: `[hooks]`, `[guardrails]` and `[metrics]`
   there are ignored.
 - No repository or overlay code runs without your user-local trust approval.

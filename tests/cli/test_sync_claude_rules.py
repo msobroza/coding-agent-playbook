@@ -2,16 +2,19 @@
 
 The ``claude_code`` adapter writes the rule sections to
 ``.claude/rules/coding-agent-playbook.md`` and leaves ``.claude/CLAUDE.md`` a
-rule-free stub, because OpenCode v1 attaches ``.claude/CLAUDE.md`` whenever it
-reads a file under ``.claude/`` (a second copy of the rules) and no OpenCode
-version reads ``.claude/rules/``. These tests pin the end-to-end layout: both
-files are written, locked and gitignored; a pre-upgrade ``.claude/CLAUDE.md``
-(full rules) is rewritten to the stub; other ``.claude/rules/`` files stay the
-user's.
+rule-free stub, because OpenCode v1 attaches ``.claude/CLAUDE.md`` when its read
+tool opens a file under ``.claude/`` (once per uncompacted session, SPEC §10.6:
+a second copy of the rules) and no OpenCode version discovers ``.claude/rules/``
+by default. These tests pin the end-to-end layout: both files are written,
+locked and gitignored; a pre-upgrade ``.claude/CLAUDE.md`` (full rules) is
+rewritten to the stub; other ``.claude/rules/`` files stay the user's, and so
+does a same-named file without the sentinel or a symlinked ``.claude/rules``
+(refused, nothing written).
 """
 
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING
 
 import pytest
@@ -19,6 +22,7 @@ import pytest
 from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from tests.cli.hook_repo import tree
 from tests.conftest import _DEFAULT_CONFIG
 from tests.fakes import FakeGitClient
 
@@ -40,6 +44,10 @@ _NO_CLAUDE_CONFIG = _DEFAULT_CONFIG.replace(
     'adapters_enabled = ["continue", "claude_code", "opencode"]',
     'adapters_enabled = ["continue", "opencode"]',
 )
+#: A user's own file that happens to take the engine's name (no sentinel line).
+_USER_RULES = b"# My own team rules\nAlways use tabs.\n"
+
+posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
 
 
 @pytest.fixture
@@ -110,6 +118,68 @@ def test_sync_never_touches_other_claude_rules_files(repo: Path) -> None:
     assert "team.md" not in _read(repo, ".gitignore")
     assert "legacy.md" not in _read(repo, ".gitignore")
     assert not {".claude/rules/team.md", ".claude/rules/legacy.md"} & _lock_paths(repo)
+
+
+@pytest.mark.parametrize("tracked", [True, False], ids=["committed", "untracked"])
+def test_sync_refuses_a_user_file_at_the_rules_path(
+    repo: Path, capsys: pytest.CaptureFixture[str], tracked: bool
+) -> None:
+    """Regression: a same-named user file was overwritten (an untracked one lost
+    for good). It is refused before any adapter writes, like the launcher."""
+    user_file = repo / _RULES_FILE
+    user_file.parent.mkdir(parents=True)
+    user_file.write_bytes(_USER_RULES)
+    git = FakeGitClient(tracked={_RULES_FILE} if tracked else set())
+    before = tree(repo, skip=())
+
+    assert _sync.execute(repo, git=git) == 1
+
+    err = capsys.readouterr().err
+    assert f"error: {_RULES_FILE}: it exists without the playbook sentinel" in err
+    assert f"playbook sync stopped; {_RULES_FILE} was not changed" in err
+    assert "Move or rename what is in the way" in err
+    assert user_file.read_bytes() == _USER_RULES
+    assert tree(repo, skip=()) == before  # no stub, no lockfile, no .gitignore edit
+
+
+def test_check_reports_a_user_file_at_the_rules_path_as_unverifiable(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert _sync.execute(repo, git=FakeGitClient()) == 0
+    (repo / _RULES_FILE).write_bytes(_USER_RULES)
+    capsys.readouterr()
+
+    assert _sync.execute(repo, check=True, git=FakeGitClient()) == 1
+
+    out = capsys.readouterr().out
+    assert f"Cannot verify {_RULES_FILE}: " in out
+    assert "Generated content differs" not in out
+    assert (repo / _RULES_FILE).read_bytes() == _USER_RULES
+
+
+@posix_only
+@pytest.mark.parametrize("linked", [".claude", ".claude/rules"])
+def test_sync_refuses_a_symlinked_rules_directory(
+    repo: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+    capsys: pytest.CaptureFixture[str],
+    linked: str,
+) -> None:
+    """Regression: a ``.claude/rules`` linked to a shared folder got the engine
+    file written outside the repo, an absolute lockfile path and endless drift."""
+    shared = tmp_path_factory.mktemp("shared")  # outside the repo (``repo`` is tmp_path)
+    (repo / linked).parent.mkdir(parents=True, exist_ok=True)
+    (repo / linked).symlink_to(shared, target_is_directory=True)
+    before = tree(repo, skip=())
+
+    assert _sync.execute(repo, git=FakeGitClient()) == 1
+    assert _sync.execute(repo, check=True, git=FakeGitClient()) == 1
+
+    captured = capsys.readouterr()
+    assert f"{linked} is a symbolic link" in captured.err
+    assert f"Cannot verify {_RULES_FILE}: {linked} is a symbolic link" in captured.out
+    assert list(shared.rglob("*")) == []
+    assert tree(repo, skip=()) == before
 
 
 def test_disabling_claude_code_settles_both_files(repo: Path) -> None:

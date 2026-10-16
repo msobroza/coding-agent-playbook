@@ -15,14 +15,15 @@
 - :func:`check_settings_readable`: refuses a ``settings.json`` the Claude Code
   merge would choke on *before* any adapter writes;
 - :func:`check_runtime_outputs_owned`: refuses, just as early, a user file (or
-  a symlink) where an adapter is about to write a runtime output whole — the
-  launcher, the OpenCode shim (``adapters._owned_files``);
+  a symlink) where an adapter is about to write an engine-owned file whole — the
+  launcher, the OpenCode shim, the Claude Code rules file
+  (``adapters._owned_files``);
 - :func:`finish_write`: write mode's pins, summary lines and approvals;
 - :func:`opencode_restart_notice`: the §C.1.5 restart line, from the previous
   and the new lockfile's whole-file shim entry (both ``[output] commit``
   settings; never in a check, where no lockfile is written).
 
-An absent ``[hooks]`` table means zero byte change plus one notice line: an
+An absent ``[hooks]`` table means no hook output plus one notice line: an
 engine upgrade never switches executable hooks on.
 """
 
@@ -41,6 +42,7 @@ from coding_agent_playbook._guard_config_ruff import (
 from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
 from coding_agent_playbook.adapters._owned_files import check_engine_owned
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
+from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_RULES_PATH
 from coding_agent_playbook.adapters.claude_settings import (
     CLAUDE_SETTINGS_PATH,
     decode_settings,
@@ -294,12 +296,17 @@ def check_runtime_outputs_owned(
     could be in the way). Called before any adapter writes, like
     :func:`check_settings_readable`, so a user's same-named file or a symlink
     on the way stops the sync with nothing written (review findings #1, #2).
+    With ``claude_code`` on, its rules file is checked too, hooks or not: it
+    sits in ``.claude/rules/``, a directory of the user's own files (SPEC
+    §10.3.1). Conservatively, even when no rule would be written there.
 
     Example: ``check_runtime_outputs_owned(ctx.repo_root, adapters, rendered.hooks)``.
     """
     for adapter in adapters.values():
         for relative in adapter.planned_runtime_outputs(hooks.resolved):
             check_engine_owned(repo_root / relative, repo_root)
+    if _CLAUDE in adapters:
+        check_engine_owned(repo_root / CLAUDE_RULES_PATH, repo_root)
 
 
 def report_owned_file_error(exc: UserOwnedFileError, *, check: bool) -> int:

@@ -134,7 +134,10 @@ def _render(name: str, rule: Rule, root: Path) -> dict[str, bytes]:
 def test_rules_without_lint_codes_render_byte_identically(
     tmp_path: Path, adapter: str, rule_id: str
 ) -> None:
-    """Codes never reach CLAUDE.md, AGENTS.md or Continue; only the sidecar records them."""
+    """Codes never reach the Claude Code rules file, AGENTS.md or Continue.
+
+    Only the sidecar records them.
+    """
     linked = _engine_rules()[rule_id]
     plain = dataclasses.replace(
         linked, frontmatter=dataclasses.replace(linked.frontmatter, lint_codes={})

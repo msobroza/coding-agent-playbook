@@ -117,9 +117,10 @@ def _render_into(
     ``settings.json`` — are read from the real repo through ``ctx``; only the
     writes go to ``output_root``. So ``--check`` modes render into an empty
     scratch dir without copying the working tree. Every template runs, and a
-    ``settings.json`` the merge would refuse or a user file where a runtime
-    output (the launcher, the OpenCode shim) goes is rejected, before the
-    first write. Returns the written paths with their provenance, and the hooks.
+    ``settings.json`` the merge would refuse or a user file where an
+    engine-owned file (the launcher, the OpenCode shim, the Claude Code rules
+    file) goes is rejected, before the first write. Returns the written paths
+    with their provenance, and the hooks.
     """
     rendered = render_artifacts(ctx)
     _sync_hooks.check_settings_readable(ctx, rendered.hooks, prior)
@@ -186,7 +187,7 @@ def execute(
     fakes. Returns 1, having written nothing, on any validate finding, when a
     template is rejected by the Jinja sandbox, when ``settings.json`` is
     not valid JSON, or when a user file (or a symlink) holds the path of the
-    launcher or the OpenCode shim.
+    launcher, the OpenCode shim or the Claude Code rules file.
 
     Example::
 

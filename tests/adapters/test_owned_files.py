@@ -20,6 +20,7 @@ from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._owned_files import (
     UserOwnedFileError,
     check_engine_owned,
+    crosses_symlink,
     write_engine_owned,
 )
 from coding_agent_playbook.adapters.base import Adapter
@@ -159,6 +160,27 @@ def test_fifo_at_the_path_is_refused_without_opening_it(tmp_path: Path) -> None:
     os.mkfifo(target)
 
     assert "not a regular file" in _refusal(target, tmp_path).reason
+
+
+@posix_only
+@pytest.mark.parametrize("linked", [".opencode", ".opencode/plugins", _REL])
+def test_crosses_symlink_sees_a_link_at_or_below_the_repo_root(tmp_path: Path, linked: str) -> None:
+    repo, outside = tmp_path / "repo", _write(tmp_path / "outside" / "x.js", _USER)
+    (repo / linked).parent.mkdir(parents=True, exist_ok=True)
+    (repo / linked).symlink_to(outside if linked == _REL else outside.parent)
+
+    assert crosses_symlink(repo / _REL, repo)
+
+
+@posix_only
+def test_crosses_symlink_ignores_a_link_above_the_repo_root(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    _write(real / _REL, _USER)
+    alias = tmp_path / "alias"
+    alias.symlink_to(real, target_is_directory=True)
+
+    assert not crosses_symlink(alias / _REL, alias)
+    assert not crosses_symlink(real / ".opencode" / "absent.js", real)
 
 
 def test_check_alone_writes_nothing(tmp_path: Path) -> None:

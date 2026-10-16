@@ -23,11 +23,12 @@ Why the rules (and, since PR K, the hook advisories and the heartbeat line)
 leave ``.claude/CLAUDE.md``: OpenCode v1 (anomalyco/opencode v1.19.3,
 ``session/instruction.ts:171-218`` via ``tool/read.ts:300``) attaches the first
 ``AGENTS.md``/``CLAUDE.md`` of every directory between a file it reads and its
-working directory, so any read under ``.claude/`` added a second full copy of
-the rules the root ``AGENTS.md`` already gives it, plus a heartbeat instruction
-a hookless OpenCode session can never satisfy. No OpenCode version reads
-``.claude/rules/`` (v1 only looks for files named
-``AGENTS.md``/``CLAUDE.md``/``CONTEXT.md``; v2 reads only ``AGENTS.md``), while
+working directory, so when its read tool opened a file under ``.claude/`` (once
+per uncompacted session, SPEC §10.6) it added a second full copy of the rules
+the root ``AGENTS.md`` already gives it, plus a heartbeat instruction a hookless
+OpenCode session can never satisfy. No OpenCode version discovers
+``.claude/rules/`` by default (v1 looks up files named
+``AGENTS.md``/``CLAUDE.md``/``CONTEXT.md``; v2 only ``AGENTS.md``), while
 Claude Code loads a ``.claude/rules/*.md`` file without ``paths:`` frontmatter
 "at launch with the same priority as ``.claude/CLAUDE.md``"
 (code.claude.com/docs/en/memory). Live-verified on Claude Code 2.1.292
@@ -44,6 +45,11 @@ from typing import TYPE_CHECKING, ClassVar, Final
 
 from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._claude_hooks import ClaudeHookEmitter, plans_launcher
+from coding_agent_playbook.adapters._owned_files import (
+    check_engine_owned,
+    crosses_symlink,
+    write_engine_owned,
+)
 from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_rule_paths import (
@@ -230,8 +236,10 @@ class ClaudeCodeAdapter(Adapter):
 
         ``settings.json`` is merged first: a file that cannot be merged safely
         raises :class:`~.claude_settings.SettingsMergeError` before this adapter
-        writes anything. Returns the paths written; ``settings.json`` only when
-        the merge changed it.
+        writes anything. A rules-file path the user holds raises
+        :class:`~._owned_files.UserOwnedFileError` (``playbook sync`` checks it
+        on the real repo before any adapter runs). Returns the paths written;
+        ``settings.json`` only when the merge changed it.
 
         Example::
 
@@ -246,16 +254,22 @@ class ClaudeCodeAdapter(Adapter):
         """Write the rule-free stub and the rules file; ``[]`` when there is nothing to carry.
 
         Nothing buffered and no heartbeat line writes neither file, so a stale
-        engine-owned pair is left to :meth:`stale_outputs`.
+        engine-owned pair is left to :meth:`stale_outputs`. ``.claude/rules/``
+        is the user's directory, so the rules file is written only over nothing
+        or a sentinel-tagged file, never through a symlink (``_owned_files``);
+        it is checked before the stub is written, so a refusal
+        (:class:`~._owned_files.UserOwnedFileError`) leaves neither file
+        half-written. The stub is overwritten as before.
         """
         body = self._rules_body()
         if body is None:
             return []
+        rules_path = repo_root / CLAUDE_RULES_PATH
+        check_engine_owned(rules_path, repo_root)
+        rules_text = f"{_generated_header(_RULES_FILE_TITLE)}\n{body}"
         return [
             _write_output(repo_root / CLAUDE_MD_PATH, _generated_header(_CLAUDE_MD_TITLE)),
-            _write_output(
-                repo_root / CLAUDE_RULES_PATH, f"{_generated_header(_RULES_FILE_TITLE)}\n{body}"
-            ),
+            write_engine_owned(rules_path, repo_root, rules_text.encode("utf-8")),
         ]
 
     def _rules_body(self) -> str | None:
@@ -299,9 +313,10 @@ class ClaudeCodeAdapter(Adapter):
         - ``.claude/commands/``: every sentinel-tagged file not in
           ``written_paths`` (the ABC's sentinel scan).
         - ``.claude/CLAUDE.md`` and ``.claude/rules/coding-agent-playbook.md``:
-          each only if it carries the sentinel and was not re-written this
-          sync (``finalize`` skipped it), so a user-authored file at either
-          path is preserved. No other ``.claude/rules/`` file is ever reported.
+          each only if it carries the sentinel, was not re-written this sync
+          (``finalize`` skipped it) and is reached through no symlink, so a
+          user-authored or linked file at either path is preserved. No other
+          ``.claude/rules/`` file is ever reported.
 
         "Sentinel-tagged" is the shared anchored rule (``_sentinel.has_sentinel``
         via :meth:`Adapter._carries_sentinel`). ``.claude/skills/`` is
@@ -316,11 +331,19 @@ class ClaudeCodeAdapter(Adapter):
         """
         stale = self._stale_by_sentinel(written_paths, repo_root)
         composites = (repo_root / rel for rel in CLAUDE_CODE_COMPOSITES)
-        stale.extend(path for path in composites if self._is_stale_composite(path, written_paths))
+        stale.extend(
+            path for path in composites if self._is_stale_composite(path, repo_root, written_paths)
+        )
         return stale
 
-    def _is_stale_composite(self, path: Path, written_paths: set[Path]) -> bool:
-        """An engine-owned (sentinel-tagged) composite file this sync did not re-write."""
-        return (
-            path.is_file() and path.resolve() not in written_paths and self._carries_sentinel(path)
-        )
+    def _is_stale_composite(self, path: Path, repo_root: Path, written_paths: set[Path]) -> bool:
+        """An engine-owned (sentinel-tagged) composite file this sync did not re-write.
+
+        Never one reached through a symlink (the file itself, ``.claude`` or
+        ``.claude/rules``): the engine never writes through a link, so whatever
+        it reaches is the user's, possibly outside the repo — the rule of
+        :meth:`Adapter._scan_targets` and the lockfile orphan scan.
+        """
+        if crosses_symlink(path, repo_root) or not path.is_file():
+            return False
+        return path.resolve() not in written_paths and self._carries_sentinel(path)

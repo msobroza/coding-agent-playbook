@@ -3,10 +3,12 @@
 Some outputs are one file at a fixed, user-visible path that ``playbook sync``
 writes whole: the Claude Code launcher ``.claude/hooks/playbook/launch.sh`` and
 the OpenCode shim ``.opencode/plugins/playbook-hooks.js`` (an adapter's
-``runtime_outputs``). Those directories also hold the user's own files, so the
-path is the engine's only when nothing is there yet, or when the file there
-carries the sentinel line (``_sentinel.file_has_sentinel``, the same predicate
-the stale-output scans and hook guards decide on). Anything else is refused,
+``runtime_outputs``), and the Claude Code rules file
+``.claude/rules/coding-agent-playbook.md`` (SPEC §10.3.1). Those directories
+also hold the user's own files, so the path is the engine's only when nothing
+is there yet, or when the file there carries the sentinel line
+(``_sentinel.file_has_sentinel``, the same predicate the stale-output scans and
+hook guards decide on). Anything else is refused,
 never overwritten (code review of claude/prk-hooks-impl, findings #1 and #2):
 
 - a regular file without the sentinel line: a user file of the same name;
@@ -16,9 +18,10 @@ never overwritten (code review of claude/prk-hooks-impl, findings #1 and #2):
 - a non-directory where a parent directory belongs.
 
 ``playbook sync`` runs :func:`check_engine_owned` on the real repo for every
-file an adapter plans to write (``Adapter.planned_runtime_outputs``) before any
-adapter writes, so a refusal exits 1 with nothing written; the adapters write
-through :func:`write_engine_owned`, which checks again.
+file an adapter plans to write (``Adapter.planned_runtime_outputs``, plus the
+rules file whenever ``claude_code`` is on) before any adapter writes, so a
+refusal exits 1 with nothing written; the adapters write through
+:func:`write_engine_owned`, which checks again.
 """
 
 from __future__ import annotations
@@ -28,9 +31,10 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook._sentinel import file_has_sentinel
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
-__all__ = ["UserOwnedFileError", "check_engine_owned", "write_engine_owned"]
+__all__ = ["UserOwnedFileError", "check_engine_owned", "crosses_symlink", "write_engine_owned"]
 
 
 class UserOwnedFileError(Exception):
@@ -84,6 +88,26 @@ def write_engine_owned(path: Path, repo_root: Path, data: bytes) -> Path:
     return path
 
 
+def crosses_symlink(path: Path, repo_root: Path) -> bool:
+    """Whether ``path``, or a directory between it and ``repo_root``, is a symlink.
+
+    The same walk as :func:`check_engine_owned` (nothing at or above
+    ``repo_root`` counts), for a stale-output check: the engine never writes
+    through a link, so a file reached through one is the user's.
+
+    Example: ``crosses_symlink(repo / ".claude/rules/x.md", repo)`` (``True`` if ``.claude`` is a link).
+    """
+    return any(entry.is_symlink() for entry in _entries_down_to(path, repo_root))
+
+
+def _entries_down_to(path: Path, repo_root: Path) -> Iterator[Path]:
+    """Each entry from ``repo_root``'s child down to ``path`` itself, as spelled (nothing resolved)."""
+    current = repo_root
+    for part in path.relative_to(repo_root).parts:
+        current = current / part
+        yield current
+
+
 def _relative_posix(path: Path, repo_root: Path) -> str:
     """``path`` relative to ``repo_root`` as spelled (nothing resolved), POSIX."""
     try:
@@ -96,9 +120,7 @@ def _relative_posix(path: Path, repo_root: Path) -> str:
 
 def _parent_refusal(path: Path, repo_root: Path) -> str | None:
     """Why a directory between ``repo_root`` and ``path`` makes it the user's, else None."""
-    current = repo_root
-    for part in path.relative_to(repo_root).parts[:-1]:
-        current = current / part
+    for current in _entries_down_to(path.parent, repo_root):
         shown = _relative_posix(current, repo_root)
         if current.is_symlink():
             return f"{shown} is a symbolic link, and the engine never writes through one"
