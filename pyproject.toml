@@ -136,11 +136,14 @@ src = ["src", "tests"]
 # deliberate "before" code.
 # Eval-task fixtures under setup/ are deliberately unclean needle material (the
 # find-injected-vuln-* bugs live there), so `ruff check --fix` / `ruff format`
-# must never rewrite them either (specs/prK-lifecycle-hooks.md §P9).
+# must never rewrite them either (specs/prK-lifecycle-hooks.md §P9). Eval tasks
+# are per layer, so a bundled plugin's fixtures get the same exclude as core's.
+# mypy needs none: catalog/ is outside its `files`.
 extend-exclude = [
     "catalog/plugins/superpowers",
     "catalog/plugins/python_design/**/*.md",
     "catalog/core/eval_tasks/*/setup",
+    "catalog/plugins/*/eval_tasks/*/setup",
 ]
 # Pre-commit and the hook/Stop stages pass file names explicitly, and ruff
 # ignores the excludes above for an explicitly passed path unless force-exclude
