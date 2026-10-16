@@ -9,14 +9,18 @@ a Python file tool write; the only §E.3-§E.5 hook with a working-tree side
 effect, so its builtin alone holds the ``mutates_edited_file`` capability
 (validate refuses it anywhere else). Per edited file:
 
-- **anti-churn**: the file is rewritten only when it is new/untracked or its
-  HEAD blob is format-clean (``ruff format --check`` on the HEAD text, cached
-  in the state root by blob id, so once per blob, not per edit). A legacy
-  unformatted file is never reformatted, only reported;
 - **M1** fixes only ``guard_config.ruff.safe_fix_select`` (``{I, UP}`` ∩ the
   project's selection, narrowed by this hook's ``safe_fix_allowlist``), never
   ``F401``/``F841``/``F811``: the agent adds an import in one Edit and its
-  first use in the next. **M2** then formats, so the formatter has the last word;
+  first use in the next. **M2** then formats, so the formatter has the last
+  word. Both run over the file's bytes on stdin, and the result is written
+  back only when it differs;
+- **anti-churn**: it is written only when the file is new/untracked or its
+  HEAD blob is format-clean (``ruff format --check`` on the HEAD text, cached
+  in the state root by blob id, so once per blob, not per edit). The HEAD
+  check runs only when M1/M2 changed the bytes: an edit they leave alone costs
+  the one format call (review finding #5), and a cached "not clean" skips
+  them. A legacy unformatted file is never reformatted, only reported;
 - then bucket 1: what CI fails on, on the changed lines, at most
   ``max_project_lines``. It runs before the lint hooks (priority 50 < 60), so
   their D1 sees the mutated file.
@@ -36,6 +40,7 @@ skips with one note per session (shared by every consumer); never blocks.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from contextlib import suppress
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime._ruff import (
@@ -45,6 +50,7 @@ from coding_agent_playbook.hook_runtime._ruff import (
     format_args,
     format_check_args,
     intersect_selectors,
+    rewritten,
 )
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.handlers._ruff_buckets import event_lines
@@ -183,8 +189,8 @@ def _reports(
         if ctx.deadline - ctx.clock.monotonic() < RUFF_TIMEOUT_S:
             break  # the watchdog would cut the call; the file's next edit is checked instead
         head = head_blob(ctx, edited)
-        if rewrite and (head is None or _clean_at_head(runner, ctx.session.store, edited, head)):
-            _rewrite(runner, ctx, edited)
+        if rewrite:
+            _rewrite(runner, ctx, edited, head)
         report = file_report(
             runner,
             ctx,
@@ -199,27 +205,59 @@ def _reports(
     return reports
 
 
-def _rewrite(runner: RuffRunner, ctx: HandlerContext, edited: EditedFile) -> None:
-    """M1 then M2; their exit codes are not verdicts (a parse error is D1's to report)."""
+def _rewrite(
+    runner: RuffRunner, ctx: HandlerContext, edited: EditedFile, head: HeadBlob | None
+) -> None:
+    """M1 then M2 over the file's bytes, written back when they changed and the file is eligible."""
+    store = ctx.session.store
+    verdict = True if head is None else _known_verdict(store, head.oid)
+    before = None if verdict is False else _read_bytes(edited.path)
+    if before is None:
+        return  # a legacy file (cached), or an unreadable one: hands off
+    after = _fixed_and_formatted(runner, ctx, edited, before)
+    if after == before:
+        return  # nothing to write, so HEAD's verdict cannot matter
+    if verdict is None and head is not None and not _clean_at_head(runner, store, edited, head):
+        return
+    with suppress(OSError), open(edited.path, "wb") as handle:  # in place, as ruff writes
+        handle.write(after)
+
+
+def _fixed_and_formatted(
+    runner: RuffRunner, ctx: HandlerContext, edited: EditedFile, text: bytes
+) -> bytes:
+    """M1 (when a safe-fix code is selected) then M2; a parse error is D1's to report."""
     table = ctx.cfg.tables.get("ruff")
     table = table if isinstance(table, Mapping) else {}
     allow = _strings(ctx.config.get("safe_fix_allowlist"), DEFAULT_SAFE_FIX_ALLOWLIST)
     select = intersect_selectors(allow, _strings(table.get("safe_fix_select"), ()))
     if select:
-        runner.run(fix_args(edited.path, select, _strings(table.get("safe_fix_ignore"), ())))
-    runner.run(format_args(edited.path))
+        ignore = _strings(table.get("safe_fix_ignore"), ())
+        text = rewritten(runner.run(fix_args(edited.rel, select, ignore), stdin=text), text)
+    return rewritten(runner.run(format_args(edited.rel), stdin=text), text)
+
+
+def _read_bytes(path: str) -> bytes | None:
+    try:
+        with open(path, "rb") as handle:
+            return handle.read()
+    except OSError:
+        return None
+
+
+def _known_verdict(store: StateStore, oid: str) -> bool | None:
+    """The cached HEAD format-clean verdict of blob ``oid``; ``None`` when not judged yet."""
+    try:
+        known = store.read_json(FORMAT_CACHE).get(oid)
+    except StateUnavailable:
+        return None
+    return known if isinstance(known, bool) else None
 
 
 def _clean_at_head(
     runner: RuffRunner, store: StateStore, edited: EditedFile, head: HeadBlob
 ) -> bool:
-    """Whether the HEAD text is format-clean: once per blob id, then from the state root."""
-    try:
-        known = store.read_json(FORMAT_CACHE).get(head.oid)
-    except StateUnavailable:
-        known = None
-    if isinstance(known, bool):
-        return known
+    """Judge the HEAD text with ``ruff format --check`` and remember it by blob id."""
     done = runner.run(format_check_args(edited.rel), stdin=head.data)
     clean = done.returncode == 0  # 1: would reformat; 2: HEAD does not parse. Either: hands off.
     _remember(store, head.oid, clean)

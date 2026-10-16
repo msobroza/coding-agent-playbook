@@ -8,7 +8,9 @@ Every ruff call of the §E.3 pipeline goes through :class:`RuffRunner`: the
   signature changed since sync (the agent overwrote ``.venv/bin/ruff``) runs
   nothing;
 - the argv of each call: M1 (safe fixes, ``F401``/``F841``/``F811`` never
-  fixed), M2 (format), the HEAD format-clean check and D1, the **one**
+  fixed) and M2 (format), both over the edited file's bytes on stdin (the
+  caller compares them before and after: review finding #5), the HEAD
+  format-clean check and D1, the **one**
   diagnostics call, ``--extend-select`` so the project's own ``select``,
   ``ignore``, ``per-file-ignores`` and ``# noqa`` win (plus the quality
   bucket's ``--config`` thresholds, and one ``--preview`` call for the codes
@@ -57,6 +59,7 @@ __all__ = [
     "intersect_selectors",
     "parse_diagnostics",
     "preview_args",
+    "rewritten",
     "ruff_diagnostics_for",
     "ruff_pin",
     "selector_matches",
@@ -242,32 +245,49 @@ def preview_args(path: str, codes: Iterable[str], config: Iterable[str] = ()) ->
     return [*args, "--preview", "--select", ",".join(sorted(set(codes))), "--", path]
 
 
-def fix_args(path: str, select: Sequence[str], ignore: Sequence[str] = ()) -> list[str]:
-    """M1: safe fixes of ``select`` only; ``ignore`` re-applies the project's narrower ignores.
+def fix_args(rel: str, select: Sequence[str], ignore: Sequence[str] = ()) -> list[str]:
+    """M1: safe fixes of ``select`` only, of the text on stdin judged as ``rel``.
 
-    A CLI ``--select`` resets the config's ``ignore``, hence the explicit one.
+    ``ignore`` re-applies the project's narrower ignores: a CLI ``--select``
+    resets the config's ``ignore``. The fixed text is printed on stdout.
 
     Example::
 
-        >>> "--unfixable" in fix_args("/r/a.py", ["I"])
-        True
+        >>> fix_args("src/a.py", ["I"])[-3:]
+        ['--stdin-filename', 'src/a.py', '-']
     """
     args = ["check", "--fix-only", "--force-exclude", "--no-unsafe-fixes"]
     args += ["--select", ",".join(select)]
     if ignore:
         args += ["--ignore", ",".join(ignore)]
-    return [*args, "--unfixable", ",".join(NEVER_FIX), "--", path]
+    return [*args, "--unfixable", ",".join(NEVER_FIX), "--stdin-filename", rel, "-"]
 
 
-def format_args(path: str) -> list[str]:
-    """M2: format the edited file (after M1, so the formatter has the last word).
+def format_args(rel: str) -> list[str]:
+    """M2: format the text on stdin judged as ``rel`` (after M1: the formatter has the last word).
 
     Example::
 
-        >>> format_args("/r/a.py")
-        ['format', '--force-exclude', '--', '/r/a.py']
+        >>> format_args("src/a.py")
+        ['format', '--force-exclude', '--stdin-filename', 'src/a.py', '-']
     """
-    return ["format", "--force-exclude", "--", path]
+    return ["format", "--force-exclude", "--stdin-filename", rel, "-"]
+
+
+def rewritten(done: ProcResult, text: bytes) -> bytes:
+    """What an M1/M2 stdin call made of ``text``; ``text`` itself unless it ran cleanly.
+
+    A parse error (exit 2) or an empty answer to a non-empty text keeps the
+    text: the file is never replaced by an error or by nothing.
+
+    Example::
+
+        >>> rewritten(ProcResult(("ruff",), 2), b"x=1\\n")
+        b'x=1\\n'
+    """
+    if done.returncode != 0 or (text and not done.stdout):
+        return text
+    return done.stdout
 
 
 def format_check_args(rel: str) -> list[str]:

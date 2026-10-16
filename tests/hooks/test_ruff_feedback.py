@@ -43,6 +43,11 @@ EDITED: Final = HEAD + "x = undefined_name\n"
 PREFIX: Final = "ruff (CI fails on this): "
 
 
+def fix_text(text: str) -> str:
+    """The scripted M1 of the M1-then-M2 case: one sorted-import change."""
+    return text.replace("import os\n", "import os\n\nimport sys\n", 1)
+
+
 @pytest.fixture
 def repo(pack_repo: PackRepo, ruff_program: Path) -> PackRepo:
     """post-edit-ruff-format on, the project selecting E/F/I/UP, ruff pinned."""
@@ -77,21 +82,35 @@ _value = value_of
 def test_clean_at_head_file_gets_m1_then_m2(
     repo: PackRepo, deps: Callable[..., RuntimeDeps]
 ) -> None:
-    ruff = FakeRuff(
-        fix=lambda text: text.replace("import os\n", "import os\n\nimport sys\n", 1),
-        reformat=lambda text: text + "# formatted\n",
-    )
+    ruff = FakeRuff(fix=fix_text, reformat=lambda text: text + "# formatted\n")
 
     report = _edit(repo, deps(proc=ruff, git=_git()))
 
-    assert ruff.kinds() == ["format-check", "fix", "format", "d1"]
-    check, fix = ruff.calls[0], ruff.argvs("fix")[0]
+    # M1 and M2 rewrite the file's bytes through stdin; HEAD is judged only once they changed it
+    assert ruff.kinds() == ["fix", "format", "format-check", "d1"]
+    fix, fmt, check = (c for c in ruff.calls if ruff.kind(c.argv[1:]) != "d1")
+    assert fix.input == EDITED.encode() and fmt.input == fix_text(EDITED).encode()
     assert check.input == HEAD.encode() and check.cwd == str(repo.root)
-    assert _value(fix, "--select") == "I,UP"
-    assert _value(fix, "--ignore") == "UP007"  # the project's ignore survives the CLI --select
+    assert _value(fix.argv, "--select") == "I,UP"
+    assert _value(fix.argv, "--ignore") == "UP007"  # the project's ignore survives the CLI --select
+    assert _value(fmt.argv, "--stdin-filename") == APP
     text = (repo.root / APP).read_text(encoding="utf-8")
     assert "import sys" in text and text.endswith("# formatted\n")  # lint fixes, then format
     assert report.trace.combined.decision is Decision.NONE  # silent on success
+
+
+def test_edit_m1_m2_leave_unchanged_needs_no_head_check(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps]
+) -> None:
+    """Finding #5: the one format call decides; HEAD's verdict cannot matter when nothing changes."""
+    ruff = FakeRuff(format_clean=False)
+    before = (repo.root / APP).stat().st_mtime_ns
+
+    _edit(repo, deps(proc=ruff, git=_git()))
+
+    assert ruff.kinds() == ["fix", "format", "d1"]
+    assert (repo.root / APP).read_text(encoding="utf-8") == EDITED
+    assert (repo.root / APP).stat().st_mtime_ns == before  # no write at all
 
 
 def test_unformatted_at_head_file_untouched_and_reported(
@@ -99,13 +118,14 @@ def test_unformatted_at_head_file_untouched_and_reported(
 ) -> None:
     ruff = FakeRuff(
         format_clean=False,
+        reformat=lambda text: text + "# formatted\n",
         diagnostics=[ruff_row("F821", 6, "Undefined name `undefined_name`")],
     )
 
     report = _edit(repo, deps(proc=ruff, git=_git()))
 
-    assert ruff.kinds() == ["format-check", "d1"]  # a legacy file is never reformatted
-    assert (repo.root / APP).read_text(encoding="utf-8") == EDITED
+    assert ruff.kinds() == ["fix", "format", "format-check", "d1"]
+    assert (repo.root / APP).read_text(encoding="utf-8") == EDITED  # never reformatted
     assert _context(report) == [f'{PREFIX}"src/app.py:6 F821 Undefined name `undefined_name`"']
 
 
@@ -128,13 +148,26 @@ def test_import_only_edit_keeps_import_no_F_in_m1_argv(
 def test_format_verdict_cached_per_head_blob(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path
 ) -> None:
-    ruff = FakeRuff()
+    ruff = FakeRuff(reformat=lambda text: text + "# formatted\n")
 
     _edit(repo, deps(proc=ruff, git=_git()), state=tmp_path / "state")
     _edit(repo, deps(proc=ruff, git=_git()), state=tmp_path / "state")
 
     assert ruff.kinds().count("format-check") == 1
     assert ruff.kinds().count("format") == 2
+    assert (repo.root / APP).read_text(encoding="utf-8").endswith("# formatted\n# formatted\n")
+
+
+def test_legacy_verdict_cached_skips_m1_m2_on_the_next_edit(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path
+) -> None:
+    ruff = FakeRuff(format_clean=False, reformat=lambda text: text + "# formatted\n")
+
+    _edit(repo, deps(proc=ruff, git=_git()), state=tmp_path / "state")
+    _edit(repo, deps(proc=ruff, git=_git()), state=tmp_path / "state")
+
+    assert ruff.kinds() == ["fix", "format", "format-check", "d1", "d1"]
+    assert (repo.root / APP).read_text(encoding="utf-8") == EDITED
 
 
 def test_safe_fix_allowlist_narrows_and_never_widens(
@@ -161,7 +194,7 @@ def test_project_on_ruff_defaults_gets_format_but_no_fixes(
 
     _edit(pack_repo, deps(proc=ruff, git=_git()))
 
-    assert ruff.kinds() == ["format-check", "format", "d1"]
+    assert ruff.kinds() == ["format", "d1"]
 
 
 # --- D1 on the changed lines: partition, dedupe, cap -----------------------------------------

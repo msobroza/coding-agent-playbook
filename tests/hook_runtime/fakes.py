@@ -447,8 +447,9 @@ class FakeRuff:
     - the metrics gate's ``ruff_violations`` call (``check ... --stdin-filename
       <label> -``, kind ``metrics``) prints ``by_stdin[<the bytes on stdin>]``
       (``[]`` for any other text);
-    - M1 (``check --fix-only``) and M2 (``format -- <path>``) rewrite the file
-      after ``--`` through ``fix`` / ``reformat`` (identity when ``None``);
+    - M1 (``check --fix-only``) and M2 (``format``) print the text on stdin
+      through ``fix`` / ``reformat`` (identity when ``None``); the path form
+      (``-- <path>``) rewrites that file instead;
     - the HEAD check (``format --check ... -``) exits 0 when ``format_clean``;
     - ``rule --all`` prints ``rules`` (exit 2 when ``rule_all`` is off: a ruff
       without the JSON listing) and ``rule <code>`` answers from ``rules``
@@ -507,6 +508,9 @@ class FakeRuff:
             raise ProcTimeout(command[0], timeout)
         if kind == "metrics":
             return ProcResult(command, 0, json.dumps(self.by_stdin.get(input or b"", [])).encode())
+        if kind in ("fix", "format") and args[-1:] == ("-",):
+            change = (self.fix if kind == "fix" else self.reformat) or (lambda text: text)
+            return ProcResult(command, 0, change((input or b"").decode("utf-8")).encode("utf-8"))
         returncode, stdout = self._answer(kind, args)
         return ProcResult(command, returncode, stdout)
 

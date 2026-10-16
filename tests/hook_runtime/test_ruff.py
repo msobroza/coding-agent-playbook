@@ -23,15 +23,17 @@ from coding_agent_playbook.hook_runtime._ruff import (
     changed_lines,
     d1_args,
     fix_args,
+    format_args,
     format_check_args,
     intersect_selectors,
     parse_diagnostics,
+    rewritten,
     ruff_diagnostics_for,
     ruff_pin,
     selector_matches,
 )
 from coding_agent_playbook.hook_runtime.pin import MachinePins, ToolPin, tool_signature
-from coding_agent_playbook.hook_runtime.proc import SubprocessProc
+from coding_agent_playbook.hook_runtime.proc import ProcResult, SubprocessProc
 from tests.hook_runtime.dispatch_kit import POST, dispatch
 from tests.hook_runtime.fakes import FakeRuff, ruff_row
 from tests.hook_runtime.guard_repo import hook_record
@@ -198,7 +200,7 @@ def test_pin_sig_mismatch_skips(tmp_path: Path) -> None:
 
 
 def test_fix_args_select_only_safe_rules_and_never_fix_unused_names() -> None:
-    args = fix_args("/repo/a.py", ["I", "UP"], ["UP007"])
+    args = fix_args("src/a.py", ["I", "UP"], ["UP007"])
 
     assert args[: args.index("--select")] == [
         "check",
@@ -209,7 +211,33 @@ def test_fix_args_select_only_safe_rules_and_never_fix_unused_names() -> None:
     assert args[args.index("--select") + 1] == "I,UP"
     assert args[args.index("--ignore") + 1] == "UP007"
     assert args[args.index("--unfixable") + 1] == ",".join(NEVER_FIX) == "F401,F841,F811"
-    assert args[-2:] == ["--", "/repo/a.py"]
+    assert args[-3:] == ["--stdin-filename", "src/a.py", "-"]  # the file's bytes on stdin
+
+
+def test_format_reads_the_edited_text_from_stdin_as_its_repo_path() -> None:
+    assert format_args("src/a.py") == [
+        "format",
+        "--force-exclude",
+        "--stdin-filename",
+        "src/a.py",
+        "-",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stdout", "expected"),
+    [
+        (0, b"x = 1\n", b"x = 1\n"),
+        (2, b"", b"x=1\n"),  # a parse error: the text stays as it was
+        (0, b"", b"x=1\n"),  # never an empty file over content
+    ],
+)
+def test_rewritten_takes_stdout_only_from_a_clean_run(
+    returncode: int, stdout: bytes, expected: bytes
+) -> None:
+    done = ProcResult(("ruff", "format"), returncode, stdout)
+
+    assert rewritten(done, b"x=1\n") == expected
 
 
 def test_format_check_reads_head_text_from_stdin_as_its_repo_path() -> None:
