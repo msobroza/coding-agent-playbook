@@ -20,12 +20,20 @@ Conventions that apply to every Python file. Follow them in new code; when editi
 ## Data shapes
 
 - Structured data: use `@dataclass` (frozen when immutable). Reach for Pydantic at I/O boundaries (request bodies, config files, anything crossing a serialization seam).
-- Avoid dict-of-strings as a stand-in for a record type. If three or more fields belong together, give them a dataclass.
+- Avoid dict-of-strings as a stand-in for a record type. If three or more fields belong together, give them a dataclass. Pass typed records between layers, never `dict[str, Any]`.
+- A frozen dataclass is only shallowly immutable: give it `tuple`/`frozenset` fields and copy collections passed in, including from a builder into the object it builds.
+- No parallel lists indexed together; zip them into one list of records. Return at most three values as a tuple, otherwise a dataclass or `NamedTuple`. Compute derived values with `@property` instead of storing a copy that can go stale.
+- Money is never `float`: use `Decimal` or integer minor units (cents).
+- Name domain magic values as `UPPER_CASE` module constants annotated `Final`, beside the code that uses them. Values that change per environment (URLs, credentials, feature flags, deployment-tuned timeouts) live in the single settings object.
 
 ## Function signatures
 
-- Type-hint every public function signature. Internal helpers can skip annotations when the type is obvious from a one-liner body, but err on the side of annotating.
+- Type-hint every function signature, private helpers included.
+- Never use a mutable default argument (`[]`, `{}`, `set()`); default to `None`, or `field(default_factory=...)` in a dataclass.
+- Make boolean option flags keyword-only (`*, dry_run: bool = False`). When a flag selects a different algorithm, split the function instead.
+- Use an `Enum`/`StrEnum` (or `Literal[...]` in a signature) for a closed set of options, never bare string constants.
 - Prefer composition over inheritance. Subclass only when the relationship is genuinely substitutable.
+- Never subclass a third-party class to change its interface; wrap it. Framework base classes (`BaseModel`, `BaseSettings`, `DeclarativeBase`, Django views), exception hierarchies and documented ABC extension points are normal subclassing.
 
 ## Strings and formatting
 
@@ -46,7 +54,7 @@ from pathlib import Path
 
 import httpx  # third-party
 
-from myapp.config import settings  # first-party
+from myapp.orders import place_order  # first-party
 ```
 
 ## Small but persistent annoyances
@@ -54,6 +62,8 @@ from myapp.config import settings  # first-party
 - Don't `from foo import *`. Name what you use.
 - Don't shadow builtins (`list`, `dict`, `id`, `type`, `vars`) with local variables.
 - Prefer early `return` over deeply nested `if`/`else`.
+- Never write a bare `# noqa`. Write `# noqa: CODE` plus a comment saying why, the same discipline as `# type: ignore[code]`.
+- Follow the repo's existing layout axis (layer-first or feature-first), and never mix the two.
 
 ## Examples
 
@@ -63,13 +73,13 @@ Good:
 from pathlib import Path
 
 
-def load_config(path: Path) -> dict[str, str]:
-    return json.loads(path.read_text(encoding="utf-8"))
+def count_lines(path: Path) -> int:
+    return len(path.read_text(encoding="utf-8").splitlines())
 ```
 
 Avoid:
 
 ```python
-def load_config(path):  # missing type hints
-    return json.loads(open(path).read())  # no encoding, no Path, leaked file handle
+def count_lines(path):  # missing type hints
+    return len(open(path).read().splitlines())  # no encoding, no Path, leaked file handle
 ```

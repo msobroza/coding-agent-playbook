@@ -91,6 +91,7 @@ class ClaudeCodeAdapter(Adapter):
             "prompt_claude_command",
             frontmatter=dataclasses.asdict(prompt.frontmatter),
             rule_registry=self._rule_registry,
+            template_body=prompt.template_body,
         )
         output_path = repo_root / ".claude" / "commands" / f"{prompt.frontmatter.slash}.md"
         output_path.parent.mkdir(parents=True, exist_ok=True)

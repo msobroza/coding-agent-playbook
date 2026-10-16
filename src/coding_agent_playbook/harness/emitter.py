@@ -22,8 +22,11 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.harness.leaf_detectors import HARNESS_LEAF_MARKER
+
+# ``with_sentinel_body`` lives in the renderer (it also shapes OpenCode commands);
+# re-exported here for the harness/skill writers that import it from this module.
+from coding_agent_playbook.renderer import with_sentinel_body as with_sentinel_body
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -40,16 +43,6 @@ def frontmatter_block(fields: Mapping[str, str]) -> str:
     """
     dumped = yaml.safe_dump(dict(fields), sort_keys=False, allow_unicode=True).rstrip("\n")
     return f"{_FENCE}\n{dumped}\n{_FENCE}\n"
-
-
-def with_sentinel_body(frontmatter: str, body: str) -> str:
-    """Compose a generated text file: frontmatter, then sentinel, then body.
-
-    ``frontmatter`` must already start with ``---`` (line 1). The :data:`SENTINEL`
-    is placed as the **first body line** (an HTML comment) — it cannot be line 1
-    because the frontmatter fence must be — followed by a blank line and ``body``.
-    """
-    return f"{frontmatter.rstrip('\n')}\n{sentinel_line('html')}\n\n{body}"
 
 
 def routing_file(description: str, body: str) -> str:

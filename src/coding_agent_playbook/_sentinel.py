@@ -35,6 +35,9 @@ _SENTINEL_LINES: frozenset[str] = frozenset(
 
 _FRONTMATTER_FENCE = "---"
 
+#: The UTF-8 byte-order mark some editors prepend on save; it never hides a sentinel.
+_BOM = "\ufeff"
+
 
 def sentinel_line(style: "SentinelStyle") -> str:
     """Return the sentinel wrapped in ``style``'s comment syntax, without a newline.
@@ -63,6 +66,7 @@ def has_sentinel(text: str) -> bool:
     ``\\r`` ignored), which is all the engine ever writes. A sentinel anywhere
     else, or quoted inside prose on one of those lines, is user text (``SPEC.md``
     and test fixtures quote it), so it never marks a file as engine-generated.
+    A leading UTF-8 BOM (some editors add one on save) is ignored.
 
     Example::
 
@@ -75,7 +79,7 @@ def has_sentinel(text: str) -> bool:
         >>> has_sentinel("Lines like `" + sentinel_line("html") + "` are generated.\\n")
         False
     """
-    lines = text.split("\n")
+    lines = text.removeprefix(_BOM).split("\n")
     if _is_sentinel_line(lines[0]):
         return True
     body_line = _first_body_line(lines)

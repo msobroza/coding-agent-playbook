@@ -3,8 +3,10 @@
 A skill's ``scripts/`` and ``references/`` are byte-copied into every skills
 root and the ``agent_harness`` tree, so a copied file is *published*: hashed
 into the lockfile, committed under ``[output] commit = true``, and written to
-the ``playbook sync --check`` scratch tree. Two kinds of source file are
-therefore never copied; each is named in a stderr warning instead:
+the ``playbook sync --check`` scratch tree. The walk starts from
+:func:`~coding_agent_playbook.adapters._skill_files.skill_subtree_files`, which
+silently drops Python bytecode caches (by-products, not content). Two kinds of
+source file are then never copied; each is named in a stderr warning instead:
 
 - a **secret path** (``security.paths.is_secret_path``), judged both by its name
   inside the skill and by where it resolves, so ``scripts/notes.txt ->
@@ -22,6 +24,7 @@ import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.adapters._skill_files import skill_subtree_files
 from coding_agent_playbook.security.files import is_secret_file, user_home
 
 if TYPE_CHECKING:
@@ -78,11 +81,11 @@ def refused_skill_files(skill: Skill) -> list[RefusedSkillFile]:
 
 
 def _partition(src: Path, *, home: str) -> tuple[list[Path], list[RefusedSkillFile]]:
-    """Split the files under ``src`` (sorted) into copyable and refused."""
+    """Split the files under ``src`` (sorted, caches excluded) into copyable and refused."""
     skill_root = src.parent.resolve()
     copyable: list[Path] = []
     refused: list[RefusedSkillFile] = []
-    for source_file in sorted(path for path in src.rglob("*") if path.is_file()):
+    for source_file in skill_subtree_files(src):
         reason = _refusal_reason(source_file, src, skill_root, home)
         if reason is None:
             copyable.append(source_file)

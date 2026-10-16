@@ -9,6 +9,7 @@ typos fail loudly and attribute escapes to Python internals raise.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any, Protocol
 
 import yaml
@@ -50,6 +51,29 @@ BUILTIN_FORMATS: frozenset[str] = frozenset(
         "prompt_opencode_command",
     }
 )
+
+# A ``{{ rule("id") }}`` call in a prompt template; group 1 is the rule id.
+# Whitespace- and trim-marker-tolerant (``{{rule("x")}}``, ``{{- rule('x') -}}``).
+# The single definition the appendix decision, ``playbook validate`` and
+# ``playbook sync``'s appendix pre-render all use.
+RULE_CALL_RE = re.compile(r"\{\{-?\s*rule\s*\(\s*['\"]([^'\"]+)['\"]\s*\)\s*-?\}\}")
+
+
+def with_sentinel_body(frontmatter: str, body: str) -> str:
+    """Compose a generated file whose frontmatter must stay on line 1.
+
+    Parsers such as OpenCode's (gray-matter) and the Agent Skills loaders only
+    see frontmatter when the file *starts* with ``---``, so the sentinel cannot
+    be line 1 there: :func:`~coding_agent_playbook._sentinel.sentinel_line` is
+    the **first body line** (the second position ``_sentinel.has_sentinel``
+    accepts), followed by a blank line and ``body``. ``frontmatter`` must start
+    with ``---``.
+
+    Example::
+
+        with_sentinel_body("---\ndescription: d\n---", "Body\n")
+    """
+    return f"{frontmatter.rstrip('\n')}\n{sentinel_line('html')}\n\n{body}"
 
 
 class RuleRegistry(Protocol):
@@ -205,11 +229,18 @@ def render_for(
     *,
     frontmatter: dict[str, Any],
     rule_registry: RuleRegistry | None = None,
+    template_body: str | None = None,
 ) -> str:
     """Apply per-format post-processing to a Jinja-rendered body.
 
     ``fmt`` is one of the formats in ``BUILTIN_FORMATS`` (or a short alias in
     ``FORMAT_ALIASES``). Behaviour per format is documented in SPEC §9.7.
+
+    For prompt formats, pass the prompt's un-rendered ``template_body``: whether
+    the ``includes_rules:`` appendix is generated depends on the template, since
+    a rendered ``body`` no longer shows the ``rule()`` calls Jinja expanded (see
+    :func:`includes_rules_appendix`). It defaults to ``body`` for callers that
+    pass an un-rendered body.
 
     ``_template_path`` is reserved for future format-specific dispatch
     (SPEC §9.7); current transforms key off ``fmt`` and ``frontmatter`` only.
@@ -224,12 +255,15 @@ def render_for(
         return _render_continue_rule(body, frontmatter)
     if resolved in ("claude_md_section", "agents_md_section"):
         return _render_markdown_rule_section(body, frontmatter)
+    appendix = includes_rules_appendix(
+        body if template_body is None else template_body, frontmatter, rule_registry
+    )
     if resolved == "prompt_continue":
-        return _render_prompt_continue(body, frontmatter, rule_registry)
+        return _render_prompt_continue(body, frontmatter, appendix)
     if resolved == "prompt_claude_command":
-        return _render_prompt_claude_command(body, frontmatter, rule_registry)
+        return _render_prompt_claude_command(body, frontmatter, appendix)
     if resolved == "prompt_opencode_command":
-        return _render_prompt_opencode_command(body, frontmatter, rule_registry)
+        return _render_prompt_opencode_command(body, frontmatter, appendix)
 
     # All BUILTIN_FORMATS are handled above; reaching here means a new format
     # was added to the set but its branch was forgotten.
@@ -288,28 +322,41 @@ def _render_markdown_rule_section(body: str, frontmatter: dict[str, Any]) -> str
     return "\n".join(parts)
 
 
-def _has_inline_rule_call(body: str) -> bool:
-    """Detect whether the rendered body contains the literal substring ``{{ rule(``.
+def includes_rules_appendix(
+    template_body: str,
+    frontmatter: dict[str, Any],
+    rule_registry: RuleRegistry | None,
+) -> str:
+    """The ``## Reference rules`` appendix a prompt gets, or ``""`` (SPEC §6.2.5).
 
-    In practice this only occurs when the author wrapped a ``rule()`` call in
-    ``{% raw %}`` to keep the literal text (e.g. to handle inclusion themselves
-    with custom formatting). When True, the auto-generated ``## Reference rules``
-    appendix is suppressed and the author owns the inclusion layout (SPEC §6.2.5).
+    The appendix is only for prompts whose template never calls ``{{ rule() }}``:
+    a prompt that places its rules itself owns the inclusion layout. Decide this
+    on the *template* body. Checking the rendered body (the old behaviour) never
+    saw a call Jinja had already expanded, so every inlined rule was emitted
+    twice: once in place, once in the appendix.
+
+    Example::
+
+        includes_rules_appendix(prompt.template_body, frontmatter, registry)
     """
-    return "{{ rule(" in body
+    if RULE_CALL_RE.search(template_body):
+        return ""
+    return _build_includes_rules_appendix(frontmatter, rule_registry)
 
 
-def appendix_rule_ids(includes_rules: Sequence[str], body: str) -> list[str]:
+def appendix_rule_ids(includes_rules: Sequence[str], template_body: str) -> list[str]:
     """The rule ids the ``## Reference rules`` appendix renders for one prompt.
 
-    ``includes_rules`` in order, or none when the rendered ``body`` inlines
-    ``rule()`` itself (the author owns the layout, SPEC §6.2.5). ``playbook
-    sync`` pre-renders exactly these before any adapter writes, so a template
-    error in an included rule aborts the sync before the first file lands.
+    ``includes_rules`` in order, or none when the prompt's un-rendered
+    ``template_body`` calls ``rule()`` itself (the author owns the layout, SPEC
+    §6.2.5) — the same :data:`RULE_CALL_RE` decision as
+    :func:`includes_rules_appendix`. ``playbook sync`` pre-renders exactly these
+    before any adapter writes, so a template error in an included rule aborts
+    the sync before the first file lands.
 
     Example: ``appendix_rule_ids(["style"], "Refactor.\\n")`` -> ``["style"]``.
     """
-    return [] if _has_inline_rule_call(body) else list(includes_rules)
+    return [] if RULE_CALL_RE.search(template_body) else list(includes_rules)
 
 
 def _build_includes_rules_appendix(
@@ -336,7 +383,7 @@ def _build_includes_rules_appendix(
 def _render_prompt_continue(
     body: str,
     frontmatter: dict[str, Any],
-    rule_registry: RuleRegistry | None,
+    appendix: str,
 ) -> str:
     """Emit a Continue-shaped prompt file (SPEC §9.7)."""
     continue_frontmatter: dict[str, Any] = {
@@ -345,16 +392,13 @@ def _render_prompt_continue(
         "invokable": True,
     }
     fenced = yaml.safe_dump(continue_frontmatter, sort_keys=False, allow_unicode=True).rstrip("\n")
-    output = f"{sentinel_line('html')}\n---\n{fenced}\n---\n{body}"
-    if not _has_inline_rule_call(body):
-        output += _build_includes_rules_appendix(frontmatter, rule_registry)
-    return output
+    return f"{sentinel_line('html')}\n---\n{fenced}\n---\n{body}{appendix}"
 
 
 def _render_prompt_claude_command(
     body: str,
     frontmatter: dict[str, Any],
-    rule_registry: RuleRegistry | None,
+    appendix: str,
 ) -> str:
     """Emit a Claude Code slash-command file (SPEC §9.7).
 
@@ -366,15 +410,13 @@ def _render_prompt_claude_command(
     """
     name = frontmatter["name"]
     output = body if body.lstrip().startswith("# ") else f"# {name}\n\n{body}"
-    if not _has_inline_rule_call(body):
-        output += _build_includes_rules_appendix(frontmatter, rule_registry)
-    return f"{sentinel_line('html')}\n{output}"
+    return f"{sentinel_line('html')}\n{output}{appendix}"
 
 
 def _render_prompt_opencode_command(
     body: str,
     frontmatter: dict[str, Any],
-    rule_registry: RuleRegistry | None,
+    appendix: str,
 ) -> str:
     """Emit an OpenCode slash-command file (SPEC §9.7).
 
@@ -405,9 +447,7 @@ def _render_prompt_opencode_command(
     description_line = yaml.safe_dump(
         {"description": description}, sort_keys=False, allow_unicode=True
     ).rstrip("\n")
-    # The sentinel comment goes BEFORE the YAML envelope so adapter cleanup
-    # can recognise the file as engine-owned by reading the first line.
-    output = f"{sentinel_line('html')}\n---\n{description_line}\n---\n{rendered_body}"
-    if not _has_inline_rule_call(body):
-        output += _build_includes_rules_appendix(frontmatter, rule_registry)
-    return output
+    # OpenCode parses commands with gray-matter, which only sees frontmatter at
+    # offset 0: a sentinel on line 1 dropped the description and leaked the
+    # comment and the envelope into the prompt. So the envelope comes first.
+    return with_sentinel_body(f"---\n{description_line}\n---", f"{rendered_body}{appendix}")

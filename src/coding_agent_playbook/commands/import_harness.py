@@ -470,12 +470,16 @@ def _write_skill_md(skill: Skill, target: Path) -> None:
 
 
 def _copy_tree(src: Path, dst: Path, *, restore_exec: bool) -> None:
-    """Copy ``src`` files into ``dst`` verbatim, preserving the executable bit."""
+    """Copy ``src`` files into ``dst`` verbatim, preserving the executable bit.
+
+    Bytecode caches are skipped by the same rule sync uses, so running a harness
+    script never plants ``__pycache__`` in the canonical ``playbook/skills/``.
+    """
     import shutil
 
-    for path in sorted(src.rglob("*")):
-        if not path.is_file():
-            continue
+    from coding_agent_playbook.adapters._skill_files import skill_subtree_files
+
+    for path in skill_subtree_files(src):
         out = dst / path.relative_to(src)
         out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, out)

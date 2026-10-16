@@ -93,6 +93,7 @@ class OpenCodeAdapter(Adapter):
             "prompt_opencode_command",
             frontmatter=dataclasses.asdict(prompt.frontmatter),
             rule_registry=self._rule_registry,
+            template_body=prompt.template_body,
         )
         target.write_text(rendered, encoding="utf-8")
         return [target]
@@ -110,8 +111,11 @@ class OpenCodeAdapter(Adapter):
     def _output_directories(self, repo_root: Path) -> Iterable[Path]:
         """``.opencode/command/`` is scanned by the ABC's anchored sentinel scan.
 
-        A file is engine output when ``_sentinel.has_sentinel`` finds the
-        sentinel line at an anchored position (line 1 for a command file).
+        Commands carry the sentinel as the first body line, after the
+        ``description`` frontmatter (OpenCode's gray-matter only reads
+        frontmatter at offset 0) — the second anchored position
+        ``_sentinel.has_sentinel`` accepts; commands older engines wrote with
+        the sentinel on line 1 are still recognised.
 
         ``.opencode/skills/`` is never scanned: stale skill output is settled by
         ``playbook sync``'s lockfile leftover policy (SPEC §4.2 step 9, §10.8).

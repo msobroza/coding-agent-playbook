@@ -9,6 +9,9 @@ modules in ``coding_agent_playbook.commands`` consume. The pieces here:
   repo-local). Records collisions for ``playbook check``.
 - :class:`RuleRegistryImpl` — concrete ``RuleRegistry`` from the renderer
   Protocol. Built once per sync from the applies_if-filtered rule list.
+- :func:`filter_applies_if` / :func:`build_prompt_environment` — the shared
+  applies_if filter and the rule-aware Jinja environments every prompt render
+  (``sync``, ``render``, the eval runner) builds the same way.
 - :func:`discover_adapters` — entry-point discovery + always-enable
   ``agents_md``.
 
@@ -26,8 +29,8 @@ from dataclasses import dataclass, field
 from importlib import metadata
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.detector import detect
-from coding_agent_playbook.renderer import render_sandboxed
+from coding_agent_playbook.detector import detect, evaluate_predicate
+from coding_agent_playbook.renderer import build_environment, render_sandboxed
 from coding_agent_playbook.sources.filesystem import (
     FileSystemArtifactSource,
     FileSystemStateSource,
@@ -202,6 +205,49 @@ class RuleRegistryImpl:
         else:
             body = rule.body
         return f"### {rule.frontmatter.name}\n\n{body}"
+
+
+def filter_applies_if[T: "Rule | Prompt"](
+    artifacts: list[T],
+    facts: Facts,
+    repo_root: Path,
+) -> list[T]:
+    """Drop the artifacts whose ``applies_if`` is false for ``facts`` (SPEC §6.4).
+
+    An empty predicate always passes. ``repo_root`` anchors ``has_file`` paths.
+
+    Example::
+
+        rules = filter_applies_if(ctx.rules_resolved, ctx.facts, ctx.repo_root)
+    """
+    kept: list[T] = []
+    for artifact in artifacts:
+        predicate = artifact.frontmatter.applies_if or {}
+        if not predicate or evaluate_predicate(predicate, facts, repo_root=repo_root):
+            kept.append(artifact)
+    return kept
+
+
+def build_prompt_environment(
+    rules: list[Rule], facts: Facts
+) -> tuple[RuleRegistryImpl, Environment]:
+    """Build the rule registry and the prompt Jinja environment that renders through it.
+
+    The registry renders included rules in an environment *without* ``rule()``
+    (rules cannot include rules, SPEC §6.2.5); the returned prompt environment
+    registers ``rule()`` against that registry. Both see ``facts`` for the
+    ``has_framework``/``has_ml_dep`` helpers.
+
+    Example::
+
+        registry, prompt_env = build_prompt_environment(applicable_rules, facts)
+    """
+    rule_env = build_environment([], is_prompt_context=False)
+    rule_env.globals["_facts"] = dict(facts)
+    registry = RuleRegistryImpl(rules, facts, rule_env)
+    prompt_env = build_environment([], is_prompt_context=True, rule_registry=registry)
+    prompt_env.globals["_facts"] = dict(facts)
+    return registry, prompt_env
 
 
 def discover_adapters(

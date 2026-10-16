@@ -403,3 +403,22 @@ def test_compile_raises_on_unknown_layer_in_weights(tmp_path: Path) -> None:
     task = _make(data, tmp_path)
     with pytest.raises(ValueError, match="unknown layer"):
         compile_eval_task(task)
+
+
+@pytest.mark.parametrize("ml_stack", ["torch", [["torch"]], {"torch": 2}, 3])
+def test_setup_rejects_malformed_ml_stack_mock(tmp_path: Path, ml_stack: Any) -> None:
+    """A mocked ``ml_stack`` gates rules at render time; a bad shape must fail at
+    parse (so ``playbook validate`` reports it), not later at ``--run``."""
+    data = _minimal_dict()
+    data["setup"] = {"ml_stack": ml_stack}
+
+    with pytest.raises(ValueError, match=r"\[setup\]\.ml_stack must be a list of names"):
+        _make(data, tmp_path)
+
+
+@pytest.mark.parametrize("ml_stack", [["torch", "jax"], {"torch": ">=2"}, []])
+def test_setup_accepts_list_or_table_ml_stack_mock(tmp_path: Path, ml_stack: Any) -> None:
+    data = _minimal_dict()
+    data["setup"] = {"ml_stack": ml_stack}
+
+    assert _make(data, tmp_path).setup.extra_facts["ml_stack"] == ml_stack

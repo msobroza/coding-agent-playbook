@@ -187,7 +187,11 @@ class AgentHarnessAdapter(Adapter):
     def _copy_scripts(
         self, skill: Skill, skill_dir: Path, repo_root: Path
     ) -> tuple[list[manifest.ScriptEntry], list[Path]]:
-        """Copy the skill's publishable scripts (never a secret or an escaping link)."""
+        """Copy the skill's publishable scripts and record each file's exec flag.
+
+        Bytecode caches, secret paths and links leaving the skill are never
+        copied (:func:`_skill_sources.copyable_skill_files`).
+        """
         if skill.scripts_dir is None:
             return [], []
         scripts: list[manifest.ScriptEntry] = []
@@ -204,7 +208,7 @@ class AgentHarnessAdapter(Adapter):
 
     @staticmethod
     def _copy_references(skill: Skill, skill_dir: Path) -> list[Path]:
-        """Copy the skill's publishable references (never a secret or an escaping link)."""
+        """Byte-copy the skill's publishable references, filtered like ``scripts/``."""
         if skill.references_dir is None:
             return []
         dst_root = skill_dir / "references"
@@ -281,6 +285,7 @@ class AgentHarnessAdapter(Adapter):
             "prompt_claude_command",
             frontmatter=dataclasses.asdict(prompt.frontmatter),
             rule_registry=self._rule_registry,
+            template_body=prompt.template_body,
         )
         # The claude-command renderer prepends its own sentinel comment; drop it
         # so this leaf carries exactly one sentinel (placed by with_sentinel_body).

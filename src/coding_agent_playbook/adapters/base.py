@@ -25,6 +25,9 @@ if TYPE_CHECKING:
 #: output keeps far below this; a scan never reads a large file whole.
 _SENTINEL_HEAD_BYTES = 64 * 1024
 _FRONTMATTER_FENCE = b"---"
+#: A UTF-8 BOM some editors prepend on save; ``has_sentinel`` ignores it, so
+#: the head read must too when it looks for a leading frontmatter fence.
+_UTF8_BOM = b"\xef\xbb\xbf"
 
 
 class Adapter(ABC):
@@ -205,7 +208,7 @@ def _sentinel_head(path: Path) -> bytes:
     budget = _SENTINEL_HEAD_BYTES
     with path.open("rb") as handle:
         first = handle.readline(budget)
-        if first.rstrip(b"\n").rstrip(b"\r") != _FRONTMATTER_FENCE:
+        if first.removeprefix(_UTF8_BOM).rstrip(b"\n").rstrip(b"\r") != _FRONTMATTER_FENCE:
             return first
         head = [first]
         budget -= len(first)
