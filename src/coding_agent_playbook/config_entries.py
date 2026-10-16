@@ -19,7 +19,9 @@ if TYPE_CHECKING:
 
 #: The top-level keys :class:`~coding_agent_playbook.config.Config` owns: exactly
 #: what ``Config.from_dict`` reads and a fully populated ``Config.to_dict`` writes
-#: (pinned against the dataclass fields by ``tests/unit/test_config.py``). Every
+#: (pinned against the dataclass fields by ``tests/unit/test_config.py``). Derived
+#: ``compare=False`` fields (``deprecated_overlay_names``) are exempt: ``Config``
+#: computes them from other fields and never writes them. Every
 #: other top-level key is parsed from the raw TOML by its own command and never
 #: passes through ``Config``, so a rewrite of the committed file must carry it
 #: over itself (:func:`unmanaged_config_entries`; ``playbook init`` and

@@ -16,6 +16,7 @@ from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.config import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.gitignore import BLOCK_START
 from tests.toml_equality import assert_toml_identical
+from tests.unit.test_cli import break_bundled_content
 from tests.unit.test_precommit_merge import LEGACY_APPENDED, LEGACY_STARTER
 
 if TYPE_CHECKING:
@@ -406,6 +407,7 @@ def test_init_warns_about_a_hand_edited_legacy_hook(tmp_path, capsys):
 #: homepage``), and tables it does not manage at all (``[metrics]``, a personal
 #: one). ``init`` writes back what the *committed* file holds outside ``Config``;
 #: computing that from the merged files would commit the last three.
+# alias regression: init checks the local list as written (SPEC v0.19)
 _LOCAL_OVERRIDES = """\
 adapters_enabled = ["claude_code"]
 overlays_enabled = ["coding_agent_playbook.packs.superpowers"]
@@ -545,7 +547,7 @@ def test_init_rerun_preserves_committed_tables_config_does_not_manage(tmp_path: 
 
 _STALE_COMMITTED = """\
 schema_version = 1
-overlays_enabled = ["coding_agent_playbook.packs.superpowers"]
+overlays_enabled = ["coding_agent_playbook.plugins.superpowers"]
 adapters_enabled = ["continue"]
 
 [project]
@@ -800,3 +802,19 @@ def test_init_rerun_refuses_a_committed_non_table_the_local_file_hides(
     err = capsys.readouterr().err
     assert err.startswith(f"error: .coding-agent-playbook.toml: [{table}] must be a table, got ")
     assert _snapshot(tmp_path) == before
+
+
+def test_init_writes_nothing_when_bundled_content_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A broken install exits 2 in init's preflight, never leaving a half-initialized repo."""
+    expected = break_bundled_content(monkeypatch, tmp_path)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    before = _snapshot(repo)
+
+    argv = ["init", "--repo-root", str(repo), "--non-interactive", "--name", "x"]
+    assert main([*argv, "--kind", "python-library"]) == 2
+
+    assert capsys.readouterr().err == expected
+    assert _snapshot(repo) == before

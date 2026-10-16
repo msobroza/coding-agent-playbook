@@ -12,21 +12,25 @@ from __future__ import annotations
 
 import sys
 import textwrap
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
 from coding_agent_playbook.evals.loader import load_eval_task_from_dir
-from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
+from coding_agent_playbook.evals.prompting import (
+    PromptResolutionError,
+    _infer_prompts_dir,
+    render_prompt,
+)
 from coding_agent_playbook.evals.task import EvalTask, TaskInvocation, TaskSetup
+from tests._content import CORE_ROOT
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from pathlib import Path
 
 _ENGINE = "coding_agent_playbook"
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_SHIPPED_TASKS = _REPO_ROOT / "src" / "coding_agent_playbook" / "resources" / "eval_tasks"
+_SHIPPED_TASKS = CORE_ROOT / "eval_tasks"
 
 
 def _shipped_task_dirs() -> list[Path]:
@@ -80,6 +84,72 @@ def test_authored_project_kind_is_the_mock_detector_fact() -> None:
     """``[setup].project_kind`` overrides what the detector infers from setup/."""
     prompt = render_prompt(_shipped("generate-tests-happy-path"), strict=True)
     assert "`python-application` project" in prompt
+
+
+# --------------------------------------------------------------------------- #
+# Prompt directory — found by layer, not by a ``resources`` path segment
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "layer_parts",
+    [("content", "core"), ("pkg", "resources"), ("playbook",)],
+    ids=["bundled-content", "overlay-resources", "repo-local"],
+)
+def test_infer_prompts_dir_layers(tmp_path: Path, layer_parts: tuple[str, ...]) -> None:
+    """``<layer>/eval_tasks/<dir>/task.toml`` finds ``<layer>/prompts`` in every layer.
+
+    The bundled layer (``content/core``) has no ``resources`` segment, and a
+    repo-local task never found its prompts before.
+    """
+    layer = tmp_path.joinpath(*layer_parts)
+    task_toml = layer / "eval_tasks" / "t" / "task.toml"
+    assert _infer_prompts_dir(task_toml) == layer / "prompts"
+
+
+def test_infer_prompts_dir_non_task_path(tmp_path: Path) -> None:
+    """A task dir whose parent is not ``eval_tasks`` has no prompts layer."""
+    assert _infer_prompts_dir(tmp_path / "t" / "task.toml") is None
+
+
+def test_infer_prompts_dir_does_not_resolve_symlinks(tmp_path: Path) -> None:
+    """A symlinked task dir maps to the layer it is reached through, not its target's."""
+    target = tmp_path / "target_layer" / "eval_tasks" / "t"
+    target.mkdir(parents=True)
+    (target / "task.toml").write_text("", encoding="utf-8")
+    link_layer = tmp_path / "link_layer"
+    (link_layer / "eval_tasks").mkdir(parents=True)
+    (link_layer / "eval_tasks" / "t").symlink_to(target, target_is_directory=True)
+
+    task_toml = link_layer / "eval_tasks" / "t" / "task.toml"
+    assert _infer_prompts_dir(task_toml) == link_layer / "prompts"
+
+
+def test_strict_unresolved_prompt_hint_points_at_the_layers_prompts_dir(tmp_path: Path) -> None:
+    """The strict-mode hint names where the lookup really happens.
+
+    Regression: it said to check "that resources/prompts/ is reachable", but the
+    engine's own content has no ``resources/`` since v0.19, and every layer's
+    prompts are found next to its ``eval_tasks/`` (:func:`_infer_prompts_dir`).
+    """
+    task_dir = tmp_path / "content" / "core" / "eval_tasks" / "orphan-task"
+    (task_dir / "setup").mkdir(parents=True)
+    task = EvalTask(
+        id="orphan-task",
+        prompt_id="no-such-prompt",
+        description="A task whose prompt is not shipped.",
+        source_path=task_dir / "task.toml",
+        source_package=_ENGINE,
+        setup=TaskSetup(),
+        invocation=TaskInvocation(prompt_args="go"),
+    )
+
+    with pytest.raises(PromptResolutionError) as raised:
+        render_prompt(task, strict=True)
+
+    message = str(raised.value)
+    assert "resources/prompts" not in message
+    assert "the prompts/ directory next to the task's eval_tasks/" in message
 
 
 # --------------------------------------------------------------------------- #

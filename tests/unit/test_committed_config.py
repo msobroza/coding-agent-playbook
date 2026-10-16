@@ -160,6 +160,20 @@ def test_plan_detector_cache_refresh_changes_only_the_detector_cache(tmp_path: P
     assert (tmp_path / _LOCAL).read_text(encoding="utf-8") == _PERSONAL
 
 
+def test_plan_detector_cache_refresh_keeps_deprecated_overlay(tmp_path: Path) -> None:
+    """SPEC §12.5: a refresh writes every other key as parsed, so a deprecated
+    ``packs`` name stays in the committed file; ``config`` is its canonical view."""
+    old = "coding_agent_playbook.packs.superpowers"
+    state = _state(tmp_path)
+    (tmp_path / _PRIMARY).write_text(f'overlays_enabled = ["{old}"]\n' + _COMMITTED)
+
+    rewrite = plan_detector_cache_refresh(state, {"fresh": True})
+
+    assert rewrite.table["overlays_enabled"] == [old]
+    assert rewrite.config.overlays_enabled == ["coding_agent_playbook.plugins.superpowers"]
+    assert rewrite.config.deprecated_overlay_names == (old,)
+
+
 def test_plan_detector_cache_refresh_appends_a_missing_detector_cache(tmp_path: Path) -> None:
     state = _state(tmp_path)
     table = plan_detector_cache_refresh(state, {"fresh": True}).table

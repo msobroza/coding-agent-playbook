@@ -63,6 +63,46 @@ uv run pytest         # run the test suite
 uv run playbook --version  # smoke-test the CLI
 ```
 
+## Editing content
+
+Everything the playbook ships as content lives in `content/`, outside the
+Python package; `src/coding_agent_playbook/` is engine logic only. Writing a
+rule, prompt, eval task or skill never means touching Python:
+
+- `content/core/` holds the engine's built-ins: `rules/`, `prompts/` and
+  `eval_tasks/`, always on.
+- `content/plugins/<name>/` holds one **bundled plugin** per directory
+  (today `superpowers` and `python_design`), off until a consumer lists
+  `coding_agent_playbook.plugins.<name>` in `overlays_enabled`. A new
+  directory there is a new plugin, with no code change.
+
+`content/README.md` is the contributor guide: where each kind lives, how to
+add a rule, prompt, eval task, skill or bundled plugin, and the four commands
+CI runs. There is still one wheel: the build copies `content/` into it, so
+`pip install coding-agent-playbook` ships everything. Build releases from the
+sdist (`uv build` or `python -m build`, never `--wheel`).
+
+```mermaid
+flowchart LR
+    subgraph content["content/ (playbook content, no Python)"]
+        core["core/: rules, prompts, eval_tasks (always on)"]
+        plugins["plugins/: one directory per bundled plugin (opt-in)"]
+    end
+    subgraph src["src/coding_agent_playbook/ (engine logic)"]
+        resolver["bundled_content.py: the only code that locates content"]
+        engine["sources, renderer, adapters, CLI"]
+        template["templates/precommit/: the starter pre-commit config"]
+    end
+    wheel["installed wheel: coding_agent_playbook/_content/"]
+    consumer["consumer repo: AGENTS.md, .claude/, .continue/, .opencode/, shared_skills/"]
+    content -->|"copied at build time"| wheel
+    content -.->|"read in a source checkout"| resolver
+    wheel -.->|"read when installed"| resolver
+    resolver --> engine
+    template --> engine
+    engine -->|"playbook sync"| consumer
+```
+
 ## Using the playbook in an external repo
 
 Add the playbook to any repo that should get generated assistant context
@@ -141,7 +181,8 @@ What `sync` does with git, by `[output] commit` in `.coding-agent-playbook.toml`
 
 Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
 
-1. **Engine generic content** — ships with `coding-agent-playbook`.
+1. **Engine generic content** — ships with `coding-agent-playbook` (kept in
+   the engine repository's `content/core/`).
 2. **Overlay packages** — installed org packages, enabled (and ordered) in config.
    They're auto-discovered through Python entry points; you just list them:
 
@@ -254,12 +295,15 @@ playbook/skills/<dir>/  ──►  SkillWriter  ──┬──►  .claude/skil
   until you move it. A path you re-point through a symlink, or a skill dir whose
   `SKILL.md` you rewrote, is yours from then on.
 
-## Bundled packs: superpowers, python_design
+## Bundled plugins: superpowers, python_design
 
-The engine wheel bundles **opt-in content packs**. They layer exactly like an
-overlay package but need no extra install, and they stay **off** until you
-list them. The first is `superpowers`: a near-verbatim, self-contained port of
-the Superpowers skills library (v7.0.0, MIT, by Jesse Vincent) with 15 skills:
+The engine wheel bundles **opt-in bundled plugins** (called *packs* before
+v0.19). They layer exactly like an overlay package but need no extra install,
+and they stay **off** until you list them. Each one is a plain content
+directory, `content/plugins/<name>/` in the engine repository, enabled as
+`coding_agent_playbook.plugins.<name>`. The first is `superpowers`: a
+near-verbatim, self-contained port of the Superpowers skills library (v7.0.0,
+MIT, by Jesse Vincent) with 15 skills:
 brainstorming, writing-plans, executing-plans, subagent-driven-development,
 test-driven-development, systematic-debugging, verification-before-completion,
 requesting/receiving-code-review, using-git-worktrees,
@@ -268,7 +312,7 @@ using-superpowers, and diagnosing-superpowers.
 
 ```toml
 # .coding-agent-playbook.toml (top-level keys, above the first [table] header)
-overlays_enabled = ["coding_agent_playbook.packs.superpowers"]
+overlays_enabled = ["coding_agent_playbook.plugins.superpowers"]
 adapters_enabled = ["continue", "claude_code", "opencode", "shared_skills"]
 ```
 
@@ -280,19 +324,24 @@ config (`sync`, `check`, `validate`, `render`, `eval`, `init`) refuses such a
 nested key, the `[overlays] enabled` / `[adapters] enabled` table form and a
 misspelled key: it exits 2 with an `error:` that names the file and shows the
 top-level line to write, and writes nothing, so a repo you already synced
-keeps its skills, lockfile and `.gitignore` untouched. A misspelled pack name
-is caught everywhere: `playbook sync` (write mode, `--check`, and
-`--check-staged` under the default `commit = false`; under `commit = true`
-that last one is a no-op) exits 1 naming the package and writes nothing,
-`playbook validate` fails on it, `playbook check` flags it under `Overlays:`,
-and `playbook init` refuses it before writing (from `--overlays`, or from a
-local file's `overlays_enabled`, which replaces it). A name that looks
-like a pack typo also lists the bundled packs:
-`coding_agent_playbook.packs.superpower: not importable (bundled packs: coding_agent_playbook.packs.python_design, coding_agent_playbook.packs.superpowers)`.
-The same goes for a package that imports but ships no `resources/` directory,
-such as the parent `coding_agent_playbook.packs`, and for one whose import
-raises (the reason then quotes the error).
-Or let `playbook init --non-interactive --name … --kind … --overlays coding_agent_playbook.packs.superpowers`
+keeps its skills, lockfile and `.gitignore` untouched. A misspelled
+bundled-plugin name is caught everywhere: `playbook sync` (write mode,
+`--check`, and `--check-staged` under the default `commit = false`; under
+`commit = true` that last one is a no-op) exits 1 naming it and writes
+nothing, `playbook validate` fails on it, `playbook check` flags it under
+`Overlays:`, and `playbook init` refuses it before writing (from `--overlays`,
+or from a local file's `overlays_enabled`, which replaces it). A
+bundled-plugin name is checked against `content/plugins/<name>/` and never
+imported. An unknown one reads `no such bundled plugin`, and a name that looks
+like a plugin typo also lists the bundled plugins:
+`coding_agent_playbook.plugins.superpower: no such bundled plugin (bundled plugins: coding_agent_playbook.plugins.python_design, coding_agent_playbook.plugins.superpowers)`.
+The bare namespace (`coding_agent_playbook.plugins`, or the old
+`coding_agent_playbook.packs`) is refused as
+`the bundled plugin namespace, not a plugin`. Any other name is an overlay
+package and is still imported: one that imports but ships no `resources/`
+directory is refused, and so is one whose import raises (the reason then quotes
+the error).
+Or let `playbook init --non-interactive --name … --kind … --overlays coding_agent_playbook.plugins.superpowers`
 write the config for you.
 
 `playbook sync` then writes each skill, like any canonical skill (see above),
@@ -304,16 +353,16 @@ adapter (enable it by adding `agent_harness` to the top-level
 `adapters_enabled`) writes `skills/<id>/`. Like all generated output the
 copies are gitignored by default. Nothing reaches out to the upstream plugin,
 its marketplace, or the network: cross-skill references use plain skill names,
-and the pack contains no external URLs. The brainstorming visual companion (a
-Node.js server) and the plugin's SessionStart hook are not included. The
-license and the list of changes are in
-`src/coding_agent_playbook/packs/superpowers/LICENSE` and `ATTRIBUTIONS.md`.
+and the bundled plugin contains no external URLs. The brainstorming visual
+companion (a Node.js server) and the upstream plugin's SessionStart hook are
+not included. The license and the list of changes are in
+`content/plugins/superpowers/LICENSE` and `ATTRIBUTIONS.md`.
 Every skill also carries the license as `references/LICENSE`, so it lands in
-each synced skill directory. If you render the pack only for Continue, keep a
+each synced skill directory. If you render the plugin only for Continue, keep a
 copy of that `LICENSE` next to the prompts yourself.
 
-**Opting out:** remove the pack from `overlays_enabled` and run `playbook sync`.
-The pack's skills are then leftovers of an earlier sync, settled by the same
+**Opting out:** remove the plugin from `overlays_enabled` and run `playbook sync`.
+The plugin's skills are then leftovers of an earlier sync, settled by the same
 rule as a skill you remove: every file sync wrote that you have not touched
 since (and git does not track) is deleted and the emptied directories are
 pruned, so the 15 skill directories disappear from every skill root. Until you
@@ -321,29 +370,29 @@ sync, `playbook sync --check` reports the managed `.gitignore` block as stale
 (under the default `commit = false`). A skill file you edited is kept (still
 owned and gitignored) until you delete it by hand, and a file you added inside a
 skill directory (notes in `references/`, `node_modules/` under `scripts/`) was
-never written by sync, so it and the directory that holds it stay. The pack's
+never written by sync, so it and the directory that holds it stay. The plugin's
 Continue prompts carry the `AUTOGENERATED` header on line 1 and are removed
 even if edited or committed. Under `commit = true`, committed (tracked) skill
 files are kept and listed on stderr until you `git rm` them. The same rule
-applies when you override one pack skill with `playbook/skills/<id>/`: your
-override replaces it in every root, and every unedited pack file under that
+applies when you override one plugin skill with `playbook/skills/<id>/`: your
+override replaces it in every root, and every unedited plugin file under that
 skill's `scripts/` or `references/` that your override does not ship is
 removed. An override of `subagent-driven-development` must therefore ship
 `scripts/task-brief` and `scripts/sdd-workspace`, which executing-plans calls
 (SPEC §11.5.1). See SPEC §11.5 and §4.2 step 9.
 
-**The `python_design` pack** (`coding_agent_playbook.packs.python_design`) adds
+**The `python_design` bundled plugin** (`coding_agent_playbook.plugins.python_design`) adds
 two skills for Python design work: `python-design-review` (smells, principles
 and patterns; its `detect_smells.py` and `lcom4_clusters.py` scripts print JSON
 candidates) and `python-architecture` (layers, composition root, dependency
 injection, testability and persistence; its `layer_map.py` script reports
 imports that cross layers the wrong way, and import cycles). Its content is
 distilled, not vendored: written fresh, with the credit in
-`src/coding_agent_playbook/packs/python_design/ATTRIBUTIONS.md`. Each `SKILL.md`
+`content/plugins/python_design/ATTRIBUTIONS.md`. Each `SKILL.md`
 works on its own, so the degraded Continue prompt keeps the decision tables, and
 the scripts are stdlib-only and run on Python 3.10+. Enable it the same way,
 alone or next to superpowers:
-`overlays_enabled = ["coding_agent_playbook.packs.python_design"]`. See SPEC
+`overlays_enabled = ["coding_agent_playbook.plugins.python_design"]`. See SPEC
 §11.5.2.
 
 Those three scripts are `.py` files, and sync writes them as such under
@@ -356,6 +405,23 @@ module.
 default `commit = false`) and lints every copy under `commit = true`. If you run
 these tools over the repository root, exclude the generated skill roots (for
 example `exclude` under `[tool.mypy]`, `extend-exclude` under `[tool.ruff]`).
+
+**Old names still work.** A config written before v0.19 says
+`coding_agent_playbook.packs.<name>`. That spelling is a deprecated alias:
+the plugin renders exactly as before, and every command that loads the config
+prints one line per old name, naming the file that holds it:
+
+```text
+warning: .coding-agent-playbook.toml: overlays_enabled: 'coding_agent_playbook.packs.superpowers' is deprecated; use 'coding_agent_playbook.plugins.superpowers'
+```
+
+`sync` never rewrites the name for you. Re-run `playbook init` with
+`--overlays coding_agent_playbook.plugins.<name>` (an old name there is
+accepted too, with a `warning: --overlays: …` line, and written in its new
+spelling), or edit `.coding-agent-playbook.toml`. A
+`.coding-agent-playbook.local.toml` must be edited by hand. The
+`coding_agent_playbook.packs` modules and their `PACK_NAME` constants are gone:
+list the dotted string. See `MIGRATION.md`.
 
 ## Agent Harness support (opt-in)
 
@@ -408,7 +474,7 @@ repos:
     rev: v0.1.0a0     # the engine version your project pins
     hooks:
       - id: playbook-sync                  # re-render local output after checkout / merge
-        additional_dependencies: [playbook-rules-<org>]   # every overlay you enable
+        additional_dependencies: [playbook-rules-<org>]   # every third-party overlay package / out-of-tree adapter (bundled plugins need none)
       - id: playbook-no-generated-output   # refuse commits that stage generated output
         additional_dependencies: [playbook-rules-<org>]
 ```
@@ -417,9 +483,9 @@ repos:
 > runs them in its **own** virtualenv holding only the engine at `rev:` — not your
 > project environment. List every overlay package (and any out-of-tree adapter)
 > under `additional_dependencies` and keep `rev` on the engine version you pin.
-> Otherwise `playbook sync` refuses to run ("overlay package(s) in
-> overlays_enabled are not usable here", each one `not importable`) instead of
-> silently re-rendering without your org's rules. The
+> Otherwise `playbook sync` refuses to run ("overlay package(s) or bundled
+> plugin(s) in overlays_enabled are not usable here", each overlay package
+> `not importable`) instead of silently re-rendering without your org's rules. The
 > simpler option: use the `repo: local` + `language: system` hooks `playbook init`
 > writes (below), which run the `playbook` from your project environment.
 

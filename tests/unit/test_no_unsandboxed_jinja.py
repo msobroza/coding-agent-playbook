@@ -34,6 +34,7 @@ from jinja2.sandbox import SandboxedEnvironment
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.evals.loader import load_eval_task_from_dir
 from coding_agent_playbook.evals.prompting import render_prompt
+from tests._content import CORE_ROOT
 from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:
@@ -187,7 +188,7 @@ def test_sync_and_eval_prompts_build_only_sandboxed_environments(
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body of x\n")])
     assert _sync.execute(repo, git=FakeGitClient()) == 0
     assert _sync.execute(repo, check=True, git=FakeGitClient()) == 0
-    task_dir = _SRC / "resources" / "eval_tasks" / "review-spot-the-bug"
+    task_dir = CORE_ROOT / "eval_tasks" / "review-spot-the-bug"
     task = load_eval_task_from_dir(task_dir, source_package="coding_agent_playbook")
     assert "### " in render_prompt(task, strict=True)  # a rule() inclusion rendered
 

@@ -1,8 +1,9 @@
 """Tests for the SPEC §12.6 self-contained-markdown-links rule (PR L).
 
 Drives ``playbook validate`` end-to-end on synthetic consumer repos, plus the
-CI gate asserting every *shipped* engine artifact is itself clean — that test
-running under ``pytest -q`` is what enforces the invariant on CI.
+CI gates asserting every *shipped* artifact, the engine's and every bundled
+plugin's, is itself clean — those tests running under ``pytest -q`` are what
+enforce the invariant on CI.
 """
 
 from __future__ import annotations
@@ -10,17 +11,20 @@ from __future__ import annotations
 import argparse
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.bundled_content import bundled_plugins
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.links import LinksConfig
-from coding_agent_playbook.packs.superpowers import PACK_NAME
 from coding_agent_playbook.sources.base import ArtifactSource
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, _resource_subdir
+from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import Prompt, PromptFrontmatter
-from tests.packs.superpowers_expectations import SKILLS_ROOT
+from tests._content import PLUGINS_ROOT, bundled_plugin_dirs
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    import pytest
+
+    from coding_agent_playbook.commands.validate import ValidationError
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.types import Rule, Skill
 
@@ -183,23 +187,85 @@ def test_non_filesystem_source_skips_relative_targets(tmp_path):
     assert _validate._check_markdown_links(source, tmp_path, LinksConfig()) == []
 
 
-def test_shipped_engine_artifacts_have_self_contained_links(tmp_path):
+def _check_links_recording_visits(
+    source: FileSystemArtifactSource, repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[list[ValidationError], list[Path]]:
+    """Run the link gate; return its errors and every markdown file it scanned.
+
+    The gate silently skips a root that does not resolve, so only the visits
+    prove it is not vacuous. Example::
+
+        errors, visited = _check_links_recording_visits(source, tmp_path, monkeypatch)
+    """
+    visited: list[Path] = []
+    real_scan = _validate._scan_markdown_file
+
+    def _recording_scan(
+        md: Path, *, root_dir: Path, links_config: LinksConfig
+    ) -> list[ValidationError]:
+        visited.append(md)
+        return real_scan(md, root_dir=root_dir, links_config=links_config)
+
+    monkeypatch.setattr(_validate, "_scan_markdown_file", _recording_scan)
+    return _validate._check_markdown_links(source, repo, LinksConfig()), visited
+
+
+def test_shipped_engine_artifacts_have_self_contained_links(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The CI gate: every markdown link in every shipped engine artifact must
     be self-contained under the strict default (empty allowlist)."""
     source = FileSystemArtifactSource(repo_root=tmp_path)
-    errors = _validate._check_markdown_links(source, tmp_path, LinksConfig())
+    errors, visited = _check_links_recording_visits(source, tmp_path, monkeypatch)
+    assert any("rules" in md.parts for md in visited), (
+        f"the link gate visited no rule of {source.engine_package} ({len(visited)} files scanned)"
+    )
     assert errors == [], "\n".join(f"{e.path}: {e.message}" for e in errors)
 
 
-def test_superpowers_pack_has_self_contained_links(tmp_path: Path) -> None:
-    """The same CI gate over the opt-in superpowers pack (SPEC §11.5): it is
-    walked only when enabled, so the engine-only gate above never sees it."""
-    # The validator silently skips a package whose skills/ does not resolve, so
-    # pin that it resolves to the shipped tree: otherwise this gate is vacuous.
-    walked = _resource_subdir(PACK_NAME, "skills")
-    assert walked is not None
-    assert walked.resolve() == SKILLS_ROOT.resolve()
-    assert any(walked.glob("*/SKILL.md"))
-    source = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PACK_NAME])
-    errors = _validate._check_markdown_links(source, tmp_path, LinksConfig())
+def _plugins_with_link_checked_markdown() -> set[str]:
+    """Names of the plugin dirs holding a ``.md``/``.md.j2`` file the link gate reads.
+
+    Read from the checkout, not from the code under test, so a plugin the gate
+    fails to walk shows up as missing. Example::
+
+        _plugins_with_link_checked_markdown()  # {'python_design', 'superpowers'}
+    """
+    kind_dirs = [
+        (plugin_dir.name, plugin_dir / kind)
+        for plugin_dir in bundled_plugin_dirs()
+        for kind in _validate._LINK_CHECKED_SUBDIRS
+    ]
+    return {
+        name
+        for name, kind_dir in kind_dirs
+        if kind_dir.is_dir()
+        and any(path.name.endswith((".md", ".md.j2")) for path in kind_dir.rglob("*"))
+    }
+
+
+def test_every_bundled_plugin_has_self_contained_links(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same CI gate with every bundled plugin enabled (SPEC §11.5).
+
+    Plugins are walked only when enabled, so the engine-only gate above never
+    sees them. The plugin set is discovered, so a new ``content/plugins/<name>/``
+    is gated with no edit here (acceptance 5). Each plugin's containment root is
+    its own directory, so a link into ``core/`` or another plugin fails.
+    """
+    plugins = bundled_plugins()
+    source = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=plugins)
+    errors, visited = _check_links_recording_visits(source, tmp_path, monkeypatch)
+    # The gate silently skips a plugin whose kind dirs do not resolve, so pin
+    # that it walked every one that ships markdown: otherwise it is vacuous.
+    plugins_root = PLUGINS_ROOT.resolve()
+    walked = {
+        md.resolve().relative_to(plugins_root).parts[0]
+        for md in visited
+        if md.resolve().is_relative_to(plugins_root)
+    }
+    assert walked == _plugins_with_link_checked_markdown(), (
+        f"the link gate walked {sorted(walked)} of the bundled plugins {plugins}"
+    )
     assert errors == [], "\n".join(f"{e.path}: {e.message}" for e in errors)

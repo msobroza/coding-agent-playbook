@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -13,15 +12,13 @@ from coding_agent_playbook.evals.loader import load_eval_task_from_dir
 from coding_agent_playbook.evals.runner import capture, materialize
 from coding_agent_playbook.evals.scoring import score
 from coding_agent_playbook.evals.task import Verdict
+from tests._content import CORE_ROOT
 from tests.integration.ccv_answers import CORRECT_ANSWER
 
-_TASKS_ROOT = (
-    Path(__file__).resolve().parents[2]
-    / "src"
-    / "coding_agent_playbook"
-    / "resources"
-    / "eval_tasks"
-)
+if TYPE_CHECKING:
+    from pathlib import Path
+
+_TASKS_ROOT = CORE_ROOT / "eval_tasks"
 _FIXTURE = _TASKS_ROOT / "find-injected-vuln-modoboa-cmdi"
 
 

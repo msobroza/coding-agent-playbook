@@ -1,14 +1,17 @@
 """An unusable overlay is reported by every command, not only ``sync`` (SPEC §11.5).
 
-"Unusable" is the one shared preflight check (``_sync_preflight``): importing the
-package fails (it is missing, or its own code raises), or it imports but ships no
-``resources/`` directory (the parent ``coding_agent_playbook.packs``, say).
+"Unusable" is the one shared preflight check (``_sync_preflight``): importing an
+overlay package fails (it is missing, or its own code raises), or it imports but
+ships no ``resources/`` directory (``json``, say). A bundled-plugin name is never
+imported: it is unusable when no ``content/plugins/<leaf>/`` matches it ("no
+such bundled plugin"), and the bare plugin namespace is never a plugin.
 ``sync`` refuses (exit 1), ``validate`` fails (exit 1), ``check`` flags it and
 stops claiming a clean state (exit 0, it is a diagnostic), and ``init`` refuses
 before writing (exit 2, a usage error) — for ``--overlays`` and for a local
 file's ``overlays_enabled``, which replaces it. Each unusable overlay gets its own
-line. A name that reads like a mistyped bundled pack also lists the bundled packs.
-A package that raises at import time used to crash every command with a traceback.
+line. A name that reads like a mistyped bundled plugin also lists the bundled
+plugins. A package that raises at import time used to crash every command with a
+traceback.
 """
 
 from __future__ import annotations
@@ -19,14 +22,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands import check as _check
 from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands import validate as _validate
-from coding_agent_playbook.commands._sync_preflight import bundled_packs
-from coding_agent_playbook.packs.superpowers import PACK_NAME
+from coding_agent_playbook.commands._sync_preflight import bundled_plugins
 from tests.conftest import _DEFAULT_CONFIG
 from tests.fakes import FakeGitClient
+from tests.plugins.superpowers_expectations import PLUGIN_NAME
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -35,13 +39,15 @@ if TYPE_CHECKING:
 # init ends with a real sync (SubprocessGitClient); keep git off the developer's config.
 pytestmark = pytest.mark.usefixtures("hermetic_git_env")
 
-_TYPO = "coding_agent_playbook.packs.superpower"  # the trailing "s" is missing
-_PARENT = "coding_agent_playbook.packs"  # importable, but no resources/ of its own
-_NOT_A_PACK = "no_such_overlay_pkg"
+_TYPO = "coding_agent_playbook.plugins.superpower"  # the trailing "s" is missing
+_NO_RES = "json"  # importable, but no resources/ of its own
+_NO_RES_REASON = "importable, but ships no resources/ directory, so it is not an overlay package"
+_NAMESPACE = "coding_agent_playbook.plugins"  # the namespace itself, not a plugin
+_NOT_A_PLUGIN = "no_such_overlay_pkg"
 
 
-def _packs_hint() -> str:
-    return f"(bundled packs: {', '.join(bundled_packs())})"
+def _plugins_hint() -> str:
+    return f"(bundled plugins: {', '.join(bundled_plugins())})"
 
 
 def _config_with(*overlays: str) -> str:
@@ -80,13 +86,14 @@ def _ns(repo: Path, **kwargs: object) -> argparse.Namespace:
 @pytest.mark.parametrize(
     ("overlay", "expected"),
     [
-        (_TYPO, f"FAIL overlays_enabled: {_TYPO}: not importable {_packs_hint()}"),
+        (_TYPO, f"FAIL overlays_enabled: {_TYPO}: no such bundled plugin {_plugins_hint()}"),
+        (_NO_RES, f"FAIL overlays_enabled: {_NO_RES}: {_NO_RES_REASON}\n"),
         (
-            _PARENT,
-            f"FAIL overlays_enabled: {_PARENT}: importable, but ships no resources/ "
-            f"directory, so it is not an overlay package {_packs_hint()}",
+            _NAMESPACE,
+            f"FAIL overlays_enabled: {_NAMESPACE}: the bundled plugin namespace, "
+            f"not a plugin {_plugins_hint()}\n",
         ),
-        (_NOT_A_PACK, f"FAIL overlays_enabled: {_NOT_A_PACK}: not importable\n"),
+        (_NOT_A_PLUGIN, f"FAIL overlays_enabled: {_NOT_A_PLUGIN}: not importable\n"),
     ],
 )
 def test_validate_fails_on_an_unusable_overlay(
@@ -111,16 +118,15 @@ def test_validate_reports_each_unusable_overlay(
     make_package: Callable[..., str],
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    repo = _repo(tmp_path, make_synthetic_repo, _TYPO, _PARENT, *_raising_overlays(make_package))
+    repo = _repo(tmp_path, make_synthetic_repo, _TYPO, _NO_RES, *_raising_overlays(make_package))
 
     assert _validate.run(_ns(repo)) == 1
 
     out = capsys.readouterr().out
     fails = [line for line in out.splitlines() if line.startswith("FAIL overlays_enabled: ")]
     assert fails == [
-        f"FAIL overlays_enabled: {_TYPO}: not importable {_packs_hint()}",
-        f"FAIL overlays_enabled: {_PARENT}: importable, but ships no resources/ directory, "
-        f"so it is not an overlay package {_packs_hint()}",
+        f"FAIL overlays_enabled: {_TYPO}: no such bundled plugin {_plugins_hint()}",
+        f"FAIL overlays_enabled: {_NO_RES}: {_NO_RES_REASON}",
         *(f"FAIL overlays_enabled: {reason}" for reason in _BOOM_REASONS),
     ]
     assert "validation failed with 4 error(s)" in out
@@ -139,7 +145,7 @@ def test_validate_passes_with_no_overlays(
 # --------------------------------------------------------------------------- #
 
 
-def test_check_flags_a_misspelled_pack_and_does_not_claim_a_clean_state(
+def test_check_flags_a_misspelled_plugin_and_does_not_claim_a_clean_state(
     tmp_path: Path, make_synthetic_repo: Callable[..., Path], capsys: pytest.CaptureFixture[str]
 ) -> None:
     repo = make_synthetic_repo(tmp_path, rules=[("style", "Body\n")])
@@ -152,7 +158,7 @@ def test_check_flags_a_misspelled_pack_and_does_not_claim_a_clean_state(
     out = capsys.readouterr().out
     environment, _, rest = out.partition("=== Detected ===")
     assert f"  Overlays: {_TYPO}\n" in environment
-    assert f"    ✗ {_TYPO}: not importable {_packs_hint()}\n" in environment
+    assert f"    ✗ {_TYPO}: no such bundled plugin {_plugins_hint()}\n" in environment
     assert "'playbook sync' refuses to run" in environment
     drift = rest.partition("=== Drift ===")[2]
     assert "All on-disk files match generated output." not in drift
@@ -182,7 +188,7 @@ def test_check_flags_each_unusable_overlay(
 ) -> None:
     """Also a package raising at import: ``check`` used to crash with a traceback."""
     repo = _repo(
-        tmp_path, make_synthetic_repo, _TYPO, _NOT_A_PACK, *_raising_overlays(make_package)
+        tmp_path, make_synthetic_repo, _TYPO, _NOT_A_PLUGIN, *_raising_overlays(make_package)
     )
 
     assert _check.run(_ns(repo, refresh=False)) == 0
@@ -190,8 +196,8 @@ def test_check_flags_each_unusable_overlay(
     environment = capsys.readouterr().out.partition("=== Detected ===")[0]
     flagged = [line for line in environment.splitlines() if line.startswith("    ✗ ")]
     assert flagged == [
-        f"    ✗ {_TYPO}: not importable {_packs_hint()}",
-        f"    ✗ {_NOT_A_PACK}: not importable",
+        f"    ✗ {_TYPO}: no such bundled plugin {_plugins_hint()}",
+        f"    ✗ {_NOT_A_PLUGIN}: not importable",
         *(f"    ✗ {reason}" for reason in _BOOM_REASONS),
     ]
 
@@ -202,7 +208,7 @@ def test_check_keeps_listing_lockfile_drift_next_to_the_overlay_problem(
     repo = make_synthetic_repo(tmp_path, rules=[("style", "Body\n")])
     assert _sync.execute(repo, git=FakeGitClient()) == 0
     (repo / "AGENTS.md").write_text("edited\n", encoding="utf-8")
-    (repo / ".coding-agent-playbook.toml").write_text(_config_with(_PARENT), encoding="utf-8")
+    (repo / ".coding-agent-playbook.toml").write_text(_config_with(_NO_RES), encoding="utf-8")
     capsys.readouterr()
 
     assert _check.run(_ns(repo, refresh=False)) == 0
@@ -238,9 +244,10 @@ def _write_pyproject(repo: Path) -> None:
 @pytest.mark.parametrize(
     ("overlay", "reason"),
     [
-        (_TYPO, f"{_TYPO}: not importable {_packs_hint()}"),
-        (_PARENT, f"{_PARENT}: importable, but ships no resources/ directory"),
-        (_NOT_A_PACK, f"{_NOT_A_PACK}: not importable\n"),
+        (_TYPO, f"{_TYPO}: no such bundled plugin {_plugins_hint()}"),
+        (_NO_RES, f"{_NO_RES}: {_NO_RES_REASON}\n"),
+        (_NAMESPACE, f"{_NAMESPACE}: the bundled plugin namespace, not a plugin {_plugins_hint()}"),
+        (_NOT_A_PLUGIN, f"{_NOT_A_PLUGIN}: not importable\n"),
     ],
 )
 def test_init_refuses_an_unusable_overlay_before_writing(
@@ -251,7 +258,9 @@ def test_init_refuses_an_unusable_overlay_before_writing(
     assert _init.run(_init_ns(tmp_path, overlays=f"{overlay}")) == 2
 
     err = capsys.readouterr().err
-    assert err.startswith("error: --overlays names package(s) that cannot be used as overlays")
+    assert err.startswith(
+        "error: --overlays names overlay package(s) or bundled plugin(s) that cannot be used here"
+    )
     assert f"\n  {reason}" in err
     assert sorted(path.name for path in tmp_path.iterdir()) == ["pyproject.toml"]
 
@@ -261,15 +270,15 @@ def test_init_lists_each_unusable_overlay_and_a_raising_one(
 ) -> None:
     """A package raising at import used to pass, get written, then crash the sync."""
     _write_pyproject(tmp_path)
-    overlays = ",".join([_TYPO, _NOT_A_PACK, *_raising_overlays(make_package)])
+    overlays = ",".join([_TYPO, _NOT_A_PLUGIN, *_raising_overlays(make_package)])
 
     assert _init.run(_init_ns(tmp_path, overlays=overlays)) == 2
 
     err = capsys.readouterr().err
     listed = [line for line in err.splitlines() if line.startswith("  ")]
     assert listed == [
-        f"  {_TYPO}: not importable {_packs_hint()}",
-        f"  {_NOT_A_PACK}: not importable",
+        f"  {_TYPO}: no such bundled plugin {_plugins_hint()}",
+        f"  {_NOT_A_PLUGIN}: not importable",
         *(f"  {reason}" for reason in _BOOM_REASONS),
     ]
     assert sorted(path.name for path in tmp_path.iterdir()) == ["pyproject.toml"]
@@ -283,18 +292,40 @@ def test_init_checks_the_local_files_overlays_which_replace_the_flag(
     local = tmp_path / ".coding-agent-playbook.local.toml"
     local.write_text(f'overlays_enabled = ["{_TYPO}"]\n', encoding="utf-8")
 
-    assert _init.run(_init_ns(tmp_path, overlays=PACK_NAME)) == 2
+    assert _init.run(_init_ns(tmp_path, overlays=PLUGIN_NAME)) == 2
 
     err = capsys.readouterr().err
     assert err.startswith(
-        "error: overlays_enabled in .coding-agent-playbook.local.toml names package(s) "
-        "that cannot be used as overlays here; nothing was written:"
+        "error: overlays_enabled in .coding-agent-playbook.local.toml names overlay package(s) "
+        "or bundled plugin(s) that cannot be used here; nothing was written:"
     )
-    assert f"\n  {_TYPO}: not importable {_packs_hint()}" in err
+    assert f"\n  {_TYPO}: no such bundled plugin {_plugins_hint()}" in err
     assert sorted(path.name for path in tmp_path.iterdir()) == [local.name, "pyproject.toml"]
 
 
-@pytest.mark.parametrize("local_overlays", ["[]", f'["{PACK_NAME}"]'])
+def test_init_refuses_unknown_bundled_plugin_in_local_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Review Focus 5: the final sync would refuse the local list, so init does first."""
+    _write_pyproject(tmp_path)
+    local = tmp_path / ".coding-agent-playbook.local.toml"
+    unknown = "coding_agent_playbook.plugins.nope"
+    local.write_text(f'overlays_enabled = ["{unknown}"]\n', encoding="utf-8")
+    argv = ["init", "--non-interactive", "--name", "x", "--kind", "python-library"]
+
+    assert main([*argv, "--repo-root", str(tmp_path)]) == 2
+
+    err = capsys.readouterr().err
+    assert (
+        "error: overlays_enabled in .coding-agent-playbook.local.toml names overlay package(s) "
+        "or bundled plugin(s)"
+    ) in err
+    assert f"\n  {unknown}: no such bundled plugin {_plugins_hint()}\n" in err
+    assert not (tmp_path / ".coding-agent-playbook.toml").exists()
+    assert sorted(path.name for path in tmp_path.iterdir()) == [local.name, "pyproject.toml"]
+
+
+@pytest.mark.parametrize("local_overlays", ["[]", f'["{PLUGIN_NAME}"]'])
 def test_init_checks_the_flag_too_when_the_local_file_replaces_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], local_overlays: str
 ) -> None:
@@ -309,10 +340,10 @@ def test_init_checks_the_flag_too_when_the_local_file_replaces_it(
 
     err = capsys.readouterr().err
     assert err.startswith(
-        "error: --overlays names package(s) that cannot be used as overlays here; "
-        "nothing was written:"
+        "error: --overlays names overlay package(s) or bundled plugin(s) that cannot be used "
+        "here; nothing was written:"
     )
-    assert f"\n  {_TYPO}: not importable {_packs_hint()}" in err
+    assert f"\n  {_TYPO}: no such bundled plugin {_plugins_hint()}" in err
     assert "overlays_enabled in" not in err  # the local list is usable
     assert sorted(path.name for path in tmp_path.iterdir()) == [local.name, "pyproject.toml"]
 
@@ -322,24 +353,27 @@ def test_init_reports_both_unusable_lists_at_once(
 ) -> None:
     _write_pyproject(tmp_path)
     local = tmp_path / ".coding-agent-playbook.local.toml"
-    local.write_text(f'overlays_enabled = ["{_NOT_A_PACK}"]\n', encoding="utf-8")
+    local.write_text(f'overlays_enabled = ["{_NOT_A_PLUGIN}"]\n', encoding="utf-8")
 
     assert _init.run(_init_ns(tmp_path, overlays=_TYPO)) == 2
 
     err = capsys.readouterr().err
-    assert err.startswith("error: --overlays names package(s)")
-    assert "\nerror: overlays_enabled in .coding-agent-playbook.local.toml names package(s)" in err
+    assert err.startswith("error: --overlays names overlay package(s) or bundled plugin(s)")
+    assert (
+        "\nerror: overlays_enabled in .coding-agent-playbook.local.toml names overlay package(s) "
+        "or bundled plugin(s)"
+    ) in err
     assert sorted(path.name for path in tmp_path.iterdir()) == [local.name, "pyproject.toml"]
 
 
-def test_init_accepts_the_bundled_pack_and_writes_the_top_level_key(tmp_path: Path) -> None:
+def test_init_accepts_the_bundled_plugin_and_writes_the_top_level_key(tmp_path: Path) -> None:
     _write_pyproject(tmp_path)
 
-    assert _init.run(_init_ns(tmp_path, overlays=PACK_NAME)) == 0
+    assert _init.run(_init_ns(tmp_path, overlays=PLUGIN_NAME)) == 0
 
     with (tmp_path / ".coding-agent-playbook.toml").open("rb") as handle:
         data = tomllib.load(handle)
-    assert data["overlays_enabled"] == [PACK_NAME]
+    assert data["overlays_enabled"] == [PLUGIN_NAME]
     assert "overlays" not in data
     assert "adapters" not in data
     assert (tmp_path / ".claude" / "skills" / "brainstorming" / "SKILL.md").is_file()
@@ -357,12 +391,12 @@ def test_sync_refuses_a_package_without_resources(
     make_synthetic_repo: Callable[..., Path],
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    repo = _repo(tmp_path, make_synthetic_repo, _PARENT)
+    repo = _repo(tmp_path, make_synthetic_repo, _NO_RES)
 
     assert _sync.execute(repo, git=FakeGitClient(staged=["AGENTS.md"]), **mode) == 1
 
     err = capsys.readouterr().err
-    assert f"\n  {_PARENT}: importable, but ships no resources/ directory" in err
+    assert f"\n  {_NO_RES}: {_NO_RES_REASON}\n" in err
     assert not (repo / "AGENTS.md").exists()
     assert not (repo / ".coding-agent-playbook.lock").exists()
     assert not (repo / ".gitignore").exists()

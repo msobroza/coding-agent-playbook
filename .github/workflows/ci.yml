@@ -46,3 +46,67 @@ jobs:
 
       - name: coding-agent-playbook --version smoke test
         run: coding-agent-playbook --version
+
+  # Builds the wheel the way a release does (the sdist first, then a wheel from
+  # it) and proves the installed wheel works outside the checkout. content/ ships
+  # through a force-include, so a mis-scoped include or a tracked file the sdist
+  # drops would otherwise go unnoticed: the editable install in `test` never
+  # reads the packaged copy.
+  wheel-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash # -eo pipefail: a failing command piped into tee still fails the step
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the sdist, then a wheel from it
+        run: python -m pip install build && python -m build
+
+      - name: The wheel's _content/ equals the tracked content/ tree
+        run: |
+          python -c '
+          import glob, subprocess, sys, zipfile
+          (wheel,) = glob.glob("dist/*.whl")
+          prefix = "coding_agent_playbook/_content/"
+          names = zipfile.ZipFile(wheel).namelist()
+          shipped = {n[len(prefix):] for n in names if n.startswith(prefix) and not n.endswith("/")}
+          listed = subprocess.run(["git", "ls-files", "-z", "content"], capture_output=True, text=True, check=True).stdout
+          tracked = {path[len("content/"):] for path in listed.split("\0") if path}
+          if shipped != tracked:
+              sys.exit(f"wheel-only: {sorted(shipped - tracked)}; tracked-only: {sorted(tracked - shipped)}")
+          print(f"{len(shipped)} content files match git ls-files content")
+          '
+
+      - name: Install the wheel (non-editable) into a fresh venv
+        run: |
+          python -m venv "$RUNNER_TEMP/smoke-venv"
+          "$RUNNER_TEMP/smoke-venv/bin/python" -m pip install dist/*.whl
+          echo "$RUNNER_TEMP/smoke-venv/bin" >> "$GITHUB_PATH"
+          timeout 120 "$RUNNER_TEMP/smoke-venv/bin/playbook" --version </dev/null
+
+      - name: init with both bundled plugins in an empty scratch directory
+        run: |
+          mkdir "$RUNNER_TEMP/smoke-repo"
+          cd "$RUNNER_TEMP/smoke-repo"
+          timeout 120 playbook init --non-interactive --name smoke --kind python-library \
+            --overlays coding_agent_playbook.plugins.superpowers,coding_agent_playbook.plugins.python_design \
+            </dev/null 2>&1 | tee "$RUNNER_TEMP/init.log"
+          if grep -n '^warning:' "$RUNNER_TEMP/init.log"; then
+            echo "init printed a warning line" >&2
+            exit 1
+          fi
+          for skill in brainstorming python-design-review; do
+            test -f ".claude/skills/$skill/SKILL.md" || { echo "missing .claude/skills/$skill/SKILL.md" >&2; exit 1; }
+          done
+
+      - name: eval --list finds the 23 core eval tasks
+        run: |
+          cd "$RUNNER_TEMP/smoke-repo"
+          timeout 120 playbook eval --list </dev/null | tee "$RUNNER_TEMP/eval-list.log"
+          grep -Fw '23 eval tasks' "$RUNNER_TEMP/eval-list.log"
