@@ -65,3 +65,15 @@ def plugin_files_root(name: str) -> Path:
         plugin_files_root("python_design") / "ATTRIBUTIONS.md"
     """
     return PLUGINS_ROOT / name
+
+
+def bundled_eval_task_roots() -> list[Path]:
+    """Every bundled layer's ``eval_tasks/`` dir: core first, then each plugin that ships one.
+
+    Eval tasks are a per-layer artifact kind, so a plugin may ship its own;
+    the shipped-task gates walk all of them.
+
+    Example: ``bundled_eval_task_roots()[0] == CORE_ROOT / "eval_tasks"``.
+    """
+    plugin_roots = [d / "eval_tasks" for d in bundled_plugin_dirs()]
+    return [CORE_ROOT / "eval_tasks", *(r for r in plugin_roots if r.is_dir())]

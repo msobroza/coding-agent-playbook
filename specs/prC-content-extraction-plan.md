@@ -4,7 +4,7 @@
 > `catalog/`: the wheel's `_content/` is `_catalog/`, `bundled_content.py` is `catalog.py`
 > (`catalog_root`, `catalog_layer_root`, `CatalogMissingError`, `catalog_dir=`),
 > `tests/_content.py` is `tests/_catalog.py`, and the `content` pytest marker is
-> `catalog`. The text below uses the current names.
+> `catalog`. The text below uses the current names; test-file names it cites may predate the rename.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

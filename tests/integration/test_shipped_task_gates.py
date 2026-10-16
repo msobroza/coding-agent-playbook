@@ -53,7 +53,7 @@ from coding_agent_playbook.evals.scoring import score
 from coding_agent_playbook.evals.validator import validate_tasks
 from coding_agent_playbook.evaluators.types import CheckResult
 from coding_agent_playbook.types import Prompt, PromptFrontmatter
-from tests._catalog import CORE_ROOT
+from tests._catalog import CORE_ROOT, bundled_eval_task_roots
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -228,7 +228,8 @@ def describe(result: CheckResult) -> str:
 
 
 def _shipped_task_dirs() -> list[Path]:
-    return list(discover_eval_task_dirs(_TASKS_ROOT))
+    """Core's eval tasks, then every bundled plugin's (eval tasks are per layer)."""
+    return [d for root in bundled_eval_task_roots() for d in discover_eval_task_dirs(root)]
 
 
 # Fail collection loudly: an empty or mis-pointed root would turn every gate proof

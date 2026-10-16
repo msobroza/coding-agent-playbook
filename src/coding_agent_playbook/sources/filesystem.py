@@ -74,7 +74,7 @@ def _resource_subdir(package: str, subdir: str) -> Path | None:
     catalog root is missing: a broken install must fail loudly, not render
     without the engine's artifacts.
     """
-    # Outside the ``except Exception`` guard below on purpose: a missing content
+    # Outside the ``except Exception`` guard below on purpose: a missing catalog
     # root must propagate, never read as "this layer ships nothing".
     if is_bundled_layer(package):
         return _bundled_subdir(package, subdir)
