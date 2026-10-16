@@ -2,6 +2,8 @@
 
 > **Part 2 of PR K.** Part 1 is [`prK-lifecycle-hooks.md`](prK-lifecycle-hooks.md) and owns the mechanism (the canonical `Hook` artifact, configuration and trust, the adapters, the `playbook-hook` runtime), the locked decisions (§G), the invariants (§I), the SPEC amendments (§J) and the resolved open questions (§K). This part specifies what runs on that mechanism: the standard hook pack (§E), the four new quality tools (§F), their tracks K5–K10 and the rejected hooks (Appendix R).
 >
+> **Layout note (SPEC v0.19, PR C; `content/` renamed `catalog/` in v0.20).** This design predates the move of the engine's content out of the Python package. The engine's `src/coding_agent_playbook/resources/{rules,prompts,eval_tasks,hooks}/` now live in `catalog/core/{rules,prompts,eval_tasks,hooks}/`, the hook shim templates (`resources/hook_shims/`) in the package's `src/coding_agent_playbook/templates/hook_shims/`, and the bundled packs (`coding_agent_playbook.packs.<name>`) are bundled plugins under `catalog/plugins/<name>/` (`coding_agent_playbook.plugins.<name>`). Overlay packages keep `<pkg>/resources/…`. Older paths in the track file lists below read through this mapping; SPEC.md is authoritative.
+>
 > **Commit policy (overrides any tooling default):** commits authored **solely by `msobroza`** — no `Co-Authored-By`, no `--author`, no signing, no `git config` edits. Subagents `cd <worktree>` as their first tool call, default `opus`, **no `git push` / `gh pr create` until the user gate approves the diff**. Run the **full cache-free, no-optional-extras CI-parity gate** (`uv pip uninstall radon -y; rm -rf .mypy_cache; ruff check . && ruff format --check . && mypy && pytest -q`, no path args; invoke as `uv run python -m mypy` / `uv run python -m pytest -q` per CLAUDE.md) before claiming green — see [[ci-parity-gate-pitfalls]].
 
 Section letters are shared across the two parts: §P, §A–§D, §G–§K live in [part 1](prK-lifecycle-hooks.md); §E, §F, Tracks K5–K10 and Appendix R live in [part 2](prK-hook-pack.md).
@@ -23,7 +25,7 @@ The pack is the 38 non-rejected entries of the hook catalog, grouped into five f
 
 #### E.0.1 Every pack hook is a canonical `Hook` with a builtin handler
 
-- **One artifact per catalog id.** Each hook is a `Hook` under `src/coding_agent_playbook/resources/hooks/`, authored as markdown plus static YAML frontmatter (L1). Ids are byte-identical to `catalog.json`. The body is the advisory paragraph that degrades into AGENTS.md / Continue output for harnesses without hooks.
+- **One artifact per catalog id.** Each hook is a `Hook` under `catalog/core/hooks/`, authored as markdown plus static YAML frontmatter (L1). Ids are byte-identical to `catalog.json`. The body is the advisory paragraph that degrades into AGENTS.md / Continue output for harnesses without hooks.
 - **Builtin handlers only.** Every engine-shipped pack handler is a builtin registered with `@register_hook_handler("<name>")` (entry-point group `coding_agent_playbook.hook_handlers`), following the §A.2 naming rule: snake_case, shareable across hooks, `<name>:<role>` for a companion on a second event (bound through the hook's `handlers` map, §A.2), e.g. `gate_weakening_guard:pre_edit`. For a one-hook handler the name is the hook id snake-cased (`guard_generated_outputs`); the decision log records `hook_id` separately. Handler modules live under `src/coding_agent_playbook/hook_runtime/handlers/` *(NEW)*; a module may hold several related handlers (e.g. `ruff_feedback.py`, §E.3) and files stay small. The engine ships no external-command handler, so the trust-on-first-use path (L1, L2) only ever applies to overlay and repo-local handlers.
 - **Import discipline (L3), verified.** I checked imports on the worktree venv (CPython 3.13.9):
   - These load **without** jinja2: `commands.metrics`, `evals.task`, `evals.loader`, `evals.validator`, `detector` (but it imports `packaging`, `detector.py:14-15`), `lockfile`, `sources.filesystem` (yaml). A handler may import one in-process **only** as a row of §D.1's branch-local allow-list (cold branches, trigger-gated); never on the hot path.
@@ -35,8 +37,8 @@ The pack is the 38 non-rejected entries of the hook catalog, grouped into five f
 
 | Tier | Shipped state | Who turns it on | Hooks |
 | --- | --- | --- | --- |
-| `default` | on in any repo that has enabled hooks | nobody; the user can disable per id in `[hooks]` (that key is guarded by control-plane-guard) | 26 |
-| `opt-in` | shipped, off | the user, per id, in `[hooks]` | 9 |
+| `default` | on in any repo that has enabled hooks | nobody; the user can disable per id in `[hooks]` (that key is guarded by control-plane-guard) | 27 |
+| `opt-in` | shipped, off | the user, per id, in `[hooks]` | 8 |
 | `overlay` | mechanism shipped `enabled: true` with inert data (`mode: off`, empty tables) and **not on**: `tier: overlay` is never in `[hooks] tiers` | a regulated overlay, by a same-id override that promotes it to `tier: default` (optionally `mandatory: true`) and supplies data (patterns, allowlists, mode) per L2 (§A.6, §E.5) | 3 |
 
 - **"Default" never means "on after an engine upgrade".** Default-tier hooks run only in a repo that has opted into hooks through the `[hooks]` master switch, which `playbook init` writes (§B.1). An engine upgrade therefore never injects executable hooks into a repo that has not opted in.
@@ -75,7 +77,7 @@ There is one dispatcher process per harness event, and it fans out to the hooks 
 | `stop` | coordinator | the stages in the table below | fingerprint, block budget, one combined reason |
 | `subagent_stop` | coordinator, scoped | subagent-stop-verify | the same coordinator engine |
 | `session_start` | briefing | session-start-playbook-briefing | TTL sweep of stale state |
-| `user_prompt_submit` | prompt | pii-prompt-guard, the active-prompt record (shared by prompt-write-scope-guard and prompt-output-contract-on-stop) | none |
+| `user_prompt_submit` | prompt | pii-prompt-guard, local-audit-log (registered only while one is on: the active prompt is resolved per turn from the transcript, review finding #6) | none |
 | `pre_compact` | none | precompact-checkpoint | none |
 | every event | none | guard-decision-log (an in-process writer) | none |
 
@@ -98,7 +100,7 @@ The stage names are the strings §F registers against. The order below is the en
 | 6 | `notebooks` | notebook-output-hygiene (E.3) | deterministic | opt-in | `context` |
 | 7 | `verify-claim` | stop-ci-parity-gate (E.2) | deterministic, under 10ms | default | `deny` |
 | 8 | `output-contract` | prompt-output-contract-on-stop (E.2) | under 10ms | opt-in | `context` (deny-once is configurable) |
-| 9 | `tests-nudge` | tests-with-source-nudge (E.2); runs only when stages 0–7 are green | 0.1–0.3s | opt-in | `context` |
+| 9 | `tests-nudge` | tests-with-source-nudge (E.2); runs only when stages 0–7 are green | 0.1–0.3s | default | `context` |
 | 10 | `typecheck` | stop-ci-parity-gate (E.2) | execution | opt-in + trust | `deny` |
 | 11 | `tests` | stop-ci-parity-gate (E.2) | execution | opt-in + trust | `deny` |
 | 12 | `coverage` | coverage-diff-gate (§F.1) | execution | opt-in + trust | `deny` (configurable `context`) |
@@ -149,10 +151,10 @@ The stage names are the strings §F registers against. The order below is the en
 | 7 | eval-task-authoring-lint | Protect | post_tool_use | warn → context | default | 0.5–1s per task.toml edit |
 | 8 | guard-eval-fixtures | Protect | pre_tool_use | ask → ask | opt-in | about 0.05s (path match) |
 | 9 | stop-ci-parity-gate | Verify | stop (coordinator; `lint`, `verify-claim`, `typecheck`, `tests`) | block → deny | default | about 60ms on an unchanged tree; ≤3s default stages; execution stages tens of seconds |
-| 10 | clean-code-metrics-nonregression | Verify | stop (`quality-metrics`); post_tool_use companion (ruff C901/PLR codes in the shared D1 call) | block → deny / context | default (companion opt-in) | 0.1–1s at Stop when .py files were touched; about 0 extra per edit (companion shares D1) |
+| 10 | clean-code-metrics-nonregression | Verify | stop (`quality-metrics`); post_tool_use companion (ruff C901/PLR codes in the shared D1 call) | block → deny / context | default (companion included; PLR1702 opt-in) | 0.1–1s at Stop when .py files were touched; about 0 extra per edit (companion shares D1) |
 | 11 | block-precommit-bypass | Verify | pre_tool_use | block → deny | default | ≤100ms p95; early exit for non-git commands |
 | 12 | gate-weakening-guard | Verify | stop (`gate-integrity`); pre_tool_use companion | block → deny; companion ask | default | about 100ms per Stop with a diff; 50–100ms per test-file edit |
-| 13 | tests-with-source-nudge | Verify | stop (`tests-nudge`) | warn → context | opt-in | 0.1–0.3s, only on Stops with a src diff |
+| 13 | tests-with-source-nudge | Verify | stop (`tests-nudge`) | warn → context | default | 0.1–0.3s, only on Stops with a src diff |
 | 14 | subagent-stop-verify | Verify | subagent_stop | block → deny | opt-in | seconds per editing subagent; tens of seconds with execution stages |
 | 15 | prompt-output-contract-on-stop | Verify | stop (`output-contract`) | warn → context | opt-in | under 10ms |
 | 16 | post-edit-ruff-format | Feedback | post_tool_use | auto_fix → none (context when diagnostics remain) | default | 50–150ms per .py edit |
@@ -160,7 +162,7 @@ The stage names are the strings §F registers against. The order below is the en
 | 18 | error-handling-lint-feedback | Feedback | post_tool_use | warn → context | default | about 0 extra (shares the ruff call) |
 | 19 | typing-lint-feedback | Feedback | post_tool_use | warn → context | default | about 0 extra (shared ruff call plus one ast.parse) |
 | 20 | pytest-conventions-feedback | Feedback | post_tool_use | warn → context | default | about 0 extra; about 10ms for the opt-in AST checks |
-| 21 | prompt-write-scope-guard | Feedback | pre_tool_use (+ a user_prompt_submit record) | block → deny | default | under 1ms with no scope; ≤100ms with one |
+| 21 | prompt-write-scope-guard | Feedback | pre_tool_use (resolves the turn's prompt from the transcript) | block → deny | default | one bounded transcript read per turn, then under 1ms; ≤100ms with a scope |
 | 22 | toolchain-missing-hint | Feedback | post_tool_use (+ _failure) | inject_context → context | default | under 1ms extra |
 | 23 | notebook-output-hygiene | Feedback | post_tool_use; stop (`notebooks`) | warn → context | opt-in | 5–50ms per notebook edit |
 | 24 | secrets-path-guard | Safety | pre_tool_use | block → deny | default | ≤100ms p95 per file-tool or Bash call |
@@ -230,7 +232,7 @@ These hooks keep the playbook's own invariants true while the agent works:
 - **Implementation.**
   - Builtin handler `guard_generated_outputs` in `hook_runtime/handlers/guard_generated_outputs.py`.
   - It uses the shared helper `protected_paths(cfg) -> ProtectedSet` *(NEW, `hook_runtime/protected.py`; reused by control-plane-guard and stop-drift-and-orphan-gate)*.
-  - Bash write targets come from §D.2.5's `shell.write_targets`: redirect targets, `tee`, `sed -i` / `perl -pi`, `cp`/`mv` destinations, and `rm`/`truncate` operands.
+  - Bash write targets come from §D.2.5's `shell.write_targets`: redirect targets, `tee`, `sed -i` / `perl -pi`, `cp`/`mv` destinations, and `rm`/`truncate` operands. A command none of whose segments has a write target (`ls`, `pytest`, `git status`: most Bash calls) exits right after the parse, before the restore rules are read or any target is normalized (review finding #8); a restore exemption only removes targets, so the early exit decides nothing differently.
   - It never shells out to `playbook render --show-source`: that would render agent-written templates through the unsandboxed `jinja2.Environment` (`renderer.py:78`) and costs about 0.5s.
   - Prerequisites (P3, P4): `LockEntry` gains `source` + `artifact_id` (`lockfile.py:20-24`, schema bump of `_LOCKFILE_SCHEMA`, `commands/sync.py:35`); the sentinel wording is reconciled. `renderer.py:43` emits `AUTOGENERATED by coding-agent-playbook — edit in source, run 'playbook sync'`, while SPEC §4.3 and CLAUDE.md quote `# AUTOGENERATED — edit in coding-agent-playbook, …`.
   - Keys read: `sentinel`, `protected.*`, the hook's `config.restore_commands`.
@@ -273,7 +275,7 @@ These hooks keep the playbook's own invariants true while the agent works:
 | `.coding-agent-playbook.toml` (tomllib key-path diff) | any `[hooks]` / `[hooks.*]` change (including `[hooks.commit_convention] cutover_date`) or `[guardrails]` change | removals from `overlays_enabled`; `adapters_enabled` changes; additions to `[links] allowed_domains`; `[metrics]` loosening (`mode`, `thresholds.*`, `regression.*.max_worsening`, `fail_on_breach`, `strict`, `ignore`/`exclude` additions, `select` narrowing; a change whose direction is unknown counts as loosening); hand edits to `detector_cache`; `[engine] version` | `[project]` and other keys |
 | `.coding-agent-playbook.local.toml` (gitignored, deep-merged into Config with no warning, `sources/filesystem.py:351-355`) | any `[hooks]` or `[guardrails]` key, or any key that is an `ask` row above | none | non-policy keys |
 | `$(git rev-parse --git-path playbook-hooks)/**` (the `interpreter` pin — rewriting it redirects every hook to an arbitrary interpreter — `machine.json`, `stop/last_green`, `stop.json`, `session.json`) and the user-local trust store (`default_trust_store_path()`, §B.4), including Bash `write_targets` | any write | none | reads |
-| `playbook/hooks/**`; `src/*/resources/hooks/**` in engine/overlay repos | none | any edit (executable policy; the user approves). This is the single verdict; §B.2 matches it | none |
+| `playbook/hooks/**`; `src/*/resources/hooks/**` in overlay repos; `catalog/core/hooks/**` and `catalog/plugins/*/hooks/**` in the engine repo | none | any edit (executable policy; the user approves). This is the single verdict; §B.2 matches it | none |
 | Bash `script`/`expect`/`unbuffer … playbook sync`, or `playbook sync` with stdin from a pipe or redirect | the wrapped or piped sync (it would defeat the TTY-only approval of §B.4; a speed bump) | none | a plain `playbook sync` |
 | a file that no longer parses after the edit | none | `ask` | none |
 
@@ -410,7 +412,8 @@ These hooks keep the playbook's own invariants true while the agent works:
   - Builtin handler `resync_on_detector_input_change`.
   - It uses `detector.detect()` (`detector.py:288`) and `detector.evaluate_predicate()` (`detector.py:386`) in-process (jinja2-free, verified; `detector` imports `packaging`, so this is a §D.1 branch-local row: imported only on the source-changed branch, and only after the cheap tomllib comparison found a change). It does **not** build a `SyncContext`, because `orchestrator` imports jinja2.
   - Keys read: `facts`, `applicability`, `protected.entries`.
-- **Budget & failure.** About 5ms when unchanged; about 0.5s when the applicable set changes. Fails open.
+  - It declares the install programs (`uv`, `poetry`, `pip`, `pip3`) as its `argv0s`, so the shared shell prefilter (§E.4) never calls it for a Bash command none of whose segments runs one (`ls`, `pytest`, `git status`). A shell call has no `write_paths`, so only an install segment could trigger it; Edit/Write calls are never prefiltered.
+- **Budget & failure.** About 5ms when unchanged; about 0.5s when the applicable set changes; nothing past the shared prefilter for a non-install Bash command. Fails open.
 - **Guards.** Once per newly activated id per session. Auto-sync never removes or relaxes anything.
 - **Portability.**
   - Claude PostToolUse; OpenCode `tool.execute.after` (success only, matching the exit-0 condition).
@@ -550,7 +553,7 @@ These hooks make "done" mean "the checks pass", not "the agent stopped". stop-ci
     - a file that became unformatted;
 
     both measured against a baseline computed once per `HEAD^{tree}`. The baseline comes from the same argv run over a `git archive HEAD` export in a temp dir (secret globs excluded) and is cached in state. Legacy red therefore never fails every turn.
-  - **`verify-claim`.** Fires when `last_assistant_message` matches a `claim_patterns` entry ("tests pass", "mypy clean", "green", "ready to merge", …) **and** the ledger has no green run of any `verify_commands` entry after the last `.py` edit. A green run is a `post_tool_use` event, not `_failure`. It contributes `You said "<claim>"; no passing <cmd> since your last edit. Run it and report the result.`
+  - **`verify-claim`.** Fires when `last_assistant_message` matches a `claim_patterns` entry ("tests pass", "mypy clean", "green", "ready to merge", …) **and** the ledger has no green run of any `verify_commands` entry after the last `.py` edit. A green run is a `post_tool_use` event, not `_failure`; a run behind a launcher counts, since the ledger tags it after the guards' own unwrapping (§D.6.3). It contributes `You said "<claim>"; no passing <cmd> since your last edit. Run it and report the result.`
   - **`typecheck` / `tests`** (opt-in, and only with a user-local trust entry stored outside the repo). They run `python -m mypy` and `python -m pytest -q`, again with no path args. A hook that runs pytest executes agent-written `conftest.py` without a permission prompt, which is an edit-to-exec escalation; hence the trust requirement.
     - mypy is skipped when `[tool.mypy] plugins` differ from HEAD.
     - pytest runs only when completion is claimed.
@@ -593,7 +596,7 @@ These hooks make "done" mean "the checks pass", not "the agent stopped". stop-ci
 
 #### clean-code-metrics-nonregression — Stage `quality-metrics`: static non-regression at Stop, mirroring the repo's metrics gate
 
-`default` (post-edit companion `opt-in`) · `stop` (stage 2); companion `post_tool_use` on Edit|Write|NotebookEdit of `**/*.py` (handler `clean_code_metrics_nonregression:post_edit`, bound through `handlers`) · active when `.py` files were touched (ledger ∪ `git diff --name-only HEAD` ∪ untracked), excluding `eval.fixture_globs` · `deny` / `context`
+`default` (post-edit companion included; `lint_feedback = false` turns it off) · `stop` (stage 2); companion `post_tool_use` on Edit|Write|NotebookEdit of `**/*.py` (handler `clean_code_metrics_nonregression:post_edit`, bound through `handlers`) · active when `.py` files were touched (ledger ∪ `git diff --name-only HEAD` ∪ untracked), excluding `eval.fixture_globs` · `deny` / `context`
 
 - **Behavior.**
   - **What it runs** (addendum D-Q1). The existing `playbook metrics` static gate over the touched files, with `--baseline git:HEAD`: CC, WMC, LCOM4, DIT and CBO≈, plus MI and `file_sloc` when radon is installed, **plus** §F.2's `ruff_violations` metric restricted to its `quality` family (C901, PLR0911, PLR0912, PLR0913, PLR0915; counts per touched file, candidate vs baseline). It executes **no repo code** (ruff is a pinned consumer-toolchain subprocess).
@@ -603,7 +606,7 @@ These hooks make "done" mean "the checks pass", not "the agent stopped". stop-ci
 
     In that case the commit would fail anyway, so the agent that caused the finding fixes it while it still has the context. Otherwise each finding is one context line.
   - **Scopes.** Existing scopes are judged on non-regression. New functions and files get absolute bands only when configured, through `[metrics] thresholds` or an overlay; the budgets come from the user's global CLAUDE.md, not a shipped rule, and the engine itself has functions with CC above 10 and files over 500 lines.
-  - **Post-edit companion** (opt-in; addendum D-Q1). Context only. It adds no metric code: it contributes the `quality` bucket (C901, PLR0911, PLR0912, PLR0913, PLR0915; thresholds from `[metrics.ruff_violations] config` (§F.2.1, the one source shared with the Stop stage and the twins), rendered at sync as per-invocation `--config` overrides and omitted where the project itself selects the code) to the **single** §E.3 D1 ruff call, changed lines only, within the shared 8-line cap. PLR1702 (nesting) is preview-only in ruff 0.15.10 and opt-in through a separate per-invocation `--preview --select PLR1702` call.
+  - **Post-edit companion** (default, promoted from opt-in after the pack eval: about 0 ms per edit on the shared D1 call; addendum D-Q1). Context only; `[hooks.clean-code-metrics-nonregression] lint_feedback = false` drops its codes from D1. It adds no metric code: it contributes the `quality` bucket (C901, PLR0911, PLR0912, PLR0913, PLR0915; thresholds from `[metrics.ruff_violations] config` (§F.2.1, the one source shared with the Stop stage and the twins), rendered at sync as per-invocation `--config` overrides and omitted where the project itself selects the code) to the **single** §E.3 D1 ruff call, changed lines only, within the shared 8-line cap. PLR1702 (nesting) is preview-only in ruff 0.15.10 and opt-in through a separate per-invocation `--preview --select PLR1702` call.
 - **Implementation.**
   - Builtin handler `clean_code_metrics_nonregression`. It runs in-process through `evaluators.metrics_gate` (a §D.1 branch-local row; jinja2-free).
   - **It must force static-only.** `commands/metrics.py::run` (`:574`) computes `run_tests = bool(args.run_tests) or config.run_tests`, so a repo with `[metrics] run_tests = true` would execute its test suite from the hook without trust. The stage therefore calls `run_metrics_gate` (§F.0.3) with `run_tests=False`. The CLI output stays unchanged.
@@ -620,7 +623,7 @@ These hooks make "done" mean "the checks pass", not "the agent stopped". stop-ci
   - Grow a function's CC versus HEAD with the metrics pre-commit hook configured: one block line naming `scope_key`, the metric and `baseline → candidate`.
   - The same change without the hook: a context line.
   - A new function over the configured `PLR0915` statement limit: silent with no `ruff_violations` selection; a context line (or a deny line under the metrics pre-commit hook) when the quality family is selected.
-  - Post-edit companion: the D1 argv carries `--extend-select C901,PLR0911,PLR0912,PLR0913,PLR0915` and the `--config lint.mccabe.max-complexity=…` override; no override when the project selects `C901`.
+  - Post-edit companion, as shipped: the D1 argv carries `--extend-select C901,PLR0911,PLR0912,PLR0913,PLR0915` and the `--config lint.mccabe.max-complexity=…` override, with no `--preview` call; no override when the project selects `C901`; `lint_feedback = false`: no quality codes in D1.
   - `[metrics] run_tests = true`: no test subprocess (spy).
   - A pathologically nested file: a context line, no crash.
 
@@ -658,7 +661,7 @@ These hooks make "done" mean "the checks pass", not "the agent stopped". stop-ci
   - `git config alias.ci 'commit --no-verify'`: deny.
   - `rm .git/hooks/pre-commit`: deny.
   - A config with no playbook ids: inactive.
-  - A wrapper prefix (`rtk git commit --no-verify`): deny.
+  - A wrapper prefix (`proxy git commit --no-verify`, `proxy` a declared wrapper): deny.
 
 #### gate-weakening-guard — Stage `gate-integrity`: new suppressions, skipped/deleted tests, loosened checker config
 
@@ -701,7 +704,7 @@ These hooks make "done" mean "the checks pass", not "the agent stopped". stop-ci
 
 #### tests-with-source-nudge — Stage `tests-nudge`: new public API without a test
 
-`opt-in` · `stop` (stage 9; runs only when stages 0–7 are green and source roots differ from HEAD) · `context`
+`default` · `stop` (stage 9; runs only when stages 0–7 are green and source roots differ from HEAD) · `context`
 
 - **Behavior.**
   - For each changed file under the source roots, it compares `ast` of the working tree against `git show HEAD:<path>` and collects **new** public symbols: top-level functions and classes, and methods of public classes.
@@ -717,6 +720,7 @@ These hooks make "done" mean "the checks pass", not "the agent stopped". stop-ci
     - test roots: `[tool.pytest.ini_options] testpaths` if set, else `tests/`.
   - At most 20 parsed files per stop.
 - **Budget & failure.** 0.1–0.3s, only on Stops with a source diff. Fails open.
+- **Tier.** `default`, promoted from `opt-in` after the pack eval: it is warn-only (context lines; a deny only under `block = true`), costs about 115 ms per Stop with a source diff and added no agent turns. `[hooks] disable` turns it off per repo.
 - **Guards.** Context only by default. New symbols only. Skipped on questions.
 - **Portability.** Git-state input, so any stop-like event works. OpenCode: evidence-only.
 - **Off-workstation twin.** §F's `coverage` tool (coverage non-regression in CI) catches untested new code in aggregate. This stage is the per-symbol complement that `--cov-fail-under=80` cannot see.
@@ -756,14 +760,14 @@ These hooks make "done" mean "the checks pass", not "the agent stopped". stop-ci
 `opt-in` · `stop` (stage 8) · active only while the session's active playbook prompt declares an `output_contract` · `context` (deny-once configurable)
 
 - **Behavior.**
-  - It applies the active prompt's contract regexes to `last_assistant_message` only, capped at the last 4,000 characters. It **never** reads `transcript_path`, which holds the whole session in an internal format.
+  - It applies the active prompt's contract regexes to `last_assistant_message` only, capped at the last 4,000 characters. It never judges the transcript: resolving the active prompt (E.3) reads at most the transcript's turn-opening entry, for its slash only, and nothing once the turn is resolved.
   - On a miss it adds a context line by default. `[hooks.prompt-output-contract-on-stop] block_once = true` makes it a deny line within the coordinator's budget.
   - **Proposed contracts for shipped prompts:**
     - `review` and `security-review`: a final verdict line, `(?im)^\W*(verdict\W*)?(approve with comments|approve|request changes)\W*$`. These are their documented "Output format" sections (`review.md.j2:52`, `security-review.md.j2:39`).
     - `find-injected-vulnerability`: `(?i)\bCWE-\d+\b|no (reachable|exploitable)`. The prompt asks for the CWE, or a plain "no chain" conclusion.
 - **Implementation.**
   - Builtin handler `prompt_output_contract_on_stop`.
-  - The active prompt comes from the user_prompt_submit active-prompt record (shared with prompt-write-scope-guard, E.3) and `prompts.<slash>.output_contract`.
+  - The active prompt comes from the per-turn resolution shared with prompt-write-scope-guard (E.3; a review turn with no tool call is resolved at Stop) and `prompts.<slash>.output_contract`.
   - **New optional frontmatter field** `output_contract: list[str]` on `PromptFrontmatter` (`types.py:128`) *(NEW)*. It needs the `__post_init__` None-coercion, the §6.6.3 round-trip update and the agent_harness sidecar fields (§A.7).
   - It is compiled at `playbook validate`, fail-closed at construction like `AnswerMatchesCheck` (`evaluators/checks/answer.py:48`), with a capped input. One pattern source serves both live checks and authors of the prompt's eval `answer_matches` gates.
 - **Budget & failure.** Under 10ms. Fails open.
@@ -773,7 +777,8 @@ These hooks make "done" mean "the checks pass", not "the agent stopped". stop-ci
 - **Tests.**
   - Active `/review` with a final message lacking a verdict line: a context line.
   - `Verdict: approve`: silent.
-  - The transcript file is never opened (spy on `open`).
+  - Once the turn is resolved, the transcript file is never opened (spy on `open`).
+  - A `/review` turn is resolved from the transcript at Stop; the next prompt's turn is not `/review`.
   - No active prompt: inert.
   - An invalid regex in `output_contract`: a `playbook validate` failure.
 
@@ -854,7 +859,7 @@ lint_codes:
 
 `default` · `post_tool_use` · `Edit|Write|NotebookEdit` on `**/*.py`, `**/*.pyi` inside the repo root · auto_fix → `none` (`context` only when bucket-1 diagnostics remain) · label: n/a (quality; the only E.3–E.5 hook with a working-tree side effect)
 
-**Behavior.** Anti-churn eligibility for M1/M2: the file is new/untracked, or its HEAD blob is format-clean per `<ruff> format --check --force-exclude --stdin-filename <rel> -` fed the HEAD text; the result is cached in `<state>` keyed by blob `oid`, so it is computed once per blob, not per edit. A legacy unformatted file is never reformatted, only reported. M1 fixes only `gc:shared.ruff.safe_fix_select` = `{I, UP}` ∩ project select (computed at sync; no hardcoded second style source). `F401`/`F841`/`F811` are never fixed (`F` is outside the allowlist and is also passed to `--unfixable`): the agent often adds an import in one Edit and its first use in the next, and an autofix would delete the import in between. Then bucket-1 diagnostics on changed lines are reported. Silent on success; no "re-read the file" message.
+**Behavior.** M1 and M2 run over the edited file's bytes on stdin (`--stdin-filename <rel> -`, so the project config and `--force-exclude` judge it by its repo path), and the hook writes the result back in place only when it differs from the bytes it read. Anti-churn eligibility for that write: the file is new/untracked, or its HEAD blob is format-clean per `<ruff> format --check --force-exclude --stdin-filename <rel> -` fed the HEAD text; the result is cached in `<state>` keyed by blob `oid`, so it is computed once per blob, not per edit. The HEAD check runs only when M1/M2 changed the bytes, so an edit they leave alone costs the one format call and never asks about HEAD; a cached "not clean" skips M1/M2 altogether (review finding #5: the stdin `format --check` + file `format` pair was two ruff spawns on every first edit of a file). A legacy unformatted file is never reformatted, not even transiently, only reported. A parse error (exit 2) or an empty answer leaves the file as it was. M1 fixes only `gc:shared.ruff.safe_fix_select` = `{I, UP}` ∩ project select (computed at sync; no hardcoded second style source). `F401`/`F841`/`F811` are never fixed (`F` is outside the allowlist and is also passed to `--unfixable`): the agent often adds an import in one Edit and its first use in the next, and an autofix would delete the import in between. Then bucket-1 diagnostics on changed lines are reported. Silent on success; no "re-read the file" message.
 
 **Implementation.** Handler `ruff_post_edit` (`hook_runtime/handlers/ruff_feedback.py`, NEW) on the shared pipeline; `hook_runtime/_ruff.py` (NEW) owns `RuffPin`, `run_ruff(args, *, stdin, timeout_s) -> CompletedProcess`, `ruff_diagnostics_for(path, codes) -> list[RuffDiagnostic]` (the D1 memo) and `changed_lines(head_text, new_text) -> set[int]`. Keys: `gc:shared.ruff.{version,project_select,project_ignore,safe_fix_select}` (machine-independent; the ruff path and stat signature are `machine.json` `tools.ruff`), `gc:post-edit-ruff-format.{safe_fix_allowlist=["I","UP"], max_project_lines=5}`. The handler registration declares a `mutates_edited_file` capability **(shared name — proposed)** that `playbook validate` allows only for builtin handlers, never for external-command handlers (an extension of the L6 trust contract: no hook may write anything except the file the tool just edited, and only builtins may do even that).
 
@@ -950,7 +955,7 @@ lint_codes:
 
 #### prompt-write-scope-guard — Enforce each playbook prompt's write scope, native-first
 
-`default` · `user_prompt_submit` (ledger) + `pre_tool_use` (enforce; also records scope from the `Skill` tool) · pre-tool: `Edit|Write|NotebookEdit` (`MultiEdit` tolerated), write-shaped `Bash`, and `Skill` · block → `deny` / `ask` · label: **boundary** for structured edit tools; **speed bump** for Bash
+`default` · `pre_tool_use` (enforce; resolves the turn's active prompt from the transcript, and records it from the `Skill` tool) · pre-tool: `Edit|Write|NotebookEdit` (`MultiEdit` tolerated), write-shaped `Bash`, and `Skill` · block → `deny` / `ask` · label: **boundary** for structured edit tools; **speed bump** for Bash
 
 **Schema change.** `PromptFrontmatter` (types.py:128-154) gains `write_scope: dict[str, Any] = field(default_factory=dict)` with exactly one of `read_only: true` or `globs: [<glob>, ...]` (validated by `playbook validate`; None-coerced like the other fields; carried by the agent_harness sidecar, §A.7). It is a dict on purpose: `_without_empty` (types.py:45-47) drops `[]`, so an empty-list "read-only" would silently round-trip to "unrestricted", and a defaulted bool would add `read_only: false` to every prompt's `to_markdown` output. Amend SPEC §6.2, §6.6 and §10.6.1. Assignments:
 
@@ -964,18 +969,18 @@ lint_codes:
 **Behavior — native first.** OpenCode: read-only prompts render `agent: plan` in the command frontmatter (`_render_prompt_opencode_command`, renderer.py:302-338; SPEC §10.6.1 already lists `agent`). Claude Code: read-only prompts render `disallowed-tools: Edit Write NotebookEdit` in the command frontmatter (verified: commands and skills accept it; the tools are removed while the command is active and the restriction clears at the next message, which matches the ledger semantics). This needs `_render_prompt_claude_command` (renderer.py:282-299), which emits no frontmatter today, to emit a line-1 `---` fence, so the sentinel moves to the first body line (the PR-H agent_harness precedent); the renderer change and the `_scan_for_stale` (claude_code_adapter.py:191) / guard anchor change are §C.4.3 and P3's `has_sentinel`. Glob scopes have no native form.
 
 **Behavior — fallback hook (Claude only).**
-- `user_prompt_submit`: detects `/<slash>` in raw form or inside the harness's command wrapper and records `{prompt_id, write_scope}` keyed by `session_id` in `<state>`; any other prompt clears it. Uncertain detection → no scope (fail open).
-- `pre_tool_use` on the `Skill` tool: the model can also run a command or skill itself, which fires no `UserPromptSubmit`; the guard records the scope of the `tool_input` skill name the same way (cheap: the pre-tool dispatcher already runs). Claude's `UserPromptExpansion` event (typed slash commands) is not canonical and stays a documented gap; the native `disallowed-tools` frontmatter covers both paths. prompt-output-contract-on-stop reads the same record.
+- **The active prompt is resolved per turn, lazily** (review finding #6: no `user_prompt_submit` process per prompt). The first call of a turn that needs it reads `transcript_path` backwards to the turn-opening entry: the newest main-thread user entry that is not `isMeta`, a sidechain, a compact summary, a tool result or a harness echo (local-command output, `!` shell echoes, hook output, an interruption). A `/<slash>` in raw form or inside the harness's command wrapper names the prompt when it is a known playbook prompt; anything else is no prompt. The answer is stored as the turn's record `{slash, via, turn_id}` keyed by `session_id` in `<state>`, so later calls of the same turn (Claude's `prompt_id`) read it instead; a new turn resolves afresh, which is what "the next prompt clears it" means now. Reads are bounded (64 KiB, 1 MiB, then 8 MiB from the end; only user lines are decoded): about 0.1 ms with the prompt nearby, about 2 ms behind 2.4 MB of tool output. Uncertain detection (an unreadable transcript, an unknown entry shape, no turn entry inside 8 MiB) → no scope (fail open).
+- `pre_tool_use` on the `Skill` tool: the model can also run a command or skill itself, which opens no turn; the dispatcher records the `tool_input` skill name as the turn's record the same way (cheap: the pre-tool dispatcher already runs). Without turn ids, that record carries the transcript uuid of the turn's opening entry and lasts until another entry opens a turn. Claude's `UserPromptExpansion` event (typed slash commands) is not canonical and stays a documented gap; the native `disallowed-tools` frontmatter covers both paths. prompt-output-contract-on-stop reads the same resolution.
 - `pre_tool_use`, read-only scope: `Edit`/`Write`/`NotebookEdit` → `deny` "`/<id>` is read-only: report findings; the user will ask for fixes in a follow-up." Write-shaped Bash (redirect into the repo, `sed -i`, `tee`, `cp`/`mv` into the repo, `git apply`, `patch`, `git commit`) → `ask`.
 - Glob scope: a write outside the globs → `ask`, quoting generate-tests.md.j2:39.
 
-**Implementation.** `handlers: {pre_tool_use: prompt_scope_guard}` (`hook_runtime/handlers/prompt_scope.py`, NEW). The `user_prompt_submit` active-prompt record is a dispatcher branch, not this hook's companion handler (`hook_runtime/active_prompt.py`, NEW, shared name — proposed): it is active whenever prompt-write-scope-guard **or** prompt-output-contract-on-stop is enabled, so disabling this guard never makes the output-contract stage inert (OQ-45); `gc:prompt-write-scope-guard.scopes = {<slash>: {read_only | globs}}` rendered at sync from `PromptFrontmatter`; write-shaped Bash detection uses §D.2.5's `shell.parse_shell` / `write_targets`. The guard short-circuits on one `stat` of the ledger file when no scope is active.
+**Implementation.** `handlers: {pre_tool_use: prompt_scope_guard}` (`hook_runtime/handlers/prompt_scope.py`, NEW). The active prompt is shared, not this hook's: `hook_runtime/active_prompt.py` (`resolve_active_prompt`, the per-turn record) and `hook_runtime/_prompt_boundary.py` (the bounded backward transcript read). Each consumer resolves it itself, and the `Skill` record is a dispatcher branch run whenever prompt-write-scope-guard **or** prompt-output-contract-on-stop is enabled, so disabling this guard never makes the output-contract stage inert (OQ-45). Neither consumer registers `user_prompt_submit`: it is registered only for a hook that binds it (pii-prompt-guard, local-audit-log). `gc:prompt-write-scope-guard.scopes = {<slash>: {read_only | globs}}` rendered at sync from `PromptFrontmatter`; write-shaped Bash detection uses §D.2.5's `shell.parse_shell` / `write_targets`. After the first call of a turn, the guard reads one small state record.
 
-**Budget & failure mode.** < 1 ms incremental with no active scope; <= 100 ms with one. Detection uncertainty → open; internal error → `ask`.
+**Budget & failure mode.** The first call of a turn: one bounded transcript read (about 0.1-3 ms); then < 1 ms incremental with no active scope; <= 100 ms with one. No per-prompt process (about 100 ms per prompt before finding #6). Detection uncertainty → open; internal error → `ask`.
 
-**Guards.** Active only during a scoped prompt; cleared by the next user prompt; native constraints preferred, the hook is defense in depth.
+**Guards.** Active only during a scoped prompt's turn; the next user prompt opens a turn resolved afresh; native constraints preferred, the hook is defense in depth.
 
-**Portability.** Claude: native `disallowed-tools` + both hook events. OpenCode: native `agent: plan` only (`user_prompt_submit` is not rendered there, QC-2; no ledger). Others: the body sentence in AGENTS.md.
+**Portability.** Claude: native `disallowed-tools` + `pre_tool_use` (the transcript gives the turn's prompt). OpenCode: native `agent: plan` only (the hook is Claude-only; no transcript record). Others: the body sentence in AGENTS.md.
 
 **Off-workstation twin.** None at run time (the scope is a session concept). Offline evidence is the eval corpus: the review/explain/security tasks already grade `file_unchanged`.
 
@@ -1023,7 +1028,7 @@ Nine guards on reads, writes and shell commands. They share one pre-tool dispatc
 
 #### Shared: Bash parsing, path policy and the secret library
 
-- **Shell and git parsing are §D's** (`hook_runtime/shell.py`: `parse_shell(text, kind, cwd, cfg) -> ShellCommand` with `Segment`s and `write_targets`; `hook_runtime/gitargv.py`: `parse_git(segment) -> GitInvocation`, §D.2.5). This section only adds `gitargv.commit_message_sources(inv) -> list[str] | Uninspectable` (`-m` values joined as git does, heredoc bodies, `-F <file>` inside the worktree; `-F <(...)` and editor-composed messages are `Uninspectable`). Tokens, never substrings, so `echo git commit --author` is not a git command. Wrapper prefixes come from `guard_config.shell.wrapper_prefixes` (`[hooks] wrapper_prefixes`, §B.1): empty in the engine; a consumer that runs the `rtk` rewriter sets `["rtk"]` — the user's `rtk hook claude` runs **in parallel** and rewrites the *executed* input while the guard sees the original, and agents also type `rtk …` literally (a rewriter can change what executes after the guard's verdict, §C.2.9). **Degradation follows §D.2.5:** a set `ShellCommand.parse_error` sends every guard to its conservative raw-regex branch (there is no exception type). Shared by destructive-command-guard, git-commit-push-policy-guard, exfil-channel-guard, block-precommit-bypass (E.2) and §F's commit-message-convention.
+- **Shell and git parsing are §D's** (`hook_runtime/shell.py`: `parse_shell(text, kind, cwd, cfg) -> ShellCommand` with `Segment`s and `write_targets`; `hook_runtime/gitargv.py`: `parse_git(segment) -> GitInvocation`, §D.2.5). This section only adds `gitargv.commit_message_sources(inv) -> list[str] | Uninspectable` (`-m` values joined as git does, heredoc bodies, `-F <file>` inside the worktree; `-F <(...)` and editor-composed messages are `Uninspectable`). Tokens, never substrings, so `echo git commit --author` is not a git command. Wrapper prefixes come from `guard_config.shell.wrapper_prefixes` (`[hooks] wrapper_prefixes`, §B.1): empty in the engine; a consumer that runs a command-rewriting launcher (say `proxy`) declares it, `["proxy"]`, and a single developer declares their own with `PLAYBOOK_HOOK_WRAPPER_PREFIXES=proxy` in the launching shell (part 1 §D.7) — a user's own rewriting hook runs **in parallel** and rewrites the *executed* input while the guard sees the original, and agents also type `proxy …` literally (a rewriter can change what executes after the guard's verdict, §C.2.9). **Degradation follows §D.2.5:** a set `ShellCommand.parse_error` sends every guard to its conservative raw-regex branch (there is no exception type). Shared by destructive-command-guard, git-commit-push-policy-guard, exfil-channel-guard, block-precommit-bypass (E.2) and §F's commit-message-convention.
 - **`hook_runtime/_hosts.py` (NEW).** `extract_hosts(segment) -> list[str]` (URL args, scp-style `user@host:path`, git remotes via local `git remote get-url`, index flags, `git+https` requirements) as strings only, never DNS or connect probes (a lookup is itself egress; principle 10); `is_loopback(host)` via `ipaddress` plus `localhost` (no implicit RFC1918 trust); suffix matching. Shared by exfil-channel-guard and network-egress-guard.
 - **`security/patterns.py` (NEW).** `SECRET_PATH_GLOBS`, `SECRET_PATH_EXEMPT`, `SECRET_CONTENT_RULES` (id, compiled regex, label), `EXAMPLE_SECRET_ALLOWLIST`, `WEAKENING_PRAGMAS`, and `screen_regex(pattern: str) -> str | None` (rejects nested unbounded quantifiers and over-long patterns; used by `playbook validate` for every overlay- or repo-supplied regex in this section).
 - **`security/paths.py` (NEW).** `PathPolicy(deny: tuple[str, ...], allow: tuple[str, ...], mode: Literal["deny", "ask"])` with `classify(key: str, *, nlink: int) -> Literal["deny", "ask"] | None`, operating on the `NormalizedPath.key` that §D.2.4's `normalize_path` already produced (realpath, case-folding on darwin/win32, the `nlink` hard-link fact) — the caller normalizes, so `security` never imports `hook_runtime`. Also `is_secret_path(path, *, home)` (P7). Shared by secrets-path-guard, sensitive-data-read-guard and the detector.
@@ -1047,7 +1052,7 @@ Nine guards on reads, writes and shell commands. They share one pre-tool dispatc
 
 **Off-workstation twin.** None can exist for reads: the leak is the read itself (the content reaches the model endpoint and the transcript). The commit side is covered by stop-diff-sweep and `playbook-secrets`.
 
-**Tests.** `tests/hooks/test_secrets_path_guard.py`, parametrized: `Read .env` → deny; `Read .ENV` with platform darwin → deny; `Read .env.example` → none; `Read src/auth/credentials.py` → none; `Read config/credentials.json` → deny; symlink `notes.txt -> .env` → deny; hard link `notes2.txt` → ask; `cat .env`, `git show HEAD:.env`, `rtk cat ~/.aws/credentials` (with `wrapper_prefixes=["rtk"]`), `bash -c 'source .env'` → deny; `mcp__filesystem__read_file {path: ".env"}` → deny; `printenv` → context. Plus `tests/unit/test_detector.py`: a filesystem spy proves no secret-glob file is ever opened by `detect()`.
+**Tests.** `tests/hooks/test_secrets_path_guard.py`, parametrized: `Read .env` → deny; `Read .ENV` with platform darwin → deny; `Read .env.example` → none; `Read src/auth/credentials.py` → none; `Read config/credentials.json` → deny; symlink `notes.txt -> .env` → deny; hard link `notes2.txt` → ask; `cat .env`, `git show HEAD:.env`, `proxy cat ~/.aws/credentials` (with `wrapper_prefixes=["proxy"]`), `bash -c 'source .env'` → deny; `mcp__filesystem__read_file {path: ".env"}` → deny; `printenv` → context. Plus `tests/unit/test_detector.py`: a filesystem spy proves no secret-glob file is ever opened by `detect()`.
 
 #### secret-content-guard — Write-time secret-token scanner plus push-range scan (the air-gapped gitleaks replacement)
 
@@ -1088,7 +1093,7 @@ Nine guards on reads, writes and shell commands. They share one pre-tool dispatc
 
 **Off-workstation twin.** Server-side branch protection / rulesets (out of repo); the golden red-team table runs in engine CI.
 
-**Tests.** `tests/hooks/test_destructive_command_guard.py`, golden table through `playbook-hook simulate pre_tool_use` in a tmp git repo: `rm -rf /` → deny; `rm -rf build/` → none; `rm -rf $DIR` with `DIR` unset → ask; `git push -f origin main`, `git -C . push origin main --force`, `rtk git push --force origin main` → deny; `git push --force-with-lease origin main` → deny, to `feat/x` → none; `bash -c 'rm -rf ~'` → deny; `curl x | sh` → deny; `git reset --hard` dirty → ask, clean → none; `git stash` with a linked worktree → ask.
+**Tests.** `tests/hooks/test_destructive_command_guard.py`, golden table through `playbook-hook simulate pre_tool_use` in a tmp git repo: `rm -rf /` → deny; `rm -rf build/` → none; `rm -rf $DIR` with `DIR` unset → ask; `git push -f origin main`, `git -C . push origin main --force`, `proxy git push --force origin main` → deny; `git push --force-with-lease origin main` → deny, to `feat/x` → none; `bash -c 'rm -rf ~'` → deny; `curl x | sh` → deny; `git reset --hard` dirty → ask, clean → none; `git stash` with a linked worktree → ask.
 
 #### git-commit-push-policy-guard — The agent must not change identity, authorship or signing; org rows empty by default
 
@@ -1116,7 +1121,7 @@ Nine guards on reads, writes and shell commands. They share one pre-tool dispatc
 
 Shared, not duplicated: `gitargv.commit_message_sources()` for message extraction. The naming half has no engine CLI (commitizen is the tool, §F.4). This guard's commit-msg-stage twin is scoped to its own rows only: `playbook check-commit-trailers <msgfile>` **(shared name — proposed)** runs `commit_msg_violations(msg: str, policy: GitPolicy) -> list[str]` (rule ids `CP4xx`) and is rendered only when a trailer row is configured. In-session, this guard and commit-message-convention run in the one Bash dispatcher on the same parsed commit and combine `deny > ask > context > none`. The catalog's "required ticket key" row is split: a ticket **trailer** stays here as `required_trailers`; a ticket in the **subject** is a commitizen `schema_pattern` (E-Q5).
 
-**Implementation.** Handler `git_policy_guard` (`hook_runtime/handlers/git_policy.py`, NEW); local `git config --get` only; it only denies or asks and never rewrites input, so it coexists with the user's `rtk hook claude` rewriter. Keys: `gc:shared.protected_branches`, `gc:git-commit-push-policy-guard.{placeholder_identity, ask_on_default_branch, forbid_trailers, allowed_coauthors, required_trailers, never_commit_globs, push_requires_green}`.
+**Implementation.** Handler `git_policy_guard` (`hook_runtime/handlers/git_policy.py`, NEW); local `git config --get` only; it only denies or asks and never rewrites input, so it coexists with a user's own command-rewriting hook. Keys: `gc:shared.protected_branches`, `gc:git-commit-push-policy-guard.{placeholder_identity, ask_on_default_branch, forbid_trailers, allowed_coauthors, required_trailers, never_commit_globs, push_requires_green}`.
 
 **Budget & failure mode.** ~50 ms prefilter per Bash call; ~150-250 ms (4-6 local git subprocesses) when a commit, push, PR or config command is detected. `on_error: ask`.
 
@@ -1208,9 +1213,9 @@ Shared, not duplicated: `gitargv.commit_message_sources()` for message extractio
 
 #### command-convention-guard — Data-driven Bash convention rows; the engine ships zero rows
 
-`opt-in` · `pre_tool_use` · `Bash`, each unwrapped segment (wrapper prefixes stripped, so `rtk uv run mypy` matches) · warn → `context` (deny rows → `deny`) · label: **speed bump** (convention, not security)
+`opt-in` · `pre_tool_use` · `Bash`, each unwrapped segment (wrapper prefixes stripped, so `proxy uv run mypy` matches) · warn → `context` (deny rows → `deny`) · label: **speed bump** (convention, not security)
 
-**Behavior.** Rows `config.rules: [{pattern, decision: deny | warn, message}]`. A `deny` row returns `deny` carrying the corrected command; a `warn` row returns `context` with no permission decision, once per session per row. Never `updatedInput` (L6): the user already runs `rtk hook claude` as an input rewriter, and two rewriters on one call race. Example rows for a consumer config with this repo's conventions (`[hooks.command-convention-guard] rules`, from this repo's CLAUDE.md "Working in this repo" and subagent policy; whether this repo dogfoods them is the §K dogfooding question): `^uv run (mypy|pytest)\b` → deny, "use `uv run python -m mypy` / `uv run python -m pytest -q`"; `(mypy|ruff check|pytest)\s+\S+\.py` → warn, "subset run: fine for iteration, not CI parity".
+**Behavior.** Rows `config.rules: [{pattern, decision: deny | warn, message}]`. A `deny` row returns `deny` carrying the corrected command; a `warn` row returns `context` with no permission decision, once per session per row. Never `updatedInput` (L6): a user may already run their own command-rewriting hook, and two rewriters on one call race. Example rows for a consumer config with this repo's conventions (`[hooks.command-convention-guard] rules`, from this repo's CLAUDE.md "Working in this repo" and subagent policy; whether this repo dogfoods them is the §K dogfooding question): `^uv run (mypy|pytest)\b` → deny, "use `uv run python -m mypy` / `uv run python -m pytest -q`"; `(mypy|ruff check|pytest)\s+\S+\.py` → warn, "subset run: fine for iteration, not CI parity".
 
 **Implementation.** Handler `command_convention_guard` (`hook_runtime/handlers/conventions.py`, NEW), a step in the shared Bash dispatcher; rows come only from the consumer layer `[hooks.command-convention-guard] rules`, a repo-local override or an overlay, compiled and `screen_regex`-checked at `playbook validate`; rendered to `gc:command-convention-guard.rules`.
 
@@ -1222,7 +1227,7 @@ Shared, not duplicated: `gitargv.commit_message_sources()` for message extractio
 
 **Off-workstation twin.** None needed: CI already runs the canonical commands.
 
-**Tests.** With a row for `uv run mypy`: deny carrying the correction; without rows: no handler work; a warn row fires once per session; `rtk uv run mypy` matches with `[hooks] wrapper_prefixes = ["rtk"]` (`guard_config.shell.wrapper_prefixes`); a ReDoS-shaped row fails `playbook validate`.
+**Tests.** With a row for `uv run mypy`: deny carrying the correction; without rows: no handler work; a warn row fires once per session; `proxy uv run mypy` matches with `[hooks] wrapper_prefixes = ["proxy"]` (`guard_config.shell.wrapper_prefixes`); a ReDoS-shaped row fails `playbook validate`.
 
 ### E.5 Audit and overlay mechanisms
 
@@ -1432,7 +1437,7 @@ Each row lists the engine capability (NEW unless marked existing), its CLI, the 
 | Tool | Engine capability | CLI | Hook (id · event/stage · tier) | Pre-commit twin | CI twin (`playbook ci` step, F.5) |
 | --- | --- | --- | --- | --- | --- |
 | **Test coverage** (F.1) | `diff_coverage` execution metric (stdlib; reuses `evaluators/execution/coverage_xml.py` + `git diff -U0`), plus the existing `coverage` metric (`evaluators/execution/coverage.py:65`) | `playbook metrics --run-tests --select testing --baseline git:<ref>` | `coverage-diff-gate` · stop `coverage` (stage 12) · **opt-in + trust** | `playbook-coverage` (`stages: [manual]`) | `coverage` (included when `[metrics] run_tests = true`) |
-| **Quality metrics** (F.2) | the existing static metrics, plus `ruff_violations` (family `quality`: C901, PLR0911, PLR0912, PLR0913, PLR0915) and the radon-backed `file_sloc`; per-edit feedback through the shared post-edit ruff call | `playbook metrics --baseline git:<ref> [--changed] [--extend-select ruff_violations,file_sloc]` | clean-code-metrics-nonregression (§E.2) · stop `quality-metrics` (stage 2) · default; post-edit companion opt-in | `playbook-metrics` / `coding-agent-playbook-metrics` (existing; gain `--no-run-tests`) | `metrics` |
+| **Quality metrics** (F.2) | the existing static metrics, plus `ruff_violations` (family `quality`: C901, PLR0911, PLR0912, PLR0913, PLR0915) and the radon-backed `file_sloc`; per-edit feedback through the shared post-edit ruff call | `playbook metrics --baseline git:<ref> [--changed] [--extend-select ruff_violations,file_sloc]` | clean-code-metrics-nonregression (§E.2) · stop `quality-metrics` (stage 2) · default; post-edit companion default (PLR1702 opt-in through `preview`) | `playbook-metrics` / `coding-agent-playbook-metrics` (existing; gain `--no-run-tests`) | `metrics` |
 | **Docstrings** (F.3) | `ruff_violations` family `docstrings` (D100–D107); the `python-docstrings` rule's `lint_codes` for post-edit; opt-in strict `docstring_example` (a tiny stdlib ast check) | `playbook metrics --select ruff_violations …` | `docstring-nonregression` · stop `docstrings` (stage 3) · default; post-edit (D1xx in the shared ruff call) default | the same `playbook-metrics` hook, when the consumer selects `ruff_violations` | `metrics` |
 | **Commit names** (F.4) | none in the engine: commitizen `cz check` from the consumer's toolchain, pinned per worktree | `cz check` (no `playbook` wrapper) | `commit-message-convention` · `pre_tool_use` (bash branch) · default | `playbook-commit-msg` / `coding-agent-playbook-commit-msg` (`cz check --commit-msg-file`, `stages: [commit-msg]`) | `commit-convention` (cut-over-filtered `cz check`) |
 
@@ -1646,7 +1651,7 @@ No new hook id.
   - It is one in-process pass shared with the `docstrings` stage (F.3.2) through a per-fingerprint memo, so each touched file is parsed and ruff-checked once per Stop; findings are partitioned by family (`ruff:quality` vs `ruff:docstrings` scope keys).
   - **Severity** is §E.2's rule, plus one parity rule: `ruff_violations` findings are `deny`-eligible only when the consumer's own `[metrics]` selection includes `ruff_violations` (otherwise the pre-commit twin would not enforce them, and a stage is never stricter than its twin); else they are `context`.
   - Each line shows the raw `baseline → candidate`, e.g. `quality-metrics: src/x.py ruff:quality 1 → 2 (C901 parse)` and `src/x.py::parse cyclomatic_complexity 0.71 -> 0.42 (regression)`. A stage shows at most 6 lines, then `+N more (playbook metrics --changed --baseline git:HEAD)`.
-- **The post-edit companion** (opt-in, §E.2) adds no metric code: it is the `quality` bucket of §E.3's single D1 ruff call (C901, PLR0911, PLR0912, PLR0913, PLR0915, changed lines only, which scopes it to new or changed functions), with `--config` thresholds rendered at sync from `[metrics.ruff_violations] config` and omitted where the project itself selects the code; PLR1702 runs only when `preview = true`, in a separate per-invocation `--preview --select PLR1702` call. It counts against §E.0.5's cap of 8 post-edit lines.
+- **The post-edit companion** (default, §E.2; `lint_feedback = false` turns it off) adds no metric code: it is the `quality` bucket of §E.3's single D1 ruff call (C901, PLR0911, PLR0912, PLR0913, PLR0915, changed lines only, which scopes it to new or changed functions), with `--config` thresholds rendered at sync from `[metrics.ruff_violations] config` and omitted where the project itself selects the code; PLR1702 runs only when `preview = true`, in a separate per-invocation `--preview --select PLR1702` call. It counts against §E.0.5's cap of 8 post-edit lines.
 
 #### F.2.3 Twins
 
@@ -1717,17 +1722,17 @@ No new hook id.
 
 #### F.4.2 Hook: `commit-message-convention`
 
-`default` · `pre_tool_use`, bash branch (§E.0.4), on the shared `shell.parse_shell` / `gitargv.parse_git` parse with wrapper prefixes such as `rtk` unwrapped · segments `git [-C <dir>] commit …` with an inspectable message; `git push …` (range scan, `config.check_push`) · `deny`
+`default` · `pre_tool_use`, bash branch (§E.0.4), on the shared `shell.parse_shell` / `gitargv.parse_git` parse with wrapper prefixes such as a declared `proxy` unwrapped · segments `git [-C <dir>] commit …` with an inspectable message; `git push …` (range scan, opt-in `config.check_push`) · `deny`
 
 - **Behavior.**
   - **Message.** `gitargv.commit_message_sources` (§E.4): `-m/--message` repeated (paragraphs joined by a blank line, as git does); `-F/--file <path>` inside the worktree, at most 64 KiB; heredoc bodies, including the `-m "$(cat <<'EOF' … EOF)"` form Claude Code uses.
   - **Decision `none` (skip, zero cz calls).** No message source (an editor would open; the commit-msg twin covers it); `-C/-c/--reuse-message/--reedit-message`; `--amend --no-edit`; `--allow-empty-message`; dynamic content the parser cannot resolve (`$VAR`, backticks, any other `$(…)`); `Uninspectable`.
   - **Commit.** `proc.run([<cz>, "check", "--message", msg], cwd=<repo root>, timeout=3)`; cz reads `[tool.commitizen]` itself. A non-zero exit → `deny`. The reason is cz's error output, sanitized (control characters stripped, at most 3 lines, the subject quoted as data and capped at 100 characters), plus `Rewrite the message to this repo's commit convention and retry.` It never points at `[tool.commitizen]` or `cutover_date`, which would teach a bypass.
-  - **Push** (`check_push`, default `true`). It resolves the destination (an explicit `src:dst` refspec, else the upstream `git rev-parse --abbrev-ref @{upstream}`, else the current branch), lists `git log --format='%H %cI' <remote>/<dst>..<src>` from **local** refs only (at most 200, 3 s timeout; never a fetch), keeps the commits whose committer date is ≥ `cutover_date`, then runs one `cz check --rev-range <range>` when the kept commits are the contiguous tail of the range, else `cz check --message` per kept commit (up to 20; beyond that, one note — CI checks the full range). A missing tracking ref fails open (the CI twin covers it).
+  - **Push** (`check_push`, default `false`: opt-in). Demoted after the pack eval: it duplicates the per-commit check and the commit-msg twin, which already saw every new commit, and costs 0.2–6 s per push. `[hooks.commit-message-convention] check_push = true` turns it on. It resolves the destination (an explicit `src:dst` refspec, else the upstream `git rev-parse --abbrev-ref @{upstream}`, else the current branch), lists `git log --format='%H %P%x1f%cI%x1f%B' <remote>/<dst>..<src>` from **local** refs only (at most 200, 3 s timeout; never a fetch), keeps the commits whose committer date is ≥ `cutover_date`, then runs one `cz check --rev-range` only when that range names exactly the kept commits (all kept → `<remote>/<dst>..<src>`; the kept commits are a **linear** newest tail, each with one parent that is the next kept commit → `<oldest kept>^..<src>`), else `cz check --message` per kept commit (up to 20; beyond that, one note — CI checks the full range). A merge among the kept commits forces the per-commit path: `<oldest kept>^` does not exclude what the merge brought in, so a branch that merged main would otherwise check main's own commits. A missing tracking ref fails open (the CI twin covers it).
   - **cz missing** (no pin, or its signature changed) → `none` plus the once-per-session toolchain hint (§E.3).
-  - It never returns `ask` (a convention is not a judgment call) and never `updatedInput` (L6), so it coexists with the user's `rtk` input rewriter.
+  - It never returns `ask` (a convention is not a judgment call) and never `updatedInput` (L6), so it coexists with a user's own command-rewriting hook.
 - **Implementation.** Builtin `commit_message_convention` in `hook_runtime/handlers/commit_convention.py`; `cutover_date` is rendered from `[hooks.commit_convention]` into the hook's config, `check_push` from `[hooks.commit-message-convention]`. cz runs as a subprocess, so the dispatcher imports nothing new.
-- **Budget & failure.** Under 1 ms for non-matching segments (the shared prefilter). A commit costs one cz process (a Python CLI: one interpreter start, roughly 0.1–0.3 s, not yet measured); that exceeds the ≤ 100 ms pre-tool p95 only on `git commit` / `git push` segments, which are rare. 3 s timeout. Quality class: `on_error: open`, one note per session.
+- **Budget & failure.** Under 1 ms for non-matching segments (the shared prefilter). A commit costs one cz process (a Python CLI: one interpreter start, roughly 0.1–0.3 s, not yet measured); that exceeds the ≤ 100 ms pre-tool p95 only on `git commit` segments (and `git push` ones under `check_push`), which are rare. 3 s timeout. Quality class: `on_error: open`, one note per session.
 - **Ownership split with git-commit-push-policy-guard (E.4).** Both run on the same bash event against one shared parse, and the dispatcher folds their decisions (deny wins).
 
 | Concern | Owner |
@@ -1742,10 +1747,11 @@ No new hook id.
   - `git commit -m "Add thing."` with FakeCz rejecting → deny carrying the sanitized cz text and no mention of `[tool.commitizen]`;
   - the heredoc form → FakeCz receives the exact message;
   - `-F msg.txt` → read;
-  - `rtk git commit -m "feat: y"` → none (wrapper unwrapped; FakeCz accepts);
+  - `proxy git commit -m "feat: y"` → none (wrapper unwrapped; FakeCz accepts);
   - `git commit --amend --no-edit`, `-m "$X"`, `echo git commit -m "bad."` → none with zero cz calls;
   - no cz pin → none plus one hint per session;
-  - push with `cutover_date`: commits committed before the cut-over are not passed to cz; a rebased commit (new committer date) is; a non-contiguous kept set → per-commit `--message` calls.
+  - push, as shipped (`check_push = false`): none, with no `git log` and no cz call;
+  - push with `check_push = true` and `cutover_date`: commits committed before the cut-over are not passed to cz; a rebased commit (new committer date) is; a non-contiguous kept set, or a kept tail through a merge, → per-commit `--message` calls.
 
 #### F.4.3 Twins
 
@@ -1760,7 +1766,7 @@ No new hook id.
   ```
 
   Added to `.pre-commit-hooks.yaml` and `resources/precommit/config.yaml.j2` (`language: system` keeps `tests/integration/test_precommit_template.py:36` green); the template gains `default_install_hook_types: [pre-commit, commit-msg]`, so a plain `pre-commit install` installs the stage. A machine without `cz` fails this human-run twin loudly ("executable not found"), which is the intended signal for a consumer that opted into commitizen.
-- **CI.** The `playbook ci` `commit-convention` step (F.5): list `git log --format='%H %cI' <mb>..HEAD`, keep commits with committer date ≥ `cutover_date`; all kept → `cz check --rev-range <mb>..HEAD`; a contiguous kept tail → `cz check --rev-range <first>^..HEAD`; otherwise `cz check --message` per kept commit. In squash-merge repos the PR title is the future subject: when `PLAYBOOK_PR_TITLE` is set, the step also runs `cz check --message <title>`, with the title passed as an argv element read from the environment and **never** interpolated into a workflow `run:` line (the GitHub Actions script-injection pattern).
+- **CI.** The `playbook ci` `commit-convention` step (F.5): list `<mb>..HEAD` with each commit's parents and committer date, keep commits with committer date ≥ `cutover_date`, and use a single `--rev-range` only when it covers exactly the kept commits: all kept → `cz check --rev-range <mb>..HEAD`; a linear kept tail (no merge; each kept commit's one parent is the next kept one) → `cz check --rev-range <oldest kept>^..HEAD`; otherwise `cz check --message` per kept commit (one argv element each, never shell-interpolated). A branch that merged main after the cut-over takes the per-commit path: `<oldest kept>^..HEAD` would also reach main's merged commits, which `<mb>..HEAD` excludes (PR #32 failed on main's squash subjects that way). In squash-merge repos the PR title is the future subject: when `PLAYBOOK_PR_TITLE` is set, the step also runs `cz check --message <title>`, with the title passed as an argv element read from the environment and **never** interpolated into a workflow `run:` line (the GitHub Actions script-injection pattern).
 
 #### F.4.4 Tests (tool)
 
@@ -1912,10 +1918,10 @@ The 9 `rejected` catalog entries stay rejected.
 
 | id | Catalog event | Why rejected | Where it belongs instead |
 | --- | --- | --- | --- |
-| scoped-rule-injection | post_tool_use | A rendering problem, not a lifecycle one: it would fire on every Read (the most frequent call), and 8 of the 10 currently bundled scoped rules glob `**/*.py` (9 of 11 once K10's `python-docstrings` lands), so a Python repo saves nothing. | The adapters: Continue honors globs natively; Claude Code *could* render scoped rules as `.claude/rules/<id>.md` with `paths:`, but the shipped adapter does not (it concatenates every rule into `.claude/CLAUDE.md`, SPEC §10.3.1); CLAUDE.md and AGENTS.md keep the advisory `*Applies to*` note. |
+| scoped-rule-injection | post_tool_use | A rendering problem, not a lifecycle one: it would fire on every Read (the most frequent call), and 9 of the 11 bundled scoped rules glob `**/*.py` (K10's `python-docstrings` included), so a Python repo saves nothing. | The adapters: Continue honors globs natively; Claude Code *could* render scoped rules as `.claude/rules/<id>.md` with `paths:`, but the shipped adapter does not (it concatenates every rule into `.claude/CLAUDE.md`, SPEC §10.3.1); CLAUDE.md and AGENTS.md keep the advisory `*Applies to*` note. |
 | guardrail-self-test | session_start | Circular: a broken interpreter, entry point or runtime fails the self-test open silently too. | The briefing heartbeat line plus the CLAUDE.md line that reports its absence (§E.1, §C.4.2), and `playbook-hook doctor` (§D.9). |
 | auto-commit-checkpoint | post_tool_use | Rewrites the user-owned authorship and commit policy, fills history with WIP commits, and turns commit-time gates into per-turn side effects. | The harness's own undo/rewind or the user's VCS workflow. |
-| input-rewriting-hooks | pre_tool_use | L6 forbids `updatedInput`: rewriters race (last writer wins; the user already runs `rtk`), hide the correction from the model, and an overlay rewriter can change what the user approved. | Deny-with-correction (command-convention-guard, §E.4); `playbook validate` rejects input rewriting (H8). |
+| input-rewriting-hooks | pre_tool_use | L6 forbids `updatedInput`: rewriters race (last writer wins; a user may already run their own rewriting hook), hide the correction from the model, and an overlay rewriter can change what the user approved. | Deny-with-correction (command-convention-guard, §E.4); `playbook validate` rejects input rewriting (H8). |
 | permission-auto-approve | pre_tool_use | L6 forbids `allow`: a hook-issued allow bypasses the harness permission system, so any overlay or malicious PR shipping one is a privilege escalation. | Reviewed, opt-in `permissions.allow` rendering of the remediation commands (§C.2.8, OQ-16). |
 | http-audit-exporter | post_tool_use | L8: no HTTP hooks, no telemetry, air-gapped. | An org's own log shipper pointed at the local decision/audit logs (§E.5), or an explicit opt-in overlay exporter per SPEC §17.4. |
 | prompt-injection-regex-scanner | post_tool_use | Evadable by rewording and noisy on security code and docs; hooks are not a security boundary. | taint-escalation (§E.4), the deterministic, content-free alternative; a regex scanner may live in an org overlay as an explicit opt-in. |

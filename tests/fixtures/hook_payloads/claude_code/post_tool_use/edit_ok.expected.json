@@ -1,0 +1,61 @@
+{
+  "parsed": {
+    "name": "post_tool_use",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "turn_id": "pr_14",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "acceptEdits",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PostToolUse",
+    "tool": {
+      "name": "Edit",
+      "native_name": "Edit",
+      "tool_class": "edit",
+      "tool_classes": [
+        "edit"
+      ],
+      "use_id": "toolu_01Edit",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/src/app.py",
+          "repo_rel": "src/app.py",
+          "key": "src/app.py"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/src/app.py",
+          "repo_rel": "src/app.py",
+          "key": "src/app.py"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/src/app.py",
+          "new_string",
+          "y"
+        ]
+      ],
+      "response": {
+        "ok": true,
+        "is_interrupt": false
+      }
+    }
+  },
+  "result": {
+    "decision": "context",
+    "context": [
+      "src/app.py:3 F401 `os` imported but unused"
+    ]
+  },
+  "wire": {
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"src/app.py:3 F401 `os` imported but unused\"}}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

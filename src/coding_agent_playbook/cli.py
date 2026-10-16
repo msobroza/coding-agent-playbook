@@ -17,17 +17,25 @@ import sys
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__
-from coding_agent_playbook.bundled_content import BundledContentMissingError
+from coding_agent_playbook.catalog import CatalogMissingError
 from coding_agent_playbook.commands import check as check_cmd
+from coding_agent_playbook.commands import check_commit_trailers as check_commit_trailers_cmd
+from coding_agent_playbook.commands import check_deps as check_deps_cmd
+from coding_agent_playbook.commands import check_notebooks as check_notebooks_cmd
+from coding_agent_playbook.commands import ci as ci_cmd
 from coding_agent_playbook.commands import eval as eval_cmd
+from coding_agent_playbook.commands import gate_scan as gate_scan_cmd
 from coding_agent_playbook.commands import import_harness as import_harness_cmd
 from coding_agent_playbook.commands import init as init_cmd
 from coding_agent_playbook.commands import metrics as metrics_cmd
 from coding_agent_playbook.commands import render as render_cmd
+from coding_agent_playbook.commands import scan_secrets as scan_secrets_cmd
+from coding_agent_playbook.commands import scan_sinks as scan_sinks_cmd
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as validate_cmd
 from coding_agent_playbook.commands import validate_harness as validate_harness_cmd
 from coding_agent_playbook.config import ConfigError
+from coding_agent_playbook.types import HookSchemaError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -46,6 +54,13 @@ _SUBCOMMANDS: tuple[str, ...] = (
     "metrics",
     "import-harness",
     "validate-harness",
+    "gate-scan",
+    "ci",
+    "scan-sinks",
+    "check-notebooks",
+    "scan-secrets",
+    "check-commit-trailers",
+    "check-deps",
 )
 
 
@@ -70,6 +85,12 @@ def build_parser() -> argparse.ArgumentParser:
     init_p.add_argument("--description", default="")
     init_p.add_argument("--adapters", help="comma-separated adapter names")
     init_p.add_argument("--overlays", help="comma-separated overlay package names")
+    init_p.add_argument(
+        "--no-hooks",
+        dest="no_hooks",
+        action="store_true",
+        help="do not enable assistant lifecycle hooks (writes [hooks] enabled = false)",
+    )
     init_p.set_defaults(func=init_cmd.run)
 
     # playbook sync
@@ -183,7 +204,37 @@ def build_parser() -> argparse.ArgumentParser:
     )
     metrics_p.add_argument(
         "--baseline",
-        help="non-regression baseline: 'git:<ref>' (via git show) or a directory path",
+        help="non-regression baseline: 'git:<ref>', 'json:<path>' (an --emit-measurements "
+        "snapshot) or a directory path",
+    )
+    metrics_p.add_argument(
+        "--changed",
+        action="store_true",
+        help="only the *.py files changed against the git: baseline, plus untracked ones",
+    )
+    # Ruff-shaped selection (prK §F.0.3 item 2): each flag replaces its [metrics] key.
+    metrics_p.add_argument(
+        "--select",
+        metavar="NAMES",
+        help="comma-separated metrics or families (quality, docstrings, testing) to "
+        "measure instead of the default set",
+    )
+    metrics_p.add_argument(
+        "--extend-select",
+        dest="extend_select",
+        metavar="NAMES",
+        help="comma-separated metrics or families to add; opt-in metrics only by name",
+    )
+    metrics_p.add_argument(
+        "--ignore",
+        metavar="NAMES",
+        help="comma-separated metrics or families to leave out",
+    )
+    metrics_p.add_argument(
+        "--emit-measurements",
+        dest="emit_measurements",
+        metavar="PATH",
+        help="write the raw candidate measurements as a JSON snapshot (for --baseline json:PATH)",
     )
     metrics_p.add_argument(
         "--mode",
@@ -195,12 +246,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="promote warnings to gate failures (non-zero exit)",
     )
+    # Tri-state: None defers to [metrics] run_tests; --no-run-tests keeps the
+    # pre-commit twins static even when the config enables tests (§F.0.3 item 6).
     metrics_p.add_argument(
         "--run-tests",
         dest="run_tests",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help="also run the execution evaluators (test_pass_rate, coverage): "
-        "shells out to the target's pytest (opt-in, has side effects)",
+        "shells out to the target's pytest (opt-in, has side effects); "
+        "--no-run-tests overrides [metrics] run_tests = true",
     )
     metrics_p.add_argument(
         "--test-cmd",
@@ -243,23 +298,144 @@ def build_parser() -> argparse.ArgumentParser:
     )
     validate_harness_p.set_defaults(func=validate_harness_cmd.run)
 
+    _add_twin_parsers(subcommands)
     return parser
+
+
+def _add_twin_parsers(subcommands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """The hooks' off-workstation twins: ``gate-scan``, ``ci`` (prK §E.2, §F.5), ``scan-sinks``,
+    ``check-notebooks`` (§E.3), ``scan-secrets``, ``check-commit-trailers`` and ``check-deps``
+    (§E.4)."""
+    gate_p = subcommands.add_parser(
+        _SUBCOMMANDS[9], help="flag gate-weakening changes in a commit range (prK §E.2)"
+    )
+    gate_p.add_argument(
+        "--range",
+        dest="rev_range",
+        help="A..B, or A...B from their merge base (default: <merge-base>..HEAD)",
+    )
+    gate_p.add_argument("--format", choices=("text", "json"), default="text")
+    gate_p.add_argument("--repo-root", help="repo to scan (defaults to cwd)")
+    gate_p.set_defaults(func=gate_scan_cmd.run)
+
+    ci_p = subcommands.add_parser(
+        _SUBCOMMANDS[10], help="run the CI twins as child processes (prK §F.5)"
+    )
+    ci_p.add_argument("--base", help="base ref (default: the default branch, origin/HEAD first)")
+    ci_p.add_argument("--steps", help="comma-separated CI_STEPS names (default: every row)")
+    ci_p.add_argument("--format", choices=("text", "json"), default="text")
+    ci_p.add_argument("--repo-root", help="repo to check (defaults to cwd)")
+    ci_p.set_defaults(func=ci_cmd.run)
+
+    sinks_p = subcommands.add_parser(
+        _SUBCOMMANDS[11], help="flag new unsafe deserialization sinks in a change (prK §E.3)"
+    )
+    sinks_scope = sinks_p.add_mutually_exclusive_group()
+    sinks_scope.add_argument("--staged", action="store_true", help="scan the index against HEAD")
+    sinks_scope.add_argument(
+        "--range",
+        dest="rev_range",
+        help="A..B, or A...B from their merge base (default: <merge-base>..HEAD)",
+    )
+    sinks_p.add_argument("--format", choices=("text", "json"), default="text")
+    sinks_p.add_argument("--repo-root", help="repo to scan (defaults to cwd)")
+    sinks_p.set_defaults(func=scan_sinks_cmd.run)
+
+    notebooks_p = subcommands.add_parser(
+        _SUBCOMMANDS[12], help="fail when notebooks keep cell outputs (prK §E.3)"
+    )
+    notebooks_p.add_argument(
+        "paths", nargs="*", help="notebooks to check (default: every tracked .ipynb file)"
+    )
+    notebooks_p.add_argument("--repo-root", help="repo the paths are relative to (defaults to cwd)")
+    notebooks_p.set_defaults(func=check_notebooks_cmd.run)
+    _add_scan_secrets_parser(subcommands)
+
+
+def _add_scan_secrets_parser(
+    subcommands: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """``scan-secrets [--staged | --range A..B | --worktree | PATHS] [--pii]`` (prK §E.4, §E.5)."""
+    secrets_p = subcommands.add_parser(
+        _SUBCOMMANDS[13], help="flag secret tokens and credential files, masked (prK §E.4)"
+    )
+    secrets_p.add_argument(
+        "paths", nargs="*", help="files to scan whole, relative to --repo-root (exclusive of modes)"
+    )
+    scope = secrets_p.add_mutually_exclusive_group()
+    scope.add_argument("--staged", action="store_true", help="scan the index against HEAD")
+    scope.add_argument(
+        "--range",
+        dest="rev_range",
+        help="A..B, or A...B from their merge base (default: <merge-base>..HEAD)",
+    )
+    scope.add_argument(
+        "--worktree",
+        action="store_true",
+        help="scan tracked changes against HEAD and untracked, non-ignored files",
+    )
+    secrets_p.add_argument(
+        "--pii",
+        action="store_true",
+        help="also flag checksum-validated PII (IBAN, card numbers), masked (prK §E.5)",
+    )
+    secrets_p.add_argument(
+        "--pii-detectors",
+        metavar="NAMES",
+        help="comma-separated PII detectors (iban, card_pan, fr_nir, us_ssn); implies --pii",
+    )
+    secrets_p.add_argument("--format", choices=("text", "json"), default="text")
+    secrets_p.add_argument("--repo-root", help="repo to scan (defaults to cwd)")
+    secrets_p.set_defaults(func=scan_secrets_cmd.run)
+    _add_check_commit_trailers_parser(subcommands)
+
+
+def _add_check_commit_trailers_parser(
+    subcommands: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """``check-commit-trailers <msgfile> | --range A..B`` (prK §E.4)."""
+    trailers_p = subcommands.add_parser(
+        _SUBCOMMANDS[14], help="check commit-message trailer rows, CP4xx (prK §E.4)"
+    )
+    trailers_p.add_argument(
+        "msgfile", nargs="?", help="the commit message file (the commit-msg stage passes it)"
+    )
+    trailers_p.add_argument(
+        "--range", dest="rev_range", help="check every commit of A..B, or A...B"
+    )
+    trailers_p.add_argument("--repo-root", help="repo whose policy applies (defaults to cwd)")
+    trailers_p.set_defaults(func=check_commit_trailers_cmd.run)
+    _add_check_deps_parser(subcommands)
+
+
+def _add_check_deps_parser(
+    subcommands: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """``check-deps [--base REF]`` (prK §E.4)."""
+    deps_p = subcommands.add_parser(
+        _SUBCOMMANDS[15], help="flag new dependencies and package indexes since a base (prK §E.4)"
+    )
+    deps_p.add_argument("--base", help="base ref (default: the default branch, origin/HEAD first)")
+    deps_p.add_argument("--repo-root", help="repo to check (defaults to cwd)")
+    deps_p.set_defaults(func=check_deps_cmd.run)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Parse ``argv``, run the subcommand, and return its exit code.
 
-    A missing config (:class:`FileNotFoundError`) and a config the engine would
-    misread (:class:`ConfigError`) both print ``error: <message>`` and exit 2.
-    Commands load the config first, so either one stops them before they write.
+    A missing config (:class:`FileNotFoundError`), a config the engine would
+    misread (:class:`ConfigError`) and a malformed ``HOOK.md``
+    (:class:`HookSchemaError`, prK §A.5) all print ``error: <message>`` and exit
+    2. Commands load the config and the artifacts first, so each one stops them
+    before they write.
 
-    A broken install also exits 2, without a traceback. Engine content found in
-    neither home (:class:`BundledContentMissingError`) prints
-    ``error: the engine's bundled content was not found (looked in <a>, <b>);
+    A broken install also exits 2, without a traceback. An engine catalog found in
+    neither home (:class:`CatalogMissingError`) prints
+    ``error: the engine's catalog was not found (looked in <a>, <b>);
     reinstall coding-agent-playbook`` on one line, where ``<a>`` and ``<b>`` are
-    the wheel's ``<package>/_content`` and the checkout's ``<repo>/content``, in
+    the wheel's ``<package>/_catalog`` and the checkout's ``<repo>/catalog``, in
     that order; it used to render zero engine artifacts silently. Only commands
-    that load the content raise it (``init``, ``sync``, ``check``, ``validate``,
+    that load the catalog raise it (``init``, ``sync``, ``check``, ``validate``,
     ``render``, ``eval``). A missing pre-commit template
     (:class:`~coding_agent_playbook.commands.init.PrecommitTemplateMissingError`)
     prints ``error: <message>``.
@@ -277,19 +453,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         return int(args.func(args))
     except SystemExit:
         raise
-    except (FileNotFoundError, ConfigError, init_cmd.PrecommitTemplateMissingError) as exc:
+    except (
+        FileNotFoundError,
+        ConfigError,
+        HookSchemaError,
+        init_cmd.PrecommitTemplateMissingError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    except BundledContentMissingError as exc:
-        print(_missing_content_line(exc), file=sys.stderr)
+    except CatalogMissingError as exc:
+        print(_missing_catalog_line(exc), file=sys.stderr)
         return 2
 
 
-def _missing_content_line(exc: BundledContentMissingError) -> str:
-    """The missing-content error line, naming every content home tried, in order."""
+def _missing_catalog_line(exc: CatalogMissingError) -> str:
+    """The missing-catalog error line, naming every catalog home tried, in order."""
     looked_in = ", ".join(str(path) for path in exc.tried)
     return (
-        f"error: the engine's bundled content was not found (looked in {looked_in}); "
+        f"error: the engine's catalog was not found (looked in {looked_in}); "
         "reinstall coding-agent-playbook"
     )
 

@@ -57,6 +57,7 @@ def _make_prompt(
     body: str = "# Review\n\nReview the diff.\n",
     includes_rules: list[str] | None = None,
     input_variables: list[dict[str, object]] | None = None,
+    write_scope: dict[str, object] | None = None,
 ) -> Prompt:
     return Prompt(
         frontmatter=PromptFrontmatter(
@@ -66,6 +67,7 @@ def _make_prompt(
             slash=slash,
             includes_rules=includes_rules or [],
             input_variables=input_variables or [],
+            write_scope=dict(write_scope or {}),
         ),
         body=body,
         template_body=body,
@@ -285,6 +287,51 @@ def test_claude_code_cleanup_round_trip_after_slash_rename(tmp_path):
     assert b_path.exists()
 
 
+# --- write_scope: native read-only constraint (specs/prK-lifecycle-hooks.md §C.4.3) ---
+
+
+def test_read_only_prompt_renders_disallowed_tools_frontmatter(tmp_path):
+    prompt = _make_prompt(write_scope={"read_only": True})
+
+    [path] = ClaudeCodeAdapter().write_prompt(prompt, repo_root=tmp_path)
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert lines[:4] == [
+        "---",
+        "disallowed-tools: Edit Write NotebookEdit",
+        "---",
+        f"<!-- {SENTINEL} -->",
+    ]
+    assert lines[4] == "# Review"
+    assert Adapter._carries_sentinel(path)
+
+
+def test_read_only_command_is_cleaned_when_stale(tmp_path):
+    adapter = ClaudeCodeAdapter()
+    stale = adapter.write_prompt(_make_prompt(write_scope={"read_only": True}), tmp_path)[0]
+    kept = adapter.write_prompt(_make_prompt(prompt_id="b", slash="b"), tmp_path)[0]
+
+    deleted = adapter.cleanup_stale({kept.resolve()}, repo_root=tmp_path)
+
+    assert stale in deleted
+    assert not stale.exists()
+    assert kept.exists()
+
+
+@pytest.mark.parametrize("scope", [None, {"globs": ["tests/**"]}])
+def test_unscoped_and_glob_scoped_prompts_render_byte_identically(
+    tmp_path: Path, scope: dict[str, object] | None
+) -> None:
+    """Only ``read_only`` has a native form; every other prompt renders exactly as before."""
+    plain = ClaudeCodeAdapter().write_prompt(_make_prompt(), tmp_path / "plain")[0]
+    scoped = ClaudeCodeAdapter().write_prompt(_make_prompt(write_scope=scope), tmp_path / "s")[0]
+
+    assert scoped.read_bytes() == plain.read_bytes()
+    assert (
+        plain.read_text(encoding="utf-8") == f"<!-- {SENTINEL} -->\n# Review\n\nReview the diff.\n"
+    )
+
+
 def test_claude_code_write_skill_writes_skill_md_only(tmp_path):
     """A skill with no scripts/references writes just SKILL.md."""
     skill = _make_skill(
@@ -386,8 +433,9 @@ def test_claude_code_output_directories(tmp_path):
     adapter = ClaudeCodeAdapter()
     dirs = list(adapter._output_directories(tmp_path))
     # .claude/skills/ is never scanned: stale skill output is settled by sync's
-    # lockfile leftover policy (SPEC §4.2 step 9).
-    assert dirs == [tmp_path / ".claude" / "commands"]
+    # lockfile leftover policy (SPEC §4.2 step 9). The hook launcher's dir is
+    # (prK §C.0); settings.json never is (co-owned, edited in place).
+    assert dirs == [tmp_path / ".claude" / "commands", tmp_path / ".claude" / "hooks" / "playbook"]
 
 
 def test_claude_code_cleanup_stale_removes_stale_command(tmp_path):

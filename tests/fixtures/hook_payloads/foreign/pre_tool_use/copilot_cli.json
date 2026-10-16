@@ -1,0 +1,11 @@
+{
+  "_fixture": {
+    "harness": "copilot_cli",
+    "harness_version": "0.0.400",
+    "source": "docs"
+  },
+  "timestamp": 1760437800123,
+  "cwd": "/playbook-fixture/proj",
+  "toolName": "bash",
+  "toolArgs": "{\"command\":\"rm -rf build\"}"
+}

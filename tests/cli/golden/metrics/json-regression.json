@@ -1,0 +1,18 @@
+{
+  "composite": null,
+  "fail_count": 1,
+  "findings": [
+    {
+      "baseline": 2.0,
+      "bound": null,
+      "evaluator": "cyclomatic_complexity",
+      "kind": "regression",
+      "level": "fail",
+      "scope_key": "mod.py::classify",
+      "score": 0.8,
+      "value": 8.0
+    }
+  ],
+  "passed": false,
+  "warn_count": 0
+}

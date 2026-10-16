@@ -1,0 +1,56 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "opencode",
+    "session_id": "ses_7a1b2c3d4e5f",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "unattended": true,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "Write",
+      "native_name": "write",
+      "tool_class": "write",
+      "tool_classes": [
+        "write"
+      ],
+      "use_id": "call_mudg_01",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/src/app/io.py",
+          "repo_rel": "src/app/io.py",
+          "key": "src/app/io.py"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/src/app/io.py",
+          "repo_rel": "src/app/io.py",
+          "key": "src/app/io.py"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/src/app/io.py",
+          "content",
+          "import pickle\n\n\ndef read_model(blob):\n    return pickle.loads(blob)\n"
+        ]
+      ]
+    }
+  },
+  "result": {
+    "decision": "deny",
+    "reason": "\"src/app/io.py:5\" adds pickle.loads(...): loading untrusted data this way runs code.\nLoad a data-only format instead: safetensors, JSON, Parquet or .npy without pickle.\nFor an artifact you trust, ask the user to confirm a `# playbook: trusted-artifact <provenance>` comment above the call."
+  },
+  "wire": {
+    "stdout": "{\"v\":1,\"decision\":\"deny\",\"reason\":\"\\\"src/app/io.py:5\\\" adds pickle.loads(...): loading untrusted data this way runs code.\\nLoad a data-only format instead: safetensors, JSON, Parquet or .npy without pickle.\\nFor an artifact you trust, ask the user to confirm a `# playbook: trusted-artifact <provenance>` comment above the call.\",\"context\":[],\"notice\":\"\"}\n",
+    "stderr": "",
+    "exit_code": 10
+  }
+}

@@ -3,9 +3,10 @@
 Shared by ``playbook init`` and ``playbook check --refresh``. Both update the
 *committed* config, never the effective one ``FileSystemStateSource.load_config``
 returns: that one has the gitignored ``.coding-agent-playbook.local.toml`` merged
-in, so saving it commits one engineer's personal overrides for the whole team,
-and the round trip through ``Config`` alone drops the committed tables it does
-not manage (``[links]``, ``[metrics]``). Before v0.18 both commands did both.
+in, so saving it commits one engineer's personal overrides for the whole team.
+Before v0.18 both commands did that, and their round trip through ``Config``
+also dropped the committed tables it does not manage (``[hooks]``, ``[links]``,
+``[metrics]``); ``Config.extra_tables`` now carries those (P6).
 
 Every :class:`ConfigRewrite` is built here, by a ``plan_*`` function that reads
 the committed file itself or requires that there is none, and
@@ -19,7 +20,6 @@ import dataclasses
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.config import Config
-from coding_agent_playbook.config_entries import unmanaged_config_entries, with_unmanaged_entries
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 
 if TYPE_CHECKING:
@@ -96,10 +96,12 @@ def plan_committed_update(
     """The checked rewrite of the committed file with ``update`` applied to its ``Config``.
 
     Reads the committed file alone (``read_committed_config_table``; the local
-    file is never merged in), hands its ``Config`` to ``update``, writes the
-    result through ``Config.to_dict`` and carries everything ``Config`` does not
-    own over verbatim (``config_entries.with_unmanaged_entries``). Nothing is
-    written. ``init`` re-runs use it: the answers replace what ``Config`` owns.
+    file is never merged in), hands its ``Config`` to ``update`` and writes the
+    result through ``Config.to_dict``. Everything ``Config`` does not own rides
+    along verbatim in ``Config.extra_tables`` (``config_entries``), so ``update``
+    keeps it by building its result with ``dataclasses.replace`` — and may change
+    it, as init's ``[hooks] enabled`` answer does. Nothing is written. ``init``
+    re-runs use it: the answers replace what ``Config`` owns.
 
     Raises ``FileNotFoundError`` without the committed file and ``ConfigError``
     (naming it) for one ``Config`` would misread — including one missing a
@@ -114,8 +116,7 @@ def plan_committed_update(
     """
     committed = state.read_committed_config_table()
     updated = update(Config.from_dict(committed, source=_COMMITTED))
-    table = with_unmanaged_entries(updated.to_dict(), unmanaged_config_entries(committed))
-    return _checked_rewrite(state, updated, table)
+    return _checked_rewrite(state, updated, updated.to_dict())
 
 
 def plan_detector_cache_refresh(

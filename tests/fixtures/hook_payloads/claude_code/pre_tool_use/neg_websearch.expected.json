@@ -1,0 +1,37 @@
+{
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "turn_id": "pr_09",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "default",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "WebSearch",
+      "native_name": "WebSearch",
+      "tool_class": "web",
+      "tool_classes": [
+        "web"
+      ],
+      "use_id": "toolu_01K903",
+      "paths": [],
+      "write_paths": [],
+      "content": []
+    }
+  },
+  "result": {
+    "decision": "deny",
+    "reason": "Blocked: WebSearch reaches public search engines, which this repository's policy bars.\nUse the approved internal hosts (internal index or mirror); do not retry public hosts."
+  },
+  "wire": {
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Blocked: WebSearch reaches public search engines, which this repository's policy bars.\\nUse the approved internal hosts (internal index or mirror); do not retry public hosts.\"}}\n",
+    "stderr": "Blocked: WebSearch reaches public search engines, which this repository's policy bars.\nUse the approved internal hosts (internal index or mirror); do not retry public hosts.\n",
+    "exit_code": 10
+  }
+}

@@ -6,7 +6,8 @@ modules in ``coding_agent_playbook.commands`` consume. The pieces here:
 - :class:`SyncContext` — the bundle of (config, facts, source, adapters,
   resolved artifacts) handed to every command.
 - :class:`OverlayResolver` — three-layer merge per SPEC §11 (engine, overlays,
-  repo-local). Records collisions for ``playbook check``.
+  repo-local). Records collisions for ``playbook check``; hooks merge through
+  the additive ``hook_policy.merge_hook_layers`` (specs/prK-lifecycle-hooks.md §A.6).
 - :class:`RuleRegistryImpl` — concrete ``RuleRegistry`` from the renderer
   Protocol. Built once per sync from the applies_if-filtered rule list.
 - :func:`filter_applies_if` / :func:`build_prompt_environment` — the shared
@@ -30,10 +31,18 @@ from dataclasses import dataclass, field
 from importlib import metadata
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.bundled_content import canonical_overlay_name
+from coding_agent_playbook.catalog import canonical_overlay_name
 from coding_agent_playbook.detector import detect, evaluate_predicate
+from coding_agent_playbook.hook_policy import (
+    NO_HANDLER_SCHEMAS,
+    RegistryCatalog,
+    merge_hook_layers,
+    split_hook_layers,
+)
+from coding_agent_playbook.hooks_config import PolicyTables
 from coding_agent_playbook.renderer import build_environment, render_sandboxed
 from coding_agent_playbook.sources.filesystem import (
+    ENGINE_PACKAGE,
     FileSystemArtifactSource,
     FileSystemStateSource,
 )
@@ -46,18 +55,25 @@ if TYPE_CHECKING:
     from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.config import Config
     from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.hook_policy import (
+        ConfigSchemaLookup,
+        HookLayerMerger,
+        HookViolation,
+    )
     from coding_agent_playbook.renderer import RuleRegistry
     from coding_agent_playbook.sources.base import ArtifactSource, StateSource
-    from coding_agent_playbook.types import Prompt, Rule, Skill
+    from coding_agent_playbook.types import Hook, HookSchemaError, Prompt, Rule, Skill
 
 
 @dataclass(frozen=True)
 class Collision:
     """One overlay collision recorded by :class:`OverlayResolver`.
 
-    ``kind`` is one of ``"rule"``, ``"prompt"``, ``"skill"``; ``artifact_id`` is
-    the conflicting ID; ``winner`` and ``losers`` are the source package names
-    (e.g. ``"coding_agent_playbook"``, ``"<repo-local>"``).
+    ``kind`` is one of ``"rule"``, ``"prompt"``, ``"skill"``, ``"hook"``;
+    ``artifact_id`` is the conflicting ID; ``winner`` and ``losers`` are the
+    source package names (e.g. ``"coding_agent_playbook"``, ``"<repo-local>"``).
+    A hook's winner is the merged definition's layer, which a refused
+    override (H2, H15) leaves earlier than the last one.
     """
 
     kind: str
@@ -70,20 +86,41 @@ class OverlayResolver:
     """Merge engine + overlay + repo-local artifact lists by ID (SPEC §11).
 
     Resolution order (later wins on ID collision):
-      1. Engine artifacts (the bundled ``content/core/``).
+      1. Engine artifacts (the bundled ``catalog/core/``).
       2. Each overlay package or bundled plugin, in ``config.overlays_enabled`` order.
       3. Repo-local artifacts under ``<repo>/playbook/``.
 
     For each ``(kind, id)`` pair the winner is kept; losers are recorded for
-    ``playbook check`` and ``playbook render --show-source``.
+    ``playbook check`` and ``playbook render --show-source``. Hooks instead
+    merge every definition of an id (:meth:`resolve_hooks`); ``merge_hooks``
+    and ``hook_schemas`` are injectable so tests can spy on that merge.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        hook_schemas: ConfigSchemaLookup = NO_HANDLER_SCHEMAS,
+        merge_hooks: HookLayerMerger = merge_hook_layers,
+    ) -> None:
         self._collisions: list[Collision] = []
+        self._hook_schemas = hook_schemas
+        self._merge_hooks = merge_hooks
+        self._hook_violations: list[HookViolation] = []
+        self._hook_definitions: dict[str, tuple[Hook, ...]] = {}
 
     @property
     def collisions(self) -> list[Collision]:
         return list(self._collisions)
+
+    @property
+    def hook_violations(self) -> list[HookViolation]:
+        """Every refused hook override (H2, H14, H15), in resolution order."""
+        return list(self._hook_violations)
+
+    @property
+    def hook_definitions(self) -> dict[str, tuple[Hook, ...]]:
+        """Every layer's definition of each hook id, in layer order (validate's H12)."""
+        return dict(self._hook_definitions)
 
     def resolve_rules(
         self,
@@ -108,6 +145,39 @@ class OverlayResolver:
         repo_local: list[Skill],
     ) -> list[Skill]:
         return self._resolve("skill", engine, overlays, repo_local)
+
+    def resolve_hooks(
+        self,
+        engine: list[Hook],
+        overlays: list[list[Hook]],
+        repo_local: list[Hook],
+    ) -> list[Hook]:
+        """Merge each hook id across every layer (§A.6); never raises for a violation.
+
+        Unlike :meth:`_resolve`, which keeps only the winner, every definition
+        of an id goes to the layer merge, because the additive policy compares
+        each override with what it overrides. Violations land on
+        :attr:`hook_violations`; ids defined more than once record a
+        ``Collision(kind="hook")``.
+
+        Example::
+
+            >>> OverlayResolver().resolve_hooks([engine_hook], [[overlay_hook]], [])  # doctest: +SKIP
+            [Hook(...)]
+        """
+        by_id: dict[str, list[Hook]] = {}
+        for layer in (engine, *overlays, repo_local):
+            for hook in layer:
+                by_id.setdefault(hook.frontmatter.id, []).append(hook)
+        resolved: list[Hook] = []
+        for hook_id, definitions in by_id.items():
+            merged, violations = self._merge_hooks(definitions, schemas=self._hook_schemas)
+            self._hook_definitions[hook_id] = tuple(definitions)
+            self._hook_violations.extend(violations)
+            if len(definitions) > 1:
+                self._collisions.append(_hook_collision(hook_id, merged, definitions))
+            resolved.append(merged)
+        return resolved
 
     def _resolve[T](
         self,
@@ -138,6 +208,14 @@ class OverlayResolver:
                 )
             )
         return list(winners.values())
+
+
+def _hook_collision(hook_id: str, merged: Hook, definitions: list[Hook]) -> Collision:
+    """The merged definition's layer wins; every other definition's layer lost."""
+    losers = [hook.source_package for hook in definitions]
+    if merged.source_package in losers:  # an injected merger may return any layer
+        losers.remove(merged.source_package)
+    return Collision("hook", hook_id, merged.source_package, tuple(losers))
 
 
 def artifact_id_of(artifact: object) -> str:
@@ -334,9 +412,14 @@ def _warn_deprecated_overlays(config: Config, state: FileSystemStateSource) -> N
 class SyncContext:
     """Bundle of state every CLI command needs after reading the config.
 
-    ``rules_resolved``, ``prompts_resolved``, ``skills_resolved`` are
-    post-overlay-merge but pre-applies_if-filter — filtering is the command's
-    responsibility (sync filters; render does not).
+    ``rules_resolved``, ``prompts_resolved``, ``skills_resolved`` and
+    ``hooks_resolved`` are post-overlay-merge but pre-applies_if-filter —
+    filtering is the command's responsibility (sync filters; render does not).
+    ``hook_load_errors`` holds the malformed hooks that ``tolerate_hook_errors``
+    set aside; ``hook_violations`` the refused layer overrides (prK §A.5, §A.6).
+    ``policy_tables`` holds the committed ``[hooks]`` / ``[guardrails]`` tables,
+    raw so validate can report a malformed one (H21); read hooks policy there,
+    never from ``config.extra_tables``, which merges ``.local.toml`` in (§B.1).
     """
 
     repo_root: Path
@@ -349,6 +432,11 @@ class SyncContext:
     prompts_resolved: list[Prompt] = field(default_factory=list)
     skills_resolved: list[Skill] = field(default_factory=list)
     overlay_collisions: list[Collision] = field(default_factory=list)
+    hooks_resolved: list[Hook] = field(default_factory=list)
+    hook_definitions: dict[str, tuple[Hook, ...]] = field(default_factory=dict)
+    hook_load_errors: list[HookSchemaError] = field(default_factory=list)
+    hook_violations: list[HookViolation] = field(default_factory=list)
+    policy_tables: PolicyTables = field(default_factory=PolicyTables)
 
     @classmethod
     def from_repo(
@@ -356,6 +444,8 @@ class SyncContext:
         repo_root: Path,
         *,
         rule_registry: RuleRegistry | None = None,
+        tolerate_hook_errors: bool = False,
+        warn_deprecated: bool = True,
     ) -> SyncContext:
         """Discovery: load config → detect facts → instantiate sources → resolve overlays.
 
@@ -365,25 +455,66 @@ class SyncContext:
         without a registry, then re-build the adapters via
         :func:`discover_adapters` after the registry exists.
 
+        A malformed hook raises ``HookSchemaError`` (sync, check, render and
+        eval fail loudly); ``tolerate_hook_errors=True`` records each one on
+        ``hook_load_errors`` instead, so ``playbook validate`` can report them
+        all (prK §P P8c).
+
         Prints one ``warning:`` line per deprecated ``coding_agent_playbook.packs.*``
         overlay name, before anything else runs (:func:`_warn_deprecated_overlays`).
+        ``warn_deprecated=False`` is for an internal re-read inside a command that
+        already built its own context (the hook twins' policy read during
+        ``init``), so the user sees each warning once.
         """
         state_source = FileSystemStateSource(repo_root=repo_root)
         config = state_source.load_config()
-        _warn_deprecated_overlays(config, state_source)
-        facts = detect(repo_root)
-
-        artifact_source = FileSystemArtifactSource(
-            repo_root=repo_root,
-            overlay_packages=list(config.overlays_enabled),
+        if warn_deprecated:
+            _warn_deprecated_overlays(config, state_source)
+        return cls.from_config(
+            repo_root,
+            config,
+            rule_registry=rule_registry,
+            tolerate_hook_errors=tolerate_hook_errors,
+            policy_tables=state_source.load_policy_tables(),
         )
+
+    @classmethod
+    def from_config(
+        cls,
+        repo_root: Path,
+        config: Config,
+        *,
+        artifact_source: ArtifactSource | None = None,
+        rule_registry: RuleRegistry | None = None,
+        tolerate_hook_errors: bool = False,
+        policy_tables: PolicyTables | None = None,
+    ) -> SyncContext:
+        """:meth:`from_repo` minus the config load: detect → walk → resolve overlays.
+
+        Config-less ``playbook validate`` passes a stand-in ``config`` and an
+        ``artifact_source`` with extra checkout layers (prK §P P8); by default
+        the source walks the engine, ``config.overlays_enabled`` and
+        ``<repo>/playbook/``. Without ``policy_tables`` there is no ``[hooks]``
+        table, so hooks are off.
+
+        Example::
+
+            >>> SyncContext.from_config(repo, config).rules_resolved  # doctest: +SKIP
+            [Rule(...), ...]
+        """
+        facts = detect(repo_root)
+        if artifact_source is None:
+            artifact_source = FileSystemArtifactSource(
+                repo_root=repo_root,
+                overlay_packages=list(config.overlays_enabled),
+            )
         # FileSystemArtifactSource walks the engine and bundled-plugin artifacts
-        # in the bundled content (``content/core/``, ``content/plugins/<name>/``)
+        # in the catalog (``catalog/core/``, ``catalog/plugins/<name>/``)
         # and each overlay package's ``resources/`` tree via importlib.resources;
         # repo-local artifacts come from ``<repo>/playbook/``. v1 walks all of
         # those in a single ``list_*`` call — sufficient for PR 10. PRs 13+
         # may split per-layer if we need fine-grained source provenance.
-        resolver = OverlayResolver()
+        resolver = OverlayResolver(hook_schemas=RegistryCatalog())  # handlers' CONFIG_SCHEMA
         all_rules = artifact_source.list_rules()
         all_prompts = artifact_source.list_prompts()
         all_skills = artifact_source.list_skills()
@@ -399,6 +530,9 @@ class SyncContext:
         rules_resolved = resolver.resolve_rules(all_rules, [], [])
         prompts_resolved = resolver.resolve_prompts(all_prompts, [], [])
         skills_resolved = resolver.resolve_skills(all_skills, [], [])
+        hooks_resolved, hook_load_errors = _resolve_hooks(
+            artifact_source, resolver, tolerate=tolerate_hook_errors
+        )
 
         adapters = discover_adapters(config, rule_registry=rule_registry)
 
@@ -407,10 +541,45 @@ class SyncContext:
             config=config,
             facts=facts,
             artifact_source=artifact_source,
-            state_source=state_source,
+            state_source=FileSystemStateSource(repo_root=repo_root),
             adapters=adapters,
             rules_resolved=rules_resolved,
             prompts_resolved=prompts_resolved,
             skills_resolved=skills_resolved,
             overlay_collisions=resolver.collisions,
+            hooks_resolved=hooks_resolved,
+            hook_definitions=resolver.hook_definitions,
+            hook_load_errors=hook_load_errors,
+            hook_violations=resolver.hook_violations,
+            policy_tables=PolicyTables() if policy_tables is None else policy_tables,
         )
+
+
+def _resolve_hooks(
+    source: ArtifactSource, resolver: OverlayResolver, *, tolerate: bool
+) -> tuple[list[Hook], list[HookSchemaError]]:
+    """Merge ``source``'s hooks layer by layer; return them and the load errors.
+
+    Unlike the other kinds, hooks need real layers, because the additive merge
+    treats an overlay and a repo-local override differently (§A.6). A malformed
+    hook raises unless ``tolerate`` records it (P8c).
+    """
+    hooks, errors = source.collect_hooks() if tolerate else (source.list_hooks(), [])
+    layers = split_hook_layers(hooks, engine_package=engine_package_of(source))
+    return resolver.resolve_hooks(*layers), errors
+
+
+def engine_package_of(source: ArtifactSource) -> str:
+    """The ``source_package`` of ``source``'s engine layer; hooks from it are engine-sourced.
+
+    A filesystem source can be pointed at another engine package (tests do);
+    any other source is assumed to serve the real one.
+
+    Example::
+
+        >>> engine_package_of(FileSystemArtifactSource(repo_root=Path(".")))  # doctest: +SKIP
+        'coding_agent_playbook'
+    """
+    if isinstance(source, FileSystemArtifactSource):
+        return source.engine_package
+    return ENGINE_PACKAGE

@@ -9,6 +9,7 @@ typos fail loudly and attribute escapes to Python internals raise.
 
 from __future__ import annotations
 
+import json
 import re
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -21,6 +22,13 @@ from jinja2.sandbox import SandboxedEnvironment
 # working; the import-light ``_sentinel`` module is the single home (prK §P3).
 from coding_agent_playbook._sentinel import SENTINEL as SENTINEL
 from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.hook_policy import advisory_block, advisory_text
+from coding_agent_playbook.hook_registrations import (
+    DeclaredMember,
+    claude_settings_projection,
+    declared_stop_budget_s,
+)
+from coding_agent_playbook.types import HookFrontmatter
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -39,6 +47,9 @@ FORMAT_ALIASES: dict[str, str] = {
     "opencode": "prompt_opencode_command",
 }
 
+#: The tools a read-only prompt's Claude command removes (specs/prK-hook-pack.md §E.3).
+CLAUDE_READ_ONLY_DISALLOWED = "Edit Write NotebookEdit"
+
 # All built-in formats. Adapters may register more via the renderer registry
 # (future work — v1 just has the built-ins inline here).
 BUILTIN_FORMATS: frozenset[str] = frozenset(
@@ -49,6 +60,10 @@ BUILTIN_FORMATS: frozenset[str] = frozenset(
         "prompt_continue",
         "prompt_claude_command",
         "prompt_opencode_command",
+        # Hooks (specs/prK-lifecycle-hooks.md §C.4.1): the advisory markdown every
+        # advisory target shares, and the debug JSON of the Claude registrations.
+        "hook_advisory",
+        "hook_claude_settings",
     }
 )
 
@@ -243,8 +258,8 @@ def render_for(
     pass an un-rendered body.
 
     ``_template_path`` is reserved for future format-specific dispatch
-    (SPEC §9.7); current transforms key off ``fmt`` and ``frontmatter`` only.
-    The leading underscore marks it as intentionally unused for now.
+    (SPEC §9.7); current transforms key off ``fmt`` and ``frontmatter`` only,
+    and ``hook_claude_settings`` names it when the frontmatter is malformed.
     """
     resolved = FORMAT_ALIASES.get(fmt, fmt)
     if resolved not in BUILTIN_FORMATS:
@@ -255,6 +270,10 @@ def render_for(
         return _render_continue_rule(body, frontmatter)
     if resolved in ("claude_md_section", "agents_md_section"):
         return _render_markdown_rule_section(body, frontmatter)
+    if resolved == "hook_advisory":
+        return _render_hook_advisory(body, frontmatter)
+    if resolved == "hook_claude_settings":
+        return _render_hook_claude_settings(_template_path, frontmatter)
     appendix = includes_rules_appendix(
         body if template_body is None else template_body, frontmatter, rule_registry
     )
@@ -320,6 +339,30 @@ def _render_markdown_rule_section(body: str, frontmatter: dict[str, Any]) -> str
     parts.append("---")
     parts.append("")
     return "\n".join(parts)
+
+
+def _render_hook_advisory(body: str, frontmatter: dict[str, Any]) -> str:
+    """``### <name>``, the rendered hook body, and its static enforcement line (§C.4.1).
+
+    ``frontmatter`` is the hook's (``HookFrontmatter.to_mapping()``); the line
+    comes from its declared ``events`` and ``supports`` only.
+    """
+    events = frontmatter.get("events") or []
+    supports = frontmatter.get("supports") or []
+    return advisory_block(frontmatter["name"], advisory_text(body, events, supports))
+
+
+def _render_hook_claude_settings(source: Path, frontmatter: dict[str, Any]) -> str:
+    """The hook's Claude registrations as ``settings.json`` JSON, alone in the repo (debug-only).
+
+    Built from the declared frontmatter (no ``[hooks]`` gating or consumer
+    config); raises ``HookSchemaError`` naming ``source`` on a malformed one.
+    """
+    fm = HookFrontmatter.from_mapping(frontmatter, where=str(source))
+    projection = claude_settings_projection(
+        [DeclaredMember.from_frontmatter(fm)], stop_budget_s=declared_stop_budget_s(fm)
+    )
+    return json.dumps(projection, indent=2, ensure_ascii=False) + "\n"
 
 
 def includes_rules_appendix(
@@ -395,6 +438,23 @@ def _render_prompt_continue(
     return f"{sentinel_line('html')}\n---\n{fenced}\n---\n{body}{appendix}"
 
 
+def is_read_only_prompt(frontmatter: dict[str, Any]) -> bool:
+    """Whether a prompt's ``write_scope`` is ``{read_only: true}`` (specs/prK-hook-pack.md §E.3).
+
+    Only an explicit ``True`` counts: a malformed scope (validate rejects it)
+    never removes tools from a command.
+
+    Example::
+
+        >>> is_read_only_prompt({"write_scope": {"read_only": True}})
+        True
+        >>> is_read_only_prompt({"write_scope": {"globs": ["tests/**"]}})
+        False
+    """
+    scope = frontmatter.get("write_scope")
+    return isinstance(scope, dict) and scope.get("read_only") is True
+
+
 def _render_prompt_claude_command(
     body: str,
     frontmatter: dict[str, Any],
@@ -407,10 +467,19 @@ def _render_prompt_claude_command(
     the file as engine-owned; we then prepend ``# {name}`` if the body
     does not already start with a level-1 heading, then optionally append
     the ``includes_rules`` appendix.
+
+    A read-only prompt instead opens with a ``disallowed-tools`` frontmatter
+    block (Claude removes those tools while the command runs) and carries the
+    sentinel on its first body line, the second anchored position
+    ``_sentinel.has_sentinel`` accepts (specs/prK-lifecycle-hooks.md §C.4.3).
+    Every other prompt renders exactly as before.
     """
     name = frontmatter["name"]
     output = body if body.lstrip().startswith("# ") else f"# {name}\n\n{body}"
-    return f"{sentinel_line('html')}\n{output}{appendix}"
+    marked = f"{sentinel_line('html')}\n{output}{appendix}"
+    if is_read_only_prompt(frontmatter):
+        return f"---\ndisallowed-tools: {CLAUDE_READ_ONLY_DISALLOWED}\n---\n{marked}"
+    return marked
 
 
 def _render_prompt_opencode_command(
@@ -450,4 +519,8 @@ def _render_prompt_opencode_command(
     # OpenCode parses commands with gray-matter, which only sees frontmatter at
     # offset 0: a sentinel on line 1 dropped the description and leaked the
     # comment and the envelope into the prompt. So the envelope comes first.
-    return with_sentinel_body(f"---\n{description_line}\n---", f"{rendered_body}{appendix}")
+    # A read-only prompt runs as OpenCode's built-in ``plan`` agent, which has
+    # no edit tools (specs/prK-hook-pack.md §E.3; SPEC §10.6.1 lists ``agent``).
+    agent_line = "\nagent: plan" if is_read_only_prompt(frontmatter) else ""
+    envelope = f"---\n{description_line}{agent_line}\n---"
+    return with_sentinel_body(envelope, f"{rendered_body}{appendix}")

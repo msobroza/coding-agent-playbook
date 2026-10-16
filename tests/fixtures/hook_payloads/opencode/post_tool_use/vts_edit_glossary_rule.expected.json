@@ -1,0 +1,62 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "parsed": {
+    "name": "post_tool_use",
+    "harness": "opencode",
+    "session_id": "ses_7a1b2c3d4e5f",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "unattended": true,
+    "truncated": false,
+    "raw_event_name": "PostToolUse",
+    "tool": {
+      "name": "Edit",
+      "native_name": "edit",
+      "tool_class": "edit",
+      "tool_classes": [
+        "edit"
+      ],
+      "use_id": "call_vts_01",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/playbook/rules/glossary.md",
+          "repo_rel": "playbook/rules/glossary.md",
+          "key": "playbook/rules/glossary.md"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/playbook/rules/glossary.md",
+          "repo_rel": "playbook/rules/glossary.md",
+          "key": "playbook/rules/glossary.md"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/playbook/rules/glossary.md",
+          "new_string",
+          "See [missing](missing.md)."
+        ]
+      ],
+      "response": {
+        "ok": true,
+        "is_interrupt": false
+      }
+    }
+  },
+  "result": {
+    "decision": "context",
+    "context": [
+      "playbook validate fails for \"playbook/rules/glossary.md\"; resolve before finishing:\n\"FAIL playbook/rules/glossary.md: link target 'missing.md' does not exist\"\n\"FAIL playbook/prompts/triage.md: rule() names 'glossary', which is not in includes_rules\""
+    ]
+  },
+  "wire": {
+    "stdout": "{\"v\":1,\"decision\":\"context\",\"reason\":\"\",\"context\":[\"playbook validate fails for \\\"playbook/rules/glossary.md\\\"; resolve before finishing:\\n\\\"FAIL playbook/rules/glossary.md: link target 'missing.md' does not exist\\\"\\n\\\"FAIL playbook/prompts/triage.md: rule() names 'glossary', which is not in includes_rules\\\"\"],\"notice\":\"\"}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

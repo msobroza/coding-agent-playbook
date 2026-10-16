@@ -1,0 +1,29 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "parsed": {
+    "name": "session_start",
+    "harness": "opencode",
+    "session_id": "ses_7a1b2c3d4e5f",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "source": "startup",
+    "unattended": true,
+    "truncated": false,
+    "raw_event_name": "SessionStart"
+  },
+  "result": {
+    "decision": "context",
+    "context": [
+      "PLAYBOOK-GUARDS: OK 3 hooks active"
+    ]
+  },
+  "wire": {
+    "stdout": "{\"v\":1,\"decision\":\"context\",\"reason\":\"\",\"context\":[\"PLAYBOOK-GUARDS: OK 3 hooks active\"],\"notice\":\"\"}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

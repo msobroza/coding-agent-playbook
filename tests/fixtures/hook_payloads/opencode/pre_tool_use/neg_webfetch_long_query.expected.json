@@ -1,0 +1,38 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "opencode",
+    "session_id": "ses_7a1b2c3d4e5f",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "unattended": true,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "WebFetch",
+      "native_name": "webfetch",
+      "tool_class": "web",
+      "tool_classes": [
+        "web"
+      ],
+      "use_id": "call_k904",
+      "paths": [],
+      "write_paths": [],
+      "content": []
+    }
+  },
+  "result": {
+    "decision": "deny",
+    "reason": "Needs user approval (OpenCode cannot ask): This WebFetch URL carries a 300-character query string (limit 256): it may send repository data off the machine.\nConfirm with the user."
+  },
+  "wire": {
+    "stdout": "{\"v\":1,\"decision\":\"deny\",\"reason\":\"Needs user approval (OpenCode cannot ask): This WebFetch URL carries a 300-character query string (limit 256): it may send repository data off the machine.\\nConfirm with the user.\",\"context\":[],\"notice\":\"\"}\n",
+    "stderr": "",
+    "exit_code": 10
+  }
+}

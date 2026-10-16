@@ -8,21 +8,22 @@ directory and the platform injected so the tables are hermetic.
 
 from __future__ import annotations
 
-import ast
-import subprocess
 import sys
 
 import pytest
 
 from coding_agent_playbook.security.paths import is_secret_path
 from coding_agent_playbook.security.patterns import (
+    EXAMPLE_SECRET_ALLOWLIST,
+    SECRET_CONTENT_RULES,
     SECRET_GLOB_EXEMPT,
     SECRET_PATH_EXEMPT,
     SECRET_PATH_GLOBS,
+    SECRET_SCAN_SKIP_NAMES,
 )
+from tests.import_probe import new_modules_after
 
 _HOME = "/home/dev"
-_SUBPROCESS_TIMEOUT_S = 60
 
 #: SPEC §17.3's original four globs; the catalog must keep every one of them.
 _SPEC_17_3_GLOBS = (".env*", "*.pem", "*.key", "*credentials*")
@@ -205,30 +206,13 @@ def test_scoped_exemptions_name_catalog_globs() -> None:
     assert not any("credentials" in glob for glob in SECRET_PATH_EXEMPT)
 
 
-def _new_modules_after(import_stmt: str) -> list[str]:
-    """Modules ``import_stmt`` loads in a fresh interpreter, beyond the package root."""
-    code = (
-        "import sys, coding_agent_playbook; before = set(sys.modules); "
-        f"{import_stmt}; print(sorted(set(sys.modules) - before))"
-    )
-    completed = subprocess.run(
-        [sys.executable, "-c", code],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=_SUBPROCESS_TIMEOUT_S,
-    )
-    loaded: list[str] = ast.literal_eval(completed.stdout.strip())
-    return loaded
-
-
 def test_patterns_module_imports_nothing_at_runtime() -> None:
-    loaded = _new_modules_after("import coding_agent_playbook.security.patterns")
+    loaded = new_modules_after("import coding_agent_playbook.security.patterns")
     assert loaded == ["coding_agent_playbook.security", "coding_agent_playbook.security.patterns"]
 
 
 def test_paths_module_imports_only_the_stdlib() -> None:
-    loaded = _new_modules_after("import coding_agent_playbook.security.paths")
+    loaded = new_modules_after("import coding_agent_playbook.security.paths")
     foreign = [
         name
         for name in loaded
@@ -236,3 +220,23 @@ def test_paths_module_imports_only_the_stdlib() -> None:
         and name.split(".")[0] not in sys.stdlib_module_names
     ]
     assert foreign == []
+
+
+def test_secret_content_rule_ids_unique_and_compile() -> None:
+    import re
+
+    from coding_agent_playbook.security.secrets import screen_regex
+
+    ids = [rule_id for rule_id, _, _ in SECRET_CONTENT_RULES]
+    assert len(set(ids)) == len(ids)
+    for rule_id, source, label in SECRET_CONTENT_RULES:
+        assert re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", rule_id), rule_id
+        assert label and re.compile(source).groups == 0, rule_id
+        assert screen_regex(source) is None, rule_id  # the engine passes its own screen
+
+
+def test_example_allowlist_and_skip_names_are_frozen() -> None:
+    assert "AKIAIOSFODNN7EXAMPLE" in EXAMPLE_SECRET_ALLOWLIST
+    assert {"uv.lock", "poetry.lock", "package-lock.json"} <= SECRET_SCAN_SKIP_NAMES
+    assert isinstance(EXAMPLE_SECRET_ALLOWLIST, frozenset)
+    assert isinstance(SECRET_SCAN_SKIP_NAMES, frozenset)

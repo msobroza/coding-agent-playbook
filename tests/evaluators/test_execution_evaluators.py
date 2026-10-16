@@ -334,3 +334,26 @@ def test_flaky_retry_off_by_default_keeps_first_rate(
 
     monkeypatch.setattr(ProjectHandle, "_run_once", _fake_run_once)
     assert handle.best_pass_rate() == 0.5
+
+
+def test_coverage_file_keys_are_repo_relative_in_source_mode(tmp_path: Path) -> None:
+    """prK §F.1.1: ``--cov=src`` names files relative to ``src``; scope keys must not move."""
+    from dataclasses import replace
+
+    from coding_agent_playbook.evaluators.execution.coverage_xml import CoverageReport
+    from tests.fakes import FakeProjectHandle, empty_run
+
+    source_mode = CoverageReport(
+        per_file={"pkg/a.py": 50.0}, total=50.0, sources=(str(tmp_path / "src"),)
+    )
+    bare = CoverageReport(per_file={"src/pkg/a.py": 50.0}, total=50.0, sources=(str(tmp_path),))
+
+    keys = []
+    for report in (source_mode, bare):
+        artifacts = replace(empty_run(), coverage=report)
+        handle = FakeProjectHandle(
+            root=tmp_path, test_cmd=[], report_dir=tmp_path / "rep", artifacts=artifacts
+        )
+        keys.append([m.scope_key for m in CoverageMetric().measure(_ctx(handle))])
+
+    assert keys[0] == keys[1] == ["src/pkg/a.py", "suite"]

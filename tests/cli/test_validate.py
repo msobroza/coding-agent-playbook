@@ -6,12 +6,20 @@ Covers each error class documented in SPEC §12.6 plus the happy path.
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
+
+import coding_agent_playbook
+from coding_agent_playbook.commands import _validate_context
 from coding_agent_playbook.commands import validate as _validate
+from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
+from tests._catalog import CORE_ROOT
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Callable, Iterator
 
 
 def _ns(repo: Path) -> argparse.Namespace:
@@ -74,6 +82,101 @@ def test_validate_flags_prompt_rule_call_not_in_includes_rules(
     out = capsys.readouterr().out
     assert "python-style" in out
     assert "includes_rules" in out
+
+
+@pytest.mark.parametrize(
+    ("scope_yaml", "expected"),
+    [
+        ("  read_only: true\n  globs: [tests/**]\n", "got both keys"),
+        ("  {}\n", None),
+        ("  read_only: false\n", "read_only must be true, got False"),
+        ("  globs: []\n", "globs must be a non-empty list"),
+        ("  mode: read\n", "unknown key(s) ['mode']"),
+        ("  globs: [tests/**, '']\n", "globs entries must be non-empty strings"),
+    ],
+    ids=["both", "neither", "read_only_false", "empty_globs", "unknown_key", "blank_glob"],
+)
+def test_write_scope_requires_exactly_one_of_read_only_or_globs(
+    tmp_path: Path,
+    make_synthetic_repo: Callable[..., Path],
+    capsys: pytest.CaptureFixture[str],
+    scope_yaml: str,
+    expected: str | None,
+) -> None:
+    """specs/prK-hook-pack.md §E.3: each malformed scope is one field-precise finding."""
+    repo = make_synthetic_repo(tmp_path)
+    prompts_dir = repo / "playbook" / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+    (prompts_dir / "scoped.md").write_text(
+        "---\nid: scoped\nname: Scoped\ndescription: d\nslash: scoped\n"
+        f"write_scope:\n{scope_yaml}---\nBody\n",
+        encoding="utf-8",
+    )
+
+    rc = _validate.run(_ns(repo))
+
+    out = capsys.readouterr().out
+    if expected is None:  # an empty mapping is "no scope": valid
+        assert rc == 0, out
+        return
+    assert rc == 1
+    assert f"write_scope: {expected}" in out
+    assert "scoped.md" in out
+
+
+@pytest.mark.parametrize(
+    ("codes_yaml", "expected"),
+    [
+        ("  warn: [E722]\n  block: [S101]\n", "lint_codes: unknown key(s) ['block']"),
+        ("  warn: E722\n", "lint_codes.warn: expected a list of ruff rule codes, got 'E722'"),
+        ("  warn: [E722, e7]\n", "lint_codes.warn: 'e7' is not a ruff rule code"),
+        (
+            "  warn: [ANN001]\n  when:\n    - applies_if: {pyver: '3.12'}\n      warn: [UP046]\n",
+            "lint_codes.when[0].applies_if: ",
+        ),
+        (
+            "  warn: [ANN001]\n  when:\n    - applies_if: {python_version: '>=3.12'}\n",
+            "lint_codes.when[0]: expected exactly the keys ['applies_if', 'warn']",
+        ),
+        ("  warn: [ANN001]\n  when: {python_version: '>=3.12'}\n", "lint_codes.when: expected a"),
+        ("  {}\n", None),
+    ],
+    ids=[
+        "block_key",
+        "warn_not_list",
+        "bad_code",
+        "unknown_predicate",
+        "when_without_warn",
+        "when_not_list",
+        "empty",
+    ],
+)
+def test_lint_codes_shape_errors_are_field_precise(
+    tmp_path: Path,
+    make_synthetic_repo: Callable[..., Path],
+    capsys: pytest.CaptureFixture[str],
+    codes_yaml: str,
+    expected: str | None,
+) -> None:
+    """specs/prK-lifecycle-hooks.md §A.7: each malformed ``lint_codes`` names the field and value."""
+    repo = make_synthetic_repo(tmp_path)
+    rules_dir = repo / "playbook" / "rules"
+    rules_dir.mkdir(parents=True, exist_ok=True)
+    (rules_dir / "linted.md").write_text(
+        "---\nid: linted\nname: Linted\ndescription: d\nscope: always\n"
+        f"lint_codes:\n{codes_yaml}---\nBody\n",
+        encoding="utf-8",
+    )
+
+    rc = _validate.run(_ns(repo))
+
+    out = capsys.readouterr().out
+    if expected is None:  # an empty mapping is "no codes": valid
+        assert rc == 0, out
+        return
+    assert rc == 1
+    assert expected in out
+    assert "linted.md" in out
 
 
 def test_validate_flags_undeclared_rule_call_with_trim_markers(
@@ -149,6 +252,57 @@ def test_validate_flags_orphan_eval_task(tmp_path, make_synthetic_repo, capsys):
     assert rc == 1
     out = capsys.readouterr().out
     assert "deleted-prompt" in out
+
+
+def test_invalid_output_contract_regex_fails_validate(tmp_path, make_synthetic_repo, capsys):
+    """A contract that does not compile fails closed, naming the pattern and the shape."""
+    repo = make_synthetic_repo(tmp_path)
+    prompts_dir = repo / "playbook" / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+    (prompts_dir / "bad-contract.md").write_text(
+        "---\n"
+        "id: bad-contract\n"
+        "name: Bad\n"
+        "description: Bad\n"
+        "slash: bad-contract\n"
+        "output_contract:\n"
+        "  - '(?i)verdict: (approve'\n"
+        "---\n"
+        "Review it.\n",
+        encoding="utf-8",
+    )
+
+    rc = _validate.run(_ns(repo))
+
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "output_contract pattern '(?i)verdict: (approve'" in out
+    assert "expected a list of Python regular expressions" in out
+
+
+@pytest.mark.catalog
+def test_shipped_prompt_contracts_compile() -> None:
+    """The engine's review, security-review and find-injected-vulnerability contracts compile."""
+    import re
+
+    from coding_agent_playbook.types import Prompt
+
+    root = CORE_ROOT / "prompts"
+    contracts = {
+        path.name.split(".")[0]: Prompt.from_markdown(path, "pkg").frontmatter.output_contract
+        for path in sorted(root.glob("*.md*"))
+    }
+
+    with_contract = {name for name, contract in contracts.items() if contract}
+    assert with_contract == {"review", "security-review", "find-injected-vulnerability"}
+    for contract in contracts.values():
+        assert all(re.compile(pattern) for pattern in contract)
+    assert (
+        _validate._check_output_contracts(  # the validate rule itself agrees
+            [Prompt.from_markdown(path, "pkg") for path in sorted(root.glob("*.md*"))]
+        )
+        == []
+    )
 
 
 def test_validate_flags_missing_eval_task_for_prompt(tmp_path, make_synthetic_repo, capsys):
@@ -261,3 +415,118 @@ def test_validate_warns_about_skill_files_sync_never_copies(
     assert "warning: skills/query-db (<repo-local>):" in captured.err
     assert f"{scripts / '.env'} is never copied" in captured.err
     assert "run.sh" not in captured.err
+
+
+# --- Config-less validate (specs/prK-lifecycle-hooks.md §P P8a) -----------------
+
+_UNKNOWN_FACT_RULE = (
+    "---\nid: bad\nname: Bad\ndescription: bad\nscope: scoped\n"
+    "applies_if:\n  orm_version: '>=2'\n---\nBody\n"
+)
+
+
+def _engine_artifact_count(repo: Path) -> int:
+    """Rules + prompts + hooks the engine package resolves to (ids are unique per kind)."""
+    engine = FileSystemArtifactSource(repo_root=repo)
+    rule_ids = {rule.frontmatter.id for rule in engine.list_rules()}
+    prompt_ids = {prompt.frontmatter.id for prompt in engine.list_prompts()}
+    hook_ids = {hook.frontmatter.id for hook in engine.list_hooks()}
+    return len(rule_ids) + len(prompt_ids) + len(hook_ids)
+
+
+def test_validate_without_config_checks_engine_resources(tmp_path, capsys):
+    """An engine or overlay checkout has no consumer config: validate must not
+    raise FileNotFoundError, and still validates the engine and ``playbook/``."""
+    assert _validate.run(_ns(tmp_path)) == 0
+    out = capsys.readouterr().out
+    assert f"OK {_engine_artifact_count(tmp_path)} artifacts validated" in out
+    assert "no .coding-agent-playbook.toml" in out
+
+    bad = tmp_path / "playbook" / "rules" / "bad.md"
+    bad.parent.mkdir(parents=True)
+    bad.write_text(_UNKNOWN_FACT_RULE, encoding="utf-8")
+
+    assert _validate.run(_ns(tmp_path)) == 1
+    fail_lines = [line for line in capsys.readouterr().out.splitlines() if line.startswith("FAIL")]
+    assert fail_lines == [f"FAIL {bad}: applies_if: unknown predicate key: 'orm_version'"]
+
+
+def test_validate_without_config_checks_checkout_resources(tmp_path, capsys):
+    """An overlay checkout's own ``src/<pkg>/resources/`` is a validated layer."""
+    rule = tmp_path / "src" / "acme_overlay" / "resources" / "rules" / "x.md"
+    rule.parent.mkdir(parents=True)
+    rule.write_text(
+        "---\nid: x\nname: X\ndescription: d\nscope: always\n---\n"
+        "Read [docs](https://example.com/docs).\n",
+        encoding="utf-8",
+    )
+
+    assert _validate.run(_ns(tmp_path)) == 1
+
+    out = capsys.readouterr().out
+    assert f"FAIL {rule}: markdown link 'https://example.com/docs'" in out
+    assert f"OK {_engine_artifact_count(tmp_path) + 1}" not in out
+
+
+def test_validate_without_config_reports_consumer_checks_skipped(tmp_path, capsys):
+    assert _validate.run(_ns(tmp_path)) == 0
+    skipped = [line for line in capsys.readouterr().out.splitlines() if line.startswith("skipped")]
+    assert len(skipped) == len(_validate_context.CONSUMER_CONFIG_CHECKS) == 3
+    assert any("overlays_enabled" in line for line in skipped)
+    assert any("[links] allowed_domains" in line for line in skipped)
+    assert any("[hooks] / [guardrails] policy" in line for line in skipped)
+
+
+def test_validate_with_config_prints_no_config_less_note(tmp_path, make_synthetic_repo, capsys):
+    repo = make_synthetic_repo(tmp_path)
+    assert _validate.run(_ns(repo)) == 0
+    out = capsys.readouterr().out
+    assert "no .coding-agent-playbook.toml" not in out
+    assert "skipped" not in out
+
+
+@pytest.fixture
+def fake_engine_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
+    """``<tmp_path>/src/<pkg>/resources`` as an importable package: a checkout whose
+    src/ package IS the engine, as in an editable install of the engine repo."""
+    name = "fake_engine_p8"
+    package = tmp_path / "src" / name
+    (package / "resources" / "rules").mkdir(parents=True)
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path / "src"))
+    yield name
+    sys.modules.pop(name, None)
+
+
+def test_checkout_resource_roots_skips_the_engine_package(tmp_path, fake_engine_checkout):
+    overlay_resources = tmp_path / "src" / "acme_overlay" / "resources"
+    overlay_resources.mkdir(parents=True)
+    (tmp_path / "src" / "no_resources").mkdir()
+    (tmp_path / "src" / ".hidden" / "resources").mkdir(parents=True)
+
+    roots = _validate_context.checkout_resource_roots(tmp_path, engine_package=fake_engine_checkout)
+
+    assert roots == [overlay_resources]
+
+
+def test_checkout_resource_roots_without_src_is_empty(tmp_path):
+    assert _validate_context.checkout_resource_roots(tmp_path, engine_package="x") == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs a directory symlink")
+def test_config_less_context_in_the_engine_checkout_walks_the_engine_once(tmp_path, capsys):
+    """A checkout whose ``src/coding_agent_playbook`` IS the engine package walks
+    the engine once: before v0.19 its ``resources/`` was the engine's content and
+    needed the resolved-path dedupe; the content now lives in ``catalog/``, so
+    no ``src/*/resources/`` layer may appear at all."""
+    engine_dir = Path(coding_agent_playbook.__file__).parent
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "coding_agent_playbook").symlink_to(engine_dir, target_is_directory=True)
+
+    ctx = _validate_context.config_less_context(tmp_path)
+
+    assert isinstance(ctx.artifact_source, FileSystemArtifactSource)
+    assert ctx.artifact_source.extra_resource_roots == ()
+    assert ctx.overlay_collisions == []
+    assert _validate.run(_ns(tmp_path)) == 0
+    assert f"OK {_engine_artifact_count(tmp_path)} artifacts validated" in capsys.readouterr().out

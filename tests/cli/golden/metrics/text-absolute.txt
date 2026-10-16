@@ -1,0 +1,4 @@
+=== Metrics ===
+  tangled.py:
+    [fail] cyclomatic_complexity @ tangled = 23 (new; bound=0.25)
+  summary: FAIL — 1 fail, 0 warn, composite=n/a

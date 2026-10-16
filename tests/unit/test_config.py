@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 import dataclasses
 import re
+import sys
+import tomllib
 from typing import Any
 
 import pytest
@@ -21,6 +23,7 @@ from coding_agent_playbook.config import (
 from coding_agent_playbook.config_entries import (
     CONFIG_MANAGED_KEYS,
     CONFIG_MANAGED_TABLE_KEYS,
+    copy_toml_value,
     unmanaged_config_entries,
     with_unmanaged_entries,
 )
@@ -156,6 +159,127 @@ def test_parse_metrics_config_rejects_unknown_mode():
         parse_metrics_config({"mode": "nonsense"})
 
 
+def test_parse_metrics_config_git_timeout():
+    assert parse_metrics_config({}).git_timeout_s == 10.0
+    assert parse_metrics_config({"git_timeout_s": 3}).git_timeout_s == 3.0
+    assert parse_metrics_config({"git_timeout_s": 0.5}).git_timeout_s == 0.5
+
+
+@pytest.mark.parametrize(
+    "raw", [0, -1, 0.0, float("inf"), float("nan"), "10", True, None], ids=repr
+)
+def test_parse_metrics_config_rejects_non_positive_git_timeout(raw):
+    with pytest.raises(ValueError) as excinfo:
+        parse_metrics_config({"git_timeout_s": raw})
+
+    assert str(excinfo.value) == (
+        f"[metrics] git_timeout_s must be a positive number of seconds, got {raw!r}"
+    )
+
+
+def test_parse_metrics_config_selection_lists():
+    """prK §F.0.3 item 2: ruff-shaped selection keys; names are validated by the gate."""
+    cfg = parse_metrics_config(
+        {"select": ["quality"], "extend_select": ["ruff_violations"], "ignore": ["lcom4"]}
+    )
+
+    assert cfg.select == ("quality",)
+    assert cfg.extend_select == ("ruff_violations",)
+    assert cfg.ignore == ("lcom4",)
+    defaults = parse_metrics_config({})
+    assert (defaults.select, defaults.extend_select, defaults.ignore) == (None, (), ())
+
+
+@pytest.mark.parametrize("key", ["select", "extend_select", "ignore", "exclude"])
+@pytest.mark.parametrize("raw", ["quality", ["wmc", 3], {"a": 1}, None], ids=repr)
+def test_parse_metrics_config_rejects_non_string_list_naming_value(key, raw):
+    with pytest.raises(ValueError) as excinfo:
+        parse_metrics_config({key: raw})
+
+    assert str(excinfo.value) == f"[metrics] {key} must be a list of strings, got {raw!r}"
+
+
+def test_exclude_defaults_to_eval_fixture_globs():
+    """prK §F.0.3 item 5: intentionally bad eval needle code never gates a commit."""
+    from coding_agent_playbook.evaluators.paths import EVAL_FIXTURE_GLOBS
+    from coding_agent_playbook.evaluators.types import MetricConfig
+
+    assert parse_metrics_config({}).exclude == EVAL_FIXTURE_GLOBS
+    assert MetricConfig().exclude == EVAL_FIXTURE_GLOBS
+    assert parse_metrics_config({"exclude": []}).exclude == ()
+    assert parse_metrics_config({"exclude": ["gen/**"]}).exclude == ("gen/**",)
+
+
+def test_parse_metrics_config_timeouts_positive():
+    assert parse_metrics_config({}).test_timeout_s is None
+    assert parse_metrics_config({"test_timeout_s": 300}).test_timeout_s == 300.0
+    with pytest.raises(ValueError) as excinfo:
+        parse_metrics_config({"test_timeout_s": -5})
+
+    assert str(excinfo.value) == (
+        "[metrics] test_timeout_s must be a positive number of seconds, got -5"
+    )
+
+
+def test_parse_ruff_violations_subtable_defaults_and_overrides():
+    """prK §F.2.1: ``[metrics.ruff_violations]`` families (per-family replace), config, preview."""
+    from coding_agent_playbook.evaluators.types import DEFAULT_RUFF_FAMILIES
+
+    defaults = parse_metrics_config({})
+    cfg = parse_metrics_config(
+        {
+            "ruff_violations": {
+                "families": {"quality": ["C901", "PLR1702"], "docstrings": []},
+                "config": {"lint.mccabe.max-complexity": 10, "lint.pylint.max-args": 5},
+                "preview": True,
+            }
+        }
+    )
+
+    assert defaults.ruff_families == dict(DEFAULT_RUFF_FAMILIES)
+    assert (defaults.ruff_config, defaults.ruff_preview) == ({}, False)
+    assert cfg.ruff_families == {"quality": ("C901", "PLR1702")}
+    assert cfg.ruff_settings.config == (
+        "lint.mccabe.max-complexity=10",
+        "lint.pylint.max-args=5",
+    )
+    assert cfg.ruff_settings.preview is True
+
+
+@pytest.mark.parametrize(
+    ("table", "message"),
+    [
+        (
+            {"families": {"quality": ["C901", "c9x"]}},
+            "[metrics] ruff_violations.families.quality must be a list of ruff codes like "
+            "'C901', got ['C901', 'c9x']",
+        ),
+        (
+            {"families": {"Bad Name": ["C901"]}},
+            "[metrics] ruff_violations.families: bad family name 'Bad Name' "
+            "(expected lowercase letters, digits and _)",
+        ),
+        (
+            {"config": {"--select": "ALL"}},
+            "[metrics] ruff_violations.config: bad ruff setting '--select' "
+            "(expected a dotted name like 'lint.mccabe.max-complexity')",
+        ),
+        (
+            {"config": {"lint.x": {"a": 1}}},
+            "[metrics] ruff_violations.config.lint.x must be a string, number, boolean "
+            "or a list of them, got {'a': 1}",
+        ),
+        ({"preview": "yes"}, "[metrics] ruff_violations.preview must be true or false, got 'yes'"),
+    ],
+    ids=["code", "family", "setting", "value", "preview"],
+)
+def test_ruff_violations_rejects_bad_codes_naming_value(table, message):
+    with pytest.raises(ValueError) as excinfo:
+        parse_metrics_config({"ruff_violations": table})
+
+    assert str(excinfo.value) == message
+
+
 def test_parse_links_config_empty_uses_strict_default():
     from coding_agent_playbook.config import parse_links_config
 
@@ -250,6 +374,100 @@ def test_output_round_trips_through_toml_dump(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# extra_tables: unmodelled top-level keys survive a save (P6)
+# --------------------------------------------------------------------------- #
+
+_EXTRA_TABLES: dict[str, Any] = {
+    "hooks": {
+        "disabled": ["stop-ci-parity-gate"],
+        "some-hook": {"enabled": False, "timeout": 2.5, "config": {"paths": ["src/"]}},
+    },
+    "guardrails": {"secrets": {"extra_globs": ["*.vault"]}, "unattended_ask": "deny"},
+    "links": {"allowed_domains": ["agentharnesses.io"]},
+    "team_note": "kept verbatim",
+}
+
+
+def test_extra_tables_roundtrip():
+    storage = {"artifact_source": "filesystem", "state_source": "filesystem"}
+    data = {**_MINIMAL, "storage": storage, **copy.deepcopy(_EXTRA_TABLES)}
+    config = Config.from_dict(data)
+    assert config.extra_tables == _EXTRA_TABLES
+    assert config.to_dict() == data
+    # Deep copies in and out: neither side aliases the other's nested tables.
+    data["hooks"]["some-hook"]["enabled"] = True
+    assert config.extra_tables["hooks"]["some-hook"]["enabled"] is False
+    config.to_dict()["hooks"]["disabled"].append("x")
+    assert config.extra_tables["hooks"]["disabled"] == ["stop-ci-parity-gate"]
+
+
+def test_copy_toml_value_is_deep_and_iterative() -> None:
+    """``extra_tables`` never alias the decoded file, and a header nested past the
+    recursion limit (``tomllib`` accepts one) copies without ``RecursionError``."""
+    source: dict[str, Any] = {"hooks": {"disable": ["x"], "rows": [{"k": 1.5}]}}
+    copied = copy_toml_value(source)
+    assert copied == source
+    assert copied["hooks"] is not source["hooks"]
+    assert copied["hooks"]["rows"][0] is not source["hooks"]["rows"][0]
+    deep: dict[str, Any] = {}
+    node = deep
+    for _ in range(sys.getrecursionlimit() + 100):
+        node["d"] = {}
+        node = node["d"]
+    node["leaf"] = 1
+    walk = copy_toml_value(deep)
+    while "d" in walk:
+        walk = walk["d"]
+    assert walk == {"leaf": 1}
+
+
+def test_extra_tables_follow_the_modelled_keys():
+    data = {"team_note": "n", **_MINIMAL, "hooks": {"x": {}}, "user_choices": {"a": 1}}
+    keys = list(Config.from_dict(data).to_dict())
+    assert keys[-2:] == ["team_note", "hooks"]
+
+
+_METRICS_TABLE: dict[str, Any] = {
+    "mode": "both",
+    "fail_on_breach": True,
+    "test_cmd": ["python", "-m", "pytest", "-q"],
+    "thresholds": {
+        "cyclomatic_complexity": {"warn": 10, "fail": 20},
+        "maintainability_index": {"warn": 0.65, "fail": 0.5},
+    },
+    "regression": {"coverage": {"max_worsening": 0.5}},
+    "weights": {"x": 1.0, "cyclomatic_complexity": 2.25},
+}
+
+
+def test_metrics_table_roundtrip():
+    """A realistic ``[metrics]`` (floats, per-metric tables) survives
+    ``Config.to_dict`` → ``dump_toml`` → ``tomllib`` unchanged."""
+    from coding_agent_playbook._toml import dump_toml
+
+    config = Config.from_dict({**_MINIMAL, "metrics": copy.deepcopy(_METRICS_TABLE)})
+    reread = tomllib.loads(dump_toml(config.to_dict()))
+    assert reread["metrics"] == _METRICS_TABLE
+    assert isinstance(reread["metrics"]["weights"]["x"], float)
+    assert parse_metrics_config(reread["metrics"]) == parse_metrics_config(_METRICS_TABLE)
+
+
+def test_extra_tables_never_shadow_modelled_keys():
+    data = {**_MINIMAL, "hooks": {"a": 1}}
+    assert set(Config.from_dict(data).extra_tables) == {"hooks"}
+    config = Config(
+        schema_version=1,
+        project=ProjectMeta(name="x", kind="python-library"),
+        engine_version="0.1.0a0",
+        extra_tables={"project": {"name": "evil"}, "engine": {}, "hooks": {"a": 1}},
+    )
+    result = config.to_dict()
+    assert result["project"] == {"name": "x", "kind": "python-library"}
+    assert result["engine"] == {"version": "0.1.0a0"}
+    assert result["hooks"] == {"a": 1}
+
+
+# --------------------------------------------------------------------------- #
 # CONFIG_MANAGED_KEYS / unmanaged_config_entries — what `playbook init` rewrites
 # from the Config and what it writes back verbatim (SPEC §12.1)
 # --------------------------------------------------------------------------- #
@@ -301,9 +519,10 @@ def test_full_fixture_sets_every_config_field_off_its_default() -> None:
     fails here until ``_FULL`` sets it, and the key it is written under must then
     be in ``CONFIG_MANAGED_KEYS``/``CONFIG_MANAGED_TABLE_KEYS`` (tests below) —
     else ``init`` would carry the committed value over as unmanaged and override,
-    or resurrect, what it computed.
+    or resurrect, what it computed. ``extra_tables`` is the one field no managed
+    key fills: it carries the unmanaged entries (P6), so ``_FULL`` leaves it empty.
     """
-    assert _fields_left_at_default(Config.from_dict(dict(_FULL))) == []
+    assert _fields_left_at_default(Config.from_dict(dict(_FULL))) == ["extra_tables"]
 
 
 def test_config_canonicalizes_deprecated_overlays() -> None:
@@ -392,9 +611,12 @@ def test_a_non_table_project_is_a_config_error_not_a_type_error() -> None:
         Config.from_dict({**_FULL, "project": "x"}, source="c.toml")
 
 
-def test_from_dict_ignores_every_unmanaged_key() -> None:
+def test_from_dict_keeps_every_unmanaged_key_out_of_the_owned_fields() -> None:
+    """Unmanaged keys change no owned field; they ride along in ``extra_tables`` (P6)."""
     extra = {"links": {"allowed_domains": ["a.com"]}, "metrics": {"mode": "both"}, "future": 1}
-    assert Config.from_dict({**_FULL, **extra}) == Config.from_dict(dict(_FULL))
+    config = Config.from_dict({**_FULL, **extra})
+    assert dataclasses.replace(config, extra_tables={}) == Config.from_dict(dict(_FULL))
+    assert config.extra_tables == extra
 
 
 def test_unmanaged_config_entries_keeps_top_level_keys_config_ignores() -> None:
@@ -437,10 +659,13 @@ def test_with_unmanaged_entries_rebuilds_the_file_from_config_plus_its_entries()
     data = {**_FULL_WITH_UNKNOWN_SUB_KEYS, "links": {"allowed_domains": []}}
     data["detector_cache"] = {"python_version": "3.12"}  # regenerated whole: no stale key
     rebuilt = with_unmanaged_entries(
-        Config.from_dict(data).to_dict(), unmanaged_config_entries(data)
+        dataclasses.replace(Config.from_dict(data), extra_tables={}).to_dict(),
+        unmanaged_config_entries(data),
     )
     assert rebuilt == data
     assert list(rebuilt["project"]) == ["name", "kind", "description", "homepage"]
+    # Config carries the same entries itself, so its own round trip is lossless too.
+    assert Config.from_dict(data).to_dict() == rebuilt
 
 
 def test_with_unmanaged_entries_never_brings_back_a_dropped_owned_key() -> None:

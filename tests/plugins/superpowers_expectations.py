@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tests._content import plugin_files_root
+from tests._catalog import plugin_files_root
 
 if TYPE_CHECKING:
     from pathlib import Path

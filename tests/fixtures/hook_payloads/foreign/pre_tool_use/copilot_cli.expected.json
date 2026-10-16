@@ -1,0 +1,11 @@
+{
+  "context": {
+    "env": {}
+  },
+  "foreign": "timestamp",
+  "wire": {
+    "stdout": "",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

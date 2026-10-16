@@ -1,0 +1,57 @@
+{
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "turn_id": "pr_06",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "default",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "NotebookEdit",
+      "native_name": "NotebookEdit",
+      "tool_class": "notebook_edit",
+      "tool_classes": [
+        "notebook_edit"
+      ],
+      "use_id": "toolu_01Nb",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/nb/explore.ipynb",
+          "repo_rel": "nb/explore.ipynb",
+          "key": "nb/explore.ipynb"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/nb/explore.ipynb",
+          "repo_rel": "nb/explore.ipynb",
+          "key": "nb/explore.ipynb"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/nb/explore.ipynb",
+          "new_source",
+          "df.head()"
+        ]
+      ]
+    }
+  },
+  "result": {
+    "decision": "none",
+    "user_notes": [
+      "notebook-hygiene skipped: internal error — run playbook-hook doctor"
+    ]
+  },
+  "wire": {
+    "stdout": "{\"systemMessage\":\"notebook-hygiene skipped: internal error \\u2014 run playbook-hook doctor\"}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

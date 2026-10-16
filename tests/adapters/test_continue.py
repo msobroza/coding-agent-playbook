@@ -13,6 +13,7 @@ from coding_agent_playbook.types import (
     RuleFrontmatter,
     Skill,
 )
+from tests.hook_samples import resolved_hook
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -264,6 +265,64 @@ def test_continue_write_skill_degrades_to_prompt_path(tmp_path: Path) -> None:
     assert "Demo skill body" in content
     # The Continue prompt shape ships invokable: true at the top.
     assert "invokable: true" in content
+
+
+# --- K3: hooks degrade to one advisory rule (specs/prK-lifecycle-hooks.md §C.4.2, P5) ----
+
+
+def test_guardrail_rule_written_as_30_guardrail_id_md(tmp_path: Path) -> None:
+    adapter = ContinueAdapter()
+
+    written = adapter.write_hook(resolved_hook(body="Never edit generated files.\n"), tmp_path)
+
+    target = tmp_path / ".continue" / "rules" / "30-guardrail-guard-x.md"
+    assert written == [target]
+    assert target.read_text(encoding="utf-8") == (
+        f"<!-- {SENTINEL} -->\n"
+        "---\n"
+        "name: 'Guardrail: Guard X'\n"
+        "description: Deny x.\n"
+        "alwaysApply: true\n"
+        "---\n"
+        "Never edit generated files.\n\n"
+        "*Enforced by lifecycle hooks on: Claude Code. "
+        "Everywhere else this is guidance: apply it yourself.*\n"
+    )
+
+
+def test_guardrail_rule_scoped_to_the_hook_paths(tmp_path: Path) -> None:
+    hook = resolved_hook(matcher={"pre_tool_use": {"tools": ["edit"], "paths": ["src/**"]}})
+
+    (target,) = ContinueAdapter().write_hook(hook, tmp_path)
+
+    text = target.read_text(encoding="utf-8")
+    assert "alwaysApply: false\n" in text
+    assert "globs:\n- src/**\n" in text
+
+
+def test_empty_body_hook_writes_no_continue_rule(tmp_path: Path) -> None:
+    assert ContinueAdapter().write_hook(resolved_hook(body=" \n"), tmp_path) == []
+    assert not (tmp_path / ".continue").exists()
+
+
+def test_hooks_never_write_continue_hook_config(tmp_path: Path) -> None:
+    """P5: Continue has no wired hook mechanism, so hooks only ever become rule files."""
+    adapter = ContinueAdapter()
+    hooks = [
+        resolved_hook("guard-a", events=("pre_tool_use", "stop"), supports=("claude_code",)),
+        resolved_hook("guard-b", events=("session_start",), supports=("opencode",)),
+    ]
+
+    written = [path for hook in hooks for path in adapter.write_hook(hook, tmp_path)]
+    written += adapter.finalize(tmp_path)
+
+    on_disk = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*") if p.is_file())
+    assert on_disk == [
+        ".continue/rules/30-guardrail-guard-a.md",
+        ".continue/rules/30-guardrail-guard-b.md",
+    ]
+    assert sorted(p.relative_to(tmp_path).as_posix() for p in written) == on_disk
+    assert dict(ContinueAdapter.hook_support) == {}
 
 
 def test_cleanup_reads_the_frontmatter_first_sentinel_like_every_scanner(

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.bundled_content import bundled_plugins
+from coding_agent_playbook.catalog import bundled_plugins
 from coding_agent_playbook.cli import main
 from tests.plugins.superpowers_expectations import PLUGIN_NAME, write_consumer_repo
 
@@ -148,7 +148,18 @@ def test_check_refresh_keeps_deprecated_name(
 
 
 def _init_argv(*extra: str) -> list[str]:
-    return ["init", "--non-interactive", "--name", "x", "--kind", "python-library", *extra]
+    """A non-interactive ``init``; ``--no-hooks`` keeps the hook warnings of a
+    non-git ``tmp_path`` (hooks are git-only, SPEC §7.1.1) out of these alias pins."""
+    return [
+        "init",
+        "--non-interactive",
+        "--name",
+        "x",
+        "--kind",
+        "python-library",
+        "--no-hooks",
+        *extra,
+    ]
 
 
 def _write_pyproject(repo: Path) -> None:

@@ -3,31 +3,30 @@
 Concrete adapters (Continue, Claude Code, OpenCode, AGENTS.md) land in PRs 6-9.
 Third-party adapters register via the ``coding_agent_playbook.adapters`` entry
 point declared in ``pyproject.toml``.
+
+The lifecycle-hook additions (specs/prK-lifecycle-hooks.md §C.1.1) are all
+concrete defaults, like ``write_skill``: an ``@abstractmethod`` would break
+every third-party adapter written before hooks existed.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook._sentinel import has_sentinel
+from coding_agent_playbook._sentinel import file_has_sentinel
 from coding_agent_playbook.security.files import is_secret_file, user_home
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping, Sequence
     from pathlib import Path
 
     from coding_agent_playbook._typing import Prompt, Rule, Skill
-
-#: The most :meth:`Adapter._carries_sentinel` reads of one file. The sentinel
-#: sits on line 1 or right after a leading frontmatter block, which engine
-#: output keeps far below this; a scan never reads a large file whole.
-_SENTINEL_HEAD_BYTES = 64 * 1024
-_FRONTMATTER_FENCE = b"---"
-#: A UTF-8 BOM some editors prepend on save; ``has_sentinel`` ignores it, so
-#: the head read must too when it looks for a leading frontmatter fence.
-_UTF8_BOM = b"\xef\xbb\xbf"
+    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks_config import HooksConfig
+    from coding_agent_playbook.lockfile import LockEntry, Lockfile
 
 
 class Adapter(ABC):
@@ -42,6 +41,25 @@ class Adapter(ABC):
     #: file) and never prunes empty directories above one (SPEC §4.2 step 9,
     #: §10.1). Declared on the class, so a since-disabled adapter still counts.
     output_locations: ClassVar[tuple[str, ...]] = ()
+
+    #: Canonical hook event -> the decisions this adapter renders natively. The
+    #: empty default means advisory-only: hooks degrade to text (§C.1.1, §C.5.1).
+    #: Built-in hook-capable adapters take their row from ``hook_policy.HOOK_SUPPORT``.
+    hook_support: ClassVar[Mapping[str, frozenset[str]]] = MappingProxyType({})
+
+    #: Repo-relative files this adapter co-owns with the user and the harness
+    #: (Claude Code's ``.claude/settings.json``): it edits managed elements in
+    #: place, so ``playbook sync`` never gives one a whole-file lock entry,
+    #: gitignores it, flags it as staged output, or deletes it.
+    shared_outputs: ClassVar[tuple[str, ...]] = ()
+
+    #: Repo-relative files :meth:`finalize` writes that are hook runtime plumbing
+    #: (the Claude Code launcher, the OpenCode shim), not composed artifacts: their
+    #: lock entries get ``kind = "runtime"`` and no artifact id (§B.6), which tells
+    #: guard-generated-outputs there is no source artifact to point an editor at.
+    #: Each is written whole at a fixed path, so sync refuses one the user holds
+    #: (:meth:`planned_runtime_outputs`, ``_owned_files``) instead of overwriting it.
+    runtime_outputs: ClassVar[tuple[str, ...]] = ()
 
     @abstractmethod
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
@@ -64,6 +82,64 @@ class Adapter(ABC):
         ``agents_md``) override it to return an empty list.
         """
         return self.write_prompt(skill.to_prompt(), repo_root)
+
+    # Concrete on purpose (B027): an abstract hook would break every out-of-tree adapter.
+    def begin_sync(  # noqa: B027
+        self,
+        repo_root: Path,
+        prior_lock: Lockfile | None,
+        *,
+        hooks_config: HooksConfig | None = None,
+    ) -> None:
+        """Called once per sync before any ``write_*``. Default: no-op.
+
+        ``repo_root`` is the real repository (the input root), even when output
+        goes to a scratch directory (``sync --check``): adapters that own
+        sub-file regions read the co-owned file and their prior ownership hashes
+        from ``prior_lock`` here. ``hooks_config`` is the parsed ``[hooks]`` table.
+
+        Example::
+
+            adapter.begin_sync(ctx.repo_root, state_source.load_lockfile())
+        """
+
+    def write_hook(self, hook: ResolvedHook, repo_root: Path) -> list[Path]:
+        """Degrade a hook to advisory text: its advisory rule goes through :meth:`write_rule`.
+
+        Mirrors ``write_skill`` -> ``to_prompt``. Hook-capable adapters override
+        and fall back to ``super().write_hook`` for hooks they cannot enforce. A
+        hook whose body is blank (or whose advisory is off) degrades to nothing.
+
+        Example::
+
+            written = adapter.write_hook(hook, repo_root)  # e.g. 30-guardrail-<id>.md
+        """
+        rule = hook.advisory
+        return [] if rule is None else self.write_rule(rule, repo_root)
+
+    def planned_runtime_outputs(self, hooks: Sequence[ResolvedHook]) -> tuple[str, ...]:
+        """The :attr:`runtime_outputs` :meth:`finalize` will write for ``hooks`` (repo-relative).
+
+        ``playbook sync`` checks each one on the real repo before any adapter
+        writes and exits 1 when it is the user's (``_owned_files``: a same-named
+        file without the sentinel line, or a symlink on the way). The default is
+        conservative, so declaring a runtime output is enough to guard it: every
+        declared file once any hook lists this adapter in ``supports``. Adapters
+        that know exactly when they write override it with the same plan
+        :meth:`finalize` uses.
+
+        Example: ``adapter.planned_runtime_outputs(hooks.resolved)`` -> ``(LAUNCHER_PATH,)``.
+        """
+        targeted = any(self.name in hook.supports for hook in hooks)
+        return type(self).runtime_outputs if targeted else ()
+
+    def managed_lock_entries(self) -> list[LockEntry]:
+        """Sub-file ownership records (scoped lock entries) of the last :meth:`finalize`.
+
+        Default: ``[]``. The Claude Code adapter returns one per managed
+        ``settings.json`` element, including the ones this sync left unchanged.
+        """
+        return []
 
     def finalize(self, repo_root: Path) -> list[Path]:
         """Emit any buffered composite output. Default: nothing.
@@ -178,47 +254,17 @@ class Adapter(ABC):
 
     @staticmethod
     def _carries_sentinel(path: Path) -> bool:
-        """Whether ``path`` is engine-generated per :func:`_sentinel.has_sentinel`.
+        """Whether ``path`` is engine-generated per :func:`_sentinel.file_has_sentinel`.
 
         The sentinel line must be line 1, or the first body line after a
         leading YAML frontmatter block; anywhere else it is user prose. Binary,
         undecodable or unreadable files count as user-owned (``False``), so a
-        cleanup scan never crashes a sync.
+        cleanup scan never crashes a sync. The read is bounded to that head and
+        shared with the hook guards (specs/prK-hook-pack.md §E.1).
 
         Example::
 
             if self._carries_sentinel(repo_root / "AGENTS.md"):
                 ...  # engine-owned: safe to delete once stale
         """
-        try:
-            head = _sentinel_head(path).decode("utf-8")
-        except (UnicodeDecodeError, OSError):
-            return False
-        return has_sentinel(head)
-
-
-def _sentinel_head(path: Path) -> bytes:
-    """The bytes :func:`has_sentinel` decides on: line 1, or a leading frontmatter block + one line.
-
-    Reads at most :data:`_SENTINEL_HEAD_BYTES`. Lines split on ``\\n`` only,
-    exactly as :func:`has_sentinel` splits, so the verdict matches a whole-file
-    read. A frontmatter block longer than the cap reads as unterminated, so the
-    file counts as user-owned.
-    """
-    budget = _SENTINEL_HEAD_BYTES
-    with path.open("rb") as handle:
-        first = handle.readline(budget)
-        if first.removeprefix(_UTF8_BOM).rstrip(b"\n").rstrip(b"\r") != _FRONTMATTER_FENCE:
-            return first
-        head = [first]
-        budget -= len(first)
-        while budget > 0:
-            line = handle.readline(budget)
-            if not line:
-                break
-            head.append(line)
-            budget -= len(line)
-            if line.rstrip(b"\n").rstrip(b"\r") == _FRONTMATTER_FENCE:
-                head.append(handle.readline(budget))  # the first body line
-                break
-    return b"".join(head)
+        return file_has_sentinel(path)

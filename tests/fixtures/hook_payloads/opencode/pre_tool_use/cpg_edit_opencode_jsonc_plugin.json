@@ -1,0 +1,21 @@
+{
+  "_fixture": {
+    "harness_version": "1.19.0",
+    "source": "k5-control-plane-guard"
+  },
+  "hook_event_name": "PreToolUse",
+  "session_id": "ses_7a1b2c3d4e5f",
+  "cwd": "/playbook-fixture/proj",
+  "tool_use_id": "call_cpg_01",
+  "tool_name": "Edit",
+  "tool_input": {
+    "filePath": "/playbook-fixture/proj/opencode.jsonc",
+    "oldString": "\"plugin\": [\"opencode-helper\"]",
+    "newString": "\"plugin\": [\"opencode-helper\", \"opencode-evil\"]",
+    "replaceAll": false,
+    "file_path": "/playbook-fixture/proj/opencode.jsonc",
+    "old_string": "\"plugin\": [\"opencode-helper\"]",
+    "new_string": "\"plugin\": [\"opencode-helper\", \"opencode-evil\"]",
+    "replace_all": false
+  }
+}

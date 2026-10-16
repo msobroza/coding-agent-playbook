@@ -1,0 +1,62 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "parsed": {
+    "name": "post_tool_use",
+    "harness": "opencode",
+    "session_id": "ses_7a1b2c3d4e5f",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "unattended": true,
+    "truncated": false,
+    "raw_event_name": "PostToolUse",
+    "tool": {
+      "name": "Edit",
+      "native_name": "edit",
+      "tool_class": "edit",
+      "tool_classes": [
+        "edit"
+      ],
+      "use_id": "call_perf_01",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/src/app.py",
+          "repo_rel": "src/app.py",
+          "key": "src/app.py"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/src/app.py",
+          "repo_rel": "src/app.py",
+          "key": "src/app.py"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/src/app.py",
+          "new_string",
+          "    return os.sep\nx = undefined_name\n"
+        ]
+      ],
+      "response": {
+        "ok": true,
+        "is_interrupt": false
+      }
+    }
+  },
+  "result": {
+    "decision": "context",
+    "context": [
+      "ruff (CI fails on this): \"src/app.py:6 F821 Undefined name `undefined_name`\""
+    ]
+  },
+  "wire": {
+    "stdout": "{\"v\":1,\"decision\":\"context\",\"reason\":\"\",\"context\":[\"ruff (CI fails on this): \\\"src/app.py:6 F821 Undefined name `undefined_name`\\\"\"],\"notice\":\"\"}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

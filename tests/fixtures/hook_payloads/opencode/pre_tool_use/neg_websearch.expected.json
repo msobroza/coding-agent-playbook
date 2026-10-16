@@ -1,0 +1,38 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "opencode",
+    "session_id": "ses_7a1b2c3d4e5f",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "unattended": true,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "WebSearch",
+      "native_name": "websearch",
+      "tool_class": "web",
+      "tool_classes": [
+        "web"
+      ],
+      "use_id": "call_k903",
+      "paths": [],
+      "write_paths": [],
+      "content": []
+    }
+  },
+  "result": {
+    "decision": "deny",
+    "reason": "Blocked: WebSearch reaches public search engines, which this repository's policy bars.\nUse the approved internal hosts (internal index or mirror); do not retry public hosts."
+  },
+  "wire": {
+    "stdout": "{\"v\":1,\"decision\":\"deny\",\"reason\":\"Blocked: WebSearch reaches public search engines, which this repository's policy bars.\\nUse the approved internal hosts (internal index or mirror); do not retry public hosts.\",\"context\":[],\"notice\":\"\"}\n",
+    "stderr": "",
+    "exit_code": 10
+  }
+}

@@ -11,8 +11,21 @@
 # install all three hook types — a plain `pre-commit install` honours
 # `default_install_hook_types` below. `default_stages` keeps every other hook
 # (ruff, mypy, metrics) on pre-commit only. Stage names need pre-commit >= 3.2.
+{% endif %}
+{% if commit_trailers %}
+#
+# The commit-trailer rows of [hooks.git-commit-push-policy-guard] are checked at
+# the commit-msg stage too, so `default_install_hook_types` installs it.
+{% endif %}
+{% if commitizen %}
+#
+# This repo uses a commitizen convention ([tool.commitizen] or
+# [hooks.commit_convention]): `cz check` runs at the commit-msg stage, so
+# `default_install_hook_types` installs it. Install commitizen with your dev tools.
+{% endif %}
+{% if not output_commit or commit_trailers or commitizen %}
 minimum_pre_commit_version: "3.2.0"
-default_install_hook_types: [pre-commit, post-checkout, post-merge]
+default_install_hook_types: [pre-commit{% if not output_commit %}, post-checkout, post-merge{% endif %}{% if commit_trailers or commitizen %}, commit-msg{% endif %}]
 default_stages: [pre-commit]
 {% endif %}
 default_language_version:
@@ -51,6 +64,7 @@ repos:
       # STATIC ONLY: this never runs your test suite. Execution evaluators
       # (`playbook metrics --run-tests`) are deliberately excluded from the
       # default hook (side effects + cost) — wire them into CI instead.
+      # `--no-run-tests` keeps it static even when `[metrics] run_tests = true`.
       # Caveat: it compares the *working-tree* file against HEAD (not the index),
       # so a partially-staged file is diffed working-tree-against-HEAD. Fine for
       # the common all-staged case (working tree == index).
@@ -59,10 +73,50 @@ repos:
       # already on PATH instead of building a venv — intentionally different.
       - id: coding-agent-playbook-metrics
         name: coding-agent-playbook metrics (static)
-        entry: playbook metrics --baseline git:HEAD
+        entry: playbook metrics --baseline git:HEAD --no-run-tests
         language: system
         types_or: [python, pyi]
         require_serial: true
+      # The playbook — coverage gate. RUNS YOUR TEST SUITE, so manual-only: changed
+      # lines >= 80% executed, total coverage not below HEAD (needs pytest-cov).
+      #   pre-commit run coding-agent-playbook-coverage --hook-stage manual
+      - id: coding-agent-playbook-coverage
+        name: coding-agent-playbook coverage (diff + non-regression; runs your test suite)
+        entry: playbook metrics --run-tests --select testing --baseline git:HEAD
+        language: system
+        pass_filenames: false
+        types_or: [python]
+        require_serial: true
+        stages: [manual]
+      # The playbook — secret scan of every commit (stdlib; stands in for gitleaks,
+      # which SPEC §13.2 keeps out because it clones a remote hook repo). Fails when
+      # staged lines add a known token format or a credential file is staged; masked.
+      - id: coding-agent-playbook-secrets
+        name: coding-agent-playbook secrets
+        entry: playbook scan-secrets --staged
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+{% if commit_trailers %}
+      # The playbook — commit-message trailer rows (CP4xx: forbidden, co-author and
+      # required trailers) from [hooks.git-commit-push-policy-guard], for every
+      # commit, editor-composed and human ones included. Subject form is commitizen's.
+      - id: coding-agent-playbook-commit-trailers
+        name: coding-agent-playbook commit trailers
+        entry: playbook check-commit-trailers
+        language: system
+        stages: [commit-msg]
+{% endif %}
+{% if commitizen %}
+      # Commit-message convention: commitizen's own check of every commit message
+      # (your [tool.commitizen]; no cut-over here: every new commit conforms).
+      - id: coding-agent-playbook-commit-msg
+        name: commit message convention (commitizen)
+        entry: cz check --commit-msg-file
+        language: system
+        stages: [commit-msg]
+{% endif %}
       # Linting and formatting (ruff must be installed)
       - id: ruff
         name: ruff (lint + autofix)

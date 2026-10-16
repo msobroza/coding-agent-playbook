@@ -44,17 +44,27 @@ def TestsPassCheck(*, weight: float = 0.0, required: bool = True) -> ThresholdCh
 @register_check("coverage")
 def CoverageCheck(
     *,
-    warn: float = 80.0,
+    warn: float = 0.8,
     fail: float | None = None,
     weight: float = 0.0,
     required: bool = False,
 ) -> ThresholdCheck:
-    """A check flagging files under a coverage floor (``coverage``, ``warn=80``).
+    """A check flagging files under a coverage floor (``coverage``, ``warn=0.8``).
 
-    Higher-is-better: a file below ``warn`` (default ``80%``) warns, and below
-    ``fail`` (unset by default) fails. Advisory by default (``required=False``) so
-    a coverage dip is a warning, not a hard gate failure, unless the author opts
-    in. The EXECUTION cost tier is derived from the metric's ``needs_project``.
+    Higher-is-better: a file whose normalized score is below ``warn`` (default
+    ``0.8``, i.e. under 80% coverage) warns, and below ``fail`` (unset by
+    default) fails. The bounds are ``0-1`` cutoffs on the normalized score, not
+    raw percentages: the old raw ``warn=80.0`` could never be met, since
+    ``PercentNormalizer`` tops out at ``1.0`` (prK §F.1.1). Advisory by default
+    (``required=False``) so a coverage dip is a warning, not a hard gate
+    failure, unless the author opts in. The EXECUTION cost tier is derived from
+    the metric's ``needs_project``.
+
+    Example::
+
+        >>> full = MeasurementSet([Measurement("coverage", "a.py", 100.0)])
+        >>> CoverageCheck().grade(ctx, full).subresults[0].level  # doctest: +SKIP
+        'ok'
     """
     return ThresholdCheck(
         get_metric("coverage"),

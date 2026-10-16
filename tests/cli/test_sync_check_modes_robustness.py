@@ -164,7 +164,15 @@ def test_check_modes_refuse_when_an_overlay_is_not_importable(
 ) -> None:
     _with_missing_overlay(repo)
     git = FakeGitClient(staged=["src/a.py"])
-    assert _sync.execute(repo, git=git, **mode) == 1
+    assert (
+        _sync.execute(
+            repo,
+            git=git,
+            check=mode.get("check", False),
+            check_staged=mode.get("check_staged", False),
+        )
+        == 1
+    )
     assert "no_such_overlay_pkg" in capsys.readouterr().err
 
 

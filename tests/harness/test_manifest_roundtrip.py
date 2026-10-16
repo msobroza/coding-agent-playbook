@@ -5,7 +5,7 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import tomllib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -18,7 +18,8 @@ from coding_agent_playbook.harness.manifest import (
     read_manifest,
     write_manifest,
 )
-from coding_agent_playbook.types import Rule, RuleFrontmatter, Skill
+from coding_agent_playbook.types import HookFrontmatter, Rule, RuleFrontmatter, Skill
+from tests.hook_samples import hook_frontmatter
 from tests.toml_equality import assert_toml_identical
 
 if TYPE_CHECKING:
@@ -125,6 +126,75 @@ def test_roundtrip_prompt(tmp_path: Path) -> None:
     manifest = read_manifest(tmp_path)
     assert manifest is not None
     assert manifest.entries == [_prompt_entry()]
+
+
+VERDICT = r"(?im)^\W*(verdict\W*)?(approve with comments|approve|request changes)\W*$"
+
+
+def test_roundtrip_prompt_output_contract(tmp_path: Path) -> None:
+    """Regex backslashes survive the TOML sidecar (specs/prK-hook-pack.md §E.2)."""
+    entry = _prompt_entry()
+    entry.output_contract = [VERDICT, r"(?i)\bCWE-\d+\b|no (reachable|exploitable)"]
+    write_manifest(tmp_path, [entry])
+
+    manifest = read_manifest(tmp_path)
+
+    assert manifest is not None
+    assert manifest.entries == [entry]
+    assert _tables(tmp_path)[0]["output_contract"][0] == VERDICT
+
+
+def test_prompt_without_output_contract_emits_no_key(tmp_path: Path) -> None:
+    """Existing manifests stay byte-identical: no empty ``output_contract`` key."""
+    write_manifest(tmp_path, [_prompt_entry()])
+
+    text = (tmp_path / ".playbook" / "manifest.toml").read_text(encoding="utf-8")
+
+    assert "output_contract" not in text
+
+
+@pytest.mark.parametrize("scope", [{"read_only": True}, {"globs": ["tests/**", "**/conftest.py"]}])
+def test_roundtrip_prompt_write_scope(tmp_path: Path, scope: dict[str, Any]) -> None:
+    """specs/prK-lifecycle-hooks.md §A.7: the sidecar carries ``write_scope`` as an inline table."""
+    entry = _prompt_entry()
+    entry.write_scope = scope
+
+    write_manifest(tmp_path, [entry])
+
+    manifest = read_manifest(tmp_path)
+    assert manifest is not None and manifest.entries == [entry]
+    assert _tables(tmp_path)[0]["write_scope"] == scope
+
+
+def test_prompt_without_write_scope_emits_no_key(tmp_path: Path) -> None:
+    """Existing sidecars stay byte-identical: an unscoped prompt writes no ``write_scope`` line."""
+    write_manifest(tmp_path, [_prompt_entry(), _rule_entry()])
+
+    text = (tmp_path / ".playbook" / "manifest.toml").read_text(encoding="utf-8")
+
+    assert "write_scope" not in text
+    assert all("write_scope" not in table for table in _tables(tmp_path))
+
+
+def test_roundtrip_rule_lint_codes_inline_table(tmp_path: Path) -> None:
+    """specs/prK-lifecycle-hooks.md §A.7: ``lint_codes`` rides the sidecar as one inline table.
+
+    A rule without it writes no ``lint_codes`` line (existing sidecars stay byte-identical).
+    """
+    entry = _scoped_rule_entry()
+    entry.lint_codes = {
+        "warn": ["ANN001", "B006"],
+        "when": [{"applies_if": {"python_version": ">=3.12"}, "warn": ["UP046"]}],
+    }
+
+    write_manifest(tmp_path, [entry, _rule_entry()])
+
+    manifest = read_manifest(tmp_path)
+    text = (tmp_path / ".playbook" / "manifest.toml").read_text(encoding="utf-8")
+    assert manifest is not None and manifest.entries == [entry, _rule_entry()]
+    assert text.count("lint_codes = {") == 1
+    assert _tables(tmp_path)[0]["lint_codes"] == entry.lint_codes
+    assert "lint_codes" not in _tables(tmp_path)[1]
 
 
 def test_roundtrip_records_name_body_and_is_templated(tmp_path: Path) -> None:
@@ -251,6 +321,72 @@ def test_roundtrip_non_identifier_key_in_inline_table(tmp_path: Path) -> None:
 def test_format_scalar_rejects_unsupported_type() -> None:
     with pytest.raises(TypeError):
         _format_scalar(object())
+
+
+# --- kind "hook" (specs/prK-lifecycle-hooks.md §C.6) -------------------------
+
+
+def _hook_entry(**frontmatter: object) -> ManifestEntry:
+    return ManifestEntry(
+        kind="hook",
+        path=".playbook/hooks/guard-x/HOOK.md",
+        id="guard-x",
+        name="Guard X",
+        body="Advice for {{ project.name }}.\n",
+        is_templated=True,
+        hook_frontmatter=hook_frontmatter(**frontmatter).to_mapping(),
+        scripts=[ScriptEntry(path=".playbook/hooks/guard-x/scripts/check.sh", executable=True)],
+    )
+
+
+def test_hook_kind_roundtrip(tmp_path: Path) -> None:
+    write_manifest(tmp_path, [_rule_entry(), _hook_entry()])
+
+    manifest = read_manifest(tmp_path)
+
+    assert manifest is not None
+    assert manifest.entries == [_rule_entry(), _hook_entry()]
+    [table] = [t for t in _tables(tmp_path) if t["kind"] == "hook"]
+    assert table["hook_frontmatter"]["handler"] == {"builtin": "guard_x"}
+    assert "hook_frontmatter" not in next(t for t in _tables(tmp_path) if t["kind"] == "rule")
+
+
+def test_hook_float_timeout_and_config_roundtrip(tmp_path: Path) -> None:
+    handler = {"builtin": "guard_x", "config": {"threshold": 0.75, "limits": {"max": 3}}}
+    entry = _hook_entry(timeout=2.5, handler=handler)
+    write_manifest(tmp_path, [entry])
+
+    manifest = read_manifest(tmp_path)
+
+    assert manifest is not None
+    [read] = manifest.entries
+    rebuilt = HookFrontmatter.from_mapping(read.hook_frontmatter, where="manifest")
+    assert rebuilt == hook_frontmatter(timeout=2.5, handler=handler)
+    assert repr(read.hook_frontmatter["timeout"]) == "2.5"
+    assert repr(read.hook_frontmatter["handler"]["config"]["threshold"]) == "0.75"
+
+
+def test_old_engine_unknown_kind_warns_and_skips(tmp_path: Path) -> None:
+    """A newer engine's kind reads fine and is skipped with a warning (no schema bump)."""
+    (tmp_path / "HARNESS.md").write_text("---\nname: h\ndescription: d\n---\n", "utf-8")
+    sidecar = tmp_path / ".playbook"
+    sidecar.mkdir()
+    (sidecar / "manifest.toml").write_text(
+        'schema = 1\n\n[[artifact]]\nkind = "widget"\npath = "HARNESS.md"\nid = "w"\n'
+        "widget_fields = { a = 1 }\n",
+        "utf-8",
+    )
+
+    result = import_harness(tmp_path)
+
+    assert (result.rules, result.prompts, result.skills, result.hooks) == ([], [], [], [])
+    assert result.warnings == ["manifest entry 'HARNESS.md' has unsupported kind 'widget'; skipped"]
+
+
+def _tables(root: Path) -> list[dict[str, Any]]:
+    with (root / ".playbook" / "manifest.toml").open("rb") as handle:
+        tables: list[dict[str, Any]] = tomllib.load(handle)["artifact"]
+    return tables
 
 
 #: ``_serialize`` output for the entries below, captured before ``_toml`` gained

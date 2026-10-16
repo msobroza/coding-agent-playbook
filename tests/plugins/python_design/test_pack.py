@@ -30,16 +30,17 @@ from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.commands._sync_preflight import bundled_plugins, unusable_overlays
+from coding_agent_playbook.commands._validate_links import check_markdown_links
 from coding_agent_playbook.links import LinksConfig, extract_markdown_links
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, _resource_subdir
 from coding_agent_playbook.types import split_frontmatter
-from tests._content import plugin_root
+from tests._catalog import plugin_root
 from tests.conftest import apply_hermetic_git_env
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS, SYNCED_SKILL_ENTRIES
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 #: The dotted name a consumer lists in ``overlays_enabled`` to turn the plugin on.
 PLUGIN_NAME = "coding_agent_playbook.plugins.python_design"
@@ -331,7 +332,7 @@ def test_link_gate_walks_and_passes_over_the_pack(tmp_path: Path) -> None:
     walked = _resource_subdir(PLUGIN_NAME, "skills")
     assert walked is not None and walked.resolve() == SKILLS_ROOT.resolve()
     source = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PLUGIN_NAME])
-    errors = _validate._check_markdown_links(source, tmp_path, LinksConfig())
+    errors = check_markdown_links(source, tmp_path, LinksConfig())
     assert errors == [], "\n".join(f"{e.path}: {e.message}" for e in errors)
 
 

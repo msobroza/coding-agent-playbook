@@ -1,0 +1,62 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "parsed": {
+    "name": "post_tool_use",
+    "harness": "opencode",
+    "session_id": "ses_7a1b2c3d4e5f",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "unattended": true,
+    "truncated": false,
+    "raw_event_name": "PostToolUse",
+    "tool": {
+      "name": "Write",
+      "native_name": "write",
+      "tool_class": "write",
+      "tool_classes": [
+        "write"
+      ],
+      "use_id": "call_etl_01",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/playbook/eval_tasks/demo-task/task.toml",
+          "repo_rel": "playbook/eval_tasks/demo-task/task.toml",
+          "key": "playbook/eval_tasks/demo-task/task.toml"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/playbook/eval_tasks/demo-task/task.toml",
+          "repo_rel": "playbook/eval_tasks/demo-task/task.toml",
+          "key": "playbook/eval_tasks/demo-task/task.toml"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/playbook/eval_tasks/demo-task/task.toml",
+          "content",
+          "id = \"demo-task\"\npattern = \"\\s+\"\n"
+        ]
+      ],
+      "response": {
+        "ok": true,
+        "is_interrupt": false
+      }
+    }
+  },
+  "result": {
+    "decision": "context",
+    "context": [
+      "Eval task \"demo-task\" does not compile; resolve before finishing:\n\"task.toml: malformed TOML: Unescaped '\\\\' in a string (at line 16, column 14)\"\nauthor regex patterns as TOML literal strings (single quotes); \\s is an invalid escape in a basic string"
+    ]
+  },
+  "wire": {
+    "stdout": "{\"v\":1,\"decision\":\"context\",\"reason\":\"\",\"context\":[\"Eval task \\\"demo-task\\\" does not compile; resolve before finishing:\\n\\\"task.toml: malformed TOML: Unescaped '\\\\\\\\' in a string (at line 16, column 14)\\\"\\nauthor regex patterns as TOML literal strings (single quotes); \\\\s is an invalid escape in a basic string\"],\"notice\":\"\"}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

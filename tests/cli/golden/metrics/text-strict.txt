@@ -1,0 +1,4 @@
+=== Metrics ===
+  warn.py:
+    [warn] cyclomatic_complexity @ f = 14 (new; bound=0.5)
+  summary: FAIL — 0 fail, 1 warn, composite=n/a

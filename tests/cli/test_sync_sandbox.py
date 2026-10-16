@@ -78,7 +78,12 @@ def test_sync_check_modes_fail_loudly_on_sandbox_violation(
     _write_templated_rule(repo, "escape", _ESCAPE_BODY)
     before = _tree_snapshot(repo)
     capsys.readouterr()
-    rc = _sync.execute(repo, git=FakeGitClient(staged=["AGENTS.md"]), **mode)
+    rc = _sync.execute(
+        repo,
+        git=FakeGitClient(staged=["AGENTS.md"]),
+        check=mode.get("check", False),
+        check_staged=mode.get("check_staged", False),
+    )
     assert rc == 1
     err = capsys.readouterr().err
     _assert_reported(err, "playbook/rules/escape.md.j2", tmp_path)

@@ -19,14 +19,14 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from tests._content import plugin_root
+from tests._catalog import plugin_root
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
     from types import ModuleType
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 SCRIPT = (
     plugin_root("python_design") / "skills" / "python-architecture" / "scripts" / "layer_map.py"

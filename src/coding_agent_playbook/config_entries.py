@@ -1,12 +1,14 @@
 """Which entries of ``.coding-agent-playbook.toml`` ``Config`` owns (SPEC §7.1, §7.2).
 
-``Config`` reads and writes a fixed set of keys; every other entry — ``[links]``,
-``[metrics]``, a future table, ``[project] homepage`` — is parsed from the raw
-TOML by its own command, or by nothing yet. ``playbook init`` and ``playbook
-check --refresh`` rewrite the committed file, so they must carry those entries
-over themselves: :func:`unmanaged_config_entries` picks them out of the
-committed table and :func:`with_unmanaged_entries` writes them back after the
-config's own keys. A leaf module (no engine imports), split from ``config.py``.
+``Config`` reads and writes a fixed set of keys; every other entry — ``[hooks]``,
+``[guardrails]``, ``[links]``, ``[metrics]``, a future table, ``[project]
+homepage`` — is parsed from the raw TOML by its own command, or by nothing yet.
+``playbook init`` and ``playbook check --refresh`` rewrite the committed file, so
+those entries must survive the rewrite: ``Config.from_dict`` keeps
+:func:`unmanaged_config_entries` of the file in ``Config.extra_tables`` (copied
+with :func:`copy_toml_value`) and ``Config.to_dict`` writes them back after the
+config's own keys with :func:`with_unmanaged_entries` (P6). A leaf module (no
+engine imports), split from ``config.py``.
 """
 
 from __future__ import annotations
@@ -21,11 +23,11 @@ if TYPE_CHECKING:
 #: what ``Config.from_dict`` reads and a fully populated ``Config.to_dict`` writes
 #: (pinned against the dataclass fields by ``tests/unit/test_config.py``). Derived
 #: ``compare=False`` fields (``deprecated_overlay_names``) are exempt: ``Config``
-#: computes them from other fields and never writes them. Every
-#: other top-level key is parsed from the raw TOML by its own command and never
-#: passes through ``Config``, so a rewrite of the committed file must carry it
-#: over itself (:func:`unmanaged_config_entries`; ``playbook init`` and
-#: ``playbook check --refresh``, through ``commands/_committed_config``).
+#: computes them from other fields and never writes them. Every other top-level
+#: key is parsed from the raw TOML by its own command; ``Config`` only carries it,
+#: verbatim, in ``extra_tables`` (:func:`unmanaged_config_entries`), so a rewrite
+#: of the committed file keeps it (``playbook init`` and ``playbook check
+#: --refresh``, through ``commands/_committed_config``).
 CONFIG_MANAGED_KEYS: frozenset[str] = frozenset(
     {
         "schema_version",
@@ -114,6 +116,41 @@ def with_unmanaged_entries(
     for key, value in preserved.items():
         merged[key] = {**merged.get(key, {}), **value} if key in CONFIG_MANAGED_KEYS else value
     return merged
+
+
+def copy_toml_value(value: Any) -> Any:
+    """A deep copy of a decoded TOML value: every table and array is new, scalars shared.
+
+    ``Config.extra_tables`` copies the entries it carries in and out with it, so
+    neither side aliases the other's nested tables (P6). Iterative, not
+    ``copy.deepcopy``: ``tomllib`` builds header tables iteratively, with no depth
+    limit, so a committed ``[d0.d1.….d999]`` must copy without ``RecursionError``.
+    Every scalar ``tomllib`` returns is immutable, so sharing one is safe.
+
+    Example::
+
+        >>> source = {"hooks": {"disable": ["x"]}}
+        >>> copied = copy_toml_value(source)
+        >>> copied == source, copied["hooks"] is source["hooks"]
+        (True, False)
+    """
+    if not isinstance(value, dict | list):
+        return value
+    root: dict[Any, Any] | list[Any] = {} if isinstance(value, dict) else []
+    pending: list[tuple[dict[Any, Any] | list[Any], dict[Any, Any] | list[Any]]] = [(value, root)]
+    while pending:
+        source, target = pending.pop()
+        items = source.items() if isinstance(source, dict) else enumerate(source)
+        for key, item in items:
+            child = item
+            if isinstance(item, dict | list):
+                child = {} if isinstance(item, dict) else []
+                pending.append((item, child))
+            if isinstance(target, dict):
+                target[key] = child
+            else:
+                target.append(child)
+    return root
 
 
 def _owned_keys_in(preserved: Mapping[str, Any]) -> list[str]:

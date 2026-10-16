@@ -1,0 +1,22 @@
+{
+  "parsed": {
+    "name": "session_end",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "SessionEnd"
+  },
+  "result": {
+    "decision": "none"
+  },
+  "wire": {
+    "stdout": "",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

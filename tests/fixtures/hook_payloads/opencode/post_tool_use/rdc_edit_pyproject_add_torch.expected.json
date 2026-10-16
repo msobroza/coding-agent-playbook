@@ -1,0 +1,62 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "parsed": {
+    "name": "post_tool_use",
+    "harness": "opencode",
+    "session_id": "ses_7a1b2c3d4e5f",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "unattended": true,
+    "truncated": false,
+    "raw_event_name": "PostToolUse",
+    "tool": {
+      "name": "Edit",
+      "native_name": "edit",
+      "tool_class": "edit",
+      "tool_classes": [
+        "edit"
+      ],
+      "use_id": "call_rdc_01",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/pyproject.toml",
+          "repo_rel": "pyproject.toml",
+          "key": "pyproject.toml"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/pyproject.toml",
+          "repo_rel": "pyproject.toml",
+          "key": "pyproject.toml"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/pyproject.toml",
+          "new_string",
+          "dependencies = [\"fastapi>=0.110\", \"torch>=2\"]"
+        ]
+      ],
+      "response": {
+        "ok": true,
+        "is_interrupt": false
+      }
+    }
+  },
+  "result": {
+    "decision": "context",
+    "context": [
+      "Detector inputs changed; now applicable but not synced yet: prompt \"security-review\" (source \"coding_agent_playbook\"), rule \"ml-serialization-security\" (source \"coding_agent_playbook\").\nThen ask the user to run playbook validate && playbook sync."
+    ]
+  },
+  "wire": {
+    "stdout": "{\"v\":1,\"decision\":\"context\",\"reason\":\"\",\"context\":[\"Detector inputs changed; now applicable but not synced yet: prompt \\\"security-review\\\" (source \\\"coding_agent_playbook\\\"), rule \\\"ml-serialization-security\\\" (source \\\"coding_agent_playbook\\\").\\nThen ask the user to run playbook validate && playbook sync.\"],\"notice\":\"\"}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "_fixture": {
+    "harness_version": "1.19.0",
+    "source": "k5-guard-generated-outputs"
+  },
+  "hook_event_name": "PreToolUse",
+  "session_id": "ses_7a1b2c3d4e5f",
+  "cwd": "/playbook-fixture/proj",
+  "tool_use_id": "call_ggo_02",
+  "tool_name": "apply_patch",
+  "tool_input": {
+    "patchText": "*** Begin Patch\n*** Update File: .opencode/command/review.md\n@@\n-old\n+new\n*** End Patch\n",
+    "patch_text": "*** Begin Patch\n*** Update File: .opencode/command/review.md\n@@\n-old\n+new\n*** End Patch\n"
+  }
+}

@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from coding_agent_playbook.git_env import REPO_LOCATION_GIT_VARS
-from tests._content import REPO_ROOT
+from tests._catalog import REPO_ROOT
 from tests.conftest import apply_hermetic_git_env
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH")
@@ -90,7 +90,7 @@ def test_session_has_no_repo_location_git_vars() -> None:
 def test_a_run_started_from_a_hook_drops_the_hook_git_vars(tmp_path: Path) -> None:
     """A run launched with what git exports to a linked-worktree hook strips it.
 
-    The ``content-checks`` pre-commit hook runs tests that call ``materialize`` or
+    The ``catalog-checks`` pre-commit hook runs tests that call ``materialize`` or
     ``git`` without ``hermetic_git_env``; they rely on this session-wide strip.
     """
     decoy = tmp_path / "decoy.git"

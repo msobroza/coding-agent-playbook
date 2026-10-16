@@ -1,0 +1,20 @@
+{
+  "_fixture": {
+    "harness_version": "2.1.296",
+    "source": "docs"
+  },
+  "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+  "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+  "cwd": "/playbook-fixture/proj",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "prompt_id": "pr_06",
+  "tool_name": "NotebookEdit",
+  "tool_input": {
+    "notebook_path": "/playbook-fixture/proj/nb/explore.ipynb",
+    "cell_id": "c1",
+    "new_source": "df.head()",
+    "edit_mode": "replace"
+  },
+  "tool_use_id": "toolu_01Nb"
+}

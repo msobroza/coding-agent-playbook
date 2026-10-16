@@ -5,7 +5,7 @@ The ``Metric`` layer is the "measure" leaf of the
 ``Metric`` produces raw
 :class:`~coding_agent_playbook.evaluators.types.Measurement` rows over a scope
 and carries *only* the measurement-side descriptors (``name``, ``scope``,
-``normalizer``, ``requires``, ``needs_project``) - the grading-side
+``normalizer``, ``requires``, ``needs_project``, ``diff_based``) - the grading-side
 descriptors (thresholds, regression policy, weight) live on the ``Check`` layer.
 
 Every metric owns a
@@ -77,6 +77,12 @@ class Metric(ABC):
     #: reads this to schedule the check in the JUDGED tier and to measure it lazily
     #: at grade time (so the cost-tiered scheduler can short-circuit it).
     needs_judge: bool = False
+    #: ``True`` for execution metrics that measure the candidate *relative to a
+    #: diff base* (``diff_coverage``, prK §F.1.1). A baseline run of one is
+    #: meaningless: the metrics gate skips the baseline suite run when every
+    #: selected execution metric is diff-based, and a baseline handle carries no
+    #: diff base, so the candidate grades as ``kind="new"`` (absolute).
+    diff_based: bool = False
 
     def available(self, ctx: EvalContext) -> bool:
         """True when this metric can run in ``ctx``.

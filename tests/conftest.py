@@ -17,22 +17,28 @@ fixture only seeds repo-local content when callers ask for it.
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from coding_agent_playbook.git_env import REPO_LOCATION_GIT_VARS
+from tests.attendance_env import ATTENDANCE_ENV_VARS
+from tests.hook_samples import write_hook
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
     from pathlib import Path
+
+    from tests.hook_payloads import HookPayloadCase
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:
     """Drop the inherited variables that pin a git repository, for the whole run.
 
     Git exports absolute ``GIT_DIR``/``GIT_INDEX_FILE`` to hooks in a linked
-    worktree, and pre-commit passes them on to the ``content-checks`` hook. Any
+    worktree, and pre-commit passes them on to the ``catalog-checks`` hook. Any
     test running real git without ``hermetic_git_env`` (``materialize`` in the
     shipped-task tests) would then commit onto the developer's branch and
     overwrite their index. Runs before collection, so collection-time git is
@@ -108,6 +114,23 @@ def _write_prompt(
     target.write_text("\n".join(lines), encoding="utf-8")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def attended_session_env() -> Iterator[None]:
+    """Clear the runner's attendance variables (``CI``, ``GITHUB_ACTIONS``, ...) for the session.
+
+    ``is_unattended`` turns every ``ask`` into a ``deny`` under them, so an
+    in-process dispatch, a ``RuntimeDeps()`` snapshot of ``os.environ`` or a
+    subprocess inheriting it would test the unattended path on CI only (PR #32).
+    Session scope also covers module-scoped fixtures, and a function-scoped
+    ``monkeypatch`` that sets one is undone back to "unset". A test that wants
+    an unattended run sets one itself. See :mod:`tests.attendance_env`.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        for name in ATTENDANCE_ENV_VARS:
+            patch.delenv(name, raising=False)
+        yield
+
+
 def apply_hermetic_git_env(
     monkeypatch: pytest.MonkeyPatch, *, ceiling: Path, config_home: Path
 ) -> None:
@@ -152,6 +175,39 @@ def hermetic_git_env(
     )
 
 
+#: Bound on each fixture-building ``git`` call of :func:`real_git`.
+GIT_TIMEOUT_S = 30
+
+
+@pytest.fixture
+def real_git(hermetic_git_env: None) -> Callable[..., str]:
+    """Return ``run(*args, cwd=path) -> stdout`` for the real git, or skip without one.
+
+    Shared by the hook runtime and the pack hook suites; git is isolated from
+    the developer's machine through :func:`hermetic_git_env`.
+
+    Example::
+
+        def test_x(real_git, tmp_path):
+            real_git("init", "-q", cwd=tmp_path)
+    """
+    if shutil.which("git") is None:
+        pytest.skip("git not on PATH")
+
+    def _run(*args: str, cwd: Path) -> str:
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT_S,
+        )
+        return completed.stdout.strip()
+
+    return _run
+
+
 @pytest.fixture
 def make_synthetic_repo():
     """Return a builder that creates a synthetic consumer repo in ``tmp_path``.
@@ -162,10 +218,14 @@ def make_synthetic_repo():
             repo = make_synthetic_repo(
                 tmp_path,
                 rules=[("python-style", "Body content\\n")],
-                prompts=[("refactor", {"slash": "refactor"})],
+                prompts=[("tidy-up", {"slash": "tidy-up"})],
                 pyproject_extras={"dependencies": ["fastapi"]},
             )
             # repo is the path to the consumer-repo root.
+
+    Prefer artifact ids the engine does not ship: a repo-local ``refactor``
+    prompt overrides the engine's without its ``eval_tasks``, which fails
+    ``playbook validate`` and so makes ``playbook sync`` refuse to write.
     """
 
     def _build(
@@ -240,6 +300,60 @@ def make_package(
     yield _make
     for name in built:
         sys.modules.pop(name, None)
+
+
+@pytest.fixture
+def make_hook() -> Callable[..., Path]:
+    """Return a builder that writes one hook directory (specs/prK-lifecycle-hooks.md §A.1).
+
+    ``make_hook(root, "guard-y", tier="opt-in")`` writes
+    ``<root>/protect/guard-y/HOOK.md`` from a minimal valid frontmatter with
+    those keys replaced, and returns the path (``category=``, ``marker=``,
+    ``body=`` and ``scripts=`` adjust the layout; see
+    :func:`tests.hook_samples.write_hook`).
+    """
+    return write_hook
+
+
+@pytest.fixture
+def sample_hook_handlers(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[tuple[str, ...]]:
+    """Install the sample handler distribution so the sample hooks' builtins are registered.
+
+    ``playbook validate`` checks every builtin name against the handler registry
+    (H6); the engine ships no handlers before K5, so tests whose hooks bind
+    ``guard_x`` / ``guard_y`` / ``guard_z`` resolve them through a real
+    ``coding_agent_playbook.hook_handlers`` entry point. Yields the names.
+    """
+    import sys
+
+    from tests.hook_samples import (
+        SAMPLE_HANDLER_NAMES,
+        SAMPLE_HANDLERS_PACKAGE,
+        install_sample_handlers,
+    )
+
+    root = tmp_path_factory.mktemp("sample-handlers")
+    install_sample_handlers(root)
+    monkeypatch.syspath_prepend(str(root))
+    yield SAMPLE_HANDLER_NAMES
+    sys.modules.pop(SAMPLE_HANDLERS_PACKAGE, None)
+
+
+@pytest.fixture
+def hook_payload() -> Callable[[str, str, str], HookPayloadCase]:
+    """Return the loader of the golden harness payloads (specs/prK-lifecycle-hooks.md §D.9).
+
+    ``hook_payload("claude_code", "pre_tool_use", "bash_rm_root")`` reads
+    ``tests/fixtures/hook_payloads/claude_code/pre_tool_use/bash_rm_root.json``
+    and its ``.expected.json``; shared by ``tests/hook_runtime``, ``tests/hooks``
+    and ``tests/security``. See :mod:`tests.hook_payloads` for the file format.
+    """
+    # Imported here so that only the suites using payloads load the hook runtime.
+    from tests.hook_payloads import load_hook_payload
+
+    return load_hook_payload
 
 
 #: CPython's default int-to-str digit limit (``sys.int_info.default_max_str_digits``).

@@ -48,6 +48,9 @@ dev = [
 [project.scripts]
 playbook = "coding_agent_playbook.cli:main"
 coding-agent-playbook = "coding_agent_playbook.cli:main"
+# The human entry of the hook runtime (simulate, doctor, --version). Harnesses never
+# use it: they run "<pin> -I -m coding_agent_playbook.hook_runtime" (prK §D.1).
+playbook-hook = "coding_agent_playbook.hook_runtime.cli:main"
 
 # --- Extension-point tables. PR 1 declares them empty; future PRs populate. ---
 
@@ -103,6 +106,12 @@ llm = "coding_agent_playbook.evals.judge:LLMJudge"
 # file/threshold/judge checks) registers here so eval tasks can share one gate by
 # name. The engine ships none; in-tree registrations win on a name clash.
 
+[project.entry-points."coding_agent_playbook.hook_handlers"]
+# Out-of-tree lifecycle-hook handlers (specs/prK-lifecycle-hooks.md §D.1, P-D5).
+# The engine's own handlers are builtins and ship none here. Entries are resolved
+# at `playbook sync`, never scanned by the hook runtime, and run only when their
+# package is in allow_code_from. The `playbook-hook` script lands with its module.
+
 # ----------------------------------------------------------------------------
 
 [tool.hatch.build.targets.wheel]
@@ -110,7 +119,7 @@ packages = ["src/coding_agent_playbook"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/coding_agent_playbook/py.typed" = "coding_agent_playbook/py.typed"
-"content" = "coding_agent_playbook/_content"
+"catalog" = "coding_agent_playbook/_catalog"
 
 # --- Ruff (lint + format) ---
 
@@ -125,14 +134,25 @@ src = ["src", "tests"]
 # because newer, unpinned ruff versions also reformat code blocks inside
 # markdown (CI has gone red on that before), and its fenced examples include
 # deliberate "before" code.
-extend-exclude = ["content/plugins/superpowers", "content/plugins/python_design/**/*.md"]
-# pre-commit passes file names explicitly, and ruff ignores extend-exclude for
-# explicit paths unless force-exclude is on: the hooks would then rewrite the
-# vendored superpowers markdown.
+# Eval-task fixtures under setup/ are deliberately unclean needle material (the
+# find-injected-vuln-* bugs live there), so `ruff check --fix` / `ruff format`
+# must never rewrite them either (specs/prK-lifecycle-hooks.md §P9). Eval tasks
+# are per layer, so a bundled plugin's fixtures get the same exclude as core's.
+# mypy needs none: catalog/ is outside its `files`.
+extend-exclude = [
+    "catalog/plugins/superpowers",
+    "catalog/plugins/python_design/**/*.md",
+    "catalog/core/eval_tasks/*/setup",
+    "catalog/plugins/*/eval_tasks/*/setup",
+]
+# Pre-commit and the hook/Stop stages pass file names explicitly, and ruff
+# ignores the excludes above for an explicitly passed path unless force-exclude
+# is on: the hooks would then rewrite the vendored superpowers markdown and the
+# eval-task needle fixtures.
 force-exclude = true
 # Skill scripts run in consumer repos on Python 3.10+, so pyupgrade must not
 # suggest 3.12-only syntax there (PEP 695 aliases/generics).
-per-file-target-version = { "content/plugins/*/skills/*/scripts/*.py" = "py310" }
+per-file-target-version = { "catalog/plugins/*/skills/*/scripts/*.py" = "py310" }
 
 [tool.ruff.lint]
 select = [
@@ -191,7 +211,7 @@ addopts = [
 ]
 xfail_strict = true
 filterwarnings = ["error"]
-markers = ["content: checks over the bundled content tree under content/ (pre-commit content-checks hook)"]
+markers = ["catalog: checks over the engine catalog under catalog/ (pre-commit catalog-checks hook)"]
 
 # --- coverage ---
 
@@ -205,3 +225,13 @@ exclude_lines = [
     "raise NotImplementedError",
     "^\\s*\\.\\.\\.\\s*$",
 ]
+
+# --- commitizen (the commit-message convention; dogfooded, prK §K OQ-6) ---
+# Read by `cz check` in the playbook-ci job, which runs the `commit-convention` step
+# of `playbook ci` (the history before .coding-agent-playbook.toml's cutover_date is
+# skipped). It sets no version or bump keys, because hatch's [project] version
+# stays the only version source. commitizen is not a dev extra: only that CI job
+# installs it, so the CI-parity gate is unchanged.
+
+[tool.commitizen]
+name = "cz_conventional_commits"

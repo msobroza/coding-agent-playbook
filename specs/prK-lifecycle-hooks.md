@@ -2,6 +2,8 @@
 
 > **Resolves SPEC §19 Q8** (OpenCode plugin generation): the engine ships one generated OpenCode plugin shim that delegates to the same dispatcher as Claude Code, not hook *patterns* in docs. **Amends** §2.2 (the "no OpenCode plugins" non-goal narrows to *user-authored* plugins — the engine owns exactly one generated plugin file), §2.3 (the "OpenCode plugin generation from canonical hook descriptions" aspiration is delivered), §3 (**Hook** becomes the 4th emitted canonical kind; the "supported by … Continue CLI" claim is corrected — see P5), §10.6.2 (the hook gap is closed for the OpenCode V1 plugin API) and §17.1 (HTTP hook handlers are *rejected by `playbook validate`*, not merely "not shipped"). **Partially answers** §19 Q1 for executable overlay content (`allow_code_from` + trust-on-first-use, §B.4). The `Metric`/`Check`/`Rubric` engine (§21, `specs/prR6-check-rubric.md`) is reused unchanged by the new tools; no evaluator abstraction changes.
 >
+> **Layout note (SPEC v0.19, PR C; `content/` renamed `catalog/` in v0.20).** This design predates the move of the engine's content out of the Python package. The engine's `src/coding_agent_playbook/resources/{rules,prompts,eval_tasks,hooks}/` now live in `catalog/core/{rules,prompts,eval_tasks,hooks}/`, the hook shim templates (`resources/hook_shims/`) in the package's `src/coding_agent_playbook/templates/hook_shims/`, and the bundled packs (`coding_agent_playbook.packs.<name>`) are bundled plugins under `catalog/plugins/<name>/` (`coding_agent_playbook.plugins.<name>`). Overlay packages keep `<pkg>/resources/…`. Older paths in the track file lists below read through this mapping; SPEC.md is authoritative.
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development; checkbox steps.
 >
 > **Commit policy (overrides any tooling default):** commits authored **solely by `msobroza`** — no `Co-Authored-By`, no `--author`, no signing, no `git config` edits. Subagents `cd <worktree>` as their first tool call, default `opus`, **no `git push` / `gh pr create` until the user gate approves the diff**. Run the **full cache-free, no-optional-extras CI-parity gate** (`uv pip uninstall radon -y; rm -rf .mypy_cache; ruff check . && ruff format --check . && mypy && pytest -q`, no path args; invoke as `uv run python -m mypy` / `uv run python -m pytest -q` per CLAUDE.md) before claiming green — see [[ci-parity-gate-pitfalls]].
@@ -36,7 +38,7 @@ Deliverables:
 - **Configuration, trust and validation** (§B): the `[hooks]` table (+ `[guardrails]` policy domains), kill switches, the user-local trust store, the numbered hook trust contract enforced by `playbook validate`, and lockfile v2 ownership semantics.
 - **Rendering** (§C): Claude Code managed merge into `.claude/settings.json` (ownership tracked in the lockfile, interpreter-pin design per L4); OpenCode V1 plugin shim (`.opencode/plugins/`, sentinel on line 1, throws on deny); the sync-level `guard_config.json`.
 - **Runtime** (§D): `playbook-hook dispatch|simulate|doctor`, the `@register_hook_handler` registry + `coding_agent_playbook.hook_handlers` entry-point group, the single Stop coordinator, state and logs.
-- **The standard hook pack** (§E, in [part 2](prK-hook-pack.md)): the 38 catalog hooks (26 `default`, 9 `opt-in`, 3 `overlay`); the 9 rejected entries are in Appendix R.
+- **The standard hook pack** (§E, in [part 2](prK-hook-pack.md)): the 38 catalog hooks (27 `default`, 8 `opt-in`, 3 `overlay`); the 9 rejected entries are in Appendix R.
 - **Four new tools** (§F, in [part 2](prK-hook-pack.md)), each usable from a hook **and** from an off-workstation twin (pre-commit stage and/or CI): test coverage, deterministic code-quality metrics, docstrings, commit-message naming. They add 3 tool hooks (`coverage-diff-gate`, `docstring-nonregression`, `commit-message-convention`), so the pack totals 38 catalog hooks + 3 tool hooks. Built on the existing `evaluators/` (`Metric` + `@register_metric` + `Normalizer`, `ThresholdCheck`/`NonRegressionCheck`, `playbook metrics --baseline git:HEAD [--run-tests]`, the `coverage`/`test_pass_rate` execution metrics) and on consumer-toolchain binaries (ruff, commitizen `cz`) per addendum D-Q1/D-Q2.
 - **End matter** (§G–§K here; Appendix R in part 2): locked decisions, tracks with files and tests (the Track K5–K10 subsections are in part 2), invariants, the SPEC amendment table, and the single deduplicated open-question list.
 - **Docs**: SPEC v0.15 (changelog + every section in the §J amendment table), README ("Pre-commit hooks" vs "Assistant lifecycle hooks"), and the CLAUDE.md invariants — subject to the harness-files policy question (§B.7 Q5). Bumping the SPEC header breaks `tests/unit/test_docs_check_rubric_refactor.py:114-115` (it asserts `| Version | 0.14 (draft) |` and `### v0.14`); the Docs track updates that test to assert `| Version | 0.15 (draft) |` and `### v0.15` while keeping the v0.14/v0.13/v0.12 changelog assertions, and runs the docs tests in the CI-parity gate. The same file scans the §21 body for deleted R6 symbols, so §21 amendments must not mention them bare.
@@ -131,6 +133,7 @@ Track P is pure engine hardening: no hook ships in it, every item is independent
 - **Defect.** mypy excludes `resources/eval_tasks/.*/setup/` (`pyproject.toml:150`) because those trees are deliberately unclean needle material, but `[tool.ruff]` (`pyproject.toml:111`) has no exclude: a post-edit `ruff format` or a Stop-tier `ruff check --fix` would rewrite fixtures (the `find-injected-vuln-*` needles included).
 - **Fix.** `[tool.ruff] extend-exclude = ["src/coding_agent_playbook/resources/eval_tasks/*/setup"]` **and** `force-exclude = true` (engine repo only; consumers are unaffected). Verified with ruff 0.15.10: `extend-exclude` is not applied to an explicitly passed path unless `force-exclude` is set, and the post-edit hooks and Stop stages pass explicit paths. Every hook and stage ruff argv also carries `--force-exclude` (§E.3), so consumer excludes hold without their own `force-exclude`.
 - **Tests.** `tests/integration/test_ruff_scope.py::test_ruff_excludes_eval_fixture_setup` (parse `pyproject.toml`, assert the glob and `force-exclude`; when `ruff` is on PATH, run `ruff check --force-exclude <a fixture file>` and assert "No Python files found", else skip).
+- **Since v0.20.** Eval tasks are per layer, so the excludes are `catalog/core/eval_tasks/*/setup` and `catalog/plugins/*/eval_tasks/*/setup`: a bundled plugin may ship `eval_tasks/`, each task using its own layer's `prompts/`. mypy needs no exclude, because `catalog/` is outside its `files`. `test_ruff_scope.py` also runs ruff on a plugin fixture in a scratch project that carries the engine's ruff table.
 
 ---
 
@@ -141,13 +144,14 @@ Track P is pure engine hardening: no hook ships in it, every item is independent
 A hook is a **directory containing `HOOK.md` or `HOOK.md.j2`** (shared name — proposed), with an optional `scripts/` subdirectory for the external-command form. The directory name **is** the hook id. Category folders above hook directories are allowed and carry no meaning:
 
 ```
-src/coding_agent_playbook/resources/hooks/            # engine (builtin handlers only)
+catalog/core/hooks/                                   # engine (builtin handlers only)
 ├── protect/
 │   ├── guard-generated-outputs/HOOK.md
 │   └── control-plane-guard/HOOK.md
 ├── verify/stop-ci-parity-gate/HOOK.md
 └── ...
 <overlay_pkg>/resources/hooks/<category>/<id>/HOOK.md  # overlay layer
+catalog/plugins/<name>/hooks/<category>/<id>/HOOK.md   # bundled-plugin layer (an overlay)
 <repo>/playbook/hooks/<id>/                            # repo-local layer
 ├── HOOK.md
 └── scripts/
@@ -561,7 +565,7 @@ Parsed by `config.parse_hooks_config(data) -> HooksConfig` (frozen dataclass; un
 | `unattended_ask` | `"deny"` \| `"warn"` | `"deny"` | What `ask` (decision or `on_error`) becomes when no human can answer (headless `claude -p`, SDK, CI, runner evals, OpenCode; detection in §D.3.6). `warn` = `context` + proceed + a user note. This is the only value set; §D.3.6 and `guard_config.unattended_ask` use it verbatim. |
 | `allow_code_from` | `list[str]` | `[]` | Source packages whose external-command or entry-point handlers may run: overlay names from `overlays_enabled`, and/or `"<repo-local>"`. The engine package is implicit. |
 | `auto_sync` | `bool` | `false` | Lets validate-then-sync-on-canonical-edit run `playbook sync` itself (never for edits to hooks, `[hooks]`, `[guardrails]`, `overlays_enabled`, `adapters_enabled`). |
-| `wrapper_prefixes` | `list[str]` | `[]` | (shared name — proposed) Extra command prefixes the dispatcher strips before shell matching (e.g. `["rtk"]`), beyond the built-in `env`/`sudo`/`timeout`/`nice`/`nohup`; rendered to `guard_config.shell.wrapper_prefixes` (§D.8.2). |
+| `wrapper_prefixes` | `list[str]` | `[]` | (shared name — proposed) Extra command prefixes the dispatcher strips before shell matching (e.g. `["proxy"]` for a command-rewriting launcher), beyond the built-in `env`/`sudo`/`timeout`/`nice`/`nohup`; rendered to `guard_config.shell.wrapper_prefixes` (§D.8.2). A stripped prefix is invisible to every guard, so no token of an entry may name a guarded command — a program a guard inspects by name (every builtin handler's `argv0s` and the guards' program tables), a built-in launcher, a runner (`uv`, `poetry`, …) or a shell/interpreter; such an entry is an H21 error. A launcher only one developer uses is declared at run time instead, through `PLAYBOOK_HOOK_WRAPPER_PREFIXES` (§B.2, §D.7): `.local.toml` never holds `[hooks]`. |
 | `state_ttl_days` | `int` | `7` | (shared name — proposed) Age after which per-session state is swept (§D.6.1). |
 | `render_remediation_allow` | `bool` | `false` | (shared name — proposed) Render the fixed engine list of remediation commands into `permissions.allow` (§C.2.8). Off by default: an allow list is a committed privilege grant. |
 
@@ -586,7 +590,7 @@ on(w) = cfg.enabled
 
 **Absent table ⇒ off (no upgrade injection).** A consumer upgrading the engine without a `[hooks]` table gets **zero byte change** — no settings entries, no shim, no advisory text — and `playbook sync` prints one notice line (`hooks available: add [hooks] enabled = true or re-run playbook init`). New repos opt in through `playbook init` ("Enable assistant lifecycle hooks? [Y/n]"; non-interactive default yes, `--no-hooks` (shared name — proposed) to opt out). Once enabled, `default`-tier hooks are on by default as the catalog intends. This reconciles "default = on by default" with the engine-upgrade drift invariant (§B.7 Q3).
 
-**`.coding-agent-playbook.local.toml` exclusion.** `[hooks]` and `[guardrails]` keys in the gitignored local file are **ignored** (sync warns; validate errors, H21): committed output (`.claude/settings.json`, the shim, `guard_config.json`) must not depend on a file CI never sees, and a gitignored, deep-merged file is an unreviewed off switch. This narrows §7.2's deep-merge for these two tables only. Per-developer deviation is runtime-only, through the hook-process environment (§B.2).
+**`.coding-agent-playbook.local.toml` exclusion.** `[hooks]` and `[guardrails]` keys in the gitignored local file are **ignored** (sync warns; validate errors, H21): committed output (`.claude/settings.json`, the shim, `guard_config.json`) must not depend on a file CI never sees, and a gitignored, deep-merged file is an unreviewed off switch. This narrows §7.2's deep-merge for these two tables only. Per-developer deviation is runtime-only, through the hook-process environment (§B.2): `PLAYBOOK_HOOKS_DISABLE`, and a developer's own command launchers through `PLAYBOOK_HOOK_WRAPPER_PREFIXES`.
 
 ### B.2 Kill switches and escape hatches
 
@@ -598,6 +602,7 @@ on(w) = cfg.enabled
 | `PLAYBOOK_HOOKS_DISABLE=a,b` | hook-process environment | listed non-mandatory ids | Runtime skip, reported like the above. |
 | `PLAYBOOK_GATE=off` | hook-process environment | the Stop coordinator | Stop allowed with `systemMessage` "gate disabled — NOT verified". |
 | `PLAYBOOK_ALLOW_GENERATED_EDIT=1` | hook-process environment | guard-generated-outputs | Hand edit allowed (sync will still overwrite it). |
+| `PLAYBOOK_HOOK_WRAPPER_PREFIXES=proxy,proxy run` | hook-process environment | the shell guards and verify-run tagging | This developer's own command launchers, merged with `[hooks] wrapper_prefixes` into `guard_config.shell` for the dispatch (§D.7). An entry with a token naming a guarded command is ignored, logged and reported by `doctor`; it can only reveal a command, never hide one. |
 
 Escape hatches cannot be self-granted in-session: the dispatcher reads these **only from its own `os.environ`**, never from a `VAR=1 cmd` prefix inside a Bash `tool_input`. On Claude Code `os.environ` **does** include every `env` key from the user, project, local and managed settings files (Claude sets them for every subprocess it starts, hooks included; `PLAYBOOK_*` and `PYTHON*` are not on its exclusion list). So whenever a hatch variable is present, the dispatcher (§D.7) reads the `env` objects of the settings files Claude loads — repo `.claude/settings.json`, the effective `.claude/settings.local.json` (§E.1 control-plane-guard resolves its location), `${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json` — and **ignores** a hatch defined there (a deliberate human override belongs in the launching shell), reporting it once in the session-start briefing and the decision log (`escape_via_settings_env`). control-plane-guard's deny on `env` edits stays, labelled a speed bump. `-I` already neutralizes `PYTHONPATH`/`PYTHONSTARTUP` for the dispatcher itself. Edits to `[hooks]`/`[guardrails]` by the agent are denied by control-plane-guard, and edits to `playbook/hooks/**` are `ask` (executable policy the user approves; §E.1 is the single verdict).
 
@@ -668,7 +673,7 @@ Implemented as `hook_policy.classify_hook(hook, ctx) -> list[str]` (per hook) pl
 | H18 | `linked_rule` resolves in the merged rule set. | `linked_rule 'python-error-handlng' not found` |
 | H19 | Body: `.md.j2` compiles under the sandboxed environment and never calls `rule()`; markdown links are self-contained (`"hooks"` joins `_LINK_CHECKED_SUBDIRS`, `commands/validate.py:241`). | `body calls {{ rule(...) }} — hook bodies cannot include rules` |
 | H20 | Authored rule ids do not start with the reserved advisory prefix `guardrail-`; a hook id equal to a rule or prompt id is reported (`playbook render` looks ids up across kinds). | `rule id 'guardrail-x' uses the reserved 'guardrail-' prefix` |
-| H21 | `[hooks]` / `[guardrails]` parse (unknown keys, types); `enable`/`disable` ids exist and are disjoint; `allow_code_from` ⊆ `overlays_enabled` ∪ {`"<repo-local>"`}; every `[hooks.<x>]` sub-table names an existing hook id (or the reserved `commit_convention`) and validates against that hook's `CONFIG_SCHEMA`; `[hooks.stop-ci-parity-gate] stages` ⊆ {`typecheck`, `tests`}; `[hooks.commit_convention] cutover_date` is a `"YYYY-MM-DD"` string; neither table appears in `.local.toml`. | `[hooks] disable: unknown hook id 'post-edit-ruff'` |
+| H21 | `[hooks]` / `[guardrails]` parse (unknown keys, types); `enable`/`disable` ids exist and are disjoint; `allow_code_from` ⊆ `overlays_enabled` ∪ {`"<repo-local>"`}; no `wrapper_prefixes` entry has a token naming a guarded command (`hook_runtime.wrapper_policy.hidden_program`, §D.2.5); every `[hooks.<x>]` sub-table names an existing hook id (or the reserved `commit_convention`) and validates against that hook's `CONFIG_SCHEMA`; `[hooks.stop-ci-parity-gate] stages` ⊆ {`typecheck`, `tests`}; `[hooks.commit_convention] cutover_date` is a `"YYYY-MM-DD"` string; neither table appears in `.local.toml`. | `[hooks] disable: unknown hook id 'post-edit-ruff'` |
 
 The OK line becomes `OK {rules + prompts + hooks} artifacts validated` (`commands/validate.py:394`).
 
@@ -755,8 +760,8 @@ Names this section introduces are marked *(shared name — proposed)*. Everythin
 | Output | Writer | Ownership proof | Cleanup | Drift rule |
 | --- | --- | --- | --- | --- |
 | `.claude/settings.json` → managed matcher groups under `hooks.<Event>[]` (plus opt-in `permissions.allow` strings, §C.2.8) | `ClaudeCodeAdapter.finalize` | **lockfile hash** of each managed element's canonical JSON (§C.2.3). JSON has no comment syntax, so no sentinel is possible (L8 exception) | stale managed elements are removed **inside `finalize`** by a span-preserving splice. The file is **never** unlinked | managed projection only (§C.2.6) |
-| `.claude/hooks/playbook/launch.sh` *(shared name — proposed)* | `ClaudeCodeAdapter.finalize` | sentinel on line 1 (`# <SENTINEL>`) + whole-file lockfile hash | `_scan_for_stale` once `.claude/hooks/playbook` is added to `_output_directories` (claude_code_adapter.py:155-159) | byte compare |
-| `.opencode/plugins/playbook-hooks.js` *(shared name — proposed)* | `OpenCodeAdapter.finalize` (NEW override) | sentinel on line 1 (`// <SENTINEL>`) + whole-file lockfile hash | inherited first-line sentinel scan once `.opencode/plugins` is added to `_output_directories` (opencode_adapter.py:96-104) | byte compare |
+| `.claude/hooks/playbook/launch.sh` *(shared name — proposed)* | `ClaudeCodeAdapter.finalize` | sentinel on line 1 (`# <SENTINEL>`) + whole-file lockfile hash. Written only over nothing or a sentinel-tagged file: a same-named user file or a symlink at the path or on a parent dir below the repo root is refused before any adapter writes, sync exiting 1 naming it (`adapters/_owned_files.py`, review finding #2) | `_scan_for_stale` once `.claude/hooks/playbook` is added to `_output_directories` (claude_code_adapter.py:155-159) | byte compare |
+| `.opencode/plugins/playbook-hooks.js` *(shared name — proposed)* | `OpenCodeAdapter.finalize` (NEW override) | sentinel on line 1 (`// <SENTINEL>`) + whole-file lockfile hash. Written only over nothing or a sentinel-tagged file: a same-named user plugin or a symlink at the path or on a parent dir below the repo root is refused before any adapter writes, sync exiting 1 naming it (`adapters/_owned_files.py`, review finding #1) | inherited first-line sentinel scan once `.opencode/plugins` is added to `_output_directories` (opencode_adapter.py:96-104) | byte compare |
 | `AGENTS.md` → trailing `## Guardrails` section | `AgentsMdAdapter.finalize` | existing file sentinel | existing `cleanup_stale` (agents_md_adapter.py:96-116) | byte compare |
 | `.continue/rules/30-guardrail-<id>.md` | `ContinueAdapter` through the ABC default `write_hook` | existing rule sentinel (renderer `continue_rule`) | existing sentinel scan (continue_adapter.py:83-87) | byte compare |
 | `rules/30-guardrail-<id>.md`, `.playbook/hooks/<id>/**`, manifest `kind = "hook"` | `AgentHarnessAdapter.finalize` | sentinel (first body line) / prior manifest for scripts | existing scan + `.playbook/hooks` (§C.6) | byte compare |
@@ -843,6 +848,7 @@ class Adapter(ABC):
 | after sync.py:157 | add `hooks, skipped = hook_policy.resolve_effective_hooks(ctx.hooks_resolved, rules, parse_hooks_config(ctx.config.extra_tables.get("hooks", {})), parse_guardrails_config(ctx.config.extra_tables.get("guardrails", {})), ctx.facts, ctx.repo_root)` — the single gating path (§A.7: on-formula, `applies_if`, `linked_rule`, guardrails merge, `supports ∩ [hooks] adapters`). `Config` has no `hooks` attribute; the tables live in `extra_tables` (P6). `skipped` feeds the sync summary (§C.1.5) |
 | after sync.py:170 | add `hooks = [h.with_rendered_body(_render_hook_body(h, base_context, base_env)) for h in hooks]` (`with_rendered_body` sets `advisory` from the rendered body, §A.8). Only the advisory **body** of a `HOOK.md.j2` is rendered, with `base_env` (`is_prompt_context=False`, so `rule()` is unavailable, sandboxed per P1). Frontmatter, handler commands and scripts are never rendered |
 | before sync.py:177 | add `prior_lock = ctx.state_source.load_lockfile()` |
+| before the adapter loop | the ownership preflight, beside the `settings.json` one: for each adapter, `check_engine_owned(repo_root / path, repo_root)` on every path of `adapter.planned_runtime_outputs(hooks)` (the `runtime_outputs` its `finalize` will write for these hooks; the ABC default is every declared one once a hook targets the adapter). A user file or a symlink there raises `UserOwnedFileError`: exit 1 naming the file, nothing written, in every mode (review findings #1, #2) |
 | sync.py:178-185 | per adapter: first `adapter.begin_sync(ctx.repo_root, prior_lock)`. After the skills loop (183-184), add `for hook in hooks: written.extend(adapter.write_hook(hook, ctx.repo_root))`. Then the existing `finalize` (185). Then `managed.extend(adapter.managed_lock_entries())` |
 | after sync.py:185 | sync-level writes (not adapters), when `[hooks] enabled` and a hook-capable adapter is on: `guard_config.json` from `[h.to_json() for h in hooks]` plus the §D.8.2/§E.0.5 tables, and the copied external-handler scripts (§C.0) |
 | sync.py:187-191 | `cleanup_stale` loop unchanged; it always runs after **every** adapter's `finalize`. `_run_sync` now returns the single `SyncResult(written, removed, provenance, managed)` of P4 |
@@ -896,7 +902,7 @@ Example (user-owned keys and the user's own hook group are preserved as-is; mana
   "permissions": { "deny": ["Read(./.env)"] },
   "hooks": {
     "PreToolUse": [
-      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "~/.claude/hooks/rtk-rewrite.sh" } ] },
+      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "~/.claude/hooks/command-rewrite.sh" } ] },
       { "matcher": "Bash|Edit|Glob|Grep|MultiEdit|NotebookEdit|PowerShell|Read|Write",
         "hooks": [ { "type": "command",
                      "command": "sh \"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}/.claude/hooks/playbook/launch.sh\" dispatch pre_tool_use --harness claude_code",
@@ -1157,23 +1163,24 @@ exit 0
   - Supported only with Git Bash, which is what Claude Code uses for the Bash tool and for shell-form hooks.
   - A PowerShell-only install runs `sh …` under PowerShell, the command fails, and Claude shows its non-blocking "hook error" notice: fail-open (QC-4).
   - `tool_input.file_path` arrives with backslashes. Normalization is the dispatcher's job (§D.2.4).
-- **Concurrent handlers.** All matching handlers run in parallel, including the user's own (for example the `rtk` rewriter). The playbook group sees the original `tool_input`, never another hook's `updatedInput`. **Known gap:** any user, plugin or skill hook that returns `updatedInput` can change the executed input after the playbook verdict (the last `updatedInput` to finish wins); ordering cannot close this because Claude runs hooks in parallel. control-plane-guard treats the creation of new hook carriers as a policy edit (§E.1).
+- **Concurrent handlers.** All matching handlers run in parallel, including the user's own (for example a command-rewriting hook). The playbook group sees the original `tool_input`, never another hook's `updatedInput`. **Known gap:** any user, plugin or skill hook that returns `updatedInput` can change the executed input after the playbook verdict (the last `updatedInput` to finish wins); ordering cannot close this because Claude runs hooks in parallel. control-plane-guard treats the creation of new hook carriers as a policy edit (§E.1).
 
 ### §C.3 OpenCode V1 (L5)
 
 #### §C.3.1 File and module rules
 
 - **Exactly one file**, `.opencode/plugins/playbook-hooks.js`.
+  - It is written only over nothing or a file with the line-1 sentinel. A user's plugin of that name, a non-regular file, or a symlink at the path, `.opencode` or `.opencode/plugins` is refused before any adapter writes (sync exits 1 naming it; `--check` prints `Cannot verify <path>: <reason>.`), never overwritten or written through.
   - It is auto-discovered by V1's non-recursive `{plugin,plugins}/*.{ts,js}` scan, so `opencode.json(c)` is never touched (SPEC §10.6.4 holds for it).
   - It is plain `.js`, because the Electron desktop sidecar runs it under Node, not Bun.
   - Its imports are only `node:` built-ins: no `@opencode-ai/plugin` runtime import, no `node_modules`, no Bun `$`.
 - **Exactly one export**: the default object. OpenCode loads every export as a plugin ("Plugin export is not a function"), so helpers and constants stay unexported.
 - **Never** subdirectories or helper files in `.opencode/plugins/`. V2 loads immediate subdirectories as plugin packages.
 - **Sentinel.** Line 1 is `// ` + the reconciled `renderer.SENTINEL` (L7). The `.opencode/plugins` entry in `_output_directories` therefore makes the inherited first-line scan clean up a stale shim. The duplicate `_default_cleanup` in opencode_adapter.py:106-131 should be deleted in favor of the ABC's (base.py:74-100); it is byte-identical.
-- **Rendering.** The shim is rendered from a packaged static template, `src/coding_agent_playbook/resources/hook_shims/opencode-plugin.js` *(proposed)*. A single placeholder, `/*@@REG@@*/`, is replaced (via `str.replace`) by `json.dumps(reg, sort_keys=True, separators=(",", ":"))`.
+- **Rendering.** The shim is rendered from a packaged static template, `src/coding_agent_playbook/templates/hook_shims/opencode-plugin.js`. A single placeholder, `/*@@REG@@*/`, is replaced (via `str.replace`) by `json.dumps(reg, sort_keys=True, separators=(",", ":"))`.
   - **Not Jinja**: JS braces would fight it, and L7 limits Jinja to bodies.
-  - The launcher (§C.2.7) uses the same mechanism from `resources/hook_shims/claude-launch.sh`.
-  - `resources/hook_shims/` is not an artifact subdir, so `FileSystemArtifactSource` never walks it.
+  - The launcher (§C.2.7) uses the same mechanism from `templates/hook_shims/claude-launch.sh`.
+  - `templates/hook_shims/` is engine wiring outside the bundled content, so `FileSystemArtifactSource` never walks it.
 - **SPEC amendments.** §2.2 (the "No OpenCode plugins" non-goal), §10.6.2 and §10.6.4 change from "users author plugins" to "the adapter owns exactly `plugins/playbook-hooks.js`; every other file in `.opencode/plugin(s)/` is user-owned". Q8 in §19 is resolved. The catalog's control-plane-guard path `.opencode/plugin/playbook-*` is corrected to `.opencode/plugins/playbook-hooks.js`.
 
 #### §C.3.2 Shim skeleton (rendered; `REG` shown for a typical default pack)
@@ -1580,7 +1587,7 @@ All tests are hermetic and use the CI command (`uv run python -m pytest -q`, no 
 
 - §2.2 / §2.3: OpenCode plugin generation moves from v2 aspiration to v1 (one generated shim).
 - §3: the Continue claim is corrected (L7); the Plugin (OpenCode) glossary entry states the one generated shim under `.opencode/plugins/` (§C.3.1).
-- §10.1: the four ABC additions, and `OpenCodeAdapter` joins the adapters that override `finalize()` (it composes the shim, §C.3.1, Track K4). (The older stale sentence "only ClaudeCodeAdapter overrides `finalize()`" was corrected separately, ahead of PR K; today `claude_code`, `agents_md` and `agent_harness` override `finalize()`.)
+- §10.1: the four ABC additions. Also fixes the stale sentence "only ClaudeCodeAdapter overrides `finalize()`"; `agents_md` and `agent_harness` already override it.
 - New §10.3.2: settings.json managed merge, launcher, pin.
 - §10.4: Guardrails section.
 - §10.6.2 / §10.6.4: the shim exception.
@@ -1669,7 +1676,7 @@ playbook-hook --version
 | `ledger.py` | session ledger append/read | post/stop |
 | `escape.py` | kill switches; `pragma_at_head(...)` | yes |
 | `proc.py` | **the only** `subprocess`/`shutil.which` seam; lazy `import subprocess`; mandatory `timeout=` | when used |
-| `git.py` | `GitPort` Protocol + `SafeGit` (§D.5.3): `head_tree`, `fingerprint`, `diff_added`, `cat_head`, `ls_untracked` | when used |
+| `git.py` | `GitPort` Protocol + `SafeGit` (§D.5.3): `head_tree`, `fingerprint`, `diff_added`, `cat_head`, `ls_untracked`; `_git_memo.MemoGit`, the dispatch's per-snapshot memo | when used |
 | `security/trust.py` (§B.4; not a `hook_runtime` module) | the one `TrustStore` (reader and writer, user-local, outside the repo) | stop / external |
 | `watchdog.py` | event deadline timer that emits the failure-policy result and calls `os._exit` | yes |
 | `stop/coordinator.py` | `StopCoordinator.run(ev, deps) -> CombinedResult` | stop |
@@ -1914,7 +1921,7 @@ class Segment:
     argv: tuple[str, ...]  # effective argv after env-prefix strip + wrapper unwrap
     raw_argv: tuple[str, ...]  # as written (post-shlex)
     env: tuple[tuple[str, str], ...]  # NAME=value prefixes, incl. those consumed by `env`
-    wrappers: tuple[str, ...]  # unwrapped chain, e.g. ("rtk", "timeout")
+    wrappers: tuple[str, ...]  # unwrapped chain, e.g. ("proxy", "timeout")
     redirects: tuple[Redirect, ...]
     heredoc_bodies: tuple[str, ...]  # data only, never parsed as commands
     cwd: str | None  # resolved cwd (after `cd X &&`, git -C, workdir); None = unknown
@@ -1950,7 +1957,7 @@ class ShellCommand:
 | `bash`/`sh`/`zsh`/`dash`/`ksh` | `-c SCRIPT` (including combined `-lc`, `-ec`, `-xc`, `-euc`) → recursive parse (`origin="bash_c"`). `bash file.sh` is opaque, not unwrapped |
 | `eval` | args joined → recursive parse |
 | `find … -exec/-execdir/-ok CMD … ;` | CMD extracted as an extra segment (`args_open=True`); `find` itself stays a segment (for `-delete`) |
-| `guard_config.shell.wrapper_prefixes` | longest-prefix token strip, e.g. `["rtk proxy", "rtk"]`. The user's `rtk hook claude` rewriter runs in parallel on the *original* input, but agents also type `rtk …` literally (catalog principle 18) |
+| `guard_config.shell.wrapper_prefixes` | longest-prefix token strip, e.g. `["proxy run", "proxy"]` for a command-rewriting launcher. A user's own rewriting hook runs in parallel on the *original* input, but agents also type `proxy …` literally (catalog principle 18). A prefix is stripped as bare tokens, so none of its tokens may name a guarded command, launcher, runner or shell (`wrapper_policy.hidden_program`; H21 for `[hooks]`). At run time `PLAYBOOK_HOOK_WRAPPER_PREFIXES` adds a developer's own prefixes (§D.7) |
 | `guard_config.shell.runner_wrappers` | default `uv run`, `uvx`, `poetry run`, `pdm run`, `hatch run`, `pipx run`, with their own options skipped. Kept in `wrappers`, so command-convention-guard still sees `uv run mypy` |
 
 **Limits and degradation.**
@@ -2238,6 +2245,7 @@ Because `.git/config` and `.gitattributes` are agent-writable, an unhardened Sto
 - **Disables other hook points.** It prepends `-c core.fsmonitor=false` (`core.fsmonitor` can name an executable), and adds `--no-ext-diff --no-textconv` to every `diff`/`log -p`/`show` call. It uses `cat-file -p <rev>:<path>` for blob reads.
 - **Scrubs the child env.** It removes `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` (except its own), `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_*`, `GIT_CONFIG_VALUE_*` and `GIT_EXTERNAL_DIFF`. It sets `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`, `GIT_PAGER=cat` and `LC_ALL=C`.
 - **Bounds time.** Timeouts are 2 s on hot-path calls (pragma checks, §E git guards) and 5 s in Stop stages. A timeout raises `GitTimeout`, which is handled by the failure policy.
+- **Answers each distinct read once per dispatch.** A dispatch is one snapshot of the working tree, so the dispatcher's git (`_ports.LazyGit`) is a memoizing `SafeGit` (`_git_memo.MemoGit`): a call to a read-only subcommand (`rev-parse`, `ls-files`, `diff`, `cat-file`, `grep`, `status`, `log`, `for-each-ref`, `merge-base`) with the same argv, stdin and accepted exit codes spawns once, and later askers reuse its answer. Temp-index calls (the fingerprint's `add` / `write-tree`) always spawn, a failed or timed-out call is not stored, and the CLI twins keep a plain `SafeGit` (a command may change the tree between its own reads). A default-tier Stop over a changed tree went from 24 git spawns (`rev-parse HEAD^{tree}` and `ls-files --others` 5x each, `diff HEAD` 4x) to 11.
 
 **Known cost.** `git add -A` writes loose blobs for modified and untracked non-excluded files into the object store, where `git gc` prunes them. See Q-D4. A `stat`-mode fallback fingerprint (sha256 over `git status --porcelain=v2 -z` plus per-path stat) is used when git is older than 2.26 or filter discovery fails. In that mode `unchanged_vs_head` is decided by an empty status, and the commit-policy cache key is unavailable.
 
@@ -2330,7 +2338,7 @@ There is one JSON line per decision event. `security/audit.py` defines two funct
 - `ask→deny`;
 - `override`: a post-tool event for a `tool_use_id` in the session's asked set, meaning the user approved an ask;
 - `degraded` (failure policy);
-- `escape` (a kill switch or allow env var used);
+- `escape` (a kill switch, allow env var or `PLAYBOOK_HOOK_WRAPPER_PREFIXES` used, its name in `escape`; for a variable that was ignored, `rule_id` names it and `escape` says why: `escape_via_settings_env`, or `wrapper_prefix_rejected` for a refused wrapper entry);
 - `untrusted` (an external handler or execution stage skipped);
 - `contract_violation`;
 - `canary` (doctor or heartbeat self-tests, also tagged `canary: true`).
@@ -2352,7 +2360,7 @@ The log never blocks, never prints to the model, and never touches the network. 
 
 - **Paths** are repo-relative. A path outside the repo is recorded as `"<outside>"`, and a path matching `secret_path_globs` as `"<secret-path>"`. Absolute paths and secret paths are never written.
 - **`cats`** come from `guard_config.path_classes`: `canonical`, `detector_input`, `generated`, `control_plane`, `py`, `test`, `notebook`, `eval_fixture`, `secret`.
-- **`verify`** is the `stop_gate.verify_commands` id matched against the segment's effective argv (§E verify-claim). Green runs arrive on `post_tool_use`. Red runs arrive on `post_tool_use_failure`, whose Bash error begins `Exit code N`.
+- **`verify`** is the `stop_gate.verify_commands` id matched against the segment's effective argv (§E verify-claim). The command and every row are unwrapped with `guard_config.shell`, the same unwrapping the guards judge a command by (§D.2.5: configured `wrapper_prefixes`, `runner_wrappers`, the built-in launcher table), then a leading `python -m` is dropped; so `proxy uv run pytest -q` counts as `pytest` once `proxy` is a wrapper, and a row written as `timeout 900 pytest -x` matches `pytest -x`. Green runs arrive on `post_tool_use`. Red runs arrive on `post_tool_use_failure`, whose Bash error begins `Exit code N`.
 - **Caps.** At most 2,000 lines per session. Beyond that the ledger compacts to a path-set summary.
 
 #### §D.6.4 Session flags and deferred notes
@@ -2367,7 +2375,7 @@ The log never blocks, never prints to the model, and never touches the network. 
 | `push_note(text)`, `drain_notes() -> list[str]` | deferred notes, max 5 |
 
 Deferred notes (e.g. quality-hook failure notes produced where no user-note channel exists) are drained per harness:
-- **Claude:** into the `systemMessage` of the next `user_prompt_submit` or `session_start` dispatch for the same session.
+- **Claude:** into the `systemMessage` of the next `user_prompt_submit` (registered only while a hook binds it) or `session_start` dispatch for the same session. Notes are pushed only on `session_end` and `pre_compact`, and each is followed by a `session_start` (a new session, or `source: compact`), so the default tier delivers them without a `user_prompt_submit` registration.
 - **OpenCode:** into the wire `notice` of **every** dispatch for the session (user_prompt_submit is not rendered and session_start is memoized by the shim, so neither could carry them); the shim pushes notices into the next model request (§C.3.2). OpenCode Stop results are not deferred notes: they are returned on stdout (§D.5.6).
 
 ### §D.7 Escape hatches, kill switches, pragmas
@@ -2382,6 +2390,7 @@ Escape hatches are read **only from the dispatcher process environment** (`os.en
 | `PLAYBOOK_GATE` | `off` | `stop` and `subagent_stop` skip all stages | once per session; user note `work NOT verified` |
 | `PLAYBOOK_ALLOW_GENERATED_EDIT` | `1` | guard-generated-outputs returns `NONE` (§E.1) | once per session; user note |
 | `PLAYBOOK_HOOKS_DISABLE` | comma-separated hook ids | step 4 of the pipeline skips the listed ids unless `mandatory` (§B.2) | once per session per id; user note |
+| `PLAYBOOK_HOOK_WRAPPER_PREFIXES` | comma-separated prefixes, each one or more words (`proxy,proxy run`); spaces normalized | after the config loads, the accepted prefixes join `guard_config.shell.wrapper_prefixes` for this dispatch, so every shell guard and the verify-run tags (§D.6.3) see the launched command. An entry any token of which names a guarded command, launcher, runner or shell (`wrapper_policy.hidden_program`, the H21 rule) is never applied | `escape: PLAYBOOK_HOOK_WRAPPER_PREFIXES` once per session while a prefix is in effect; a refused entry: one `escape` line `rule_id: PLAYBOOK_HOOK_WRAPPER_PREFIXES`, `escape: wrapper_prefix_rejected` (never the value), and a `doctor` warning |
 
 **Pragmas.** The pragmas are `playbook: allow-secret` and `playbook: trusted-artifact` (§E), found in a line comment. A pragma on line `L` of `path` is honored **only if present at HEAD**: `escape.pragma_at_head(git, repo_rel, line_text)` holds when `SafeGit` `cat-file -p HEAD:<path>` contains a line equal to `line_text` after whitespace strip.
 - **Cost.** One 2 s-bounded git call, made only when a payload or diff contains a pragma.
@@ -2410,7 +2419,7 @@ Escape hatches are read **only from the dispatcher process environment** (`os.en
 | `deadlines_ms` | per-event watchdog deadlines | the §D.4 formula (derived, not configured) | watchdog; §C registration timeouts |
 | `unattended_ask` | `"deny"` \| `"warn"` | `[hooks]` (§B.1) | §D.3.6 |
 | `logging` | `{decisions: bool, audit: bool, audit_mode}` | guard-decision-log / local-audit-log enablement | §D.6.2 |
-| `shell` | `{wrapper_prefixes[], runner_wrappers[]}` | engine defaults ∪ `[hooks]` ∪ overlays (add-only) | §D.2.5 |
+| `shell` | `{wrapper_prefixes[], runner_wrappers[]}` | engine defaults ∪ `[hooks]` ∪ overlays (add-only); at run time ∪ `PLAYBOOK_HOOK_WRAPPER_PREFIXES` (§D.7) | §D.2.5 |
 | `path_classes` | `{canonical, detector_input, generated, control_plane, py, test, notebook, eval_fixture}` globs | detector facts + layout + `protected` | ledger `cats`, stage planning |
 | `secret_path_globs` | list | `security/patterns.py::SECRET_PATH_GLOBS` ∪ overlay additions (add-only, L2) | path guards, fingerprint exclusions, ledger masking |
 | `secret_rules` | engine ruleset id/version + overlay `extra_patterns` (compiled and ReDoS-checked at validate) | `security/patterns.py` + overlays | secret-content-guard, the `secrets` stage |
@@ -2437,7 +2446,7 @@ Escape hatches are read **only from the dispatcher process environment** (`os.en
  "tools":{"ruff":{"argv":["/abs/.venv/bin/ruff"],"sig":[31457280,1728900000000000000,1234567]},
           "cz":{"argv":["/abs/.venv/bin/cz"],"sig":[…]},
           "project_python":{"argv":["/abs/.venv/bin/python3.13"],"sig":[…]}},
- "resource_roots":{"pkg:coding_agent_playbook/resources":"/abs/site-packages/coding_agent_playbook/resources"}}
+ "resource_roots":{"pkg:coding_agent_playbook/resources":"/abs/site-packages/coding_agent_playbook/_catalog/core"}}
 ```
 
 - `sig` is `[st_size, st_mtime_ns, st_ino]`, captured at sync. `project_python` is the project's interpreter for test/coverage stages (§F.1), distinct from the engine pin.
@@ -2468,7 +2477,7 @@ Escape hatches are read **only from the dispatcher process environment** (`os.en
 
 **Parametrized red-team tables** (`tests/hook_runtime/test_shell.py`, `test_paths.py`, `test_combine.py`, `test_render_*.py`):
 - **Shell parsing, mapping input to effective `argv`/`wrappers`/`dynamic`:**
-  - `rtk git push --force origin main`;
+  - `proxy git push --force origin main`;
   - `env FOO=1 sudo -u root timeout 5 rm -rf /`;
   - `bash -lc 'rm -rf ~'`;
   - `xargs rm -rf < list`;
@@ -2543,7 +2552,8 @@ The exit code is 0 for any completed simulation, whatever the decision, and 2 on
   - `claude --version` ≥ 2.1.295 wherever a registration carries `onFailure` (QC-11); `opencode --version` ≥ 1.18.29 when `opencode` is on PATH (QC-14); a warning when `copilot` is on PATH (Windows deny-all risk, §C.5.2);
   - the state root is mode 0700 and owned by the user;
   - `machine.json` tool signatures match;
-  - the trust-store status.
+  - the trust-store status;
+  - when `PLAYBOOK_HOOK_WRAPPER_PREFIXES` is set, a `wrappers` row: `ok` with the prefixes the dispatcher will strip, or a `warning` naming each refused entry and the command it would hide, or a value a settings-file `env` sets (ignored).
 - **Decision-log summary** over `--since` days (default 30): per hook, deny/ask/override/degraded counts and the override rate. This is the evidence needed before promoting an opt-in hook or flipping an ask to a deny (§E.0.2).
 - **Hygiene.** Canary runs use the session id `playbook-doctor-<pid>`, are logged `canary: true`, and their session dir is removed afterwards.
 - **Exit codes:** 0 healthy, 1 degraded, 2 broken.
@@ -2609,7 +2619,7 @@ The user's locks L1–L9 (selection) and addenda D-Q1–D-Q3 are final as resolv
 | **L9** commit naming | **Superseded by D-Q2/D-Q3.** The configurable convention is commitizen's own: `[tool.commitizen]` in the consumer's `pyproject.toml`, default `cz_conventional_commits`, with `cz_customize` / `schema_pattern` for a scoped or custom-regex convention. It is checked by `cz check` from the consumer toolchain. The engine adds only the committer-date `[hooks.commit_convention] cutover_date` filter for range checks. | §F.4, §B.1 | OQ-44, OQ-6 |
 | **D-Q1** reuse tools | Quality: ruff C901, PLR0911, PLR0912, PLR0913, PLR0915 in the single post-edit call (PLR1702 is preview and per-invocation opt-in), the existing static metrics, NEW `ruff_violations` (subprocess, non-regression), and NEW radon-backed `file_sloc`. Docstrings: ruff D100–D107 (DOC* is preview and opt-in) and `ruff_violations` family `docstrings`. Coverage: the existing `coverage` metric plus NEW stdlib `diff_coverage` over `coverage_xml.py` + `git diff -U0`. Radon stays the only optional extra; no stdlib `function_length` / `nesting_depth`. | §F.0–§F.3 | OQ-38, OQ-39, OQ-42 |
 | **D-Q2** commitizen | Commit names are checked by commitizen `cz check` (a subprocess pinned per worktree; fail-open plus the toolchain hint when missing). Twins: the `playbook-commit-msg` commit-msg entry and the `playbook ci` `commit-convention` step. No `playbook commit-lint`, no wrapper. | §F.4 | — |
-| **D-Q3** cut-over date | `cutover_date` is a TOML string `YYYY-MM-DD` (unset ⇒ every commit is checked), filtered on **committer** date for range checks (the CI twin and the push scan). The `pre_tool_use` check and the commit-msg twin always check. | §F.4, §B.1 | OQ-6 |
+| **D-Q3** cut-over date | `cutover_date` is a TOML string `YYYY-MM-DD` (unset ⇒ every commit is checked), filtered on **committer** date for range checks (the CI twin and the opt-in push scan, `check_push`). The `pre_tool_use` check and the commit-msg twin always check. | §F.4, §B.1 | OQ-6 |
 
 ### G.2 Spec-level locks
 
@@ -2627,7 +2637,7 @@ The user's locks L1–L9 (selection) and addenda D-Q1–D-Q3 are final as resolv
 | K-10 | Stop order = `STOP_STAGE_ORDER`; `priority` orders fan-out only | §D.5.2, §E.0.4 |
 | K-11 | Overlay-tier mechanisms are activated only by an overlay promoting them to `tier: default` | §A.6, §E.5 |
 | K-12 | Hooks are git-only in v1 | §C.2.7, §D.6.1 |
-| K-13 | Escape hatches come from the hook process env only; hatches defined in settings `env` objects are ignored and reported | §B.2, §D.7 |
+| K-13 | Escape hatches (and `PLAYBOOK_HOOK_WRAPPER_PREFIXES`) come from the hook process env only; hatches defined in settings `env` objects are ignored and reported | §B.2, §D.7 |
 | K-14 | The trust store holds approvals only; the interpreter pin is not a trust approval | §B.4 |
 | K-15 | Launcher design D (committed launcher + per-worktree pin) | §C.2.7 |
 | K-16 | Runtime decisions D-1…D-14 | §D.10 |
@@ -2776,7 +2786,7 @@ K11 applies every row; rows marked P ride with their Track P code fix.
 | §8.2 | Facts injected into the `sync --check` scratch run (P) | P2 |
 | §9.3 | `SandboxedEnvironment` (P) | P1 |
 | §9.7 | The `hook_advisory` and `hook_claude_settings` formats; Claude command frontmatter for `write_scope` | §C.4.1, §C.4.3 |
-| §10.1 | `hook_support`, `begin_sync`, `write_hook`, `managed_lock_entries`; `OpenCodeAdapter` added to the `finalize()` overrides (the older "only ClaudeCodeAdapter" sentence was fixed ahead of PR K) | §C.1.1, §C.1.2 |
+| §10.1 | `hook_support`, `begin_sync`, `write_hook`, `managed_lock_entries`; the stale `finalize` sentence fixed | §C.1.1 |
 | §10.2 | Continue: advisory degrade only (P) | P5 |
 | §10.3 (new §10.3.2) | settings.json managed merge, launcher, pin, heartbeat line, command frontmatter | §C.2, §C.4 |
 | §10.4 | Guardrails section | §C.4.2 |
@@ -2805,16 +2815,16 @@ K11 applies every row; rows marked P ride with their Track P code fix.
 
 Each question has one owner; the per-section lists (§B.7, §C.8, §D.12, the §E lists, §F.9) point here. The proposed default applies unless the user decides otherwise.
 
-**Status (2026-10-14).** The user accepted the proposed default for all 45 questions; every default below is now a decision, and the body text reflects them (OQ-19, OQ-43, OQ-45 and OQ-5 edited in place). No question remains open; only the commitizen start-up figure below still needs measuring.
+**Status (2026-10-14).** The user accepted the proposed default for all 45 questions; every default below is now a decision, and the body text reflects them (OQ-19, OQ-43, OQ-45 and OQ-5 edited in place). No question remains open. The commitizen start-up figure below is explicitly deferred (K11), and the note after it records how OQ-6 was applied.
 
 | ID | Question | Proposed default | Source | Status |
 | --- | --- | --- | --- | --- |
 | OQ-1 | `[guardrails]` as a second top-level table, or fold its domains into `[hooks.<domain>]`? | Keep `[guardrails]`: twins and permission rendering read policy even with hooks disabled. | §B.7 Q1 | Accepted |
-| OQ-2 | Ignore `[hooks]` / `[guardrails]` in `.local.toml` (no local *enable* of an opt-in hook)? | Accept; per-developer deviation is runtime-only (`PLAYBOOK_HOOKS_DISABLE`). | §B.7 Q2 | Accepted |
+| OQ-2 | Ignore `[hooks]` / `[guardrails]` in `.local.toml` (no local *enable* of an opt-in hook)? | Accept; per-developer deviation is runtime-only (`PLAYBOOK_HOOKS_DISABLE`; a developer's own command launchers through `PLAYBOOK_HOOK_WRAPPER_PREFIXES`, §D.7, read like the escape hatches and never able to hide a guarded command). | §B.7 Q2 | Accepted |
 | OQ-3 | Absent `[hooks]` ⇒ off, or on for every consumer on upgrade? | Off; `playbook init` asks (default yes), `--no-hooks` opts out, and sync prints one notice line. | §B.7 Q3 | Accepted |
 | OQ-4 | Keep P6–P9 in Track P? P8's validate-gated sync may break consumers whose content fails `playbook validate` today. | Keep in P; gate sync on the full validate set, with a MIGRATION note to run `playbook validate` before upgrading. | §B.7 Q4 | Accepted |
 | OQ-5 | Commit the CLAUDE.md edits, or keep them local under the harness-files policy? | Keep them local (the harness-files policy); SPEC §4.3 and the README carry the sentinel wording and the invariants. | §B.7 Q5 | Accepted |
-| OQ-6 | **Dogfooding.** D-Q3 says this repo sets `cutover_date` to the date the hooks PR lands, which needs a committed `.coding-agent-playbook.toml`; that flips the engine repo out of config-less validate (H16/H21 apply) and puts `sync --check` and `playbook ci` into its CI. Commit it, or keep the settings in the user's untracked setup? | Honor D-Q3 minimally: commit only `[hooks.commit_convention] cutover_date` (and `[tool.commitizen]` in `pyproject.toml`) and add the `playbook ci` job; keep `[hooks] wrapper_prefixes = ["rtk"]`, the command-convention rows and the trailer rows in the user's untracked setup. `.local.toml` cannot hold `[hooks]` (§B.1). | §F.4.1, §F.5, §E.4 | Accepted |
+| OQ-6 | **Dogfooding.** D-Q3 says this repo sets `cutover_date` to the date the hooks PR lands, which needs a committed `.coding-agent-playbook.toml`; that flips the engine repo out of config-less validate (H16/H21 apply) and puts `sync --check` and `playbook ci` into its CI. Commit it, or keep the settings in the user's untracked setup? | Honor D-Q3 minimally: commit only `[hooks.commit_convention] cutover_date` (and `[tool.commitizen]` in `pyproject.toml`) and add the `playbook ci` job; keep the developer's own wrapper prefixes (`PLAYBOOK_HOOK_WRAPPER_PREFIXES` in the launching shell, §D.7), the command-convention rows and the trailer rows in the user's untracked setup. `.local.toml` cannot hold `[hooks]` (§B.1). | §F.4.1, §F.5, §E.4 | Accepted |
 | OQ-7 | TTY-only trust approvals acceptable for scripted machine bootstrap? | Accept; document "one interactive `playbook sync` per machine". | §B.7 Q7 | Accepted |
 | OQ-8 | TOFU on (distribution, version) for entry-point handlers? | Not in v1: `allow_code_from` plus the consumer's dependency lock; revisit when an overlay ships one. | §B.7 Q8, §D.3.1 | Accepted |
 | OQ-9 | Align skills to recursive marker discovery? | Keep the difference; align skills in a separate PR if wanted. | §B.7 Q9 | Accepted |
@@ -2853,8 +2863,15 @@ Each question has one owner; the per-section lists (§B.7, §C.8, §D.12, the §
 | OQ-42 | Keep the strict `docstring_example` check at all? | Keep it, opt-in and off by default (about 40 stdlib lines): it encodes the user's "intent + one usage example" docstring convention. | Q-F7 | Accepted |
 | OQ-43 | **(new)** H11 requires every declared event to be reachable on every listed adapter, so toolchain-missing-hint (`post_tool_use_failure`) and local-audit-log (`session_end`, `user_prompt_submit`) cannot list `opencode` although their entries describe OpenCode behaviour. Relax H11? | Yes: require at least one reachable event per listed adapter; an unreachable event on a listed adapter is a validate warning plus a `degraded` label, and is simply not registered there. | §B.5 H11 vs §E.3, §E.5 | Accepted |
 | OQ-44 | **(new) L9 commit convention.** Confirm that D-Q2/D-Q3 close L9: commitizen's default `cz_conventional_commits`, a `cz_customize` `schema_pattern` for scoped or custom conventions, and the committer-date cut-over, with no engine-side `conventional \| scoped \| regex` setting. | Confirm; ship no preset beyond commitizen's default. | L9, D-Q2, D-Q3 | Accepted |
-| OQ-45 | **(new)** The `user_prompt_submit` active-prompt record is bound only as prompt-write-scope-guard's `prompt_scope_guard:ledger` companion, so disabling that guard silently makes the prompt-output-contract-on-stop stage inert. | Make the record a dispatcher branch, active whenever either hook is enabled. | §E.0.4, §E.2, §E.3 | Accepted |
+| OQ-45 | **(new)** The `user_prompt_submit` active-prompt record is bound only as prompt-write-scope-guard's `prompt_scope_guard:ledger` companion, so disabling that guard silently makes the prompt-output-contract-on-stop stage inert. | Make the record a dispatcher branch, active whenever either hook is enabled. Amended by review finding #6: no `user_prompt_submit` registration for it; each consumer resolves the turn's prompt from the transcript (once per turn), and only the `Skill` record stays a dispatcher branch. | §E.0.4, §E.2, §E.3 | Accepted |
 
-**Unverified figure (measure before GA):** the commitizen start-up cost on `git commit` / `git push` segments (0.1–0.3 s, an estimate in F.4.2) is measured in K10.
+**Deferred figure (measure before GA):** the commitizen start-up cost on `git commit` / `git push` segments (0.1–0.3 s, an estimate in F.4.2) is still unmeasured. K10 found no `cz` on the implementation machine, and installing one needs the package index, so neither K10 nor K11 has a number. The measurement is ready to run: `tests/hooks/test_commit_message_convention.py::test_cz_startup_latency`, gated on `PLAYBOOK_LATENCY_TESTS=1` with `cz` on PATH, prints the median of five `cz check --message` runs and asserts that it stays under the hook's 3 s `cz` timeout. Until it has run, F.4.2's figure remains an estimate. The cost lands only on `git commit` / `git push` segments, and the hook fails open on a timeout.
+
+**OQ-6 as applied (K11).**
+- **The committed `.coding-agent-playbook.toml`.** It carries `[hooks.commit_convention] cutover_date` as a quoted string, plus the `schema_version` / `[engine]` / `[project]` identity that every loadable config needs. `Config.from_dict` requires that identity: with a hooks-only file, `playbook validate` at the engine root fails with a `KeyError`. With it, validate leaves config-less mode and runs H15/H16/H21. The file has no `[hooks]` key besides the cut-over, so hooks stay off.
+- **`pyproject.toml`** gains `[tool.commitizen] name = "cz_conventional_commits"` with no version or bump keys.
+- **`.github/workflows/ci.yml`** gains a pull-request-only `playbook-ci` job. It checks out with `fetch-depth: 0`, installs `-e .` plus `commitizen>=3`, and runs `playbook ci --steps commit-convention --base origin/main`, with `PLAYBOOK_PR_TITLE` set only in `env:`. The test matrix and its `.[dev]` install are unchanged.
+- **`tests/integration/test_dogfood_config.py`** pins all three.
+- **The cut-over date.** `cutover_date` is `"2026-10-15"`: set it to the merge date before landing. The hooks PR's title must itself pass `cz check`, because the job also checks `PLAYBOOK_PR_TITLE`.
 
 **Resolved during editing (kept for traceability):** QC-5, QC-6, QC-9, QC-12, Q-D2 (→ OQ-18), Q-D7, Q-D8, Q-D9, E-Q1 (→ OQ-19), E-Q2, E-Q3, E-Q6 (→ OQ-18), E-Q7, E-Q10, §B.7 Q6 (D-Q3), §B.7 Q10, §E OQ4/OQ5/OQ9/OQ11 (§E OQ10 is a citation note, not a question), Q-F1, Q-F2, Q-F8.

@@ -1,7 +1,8 @@
 """``playbook import-harness <path> [--into <dir>]`` (PR H Track H3).
 
 Parses an Agent Harness tree back into canonical ``Rule`` / ``Prompt`` / ``Skill``
-artifacts and writes them into an overlay directory (default ``playbook/``) in the
+(and, from the sidecar, ``Hook``: :mod:`._import_hooks`) artifacts and writes
+them into an overlay directory (default ``playbook/``) in the
 :class:`~coding_agent_playbook.sources.filesystem.FileSystemArtifactSource` layout,
 so a later ``playbook sync`` can re-read them.
 
@@ -26,13 +27,22 @@ on the reconstructed objects directly.
 
 from __future__ import annotations
 
-import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.commands._import_files import (
+    copy_tree,
+    harness_root_for,
+    restore_exec_bit,
+)
+from coding_agent_playbook.commands._import_hooks import (
+    guardrail_warning,
+    hook_from_entry,
+    write_hook,
+)
 from coding_agent_playbook.harness.manifest import Manifest, ManifestEntry, read_manifest
 from coding_agent_playbook.harness.models import (
     ContentFile,
@@ -45,6 +55,8 @@ from coding_agent_playbook.harness.models import (
 )
 from coding_agent_playbook.harness.parser import parse_harness
 from coding_agent_playbook.types import (
+    Hook,
+    HookSchemaError,
     Prompt,
     PromptFrontmatter,
     Rule,
@@ -74,6 +86,7 @@ class ImportResult:
     rules: list[Rule] = field(default_factory=list)
     prompts: list[Prompt] = field(default_factory=list)
     skills: list[Skill] = field(default_factory=list)
+    hooks: list[Hook] = field(default_factory=list)
     raw_assets: list[Path] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -153,6 +166,7 @@ def _rule_from_entry(path: Path, entry: ManifestEntry) -> Rule:
             applies_if=dict(entry.applies_if),
             priority=entry.priority if entry.priority is not None else 50,
             tags=list(entry.tags),
+            lint_codes=dict(entry.lint_codes),
         ),
         body=body,
         template_body=body,
@@ -184,6 +198,8 @@ def _prompt_from_entry(path: Path, entry: ManifestEntry) -> Prompt:
             input_variables=[dict(v) for v in entry.input_variables],
             includes_rules=list(entry.includes_rules),
             eval_tasks=list(entry.eval_tasks),
+            output_contract=list(entry.output_contract),
+            write_scope=dict(entry.write_scope),
         ),
         body=body,
         template_body=body,
@@ -211,10 +227,10 @@ def _skill_from_entry(path: Path, entry: ManifestEntry) -> Skill:
     rebuilt.update(entry.extra_frontmatter)
 
     skill_dir = path.parent
-    harness_root = _harness_root_for(path, entry.path)
+    harness_root = harness_root_for(path, entry.path)
     for script in entry.scripts:
         if script.executable:
-            _restore_exec_bit(harness_root / script.path)
+            restore_exec_bit(harness_root / script.path)
 
     scripts_dir = skill_dir / "scripts"
     references_dir = skill_dir / "references"
@@ -225,22 +241,6 @@ def _skill_from_entry(path: Path, entry: ManifestEntry) -> Skill:
         references_dir=references_dir if references_dir.is_dir() else None,
         source_package=IMPORTED_SOURCE_PACKAGE,
     )
-
-
-def _harness_root_for(absolute: Path, relative: str) -> Path:
-    """Recover the harness root: ``absolute`` minus its harness-relative tail."""
-    depth = len(Path(relative).parts)
-    root = absolute
-    for _ in range(depth):
-        root = root.parent
-    return root
-
-
-def _restore_exec_bit(path: Path) -> None:
-    """Set the execute bit on POSIX (no-op on Windows / missing file)."""
-    if os.name != "posix" or not path.is_file():
-        return
-    os.chmod(path, os.stat(path).st_mode | 0o111)
 
 
 def _import_lossless(root: Path, manifest: Manifest) -> ImportResult:
@@ -258,11 +258,25 @@ def _import_lossless(root: Path, manifest: Manifest) -> ImportResult:
             result.prompts.append(_prompt_from_entry(absolute, entry))
         elif entry.kind == "skill":
             result.skills.append(_skill_from_entry(absolute, entry))
+        elif entry.kind == "hook":
+            _import_hook(root, absolute, entry, result)
         else:  # eval_task or unknown — no canonical adapter home
             result.warnings.append(
                 f"manifest entry {rel_path!r} has unsupported kind {entry.kind!r}; skipped"
             )
     return result
+
+
+def _import_hook(root: Path, absolute: Path, entry: ManifestEntry, result: ImportResult) -> None:
+    """Rebuild a hook from its sidecar entry; one that no longer parses is warned about and skipped."""
+    try:
+        hook = hook_from_entry(
+            absolute, entry, harness_root=root, source_package=IMPORTED_SOURCE_PACKAGE
+        )
+    except HookSchemaError as exc:
+        result.warnings.append(f"manifest entry {entry.path!r}: {exc}; skipped")
+        return
+    result.hooks.append(hook)
 
 
 # --- best-effort reconstruction (no manifest) ------------------------------
@@ -379,6 +393,8 @@ def _best_effort_content(item: ContentFile | RawAsset, top: str, result: ImportR
     # ``NN-`` so the canonical id matches what was emitted.
     rule_id = _strip_priority_prefix(rule_id)
     scope = "scoped" if top == "references" else "always"
+    if (lossy := guardrail_warning(rule_id)) is not None:
+        result.warnings.append(lossy)
     result.warnings.append(
         f"rule {rule_id!r}: scope inferred as {scope!r} from {top}/ placement; "
         "globs/applies_if/priority/tags/version not recoverable without sidecar"
@@ -457,9 +473,9 @@ def _write_skill(skill: Skill, into: Path) -> None:
     skill_dir.mkdir(parents=True, exist_ok=True)
     _write_skill_md(skill, skill_dir / "SKILL.md")
     if skill.scripts_dir is not None and skill.scripts_dir.is_dir():
-        _copy_tree(skill.scripts_dir, skill_dir / "scripts", restore_exec=True)
+        copy_tree(skill.scripts_dir, skill_dir / "scripts", restore_exec=True)
     if skill.references_dir is not None and skill.references_dir.is_dir():
-        _copy_tree(skill.references_dir, skill_dir / "references", restore_exec=False)
+        copy_tree(skill.references_dir, skill_dir / "references", restore_exec=False)
 
 
 def _write_skill_md(skill: Skill, target: Path) -> None:
@@ -467,24 +483,6 @@ def _write_skill_md(skill: Skill, target: Path) -> None:
     from coding_agent_playbook.types import format_frontmatter
 
     target.write_text(format_frontmatter(dict(skill.frontmatter), skill.body), encoding="utf-8")
-
-
-def _copy_tree(src: Path, dst: Path, *, restore_exec: bool) -> None:
-    """Copy ``src`` files into ``dst`` verbatim, preserving the executable bit.
-
-    Bytecode caches are skipped by the same rule sync uses, so running a harness
-    script never plants ``__pycache__`` in the canonical ``playbook/skills/``.
-    """
-    import shutil
-
-    from coding_agent_playbook.adapters._skill_files import skill_subtree_files
-
-    for path in skill_subtree_files(src):
-        out = dst / path.relative_to(src)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, out)
-        if restore_exec and os.name == "posix" and (os.stat(path).st_mode & 0o111):
-            _restore_exec_bit(out)
 
 
 def _write_raw_asset(asset: Path, into: Path) -> None:
@@ -502,6 +500,8 @@ def _write_result(result: ImportResult, into: Path) -> None:
         _write_prompt(prompt, into)
     for skill in result.skills:
         _write_skill(skill, into)
+    for hook in result.hooks:
+        write_hook(hook, into)
     for asset in result.raw_assets:
         _write_raw_asset(asset, into)
 
@@ -532,10 +532,10 @@ def run(args: argparse.Namespace) -> int:
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
 
-    count = len(result.rules) + len(result.prompts) + len(result.skills)
+    count = len(result.rules) + len(result.prompts) + len(result.skills) + len(result.hooks)
     print(
         f"imported {count} artifact(s) into {into} "
         f"({len(result.rules)} rules, {len(result.prompts)} prompts, "
-        f"{len(result.skills)} skills)"
+        f"{len(result.skills)} skills, {len(result.hooks)} hooks)"
     )
     return 0

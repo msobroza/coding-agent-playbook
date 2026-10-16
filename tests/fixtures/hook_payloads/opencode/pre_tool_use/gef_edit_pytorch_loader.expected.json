@@ -1,0 +1,56 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "parsed": {
+    "name": "pre_tool_use",
+    "harness": "opencode",
+    "session_id": "ses_7a1b2c3d4e5f",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "unattended": true,
+    "truncated": false,
+    "raw_event_name": "PreToolUse",
+    "tool": {
+      "name": "Edit",
+      "native_name": "edit",
+      "tool_class": "edit",
+      "tool_classes": [
+        "edit"
+      ],
+      "use_id": "call_gef_01",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
+          "repo_rel": "src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
+          "key": "src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
+          "repo_rel": "src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
+          "key": "src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
+          "new_string",
+          "return torch.load(p, weights_only=True)"
+        ]
+      ]
+    }
+  },
+  "result": {
+    "decision": "deny",
+    "reason": "Needs user approval (OpenCode cannot ask): \"setup/app/loader.py\" is a frozen fixture of eval task \"find-injected-vuln-pytorch-deserial\".\nsetup/ is the frozen starting state; find-injected-vuln fixtures are intentionally vulnerable and file_unchanged gates compare against it."
+  },
+  "wire": {
+    "stdout": "{\"v\":1,\"decision\":\"deny\",\"reason\":\"Needs user approval (OpenCode cannot ask): \\\"setup/app/loader.py\\\" is a frozen fixture of eval task \\\"find-injected-vuln-pytorch-deserial\\\".\\nsetup/ is the frozen starting state; find-injected-vuln fixtures are intentionally vulnerable and file_unchanged gates compare against it.\",\"context\":[],\"notice\":\"\"}\n",
+    "stderr": "",
+    "exit_code": 10
+  }
+}

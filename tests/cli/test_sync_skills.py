@@ -18,7 +18,7 @@ import pytest
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.lockfile import compute_hash
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
-from tests.fakes import FakeGitClient
+from tests.fakes import FakeGitClient, pre_gate_validate
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -325,6 +325,9 @@ def _rename_skill_id_case_and_sync(
 ) -> str:
     """Sync ``id: Demo``, rename it to ``id: demo``, sync again; return that sync's stdout.
 
+    The first sync bypasses the validate gate (``id: Demo`` breaks the Agent
+    Skills name rule): it models output a pre-gate engine wrote (prK §P P8).
+
     Asserts the FS-independent contract: ``--check`` reports drift (no crash)
     before the second sync, every root then holds exactly one fresh ``demo/``,
     and ``--check`` is clean afterwards.
@@ -333,7 +336,8 @@ def _rename_skill_id_case_and_sync(
     # through the ABC's sentinel cleanup, which must compare identity, not spelling.
     repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
     source = _write_repo_local_skill(repo, "Demo")
-    assert _sync.run(_ns(repo)) == 0
+    # ``id: Demo`` fails validate, which now gates sync: seed pre-gate output.
+    assert _sync.execute(repo, validate=pre_gate_validate) == 0
     skill_md = source / "SKILL.md"
     skill_md.write_text(skill_md.read_text().replace("id: Demo", "id: demo"))
     capsys.readouterr()
@@ -461,7 +465,8 @@ def _scenario_script_dropped_from_live_skill(repo: Path) -> FakeGitClient:
 def _scenario_case_only_rename(repo: Path) -> FakeGitClient:
     git = FakeGitClient()
     skill_md = _write_repo_local_skill(repo, "Demo") / "SKILL.md"
-    _sync_ok(repo, git)
+    # ``id: Demo`` fails validate, which now gates sync: seed pre-gate output.
+    assert _sync.execute(repo, git=git, validate=pre_gate_validate) == 0
     skill_md.write_text(skill_md.read_text().replace("id: Demo", "id: demo"))
     return git
 

@@ -373,7 +373,7 @@ def test_display_source_path_uses_package_prefix_for_overlay_tasks(tmp_path):
     [
         (
             "coding_agent_playbook.plugins.x",
-            ("content", "plugins", "x", "eval_tasks", "t"),
+            ("catalog", "plugins", "x", "eval_tasks", "t"),
             "coding_agent_playbook.plugins.x/eval_tasks/t/",
         ),
         ("some_overlay", ("weird_root", "task-x"), "some_overlay/resources/eval_tasks/task-x/"),

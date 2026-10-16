@@ -11,11 +11,15 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from typing import TYPE_CHECKING
 
 import pytest
 
 from coding_agent_playbook import _sentinel, renderer
 from coding_agent_playbook._sentinel import SENTINEL, has_sentinel, sentinel_line
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 #: The text every shipped consumer's generated files already carry. Changing it
 #: would make every consumer drift on upgrade, so it is pinned here verbatim.
@@ -126,3 +130,57 @@ def test_has_sentinel_positions(text: str) -> None:
 )
 def test_has_sentinel_rejects_unanchored_positions(text: str) -> None:
     assert has_sentinel(text) is False
+
+
+# --- file_has_sentinel: the bounded head read shared by adapters and the hook runtime ----------
+
+_WHOLE_TEXT_CASES = {
+    "line-1": f"{_HTML}\n# Title\n",
+    "line-1-crlf": f"{_HTML}\r\nbody\r\n",
+    "first-body-line": f"{_FRONTMATTER}{_HTML}\n\nbody\n",
+    "first-body-line-at-eof": f"{_FRONTMATTER}{_HTML}",
+    "lone-cr-after-sentinel": f"{_HTML}\rjunk\nbody\n",
+    "second-body-line": f"{_FRONTMATTER}\n{_HTML}\n",
+    "unterminated-frontmatter": f"---\nname: demo\n{_HTML}\n",
+    "fence-at-eof": "---\nname: x\n---",
+    "prose-quoting-it": f"Lines like `{_HTML}` are generated.\n",
+    "empty": "",
+}
+
+
+@pytest.mark.parametrize("text", list(_WHOLE_TEXT_CASES.values()), ids=list(_WHOLE_TEXT_CASES))
+def test_file_has_sentinel_matches_has_sentinel_on_whole_text(tmp_path: Path, text: str) -> None:
+    target = tmp_path / "f.md"
+    target.write_bytes(text.encode("utf-8"))
+
+    assert _sentinel.file_has_sentinel(target) is has_sentinel(text)
+    assert _sentinel.file_has_sentinel(str(target)) is has_sentinel(text)
+
+
+def test_file_has_sentinel_reads_bounded_head_and_is_binary_safe(tmp_path: Path) -> None:
+    """Only line 1 (or a frontmatter block + one line) is read; bad bytes are user-owned."""
+    big_body = "x" * (2 * _sentinel.SENTINEL_HEAD_BYTES) + "\n"
+    plain = tmp_path / "plain.md"
+    plain.write_text(f"# Title\n{big_body}", encoding="utf-8")
+    fronted = tmp_path / "fronted.md"
+    fronted.write_text(f"{_FRONTMATTER}{_HTML}\n{big_body}", encoding="utf-8")
+    huge_frontmatter = tmp_path / "huge.md"
+    huge_frontmatter.write_text(f"---\n{big_body}---\n{_HTML}\n", encoding="utf-8")
+    binary = tmp_path / "blob.bin"
+    binary.write_bytes(b"\xff\xfe\x00" + _HTML.encode() + b"\n")
+
+    assert _sentinel._sentinel_head(plain) == b"# Title\n"
+    assert _sentinel._sentinel_head(fronted) == f"{_FRONTMATTER}{_HTML}\n".encode()
+    assert _sentinel.file_has_sentinel(fronted) is True
+    assert _sentinel.file_has_sentinel(huge_frontmatter) is False
+    assert _sentinel.file_has_sentinel(binary) is False
+    assert _sentinel.file_has_sentinel(tmp_path / "missing.md") is False
+    assert _sentinel.file_has_sentinel(tmp_path) is False  # a directory
+
+
+def test_sentinel_text_is_injectable_for_a_rendered_guard_config() -> None:
+    custom = "<!-- GENERATED -->\nbody\n"
+
+    assert has_sentinel(custom, sentinel="GENERATED") is True
+    assert has_sentinel(f"{_HTML}\n", sentinel="GENERATED") is False
+    assert has_sentinel(f"{_HTML}\n", sentinel=SENTINEL) is True

@@ -13,22 +13,23 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.bundled_content import bundled_plugins
+from coding_agent_playbook.catalog import bundled_plugins
+from coding_agent_playbook.commands import _validate_links
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.links import LinksConfig
 from coding_agent_playbook.sources.base import ArtifactSource
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import Prompt, PromptFrontmatter
-from tests._content import PLUGINS_ROOT, bundled_plugin_dirs
+from tests._catalog import PLUGINS_ROOT, bundled_plugin_dirs
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.commands.validate import ValidationError
+    from coding_agent_playbook.commands._validation import ValidationError
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.types import Rule, Skill
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 
 def _ns(repo: Path) -> argparse.Namespace:
@@ -179,14 +180,14 @@ def _prompt(body: str) -> Prompt:
 
 def test_non_filesystem_source_still_applies_external_policy(tmp_path):
     source = _InMemorySource([_prompt("Bad [x](https://example.com/x).\n")])
-    errors = _validate._check_markdown_links(source, tmp_path, LinksConfig())
+    errors = _validate_links.check_markdown_links(source, tmp_path, LinksConfig())
     assert len(errors) == 1
     assert "example.com" in errors[0].message
 
 
 def test_non_filesystem_source_skips_relative_targets(tmp_path):
     source = _InMemorySource([_prompt("Rel [x](unresolvable.md).\n")])
-    assert _validate._check_markdown_links(source, tmp_path, LinksConfig()) == []
+    assert _validate_links.check_markdown_links(source, tmp_path, LinksConfig()) == []
 
 
 def _check_links_recording_visits(
@@ -200,7 +201,7 @@ def _check_links_recording_visits(
         errors, visited = _check_links_recording_visits(source, tmp_path, monkeypatch)
     """
     visited: list[Path] = []
-    real_scan = _validate._scan_markdown_file
+    real_scan = _validate_links._scan_markdown_file
 
     def _recording_scan(
         md: Path, *, root_dir: Path, links_config: LinksConfig
@@ -208,8 +209,8 @@ def _check_links_recording_visits(
         visited.append(md)
         return real_scan(md, root_dir=root_dir, links_config=links_config)
 
-    monkeypatch.setattr(_validate, "_scan_markdown_file", _recording_scan)
-    return _validate._check_markdown_links(source, repo, LinksConfig()), visited
+    monkeypatch.setattr(_validate_links, "_scan_markdown_file", _recording_scan)
+    return _validate_links.check_markdown_links(source, repo, LinksConfig()), visited
 
 
 def test_shipped_engine_artifacts_have_self_contained_links(
@@ -219,9 +220,11 @@ def test_shipped_engine_artifacts_have_self_contained_links(
     be self-contained under the strict default (empty allowlist)."""
     source = FileSystemArtifactSource(repo_root=tmp_path)
     errors, visited = _check_links_recording_visits(source, tmp_path, monkeypatch)
-    assert any("rules" in md.parts for md in visited), (
-        f"the link gate visited no rule of {source.engine_package} ({len(visited)} files scanned)"
-    )
+    for kind in ("rules", "hooks"):
+        assert any(kind in md.parts for md in visited), (
+            f"the link gate visited no {kind[:-1]} of {source.engine_package} "
+            f"({len(visited)} files scanned)"
+        )
     assert errors == [], "\n".join(f"{e.path}: {e.message}" for e in errors)
 
 
@@ -236,7 +239,7 @@ def _plugins_with_link_checked_markdown() -> set[str]:
     kind_dirs = [
         (plugin_dir.name, plugin_dir / kind)
         for plugin_dir in bundled_plugin_dirs()
-        for kind in _validate._LINK_CHECKED_SUBDIRS
+        for kind in _validate_links._LINK_CHECKED_SUBDIRS
     ]
     return {
         name
@@ -252,7 +255,7 @@ def test_every_bundled_plugin_has_self_contained_links(
     """The same CI gate with every bundled plugin enabled (SPEC §11.5).
 
     Plugins are walked only when enabled, so the engine-only gate above never
-    sees them. The plugin set is discovered, so a new ``content/plugins/<name>/``
+    sees them. The plugin set is discovered, so a new ``catalog/plugins/<name>/``
     is gated with no edit here (acceptance 5). Each plugin's containment root is
     its own directory, so a link into ``core/`` or another plugin fails.
     """

@@ -15,9 +15,9 @@ import re
 
 import pytest
 
-from tests._content import plugin_root
+from tests._catalog import plugin_root
 
-pytestmark = pytest.mark.content
+pytestmark = pytest.mark.catalog
 
 EXAMPLE = (
     plugin_root("python_design") / "skills" / "python-architecture/references/worked-example.md"

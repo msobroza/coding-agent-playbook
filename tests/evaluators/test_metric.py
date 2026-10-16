@@ -76,6 +76,18 @@ def test_static_metrics_excludes_execution() -> None:
     assert all(not m.needs_project for m in static_metrics())
 
 
+def test_default_static_selection_unchanged_by_opt_in_metrics() -> None:
+    """K10 Done-when: the new metrics register as static yet stay out of the default set."""
+    from coding_agent_playbook.evaluators.policy import OPT_IN_METRICS, resolve_metric_selection
+
+    registered = {m.name for m in static_metrics()}
+    default = {m.name for m in resolve_metric_selection(static_metrics())}
+
+    assert registered >= {"ruff_violations", "file_sloc", "docstring_example"}
+    assert default == _STATIC_BUILTIN_NAMES
+    assert registered - default == OPT_IN_METRICS
+
+
 def test_execution_metrics_is_the_needs_project_partition() -> None:
     names = {m.name for m in execution_metrics()}
     assert names >= _EXECUTION_NAMES
