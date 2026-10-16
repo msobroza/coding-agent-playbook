@@ -1,4 +1,9 @@
-"""Tests for the Claude Code adapter (PR B Track 7)."""
+"""Tests for the Claude Code adapter (PR B Track 7).
+
+The composed rule output (the ``.claude/CLAUDE.md`` stub and the
+``.claude/rules/coding-agent-playbook.md`` rules file) and its staleness are
+covered in ``test_claude_code_rules.py``.
+"""
 
 from __future__ import annotations
 
@@ -128,43 +133,6 @@ def test_claude_code_write_rule_appends_to_buffer_in_call_order(tmp_path):
     adapter.write_rule(_make_rule(rule_id="a", priority=10, name="A"), tmp_path)
     adapter.write_rule(_make_rule(rule_id="b", priority=20, name="B"), tmp_path)
     assert [item[:2] for item in adapter._buffered_rules] == [(10, "a"), (20, "b")]
-
-
-def test_claude_code_finalize_composes_claude_md(tmp_path):
-    adapter = ClaudeCodeAdapter()
-    # Insert in non-priority order to confirm finalize sorts.
-    adapter.write_rule(_make_rule(rule_id="b", priority=20, name="B rule"), tmp_path)
-    adapter.write_rule(_make_rule(rule_id="a", priority=10, name="A rule"), tmp_path)
-    written = adapter.finalize(tmp_path)
-    expected = tmp_path / ".claude" / "CLAUDE.md"
-    assert written == [expected]
-    assert expected.is_file()
-    content = expected.read_text(encoding="utf-8")
-    # First line carries the sentinel banner.
-    assert SENTINEL in content.split("\n", 1)[0]
-    # Both rule sections rendered.
-    assert "## A rule" in content
-    assert "## B rule" in content
-    # Priority-ordered: A (10) before B (20).
-    assert content.index("## A rule") < content.index("## B rule")
-
-
-def test_claude_code_finalize_ties_break_by_rule_id(tmp_path):
-    adapter = ClaudeCodeAdapter()
-    # Same priority — tie-break by rule_id alphabetically.
-    adapter.write_rule(_make_rule(rule_id="z", priority=50, name="Z rule"), tmp_path)
-    adapter.write_rule(_make_rule(rule_id="a", priority=50, name="A rule"), tmp_path)
-    adapter.finalize(tmp_path)
-    content = (tmp_path / ".claude" / "CLAUDE.md").read_text(encoding="utf-8")
-    assert content.index("## A rule") < content.index("## Z rule")
-
-
-def test_claude_code_finalize_with_no_rules_returns_empty(tmp_path):
-    """An empty buffer must produce no file — finalize is a no-op then."""
-    adapter = ClaudeCodeAdapter()
-    written = adapter.finalize(tmp_path)
-    assert written == []
-    assert not (tmp_path / ".claude" / "CLAUDE.md").exists()
 
 
 def test_claude_code_write_prompt_creates_command_file(tmp_path):
@@ -504,47 +472,6 @@ def test_claude_code_cleanup_stale_preserves_user_authored_skill_dir(tmp_path):
     assert helper.is_file()
 
 
-def test_claude_code_cleanup_stale_deletes_claude_md_when_buffer_empty(tmp_path):
-    """If finalize would skip CLAUDE.md (empty buffer), an existing sentinel-tagged
-    CLAUDE.md must be deleted so prior renders don't linger."""
-    claude_md = tmp_path / ".claude" / "CLAUDE.md"
-    claude_md.parent.mkdir(parents=True)
-    claude_md.write_text(f"<!-- {SENTINEL} -->\n# old\n", encoding="utf-8")
-
-    adapter = ClaudeCodeAdapter()  # empty buffer
-    deleted = adapter.cleanup_stale(set(), repo_root=tmp_path)
-
-    assert claude_md.resolve() in {p.resolve() for p in deleted}
-    assert not claude_md.exists()
-
-
-def test_claude_code_cleanup_stale_preserves_user_authored_claude_md(tmp_path):
-    """A user-authored CLAUDE.md (no sentinel) is never deleted."""
-    claude_md = tmp_path / ".claude" / "CLAUDE.md"
-    claude_md.parent.mkdir(parents=True)
-    claude_md.write_text("# My own CLAUDE.md\n", encoding="utf-8")
-
-    adapter = ClaudeCodeAdapter()
-    deleted = adapter.cleanup_stale(set(), repo_root=tmp_path)
-
-    assert claude_md.resolve() not in {p.resolve() for p in deleted}
-    assert claude_md.is_file()
-
-
-def test_claude_code_cleanup_stale_keeps_claude_md_when_in_written_paths(tmp_path):
-    """When CLAUDE.md was just regenerated, written_paths contains it and cleanup
-    must skip the regenerate-or-delete branch."""
-    claude_md = tmp_path / ".claude" / "CLAUDE.md"
-    claude_md.parent.mkdir(parents=True)
-    claude_md.write_text(f"<!-- {SENTINEL} -->\n# fresh\n", encoding="utf-8")
-
-    adapter = ClaudeCodeAdapter()
-    deleted = adapter.cleanup_stale({claude_md.resolve()}, repo_root=tmp_path)
-
-    assert claude_md.resolve() not in {p.resolve() for p in deleted}
-    assert claude_md.is_file()
-
-
 def test_claude_code_cleanup_stale_skips_binary_files(tmp_path):
     """A non-UTF-8 file in an output directory must not crash the scan."""
     commands = tmp_path / ".claude" / "commands"
@@ -559,16 +486,3 @@ def test_claude_code_cleanup_stale_skips_binary_files(tmp_path):
     # Binary file is neither deleted nor crashes the scan.
     assert binary.resolve() not in {p.resolve() for p in deleted}
     assert binary.exists()
-
-
-def test_claude_code_cleanup_stale_skips_binary_claude_md(tmp_path):
-    """A binary CLAUDE.md is left alone (defensive — never realistically happens)."""
-    claude_md = tmp_path / ".claude" / "CLAUDE.md"
-    claude_md.parent.mkdir(parents=True)
-    claude_md.write_bytes(b"\x80\x81\x82\x83")
-
-    adapter = ClaudeCodeAdapter()
-    deleted = adapter.cleanup_stale(set(), repo_root=tmp_path)
-
-    assert claude_md.resolve() not in {p.resolve() for p in deleted}
-    assert claude_md.exists()

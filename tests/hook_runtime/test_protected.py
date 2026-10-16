@@ -167,6 +167,20 @@ def test_sentinel_counts_only_at_anchored_positions(root: Path) -> None:
     assert _hit(pset, root, "tests/harness/fixtures/out.md") is None  # not an output dir
 
 
+def test_a_singleton_output_protects_that_file_not_its_directory(root: Path) -> None:
+    """Claude Code's rules file is one singleton (SPEC §10.3.1): its sentinel protects it,
+    while a sentinel-tagged sibling in the user's ``.claude/rules/`` is never read."""
+    rules_file = ".claude/rules/coding-agent-playbook.md"
+    _write(root, rules_file, f"{_HTML}\n# Project rules\n")
+    sibling = _write(root, ".claude/rules/team.md", f"{_HTML}\n# Team\n")
+    reader = SpyReader()
+    pset = _pset(_cfg(output_dirs=[".claude/CLAUDE.md", rules_file, "AGENTS.md"]))
+
+    assert _hit(pset, root, rules_file, reader=reader) == ProtectedHit(rules_file, "sentinel")
+    assert _hit(pset, root, ".claude/rules/team.md", reader=reader) is None
+    assert str(sibling) not in reader.opened
+
+
 def test_all_scoped_entries_are_skipped(root: Path) -> None:
     _write(root, ".claude/settings.json", '{"hooks": {}}\n')
     reader = SpyReader()

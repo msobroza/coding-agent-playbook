@@ -135,7 +135,7 @@ def test_sync_removes_deleted_skill_from_all_three_roots(tmp_path, make_syntheti
     assert re.search(r", 7 removed$", capsys.readouterr().out, re.MULTILINE)
     assert not (repo / ".continue" / "prompts" / "query-db.md").exists()
     assert user_skill.is_file()
-    for generated in ("AGENTS.md", ".claude/CLAUDE.md"):
+    for generated in ("AGENTS.md", ".claude/CLAUDE.md", ".claude/rules/coding-agent-playbook.md"):
         assert (repo / generated).is_file(), generated
 
 

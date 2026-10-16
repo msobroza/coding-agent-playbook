@@ -230,8 +230,8 @@ def test_claude_md_is_composite(tmp_path: Path, make_synthetic_repo: SyntheticRe
     """Multi-artifact outputs composed in ``finalize`` are ``kind="composite"``."""
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
     lockfile = _sync_and_load_lockfile(repo)
-    claude_md = _entry(lockfile, ".claude/CLAUDE.md")
-    assert _provenance_of(claude_md) == ("composite", "", "", "claude_code")
+    for path in (".claude/CLAUDE.md", ".claude/rules/coding-agent-playbook.md"):
+        assert _provenance_of(_entry(lockfile, path)) == ("composite", "", "", "claude_code")
     agents_md = _entry(lockfile, "AGENTS.md")
     assert _provenance_of(agents_md) == ("composite", "", "", "agents_md")
     text = (repo / ".coding-agent-playbook.lock").read_text(encoding="utf-8")

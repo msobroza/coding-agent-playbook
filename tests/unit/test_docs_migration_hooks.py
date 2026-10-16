@@ -3,8 +3,9 @@
 PR K is opt-in, but a few changes reach every consumer on upgrade: the
 validate-gated sync, lockfile schema 2, the ``.local.toml`` policy exclusion,
 ``--no-run-tests`` on the metrics hooks, the ``CoverageCheck`` fix, the PEP 503
-``detector_cache`` churn (OQ-36), the one-time heartbeat line (OQ-30) and the
-adapter ABC additions. Each test reads its expected text from the landed code
+``detector_cache`` churn (OQ-36), the one-time heartbeat line (OQ-30), the
+adapter ABC additions and the Claude Code rules' move to
+``.claude/rules/coding-agent-playbook.md``. Each test reads its expected text from the landed code
 where one exists (the lockfile schema, the sync abort and absent-table lines,
 the heartbeat line, the ``Adapter`` members, the ``CoverageCheck`` default), so
 the guide cannot drift from what shipped. Prose-only: no engine behaviour runs.
@@ -21,6 +22,7 @@ import pytest
 from coding_agent_playbook._pep503 import canonical_name
 from coding_agent_playbook.adapters._claude_hooks import CLAUDE_HEARTBEAT_LINE
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_RULES_PATH
 from coding_agent_playbook.commands._sync_hooks import HOOKS_NOTICE
 from coding_agent_playbook.commands._sync_lockfile import LOCKFILE_SCHEMA
 from coding_agent_playbook.commands.sync import _ABORT_OUTCOME
@@ -52,6 +54,7 @@ _TOPIC_ORDER = (
     "heartbeat",
     "adapter",
     "catalog/",
+    ".claude/rules/",
 )
 
 
@@ -93,6 +96,8 @@ def test_migration_heads_up_points_at_v0_20() -> None:
         "detector_cache",
         CLAUDE_HEARTBEAT_LINE,
         "hook_support",
+        CLAUDE_RULES_PATH,
+        "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT",
     ],
 )
 def test_migration_v0_20_covers_topic(phrase: str) -> None:

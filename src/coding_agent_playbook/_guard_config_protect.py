@@ -9,7 +9,7 @@ so the hot path never renders a template or spawns ``playbook``:
   ``sha256`` on the scoped rows (the managed ``settings.json`` elements), so
   control-plane-guard can tell a managed element from a user one;
 - ``output_dirs``: each enabled adapter's sentinel-scanned ``_output_directories()``
-  (repo-relative, trailing ``/``) plus its composite singleton, the files a
+  (repo-relative, trailing ``/``) plus its composite singletons, the files a
   sentinel can mark as engine output;
 - ``hook_artifacts``: the guardrail files themselves, which only the user may change;
 - ``resource_roots``: package-relative ids (``pkg:<package>/resources``) of the
@@ -29,6 +29,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
+# The stdlib-only paths module, not the adapter: this sync-time module stays free
+# of the renderer (jinja2, yaml), and no adapter import can cycle back here.
+from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_CODE_COMPOSITES
+
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, Sequence
     from pathlib import Path
@@ -47,10 +51,14 @@ __all__ = [
     "resource_root_ids",
 ]
 
-#: The multi-source file each adapter's ``finalize`` writes, by adapter name.
-COMPOSITE_SINGLETONS: Final[Mapping[str, str]] = {
-    "claude_code": ".claude/CLAUDE.md",
-    "agents_md": "AGENTS.md",
+#: The multi-source files each adapter's ``finalize`` writes, by adapter name.
+#: ``claude_code`` composes two since its rules (and hook advisories and the
+#: heartbeat line) moved to ``.claude/rules/coding-agent-playbook.md`` beside a
+#: rule-free ``.claude/CLAUDE.md`` stub (SPEC §10.3.1): guard-generated-outputs
+#: must deny an edit of either, and the drift scan must see either as an orphan.
+COMPOSITE_SINGLETONS: Final[Mapping[str, tuple[str, ...]]] = {
+    "claude_code": CLAUDE_CODE_COMPOSITES,
+    "agents_md": ("AGENTS.md",),
 }
 _RESOURCE_ID: Final = "pkg:{package}/resources"
 
@@ -138,7 +146,7 @@ def protected_rows(
 
 
 def adapter_output_dirs(adapters: Mapping[str, Adapter], out_root: Path) -> list[str]:
-    """Each adapter's sentinel-scan dirs (``x/``) and composite singleton, repo-relative, sorted.
+    """Each adapter's sentinel-scan dirs (``x/``) and composite singletons, repo-relative, sorted.
 
     The same directories the adapters' ``stale_outputs`` scan, so a guard and
     ``sync --check`` agree on which sentinel files are engine output; native
@@ -156,8 +164,7 @@ def adapter_output_dirs(adapters: Mapping[str, Adapter], out_root: Path) -> list
             rel = _relative(directory.resolve(), root)
             if rel is not None and rel != ".":
                 found.add(f"{rel}/")
-        if name in COMPOSITE_SINGLETONS:
-            found.add(COMPOSITE_SINGLETONS[name])
+        found.update(COMPOSITE_SINGLETONS.get(name, ()))
     return sorted(found)
 
 

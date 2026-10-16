@@ -89,7 +89,9 @@ hooks on, one dispatcher answers every harness event at run time:
                                                                                  ▼
  adapters: each writes what its harness reads
    continue       .continue/rules/ + .continue/prompts/
-   claude_code    .claude/ + managed hook entries in .claude/settings.json
+   claude_code    .claude/ (rules in .claude/rules/coding-agent-playbook.md,
+                           a rule-free .claude/CLAUDE.md stub)
+                           + managed hook entries in .claude/settings.json
                            + .claude/hooks/playbook/launch.sh
    opencode       .opencode/ + .opencode/plugins/playbook-hooks.js
    agents_md      AGENTS.md (always; a ## Guardrails section when hooks are on)
@@ -227,6 +229,10 @@ meaningful in a working copy that has already been synced.) From then on the `po
 hook re-runs it after every checkout and pull; run it by hand whenever you
 change `playbook/` or the config. `AGENTS.md` is always generated regardless of
 which adapters are enabled (as long as at least one rule or hook advisory applies).
+Claude Code gets the same rule sections in `.claude/rules/coding-agent-playbook.md`,
+which it loads natively; the generated `.claude/CLAUDE.md` is a rule-free stub, so
+OpenCode v1 (which attaches that file when it reads under `.claude/`) never loads
+the rules twice (SPEC §10.3.1). Any other `.claude/rules/` file is yours.
 
 What `sync` does with git, by `[output] commit` in `.coding-agent-playbook.toml`:
 
@@ -792,8 +798,8 @@ degraded and 2 when broken. `simulate` runs the exact dispatch pipeline on one
 payload (the JSON the harness would send on stdin) with a throwaway state
 directory, so your real decision log is never touched. With
 `session-start-playbook-briefing` on, Claude Code shows `PLAYBOOK-GUARDS: OK` at
-session start, and `.claude/CLAUDE.md` ends with a line asking Claude to tell you
-when that heartbeat is missing.
+session start, and `.claude/rules/coding-agent-playbook.md` ends with a line asking
+Claude to tell you when that heartbeat is missing.
 
 ### Caveats
 

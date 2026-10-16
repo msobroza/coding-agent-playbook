@@ -103,7 +103,8 @@ def deny_reason(hit: ProtectedHit, *, composite: bool = False) -> str:
     """The ≤4-line reason for ``hit``, chosen by provenance (§E.1).
 
     ``composite`` marks a sentinel hit on a multi-source singleton
-    (``AGENTS.md``, ``.claude/CLAUDE.md``) that has no lock row.
+    (``AGENTS.md``, ``.claude/CLAUDE.md``, ``.claude/rules/coding-agent-playbook.md``)
+    that has no lock row.
 
     Example::
 

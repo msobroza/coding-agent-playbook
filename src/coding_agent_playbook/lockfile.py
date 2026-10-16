@@ -44,9 +44,10 @@ if TYPE_CHECKING:
 
 ProvenanceKind = Literal["rule", "prompt", "skill", "hook", "composite", "runtime"]
 """Who produced a generated path. ``composite`` = a multi-source output
-(``finalize`` results such as ``CLAUDE.md`` / ``AGENTS.md``, or a path written
-by two different artifacts); ``hook`` = a copied external-handler script;
-``runtime`` = hook runtime files and managed settings elements (§B.6)."""
+(``finalize`` results such as ``.claude/CLAUDE.md``, Claude Code's rules file and
+``AGENTS.md``, or a path written by two different artifacts); ``hook`` = a
+copied external-handler script; ``runtime`` = hook runtime files and managed
+settings elements (§B.6)."""
 
 PROVENANCE_KINDS: Final[tuple[str, ...]] = get_args(ProvenanceKind)
 

@@ -27,8 +27,8 @@ before. Authoritative design: `specs/prK-lifecycle-hooks.md` and
 
 | You are… | Migration |
 |---|---|
-| **Every consumer repo** | Run `playbook validate` before upgrading and fix what it reports (§2). Nothing else is required: hooks stay off, and the only other changes are the lockfile schema (§1) and one notice line from `playbook sync` (§3). |
-| A repo that **wants lifecycle hooks** | Re-run `playbook init` (it asks) or set `[hooks] enabled = true`, then run `playbook sync` once interactively on each machine (§3). Expect a one-time `.claude/CLAUDE.md` change (§9). |
+| **Every consumer repo** | Run `playbook validate` before upgrading and fix what it reports (§2). Nothing else is required: hooks stay off, and the only other changes are the lockfile schema (§1), one notice line from `playbook sync` (§3) and, with `claude_code` enabled, the rules' one-time move from `.claude/CLAUDE.md` to `.claude/rules/coding-agent-playbook.md` (§12). |
+| A repo that **wants lifecycle hooks** | Re-run `playbook init` (it asks) or set `[hooks] enabled = true`, then run `playbook sync` once interactively on each machine (§3). Expect a one-time change to the Claude Code rules file (§9). |
 | A repo whose **`.coding-agent-playbook.local.toml`** sets `[hooks]`, `[guardrails]` or `[metrics]` | Move them to the committed config: the local copies are ignored (§4). |
 | A **`playbook metrics`** user | The engine's pre-commit hook: nothing. An `init`-written `repo: local` hook with `[metrics] run_tests = true`: add `--no-run-tests` (§5). `--run-tests` with a `git:` baseline now also grades `diff_coverage` (§7). |
 | Code calling **`CoverageCheck(warn=80.0)`** | Pass the 0–1 cutoff, `warn=0.8` (§6). |
@@ -78,8 +78,8 @@ checks it skips.
 ### 3. `[hooks]`: opt in through `playbook init`, or not at all
 
 An engine upgrade never enables hooks. Without a `[hooks]` table every mode of
-`playbook sync` renders byte for byte what v0.19 rendered, and write mode prints
-one line:
+`playbook sync` renders byte for byte what v0.19 rendered (apart from the
+Claude Code rules file, §12), and write mode prints one line:
 
 ```text
 hooks available: add [hooks] enabled = true or re-run playbook init
@@ -177,11 +177,11 @@ the `has_dev_dependency` predicate, dependency-allowlist-guard and
   Spell `applies_if` names in the normalized form
   (`has_framework: ["pytest-asyncio"]`).
 
-### 9. One heartbeat line in `.claude/CLAUDE.md`
+### 9. One heartbeat line in the Claude Code rules file
 
 With hooks on, `session-start-playbook-briefing` (a `default`-tier hook) proves
-at session start that the guards answer, and `.claude/CLAUDE.md` ends with one
-fixed line:
+at session start that the guards answer, and the Claude Code rules file
+`.claude/rules/coding-agent-playbook.md` (§12) ends with one fixed line:
 
 ```text
 If PLAYBOOK-GUARDS: OK did not appear at session start, tell the user guardrails are not running before risky work.
@@ -189,7 +189,8 @@ If PLAYBOOK-GUARDS: OK did not appear at session start, tell the user guardrails
 
 It appears once per opted-in repo and never changes after that (OQ-30). Under
 `[output] commit = true`, commit that one-time diff; under the default it is
-local output. `AGENTS.md` never carries it, and it goes away with the hook.
+local output. `AGENTS.md` never carries it, nor does the `.claude/CLAUDE.md`
+stub, which OpenCode v1 also reads (§12); it goes away with the hook.
 
 ### 10. Out-of-tree adapters: the hook members, and `stale_outputs`
 
@@ -281,6 +282,49 @@ Eval tasks stay a per-layer kind: a bundled plugin may ship
 `catalog/plugins/<name>/eval_tasks/<id>/`, which finds its prompt in the plugin's
 own `prompts/` and is listed by `playbook eval --list` only where the plugin is
 enabled.
+
+### 12. Claude Code rules move to `.claude/rules/coding-agent-playbook.md`
+
+The `claude_code` adapter now writes every rule section (and, with hooks on, the
+advisories of hooks Claude Code cannot enforce and the §9 heartbeat line) to one
+rules file, `.claude/rules/coding-agent-playbook.md`, and `.claude/CLAUDE.md`
+becomes a four-line generated stub with no rules in it. Claude Code loads a
+`.claude/rules/` file without `paths:` frontmatter natively, at launch and with
+the same priority as `.claude/CLAUDE.md`, so Claude sees the same rules as
+before; the sections are unchanged and still byte-identical to `AGENTS.md`'s
+(SPEC §10.3.1).
+
+**Why.** OpenCode v1 attaches `.claude/CLAUDE.md` every time its read tool opens
+a file under `.claude/`, so it loaded the rules twice (`AGENTS.md` plus that
+copy, again after each compaction, in each subagent session and on each
+`@`-mention) and saw the Claude-only heartbeat line. No OpenCode version reads
+`.claude/rules/`, so that duplicate is gone. The stub must stay: any
+`CLAUDE.md` stops Claude Code from also reading the root `AGENTS.md`, and a
+rules file does not.
+
+What the next `playbook sync` (or the post-checkout / post-merge hook) does:
+
+- It rewrites `.claude/CLAUDE.md` to the stub, writes the rules file, and locks
+  and gitignores both. Under the default `[output] commit = false` there is
+  nothing to do. Under `commit = true`, commit both files; until then
+  `playbook sync --check` reports them as drift.
+- As before, sync overwrites hand edits of `.claude/CLAUDE.md`, and now of the
+  rules file too; with hooks on, guard-generated-outputs denies an agent's edit
+  of either. Change rules in `playbook/rules/`, and keep your own notes in a
+  file the engine does not own, such as your own `.claude/rules/<name>.md`.
+- Every other `.claude/rules/` file stays yours: the engine owns exactly
+  `coding-agent-playbook.md` there and never reads, rewrites, gitignores or
+  deletes any other file.
+- Rules are still unscoped: the rules file has no `paths:` frontmatter, so every
+  rule loads in full, as before; a rule's globs stay advisory.
+- An OpenCode v1 user who set `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1` for the
+  duplicate may unset it once synced (it also hid the global
+  `~/.claude/CLAUDE.md` from OpenCode).
+
+Not changed: `AGENTS.md`, `.continue/`, `.opencode/` and `shared_skills/`
+output (so OpenCode v2, Codex, Cursor and Copilot see no difference), prompts
+(`.claude/commands/`) and skills (`.claude/skills/`), and
+`playbook render --format claude_md_section` (the format name and its bytes).
 
 ## v0.19 — Bundled content moves to `content/` (now `catalog/`); packs become bundled plugins
 

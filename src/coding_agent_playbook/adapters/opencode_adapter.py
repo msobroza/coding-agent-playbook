@@ -4,8 +4,11 @@ OpenCode reads ``AGENTS.md`` natively for rules (walking up the directory
 tree and loading every ``AGENTS.md`` on the way; v1 also falls back to
 ``CLAUDE.md`` when none exists and, on reads, attaches a subdirectory
 ``CLAUDE.md`` such as ``.claude/CLAUDE.md``; the v2 core reads ``AGENTS.md``
-only — SPEC §10.6), so rules are routed through the AGENTS.md adapter. This
-adapter writes OpenCode's own native outputs:
+only — SPEC §10.6), so rules are routed through the AGENTS.md adapter. The
+``claude_code`` adapter keeps ``.claude/CLAUDE.md`` rule-free (its rules, hook
+advisories and heartbeat line live in ``.claude/rules/``, which no OpenCode
+version reads), so that v1 attachment adds only a short header, not a second
+copy of the rules. This adapter writes OpenCode's own native outputs:
 
 - prompts -> ``.opencode/command/<slash>.md`` slash commands;
 - skills  -> ``.opencode/skills/<id>/`` (``SKILL.md`` + ``scripts/`` +

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook import renderer
+from coding_agent_playbook._guard_config_protect import COMPOSITE_SINGLETONS
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
@@ -305,13 +306,33 @@ def test_protected_output_dirs_match_adapter_stale_scan_dirs(tmp_path: Path) -> 
         for adapter in adapters.values()
         for path in adapter._output_directories(tmp_path)
     }
-    assert set(dirs) == scanned | {".claude/CLAUDE.md", "AGENTS.md"}
+    composites = {".claude/CLAUDE.md", ".claude/rules/coding-agent-playbook.md", "AGENTS.md"}
+    assert set(dirs) == scanned | composites
     assert ".claude/skills/" not in dirs  # skill output is lockfile-only (main #25)
+    assert ".claude/rules/" not in dirs  # every other rules file is the user's
     assert dirs == sorted(dirs)
     assert adapter_output_dirs({"continue": ContinueAdapter()}, tmp_path) == [
         ".continue/prompts/",
         ".continue/rules/",
     ]
+
+
+@pytest.mark.parametrize("name", sorted(COMPOSITE_SINGLETONS))
+def test_composite_singletons_are_exactly_what_finalize_writes(tmp_path: Path, name: str) -> None:
+    """The guard, the drift scan and ``sync`` must agree on every multi-source file.
+
+    Since the Claude Code rules moved to ``.claude/rules/coding-agent-playbook.md``
+    (SPEC §10.3.1) ``claude_code`` composes two files; both are singletons.
+    """
+    adapter = {"claude_code": ClaudeCodeAdapter, "agents_md": AgentsMdAdapter}[name]()
+    body = "Use type hints.\n"
+    fm = RuleFrontmatter(id="typing", name="Typing", description="d", scope="always")
+    adapter.write_rule(Rule(fm, body, body, False, None, "test"), tmp_path)
+
+    written = adapter.finalize(tmp_path)
+
+    relative = tuple(path.relative_to(tmp_path).as_posix() for path in written)
+    assert relative == COMPOSITE_SINGLETONS[name]
 
 
 def test_resource_roots_are_package_relative_ids() -> None:

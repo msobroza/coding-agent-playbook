@@ -10,7 +10,8 @@ Every start, resume, clear, compaction and fork gets one context item:
   launcher, the OpenCode shim, a copied script) or an unreadable lockfile is
   degraded too; ``guard_config.json`` itself is verified by the dispatcher
   before any hook runs (a fault prints ``DEGRADED: config`` from ``_faults``).
-  ``.claude/CLAUDE.md`` tells the model to warn the user when the line is missing.
+  ``.claude/rules/coding-agent-playbook.md`` tells the model to warn the user
+  when the line is missing.
 - **Anomalies** (``_briefing_probes``), one line each; on ``compact`` only
   drift and the branch are restated. The whole item stays within 600 characters.
 

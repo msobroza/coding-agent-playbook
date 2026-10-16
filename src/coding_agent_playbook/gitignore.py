@@ -8,6 +8,7 @@ else — it is stdlib-only, never calls git, and never touches a byte of the
 
     # >>> coding-agent-playbook (managed — do not edit) >>>
     /.claude/CLAUDE.md
+    /.claude/rules/coding-agent-playbook.md
     /.claude/skills/review/
     /.coding-agent-playbook.lock
     /AGENTS.md
