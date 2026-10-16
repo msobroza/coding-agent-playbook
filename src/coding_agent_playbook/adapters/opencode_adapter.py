@@ -1,8 +1,11 @@
 """OpenCode adapter. See SPEC.md §10.6.
 
 OpenCode reads ``AGENTS.md`` natively for rules (walking up the directory
-tree, with ``CLAUDE.md`` as fallback), so rules are routed through the AGENTS.md
-adapter. This adapter writes OpenCode's own native outputs:
+tree and loading every ``AGENTS.md`` on the way; v1 also falls back to
+``CLAUDE.md`` when none exists and, on reads, attaches a subdirectory
+``CLAUDE.md`` such as ``.claude/CLAUDE.md``; the v2 core reads ``AGENTS.md``
+only — SPEC §10.6), so rules are routed through the AGENTS.md adapter. This adapter writes OpenCode's own native
+outputs:
 
 - prompts -> ``.opencode/command/<slash>.md`` slash commands;
 - skills  -> ``.opencode/skills/<id>/`` (``SKILL.md`` + ``scripts/`` +
@@ -12,9 +15,11 @@ adapter. This adapter writes OpenCode's own native outputs:
 
 OpenCode *also* scans ``.claude/skills/`` (Claude-compatibility discovery), so
 with ``claude_code`` enabled the same skill is found twice. That is safe:
-OpenCode stores discovered skills in a ``Map`` keyed by skill name, last write
-wins (anomalyco/opencode ``packages/core/src/config/plugin/compatibility.ts:53``
-and ``skill.ts:155``), and both copies are byte-identical.
+OpenCode keeps one skill per key, last write wins — v1.19.x keys a record by
+frontmatter ``name`` and logs a "duplicate skill name" warning
+(``packages/opencode/src/skill/index.ts:125-134``), v2 keys a ``Map`` by the
+skill directory name (``packages/core/src/skill.ts:100-101``). The engine
+writes ``name`` = id = directory name and both copies are byte-identical.
 """
 
 from __future__ import annotations
@@ -63,9 +68,9 @@ class OpenCodeAdapter(Adapter):
         """Return ``[]`` — OpenCode reads ``AGENTS.md`` natively.
 
         Rules are emitted by the AGENTS.md adapter at the repo root, which
-        OpenCode picks up by walking up the directory tree (with
-        ``CLAUDE.md`` as a documented fallback). Duplicating them here would
-        only create drift, so this method is intentionally a no-op.
+        OpenCode picks up by walking up the directory tree (``CLAUDE.md`` is
+        read by v1 only; see SPEC §10.6). Duplicating them here would only
+        create drift, so this method is intentionally a no-op.
         """
         del rule, repo_root
         return []
@@ -104,7 +109,7 @@ class OpenCodeAdapter(Adapter):
         Delegates to the shared :class:`SkillWriter`, so the bytes are
         identical to the ``.claude/skills/`` and ``shared_skills/`` copies.
         Duplicate discovery via ``.claude/skills/`` is safe (see the module
-        docstring: OpenCode keys skills by name, last wins).
+        docstring: OpenCode keeps one skill per name/id, last wins).
         """
         return self._SKILL_WRITER.write(skill, repo_root)
 

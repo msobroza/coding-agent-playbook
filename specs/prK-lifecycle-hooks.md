@@ -1580,7 +1580,7 @@ All tests are hermetic and use the CI command (`uv run python -m pytest -q`, no 
 
 - §2.2 / §2.3: OpenCode plugin generation moves from v2 aspiration to v1 (one generated shim).
 - §3: the Continue claim is corrected (L7); the Plugin (OpenCode) glossary entry states the one generated shim under `.opencode/plugins/` (§C.3.1).
-- §10.1: the four ABC additions. Also fixes the stale sentence "only ClaudeCodeAdapter overrides `finalize()`"; `agents_md` and `agent_harness` already override it.
+- §10.1: the four ABC additions, and `OpenCodeAdapter` joins the adapters that override `finalize()` (it composes the shim, §C.3.1, Track K4). (The older stale sentence "only ClaudeCodeAdapter overrides `finalize()`" was corrected separately, ahead of PR K; today `claude_code`, `agents_md` and `agent_harness` override `finalize()`.)
 - New §10.3.2: settings.json managed merge, launcher, pin.
 - §10.4: Guardrails section.
 - §10.6.2 / §10.6.4: the shim exception.
@@ -2776,7 +2776,7 @@ K11 applies every row; rows marked P ride with their Track P code fix.
 | §8.2 | Facts injected into the `sync --check` scratch run (P) | P2 |
 | §9.3 | `SandboxedEnvironment` (P) | P1 |
 | §9.7 | The `hook_advisory` and `hook_claude_settings` formats; Claude command frontmatter for `write_scope` | §C.4.1, §C.4.3 |
-| §10.1 | `hook_support`, `begin_sync`, `write_hook`, `managed_lock_entries`; the stale `finalize` sentence fixed | §C.1.1 |
+| §10.1 | `hook_support`, `begin_sync`, `write_hook`, `managed_lock_entries`; `OpenCodeAdapter` added to the `finalize()` overrides (the older "only ClaudeCodeAdapter" sentence was fixed ahead of PR K) | §C.1.1, §C.1.2 |
 | §10.2 | Continue: advisory degrade only (P) | P5 |
 | §10.3 (new §10.3.2) | settings.json managed merge, launcher, pin, heartbeat line, command frontmatter | §C.2, §C.4 |
 | §10.4 | Guardrails section | §C.4.2 |
