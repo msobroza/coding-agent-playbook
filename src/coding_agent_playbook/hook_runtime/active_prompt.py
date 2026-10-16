@@ -1,40 +1,44 @@
-"""The session's active playbook prompt: a dispatcher branch, not a hook (specs/prK-hook-pack.md §E.3).
+"""The session's active playbook prompt, derived when a consumer needs it (specs/prK-hook-pack.md §E.3).
 
-Which playbook prompt (slash command) the session is running is shared state:
+Which playbook prompt (slash command) the turn is running is shared state:
 prompt-write-scope-guard enforces its write scope and
-prompt-output-contract-on-stop checks its output contract. The record is
-therefore kept by the dispatcher itself whenever **either** hook is enabled,
-so disabling the guard never leaves the output-contract stage inert (OQ-45).
+prompt-output-contract-on-stop checks its output contract. Neither needs a
+``user_prompt_submit`` process for it (review finding #6, OQ-45):
 
-- ``user_prompt_submit``: a prompt that *starts* with ``/<slash>``, or the
-  harness's command wrapper naming it (``<command-name>/<slash></command-name>``),
-  records ``{slash, via}`` for a known playbook prompt; any other prompt clears
-  the record. Uncertain detection records nothing (fail open).
-- ``pre_tool_use`` on the ``Skill`` tool: the model ran a command itself, which
-  fires no ``UserPromptSubmit``; a known ``tool_input.skill`` is recorded the
-  same way. An unknown skill leaves the record alone.
+- :func:`resolve_active_prompt` is what a consumer calls. The first call of a
+  turn reads the transcript's turn-opening entry (``_prompt_boundary``): a
+  ``/<slash>`` of a known playbook prompt is the active prompt, anything else
+  is none. The answer is kept as the turn's record, so later calls of the
+  same turn (Claude's ``prompt_id``) cost one small state read.
+- ``pre_tool_use`` on the ``Skill`` tool (:func:`observe`, a dispatcher branch
+  run while either consumer is enabled): the model ran a command itself, which
+  opens no turn; a known ``tool_input.skill`` becomes the turn's record. An
+  unknown skill leaves the record alone.
 
 The record is ``sessions/<sha256(session_id)[:16]>/prompt.json``:
 
-``{"v": 1, "slash": "review", "via": "prompt", "turn_id": "pr_17"}``
+``{"v": 2, "slash": "review", "via": "prompt", "turn_id": "pr_17", "anchor": null}``
 
-It is deleted when cleared, so a reader with no active prompt pays one
-``stat``. ``turn_id`` is the event's turn (Claude's ``prompt_id``) so the Stop
-stage can ignore a record left over from another turn. Known slashes are the
-keys of prompt-write-scope-guard's ``scopes`` and the rows of the ``prompts``
-table that carry an output contract (K6), both rendered at sync. No prompt
-text is ever stored (D-10). Stdlib and ``hook_runtime`` only.
+``slash`` is ``null`` for a turn with no playbook prompt. Without turn ids,
+a Skill record carries ``anchor``, the transcript uuid of the turn's opening
+entry, and lasts until a new entry opens a turn. Known slashes are the keys of
+prompt-write-scope-guard's ``scopes`` and the rows of the ``prompts`` table
+that carry an output contract (K6), both rendered at sync. No prompt text is
+ever stored (D-10). Stdlib and ``hook_runtime`` only.
 """
 
 from __future__ import annotations
 
 import os
-import re
 from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Literal
 
+from coding_agent_playbook.hook_runtime._prompt_boundary import (
+    last_prompt_boundary,
+    slash_of_prompt,
+)
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.state import StateUnavailable, session_key
 
@@ -51,69 +55,86 @@ __all__ = [
     "SCOPE_GUARD_ID",
     "SKILL_TOOL",
     "ActivePrompt",
+    "TurnRecord",
     "active_prompt_document",
-    "clear_active_prompt",
     "consumers_enabled",
     "known_slashes",
     "observe",
-    "read_active_prompt",
-    "record_active_prompt",
+    "read_turn_record",
+    "resolve_active_prompt",
     "slash_of_prompt",
+    "write_turn_record",
 ]
 
 #: The hook that enforces a prompt's write scope; its pre_tool_use config holds ``scopes``.
 SCOPE_GUARD_ID: Final = "prompt-write-scope-guard"
-#: The hooks that read the record (OQ-45): the branch runs while any one is enabled.
+#: The hooks that read the record (OQ-45): the Skill branch runs while any one is enabled.
 ACTIVE_PROMPT_CONSUMERS: Final = (SCOPE_GUARD_ID, "prompt-output-contract-on-stop")
 #: Claude Code's tool for a model-invoked command or skill.
 SKILL_TOOL: Final = "Skill"
 #: The stored record's shape version; a record of another version reads as none.
-RECORD_VERSION: Final = 1
+RECORD_VERSION: Final = 2
 #: The guard_config table of output contracts (K6): its keys are slashes too.
 _PROMPTS_TABLE: Final = "prompts"
-#: Only the head of a prompt is searched for the command wrapper.
-_SCAN_CHARS: Final = 4096
 _SLASH_MAX_CHARS: Final = 128
-_NAME: Final = r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}"
-_RAW: Final = re.compile(rf"/({_NAME})(?:\s|$)")
-_WRAPPER: Final = re.compile(rf"<command-name>\s*/?({_NAME})\s*</command-name>")
+
+type Via = Literal["prompt", "skill"]
 
 
 @dataclass(frozen=True, slots=True)
 class ActivePrompt:
-    """The playbook prompt a session is running, how it started, and in which turn.
+    """The playbook prompt a turn is running, how it started, and in which turn.
 
     ``turn_id`` is ``None`` when the harness gave no turn id.
-
-    Example::
-
-        >>> ActivePrompt("review", "prompt", "pr_17").current_for("pr_18")
-        False
+    Example: ``ActivePrompt("review", "prompt", "pr_17")``.
     """
 
     slash: str
-    via: Literal["prompt", "skill"]
+    via: Via
     turn_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TurnRecord:
+    """What the state remembers of one turn: its playbook prompt (``slash``; ``None``: none).
+
+    Example::
+
+        >>> TurnRecord(None, "prompt", "pr_18").active() is None
+        True
+    """
+
+    slash: str | None
+    via: Via
+    turn_id: str | None = None
+    anchor: str | None = None
+
+    def active(self) -> ActivePrompt | None:
+        """The active prompt this record names, if any."""
+        return None if self.slash is None else ActivePrompt(self.slash, self.via, self.turn_id)
 
     def to_json(self) -> dict[str, Any]:
         """The stored record."""
-        return {"v": RECORD_VERSION, "slash": self.slash, "via": self.via, "turn_id": self.turn_id}
+        return {
+            "v": RECORD_VERSION,
+            "slash": self.slash,
+            "via": self.via,
+            "turn_id": self.turn_id,
+            "anchor": self.anchor,
+        }
 
     @classmethod
-    def from_json(cls, document: Mapping[str, Any]) -> ActivePrompt | None:
-        """A stored record, or ``None`` when absent, of another version or malformed."""
-        slash, via, turn = document.get("slash"), document.get("via"), document.get("turn_id")
-        if document.get("v") != RECORD_VERSION or not isinstance(turn, str | None):
+    def from_json(cls, document: Mapping[str, Any]) -> TurnRecord | None:
+        """A stored record, or ``None`` when of another version or malformed."""
+        slash, via = document.get("slash"), document.get("via")
+        turn, anchor = document.get("turn_id"), document.get("anchor")
+        if document.get("v") != RECORD_VERSION or via not in ("prompt", "skill"):
             return None
-        if not isinstance(slash, str) or not 0 < len(slash) <= _SLASH_MAX_CHARS:
+        if not all(isinstance(value, str | None) for value in (slash, turn, anchor)):
             return None
-        if via == "prompt" or via == "skill":
-            return cls(slash, via, turn)
-        return None
-
-    def current_for(self, turn_id: str | None) -> bool:
-        """Whether the record still describes the turn ``turn_id`` (unknown on either side: yes)."""
-        return self.turn_id is None or turn_id is None or self.turn_id == turn_id
+        if slash is not None and not 0 < len(slash) <= _SLASH_MAX_CHARS:
+            return None
+        return cls(slash, "skill" if via == "skill" else "prompt", turn, anchor)
 
 
 def active_prompt_document(session_id: str) -> str:
@@ -127,15 +148,11 @@ def active_prompt_document(session_id: str) -> str:
     return f"sessions/{session_key(session_id)}/prompt.json"
 
 
-def read_active_prompt(store: StateStore, session_id: str) -> ActivePrompt | None:
-    """The session's active prompt, or ``None``; one ``stat`` when there is none.
+def read_turn_record(store: StateStore, session_id: str) -> TurnRecord | None:
+    """The session's last turn record, or ``None``; one ``stat`` when there is none.
 
-    A corrupt, hand-edited or unreadable record reads as none (fail open).
-
-    Example::
-
-        >>> read_active_prompt(store, "s1")  # doctest: +SKIP
-        ActivePrompt(slash='review', via='prompt', turn_id='pr_17')
+    A corrupt, hand-edited or unreadable record reads as none.
+    Example: ``read_turn_record(store, "s1")`` -> ``TurnRecord('review', 'prompt', 'pr_17')``.
     """
     rel = active_prompt_document(session_id)
     if not os.path.exists(store.path(rel)):
@@ -144,52 +161,44 @@ def read_active_prompt(store: StateStore, session_id: str) -> ActivePrompt | Non
         document = store.read_json(rel)
     except (StateUnavailable, OSError):
         return None
-    return ActivePrompt.from_json(document)
+    return TurnRecord.from_json(document)
 
 
-def record_active_prompt(store: StateStore, session_id: str, prompt: ActivePrompt) -> None:
-    """Make ``prompt`` the session's active prompt; silently skipped when stateless."""
+def write_turn_record(store: StateStore, session_id: str, record: TurnRecord) -> None:
+    """Make ``record`` the session's turn record; silently skipped when stateless."""
     with suppress(StateUnavailable):
-        store.write_json(active_prompt_document(session_id), prompt.to_json())
+        store.write_json(active_prompt_document(session_id), record.to_json())
 
 
-def clear_active_prompt(store: StateStore, session_id: str) -> None:
-    """Forget the session's active prompt; silently skipped when stateless."""
-    with suppress(StateUnavailable):
-        store.remove(active_prompt_document(session_id))
-
-
-def slash_of_prompt(text: str) -> str | None:
-    """The slash a submitted prompt invokes, raw or inside the command wrapper; else ``None``.
-
-    Only a prompt that *starts* with the command counts: ``please /review``
-    is prose, not an invocation, and an unrecognized wrapper is no command.
+def resolve_active_prompt(
+    ev: CanonicalEvent, cfg: GuardConfig, store: StateStore
+) -> ActivePrompt | None:
+    """The playbook prompt ``ev``'s turn runs, or ``None``; derived once per turn.
 
     Example::
 
-        >>> slash_of_prompt("/security-review src/app.py")
-        'security-review'
-        >>> slash_of_prompt("<command-name>/review</command-name>\\n<command-args></command-args>")
-        'review'
-        >>> slash_of_prompt("fix it") is None
-        True
+        >>> resolve_active_prompt(edit_after_review, cfg, store)  # doctest: +SKIP
+        ActivePrompt(slash='review', via='prompt', turn_id='pr_17')
     """
-    head = text[:_SCAN_CHARS].lstrip()
-    raw = _RAW.match(head)
-    if raw is not None:
-        return raw.group(1)
-    if not head.startswith("<command-"):
-        return None
-    wrapped = _WRAPPER.search(head)
-    return wrapped.group(1) if wrapped is not None else None
+    record = read_turn_record(store, ev.session_id)
+    if record is not None and ev.turn_id is not None and record.turn_id == ev.turn_id:
+        return record.active()  # this turn is already resolved
+    boundary = last_prompt_boundary(ev.transcript_path)
+    anchor = None if boundary is None else boundary.uuid
+    if record is not None and record.anchor is not None and record.anchor == anchor:
+        return record.active()  # a Skill run in this turn, harness without turn ids
+    slash = None if boundary is None else boundary.slash
+    found = slash if slash is not None and slash in known_slashes(cfg) else None
+    if ev.turn_id is not None:
+        write_turn_record(store, ev.session_id, TurnRecord(found, "prompt", ev.turn_id))
+    return None if found is None else ActivePrompt(found, "prompt", ev.turn_id)
 
 
 def known_slashes(cfg: GuardConfig) -> frozenset[str]:
     """The slashes of the playbook prompts a consumer acts on: a write scope or an output contract.
 
     The ``prompts`` table lists every rendered prompt; one with an empty
-    ``output_contract`` (and no scope) is not recorded, so invoking it clears
-    the record like any other prompt.
+    ``output_contract`` (and no scope) is not active, like any other prompt.
 
     Example::
 
@@ -217,24 +226,22 @@ def consumers_enabled(hook_ids: Iterable[str]) -> bool:
 
 
 def observe(ev: CanonicalEvent, cfg: GuardConfig, store: StateStore) -> None:
-    """The dispatcher branch: record or clear the active prompt for ``ev``, before any hook runs.
+    """The dispatcher branch: a model-run ``Skill`` of a known prompt becomes the turn's record.
 
     Example::
 
-        observe(ev, cfg, store)  # a "/review" prompt records ActivePrompt("review", "prompt")
+        observe(ev, cfg, store)  # a Skill "review" records TurnRecord("review", "skill", turn)
     """
     if not consumers_enabled(cfg.hooks):
         return
-    if ev.name is EventName.USER_PROMPT_SUBMIT:
-        slash = slash_of_prompt(ev.prompt or "")
-        if slash is not None and slash in known_slashes(cfg):
-            record_active_prompt(store, ev.session_id, ActivePrompt(slash, "prompt", ev.turn_id))
-        else:
-            clear_active_prompt(store, ev.session_id)
-        return
     skill = _skill_of(ev)
-    if skill is not None and skill in known_slashes(cfg):
-        record_active_prompt(store, ev.session_id, ActivePrompt(skill, "skill", ev.turn_id))
+    if skill is None or skill not in known_slashes(cfg):
+        return
+    anchor = None
+    if ev.turn_id is None:  # no turn id to scope it: the transcript's turn entry does
+        boundary = last_prompt_boundary(ev.transcript_path)
+        anchor = None if boundary is None else boundary.uuid
+    write_turn_record(store, ev.session_id, TurnRecord(skill, "skill", ev.turn_id, anchor))
 
 
 def _skill_of(ev: CanonicalEvent) -> str | None:

@@ -75,7 +75,7 @@ There is one dispatcher process per harness event, and it fans out to the hooks 
 | `stop` | coordinator | the stages in the table below | fingerprint, block budget, one combined reason |
 | `subagent_stop` | coordinator, scoped | subagent-stop-verify | the same coordinator engine |
 | `session_start` | briefing | session-start-playbook-briefing | TTL sweep of stale state |
-| `user_prompt_submit` | prompt | pii-prompt-guard, the active-prompt record (shared by prompt-write-scope-guard and prompt-output-contract-on-stop) | none |
+| `user_prompt_submit` | prompt | pii-prompt-guard, local-audit-log (registered only while one is on: the active prompt is resolved per turn from the transcript, review finding #6) | none |
 | `pre_compact` | none | precompact-checkpoint | none |
 | every event | none | guard-decision-log (an in-process writer) | none |
 
@@ -160,7 +160,7 @@ The stage names are the strings §F registers against. The order below is the en
 | 18 | error-handling-lint-feedback | Feedback | post_tool_use | warn → context | default | about 0 extra (shares the ruff call) |
 | 19 | typing-lint-feedback | Feedback | post_tool_use | warn → context | default | about 0 extra (shared ruff call plus one ast.parse) |
 | 20 | pytest-conventions-feedback | Feedback | post_tool_use | warn → context | default | about 0 extra; about 10ms for the opt-in AST checks |
-| 21 | prompt-write-scope-guard | Feedback | pre_tool_use (+ a user_prompt_submit record) | block → deny | default | under 1ms with no scope; ≤100ms with one |
+| 21 | prompt-write-scope-guard | Feedback | pre_tool_use (resolves the turn's prompt from the transcript) | block → deny | default | one bounded transcript read per turn, then under 1ms; ≤100ms with a scope |
 | 22 | toolchain-missing-hint | Feedback | post_tool_use (+ _failure) | inject_context → context | default | under 1ms extra |
 | 23 | notebook-output-hygiene | Feedback | post_tool_use; stop (`notebooks`) | warn → context | opt-in | 5–50ms per notebook edit |
 | 24 | secrets-path-guard | Safety | pre_tool_use | block → deny | default | ≤100ms p95 per file-tool or Bash call |
@@ -758,14 +758,14 @@ These hooks make "done" mean "the checks pass", not "the agent stopped". stop-ci
 `opt-in` · `stop` (stage 8) · active only while the session's active playbook prompt declares an `output_contract` · `context` (deny-once configurable)
 
 - **Behavior.**
-  - It applies the active prompt's contract regexes to `last_assistant_message` only, capped at the last 4,000 characters. It **never** reads `transcript_path`, which holds the whole session in an internal format.
+  - It applies the active prompt's contract regexes to `last_assistant_message` only, capped at the last 4,000 characters. It never judges the transcript: resolving the active prompt (E.3) reads at most the transcript's turn-opening entry, for its slash only, and nothing once the turn is resolved.
   - On a miss it adds a context line by default. `[hooks.prompt-output-contract-on-stop] block_once = true` makes it a deny line within the coordinator's budget.
   - **Proposed contracts for shipped prompts:**
     - `review` and `security-review`: a final verdict line, `(?im)^\W*(verdict\W*)?(approve with comments|approve|request changes)\W*$`. These are their documented "Output format" sections (`review.md.j2:52`, `security-review.md.j2:39`).
     - `find-injected-vulnerability`: `(?i)\bCWE-\d+\b|no (reachable|exploitable)`. The prompt asks for the CWE, or a plain "no chain" conclusion.
 - **Implementation.**
   - Builtin handler `prompt_output_contract_on_stop`.
-  - The active prompt comes from the user_prompt_submit active-prompt record (shared with prompt-write-scope-guard, E.3) and `prompts.<slash>.output_contract`.
+  - The active prompt comes from the per-turn resolution shared with prompt-write-scope-guard (E.3; a review turn with no tool call is resolved at Stop) and `prompts.<slash>.output_contract`.
   - **New optional frontmatter field** `output_contract: list[str]` on `PromptFrontmatter` (`types.py:128`) *(NEW)*. It needs the `__post_init__` None-coercion, the §6.6.3 round-trip update and the agent_harness sidecar fields (§A.7).
   - It is compiled at `playbook validate`, fail-closed at construction like `AnswerMatchesCheck` (`evaluators/checks/answer.py:48`), with a capped input. One pattern source serves both live checks and authors of the prompt's eval `answer_matches` gates.
 - **Budget & failure.** Under 10ms. Fails open.
@@ -775,7 +775,8 @@ These hooks make "done" mean "the checks pass", not "the agent stopped". stop-ci
 - **Tests.**
   - Active `/review` with a final message lacking a verdict line: a context line.
   - `Verdict: approve`: silent.
-  - The transcript file is never opened (spy on `open`).
+  - Once the turn is resolved, the transcript file is never opened (spy on `open`).
+  - A `/review` turn is resolved from the transcript at Stop; the next prompt's turn is not `/review`.
   - No active prompt: inert.
   - An invalid regex in `output_contract`: a `playbook validate` failure.
 
@@ -952,7 +953,7 @@ lint_codes:
 
 #### prompt-write-scope-guard — Enforce each playbook prompt's write scope, native-first
 
-`default` · `user_prompt_submit` (ledger) + `pre_tool_use` (enforce; also records scope from the `Skill` tool) · pre-tool: `Edit|Write|NotebookEdit` (`MultiEdit` tolerated), write-shaped `Bash`, and `Skill` · block → `deny` / `ask` · label: **boundary** for structured edit tools; **speed bump** for Bash
+`default` · `pre_tool_use` (enforce; resolves the turn's active prompt from the transcript, and records it from the `Skill` tool) · pre-tool: `Edit|Write|NotebookEdit` (`MultiEdit` tolerated), write-shaped `Bash`, and `Skill` · block → `deny` / `ask` · label: **boundary** for structured edit tools; **speed bump** for Bash
 
 **Schema change.** `PromptFrontmatter` (types.py:128-154) gains `write_scope: dict[str, Any] = field(default_factory=dict)` with exactly one of `read_only: true` or `globs: [<glob>, ...]` (validated by `playbook validate`; None-coerced like the other fields; carried by the agent_harness sidecar, §A.7). It is a dict on purpose: `_without_empty` (types.py:45-47) drops `[]`, so an empty-list "read-only" would silently round-trip to "unrestricted", and a defaulted bool would add `read_only: false` to every prompt's `to_markdown` output. Amend SPEC §6.2, §6.6 and §10.6.1. Assignments:
 
@@ -966,18 +967,18 @@ lint_codes:
 **Behavior — native first.** OpenCode: read-only prompts render `agent: plan` in the command frontmatter (`_render_prompt_opencode_command`, renderer.py:302-338; SPEC §10.6.1 already lists `agent`). Claude Code: read-only prompts render `disallowed-tools: Edit Write NotebookEdit` in the command frontmatter (verified: commands and skills accept it; the tools are removed while the command is active and the restriction clears at the next message, which matches the ledger semantics). This needs `_render_prompt_claude_command` (renderer.py:282-299), which emits no frontmatter today, to emit a line-1 `---` fence, so the sentinel moves to the first body line (the PR-H agent_harness precedent); the renderer change and the `_scan_for_stale` (claude_code_adapter.py:191) / guard anchor change are §C.4.3 and P3's `has_sentinel`. Glob scopes have no native form.
 
 **Behavior — fallback hook (Claude only).**
-- `user_prompt_submit`: detects `/<slash>` in raw form or inside the harness's command wrapper and records `{prompt_id, write_scope}` keyed by `session_id` in `<state>`; any other prompt clears it. Uncertain detection → no scope (fail open).
-- `pre_tool_use` on the `Skill` tool: the model can also run a command or skill itself, which fires no `UserPromptSubmit`; the guard records the scope of the `tool_input` skill name the same way (cheap: the pre-tool dispatcher already runs). Claude's `UserPromptExpansion` event (typed slash commands) is not canonical and stays a documented gap; the native `disallowed-tools` frontmatter covers both paths. prompt-output-contract-on-stop reads the same record.
+- **The active prompt is resolved per turn, lazily** (review finding #6: no `user_prompt_submit` process per prompt). The first call of a turn that needs it reads `transcript_path` backwards to the turn-opening entry: the newest main-thread user entry that is not `isMeta`, a sidechain, a compact summary, a tool result or a harness echo (local-command output, `!` shell echoes, hook output, an interruption). A `/<slash>` in raw form or inside the harness's command wrapper names the prompt when it is a known playbook prompt; anything else is no prompt. The answer is stored as the turn's record `{slash, via, turn_id}` keyed by `session_id` in `<state>`, so later calls of the same turn (Claude's `prompt_id`) read it instead; a new turn resolves afresh, which is what "the next prompt clears it" means now. Reads are bounded (64 KiB, 1 MiB, then 8 MiB from the end; only user lines are decoded): about 0.1 ms with the prompt nearby, about 2 ms behind 2.4 MB of tool output. Uncertain detection (an unreadable transcript, an unknown entry shape, no turn entry inside 8 MiB) → no scope (fail open).
+- `pre_tool_use` on the `Skill` tool: the model can also run a command or skill itself, which opens no turn; the dispatcher records the `tool_input` skill name as the turn's record the same way (cheap: the pre-tool dispatcher already runs). Without turn ids, that record carries the transcript uuid of the turn's opening entry and lasts until another entry opens a turn. Claude's `UserPromptExpansion` event (typed slash commands) is not canonical and stays a documented gap; the native `disallowed-tools` frontmatter covers both paths. prompt-output-contract-on-stop reads the same resolution.
 - `pre_tool_use`, read-only scope: `Edit`/`Write`/`NotebookEdit` → `deny` "`/<id>` is read-only: report findings; the user will ask for fixes in a follow-up." Write-shaped Bash (redirect into the repo, `sed -i`, `tee`, `cp`/`mv` into the repo, `git apply`, `patch`, `git commit`) → `ask`.
 - Glob scope: a write outside the globs → `ask`, quoting generate-tests.md.j2:39.
 
-**Implementation.** `handlers: {pre_tool_use: prompt_scope_guard}` (`hook_runtime/handlers/prompt_scope.py`, NEW). The `user_prompt_submit` active-prompt record is a dispatcher branch, not this hook's companion handler (`hook_runtime/active_prompt.py`, NEW, shared name — proposed): it is active whenever prompt-write-scope-guard **or** prompt-output-contract-on-stop is enabled, so disabling this guard never makes the output-contract stage inert (OQ-45); `gc:prompt-write-scope-guard.scopes = {<slash>: {read_only | globs}}` rendered at sync from `PromptFrontmatter`; write-shaped Bash detection uses §D.2.5's `shell.parse_shell` / `write_targets`. The guard short-circuits on one `stat` of the ledger file when no scope is active.
+**Implementation.** `handlers: {pre_tool_use: prompt_scope_guard}` (`hook_runtime/handlers/prompt_scope.py`, NEW). The active prompt is shared, not this hook's: `hook_runtime/active_prompt.py` (`resolve_active_prompt`, the per-turn record) and `hook_runtime/_prompt_boundary.py` (the bounded backward transcript read). Each consumer resolves it itself, and the `Skill` record is a dispatcher branch run whenever prompt-write-scope-guard **or** prompt-output-contract-on-stop is enabled, so disabling this guard never makes the output-contract stage inert (OQ-45). Neither consumer registers `user_prompt_submit`: it is registered only for a hook that binds it (pii-prompt-guard, local-audit-log). `gc:prompt-write-scope-guard.scopes = {<slash>: {read_only | globs}}` rendered at sync from `PromptFrontmatter`; write-shaped Bash detection uses §D.2.5's `shell.parse_shell` / `write_targets`. After the first call of a turn, the guard reads one small state record.
 
-**Budget & failure mode.** < 1 ms incremental with no active scope; <= 100 ms with one. Detection uncertainty → open; internal error → `ask`.
+**Budget & failure mode.** The first call of a turn: one bounded transcript read (about 0.1-3 ms); then < 1 ms incremental with no active scope; <= 100 ms with one. No per-prompt process (about 100 ms per prompt before finding #6). Detection uncertainty → open; internal error → `ask`.
 
-**Guards.** Active only during a scoped prompt; cleared by the next user prompt; native constraints preferred, the hook is defense in depth.
+**Guards.** Active only during a scoped prompt's turn; the next user prompt opens a turn resolved afresh; native constraints preferred, the hook is defense in depth.
 
-**Portability.** Claude: native `disallowed-tools` + both hook events. OpenCode: native `agent: plan` only (`user_prompt_submit` is not rendered there, QC-2; no ledger). Others: the body sentence in AGENTS.md.
+**Portability.** Claude: native `disallowed-tools` + `pre_tool_use` (the transcript gives the turn's prompt). OpenCode: native `agent: plan` only (the hook is Claude-only; no transcript record). Others: the body sentence in AGENTS.md.
 
 **Off-workstation twin.** None at run time (the scope is a session concept). Offline evidence is the eval corpus: the review/explain/security tasks already grade `file_unchanged`.
 

@@ -2,10 +2,12 @@
 
 Default, ``pre_tool_use``, Claude Code only: the defense in depth behind the
 native constraints (``disallowed-tools`` in the Claude command, ``agent: plan``
-on OpenCode). The active prompt comes from the dispatcher's record
-(``hook_runtime.active_prompt``); its scope from this hook's ``scopes`` config,
-rendered at sync from each prompt's ``write_scope``. With no active prompt
-the guard costs one ``stat``.
+on OpenCode). The active prompt is resolved per turn
+(``hook_runtime.active_prompt``: the transcript's turn-opening entry, or a
+model-run ``Skill``; no ``user_prompt_submit`` process); its scope comes from
+this hook's ``scopes`` config, rendered at sync from each prompt's
+``write_scope``. After the first call of a turn, the guard costs one small
+state read.
 
 - ``read_only``: a file-tool write into the repository is denied (a boundary);
   a write-shaped Bash command (a write target in the repository, ``git apply``,
@@ -24,7 +26,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.active_prompt import read_active_prompt
+from coding_agent_playbook.hook_runtime.active_prompt import resolve_active_prompt
 from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.globs import compile_globs
@@ -81,7 +83,7 @@ def prompt_scope_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult
     """
     if ev.tool is None or ev.repo is None:
         return None
-    active = read_active_prompt(ctx.session.store, ev.session_id)
+    active = resolve_active_prompt(ev, ctx.cfg, ctx.session.store)
     scope = None if active is None else scope_of(ctx.config, active.slash)
     if active is None or scope is None:
         return None

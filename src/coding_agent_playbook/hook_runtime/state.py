@@ -211,7 +211,7 @@ class StateStore:
     def remove(self, rel: str) -> None:
         """Delete ``rel`` if it exists; an absent file is no error.
 
-        A document whose absence is its meaning (the active-prompt record)
+        A document whose absence is its meaning (the precompact checkpoint)
         is removed rather than emptied, so readers decide on one ``stat``.
         """
         self._require_usable()

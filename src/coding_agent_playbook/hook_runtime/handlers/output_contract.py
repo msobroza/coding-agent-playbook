@@ -1,12 +1,13 @@
 """prompt-output-contract-on-stop: the ``output-contract`` Stop stage (specs/prK-hook-pack.md §E.2).
 
-While the session's active playbook prompt (:mod:`..active_prompt`, written on
-``user_prompt_submit``) declares an ``output_contract``, every one of its
-regexes must match the last 4,000 characters of ``last_assistant_message``,
-e.g. ``/review``'s final ``approve`` / ``request changes`` verdict line.
+While the turn's active playbook prompt (:mod:`..active_prompt`, resolved per
+turn) declares an ``output_contract``, every one of its regexes must match the
+last 4,000 characters of ``last_assistant_message``, e.g. ``/review``'s final
+``approve`` / ``request changes`` verdict line.
 
-- It reads that message only. It never opens ``transcript_path``, which holds
-  the whole session in an internal format.
+- It judges that message only. The active prompt's resolution reads at most
+  the transcript's turn-opening entry (its slash, never its text), and not at
+  all once the turn is resolved.
 - The contract comes from ``guard_config.prompts`` (rendered at sync), never
   from a prompt file read at run time.
 - A miss is a context line (``warn``); ``[hooks.prompt-output-contract-on-stop]
@@ -24,7 +25,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.active_prompt import read_active_prompt
+from coding_agent_playbook.hook_runtime.active_prompt import resolve_active_prompt
 from coding_agent_playbook.hook_runtime.caps import clean_text, clip, quote_data
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.stop.alone import run_alone
@@ -113,9 +114,7 @@ def output_contract_stage(ev: CanonicalEvent, ctx: HandlerContext) -> OutputCont
 
     Example: ``output_contract_stage(stop_event, ctx).applies(plan)``.
     """
-    prompt = read_active_prompt(ctx.session.store, ev.session_id)
-    if prompt is not None and not prompt.current_for(ev.turn_id):
-        prompt = None
+    prompt = resolve_active_prompt(ev, ctx.cfg, ctx.session.store)
     message = ev.stop.last_assistant_message if ev.stop is not None else ""
     return OutputContractStage(
         prompt=prompt,

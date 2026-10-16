@@ -112,7 +112,7 @@ def run_configured(
         store, ev, now=deps.clock.time, enabled=cfg.logging.decisions, canary=shared.canary
     )
     log.write(escape_lines(hatches, session.once))
-    # Before any hook: a guard's deny must not skip recording the prompt (OQ-45).
+    # Before any hook: a guard's deny must not skip recording a model-run Skill (OQ-45).
     observe_active_prompt(ev, cfg, store)
     selection = select_hooks(cfg, ev, hatches)
     progress = Progress(selection.selected)

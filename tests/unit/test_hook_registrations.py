@@ -189,21 +189,25 @@ def test_session_start_registered_whenever_any_registration() -> None:
 
 
 @pytest.mark.parametrize("consumer", ["prompt-write-scope-guard", "prompt-output-contract-on-stop"])
-def test_user_prompt_submit_registered_when_active_prompt_consumer_enabled(consumer: str) -> None:
-    """OQ-45: the active-prompt record is a dispatcher branch, registered with no member hook."""
+def test_active_prompt_consumer_registers_no_user_prompt_submit(consumer: str) -> None:
+    """Finding #6: the consumers resolve the prompt from the transcript; no per-prompt process."""
     hooks = [resolved_hook(consumer, events=("stop",) if "stop" in consumer else ("pre_tool_use",))]
     deadlines = deadlines_ms(hooks)
 
     regs = _by_event(plan_registrations(hooks, "claude_code", HOOK_SUPPORT, deadlines=deadlines))
-    on_opencode = plan_registrations(
-        [resolved_hook(consumer, supports=("opencode",))], "opencode", HOOK_SUPPORT
-    )
 
-    assert list(regs)[:2] == ["session_start", "user_prompt_submit"]
-    assert regs["user_prompt_submit"].members == ()
-    assert regs["user_prompt_submit"].deadline_ms == deadlines["user_prompt_submit"]
-    assert deadlines["user_prompt_submit"] == BOOTSTRAP_DEADLINE_MS
-    assert "user_prompt_submit" not in {reg.event for reg in on_opencode}  # QC-2: no ledger
+    assert "user_prompt_submit" not in regs
+    assert "user_prompt_submit" not in deadlines
+    assert next(iter(regs)) == "session_start"
+
+
+def test_user_prompt_submit_registered_for_a_member_that_binds_it() -> None:
+    hooks = [resolved_hook("pii-guard", events=("user_prompt_submit",), supports=("claude_code",))]
+
+    regs = _by_event(plan_registrations(hooks, "claude_code", HOOK_SUPPORT))
+
+    assert list(regs) == ["session_start", "user_prompt_submit"]
+    assert regs["user_prompt_submit"].members == ("pii-guard",)
 
 
 def test_user_prompt_submit_not_registered_without_a_consumer() -> None:

@@ -629,6 +629,8 @@ output_contract:                     # optional (v0.18): regexes the final messa
 Two optional keys tie a prompt to the lifecycle hooks (§6.6.7); both are dropped from the markdown when empty, so other prompts render byte-identically:
 - **`write_scope`** — what the prompt may write while it is active: `{read_only: true}` (a review or explain prompt) or `{globs: [...]}` (repo-relative globs, e.g. a test generator limited to `tests/**`). Absent means unrestricted. `playbook validate` rejects any other shape (both keys, `read_only: false`, an empty glob list). The prompt-write-scope-guard hook enforces it; a read-only prompt also renders natively restricted, as a Claude command with a `disallowed-tools` frontmatter block (§9.7) and as an OpenCode command bound to the read-only `plan` agent (§10.6.1).
 - **`output_contract`** — Python regexes the agent's final message must match while the prompt is active, checked by the `output-contract` Stop stage (prompt-output-contract-on-stop). `playbook validate` compiles every entry and fails closed on one that does not compile.
+
+A prompt is *active* for the turn the user opens with it, or in which the model runs it as a `Skill`. The hooks resolve that from Claude's session transcript once per turn (the turn's opening entry, its slash only); no hook process runs per prompt.
 #### 6.2.2 Example: `resources/prompts/generate-tests.md.j2`
 ```markdown
 ---

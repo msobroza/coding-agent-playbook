@@ -2,9 +2,11 @@
 
 Driven through ``playbook-hook simulate stop`` with the coordinator and this
 hook on, and the engine's shipped prompts rendered into ``guard_config.prompts``.
-The active-prompt record is seeded in a real state root (K7's dispatcher branch
-writes it, OQ-45; one test drives that writer end to end). A review turn changes no file, so ``FakeGit`` reports a tree
-equal to ``HEAD``: only ``needs_diff=False`` stages run, and ruff never does.
+The turn's record is seeded in a real state root (what an earlier call of the
+turn resolved); the last tests derive it end to end from a Claude transcript,
+with no ``user_prompt_submit`` dispatch (review finding #6). A review turn
+changes no file, so ``FakeGit`` reports a tree equal to ``HEAD``: only
+``needs_diff=False`` stages run, and ruff never does.
 """
 
 from __future__ import annotations
@@ -17,13 +19,13 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 import coding_agent_playbook
-from coding_agent_playbook.hook_runtime.active_prompt import ActivePrompt, active_prompt_document
+from coding_agent_playbook.hook_runtime.active_prompt import TurnRecord, write_turn_record
 from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.git import Fingerprint
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
+from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME, StateStore
 from coding_agent_playbook.types import Prompt
 from tests.hook_runtime.fakes import FakeGit, FakeStageRunner
+from tests.hook_runtime.transcript_kit import SessionTranscript
 from tests.hooks.stop_kit import HEAD_TREE, changed_git, session_of, stop, stop_payload
 
 if TYPE_CHECKING:
@@ -63,10 +65,9 @@ def _unchanged() -> FakeGit:
 
 
 def _activate(state: Path, payload: bytes, slash: str = "review", turn: str = "pr_17") -> None:
-    """Seed the record K7's user_prompt_submit branch writes for ``/<slash>``."""
-    doc = state / STATE_DIR_NAME / active_prompt_document(session_of(payload))
-    doc.parent.mkdir(parents=True, exist_ok=True)
-    doc.write_text(json.dumps(ActivePrompt(slash, "prompt", turn).to_json()), "utf-8")
+    """Seed the turn record an earlier call of turn ``turn`` resolved for ``/<slash>``."""
+    record = TurnRecord(slash, "prompt", turn)
+    write_turn_record(StateStore(state / STATE_DIR_NAME), session_of(payload), record)
 
 
 def _stop(
@@ -107,7 +108,7 @@ def test_verdict_approve_silent(
     assert report.trace.wire.stdout == ""
 
 
-def test_transcript_never_opened(
+def test_resolved_turn_never_reopens_the_transcript(
     repo: PackRepo,
     deps: Callable[..., RuntimeDeps],
     tmp_path: Path,
@@ -241,37 +242,26 @@ def test_without_the_coordinator_the_stage_reports_alone(
     assert report.trace.combined.user_notes == (MISS_LINE,)
 
 
-def _submit(
-    repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path, turn: bytes, text: str
-) -> None:
-    """A real ``user_prompt_submit`` in ``turn``'s session and turn (K7's branch records it)."""
-    ids = json.loads(turn)
-    payload = repo.payload(
-        EventName.USER_PROMPT_SUBMIT,
-        prompt=text,
-        session_id=ids["session_id"],
-        prompt_id=ids["prompt_id"],
-    )
-    repo.simulate(payload, deps(), event=EventName.USER_PROMPT_SUBMIT, state=state)
-
-
 @pytest.mark.parametrize(
-    ("prompts", "expected"),
-    [(["/review src/app.py"], (MISS_LINE,)), (["/review src/app.py", "now fix it"], ())],
-    ids=["recorded", "cleared"],
+    ("follow_up", "expected"),
+    [(None, (MISS_LINE,)), ("now fix it", ())],
+    ids=["review-turn", "next-turn"],
 )
-def test_submitted_prompt_drives_the_stage(
+def test_transcript_turn_drives_the_stage(
     repo: PackRepo,
     deps: Callable[..., RuntimeDeps],
     tmp_path: Path,
-    prompts: list[str],
+    follow_up: str | None,
     expected: tuple[str, ...],
 ) -> None:
-    """K6 + K7: the dispatcher's record is what the stage reads; the next prompt clears it."""
-    payload = stop_payload(repo, message=REVIEW_NO_VERDICT)
-    for text in prompts:
-        _submit(repo, deps, tmp_path, payload, text)
+    """K6 + finding #6: a review turn with no tool call is resolved at Stop from the transcript."""
+    transcript = SessionTranscript(tmp_path / "session.jsonl")
+    transcript.command("review", "src/app.py")
+    if follow_up is not None:
+        transcript.typed(follow_up)
+    body = json.loads(stop_payload(repo, message=REVIEW_NO_VERDICT))
+    body.update(transcript.fields())
 
-    report = stop(repo, deps, payload, git=_unchanged(), state=tmp_path)
+    report = stop(repo, deps, json.dumps(body).encode(), git=_unchanged(), state=tmp_path)
 
     assert report.trace.combined.user_notes == expected

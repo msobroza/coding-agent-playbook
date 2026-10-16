@@ -4,8 +4,9 @@
 per reachable event (L3: one registration, in-process fan-out), plus
 ``session_start`` whenever any registration exists: the dispatcher's bootstrap
 and the launcher's one visible-failure channel (§C.2.7). ``user_prompt_submit``
-is likewise registered with no member while an active-prompt consumer is on
-(the record is a dispatcher branch, specs/prK-hook-pack.md OQ-45). :func:`deadlines_ms`
+is registered only for a member that binds it (pii-prompt-guard, local-audit-log):
+the active-prompt consumers resolve the prompt from the transcript when they
+need it (specs/prK-hook-pack.md §E.3, OQ-45; review finding #6). :func:`deadlines_ms`
 and :func:`registration_timeout_s` are the one §D.4 timeout formula, rendered
 into ``guard_config.json`` (the watchdog) and into every registration (the
 harness backstop), with a checked one-second margin between them.
@@ -30,7 +31,6 @@ from coding_agent_playbook.hook_registrations.stop_gate import (
     coordinator_budget_s,
     execution_timeouts_s,
 )
-from coding_agent_playbook.hook_runtime.active_prompt import consumers_enabled
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.policy import effective_on_error
 from coding_agent_playbook.hook_runtime.routing import ASYNC_EVENT, HandlerRoute, handler_route
@@ -72,8 +72,6 @@ WATCHDOG_MARGIN_MS: Final = 1_000
 
 #: The events whose deadline is the Stop coordinator's budget, not a sum (§D.4).
 STOP_EVENTS: Final = frozenset({"stop", "subagent_stop"})
-#: Where the active-prompt record is kept: registered while a consumer is on (OQ-45).
-PROMPT_RECORD_EVENT: Final = "user_prompt_submit"
 
 
 class BoundHandler(Protocol):
@@ -229,7 +227,7 @@ def deadlines_ms(
     deadlines: dict[str, int] = {}
     for event in HOOK_EVENTS:
         on_event = [m for m in listed if event in m.events and member_route(m, event) == "sync"]
-        if not on_event and _bootstrapped(event, listed):
+        if not on_event and event == "session_start":  # the dispatcher's bootstrap
             deadlines[event] = BOOTSTRAP_DEADLINE_MS
         elif on_event:
             total = stop_ms if event in STOP_EVENTS else _sum_ms(on_event)
@@ -322,11 +320,7 @@ def plan_registrations(
         if event in reachable
     }
     background = _async_members(on_adapter) if ASYNC_EVENT in reachable else []
-    wanted = [
-        event
-        for event, found in by_event.items()
-        if found or (event == PROMPT_RECORD_EVENT and _bootstrapped(event, on_adapter))
-    ]
+    wanted = [event for event, found in by_event.items() if found]
     if (wanted or background) and "session_start" in reachable and "session_start" not in wanted:
         wanted.insert(0, "session_start")
     limits = deadlines_ms(members) if deadlines is None else deadlines
@@ -407,18 +401,6 @@ def _is_sink(member: RegistrationMember) -> bool:
     """A decision sink on every event it binds: no registration, no deadline share."""
     events = [event for event in member.events if event in member.handlers]
     return bool(events) and all(member_route(member, event) == "sink" for event in events)
-
-
-def _bootstrapped(event: str, members: Sequence[RegistrationMember]) -> bool:
-    """Whether ``event`` runs a dispatcher branch for ``members`` even with no member hook.
-
-    ``session_start`` always (the bootstrap); ``user_prompt_submit`` while an
-    active-prompt consumer is enabled, because the record is a dispatcher
-    branch, not a hook (specs/prK-hook-pack.md §E.3, OQ-45).
-    """
-    if event == "session_start":
-        return True
-    return event == PROMPT_RECORD_EVENT and consumers_enabled(m.id for m in members)
 
 
 def _sum_ms(members: Iterable[RegistrationMember]) -> int:

@@ -53,12 +53,11 @@ _NOTICE = "hooks available: add [hooks] enabled = true or re-run playbook init"
 
 
 #: The Claude events the engine pack registers (Track K5: the briefing, the guards,
-#: the source-changed hooks and the ``drift`` Stop stage; K7: the active-prompt
-#: record of prompt-write-scope-guard, a member-less ``UserPromptSubmit``, and
-#: toolchain-missing-hint's ``PostToolUseFailure``).
+#: the source-changed hooks and the ``drift`` Stop stage; K7: toolchain-missing-hint's
+#: ``PostToolUseFailure``). No ``UserPromptSubmit``: prompt-write-scope-guard resolves
+#: the active prompt from the transcript when it needs it (review finding #6).
 ENGINE_PACK_EVENTS = [
     "SessionStart",
-    "UserPromptSubmit",
     "PreToolUse",
     "PostToolUse",
     "PostToolUseFailure",
@@ -412,15 +411,16 @@ def test_summary_lines_counts_and_hand_edit_warning(
     # coverage-diff-gate) are skipped, as are the inert overlay-tier pii-prompt-guard,
     # network-egress-guard and sensitive-data-read-guard (K9). The briefing, the two lint hooks
     # and the decision sink have no advisory body, so Continue gets four fewer; the sink
-    # registers nothing, so the managed entries are unchanged. The member-less
-    # UserPromptSubmit group is one entry, toolchain-missing-hint's PostToolUseFailure
-    # another, and each native deny row (secrets and destructive prefixes) one more.
+    # registers nothing, so the managed entries are unchanged. Each registered event's
+    # group is one entry (toolchain-missing-hint's PostToolUseFailure among them; no
+    # UserPromptSubmit, finding #6), and each native deny row (secrets and destructive
+    # prefixes) one more.
     native = sum(len(rows) for rows in _native_rows().values())
     assert "✓ Hooks: 29 enabled, 14 skipped (" in out
     assert "claude_code: 29 enforced" in out
     assert "continue: 25 advisory" in out
-    updated = f"{6 + native} managed entries updated, 0 removed (user keys untouched)"
-    assert f"✓ {SETTINGS}: {updated}" in out
+    updated = f"{len(ENGINE_PACK_EVENTS) + native} managed entries updated, 0 removed"
+    assert f"✓ {SETTINGS}: {updated} (user keys untouched)" in out
 
     _edit_managed_group(repo)
     assert _sync_repo(repo, tmp_path) == 0
