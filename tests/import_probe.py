@@ -5,7 +5,10 @@ measured imports are the ones a hook process pays. Coverage's subprocess hooks
 are scrubbed from the child env: pytest-cov exports ``COVERAGE_PROCESS_START`` /
 ``COV_CORE_*``, and coverage's ``a1_coverage.pth`` then imports coverage (and
 ``importlib.metadata`` with it) before the probe's first line. ``-I`` does not
-help, because it only ignores ``PYTHON*`` variables.
+help, because it only ignores ``PYTHON*`` variables. The attendance variables
+(``tests.attendance_env``) go too: a CI runner's ``CI=true`` would send every
+spawned dispatcher down the unattended (deny) path, with other exit codes and
+other imports than the attended run the budgets measure.
 """
 
 from __future__ import annotations
@@ -15,6 +18,8 @@ import os
 import subprocess
 import sys
 
+from tests.attendance_env import without_attendance_vars
+
 PROBE_TIMEOUT_S = 60
 
 #: Env-var prefixes that make a child interpreter start coverage at startup.
@@ -22,16 +27,16 @@ _COVERAGE_ENV_PREFIXES = ("COVERAGE_", "COV_CORE_")
 
 
 def probe_env() -> dict[str, str]:
-    """The current env minus coverage's subprocess-startup variables.
+    """The current env minus coverage's subprocess-startup and the attendance variables.
 
     Example::
 
-        >>> "COVERAGE_PROCESS_START" in probe_env()
-        False
+        >>> {"COVERAGE_PROCESS_START", "CI"} & set(probe_env())
+        set()
     """
     return {
         name: value
-        for name, value in os.environ.items()
+        for name, value in without_attendance_vars(os.environ).items()
         if not name.startswith(_COVERAGE_ENV_PREFIXES)
     }
 

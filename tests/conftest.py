@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from tests.attendance_env import ATTENDANCE_ENV_VARS
 from tests.hook_samples import write_hook
 
 if TYPE_CHECKING:
@@ -95,6 +96,23 @@ def _write_prompt(
     lines.append("---")
     lines.append(body)
     target.write_text("\n".join(lines), encoding="utf-8")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def attended_session_env() -> Iterator[None]:
+    """Clear the runner's attendance variables (``CI``, ``GITHUB_ACTIONS``, ...) for the session.
+
+    ``is_unattended`` turns every ``ask`` into a ``deny`` under them, so an
+    in-process dispatch, a ``RuntimeDeps()`` snapshot of ``os.environ`` or a
+    subprocess inheriting it would test the unattended path on CI only (PR #32).
+    Session scope also covers module-scoped fixtures, and a function-scoped
+    ``monkeypatch`` that sets one is undone back to "unset". A test that wants
+    an unattended run sets one itself. See :mod:`tests.attendance_env`.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        for name in ATTENDANCE_ENV_VARS:
+            patch.delenv(name, raising=False)
+        yield
 
 
 def apply_hermetic_git_env(
