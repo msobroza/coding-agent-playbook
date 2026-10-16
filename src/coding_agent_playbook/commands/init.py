@@ -10,7 +10,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from coding_agent_playbook import __version__ as _engine_version
-from coding_agent_playbook.bundled_content import ENGINE_PACKAGE
+from coding_agent_playbook.bundled_content import (
+    ENGINE_PACKAGE,
+    canonical_overlay_list,
+    canonical_overlay_name,
+)
 from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands._committed_config import (
@@ -410,6 +414,25 @@ def _refuse_unusable_overlays(overlays: list[str], origin: str) -> bool:
     return True
 
 
+def _warn_deprecated_flag_overlays(deprecated: tuple[str, ...]) -> None:
+    """Print one stderr ``warning: --overlays:`` line per distinct deprecated name.
+
+    ``deprecated`` is what ``canonical_overlay_list`` rewrote in ``--overlays``
+    (SPEC v0.19). The local file's list is not warned about here: init's final
+    sync goes through ``SyncContext.from_repo``, which does that.
+
+    Example::
+
+        >>> _warn_deprecated_flag_overlays(deprecated)  # doctest: +SKIP
+        warning: --overlays: '<old>' is deprecated; use '<new>'
+    """
+    for old in dict.fromkeys(deprecated):
+        print(
+            f"warning: --overlays: '{old}' is deprecated; use '{canonical_overlay_name(old)}'",
+            file=sys.stderr,
+        )
+
+
 def run(args: argparse.Namespace) -> int:
     """Bootstrap the repo: write the config files and pre-commit hooks, then sync.
 
@@ -419,10 +442,14 @@ def run(args: argparse.Namespace) -> int:
     ``ConfigError``) a config file the engine would misread. Both files are read
     and checked here — the local one on its own, the committed one on its own,
     then the config the final sync will load (:func:`_plan_config`) — so a broken
-    file of either kind leaves the repo untouched.
+    file of either kind leaves the repo untouched. A deprecated
+    ``coding_agent_playbook.packs.*`` name in ``--overlays`` is written in its
+    canonical ``plugins`` spelling (on a re-run too: the migration path for the
+    committed file) and warned about once the overlay preflight passes.
     """
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     answers = _collect_answers(args)
+    answers["overlays"], deprecated_flags = canonical_overlay_list(answers["overlays"])
     state = FileSystemStateSource(repo_root=repo_root)
     local = state.load_local_overrides()
     refused = [
@@ -431,6 +458,7 @@ def run(args: argparse.Namespace) -> int:
     ]
     if any(refused):
         return 2
+    _warn_deprecated_flag_overlays(deprecated_flags)
     plan = _plan_config(state, repo_root, answers)
 
     # Nothing is written above this line.

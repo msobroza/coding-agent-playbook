@@ -83,6 +83,18 @@ def test_dotted_key_form_parses_as_the_same_table_and_is_refused() -> None:
     assert 'overlays_enabled = ["coding_agent_playbook.plugins.superpowers"]' in str(exc.value)
 
 
+def test_fixit_hint_recommends_canonical_name() -> None:
+    """The hint never recommends the deprecated ``packs`` spelling (SPEC v0.19);
+    the ``found`` part still quotes the file as written."""
+    data = _data(tables='\n[overlays]\nenabled = ["coding_agent_playbook.packs.superpowers"]\n')
+    with pytest.raises(ConfigError) as exc:
+        Config.from_dict(data, source=_PRIMARY)
+    found, hint = str(exc.value).split(_HINT, 1)
+    assert "coding_agent_playbook.packs.superpowers" in found
+    assert hint == 'overlays_enabled = ["coding_agent_playbook.plugins.superpowers"]'
+    assert ".packs." not in hint
+
+
 def test_table_without_an_enabled_list_is_refused_too() -> None:
     data = _data(tables="\n[adapters]\nclaude_code = true\n")
     with pytest.raises(ConfigError) as exc:

@@ -25,10 +25,12 @@ PR 10's invariants:
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from importlib import metadata
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.bundled_content import canonical_overlay_name
 from coding_agent_playbook.detector import detect, evaluate_predicate
 from coding_agent_playbook.renderer import build_environment, render_string
 from coding_agent_playbook.sources.filesystem import (
@@ -284,6 +286,34 @@ def installed_output_locations() -> tuple[str, ...]:
     return tuple(locations)
 
 
+def _warn_deprecated_overlays(config: Config, state: FileSystemStateSource) -> None:
+    """Print one stderr ``warning:`` per distinct deprecated overlay name (SPEC v0.19).
+
+    The line names the file to fix: the local file when it sets
+    ``overlays_enabled`` (lists replace whole in the SPEC §7.2 merge), else the
+    committed one. A print, not ``warnings.warn``: CLI users never see a
+    ``DeprecationWarning``, and pytest runs with ``filterwarnings = error``.
+    Called only from :meth:`SyncContext.from_repo`, so a directly built
+    ``SyncContext`` (or ``Config``) stays silent.
+
+    Example::
+
+        >>> _warn_deprecated_overlays(config, state)  # doctest: +SKIP
+        warning: <file>: overlays_enabled: '<old>' is deprecated; use '<new>'
+    """
+    if not config.deprecated_overlay_names:
+        return
+    local_sets_list = "overlays_enabled" in state.load_local_overrides()
+    source = state._CONFIG_LOCAL_FILENAME if local_sets_list else state._CONFIG_FILENAME
+    # Listed twice, a name is walked twice (canonical_overlay_list keeps it), but warned once.
+    for old in dict.fromkeys(config.deprecated_overlay_names):
+        print(
+            f"warning: {source}: overlays_enabled: '{old}' is deprecated; "
+            f"use '{canonical_overlay_name(old)}'",
+            file=sys.stderr,
+        )
+
+
 @dataclass
 class SyncContext:
     """Bundle of state every CLI command needs after reading the config.
@@ -318,9 +348,13 @@ class SyncContext:
         facts. Callers that want the full pipeline build the context once
         without a registry, then re-build the adapters via
         :func:`discover_adapters` after the registry exists.
+
+        Prints one ``warning:`` line per deprecated ``coding_agent_playbook.packs.*``
+        overlay name, before anything else runs (:func:`_warn_deprecated_overlays`).
         """
         state_source = FileSystemStateSource(repo_root=repo_root)
         config = state_source.load_config()
+        _warn_deprecated_overlays(config, state_source)
         facts = detect(repo_root)
 
         artifact_source = FileSystemArtifactSource(
