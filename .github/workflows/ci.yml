@@ -109,4 +109,4 @@ jobs:
         run: |
           cd "$RUNNER_TEMP/smoke-repo"
           timeout 120 playbook eval --list </dev/null | tee "$RUNNER_TEMP/eval-list.log"
-          grep -F '23 eval tasks' "$RUNNER_TEMP/eval-list.log"
+          grep -Fw '23 eval tasks' "$RUNNER_TEMP/eval-list.log"
