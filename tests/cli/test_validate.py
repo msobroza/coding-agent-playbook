@@ -239,3 +239,25 @@ def test_validate_flags_non_string_skill_id(tmp_path, make_synthetic_repo, capsy
     rc = _validate.run(_ns(repo))
     assert rc == 1
     assert "skill 'id' must be a string, got int 123" in capsys.readouterr().out
+
+
+def test_validate_warns_about_skill_files_sync_never_copies(
+    tmp_path, make_synthetic_repo, capsys, monkeypatch
+):
+    """A skill's secret file is reported as a non-fatal warning (SPEC §17.3)."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    repo = make_synthetic_repo(tmp_path)
+    _write_skill(repo, "query-db", "id: query-db\ndescription: Run a query\n")
+    scripts = repo / "playbook" / "skills" / "query-db" / "scripts"
+    scripts.mkdir()
+    (scripts / "run.sh").write_text("echo\n", encoding="utf-8")
+    (scripts / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
+
+    rc = _validate.run(_ns(repo))
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "OK" in captured.out
+    assert "warning: skills/query-db (<repo-local>):" in captured.err
+    assert f"{scripts / '.env'} is never copied" in captured.err
+    assert "run.sh" not in captured.err

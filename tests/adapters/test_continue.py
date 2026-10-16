@@ -266,19 +266,23 @@ def test_continue_write_skill_degrades_to_prompt_path(tmp_path: Path) -> None:
     assert "invokable: true" in content
 
 
-def test_cleanup_keeps_a_copied_skill_md_whose_sentinel_follows_frontmatter(
+def test_cleanup_reads_the_frontmatter_first_sentinel_like_every_scanner(
     tmp_path: Path,
 ) -> None:
-    """Only OpenCode opts into the after-frontmatter sentinel position: a generated
-    SKILL.md a user copied into a Continue folder stays theirs, as before."""
+    """One anchored detector (``_sentinel.has_sentinel``) decides ownership for
+    every adapter (prK §P3): a stale file in the :func:`with_sentinel_body`
+    layout is engine output in a Continue folder too. A copied generated
+    ``SKILL.md`` becomes the user's once its sentinel line is removed."""
     prompts = tmp_path / ".continue" / "prompts"
     prompts.mkdir(parents=True)
-    copied = prompts / "my-skill.md"
-    copied.write_text(
+    stale = prompts / "stale-skill.md"
+    stale.write_text(
         with_sentinel_body("---\nname: x\ndescription: y\n---", "body\n"), encoding="utf-8"
     )
+    claimed = prompts / "my-skill.md"
+    claimed.write_text("---\nname: x\ndescription: y\n---\n\nbody\n", encoding="utf-8")
 
     deleted = ContinueAdapter().cleanup_stale(written_paths=set(), repo_root=tmp_path)
 
-    assert deleted == []
-    assert copied.is_file()
+    assert deleted == [stale]
+    assert claimed.is_file()

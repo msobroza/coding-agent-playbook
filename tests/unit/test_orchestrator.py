@@ -8,6 +8,8 @@ Covers the three load-bearing pieces:
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from coding_agent_playbook.config import Config, ProjectMeta, StorageConfig
@@ -16,8 +18,9 @@ from coding_agent_playbook.orchestrator import (
     RuleRegistryImpl,
     SyncContext,
     discover_adapters,
+    template_source,
 )
-from coding_agent_playbook.renderer import build_environment
+from coding_agent_playbook.renderer import TemplateSecurityError, build_environment
 from coding_agent_playbook.types import (
     Prompt,
     PromptFrontmatter,
@@ -133,6 +136,25 @@ def test_rule_registry_returns_formatted_body_for_known_rule(tmp_path):
     env.globals["_facts"] = {}
     registry = RuleRegistryImpl([rule], {}, env)
     assert registry.render_for_inclusion("style", {}) == "### Style\n\nBody of style\n"
+
+
+def test_rule_registry_names_the_rule_file_on_a_sandbox_violation(tmp_path):
+    """The ``includes_rules`` render runs inside adapters; a sandbox violation there
+    must name the rule's source file, never surface as a bare ``SecurityError``."""
+    source = tmp_path / "playbook" / "rules" / "gated.md.j2"
+    rule = dataclasses.replace(
+        _make_rule("gated", "<repo-local>"),
+        template_body='{{ lipsum.__globals__["os"] }}',
+        is_templated=True,
+        source_path=source,
+    )
+    env = build_environment([])
+    env.globals["_facts"] = {}
+    registry = RuleRegistryImpl([rule], {}, env)
+    with pytest.raises(TemplateSecurityError) as caught:
+        registry.render_for_inclusion("gated", {})
+    assert caught.value.source == str(source)
+    assert template_source(dataclasses.replace(rule, source_path=None)) == "gated"
 
 
 def test_rule_registry_returns_empty_string_for_unknown_rule():

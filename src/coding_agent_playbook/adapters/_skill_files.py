@@ -2,8 +2,10 @@
 
 Both native skill writers — the shared ``SkillWriter`` (``.claude/skills/``,
 ``.opencode/skills/``, ``shared_skills/``) and the ``agent_harness`` adapter
-(``skills/``) — walk a skill's subtrees through :func:`skill_subtree_files`, so
-the skip rule lives in exactly one place.
+(``skills/``) — walk a skill's subtrees through :func:`skill_subtree_files`
+(via :func:`~coding_agent_playbook.adapters._skill_sources.copyable_skill_files`,
+which then refuses secret paths and links leaving the skill), so the skip rule
+lives in exactly one place.
 
 The rule: **Python bytecode caches are never copied** — any path with a
 ``__pycache__`` component and any ``*.pyc``/``*.pyo`` file. They are

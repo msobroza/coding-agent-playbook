@@ -30,7 +30,7 @@ from importlib import metadata
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.detector import detect, evaluate_predicate
-from coding_agent_playbook.renderer import build_environment, render_string
+from coding_agent_playbook.renderer import build_environment, render_sandboxed
 from coding_agent_playbook.sources.filesystem import (
     FileSystemArtifactSource,
     FileSystemStateSource,
@@ -161,6 +161,15 @@ def _source_package(artifact: object) -> str:
     return str(package) if package is not None else "<unknown>"
 
 
+def template_source(artifact: Rule | Prompt) -> str:
+    """Name ``artifact``'s template in error messages: its source path, else its id.
+
+    Example: ``template_source(rule)`` -> ``"/repo/playbook/rules/x.md.j2"``.
+    """
+    path = artifact.source_path
+    return str(path) if path is not None else artifact_id_of(artifact)
+
+
 class RuleRegistryImpl:
     """Concrete :class:`RuleRegistry` used by the orchestrator.
 
@@ -176,6 +185,11 @@ class RuleRegistryImpl:
         self._env = env
 
     def render_for_inclusion(self, rule_id: str, context: dict[str, object]) -> str:
+        """Render ``rule_id`` for inline placement in a prompt (``""`` if filtered out).
+
+        A sandbox violation raises :class:`TemplateSecurityError` naming the
+        rule's source file (specs/prK-lifecycle-hooks.md §P1).
+        """
         rule = self._by_id.get(rule_id)
         if rule is None:
             return ""
@@ -185,7 +199,9 @@ class RuleRegistryImpl:
             # without hitting StrictUndefined on every templated rule that
             # references a fact. Caller-supplied keys win on collision.
             merged_context = {**self._facts, **context}
-            body = render_string(rule.template_body, merged_context, env=self._env)
+            body = render_sandboxed(
+                rule.template_body, merged_context, env=self._env, source=template_source(rule)
+            )
         else:
             body = rule.body
         return f"### {rule.frontmatter.name}\n\n{body}"
@@ -311,7 +327,7 @@ class SyncContext:
         *,
         rule_registry: RuleRegistry | None = None,
     ) -> SyncContext:
-        """Discovery: load config → instantiate sources → resolve overlays.
+        """Discovery: load config → detect facts → instantiate sources → resolve overlays.
 
         ``rule_registry`` is optional because the adapters need it but the
         registry itself depends on the filtered rule list, which depends on

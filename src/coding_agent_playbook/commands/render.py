@@ -13,16 +13,18 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.commands.sync import (
-    _build_jinja_context,
-    _render_prompt_body,
-    _render_rule_body,
+from coding_agent_playbook.commands._sync_render import (
+    build_jinja_context,
+    render_prompt_body,
+    render_rule_body,
+    report_sandbox_violation,
 )
 from coding_agent_playbook.detector import evaluate_predicate
 from coding_agent_playbook.orchestrator import SyncContext, artifact_id_of, build_prompt_environment
 from coding_agent_playbook.renderer import (
     BUILTIN_FORMATS,
     FORMAT_ALIASES,
+    TemplateSecurityError,
     build_environment,
     render_for,
 )
@@ -143,8 +145,8 @@ def _show_rules(prompt: Prompt, ctx: SyncContext) -> str:
 def _render_rule(ctx: SyncContext, rule: Rule, resolved_format: str) -> str:
     base_env = build_environment([], is_prompt_context=False)
     base_env.globals["_facts"] = dict(ctx.facts)
-    context = _build_jinja_context(ctx)
-    rendered = _render_rule_body(rule, context, base_env)
+    context = build_jinja_context(ctx)
+    rendered = render_rule_body(rule, context, base_env)
     return render_for(
         rendered.source_path or Path("inline"),
         rendered.body,
@@ -156,10 +158,10 @@ def _render_rule(ctx: SyncContext, rule: Rule, resolved_format: str) -> str:
 def _render_prompt(ctx: SyncContext, prompt: Prompt, resolved_format: str) -> str:
     base_env = build_environment([], is_prompt_context=False)
     base_env.globals["_facts"] = dict(ctx.facts)
-    context = _build_jinja_context(ctx)
-    rendered_rules = [_render_rule_body(rule, context, base_env) for rule in ctx.rules_resolved]
+    context = build_jinja_context(ctx)
+    rendered_rules = [render_rule_body(rule, context, base_env) for rule in ctx.rules_resolved]
     registry, prompt_env = build_prompt_environment(rendered_rules, ctx.facts)
-    rendered_prompt = _render_prompt_body(prompt, context, prompt_env)
+    rendered_prompt = render_prompt_body(prompt, context, prompt_env)
     return render_for(
         rendered_prompt.source_path or Path("inline"),
         rendered_prompt.body,
@@ -226,5 +228,10 @@ def run(args: argparse.Namespace) -> int:
         )
         return 1
 
-    print(_render_artifact(ctx, kind, artifact, resolved_format))
+    try:
+        print(_render_artifact(ctx, kind, artifact, resolved_format))
+    except TemplateSecurityError as exc:
+        # Every resolved rule renders here, so one escaping template anywhere
+        # names its file instead of dumping a traceback (prK §P1).
+        return report_sandbox_violation(exc, ctx.repo_root, outcome="playbook render aborted.")
     return 0

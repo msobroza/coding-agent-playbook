@@ -13,8 +13,8 @@ task's authored mock facts (``[setup] project_kind`` + extra keys). The prompt's
 ``includes_rules:`` appendix is *not* expanded: that is adapter output (the
 slash-command file), and the runner hands the agent the prompt body only.
 
-Mirrors the prompt half of ``commands/sync.py::_run_sync`` without touching it;
-the two should converge on one shared helper.
+Mirrors the prompt half of ``commands/_sync_render.py::render_artifacts``
+without touching it; the two should converge on one shared helper.
 
 Usage::
 
@@ -33,7 +33,11 @@ from jinja2 import TemplateError
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.detector import detect, evaluate_predicate
 from coding_agent_playbook.orchestrator import OverlayResolver, RuleRegistryImpl
-from coding_agent_playbook.renderer import build_environment, render_string
+from coding_agent_playbook.renderer import (
+    TemplateSecurityError,
+    build_environment,
+    render_string,
+)
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import Prompt
 
@@ -60,9 +64,21 @@ _NAME_MAP_FACTS = ("dependencies", "dev_dependencies", "frameworks", "ml_stack")
 
 #: What rendering a prompt can raise on bad *inputs* rather than engine bugs: a
 #: Jinja error (typo'd variable), a mis-shaped mock fact reaching a predicate
-#: (``ml_stack = "torch"``, ``python_version = 3.12``), or an unreadable or
-#: malformed rule file (bad YAML frontmatter, a directory named ``*.md``).
-_RENDER_ERRORS = (TemplateError, ValueError, TypeError, AttributeError, yaml.YAMLError, OSError)
+#: (``ml_stack = "torch"``, ``python_version = 3.12``), an unreadable or
+#: malformed rule file (bad YAML frontmatter, a directory named ``*.md``), or a
+#: rule inlined by ``rule()`` that the Jinja sandbox rejects. That last one is
+#: ``RuleRegistryImpl``'s :class:`TemplateSecurityError`, a plain ``Exception``
+#: (not a jinja ``TemplateError``), so it must be listed or ``playbook eval
+#: --run`` crashes with exit 1, the "task failed" code, instead of exit 2.
+_RENDER_ERRORS = (
+    TemplateError,
+    TemplateSecurityError,
+    ValueError,
+    TypeError,
+    AttributeError,
+    yaml.YAMLError,
+    OSError,
+)
 
 
 class PromptResolutionError(RuntimeError):
@@ -156,7 +172,7 @@ def _task_facts(task: EvalTask) -> Facts:
 def _render_context(task: EvalTask, facts: Facts) -> dict[str, Any]:
     """Facts + project metadata + ``input_variables`` (the invocation wins).
 
-    Mirrors ``commands/sync.py::_build_jinja_context``. The project name and
+    Mirrors ``commands/_sync_render.py::build_jinja_context``. The project name and
     description come from ``setup/pyproject.toml`` — which the agent can read in
     its working tree anyway — never from the task ``description``, which
     narrates the scenario and would leak it into the prompt.
