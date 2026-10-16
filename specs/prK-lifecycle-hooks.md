@@ -1672,7 +1672,7 @@ playbook-hook --version
 | `ledger.py` | session ledger append/read | post/stop |
 | `escape.py` | kill switches; `pragma_at_head(...)` | yes |
 | `proc.py` | **the only** `subprocess`/`shutil.which` seam; lazy `import subprocess`; mandatory `timeout=` | when used |
-| `git.py` | `GitPort` Protocol + `SafeGit` (§D.5.3): `head_tree`, `fingerprint`, `diff_added`, `cat_head`, `ls_untracked` | when used |
+| `git.py` | `GitPort` Protocol + `SafeGit` (§D.5.3): `head_tree`, `fingerprint`, `diff_added`, `cat_head`, `ls_untracked`; `_git_memo.MemoGit`, the dispatch's per-snapshot memo | when used |
 | `security/trust.py` (§B.4; not a `hook_runtime` module) | the one `TrustStore` (reader and writer, user-local, outside the repo) | stop / external |
 | `watchdog.py` | event deadline timer that emits the failure-policy result and calls `os._exit` | yes |
 | `stop/coordinator.py` | `StopCoordinator.run(ev, deps) -> CombinedResult` | stop |
@@ -2241,6 +2241,7 @@ Because `.git/config` and `.gitattributes` are agent-writable, an unhardened Sto
 - **Disables other hook points.** It prepends `-c core.fsmonitor=false` (`core.fsmonitor` can name an executable), and adds `--no-ext-diff --no-textconv` to every `diff`/`log -p`/`show` call. It uses `cat-file -p <rev>:<path>` for blob reads.
 - **Scrubs the child env.** It removes `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` (except its own), `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_*`, `GIT_CONFIG_VALUE_*` and `GIT_EXTERNAL_DIFF`. It sets `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`, `GIT_PAGER=cat` and `LC_ALL=C`.
 - **Bounds time.** Timeouts are 2 s on hot-path calls (pragma checks, §E git guards) and 5 s in Stop stages. A timeout raises `GitTimeout`, which is handled by the failure policy.
+- **Answers each distinct read once per dispatch.** A dispatch is one snapshot of the working tree, so the dispatcher's git (`_ports.LazyGit`) is a memoizing `SafeGit` (`_git_memo.MemoGit`): a call to a read-only subcommand (`rev-parse`, `ls-files`, `diff`, `cat-file`, `grep`, `status`, `log`, `for-each-ref`, `merge-base`) with the same argv, stdin and accepted exit codes spawns once, and later askers reuse its answer. Temp-index calls (the fingerprint's `add` / `write-tree`) always spawn, a failed or timed-out call is not stored, and the CLI twins keep a plain `SafeGit` (a command may change the tree between its own reads). A default-tier Stop over a changed tree went from 24 git spawns (`rev-parse HEAD^{tree}` and `ls-files --others` 5x each, `diff HEAD` 4x) to 11.
 
 **Known cost.** `git add -A` writes loose blobs for modified and untracked non-excluded files into the object store, where `git gc` prunes them. See Q-D4. A `stat`-mode fallback fingerprint (sha256 over `git status --porcelain=v2 -z` plus per-path stat) is used when git is older than 2.26 or filter discovery fails. In that mode `unchanged_vs_head` is decided by an empty status, and the commit-policy cache key is unavailable.
 

@@ -26,7 +26,7 @@ __all__ = ["LazyGit", "open_trust_store"]
 
 
 class LazyGit:
-    """A ``GitPort`` that builds the hardened ``SafeGit`` on its first call.
+    """A ``GitPort`` that builds the hardened, memoizing ``MemoGit`` on its first call.
 
     Example::
 
@@ -51,9 +51,9 @@ class LazyGit:
 
     def _port(self) -> GitPort:
         if self._git is None:
-            from coding_agent_playbook.hook_runtime.git import SafeGit
+            from coding_agent_playbook.hook_runtime._git_memo import MemoGit
 
-            self._git = SafeGit(
+            self._git = MemoGit(  # one dispatch, one snapshot: each distinct read spawns once
                 self._repo,
                 proc=self._deps.proc,
                 env=self._deps.env,
