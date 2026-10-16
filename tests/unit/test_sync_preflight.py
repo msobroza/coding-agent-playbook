@@ -62,13 +62,18 @@ def test_plugin_namespace_reason(name: str) -> None:
 @pytest.mark.parametrize("name", [PLUGIN_NAMESPACE, DEPRECATED_PACK_NAMESPACE])
 def test_plugin_namespace_never_imported(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """A leftover ``packs/`` dir holding only ``__pycache__`` cannot change the result."""
+    attempted_imports: list[str] = []
 
     def _refuse_import(module: str, package: str | None = None) -> object:
+        # Recorded before raising: ``_unusable_reason`` swallows any exception
+        # from ``import_module``, so the raise alone would go unnoticed.
+        attempted_imports.append(module)
         raise AssertionError(f"imported {module!r}")
 
     # The string target: mypy rejects the attribute path (``importlib`` is not re-exported).
     monkeypatch.setattr(f"{_sync_preflight.__name__}.importlib.import_module", _refuse_import)
     (problem,) = unusable_overlays([name])
+    assert attempted_imports == []
     assert problem.reason.startswith("the bundled plugin namespace, not a plugin (")
 
 
