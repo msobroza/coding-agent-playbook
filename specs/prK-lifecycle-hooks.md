@@ -2,7 +2,7 @@
 
 > **Resolves SPEC §19 Q8** (OpenCode plugin generation): the engine ships one generated OpenCode plugin shim that delegates to the same dispatcher as Claude Code, not hook *patterns* in docs. **Amends** §2.2 (the "no OpenCode plugins" non-goal narrows to *user-authored* plugins — the engine owns exactly one generated plugin file), §2.3 (the "OpenCode plugin generation from canonical hook descriptions" aspiration is delivered), §3 (**Hook** becomes the 4th emitted canonical kind; the "supported by … Continue CLI" claim is corrected — see P5), §10.6.2 (the hook gap is closed for the OpenCode V1 plugin API) and §17.1 (HTTP hook handlers are *rejected by `playbook validate`*, not merely "not shipped"). **Partially answers** §19 Q1 for executable overlay content (`allow_code_from` + trust-on-first-use, §B.4). The `Metric`/`Check`/`Rubric` engine (§21, `specs/prR6-check-rubric.md`) is reused unchanged by the new tools; no evaluator abstraction changes.
 >
-> **Layout note (SPEC v0.19, PR C).** This design predates the move of the engine's content out of the Python package. The engine's `src/coding_agent_playbook/resources/{rules,prompts,eval_tasks,hooks}/` now live in `content/core/{rules,prompts,eval_tasks,hooks}/`, the hook shim templates (`resources/hook_shims/`) in the package's `src/coding_agent_playbook/templates/hook_shims/`, and the bundled packs (`coding_agent_playbook.packs.<name>`) are bundled plugins under `content/plugins/<name>/` (`coding_agent_playbook.plugins.<name>`). Overlay packages keep `<pkg>/resources/…`. Older paths in the track file lists below read through this mapping; SPEC.md is authoritative.
+> **Layout note (SPEC v0.19, PR C; `content/` renamed `catalog/` in v0.20).** This design predates the move of the engine's content out of the Python package. The engine's `src/coding_agent_playbook/resources/{rules,prompts,eval_tasks,hooks}/` now live in `catalog/core/{rules,prompts,eval_tasks,hooks}/`, the hook shim templates (`resources/hook_shims/`) in the package's `src/coding_agent_playbook/templates/hook_shims/`, and the bundled packs (`coding_agent_playbook.packs.<name>`) are bundled plugins under `catalog/plugins/<name>/` (`coding_agent_playbook.plugins.<name>`). Overlay packages keep `<pkg>/resources/…`. Older paths in the track file lists below read through this mapping; SPEC.md is authoritative.
 >
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development; checkbox steps.
 >
@@ -133,6 +133,7 @@ Track P is pure engine hardening: no hook ships in it, every item is independent
 - **Defect.** mypy excludes `resources/eval_tasks/.*/setup/` (`pyproject.toml:150`) because those trees are deliberately unclean needle material, but `[tool.ruff]` (`pyproject.toml:111`) has no exclude: a post-edit `ruff format` or a Stop-tier `ruff check --fix` would rewrite fixtures (the `find-injected-vuln-*` needles included).
 - **Fix.** `[tool.ruff] extend-exclude = ["src/coding_agent_playbook/resources/eval_tasks/*/setup"]` **and** `force-exclude = true` (engine repo only; consumers are unaffected). Verified with ruff 0.15.10: `extend-exclude` is not applied to an explicitly passed path unless `force-exclude` is set, and the post-edit hooks and Stop stages pass explicit paths. Every hook and stage ruff argv also carries `--force-exclude` (§E.3), so consumer excludes hold without their own `force-exclude`.
 - **Tests.** `tests/integration/test_ruff_scope.py::test_ruff_excludes_eval_fixture_setup` (parse `pyproject.toml`, assert the glob and `force-exclude`; when `ruff` is on PATH, run `ruff check --force-exclude <a fixture file>` and assert "No Python files found", else skip).
+- **Since v0.20.** Eval tasks are per layer, so the excludes are `catalog/core/eval_tasks/*/setup` and `catalog/plugins/*/eval_tasks/*/setup`: a bundled plugin may ship `eval_tasks/`, each task using its own layer's `prompts/`. mypy needs no exclude, because `catalog/` is outside its `files`. `test_ruff_scope.py` also runs ruff on a plugin fixture in a scratch project that carries the engine's ruff table.
 
 ---
 
@@ -143,14 +144,14 @@ Track P is pure engine hardening: no hook ships in it, every item is independent
 A hook is a **directory containing `HOOK.md` or `HOOK.md.j2`** (shared name — proposed), with an optional `scripts/` subdirectory for the external-command form. The directory name **is** the hook id. Category folders above hook directories are allowed and carry no meaning:
 
 ```
-content/core/hooks/                                   # engine (builtin handlers only)
+catalog/core/hooks/                                   # engine (builtin handlers only)
 ├── protect/
 │   ├── guard-generated-outputs/HOOK.md
 │   └── control-plane-guard/HOOK.md
 ├── verify/stop-ci-parity-gate/HOOK.md
 └── ...
 <overlay_pkg>/resources/hooks/<category>/<id>/HOOK.md  # overlay layer
-content/plugins/<name>/hooks/<category>/<id>/HOOK.md   # bundled-plugin layer (an overlay)
+catalog/plugins/<name>/hooks/<category>/<id>/HOOK.md   # bundled-plugin layer (an overlay)
 <repo>/playbook/hooks/<id>/                            # repo-local layer
 ├── HOOK.md
 └── scripts/
@@ -2445,7 +2446,7 @@ Escape hatches are read **only from the dispatcher process environment** (`os.en
  "tools":{"ruff":{"argv":["/abs/.venv/bin/ruff"],"sig":[31457280,1728900000000000000,1234567]},
           "cz":{"argv":["/abs/.venv/bin/cz"],"sig":[…]},
           "project_python":{"argv":["/abs/.venv/bin/python3.13"],"sig":[…]}},
- "resource_roots":{"pkg:coding_agent_playbook/resources":"/abs/site-packages/coding_agent_playbook/_content/core"}}
+ "resource_roots":{"pkg:coding_agent_playbook/resources":"/abs/site-packages/coding_agent_playbook/_catalog/core"}}
 ```
 
 - `sig` is `[st_size, st_mtime_ns, st_ino]`, captured at sync. `project_python` is the project's interpreter for test/coverage stages (§F.1), distinct from the engine pin.

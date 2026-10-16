@@ -9,7 +9,7 @@ copies this whole tree into the wheel, so what you commit here is what
 ## Where each kind lives
 
 ```text
-content/
+catalog/
 ├── README.md                 this guide (ships in the wheel, never synced)
 ├── core/                     the engine layer: always on in every consumer repo
 │   ├── ATTRIBUTIONS.md       credit for ideas distilled from third-party sources
@@ -98,6 +98,14 @@ the consumer's `playbook/`) replaces an artifact with the same `id`.
    layer's `eval_tasks/`, so a core task uses `core/prompts/`.
 5. Credit third-party fixture code in `core/eval_tasks/ATTRIBUTIONS.md`.
 
+Eval tasks belong to a layer, like every other kind. A bundled plugin ships
+its own in `plugins/<name>/eval_tasks/<task-id>/`, laid out as above, and each
+of its tasks finds its prompt in `plugins/<name>/prompts/`. Its tasks are
+listed by `playbook eval --list` only in a repo that enables the plugin. Ruff
+never lints or reformats `setup/` in either home
+(`core/eval_tasks/*/setup` and `plugins/*/eval_tasks/*/setup`), and mypy never
+reads this tree.
+
 ## Add a hook
 
 1. Create `core/hooks/<category>/<id>/HOOK.md`, where `<category>` is
@@ -165,7 +173,7 @@ plugin of your own instead.
 
 A bundled plugin is pure content: there is no Python file to write. Create
 `plugins/<name>/` and it is usable as `coding_agent_playbook.plugins.<name>`
-with no change outside `content/`.
+with no change outside `catalog/`.
 
 - **The leaf rule.** `<name>` must be a Python identifier (`str.isidentifier()`:
   letters, digits and underscores, not starting with a digit) and must not start
@@ -224,6 +232,6 @@ bundled plugin (see "Add a bundled plugin"), every eval task's gate, and the
 skill inventory that `python_design` and `superpowers` each pin.
 
 With `pre-commit install`, every commit formats markdown the way CI does, and a
-commit that touches `content/` also runs the content checks (`pytest -m content`).
+commit that touches `catalog/` also runs the catalog checks (`pytest -m catalog`).
 The hooks run a subset of the suite, so the four commands above stay the source
 of truth.

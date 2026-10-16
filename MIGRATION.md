@@ -34,8 +34,9 @@ before. Authoritative design: `specs/prK-lifecycle-hooks.md` and
 | Code calling **`CoverageCheck(warn=80.0)`** | Pass the 0–1 cutoff, `warn=0.8` (§6). |
 | A repo whose **dependency names** use `_`, `.` or capitals | Commit the one-time `[detector_cache]` change (§8). |
 | An **overlay author** | Nothing required. Overlays may now ship hooks under `<pkg>/resources/hooks/`, which only add to the engine's (SPEC §11.6), and `playbook validate` runs in an overlay checkout with no consumer config (§2). |
-| An **engine content contributor** | The engine's hooks are content: `content/core/hooks/<category>/<id>/HOOK.md`, and a bundled plugin may ship `content/plugins/<name>/hooks/` (`content/README.md`). The launcher and OpenCode shim templates are engine wiring and stay in `src/coding_agent_playbook/templates/hook_shims/`. |
+| An **engine content contributor** | Edit under `catalog/`, the new name of v0.19's `content/` (§11). The engine's hooks are content: `catalog/core/hooks/<category>/<id>/HOOK.md`, and a bundled plugin may ship `catalog/plugins/<name>/hooks/` or `eval_tasks/` (`catalog/README.md`). The launcher and OpenCode shim templates are engine wiring and stay in `src/coding_agent_playbook/templates/hook_shims/`. |
 | An **out-of-tree adapter** author | Nothing required; read §10 (the hook members, and `stale_outputs` over `cleanup_stale`). |
+| Code importing **`coding_agent_playbook.bundled_content`**, or scripts matching the engine's `content/` tree, `_content/` or the `bundled content was not found` line | Switch to the `catalog` names (§11). |
 
 ### 1. Lockfile schema 2
 
@@ -252,10 +253,39 @@ reports no sentinel orphans for it. Scan helpers to reuse: `_stale_by_sentinel`
 (the default), `_scan_targets` (each file once, never a symlink or a secret path)
 and `_carries_sentinel` (bounded, anchored sentinel check).
 
-## v0.19 — Bundled content moves to `content/`; packs become bundled plugins
+### 11. `content/` is now `catalog/`
+
+The engine's content tree that v0.19 introduced as `content/` is renamed
+`catalog/`. Rendered output, the config keys and the plugin names
+(`coding_agent_playbook.plugins.<name>`) do not change, so a consumer repo needs
+nothing. Who needs to act: anyone on `main` after v0.19 who edits the engine's
+content, imports the resolver, or scripts against the old names.
+
+| Before (v0.19) | After (v0.20) |
+|---|---|
+| `content/core/…`, `content/plugins/<name>/…`, `content/README.md` | `catalog/core/…`, `catalog/plugins/<name>/…`, `catalog/README.md` |
+| wheel: `coding_agent_playbook/_content/` | `coding_agent_playbook/_catalog/` |
+| `coding_agent_playbook.bundled_content` | `coding_agent_playbook.catalog` |
+| `bundled_content_root()` | `catalog_root()` |
+| `bundled_layer_root(name, content_root=…)` | `catalog_layer_root(name, catalog_dir=…)` |
+| `BundledContentMissingError` | `CatalogMissingError` |
+| `error: the engine's bundled content was not found (…)` | `error: the engine's catalog was not found (…)` |
+| pytest marker `content`; dev pre-commit hook `content-checks` | marker `catalog`; hook `catalog-checks` |
+
+`is_bundled_layer`, `bundled_plugins` and `engine_layer_root` keep their names
+(the `content_root=` keyword is `catalog_dir=` everywhere). There is no
+compatibility shim. A local branch that still adds files under `content/`
+should move them with `git mv content/<path> catalog/<path>` before rebasing.
+
+Eval tasks stay a per-layer kind: a bundled plugin may ship
+`catalog/plugins/<name>/eval_tasks/<id>/`, which finds its prompt in the plugin's
+own `prompts/` and is listed by `playbook eval --list` only where the plugin is
+enabled.
+
+## v0.19 — Bundled content moves to `content/` (now `catalog/`); packs become bundled plugins
 
 The engine's own rules, prompts, eval tasks and skills move out of the Python
-package into a top-level `content/` tree, and the opt-in **packs** are renamed
+package into a top-level `content/` (now `catalog/`) tree, and the opt-in **packs** are renamed
 **bundled plugins**. Rendered output is unchanged, and old names keep working
 with a warning. Authoritative design: `specs/prC-content-extraction.md`.
 
@@ -267,7 +297,7 @@ with a warning. Authoritative design: `specs/prC-content-extraction.md`.
 | A **consumer** without bundled plugins | **Nothing.** |
 | Code that imports **`coding_agent_playbook.packs`** or **`PACK_NAME`** | Use the dotted string instead (no shim). |
 | An **overlay author** (`<pkg>/resources/…`) | **Nothing.** The overlay contract is unchanged. |
-| An **engine content contributor** | Edit under `content/` instead of `src/coding_agent_playbook/resources/` or `packs/<name>/resources/`. See `content/README.md`. |
+| An **engine content contributor** | Edit under `content/` (now `catalog/`) instead of `src/coding_agent_playbook/resources/` or `packs/<name>/resources/`. See `content/README.md`. |
 | A **script that parses `playbook eval --show`** | The bundled `Source:` label lost its `resources/` segment (below). |
 
 ### 1. `packs` → bundled plugins, and the deprecated alias
@@ -276,9 +306,9 @@ with a warning. Authoritative design: `specs/prC-content-extraction.md`.
 |---|---|
 | `coding_agent_playbook.packs.superpowers` | `coding_agent_playbook.plugins.superpowers` |
 | `coding_agent_playbook.packs.python_design` | `coding_agent_playbook.plugins.python_design` |
-| `src/coding_agent_playbook/resources/…` | `content/core/…` |
-| `src/coding_agent_playbook/packs/<name>/resources/skills/…` | `content/plugins/<name>/skills/…` |
-| `src/coding_agent_playbook/packs/<name>/{LICENSE,ATTRIBUTIONS.md}` | `content/plugins/<name>/{LICENSE,ATTRIBUTIONS.md}` (plus a new `README.md`) |
+| `src/coding_agent_playbook/resources/…` | `content/core/…` (now `catalog/core/…`) |
+| `src/coding_agent_playbook/packs/<name>/resources/skills/…` | `content/plugins/<name>/skills/…` (now `catalog/plugins/<name>/skills/…`) |
+| `src/coding_agent_playbook/packs/<name>/{LICENSE,ATTRIBUTIONS.md}` | `content/plugins/<name>/{LICENSE,ATTRIBUTIONS.md}` (now `catalog/plugins/<name>/{LICENSE,ATTRIBUTIONS.md}`) (plus a new `README.md`) |
 | `src/coding_agent_playbook/resources/precommit/config.yaml.j2` | `src/coding_agent_playbook/templates/precommit/config.yaml.j2` |
 
 ```toml
@@ -303,7 +333,7 @@ overlays_enabled = ["coding_agent_playbook.plugins.superpowers"]
   name back as it was parsed. `.coding-agent-playbook.local.toml` is never
   rewritten by any command: edit it by hand.
 - **Bundled plugins are pure content.** A plugin is just the directory
-  `content/plugins/<name>/`, with no Python file. Both namespaces,
+  `content/plugins/<name>/` (now `catalog/plugins/<name>/`), with no Python file. Both namespaces,
   `coding_agent_playbook.plugins.*` and `coding_agent_playbook.packs.*`, are
   reserved for bundled plugins.
 
@@ -348,7 +378,7 @@ PLUGIN_NAME = "coding_agent_playbook.plugins.superpowers"
 ### 4. New preflight reasons and hint
 
 A bundled-plugin name in `overlays_enabled` is now checked against
-`content/plugins/<name>/` and never imported. `sync`, `validate`, `check` and
+`content/plugins/<name>/` (now `catalog/plugins/<name>/`) and never imported. `sync`, `validate`, `check` and
 `init` report it with new texts:
 
 | Entry | Before | Now |
@@ -405,11 +435,13 @@ If the engine's bundled content cannot be found, every command that loads it
 error: the engine's bundled content was not found (looked in <a>, <b>); reinstall coding-agent-playbook
 ```
 
+v0.20 prints `the engine's catalog was not found` instead (v0.20 §11).
+
 `--version`, `metrics`, `validate-harness` and `import-harness` never look for
 the content, so they still run. Before, a lookup miss silently rendered zero
 engine artifacts. If you build the engine yourself, build releases from the
 sdist (`uv build` or `python -m build`), never with `--wheel`: the wheel copies
-`content/` in with a force-include that ignores `.gitignore`.
+`content/` (now `catalog/`) in with a force-include that ignores `.gitignore`.
 
 ### Not changed (v0.19)
 

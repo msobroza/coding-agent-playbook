@@ -1,8 +1,14 @@
-# PR C — Extract bundled content to `content/`; packs become bundled plugins
+# PR C — Extract bundled content to `catalog/`; packs become bundled plugins
+
+> **Rename note (v0.20).** This design shipped the tree as `content/`; v0.20 renamed it
+> `catalog/`: the wheel's `_content/` is `_catalog/`, `bundled_content.py` is `catalog.py`
+> (`catalog_root`, `catalog_layer_root`, `CatalogMissingError`, `catalog_dir=`),
+> `tests/_content.py` is `tests/_catalog.py`, and the `content` pytest marker is
+> `catalog`. The text below uses the current names.
 
 Status: approved design (2026-10-15), revised after an adversarial review
 against the code. Moves every rule, prompt, eval task and bundled skill out of
-the Python package into a top-level `content/` tree of the same repository. It
+the Python package into a top-level `catalog/` tree of the same repository. It
 also renames the opt-in "packs" to "bundled plugins"; old names keep working
 as a deprecated alias.
 
@@ -16,12 +22,12 @@ maintainers work in one place and never touch the logic layer.
 
 ## Scope (locked with the user)
 
-- **One wheel.** `content/` is a source folder only. Hatch copies it into the
+- **One wheel.** `catalog/` is a source folder only. Hatch copies it into the
   wheel at build time, so `pip install coding-agent-playbook` behaves exactly as
   today. There is no separate content distribution.
-- **Layout.** `content/core/` holds the engine built-ins and
-  `content/plugins/<name>/` holds the opt-in bundled plugins. The contributor
-  guide is `content/README.md`.
+- **Layout.** `catalog/core/` holds the engine built-ins and
+  `catalog/plugins/<name>/` holds the opt-in bundled plugins. The contributor
+  guide is `catalog/README.md`.
 - **Rename packs to bundled plugins** in code, config names, tests and docs.
   - The new config name is `coding_agent_playbook.plugins.<name>`.
   - `coding_agent_playbook.packs.<name>` keeps working, with a deprecation
@@ -29,7 +35,7 @@ maintainers work in one place and never touch the logic layer.
   - Exception: *content* files keep their current wording and only change path
     text (see "Content edits").
 - **Bundled plugins are pure content.** There is no Python file per plugin.
-  Adding `content/plugins/<name>/` is all it takes to ship a new plugin.
+  Adding `catalog/plugins/<name>/` is all it takes to ship a new plugin.
 - **The pre-commit template stays in `src/`.** It is engine wiring, not playbook
   content: its hook ids are duplicated in `commands/_precommit_merge.py`.
 - **The overlay contract is unchanged.** Third-party overlay packages still ship
@@ -47,7 +53,7 @@ becomes "OpenCode plugin".
 Repository:
 
 ```
-content/                         everything content maintainers edit
+catalog/                         everything content maintainers edit
 ├── README.md                    contributor guide
 ├── core/                        was src/coding_agent_playbook/resources/ (minus precommit/)
 │   ├── ATTRIBUTIONS.md
@@ -58,7 +64,7 @@ content/                         everything content maintainers edit
     ├── superpowers/{README.md,LICENSE,ATTRIBUTIONS.md,skills/<skill>/…}
     └── python_design/{README.md,ATTRIBUTIONS.md,skills/<skill>/…}
 src/coding_agent_playbook/
-├── bundled_content.py           new: the only code that knows where content/ is
+├── catalog.py                   new: the only code that knows where catalog/ is
 ├── templates/precommit/config.yaml.j2   was resources/precommit/config.yaml.j2
 └── …                            packs/ removed
 tests/plugins/                   was tests/packs/ (with its __init__.py files)
@@ -75,7 +81,7 @@ artifact walk picks them up.
 Installed wheel (internal; not a user-facing contract):
 
 ```
-coding_agent_playbook/_content/{README.md,core/…,plugins/<name>/…}
+coding_agent_playbook/_catalog/{README.md,core/…,plugins/<name>/…}
 coding_agent_playbook/templates/precommit/config.yaml.j2
 ```
 
@@ -91,11 +97,11 @@ any of:
 - a gitignored harness dir;
 - an unanchored-ignored name such as `build/` or `lib/`.
 
-`content/` is none of these.
+`catalog/` is none of these.
 
 ## Components
 
-### `bundled_content.py` (new)
+### `catalog.py` (new)
 
 This is the single place that locates the engine's own content. It is a leaf
 module that imports nothing from the engine, so `config.py` and
@@ -108,26 +114,26 @@ Constants:
 | `ENGINE_PACKAGE` | `"coding_agent_playbook"` |
 | `PLUGIN_NAMESPACE` | `"coding_agent_playbook.plugins"` |
 | `DEPRECATED_PACK_NAMESPACE` | `"coding_agent_playbook.packs"` |
-| `PACKAGED_CONTENT_DIRNAME` | `"_content"` (inside the installed package) |
-| `CHECKOUT_CONTENT_DIRNAME` | `"content"` (at the repo root) |
+| `PACKAGED_CATALOG_DIRNAME` | `"_catalog"` (inside the installed package) |
+| `CHECKOUT_CATALOG_DIRNAME` | `"catalog"` (at the repo root) |
 | `_PACKAGE_DIR` | the package directory; the one module-level seam end-to-end tests may monkeypatch, read at call time |
 
-`BundledContentMissingError(RuntimeError)` carries every path that was tried.
+`CatalogMissingError(RuntimeError)` carries every path that was tried.
 
 Functions:
 
-- `bundled_content_root(package_dir: Path | None = None) -> Path`. `package_dir`
+- `catalog_root(package_dir: Path | None = None) -> Path`. `package_dir`
   defaults to `_PACKAGE_DIR`.
-  1. **Installed wheel:** return `<package_dir>/_content` if
-     `<package_dir>/_content/core` is a directory.
-  2. **Source checkout:** return `<package_dir>/../../content` if
-     `package_dir.parent.name == "src"` and `<repo>/content/core` is a
+  1. **Installed wheel:** return `<package_dir>/_catalog` if
+     `<package_dir>/_catalog/core` is a directory.
+  2. **Source checkout:** return `<package_dir>/../../catalog` if
+     `package_dir.parent.name == "src"` and `<repo>/catalog/core` is a
      directory.
-  3. Otherwise raise `BundledContentMissingError`, naming both paths.
+  3. Otherwise raise `CatalogMissingError`, naming both paths.
 
   Rule 1 must check for `core/` too. Otherwise a wheel with a mis-scoped
   force-include would load zero engine artifacts silently.
-- `bundled_plugins(content_root: Path | None = None) -> list[str]`. Sorted dotted
+- `bundled_plugins(catalog_dir: Path | None = None) -> list[str]`. Sorted dotted
   names (`coding_agent_playbook.plugins.<dir>`), from `iterdir()` on
   `<root>/plugins`. It keeps only directories whose name `isidentifier()` and
   does not start with `.` or `_`. `iterdir()` returns the on-disk spelling, so
@@ -148,26 +154,26 @@ Functions:
   `PLUGIN_NAMESPACE` and `DEPRECATED_PACK_NAMESPACE`.
 - `is_bundled_layer(name: str) -> bool`. True for `ENGINE_PACKAGE`, and for any
   name starting with `PLUGIN_NAMESPACE + "."` or `DEPRECATED_PACK_NAMESPACE + "."`.
-- `bundled_layer_root(name: str, *, content_root: Path | None = None) -> Path | None`.
+- `catalog_layer_root(name: str, *, catalog_dir: Path | None = None) -> Path | None`.
   1. Returns `<root>/core` for the engine.
   2. For any other name, canonicalizes it first, so both namespaces resolve.
   3. Returns `<root>/plugins/<leaf>` only when the canonical name is exactly an
-     entry of `bundled_plugins(content_root)`. The leaf is the full remainder
+     entry of `bundled_plugins(catalog_dir)`. The leaf is the full remainder
      after the prefix.
   4. Returns `None` for anything else: an empty leaf, `..`, `/`, nested dots,
      the wrong case, or `__pycache__`.
 
-  It never joins unchecked config text onto a path. If the content root itself
-  is missing, it raises `BundledContentMissingError`.
+  It never joins unchecked config text onto a path. If the catalog root itself
+  is missing, it raises `CatalogMissingError`.
 
 ### `sources/filesystem.py`
 
 `_resource_subdir(package, subdir)` keeps its name, signature and `None`
 contract, and branches:
 
-- **Bundled layer:** return `bundled_layer_root(package) / subdir` if that is a
+- **Bundled layer:** return `catalog_layer_root(package) / subdir` if that is a
   directory. This branch sits *outside* the existing `except Exception`
-  guard, so `BundledContentMissingError` propagates. That is the one exception
+  guard, so `CatalogMissingError` propagates. That is the one exception
   to the never-raise contract.
 - **Every other package:** keep today's body verbatim. That is the single
   two-segment `resources.files(package).joinpath("resources", subdir)` call, the
@@ -248,7 +254,7 @@ anything for the first two:
    imported, a leftover `src/coding_agent_playbook/packs/` holding only
    gitignored `__pycache__/` cannot change the result.
 2. `is_bundled_layer(name)`, the engine included: the name is usable if
-   `bundled_layer_root(name)` is not `None`. Otherwise the reason is
+   `catalog_layer_root(name)` is not `None`. Otherwise the reason is
    `no such bundled plugin`. The engine resolves to `core/`. Sending it
    through the import path would make it newly report "ships no
    `resources/`" once its content has moved out.
@@ -257,10 +263,10 @@ anything for the first two:
 
 Hints and wording:
 - `bundled_packs()` becomes `bundled_plugins()`, imported from
-  `bundled_content`. The hint becomes ` (bundled plugins: …)`. It is still
+  `catalog`. The hint becomes ` (bundled plugins: …)`. It is still
   appended for names under the engine package or close to a plugin's leaf
   (`_looks_like_pack` becomes `_looks_like_plugin`).
-- `_ENGINE_PACKAGE` comes from `bundled_content.ENGINE_PACKAGE`.
+- `_ENGINE_PACKAGE` comes from `catalog.ENGINE_PACKAGE`.
 - User-facing text that calls every `overlays_enabled` entry an installable
   package says "overlay package or bundled plugin" instead. This covers
   `report_unusable_overlays`, the module docstring and `.pre-commit-hooks.yaml`
@@ -295,16 +301,16 @@ directory.
   `config.yaml.j2` is missing. This replaces `assert precommit_dir is not None`,
   which `-O` strips.
 - `_resource_subdir(ENGINE_PACKAGE, "precommit")` now returns `None` by design.
-- `init` calls `bundled_content_root()` in its preflight, next to
+- `init` calls `catalog_root()` in its preflight, next to
   `_refuse_unusable_overlays` and before anything is written. A broken install
   then never leaves a half-initialized repo.
 
 ### Loud failure
 
-`cli.main` catches `BundledContentMissingError` and exits 2, printing this to
+`cli.main` catches `CatalogMissingError` and exits 2, printing this to
 stderr:
 
-`error: the engine's bundled content was not found (looked in <a>, <b>); reinstall coding-agent-playbook`
+`error: the engine's catalog was not found (looked in <a>, <b>); reinstall coding-agent-playbook`
 
 Today a lookup miss silently produces zero engine artifacts.
 
@@ -312,16 +318,16 @@ Today a lookup miss silently produces zero engine artifacts.
 
 **`pyproject.toml`.**
 - `[tool.hatch.build.targets.wheel.force-include]` gains
-  `"content" = "coding_agent_playbook/_content"`.
+  `"catalog" = "coding_agent_playbook/_catalog"`.
 - The sdist needs no change: hatch includes every non-ignored file, and
-  `content/` is not ignored.
-- ruff `extend-exclude` is repointed to `content/plugins/superpowers` and
-  `content/plugins/python_design/**/*.md`.
+  `catalog/` is not ignored.
+- ruff `extend-exclude` is repointed to `catalog/plugins/superpowers` and
+  `catalog/plugins/python_design/**/*.md`.
 - `per-file-target-version` is repointed to
-  `content/plugins/*/skills/*/scripts/*.py`.
+  `catalog/plugins/*/skills/*/scripts/*.py`.
 - The mypy `exclude` patterns for `resources/eval_tasks/…` and
   `packs/…/scripts|references` are deleted, because content is outside `files`.
-  `content/` is not added to mypy `files`, because fixture module names collide.
+  `catalog/` is not added to mypy `files`, because fixture module names collide.
 
 **Force-include ignores `.gitignore` in both directions.**
 - It ships untracked ignored junk from a dirty tree.
@@ -335,15 +341,15 @@ checkout. Its failure names each path and suggests a `!` negation in
 `.gitignore` instead of `git add -f`.
 
 **Editable installs.** hatch also copies the force-included tree into a shadow
-`site-packages/coding_agent_playbook/_content/`. Nothing ever imports it,
-because the package resolves from `src/` and `bundled_content_root` looks only
+`site-packages/coding_agent_playbook/_catalog/`. Nothing ever imports it,
+because the package resolves from `src/` and `catalog_root` looks only
 under the package directory. This is accepted.
 
 **CI `wheel-smoke` job.** A new job in `ci.yml`, using pip only. In order:
 1. `python -m pip install build && python -m build`. This builds the sdist,
    then a wheel from it.
-2. Assert that the wheel's `coding_agent_playbook/_content/**` entries equal
-   `git ls-files content`, mapped to `_content/`.
+2. Assert that the wheel's `coding_agent_playbook/_catalog/**` entries equal
+   `git ls-files catalog`, mapped to `_catalog/`.
 3. Install the wheel non-editable into a fresh venv and run `playbook --version`.
 4. In an empty scratch directory outside the checkout, run:
    `playbook init --non-interactive --name smoke --kind python-library --overlays coding_agent_playbook.plugins.superpowers,coding_agent_playbook.plugins.python_design </dev/null`.
@@ -361,7 +367,7 @@ executable scripts stay `100755`.
 Content files keep their wording, and only path text changes.
 - The 10 `find-injected-vuln-*/task.toml` descriptions change
   `See resources/eval_tasks/ATTRIBUTIONS.md.` to `See eval_tasks/ATTRIBUTIONS.md.`
-- `content/plugins/superpowers/ATTRIBUTIONS.md` line 3 says `skills/` instead of
+- `catalog/plugins/superpowers/ATTRIBUTIONS.md` line 3 says `skills/` instead of
   `resources/skills/`. The python_design ATTRIBUTIONS.md has no path text and
   is not edited.
 - Both ATTRIBUTIONS.md files keep "pack" and "the plugin" as they are. There,
@@ -386,16 +392,16 @@ silently:
 
 ### Shared paths
 
-`tests/_content.py` (`tests/` is already a package) is anchored on the
+`tests/_catalog.py` (`tests/` is already a package) is anchored on the
 checkout, not on the production resolver, so the existing "resolver agrees
 with the tree" pins stay meaningful:
-- `REPO_CONTENT = Path(__file__).resolve().parents[1] / "content"`;
+- `CATALOG_ROOT = Path(__file__).resolve().parents[1] / "catalog"`;
 - `CORE_ROOT`, `PLUGINS_ROOT` and `plugin_root(name)` built from it;
 - `PRECOMMIT_TEMPLATE_DIR`, computed with
   `resources.files(ENGINE_PACKAGE) / "templates" / "precommit"`.
 
-One test asserts `bundled_content_root() == REPO_CONTENT`. It is skipped when
-`<pkg>/_content` exists.
+One test asserts `catalog_root() == CATALOG_ROOT`. It is skipped when
+`<pkg>/_catalog` exists.
 
 The 12 modules that hard-code `parents[N] / "src" / "coding_agent_playbook" / "resources"`
 switch to this helper.
@@ -455,7 +461,7 @@ the same way. Every importer of `coding_agent_playbook.packs.*`,
 - The hint pins change to `(bundled plugins: …)`: `test_sync_preflight.py:55,67-72`
   and `test_unusable_overlays.py:44`.
 - `test_bundled_packs_lists_only_subpackages` becomes a `tmp_path` test of
-  `bundled_plugins(content_root=…)`. It checks that a stray file, a `.hidden`
+  `bundled_plugins(catalog_dir=…)`. It checks that a stray file, a `.hidden`
   dir and `__pycache__` are excluded, and that a new `plugins/new_one/` dir is
   listed and resolves (acceptance 5).
 
@@ -496,7 +502,7 @@ the same way. Every importer of `coding_agent_playbook.packs.*`,
   - plugin names that are wrong case, an empty leaf, `..`, `../core`, nested
     dots, `/tmp`, or `__pycache__` give `None`;
   - both spellings resolve to the same plugin.
-- **A content gate:** every directory under `content/plugins/` passes the leaf
+- **A content gate:** every directory under `catalog/plugins/` passes the leaf
   rule and has at least one kind subdirectory.
 - **Two-portion namespace overlay:** `resources/rules` in one portion and
   `resources/skills` in the other both resolve and are attributed to the
@@ -552,7 +558,7 @@ unmodified.
   template path, §20.3 and the examples.
 - Preflight passages are not exempt as "overlay contract" (§4.2 step 1 :140,
   §11.1 :1479, §11.5 :1534, §12.1 :1649, §12.4 :1749, §12.6 :1794). Each gains
-  a clause: a bundled-plugin name is checked against `content/plugins/<leaf>/`
+  a clause: a bundled-plugin name is checked against `catalog/plugins/<leaf>/`
   and never imported.
 - The sample outputs at :1534, :1751-1752 and :1777 are regenerated with the
   new reason, hint and warning lines.
@@ -570,7 +576,7 @@ unmodified.
 - Paths at :310 and :342.
 - The preflight passage at :283-294, with the new reason and hint text.
 - A short "Editing content" section.
-- A Mermaid overview showing `content/` vs `src/`.
+- A Mermaid overview showing `catalog/` vs `src/`.
 
 **`MIGRATION.md`, new v0.19 section.**
 - The `packs` → `plugins` rename and the alias.
@@ -584,7 +590,7 @@ unmodified.
 - The bundled `eval --show` label.
 - The new warning line.
 
-**`content/README.md` (new).**
+**`catalog/README.md` (new).**
 - Where each kind lives.
 - How to add a rule, prompt, eval task, skill or bundled plugin, including the
   leaf naming rule.
@@ -609,22 +615,22 @@ in the coupling map.
    `packs/superpowers/{LICENSE,ATTRIBUTIONS.md}` and
    `packs/python_design/ATTRIBUTIONS.md`.
    - **Mapping:**
-     - `resources/X` → `_content/core/X`
+     - `resources/X` → `_catalog/core/X`
      - `resources/precommit/config.yaml.j2` → `templates/precommit/config.yaml.j2`
-     - `packs/<n>/resources/skills/X` → `_content/plugins/<n>/skills/X`
-     - `packs/<n>/{LICENSE,ATTRIBUTIONS.md}` → `_content/plugins/<n>/…`
+     - `packs/<n>/resources/skills/X` → `_catalog/plugins/<n>/skills/X`
+     - `packs/<n>/{LICENSE,ATTRIBUTIONS.md}` → `_catalog/plugins/<n>/…`
    - **Bytes:** every mapped file is byte-identical, except the 10
      `find-injected-vuln-*/task.toml` files and the superpowers
      `ATTRIBUTIONS.md`. Each of those differs only by the substring named in
      "Content edits".
    - **Modes:** the same 10 files are `0755`.
    - **Additions and removals:** exactly 3 files are added:
-     `_content/README.md` and two `plugins/<n>/README.md`. The 3
+     `_catalog/README.md` and two `plugins/<n>/README.md`. The 3
      `packs/**/__init__.py` files are removed. Nothing else is added or dropped.
 4. **Output parity.** Holds for both old and new plugin names (see Tests).
 5. **New plugins need no code.** Adding a directory under
-   `content/plugins/<name>/skills/` makes `coding_agent_playbook.plugins.<name>`
-   usable with no change outside `content/`.
+   `catalog/plugins/<name>/skills/` makes `coding_agent_playbook.plugins.<name>`
+   usable with no change outside `catalog/`.
 6. **History.** `git log --follow` on a moved file shows its pre-move history.
 
 ## Non-goals

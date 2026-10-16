@@ -51,6 +51,7 @@ _TOPIC_ORDER = (
     "PEP 503",
     "heartbeat",
     "adapter",
+    "catalog/",
 )
 
 

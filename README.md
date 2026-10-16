@@ -82,7 +82,7 @@ hooks on, one dispatcher answers every harness event at run time:
 
 ```text
  sources (later layer wins by id)    resolve                               render
- engine content/core/  ─┐            OverlayResolver: one winner per id    sandboxed Jinja,
+ engine catalog/core/  ─┐            OverlayResolver: one winner per id    sandboxed Jinja,
  overlays, plugins     ─┼──────────► (hooks: overlays only add)  ────────► StrictUndefined
  repo-local playbook/  ─┘            detector facts + applies_if                 │
  rules, prompts, skills, hooks       resolve_effective_hooks ([hooks])           │
@@ -124,39 +124,41 @@ the authoritative checks run off the workstation, as the
 
 ## Editing content
 
-Everything the playbook ships as content lives in `content/`, outside the
+Everything the playbook ships as content lives in `catalog/`, outside the
 Python package; `src/coding_agent_playbook/` is engine logic only. Writing a
 rule, prompt, eval task, skill or hook never means touching Python:
 
-- `content/core/` holds the engine's built-ins: `rules/`, `prompts/`,
+- `catalog/core/` holds the engine's built-ins: `rules/`, `prompts/`,
   `eval_tasks/` and the lifecycle `hooks/`, always on (a hook still runs only
   where `[hooks]` turns it on).
-- `content/plugins/<name>/` holds one **bundled plugin** per directory
+- `catalog/plugins/<name>/` holds one **bundled plugin** per directory
   (today `superpowers` and `python_design`), off until a consumer lists
   `coding_agent_playbook.plugins.<name>` in `overlays_enabled`. A new
-  directory there is a new plugin, with no code change.
+  directory there is a new plugin, with no code change. A plugin may ship
+  any kind `core/` does, `eval_tasks/` included: its tasks use its own
+  `prompts/` and are listed only where the plugin is enabled.
 
-`content/README.md` is the contributor guide: where each kind lives, how to
+`catalog/README.md` is the contributor guide: where each kind lives, how to
 add a rule, prompt, eval task, skill or bundled plugin, and the four commands
-CI runs. There is still one wheel: the build copies `content/` into it, so
+CI runs. There is still one wheel: the build copies `catalog/` into it, so
 `pip install coding-agent-playbook` ships everything. Build releases from the
 sdist (`uv build` or `python -m build`, never `--wheel`).
 
 ```mermaid
 flowchart LR
-    subgraph content["content/ (playbook content, no Python)"]
+    subgraph catalog["catalog/ (playbook content, no Python)"]
         core["core/: rules, prompts, eval_tasks, hooks (always on)"]
         plugins["plugins/: one directory per bundled plugin (opt-in)"]
     end
     subgraph src["src/coding_agent_playbook/ (engine logic)"]
-        resolver["bundled_content.py: the only code that locates content"]
+        resolver["catalog.py: the only code that locates the catalog"]
         engine["sources, renderer, adapters, CLI"]
         template["templates/: the starter pre-commit config, the hook shims"]
     end
-    wheel["installed wheel: coding_agent_playbook/_content/"]
+    wheel["installed wheel: coding_agent_playbook/_catalog/"]
     consumer["consumer repo: AGENTS.md, .claude/, .continue/, .opencode/, shared_skills/"]
-    content -->|"copied at build time"| wheel
-    content -.->|"read in a source checkout"| resolver
+    catalog -->|"copied at build time"| wheel
+    catalog -.->|"read in a source checkout"| resolver
     wheel -.->|"read when installed"| resolver
     resolver --> engine
     template --> engine
@@ -244,7 +246,7 @@ What `sync` does with git, by `[output] commit` in `.coding-agent-playbook.toml`
 Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
 
 1. **Engine generic content** — ships with `coding-agent-playbook` (kept in
-   the engine repository's `content/core/`).
+   the engine repository's `catalog/core/`).
 2. **Overlay packages** — installed org packages, enabled (and ordered) in config.
    They're auto-discovered through Python entry points; you just list them:
 
@@ -362,7 +364,7 @@ playbook/skills/<dir>/  ──►  SkillWriter  ──┬──►  .claude/skil
 The engine wheel bundles **opt-in bundled plugins** (called *packs* before
 v0.19). They layer exactly like an overlay package but need no extra install,
 and they stay **off** until you list them. Each one is a plain content
-directory, `content/plugins/<name>/` in the engine repository, enabled as
+directory, `catalog/plugins/<name>/` in the engine repository, enabled as
 `coding_agent_playbook.plugins.<name>`. The first is `superpowers`: a
 near-verbatim, self-contained port of the Superpowers skills library (v7.0.0,
 MIT, by Jesse Vincent) with 15 skills:
@@ -393,7 +395,7 @@ bundled-plugin name is caught everywhere: `playbook sync` (write mode,
 nothing, `playbook validate` fails on it, `playbook check` flags it under
 `Overlays:`, and `playbook init` refuses it before writing (from `--overlays`,
 or from a local file's `overlays_enabled`, which replaces it). A
-bundled-plugin name is checked against `content/plugins/<name>/` and never
+bundled-plugin name is checked against `catalog/plugins/<name>/` and never
 imported. An unknown one reads `no such bundled plugin`, and a name that looks
 like a plugin typo also lists the bundled plugins:
 `coding_agent_playbook.plugins.superpower: no such bundled plugin (bundled plugins: coding_agent_playbook.plugins.python_design, coding_agent_playbook.plugins.superpowers)`.
@@ -418,7 +420,7 @@ its marketplace, or the network: cross-skill references use plain skill names,
 and the bundled plugin contains no external URLs. The brainstorming visual
 companion (a Node.js server) and the upstream plugin's SessionStart hook are
 not included. The license and the list of changes are in
-`content/plugins/superpowers/LICENSE` and `ATTRIBUTIONS.md`.
+`catalog/plugins/superpowers/LICENSE` and `ATTRIBUTIONS.md`.
 Every skill also carries the license as `references/LICENSE`, so it lands in
 each synced skill directory. If you render the plugin only for Continue, keep a
 copy of that `LICENSE` next to the prompts yourself.
@@ -450,7 +452,7 @@ candidates) and `python-architecture` (layers, composition root, dependency
 injection, testability and persistence; its `layer_map.py` script reports
 imports that cross layers the wrong way, and import cycles). Its content is
 distilled, not vendored: written fresh, with the credit in
-`content/plugins/python_design/ATTRIBUTIONS.md`. Each `SKILL.md`
+`catalog/plugins/python_design/ATTRIBUTIONS.md`. Each `SKILL.md`
 works on its own, so the degraded Continue prompt keeps the decision tables, and
 the scripts are stdlib-only and run on Python 3.10+. Enable it the same way,
 alone or next to superpowers:
@@ -601,12 +603,12 @@ new hook you want into yours by hand (SPEC §13.2).
 Lifecycle hooks are the fourth canonical kind, next to rules, prompts and
 skills: a `<id>/HOOK.md` directory whose static frontmatter binds assistant
 events (`pre_tool_use`, `post_tool_use`, `stop`, `session_start`, …) to a
-handler. The engine ships a pack of them in `content/core/hooks/`: guards that
+handler. The engine ships a pack of them in `catalog/core/hooks/`: guards that
 protect the playbook's own outputs, verify the work before the assistant says it
 is done, feed lint back after an edit, keep secrets and destructive commands
 out, and keep a local audit trail. Claude Code and OpenCode enforce them natively; every other
 assistant reads the same guidance as text. Overlays (`<pkg>/resources/hooks/`),
-bundled plugins (`content/plugins/<name>/hooks/`) and `playbook/hooks/` can add
+bundled plugins (`catalog/plugins/<name>/hooks/`) and `playbook/hooks/` can add
 their own (SPEC §6.6.7).
 
 ### Turning them on
