@@ -5,7 +5,8 @@ its output under the commit policy:
 
 - write mode keeps the managed ``.gitignore`` block in step (or removes it for
   ``commit = true``) and warns about generated paths git still tracks;
-- ``--check`` reports file drift and a stale/missing/malformed block;
+- ``--check`` reports file drift, orphans ``playbook sync`` would delete, an
+  unreadable lockfile and a stale/missing/malformed block;
 - ``--check-staged`` lists staged paths that are generated output.
 
 It never mutates git state — it only prints the ``git rm --cached`` command.
@@ -18,6 +19,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook._file_identity import FileSet
 from coding_agent_playbook.gitignore import (
     GITIGNORE_FILENAME,
     LOCKFILE_NAME,
@@ -34,6 +36,9 @@ if TYPE_CHECKING:
     from typing import TextIO
 
     from coding_agent_playbook.git_client import GitClient
+
+#: ``sync --check`` wording for an orphan (specs/prK-lifecycle-hooks.md §P P2).
+ORPHAN_HINT = "    Orphaned generated file; run 'playbook sync' to remove."
 
 # Filenames that are state-source-managed and must be excluded from the
 # drift diff (otherwise the lockfile written by sync would itself look
@@ -94,6 +99,59 @@ def file_drift(written: Sequence[Path], scratch: Path, repo_root: Path) -> list[
                 "    Run 'playbook sync' to regenerate."
             )
     return drift
+
+
+def orphan_drift(orphans: Sequence[Path], repo_root: Path) -> list[str]:
+    """``--check``: one drift line per orphan ``playbook sync`` would delete.
+
+    Each file is shown once (sorted), however many detectors found it — the
+    adapters' sentinel cleanup and the lockfile leftover policy overlap for
+    sentinel-tagged files. Unlike the ignore entries, an orphan whose target
+    lies outside the repo (an output dir symlinked to a shared folder) is kept:
+    write mode deletes it through the link, so the check must report it.
+
+    Example::
+
+        >>> lines = orphan_drift([Path("/r/.continue/rules/50-x.md")], Path("/r"))
+        >>> lines[0].splitlines()[0]
+        '  .continue/rules/50-x.md'
+    """
+    seen = FileSet()
+    shown: set[str] = set()
+    for path in orphans:
+        if seen.holds(path):
+            continue
+        seen.add(path)
+        shown.add(_display_path(path, repo_root))
+    return [f"  {rel}\n{ORPHAN_HINT}" for rel in sorted(shown)]
+
+
+def _display_path(path: Path, repo_root: Path) -> str:
+    """``path`` as the user spells it: repo-relative (unresolved, so through a
+    symlinked output dir), else resolved repo-relative, else absolute."""
+    for candidate, root in ((path, repo_root), (path.resolve(), repo_root.resolve())):
+        try:
+            return candidate.relative_to(root).as_posix()
+        except ValueError:
+            continue
+    return path.as_posix()
+
+
+def unreadable_lockfile_drift(exc: Exception) -> list[str]:
+    """``--check``: the drift line for a lockfile that cannot be read (never a traceback).
+
+    Orphans cannot be judged without it (merge-conflict markers, a hand edit
+    of the wrong type); ``playbook sync`` rewrites it.
+
+    Example::
+
+        >>> unreadable_lockfile_drift(ValueError("bad"))[0].splitlines()[0]
+        '  .coding-agent-playbook.lock'
+    """
+    return [
+        f"  {LOCKFILE_NAME}\n    Unreadable lockfile ({type(exc).__name__}: {exc}); "
+        "run 'playbook sync' to rewrite it."
+    ]
 
 
 def _missing_hint(actual_path: Path, repo_root: Path) -> str:

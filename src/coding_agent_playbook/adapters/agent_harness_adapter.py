@@ -19,12 +19,13 @@ Layout (§B):
 Eval tasks are authoring-only and never dispatched to adapters, so this adapter
 never emits an ``evals/`` directory — consistent with the five built-in adapters.
 
-The playbook :data:`SENTINEL` is written as the **first body line** of every
-generated text file (frontmatter must stay on line 1 for the harness parser).
-``cleanup_stale`` therefore detects the sentinel *anywhere* in a file. It never
-deletes inside a skill directory (``skills/<id>/``): stale skill output — the
-``SKILL.md``, copied scripts and references — is settled only by ``playbook
-sync``'s lockfile leftover policy (SPEC §4.2 step 9), like every native skill root.
+The playbook sentinel is written as the **first body line** of every generated
+text file (frontmatter must stay on line 1 for the harness parser), one of the
+two anchored positions ``_sentinel.has_sentinel`` accepts; a sentinel quoted
+anywhere else is user prose. ``cleanup_stale`` never deletes inside a skill
+directory (``skills/<id>/``): stale skill output — the ``SKILL.md``, copied
+scripts and references — is settled only by ``playbook sync``'s lockfile
+leftover policy (SPEC §4.2 step 9), like every native skill root.
 """
 
 from __future__ import annotations
@@ -34,10 +35,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook.adapters._skill_files import skill_subtree_files
+from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.harness import emitter, manifest
-from coding_agent_playbook.renderer import SENTINEL, render_for
+from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -185,13 +187,17 @@ class AgentHarnessAdapter(Adapter):
     def _copy_scripts(
         self, skill: Skill, skill_dir: Path, repo_root: Path
     ) -> tuple[list[manifest.ScriptEntry], list[Path]]:
-        """Copy ``scripts/`` (bytecode caches skipped) and record each file's exec flag."""
-        if skill.scripts_dir is None or not skill.scripts_dir.is_dir():
+        """Copy the skill's publishable scripts and record each file's exec flag.
+
+        Bytecode caches, secret paths and links leaving the skill are never
+        copied (:func:`_skill_sources.copyable_skill_files`).
+        """
+        if skill.scripts_dir is None:
             return [], []
         scripts: list[manifest.ScriptEntry] = []
         paths: list[Path] = []
         dst_root = skill_dir / "scripts"
-        for src in skill_subtree_files(skill.scripts_dir):
+        for src in copyable_skill_files(skill.scripts_dir, dst_root):
             dst = dst_root / src.relative_to(skill.scripts_dir)
             executable = emitter.copy_script(src, dst)
             scripts.append(
@@ -202,12 +208,12 @@ class AgentHarnessAdapter(Adapter):
 
     @staticmethod
     def _copy_references(skill: Skill, skill_dir: Path) -> list[Path]:
-        """Byte-copy ``references/``, skipping bytecode caches like ``scripts/``."""
-        if skill.references_dir is None or not skill.references_dir.is_dir():
+        """Byte-copy the skill's publishable references, filtered like ``scripts/``."""
+        if skill.references_dir is None:
             return []
         dst_root = skill_dir / "references"
         paths: list[Path] = []
-        for src in skill_subtree_files(skill.references_dir):
+        for src in copyable_skill_files(skill.references_dir, dst_root):
             dst = dst_root / src.relative_to(skill.references_dir)
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_bytes(src.read_bytes())
@@ -292,7 +298,7 @@ class AgentHarnessAdapter(Adapter):
 
     @staticmethod
     def _strip_leading_sentinel(text: str) -> str:
-        marker = f"<!-- {SENTINEL} -->\n"
+        marker = f"{sentinel_line('html')}\n"
         return text[len(marker) :] if text.startswith(marker) else text
 
     @staticmethod
@@ -449,50 +455,45 @@ class AgentHarnessAdapter(Adapter):
     def _output_directories(self, repo_root: Path) -> Iterable[Path]:
         return [repo_root / d for d in _TOP_LEVEL_DIRS]
 
-    def cleanup_stale(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
-        """Remove sentinel-carrying engine files no longer backing a current artifact.
+    def stale_outputs(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
+        """Sentinel-tagged engine files no longer backing a current artifact (deletes nothing).
 
         Scans ``skills/``, ``prompts/``, ``rules/``, ``references/`` and the root
-        files (``HARNESS.md``, ``.leaf-detectors``) for files carrying
-        :data:`SENTINEL` anywhere that were not written this sync. "Not written"
-        compares file identity (:class:`FileSet`), so after a case-only id
-        rename on a case-insensitive filesystem the file just written is never
-        deleted under its old spelling.
+        files (``HARNESS.md``, ``.leaf-detectors``) for files that carry the
+        sentinel at an anchored position (:meth:`Adapter._carries_sentinel`:
+        line 1, or the first body line after frontmatter, where this adapter
+        writes it) and were not written this sync. A user file that merely
+        quotes the sentinel is never reported. "Not written" compares file
+        identity (:class:`FileSet`), so after a case-only id rename on a
+        case-insensitive filesystem the file just written is never reported
+        under its old spelling.
 
-        Nothing inside a skill directory (``skills/<id>/``) is touched: it mixes
+        Nothing inside a skill directory (``skills/<id>/``) is reported: it mixes
         engine output with files a user may have edited or added, so only the
         lockfile leftover policy (pristine + untracked + listed, SPEC §4.2 step 9)
-        deletes there. Files without the sentinel are never deleted.
+        deletes there. Only files :meth:`Adapter._scan_targets` admits are opened
+        (each once; never a symlink or a secret path — these generic repo-root
+        dirs may hold anything). The ABC's ``cleanup_stale`` deletes what this
+        returns.
         """
         written = FileSet.of(written_paths)
-        deleted: list[Path] = []
-        for path in self._scan_candidates(repo_root):
-            if written.holds(path) or not self._has_sentinel(path):
-                continue
-            path.unlink()
-            deleted.append(path)
-        return deleted
+        return [
+            path
+            for path in self._scan_targets(self._scan_candidates(repo_root), repo_root)
+            if not written.holds(path) and self._carries_sentinel(path)
+        ]
 
     def _scan_candidates(self, repo_root: Path) -> list[Path]:
-        """Every file under the output dirs (outside skill dirs) plus the root files."""
-        candidates = [repo_root / name for name in _ROOT_FILES if (repo_root / name).is_file()]
+        """Every path under the output dirs (outside skill dirs) plus the root files."""
+        candidates = [repo_root / name for name in _ROOT_FILES]
         skills_dir = repo_root / "skills"
         for output_dir in self._output_directories(repo_root):
             if not output_dir.is_dir():
                 continue
             candidates.extend(
-                path
-                for path in output_dir.rglob("*")
-                if path.is_file() and not _inside_skill_dir(path, skills_dir)
+                path for path in output_dir.rglob("*") if not _inside_skill_dir(path, skills_dir)
             )
         return candidates
-
-    @staticmethod
-    def _has_sentinel(path: Path) -> bool:
-        try:
-            return SENTINEL in path.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
-            return False
 
     @staticmethod
     def _rel(path: Path, repo_root: Path) -> str:

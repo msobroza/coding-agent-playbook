@@ -307,6 +307,24 @@ def test_validate_and_sync_check_pass_with_the_pack_enabled(
     )
 
 
+def test_lockfile_records_pack_provenance_for_every_synced_skill_file(opted_in_repo: Path) -> None:
+    """Schema-2 provenance (prK §P4) covers the plugin's output: every file a
+    plugin skill writes is stamped ``kind="skill"`` with the plugin as its ``source``."""
+    lockfile = tomllib.loads((opted_in_repo / ".coding-agent-playbook.lock").read_text("utf-8"))
+    assert lockfile["schema_version"] == 2
+    pack_entries = [
+        entry
+        for entry in lockfile["entries"]
+        if any(f"/{skill_id}" in f"/{entry['path']}" for skill_id in EXPECTED_SKILL_IDS)
+    ]
+    assert pack_entries
+    for entry in pack_entries:
+        assert entry["kind"] == "skill", entry
+        assert entry["artifact_id"] in EXPECTED_SKILL_IDS, entry
+        assert entry["source"] == PLUGIN_NAME, entry
+        assert entry["adapter"], entry
+
+
 def test_link_gate_walks_and_passes_over_the_pack(tmp_path: Path) -> None:
     walked = _resource_subdir(PLUGIN_NAME, "skills")
     assert walked is not None and walked.resolve() == SKILLS_ROOT.resolve()

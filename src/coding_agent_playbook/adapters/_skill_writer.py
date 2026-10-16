@@ -15,14 +15,16 @@ Python bytecode caches (:mod:`coding_agent_playbook.adapters._skill_files`).
 ``SKILL.md`` follows the Agent Skills standard read by Claude Code and OpenCode:
 frontmatter ``name`` is forced to the skill id (= the directory name) and must
 match :data:`AGENT_SKILL_NAME_PATTERN`; ``description`` must be non-empty. The
-playbook :data:`~coding_agent_playbook.renderer.SENTINEL` cannot sit on line 1
+playbook :data:`~coding_agent_playbook._sentinel.SENTINEL` cannot sit on line 1
 (agent parsers require ``^---`` there), so it is the first body line after the
 closing fence — the same placement as the ``agent_harness`` adapter (§10.7.3).
 
 Ownership is decided **before** any write: ``<root>/<id>/`` is engine-owned iff
-its ``SKILL.md`` carries the sentinel anywhere (or the previous sync's lockfile
-lists it with unchanged bytes — pre-sentinel engines wrote ``.claude/skills/``
-without one). A user-authored directory with a colliding id is skipped with a
+its ``SKILL.md`` carries the sentinel at an anchored position
+(``_sentinel.has_sentinel``: here the first body line, so a ``SKILL.md`` that
+only quotes it in prose is the user's), or the previous sync's lockfile lists
+it with unchanged bytes (pre-sentinel engines wrote ``.claude/skills/`` without
+one). A user-authored directory with a colliding id is skipped with a
 warning, never overwritten; so is a skills root that cannot hold directories (a
 dangling symlink or a plain file where it should be). ``playbook sync --check``/``--check-staged`` render into an empty
 scratch dir but decide ownership against the real tree
@@ -46,10 +48,10 @@ from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook._sentinel import has_sentinel
 from coding_agent_playbook.adapters._prior_output import PriorOutput
-from coding_agent_playbook.adapters._skill_files import skill_subtree_files
+from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.harness.emitter import with_sentinel_body
-from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.types import format_frontmatter
 
 if TYPE_CHECKING:
@@ -70,8 +72,6 @@ AGENT_SKILL_DESCRIPTION_MAX_CHARS = 1024
 #: Fallback id for a skill without an ``id`` key — mirrors the orchestrator's
 #: overlay-merge key and :meth:`Skill.to_prompt`.
 _DEFAULT_SKILL_ID = "skill"
-
-_SENTINEL_BYTES = SENTINEL.encode("utf-8")
 
 #: The real repo root ownership is decided against while rendering elsewhere
 #: (``--check`` renders into an empty scratch dir); ``None`` = the output root.
@@ -278,7 +278,13 @@ class SkillWriter:
 def is_engine_owned_skill_dir(skill_dir: Path) -> bool:
     """Return whether ``skill_dir`` is a real dir whose ``SKILL.md`` has the sentinel.
 
-    Binary or unreadable files never raise: the sentinel is searched as bytes.
+    The sentinel must sit at an anchored position (``_sentinel.has_sentinel``;
+    :func:`render_skill_md` writes it as the first body line), so a hand-written
+    ``SKILL.md`` that merely quotes it is never claimed. Binary, undecodable or
+    unreadable files never raise: they are user-owned (``False``).
+
+    Example: ``is_engine_owned_skill_dir(repo / ".claude/skills/demo")`` -> ``True``
+    after ``playbook sync`` wrote it.
     """
     if skill_dir.is_symlink() or not skill_dir.is_dir():
         return False
@@ -286,8 +292,8 @@ def is_engine_owned_skill_dir(skill_dir: Path) -> bool:
     if skill_md.is_symlink() or not skill_md.is_file():
         return False
     try:
-        return _SENTINEL_BYTES in skill_md.read_bytes()
-    except OSError:
+        return has_sentinel(skill_md.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
         return False
 
 
@@ -480,19 +486,21 @@ def _remove_existing(dst: Path) -> None:
 def _copy_subtree(
     src: Path | None, dst_root: Path, skill_dir: Path, prior: PriorOutput
 ) -> list[Path]:
-    """Byte-copy every file under ``src`` into ``dst_root`` (``shutil.copy2``).
+    """Byte-copy every publishable file under ``src`` into ``dst_root`` (``shutil.copy2``).
 
     Returns the destination files in sorted source order; ``[]`` when ``src``
-    is absent. Source symlinks are dereferenced (copies, not symlinks); bytecode
-    caches (``__pycache__/``, ``*.pyc``/``*.pyo``) are skipped, so they never
-    reach a skills root or the lockfile. Each recorded path is the file
-    ``copy2`` actually wrote, never a directory; a destination blocked by user
-    files is skipped (see :func:`_prepare_destination`).
+    is absent. Source symlinks inside the skill are dereferenced (copies, not
+    symlinks); bytecode caches (``__pycache__/``, ``*.pyc``/``*.pyo``) are
+    skipped, so they never reach a skills root or the lockfile; a secret path or
+    a link leaving the skill's source dir is never copied
+    (:func:`_skill_sources.copyable_skill_files` warns instead). Each recorded
+    path is the file ``copy2`` actually wrote, never a directory; a destination
+    blocked by user files is skipped (see :func:`_prepare_destination`).
     """
-    if src is None or not src.is_dir():
+    if src is None:
         return []
     written: list[Path] = []
-    for source_file in skill_subtree_files(src):
+    for source_file in copyable_skill_files(src, dst_root):
         dst = dst_root / source_file.relative_to(src)
         if _prepare_destination(dst, skill_dir, prior):
             written.append(Path(shutil.copy2(source_file, dst)))

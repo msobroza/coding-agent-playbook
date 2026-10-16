@@ -2,24 +2,31 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import tomllib
+from importlib import metadata
+from pathlib import Path
+from typing import Any
 
 import pytest
-from jinja2 import UndefinedError
+from jinja2 import StrictUndefined, UndefinedError
+from jinja2.exceptions import SecurityError
+from jinja2.sandbox import ImmutableSandboxedEnvironment, SandboxedEnvironment
+from packaging.requirements import Requirement
+from packaging.version import Version
 
+from coding_agent_playbook._sentinel import has_sentinel
 from coding_agent_playbook.renderer import (
     SENTINEL,
+    TemplateSecurityError,
+    appendix_rule_ids,
     build_environment,
-    carries_engine_sentinel,
     includes_rules_appendix,
     render_artifact_body,
     render_for,
+    render_sandboxed,
     render_string,
     with_sentinel_body,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 class StubRuleRegistry:
@@ -516,6 +523,95 @@ def test_render_for_prompt_continue_no_appendix_when_all_fragments_empty(
     assert "## Reference rules" not in out
 
 
+# --- prK §P1: sandboxed Jinja environment -----------------------------------
+
+#: Classic template-injection escapes from a template to Python internals.
+_SANDBOX_ESCAPES = (
+    pytest.param('{{ lipsum.__globals__["os"].__name__ }}', id="lipsum.__globals__"),
+    pytest.param("{{ cycler.__init__.__globals__.os.name }}", id="cycler.__init__.__globals__"),
+    pytest.param("{{ ''.__class__.__mro__[1].__subclasses__() }}", id="str.__class__.__mro__"),
+)
+
+
+@pytest.mark.parametrize("is_prompt_context", [False, True], ids=["rule-env", "prompt-env"])
+def test_build_environment_is_sandboxed(tmp_path: Path, is_prompt_context: bool) -> None:
+    registry = StubRuleRegistry({}) if is_prompt_context else None
+    env = build_environment([tmp_path], is_prompt_context=is_prompt_context, rule_registry=registry)
+    assert isinstance(env, SandboxedEnvironment)
+    # Mutable sandbox on purpose: the escape-to-``os`` threat does not need the
+    # immutable variant, which would also reject in-template list/dict mutation.
+    assert not isinstance(env, ImmutableSandboxedEnvironment)
+
+
+def test_sandboxed_environment_keeps_render_options(tmp_path: Path) -> None:
+    env = build_environment([tmp_path])
+    assert env.autoescape is False
+    assert env.keep_trailing_newline is True
+    assert env.trim_blocks is True
+    assert env.lstrip_blocks is True
+    assert env.undefined is StrictUndefined
+
+
+@pytest.mark.parametrize("template", _SANDBOX_ESCAPES)
+def test_sandbox_blocks_globals_escape(tmp_path: Path, template: str) -> None:
+    env = build_environment([tmp_path])
+    with pytest.raises(SecurityError):
+        render_string(template, {}, env=env)
+
+
+def test_sandbox_allows_in_template_list_mutation(tmp_path: Path) -> None:
+    env = build_environment([tmp_path])
+    template = "{% set seen = [] %}{{ seen.append('a') or seen | join(',') }}"
+    assert render_string(template, {}, env=env) == "a"
+
+
+def test_render_sandboxed_names_the_source_on_a_violation(tmp_path: Path) -> None:
+    """jinja2's bare ``SecurityError`` becomes ``TemplateSecurityError`` naming the file."""
+    env = build_environment([tmp_path])
+    with pytest.raises(TemplateSecurityError) as caught:
+        render_sandboxed(
+            '{{ lipsum.__globals__["os"] }}', {}, env=env, source="playbook/rules/x.md.j2"
+        )
+    assert caught.value.source == "playbook/rules/x.md.j2"
+    assert "unsafe" in caught.value.detail
+    assert str(caught.value).startswith("playbook/rules/x.md.j2: template rejected")
+    assert render_sandboxed("{{ x }}", {"x": "ok"}, env=env, source="s") == "ok"
+
+
+def test_appendix_rule_ids_follow_includes_rules_unless_template_inlines_them() -> None:
+    assert appendix_rule_ids(["a", "b"], "Refactor.\n") == ["a", "b"]
+    assert appendix_rule_ids(["a"], "{{ rule('a') }}\n") == []
+    assert appendix_rule_ids(["a"], "{{- rule('a') -}}\n") == []
+    assert appendix_rule_ids([], "body") == []
+
+
+def test_appendix_rule_ids_agree_with_includes_rules_appendix() -> None:
+    """Sync's pre-render and ``render_for`` decide the appendix on the same template body."""
+    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
+    for template_body in ('Intro\n{{rule("x")}}\n', "Plain body\n"):
+        has_appendix = includes_rules_appendix(template_body, _INLINE_FRONTMATTER, registry) != ""
+        assert bool(appendix_rule_ids(["x"], template_body)) is has_appendix
+
+
+#: The jinja2 release closing the published sandbox escapes (CVE-2024-56326,
+#: fixed in 3.1.5; CVE-2025-27516, fixed in 3.1.6). Keep in step with the
+#: ``jinja2>=`` floor in ``pyproject.toml`` (SPEC §9.3, §17).
+_JINJA_SANDBOX_FLOOR = Version("3.1.6")
+
+
+def test_jinja_version_has_sandbox_fixes() -> None:
+    """The sandbox is the security boundary for agent-writable templates (prK §P1)."""
+    assert Version(metadata.version("jinja2")) >= _JINJA_SANDBOX_FLOOR
+
+
+def test_pyproject_pins_the_jinja_sandbox_floor() -> None:
+    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    dependencies = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["dependencies"]
+    [jinja] = [Requirement(dep) for dep in dependencies if dep.startswith("jinja2")]
+    assert jinja.specifier.contains(str(_JINJA_SANDBOX_FLOOR))
+    assert not jinja.specifier.contains("3.1.5")
+
+
 # --- includes_rules appendix is decided on the template body (SPEC §6.2.5) ---
 
 _PROMPT_FORMATS = ["prompt_continue", "prompt_claude_command", "prompt_opencode_command"]
@@ -587,26 +683,24 @@ _BODY_FIRST = with_sentinel_body("---\ndescription: d\n---", "body\n")
 
 
 @pytest.mark.parametrize(
-    ("text", "after_frontmatter", "owned"),
+    ("text", "owned"),
     [
-        (f"<!-- {SENTINEL} -->\n# Title\n", False, True),
-        (f"<!-- {SENTINEL} -->\n---\ndescription: d\n---\nbody\n", False, True),
-        (_BODY_FIRST, True, True),
-        (_BODY_FIRST, False, False),
-        ("\ufeff" + _BODY_FIRST, True, True),
-        (f"\ufeff<!-- {SENTINEL} -->\n# Title\n", False, True),
-        (f"---\ndescription: d\n---\nFiles saying {SENTINEL} are generated.\n", True, False),
-        ("---\ndescription: d\n---\nbody\n", True, False),
-        (f"---\ndescription: d\n---\nintro\n<!-- {SENTINEL} -->\n", True, False),
-        (f"intro\n<!-- {SENTINEL} -->\n", True, False),
-        (f"---\ndescription: {SENTINEL}\n---\nbody\n", True, False),
-        ("", True, False),
+        (f"<!-- {SENTINEL} -->\n# Title\n", True),
+        (f"<!-- {SENTINEL} -->\n---\ndescription: d\n---\nbody\n", True),
+        (_BODY_FIRST, True),
+        ("\ufeff" + _BODY_FIRST, True),
+        (f"\ufeff<!-- {SENTINEL} -->\n# Title\n", True),
+        (f"---\ndescription: d\n---\nFiles saying {SENTINEL} are generated.\n", False),
+        ("---\ndescription: d\n---\nbody\n", False),
+        (f"---\ndescription: d\n---\nintro\n<!-- {SENTINEL} -->\n", False),
+        (f"intro\n<!-- {SENTINEL} -->\n", False),
+        (f"---\ndescription: {SENTINEL}\n---\nbody\n", False),
+        ("", False),
     ],
     ids=[
         "line-1",
         "legacy-line-1-before-frontmatter",
-        "first-body-line-opted-in",
-        "first-body-line-not-opted-in",
+        "first-body-line",
         "bom-first-body-line",
         "bom-line-1",
         "first-body-line-quotes-it-in-prose",
@@ -617,10 +711,16 @@ _BODY_FIRST = with_sentinel_body("---\ndescription: d\n---", "body\n")
         "empty",
     ],
 )
-def test_carries_engine_sentinel_only_at_the_engine_positions(
-    text: str, after_frontmatter: bool, owned: bool
+def test_with_sentinel_body_output_is_engine_owned_only_at_the_anchored_positions(
+    text: str, owned: bool
 ) -> None:
-    assert carries_engine_sentinel(text, after_frontmatter=after_frontmatter) is owned
+    """``with_sentinel_body`` writes the second position ``has_sentinel`` accepts.
+
+    One detector decides ownership for every scanner (prK §P3), so the layout
+    the renderer writes for OpenCode commands and skills is recognised without
+    a per-adapter opt-in; a file that merely quotes the sentinel stays the user's.
+    """
+    assert has_sentinel(text) is owned
 
 
 def test_opencode_command_starts_with_its_frontmatter(tmp_path: Path) -> None:

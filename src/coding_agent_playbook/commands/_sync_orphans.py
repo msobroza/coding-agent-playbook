@@ -73,9 +73,11 @@ def find_orphans(
     """Return ``previous`` entries not rewritten by this sync that still exist on disk.
 
     Entries escaping ``repo_root``, crossing a symlink, under ``.git/`` or naming
-    a user/state file are never orphans. An entry naming the same file as a
-    written path (or as an earlier orphan) — a case variant on a
-    case-insensitive filesystem, say — is not an orphan.
+    a user/state file are never orphans, and neither is a scoped
+    (``json:<pointer>``) entry: its file is shared with the user and only its
+    managed elements are engine-owned (specs/prK-lifecycle-hooks.md §B.6). An
+    entry naming the same file as a written path (or as an earlier orphan) — a
+    case variant on a case-insensitive filesystem, say — is not an orphan.
 
     Example::
 
@@ -88,7 +90,7 @@ def find_orphans(
     seen = FileSet.of(written)
     orphans: list[LockEntry] = []
     for entry in previous.entries:
-        path = _owned_path(root, entry.path)
+        path = _owned_path(root, entry.path) if entry.is_whole_file else None
         if path is None or not path.is_file() or seen.holds(path):
             continue
         seen.add(path)
@@ -234,7 +236,7 @@ class LeftoverPolicy:
         if self.previous is None:
             return None
         root = self.repo_root.resolve()
-        listed = {entry.path: entry for entry in self.previous.entries}
+        listed = {entry.path: entry for entry in self.previous.entries if entry.is_whole_file}
         entries: list[LockEntry] = []
         for path in files:
             entry = listed.get(_resolved_posix(path, root) or "")

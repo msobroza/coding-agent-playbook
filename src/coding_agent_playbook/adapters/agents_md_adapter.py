@@ -13,8 +13,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
+from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters.base import Adapter
-from coding_agent_playbook.renderer import SENTINEL, render_for
+from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
     from coding_agent_playbook._typing import Prompt, Rule, Skill
@@ -89,30 +90,24 @@ class AgentsMdAdapter(Adapter):
         # Each section already ends with the section separator + trailing
         # newline. Joining with "\n" stacks them without introducing blank
         # gaps; the sentinel + title preamble seeds the file.
-        content = f"<!-- {SENTINEL} -->\n{_AGENTS_MD_TITLE}\n" + "\n".join(sections)
+        content = f"{sentinel_line('html')}\n{_AGENTS_MD_TITLE}\n" + "\n".join(sections)
         agents_md = repo_root / "AGENTS.md"
         agents_md.parent.mkdir(parents=True, exist_ok=True)
         agents_md.write_text(content, encoding="utf-8")
         return [agents_md]
 
-    def cleanup_stale(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
-        """Delete ``AGENTS.md`` only if (a) it exists, (b) the engine wrote
-        it (sentinel on first line), and (c) it was *not* re-written this
-        sync (absent from ``written_paths``).
+    def stale_outputs(self, written_paths: set[Path], repo_root: Path) -> list[Path]:
+        """Report ``AGENTS.md`` as stale only if (a) it exists, (b) the engine
+        wrote it (sentinel-tagged per :meth:`Adapter._carries_sentinel`), and (c)
+        it was *not* re-written this sync (absent from ``written_paths``).
 
         AGENTS.md is a single repo-root file rather than a directory of
-        sentinel-tagged artifacts, so the shared ``_default_cleanup``
-        directory walker on the ABC does not apply. Overriding here keeps
-        the engine's cleanup behaviour conservative: user-authored files
-        and just-rendered files are both safe.
+        sentinel-tagged artifacts, so the shared directory scan on the ABC does
+        not apply. The ABC's ``cleanup_stale`` deletes what this returns, which
+        keeps cleanup conservative: user-authored files and just-rendered files
+        are both safe.
         """
         agents_md = repo_root / "AGENTS.md"
-        if not agents_md.is_file():
+        if not agents_md.is_file() or agents_md.resolve() in written_paths:
             return []
-        if agents_md.resolve() in written_paths:
-            return []
-        first_line = agents_md.read_text(encoding="utf-8").split("\n", 1)[0]
-        if SENTINEL not in first_line:
-            return []
-        agents_md.unlink()
-        return [agents_md]
+        return [agents_md] if self._carries_sentinel(agents_md) else []

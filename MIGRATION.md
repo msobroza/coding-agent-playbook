@@ -174,6 +174,34 @@ sdist (`uv build` or `python -m build`), never with `--wheel`: the wheel copies
 > `Normalizer`. Read the v0.13 section first; the v0.12 section still applies to the
 > engine `Metric`/`Check`/`Rubric` API and the entry-point group renames.
 
+## v0.16 — Out-of-tree adapters: override `stale_outputs`, not `cleanup_stale`
+
+`playbook sync --check` now reports orphans (SPEC §12.3), so it must know what
+write mode would delete without deleting it. `Adapter.stale_outputs(written_paths,
+repo_root) -> list[Path]` is that read-only answer and the **only** override point
+for staleness; `Adapter.cleanup_stale` deletes exactly what it returns. Who needs
+to act: authors of third-party adapters (the `coding_agent_playbook.adapters`
+entry-point group) that override `cleanup_stale`. Rule/prompt/skill authors and
+built-in adapter users need nothing.
+
+```python
+# before (SPEC §10.1 up to v0.15)
+def cleanup_stale(self, written_paths, repo_root):
+    return self._default_cleanup(written_paths, repo_root)
+
+
+# after: report, never delete; the ABC's cleanup_stale deletes what you return
+def stale_outputs(self, written_paths, repo_root):
+    return self._stale_by_sentinel(written_paths, repo_root)
+```
+
+An adapter that still overrides only `cleanup_stale` keeps working in write mode
+(`_default_cleanup` is kept, deprecated), but `--check` prints
+`warning: adapter '<name>' overrides cleanup_stale() but not stale_outputs()` and
+reports no sentinel orphans for it. Scan helpers to reuse: `_stale_by_sentinel`
+(the default), `_scan_targets` (each file once, never a symlink or a secret path)
+and `_carries_sentinel` (bounded, anchored sentinel check).
+
 ## v0.13 — Task config v2 (gate / rubric / verdict / aggregate)
 
 The eval **task config** is redesigned (Tracks C1–C8). The old

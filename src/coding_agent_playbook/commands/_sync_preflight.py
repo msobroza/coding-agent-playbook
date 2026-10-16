@@ -133,6 +133,25 @@ def warn_missing_adapters(names: Sequence[str]) -> None:
     )
 
 
+def warn_legacy_cleanup(name: str) -> None:
+    """Warn on stderr that ``--check`` skips orphan reporting for adapter ``name``.
+
+    The adapter overrides ``cleanup_stale`` but not ``stale_outputs`` (the
+    pre-v0.16 contract, SPEC §10.1), so the check cannot tell what it deletes.
+
+    Example::
+
+        >>> warn_legacy_cleanup("my_adapter")  # doctest: +SKIP
+    """
+    print(
+        f"warning: adapter {name!r} overrides cleanup_stale() but not stale_outputs(); "
+        "'playbook sync --check'\ncannot see what its cleanup deletes, so it does not "
+        "report that adapter's orphans.\nOverride stale_outputs() instead "
+        "(SPEC §10.1, MIGRATION.md).",
+        file=sys.stderr,
+    )
+
+
 def _unusable_reason(name: str) -> str | None:
     """Why ``name`` cannot serve as an overlay, or ``None`` when it can.
 

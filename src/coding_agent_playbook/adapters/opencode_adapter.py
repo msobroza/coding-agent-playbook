@@ -55,9 +55,6 @@ class OpenCodeAdapter(Adapter):
     _SKILL_WRITER: ClassVar[SkillWriter] = SkillWriter(Path(".opencode") / "skills")
 
     output_locations: ClassVar[tuple[str, ...]] = (".opencode/command/", _SKILL_WRITER.location)
-    # Commands keep their ``description`` frontmatter on line 1 (OpenCode's
-    # gray-matter only reads it at offset 0), so the sentinel follows it.
-    sentinel_after_frontmatter: ClassVar[bool] = True
 
     def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
         self._rule_registry = rule_registry
@@ -112,11 +109,13 @@ class OpenCodeAdapter(Adapter):
         return self._SKILL_WRITER.write(skill, repo_root)
 
     def _output_directories(self, repo_root: Path) -> Iterable[Path]:
-        """``.opencode/command/`` is scanned by the ABC's sentinel cleanup.
+        """``.opencode/command/`` is scanned by the ABC's anchored sentinel scan.
 
         Commands carry the sentinel as the first body line, after the
-        ``description`` frontmatter (OpenCode only reads frontmatter at offset 0);
-        files from engines that wrote it on line 1 are still recognised.
+        ``description`` frontmatter (OpenCode's gray-matter only reads
+        frontmatter at offset 0) — the second anchored position
+        ``_sentinel.has_sentinel`` accepts; commands older engines wrote with
+        the sentinel on line 1 are still recognised.
 
         ``.opencode/skills/`` is never scanned: stale skill output is settled by
         ``playbook sync``'s lockfile leftover policy (SPEC §4.2 step 9, §10.8).
