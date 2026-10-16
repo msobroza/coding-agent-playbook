@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, TypedDict
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.bundled_content import (
     ENGINE_PACKAGE,
+    bundled_content_root,
     canonical_overlay_list,
     canonical_overlay_name,
 )
@@ -452,6 +453,7 @@ def run(args: argparse.Namespace) -> int:
     answers["overlays"], deprecated_flags = canonical_overlay_list(answers["overlays"])
     state = FileSystemStateSource(repo_root=repo_root)
     local = state.load_local_overrides()
+    bundled_content_root()  # a broken install raises here: never a half-initialized repo
     refused = [
         _refuse_unusable_overlays(overlays, origin)
         for overlays, origin in _overlay_lists_to_check(answers, local)
