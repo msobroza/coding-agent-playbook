@@ -4,11 +4,12 @@ The ``claude_code`` adapter writes the rule sections to
 ``.claude/rules/coding-agent-playbook.md`` and leaves ``.claude/CLAUDE.md`` a
 rule-free stub, because OpenCode v1 attaches ``.claude/CLAUDE.md`` when its read
 tool opens a file under ``.claude/`` (once per uncompacted session, SPEC §10.6:
-a second copy of the rules) and no OpenCode version discovers ``.claude/rules/``
-by default. These tests pin the end-to-end layout: both files are written,
-locked and gitignored; a pre-upgrade ``.claude/CLAUDE.md`` (full rules) is
-rewritten to the stub; other ``.claude/rules/`` files stay the user's, and so
-does a same-named file without the sentinel or a symlinked ``.claude/rules``
+a second copy of the rules) and no OpenCode release checked (v1.19.3, v2 dev
+24c7f7a) discovers ``.claude/rules/`` by default. These tests pin the end-to-end
+layout: both files are written, locked and gitignored; a pre-upgrade
+``.claude/CLAUDE.md`` (full rules) is rewritten to the stub; other
+``.claude/rules/`` files stay the user's, and so does a same-named file without
+the sentinel, a symlinked ``.claude/rules`` or a symlinked ``.claude/CLAUDE.md``
 (refused, nothing written).
 """
 
@@ -179,6 +180,28 @@ def test_sync_refuses_a_symlinked_rules_directory(
     assert f"{linked} is a symbolic link" in captured.err
     assert f"Cannot verify {_RULES_FILE}: {linked} is a symbolic link" in captured.out
     assert list(shared.rglob("*")) == []
+    assert tree(repo, skip=()) == before
+
+
+@posix_only
+def test_sync_refuses_a_symlinked_claude_md(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Regression (review round 2): the common ``.claude/CLAUDE.md -> ../AGENTS.md``
+    link was written through, so sync exited 0 with AGENTS.md cut to the 4-line
+    stub (every AGENTS.md reader lost the rules) and ``--check`` reported drift
+    no sync could clear. Refused like a linked rules file: nothing written."""
+    assert _sync.execute(repo, git=FakeGitClient()) == 0
+    (repo / _CLAUDE_MD).unlink()
+    (repo / _CLAUDE_MD).symlink_to("../AGENTS.md")
+    before = tree(repo, skip=())
+    capsys.readouterr()
+
+    assert _sync.execute(repo, git=FakeGitClient()) == 1
+    assert _sync.execute(repo, check=True, git=FakeGitClient()) == 1
+
+    captured = capsys.readouterr()
+    assert f"error: {_CLAUDE_MD}: it is a symbolic link" in captured.err
+    assert f"Cannot verify {_CLAUDE_MD}: it is a symbolic link" in captured.out
+    assert _RULE_TEXT in _read(repo, "AGENTS.md")
     assert tree(repo, skip=()) == before
 
 

@@ -20,6 +20,7 @@ from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._owned_files import (
     UserOwnedFileError,
     check_engine_owned,
+    check_unlinked,
     crosses_symlink,
     write_engine_owned,
 )
@@ -181,6 +182,41 @@ def test_crosses_symlink_ignores_a_link_above_the_repo_root(tmp_path: Path) -> N
 
     assert not crosses_symlink(alias / _REL, alias)
     assert not crosses_symlink(real / ".opencode" / "absent.js", real)
+
+
+def test_check_unlinked_accepts_a_user_file_and_an_absent_path(tmp_path: Path) -> None:
+    """Unlike ``check_engine_owned``: a regular file without the sentinel passes."""
+    _write(tmp_path / _REL, _USER)
+
+    check_unlinked(tmp_path / _REL, tmp_path)
+    check_unlinked(tmp_path / ".absent" / "x.md", tmp_path)
+
+    assert not (tmp_path / ".absent").exists()
+
+
+@posix_only
+@pytest.mark.parametrize(
+    ("linked", "reason"),
+    [
+        (_REL, "it is a symbolic link"),
+        (".opencode", ".opencode is a symbolic link"),
+        (".opencode/plugins", ".opencode/plugins is a symbolic link"),
+    ],
+)
+def test_check_unlinked_refuses_a_link_at_or_on_the_way_to_the_path(
+    tmp_path: Path, linked: str, reason: str
+) -> None:
+    """Review round 2: the ``.claude/CLAUDE.md`` stub is never written through a link."""
+    repo, outside = tmp_path / "repo", _write(tmp_path / "outside" / "x.js", _USER)
+    (repo / linked).parent.mkdir(parents=True, exist_ok=True)
+    (repo / linked).symlink_to(outside if linked == _REL else outside.parent)
+
+    with pytest.raises(UserOwnedFileError) as caught:
+        check_unlinked(repo / _REL, repo)
+
+    assert caught.value.path == _REL
+    assert caught.value.reason.startswith(reason)
+    assert outside.read_text(encoding="utf-8") == _USER
 
 
 def test_check_alone_writes_nothing(tmp_path: Path) -> None:

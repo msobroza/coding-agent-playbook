@@ -4,9 +4,10 @@ Why two files: OpenCode v1 attaches the first ``AGENTS.md`` / ``CLAUDE.md`` of
 every directory between a file it reads and its working directory, so a
 rule-bearing ``.claude/CLAUDE.md`` handed it a second full copy of the rules
 (and the Claude-only heartbeat line) when its read tool opened a file under
-``.claude/`` (once per uncompacted session, SPEC §10.6). No OpenCode version
-discovers ``.claude/rules/`` by default, while Claude Code loads an unscoped
-``.claude/rules/*.md`` at launch like ``.claude/CLAUDE.md``. The stub must still
+``.claude/`` (once per uncompacted session, SPEC §10.6). No OpenCode release
+checked (v1.19.3, v2 dev 24c7f7a) discovers ``.claude/rules/`` by default, while
+Claude Code loads an unscoped ``.claude/rules/*.md`` at launch like
+``.claude/CLAUDE.md``. The stub must still
 exist: in Claude Code's default ``claude-md-or-agents-md`` mode (v2.1.277+) a
 ``.claude/CLAUDE.md`` stops Claude Code from also reading the root ``AGENTS.md``
 natively, and a rules file does not count for that, so without the stub Claude
@@ -213,6 +214,33 @@ def test_finalize_refuses_a_symlinked_rules_directory(tmp_path: Path) -> None:
 
     assert list(shared.iterdir()) == []
     assert not (repo / _CLAUDE_MD).exists()
+
+
+@posix_only
+def test_finalize_refuses_a_symlinked_stub(tmp_path: Path) -> None:
+    """Regression (review round 2): ``.claude/CLAUDE.md -> ../AGENTS.md`` was
+    written through, turning AGENTS.md (every other tool's rules) into the
+    4-line stub. Neither file is written; the link and its target stay."""
+    agents_text = "# AGENTS.md\n\nAll the rules.\n"
+    agents = _write(tmp_path, Path("AGENTS.md"), agents_text)
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / _CLAUDE_MD).symlink_to(Path("..") / "AGENTS.md")
+
+    with pytest.raises(UserOwnedFileError, match=r"^\.claude/CLAUDE\.md: it is a symbolic link"):
+        _finalize(tmp_path, _make_rule())
+
+    assert agents.read_text(encoding="utf-8") == agents_text
+    assert (tmp_path / _CLAUDE_MD).is_symlink()
+    assert not (tmp_path / _RULES_FILE).exists()
+
+
+def test_finalize_overwrites_a_regular_claude_md_without_the_sentinel(tmp_path: Path) -> None:
+    """The stub keeps its plain overwrite of a regular file (SPEC §10.3.1): only a link is refused."""
+    _write(tmp_path, _CLAUDE_MD, "# My notes\n")
+
+    _finalize(tmp_path, _make_rule())
+
+    assert (tmp_path / _CLAUDE_MD).read_text(encoding="utf-8") == _STUB
 
 
 def test_output_locations_declare_the_rules_file_not_its_directory() -> None:

@@ -298,9 +298,10 @@ byte-identical to `AGENTS.md`'s (SPEC §10.3.1).
 `.claude/CLAUDE.md` the first time its read tool opens a file under `.claude/` in
 a session, so it loaded the rules twice (`AGENTS.md` plus that copy, again after
 each compaction, in each subagent session and on each `@`-mention) and saw the
-Claude-only heartbeat line. No OpenCode version discovers `.claude/rules/` on
-its own (v1 looks up files named `AGENTS.md`, `CLAUDE.md` or `CONTEXT.md`; v2
-only `AGENTS.md`), so that duplicate is gone; only an `opencode.json`
+Claude-only heartbeat line. Neither OpenCode v1 (1.19.3) nor v2 (dev
+`24c7f7a`) discovers `.claude/rules/` on its own (v1 looks up files named
+`AGENTS.md`, `CLAUDE.md` or `CONTEXT.md`; v2 only `AGENTS.md`; v2's `.claude/`
+compatibility reads only `skills/`), so that duplicate is gone; only an `opencode.json`
 `instructions` entry you add, such as `.claude/rules/*.md`, would load the rules
 file, next to `AGENTS.md`. The stub must stay: in Claude Code's default
 `claude-md-or-agents-md` mode (v2.1.277+), a `.claude/CLAUDE.md` stops Claude
@@ -328,6 +329,12 @@ What the next `playbook sync` (or the post-checkout / post-merge hook) does:
   anything, with `error: .claude/rules/coding-agent-playbook.md: <reason>`
   (`--check` prints `Cannot verify …`). Rename your file, or replace the link
   with a real directory, then re-run `playbook sync`.
+- `.claude/CLAUDE.md` is still overwritten whatever regular file is there, but
+  never through a symlink: a link such as `.claude/CLAUDE.md -> ../AGENTS.md`
+  would turn `AGENTS.md` into the stub for every other tool, so sync exits 1
+  before writing anything, with `error: .claude/CLAUDE.md: it is a symbolic
+  link, …`. Delete the link (Claude Code reads the rules file instead), then
+  re-run `playbook sync`.
 - Every other `.claude/rules/` file stays yours: the engine owns exactly
   `coding-agent-playbook.md` there and never reads, rewrites, gitignores or
   deletes any other file.

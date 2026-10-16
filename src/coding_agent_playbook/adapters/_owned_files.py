@@ -21,7 +21,9 @@ never overwritten (code review of claude/prk-hooks-impl, findings #1 and #2):
 file an adapter plans to write (``Adapter.planned_runtime_outputs``, plus the
 rules file whenever ``claude_code`` is on) before any adapter writes, so a
 refusal exits 1 with nothing written; the adapters write through
-:func:`write_engine_owned`, which checks again.
+:func:`write_engine_owned`, which checks again. The ``.claude/CLAUDE.md`` stub
+is overwritten whole whatever regular file it holds, but :func:`check_unlinked`
+refuses it too when a symlink is on the way.
 """
 
 from __future__ import annotations
@@ -34,7 +36,16 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-__all__ = ["UserOwnedFileError", "check_engine_owned", "crosses_symlink", "write_engine_owned"]
+__all__ = [
+    "UserOwnedFileError",
+    "check_engine_owned",
+    "check_unlinked",
+    "crosses_symlink",
+    "write_engine_owned",
+]
+
+#: Why a symlink at the path itself is refused (shared by both checks below).
+_LINK_REASON = "it is a symbolic link, and the engine never writes through one"
 
 
 class UserOwnedFileError(Exception):
@@ -73,6 +84,24 @@ def check_engine_owned(path: Path, repo_root: Path) -> None:
     reason = _parent_refusal(path, repo_root) or _file_refusal(path)
     if reason is not None:
         raise UserOwnedFileError(relative, reason)
+
+
+def check_unlinked(path: Path, repo_root: Path) -> None:
+    """Raise :class:`UserOwnedFileError` if a write to ``path`` would go through a symlink.
+
+    For a file the engine overwrites whatever regular file it holds (the
+    ``.claude/CLAUDE.md`` stub, SPEC §10.3.1), yet never through a link at it or
+    at a directory on the way: ``.claude/CLAUDE.md -> ../AGENTS.md`` would turn
+    ``AGENTS.md`` into the stub (review round 2). The same parent walk as
+    :func:`check_engine_owned`, without its sentinel test.
+
+    Example: ``check_unlinked(repo / ".claude/CLAUDE.md", repo)``.
+    """
+    reason = _parent_refusal(path, repo_root)
+    if reason is None and path.is_symlink():
+        reason = _LINK_REASON
+    if reason is not None:
+        raise UserOwnedFileError(_relative_posix(path, repo_root), reason)
 
 
 def write_engine_owned(path: Path, repo_root: Path, data: bytes) -> Path:
@@ -134,7 +163,7 @@ def _parent_refusal(path: Path, repo_root: Path) -> str | None:
 def _file_refusal(path: Path) -> str | None:
     """Why the entry at ``path`` itself is the user's, else None (absent or sentinel-tagged)."""
     if path.is_symlink():
-        return "it is a symbolic link, and the engine never writes through one"
+        return _LINK_REASON
     if not path.exists():
         return None
     if not path.is_file():

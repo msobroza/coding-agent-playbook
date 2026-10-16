@@ -234,7 +234,9 @@ which it loads natively; the generated `.claude/CLAUDE.md` is a rule-free stub, 
 OpenCode v1 (which attaches that file when it reads under `.claude/`) never loads
 the rules twice (SPEC §10.3.1). Any other `.claude/rules/` file is yours, and
 `sync` exits 1 rather than overwrite a file of yours already named
-`coding-agent-playbook.md` there or write through a symlinked `.claude/rules`.
+`coding-agent-playbook.md` there or write through a symlink on the way to it (a
+symlinked `.claude` or `.claude/rules`, or a link at the file itself); a symlinked
+`.claude/CLAUDE.md` (such as a link to `../AGENTS.md`) stops it the same way.
 
 What `sync` does with git, by `[output] commit` in `.coding-agent-playbook.toml`:
 

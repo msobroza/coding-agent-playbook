@@ -117,9 +117,10 @@ def _render_into(
     ``settings.json`` — are read from the real repo through ``ctx``; only the
     writes go to ``output_root``. So ``--check`` modes render into an empty
     scratch dir without copying the working tree. Every template runs, and a
-    ``settings.json`` the merge would refuse or a user file where an
+    ``settings.json`` the merge would refuse, a user file where an
     engine-owned file (the launcher, the OpenCode shim, the Claude Code rules
-    file) goes is rejected, before the first write. Returns the written paths
+    file) goes, or a symlinked ``.claude/CLAUDE.md`` is rejected, before the
+    first write. Returns the written paths
     with their provenance, and the hooks.
     """
     rendered = render_artifacts(ctx)

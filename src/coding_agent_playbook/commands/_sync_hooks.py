@@ -16,8 +16,8 @@
   merge would choke on *before* any adapter writes;
 - :func:`check_runtime_outputs_owned`: refuses, just as early, a user file (or
   a symlink) where an adapter is about to write an engine-owned file whole — the
-  launcher, the OpenCode shim, the Claude Code rules file
-  (``adapters._owned_files``);
+  launcher, the OpenCode shim, the Claude Code rules file — and a symlinked
+  ``.claude/CLAUDE.md`` stub (``adapters._owned_files``);
 - :func:`finish_write`: write mode's pins, summary lines and approvals;
 - :func:`opencode_restart_notice`: the §C.1.5 restart line, from the previous
   and the new lockfile's whole-file shim entry (both ``[output] commit``
@@ -41,8 +41,10 @@ from coding_agent_playbook._guard_config_ruff import (
 )
 from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
 from coding_agent_playbook.adapters._owned_files import check_engine_owned
-from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
-from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_RULES_PATH
+from coding_agent_playbook.adapters.claude_code_adapter import (
+    ClaudeCodeAdapter,
+    check_rule_files_writable,
+)
 from coding_agent_playbook.adapters.claude_settings import (
     CLAUDE_SETTINGS_PATH,
     decode_settings,
@@ -296,9 +298,11 @@ def check_runtime_outputs_owned(
     could be in the way). Called before any adapter writes, like
     :func:`check_settings_readable`, so a user's same-named file or a symlink
     on the way stops the sync with nothing written (review findings #1, #2).
-    With ``claude_code`` on, its rules file is checked too, hooks or not: it
-    sits in ``.claude/rules/``, a directory of the user's own files (SPEC
-    §10.3.1). Conservatively, even when no rule would be written there.
+    With ``claude_code`` on, its two rule files are checked too, hooks or not
+    (:func:`~.claude_code_adapter.check_rule_files_writable`): the rules file
+    sits in ``.claude/rules/``, a directory of the user's own files, and the
+    stub is never written through a symlink (SPEC §10.3.1). Conservatively,
+    even when no rule would be written there.
 
     Example: ``check_runtime_outputs_owned(ctx.repo_root, adapters, rendered.hooks)``.
     """
@@ -306,7 +310,7 @@ def check_runtime_outputs_owned(
         for relative in adapter.planned_runtime_outputs(hooks.resolved):
             check_engine_owned(repo_root / relative, repo_root)
     if _CLAUDE in adapters:
-        check_engine_owned(repo_root / CLAUDE_RULES_PATH, repo_root)
+        check_rule_files_writable(repo_root)
 
 
 def report_owned_file_error(exc: UserOwnedFileError, *, check: bool) -> int:
