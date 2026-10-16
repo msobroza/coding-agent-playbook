@@ -57,6 +57,8 @@ from tests._content import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+pytestmark = pytest.mark.content
+
 #: Every bundled plugin's ids start here: its path relative to ``content/``.
 _PLUGINS_PREFIX = "plugins/"
 #: The distilled opt-in plugin (SPEC §11.5.2), whose ``ATTRIBUTIONS.md`` must credit the source.

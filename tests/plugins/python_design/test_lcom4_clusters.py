@@ -25,6 +25,8 @@ if TYPE_CHECKING:
     from pathlib import Path
     from types import ModuleType
 
+pytestmark = pytest.mark.content
+
 SCRIPT = plugin_root("python_design") / "skills" / "python-design-review/scripts/lcom4_clusters.py"
 RESULT_KEYS = {"class", "file", "line", "lcom4", "clusters"}
 

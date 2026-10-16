@@ -29,6 +29,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
+pytestmark = pytest.mark.content
+
 _ENGINE = "coding_agent_playbook"
 _SHIPPED_TASKS = CORE_ROOT / "eval_tasks"
 

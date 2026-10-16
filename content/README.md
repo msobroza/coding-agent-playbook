@@ -196,9 +196,13 @@ pytest -q
 ```
 
 Run them inside the dev environment (`uv sync --extra dev`, then prefix each
-with `uv run`). It takes four commands rather than one because local pre-commit
-ruff-formats only Python files, while CI's `ruff format --check .` also formats
-the Python code blocks inside markdown, this guide's included. The pytest suite
-validates the shipped content: link containment and self-containment for `core/`
-and every bundled plugin (see "Add a bundled plugin"), every eval task's gate,
-and the skill inventory that `python_design` and `superpowers` each pin.
+with `uv run`). CI's `ruff format --check .` also formats the Python code
+blocks inside markdown, this guide's included. The pytest suite validates the
+shipped content: link containment and self-containment for `core/` and every
+bundled plugin (see "Add a bundled plugin"), every eval task's gate, and the
+skill inventory that `python_design` and `superpowers` each pin.
+
+With `pre-commit install`, every commit formats markdown the way CI does, and a
+commit that touches `content/` also runs the content checks (`pytest -m content`).
+The hooks run a subset of the suite, so the four commands above stay the source
+of truth.

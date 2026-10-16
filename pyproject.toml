@@ -36,7 +36,9 @@ dependencies = [
 # without it (the evaluator reports unavailable and is skipped).
 metrics = ["radon>=6.0"]
 dev = [
-    "ruff>=0.8.0",
+    # Pinned: an unpinned ruff that began formatting the code blocks inside
+    # markdown has turned CI red before, with no change in this repository.
+    "ruff==0.17.0",
     "mypy>=1.13.0",
     "pytest>=8.3.0",
     "pytest-cov>=5.0.0",
@@ -124,6 +126,10 @@ src = ["src", "tests"]
 # markdown (CI has gone red on that before), and its fenced examples include
 # deliberate "before" code.
 extend-exclude = ["content/plugins/superpowers", "content/plugins/python_design/**/*.md"]
+# pre-commit passes file names explicitly, and ruff ignores extend-exclude for
+# explicit paths unless force-exclude is on: the hooks would then rewrite the
+# vendored superpowers markdown.
+force-exclude = true
 # Skill scripts run in consumer repos on Python 3.10+, so pyupgrade must not
 # suggest 3.12-only syntax there (PEP 695 aliases/generics).
 per-file-target-version = { "content/plugins/*/skills/*/scripts/*.py" = "py310" }
@@ -185,6 +191,7 @@ addopts = [
 ]
 xfail_strict = true
 filterwarnings = ["error"]
+markers = ["content: checks over the bundled content tree under content/ (pre-commit content-checks hook)"]
 
 # --- coverage ---
 

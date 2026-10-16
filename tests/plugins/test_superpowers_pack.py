@@ -32,6 +32,8 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.types import Skill
 
+pytestmark = pytest.mark.content
+
 # Agent Skills naming rule: lowercase alphanumerics separated by single hyphens.
 _SKILL_ID_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 _MAX_ID_LENGTH = 64

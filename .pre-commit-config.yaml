@@ -1,9 +1,13 @@
 # .pre-commit-config.yaml — engine dev loop.
 # Air-gapped-friendly: all hooks are `repo: local` + `language: system`; no
-# remote hook repos are cloned. ruff/mypy come from the `dev` extra
-# (`pip install -e ".[dev]"`) and run from PATH. This mirrors exactly what CI
-# runs (.github/workflows/ci.yml). Consumer-facing hooks are in
-# .pre-commit-hooks.yaml.
+# remote hook repos are cloned. ruff/mypy/pytest come from the `dev` extra
+# (`pip install -e ".[dev]"`) and run from PATH. This mirrors what CI runs
+# (.github/workflows/ci.yml): ruff formats the code blocks inside markdown as
+# well as Python, as CI's `ruff format --check .` does, and `--force-exclude`
+# keeps pyproject's extend-exclude (the vendored superpowers markdown) in force
+# even though pre-commit passes file names explicitly. The content checks (the
+# `content` pytest marker) run only when a commit touches content/. The full
+# test suite stays CI's job. Consumer-facing hooks are in .pre-commit-hooks.yaml.
 default_language_version:
   python: python3.12
 fail_fast: false
@@ -12,15 +16,15 @@ repos:
     hooks:
       - id: ruff
         name: ruff (lint + autofix)
-        entry: ruff check --fix
+        entry: ruff check --fix --force-exclude
         language: system
         types_or: [python, pyi]
         require_serial: true
       - id: ruff-format
         name: ruff format
-        entry: ruff format
+        entry: ruff format --force-exclude
         language: system
-        types_or: [python, pyi]
+        types_or: [python, pyi, markdown]
         require_serial: true
       - id: mypy
         name: mypy
@@ -28,3 +32,9 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: content-checks
+        name: bundled content checks
+        entry: pytest -q --no-cov -p no:cacheprovider -m content
+        language: system
+        files: ^content/
+        pass_filenames: false
