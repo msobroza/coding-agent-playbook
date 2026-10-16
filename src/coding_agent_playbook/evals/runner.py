@@ -30,6 +30,7 @@ a BOOL :class:`~coding_agent_playbook.evaluators.types.ScopeDetail` row.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from abc import ABC, abstractmethod
@@ -43,6 +44,7 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook.evals.prompting import PromptResolutionError as PromptResolutionError
 from coding_agent_playbook.evals.prompting import render_prompt as render_prompt
 from coding_agent_playbook.evals.scoring import score
+from coding_agent_playbook.git_env import without_repo_location
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.task import EvalTask
@@ -186,10 +188,16 @@ _GIT_ENV_ARGS = [
 
 
 def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    """Run ``git`` in ``repo_root`` with a pinned hermetic identity."""
+    """Run ``git`` in ``repo_root`` with a pinned hermetic identity.
+
+    The inherited ``GIT_DIR``/``GIT_INDEX_FILE`` and the other repo-location
+    variables are dropped: inside a hook in a linked worktree git exports them,
+    and the scratch repo would otherwise be the caller's gitdir and index.
+    """
     return subprocess.run(
         ["git", *_GIT_ENV_ARGS, *args],
         cwd=repo_root,
+        env=without_repo_location(os.environ),
         capture_output=True,
         text=True,
         check=True,
