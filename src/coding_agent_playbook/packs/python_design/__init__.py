@@ -1,8 +1,9 @@
 """The ``python_design`` pack: two self-contained Agent Skills for designing and
-reviewing Python code, written for this engine (see ``ATTRIBUTIONS.md`` next to
-this file for the ideas they distill).
+reviewing Python code, written for this engine (see ``ATTRIBUTIONS.md`` in
+``content/plugins/python_design/`` for the ideas they distill).
 
-The pack ships only ``resources/skills/``:
+Its content lives in ``content/plugins/python_design/``, not in this package: the
+pack ships only ``skills/`` there:
 
 * ``python-design-review`` reviews Python code for design smells, principle
   violations and over- or under-applied patterns. Its ``SKILL.md`` carries the

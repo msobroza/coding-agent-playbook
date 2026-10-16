@@ -22,7 +22,7 @@ from tests.packs.superpowers_expectations import (
     EXPECTED_REFERENCE_FILES,
     EXPECTED_SKILL_IDS,
     PACK_ROOT,
-    RESOURCES_ROOT,
+    PLUGIN_ROOT,
     SKILLS_ROOT,
     SYNCED_SKILL_ENTRIES,
 )
@@ -48,7 +48,7 @@ def test_pack_name_is_the_dotted_package_name() -> None:
 
 
 def test_pack_ships_only_skills() -> None:
-    assert sorted(path.name for path in RESOURCES_ROOT.iterdir() if path.is_dir()) == ["skills"]
+    assert sorted(path.name for path in PLUGIN_ROOT.iterdir() if path.is_dir()) == ["skills"]
 
 
 def test_pack_is_off_by_default(tmp_path: Path) -> None:

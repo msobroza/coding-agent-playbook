@@ -8,10 +8,12 @@ by the ``tests/packs/`` suite and the PR-L link gate in
 
 from __future__ import annotations
 
-from importlib import resources
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-from coding_agent_playbook.packs.superpowers import PACK_NAME
+from tests._content import plugin_files_root
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 #: The 15 upstream Superpowers skills (v7.0.0) vendored into the pack.
 EXPECTED_SKILL_IDS: frozenset[str] = frozenset(
@@ -136,9 +138,11 @@ UNRESOLVED_PATH_MENTIONS: frozenset[tuple[str, str]] = frozenset(
 #: anything else at a skill root would be silently dropped by ``playbook sync``.
 SYNCED_SKILL_ENTRIES: frozenset[str] = frozenset({"SKILL.md", "scripts", "references"})
 
-PACK_ROOT: Path = Path(str(resources.files(PACK_NAME)))
-RESOURCES_ROOT: Path = PACK_ROOT / "resources"
-SKILLS_ROOT: Path = RESOURCES_ROOT / "skills"
+#: The plugin's directory in the checkout: ``LICENSE``, ``ATTRIBUTIONS.md`` and ``skills/``.
+PLUGIN_ROOT: Path = plugin_files_root("superpowers")
+#: Alias of :data:`PLUGIN_ROOT` until this module is renamed with ``tests/plugins/``.
+PACK_ROOT: Path = PLUGIN_ROOT
+SKILLS_ROOT: Path = PLUGIN_ROOT / "skills"
 
 #: The native skill roots the default adapters write through the shared
 #: ``SkillWriter`` (SPEC §10.8): claude_code, opencode, and the shared_skills hub.
@@ -200,25 +204,29 @@ def write_consumer_repo(
 
 
 def pack_files() -> list[Path]:
-    """Return every regular file in the pack (``resources/``, ``LICENSE``,
-    ``ATTRIBUTIONS.md``, ``__init__.py``), sorted, skipping ``__pycache__``.
+    """Return every regular file in the plugin (``skills/``, ``LICENSE``,
+    ``ATTRIBUTIONS.md``), sorted, skipping ``__pycache__``.
 
     Example::
 
-        assert PACK_ROOT / "LICENSE" in pack_files()
+        assert PLUGIN_ROOT / "LICENSE" in pack_files()
     """
     return sorted(
         path
-        for path in PACK_ROOT.rglob("*")
-        if path.is_file() and "__pycache__" not in path.relative_to(PACK_ROOT).parts
+        for path in PLUGIN_ROOT.rglob("*")
+        if path.is_file() and "__pycache__" not in path.relative_to(PLUGIN_ROOT).parts
     )
 
 
 def resource_files() -> list[Path]:
-    """Return every regular file under the pack's ``resources/`` (the synced content), sorted.
+    """Return every regular file under the plugin's ``skills/`` (the synced content), sorted.
+
+    Scoped to :data:`SKILLS_ROOT` on purpose: the upstream-coupling scan runs over
+    these files, and ``ATTRIBUTIONS.md`` at the plugin root names the upstream
+    repository by design.
 
     Example::
 
-        assert all(RESOURCES_ROOT in path.parents for path in resource_files())
+        assert all(SKILLS_ROOT in path.parents for path in resource_files())
     """
-    return sorted(path for path in RESOURCES_ROOT.rglob("*") if path.is_file())
+    return sorted(path for path in SKILLS_ROOT.rglob("*") if path.is_file())

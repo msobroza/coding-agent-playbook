@@ -63,8 +63,8 @@ def overlay_cleanup(tmp_path: Path) -> Iterator[None]:
 
 
 def test_list_eval_tasks_walks_engine_resources(tmp_path: Path) -> None:
-    """The engine ships eval tasks under
-    ``coding_agent_playbook/resources/eval_tasks/`` (PR 13 onwards). Confirm
+    """The engine ships eval tasks under ``content/core/eval_tasks/``
+    (resolved through ``bundled_content``). Confirm
     the walker picks them up and tags them with
     ``source_package="coding_agent_playbook"``."""
     source = FileSystemArtifactSource(repo_root=tmp_path)

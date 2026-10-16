@@ -1,6 +1,6 @@
 # Attributions
 
-The skills under `resources/skills/` in this pack are a **near-verbatim port**
+The skills under `skills/` in this pack are a **near-verbatim port**
 of the **Superpowers** skills library.
 
 - **Source:** Superpowers, the skills library by Jesse Vincent (repository

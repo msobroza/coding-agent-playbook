@@ -5,8 +5,7 @@ scheme, no ``superpowers:<skill>`` plugin-namespace references (the upstream
 plugin is never installed), no upstream-plugin markers, ``references/`` and
 ``scripts/`` path mentions that resolve inside the pack, and scripts that stay
 executable and parse. The URL and namespace scans cover every file in the pack
-(``resources/`` plus ``LICENSE``, ``ATTRIBUTIONS.md`` and ``__init__.py``), not
-just markdown.
+(``skills/`` plus ``LICENSE`` and ``ATTRIBUTIONS.md``), not just markdown.
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ if TYPE_CHECKING:
 _URL_RE = re.compile(rb"(?i)(?:\b[a-z][a-z0-9+.-]*://|\bmailto:|\bwww\.)")
 _NAMESPACE_RE = re.compile(rb"superpowers:[A-Za-z]")
 # Text that only works with the upstream plugin installed or its repo at hand.
-# Scanned over resources/ only: ATTRIBUTIONS.md names the upstream repository.
+# Scanned over skills/ only: ATTRIBUTIONS.md names the upstream repository.
 _PLUGIN_COUPLING_RE = re.compile(
     rb"CLAUDE_PLUGIN_ROOT|obra/superpowers|gh issue|plugins/superpowers"
 )
@@ -105,7 +104,7 @@ def _is_shell_script(path: Path) -> bool:
 
 def test_scans_cover_the_whole_pack() -> None:
     scanned = {path.relative_to(PACK_ROOT).as_posix() for path in pack_files()}
-    assert {"LICENSE", "ATTRIBUTIONS.md", "__init__.py"} <= scanned
+    assert {"LICENSE", "ATTRIBUTIONS.md"} <= scanned
     assert set(resource_files()) <= set(pack_files())
 
 

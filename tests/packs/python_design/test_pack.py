@@ -21,7 +21,6 @@ import re
 import subprocess
 import sys
 import tomllib
-from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -36,12 +35,13 @@ from coding_agent_playbook.packs.python_design import PACK_NAME
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, _resource_subdir
 from coding_agent_playbook.types import split_frontmatter
+from tests._content import plugin_root
 from tests.conftest import apply_hermetic_git_env
 from tests.fakes import FakeGitClient
 from tests.packs.superpowers_expectations import NATIVE_SKILL_ROOTS, SYNCED_SKILL_ENTRIES
 
-PACK_ROOT = Path(str(resources.files(PACK_NAME)))
-SKILLS_ROOT = PACK_ROOT / "resources" / "skills"
+PACK_ROOT = plugin_root("python_design")
+SKILLS_ROOT = PACK_ROOT / "skills"
 EXPECTED_SKILL_IDS = frozenset({"python-design-review", "python-architecture"})
 #: The fixed script contracts, as ``<skill-id>/scripts/<file>``.
 EXPECTED_SCRIPTS = frozenset(
@@ -111,7 +111,7 @@ def test_pack_is_a_usable_bundled_pack() -> None:
 
 
 def test_pack_ships_only_the_two_skills() -> None:
-    assert sorted(p.name for p in (PACK_ROOT / "resources").iterdir()) == ["skills"]
+    assert sorted(p.name for p in PACK_ROOT.iterdir() if p.is_dir()) == ["skills"]
     assert {p.name for p in SKILLS_ROOT.iterdir() if p.is_dir()} == EXPECTED_SKILL_IDS
 
 

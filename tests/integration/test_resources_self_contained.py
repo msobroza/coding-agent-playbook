@@ -4,19 +4,20 @@ The engine's artifacts load straight into an agent's context, often in an
 air-gapped deployment, so a rule, prompt or skill must never point outside the
 shipped bundle and must never name the third-party source some of them were
 distilled from. Credit for that source lives in exactly two places:
-``resources/ATTRIBUTIONS.md`` for the engine's own artifacts and
-``packs/python_design/ATTRIBUTIONS.md`` for the distilled ``python_design`` pack.
+``content/core/ATTRIBUTIONS.md`` for the engine's own artifacts and
+``content/plugins/python_design/ATTRIBUTIONS.md`` for the distilled
+``python_design`` pack.
 The PR-L link gate (``links.py``) cannot enforce this: it recognizes only
 markdown link syntax, masks code spans, and reads only ``.md``/``.md.j2``. This
 scan applies no masking and reads every text file.
 
-Scope: every file under ``resources/`` and every file of the ``python_design``
-pack (its ``resources/`` plus ``ATTRIBUTIONS.md`` and ``__init__.py``; ids are
-prefixed ``packs/python_design/``), dot dirs and bytecode caches aside. The
-engine's pre-commit template (ids prefixed ``templates/precommit/``) ships too and
-gets both checks. The pack's files are all fully scanned except its
-``ATTRIBUTIONS.md``, which is URL-free but must name the plugin
-(:func:`pack_policy_for`). For ``resources/`` the checks are
+Scope: every file under ``content/core/`` (ids relative to it) and every file of
+the ``python_design`` pack (its ``skills/`` plus ``ATTRIBUTIONS.md``; ids are
+prefixed ``plugins/python_design/``, its path relative to ``content/``), dot dirs
+and bytecode caches aside. The engine's pre-commit template (ids prefixed
+``templates/precommit/``) ships too and gets both checks. The pack's files are
+all fully scanned except its ``ATTRIBUTIONS.md``, which is URL-free but must name
+the plugin (:func:`pack_policy_for`). For ``content/core/`` the checks are
 decided per file by :func:`policy_for`:
 
 * by default -> URLs and plugin markers are both violations. That includes the
@@ -24,7 +25,7 @@ decided per file by :func:`policy_for`:
   the wheel and are copied into the agent's scratch repo. No fixture needs a URL
   today; if one ever does, allow only a reserved example host (``example.com``,
   ``*.test``, ``*.invalid``, ``localhost``) for that one path;
-* ``resources/ATTRIBUTIONS.md`` -> URL-free, but it *must* name the plugin, so
+* ``content/core/ATTRIBUTIONS.md`` -> URL-free, but it *must* name the plugin, so
   the marker scan is off;
 * ``eval_tasks/**/ATTRIBUTIONS.md`` outside fixture trees -> markers only: the
   CC BY 4.0 licence requires its licence URI (pinned by
@@ -45,10 +46,10 @@ from tests._content import CORE_ROOT, PRECOMMIT_TEMPLATE_DIR, plugin_files_root
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-_RESOURCES_ROOT = CORE_ROOT
 #: The distilled opt-in pack (SPEC §11.5.2): all of it ships, so all of it is scanned.
 _PYTHON_DESIGN_ROOT = plugin_files_root("python_design")
-_PYTHON_DESIGN_PREFIX = "packs/python_design/"
+#: The pack's path relative to ``content/``, so its ids name where each file lives.
+_PYTHON_DESIGN_PREFIX = "plugins/python_design/"
 #: The engine-owned pre-commit template (engine wiring, not content) ships too.
 _PRECOMMIT_TEMPLATE_PREFIX = "templates/precommit/"
 
@@ -87,7 +88,7 @@ class ScanPolicy:
 
 @dataclass(frozen=True)
 class ScanTarget:
-    """One file to scan, its path relative to the resources root, and its policy."""
+    """One file to scan, its id (prefix + path relative to its scan root), and its policy."""
 
     path: Path
     rel: str
@@ -108,7 +109,7 @@ class Violation:
 
 
 def policy_for(rel: Path) -> ScanPolicy:
-    """Return the checks for ``rel`` (a path relative to ``resources/``).
+    """Return the checks for ``rel`` (a path relative to ``content/core/``).
 
     >>> policy_for(Path("ATTRIBUTIONS.md"))
     ScanPolicy(urls=True, markers=False)
@@ -130,7 +131,7 @@ def pack_policy_for(rel: Path) -> ScanPolicy:
     """Return the checks for ``rel`` (a path relative to the ``python_design`` pack root).
 
     The pack's own ``ATTRIBUTIONS.md`` is its one sanctioned home of the credit;
-    every other pack file (skills, scripts, ``__init__.py``) gets both checks.
+    every other pack file (skills, scripts, references) gets both checks.
 
     >>> pack_policy_for(Path("ATTRIBUTIONS.md"))
     ScanPolicy(urls=True, markers=False)
@@ -160,7 +161,7 @@ def scan_targets(
     unprefixed relative path. An empty or missing ``root`` fails loudly: a gate
     that scans nothing passes vacuously. Example::
 
-        scan_targets(pack_root, prefix="packs/python_design/", policy=pack_policy_for)
+        scan_targets(pack_root, prefix="plugins/python_design/", policy=pack_policy_for)
     """
     # POSIX-style ids keep the test ids and prefix checks stable on Windows too.
     rels = sorted(
@@ -197,7 +198,7 @@ def scan_file(target: ScanTarget) -> list[Violation]:
 
 
 _TARGETS = (
-    scan_targets(_RESOURCES_ROOT)
+    scan_targets(CORE_ROOT)
     + scan_targets(_PYTHON_DESIGN_ROOT, prefix=_PYTHON_DESIGN_PREFIX, policy=pack_policy_for)
     + scan_targets(
         PRECOMMIT_TEMPLATE_DIR,
@@ -212,7 +213,7 @@ def test_shipped_resource_is_self_contained(target: ScanTarget) -> None:
     violations = scan_file(target)
     assert violations == [], (
         "shipped resources must carry no URLs and must not name the plugin they were "
-        "distilled from (credit lives only in resources/ATTRIBUTIONS.md and "
+        "distilled from (credit lives only in core/ATTRIBUTIONS.md and "
         f"{_PYTHON_DESIGN_PREFIX}{_ATTRIBUTIONS_NAME}):\n"
         + "\n".join(v.render() for v in violations)
     )
@@ -225,7 +226,7 @@ def test_scan_covers_every_artifact_kind() -> None:
         "rules/",
         "prompts/",
         _PRECOMMIT_TEMPLATE_PREFIX,
-        f"{_PYTHON_DESIGN_PREFIX}resources/skills/",
+        f"{_PYTHON_DESIGN_PREFIX}skills/",
     ):
         assert any(r.startswith(prefix) for r in rels), f"nothing scanned under {prefix}"
     for part in ("/task.toml", "/setup/", "/solution/"):
@@ -233,7 +234,6 @@ def test_scan_covers_every_artifact_kind() -> None:
     assert _ATTRIBUTIONS_NAME in rels
     assert f"{_EVAL_TASKS_SUBDIR}/{_ATTRIBUTIONS_NAME}" in rels
     assert f"{_PYTHON_DESIGN_PREFIX}{_ATTRIBUTIONS_NAME}" in rels
-    assert f"{_PYTHON_DESIGN_PREFIX}__init__.py" in rels
 
 
 def test_pack_scan_exempts_only_the_pack_attributions_from_the_marker_check() -> None:
@@ -245,8 +245,8 @@ def test_pack_scan_exempts_only_the_pack_attributions_from_the_marker_check() ->
 
 @pytest.mark.parametrize(
     "attributions",
-    [_RESOURCES_ROOT / _ATTRIBUTIONS_NAME, _PYTHON_DESIGN_ROOT / _ATTRIBUTIONS_NAME],
-    ids=["resources", "python_design"],
+    [CORE_ROOT / _ATTRIBUTIONS_NAME, _PYTHON_DESIGN_ROOT / _ATTRIBUTIONS_NAME],
+    ids=["core", "python_design"],
 )
 def test_attributions_credit_the_distilled_source(attributions: Path) -> None:
     text = attributions.read_text(encoding="utf-8")
@@ -312,7 +312,6 @@ def test_scan_text_passes_clean_text() -> None:
     [
         ("rules/languages/python/pure-core.md", ScanPolicy(urls=True, markers=True)),
         ("prompts/characterize.md", ScanPolicy(urls=True, markers=True)),
-        ("precommit/config.yaml.j2", ScanPolicy(urls=True, markers=True)),
         ("eval_tasks/some-task/task.toml", ScanPolicy(urls=True, markers=True)),
         ("eval_tasks/some-task/setup/app/db.py", ScanPolicy(urls=True, markers=True)),
         ("eval_tasks/some-task/solution/transcript.md", ScanPolicy(urls=True, markers=True)),
@@ -331,10 +330,10 @@ def test_policy_for(rel: str, expected: ScanPolicy) -> None:
     ("rel", "expected"),
     [
         ("ATTRIBUTIONS.md", ScanPolicy(urls=True, markers=False)),
-        ("__init__.py", ScanPolicy(urls=True, markers=True)),
-        ("resources/skills/s/SKILL.md", ScanPolicy(urls=True, markers=True)),
-        ("resources/skills/s/scripts/run.py", ScanPolicy(urls=True, markers=True)),
-        ("resources/skills/s/references/ATTRIBUTIONS.md", ScanPolicy(urls=True, markers=True)),
+        ("README.md", ScanPolicy(urls=True, markers=True)),
+        ("skills/s/SKILL.md", ScanPolicy(urls=True, markers=True)),
+        ("skills/s/scripts/run.py", ScanPolicy(urls=True, markers=True)),
+        ("skills/s/references/ATTRIBUTIONS.md", ScanPolicy(urls=True, markers=True)),
     ],
 )
 def test_pack_policy_for(rel: str, expected: ScanPolicy) -> None:
@@ -345,20 +344,20 @@ def test_pack_scan_targets_on_a_synthetic_tree(tmp_path: Path) -> None:
     """Pack ids carry the prefix; only the pack-root ATTRIBUTIONS.md may name the plugin."""
     files = {
         "ATTRIBUTIONS.md": "Credit: python-clean-architecture (MIT).\n",
-        "__init__.py": '"""See www.example.org."""\n',
-        "resources/skills/s/SKILL.md": "As Arjan teaches.\n",
-        "resources/skills/s/__pycache__/x.pyc": "https://example.org\n",
+        "README.md": "See www.example.org.\n",
+        "skills/s/SKILL.md": "As Arjan teaches.\n",
+        "skills/s/__pycache__/x.pyc": "https://example.org\n",
     }
     for rel, body in files.items():
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text(body, encoding="utf-8")
 
-    targets = scan_targets(tmp_path, prefix="packs/p/", policy=pack_policy_for)
+    targets = scan_targets(tmp_path, prefix="plugins/p/", policy=pack_policy_for)
     violations = [v.render() for t in targets for v in scan_file(t)]
 
     assert violations == [
-        'packs/p/__init__.py:1: url: \'www.example.org."""\'',
-        "packs/p/resources/skills/s/SKILL.md:1: plugin-marker: 'Arjan'",
+        "plugins/p/README.md:1: url: 'www.example.org.'",
+        "plugins/p/skills/s/SKILL.md:1: plugin-marker: 'Arjan'",
     ]
 
 
@@ -368,7 +367,6 @@ def test_scan_targets_on_a_synthetic_tree(tmp_path: Path) -> None:
         "ATTRIBUTIONS.md": "Credit: python-clean-architecture.\n",
         "rules/a.md": "Read https://example.org first.\n",
         "prompts/p.md.j2": "clean\n",
-        "precommit/config.yaml.j2": "repo: https://example.org/hooks\n",
         "skills/s/scripts/run.py": "# mktoronto\n",
         "eval_tasks/ATTRIBUTIONS.md": "Licence: https://licence.example\n",
         "eval_tasks/t/task.toml": 'description = "see www.example.org"\n',
@@ -389,7 +387,6 @@ def test_scan_targets_on_a_synthetic_tree(tmp_path: Path) -> None:
         "eval_tasks/t/setup/app.py:1: url: 'https://api.example.org\"'",
         "eval_tasks/t/solution/transcript.md:1: plugin-marker: 'Arjan'",
         "eval_tasks/t/task.toml:1: url: 'www.example.org\"'",
-        "precommit/config.yaml.j2:1: url: 'https://example.org/hooks'",
         "rules/a.md:1: url: 'https://example.org'",
         "skills/s/scripts/run.py:1: plugin-marker: 'mktoronto'",
     ]

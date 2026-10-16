@@ -1,8 +1,9 @@
 """The ``superpowers`` pack: a vendored, self-contained port of the Superpowers
 skills library (MIT, Copyright (c) 2025 Jesse Vincent — see ``LICENSE`` and
-``ATTRIBUTIONS.md`` next to this file).
+``ATTRIBUTIONS.md`` in ``content/plugins/superpowers/``).
 
-The pack ships only ``resources/skills/`` — one Agent Skills directory per
+Its content lives in ``content/plugins/superpowers/``, not in this package: the
+pack ships only ``skills/`` there — one Agent Skills directory per
 skill (``SKILL.md`` + optional ``scripts/`` and ``references/``). It has no
 runtime dependency on the upstream plugin: cross-references between skills use
 plain skill names, every supporting file lives inside its skill directory, and

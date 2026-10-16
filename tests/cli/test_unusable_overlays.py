@@ -2,7 +2,9 @@
 
 "Unusable" is the one shared preflight check (``_sync_preflight``): importing the
 package fails (it is missing, or its own code raises), or it imports but ships no
-``resources/`` directory (the parent ``coding_agent_playbook.packs``, say).
+``resources/`` directory (the parent ``coding_agent_playbook.packs``, say). A
+bundled-plugin name is never imported: it is unusable when no
+``content/plugins/<leaf>/`` matches it ("no such bundled plugin").
 ``sync`` refuses (exit 1), ``validate`` fails (exit 1), ``check`` flags it and
 stops claiming a clean state (exit 0, it is a diagnostic), and ``init`` refuses
 before writing (exit 2, a usage error) — for ``--overlays`` and for a local
@@ -80,7 +82,7 @@ def _ns(repo: Path, **kwargs: object) -> argparse.Namespace:
 @pytest.mark.parametrize(
     ("overlay", "expected"),
     [
-        (_TYPO, f"FAIL overlays_enabled: {_TYPO}: not importable {_packs_hint()}"),
+        (_TYPO, f"FAIL overlays_enabled: {_TYPO}: no such bundled plugin {_packs_hint()}"),
         (
             _PARENT,
             f"FAIL overlays_enabled: {_PARENT}: importable, but ships no resources/ "
@@ -118,7 +120,7 @@ def test_validate_reports_each_unusable_overlay(
     out = capsys.readouterr().out
     fails = [line for line in out.splitlines() if line.startswith("FAIL overlays_enabled: ")]
     assert fails == [
-        f"FAIL overlays_enabled: {_TYPO}: not importable {_packs_hint()}",
+        f"FAIL overlays_enabled: {_TYPO}: no such bundled plugin {_packs_hint()}",
         f"FAIL overlays_enabled: {_PARENT}: importable, but ships no resources/ directory, "
         f"so it is not an overlay package {_packs_hint()}",
         *(f"FAIL overlays_enabled: {reason}" for reason in _BOOM_REASONS),
@@ -152,7 +154,7 @@ def test_check_flags_a_misspelled_pack_and_does_not_claim_a_clean_state(
     out = capsys.readouterr().out
     environment, _, rest = out.partition("=== Detected ===")
     assert f"  Overlays: {_TYPO}\n" in environment
-    assert f"    ✗ {_TYPO}: not importable {_packs_hint()}\n" in environment
+    assert f"    ✗ {_TYPO}: no such bundled plugin {_packs_hint()}\n" in environment
     assert "'playbook sync' refuses to run" in environment
     drift = rest.partition("=== Drift ===")[2]
     assert "All on-disk files match generated output." not in drift
@@ -190,7 +192,7 @@ def test_check_flags_each_unusable_overlay(
     environment = capsys.readouterr().out.partition("=== Detected ===")[0]
     flagged = [line for line in environment.splitlines() if line.startswith("    ✗ ")]
     assert flagged == [
-        f"    ✗ {_TYPO}: not importable {_packs_hint()}",
+        f"    ✗ {_TYPO}: no such bundled plugin {_packs_hint()}",
         f"    ✗ {_NOT_A_PACK}: not importable",
         *(f"    ✗ {reason}" for reason in _BOOM_REASONS),
     ]
@@ -238,7 +240,7 @@ def _write_pyproject(repo: Path) -> None:
 @pytest.mark.parametrize(
     ("overlay", "reason"),
     [
-        (_TYPO, f"{_TYPO}: not importable {_packs_hint()}"),
+        (_TYPO, f"{_TYPO}: no such bundled plugin {_packs_hint()}"),
         (_PARENT, f"{_PARENT}: importable, but ships no resources/ directory"),
         (_NOT_A_PACK, f"{_NOT_A_PACK}: not importable\n"),
     ],
@@ -268,7 +270,7 @@ def test_init_lists_each_unusable_overlay_and_a_raising_one(
     err = capsys.readouterr().err
     listed = [line for line in err.splitlines() if line.startswith("  ")]
     assert listed == [
-        f"  {_TYPO}: not importable {_packs_hint()}",
+        f"  {_TYPO}: no such bundled plugin {_packs_hint()}",
         f"  {_NOT_A_PACK}: not importable",
         *(f"  {reason}" for reason in _BOOM_REASONS),
     ]
@@ -290,7 +292,7 @@ def test_init_checks_the_local_files_overlays_which_replace_the_flag(
         "error: overlays_enabled in .coding-agent-playbook.local.toml names package(s) "
         "that cannot be used as overlays here; nothing was written:"
     )
-    assert f"\n  {_TYPO}: not importable {_packs_hint()}" in err
+    assert f"\n  {_TYPO}: no such bundled plugin {_packs_hint()}" in err
     assert sorted(path.name for path in tmp_path.iterdir()) == [local.name, "pyproject.toml"]
 
 
@@ -312,7 +314,7 @@ def test_init_checks_the_flag_too_when_the_local_file_replaces_it(
         "error: --overlays names package(s) that cannot be used as overlays here; "
         "nothing was written:"
     )
-    assert f"\n  {_TYPO}: not importable {_packs_hint()}" in err
+    assert f"\n  {_TYPO}: no such bundled plugin {_packs_hint()}" in err
     assert "overlays_enabled in" not in err  # the local list is usable
     assert sorted(path.name for path in tmp_path.iterdir()) == [local.name, "pyproject.toml"]
 

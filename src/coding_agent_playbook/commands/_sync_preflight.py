@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import packs as _packs
+from coding_agent_playbook.bundled_content import bundled_layer_root, is_bundled_layer
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -39,6 +40,7 @@ _HOOK_VENV_HINT = (
 
 _NOT_IMPORTABLE = "not importable"
 _NO_RESOURCES = "importable, but ships no resources/ directory, so it is not an overlay package"
+_NO_SUCH_PLUGIN = "no such bundled plugin"
 
 #: The engine's top-level package; a name starting with it reads like a pack typo.
 _ENGINE_PACKAGE = _packs.__name__.partition(".")[0]
@@ -137,7 +139,15 @@ def warn_missing_adapters(names: Sequence[str]) -> None:
 
 
 def _unusable_reason(name: str) -> str | None:
-    """Why ``name`` cannot serve as an overlay, or ``None`` when it can."""
+    """Why ``name`` cannot serve as an overlay, or ``None`` when it can.
+
+    A bundled layer is checked against the content tree and never imported: the
+    engine always resolves, and a plugin name (either namespace) resolves only
+    when its leaf is a directory under ``content/plugins/``. Every other name is
+    imported and must ship a ``resources/`` directory.
+    """
+    if is_bundled_layer(name):
+        return None if bundled_layer_root(name) is not None else _NO_SUCH_PLUGIN
     try:
         module = importlib.import_module(name)
     except Exception as exc:
