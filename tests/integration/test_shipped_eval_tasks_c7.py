@@ -1,6 +1,6 @@
 """Integration test: the shipped eval tasks under the C7 schema.
 
-Loads every ``resources/eval_tasks/<id>/task.toml`` the engine ships, asserts the
+Loads every ``content/core/eval_tasks/<id>/task.toml`` the engine ships, asserts the
 whole set validates clean (compile-based rules), and runs each task end-to-end
 through :func:`~coding_agent_playbook.evals.scoring.score` — once deterministic-only
 (no judge ⇒ the judged rubric layer skips, so the verdict reduces to the gate) and

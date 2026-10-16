@@ -5,8 +5,9 @@ Each pin guards a mistake that would otherwise pass silently:
 * a tracked file matching ``.gitignore``: hatch's force-include of ``content/``
   ignores ``.gitignore``, so a wheel built from the tree ships the file while
   one built from the sdist drops it;
-* a bundled plugin directory that breaks the leaf rule or ships no kind
-  directory: :func:`bundled_plugins` skips it, so the plugin silently vanishes;
+* a bundled plugin directory that breaks the leaf rule (:func:`bundled_plugins`
+  skips it, so the plugin silently vanishes) or ships no kind directory (it is
+  listed and passes the preflight, but contributes nothing);
 * a bundled artifact linking to a layer-root file (``README.md``, ``LICENSE``,
   ``ATTRIBUTIONS.md``): those ship in the wheel but are never synced, so the link
   breaks in every consumer repo while the link gate, whose containment root now

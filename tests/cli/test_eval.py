@@ -330,13 +330,14 @@ def test_show_uses_prompt_slash_not_id_when_they_differ(tmp_path, make_synthetic
 def test_display_source_path_uses_package_prefix_for_engine_tasks(tmp_path):
     """A bundled layer's task is labelled ``<package>/eval_tasks/<dir>/``.
 
-    The label comes from the layer, not from the path: a task still found under
-    today's ``resources/eval_tasks/`` gets no ``resources/`` in its label."""
+    The label comes from the layer, not from the path: even a bundled task whose
+    path holds ``resources/eval_tasks/`` gets no ``resources/`` in its label."""
     from coding_agent_playbook.commands.eval import _display_source_path
     from coding_agent_playbook.evals.task import EvalTask
 
-    # Synthesize a task that looks like it came from importlib.resources
-    # (typical layout: <package>/resources/eval_tasks/<id>/task.toml).
+    # Synthesize an engine task under the pre-v0.19 layout
+    # (<package>/resources/eval_tasks/<id>/task.toml), so only the layer can
+    # explain a label without ``resources/``.
     task_dir = tmp_path / "coding_agent_playbook" / "resources" / "eval_tasks" / "task-a"
     task_dir.mkdir(parents=True)
     task = EvalTask(
@@ -435,7 +436,7 @@ def test_show_source_path_is_repo_relative_for_repo_local_tasks(
     at ``playbook/eval_tasks/...``, not an absolute filesystem path.
 
     SPEC §12.8 example uses package-relative paths
-    (``coding_agent_playbook/resources/eval_tasks/.../``); the repo-local
+    (``coding_agent_playbook/eval_tasks/.../``); the repo-local
     analogue should anchor at ``playbook/`` so the output is reproducible
     across user machines (no leak of ``$HOME``/scratch-dir layouts).
 
