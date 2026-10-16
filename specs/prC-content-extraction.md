@@ -247,9 +247,11 @@ anything for the first two:
    `the bundled plugin namespace, not a plugin`. Because the namespace is never
    imported, a leftover `src/coding_agent_playbook/packs/` holding only
    gitignored `__pycache__/` cannot change the result.
-2. `is_bundled_layer(name)` (except the engine): the name is usable if
+2. `is_bundled_layer(name)`, the engine included: the name is usable if
    `bundled_layer_root(name)` is not `None`. Otherwise the reason is
-   `no such bundled plugin`.
+   `no such bundled plugin`. The engine resolves to `core/`. Sending it
+   through the import path would make it newly report "ships no
+   `resources/`" once its content has moved out.
 3. Every other name keeps today's import and `resources/` check, unchanged. It
    still reports `_NO_RESOURCES` for third-party packages.
 
