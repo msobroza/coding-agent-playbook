@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import jinja2
+import pytest
 from jinja2.sandbox import SandboxedEnvironment
 
 from coding_agent_playbook import renderer
@@ -25,8 +26,6 @@ from tests._content import CORE_ROOT
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
-
-    import pytest
 
     SyntheticRepoFactory = Callable[..., Path]
 
@@ -88,6 +87,7 @@ def _rendered_artifact_ids(repo: Path) -> set[str]:
     return {entry.artifact_id for entry in lockfile.entries if entry.artifact_id}
 
 
+@pytest.mark.content
 def test_shipped_templates_render_byte_identical_under_sandbox(
     tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
