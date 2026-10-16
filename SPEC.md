@@ -2012,7 +2012,7 @@ repos:
     rev: v0.1.0a0                # the engine version the project pins
     hooks:
       - id: playbook-sync
-        additional_dependencies: [playbook-rules-bnp]   # every overlay / out-of-tree adapter
+        additional_dependencies: [playbook-rules-bnp]   # every third-party overlay package / out-of-tree adapter (bundled plugins need none)
       - id: playbook-no-generated-output
         additional_dependencies: [playbook-rules-bnp]
 ```

@@ -137,6 +137,13 @@ The `Source:` line of `playbook eval --show` is built from the task's layer:
 repo-local task under `playbook/eval_tasks/` now finds its prompt in
 `playbook/prompts/` (it never found one before).
 
+Caveat: when `playbook eval` renders a repo-local prompt, its
+`{{ rule("<id>") }}` includes resolve only the engine's rules and the task's own
+`setup/playbook/rules/`. A repo-local prompt that includes a rule from your
+`playbook/rules/` or from an overlay renders that rule as empty text during
+`playbook eval`, while `playbook sync` writes the full body. Widening that scope
+is a follow-up.
+
 ### 6. A broken install fails loudly
 
 If the engine's bundled content cannot be found, every command that loads it

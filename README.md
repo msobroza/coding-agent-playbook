@@ -474,7 +474,7 @@ repos:
     rev: v0.1.0a0     # the engine version your project pins
     hooks:
       - id: playbook-sync                  # re-render local output after checkout / merge
-        additional_dependencies: [playbook-rules-<org>]   # every overlay you enable
+        additional_dependencies: [playbook-rules-<org>]   # every third-party overlay package / out-of-tree adapter (bundled plugins need none)
       - id: playbook-no-generated-output   # refuse commits that stage generated output
         additional_dependencies: [playbook-rules-<org>]
 ```
