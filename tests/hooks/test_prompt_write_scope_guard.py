@@ -45,6 +45,8 @@ if TYPE_CHECKING:
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "prompt-write-scope-guard"
 GOLDEN_SESSION: Final = "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c"
 

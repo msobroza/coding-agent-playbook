@@ -280,6 +280,7 @@ def test_invalid_output_contract_regex_fails_validate(tmp_path, make_synthetic_r
     assert "expected a list of Python regular expressions" in out
 
 
+@pytest.mark.content
 def test_shipped_prompt_contracts_compile() -> None:
     """The engine's review, security-review and find-injected-vulnerability contracts compile."""
     import re

@@ -32,6 +32,8 @@ if TYPE_CHECKING:
     from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.detector import Facts
 
+pytestmark = pytest.mark.content
+
 ENGINE_RULES: Final = CORE_ROOT / "rules"
 SIDECAR: Final = ".playbook/manifest.toml"
 #: §E.3's codes per linked rule, verbatim.

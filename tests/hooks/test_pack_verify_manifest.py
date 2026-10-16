@@ -23,6 +23,8 @@ from tests.hooks.pack_repo import ENGINE_HOOKS, engine_hook, engine_hook_paths
 if TYPE_CHECKING:
     from pathlib import Path
 
+pytestmark = pytest.mark.content
+
 
 class PackRow(NamedTuple):
     """One §E.0.6 row: what the shipped ``HOOK.md`` must declare."""

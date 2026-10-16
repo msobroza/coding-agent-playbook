@@ -26,6 +26,8 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "taint-escalation"
 PUSH: Final = "git push origin feat"
 

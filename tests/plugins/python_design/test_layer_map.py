@@ -26,6 +26,8 @@ if TYPE_CHECKING:
     from pathlib import Path
     from types import ModuleType
 
+pytestmark = pytest.mark.content
+
 SCRIPT = (
     plugin_root("python_design") / "skills" / "python-architecture" / "scripts" / "layer_map.py"
 )

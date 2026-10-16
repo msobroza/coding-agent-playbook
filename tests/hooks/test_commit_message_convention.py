@@ -32,6 +32,8 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "commit-message-convention"
 HEREDOC_COMMIT: Final = (
     "git commit -m \"$(cat <<'EOF'\nfeat: add parser\n\nWhy it matters.\nEOF\n)\""

@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse
 from typing import TYPE_CHECKING, Any, Final
 
+import pytest
+
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.hook_runtime.decision import Decision
 from tests.hook_runtime.fakes import FakeGit
@@ -18,13 +20,13 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    import pytest
-
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.simulate import SimulateReport
     from tests.hooks.pack_repo import PackRepo
 
     type Deps = Callable[..., RuntimeDeps]
+
+pytestmark = pytest.mark.content
 
 HOOK_ID: Final = "command-convention-guard"
 CORRECTION: Final = "Use `uv run python -m mypy` / `uv run python -m pytest -q`."

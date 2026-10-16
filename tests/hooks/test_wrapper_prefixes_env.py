@@ -36,6 +36,8 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
+pytestmark = pytest.mark.content
+
 GUARD: Final = "destructive-command-guard"
 GATE: Final = "stop-ci-parity-gate"
 FORCE_PUSH: Final = "git push --force origin main"

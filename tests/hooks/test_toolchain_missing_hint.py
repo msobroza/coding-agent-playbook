@@ -32,6 +32,8 @@ if TYPE_CHECKING:
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "toolchain-missing-hint"
 UV_EXTRA: Final = '[project]\nname = "app"\n[project.optional-dependencies]\ndev = ["mypy"]\n'
 NO_MYPY: Final = "Exit code 1\n/usr/bin/python3: No module named mypy"

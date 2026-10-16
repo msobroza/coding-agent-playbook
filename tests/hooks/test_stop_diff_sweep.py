@@ -35,6 +35,8 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "stop-diff-sweep"
 GATE_ID: Final = "stop-ci-parity-gate"
 DESER_ID: Final = "ml-unsafe-deserialization-guard"

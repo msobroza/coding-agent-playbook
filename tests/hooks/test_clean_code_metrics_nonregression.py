@@ -42,6 +42,8 @@ if TYPE_CHECKING:
     from tests.hook_runtime.fakes import FakeGit
     from tests.hooks.pack_repo import PackRepo
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "clean-code-metrics-nonregression"
 GATE_ID: Final = "stop-ci-parity-gate"
 SRC: Final = "src/x.py"

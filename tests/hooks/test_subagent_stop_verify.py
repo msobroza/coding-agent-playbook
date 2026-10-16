@@ -42,6 +42,8 @@ if TYPE_CHECKING:
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "subagent-stop-verify"
 GATE_ID: Final = "stop-ci-parity-gate"
 F401: Final = ruff_row("a.py", "F401", "`os` imported but unused", 1)

@@ -18,6 +18,8 @@ from tests.integration.ccv_answers import CORRECT_ANSWER
 if TYPE_CHECKING:
     from pathlib import Path
 
+pytestmark = pytest.mark.content
+
 _TASKS_ROOT = CORE_ROOT / "eval_tasks"
 _FIXTURE = _TASKS_ROOT / "find-injected-vuln-modoboa-cmdi"
 

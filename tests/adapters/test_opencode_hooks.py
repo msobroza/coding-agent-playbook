@@ -195,6 +195,7 @@ def test_shim_has_no_shebang_lf_endings_and_final_newline(tmp_path: Path) -> Non
     assert data.endswith(b"}\n") and not data.endswith(b"\n\n")
 
 
+@pytest.mark.content
 def test_shim_golden_with_async_post_tool_use(tmp_path: Path) -> None:
     """OQ-19: local-audit-log becomes the ``async`` pre-filter of ``post_tool_use`` in REG."""
     audit = resolve_engine_hooks(["local-audit-log"], tmp_path / "engine")

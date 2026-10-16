@@ -13,6 +13,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any, Final
 
+import pytest
+
 from coding_agent_playbook.evaluators.execution.coverage_xml import CoverageReport
 from coding_agent_playbook.evaluators.execution.junit import JunitSummary
 from coding_agent_playbook.evaluators.execution.project import RunArtifacts
@@ -50,6 +52,8 @@ if TYPE_CHECKING:
     from tests.hooks.pack_repo import PackRepo
 
     type Deps = Callable[..., RuntimeDeps]
+
+pytestmark = pytest.mark.content
 
 HOOK_ID: Final = "coverage-diff-gate"
 COORDINATOR: Final = "stop-ci-parity-gate"

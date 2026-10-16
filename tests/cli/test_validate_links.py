@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 from typing import TYPE_CHECKING
 
+import pytest
+
 from coding_agent_playbook.bundled_content import bundled_plugins
 from coding_agent_playbook.commands import _validate_links
 from coding_agent_playbook.commands import validate as _validate
@@ -23,11 +25,11 @@ from tests._content import PLUGINS_ROOT, bundled_plugin_dirs
 if TYPE_CHECKING:
     from pathlib import Path
 
-    import pytest
-
     from coding_agent_playbook.commands._validation import ValidationError
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.types import Rule, Skill
+
+pytestmark = pytest.mark.content
 
 
 def _ns(repo: Path) -> argparse.Namespace:

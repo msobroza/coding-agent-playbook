@@ -36,6 +36,8 @@ if TYPE_CHECKING:
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID = "guard-generated-outputs"
 TAIL = "then run playbook validate && playbook sync"
 _HTML = sentinel_line("html")

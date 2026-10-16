@@ -32,6 +32,8 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "secret-content-guard"
 #: Real-shaped (AKIA + 16) but not a key anyone issued; built so no scanner flags this file.
 AWS_KEY: Final = "AKIA" + "Z7Q2" * 4

@@ -30,6 +30,8 @@ if TYPE_CHECKING:
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "guard-eval-fixtures"
 TASK: Final = "src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial"
 LOADER: Final = f"{TASK}/setup/app/loader.py"

@@ -32,6 +32,8 @@ if TYPE_CHECKING:
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "validate-then-sync-on-canonical-edit"
 GLOSSARY: Final = "playbook/rules/glossary.md"
 _RULE: Final = "---\nid: glossary\nname: Glossary\ndescription: Terms.\nscope: always\n---\n"

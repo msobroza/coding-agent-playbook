@@ -32,6 +32,8 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "dependency-allowlist-guard"
 _HANDLERS: Final = "coding_agent_playbook.hook_runtime.handlers."
 #: What ``detect()`` reads from :data:`PYPROJECT` with a ``uv.lock`` beside it.

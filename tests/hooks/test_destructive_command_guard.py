@@ -28,6 +28,8 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "destructive-command-guard"
 DIRTY: Final = (("M ", "src/app.py"),)
 UNTRACKED: Final = (("??", "notes.txt"),)

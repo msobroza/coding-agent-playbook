@@ -30,6 +30,8 @@ if TYPE_CHECKING:
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "eval-task-authoring-lint"
 TASK_DIR: Final = "playbook/eval_tasks/demo-task"
 TASK: Final = f"{TASK_DIR}/task.toml"

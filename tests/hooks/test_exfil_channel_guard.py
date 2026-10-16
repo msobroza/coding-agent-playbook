@@ -27,6 +27,8 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "exfil-channel-guard"
 ORIGIN: Final = {"origin": "https://github.com/org/repo.git"}
 

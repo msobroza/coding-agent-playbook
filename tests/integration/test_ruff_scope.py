@@ -22,6 +22,8 @@ from typing import Any
 
 import pytest
 
+pytestmark = pytest.mark.content
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _FIXTURE_GLOB = "content/core/eval_tasks/*/setup"
 #: The vendored bundled plugin stays byte-faithful; the distilled python_design

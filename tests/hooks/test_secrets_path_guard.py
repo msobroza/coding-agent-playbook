@@ -30,6 +30,8 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "secrets-path-guard"
 SECRET: Final = "TOKEN=not-a-real-value\n"
 

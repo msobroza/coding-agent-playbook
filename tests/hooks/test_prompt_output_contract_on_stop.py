@@ -38,6 +38,8 @@ if TYPE_CHECKING:
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "prompt-output-contract-on-stop"
 GATE_ID: Final = "stop-ci-parity-gate"
 PROMPTS: Final = CORE_ROOT / "prompts"

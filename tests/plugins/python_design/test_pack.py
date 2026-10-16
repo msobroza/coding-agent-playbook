@@ -40,6 +40,8 @@ from tests.conftest import apply_hermetic_git_env
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS, SYNCED_SKILL_ENTRIES
 
+pytestmark = pytest.mark.content
+
 #: The dotted name a consumer lists in ``overlays_enabled`` to turn the plugin on.
 PLUGIN_NAME = "coding_agent_playbook.plugins.python_design"
 PLUGIN_ROOT = plugin_root("python_design")

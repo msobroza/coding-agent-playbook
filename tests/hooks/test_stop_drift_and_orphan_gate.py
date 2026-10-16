@@ -55,6 +55,8 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "stop-drift-and-orphan-gate"
 RULE: Final = ".continue/rules/10-x.md"
 COMMAND: Final = ".claude/commands/triage.md"

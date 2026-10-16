@@ -34,6 +34,8 @@ from tests.plugins.superpowers_expectations import (
 if TYPE_CHECKING:
     from pathlib import Path
 
+pytestmark = pytest.mark.content
+
 # Any `scheme://`, `mailto:` or bare `www.` form: the policy is "no URL", not "no http".
 _URL_RE = re.compile(rb"(?i)(?:\b[a-z][a-z0-9+.-]*://|\bmailto:|\bwww\.)")
 _NAMESPACE_RE = re.compile(rb"superpowers:[A-Za-z]")

@@ -16,12 +16,14 @@ fixture only seeds repo-local content when callers ask for it.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.git_env import REPO_LOCATION_GIT_VARS
 from tests.attendance_env import ATTENDANCE_ENV_VARS
 from tests.hook_samples import write_hook
 
@@ -30,6 +32,20 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from tests.hook_payloads import HookPayloadCase
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Drop the inherited variables that pin a git repository, for the whole run.
+
+    Git exports absolute ``GIT_DIR``/``GIT_INDEX_FILE`` to hooks in a linked
+    worktree, and pre-commit passes them on to the ``content-checks`` hook. Any
+    test running real git without ``hermetic_git_env`` (``materialize`` in the
+    shipped-task tests) would then commit onto the developer's branch and
+    overwrite their index. Runs before collection, so collection-time git is
+    covered too.
+    """
+    for name in REPO_LOCATION_GIT_VARS:
+        os.environ.pop(name, None)
 
 
 _DEFAULT_CONFIG = """\
@@ -133,8 +149,6 @@ def apply_hermetic_git_env(
 
     Only environment variables change — ``subprocess`` itself is never patched.
     """
-    import os
-
     for name in [key for key in os.environ if key.startswith("GIT_")]:
         monkeypatch.delenv(name)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))

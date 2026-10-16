@@ -38,6 +38,8 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "pii-prompt-guard"
 IBAN: Final = "FR76 3000 6000 0112 3456 7890 189"
 #: The overlay's ``max_prompt_bytes`` and the shipped ``timeout`` (seconds).

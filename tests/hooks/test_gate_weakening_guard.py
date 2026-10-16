@@ -30,6 +30,8 @@ if TYPE_CHECKING:
     from tests.hook_runtime.fakes import FakeGit
     from tests.hooks.pack_repo import PackRepo
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "gate-weakening-guard"
 GATE_ID: Final = "stop-ci-parity-gate"
 ADDOPTS: Final = '[tool.pytest.ini_options]\naddopts = [\n    "--cov-fail-under={}",{}\n]\n'

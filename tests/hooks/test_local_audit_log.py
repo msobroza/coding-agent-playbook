@@ -34,6 +34,8 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "local-audit-log"
 LEAKY: Final = "mysql -pS3cret db"
 #: A token the secret rules flag (``security.secrets.scan_text``'s own example).

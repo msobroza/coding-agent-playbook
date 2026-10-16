@@ -34,6 +34,8 @@ if TYPE_CHECKING:
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "post-edit-ruff-format"
 APP: Final = "src/app.py"
 PYPROJECT: Final = '[tool.ruff.lint]\nselect = ["E", "F", "I", "UP"]\nignore = ["UP007"]\n'

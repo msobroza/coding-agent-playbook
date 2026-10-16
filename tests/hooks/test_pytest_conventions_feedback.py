@@ -11,6 +11,8 @@ import argparse
 import json
 from typing import TYPE_CHECKING, Any, Final
 
+import pytest
+
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_runtime.decision import Decision
@@ -22,11 +24,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
-    import pytest
-
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.simulate import SimulateReport
     from tests.hooks.pack_repo import PackRepo
+
+pytestmark = pytest.mark.content
 
 HOOK_ID: Final = "pytest-conventions-feedback"
 TEST: Final = "tests/test_app.py"

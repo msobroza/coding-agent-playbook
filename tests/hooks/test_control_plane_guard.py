@@ -35,6 +35,8 @@ if TYPE_CHECKING:
     type Payload = Callable[[str, str, str], HookPayloadCase]
     type Deps = Callable[..., RuntimeDeps]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID = "control-plane-guard"
 GGO = "guard-generated-outputs"
 REASON = "Guardrail configuration is user-owned; ask the user to change it."

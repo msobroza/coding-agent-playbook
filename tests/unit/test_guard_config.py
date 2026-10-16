@@ -333,6 +333,7 @@ def test_resource_roots_are_package_relative_ids() -> None:
     assert table["output_dirs"] == [".claude/commands/", "AGENTS.md"]
 
 
+@pytest.mark.content
 def test_bundled_layers_resolve_to_their_content_dirs_never_importing() -> None:
     """The engine and a bundled plugin resolve through ``bundled_content`` (SPEC v0.19):
     the ids keep their ``resources`` spelling, the paths are the layers' content dirs,
@@ -872,6 +873,7 @@ def test_allowlists_table_rendered_from_the_guards_configs() -> None:
     }
 
 
+@pytest.mark.content
 def test_logging_block_follows_hook_enablement(tmp_path: Path) -> None:
     """guard-decision-log switches the decision log on; local-audit-log the async audit route."""
     sink = resolve_engine_hooks(["guard-decision-log"], tmp_path)

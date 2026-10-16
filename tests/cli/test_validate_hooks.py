@@ -437,6 +437,7 @@ def test_mutates_edited_file_rejected_for_external_handlers(
     ]
 
 
+@pytest.mark.content
 def test_overlay_extra_pattern_redos_rejected(
     tmp_path: Path,
     make_synthetic_repo: SyntheticRepoFactory,

@@ -130,6 +130,7 @@ def test_readme_precommit_table_lists_every_shipped_precommit_hook(hook_id: str)
     assert f"| `{hook_id}` |" in _section("### Pre-commit hooks")
 
 
+@pytest.mark.content
 @pytest.mark.parametrize("hook", _shipped_hooks(), ids=lambda hook: hook.id)
 def test_readme_lists_every_shipped_lifecycle_hook_with_its_tier(hook: HookFrontmatter) -> None:
     row = f"| `{hook.id}` | `{hook.tier}` | {_enforced_on(hook)} |"

@@ -38,6 +38,8 @@ if TYPE_CHECKING:
 
     type Deps = Callable[..., RuntimeDeps]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "network-egress-guard"
 REMOTES: Final = {
     "origin": "https://git.bank.example/org/repo.git",

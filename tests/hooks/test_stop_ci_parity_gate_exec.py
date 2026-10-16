@@ -38,6 +38,8 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from tests.hooks.pack_repo import PackRepo
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "stop-ci-parity-gate"
 MYPY: Final = ("-m", "mypy")
 PYTEST: Final = ("-m", "pytest", "-q")

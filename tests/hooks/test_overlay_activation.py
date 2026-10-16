@@ -15,6 +15,8 @@ import argparse
 import json
 from typing import TYPE_CHECKING, Any, Final
 
+import pytest
+
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands import validate as _validate
 from tests.cli.hook_repo import GUARD_CONFIG, SETTINGS, hook_deps
@@ -24,9 +26,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    import pytest
-
     SyntheticRepoFactory = Callable[..., Path]
+
+pytestmark = pytest.mark.content
 
 OVERLAY_IDS: Final = ("network-egress-guard", "pii-prompt-guard", "sensitive-data-read-guard")
 NETWORK: Final = "network-egress-guard"

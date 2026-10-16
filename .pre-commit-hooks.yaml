@@ -8,7 +8,7 @@
 #       rev: v0.1.0a0          # the engine version your project pins
 #       hooks:
 #         - id: playbook-sync                  # [output] commit = false (default)
-#           additional_dependencies: [playbook-rules-<org>]   # every overlay package / extra adapter
+#           additional_dependencies: [playbook-rules-<org>]   # every third-party overlay package / extra adapter (bundled plugins need none)
 #         - id: playbook-no-generated-output   # [output] commit = false (default)
 #           additional_dependencies: [playbook-rules-<org>]
 #       # - id: playbook-sync-check            # legacy: [output] commit = true
@@ -25,12 +25,13 @@
 #
 # These hooks are `language: python`: pre-commit runs them in its OWN venv, which
 # holds only the engine at `rev:` — not your project environment. Each
-# `overlays_enabled` entry is an overlay package or bundled plugin; bundled
-# plugins ship with the engine, so list every overlay package and out-of-tree
-# adapter under `additional_dependencies`, and keep `rev` on the engine version
-# your project pins. A missing overlay package makes `playbook sync` refuse to
-# run (it would otherwise re-render without the org rules); a missing adapter is
-# skipped with a warning.
+# `overlays_enabled` entry is a third-party overlay package or a bundled plugin.
+# Bundled plugins (`coding_agent_playbook.plugins.<name>`) ship inside the
+# engine, so never list them under `additional_dependencies`: only third-party
+# overlay packages and out-of-tree adapters go there. Keep `rev` on the engine
+# version your project pins. A missing overlay package makes `playbook sync`
+# refuse to run (it would otherwise re-render without the org rules); a missing
+# adapter is skipped with a warning.
 # Simpler for overlay users: the `repo: local` + `language: system` hooks that
 # `playbook init` writes run the `playbook` from your project environment.
 

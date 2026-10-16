@@ -42,6 +42,8 @@ if TYPE_CHECKING:
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
 
+pytestmark = pytest.mark.content
+
 HOOK_ID: Final = "session-start-playbook-briefing"
 GUARDS: Final = ("guard-generated-outputs", "control-plane-guard")
 CLAUDE_MD: Final = ".claude/CLAUDE.md"
