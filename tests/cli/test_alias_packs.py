@@ -48,10 +48,23 @@ def _committed_overlays(repo: Path) -> list[str]:
     return overlays
 
 
+@pytest.mark.parametrize(
+    "local_text",
+    [
+        pytest.param(None, id="no-local-file"),
+        # init always writes this local file (_write_local_config in
+        # commands/init.py), so it is the most common real state: the local
+        # file is the one to fix only when it sets overlays_enabled, never
+        # because it merely exists.
+        pytest.param("[user_choices]\n", id="local-file-without-list"),
+    ],
+)
 def test_sync_with_pack_name_warns_once_and_renders(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    local_text: str | None, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     repo = write_consumer_repo(tmp_path, overlays=[_OLD])
+    if local_text is not None:
+        (repo / _LOCAL).write_text(local_text, encoding="utf-8")
 
     assert _run(["sync"], repo) == 0
 
