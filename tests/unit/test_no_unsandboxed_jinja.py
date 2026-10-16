@@ -180,6 +180,7 @@ def built_environments(monkeypatch: pytest.MonkeyPatch) -> list[type]:
     return built
 
 
+@pytest.mark.content
 def test_sync_and_eval_prompts_build_only_sandboxed_environments(
     tmp_path: Path,
     make_synthetic_repo: SyntheticRepoFactory,

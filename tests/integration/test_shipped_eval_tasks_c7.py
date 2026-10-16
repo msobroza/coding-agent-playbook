@@ -52,6 +52,8 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.evals.task import EvalTask
 
+pytestmark = pytest.mark.content
+
 
 @pytest.fixture
 def stub_uv_sync(monkeypatch: pytest.MonkeyPatch) -> None:

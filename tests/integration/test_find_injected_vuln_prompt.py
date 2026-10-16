@@ -7,8 +7,12 @@ eval_tasks: entry to resolve on-disk — that whole-suite green lands in C4).
 
 from __future__ import annotations
 
+import pytest
+
 from coding_agent_playbook.types import Prompt
 from tests._content import CORE_ROOT
+
+pytestmark = pytest.mark.content
 
 _PROMPT = CORE_ROOT / "prompts" / "find-injected-vulnerability.md.j2"
 

@@ -31,6 +31,8 @@ from tests.integration.ccv_answers import CORRECT_ANSWER, WRONG_CLASS_ANSWER
 if TYPE_CHECKING:
     from pathlib import Path
 
+pytestmark = pytest.mark.content
+
 _TASKS_ROOT = CORE_ROOT / "eval_tasks"
 
 # Per-fixture banned tokens: CVE id, CWE id (both forms), sink API symbol(s), and

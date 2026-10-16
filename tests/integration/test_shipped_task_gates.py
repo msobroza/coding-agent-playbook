@@ -60,6 +60,8 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.evals.task import EvalTask
 
+pytestmark = pytest.mark.content
+
 _TASKS_ROOT = CORE_ROOT / "eval_tasks"
 _SOLUTION_DIR = "solution"
 #: ``solution/negatives/`` holds known-wrong attempts; the reference overlay skips it.

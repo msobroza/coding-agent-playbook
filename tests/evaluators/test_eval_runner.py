@@ -318,6 +318,7 @@ def test_render_prompt_falls_back_for_unresolvable_prompt(tmp_path: Path) -> Non
     assert "do the thing" in prompt
 
 
+@pytest.mark.content
 def test_render_prompt_resolves_a_real_shipped_prompt() -> None:
     """A task pointing at a shipped (non-templated) prompt renders its real body."""
     task_dir = CORE_ROOT / "eval_tasks" / "refactor-extract-helper"
@@ -831,6 +832,7 @@ def test_static_measurements_recurse_subdirs_and_skip_unparseable(tmp_path: Path
     assert not any(k.startswith("broken.py") for k in keys)
 
 
+@pytest.mark.content
 def test_render_prompt_skips_non_matching_prompts() -> None:
     """Resolution scans every prompt md and returns only the id-matching one."""
     task_dir = CORE_ROOT / "eval_tasks" / "explain-pure-function"

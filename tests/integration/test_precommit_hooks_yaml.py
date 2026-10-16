@@ -143,3 +143,13 @@ def test_header_recipe_confines_other_hooks_and_names_overlay_deps():
     assert "default_stages: [pre-commit]" in header
     assert "additional_dependencies" in header
     assert "language: system" in header  # the init-written alternative for overlay users
+
+
+def test_header_says_bundled_plugins_need_no_additional_dependencies():
+    """A bundled plugin ships inside the engine and is no pip distribution: a
+    consumer who lists one under ``additional_dependencies`` breaks the hook's
+    venv install, so the header must say they need none."""
+    header = _header_comment()
+    example = [line for line in header.splitlines() if "additional_dependencies: [" in line]
+    assert any("(bundled plugins need none)" in line for line in example), example
+    assert "coding_agent_playbook.plugins.<name>" in header

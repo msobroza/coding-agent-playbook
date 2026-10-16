@@ -29,6 +29,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from types import ModuleType
 
+pytestmark = pytest.mark.content
+
 SCRIPT = plugin_root("python_design") / "skills" / "python-design-review/scripts/detect_smells.py"
 HIT_KEYS = {"smell", "file", "line", "evidence"}
 

@@ -26,6 +26,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
+pytestmark = pytest.mark.content
+
 _SUPERPOWERS_PACK_NAME = "coding_agent_playbook.packs.superpowers"
 _SUPERPOWERS_PLUGIN_NAME = "coding_agent_playbook.plugins.superpowers"
 _DEMO_PLUGIN_NAME = "coding_agent_playbook.plugins.demo"

@@ -35,6 +35,8 @@ from tests._content import CORE_ROOT, PLUGINS_ROOT, REPO_ROOT, bundled_plugin_di
 if TYPE_CHECKING:
     from pathlib import Path
 
+pytestmark = pytest.mark.content
+
 _GIT_TIMEOUT_SECONDS = 30
 #: A bundled plugin needs at least one of these, or it ships nothing.
 _KIND_DIRS = ("rules", "prompts", "skills", "eval_tasks")

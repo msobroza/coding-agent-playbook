@@ -1,8 +1,10 @@
-"""Regression tests for the ``hermetic_git_env`` test fixture (``tests/conftest.py``).
+"""Regression tests for the git isolation in ``tests/conftest.py``.
 
 The real-git tests must never reach the developer's repository or config:
 not via ``GIT_DIR``/``GIT_INDEX_FILE`` that git exports to hooks in a linked
-worktree, and not via git's default global excludes file.
+worktree, and not via git's default global excludes file. The
+``hermetic_git_env`` fixture covers both per test; the session-wide strip covers
+the tests that run git without it.
 """
 
 from __future__ import annotations
@@ -10,10 +12,13 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
+from coding_agent_playbook.git_env import REPO_LOCATION_GIT_VARS
+from tests._content import REPO_ROOT
 from tests.conftest import apply_hermetic_git_env
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH")
@@ -74,3 +79,31 @@ def test_fixture_config_home_is_empty_and_outside_tmp_path(tmp_path: Path) -> No
     assert list(config_home.iterdir()) == []
     assert tmp_path not in config_home.parents
     assert os.environ["GIT_CONFIG_GLOBAL"] == os.devnull
+
+
+def test_session_has_no_repo_location_git_vars() -> None:
+    """Probe for the run below: nothing pins a git repository inside the session."""
+    leaked = sorted(REPO_LOCATION_GIT_VARS.intersection(os.environ))
+    assert leaked == []
+
+
+def test_a_run_started_from_a_hook_drops_the_hook_git_vars(tmp_path: Path) -> None:
+    """A run launched with what git exports to a linked-worktree hook strips it.
+
+    The ``content-checks`` pre-commit hook runs tests that call ``materialize`` or
+    ``git`` without ``hermetic_git_env``; they rely on this session-wide strip.
+    """
+    decoy = tmp_path / "decoy.git"
+    env = {**os.environ, "GIT_DIR": str(decoy), "GIT_INDEX_FILE": str(decoy / "index")}
+    probe = f"{__file__}::test_session_has_no_repo_location_git_vars"
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "--no-cov", "-p", "no:cacheprovider", probe],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "1 passed" in result.stdout
