@@ -50,7 +50,10 @@ class Adapter(ABC):
     #: Repo-relative files this adapter co-owns with the user and the harness
     #: (Claude Code's ``.claude/settings.json``): it edits managed elements in
     #: place, so ``playbook sync`` never gives one a whole-file lock entry,
-    #: gitignores it, flags it as staged output, or deletes it.
+    #: gitignores it, flags it as staged output, or deletes it. Each must be
+    #: written by atomic replace (``_atomic_io.atomic_write_bytes``): ``sync
+    #: --check`` relies on it to call a dangling link at one no blocker, since
+    #: the rename replaces the link (``_output_blockers.write_blocker``).
     shared_outputs: ClassVar[tuple[str, ...]] = ()
 
     #: Repo-relative files :meth:`finalize` writes that are hook runtime plumbing

@@ -104,11 +104,13 @@ def _spy_scratch_trees(monkeypatch: pytest.MonkeyPatch) -> list[set[str]]:
     trees: list[set[str]] = []
     real_file_drift = _sync_output.file_drift
 
-    def spy(written: list[Path], scratch: Path, repo_root: Path) -> list[str]:
+    def spy(
+        written: list[Path], scratch: Path, repo_root: Path, *, shared: frozenset[str]
+    ) -> list[str]:
         trees.append(
             {p.relative_to(scratch).as_posix() for p in scratch.rglob("*") if not p.is_dir()}
         )
-        return real_file_drift(written, scratch, repo_root)
+        return real_file_drift(written, scratch, repo_root, shared=shared)
 
     monkeypatch.setattr(_sync_output, "file_drift", spy)
     return trees

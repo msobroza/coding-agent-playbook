@@ -258,8 +258,8 @@ def _lock_path_via_repo_links(path: Path, out_root: Path, repo_root: Path) -> st
     ../.agents/skills``) gave ``.agents/skills/…`` rows in write mode but
     ``.claude/skills/…`` in the ``--check`` scratch, a drift no sync clears.
     ``None`` when the path lies outside ``out_root`` or resolves out of the repo
-    (the lockfile keeps such a path absolute; the protected table drops it in
-    both modes).
+    (the lockfile gives such a path no entry, and the protected table drops it
+    in both modes).
 
     Example::
 

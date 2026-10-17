@@ -26,6 +26,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook._file_identity import FileSet
+from coding_agent_playbook._symlinks import is_dangling_symlink
+from coding_agent_playbook.commands._output_blockers import write_blocker
 from coding_agent_playbook.gitignore import (
     GITIGNORE_FILENAME,
     LOCKFILE_NAME,
@@ -38,7 +40,7 @@ from coding_agent_playbook.gitignore import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Collection, Iterable, Mapping, Sequence
     from typing import TextIO
 
     from coding_agent_playbook.adapters.base import Adapter
@@ -77,14 +79,18 @@ def update_gitignore(repo_root: Path, written: Sequence[Path], *, commit: bool) 
     return f"Updated the managed block in {GITIGNORE_FILENAME}" if changed else None
 
 
-def file_drift(written: Sequence[Path], scratch: Path, repo_root: Path) -> list[str]:
+def file_drift(
+    written: Sequence[Path], scratch: Path, repo_root: Path, *, shared: Collection[str] = ()
+) -> list[str]:
     """``--check``: drift lines for every scratch-rendered file missing/different on disk.
 
     ``_STATE_FILES_TO_SKIP`` (config + lockfile) are StateSource-owned, never
     adapter output, so they are excluded from the diff. A file missing because
-    something on the real tree is in its way (a file/folder swap ``playbook
-    sync`` refused, SPEC §10.8) names the blocker instead of suggesting a sync
-    that cannot fix it.
+    something on the real tree is in its way names it instead of suggesting a
+    sync that cannot fix it: the blocker write mode stops on (§12.2), or, inside
+    a rendered skill directory, the file/folder swap the skill writer refused
+    (§10.8). ``shared`` (repo-relative, the adapters' co-owned files) are written
+    by atomic replace, so a dangling link at one of them is no blocker.
 
     Example::
 
@@ -98,7 +104,11 @@ def file_drift(written: Sequence[Path], scratch: Path, repo_root: Path) -> list[
             continue
         actual_path = repo_root / rel
         if not actual_path.is_file():
-            drift.append(f"  {rel.as_posix()}\n{_missing_hint(actual_path, repo_root)}")
+            skill_dir = _rendered_skill_dir(rel, scratch.resolve())
+            in_skill = None if skill_dir is None else repo_root / skill_dir
+            replaced = rel.as_posix() in shared
+            hint = _missing_hint(actual_path, repo_root, replaced=replaced, skill_dir=in_skill)
+            drift.append(f"  {rel.as_posix()}\n{hint}")
         elif actual_path.read_bytes() != path.read_bytes():
             drift.append(
                 f"  {rel.as_posix()}\n"
@@ -201,7 +211,13 @@ def unreadable_lockfile_drift(exc: Exception) -> list[str]:
     ]
 
 
-def _missing_hint(actual_path: Path, repo_root: Path) -> str:
+def _missing_hint(
+    actual_path: Path, repo_root: Path, *, replaced: bool, skill_dir: Path | None
+) -> str:
+    stop = write_blocker(actual_path, repo_root, replaces_path=replaced)
+    if stop is not None and not _strictly_inside(stop.path, skill_dir):
+        # write mode stops on it and never removes it (§12.2)
+        return f"    Missing on disk: {stop.problem}.\n    {stop.remedy}, then run 'playbook sync'."
     blocker = _blocker_of(actual_path, repo_root)
     if blocker is None:
         return "    Missing on disk; run 'playbook sync' to create."
@@ -213,12 +229,28 @@ def _missing_hint(actual_path: Path, repo_root: Path) -> str:
     )
 
 
+def _rendered_skill_dir(rel: Path, scratch: Path) -> Path | None:
+    """The rendered skill directory ``rel`` lies in: its shallowest ancestor holding ``SKILL.md``."""
+    for ancestor in reversed(rel.parents):
+        if ancestor.parts and (scratch / ancestor / "SKILL.md").is_file():
+            return ancestor
+    return None
+
+
+def _strictly_inside(path: Path, directory: Path | None) -> bool:
+    """Whether ``path`` lies below ``directory`` (both as spelled, made absolute)."""
+    if directory is None:
+        return False
+    inner, outer = Path(os.path.abspath(path)), Path(os.path.abspath(directory))
+    return inner != outer and inner.is_relative_to(outer)
+
+
 def _blocker_of(actual_path: Path, repo_root: Path) -> Path | None:
-    """A non-directory where a parent of ``actual_path`` must go, or a dir at it."""
+    """Inside a skill dir: a non-directory where a parent of ``actual_path`` must go, or a dir at it."""
     current = repo_root
     for part in actual_path.relative_to(repo_root).parts[:-1]:
         current = current / part
-        if current.is_symlink() and not current.exists():
+        if is_dangling_symlink(current):
             return current
         if current.exists() and not current.is_dir():
             return current

@@ -202,3 +202,49 @@ def test_file_drift_is_clean_when_the_exec_bit_matches(tmp_path: Path) -> None:
     scratch, repo, rendered = _scratch_pair(tmp_path, 0o755)
 
     assert file_drift([rendered], scratch, repo) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_file_drift_names_what_write_mode_stops_on(tmp_path: Path) -> None:
+    """A missing output names the blocker write mode stops on and never removes:
+    a dangling dir link, a link to a file where a dir goes, a dangling file link
+    whose target dir is missing. A dangling file link the write creates the
+    target of, or one at a shared (atomically replaced) output, is no blocker."""
+    scratch, repo = tmp_path / "scratch", tmp_path / "repo"
+    names = ("dangling/x.md", "to-file/y.md", "AGENTS.md", "CLAUDE.md")
+    rendered = [scratch / name for name in names]
+    for path in rendered:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x\n", encoding="utf-8")
+    (repo / "docs").mkdir(parents=True)
+    (repo / "README.md").write_text("r\n", encoding="utf-8")
+    (repo / "dangling").symlink_to("../gone", target_is_directory=True)
+    (repo / "to-file").symlink_to("README.md")
+    (repo / "AGENTS.md").symlink_to("gone/AGENTS.md")
+    (repo / "CLAUDE.md").symlink_to("docs/CLAUDE.md")
+
+    dir_link, to_file, file_link, creatable = file_drift(rendered, scratch, repo)
+
+    assert "dangling is a dangling symbolic link: its target ../gone does not exist" in dir_link
+    assert "to-file is a symbolic link to README.md, which is not a directory" in to_file
+    assert "Re-point or remove the link, then run 'playbook sync'." in to_file
+    assert "AGENTS.md is a dangling symbolic link: its target gone/AGENTS.md" in file_link
+    assert creatable.endswith("Missing on disk; run 'playbook sync' to create.")
+    shared = file_drift(rendered[2:3], scratch, repo, shared=frozenset({"AGENTS.md"}))
+    assert shared[0].endswith("Missing on disk; run 'playbook sync' to create.")
+
+
+def test_file_drift_keeps_the_swap_hint_inside_a_rendered_skill_dir(tmp_path: Path) -> None:
+    """Inside ``<root>/<id>/`` the skill writer displaces what is in the way when it
+    is its own unchanged output (§10.8), so the hint says that, not "move it"."""
+    scratch, repo = tmp_path / "scratch", tmp_path / "repo"
+    skill = scratch / "skills" / "demo"
+    (skill / "scripts").mkdir(parents=True)
+    (skill / "SKILL.md").write_text("s\n", encoding="utf-8")
+    (skill / "scripts" / "run.sh").write_text("x\n", encoding="utf-8")
+    (repo / "skills" / "demo").mkdir(parents=True)
+    (repo / "skills" / "demo" / "scripts").write_text("old file\n", encoding="utf-8")
+
+    [hint] = file_drift([skill / "scripts" / "run.sh"], scratch, repo)
+
+    assert "skills/demo/scripts is in the way. 'playbook sync' replaces it only" in hint

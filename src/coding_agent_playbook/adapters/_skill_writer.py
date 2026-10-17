@@ -49,6 +49,7 @@ from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook._sentinel import has_sentinel
+from coding_agent_playbook._symlinks import is_dangling_symlink
 from coding_agent_playbook.adapters._prior_output import PriorOutput
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.harness.emitter import with_sentinel_body
@@ -348,7 +349,7 @@ def _unusable_component(skills_root: Path, repo_root: Path) -> Path | None:
     current = repo_root
     for part in parts:
         current = current / part
-        if current.is_symlink() and not current.exists():
+        if is_dangling_symlink(current):
             return current
         if current.exists() and not current.is_dir():
             return current
