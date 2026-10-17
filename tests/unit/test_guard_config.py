@@ -291,6 +291,47 @@ def test_scoped_entries_carry_sha256(tmp_path: Path) -> None:
     assert all("sha256" not in row for row in rows if not row["scope"])
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
+def test_protected_rows_map_a_scratch_path_through_the_repos_symlinks(tmp_path: Path) -> None:
+    """A ``--check`` scratch row names what write mode records: the resolved repo path."""
+    repo, scratch = tmp_path / "repo", tmp_path / "scratch"
+    (repo / ".agents" / "skills").mkdir(parents=True)
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "skills").symlink_to("../.agents/skills", target_is_directory=True)
+    written = scratch / ".claude" / "skills" / "demo" / "SKILL.md"
+    provenance = {written.resolve(): Provenance(kind="skill", artifact_id="demo")}
+
+    rows = protected_rows(provenance, [], scratch, repo_root=repo)
+
+    assert [row.path for row in rows] == [".agents/skills/demo/SKILL.md"]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
+def test_protected_rows_drop_a_path_the_repo_links_outside_itself(tmp_path: Path) -> None:
+    repo, scratch, elsewhere = tmp_path / "repo", tmp_path / "scratch", tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (repo / ".claude").mkdir(parents=True)
+    (repo / ".claude" / "skills").symlink_to(elsewhere, target_is_directory=True)
+    written = scratch / ".claude" / "skills" / "demo" / "SKILL.md"
+    provenance = {written.resolve(): Provenance(kind="skill", artifact_id="demo")}
+
+    assert protected_rows(provenance, [], scratch, repo_root=repo) == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
+def test_protected_output_dirs_list_a_linked_scan_dir_by_its_target(tmp_path: Path) -> None:
+    repo, scratch = tmp_path / "repo", tmp_path / "scratch"
+    (repo / "tools" / "claude-commands").mkdir(parents=True)
+    (repo / ".claude" / "commands").parent.mkdir()
+    (repo / ".claude" / "commands").symlink_to("../tools/claude-commands", target_is_directory=True)
+
+    dirs = adapter_output_dirs({"claude_code": ClaudeCodeAdapter()}, scratch, repo_root=repo)
+
+    assert "tools/claude-commands/" in dirs
+    assert ".claude/commands/" not in dirs
+    assert dirs == adapter_output_dirs({"claude_code": ClaudeCodeAdapter()}, repo)
+
+
 def test_protected_output_dirs_match_adapter_stale_scan_dirs(tmp_path: Path) -> None:
     adapters = {
         "claude_code": ClaudeCodeAdapter(),

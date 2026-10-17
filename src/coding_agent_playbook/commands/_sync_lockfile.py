@@ -25,7 +25,13 @@ import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.lockfile import LockEntry, Lockfile, Provenance, compute_hash
+from coding_agent_playbook.lockfile import (
+    LockEntry,
+    Lockfile,
+    Provenance,
+    compute_hash,
+    merge_provenance,
+)
 from coding_agent_playbook.orchestrator import artifact_id_of
 
 if TYPE_CHECKING:
@@ -92,18 +98,7 @@ class ProvenanceRecorder:
         for path in paths:
             self.written.append(path)
             key = path.resolve()
-            previous = self.provenance.get(key)
-            if previous is None or previous == provenance:
-                self.provenance[key] = provenance
-            else:
-                self.provenance[key] = _composite_of(previous, provenance)
-
-
-def _composite_of(first: Provenance, second: Provenance) -> Provenance:
-    """Provenance of a path with two different writers: the adapter survives
-    only when both writers agree on it."""
-    adapter = first.adapter if first.adapter == second.adapter else ""
-    return Provenance(kind="composite", adapter=adapter)
+            self.provenance[key] = merge_provenance(self.provenance.get(key), provenance)
 
 
 def _artifact_provenance(

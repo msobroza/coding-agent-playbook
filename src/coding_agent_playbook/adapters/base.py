@@ -122,7 +122,8 @@ class Adapter(ABC):
 
         ``playbook sync`` checks each one on the real repo before any adapter
         writes and exits 1 when it is the user's (``_owned_files``: a same-named
-        file without the sentinel line, or a symlink on the way). The default is
+        file without the sentinel line, a hard link, or a symlink on the way).
+        The default is
         conservative, so declaring a runtime output is enough to guard it: every
         declared file once any hook lists this adapter in ``supports``. Adapters
         that know exactly when they write override it with the same plan

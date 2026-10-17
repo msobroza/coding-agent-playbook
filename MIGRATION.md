@@ -205,8 +205,9 @@ is an advisory-only target:
   elements and never a whole-file one.
 - `runtime_outputs` (class attribute): hook plumbing that `finalize` writes
   whole, locked as `kind = "runtime"`. Sync refuses to write one over a user
-  file of the same name (no sentinel on line 1) or through a symlink: it exits
-  1 naming the file before any adapter writes.
+  file of the same name (no sentinel on line 1), over a hard link (even a
+  sentinel-tagged one) or through a symlink: it exits 1 naming the file before
+  any adapter writes.
 - `planned_runtime_outputs(hooks)`: which `runtime_outputs` this sync's
   `finalize` will write, for that check. The default (every declared one once a
   hook lists your adapter in `supports`) is safe; override it only to name
@@ -327,10 +328,13 @@ What the next `playbook sync` (or the post-checkout / post-merge hook) does:
   file the engine does not own, such as your own `.claude/rules/<name>.md`.
 - A file of yours already named `.claude/rules/coding-agent-playbook.md` (one
   without the generated sentinel on line 1) is refused, never overwritten, and
-  so is a symlinked `.claude` or `.claude/rules`: sync exits 1 before writing
-  anything, with `error: .claude/rules/coding-agent-playbook.md: <reason>`
-  (`--check` prints `Cannot verify …`). Rename your file, or replace the link
-  with a real directory, then re-run `playbook sync`.
+  so is a hard link at that path (even of the generated file: writing it whole
+  would change the other name too) or a symlinked `.claude` or `.claude/rules`:
+  sync exits 1 before writing anything, with
+  `error: .claude/rules/coding-agent-playbook.md: <reason>` (`--check` prints
+  `Cannot verify …`). Rename your file, delete the extra hard-linked name, or
+  replace the link with a real directory, then re-run `playbook sync`. The
+  hook launcher and the OpenCode plugin refuse a hard link the same way.
 - `.claude/CLAUDE.md` is still overwritten whatever regular file is there, but
   never through a symlink or a hard link: a link such as
   `.claude/CLAUDE.md -> ../AGENTS.md`, or the same file hard-linked to

@@ -93,8 +93,9 @@ def _generated_header(title: str) -> str:
 def check_rule_files_writable(repo_root: Path) -> None:
     """Raise :class:`~._owned_files.UserOwnedFileError` unless both rule files may be written.
 
-    The rules file must be engine-owned (nothing there or a sentinel-tagged
-    file, no symlink on the way): ``.claude/rules/`` holds the user's own files.
+    The rules file must be engine-owned (nothing there, or an unshared
+    sentinel-tagged regular file; no symlink on the way): ``.claude/rules/``
+    holds the user's own files.
     The stub keeps its plain overwrite of a regular file, but never through a
     symlink or a hard link, and never over a directory or a FIFO: the common
     ``.claude/CLAUDE.md -> ../AGENTS.md`` link, or the same file hard-linked,
