@@ -226,7 +226,7 @@ the legacy committed-output flow and CI there; under the default it is only
 meaningful in a working copy that has already been synced.) From then on the `post-checkout` / `post-merge`
 hook re-runs it after every checkout and pull; run it by hand whenever you
 change `playbook/` or the config. `AGENTS.md` is always generated regardless of
-which adapters are enabled.
+which adapters are enabled (as long as at least one rule or hook advisory applies).
 
 What `sync` does with git, by `[output] commit` in `.coding-agent-playbook.toml`:
 

@@ -195,7 +195,7 @@ The end-to-end flow of `playbook sync` in a consumer repo:
 4. **Filter.** For each artifact, evaluate its `applies_if` predicate against the facts dictionary. Drop non-matching artifacts. Hooks are gated in one place only, `hook_policy.resolve_effective_hooks`: the `[hooks]` on-formula (`enabled`, `tiers`, `enable`, `disable`, `mandatory`), `applies_if` ANDed with a `linked_rule`'s, the `[guardrails]` domain merge, and `supports ∩ [hooks] adapters`. It returns the on hooks as `ResolvedHook`s and the off ones as `SkippedHook`s (reported by `playbook check`); with `[hooks]` off both lists are empty.
 5. **Render.** Apply Jinja2 to each surviving artifact's template with `facts | config` as context. A `HOOK.md.j2` body renders the same way (without `rule()`); hook frontmatter, handler commands and scripts never pass through Jinja.
 6. **Dispatch to adapters.** For each enabled adapter (`continue`, `claude_code`, `opencode`, `shared_skills`, `agents_md`), call `begin_sync(repo_root, prior_lock)` (the real repo and the previous lockfile, even under `--check`), pass the rendered artifacts, then every `ResolvedHook` through `write_hook`, then `finalize`; the adapter writes to its harness-specific locations. Claude Code merges its managed entries into `.claude/settings.json` and writes the launcher `.claude/hooks/playbook/launch.sh`, OpenCode writes the one shim `.opencode/plugins/playbook-hooks.js`, and every other adapter degrades a hook to its advisory text (§10). `managed_lock_entries()` then reports the sub-file elements the adapter owns. Before the first adapter writes, sync checks on the real repo every runtime output an adapter is about to write whole (`planned_runtime_outputs`, §10.1): a same-named file without the line-1 sentinel, or a symlink at that path or at a directory between it and the repo root, stops every mode with exit 1 naming the file, and nothing is written.
-7. **Write `AGENTS.md`** as the universal fallback regardless of which adapters are enabled. With hooks on it gains a Guardrails section holding the on hooks' advisory text. **Sync-level hook output:** whenever `[hooks] enabled` and a hook-capable adapter is on, sync itself (not an adapter) writes `.coding-agent-playbook/hooks/guard_config.json` — the machine-independent record the dispatcher reads (`guard_config.render_guard_config`) — and byte-copies external handlers' scripts beside it.
+7. **`AGENTS.md` is always among the outputs.** The `agents_md` adapter is force-enabled, so step 6 writes `AGENTS.md` (in its `finalize()`) whichever other adapters are enabled, as long as at least one rule survived step 4 or a hook advisory exists (§10.4). With hooks on it gains a Guardrails section holding the on hooks' advisory text. **Sync-level hook output:** whenever `[hooks] enabled` and a hook-capable adapter is on, sync itself (not an adapter) writes `.coding-agent-playbook/hooks/guard_config.json` — the machine-independent record the dispatcher reads (`guard_config.render_guard_config`) — and byte-copies external handlers' scripts beside it.
 8. **Stamp.** Write a `.coding-agent-playbook.lock` file containing the rendered file hashes via the configured `StateSource`; used by `playbook sync --check` to detect drift. The lockfile is schema 2: every entry records its provenance (`kind`, `artifact_id`, `source`, `adapter`), and each managed element of a co-owned file (`.claude/settings.json`) is a scoped entry hashed on its canonical JSON (§14.4).
 9. **Settle leftovers, then apply the output policy** (`[output] commit`, §7.1). Under **both** `commit` settings, first settle **orphans** — paths the *previous* lockfile lists that this run did not rewrite but that are still on disk (a removed skill's `SKILL.md` + scripts, a script dropped from a skill that still exists, everything a since-disabled adapter wrote). "Did not rewrite" compares file identity (`st_dev`/`st_ino`), not path spelling: after a case-only skill-id rename on a case-insensitive filesystem the old entry names the very file just written, so it is no orphan (and two entries naming one file yield one orphan, so no duplicate block entries). This is the **only** deletion policy for stale native-skill output — adapters' `cleanup_stale` never deletes inside a skill directory (`agent_harness`'s `skills/<id>/` included), and a file/folder swap inside a skill dir displaces only files this same policy would delete (§10.8) — and a path the previous lockfile does not list is a user file, never an orphan, even inside an engine-owned skill directory (with no readable previous lockfile nothing there is deleted). An entry is **released** — never deleted, no longer owned — when it leaves the repo, names a user/state file, has a `.git` segment, or reaches its file through a symlink (lockfile paths are recorded resolved, so a symlink on the way means the user re-pointed the path since — e.g. moved a skill dir into their own tree and linked it back — and git cannot see through it either), and, unless an adapter is missing, when it lies outside every installed adapter's declared `output_locations` (§10.1), so a hand-edited or merged lockfile can never aim `sync` at `.git/HEAD` or a source file. An orphan inside a declared location whose bytes still hash to its old lockfile entry and that git does not track is deleted, and the directories it leaves empty are pruned bottom-up: never above the declared directory that holds it, the declared directory itself (an emptied skills root such as `.claude/skills/`) only when it is a real directory as spelled — so the target of a symlinked root (`.claude/skills -> ../.agents/skills`) is never removed — never the repo root, never a directory with anything left in it. Directories emptied by `cleanup_stale`, or by a kept leftover the user later deleted, are pruned within the same bounds. If an enabled adapter is missing from the environment, all orphans are kept. "Git does not track it" is asked with case-insensitive literal pathspecs (`:(literal,icase)`; plain pathspecs are case-sensitive even under `core.ignorecase`) and a match is confirmed by NFC spelling (git on macOS reports precomposed names) or file identity (the index's `Demo/x` *is* `demo/x` on a case-insensitive filesystem); when git cannot answer (missing, timeout, "dubious ownership", non-zero exit) inside a git work tree (a `.git` at or above the repo root) every orphan is kept — the check fails closed. Every other orphan stays engine-owned: carried into the lockfile stamped in step 8 (orphans are settled just before stamping). With `commit = false` (the default) kept orphans are also listed in the managed block until they are gone, so leftover output never becomes committable: write the root-anchored paths of everything rendered plus the kept orphans into the managed block of the consumer's `.gitignore`, and ask git (read-only) whether any of them is still tracked and, if so, warn with the exact `git rm -r --cached -- …` to run. With `commit = true` remove the managed block and list the kept orphans on stderr — committed output is normally tracked, so a removed skill's committed files stay until the user deletes them (`git rm`). `.gitignore` is a user file: it is never hashed into the lockfile and never part of the written set. `.claude/settings.json` is a co-owned file of the same kind: its managed hook entries are owned through scoped lockfile entries, but the file itself is never whole-file locked, never listed in the managed block and never flagged as staged output.
 10. **Hooks: pins, notices, approvals** (write mode). With hooks on, write the per-worktree interpreter pin `<git_dir>/playbook-hooks/interpreter` from `sys.executable` (first writer wins; `playbook-hook doctor --repin` rewrites it) and the tool pins in `machine.json` beside it — machine-local files outside the working tree, never committed and never in the lockfile. Print the summary lines and, when the shim's lockfile entry changed, the OpenCode restart notice; then, only on a TTY, ask the trust-on-first-use questions for external handlers and execution stages (§7.1.1). With `[hooks]` absent, print one notice line instead (`hooks available: …`) and change nothing.
@@ -205,7 +205,7 @@ Eval tasks (Section 6.5) are intentionally **not** part of the sync flow. They l
 - **Jinja sparingly.** Variable substitution and conditional file selection only. Avoid `{% if %}` inside rule bodies — makes templates unreadable.
 - **Sentinel headers.** Generated text files carry the sentinel `AUTOGENERATED by coding-agent-playbook — edit in source, run 'playbook sync'` — verbatim the code string `renderer.SENTINEL` (defined in the import-light `coding_agent_playbook._sentinel`). The wording is never changed, since a new wording would make every consumer's generated files drift on upgrade. Markdown output carries it as an HTML comment, `<!-- AUTOGENERATED by coding-agent-playbook — edit in source, run 'playbook sync' -->`, on line 1, or — when the harness needs frontmatter on line 1 (the `agent_harness` adapter, §10.7.3) — on the first body line after the closing `---` fence. Native skill `SKILL.md` files (§10.8) use that second position too, as do OpenCode commands (§10.6.1; gray-matter reads frontmatter only at offset 0) and read-only Claude commands, which open with a `disallowed-tools` frontmatter block (§9.7). Non-markdown output carries it on line 1 in its own comment syntax: `# …` in the Claude Code launcher `.claude/hooks/playbook/launch.sh`, `// …` in the OpenCode shim `.opencode/plugins/playbook-hooks.js`; neither has a shebang. Those two anchored positions are the only ones cleanup recognises (`_sentinel.has_sentinel`, every scanner and hook guard alike), and only as an exact sentinel line (a leading UTF-8 BOM some editors add on save is ignored); the sentinel quoted anywhere else — or inside prose on one of those lines — is user text. **Exceptions** — files that carry no sentinel and whose ownership is recorded only in `.coding-agent-playbook.lock` (§14.4; `agent_harness` scripts also in `.playbook/manifest.toml`, §20.10): byte-copied skill `scripts/` and `references/`, byte-copied external hook scripts (`.coding-agent-playbook/hooks/scripts/<hook-id>/`), and strict-JSON output (JSON has no comment syntax): `guard_config.json` as a whole file, and each managed hook entry of the user's `.claude/settings.json` as one scoped lockfile entry — never markers. Everything inside a skill directory — `SKILL.md` included — is deleted only through the lockfile leftover policy (§4.2 step 9), never by a sentinel scan.
 - **Detector facts are cached.** Written into `.coding-agent-playbook.toml` at init. Refreshed automatically when `pyproject.toml` mtime changes, or manually via `playbook check --refresh`.
-- **`AGENTS.md` is always generated.** Even if no adapters are enabled. It is the lowest-common-denominator output and costs nothing. That includes a repo whose only content is hooks; its Guardrails section exists only when hooks are on.
+- **`AGENTS.md` is always generated.** Even if no adapters are enabled — as long as at least one rule survives `applies_if` filtering or a hook advisory exists (§10.4). It is the lowest-common-denominator output and costs nothing. That includes a repo whose only content is hooks; its Guardrails section exists only when hooks are on.
 - **Generated output is local-only by default.** Rendered files are build products of the installed engine + overlays + `playbook/`, so (with `[output] commit = false`) they are gitignored through an engine-owned managed block and regenerated on each machine by the `post-checkout`/`post-merge` hook — the committed source of truth is the config and `playbook/`, not the rendered copies.
 - **Lifecycle hooks keep these invariants** (v0.20; the full list with its owners is `specs/prK-lifecycle-hooks.md` §I). The bullets above apply to hooks too: hook scripts are byte copies, only `HOOK.md.j2` bodies pass through the sandboxed Jinja environment, and frontmatter is static YAML.
   - **Engine upgrades never inject executable hooks.** An absent `[hooks]` table, or one without `enabled = true`, means zero byte change; `playbook init` asks, and `playbook sync` prints one notice line.
@@ -482,8 +482,8 @@ Everything marked AUTOGENERATED carries the sentinel and is owned by `playbook s
 ```
 Block rules: entries are root-anchored (relative to the playbook repo root, where the `.gitignore` lives), sorted and de-duplicated, one per generated **file** — except that every file inside a generated skill directory (any directory holding a written `SKILL.md`, whatever adapter root it sits under) collapses to one `/<dir>/` entry. Glob metacharacters (`*`, `?`, `[`, `!`, `#`, `\`, leading/trailing spaces) are backslash-escaped so names match literally. Entries are Unicode-NFC-normalised (git on macOS reports precomposed paths and never normalises patterns); a name written in another form (NFD) gets a second entry in that form for Linux checkouts. Leftover output from an earlier sync that is still engine-owned (§4.2 step 9) stays in the block. The block is replaced in place (or appended after one blank line, creating `.gitignore` if needed); every byte outside it — CRLF endings, a missing final newline, a UTF-8 BOM before a first-line block — is preserved, the write is atomic (a uniquely named temp file + `os.replace`, never a fixed name that could clobber a user file), and re-running is a no-op. A start marker without an end marker, an orphan end marker, or a duplicated block is an error naming the file and line; the engine never guesses and never clobbers. With `[output] commit = true` the block is removed and the generated files are committed as before v0.16.
 Note one deliberate non-duplication for OpenCode, and one deliberate duplication:
-- **No `.opencode/rules/` directory.** OpenCode reads `AGENTS.md` natively as its primary rules source, walking up the directory tree. The universal AGENTS.md adapter is OpenCode's rule-delivery path. Writing a separate `.opencode/rules/` would just duplicate content OpenCode is already reading from `AGENTS.md`.
-- **`.opencode/skills/` is written natively.** The OpenCode adapter emits its own skill tree so OpenCode works without the Claude Code adapter enabled. OpenCode also scans `.claude/skills/`; the duplicate is harmless because OpenCode keys discovered skills by name in a map (last wins) and both copies are byte-identical (§10.6).
+- **No `.opencode/rules/` directory.** OpenCode reads `AGENTS.md` natively as its primary rules source, walking up the directory tree (§10.6). The universal AGENTS.md adapter is OpenCode's rule-delivery path. OpenCode never scans a `.opencode/rules/` directory on its own: such files would load only if registered in `opencode.json`'s `instructions` array (user-owned, §10.6.4) or by a plugin, and would then duplicate what OpenCode already reads from `AGENTS.md`.
+- **`.opencode/skills/` is written natively.** The OpenCode adapter emits its own skill tree so OpenCode works without the Claude Code adapter enabled. OpenCode also scans `.claude/skills/`; the duplicate is harmless because OpenCode keeps one discovered skill per name/id (last wins; v1 logs a duplicate warning) and both copies are byte-identical (§10.6).
 The user's own `.opencode/agent/` (custom agents), every other file under `.opencode/plugin/` or `.opencode/plugins/` (the user's own plugins), and `opencode.json` (MCP servers, permissions, model selection) are owned by the user and not touched by the engine. The one exception is the generated shim `.opencode/plugins/playbook-hooks.js`, which the OpenCode adapter owns (sentinel on line 1, whole-file lockfile entry) and writes only when hooks are on; OpenCode auto-discovers it, so `opencode.json` is never edited. See Section 10.6 for the OpenCode adapter's boundaries.
 ## 6. Canonical artifact model
 ### 6.0 File formats: `.md` and `.md.j2`
@@ -515,7 +515,7 @@ The `.j2` suffix is the author's explicit signal to readers: *"this file has log
 **Validation.** `playbook validate` checks `.j2` files for Jinja syntax errors and undefined variables. It does not run Jinja against `.md` files — they're treated as static content. This means renaming a file from `.md` to `.md.j2` triggers a stricter check on next validate.
 ### 6.1 Rules
 A canonical rule is a Markdown file (with or without Jinja templating, per Section 6.0) and YAML frontmatter. The frontmatter declares metadata used by the adapters to render harness-specific output; the body is the rule content.
-For OpenCode, rules are not written to a separate location — OpenCode reads the universal `AGENTS.md` natively (walking up the directory tree), with `CLAUDE.md` accepted as a fallback. The AGENTS.md adapter is OpenCode's rule-delivery path. No dedicated OpenCode rule directory is generated.
+For OpenCode, rules are not written to a separate location — OpenCode reads the universal `AGENTS.md` natively (walking up the directory tree; see §10.6 for the per-version lookup and the v1-only `CLAUDE.md` fallback). The AGENTS.md adapter is OpenCode's rule-delivery path. No dedicated OpenCode rule directory is generated.
 #### 6.1.1 Frontmatter schema
 ```yaml
 id: python-typing                    # required, unique across all overlays
@@ -592,9 +592,9 @@ def parse_response(payload: Dict) -> Optional["Response"]: ...
 ---
 name: Python typing standards
 description: Apply when writing or reviewing Python code with type hints
-globs:
-  - "**/*.py"
 alwaysApply: false
+globs:
+- '**/*.py'
 ---
 # Python typing standards
 Target Python version: 3.12.
@@ -605,14 +605,18 @@ Target Python version: 3.12.
 #### 6.1.4 Rendered output for Claude Code: section of `.claude/CLAUDE.md`
 ```markdown
 ## Python typing standards
+
 *Applies to: `**/*.py`*
+
+# Python typing standards
 Target Python version: 3.12.
-### Always
+## Always
 - All public functions and methods have full type annotations...
-[body]
+[rest of the body, verbatim]
+
 ---
 ```
-The Claude Code adapter concatenates all rules into a single `CLAUDE.md`, prefacing scoped rules with their globs in italics since CLAUDE.md has no native scoping.
+The Claude Code adapter concatenates all rules into a single `CLAUDE.md` (§10.3.1). Each section gets a `## {name}` heading and, for scoped rules, their globs in italics; the italic line is advisory only. The body follows verbatim — its own headings, a leading `# ` title included, are not demoted.
 #### 6.1.5 Rendered output for AGENTS.md: section
 Same shape as CLAUDE.md but in `AGENTS.md`. Identical content; identical headers.
 ### 6.2 Prompts
@@ -1531,17 +1535,25 @@ rendered_plain = renderer.render_artifact(
 The renderer exposes per-format transforms applied after Jinja substitution:
 | Format | Transform |
 | --- | --- |
-| `continue_rule` | Pass-through; frontmatter is already in Continue's shape. |
-| `claude_md_section` | Strip frontmatter, convert title to `##`, append `---` separator. |
+| `continue_rule` | Emit the sentinel on line 1, then a new frontmatter: `name`, `description`, `alwaysApply` (`true` for `scope: always`, whose `globs` are dropped; `false` for `scoped`, plus `globs` when non-empty). Canonical-only keys (`id`, `version`, `scope`, `priority`, `applies_if`, `tags`) are dropped. Then the body. |
+| `claude_md_section` | Drop frontmatter; emit a `## {name}` heading, then `` *Applies to: `g1`, `g2`* `` (each glob in backticks, comma-separated) when the rule is `scope: scoped` with non-empty `globs` (advisory only — nothing gates on it), then the body verbatim (its own headings are not demoted) and a `---` separator. |
 | `agents_md_section` | Same as `claude_md_section`. |
-| `prompt_continue` | Pass-through. If `includes_rules:` is set and the prompt's *template* body has no `{{ rule() }}` calls, append the auto-generated "Reference rules" section. Callers pass `template_body=` to `render_for`, because the rendered body no longer shows the calls Jinja expanded; deciding on it re-appended every inlined rule. |
+| `prompt_continue` | Emit the sentinel on line 1, then a new frontmatter `name`, `description`, `invokable: true`, then the body. If `includes_rules:` is set and the prompt's *template* body has no `{{ rule() }}` calls, append the auto-generated "Reference rules" section. Callers pass `template_body=` to `render_for`, because the rendered body no longer shows the calls Jinja expanded; deciding on it re-appended every inlined rule. |
 | `prompt_claude_command` | Strip frontmatter; prepend a title line if not present. Same `includes_rules:` appendix logic. A read-only prompt (`write_scope: {read_only: true}`, §6.2.1) instead opens with the frontmatter block `---` / `disallowed-tools: Edit Write NotebookEdit` / `---`, so Claude Code removes those tools while the command runs, and carries the sentinel on the first body line (§4.3). Every other prompt renders as before. |
 | `prompt_opencode_command` | Strip canonical frontmatter; emit a new minimal frontmatter with `description:` only (OpenCode's required field), plus `agent: plan` for a read-only prompt (§10.6.1), on line 1, the sentinel as the first body line. Map `input_variables` to `$ARGUMENTS` / `$1` / `$2`. Same `includes_rules:` appendix logic. |
 | `hook_advisory` | A hook's advisory text (§6.6.7): a `### <name>` heading, the rendered hook body, and one italic line saying where the hook is enforced, derived from its declared `events` and `supports` (e.g. `*Enforced by lifecycle hooks on: Claude Code, OpenCode. …*`, or `*Not enforced automatically; apply it yourself.*`). Shared by every advisory target: AGENTS.md's Guardrails section, Continue's `30-guardrail-<id>.md`, CLAUDE.md for hooks Claude Code does not enforce, and `agent_harness`. The default format of `playbook render <hook-id>`. |
 | `hook_claude_settings` | Debug only: the hook's Claude Code registrations as `settings.json` JSON, built from its declared frontmatter alone (no `[hooks]` gating, no consumer config). Never written by sync; a malformed frontmatter is a `HookSchemaError` naming the file. |
 The CLI accepts both the full internal name and a short alias (e.g., `--format continue` is shorthand for `continue_rule`; `--format claude` for `claude_md_section`; `--format opencode` for `prompt_opencode_command`). The full names appear in `playbook render --show-source` output for precision; the short aliases are the daily UX.
 ```python
-def render_for(template_path: str, context: dict, fmt: str) -> str: ...
+def render_for(
+    template_path: Path,
+    body: str,  # already Jinja-rendered
+    fmt: str,
+    *,
+    frontmatter: dict[str, Any],
+    rule_registry: RuleRegistry | None = None,
+    template_body: str | None = None,
+) -> str: ...
 ```
 ## 10. Adapter subsystem
 ### 10.1 Adapter ABC
@@ -1713,30 +1725,36 @@ class ClaudeCodeAdapter(Adapter):
         return SkillWriter(Path(".claude") / "skills").write(skill, repo_root)
 
     def finalize(self, repo_root: Path) -> list[Path]:
-        target = repo_root / ".claude" / "CLAUDE.md"
-        body = self._compose_claude_md(self._buffered_rules)
-        target.write_text(body, encoding="utf-8")
-        return [target]
+        # settings.json first: a file that cannot be merged stops the sync
+        # before this adapter writes anything (§10.3.2).
+        hook_paths = self._compose_settings(repo_root)
+        return [*self._compose_claude_md(repo_root), *hook_paths]
+
+    def _compose_claude_md(self, repo_root: Path) -> list[Path]:
+        heartbeat = self._hooks.heartbeat()
+        if not (self._buffered_rules or heartbeat):
+            return []  # nothing written; cleanup_stale removes a stale engine-owned CLAUDE.md
+        ...  # header + sorted sections (+ heartbeat line), §10.3.1
 ```
 Skills are written natively to `.claude/skills/<id>/` (`SKILL.md` + byte-copied `scripts/` and `references/`) by the shared `SkillWriter`, with `name` = id and the sentinel as the first body line (§6.3). `stale_outputs` (and so `cleanup_stale`) combines two passes: the anchored sentinel scan (`_sentinel.has_sentinel`) over `.claude/commands/` and the launcher directory `.claude/hooks/playbook/`, and the single-file `.claude/CLAUDE.md` branch. It never deletes inside `.claude/skills/`: stale skill output is settled by the lockfile leftover policy (§4.2 step 9, §10.8). `.claude/settings.json` is never stale: managed elements are removed inside `finalize`, and the file itself is never deleted. Hooks are §10.3.2.
 #### 10.3.1 CLAUDE.md composition
 ```markdown
 <!-- AUTOGENERATED by coding-agent-playbook — edit in source, run 'playbook sync' -->
-# {{ project_name }}
-{{ project_description }}
-This file is the project context for Claude Code. Rules are grouped by scope.
-## Always-on rules
-[concatenated bodies of all rules with scope=always, ordered by priority]
-## Scoped rules
-[for each scoped rule:]
-### {rule.name}
-*Applies to: {globs}*
+# CLAUDE.md
+
+This file is generated by coding-agent-playbook.
+
+[for each rule, ordered by (priority, id) — one flat list, no grouping by scope:]
+## {rule.name}
+
+*Applies to: `{glob}`, `{glob}`*        ← only for scope=scoped with non-empty globs; advisory, gates nothing
+
 [body]
+
 ---
-## Available slash commands
-[for each prompt:]
-- `/{prompt.slash}` — {prompt.description}
+[with session-start-playbook-briefing on, the closing heartbeat line (§10.3.2)]
 ```
+Each section is a `claude_md_section` rendering (§9.7): the rules, plus the advisory of every hook Claude Code cannot enforce, in one list sorted by `(priority, id)`. With session-start-playbook-briefing on, one fixed heartbeat line closes the file (§10.3.2). Project name and description reach the file only through rules that render them (e.g. the bundled `00-project-context` rule). Prompts are not listed: they live in `.claude/commands/`. With no rule, no advisory and no heartbeat line, `finalize()` writes no `.claude/CLAUDE.md` and a stale engine-owned one is removed. Claude Code's native path-scoped `.claude/rules/<id>.md` (`paths:` frontmatter) is not used: scoped rules are always loaded in full.
 #### 10.3.2 Hooks: the managed `settings.json` merge, the launcher and the pin (v0.20)
 With `[hooks] enabled = true` and `claude_code` among the `[hooks] adapters` (§7.1.1), the adapter enforces hooks natively (`adapters/_claude_hooks.py`, `adapters/claude_settings.py`, `hook_registrations/claude.py`; design `specs/prK-lifecycle-hooks.md` §C.2). Its `finalize` merges the registrations into the co-owned `.claude/settings.json` **first**, so a file it cannot merge stops the sync before this adapter writes anything.
 
@@ -1772,13 +1790,17 @@ A read-only prompt (`write_scope: {read_only: true}`) renders as a command whose
 - *Concurrent handlers.* Claude Code runs every matching handler in parallel, the user's own included, and the playbook group always sees the original `tool_input`. A user, plugin or skill hook returning `updatedInput` can still change the executed input after the playbook's verdict, a known gap that ordering cannot close.
 - *Incidental reach.* Other harnesses read `.claude/settings.json` too (Cursor, GitHub Copilot CLI, VS Code's opt-in Claude format); the dispatcher goes inert on a payload that is not Claude-shaped. Copilot CLI's `preToolUse` fails closed on errors, so a repo used with Copilot CLI, on Windows above all, must be verified against the real CLI before relying on hooks (OQ-15). Gemini CLI's `gemini hooks migrate --from-claude` copies `timeout` into a milliseconds field: never migrate playbook-managed entries.
 ### 10.4 AGENTS.md adapter
-Always enabled. Produces a single `AGENTS.md` at the repo root. Identical in shape to `CLAUDE.md` but lives at the root because that's where Codex, Cursor, and Copilot look for it.
+Always enabled (the orchestrator adds `agents_md` to every enabled set). Produces a single `AGENTS.md` at the repo root. Identical in shape to `CLAUDE.md` (§10.3.1, title `# AGENTS.md`; rule sections byte-identical) but lives at the root because that's where Codex, Cursor, and Copilot look for it; hook advisories go to a trailing Guardrails section (below) instead of being sorted in with the rules. With no rule left after `applies_if` filtering and no hook advisory, nothing is written and a stale engine-owned `AGENTS.md` is removed.
 ```python
 class AgentsMdAdapter(Adapter):
     name = "agents_md"
-    # Implementation mirrors ClaudeCodeAdapter but writes to repo_root / "AGENTS.md".
-    # Prompts are not separately written; instead they are listed at the bottom
-    # of AGENTS.md as documented slash-equivalents.
+    # Buffers each rule's agents_md_section in write_rule and each on hook's
+    # advisory in write_hook; finalize() composes repo_root / "AGENTS.md":
+    # rules ordered by (priority, id), then the Guardrails section by hook id.
+    # write_prompt and write_skill are no-ops: prompts and skills are not
+    # listed in AGENTS.md. Continue, Claude Code and OpenCode get them from
+    # their own adapters (skills also through shared_skills/); a harness that
+    # only reads AGENTS.md (Codex, Cursor, Copilot) gets rules only.
 ```
 **Guardrails section (v0.20).** With hooks on, `AGENTS.md` ends with a `## Guardrails` section holding the advisory (`hook_advisory`, §9.7) of every on hook, enforced elsewhere or not: Codex, Cursor, Copilot, Gemini and the other AGENTS.md readers only ever see this text, and OpenCode reads its advisories here too. The section opens with one fixed sentence (`These practices are enforced automatically by lifecycle hooks on assistants that support them; on every other assistant, follow them yourself.`), then one `### <hook name>` block per hook, sorted by hook id, each closing with the italic line that names where the hook is enforced. A hook with a blank body (infrastructure such as guard-decision-log) or `[hooks] advisory = false` adds nothing. `AGENTS.md` is always generated, in a hooks-only repo too (§4.3); with no on hook it is byte-identical to v0.19's. `playbook check` labels this channel `advisory`, never `enforced` (§12.4).
 ### 10.5 Adapter registration
@@ -1793,8 +1815,12 @@ agents_md = "coding_agent_playbook.adapters.agents_md_adapter:AgentsMdAdapter"
 agent_harness = "coding_agent_playbook.adapters.agent_harness_adapter:AgentHarnessAdapter"
 ```
 ### 10.6 OpenCode adapter
-OpenCode is structurally close to Claude Code but with one architectural twist: rules are not in a dedicated directory. OpenCode reads `AGENTS.md` at the repo root as its primary rules source, walking up the directory tree, with `CLAUDE.md` accepted as a fallback. This means the AGENTS.md adapter already delivers rules to OpenCode — the OpenCode adapter's job is prompts, skills and, with hooks on, the one generated plugin (§10.6.2). **Hooks need OpenCode ≥ 1.18.29**, the floor of the V1 plugin API the shim targets; `playbook-hook doctor` warns below it (§12.13), and the README states it.
-Skills are written natively to `.opencode/skills/<id>/SKILL.md` (+ `scripts/`, `references/`) through the shared `SkillWriter` (§10.8), so OpenCode no longer depends on the Claude Code adapter being enabled. OpenCode *also* scans `.claude/skills/` (its Claude-compatibility discovery), so with both adapters on the same skill is discovered twice. That is safe: OpenCode stores discovered skills in a `Map` keyed by skill name, last write wins (verified in anomalyco/opencode `packages/core/src/config/plugin/compatibility.ts:53` and `skill.ts:155`), and the two copies are byte-identical.
+OpenCode is structurally close to Claude Code but with one architectural twist: rules are not in a dedicated directory. OpenCode reads `AGENTS.md` as its primary rules source, walking up the directory tree. This means the AGENTS.md adapter already delivers rules to OpenCode — the OpenCode adapter's job is prompts, skills and, with hooks on, the one generated plugin (§10.6.2). **Hooks need OpenCode ≥ 1.18.29**, the floor of the V1 plugin API the shim targets; `playbook-hook doctor` warns below it (§12.13), and the README states it. The lookup differs by version (verified against anomalyco/opencode source; the docs lag it):
+- **v1 (`opencode-ai` ≤ 1.19.x)** walks from the working directory up to the git worktree root and loads *every* `AGENTS.md` on that path, not just the nearest (`packages/opencode/src/session/instruction.ts:122-133`, `packages/core/src/fs-util.ts:154-166` at v1.19.3). At startup `CLAUDE.md` replaces it only when no `AGENTS.md` exists anywhere on that path. Separately, when the agent reads a file, v1 attaches the first `AGENTS.md`/`CLAUDE.md` found in each directory between that file and the working directory (`instruction.ts:171-218`, `tool/read.ts:300`) — so reading anything under `.claude/` also attaches the Claude Code adapter's `.claude/CLAUDE.md`, a second copy of the rules. Neither path uses `CLAUDE.md` when `OPENCODE_DISABLE_CLAUDE_CODE` or `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT` is set.
+- **v2 (`@opencode/cli` 2.x, the `packages/core` rewrite; verified at dev `24c7f7a`)** loads `AGENTS.md` only — no `CLAUDE.md`, at startup or on reads (`packages/core/src/tool/plugin/read.ts:16`). Like v1 it loads *every* `AGENTS.md` on the walk, which goes up to `$HOME` when the working directory is under it and otherwise stops at the project root (`packages/core/src/config/plugin/instruction.ts:36-40,76-86`). Under `$HOME` that includes `AGENTS.md` files above the repo — e.g. the main checkout enclosing a nested `.claude/worktrees/<name>` worktree.
+Either way, unless `OPENCODE_DISABLE_PROJECT_CONFIG` is set, the root `AGENTS.md` is loaded in full on every step. OpenCode's only scoped loading is by directory (the read-time attachment above); it has no glob-scoped rule loading, so a rule's `globs` stay advisory.
+**Known v1 duplicate (with `claude_code` enabled).** The read-time attachment of `.claude/CLAUDE.md` happens only when OpenCode runs at or above the repo root (the walk never leaves the working directory), and only when the read tool reads a *file* under `.claude/` (a directory listing does not trigger it). It costs more than one copy per session: v1 skips an instruction file only if an earlier, uncompacted `read` result in the same session already carried it (`instruction.ts:17-32`), so the copy comes back after every compaction and in every subagent session, and each `@`-mention of a file under `.claude/` re-attaches it, because prompt-time file reads run with no message history (`session/prompt.ts:808-827`). Workaround until the engine stops putting rules in a file OpenCode attaches: set `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1` in the environment OpenCode runs in. It removes `CLAUDE.md` from both the startup and the read-time lookup, but also drops the global `~/.claude/CLAUDE.md` fallback (`effect/runtime-flags.ts:23-30`, `instruction.ts:60-68`). `OPENCODE_DISABLE_CLAUDE_CODE=1` does the same and also disables `.claude/skills/` discovery, which is harmless here because the OpenCode adapter writes `.opencode/skills/`. There is no `opencode.json` equivalent, and the engine sets neither variable (the environment and `opencode.json` belong to the user, §10.6.4). v2 needs no workaround.
+Skills are written natively to `.opencode/skills/<id>/SKILL.md` (+ `scripts/`, `references/`) through the shared `SkillWriter` (§10.8), so OpenCode no longer depends on the Claude Code adapter being enabled. OpenCode *also* scans `.claude/skills/` (its Claude-compatibility discovery), so with both adapters on the same skill is discovered twice. That is safe: OpenCode keeps one skill per key and the last write wins — v1.19.x in a record keyed by frontmatter `name`, logging a "duplicate skill name" warning (`packages/opencode/src/skill/index.ts:125-134`), v2 in a `Map` keyed by skill id, the directory name (`packages/core/src/skill.ts:100-101` at dev `24c7f7a`). The engine writes `name` = id = directory name, and the two copies are byte-identical, so either winner is correct.
 ```python
 class OpenCodeAdapter(Adapter):
     name = "opencode"
