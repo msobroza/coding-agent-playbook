@@ -229,6 +229,27 @@ def test_sync_refuses_a_hard_linked_claude_md(
     assert tree(repo, skip=()) == before
 
 
+def test_sync_refuses_a_hard_linked_rules_file(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The engine-owned rules file hard-linked to another file (sentinel and all)
+    would be truncated through the shared inode: refused like the stub."""
+    assert _sync.execute(repo, git=FakeGitClient()) == 0
+    other = repo / "keep" / "rules-copy.md"
+    other.parent.mkdir()
+    os.link(repo / _RULES_FILE, other)
+    before = tree(repo, skip=())
+    capsys.readouterr()
+
+    assert _sync.execute(repo, git=FakeGitClient()) == 1
+    assert _sync.execute(repo, check=True, git=FakeGitClient()) == 1
+
+    captured = capsys.readouterr()
+    assert f"error: {_RULES_FILE}: it is a hard link" in captured.err
+    assert f"Cannot verify {_RULES_FILE}: it is a hard link" in captured.out
+    assert tree(repo, skip=()) == before
+
+
 def test_sync_refuses_a_directory_at_claude_md(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

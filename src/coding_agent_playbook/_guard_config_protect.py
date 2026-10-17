@@ -27,11 +27,13 @@ Split out of ``guard_config`` for the module-size budget.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any, Final
 
 # The stdlib-only paths module, not the adapter: this sync-time module stays free
 # of the renderer (jinja2, yaml), and no adapter import can cycle back here.
 from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_CODE_COMPOSITES
+from coding_agent_playbook.lockfile import merge_provenance
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, Sequence
@@ -118,50 +120,62 @@ def protected_rows(
     out_root: Path,
     *,
     shared: Collection[str] = (),
+    repo_root: Path | None = None,
 ) -> list[ProtectedRow]:
     """The rows the lockfile will hold for this sync's writes, in lockfile order.
 
     Mirrors ``commands._sync_lockfile.build_lockfile``: one whole-file row per
     written path (``provenance`` is keyed by resolved path) except the paths
     owned element-wise by ``managed`` or co-owned (``shared``), then the scoped
-    rows. Paths are POSIX and relative to ``out_root`` (the repo, or the
-    ``--check`` scratch dir), so both modes render the same bytes.
+    rows. Paths are POSIX and relative to the real repo (``repo_root``, which
+    defaults to ``out_root``): a ``--check`` scratch path is mapped onto the repo
+    first (:func:`_lock_path_via_repo_links`), and paths that land on one repo
+    file merge like the lockfile's (``merge_provenance``: two adapters' skills
+    roots linked to one directory give one ``composite`` row), in the lockfile's
+    path order, so both modes render the same bytes.
 
     Example::
 
         rows = protected_rows(recorder.provenance, recorder.managed, out_root,
-                              shared=(".claude/settings.json",))
+                              shared=(".claude/settings.json",), repo_root=repo)
     """
-    root = out_root.resolve()
+    repo = out_root if repo_root is None else repo_root
     skipped = {entry.path for entry in managed} | set(shared)
-    rows = [
-        ProtectedRow(rel, origin.kind, origin.artifact_id, origin.source)
-        for path, origin in sorted(provenance.items())
-        if (rel := _relative(path, root)) is not None and rel not in skipped
-    ]
+    merged: dict[str, Provenance] = {}
+    for path, origin in provenance.items():
+        rel = _lock_path_via_repo_links(path, out_root, repo)
+        if rel is not None and rel not in skipped:
+            merged[rel] = merge_provenance(merged.get(rel), origin)
+    # PurePosixPath order, not string order: the lockfile sorts resolved Paths.
+    ordered = sorted(merged.items(), key=lambda item: PurePosixPath(item[0]))
+    rows = [ProtectedRow(rel, o.kind, o.artifact_id, o.source) for rel, o in ordered]
     rows.extend(
         ProtectedRow(e.path, e.kind, e.artifact_id, e.source, e.scope, e.sha256) for e in managed
     )
     return rows
 
 
-def adapter_output_dirs(adapters: Mapping[str, Adapter], out_root: Path) -> list[str]:
+def adapter_output_dirs(
+    adapters: Mapping[str, Adapter], out_root: Path, *, repo_root: Path | None = None
+) -> list[str]:
     """Each adapter's sentinel-scan dirs (``x/``) and composite singletons, repo-relative, sorted.
 
     The same directories the adapters' ``stale_outputs`` scan, so a guard and
     ``sync --check`` agree on which sentinel files are engine output; native
-    skill dirs are lockfile-only (main #25) and never listed.
+    skill dirs are lockfile-only (main #25) and never listed. Each directory is
+    mapped onto ``repo_root`` (default ``out_root``) like :func:`protected_rows`,
+    so a symlinked ``.claude/commands`` lists its target in both modes.
 
     Example::
 
         >>> adapter_output_dirs({"continue": ContinueAdapter()}, Path("/r"))  # doctest: +SKIP
         ['.continue/prompts/', '.continue/rules/']
     """
-    root = out_root.resolve()
+    repo = out_root if repo_root is None else repo_root
     found: set[str] = set()
     for name, adapter in adapters.items():
         for directory in adapter._output_directories(out_root):
-            rel = _relative(directory.resolve(), root)
+            rel = _lock_path_via_repo_links(directory, out_root, repo)
             if rel is not None and rel != ".":
                 found.add(f"{rel}/")
         found.update(COMPOSITE_SINGLETONS.get(name, ()))
@@ -233,6 +247,29 @@ def protected_table(inputs: ProtectInputs, hook_artifacts: Sequence[str]) -> dic
         "hook_artifacts": list(hook_artifacts),
         "resource_roots": resource_root_ids(inputs.packages),
     }
+
+
+def _lock_path_via_repo_links(path: Path, out_root: Path, repo_root: Path) -> str | None:
+    """``path`` (rendered under ``out_root``) as the repo-relative POSIX path write mode records.
+
+    The path is mapped onto ``repo_root`` and resolved through the repo's own
+    symlinks, like ``sync._on_real_tree`` followed by ``build_lockfile``'s
+    resolve. Without that a symlinked skills root (``.claude/skills ->
+    ../.agents/skills``) gave ``.agents/skills/…`` rows in write mode but
+    ``.claude/skills/…`` in the ``--check`` scratch, a drift no sync clears.
+    ``None`` when the path lies outside ``out_root`` or resolves out of the repo
+    (the lockfile keeps such a path absolute; the protected table drops it in
+    both modes).
+
+    Example::
+
+        _lock_path_via_repo_links(scratch / ".claude/skills/x/SKILL.md", scratch, repo)
+        # -> ".agents/skills/x/SKILL.md" when the repo links .claude/skills there
+    """
+    inside = _relative(path.resolve(), out_root.resolve())
+    if inside is None:
+        return None
+    return _relative((repo_root / inside).resolve(), repo_root.resolve())
 
 
 def _relative(path: Path, root: Path) -> str | None:

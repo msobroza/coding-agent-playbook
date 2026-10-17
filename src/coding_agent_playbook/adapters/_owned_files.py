@@ -15,6 +15,8 @@ never overwritten (code review of claude/prk-hooks-impl, findings #1 and #2):
 - anything that is not a regular file (a directory, a FIFO, a socket);
 - a symlink at the path, or at any directory between it and the repo root:
   writing through it could land outside the repo or in the user's own file;
+- a hard link (``st_nlink > 1``), sentinel-tagged or not: writing in place
+  truncates the inode every other name of it shares;
 - a non-directory where a parent directory belongs.
 
 ``playbook sync`` runs :func:`check_engine_owned` on the real repo for every
@@ -45,8 +47,7 @@ __all__ = [
     "write_engine_owned",
 ]
 
-#: Why the entry at the path itself is refused (the first two by both checks
-#: below, the hard link by :func:`check_unlinked` alone).
+#: Why the entry at the path itself is refused, by both checks below.
 _LINK_REASON = "it is a symbolic link, and the engine never writes through one"
 _NOT_REGULAR_REASON = "it is not a regular file"
 _HARD_LINK_REASON = (
@@ -169,7 +170,11 @@ def _parent_refusal(path: Path, repo_root: Path) -> str | None:
 
 
 def _file_refusal(path: Path) -> str | None:
-    """Why the entry at ``path`` itself is the user's, else None (absent or sentinel-tagged)."""
+    """Why the entry at ``path`` itself is the user's, else None (absent, or unshared and tagged).
+
+    The ownership reason comes first: an untagged file is the user's whether
+    or not it is also hard-linked elsewhere.
+    """
     if path.is_symlink():
         return _LINK_REASON
     if not path.exists():
@@ -178,7 +183,7 @@ def _file_refusal(path: Path) -> str | None:
         return _NOT_REGULAR_REASON
     if not file_has_sentinel(path):
         return "it exists without the playbook sentinel on line 1, so it is yours"
-    return None
+    return _hard_link_refusal(path)
 
 
 def _unlinked_file_refusal(path: Path) -> str | None:
@@ -189,6 +194,9 @@ def _unlinked_file_refusal(path: Path) -> str | None:
         return None
     if not path.is_file():
         return _NOT_REGULAR_REASON
-    if path.stat().st_nlink > 1:
-        return _HARD_LINK_REASON
-    return None
+    return _hard_link_refusal(path)
+
+
+def _hard_link_refusal(path: Path) -> str | None:
+    """:data:`_HARD_LINK_REASON` when the regular file at ``path`` has another name, else None."""
+    return _HARD_LINK_REASON if path.stat().st_nlink > 1 else None

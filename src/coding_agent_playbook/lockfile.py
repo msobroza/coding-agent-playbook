@@ -66,6 +66,7 @@ __all__ = [
     "compute_hash",
     "drift_entries",
     "managed_drift",
+    "merge_provenance",
     "parse_json_document",
 ]
 
@@ -141,6 +142,27 @@ class Provenance:
             raise ValueError(
                 f"unknown provenance kind {self.kind!r}; expected one of {PROVENANCE_KINDS}"
             )
+
+
+def merge_provenance(previous: Provenance | None, new: Provenance) -> Provenance:
+    """The provenance of one path once ``new`` is recorded for it after ``previous``.
+
+    The single rule for a path two writers share (§P P4): the same provenance
+    twice is kept; two different ones make it ``kind="composite"``, the adapter
+    surviving only when both agree. ``ProvenanceRecorder`` applies it per
+    resolved path, and the ``guard_config.json`` ``protected`` table per
+    repo-mapped path, so both name a shared skill file the same way.
+
+    Example::
+
+        merge_provenance(Provenance(kind="skill", artifact_id="x", adapter="claude_code"),
+                         Provenance(kind="skill", artifact_id="x", adapter="opencode")).kind
+        # -> "composite"
+    """
+    if previous is None or previous == new:
+        return new
+    adapter = previous.adapter if previous.adapter == new.adapter else ""
+    return Provenance(kind="composite", adapter=adapter)
 
 
 @dataclass

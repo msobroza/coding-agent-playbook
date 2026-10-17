@@ -4,9 +4,9 @@ The OpenCode shim ``.opencode/plugins/playbook-hooks.js`` and the Claude Code
 launcher ``.claude/hooks/playbook/launch.sh`` are written whole at fixed
 paths. Before any adapter writes, sync checks each one it is about to write on
 the real repo (like the ``settings.json`` preflight): a same-named file without
-the sentinel line, or a symlink at the path or at a directory between it and
-the repo root, stops every mode with exit 1 naming the file, and nothing is
-written. An engine-owned prior file (sentinel on line 1) is rewritten as usual.
+the sentinel line, a hard link (even sentinel-tagged), or a symlink at the path
+or at a directory between it and the repo root, stops every mode with exit 1
+naming the file, and nothing is written. An engine-owned prior file (sentinel on line 1) is rewritten as usual.
 """
 
 from __future__ import annotations
@@ -123,6 +123,32 @@ def test_write_mode_refuses_a_symlinked_parent_directory(
 
     assert f"{owned.linked_dir} is a symbolic link" in capsys.readouterr().err
     assert list(outside.rglob("*")) == []
+    assert tree(repo, skip=()) == before
+
+
+@_BOTH
+def test_every_mode_refuses_a_hard_linked_owned_file(
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    capsys: pytest.CaptureFixture[str],
+    owned: OwnedFile,
+) -> None:
+    """A sentinel-tagged file hard-linked at the path: writing it whole would
+    truncate the other name too, so every mode stops before any write."""
+    repo = _repo(tmp_path, make_synthetic_repo)
+    tagged = f"{sentinel_line(owned.style)}\nmine\n"
+    other = _place(repo / "keep" / "other", tagged)
+    (repo / owned.rel).parent.mkdir(parents=True, exist_ok=True)
+    os.link(other, repo / owned.rel)
+    before = tree(repo, skip=())
+
+    assert _sync_repo(repo, tmp_path) == 1
+    assert f"error: {owned.rel}: it is a hard link" in capsys.readouterr().err
+    staged = FakeGitClient(staged=["src/app.py"])
+    assert _sync_repo(repo, tmp_path, check=True) == 1
+    assert _sync_repo(repo, tmp_path, git=staged, check_staged=True) == 1
+    assert capsys.readouterr().out.count(f"Cannot verify {owned.rel}: it is a hard link") == 2
+    assert other.read_text(encoding="utf-8") == tagged
     assert tree(repo, skip=()) == before
 
 

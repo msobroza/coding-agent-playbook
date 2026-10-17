@@ -231,9 +231,14 @@ def _protect_inputs(
 ) -> ProtectInputs:
     """The ``protected`` table's inputs: what the adapters wrote, where they scan, the layers."""
     rows = protected_rows(
-        recorder.provenance, recorder.managed, out_root, shared=shared_outputs(ctx.adapters)
+        recorder.provenance,
+        recorder.managed,
+        out_root,
+        shared=shared_outputs(ctx.adapters),
+        repo_root=ctx.repo_root,
     )
-    return ProtectInputs(rows, adapter_output_dirs(ctx.adapters, out_root), layer_packages(ctx))
+    dirs = adapter_output_dirs(ctx.adapters, out_root, repo_root=ctx.repo_root)
+    return ProtectInputs(rows, dirs, layer_packages(ctx))
 
 
 def _detect_inputs(ctx: SyncContext, hooks: SyncHooks) -> DetectInputs:
@@ -296,8 +301,9 @@ def check_runtime_outputs_owned(
     the on hooks (``planned_runtime_outputs``); each is checked on the real repo
     in every mode (``--check`` renders into an empty scratch dir, where nothing
     could be in the way). Called before any adapter writes, like
-    :func:`check_settings_readable`, so a user's same-named file or a symlink
-    on the way stops the sync with nothing written (review findings #1, #2).
+    :func:`check_settings_readable`, so a user's same-named file, a hard link
+    or a symlink on the way stops the sync with nothing written (review
+    findings #1, #2).
     With ``claude_code`` on, its two rule files are checked too, hooks or not
     (:func:`~.claude_code_adapter.check_rule_files_writable`): the rules file
     sits in ``.claude/rules/``, a directory of the user's own files, and the

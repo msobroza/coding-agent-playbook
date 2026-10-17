@@ -220,6 +220,34 @@ def test_check_unlinked_refuses_a_link_at_or_on_the_way_to_the_path(
     assert outside.read_text(encoding="utf-8") == _USER
 
 
+def test_check_engine_owned_refuses_a_hard_linked_tagged_file(tmp_path: Path) -> None:
+    """A sentinel-tagged file hard-linked at an owned path shares its inode with
+    another file, which a whole-file write would truncate in place. Refused like
+    the ``.claude/CLAUDE.md`` stub (``check_unlinked``)."""
+    shared = _write(tmp_path / "elsewhere.js", _ENGINE_OLD)
+    (tmp_path / _REL).parent.mkdir(parents=True)
+    os.link(shared, tmp_path / _REL)
+
+    with pytest.raises(UserOwnedFileError) as caught:
+        write_engine_owned(tmp_path / _REL, tmp_path, _NEW)
+
+    assert caught.value.path == _REL
+    assert caught.value.reason.startswith("it is a hard link")
+    assert shared.read_text(encoding="utf-8") == _ENGINE_OLD
+
+
+def test_check_engine_owned_still_names_an_untagged_hard_link_as_yours(tmp_path: Path) -> None:
+    """The ownership reason wins when the file is not the engine's in the first place."""
+    shared = _write(tmp_path / "elsewhere.js", _USER)
+    (tmp_path / _REL).parent.mkdir(parents=True)
+    os.link(shared, tmp_path / _REL)
+
+    with pytest.raises(UserOwnedFileError) as caught:
+        check_engine_owned(tmp_path / _REL, tmp_path)
+
+    assert "so it is yours" in caught.value.reason
+
+
 def test_check_unlinked_refuses_a_hard_link(tmp_path: Path) -> None:
     """Final review: a hard-linked ``.claude/CLAUDE.md`` (the Windows stand-in for a
     symlink) is a regular file, yet ``write_text`` truncates the shared inode, so
