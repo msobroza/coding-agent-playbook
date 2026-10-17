@@ -29,6 +29,7 @@ from tests.fakes import record_opens
 from tests.hook_samples import resolved_hook
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from coding_agent_playbook._typing import Prompt, Rule
@@ -217,6 +218,44 @@ def test_check_unlinked_refuses_a_link_at_or_on_the_way_to_the_path(
     assert caught.value.path == _REL
     assert caught.value.reason.startswith(reason)
     assert outside.read_text(encoding="utf-8") == _USER
+
+
+def test_check_unlinked_refuses_a_hard_link(tmp_path: Path) -> None:
+    """Final review: a hard-linked ``.claude/CLAUDE.md`` (the Windows stand-in for a
+    symlink) is a regular file, yet ``write_text`` truncates the shared inode, so
+    writing the stub cut ``AGENTS.md`` to four lines. Refused like a symlink."""
+    shared = _write(tmp_path / "AGENTS.md", _USER)
+    (tmp_path / _REL).parent.mkdir(parents=True)
+    os.link(shared, tmp_path / _REL)
+
+    with pytest.raises(UserOwnedFileError) as caught:
+        check_unlinked(tmp_path / _REL, tmp_path)
+
+    assert caught.value.path == _REL
+    assert caught.value.reason.startswith("it is a hard link")
+    assert shared.read_text(encoding="utf-8") == _USER
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        pytest.param(lambda path: path.mkdir(), id="directory"),
+        pytest.param(lambda path: os.mkfifo(path), id="fifo", marks=posix_only),
+    ],
+)
+def test_check_unlinked_refuses_what_is_not_a_regular_file(
+    tmp_path: Path, make: Callable[[Path], None]
+) -> None:
+    """Final review: a directory there crashed the stub write after AGENTS.md was
+    written (IsADirectoryError), and a FIFO hung sync and the git hooks running it."""
+    target = tmp_path / _REL
+    target.parent.mkdir(parents=True)
+    make(target)
+
+    with pytest.raises(UserOwnedFileError) as caught:
+        check_unlinked(target, tmp_path)
+
+    assert caught.value.reason == "it is not a regular file"
 
 
 def test_check_alone_writes_nothing(tmp_path: Path) -> None:

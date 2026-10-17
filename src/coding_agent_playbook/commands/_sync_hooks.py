@@ -301,8 +301,8 @@ def check_runtime_outputs_owned(
     With ``claude_code`` on, its two rule files are checked too, hooks or not
     (:func:`~.claude_code_adapter.check_rule_files_writable`): the rules file
     sits in ``.claude/rules/``, a directory of the user's own files, and the
-    stub is never written through a symlink (SPEC §10.3.1). Conservatively,
-    even when no rule would be written there.
+    stub is never written through a symlink or a hard link (SPEC §10.3.1).
+    Conservatively, even when no rule would be written there.
 
     Example: ``check_runtime_outputs_owned(ctx.repo_root, adapters, rendered.hooks)``.
     """

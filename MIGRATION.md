@@ -292,7 +292,9 @@ becomes a four-line generated stub with no rules in it. Claude Code loads a
 `.claude/rules/` file without `paths:` frontmatter natively, at launch and with
 the same priority as `.claude/CLAUDE.md`, so Claude sees the same rules as
 before; the sections are unchanged, and the rule sections are still
-byte-identical to `AGENTS.md`'s (SPEC §10.3.1).
+byte-identical to `AGENTS.md`'s (SPEC §10.3.1), up to line endings: both
+Claude Code files are now written LF on every platform, while `AGENTS.md` stays
+CRLF on Windows.
 
 **Why.** OpenCode v1, run at or above the repo root, attaches
 `.claude/CLAUDE.md` the first time its read tool opens a file under `.claude/` in
@@ -330,11 +332,15 @@ What the next `playbook sync` (or the post-checkout / post-merge hook) does:
   (`--check` prints `Cannot verify …`). Rename your file, or replace the link
   with a real directory, then re-run `playbook sync`.
 - `.claude/CLAUDE.md` is still overwritten whatever regular file is there, but
-  never through a symlink: a link such as `.claude/CLAUDE.md -> ../AGENTS.md`
-  would turn `AGENTS.md` into the stub for every other tool, so sync exits 1
-  before writing anything, with `error: .claude/CLAUDE.md: it is a symbolic
-  link, …`. Delete the link (Claude Code reads the rules file instead), then
-  re-run `playbook sync`.
+  never through a symlink or a hard link: a link such as
+  `.claude/CLAUDE.md -> ../AGENTS.md`, or the same file hard-linked to
+  `AGENTS.md` (common on Windows), would turn `AGENTS.md` into the stub for
+  every other tool, so sync exits 1 before writing anything, with
+  `error: .claude/CLAUDE.md: it is a symbolic link, …` (or `it is a hard link
+  shared with another file, …`). A directory or other non-regular file there is
+  refused the same way (`it is not a regular file`). Delete the link, or move
+  what is there (Claude Code reads the rules file instead), then re-run
+  `playbook sync`.
 - Every other `.claude/rules/` file stays yours: the engine owns exactly
   `coding-agent-playbook.md` there and never reads, rewrites, gitignores or
   deletes any other file.

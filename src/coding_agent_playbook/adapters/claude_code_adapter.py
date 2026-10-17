@@ -96,10 +96,12 @@ def check_rule_files_writable(repo_root: Path) -> None:
     The rules file must be engine-owned (nothing there or a sentinel-tagged
     file, no symlink on the way): ``.claude/rules/`` holds the user's own files.
     The stub keeps its plain overwrite of a regular file, but never through a
-    symlink: the common ``.claude/CLAUDE.md -> ../AGENTS.md`` link turned
-    ``AGENTS.md`` into the 4-line stub for every other tool (review round 2).
-    ``playbook sync`` calls this on the real repo before any adapter writes;
-    :meth:`ClaudeCodeAdapter.finalize` calls it again before writing either file.
+    symlink or a hard link, and never over a directory or a FIFO: the common
+    ``.claude/CLAUDE.md -> ../AGENTS.md`` link, or the same file hard-linked,
+    turned ``AGENTS.md`` into the 4-line stub for every other tool (review
+    round 2, final review). ``playbook sync`` calls this on the real repo before
+    any adapter writes; :meth:`ClaudeCodeAdapter.finalize` calls it again
+    before writing either file.
 
     Example: ``check_rule_files_writable(ctx.repo_root)``.
     """
@@ -108,9 +110,13 @@ def check_rule_files_writable(repo_root: Path) -> None:
 
 
 def _write_output(path: Path, text: str) -> Path:
-    """Write ``text`` to ``path`` (creating its parent) and return ``path``."""
+    """Write ``text`` to ``path`` as UTF-8 LF bytes (creating its parent) and return ``path``.
+
+    Bytes, not text, like the rules file (:func:`~._owned_files.write_engine_owned`):
+    ``write_text`` would write the stub CRLF on Windows (final review).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    path.write_bytes(text.encode("utf-8"))
     return path
 
 
@@ -276,7 +282,8 @@ class ClaudeCodeAdapter(Adapter):
         checked (:func:`check_rule_files_writable`) before either is written, so
         a refusal (:class:`~._owned_files.UserOwnedFileError`) leaves neither
         half-written: the rules file only over nothing or a sentinel-tagged
-        file, the stub over any regular file, and neither through a symlink.
+        file, the stub over any regular file that is not a hard link, and
+        neither through a symlink.
         """
         body = self._rules_body()
         if body is None:

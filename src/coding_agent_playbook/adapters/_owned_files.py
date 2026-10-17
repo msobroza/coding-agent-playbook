@@ -23,7 +23,8 @@ rules file whenever ``claude_code`` is on) before any adapter writes, so a
 refusal exits 1 with nothing written; the adapters write through
 :func:`write_engine_owned`, which checks again. The ``.claude/CLAUDE.md`` stub
 is overwritten whole whatever regular file it holds, but :func:`check_unlinked`
-refuses it too when a symlink is on the way.
+refuses it too when a symlink is on the way, when it is a hard link, or when
+it is not a regular file.
 """
 
 from __future__ import annotations
@@ -44,8 +45,13 @@ __all__ = [
     "write_engine_owned",
 ]
 
-#: Why a symlink at the path itself is refused (shared by both checks below).
+#: Why the entry at the path itself is refused (the first two by both checks
+#: below, the hard link by :func:`check_unlinked` alone).
 _LINK_REASON = "it is a symbolic link, and the engine never writes through one"
+_NOT_REGULAR_REASON = "it is not a regular file"
+_HARD_LINK_REASON = (
+    "it is a hard link shared with another file, and the engine never writes through one"
+)
 
 
 class UserOwnedFileError(Exception):
@@ -87,19 +93,21 @@ def check_engine_owned(path: Path, repo_root: Path) -> None:
 
 
 def check_unlinked(path: Path, repo_root: Path) -> None:
-    """Raise :class:`UserOwnedFileError` if a write to ``path`` would go through a symlink.
+    """Raise :class:`UserOwnedFileError` unless ``path`` is absent or an unshared regular file.
 
     For a file the engine overwrites whatever regular file it holds (the
-    ``.claude/CLAUDE.md`` stub, SPEC §10.3.1), yet never through a link at it or
-    at a directory on the way: ``.claude/CLAUDE.md -> ../AGENTS.md`` would turn
-    ``AGENTS.md`` into the stub (review round 2). The same parent walk as
-    :func:`check_engine_owned`, without its sentinel test.
+    ``.claude/CLAUDE.md`` stub, SPEC §10.3.1), yet never through a link: a
+    symlink at it or at a directory on the way, or a hard link. Writing in place
+    truncates the shared inode, so ``.claude/CLAUDE.md -> ../AGENTS.md`` (review
+    round 2) or the same file hard-linked to ``AGENTS.md`` (final review; the
+    usual stand-in on Windows, where file symlinks need developer mode) turned
+    ``AGENTS.md`` into the stub. A directory or a FIFO there is refused too: it
+    crashed or hung the stub write after other adapters had written. The same
+    parent walk as :func:`check_engine_owned`, without its sentinel test.
 
     Example: ``check_unlinked(repo / ".claude/CLAUDE.md", repo)``.
     """
-    reason = _parent_refusal(path, repo_root)
-    if reason is None and path.is_symlink():
-        reason = _LINK_REASON
+    reason = _parent_refusal(path, repo_root) or _unlinked_file_refusal(path)
     if reason is not None:
         raise UserOwnedFileError(_relative_posix(path, repo_root), reason)
 
@@ -167,7 +175,20 @@ def _file_refusal(path: Path) -> str | None:
     if not path.exists():
         return None
     if not path.is_file():
-        return "it is not a regular file"
+        return _NOT_REGULAR_REASON
     if not file_has_sentinel(path):
         return "it exists without the playbook sentinel on line 1, so it is yours"
+    return None
+
+
+def _unlinked_file_refusal(path: Path) -> str | None:
+    """Why the entry at ``path`` may not be overwritten in place, else None (absent or unshared)."""
+    if path.is_symlink():
+        return _LINK_REASON
+    if not path.exists():
+        return None
+    if not path.is_file():
+        return _NOT_REGULAR_REASON
+    if path.stat().st_nlink > 1:
+        return _HARD_LINK_REASON
     return None

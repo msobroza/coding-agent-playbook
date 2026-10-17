@@ -16,6 +16,7 @@ would load the rules twice.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -119,6 +120,32 @@ def test_claude_md_is_the_rule_free_header_stub(tmp_path: Path) -> None:
     assert "Typing rule" not in content
     assert "Use type hints everywhere." not in content
     assert "rules/" not in content
+
+
+def _windows_write_text(
+    self: Path,
+    data: str,
+    encoding: str | None = None,
+    errors: str | None = None,
+    newline: str | None = None,
+) -> int:
+    """``Path.write_text`` as it behaves on Windows: text mode turns each LF into CRLF."""
+    text = data if newline in ("", "\n") else data.replace("\n", "\r\n")
+    return self.write_bytes(text.encode(encoding or "utf-8", errors or "strict"))
+
+
+def test_both_files_are_lf_even_where_text_mode_writes_crlf(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression (final review): the stub went through ``write_text`` (CRLF on
+    Windows) while the rules file is written as bytes (LF), so the two files of
+    one adapter differed in line endings, and the stub's hash from POSIX's."""
+    monkeypatch.setattr(Path, "write_text", _windows_write_text)
+
+    _finalize(tmp_path, _make_rule())
+
+    assert (tmp_path / _CLAUDE_MD).read_bytes() == _STUB.encode("utf-8")
+    assert b"\r" not in (tmp_path / _RULES_FILE).read_bytes()
 
 
 def test_rules_file_header_has_no_frontmatter(tmp_path: Path) -> None:
@@ -231,6 +258,22 @@ def test_finalize_refuses_a_symlinked_stub(tmp_path: Path) -> None:
 
     assert agents.read_text(encoding="utf-8") == agents_text
     assert (tmp_path / _CLAUDE_MD).is_symlink()
+    assert not (tmp_path / _RULES_FILE).exists()
+
+
+def test_finalize_refuses_a_hard_linked_stub(tmp_path: Path) -> None:
+    """Regression (final review): a ``.claude/CLAUDE.md`` hard-linked to AGENTS.md
+    is a regular file, and the stub's overwrite truncated the shared inode, so
+    AGENTS.md became the 4-line stub. Refused like a symlink: nothing written."""
+    agents_text = "# AGENTS.md\n\nAll the rules.\n"
+    agents = _write(tmp_path, Path("AGENTS.md"), agents_text)
+    (tmp_path / ".claude").mkdir()
+    os.link(agents, tmp_path / _CLAUDE_MD)
+
+    with pytest.raises(UserOwnedFileError, match=r"^\.claude/CLAUDE\.md: it is a hard link"):
+        _finalize(tmp_path, _make_rule())
+
+    assert agents.read_text(encoding="utf-8") == agents_text
     assert not (tmp_path / _RULES_FILE).exists()
 
 

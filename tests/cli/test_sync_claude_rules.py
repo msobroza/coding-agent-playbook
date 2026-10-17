@@ -9,12 +9,13 @@ a second copy of the rules) and no OpenCode release checked (v1.19.3, v2 dev
 layout: both files are written, locked and gitignored; a pre-upgrade
 ``.claude/CLAUDE.md`` (full rules) is rewritten to the stub; other
 ``.claude/rules/`` files stay the user's, and so does a same-named file without
-the sentinel, a symlinked ``.claude/rules`` or a symlinked ``.claude/CLAUDE.md``
-(refused, nothing written).
+the sentinel, a symlinked ``.claude/rules`` or a symlinked, hard-linked or
+non-regular ``.claude/CLAUDE.md`` (refused, nothing written).
 """
 
 from __future__ import annotations
 
+import os
 import sys
 from typing import TYPE_CHECKING
 
@@ -202,6 +203,44 @@ def test_sync_refuses_a_symlinked_claude_md(repo: Path, capsys: pytest.CaptureFi
     assert f"error: {_CLAUDE_MD}: it is a symbolic link" in captured.err
     assert f"Cannot verify {_CLAUDE_MD}: it is a symbolic link" in captured.out
     assert _RULE_TEXT in _read(repo, "AGENTS.md")
+    assert tree(repo, skip=()) == before
+
+
+def test_sync_refuses_a_hard_linked_claude_md(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression (final review): a ``.claude/CLAUDE.md`` hard-linked to AGENTS.md
+    (the usual stand-in for a file symlink on Windows) passed the symlink check,
+    so sync exited 0 with AGENTS.md cut to the stub through the shared inode and
+    ``--check`` reported drift no sync could clear. Refused, nothing written."""
+    assert _sync.execute(repo, git=FakeGitClient()) == 0
+    (repo / _CLAUDE_MD).unlink()
+    os.link(repo / "AGENTS.md", repo / _CLAUDE_MD)
+    before = tree(repo, skip=())
+    capsys.readouterr()
+
+    assert _sync.execute(repo, git=FakeGitClient()) == 1
+    assert _sync.execute(repo, check=True, git=FakeGitClient()) == 1
+
+    captured = capsys.readouterr()
+    assert f"error: {_CLAUDE_MD}: it is a hard link" in captured.err
+    assert f"Cannot verify {_CLAUDE_MD}: it is a hard link" in captured.out
+    assert _RULE_TEXT in _read(repo, "AGENTS.md")
+    assert tree(repo, skip=()) == before
+
+
+def test_sync_refuses_a_directory_at_claude_md(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression (final review): a directory at ``.claude/CLAUDE.md`` passed the
+    pre-check, so sync wrote AGENTS.md and then died with an IsADirectoryError
+    traceback. Refused before any adapter writes, with exit 1."""
+    (repo / _CLAUDE_MD).mkdir(parents=True)
+    before = tree(repo, skip=())
+
+    assert _sync.execute(repo, git=FakeGitClient()) == 1
+
+    assert f"error: {_CLAUDE_MD}: it is not a regular file" in capsys.readouterr().err
     assert tree(repo, skip=()) == before
 
 
