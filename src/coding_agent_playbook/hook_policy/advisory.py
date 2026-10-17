@@ -1,7 +1,8 @@
 """The advisory projection of a hook body (specs/prK-lifecycle-hooks.md §A.8, §C.4.1).
 
 Every advisory target (AGENTS.md's Guardrails section, Continue's
-``30-guardrail-<id>.md``, CLAUDE.md for hooks Claude Code cannot enforce) gets
+``30-guardrail-<id>.md``, the Claude Code rules file
+``.claude/rules/coding-agent-playbook.md`` for hooks Claude Code cannot enforce) gets
 the same text: the rendered body plus **one** enforcement line, so advice is
 never mistaken for enforcement (QC-10).
 

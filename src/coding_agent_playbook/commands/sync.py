@@ -40,10 +40,12 @@ adapters (each told the real repo and the prior lockfile) plus the sync-level
 ``guard_config.json`` and script copies. ``.claude/settings.json`` is a shared
 output: merged against the real file even into the ``--check`` scratch dir,
 and never whole-file locked, gitignored or flagged as staged output. The
-launcher and the OpenCode shim are written whole, so every mode first refuses
-(exit 1, naming the file) a user file or a symlink at either path it is about
-to write. Write mode then pins the interpreter, says when OpenCode must
-restart (the shim's lock entry changed), and asks the TTY-only trust questions.
+launcher, the OpenCode shim and (hooks or not) the Claude Code rules file are
+written whole, so every mode first refuses (exit 1, naming the file) a user
+file or a symlink at a path it is about to write, and a symlinked or
+hard-linked ``.claude/CLAUDE.md`` stub. Write mode then pins the interpreter,
+says when OpenCode must restart (the shim's lock entry changed), and asks the
+TTY-only trust questions.
 """
 
 from __future__ import annotations
@@ -117,9 +119,11 @@ def _render_into(
     ``settings.json`` — are read from the real repo through ``ctx``; only the
     writes go to ``output_root``. So ``--check`` modes render into an empty
     scratch dir without copying the working tree. Every template runs, and a
-    ``settings.json`` the merge would refuse or a user file where a runtime
-    output (the launcher, the OpenCode shim) goes is rejected, before the
-    first write. Returns the written paths with their provenance, and the hooks.
+    ``settings.json`` the merge would refuse, a user file where an
+    engine-owned file (the launcher, the OpenCode shim, the Claude Code rules
+    file) goes, or a symlinked or hard-linked ``.claude/CLAUDE.md`` is
+    rejected, before the first write. Returns the written paths with their
+    provenance, and the hooks.
     """
     rendered = render_artifacts(ctx)
     _sync_hooks.check_settings_readable(ctx, rendered.hooks, prior)
@@ -186,7 +190,8 @@ def execute(
     fakes. Returns 1, having written nothing, on any validate finding, when a
     template is rejected by the Jinja sandbox, when ``settings.json`` is
     not valid JSON, or when a user file (or a symlink) holds the path of the
-    launcher or the OpenCode shim.
+    launcher, the OpenCode shim or the Claude Code rules file, or when
+    ``.claude/CLAUDE.md`` is a symlink, a hard link or not a regular file.
 
     Example::
 

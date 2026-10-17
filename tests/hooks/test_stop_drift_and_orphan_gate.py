@@ -146,6 +146,20 @@ def test_sentinel_command_missing_from_lockfile_is_orphan(repo: PackRepo) -> Non
     assert result.lines == (f'Playbook drift: ".claude/commands/old.md" (orphan). {ADVICE}',)
 
 
+def test_sentinel_claude_rules_file_missing_from_lockfile_is_orphan(repo: PackRepo) -> None:
+    """The rules file is a composite singleton (SPEC §10.3.1); the rest of ``.claude/rules/``
+    is the user's and is never scanned, sentinel or not."""
+    repo.write(".claude/rules/coding-agent-playbook.md", _generated())
+    repo.write(".claude/rules/team.md", _generated())
+    stage = _stage(repo)
+
+    result = stage.run(_plan(stage, "generated"), stage.ctx.deadline)
+
+    assert result.lines == (
+        f'Playbook drift: ".claude/rules/coding-agent-playbook.md" (orphan). {ADVICE}',
+    )
+
+
 def test_sentinel_skill_md_not_in_lockfile_is_not_orphan(repo: PackRepo) -> None:
     """Parity with the #25 leftover policy: ``.claude/skills`` is lockfile-only, never scanned."""
     repo.write(".claude/skills/old-skill/SKILL.md", _generated())

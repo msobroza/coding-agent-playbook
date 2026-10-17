@@ -1,9 +1,9 @@
 """Cross-adapter cleanup contract for the anchored sentinel (prK §P3).
 
 Every built-in sentinel scanner (the ABC's directory scan used by Continue and
-OpenCode, Claude Code's ``.claude/commands`` + ``CLAUDE.md`` scans, AGENTS.md's
-single-file check and the agent_harness tree scan) recognises an
-engine-generated file by ``_sentinel.has_sentinel``: a sentinel line on line 1,
+OpenCode, Claude Code's ``.claude/commands`` scan + ``CLAUDE.md`` and rules-file
+checks, AGENTS.md's single-file check and the agent_harness tree scan)
+recognises an engine-generated file by ``_sentinel.has_sentinel``: a sentinel line on line 1,
 or on the first body line after a leading YAML frontmatter block. A sentinel
 anywhere else is user prose and never makes a file deletable. ``stale_outputs``
 is the read-only twin ``sync --check`` uses: it reports exactly what
@@ -46,6 +46,7 @@ _QUOTED_SENTINEL_TEXT = f"{_FRONTMATTER}# Notes\n\nOur header reads:\n{sentinel_
 _SCANNED_OUTPUTS: list[tuple[Callable[[], Adapter], str]] = [
     (ClaudeCodeAdapter, ".claude/commands/review.md"),
     (ClaudeCodeAdapter, ".claude/CLAUDE.md"),
+    (ClaudeCodeAdapter, ".claude/rules/coding-agent-playbook.md"),
     (AgentHarnessAdapter, "references/playbook-notes.md"),
     (AgentHarnessAdapter, "rules/50-review.md"),
     (AgentHarnessAdapter, "HARNESS.md"),

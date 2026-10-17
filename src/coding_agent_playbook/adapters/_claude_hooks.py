@@ -9,7 +9,8 @@ opt-in ``permissions.allow`` remediation strings, the native deny rows of the
 the same pointer are concatenated) and of the §E.5 overlay guards an overlay
 activated (``_overlay_native``), and the committed launcher — written whole, so a
 user file at its path or a symlink on the way is refused (``_owned_files``).
-Hooks Claude Code cannot enforce go back to the adapter's ``CLAUDE.md`` path.
+Hooks Claude Code cannot enforce go back to the adapter's rules-file path
+(``.claude/rules/coding-agent-playbook.md``, SPEC §10.3.1).
 """
 
 from __future__ import annotations
@@ -58,7 +59,9 @@ __all__ = [
 
 #: The hook whose session-start output the heartbeat line checks for (§E.1).
 BRIEFING_HOOK_ID: Final = "session-start-playbook-briefing"
-#: The one fixed CLAUDE.md line owned here (§C.4.2); never written to AGENTS.md.
+#: The one fixed line of the Claude Code rules file owned here (§C.4.2); never
+#: written to AGENTS.md, nor to the ``.claude/CLAUDE.md`` stub that OpenCode v1
+#: attaches on reads under ``.claude/`` (a hookless session would see it there).
 CLAUDE_HEARTBEAT_LINE: Final = (
     "If PLAYBOOK-GUARDS: OK did not appear at session start, "
     "tell the user guardrails are not running before risky work."
@@ -84,7 +87,7 @@ class ClaudeHookEmitter:
 
         emitter = ClaudeHookEmitter("claude_code", HOOK_SUPPORT["claude_code"])
         emitter.begin(repo_root, prior_lock, hooks_config)
-        native = emitter.add(hook)  # False: route the hook's advisory to CLAUDE.md
+        native = emitter.add(hook)  # False: route the hook's advisory to the rules file
         written = emitter.emit(output_root)
     """
 

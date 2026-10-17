@@ -319,7 +319,7 @@ def _render_continue_rule(body: str, frontmatter: dict[str, Any]) -> str:
 
 
 def _render_markdown_rule_section(body: str, frontmatter: dict[str, Any]) -> str:
-    """Emit a markdown section suitable for CLAUDE.md or AGENTS.md (SPEC §9.7).
+    """Emit a markdown section for the Claude Code rules file or AGENTS.md (SPEC §9.7).
 
     The two adapters share byte-identical output: a level-2 heading with the
     rule name, an optional ``*Applies to: ...*`` line for scoped rules, the

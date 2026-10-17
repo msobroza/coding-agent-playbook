@@ -89,7 +89,9 @@ hooks on, one dispatcher answers every harness event at run time:
                                                                                  ▼
  adapters: each writes what its harness reads
    continue       .continue/rules/ + .continue/prompts/
-   claude_code    .claude/ + managed hook entries in .claude/settings.json
+   claude_code    .claude/ (rules in .claude/rules/coding-agent-playbook.md,
+                           a rule-free .claude/CLAUDE.md stub)
+                           + managed hook entries in .claude/settings.json
                            + .claude/hooks/playbook/launch.sh
    opencode       .opencode/ + .opencode/plugins/playbook-hooks.js
    agents_md      AGENTS.md (always; a ## Guardrails section when hooks are on)
@@ -227,6 +229,14 @@ meaningful in a working copy that has already been synced.) From then on the `po
 hook re-runs it after every checkout and pull; run it by hand whenever you
 change `playbook/` or the config. `AGENTS.md` is always generated regardless of
 which adapters are enabled (as long as at least one rule or hook advisory applies).
+Claude Code gets the same rule sections in `.claude/rules/coding-agent-playbook.md`,
+which it loads natively; the generated `.claude/CLAUDE.md` is a rule-free stub, so
+OpenCode v1 (which attaches that file when it reads under `.claude/`) never loads
+the rules twice (SPEC §10.3.1). Any other `.claude/rules/` file is yours, and
+`sync` exits 1 rather than overwrite a file of yours already named
+`coding-agent-playbook.md` there or write through a symlink on the way to it (a
+symlinked `.claude` or `.claude/rules`, or a link at the file itself); a symlinked
+`.claude/CLAUDE.md` (such as a link to `../AGENTS.md`) stops it the same way.
 
 What `sync` does with git, by `[output] commit` in `.coding-agent-playbook.toml`:
 
@@ -615,9 +625,11 @@ their own (SPEC §6.6.7).
 
 Hooks are **off until a repo opts in**, and an engine upgrade never turns them
 on: with no `[hooks] enabled = true`, every mode of `playbook sync` renders byte
-for byte what it rendered before, and write mode prints one line, `hooks
-available: add [hooks] enabled = true or re-run playbook init`. `playbook init`
-asks `Enable assistant lifecycle hooks? [Y/n]` and writes your answer;
+for byte what it rendered before (apart from the Claude Code rules' one-time
+move to `.claude/rules/coding-agent-playbook.md`, SPEC §10.3.1), and write mode
+prints one line, `hooks available: add [hooks] enabled = true or re-run playbook
+init`. `playbook init` asks `Enable assistant lifecycle hooks? [Y/n]` and writes
+your answer;
 `playbook init --no-hooks` writes `enabled = false` without asking. Or edit the
 committed config yourself:
 
@@ -792,8 +804,8 @@ degraded and 2 when broken. `simulate` runs the exact dispatch pipeline on one
 payload (the JSON the harness would send on stdin) with a throwaway state
 directory, so your real decision log is never touched. With
 `session-start-playbook-briefing` on, Claude Code shows `PLAYBOOK-GUARDS: OK` at
-session start, and `.claude/CLAUDE.md` ends with a line asking Claude to tell you
-when that heartbeat is missing.
+session start, and `.claude/rules/coding-agent-playbook.md` ends with a line asking
+Claude to tell you when that heartbeat is missing.
 
 ### Caveats
 
@@ -832,7 +844,8 @@ when that heartbeat is missing.
   broken install fails open instead of blocking your assistant (unless an
   overlay opted into its strict mode).
 - An engine upgrade never adds executable hooks: an absent `[hooks]` table (or
-  one without `enabled = true`) means zero byte change.
+  one without `enabled = true`) means no hook output: no settings entries,
+  launcher, shim or advisory text.
 - `.local.toml` never carries policy: `[hooks]`, `[guardrails]` and `[metrics]`
   there are ignored.
 - No repository or overlay code runs without your user-local trust approval.

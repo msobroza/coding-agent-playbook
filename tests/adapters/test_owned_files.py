@@ -20,6 +20,8 @@ from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._owned_files import (
     UserOwnedFileError,
     check_engine_owned,
+    check_unlinked,
+    crosses_symlink,
     write_engine_owned,
 )
 from coding_agent_playbook.adapters.base import Adapter
@@ -27,6 +29,7 @@ from tests.fakes import record_opens
 from tests.hook_samples import resolved_hook
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from coding_agent_playbook._typing import Prompt, Rule
@@ -159,6 +162,100 @@ def test_fifo_at_the_path_is_refused_without_opening_it(tmp_path: Path) -> None:
     os.mkfifo(target)
 
     assert "not a regular file" in _refusal(target, tmp_path).reason
+
+
+@posix_only
+@pytest.mark.parametrize("linked", [".opencode", ".opencode/plugins", _REL])
+def test_crosses_symlink_sees_a_link_at_or_below_the_repo_root(tmp_path: Path, linked: str) -> None:
+    repo, outside = tmp_path / "repo", _write(tmp_path / "outside" / "x.js", _USER)
+    (repo / linked).parent.mkdir(parents=True, exist_ok=True)
+    (repo / linked).symlink_to(outside if linked == _REL else outside.parent)
+
+    assert crosses_symlink(repo / _REL, repo)
+
+
+@posix_only
+def test_crosses_symlink_ignores_a_link_above_the_repo_root(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    _write(real / _REL, _USER)
+    alias = tmp_path / "alias"
+    alias.symlink_to(real, target_is_directory=True)
+
+    assert not crosses_symlink(alias / _REL, alias)
+    assert not crosses_symlink(real / ".opencode" / "absent.js", real)
+
+
+def test_check_unlinked_accepts_a_user_file_and_an_absent_path(tmp_path: Path) -> None:
+    """Unlike ``check_engine_owned``: a regular file without the sentinel passes."""
+    _write(tmp_path / _REL, _USER)
+
+    check_unlinked(tmp_path / _REL, tmp_path)
+    check_unlinked(tmp_path / ".absent" / "x.md", tmp_path)
+
+    assert not (tmp_path / ".absent").exists()
+
+
+@posix_only
+@pytest.mark.parametrize(
+    ("linked", "reason"),
+    [
+        (_REL, "it is a symbolic link"),
+        (".opencode", ".opencode is a symbolic link"),
+        (".opencode/plugins", ".opencode/plugins is a symbolic link"),
+    ],
+)
+def test_check_unlinked_refuses_a_link_at_or_on_the_way_to_the_path(
+    tmp_path: Path, linked: str, reason: str
+) -> None:
+    """Review round 2: the ``.claude/CLAUDE.md`` stub is never written through a link."""
+    repo, outside = tmp_path / "repo", _write(tmp_path / "outside" / "x.js", _USER)
+    (repo / linked).parent.mkdir(parents=True, exist_ok=True)
+    (repo / linked).symlink_to(outside if linked == _REL else outside.parent)
+
+    with pytest.raises(UserOwnedFileError) as caught:
+        check_unlinked(repo / _REL, repo)
+
+    assert caught.value.path == _REL
+    assert caught.value.reason.startswith(reason)
+    assert outside.read_text(encoding="utf-8") == _USER
+
+
+def test_check_unlinked_refuses_a_hard_link(tmp_path: Path) -> None:
+    """Final review: a hard-linked ``.claude/CLAUDE.md`` (the Windows stand-in for a
+    symlink) is a regular file, yet ``write_text`` truncates the shared inode, so
+    writing the stub cut ``AGENTS.md`` to four lines. Refused like a symlink."""
+    shared = _write(tmp_path / "AGENTS.md", _USER)
+    (tmp_path / _REL).parent.mkdir(parents=True)
+    os.link(shared, tmp_path / _REL)
+
+    with pytest.raises(UserOwnedFileError) as caught:
+        check_unlinked(tmp_path / _REL, tmp_path)
+
+    assert caught.value.path == _REL
+    assert caught.value.reason.startswith("it is a hard link")
+    assert shared.read_text(encoding="utf-8") == _USER
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        pytest.param(lambda path: path.mkdir(), id="directory"),
+        pytest.param(lambda path: os.mkfifo(path), id="fifo", marks=posix_only),
+    ],
+)
+def test_check_unlinked_refuses_what_is_not_a_regular_file(
+    tmp_path: Path, make: Callable[[Path], None]
+) -> None:
+    """Final review: a directory there crashed the stub write after AGENTS.md was
+    written (IsADirectoryError), and a FIFO hung sync and the git hooks running it."""
+    target = tmp_path / _REL
+    target.parent.mkdir(parents=True)
+    make(target)
+
+    with pytest.raises(UserOwnedFileError) as caught:
+        check_unlinked(target, tmp_path)
+
+    assert caught.value.reason == "it is not a regular file"
 
 
 def test_check_alone_writes_nothing(tmp_path: Path) -> None:

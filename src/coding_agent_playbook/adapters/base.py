@@ -144,8 +144,9 @@ class Adapter(ABC):
     def finalize(self, repo_root: Path) -> list[Path]:
         """Emit any buffered composite output. Default: nothing.
 
-        Adapters that concatenate artifacts into a single file (e.g. Claude
-        Code's ``CLAUDE.md``) override this and return the composed paths.
+        Adapters that concatenate artifacts into composite files (e.g. Claude
+        Code's rules file and ``.claude/CLAUDE.md`` stub, ``AGENTS.md``)
+        override this and return the composed paths.
         """
         return []
 

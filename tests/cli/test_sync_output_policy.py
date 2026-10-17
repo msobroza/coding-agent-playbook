@@ -75,6 +75,7 @@ def test_write_mode_writes_managed_block_by_default(
     for entry in (
         "/AGENTS.md",
         "/.claude/CLAUDE.md",
+        "/.claude/rules/coding-agent-playbook.md",
         "/.claude/commands/tidy-up.md",
         "/.continue/rules/50-style-guide.md",
         "/.opencode/command/tidy-up.md",

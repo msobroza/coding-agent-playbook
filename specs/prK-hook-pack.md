@@ -4,6 +4,8 @@
 >
 > **Layout note (SPEC v0.19, PR C; `content/` renamed `catalog/` in v0.20).** This design predates the move of the engine's content out of the Python package. The engine's `src/coding_agent_playbook/resources/{rules,prompts,eval_tasks,hooks}/` now live in `catalog/core/{rules,prompts,eval_tasks,hooks}/`, the hook shim templates (`resources/hook_shims/`) in the package's `src/coding_agent_playbook/templates/hook_shims/`, and the bundled packs (`coding_agent_playbook.packs.<name>`) are bundled plugins under `catalog/plugins/<name>/` (`coding_agent_playbook.plugins.<name>`). Overlay packages keep `<pkg>/resources/…`. Older paths in the track file lists below read through this mapping; SPEC.md is authoritative.
 >
+> **Claude Code rules-file note (after PR K; SPEC §10.3.1).** The `claude_code` adapter no longer writes rules, hook advisories or the heartbeat line into `.claude/CLAUDE.md`: they live in `.claude/rules/coding-agent-playbook.md`, and `.claude/CLAUDE.md` is a rule-free four-line stub, because OpenCode v1 attaches `.claude/CLAUDE.md` when its read tool opens a file under `.claude/` (once per uncompacted session, SPEC §10.6) and so loaded the rules twice and saw the Claude-only heartbeat line. Both files are composite outputs (`kind = "composite"`, composite singletons of `protected.output_dirs`): guard-generated-outputs denies an edit of either with the same reason and the drift scan reports either as an orphan; no other `.claude/rules/` file is the engine's. Where this design places that text in `.claude/CLAUDE.md`, read the rules file; the *(Rules-file note)* markers below flag those places. SPEC.md is authoritative.
+>
 > **Commit policy (overrides any tooling default):** commits authored **solely by `msobroza`** — no `Co-Authored-By`, no `--author`, no signing, no `git config` edits. Subagents `cd <worktree>` as their first tool call, default `opus`, **no `git push` / `gh pr create` until the user gate approves the diff**. Run the **full cache-free, no-optional-extras CI-parity gate** (`uv pip uninstall radon -y; rm -rf .mypy_cache; ruff check . && ruff format --check . && mypy && pytest -q`, no path args; invoke as `uv run python -m mypy` / `uv run python -m pytest -q` per CLAUDE.md) before claiming green — see [[ci-parity-gate-pitfalls]].
 
 Section letters are shared across the two parts: §P, §A–§D, §G–§K live in [part 1](prK-lifecycle-hooks.md); §E, §F, Tracks K5–K10 and Appendix R live in [part 2](prK-hook-pack.md).
@@ -223,7 +225,7 @@ These hooks keep the playbook's own invariants true while the agent works:
     - If the source is under `playbook/`, it says to edit that file.
     - If the source is an engine or overlay resource, it says to add a same-id override under `playbook/{rules,prompts,skills}/` (repo-local wins, SPEC §11.2), never touching site-packages.
     - It always ends with `then run playbook validate && playbook sync` (the next sync would silently overwrite a hand edit).
-    - Multi-source outputs (`.claude/CLAUDE.md`, `AGENTS.md`) get `generated from rules; edit playbook/rules/<id> (ids: playbook check)`. There is no heading heuristic.
+    - Multi-source outputs (`.claude/CLAUDE.md`, `AGENTS.md`) get `generated from rules; edit playbook/rules/<id> (ids: playbook check)`. There is no heading heuristic. *(Rules-file note: `.claude/rules/coding-agent-playbook.md` is a multi-source output too and gets the same reason.)*
     - Hook artifacts (`protected.hook_artifacts`: everything under `.coding-agent-playbook/hooks/` — `guard_config.json` and the copied scripts — the rendered launcher, and `.opencode/plugins/playbook-hooks.js`) get `ask the user` instead of remediation steps, so the guard never teaches the bypass.
   - **What passes (`none`).**
     - Restore commands: `playbook sync`, `playbook init`, and `git checkout|restore -- <generated>`.
@@ -249,6 +251,7 @@ These hooks keep the playbook's own invariants true while the agent works:
 - **Off-workstation twin.** `playbook sync --check`, run as the `playbook-sync-check` pre-commit hook (`.pre-commit-hooks.yaml`) or `coding-agent-playbook-sync` (`resources/precommit/config.yaml.j2`), and in CI.
 - **Tests.**
   - Edit `.claude/CLAUDE.md`: deny, and the reason names `playbook/rules`.
+  - *(Rules-file note)* Edit `.claude/rules/coding-agent-playbook.md`: deny, same reason, with or without its lock row; edit a user's `.claude/rules/team.md` (no lock row, outside `output_dirs`): none.
   - Edit `.claude/skills/demo/SKILL.md` and `scripts/run.py`: deny via the lockfile, with no sentinel present.
   - `.Claude/CLAUDE.md` with `sys.platform` patched to darwin: deny.
   - New `.claude/commands/new.md`: none.
@@ -334,7 +337,7 @@ These hooks keep the playbook's own invariants true while the agent works:
 - **Behavior.**
   - **Fast path (the only default, about 0.1s, stdlib):**
     - sha256 every lockfile entry against disk; partially-owned entries are compared by their scoped hash (L4);
-    - scan `protected.output_dirs` for files carrying the sentinel at its anchored position that are missing from the lockfile: these are **orphans**. The dirs are `.continue/rules`, `.continue/prompts`, `.claude/commands`, `.claude/skills`, `.opencode/command`, plus `.claude/CLAUDE.md` and `AGENTS.md`. Files outside those dirs are never read.
+    - scan `protected.output_dirs` for files carrying the sentinel at its anchored position that are missing from the lockfile: these are **orphans**. The dirs are `.continue/rules`, `.continue/prompts`, `.claude/commands`, `.claude/skills`, `.opencode/command`, plus `.claude/CLAUDE.md` and `AGENTS.md`. Files outside those dirs are never read. *(Rules-file note: `.claude/rules/coding-agent-playbook.md` is scanned as a singleton too; the rest of `.claude/rules/` is the user's and is never read.)*
   - On a finding it adds one line to the combined reason: `Playbook drift: <files>. Run playbook validate && playbook sync before finishing.` A repeat on the same fingerprint gives a user note only.
   - **Slow path.** A child process `playbook sync --check` (it imports the renderer). It is enabled only once the engine fixes below land, and then only when canonical or detector inputs changed this session.
 - **Implementation.**
@@ -431,7 +434,7 @@ These hooks keep the playbook's own invariants true while the agent works:
 
 - **Behavior.**
   - **The heartbeat line is always emitted** and is at most 40 characters: `PLAYBOOK-GUARDS: OK <n>` or `GUARDRAILS DEGRADED: <which>`.
-    - It is computed from in-process canaries: each enabled `pre_tool_use` guard is run against its synthetic payload from the simulate fixtures, for example "Edit `.claude/CLAUDE.md` must deny".
+    - It is computed from in-process canaries: each enabled `pre_tool_use` guard is run against its synthetic payload from the simulate fixtures, for example "Edit `.claude/CLAUDE.md` must deny". *(Rules-file note: `.claude/rules/coding-agent-playbook.md` is protected alike.)*
     - It also checks the `guard_config.json` and launcher hashes against the lockfile.
   - **Everything else appears only on an anomaly**, with a hard 600-character total:
     1. drift (the fast path from stop-drift-and-orphan-gate; never `sync --check` at startup, which copytrees the repo, took 11s with a large `.venv`, copies `.env*` and renders Jinja);
@@ -450,7 +453,7 @@ These hooks keep the playbook's own invariants true while the agent works:
   - Builtin handler `session_start_playbook_briefing`, a cold path.
   - It reads the lockfile with `tomllib` (`sources/filesystem.py:340`, `.coding-agent-playbook.lock`) and runs local git (`rev-parse --git-dir/--git-common-dir`, `symbolic-ref`).
   - No `uv run`, no Jinja, no `sync --check`, no toolchain probe; that is left to the reactive toolchain-missing-hint (E.3).
-  - **Heartbeat carrier.** When this hook is active, the `claude_code` adapter adds one fixed line to `.claude/CLAUDE.md` (the adapter change and its byte-stability impact are §C.4.2's): `If PLAYBOOK-GUARDS: OK did not appear at session start, tell the user guardrails are not running before risky work.` A broken runtime is then detected by the line's absence. The line is never written into AGENTS.md, where a hookless harness would always "see" a missing heartbeat.
+  - **Heartbeat carrier.** When this hook is active, the `claude_code` adapter adds one fixed line to `.claude/CLAUDE.md` (the adapter change and its byte-stability impact are §C.4.2's): `If PLAYBOOK-GUARDS: OK did not appear at session start, tell the user guardrails are not running before risky work.` A broken runtime is then detected by the line's absence. The line is never written into AGENTS.md, where a hookless harness would always "see" a missing heartbeat. *(Rules-file note: the line now closes `.claude/rules/coding-agent-playbook.md`, never the `.claude/CLAUDE.md` stub: OpenCode v1 attaches the stub on reads under `.claude/`, so a hookless OpenCode session would see it there.)*
   - **The static model moves into a Hook body.** The static generated-vs-canonical guidance becomes the guard-generated-outputs Hook body, not briefing output.
 - **Budget & failure.**
   - ≤300ms, once per start, resume or compaction.
@@ -791,7 +794,7 @@ The authoritative, deduplicated list is §K; these are its E.1/E.2 sources.
 3. **Stop on OpenCode** is evidence-only (state plus next-turn `experimental.chat.system.transform`), because `session.idle` cannot block (#16626). An SDK re-prompt is rejected until loop re-entry ships. This depends on an `experimental.*` API (L5 open question on V2).
 4. **Prerequisites beyond L7.** *Resolved*: both are in Track P (P8 validate-gated sync + config-less validate; P2(b) `copytree` hardening).
 5. **`[metrics] run_tests = true` executes the suite from `playbook metrics`.** *Resolved* by §F.0.3 item 6: both `playbook-metrics` pre-commit entries gain `--no-run-tests`.
-6. **Heartbeat line in `.claude/CLAUDE.md`.** It changes CLAUDE.md bytes when hooks are enabled, so the consumer gets drift once on upgrade and must re-sync. AGENTS.md is untouched.
+6. **Heartbeat line in `.claude/CLAUDE.md`.** It changes CLAUDE.md bytes when hooks are enabled, so the consumer gets drift once on upgrade and must re-sync. AGENTS.md is untouched. *(Rules-file note: the line is now in `.claude/rules/coding-agent-playbook.md`; the `.claude/CLAUDE.md` stub never changes.)*
 7. **SPEC.md:141** ("avoid `{% if %}` inside rule bodies") contradicts shipped `.md.j2` rules: `00-project-context`, `typing`, `pytest` and `serialization-security` use it. validate-then-sync does not enforce the rule. Should the SPEC be amended?
 8. **Fixture integrity mechanism** (guard-eval-fixtures twin). Either a per-task content hash in `task.toml` (a schema change, §6.5.3), or a CI diff of `eval_tasks/*/setup/**` against the merge base.
 9. **`playbook ci` ownership.** *Resolved*: §F.5 owns it.
@@ -908,7 +911,7 @@ lint_codes:
 
 **Guards.** Changed lines; shared 8-line cap; per-session dedupe; warn-only.
 
-**Portability.** Claude `PostToolUse`, OpenCode `tool.execute.after` (appended output). The rule text reaches every harness via CLAUDE.md / AGENTS.md / `.continue/rules/`.
+**Portability.** Claude `PostToolUse`, OpenCode `tool.execute.after` (appended output). The rule text reaches every harness via CLAUDE.md / AGENTS.md / `.continue/rules/`. *(Rules-file note: for Claude Code, `.claude/rules/coding-agent-playbook.md`.)*
 
 **Off-workstation twin.** None required (advisory). The enforcement path is explicit: a project that wants these codes enforced adds them to `[tool.ruff.lint] select`; they then move to bucket 1 and CI's `ruff check .` enforces them.
 
@@ -1918,8 +1921,8 @@ The 9 `rejected` catalog entries stay rejected.
 
 | id | Catalog event | Why rejected | Where it belongs instead |
 | --- | --- | --- | --- |
-| scoped-rule-injection | post_tool_use | A rendering problem, not a lifecycle one: it would fire on every Read (the most frequent call), and 9 of the 11 bundled scoped rules glob `**/*.py` (K10's `python-docstrings` included), so a Python repo saves nothing. | The adapters: Continue honors globs natively; Claude Code *could* render scoped rules as `.claude/rules/<id>.md` with `paths:`, but the shipped adapter does not (it concatenates every rule into `.claude/CLAUDE.md`, SPEC §10.3.1); CLAUDE.md and AGENTS.md keep the advisory `*Applies to*` note. |
-| guardrail-self-test | session_start | Circular: a broken interpreter, entry point or runtime fails the self-test open silently too. | The briefing heartbeat line plus the CLAUDE.md line that reports its absence (§E.1, §C.4.2), and `playbook-hook doctor` (§D.9). |
+| scoped-rule-injection | post_tool_use | A rendering problem, not a lifecycle one: it would fire on every Read (the most frequent call), and 9 of the 11 bundled scoped rules glob `**/*.py` (K10's `python-docstrings` included), so a Python repo saves nothing. | The adapters: Continue honors globs natively; Claude Code *could* render scoped rules as `.claude/rules/<id>.md` with `paths:`, but the shipped adapter does not (it concatenates every rule into `.claude/CLAUDE.md`, SPEC §10.3.1); CLAUDE.md and AGENTS.md keep the advisory `*Applies to*` note. *(Rules-file note: the rules now go to one unscoped `.claude/rules/coding-agent-playbook.md`, still without `paths:`.)* |
+| guardrail-self-test | session_start | Circular: a broken interpreter, entry point or runtime fails the self-test open silently too. | The briefing heartbeat line plus the CLAUDE.md line that reports its absence (§E.1, §C.4.2), and `playbook-hook doctor` (§D.9). *(Rules-file note: that line is now in `.claude/rules/coding-agent-playbook.md`.)* |
 | auto-commit-checkpoint | post_tool_use | Rewrites the user-owned authorship and commit policy, fills history with WIP commits, and turns commit-time gates into per-turn side effects. | The harness's own undo/rewind or the user's VCS workflow. |
 | input-rewriting-hooks | pre_tool_use | L6 forbids `updatedInput`: rewriters race (last writer wins; a user may already run their own rewriting hook), hide the correction from the model, and an overlay rewriter can change what the user approved. | Deny-with-correction (command-convention-guard, §E.4); `playbook validate` rejects input rewriting (H8). |
 | permission-auto-approve | pre_tool_use | L6 forbids `allow`: a hook-issued allow bypasses the harness permission system, so any overlay or malicious PR shipping one is a privilege escalation. | Reviewed, opt-in `permissions.allow` rendering of the remediation commands (§C.2.8, OQ-16). |

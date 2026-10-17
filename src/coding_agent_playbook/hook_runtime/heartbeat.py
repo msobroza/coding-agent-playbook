@@ -2,8 +2,10 @@
 
 ``PLAYBOOK-GUARDS: OK <n>`` says the dispatcher ran and ``n`` guards passed
 their in-process canary; ``GUARDRAILS DEGRADED: <which>`` names what did not.
-The ``.claude/CLAUDE.md`` carrier line tells the model to warn the user when
-neither appears, so a dead runtime is caught by the line's absence.
+The carrier line in Claude Code's rules file (``.claude/rules/coding-agent-playbook.md``,
+never the ``.claude/CLAUDE.md`` stub that OpenCode v1 attaches, SPEC §10.3.1)
+tells the model to warn the user when neither appears, so a dead runtime is
+caught by the line's absence.
 
 A leaf module (``caps`` only): the session-start briefing builds the line, and
 the dispatcher's config-fault path (``_faults``), which runs before any hook
