@@ -234,17 +234,95 @@ def test_file_drift_names_what_write_mode_stops_on(tmp_path: Path) -> None:
     assert shared[0].endswith("Missing on disk; run 'playbook sync' to create.")
 
 
-def test_file_drift_keeps_the_swap_hint_inside_a_rendered_skill_dir(tmp_path: Path) -> None:
-    """Inside ``<root>/<id>/`` the skill writer displaces what is in the way when it
-    is its own unchanged output (§10.8), so the hint says that, not "move it"."""
+def _skill_scratch(tmp_path: Path, root: str) -> tuple[Path, Path, Path]:
+    """A scratch render of ``<root>/demo/scripts/run.sh`` and the real repo beside it."""
     scratch, repo = tmp_path / "scratch", tmp_path / "repo"
-    skill = scratch / "skills" / "demo"
+    skill = scratch / root / "demo"
     (skill / "scripts").mkdir(parents=True)
     (skill / "SKILL.md").write_text("s\n", encoding="utf-8")
     (skill / "scripts" / "run.sh").write_text("x\n", encoding="utf-8")
-    (repo / "skills" / "demo").mkdir(parents=True)
-    (repo / "skills" / "demo" / "scripts").write_text("old file\n", encoding="utf-8")
+    (repo / root / "demo").mkdir(parents=True)
+    return scratch, repo, skill / "scripts" / "run.sh"
 
-    [hint] = file_drift([skill / "scripts" / "run.sh"], scratch, repo)
 
-    assert "skills/demo/scripts is in the way. 'playbook sync' replaces it only" in hint
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_file_drift_counts_output_written_into_a_character_device_as_delivered(
+    tmp_path: Path,
+) -> None:
+    """``AGENTS.md -> /dev/null`` is how a repo discards a force-enabled output: write
+    mode writes into it, so there is nothing to compare and nothing sync could fix."""
+    scratch, repo = tmp_path / "scratch", tmp_path / "repo"
+    scratch.mkdir()
+    repo.mkdir()
+    (scratch / "AGENTS.md").write_text("x\n", encoding="utf-8")
+    (repo / "AGENTS.md").symlink_to(os.devnull)
+
+    assert file_drift([scratch / "AGENTS.md"], scratch, repo) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_file_drift_reports_a_character_device_inside_a_native_skill_dir(tmp_path: Path) -> None:
+    """The skill writer replaces a link at its destination with the real file, so
+    ``scripts/run.sh -> /dev/null`` there is drift sync clears, not delivered output."""
+    scratch, repo, rendered = _skill_scratch(tmp_path, ".claude/skills")
+    (repo / ".claude/skills/demo/scripts").mkdir()
+    (repo / ".claude/skills/demo/scripts/run.sh").symlink_to(os.devnull)
+
+    [hint] = file_drift([rendered], scratch, repo, skill_roots=frozenset({".claude/skills"}))
+
+    assert hint.endswith("Missing on disk; run 'playbook sync' to create.")
+
+
+def test_file_drift_keeps_the_swap_hint_inside_a_native_skill_dir(tmp_path: Path) -> None:
+    """Inside ``<root>/<id>/`` of a native skills root the skill writer displaces what
+    is in the way when it is its own unchanged output (§10.8): the hint says that."""
+    scratch, repo, rendered = _skill_scratch(tmp_path, ".claude/skills")
+    (repo / ".claude/skills/demo/scripts").write_text("old file\n", encoding="utf-8")
+
+    [hint] = file_drift([rendered], scratch, repo, skill_roots=frozenset({".claude/skills"}))
+
+    assert ".claude/skills/demo/scripts is in the way. 'playbook sync' replaces it only" in hint
+
+
+def test_file_drift_gives_agent_harness_skills_the_blocker_write_mode_stops_on(
+    tmp_path: Path,
+) -> None:
+    """``skills/`` is ``agent_harness``'s, not a native root: it never displaces anything."""
+    scratch, repo, rendered = _skill_scratch(tmp_path, "skills")
+    (repo / "skills/demo/scripts").write_text("old file\n", encoding="utf-8")
+
+    [hint] = file_drift([rendered], scratch, repo, skill_roots=frozenset({".claude/skills"}))
+
+    assert "skills/demo/scripts is not a directory, but sync writes generated files" in hint
+    assert "replaces it only" not in hint
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_file_drift_names_the_link_even_when_a_file_is_behind_it(tmp_path: Path) -> None:
+    """ "Run 'playbook sync' to regenerate" would be a drift no sync clears: sync never
+    writes through a link leading out of the skill dir, so the hint names the link."""
+    scratch, repo, rendered = _skill_scratch(tmp_path, ".claude/skills")
+    (tmp_path / "elsewhere").mkdir()
+    (tmp_path / "elsewhere" / "run.sh").write_text("their version\n", encoding="utf-8")
+    (repo / ".claude/skills/demo/scripts").symlink_to(tmp_path / "elsewhere")
+
+    [hint] = file_drift([rendered], scratch, repo, skill_roots=frozenset({".claude/skills"}))
+
+    assert "is a symbolic link leading outside the skill directory" in hint
+    assert "regenerate" not in hint
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_file_drift_names_a_link_leaving_a_native_skill_dir(tmp_path: Path) -> None:
+    """The skill writer skips a file under such a link with a warning: name the link."""
+    scratch, repo, rendered = _skill_scratch(tmp_path, ".claude/skills")
+    (tmp_path / "elsewhere").mkdir()
+    (repo / ".claude/skills/demo/scripts").symlink_to(tmp_path / "elsewhere")
+
+    [hint] = file_drift([rendered], scratch, repo, skill_roots=frozenset({".claude/skills"}))
+
+    assert hint.endswith(
+        "    Missing on disk: .claude/skills/demo/scripts is a symbolic link leading outside the "
+        "skill directory, and sync never writes through one.\n"
+        "    Remove or re-point the link, then run 'playbook sync'."
+    )

@@ -1,19 +1,22 @@
 """What stops a write of sync output (``commands/_output_blockers.py``, SPEC §12.2).
 
 Regressions: a dangling ``.claude/commands -> ../tools/cc``, a file (or a link
-to one) at ``.claude/commands`` or ``.continue``, and a directory at
-``AGENTS.md`` each made write-mode ``playbook sync`` crash with a traceback.
+to one) at ``.claude/commands`` or ``.continue``, a directory at ``AGENTS.md``
+and a socket there each made write-mode ``playbook sync`` crash with a
+traceback; a FIFO there made it hang.
 """
 
 from __future__ import annotations
 
 import errno
 import os
+import socket
 import sys
 from pathlib import Path
 
 import pytest
 
+from coding_agent_playbook._output_io import NotRegularFileError
 from coding_agent_playbook.commands._output_blockers import (
     OutputBlocker,
     blocker_in,
@@ -43,11 +46,12 @@ def test_mkdir_through_a_dangling_link_names_the_link(repo: Path) -> None:
 
     found = blocker_in(_failed(errno.EEXIST, link), repo)
 
-    assert found == OutputBlocker(
-        link,
-        ".claude/commands is a dangling symbolic link: its target ../tools/cc does not exist",
-        "Create the link's target, or re-point or remove the link",
+    assert found is not None
+    assert (found.path, found.shown) == (link, ".claude/commands")
+    assert found.problem == (
+        ".claude/commands is a dangling symbolic link: its target ../tools/cc does not exist"
     )
+    assert found.remedy == "Create the link's target, or re-point or remove the link"
     assert blocker_in(_failed(errno.ENOENT, link / "x.md"), repo) == found
 
 
@@ -115,6 +119,47 @@ def test_a_link_to_a_directory_at_a_file_path_asks_to_re_point_the_link(repo: Pa
     )
     assert failed.remedy == "Re-point or remove the link"
     assert predicted == failed
+
+
+@needs_symlinks
+def test_a_fifo_refused_by_the_output_writer_is_named(repo: Path) -> None:
+    os.mkfifo(repo / "AGENTS.md")
+    refused = NotRegularFileError(errno.ENXIO, "not a regular file", str(repo / "AGENTS.md"))
+
+    failed = blocker_in(refused, repo)
+    predicted = write_blocker(repo / "AGENTS.md", repo)
+
+    assert failed is not None
+    assert failed.problem == (
+        "AGENTS.md is a FIFO, not a regular file, but sync writes a generated file at that path"
+    )
+    assert failed.remedy == "Move or rename it (sync never deletes it)"
+    assert predicted == failed
+
+
+@needs_symlinks
+def test_a_raw_socket_error_is_named_and_a_link_to_a_fifo_asks_to_re_point_it(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(repo)
+    sock = socket.socket(socket.AF_UNIX)
+    sock.bind("AGENTS.md")  # a short relative name: AF_UNIX paths are capped
+    os.mkfifo(repo / "pipe")
+    (repo / "CLAUDE.md").symlink_to("pipe")
+    try:
+        on_socket = blocker_in(_failed(errno.EOPNOTSUPP, repo / "AGENTS.md"), repo)
+        linked = write_blocker(repo / "CLAUDE.md", repo)
+    finally:
+        sock.close()
+
+    assert on_socket is not None
+    assert on_socket.problem.startswith("AGENTS.md is a socket, not a regular file")
+    assert linked is not None
+    assert linked.problem == (
+        "CLAUDE.md is a symbolic link to pipe, which is a FIFO, not a regular file, "
+        "but sync writes a generated file at that path"
+    )
+    assert linked.remedy == "Re-point or remove the link"
 
 
 @pytest.mark.parametrize("code", [errno.EACCES, errno.ENOSPC, errno.EROFS])
@@ -215,7 +260,7 @@ def test_a_dangling_link_says_whether_it_loops_or_reaches_another_dangling_link(
 
 
 def _blocker(repo: Path) -> OutputBlocker:
-    return OutputBlocker(repo / "AGENTS.md", "AGENTS.md is a directory, but …", "Move it")
+    return OutputBlocker(repo / "AGENTS.md", "AGENTS.md", "is a directory, but …", "Move it")
 
 
 def test_write_mode_report_goes_to_stderr(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -231,7 +276,9 @@ def test_write_mode_report_goes_to_stderr(repo: Path, capsys: pytest.CaptureFixt
 
 def test_check_report_goes_to_stdout(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert report_blocker(_blocker(repo), check=True) == 1
+    # "Cannot verify <path>: …", the shape every check-mode refusal shares (the
+    # stop gate's sync_check_findings reads the path from it)
     assert capsys.readouterr().out.splitlines() == [
-        "Cannot verify: AGENTS.md is a directory, but ….",
+        "Cannot verify AGENTS.md: it is a directory, but ….",
         "Move it, then re-run 'playbook sync --check'.",
     ]

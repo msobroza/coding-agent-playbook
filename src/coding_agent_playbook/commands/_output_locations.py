@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook._symlinks import real_path
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
@@ -97,7 +99,7 @@ class OutputLocations:
 def _resolved_rel(path: Path, root: Path) -> PurePosixPath | None:
     """``path`` (which may no longer exist) resolved, relative to ``root``; ``None`` outside."""
     try:
-        return PurePosixPath(path.resolve().relative_to(root).as_posix())
+        return PurePosixPath(real_path(path).relative_to(root).as_posix())
     except ValueError:
         return None
 

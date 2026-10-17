@@ -1,7 +1,7 @@
 """What stops a write of sync output, named with exit 1 instead of a traceback (SPEC §12.2).
 
 Each adapter writes its files under fixed directories (``.claude/commands/``,
-``.continue/rules/``, ``AGENTS.md`` at the root). Three things on the real tree
+``.continue/rules/``, ``AGENTS.md`` at the root). Four things on the real tree
 stop such a write, and the engine never removes one, since it cannot tell
 whose it is:
 
@@ -10,7 +10,9 @@ whose it is:
   below it ``FileNotFoundError``;
 - a non-directory where a directory goes (a file, or a link to one, at
   ``.claude/commands``): ``FileExistsError`` or ``NotADirectoryError``;
-- a directory where the output file goes (``AGENTS.md/``): ``IsADirectoryError``.
+- a directory where the output file goes (``AGENTS.md/``): ``IsADirectoryError``;
+- a FIFO, socket or device where the output file goes: the owned output writers
+  refuse it before ``open()`` would block or fail (``_output_io``).
 
 Write mode attributes the failed write's ``OSError`` to the blocker on its path
 (:func:`blocker_in`) and exits 1 naming it (:func:`report_blocker`); ``--check``
@@ -31,34 +33,53 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from coding_agent_playbook._output_io import special_file_kind
 from coding_agent_playbook._symlinks import is_dangling_symlink, unresolvable_link_errno
 
 #: The errnos a blocker causes; anything else (EACCES, ENOSPC, EROFS, ...) keeps its traceback.
 _BLOCKER_ERRNOS: Final = frozenset(
-    {errno.EEXIST, errno.ENOENT, errno.ENOTDIR, errno.ELOOP, errno.EISDIR}
+    {
+        errno.EEXIST,
+        errno.ENOENT,
+        errno.ENOTDIR,
+        errno.ELOOP,
+        errno.EISDIR,
+        errno.ENXIO,
+        errno.EOPNOTSUPP,
+    }
 )
+#: What a FIFO, socket or device at the path reports: ``_output_io``'s refusal, or ``open()`` on a socket.
+_SPECIAL_ERRNOS: Final = frozenset({errno.ENXIO, errno.EOPNOTSUPP})
 _MOVE_REMEDY: Final = "Move or rename it (sync never deletes it)"
 _LINK_REMEDY: Final = "Re-point or remove the link"
 _DANGLING_REMEDY: Final = "Create the link's target, or re-point or remove the link"
+_INSIDE: Final = "but sync writes generated files inside it"
+_AT: Final = "but sync writes a generated file at that path"
 
 
 @dataclass(frozen=True)
 class OutputBlocker:
     """The entry on the real tree that stops a write of sync output.
 
-    ``problem`` names it repo-relative; ``remedy`` is the fix, without the
-    command to re-run.
+    ``shown`` is its repo-relative spelling and ``reason`` what is wrong with it
+    (``problem`` joins the two); ``remedy`` is the fix, without the command to re-run.
 
     Example::
 
-        OutputBlocker(repo / "AGENTS.md",
-                      "AGENTS.md is a directory, but sync writes a generated file at that path",
+        OutputBlocker(repo / "AGENTS.md", "AGENTS.md",
+                      "is a directory, but sync writes a generated file at that path",
                       "Move or rename it (sync never deletes it)")
     """
 
     path: Path
-    problem: str
+    shown: str
+    reason: str
     remedy: str
+
+    @property
+    def problem(self) -> str:
+        """``<shown> <reason>``: the sentence write mode prints after ``error:``."""
+        return f"{self.shown} {self.reason}"
 
 
 def blocker_in(exc: OSError, repo_root: Path) -> OutputBlocker | None:
@@ -85,11 +106,12 @@ def write_blocker(
     """``--check``: the blocker a write of the file ``path`` would stop on, else ``None``.
 
     A dangling link or a non-directory at a directory on the way always stops
-    it, and so does a directory at ``path``. A dangling link at ``path`` only
-    when it loops or its target's directory is missing too: otherwise the write
-    creates the target through it (``AGENTS.md -> docs/AGENTS.md``). With
-    ``replaces_path`` (an atomic ``os.replace``, as for the co-owned
-    ``.claude/settings.json``) a link at ``path`` is replaced, never a blocker.
+    it, and so does a directory, a FIFO, a socket or a device at ``path``. A
+    dangling link at ``path`` only when it loops or its target's directory is
+    missing too: otherwise the write creates the target through it
+    (``AGENTS.md -> docs/AGENTS.md``). With ``replaces_path`` (an atomic
+    ``os.replace``, as for the co-owned ``.claude/settings.json``) a dangling
+    link at ``path`` is replaced, never a blocker.
 
     Example: ``write_blocker(repo / ".claude/commands/x.md", repo)`` names
     ``.claude/commands`` when it is a file.
@@ -100,10 +122,14 @@ def write_blocker(
 def report_blocker(blocker: OutputBlocker, *, check: bool) -> int:
     """Explain the ``blocker`` a sync could not write past; return 1.
 
+    ``--check`` prints ``Cannot verify <path>: it <reason>.``, the shape every
+    check-mode refusal shares, so the stop gate's ``sync_check_findings`` reads
+    the path from it.
+
     Example: ``return report_blocker(blocker, check=False)``.
     """
     if check:
-        print(f"Cannot verify: {blocker.problem}.")
+        print(f"Cannot verify {blocker.shown}: it {blocker.reason}.")
         print(f"{blocker.remedy}, then re-run 'playbook sync --check'.")
         return 1
     print(f"error: {blocker.problem}", file=sys.stderr)
@@ -139,7 +165,7 @@ def _parent_blocker(path: Path, repo_root: Path) -> OutputBlocker | None:
         if is_dangling_symlink(entry):
             return _dangling(entry, repo_root)
         if os.path.exists(entry) and not os.path.isdir(entry):
-            return _not_a_directory(entry, repo_root)
+            return _described(entry, repo_root, "not a directory", _INSIDE)
     return None
 
 
@@ -148,13 +174,15 @@ def _failed_leaf(path: Path, repo_root: Path, code: int | None) -> OutputBlocker
     entries = _entries_down_to(path, repo_root)
     if not entries:
         return None
-    leaf = entries[-1]
+    leaf, kind = entries[-1], special_file_kind(entries[-1], reading=True)
     if is_dangling_symlink(leaf):
         return _dangling(leaf, repo_root)
     if code == errno.EEXIST and os.path.exists(leaf) and not os.path.isdir(leaf):
-        return _not_a_directory(leaf, repo_root)  # ``mkdir`` of an output directory
+        return _described(leaf, repo_root, "not a directory", _INSIDE)  # ``mkdir`` of an output dir
     if code == errno.EISDIR and os.path.isdir(leaf):
-        return _a_directory(leaf, repo_root)
+        return _described(leaf, repo_root, "a directory", _AT)
+    if code in _SPECIAL_ERRNOS and kind is not None:
+        return _described(leaf, repo_root, f"a {kind}, not a regular file", _AT)
     return None
 
 
@@ -163,16 +191,17 @@ def _predicted_leaf(path: Path, repo_root: Path, replaces_path: bool) -> OutputB
     entries = _entries_down_to(path, repo_root)
     if not entries:
         return None
-    leaf = entries[-1]
+    leaf, kind = entries[-1], special_file_kind(entries[-1])
     if os.path.isdir(leaf):
-        return _a_directory(leaf, repo_root)
+        return _described(leaf, repo_root, "a directory", _AT)
+    if kind is not None:
+        return _described(leaf, repo_root, f"a {kind}, not a regular file", _AT)
     code = None if replaces_path else unresolvable_link_errno(leaf)
     if code is None:
         return None
     target_dir = os.path.dirname(os.path.realpath(leaf))
-    return (
-        _dangling(leaf, repo_root) if code == errno.ELOOP or not os.path.isdir(target_dir) else None
-    )
+    looped_or_lost = code == errno.ELOOP or not os.path.isdir(target_dir)
+    return _dangling(leaf, repo_root) if looped_or_lost else None
 
 
 def _shown(entry: Path, repo_root: Path) -> str:
@@ -199,21 +228,14 @@ def _dangling(link: Path, repo_root: Path) -> OutputBlocker:
         state = "is itself a dangling symbolic link"
     else:
         state = "does not exist"
-    problem = f"{_shown(link, repo_root)} is a dangling symbolic link: its target {target} {state}"
-    return OutputBlocker(link, problem, _DANGLING_REMEDY)
+    reason = f"is a dangling symbolic link: its target {target} {state}"
+    return OutputBlocker(link, _shown(link, repo_root), reason, _DANGLING_REMEDY)
 
 
-def _not_a_directory(entry: Path, repo_root: Path) -> OutputBlocker:
-    shown, inside = _shown(entry, repo_root), "but sync writes generated files inside it"
+def _described(entry: Path, repo_root: Path, what: str, tail: str) -> OutputBlocker:
+    """``<entry> is <what>, <tail>``; for a link ``… is a symbolic link to T, which is <what>, <tail>``."""
+    shown = _shown(entry, repo_root)
     if os.path.islink(entry):
-        problem = f"{shown} is a symbolic link to {_link_target(entry)}, which is not a directory"
-        return OutputBlocker(entry, f"{problem}, {inside}", _LINK_REMEDY)
-    return OutputBlocker(entry, f"{shown} is not a directory, {inside}", _MOVE_REMEDY)
-
-
-def _a_directory(entry: Path, repo_root: Path) -> OutputBlocker:
-    shown, at = _shown(entry, repo_root), "but sync writes a generated file at that path"
-    if os.path.islink(entry):
-        problem = f"{shown} is a symbolic link to {_link_target(entry)}, which is a directory"
-        return OutputBlocker(entry, f"{problem}, {at}", _LINK_REMEDY)
-    return OutputBlocker(entry, f"{shown} is a directory, {at}", _MOVE_REMEDY)
+        reason = f"is a symbolic link to {_link_target(entry)}, which is {what}, {tail}"
+        return OutputBlocker(entry, shown, reason, _LINK_REMEDY)
+    return OutputBlocker(entry, shown, f"is {what}, {tail}", _MOVE_REMEDY)

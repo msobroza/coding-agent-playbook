@@ -15,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
+from coding_agent_playbook._output_io import write_output_text
 from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.hook_policy import advisory_block
@@ -121,7 +122,7 @@ class AgentsMdAdapter(Adapter):
             content += ("\n" if sections else "") + self._guardrails_section()
         agents_md = repo_root / "AGENTS.md"
         agents_md.parent.mkdir(parents=True, exist_ok=True)
-        agents_md.write_text(content, encoding="utf-8")
+        write_output_text(agents_md, content)
         return [agents_md]
 
     def _guardrails_section(self) -> str:

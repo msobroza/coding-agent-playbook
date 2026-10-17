@@ -43,6 +43,7 @@ import dataclasses
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Final
 
+from coding_agent_playbook._output_io import write_output_bytes, write_output_text
 from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._claude_hooks import ClaudeHookEmitter, plans_launcher
 from coding_agent_playbook.adapters._owned_files import (
@@ -117,7 +118,7 @@ def _write_output(path: Path, text: str) -> Path:
     ``write_text`` would write the stub CRLF on Windows (final review).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(text.encode("utf-8"))
+    write_output_bytes(path, text.encode("utf-8"))
     return path
 
 
@@ -136,6 +137,7 @@ class ClaudeCodeAdapter(Adapter):
 
     #: Native skills root; Claude Code discovers ``.claude/skills/<name>/SKILL.md``.
     _SKILL_WRITER: ClassVar[SkillWriter] = SkillWriter(Path(".claude") / "skills")
+    native_skills_root: ClassVar[str | None] = _SKILL_WRITER.root.as_posix()
 
     output_locations: ClassVar[tuple[str, ...]] = (
         *CLAUDE_CODE_COMPOSITES,
@@ -242,7 +244,7 @@ class ClaudeCodeAdapter(Adapter):
         )
         output_path = repo_root / ".claude" / "commands" / f"{prompt.frontmatter.slash}.md"
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(rendered, encoding="utf-8")
+        write_output_text(output_path, rendered)
         return [output_path]
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:

@@ -45,8 +45,8 @@ written whole, so every mode first refuses (exit 1, naming the file) a user
 file or a symlink at a path it is about to write, and a symlinked or
 hard-linked ``.claude/CLAUDE.md`` stub. A write stopped by something in the way
 (a dangling symlink such as ``.claude/commands -> ../tools/cc``, a file where an
-output directory goes, a directory where an output file goes) exits 1 naming
-it, never a traceback (``_output_blockers``). Write mode then pins the interpreter,
+output directory goes, a directory, FIFO or socket where an output file goes)
+exits 1 naming it, never a traceback or a hang (``_output_blockers``). Write mode then pins the interpreter,
 says when OpenCode must restart (the shim's lock entry changed), and asks the
 TTY-only trust questions.
 """
@@ -60,9 +60,13 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
-from coding_agent_playbook.adapters._skill_writer import deciding_ownership_against
+from coding_agent_playbook.adapters._skill_writer import (
+    deciding_ownership_against,
+    native_skill_roots,
+)
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_settings import SettingsMergeError
 from coding_agent_playbook.commands import (
@@ -203,8 +207,8 @@ def execute(
     ``.claude/CLAUDE.md`` is a symlink, a hard link or not a regular file.
     Returns 1 too, without a traceback, naming the entry, when a write is stopped
     by something in the way in the repo: a dangling symlink (``.claude/commands
-    -> ../tools/cc``), a file where an output directory goes, or a directory
-    where an output file goes.
+    -> ../tools/cc``), a file where an output directory goes, or a directory,
+    FIFO or socket where an output file goes.
 
     Example::
 
@@ -238,8 +242,8 @@ def execute(
         return 1
     except OSError as exc:
         # A write stopped by something in the way (a dangling link, a file where an
-        # output dir goes, a dir where an output file goes): name it instead of a
-        # traceback. Any other OSError (EACCES, ENOSPC, a bug) keeps its traceback.
+        # output dir goes, a dir, FIFO or socket where an output file goes): name
+        # it instead of a traceback. Any other OSError (EACCES, ENOSPC, a bug) keeps its traceback.
         blocker = _output_blockers.blocker_in(exc, ctx.repo_root)
         if blocker is None:
             raise
@@ -417,8 +421,13 @@ def _run_check(ctx: SyncContext, git: GitClient) -> int:
     """
     previous, lockfile_drift = _check_lockfile(ctx)
     with _rendered_scratch(ctx, previous) as (scratch, written):
-        shared = _sync_output.shared_outputs(ctx.adapters)
-        drift = _sync_output.file_drift(written, scratch, ctx.repo_root, shared=shared)
+        drift = _sync_output.file_drift(
+            written,
+            scratch,
+            ctx.repo_root,
+            shared=_sync_output.shared_outputs(ctx.adapters),
+            skill_roots=native_skill_roots(ctx.adapters.values()),
+        )
         real_written = _on_real_tree(written, scratch, ctx.repo_root)
     stale = _stale_outputs(ctx, real_written)
     # Settled as in write mode, where cleanup_stale has already deleted ``stale``.
@@ -446,7 +455,7 @@ def _stale_outputs(ctx: SyncContext, real_written: Sequence[Path]) -> list[Path]
     cleanup deletes, so it is skipped with a warning rather than reporting
     orphans its own cleanup may never remove (a drift no sync could clear).
     """
-    resolved = {path.resolve() for path in real_written}
+    resolved = {real_path(path) for path in real_written}  # may pass through a user's loop
     stale: list[Path] = []
     for name, adapter in ctx.adapters.items():
         if _has_legacy_cleanup(adapter):

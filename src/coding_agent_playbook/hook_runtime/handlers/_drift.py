@@ -62,6 +62,8 @@ _PATH_CHARS: Final = 80
 #: An output dir holding more files than this is not scanned further (a bound, not a verdict).
 _MAX_SCAN_FILES: Final = 5000
 _DRIFT_REPORT: Final = "Drift detected:"
+#: How ``sync --check`` names what stopped it before any drift report (``Cannot verify <path>: …``).
+_CANNOT_VERIFY: Final = "Cannot verify "
 _WHAT: Final = {
     "missing": "missing",
     "hash_mismatch": "hash mismatch",
@@ -191,10 +193,13 @@ def drift_line(findings: Sequence[DriftFinding]) -> str:
 
 
 def sync_check_findings(stdout: bytes) -> list[DriftFinding]:
-    """The paths a failed ``playbook sync --check`` lists; ``ValueError`` when it is no drift report.
+    """The paths a failed ``playbook sync --check`` lists; ``ValueError`` when it names none.
 
     Each drift entry starts with a two-space ``  <path>`` line; its explanation
-    lines are indented further.
+    lines are indented further. A check stopped before any drift report by
+    something in the way (a file where an output directory goes, a symlinked
+    rules file, an unparsable ``settings.json``) prints ``Cannot verify <path>:
+    <reason>.`` instead: that path is a ``cannot verify`` finding, not a crash.
 
     Example::
 
@@ -202,12 +207,21 @@ def sync_check_findings(stdout: bytes) -> list[DriftFinding]:
         [DriftFinding(path='AGENTS.md', what='out of sync')]
     """
     lines = stdout.decode("utf-8", errors="replace").splitlines()
-    if _DRIFT_REPORT not in lines:
+    if _DRIFT_REPORT in lines:
+        paths = [line[2:] for line in lines if line.startswith("  ") and not line.startswith("   ")]
+        return [DriftFinding(path, "out of sync") for path in paths] or [
+            DriftFinding("playbook sync --check", "drift")
+        ]
+    refused = [_refused_path(line) for line in lines if line.startswith(_CANNOT_VERIFY)]
+    if not refused:
         raise ValueError("playbook sync --check failed without a drift report")
-    paths = [line[2:] for line in lines if line.startswith("  ") and not line.startswith("   ")]
-    return [DriftFinding(path, "out of sync") for path in paths] or [
-        DriftFinding("playbook sync --check", "drift")
-    ]
+    return [DriftFinding(path, "cannot verify") for path in refused]
+
+
+def _refused_path(line: str) -> str:
+    """``<path>`` of a ``Cannot verify <path>: <reason>.`` line (the command when unnamed)."""
+    path = line[len(_CANNOT_VERIFY) :].split(": ", 1)[0].strip()
+    return path or "playbook sync --check"
 
 
 def _finding(item: DriftItem) -> DriftFinding:

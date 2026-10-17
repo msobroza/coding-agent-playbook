@@ -33,6 +33,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook._file_identity import FileSet
+from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.gitignore import GITIGNORE_FILENAME, LOCKFILE_NAME
 
 if TYPE_CHECKING:
@@ -261,7 +262,7 @@ def _owned_path(root: Path, rel: str) -> Path | None:
     if any(part.casefold() == _GIT_DIR for part in parts):
         return None
     spelled = root.joinpath(*parts)
-    resolved = spelled.resolve()
+    resolved = real_path(spelled)  # Path.resolve() raises on a link loop on Python 3.12
     if resolved != spelled or root not in resolved.parents:
         return None
     return resolved

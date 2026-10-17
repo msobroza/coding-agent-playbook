@@ -20,8 +20,11 @@ from coding_agent_playbook.adapters._skill_writer import (
     ensure_path_safe_skill_id,
     has_declared_id,
     is_engine_owned_skill_dir,
+    link_leaving,
+    native_skill_roots,
     render_skill_md,
     skill_id_of,
+    swap_blocker,
 )
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands._output_locations import OutputLocations
@@ -268,30 +271,109 @@ def test_write_rejects_path_traversal_and_writes_nothing(tmp_path: Path, skill_i
 
 
 @needs_symlinks
-def test_write_refuses_symlinked_skill_dir_escaping_root(tmp_path: Path) -> None:
+def test_write_skips_symlinked_skill_dir_escaping_root(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression: a ``ValueError`` here stopped every ``playbook sync`` mode with a traceback."""
     outside = tmp_path / "outside"
     outside.mkdir()
     root = tmp_path / "repo" / "shared_skills"
     root.mkdir(parents=True)
     (root / "demo").symlink_to(outside, target_is_directory=True)
-    with pytest.raises(ValueError, match="outside the skills root"):
-        SkillWriter(Path("shared_skills")).write(_make_skill(skill_id="demo"), tmp_path / "repo")
+    writer = SkillWriter(Path("shared_skills"))
+
+    assert writer.write(_make_skill(skill_id="demo"), tmp_path / "repo") == []
+    assert "outside the skills root" in capsys.readouterr().err
+    with _skill_writer.deciding_ownership_against(tmp_path / "repo"):  # check modes skip it too
+        assert writer.write(_make_skill(skill_id="demo"), tmp_path / "scratch") == []
+    assert "outside the skills root" in capsys.readouterr().err
     assert list(outside.iterdir()) == []
 
 
 @needs_symlinks
-def test_write_refuses_escaping_intermediate_dir(tmp_path: Path) -> None:
+@pytest.mark.parametrize("dangling", [False, True], ids=["live", "dangling"])
+def test_write_skips_files_under_a_link_leaving_the_skill_dir(
+    tmp_path: Path, dangling: bool, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression: a ``ValueError`` ("refusing to write") stopped ``playbook sync``.
+
+    Skipped with a warning like any other blocker inside a skill dir: nothing is
+    written outside it, and the rest of the skill is still written.
+    """
     outside = tmp_path / "outside"
-    outside.mkdir()
+    if not dangling:
+        outside.mkdir()
     scripts = _seed_tree(tmp_path / "src" / "scripts", {"deep/x.py": b"x\n"})
     writer = SkillWriter(Path("shared_skills"))
     writer.write(_make_skill(skill_id="demo"), tmp_path / "repo")  # engine-owned dir
     skill_dir = tmp_path / "repo" / "shared_skills" / "demo"
     (skill_dir / "scripts").symlink_to(outside, target_is_directory=True)
-    skill = _make_skill(skill_id="demo", scripts_dir=scripts)
-    with pytest.raises(ValueError, match="refusing to write"):
-        writer.write(skill, tmp_path / "repo")
-    assert list(outside.iterdir()) == []
+    capsys.readouterr()
+
+    written = writer.write(_make_skill(skill_id="demo", scripts_dir=scripts), tmp_path / "repo")
+
+    assert written == [skill_dir / SKILL_FILENAME]
+    err = capsys.readouterr().err
+    assert f"not writing {skill_dir / 'scripts' / 'deep' / 'x.py'}" in err
+    assert f"{skill_dir / 'scripts'} is a symbolic link leading outside the skill directory" in err
+    assert not outside.exists() or list(outside.iterdir()) == []
+    assert (skill_dir / "scripts").is_symlink()
+
+
+@needs_symlinks
+def test_link_leaving_names_the_first_link_that_resolves_outside(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skill"
+    (skill_dir / "real" / "sub").mkdir(parents=True)
+    (skill_dir / "inside").symlink_to("real", target_is_directory=True)
+    (skill_dir / "hop").symlink_to(tmp_path, target_is_directory=True)
+    (skill_dir / "via").symlink_to("hop", target_is_directory=True)  # inside -> outside
+
+    assert link_leaving(skill_dir / "real" / "sub", skill_dir) is None
+    assert link_leaving(skill_dir / "inside" / "sub", skill_dir) is None
+    assert link_leaving(skill_dir / "hop" / "x", skill_dir) == skill_dir / "hop"
+    assert link_leaving(skill_dir / "via" / "x", skill_dir) == skill_dir / "via"
+    assert link_leaving(skill_dir, skill_dir) is None
+
+
+def test_swap_blocker_ignores_links_and_names_a_file_or_dir_in_the_way(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skill"
+    (skill_dir / "refs" / "api.md").mkdir(parents=True)  # a dir where a file goes
+    (skill_dir / "scripts").write_text("a file where a dir goes\n", encoding="utf-8")
+
+    assert swap_blocker(skill_dir / "scripts" / "run.sh", skill_dir) == skill_dir / "scripts"
+    assert swap_blocker(skill_dir / "refs" / "api.md", skill_dir) == skill_dir / "refs" / "api.md"
+    assert swap_blocker(skill_dir / "new" / "x.md", skill_dir) is None
+
+
+def test_native_skill_roots_are_the_skill_writer_roots_of_the_given_adapters() -> None:
+    from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
+    from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
+    from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
+    from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
+    from coding_agent_playbook.adapters.shared_skills_adapter import (
+        SHARED_SKILLS_ROOT,
+        SharedSkillsAdapter,
+    )
+
+    native = [ClaudeCodeAdapter(), OpenCodeAdapter(), SharedSkillsAdapter()]
+    others = [ContinueAdapter(), AgentHarnessAdapter()]
+
+    assert native_skill_roots([*native, *others]) == {
+        ".claude/skills",
+        ".opencode/skills",
+        SHARED_SKILLS_ROOT.as_posix(),
+    }
+    assert native_skill_roots(others) == frozenset()
+
+
+def test_native_skill_roots_read_the_public_class_attribute() -> None:
+    """An out-of-tree adapter opts in by declaring ``native_skills_root``."""
+    from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
+
+    class _ThirdPartySkills(ContinueAdapter):
+        native_skills_root = ".acme/skills"
+
+    assert native_skill_roots([_ThirdPartySkills()]) == {".acme/skills"}
 
 
 @needs_symlinks

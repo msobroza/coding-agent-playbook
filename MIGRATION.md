@@ -233,6 +233,12 @@ Sync calls them in one order per adapter: `begin_sync`, the `write_rule` /
 `managed_lock_entries`; `cleanup_stale` still runs after every adapter's
 `finalize` (SPEC §10.1).
 
+One more optional class attribute, `native_skills_root` (default `None`): an
+adapter whose `write_skill` delegates to the shared `SkillWriter` names its root
+there (`".claude/skills"`), so `playbook sync --check` explains a file missing
+inside `<root>/<id>/` the way that writer settles it (SPEC §10.8, §12.3). Leave
+it unset otherwise.
+
 #### Override `stale_outputs`, not `cleanup_stale`
 
 `playbook sync --check` now reports orphans (SPEC §12.3), so it must know what

@@ -14,7 +14,10 @@ Run playbook validate && playbook sync before finishing.``
   sources or detector inputs were touched, the slow path runs ``playbook sync
   --check`` as a child (it renders, so never in-process: L3): only a render
   sees a lockfile orphan whose canonical source was deleted.
-- Any error or timeout is ``skipped`` (``NOT verified``), never green.
+- A child that stopped before any drift report because something is in the
+  way of the output prints ``Cannot verify <path>: …``: that is ``red`` with a
+  ``cannot verify`` finding for ``<path>`` (``_drift.sync_check_findings``).
+- Any other error or timeout is ``skipped`` (``NOT verified``), never green.
 
 The Stop coordinator (stop-ci-parity-gate) plans the stage through
 :func:`drift_stage` and owns the one-block-per-fingerprint budget. Only when

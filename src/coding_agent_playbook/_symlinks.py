@@ -1,20 +1,23 @@
-"""Dangling-symlink predicates that never raise (stdlib only).
+"""Symlink predicates and resolution that never raise (stdlib only).
 
 ``is_symlink() and not exists()`` misjudges, and on Python 3.12/3.13 can
 raise: ``Path.exists()`` raises on any error but ENOENT/ENOTDIR/EBADF/ELOOP,
 so a live link under an unreadable directory (EACCES) either raised out of an
 error handler or read as dangling. These ask ``os.stat`` and keep only the
 errnos that mean the target is gone: missing, or a link loop.
+
+:func:`real_path` stands in for ``Path.resolve()`` on paths a user's link can
+make loop: on Python 3.12 ``resolve()`` raises ``RuntimeError`` on a symlink
+loop (3.13 does not, and CI runs both), so ``.claude/commands -> commands``
+crashed ``playbook sync`` there before any message.
 """
 
 from __future__ import annotations
 
 import errno
 import os
-from typing import TYPE_CHECKING, Final
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from pathlib import Path
+from typing import Final
 
 #: Following the link fails because its target is missing or the links loop.
 _UNRESOLVABLE: Final = frozenset({errno.ENOENT, errno.ENOTDIR, errno.ELOOP})
@@ -36,6 +39,18 @@ def unresolvable_link_errno(path: Path) -> int | None:
     except OSError as exc:
         return exc.errno if exc.errno in _UNRESOLVABLE else None
     return None
+
+
+def real_path(path: Path) -> Path:
+    """``Path(os.path.realpath(path))``: ``Path.resolve()`` (non-strict) that never raises.
+
+    A link loop is left unresolved, like a missing target, where Python 3.12's
+    ``resolve()`` raises ``RuntimeError``.
+
+    Example: ``real_path(repo / ".claude/commands")`` -> the path itself for
+    ``.claude/commands -> commands``.
+    """
+    return Path(os.path.realpath(path))
 
 
 def is_dangling_symlink(path: Path) -> bool:

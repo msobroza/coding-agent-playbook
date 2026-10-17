@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from coding_agent_playbook import _toml
+from coding_agent_playbook._output_io import write_output_text
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -245,7 +246,7 @@ def write_manifest(root: Path, entries: list[ManifestEntry]) -> Path:
     sidecar = root / SIDECAR_DIRNAME
     sidecar.mkdir(parents=True, exist_ok=True)
     target = sidecar / MANIFEST_FILENAME
-    target.write_text(_serialize(entries), encoding="utf-8")
+    write_output_text(target, _serialize(entries))
     return target
 
 
