@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import re
 
+import pytest
+
 from tests.unit.test_docs_migration_hooks import _migration
 
 _V021_HEADING = re.compile(r"^## v0\.21\b.*$", re.MULTILINE)
@@ -52,3 +54,19 @@ def test_migration_v0_21_section_is_first_with_tldr() -> None:
 def test_migration_v0_21_tldr_names_the_glossary_move() -> None:
     rows = [row for row in _tldr_table(_v021_section())[2:] if "CONTEXT.md" in row]
     assert rows, "the v0.21 TL;DR table needs a row saying the glossary moved to CONTEXT.md"
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "skill:",
+        "Where guidance lives",
+        "CLAUDE_RULES_PATH",
+        "python-coding",
+        "44-python-data-shapes.md",
+        "58-python-idioms.md",
+        "playbook validate",
+    ],
+)
+def test_migration_v0_21_covers_topic(phrase: str) -> None:
+    assert phrase in _v021_section(), f"the v0.21 MIGRATION section never mentions {phrase!r}"
