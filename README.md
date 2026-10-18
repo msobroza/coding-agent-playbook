@@ -396,6 +396,21 @@ playbook/skills/<dir>/  ──►  SkillWriter  ──┬──►  .claude/skil
   the way is left alone with a warning, and `playbook sync --check` names it
   until you move it. A path you re-point through a symlink, or a skill dir whose
   `SKILL.md` you rewrote, is yours from then on.
+- Output written through a link out of the repo (`.claude/skills ->
+  /shared/skills`) gets no lockfile entry, so the leftover policy never deletes
+  it: a removed skill's files there stay until you delete them (a stale
+  sentinel-tagged command or rule file there is still removed, and
+  `playbook sync --check` reports it). Anywhere else (the rules above cover
+  skill directories, and a skills root that is a dangling link or a file is
+  skipped with a warning), something in the way of output stops
+  `playbook sync` with exit 1 naming it, and is never deleted: a dangling link
+  (`.claude/commands -> ../tools/cc` with no `tools/cc`; create the target, or
+  re-point or remove the link), a file where an output directory goes (a file
+  at `.claude/commands`), or a directory, FIFO or socket where an output file
+  goes (an `AGENTS.md/` directory, `mkfifo AGENTS.md`). Move or fix it, then
+  re-run. Inside a skill directory a link that leads out of it is never written
+  through: the files under it are skipped with a warning, and
+  `playbook sync --check` names the link until you remove or re-point it.
 
 ## Bundled plugins: superpowers, python_design
 

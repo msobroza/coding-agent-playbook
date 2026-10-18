@@ -15,19 +15,20 @@ does two jobs:
   user's link dangling. That holds whatever order the adapters declare the two
   roots in, and in either link direction (specs/prS-skills-context.md 5.4.3).
 
-Paths resolve through :func:`os.path.realpath`, not ``Path.resolve()``: on
-Python 3.12 the latter raises ``RuntimeError`` on a symlink loop, so
-``OutputLocations`` keeps a looping path as spelled and never raises on one.
-That guarantee is this module's only: other ``Path.resolve()`` calls on the sync
-path, such as ``_sync_orphans._owned_path``, can still raise on a loop on 3.12.
+Paths resolve through ``_symlinks.real_path`` (:func:`os.path.realpath`), not
+``Path.resolve()``: on Python 3.12 the latter raises ``RuntimeError`` on a
+symlink loop, so ``OutputLocations`` keeps a looping path as spelled and never
+raises on one. The sync path's other loop-prone resolutions use the same helper
+(``_sync_orphans._owned_path``, the protected rows, the stale-output scan).
 """
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
+
+from coding_agent_playbook._symlinks import real_path
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -62,7 +63,7 @@ class OutputLocations:
         Unusable entries (absolute, empty, ``..``) are ignored: they can never
         widen the allowlist to the repo root or beyond.
         """
-        root = _resolve_loop_safe(repo_root)
+        root = real_path(repo_root)
         files: set[str] = set()
         dirs: list[tuple[PurePosixPath, PurePosixPath | None]] = []
         for location in locations:
@@ -88,7 +89,7 @@ class OutputLocations:
         and removes the declared directory itself only when it is prunable.
         Files outside every declared directory prune nothing.
         """
-        root = _resolve_loop_safe(repo_root)
+        root = real_path(repo_root)
         for path in deleted:
             rel = _resolved_rel(path, root)
             owner = None if rel is None else self._root_of(rel)
@@ -127,15 +128,10 @@ def _declared_roots(
     return tuple(roots)
 
 
-def _resolve_loop_safe(path: Path) -> Path:
-    """``path`` with every symlink resolved; a symlink loop is kept as spelled, never raised."""
-    return Path(os.path.realpath(path))
-
-
 def _resolved_rel(path: Path, root: Path) -> PurePosixPath | None:
     """``path`` (which may no longer exist) resolved, relative to ``root``; ``None`` outside."""
     try:
-        return PurePosixPath(_resolve_loop_safe(path).relative_to(root).as_posix())
+        return PurePosixPath(real_path(path).relative_to(root).as_posix())
     except ValueError:
         return None
 

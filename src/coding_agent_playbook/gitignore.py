@@ -24,6 +24,7 @@ without touching this module.
 
 from __future__ import annotations
 
+import os
 import unicodedata
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
@@ -72,8 +73,8 @@ def relative_posix_paths(paths: Iterable[Path], repo_root: Path) -> list[str]:
     root = repo_root.resolve()
     relative: set[str] = set()
     for path in paths:
-        try:
-            rel = path.resolve().relative_to(root)
+        try:  # realpath: Path.resolve() raises on a link loop on Python 3.12
+            rel = Path(os.path.realpath(path)).relative_to(root)
         except ValueError:
             continue
         if rel.parts:

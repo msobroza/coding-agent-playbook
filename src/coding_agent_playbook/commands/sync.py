@@ -43,7 +43,10 @@ and never whole-file locked, gitignored or flagged as staged output. The
 launcher, the OpenCode shim and (hooks or not) the Claude Code rules file are
 written whole, so every mode first refuses (exit 1, naming the file) a user
 file or a symlink at a path it is about to write, and a symlinked or
-hard-linked ``.claude/CLAUDE.md`` stub. Write mode then pins the interpreter,
+hard-linked ``.claude/CLAUDE.md`` stub. A write stopped by something in the way
+(a dangling symlink such as ``.claude/commands -> ../tools/cc``, a file where an
+output directory goes, a directory, FIFO or socket where an output file goes)
+exits 1 naming it, never a traceback or a hang (``_output_blockers``). Write mode then pins the interpreter,
 says when OpenCode must restart (the shim's lock entry changed), and asks the
 TTY-only trust questions.
 """
@@ -57,12 +60,19 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
 from coding_agent_playbook.adapters._skill_writer import deciding_ownership_against
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_settings import SettingsMergeError
-from coding_agent_playbook.commands import _sync_hooks, _sync_orphans, _sync_output, _sync_preflight
+from coding_agent_playbook.commands import (
+    _output_blockers,
+    _sync_hooks,
+    _sync_orphans,
+    _sync_output,
+    _sync_preflight,
+)
 from coding_agent_playbook.commands._output_locations import OutputLocations
 from coding_agent_playbook.commands._sync_hook_local import SyncHookDeps
 from coding_agent_playbook.commands._sync_lockfile import (
@@ -192,6 +202,10 @@ def execute(
     not valid JSON, or when a user file (or a symlink) holds the path of the
     launcher, the OpenCode shim or the Claude Code rules file, or when
     ``.claude/CLAUDE.md`` is a symlink, a hard link or not a regular file.
+    Returns 1 too, without a traceback, naming the entry, when a write is stopped
+    by something in the way in the repo: a dangling symlink (``.claude/commands
+    -> ../tools/cc``), a file where an output directory goes, or a directory,
+    FIFO or socket where an output file goes.
 
     Example::
 
@@ -223,6 +237,14 @@ def execute(
     except _sync_hooks.HookPolicyError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    except OSError as exc:
+        # A write stopped by something in the way (a dangling link, a file where an
+        # output dir goes, a dir, FIFO or socket where an output file goes): name
+        # it instead of a traceback. Any other OSError (EACCES, ENOSPC, a bug) keeps its traceback.
+        blocker = _output_blockers.blocker_in(exc, ctx.repo_root)
+        if blocker is None:
+            raise
+        return _output_blockers.report_blocker(blocker, check=check or check_staged)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -396,7 +418,13 @@ def _run_check(ctx: SyncContext, git: GitClient) -> int:
     """
     previous, lockfile_drift = _check_lockfile(ctx)
     with _rendered_scratch(ctx, previous) as (scratch, written):
-        drift = _sync_output.file_drift(written, scratch, ctx.repo_root)
+        drift = _sync_output.file_drift(
+            written,
+            scratch,
+            ctx.repo_root,
+            shared=_sync_output.shared_outputs(ctx.adapters),
+            skill_roots=_sync_output.native_skill_roots(ctx.adapters),
+        )
         real_written = _on_real_tree(written, scratch, ctx.repo_root)
     stale = _stale_outputs(ctx, real_written)
     # Settled as in write mode, where cleanup_stale has already deleted ``stale``.
@@ -424,7 +452,7 @@ def _stale_outputs(ctx: SyncContext, real_written: Sequence[Path]) -> list[Path]
     cleanup deletes, so it is skipped with a warning rather than reporting
     orphans its own cleanup may never remove (a drift no sync could clear).
     """
-    resolved = {path.resolve() for path in real_written}
+    resolved = {real_path(path) for path in real_written}  # may pass through a user's loop
     stale: list[Path] = []
     for name, adapter in ctx.adapters.items():
         if _has_legacy_cleanup(adapter):

@@ -188,6 +188,30 @@ def test_build_lockfile_skips_shared_outputs_without_scoped_entries(tmp_path: Pa
     assert lockfile.entries == []
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_build_lockfile_gives_output_linked_out_of_the_repo_no_entry(tmp_path: Path) -> None:
+    # Regression: the entry kept the resolved absolute path, machine-specific
+    # in a committed lockfile; such output is never owned (SPEC §4.2 step 9).
+    repo, outside = tmp_path / "repo", tmp_path / "shared"
+    (repo / ".claude").mkdir(parents=True)
+    outside.mkdir()
+    (repo / ".claude" / "skills").symlink_to(outside, target_is_directory=True)
+    linked = repo / ".claude" / "skills" / "SKILL.md"
+    inside = repo / "AGENTS.md"
+    for path in (linked, inside):
+        path.write_text("x\n", encoding="utf-8")
+    skill = Provenance(kind="skill", artifact_id="demo")
+
+    lockfile = build_lockfile(
+        [linked, inside],
+        repo,
+        "0.2.0",
+        provenance={linked.resolve(): skill, inside.resolve(): Provenance(kind="composite")},
+    )
+
+    assert [entry.path for entry in lockfile.entries] == ["AGENTS.md"]
+
+
 @pytest.mark.skipif(os.name != "posix", reason="exec bits are POSIX-only")
 def test_build_lockfile_records_the_exec_bit_of_copied_hook_scripts(tmp_path: Path) -> None:
     script = tmp_path / "run.sh"

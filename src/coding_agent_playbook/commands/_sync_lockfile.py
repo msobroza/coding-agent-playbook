@@ -229,7 +229,11 @@ def build_lockfile(
 
     One provenance-bearing whole-file entry per written path, sorted by path
     (``provenance`` is keyed by resolved path; a path without one gets the v1
-    unknown provenance, ``kind=""``). A path owned element-wise by ``managed``
+    unknown provenance, ``kind=""``). A path that resolves outside ``repo_root``
+    — written through an output dir linked out of the repo — gets no entry:
+    the lockfile never owns output there (SPEC §4.2 step 9 releases such an
+    entry), and an absolute, machine-specific path must not reach a lockfile
+    that may be committed (§14.4). A path owned element-wise by ``managed``
     scoped entries, or co-owned with the user (``shared``, repo-relative), gets
     no whole-file entry; the scoped entries follow. ``carried`` are the kept
     orphans (``_sync_orphans``): output an earlier sync wrote that is still
@@ -258,12 +262,14 @@ def build_lockfile(
 
 
 def _whole_file_entry(path: Path, repo_root: Path, origin: Provenance | None) -> LockEntry | None:
-    """Whole-file entry for resolved ``path``; ``None`` if it is unreadable."""
+    """Whole-file entry for resolved ``path``; ``None`` if it is outside the repo or unreadable."""
+    rel = _repo_relative(path, repo_root)
+    if rel is None:
+        return None
     try:
         content = path.read_bytes()
     except OSError:
         return None
-    rel = _repo_relative(path, repo_root)
     if origin is None:
         return LockEntry(path=rel, sha256=compute_hash(content), bytes=len(content))
     entry = LockEntry.from_provenance(rel, content, origin)
@@ -277,9 +283,9 @@ def _is_executable(path: Path) -> bool:
     return os.name == "posix" and bool(path.stat().st_mode & 0o111)
 
 
-def _repo_relative(path: Path, repo_root: Path) -> str:
-    """POSIX resolved ``path`` relative to the resolved ``repo_root`` (as is if outside)."""
+def _repo_relative(path: Path, repo_root: Path) -> str | None:
+    """POSIX resolved ``path`` relative to the resolved ``repo_root``; ``None`` outside it."""
     try:
         return path.relative_to(repo_root.resolve()).as_posix()
     except ValueError:
-        return path.as_posix()
+        return None

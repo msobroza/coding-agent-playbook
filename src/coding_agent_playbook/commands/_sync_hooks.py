@@ -40,6 +40,7 @@ from coding_agent_playbook._guard_config_ruff import (
     ruff_candidate_codes,
 )
 from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
+from coding_agent_playbook._output_io import refuse_special_file
 from coding_agent_playbook.adapters._owned_files import check_engine_owned
 from coding_agent_playbook.adapters.claude_code_adapter import (
     ClaudeCodeAdapter,
@@ -285,8 +286,10 @@ def check_settings_readable(ctx: SyncContext, hooks: SyncHooks, prior: Lockfile 
     )
     if not (targeted or owned or hooks.config.render_remediation_allow):
         return
+    path = ctx.repo_root / CLAUDE_SETTINGS_PATH
+    refuse_special_file(path, reading=True)  # reading a FIFO blocks every mode: name it (§12.2)
     try:
-        data = (ctx.repo_root / CLAUDE_SETTINGS_PATH).read_bytes()
+        data = path.read_bytes()
     except FileNotFoundError:
         return
     parse_settings(decode_settings(data))

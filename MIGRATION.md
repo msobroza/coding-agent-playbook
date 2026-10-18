@@ -187,6 +187,12 @@ schema 2. Under the default `[output] commit = false` the lockfile is local
 state, so there is nothing to do. Under `commit = true` that first sync changes
 the committed lockfile once: commit it together with the engine bump.
 
+A file written through an output dir linked out of the repo (`.claude/skills ->
+/shared/skills`) now gets no entry: the lockfile never owns such output. Earlier
+engines recorded it under its absolute, machine-specific path on every sync; the
+first sync with this version leaves that entry out (and never deletes the
+file). Under `commit = true`, commit that one-time lockfile change.
+
 ### 2. Run `playbook validate` first: `playbook sync` is validate-gated
 
 Write-mode `playbook sync` and `playbook sync --check` now run the whole
@@ -363,6 +369,12 @@ Sync calls them in one order per adapter: `begin_sync`, the `write_rule` /
 `write_prompt` / `write_skill` loops, `write_hook`, `finalize`, then
 `managed_lock_entries`; `cleanup_stale` still runs after every adapter's
 `finalize` (SPEC §10.1).
+
+One more optional class attribute, `native_skills_root` (default `None`): an
+adapter whose `write_skill` delegates to the shared `SkillWriter` names its root
+there (`".claude/skills"`), so `playbook sync --check` explains a file missing
+inside `<root>/<id>/` the way that writer settles it (SPEC §10.8, §12.3). Leave
+it unset otherwise.
 
 #### Override `stale_outputs`, not `cleanup_stale`
 

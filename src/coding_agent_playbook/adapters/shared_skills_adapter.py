@@ -57,6 +57,7 @@ class SharedSkillsAdapter(Adapter):
     name = "shared_skills"
 
     _SKILL_WRITER: ClassVar[SkillWriter] = SkillWriter(SHARED_SKILLS_ROOT)
+    native_skills_root: ClassVar[str | None] = _SKILL_WRITER.root.as_posix()
 
     output_locations: ClassVar[tuple[str, ...]] = (_SKILL_WRITER.location,)
     retired_output_locations: ClassVar[tuple[str, ...]] = (RETIRED_SHARED_SKILLS_LOCATION,)

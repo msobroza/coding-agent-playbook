@@ -26,9 +26,12 @@ only quotes it in prose is the user's), or the previous sync's lockfile lists
 it with unchanged bytes (pre-sentinel engines wrote ``.claude/skills/`` without
 one). A user-authored directory with a colliding id is skipped with a
 warning, never overwritten; so is a skills root that cannot hold directories (a
-dangling symlink or a plain file where it should be). ``playbook sync --check``/``--check-staged`` render into an empty
-scratch dir but decide ownership against the real tree
-(:func:`deciding_ownership_against`), so they skip exactly what write mode skips.
+dangling symlink or a plain file where it should be), and a ``<root>/<id>`` that
+is a link leading out of the root, as is a file under such a link inside a
+claimed dir (never a write outside the root). ``playbook sync --check``/
+``--check-staged`` render into an empty scratch dir but decide ownership against
+the real tree (:func:`deciding_ownership_against`), so they skip exactly what
+write mode skips.
 
 The writer never deletes stale files. Output an earlier sync left behind in a
 skill dir is settled by the one lockfile-based leftover policy
@@ -48,6 +51,7 @@ from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook._sentinel import has_sentinel
+from coding_agent_playbook._symlinks import is_dangling_symlink, link_leaving, real_path
 
 # The Agent Skills naming rules live in _agent_skill_rules (file-size budget); this
 # module stays the home callers import them from (commands/validate.py, the tests).
@@ -174,21 +178,29 @@ class SkillWriter:
 
         Returns ``[]`` (and warns on stderr) when ``<root>/<id>/`` already
         exists and is not engine-owned — a user-authored skill dir is never
-        overwritten — or when the skills root is unusable (a dangling symlink,
-        a plain file). Ownership is judged under :func:`deciding_ownership_against`'s
-        root when one is active (``--check`` modes), else under ``repo_root``.
-        Raises ``ValueError`` for a non-path-safe id or a destination that
-        would resolve outside the skills root (e.g. through a symlink).
+        overwritten — when the skills root is unusable (a dangling symlink, a
+        plain file), or when ``<root>/<id>`` is a link leading out of the root.
+        A file under a link leading out of ``<root>/<id>/`` is skipped the same
+        way, the rest of the skill still written. Ownership is judged under
+        :func:`deciding_ownership_against`'s root when one is active (``--check``
+        modes), else under ``repo_root``. Raises ``ValueError`` for a
+        non-path-safe id.
         """
         skill_md_text = render_skill_md(skill)  # validates the id before any I/O
         skill_id = skill_id_of(skill)
         owner_root = _OWNERSHIP_ROOT.get() or repo_root
-        unusable = _unusable_component(self.skills_root(owner_root), owner_root)
+        owner_skills = self.skills_root(owner_root)
+        unusable = _unusable_component(owner_skills, owner_root)
         if unusable is not None:
             _warn_unusable_root(unusable)
             return []
+        owner_dir = owner_skills / ensure_path_safe_skill_id(skill_id)
+        if not real_path(owner_dir).is_relative_to(real_path(owner_skills)):
+            # Regression: a ValueError here stopped every sync mode with a traceback.
+            where = f"it resolves to {real_path(owner_dir)}, outside the skills root {owner_skills}"
+            _warn_through_link(owner_dir, where)
+            return []
         skill_dir = self._skill_dir(repo_root, skill_id)
-        owner_dir = skill_dir if owner_root == repo_root else self._contained(owner_root, skill_id)
         if not _may_claim(owner_dir, owner_root):
             _warn_not_engine_owned(owner_dir)
             return []
@@ -200,13 +212,14 @@ class SkillWriter:
         return skill_dir
 
     def _contained(self, repo_root: Path, skill_id: str) -> Path:
-        """``<root>/<id>`` under ``repo_root``; ``ValueError`` if it resolves outside the root."""
+        """``<root>/<id>`` under ``repo_root``; ``ValueError`` if it resolves outside the root
+        (defensive: :meth:`write` has already skipped such a dir with a warning)."""
         root = self.skills_root(repo_root)
         skill_dir = root / ensure_path_safe_skill_id(skill_id)
-        if not skill_dir.resolve().is_relative_to(root.resolve()):
+        if not real_path(skill_dir).is_relative_to(real_path(root)):
             raise ValueError(
-                f"skill directory {skill_dir} resolves to {skill_dir.resolve()}, "
-                f"outside the skills root {root.resolve()}"
+                f"skill directory {skill_dir} resolves to {real_path(skill_dir)}, "
+                f"outside the skills root {real_path(root)}"
             )
         return skill_dir
 
@@ -284,7 +297,7 @@ def _unusable_component(skills_root: Path, repo_root: Path) -> Path | None:
     current = repo_root
     for part in parts:
         current = current / part
-        if current.is_symlink() and not current.exists():
+        if is_dangling_symlink(current):
             return current
         if current.exists() and not current.is_dir():
             return current
@@ -362,16 +375,17 @@ def _prepare_destination(dst: Path, skill_dir: Path, prior: PriorOutput) -> bool
     a parent directory must go (a file became a folder) or a real directory at
     ``dst`` (a folder became a file) is displaced only if it holds nothing but
     files the previous lockfile lists; otherwise ``dst`` is skipped with a
-    warning and ``False`` is returned, so a user file is never deleted.
+    warning and ``False`` is returned, so a user file is never deleted. A link
+    leading out of ``skill_dir`` on the way skips ``dst`` the same way: the
+    engine never writes outside the root, nor deletes the user's link.
     """
-    # Check before mkdir: resolve() follows any existing symlinked component,
-    # so an escaping intermediate directory is refused before anything is created.
-    if not dst.parent.resolve().is_relative_to(skill_dir.resolve()):
-        raise ValueError(
-            f"refusing to write {dst}: its directory resolves to "
-            f"{dst.parent.resolve()}, outside {skill_dir.resolve()}"
-        )
-    blocker = _blocker_of(dst, skill_dir)
+    # Check before mkdir, which would create directories through the link.
+    link = link_leaving(dst.parent, skill_dir)
+    if link is not None:
+        # was a ValueError: a traceback for sync
+        _warn_through_link(dst, f"{link} is a symbolic link leading outside the skill directory")
+        return False
+    blocker = swap_blocker(dst, skill_dir)
     if blocker is not None and not prior.may_displace(blocker):
         _warn_blocked(dst, blocker)
         return False
@@ -381,10 +395,15 @@ def _prepare_destination(dst: Path, skill_dir: Path, prior: PriorOutput) -> bool
     return True
 
 
-def _blocker_of(dst: Path, skill_dir: Path) -> Path | None:
+def swap_blocker(dst: Path, skill_dir: Path) -> Path | None:
     """The real file where a parent dir of ``dst`` must go, or a real dir at ``dst``.
 
-    Symlinks never block (unlinking one loses no data).
+    Symlinks never block (unlinking one loses no data). What is returned is
+    displaced only when the leftover policy allows it (a file/folder swap,
+    SPEC §10.8); ``sync --check`` names it otherwise.
+
+    Example: ``swap_blocker(skill_dir / "scripts" / "run.sh", skill_dir)`` ->
+    ``skill_dir / "scripts"`` when that is a regular file.
     """
     current = skill_dir
     for part in dst.parent.relative_to(skill_dir).parts:
@@ -392,6 +411,14 @@ def _blocker_of(dst: Path, skill_dir: Path) -> Path | None:
         if not current.is_symlink() and current.exists() and not current.is_dir():
             return current
     return dst if dst.is_dir() and not dst.is_symlink() else None
+
+
+def _warn_through_link(target: Path, where: str) -> None:
+    print(
+        f"warning: not writing {target}: {where}, and sync never writes through such a link; "
+        "remove or re-point it, then re-run 'playbook sync'",
+        file=sys.stderr,
+    )
 
 
 def _warn_blocked(dst: Path, blocker: Path) -> None:
