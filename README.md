@@ -363,8 +363,10 @@ playbook/skills/<dir>/  ──►  SkillWriter  ──┬──►  .claude/skil
   `.claude`); v1 logs one duplicate-skill warning per extra copy, which
   `OPENCODE_DISABLE_EXTERNAL_SKILLS` or `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS`
   silence. Engines before v0.21 wrote these copies to `shared_skills/`: the
-  next `playbook sync` deletes the unchanged ones and keeps, and reports,
-  anything you edited or git tracks (MIGRATION.md, v0.21).
+  next `playbook sync` deletes the unchanged ones and keeps anything you edited
+  or git tracks. It reports a tracked file on stderr, and under `commit = true`
+  every kept file; an edited, untracked copy stays owned and gitignored without
+  a notice (MIGRATION.md, v0.21).
 - No engine file sits directly in a skill root: every write is
   `<root>/<id>/…`, because OpenCode v2 loads any root-level `*.md` in a skill
   root as a skill.

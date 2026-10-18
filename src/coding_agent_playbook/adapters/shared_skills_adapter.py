@@ -9,7 +9,8 @@ not read it: they read ``.claude/skills/``.
 Engines before SPEC v0.21 wrote this adapter's skills to ``shared_skills/``,
 which no harness reads. That tree is declared as a *retired* output location,
 so the first sync after an upgrade settles it by the leftover policy (SPEC §4.2
-step 9): pristine copies are deleted, edited or tracked ones kept and reported.
+step 9): pristine copies are deleted, edited or tracked ones kept and owned
+(reported when tracked, or under ``commit = true``; MIGRATION.md, v0.21).
 
 Rules and prompts are no-ops here: rules reach every assistant through
 ``AGENTS.md`` and prompts through the harness adapters. The skill bytes come

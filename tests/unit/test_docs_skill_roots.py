@@ -57,6 +57,18 @@ def test_readme_skills_section_names_every_native_root() -> None:
         assert root in section, root
 
 
+def test_readme_promises_no_report_for_an_edited_untracked_leftover() -> None:
+    """Regression (PR #68 review): under ``commit = false`` sync keeps an edited,
+    untracked ``shared_skills/`` copy without a notice (spec P1-8: no new notice),
+    so the README must say which kept files are reported, as MIGRATION does."""
+    section = _section("## Skills: one source, every Agent-Skills root")
+    bullet = next(item for item in section.split("\n- ") if "`shared_skills/`" in item)
+    prose = " ".join(bullet.split())  # undo the markdown line wrapping
+    assert "keeps, and reports" not in prose
+    assert "under `commit = true` every kept file" in prose
+    assert "untracked copy stays owned and gitignored without a notice" in prose
+
+
 def test_spec_init_transcript_offers_no_codex_choice() -> None:
     section = _spec_section("### 12.1 `playbook init`", "### 12.2")
     assert "Codex CLI (AGENTS.md only)" not in section

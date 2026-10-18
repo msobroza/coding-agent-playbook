@@ -16,8 +16,10 @@ does two jobs:
   roots in, and in either link direction (specs/prS-skills-context.md 5.4.3).
 
 Paths resolve through :func:`os.path.realpath`, not ``Path.resolve()``: on
-Python 3.12 the latter raises ``RuntimeError`` on a symlink loop, and a loop in
-a consumer repo must not crash ``playbook sync``.
+Python 3.12 the latter raises ``RuntimeError`` on a symlink loop, so
+``OutputLocations`` keeps a looping path as spelled and never raises on one.
+That guarantee is this module's only: other ``Path.resolve()`` calls on the sync
+path, such as ``_sync_orphans._owned_path``, can still raise on a loop on 3.12.
 """
 
 from __future__ import annotations

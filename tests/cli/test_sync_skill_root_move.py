@@ -5,7 +5,9 @@ wrote the ``shared_skills`` adapter's copies to ``shared_skills/<id>/``. The
 adapter declares that tree as a retired output location, so the first sync
 after an upgrade settles it by the leftover policy (SPEC §4.2 step 9): pristine,
 untracked files are deleted and the tree pruned; edited or tracked files are
-kept, owned and reported; files no lockfile lists are never touched.
+kept and owned (reported on stderr when tracked, and every kept file under
+``commit = true``; an edited, untracked copy gets no notice, spec P1-8); files
+no lockfile lists are never touched.
 
 ``_rewind_to_shared_skills_root`` turns a repo synced by this engine into the
 state the previous engine left: the same bytes, lockfile rows and managed
@@ -130,14 +132,18 @@ def test_check_before_the_move_reports_the_old_tree_as_orphans(
 
 
 def test_edited_shared_skills_file_is_kept_owned_and_ignored(
-    tmp_path: Path, make_synthetic_repo: MakeRepo
+    tmp_path: Path, make_synthetic_repo: MakeRepo, capsys: pytest.CaptureFixture[str]
 ) -> None:
     repo = _synced_then_rewound(make_synthetic_repo(tmp_path, config_text=_config()))
     edited = repo / _OLD_ROOT / "query-db" / "scripts" / "run.py"
     edited.write_text("print('edited')\n")
+    capsys.readouterr()
 
     assert _sync.execute(repo, git=FakeGitClient()) == 0
 
+    # P1-8 (no new notice): under commit = false an edited, untracked copy is kept
+    # silently, as the README and MIGRATION say; only tracked files are reported.
+    assert f"{_OLD_ROOT}/" not in capsys.readouterr().err
     assert edited.read_text() == "print('edited')\n"
     assert not (repo / _OLD_ROOT / "query-db" / "SKILL.md").exists()
     assert f"{_OLD_ROOT}/query-db/scripts/run.py" in _lock_paths(repo)
