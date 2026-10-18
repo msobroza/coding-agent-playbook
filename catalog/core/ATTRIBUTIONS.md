@@ -34,10 +34,10 @@ License: MIT License. Copyright (c) 2026 Ludo Technologies LLC.
 The following artifacts distill ideas from that collection:
 
 - Rules: python-performance-idioms, python-async,
-  python-classes-and-protocols.
+  python-classes-and-protocols, pytest-test-doubles, pytest-fixtures.
 - Additions to existing artifacts: the python-error-handling, python-typing,
-  python-docstrings, python-dependency-injection, python-data-shapes and
-  python-idioms rules.
+  python-docstrings, python-dependency-injection, python-data-shapes,
+  python-idioms and pytest rules.
 
 The collection's impact ratings informed each rule's priority. Its tool
 recommendations that the engine does not adopt (a code-analysis tool from the

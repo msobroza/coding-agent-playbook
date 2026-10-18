@@ -45,7 +45,7 @@ changelog entry is v0.21.
 | Overriding `project-context` or `python-house-style` by id | Nothing: your text keeps winning. Consider trimming it, since the engine's own text is now much shorter. See "The always text is shorter". |
 | Keeping your own scoped rules in `playbook/rules/` or an overlay | Add `skill: <skill-id>` to each before upgrading ("Add skill: to your own scoped rules"). Until then `playbook validate` fails and `playbook sync` refuses to run. |
 | Tooling or prompts that match lint-feedback lines (`rule <id>: …`) | Accept the new `rule <id> (skill <skill>): …` prefix and the ` (rule <id>, skill <skill>)` suffix; the next `playbook sync` turns them on. See "Guardrails and lint feedback point at skills". |
-| Any repo with Python code (distilled python-best-practices content) | Nothing but `playbook sync`: `python-coding` gains three references and six change text. An overlay or repo-local rule with one of the three new ids now replaces the core rule. See "Distilled python-best-practices content". |
+| Any repo with Python code (distilled python-best-practices content) | Nothing but `playbook sync`: `python-coding` gains three references and six change text, and with pytest `python-testing` gains two and `pytest` changes text. An overlay or repo-local rule with one of the five new ids now replaces the core rule. See "Distilled python-best-practices content". |
 
 ### `package_manager` and per-key validation
 
@@ -328,9 +328,23 @@ ideas are written fresh in the catalog's own words. There is nothing to do but
   `python-typing`, `python-docstrings` and `python-dependency-injection` gain a
   few bullets each. The prompts that inline these rules (`includes_rules`)
   carry the new text too.
-- **Overrides.** An overlay or repo-local rule whose id is one of the three new
+- **Two new `python-testing` references** in a repo that uses pytest:
+  `pytest-test-doubles` (a named fake passed in like production is the default
+  double; autospec only at thin third-party seams; `monkeypatch` for the
+  environment, the working directory and code that cannot take a parameter
+  yet) and `pytest-fixtures` (scope, teardown, placement, names and factories).
+  They also match `**/conftest.py`. With Continue enabled, `.continue/rules/`
+  gains `61-pytest-test-doubles.md` and `63-pytest-fixtures.md`.
+- **`pytest` changes text.** Its fixture section and its `monkeypatch` clause
+  move to those two references, and it gains parametrize and
+  one-thing-per-test detail. The `generate-tests` prompt now recommends named
+  fakes instead of the `mocker` fixture, and the `pytest` text it inlines
+  changes with the rule.
+- **Overrides.** An overlay or repo-local rule whose id is one of the five new
   ids now replaces the core rule, like any rule with the same id; `playbook
-  check` shows which one won.
+  check` shows which one won. A repo-local override of `pytest` keeps its own
+  text, so the moved fixture and test-double guidance then lives only in the
+  two new references.
 - **Not changed.** Rule ids, gates and priorities of the existing rules; every
   rule's `lint_codes`, so lint feedback reports exactly what it did before; the
   always rules, `AGENTS.md` and the Claude Code rules file. `playbook sync
