@@ -27,8 +27,8 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook._file_identity import FileSet
 from coding_agent_playbook._output_io import is_character_device, refuse_special_file
-from coding_agent_playbook._symlinks import real_path
-from coding_agent_playbook.adapters._skill_writer import link_leaving, swap_blocker
+from coding_agent_playbook._symlinks import link_leaving, real_path
+from coding_agent_playbook.adapters._skill_writer import swap_blocker
 from coding_agent_playbook.commands._output_blockers import write_blocker
 from coding_agent_playbook.gitignore import (
     GITIGNORE_FILENAME,
@@ -161,6 +161,22 @@ def shared_outputs(adapters: Mapping[str, Adapter]) -> frozenset[str]:
         frozenset({'.claude/settings.json'})
     """
     return frozenset(path for adapter in adapters.values() for path in type(adapter).shared_outputs)
+
+
+def native_skill_roots(adapters: Mapping[str, Adapter]) -> frozenset[str]:
+    """Each declared ``Adapter.native_skills_root`` of ``adapters`` (``.claude/skills``, …).
+
+    Inside ``<root>/<id>/`` of these roots the skill writer settles what is in
+    the way itself (§10.8), so :func:`file_drift` explains a missing file its
+    way; ``agent_harness``'s ``skills/`` is written plainly and declares none.
+
+    Example::
+
+        >>> native_skill_roots({"claude_code": ClaudeCodeAdapter()})  # doctest: +SKIP
+        frozenset({'.claude/skills'})
+    """
+    roots = (type(adapter).native_skills_root for adapter in adapters.values())
+    return frozenset(root for root in roots if root is not None)
 
 
 def without_shared(paths: Iterable[Path], repo_root: Path, shared: Iterable[str]) -> list[Path]:

@@ -63,10 +63,7 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
-from coding_agent_playbook.adapters._skill_writer import (
-    deciding_ownership_against,
-    native_skill_roots,
-)
+from coding_agent_playbook.adapters._skill_writer import deciding_ownership_against
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_settings import SettingsMergeError
 from coding_agent_playbook.commands import (
@@ -426,7 +423,7 @@ def _run_check(ctx: SyncContext, git: GitClient) -> int:
             scratch,
             ctx.repo_root,
             shared=_sync_output.shared_outputs(ctx.adapters),
-            skill_roots=native_skill_roots(ctx.adapters.values()),
+            skill_roots=_sync_output.native_skill_roots(ctx.adapters),
         )
         real_written = _on_real_tree(written, scratch, ctx.repo_root)
     stale = _stale_outputs(ctx, real_written)

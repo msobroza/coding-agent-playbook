@@ -14,7 +14,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook._symlinks import is_dangling_symlink, unresolvable_link_errno
+from coding_agent_playbook._symlinks import (
+    is_dangling_symlink,
+    link_leaving,
+    unresolvable_link_errno,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -60,3 +64,17 @@ def test_a_link_into_an_unreadable_directory_is_not_called_dangling(
     (tmp_path / "into-locked").symlink_to(locked / "cc", target_is_directory=True)
 
     assert not is_dangling_symlink(tmp_path / "into-locked")  # EACCES: unknown, never raised
+
+
+def test_link_leaving_names_the_first_link_that_resolves_outside(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skill"
+    (skill_dir / "real" / "sub").mkdir(parents=True)
+    (skill_dir / "inside").symlink_to("real", target_is_directory=True)
+    (skill_dir / "hop").symlink_to(tmp_path, target_is_directory=True)
+    (skill_dir / "via").symlink_to("hop", target_is_directory=True)  # inside -> outside
+
+    assert link_leaving(skill_dir / "real" / "sub", skill_dir) is None
+    assert link_leaving(skill_dir / "inside" / "sub", skill_dir) is None
+    assert link_leaving(skill_dir / "hop" / "x", skill_dir) == skill_dir / "hop"
+    assert link_leaving(skill_dir / "via" / "x", skill_dir) == skill_dir / "via"
+    assert link_leaving(skill_dir, skill_dir) is None

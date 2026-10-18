@@ -27,14 +27,11 @@ it with unchanged bytes (pre-sentinel engines wrote ``.claude/skills/`` without
 one). A user-authored directory with a colliding id is skipped with a
 warning, never overwritten; so is a skills root that cannot hold directories (a
 dangling symlink or a plain file where it should be), and a ``<root>/<id>`` that
-is a link leading out of the root. ``playbook sync --check``/``--check-staged``
-render into an empty scratch dir but decide ownership against the real tree
-(:func:`deciding_ownership_against`), so they skip exactly what write mode skips.
-Inside a claimed dir a file under a link leading out of it is skipped with a
-warning too (never a crash, never a write outside the root); ``--check`` names
-that link, as it names a file/folder swap the writer refused
-(:func:`link_leaving`, :func:`swap_blocker`), only inside the native skills roots
-(:func:`native_skill_roots`).
+is a link leading out of the root, as is a file under such a link inside a
+claimed dir (never a write outside the root). ``playbook sync --check``/
+``--check-staged`` render into an empty scratch dir but decide ownership against
+the real tree (:func:`deciding_ownership_against`), so they skip exactly what
+write mode skips.
 
 The writer never deletes stale files. Output an earlier sync left behind in a
 skill dir is settled by the one lockfile-based leftover policy
@@ -54,7 +51,7 @@ from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook._sentinel import has_sentinel
-from coding_agent_playbook._symlinks import is_dangling_symlink, real_path
+from coding_agent_playbook._symlinks import is_dangling_symlink, link_leaving, real_path
 
 # The Agent Skills naming rules live in _agent_skill_rules (file-size budget); this
 # module stays the home callers import them from (commands/validate.py, the tests).
@@ -78,9 +75,8 @@ from coding_agent_playbook.harness.emitter import with_sentinel_body
 from coding_agent_playbook.types import format_frontmatter
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Iterator
 
-    from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.types import Skill
 
 #: The primary file of a native skill directory.
@@ -201,7 +197,8 @@ class SkillWriter:
         owner_dir = owner_skills / ensure_path_safe_skill_id(skill_id)
         if not real_path(owner_dir).is_relative_to(real_path(owner_skills)):
             # Regression: a ValueError here stopped every sync mode with a traceback.
-            _warn_escaping_skill_dir(owner_dir, owner_skills)
+            where = f"it resolves to {real_path(owner_dir)}, outside the skills root {owner_skills}"
+            _warn_through_link(owner_dir, where)
             return []
         skill_dir = self._skill_dir(repo_root, skill_id)
         if not _may_claim(owner_dir, owner_root):
@@ -215,10 +212,8 @@ class SkillWriter:
         return skill_dir
 
     def _contained(self, repo_root: Path, skill_id: str) -> Path:
-        """``<root>/<id>`` under ``repo_root``; ``ValueError`` if it resolves outside the root.
-
-        Defensive: :meth:`write` has already skipped such a dir (with a warning).
-        """
+        """``<root>/<id>`` under ``repo_root``; ``ValueError`` if it resolves outside the root
+        (defensive: :meth:`write` has already skipped such a dir with a warning)."""
         root = self.skills_root(repo_root)
         skill_dir = root / ensure_path_safe_skill_id(skill_id)
         if not real_path(skill_dir).is_relative_to(real_path(root)):
@@ -227,21 +222,6 @@ class SkillWriter:
                 f"outside the skills root {real_path(root)}"
             )
         return skill_dir
-
-
-def native_skill_roots(adapters: Iterable[Adapter]) -> frozenset[str]:
-    """Each declared ``Adapter.native_skills_root`` of ``adapters`` (``.claude/skills``, …).
-
-    Inside ``<root>/<id>/`` of these roots this writer settles what is in the
-    way itself, so ``sync --check`` explains a missing file its way;
-    ``agent_harness``'s ``skills/`` is written plainly and declares none.
-
-    Example: ``native_skill_roots(ctx.adapters.values())`` -> ``frozenset({".claude/skills"})``
-    with only ``claude_code`` on.
-    """
-    return frozenset(
-        root for adapter in adapters if (root := type(adapter).native_skills_root) is not None
-    )
 
 
 def is_engine_owned_skill_dir(skill_dir: Path) -> bool:
@@ -402,7 +382,8 @@ def _prepare_destination(dst: Path, skill_dir: Path, prior: PriorOutput) -> bool
     # Check before mkdir, which would create directories through the link.
     link = link_leaving(dst.parent, skill_dir)
     if link is not None:
-        _warn_link_leaving(dst, link)  # was a ValueError: a traceback for sync
+        # was a ValueError: a traceback for sync
+        _warn_through_link(dst, f"{link} is a symbolic link leading outside the skill directory")
         return False
     blocker = swap_blocker(dst, skill_dir)
     if blocker is not None and not prior.may_displace(blocker):
@@ -412,25 +393,6 @@ def _prepare_destination(dst: Path, skill_dir: Path, prior: PriorOutput) -> bool
     dst.parent.mkdir(parents=True, exist_ok=True)
     _remove_existing(dst)
     return True
-
-
-def link_leaving(directory: Path, skill_dir: Path) -> Path | None:
-    """The first symlink from ``skill_dir`` down to ``directory`` that leads outside ``skill_dir``.
-
-    ``None`` when every link on the way stays inside (those the writer simply
-    unlinks). A dangling link counts by where it points. ``sync --check`` names
-    the same link for a file the writer skips because of it.
-
-    Example: ``link_leaving(skill_dir / "scripts" / "deep", skill_dir)`` ->
-    ``skill_dir / "scripts"`` for ``scripts -> /elsewhere``.
-    """
-    inside = real_path(skill_dir)
-    current = skill_dir
-    for part in directory.relative_to(skill_dir).parts:
-        current = current / part
-        if current.is_symlink() and not real_path(current).is_relative_to(inside):
-            return current
-    return None
 
 
 def swap_blocker(dst: Path, skill_dir: Path) -> Path | None:
@@ -451,20 +413,10 @@ def swap_blocker(dst: Path, skill_dir: Path) -> Path | None:
     return dst if dst.is_dir() and not dst.is_symlink() else None
 
 
-def _warn_link_leaving(dst: Path, link: Path) -> None:
+def _warn_through_link(target: Path, where: str) -> None:
     print(
-        f"warning: not writing {dst}: {link} is a symbolic link leading outside the skill "
-        "directory, and sync never writes through one; remove or re-point it, then re-run "
-        "'playbook sync'",
-        file=sys.stderr,
-    )
-
-
-def _warn_escaping_skill_dir(skill_dir: Path, root: Path) -> None:
-    print(
-        f"warning: not writing {skill_dir}: it resolves to {real_path(skill_dir)}, outside the "
-        f"skills root {root}, and sync never writes through such a link; remove or re-point "
-        "it, then re-run 'playbook sync'",
+        f"warning: not writing {target}: {where}, and sync never writes through such a link; "
+        "remove or re-point it, then re-run 'playbook sync'",
         file=sys.stderr,
     )
 

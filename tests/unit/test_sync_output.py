@@ -14,6 +14,7 @@ from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.commands._sync_output import (
     file_drift,
     gitignore_drift,
+    native_skill_roots,
     report_kept_leftovers,
     report_staged_output,
     shared_outputs,
@@ -326,3 +327,38 @@ def test_file_drift_names_a_link_leaving_a_native_skill_dir(tmp_path: Path) -> N
         "skill directory, and sync never writes through one.\n"
         "    Remove or re-point the link, then run 'playbook sync'."
     )
+
+
+def test_native_skill_roots_are_the_skill_writer_roots_of_the_given_adapters() -> None:
+    from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
+    from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
+    from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
+    from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
+    from coding_agent_playbook.adapters.shared_skills_adapter import (
+        SHARED_SKILLS_ROOT,
+        SharedSkillsAdapter,
+    )
+
+    native = {
+        "claude_code": ClaudeCodeAdapter(),
+        "opencode": OpenCodeAdapter(),
+        "shared_skills": SharedSkillsAdapter(),
+    }
+    others = {"continue": ContinueAdapter(), "agent_harness": AgentHarnessAdapter()}
+
+    assert native_skill_roots({**native, **others}) == {
+        ".claude/skills",
+        ".opencode/skills",
+        SHARED_SKILLS_ROOT.as_posix(),
+    }
+    assert native_skill_roots(others) == frozenset()
+
+
+def test_native_skill_roots_read_the_public_class_attribute() -> None:
+    """An out-of-tree adapter opts in by declaring ``native_skills_root``."""
+    from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
+
+    class _ThirdPartySkills(ContinueAdapter):
+        native_skills_root = ".acme/skills"
+
+    assert native_skill_roots({"acme": _ThirdPartySkills()}) == {".acme/skills"}

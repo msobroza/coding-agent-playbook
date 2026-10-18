@@ -53,6 +53,25 @@ def real_path(path: Path) -> Path:
     return Path(os.path.realpath(path))
 
 
+def link_leaving(directory: Path, root: Path) -> Path | None:
+    """The first symlink from ``root`` down to ``directory`` that leads outside ``root``.
+
+    ``None`` when every link on the way stays inside. A dangling link counts by
+    where it points. The skill writer skips a file under such a link inside a
+    skill directory, and ``sync --check`` names the link (SPEC §10.8, §12.3).
+
+    Example: ``link_leaving(skill_dir / "scripts" / "deep", skill_dir)`` ->
+    ``skill_dir / "scripts"`` for ``scripts -> /elsewhere``.
+    """
+    inside = real_path(root)
+    current = root
+    for part in directory.relative_to(root).parts:
+        current = current / part
+        if current.is_symlink() and not real_path(current).is_relative_to(inside):
+            return current
+    return None
+
+
 def is_dangling_symlink(path: Path) -> bool:
     """Whether ``path`` is a symlink whose target is missing or loops; never raises.
 
