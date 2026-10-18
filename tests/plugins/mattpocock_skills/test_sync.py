@@ -29,7 +29,7 @@ from tests.plugins.mattpocock_skills._expectations import (
     split_skill,
 )
 from tests.plugins.mattpocock_skills.conftest import init_probe
-from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
+from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS, SKILL_ADAPTERS
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -122,7 +122,17 @@ def test_lockfile_stamps_every_plugin_skill_entry_with_kind_and_source(synced_re
 
 @pytest.mark.usefixtures("hermetic_git_env")
 def test_init_without_the_overlay_writes_none_of_the_ids(tmp_path: Path) -> None:
-    repo = init_probe(tmp_path, overlays=None)
+    # Continue is opt-in at init: enable every skill adapter so each root could leak.
+    repo = init_probe(tmp_path, overlays=None, adapters=",".join(SKILL_ADAPTERS))
+    config = tomllib.loads((repo / ".coding-agent-playbook.toml").read_text("utf-8"))
+    assert sorted(config["adapters_enabled"]) == sorted(SKILL_ADAPTERS)
+    lockfile = tomllib.loads((repo / ".coding-agent-playbook.lock").read_text("utf-8"))
+    leaked = [
+        e
+        for e in lockfile.get("entries", [])
+        if e.get("source") == PLUGIN_NAME or e.get("artifact_id") in FINAL_IDS
+    ]
+    assert leaked == [], "a plugin entry in the lockfile with the overlay off"
     for root in NATIVE_SKILL_ROOTS:
         assert sorted(FINAL_IDS & {p.name for p in _dir_entries(repo / root)}) == [], root
     prompts = {p.stem for p in _dir_entries(repo / ".continue" / "prompts")}

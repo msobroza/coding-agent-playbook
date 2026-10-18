@@ -94,6 +94,11 @@ def _docs_and_rules(skill_id: str) -> list[Path]:
     return [*skill_docs(skill_id), *rule_files()]
 
 
+def _skill_and_rule_files(skill_id: str) -> list[Path]:
+    """Every file of one skill plus the rules: what G7 and G8 scan (section 7.1)."""
+    return [*skill_files(skill_id), *rule_files()]
+
+
 def _scanned_hits(skill_id: str) -> list[Hit]:
     """Every allowlist-able hit of one skill: G4, G5 and G13."""
     return [
@@ -184,17 +189,21 @@ def test_g6_no_shell_script_and_only_python3_shebangs_in_scripts(path: Path) -> 
     assert path.parent.name == "scripts" and path.suffix == ".py", f"{_rel(path)}: not a script"
 
 
+def _claude_only_hits(skill_id: str) -> list[Hit]:
+    """G7: Claude Code-only names in every file of one skill (scripts included) and the rules."""
+    files = _skill_and_rule_files(skill_id)
+    return [hit for path in files for hit in regex_hits(path, CLAUDE_ONLY_RE)]
+
+
 @pytest.mark.parametrize("skill_id", _SKILLS)
 def test_g7_no_claude_only_name(skill_id: str) -> None:
-    hits = [
-        str(hit) for path in _docs_and_rules(skill_id) for hit in regex_hits(path, CLAUDE_ONLY_RE)
-    ]
+    hits = [str(hit) for hit in _claude_only_hits(skill_id)]
     assert hits == [], "name the harness capability with a fallback instead (D17)"
 
 
 @pytest.mark.parametrize("skill_id", _SKILLS)
 def test_g8_no_coupling_marker(skill_id: str) -> None:
-    files = [*skill_files(skill_id), *rule_files()]
+    files = _skill_and_rule_files(skill_id)
     hits = [str(hit) for path in files for hit in regex_hits(path, COUPLING_RE)]
     assert hits == [], "text that only works with an upstream plugin install (D2)"
 
@@ -373,15 +382,18 @@ def test_g19_script_passes_strict_mypy_for_python_310(script: Path, mypy_workdir
 
 
 def _glob_matches(pattern: str, path: str) -> bool:
-    """Whether a ruff ``extend-exclude`` entry excludes the POSIX ``path``."""
-    if not any(char in pattern for char in "*?["):
-        return path == pattern or path.startswith(pattern.rstrip("/") + "/")
-    regex = re.escape(pattern).replace(r"\*\*/", "(?:.*/)?").replace(r"\*\*", ".*")
-    regex = regex.replace(r"\*", "[^/]*").replace(r"\?", "[^/]")
-    return (
-        re.fullmatch(regex, path) is not None
-        or re.fullmatch(regex, path.rsplit("/", 1)[-1]) is not None
-    )
+    """Whether a ruff ``extend-exclude`` entry excludes the repo-relative POSIX ``path``.
+
+    Ruff prunes a directory whose root-relative path or name matches, so every ancestor
+    and every component is a candidate; its globs let ``*`` and ``?`` cross ``/`` (probed
+    against ruff: ``catalog/*.py`` and ``scripts`` both exclude a nested script).
+    Example: ``_glob_matches("**/scripts", "a/scripts/x.py") is True``.
+    """
+    regex = re.escape(pattern.rstrip("/")).replace(r"\*\*/", "(?:.*/)?")
+    regex = regex.replace(r"\*", ".*").replace(r"\?", ".")
+    parts = path.split("/")
+    candidates = ["/".join(parts[:end]) for end in range(1, len(parts) + 1)] + parts
+    return any(re.fullmatch(regex, candidate) for candidate in candidates)
 
 
 def test_g20_ruff_excludes_the_vendored_markdown_but_not_the_scripts() -> None:

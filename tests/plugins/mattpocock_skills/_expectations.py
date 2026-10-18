@@ -360,7 +360,10 @@ def _command_word(node: ast.Call) -> str | None:
     shell = any(k.arg == "shell" and getattr(k.value, "value", False) for k in node.keywords)
     is_subprocess = module in {"subprocess", ""} and name in _SUBPROCESS_CALLS
     is_os_string = module == "os" and name in {"system", "popen"}
-    if not (is_subprocess or is_os_string or (module == "os" and name.startswith("exec"))):
+    if module == "os" and name.startswith("exec"):
+        # os.exec* takes the program as a string, never a list; the basename is checked.
+        return _string_constant(node.args[0]) if node.args else None
+    if not (is_subprocess or is_os_string):
         return None
     argument = _command_argument(node)
     if isinstance(argument, ast.List | ast.Tuple) and argument.elts:
