@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
+from typing import ClassVar
 
 from coding_agent_playbook._member_reference import member_reference_path
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
+from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
 from coding_agent_playbook.commands._sync_render import render_rule_body
 from coding_agent_playbook.renderer import build_environment
@@ -23,8 +25,23 @@ from coding_agent_playbook.skill_membership import (
     member_rules_of,
     undelivered_member_warning,
 )
-from coding_agent_playbook.types import Rule, RuleFrontmatter, Skill
+from coding_agent_playbook.types import Prompt, Rule, RuleFrontmatter, Skill
 from tests.hook_samples import sample_hook
+
+
+class _AlwaysRulesOnlyAdapter(Adapter):
+    """An adapter that, like agents_md, delivers no member rule; named per instance."""
+
+    delivers_member_rules: ClassVar[bool] = False
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
+        return []
+
+    def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
+        return []
 
 
 def _rule(rule_id: str, *, skill: str | None = "python-coding", priority: int = 50) -> Rule:
@@ -158,6 +175,24 @@ def test_undelivered_member_warning_when_only_agents_md_is_enabled() -> None:
         "warning: no enabled adapter delivers scoped rules (no adapter is on); skill ml-data "
         "reaches no assistant: add claude_code, opencode or shared_skills to adapters_enabled"
     )
+
+
+def test_undelivered_member_warning_lists_several_enabled_adapters_sorted() -> None:
+    """Section 6.4.3 gives only the one-adapter text; "only a, b are on" is this PR's reading."""
+    enabled = [_AlwaysRulesOnlyAdapter("rules_b"), _AlwaysRulesOnlyAdapter("rules_a")]
+    assert undelivered_member_warning(enabled, _composed("ml-data")) == (
+        "warning: no enabled adapter delivers scoped rules (only rules_a, rules_b are on); "
+        "skill ml-data reaches no assistant: add claude_code, opencode or shared_skills to "
+        "adapters_enabled"
+    )
+
+
+def test_undelivered_member_warning_accepts_a_name_to_adapter_mapping_view() -> None:
+    """``SyncContext.adapters`` is ``dict[str, Adapter]``: callers pass its ``.values()``."""
+    adapters: dict[str, Adapter] = {"agents_md": AgentsMdAdapter()}
+    warning = undelivered_member_warning(adapters.values(), _composed("python-coding"))
+    assert warning is not None
+    assert "(only agents_md is on)" in warning
 
 
 def test_no_undelivered_member_warning_with_a_skill_adapter() -> None:

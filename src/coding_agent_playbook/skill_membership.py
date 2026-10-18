@@ -97,7 +97,7 @@ def undelivered_member_warning(adapters: Iterable[Adapter], skills: Sequence[Ski
     ``None`` when some adapter has ``delivers_member_rules`` (section 6.4.10) or
     no skill carries members. Example::
 
-        warning = undelivered_member_warning(ctx.adapters, rendered.skills)
+        warning = undelivered_member_warning(ctx.adapters.values(), rendered.skills)
     """
     enabled = list(adapters)
     if any(adapter.delivers_member_rules for adapter in enabled):
