@@ -1001,6 +1001,13 @@ the plugin always rule would push the always rules past the 800-word cap, which 
 at about 769), so a separate small PR first pins the probe to the two plugins (D31), and PR A
 rebases on it.
 
+The check at T10b (main merged at `8004679`): `tests/_budget_probe.py` names the two plugins in
+`REFERENCE_PROBE_OVERLAYS`, so no probe PR is needed. Measured on the probe as synced: superpowers
+plus python_design list 21 skills in 4,160 characters with 309 always words (after #149 shortened
+the always text); core plus this plugin lists 30 skills in 4,542 characters with 362 always words;
+all three plugins together would list 47 skills in 7,940 characters, over the 6,000 limit, which
+is why the probe keeps the two plugins (D31).
+
 **PR B**, suggested title `docs(plugins): document the mattpocock_skills bundled plugin`: D35,
 after ticket 13 (#53), rebased late:
 
