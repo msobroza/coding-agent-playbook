@@ -7,10 +7,14 @@ each consumer then emits its own bucket's lines as its ``context``:
 - **partition** (:data:`BUCKETS`, first enabled row claiming a finding wins):
   bucket 1 is what CI fails on (a parse error, a code D1 did not add, or an
   added code the project itself selects); then one row per rule-linked hook,
-  each with its own codes, paths and extra filters. A bucket-1 finding that an
-  enabled rule row would also claim gets `` (rule <id>)`` appended, so the
-  model learns both "CI fails" and "why". With post-edit-ruff-format off,
-  project-selected codes no rule claims are dropped;
+  each with its own codes, paths and extra filters. A rule row's prefix is
+  ``rule <id> (skill <skill>):``, naming the skill that holds the fix (D16).
+  A bucket-1 finding that an enabled rule row would also claim gets
+  `` (rule <id>, skill <skill>)`` appended, so the model learns both "CI
+  fails" and "why". Sync puts the skill in ``lint_codes["skill"]``; without
+  it (an always rule, or a config rendered before SPEC v0.21) the old
+  ``rule <id>:`` and `` (rule <id>)`` spellings stay. With
+  post-edit-ruff-format off, project-selected codes no rule claims are dropped;
 - **dedupe**: a line already shown this session is not repeated; the key is
   ``sha256(rel, code, stripped source line)`` (line numbers shift between
   edits, the text does not), ``(rel, code)`` for once-per-file heuristics;
@@ -25,9 +29,10 @@ and leaves ``UP007``/``UP045`` to M1 when the safe fixes cover them. An
 ``ANN401`` line carries the rule's "Any is a last resort" note.
 
 §F's companions add two rows (§F.2.2, §F.3.2): ``quality:`` (C901 and the
-PLR budget codes, opt-in) and ``rule python-docstrings:`` (D100-D107, never
-under ``tests/``). Both report on def lines, so the changed-lines filter
-already keeps them to defs that are new or whose signature line changed.
+PLR budget codes, opt-in) and ``rule python-docstrings (skill python-coding):``
+(D100-D107, never under ``tests/``). Both report on def lines, so the
+changed-lines filter already keeps them to defs that are new or whose
+signature line changed.
 """
 
 from __future__ import annotations
@@ -69,6 +74,8 @@ __all__ = [
     "Judge",
     "event_lines",
     "partition",
+    "rule_label",
+    "rule_suffix",
 ]
 
 ERROR_HANDLING_HOOK_ID: Final = "error-handling-lint-feedback"
@@ -111,14 +118,16 @@ class Finding:
 class Judge:
     """The event-level facts the rows judge a finding by, read once per event.
 
-    ``codes``/``files``/``rules`` are per enabled consumer: its lint codes, the
-    files its paths take, its linked rule id. ``public_lines`` maps a report to
-    its public signature lines (one ``ast.parse``, memoized by the caller).
+    ``codes``/``files``/``rules``/``skills`` are per enabled consumer: its lint
+    codes, the files its paths take, its linked rule id, that rule's owning
+    skill (absent when sync named none). ``public_lines`` maps a report to its
+    public signature lines (one ``ast.parse``, memoized by the caller).
     """
 
     codes: Mapping[str, frozenset[str]] = field(default_factory=dict)
     files: Mapping[str, frozenset[str]] = field(default_factory=dict)
     rules: Mapping[str, str] = field(default_factory=dict)
+    skills: Mapping[str, str] = field(default_factory=dict)
     project_select: tuple[str, ...] = ()
     project_ignore: tuple[str, ...] = ()
     safe_fix_select: tuple[str, ...] = ()
@@ -149,7 +158,7 @@ class BucketRow:
     """One §E.3 bucket: the hook that reports it, its linked rule (``""``: CI's), its claim.
 
     ``label`` names a row with no linked rule (``quality``): its line prefix is
-    ``<label>:`` instead of ``rule <id>:``.
+    ``<label>:`` instead of ``rule <id> (skill <skill>):``.
     """
 
     hook_id: str
@@ -258,7 +267,24 @@ def _place(
     if rows[first].rule != "":
         return first, finding, ""
     also = next((rows[i] for i in claimed[1:] if rows[i].rule != ""), None)
-    return first, finding, "" if also is None else f" ({_name(also, judge)})"
+    return first, finding, "" if also is None else _suffix(also, judge)
+
+
+def rule_label(rule_id: str, skill_id: str) -> str:
+    """``rule <id> (skill <skill>)``, or ``rule <id>`` when no skill is known (D16).
+
+    Example: ``rule_label("pytest", "python-testing")`` -> ``"rule pytest (skill python-testing)"``.
+    """
+    return f"rule {rule_id} (skill {skill_id})" if skill_id else f"rule {rule_id}"
+
+
+def rule_suffix(rule_id: str, skill_id: str) -> str:
+    """The bucket-1 tail naming the rule that also claims a CI finding (no nested parentheses).
+
+    Example: ``rule_suffix("python-typing", "python-coding")`` ->
+    ``" (rule python-typing, skill python-coding)"``.
+    """
+    return f" (rule {rule_id}, skill {skill_id})" if skill_id else f" (rule {rule_id})"
 
 
 def _rule_id(row: BucketRow, judge: Judge) -> str:
@@ -266,13 +292,22 @@ def _rule_id(row: BucketRow, judge: Judge) -> str:
     return judge.rules.get(row.hook_id, row.rule)
 
 
-def _name(row: BucketRow, judge: Judge) -> str:
-    """``rule <id>``, or the row's own label when it has no linked rule."""
-    return row.label or f"rule {_rule_id(row, judge)}"
+def _skill_id(row: BucketRow, judge: Judge) -> str:
+    """The linked rule's skill sync named in the hook's ``lint_codes``, ``""`` when none."""
+    return judge.skills.get(row.hook_id, "")
+
+
+def _suffix(row: BucketRow, judge: Judge) -> str:
+    """``rule_suffix`` of ``row``'s rule, or `` (<label>)`` when it has no linked rule."""
+    return (
+        f" ({row.label})" if row.label else rule_suffix(_rule_id(row, judge), _skill_id(row, judge))
+    )
 
 
 def _prefix(row: BucketRow, judge: Judge) -> str:
-    return _CI_PREFIX if row.rule == "" else f"{_name(row, judge)}:"
+    if row.rule == "":
+        return _CI_PREFIX
+    return f"{row.label or rule_label(_rule_id(row, judge), _skill_id(row, judge))}:"
 
 
 def _dedupe_key(finding: Finding) -> str:
@@ -300,7 +335,7 @@ def event_lines(
     Example::
 
         >>> event_lines(ctx, consumers, reports).get(ctx.hook.id, [])  # doctest: +SKIP
-        ['rule python-error-handling: "src/app.py:4 E722 Do not use bare `except`"']
+        ['rule python-error-handling (skill python-coding): "src/app.py:4 E722 Do not use bare `except`"']
     """
     key = ("ruff-partition", tuple(sorted((r.edited.rel, r.sha) for r in reports)))
     lines: Mapping[str, list[str]] = ctx.memo.get_or_compute(
@@ -340,6 +375,7 @@ def _judge(
             for hook_id, record in consumers.items()
         },
         rules={hook_id: rule for hook_id, r in consumers.items() if (rule := _rule_of(r))},
+        skills={hook_id: s for hook_id, r in consumers.items() if (s := _skill_of(r))},
         project_select=_strings(ruff.get("project_select")),
         project_ignore=_strings(ruff.get("project_ignore")),
         safe_fix_select=_strings(ruff.get("safe_fix_select")),
@@ -385,10 +421,20 @@ def _heuristics(
 
 
 def _rule_of(record: HookRecord) -> str:
+    return _lint_codes_string(record, "rule")
+
+
+def _skill_of(record: HookRecord) -> str:
+    """The skill sync named in ``lint_codes``; ``""`` for a stale config (fail-open)."""
+    return _lint_codes_string(record, "skill")
+
+
+def _lint_codes_string(record: HookRecord, key: str) -> str:
+    """``config["lint_codes"][key]`` of the post-edit handler, ``""`` when absent or not a string."""
     spec = record.handlers.get(EventName.POST_TOOL_USE)
     codes = None if spec is None else spec.config.get("lint_codes")
-    rule = codes.get("rule") if isinstance(codes, Mapping) else None
-    return rule if isinstance(rule, str) else ""
+    value = codes.get(key) if isinstance(codes, Mapping) else None
+    return value if isinstance(value, str) else ""
 
 
 def _project_cap(record: HookRecord | None) -> int:

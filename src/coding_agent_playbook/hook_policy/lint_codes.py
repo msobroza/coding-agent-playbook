@@ -8,9 +8,11 @@ result into the builtin handler's ``config["lint_codes"]``, so the rule text
 and the enforcing hook never disagree, and the hook never evaluates a
 predicate at run time (it cannot import ``detector``).
 
-The resolved shape is ``{"rule": <rule id>, "warn": [<code>, ...]}``: the
-post-edit pipeline reads ``warn`` (``_ruff_pipeline.extended_codes``, the
-sync-time ruff probe) and names ``rule`` in its line prefix.
+The resolved shape is ``{"rule": <rule id>, "skill": <skill id>, "warn": [<code>, ...]}``:
+the post-edit pipeline reads ``warn`` (``_ruff_pipeline.extended_codes``, the
+sync-time ruff probe) and names ``rule`` and ``skill`` in its line prefix
+(D16). ``skill`` is the rule's owning skill, absent when the rule names none
+(an always rule), so the prefix then stays ``rule <id>:``.
 """
 
 from __future__ import annotations
@@ -51,15 +53,24 @@ def resolve_lint_codes(
     return list(dict.fromkeys(found))
 
 
-def linked_lint_config(rule_id: str, codes: list[str]) -> dict[str, Any]:
-    """The ``config["lint_codes"]`` value of a hook linked to ``rule_id``.
+def linked_lint_config(
+    rule_id: str, codes: list[str], skill_id: str | None = None
+) -> dict[str, Any]:
+    """The ``config["lint_codes"]`` value of a hook linked to ``rule_id`` (D16).
+
+    ``skill`` is present only when the rule names an owning skill (an always
+    rule has none).
 
     Example::
 
-        >>> linked_lint_config("pytest", ["PT009"])
-        {'rule': 'pytest', 'warn': ['PT009']}
+        >>> linked_lint_config("pytest", ["PT009"], "python-testing")
+        {'rule': 'pytest', 'skill': 'python-testing', 'warn': ['PT009']}
     """
-    return {"rule": rule_id, "warn": list(codes)}
+    config: dict[str, Any] = {"rule": rule_id}
+    if skill_id:
+        config["skill"] = skill_id
+    config["warn"] = list(codes)
+    return config
 
 
 def _codes(value: object) -> Iterator[str]:

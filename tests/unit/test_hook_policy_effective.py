@@ -515,6 +515,29 @@ def test_lint_codes_replace_any_layer_value_and_skip_external_handlers() -> None
     assert "lint_codes" not in configs["ext"]
 
 
+def test_linked_lint_codes_name_the_rules_skill() -> None:
+    """The rule's owning skill travels with its codes, so lint feedback can name it (D16)."""
+    rule = _rule("pytest", scope="scoped", globs=["tests/**/*.py"])
+    rule.frontmatter.lint_codes = {"warn": ["PT009"]}
+    rule.frontmatter.skill = "python-testing"
+    hook = sample_hook(linked_rule="pytest", handler={"builtin": "guard_x"})
+
+    config = _config(_resolve([hook], rules=[rule]))
+
+    assert config == {
+        "lint_codes": {"rule": "pytest", "skill": "python-testing", "warn": ["PT009"]}
+    }
+
+
+def test_linked_lint_codes_have_no_skill_for_an_always_rule() -> None:
+    """An always rule names no skill: no ``skill`` key, no error (the prefix stays ``rule <id>:``)."""
+    hook = sample_hook(linked_rule="python-typing", handler={"builtin": "guard_x"})
+
+    config = _config(_resolve([hook], rules=[_linted_rule({"warn": ["E722"]})]))
+
+    assert config == {"lint_codes": {"rule": "python-typing", "warn": ["E722"]}}
+
+
 def test_invalid_when_predicate_contributes_nothing() -> None:
     codes = {"warn": ["E722"], "when": [{"applies_if": {"pyver": "3"}, "warn": ["UP046"]}]}
     hook = sample_hook(linked_rule="python-typing", handler={"builtin": "guard_x"})

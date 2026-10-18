@@ -443,9 +443,9 @@ def test_eight_line_total_cap_bucket_1_first(
     shown = [(line.split(":")[0], line.split(":")[2].split()[0]) for line in _context(report)]
     assert shown == [
         *[("ruff (CI fails on this)", str(row)) for row in range(1, 6)],
-        ("rule python-error-handling", "8"),
-        ("rule python-error-handling", "10"),
-        ("rule python-typing", "9"),
+        ("rule python-error-handling (skill python-coding)", "8"),
+        ("rule python-error-handling (skill python-coding)", "10"),
+        ("rule python-typing (skill python-coding)", "9"),
     ]
 
 

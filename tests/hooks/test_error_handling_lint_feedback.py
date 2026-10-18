@@ -37,7 +37,7 @@ HEAD: Final = "def run():\n    return 1\n"
 EDITED: Final = HEAD + "try:\n    run()\nexcept:\n    pass\n"
 BARE: Final = ruff_row("E722", 5, "Do not use bare `except`")
 PASS: Final = ruff_row("S110", 5, "`try`-`except`-`pass` detected, consider logging the exception")
-PREFIX: Final = "rule python-error-handling: "
+PREFIX: Final = "rule python-error-handling (skill python-coding): "
 
 
 def _install(repo: PackRepo, program: Path, *hook_ids: str, select: str = '["F"]') -> None:
@@ -141,7 +141,7 @@ def test_project_selected_code_lands_in_bucket_1_with_rule_suffix(
     assert ruff.kinds().count("d1") == 1
     assert context(report) == [
         'ruff (CI fails on this): "src/app.py:5 E722 Do not use bare `except`" '
-        "(rule python-error-handling)",
+        "(rule python-error-handling, skill python-coding)",
         f'{PREFIX}"src/app.py:5 S110 `try`-`except`-`pass` detected, consider logging the '
         'exception"',
     ]

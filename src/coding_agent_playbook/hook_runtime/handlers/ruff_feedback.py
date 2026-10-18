@@ -132,7 +132,7 @@ def ruff_lint_feedback(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult
     Example::
 
         >>> ruff_lint_feedback(edit_adding_bare_except, ctx).context  # doctest: +SKIP
-        ('rule python-error-handling: "src/app.py:4 E722 Do not use bare `except`"',)
+        ('rule python-error-handling (skill python-coding): "src/app.py:4 E722 Do not use bare `except`"',)
     """
     codes = ctx.config.get("lint_codes")
     rule = codes.get("rule") if isinstance(codes, Mapping) else None

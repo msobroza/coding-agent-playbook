@@ -33,7 +33,7 @@ pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "typing-lint-feedback"
 APP: Final = "src/app.py"
-PREFIX: Final = "rule python-typing: "
+PREFIX: Final = "rule python-typing (skill python-coding): "
 #: A new file: a public def, a private helper, a mutable default.
 NEW_FILE: Final = (
     "def first(items):\n"  # 1
