@@ -18,6 +18,10 @@ _Avoid_: global rule, core rule
 A rule delivered on demand, as a reference inside the one skill it names as the owner of its topic.
 _Avoid_: conditional rule, glob rule
 
+**Member rule**:
+A scoped rule seen from the skill it names in `skill:`; the engine renders it as one of that skill's references. Continue, which reads no skills, still receives it as its own rule file.
+_Avoid_: child rule
+
 **Skill**:
 A named unit of on-demand guidance: a short index the agent loads by name, plus references it opens only when needed.
 _Avoid_: pack, plugin
@@ -48,7 +52,7 @@ A reproducible test case for a prompt: a starting repo state, an invocation and 
 ### Context
 
 **Always-loaded context**:
-Everything a harness puts in front of the model on every turn, whatever the task: always rules, guardrails and the skill listing.
+Everything a harness puts in front of the model on every turn, whatever the task: always rules, the generated "Where guidance lives" map, guardrails and the skill listing.
 _Avoid_: system prompt, memory
 
 **Skill listing**:
@@ -60,6 +64,7 @@ _Avoid_: token limit (each harness's own limits are a different thing)
 
 **Skill root**:
 A directory that harnesses scan to discover skills.
+_Avoid_: skills hub
 
 ### Engine and catalog
 
