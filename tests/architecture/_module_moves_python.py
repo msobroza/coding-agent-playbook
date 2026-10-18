@@ -15,16 +15,24 @@ import re
 import tokenize
 from typing import TYPE_CHECKING, Final, NamedTuple, Protocol
 
-from tests.architecture._module_moves_text import Edit, Resolver, colon_or_dotted, prose_edits
+from tests.architecture._module_moves_text import (
+    Edit,
+    Resolver,
+    applied,
+    colon_or_dotted,
+    prose_edits,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Iterable, Iterator, Sequence
 
 _EXACT_NAME: Final = re.compile(
     r"^(?:coding_agent_playbook|tests)(?:\.[A-Za-z_]\w*)+(?::[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)?$"
 )
 _SIMPLE_LITERAL: Final = re.compile(r"^([rRuU]?)([\"'])(.*)\2$", re.DOTALL)
 _DOCSTRING_OWNERS: Final = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+#: How rebuilt statements join when the statement follows other code on its line.
+_SAME_LINE: Final = "; "
 
 
 class PythonResolver(Resolver, Protocol):
@@ -45,12 +53,56 @@ class _Target(NamedTuple):
     asname: str | None
 
 
+class _Statement(NamedTuple):
+    """One import statement to emit: ``head`` plus its names and each name's own comment.
+
+    With no ``names``, ``head`` is the whole statement (a plain ``import``).
+    """
+
+    head: str
+    names: tuple[tuple[str, str | None], ...] = ()
+
+    def one_line(self) -> str:
+        return self.head + ", ".join(name for name, _ in self.names)
+
+    def render(self, shared: Sequence[str], joiner: str) -> str:
+        """One line ending in the shared comments, or parenthesised when a name has its own."""
+        if all(comment is None for _, comment in self.names):
+            return self.one_line() + _suffix(shared)
+        body = "".join(f"{joiner}    {name},{_suffix([comment])}" for name, comment in self.names)
+        return f"{self.head}({_suffix(shared)}{body}{joiner})"
+
+
+class _Carried(NamedTuple):
+    """The comments of an import statement that its rebuilt statements carry over."""
+
+    #: After ``(``, on a line of their own, or after the statement: every statement gets them.
+    shared: tuple[str, ...]
+    #: Per alias, the comment on the line where it ends: the statement that receives it gets it.
+    by_alias: tuple[str | None, ...]
+    #: Where the rewrite ends: past a comment that follows the statement on its last line.
+    end: int
+
+
 class _Lines:
     """Converts ``ast`` (UTF-8 byte columns) and ``tokenize`` positions to text offsets."""
 
     def __init__(self, text: str) -> None:
         self.text = text
         self.starts = [0, *(match.end() for match in re.finditer("\n", text))]
+        #: 1-based line -> (text offset, ``# ...``): a line holds at most one comment.
+        self.comments = {
+            token.start[0]: (self.starts[token.start[0] - 1] + token.start[1], token.string)
+            for token in tokenize.generate_tokens(io.StringIO(text).readline)
+            if token.type == tokenize.COMMENT
+        }
+
+    def comment_after(self, line: int, end: int) -> tuple[int, str] | None:
+        """The comment of ``line`` that follows offset ``end`` with only blanks between."""
+        found = self.comments.get(line)
+        if found is None or found[0] < end or self.text[end : found[0]].strip():
+            return None
+        return found
 
     def from_ast(self, line: int, column: int) -> int:
         start = self.starts[line - 1]
@@ -89,7 +141,8 @@ def without_overlaps(edits: Sequence[Edit]) -> list[Edit]:
     """``edits`` by position, dropping any that overlaps an earlier one.
 
     An import statement is rewritten whole when split, so a comment edit inside it
-    goes. Example: ``without_overlaps([Edit(0, 9, "x"), Edit(4, 6, "y")])`` keeps the first.
+    goes (``_carried`` applies R-DOC to the comments it carries over).
+    Example: ``without_overlaps([Edit(0, 9, "x"), Edit(4, 6, "y")])`` keeps the first.
     """
     kept: list[Edit] = []
     for edit in sorted(edits, key=lambda edit: (edit.start, edit.end)):
@@ -116,10 +169,12 @@ def _from_import_edit(node: ast.ImportFrom, lines: _Lines, resolver: PythonResol
     targets = [_from_target(module, alias, resolver) for alias in node.names]
     if targets == [_Target(module, alias.name, alias.asname) for alias in node.names]:
         return []
-    start, end = lines.span(node)
+    start, _ = lines.span(node)
     if _only_the_module_changes(node, targets):
         return _module_token_edit(lines.text, start, module, targets[0].module)
-    return [Edit(start, end, _joiner(lines.text, start).join(_from_statements(targets)))]
+    carried = _carried(node, lines, resolver)
+    old = f"from {module} import {', '.join(_alias(a.name, a.asname) for a in node.names)}"
+    return [_rebuilt(lines.text, start, old, _from_statements(targets, carried), carried)]
 
 
 def _from_target(module: str, alias: ast.alias, resolver: PythonResolver) -> _Target:
@@ -162,23 +217,84 @@ def _module_token_edit(text: str, start: int, module: str, new: str) -> list[Edi
     return [Edit(token.end() - len(module), token.end(), new)]
 
 
-def _from_statements(targets: Sequence[_Target]) -> list[str]:
-    grouped: dict[str, list[str]] = {}
-    for target in targets:
-        grouped.setdefault(target.module, []).append(_alias(target.name, target.asname))
-    return [f"from {module} import {', '.join(names)}" for module, names in grouped.items()]
+def _from_statements(targets: Sequence[_Target], carried: _Carried) -> list[_Statement]:
+    """One ``from`` per destination, in first-seen order; each name keeps its own comment."""
+    grouped: dict[str, list[tuple[str, str | None]]] = {}
+    for target, comment in zip(targets, carried.by_alias, strict=True):
+        grouped.setdefault(target.module, []).append((_alias(target.name, target.asname), comment))
+    return [_Statement(f"from {module} import ", tuple(names)) for module, names in grouped.items()]
 
 
 def _import_edit(node: ast.Import, lines: _Lines, resolver: PythonResolver) -> list[Edit]:
     pieces = [_import_piece(alias, resolver) for alias in node.names]
     if all(piece is None for piece in pieces):
         return []
-    rendered = [
-        piece or f"import {_alias(alias.name, alias.asname)}"
+    statements = [
+        _Statement(piece or f"import {_alias(alias.name, alias.asname)}")
         for piece, alias in zip(pieces, node.names, strict=True)
     ]
-    start, end = lines.span(node)
-    return [Edit(start, end, _joiner(lines.text, start).join(rendered))]
+    start, _ = lines.span(node)
+    old = f"import {', '.join(_alias(alias.name, alias.asname) for alias in node.names)}"
+    return [_rebuilt(lines.text, start, old, statements, _carried(node, lines, resolver))]
+
+
+def _carried(node: ast.Import | ast.ImportFrom, lines: _Lines, resolver: Resolver) -> _Carried:
+    """The comments a rebuilt statement keeps (5.4.2: imports are edited so comments stay).
+
+    A split once dropped every comment inside the statement, ``# noqa`` pragmas
+    included, and kept a trailing one on the last statement only (review of #152).
+    A comment on a line where aliases end belongs to each of them; any other one is shared.
+    """
+    _, end = lines.span(node)
+    last = node.end_lineno or node.lineno
+    # A comment runs to the end of its line, so one inside the span sits before ``last``.
+    inside = {
+        row: _current_comment(lines.comments[row][1], resolver)
+        for row in range(node.lineno, last)
+        if row in lines.comments
+    }
+    alias_rows = {alias.end_lineno for alias in node.names}
+    shared = [comment for row, comment in inside.items() if row not in alias_rows]
+    after = lines.comment_after(last, end)
+    if after is not None:
+        shared.append(_current_comment(after[1], resolver))
+        end = after[0] + len(after[1])
+    by_alias = tuple(inside.get(alias.end_lineno or 0) for alias in node.names)
+    return _Carried(tuple(dict.fromkeys(shared)), by_alias, end)
+
+
+def _current_comment(comment: str, resolver: Resolver) -> str:
+    """R-DOC on a carried comment: the rebuilt statement overlaps, and so drops, its own edit."""
+    return applied(comment, without_overlaps(prose_edits(comment, 0, resolver)))
+
+
+def _rebuilt(
+    text: str, start: int, old: str, statements: Sequence[_Statement], carried: _Carried
+) -> Edit:
+    """The edit that replaces a statement (and its trailing comment) with ``statements``.
+
+    ``check`` prints the label: both sides on one line, without the comments.
+    """
+    new = _SAME_LINE.join(statement.one_line() for statement in statements)
+    joined = _emitted(statements, carried.shared, _joiner(text, start))
+    return Edit(start, carried.end, joined, label=f"{old} -> {new}")
+
+
+def _emitted(statements: Sequence[_Statement], shared: Sequence[str], joiner: str) -> str:
+    """The statements, each carrying the shared comments, joined by ``joiner``.
+
+    After other code on its line, a comment would swallow the statements after it,
+    so every comment goes once at the end of the line instead.
+    """
+    if joiner != _SAME_LINE:
+        return joiner.join(statement.render(shared, joiner) for statement in statements)
+    own = (comment for statement in statements for _, comment in statement.names)
+    every = dict.fromkeys(comment for comment in (*shared, *own) if comment is not None)
+    return _SAME_LINE.join(statement.one_line() for statement in statements) + _suffix(every)
+
+
+def _suffix(comments: Iterable[str | None]) -> str:
+    return "".join(f"  {comment}" for comment in comments if comment is not None)
 
 
 def _import_piece(alias: ast.alias, resolver: PythonResolver) -> str | None:
@@ -199,7 +315,7 @@ def _alias(name: str, asname: str | None) -> str:
 def _joiner(text: str, start: int) -> str:
     """Split statements go on new lines at the statement's indentation, or after ``; ``."""
     indent = text[text.rfind("\n", 0, start) + 1 : start]
-    return "\n" + indent if not indent.strip() else "; "
+    return "\n" + indent if not indent.strip() else _SAME_LINE
 
 
 def _docstrings(tree: ast.Module) -> list[ast.Constant]:
@@ -260,9 +376,8 @@ def _docstring_edits(
 
 
 def _comment_edits(lines: _Lines, resolver: Resolver) -> list[Edit]:
-    edits = []
-    for token in tokenize.generate_tokens(io.StringIO(lines.text).readline):
-        if token.type == tokenize.COMMENT:
-            row, column = token.start
-            edits += prose_edits(token.string, lines.starts[row - 1] + column, resolver)
-    return edits
+    return [
+        edit
+        for offset, comment in lines.comments.values()
+        for edit in prose_edits(comment, offset, resolver)
+    ]

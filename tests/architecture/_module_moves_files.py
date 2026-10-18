@@ -28,7 +28,7 @@ from tests.architecture._module_moves_text import (
 from tests.architecture._module_moves_tree import ENGINE, module_source
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Iterator
 
     from tests.architecture.module_moves import MoveMap
 
@@ -198,18 +198,6 @@ def migration_rows(moves: MoveMap, tree: Path) -> Rows:
 def _is_public_engine(dotted: str) -> bool:
     parts = dotted.split(".")
     return parts[0] == ENGINE and not any(part.startswith("_") for part in parts)
-
-
-def applied(text: str, edits: Sequence[Edit]) -> str:
-    """``text`` with non-overlapping ``edits`` (sorted by position) applied.
-
-    Example: ``applied("import a", [Edit(7, 8, "b")])`` is ``"import b"``.
-    """
-    pieces, last = [], 0
-    for edit in edits:
-        pieces += [text[last : edit.start], edit.new]
-        last = edit.end
-    return "".join([*pieces, text[last:]])
 
 
 def shown(text: str, edit: Edit) -> str:

@@ -74,6 +74,18 @@ class Resolver(Protocol):
         """The current spelling of a stale repo-relative path, or None."""
 
 
+def applied(text: str, edits: Sequence[Edit]) -> str:
+    """``text`` with non-overlapping ``edits`` (sorted by position) applied.
+
+    Example: ``applied("import a", [Edit(7, 8, "b")])`` is ``"import b"``.
+    """
+    pieces, last = [], 0
+    for edit in edits:
+        pieces += [text[last : edit.start], edit.new]
+        last = edit.end
+    return "".join([*pieces, text[last:]])
+
+
 def split_lines(text: str) -> list[Line]:
     """Every line of ``text`` (split on ``\\n`` only, so offsets match the text), region ``doc``.
 

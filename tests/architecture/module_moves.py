@@ -27,8 +27,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from tests.architecture._module_moves_files import applied, rewrites, shown
+from tests.architecture._module_moves_files import rewrites, shown
 from tests.architecture._module_moves_format import run_ruff
+from tests.architecture._module_moves_text import applied
 from tests.architecture._module_moves_tree import (
     ENGINE,
     is_current,
@@ -404,11 +405,13 @@ def apply(repo_root: Path, moves: MoveMap, *, formatter: Formatter | None = None
     (``_module_moves_format.run_ruff`` by default). Example:
     ``apply(repo, load_map(repo / MAP_DIR))`` -> ``[]`` on a tree that is already current.
     """
-    changed = []
-    for rewrite in rewrites(repo_root, moves):
-        if rewrite.edits:
-            rewrite.path.write_bytes(applied(rewrite.text, rewrite.edits).encode("utf-8"))
-            changed.append(rewrite.path)
+    # Every refusal (a relative import, an unbalanced marker) raises while the edits are
+    # computed, so all of them are computed before the first write: a refusal in a later
+    # file left earlier files rewritten and never formatted (review of #152).
+    pending = [rewrite for rewrite in rewrites(repo_root, moves) if rewrite.edits]
+    for rewrite in pending:
+        rewrite.path.write_bytes(applied(rewrite.text, rewrite.edits).encode("utf-8"))
+    changed = [rewrite.path for rewrite in pending]
     formattable = [path for path in changed if path.suffix in (".py", ".md")]
     if formattable:
         (formatter or run_ruff)(repo_root, formattable)
