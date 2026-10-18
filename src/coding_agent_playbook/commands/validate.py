@@ -405,7 +405,11 @@ def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationE
     errors.extend(links_errors)
     errors.extend(check_markdown_links(ctx.artifact_source, ctx.repo_root, links_config))
     errors.extend(_check_agent_skills(ctx.skills_resolved, ctx.artifact_source.list_skills()))
-    errors.extend(check_skill_membership(rules, ctx.skills_resolved))
+    errors.extend(
+        check_skill_membership(
+            rules, ctx.skills_resolved, all_rules=ctx.artifact_source.list_rules()
+        )
+    )
     return errors
 
 

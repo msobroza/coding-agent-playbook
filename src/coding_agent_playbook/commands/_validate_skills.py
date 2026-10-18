@@ -4,10 +4,12 @@ A scoped rule that names a skill in ``skill:`` is a member rule of that skill
 (ADR 0001); the engine writes it as one of the skill's references. Two checks
 guard that composition before ``playbook sync`` writes anything:
 
-- :func:`check_skill_membership`, per rule: ``skill`` is forbidden on an always
-  rule (V3), must be a skill id string (V4) naming a skill that exists after the
-  layer merge (V5) and declares a ``playbook:`` block (V14, E6); a member rule's
-  own id must be a skill-safe file name (V6, E14).
+- :func:`check_skill_membership`, per rule: ``skill`` is required on a scoped
+  rule (V1, with V2's hint when the rule overrides one that named a skill) and
+  forbidden on an always rule (V3), must be a skill id string (V4) naming a
+  skill that exists after the layer merge (V5) and declares a ``playbook:``
+  block (V14, E6); a member rule's own id must be a skill-safe file name (V6,
+  E14).
 - :func:`check_rule_skills`, per skill with a ``playbook:`` block: the block's
   shape (V7-V10, E15), the worst-case composed description within 300 chars
   (V11, E7), no hand-written reference named like a member (V12), no authored
@@ -70,26 +72,35 @@ _PHRASE_SHAPES: Final = {
 # E15: the engine adds the prefix, so an authored one would read "Use when Use when".
 _USE_WHEN_PREFIX: Final = re.compile(r"use when\b", re.IGNORECASE)
 _REFERENCES_HEADING: Final = "## References"
+#: V1's message; MIGRATION.md quotes it with ``{known}`` filled for core, and a docs
+#: test imports it so the quote cannot drift (prS §6.4.12).
+SCOPED_RULE_NEEDS_SKILL_MESSAGE: Final = (
+    "scope 'scoped' needs 'skill: <skill-id>' naming the skill whose references deliver "
+    "this rule; known skills: {known}"
+)
 
 
 def check_skill_membership(
-    resolved_rules: Sequence[Rule], skills: Sequence[Skill]
+    resolved_rules: Sequence[Rule], skills: Sequence[Skill], *, all_rules: Sequence[Rule]
 ) -> list[ValidationError]:
-    """One error per way a rule's ``skill`` breaks D2 (forbidden/shape/exists), E14 or V14.
+    """One error per way a rule's ``skill`` breaks D2 (required/forbidden/shape/exists), E14 or V14.
 
     ``resolved_rules`` and ``skills`` are the merged sets (``ctx.rules_resolved``,
-    ``ctx.skills_resolved``). A rule without ``skill`` passes here.
+    ``ctx.skills_resolved``); ``all_rules`` is every layer's definition
+    (``ctx.artifact_source.list_rules()``), read only for V2's hint. An always
+    rule without ``skill`` passes here.
 
     Example::
 
-        errors = check_skill_membership(ctx.rules_resolved, ctx.skills_resolved)
+        errors = check_skill_membership(
+            ctx.rules_resolved, ctx.skills_resolved, all_rules=ctx.artifact_source.list_rules()
+        )
     """
     skills_by_id = {skill_id_of(skill): skill for skill in skills}
     return [
         ValidationError(path=str(rule.source_path or rule.frontmatter.id), message=message)
         for rule in resolved_rules
-        if rule.frontmatter.skill is not None
-        for message in _membership_problems(rule, skills_by_id)
+        for message in _rule_membership_problems(rule, skills_by_id, all_rules)
     ]
 
 
@@ -126,6 +137,37 @@ def is_skill_safe_name(value: object) -> TypeGuard[str]:
         and len(value) <= AGENT_SKILL_NAME_MAX_CHARS
         and AGENT_SKILL_NAME_PATTERN.fullmatch(value) is not None
     )
+
+
+def _rule_membership_problems(
+    rule: Rule, skills_by_id: Mapping[str, Skill], all_rules: Sequence[Rule]
+) -> list[str]:
+    """V1/V2 for a scoped rule without ``skill``; the ``skill`` checks when it sets one."""
+    if rule.frontmatter.skill is not None:
+        return _membership_problems(rule, skills_by_id)
+    if rule.frontmatter.scope != "scoped":
+        return []
+    message = SCOPED_RULE_NEEDS_SKILL_MESSAGE.format(known=_known_rule_skills(skills_by_id))
+    return [message + _overridden_skill_hint(rule, all_rules)]
+
+
+def _overridden_skill_hint(rule: Rule, all_rules: Sequence[Rule]) -> str:
+    """V2: ``; the rule it overrides (<pkg>) names '<skill>'``, or ``""`` when none did.
+
+    The merge keeps the last definition of an id, so every other definition of
+    ``rule``'s id is one it overrides; the nearest one that names a skill wins.
+    """
+    overridden = [
+        other
+        for other in all_rules
+        if other.frontmatter.id == rule.frontmatter.id
+        and (other.source_package, other.source_path) != (rule.source_package, rule.source_path)
+        and isinstance(other.frontmatter.skill, str)
+    ]
+    if not overridden:
+        return ""
+    nearest = overridden[-1]
+    return f"; the rule it overrides ({nearest.source_package}) names {nearest.frontmatter.skill!r}"
 
 
 def _membership_problems(rule: Rule, skills_by_id: Mapping[str, Skill]) -> list[str]:
