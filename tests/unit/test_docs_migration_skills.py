@@ -9,16 +9,12 @@ tests read markdown, never engine behaviour.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-_ROOT = Path(__file__).resolve().parents[2]
+from tests.unit.test_docs_migration_hooks import _migration
+
 _V021_HEADING = re.compile(r"^## v0\.21\b.*$", re.MULTILINE)
 _TLDR_HEADING = "### TL;DR — who needs to do anything"
 _TABLE_SEPARATOR = re.compile(r"\|(\s*:?-{3,}:?\s*\|)+")
-
-
-def _migration() -> str:
-    return (_ROOT / "MIGRATION.md").read_text(encoding="utf-8")
 
 
 def _v021_section() -> str:
