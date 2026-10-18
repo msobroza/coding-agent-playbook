@@ -154,6 +154,20 @@ def test_agents_md_written_with_only_a_where_entry(tmp_path: Path) -> None:
     assert content == _AGENTS_HEAD + _WHERE
 
 
+def test_agents_md_not_written_for_member_rules_whose_skill_has_no_files_phrase(
+    tmp_path: Path,
+) -> None:
+    """Pins the README/SPEC §10.4 condition: no always rule, Where line or advisory, no file."""
+    no_phrase = sample_member_skill("python-coding", sample_member_reference())
+    del no_phrase.frontmatter["playbook"]["files"]
+    adapter = AgentsMdAdapter()
+    adapter.write_rule(_member_rule(), tmp_path)
+    adapter.write_skill(no_phrase, tmp_path)
+
+    assert adapter.finalize(tmp_path) == []
+    assert not (tmp_path / "AGENTS.md").exists()
+
+
 def test_agents_md_lists_a_skill_once_however_often_it_is_written(tmp_path: Path) -> None:
     content = _agents_md(tmp_path, [], [_member_skill(), _member_skill()])
 

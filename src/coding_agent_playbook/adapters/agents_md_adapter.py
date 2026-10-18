@@ -126,7 +126,7 @@ class AgentsMdAdapter(Adapter):
         Title, always rules sorted by ``(priority, id)``, the Where section,
         then the Guardrails blocks sorted by hook id, so the on-disk layout is
         stable across syncs. The file is *always* overwritten if there is at
-        least one rule, Where entry or hook advisory (a hooks-only repo still
+        least one always rule, Where entry or hook advisory (a hooks-only repo still
         gets one, SPEC §4.3); with none, nothing is written (and any stale file
         is cleaned up by :meth:`cleanup_stale`). Without member skills or hook
         advisories the bytes are exactly the rules-only file.

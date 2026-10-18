@@ -244,8 +244,8 @@ the legacy committed-output flow and CI there; under the default it is only
 meaningful in a working copy that has already been synced.) From then on the `post-checkout` / `post-merge`
 hook re-runs it after every checkout and pull; run it by hand whenever you
 change `playbook/` or the config. `AGENTS.md` is always generated regardless of
-which adapters are enabled (as long as at least one rule, member skill or hook
-advisory applies). A scoped rule that names a skill (`skill:`) is not in it: it
+which adapters are enabled (as long as at least one always rule, Where line (a skill with member
+rules and a `playbook.files` phrase) or hook advisory applies). A scoped rule that names a skill (`skill:`) is not in it: it
 arrives as a reference inside that skill, and a generated `## Where guidance lives`
 section maps file kinds to those skills.
 Claude Code gets the same always-rule sections and the same map in `.claude/rules/coding-agent-playbook.md`,
