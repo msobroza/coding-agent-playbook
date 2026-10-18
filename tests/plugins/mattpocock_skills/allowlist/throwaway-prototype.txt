@@ -1,0 +1,5 @@
+# throwaway-prototype: project toolchain named as examples (D2, D27), SKILL.md L23 (upstream L22).
+# `pnpm <name>`: the consumer repo's own task runner starting a UI prototype, not an imposed tool.
+SKILL.md: `pnpm <name>`
+# `bun <path>`: the same task-runner example on the same line, also the consumer's project toolchain.
+SKILL.md: `bun <path>`

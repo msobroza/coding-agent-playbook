@@ -1,0 +1,1 @@
+# codebase-design: no project-toolchain entry (A.T06.3); the gate finds no hit to allowlist.
