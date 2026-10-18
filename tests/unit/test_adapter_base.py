@@ -251,6 +251,17 @@ def test_begin_sync_and_managed_lock_entries_defaults(tmp_path: Path) -> None:
     assert Adapter.shared_outputs == ()
 
 
+def test_note_native_skill_roots_default_is_a_no_op(tmp_path: Path) -> None:
+    """An out-of-tree adapter that ignores the call writes exactly what it wrote before."""
+    adapter = _DummyAdapter()
+
+    adapter.note_native_skill_roots(frozenset())
+    adapter.note_native_skill_roots(frozenset({".claude/skills"}))
+
+    assert adapter.finalize(tmp_path) == []
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_hook_support_default_is_read_only() -> None:
     with pytest.raises(TypeError):
         Adapter.hook_support["pre_tool_use"] = frozenset({"deny"})  # type: ignore[index]

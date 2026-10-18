@@ -18,6 +18,7 @@ import pytest
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.lockfile import compute_hash
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from tests._catalog import core_skill_ids
 from tests.fakes import FakeGitClient, pre_gate_validate
 
 if TYPE_CHECKING:
@@ -352,7 +353,8 @@ def _rename_skill_id_case_and_sync(
     out: str = capsys.readouterr().out
 
     for root in _SKILL_ROOTS:
-        assert [entry.name for entry in (repo / root).iterdir()] == ["demo"], root
+        entries = [entry.name for entry in (repo / root).iterdir()]
+        assert [name for name in entries if name not in core_skill_ids()] == ["demo"], root
         assert (repo / root / "demo" / "scripts" / "run.py").is_file(), root
         assert (repo / root / "demo" / "SKILL.md").read_text().startswith("---\nname: demo\n")
     assert not any("/Demo/" in path for path in _lock_paths(repo))

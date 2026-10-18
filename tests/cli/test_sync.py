@@ -524,8 +524,8 @@ def test_sync_shipped_review_command_inlines_each_rule_once(tmp_path, make_synth
     assert _sync.run(_ns(repo)) == 0
 
     review = (repo / ".claude" / "commands" / "review.md").read_text(encoding="utf-8")
-    assert review.count("### Python typing conventions") == 1
-    assert review.count("### Python error handling") == 1
+    assert review.count("### Typing") == 1
+    assert review.count("### Error handling") == 1
 
 
 def test_sync_migrates_legacy_opencode_commands_to_frontmatter_first(tmp_path, make_synthetic_repo):

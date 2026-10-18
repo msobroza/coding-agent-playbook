@@ -13,11 +13,15 @@ from __future__ import annotations
 from importlib import resources
 from pathlib import Path
 
+from coding_agent_playbook.catalog import ENGINE_PACKAGE
+from coding_agent_playbook.types import Rule
+
 #: The repository checkout this test suite runs from.
 REPO_ROOT: Path = Path(__file__).resolve().parents[1]
 #: The checkout's catalog: ``README.md``, ``core/`` and ``plugins/``.
 CATALOG_ROOT: Path = REPO_ROOT / "catalog"
-#: The engine's core layer: ``ATTRIBUTIONS.md``, ``eval_tasks/``, ``hooks/``, ``prompts/``, ``rules/``.
+#: The engine's core layer: ``ATTRIBUTIONS.md``, ``eval_tasks/``, ``hooks/``, ``prompts/``,
+#: ``rules/`` and ``skills/``.
 CORE_ROOT: Path = CATALOG_ROOT / "core"
 #: The parent of every bundled plugin's directory.
 PLUGINS_ROOT: Path = CATALOG_ROOT / "plugins"
@@ -77,3 +81,29 @@ def bundled_eval_task_roots() -> list[Path]:
     """
     plugin_roots = [d / "eval_tasks" for d in bundled_plugin_dirs()]
     return [CORE_ROOT / "eval_tasks", *(r for r in plugin_roots if r.is_dir())]
+
+
+def core_rules() -> dict[str, Rule]:
+    """Every rule under ``CORE_ROOT / "rules"``, parsed from its file, by id.
+
+    Read from the checkout, not through the artifact source, so a loader bug
+    cannot hide a shipped rule from the catalog gates.
+
+    Example: ``core_rules()["python-typing"].frontmatter.skill`` -> ``"python-coding"``.
+    """
+    paths = sorted(
+        p for p in (CORE_ROOT / "rules").rglob("*") if p.name.endswith((".md", ".md.j2"))
+    )
+    rules = (Rule.from_markdown(path, ENGINE_PACKAGE) for path in paths)
+    return {rule.frontmatter.id: rule for rule in rules}
+
+
+def core_skill_ids() -> frozenset[str]:
+    """The ids of the skills core ships: the directories under ``CORE_ROOT / "skills"``.
+
+    Every synthetic sync writes the core skills whose member rules apply, next to
+    a test's own skill, so a test that pins a whole skills root allows these.
+
+    Example: ``"python-coding" in core_skill_ids()`` -> ``True``.
+    """
+    return frozenset(path.name for path in (CORE_ROOT / "skills").iterdir() if path.is_dir())

@@ -9,7 +9,7 @@
 | License | Apache-2.0 (engine); organization overlays may be private |
 
 **Changelog**
-- **0.21** — Skills-first context (draft; design `specs/prS-skills-context.md`, decision record `docs/adr/0001-scoped-rules-are-delivered-as-skill-references.md`). Goal: keep only always rules in always-loaded context and deliver every scoped rule as a reference inside the one skill that owns its topic. The release is built change by change, and the `### v0.21` entry of the Changelog appendix lists each section as it changes. Landed first: **`CONTEXT.md` at the repository root is the project's only glossary** (§3 is a one-line pointer to it; the two facts only the old glossary carried now live in §6.6.7 and §10.2). Then: **the shared-skills adapter (`shared_skills`) writes the shared skill root `.agents/skills/`**, which Codex and OpenCode read natively, and declares the old `shared_skills/` tree a *retired output location* (`Adapter.retired_output_locations`), so the next `playbook sync` deletes its pristine copies, prunes it and rewrites the managed `.gitignore` block, while edited, tracked or user-authored files are kept (§10.1, §10.8); leftover pruning never removes the target of a symlinked skill root, whatever order the adapters declare the two roots in (§4.2 step 9); **`playbook init` no longer enables `continue`**: the default set is `claude_code`, `opencode`, `shared_skills`, a committed `continue` stays and renders exactly as before, and the interactive choices drop `codex`, which names no adapter; a listed `codex` gets a one-line hint in the missing-adapter warning (§12.1, §12.2). Then: **`AGENTS.md` and the Claude Code rules file hold only always rules**: a member rule (a scoped rule that names a skill in `skill:`) is dropped from both and reaches its readers as a reference of that skill, and both files gain one generated `## Where guidance lives` section, byte-identical in the two, that maps file kinds to those skills; without member skills both files keep their bytes, and `playbook sync` warns when member rules are active but no enabled adapter delivers them (§6.1.4, §6.1.5, §10.3, §10.3.1, §10.4, §10.6).
+- **0.21** — Skills-first context (draft; design `specs/prS-skills-context.md`, decision record `docs/adr/0001-scoped-rules-are-delivered-as-skill-references.md`). Goal: keep only always rules in always-loaded context and deliver every scoped rule as a reference inside the one skill that owns its topic. The release is built change by change, and the `### v0.21` entry of the Changelog appendix lists each section as it changes. Landed first: **`CONTEXT.md` at the repository root is the project's only glossary** (§3 is a one-line pointer to it; the two facts only the old glossary carried now live in §6.6.7 and §10.2). Then: **the shared-skills adapter (`shared_skills`) writes the shared skill root `.agents/skills/`**, which Codex and OpenCode read natively, and declares the old `shared_skills/` tree a *retired output location* (`Adapter.retired_output_locations`), so the next `playbook sync` deletes its pristine copies, prunes it and rewrites the managed `.gitignore` block, while edited, tracked or user-authored files are kept (§10.1, §10.8); leftover pruning never removes the target of a symlinked skill root, whatever order the adapters declare the two roots in (§4.2 step 9); **`playbook init` no longer enables `continue`**: the default set is `claude_code`, `opencode`, `shared_skills`, a committed `continue` stays and renders exactly as before, and the interactive choices drop `codex`, which names no adapter; a listed `codex` gets a one-line hint in the missing-adapter warning (§12.1, §12.2). Then: **`AGENTS.md` and the Claude Code rules file hold only always rules**: a member rule (a scoped rule that names a skill in `skill:`) is dropped from both and reaches its readers as a reference of that skill, and both files gain one generated `## Where guidance lives` section, byte-identical in the two, that maps file kinds to those skills; without member skills both files keep their bytes, and `playbook sync` warns when member rules are active but no enabled adapter delivers them (§6.1.4, §6.1.5, §10.3, §10.3.1, §10.4, §10.6). Then: **core ships four skills**, `python-coding`, `python-testing`, `python-tooling` and `ml-data` (`catalog/core/skills/<id>/SKILL.md`, each with a `playbook:` block), and every scoped rule in core names one of them in `skill:`, so on every repo those rules leave `AGENTS.md` and the Claude Code rules file and arrive as references of their skill; the seven `python-coding` members get short topic-label names and four rules a one-line description; `AGENTS.md` keeps its Where map only when an enabled adapter writes a skills root (`Adapter.note_native_skill_roots`) (§2.1, §4.2, §5.1, §5.3, §6.1, §6.3, §6.4, §10.1, §10.3, §10.4, §11.2, §11.5, §14.4, §16). Then: **the always text is shorter** (D17): `project-context` keeps the name, kind and description and two reminders, and `python-house-style` keeps eight bullets, both at version 2 with no title heading and no skill named; the rest of the old house style moves into two new `python-coding` members, `python-data-shapes` (priority 44) and `python-idioms` (priority 58), so Continue gains `44-python-data-shapes.md` and `58-python-idioms.md` (§5.1, §5.3, §6.1.6, §10.2.1).
 - **0.20** — Assistant lifecycle hooks (PR K; design `specs/prK-lifecycle-hooks.md` + `specs/prK-hook-pack.md`). **`Hook` is the fourth emitted canonical kind**: a `<id>/HOOK.md` (or `HOOK.md.j2`) directory, found at any depth under each layer's `hooks/` (the engine's bundled `catalog/core/hooks/`, a bundled plugin's `catalog/plugins/<name>/hooks/`, an overlay package's `resources/hooks/`) and `playbook/hooks/`, whose static frontmatter binds canonical events to a builtin or external handler and declares its decisions (only `deny | ask | context | none`), timeout, `on_error` and supported adapters (§6.6.7). Hooks are **opt-in per repo**: an absent `[hooks]` table, or one without `enabled = true`, adds no hook output on upgrade (no settings entries, launcher, shim or advisory text); `playbook init` asks (`--no-hooks` opts out). New committed policy tables `[hooks]`, `[hooks.<hook-id>]`, `[hooks.commit_convention]` and `[guardrails]`, plus new `[metrics]` keys, none of which `.coding-agent-playbook.local.toml` may carry (§7.1.1, §7.2). Overlays merge hooks additively — `extend` / `strictest` / `relax` / `replace` config keys, overlay-only `mandatory` hooks (§11.6). Sync resolves the effective set (`hook_policy.resolve_effective_hooks`), dispatches each hook through the new `Adapter.write_hook`, and writes the sync-level `.coding-agent-playbook/hooks/guard_config.json`; Claude Code gets managed entries in `.claude/settings.json` plus the committed launcher `.claude/hooks/playbook/launch.sh`, OpenCode gets the one generated plugin `.opencode/plugins/playbook-hooks.js`, and every other target gets the hook's advisory text. Every harness event runs one dispatcher, `playbook-hook` (§4.1, §4.2). New: the `has_dev_dependency` predicate (§6.4), prompt `write_scope` / `output_contract` and rule `lint_codes` frontmatter (§6.1, §6.2), the `hook_advisory` / `hook_claude_settings` formats (§9.7), `ArtifactSource.list_hooks` (§20.2) and manifest kind `"hook"` (§20.10). The adapter contract (§10.1), the Claude Code settings merge, launcher and pin (§10.3.2), the OpenCode shim (§10.6.2), the `playbook ci` aggregate twin, the `playbook-hook` runtime and the other off-workstation twins (§12.11–§12.19), the new pre-commit ids (§13), populated scoped lockfile entries (§14.4), the hook test strategy (§16.6), the air-gapped `playbook-secrets` scan in place of the unshipped gitleaks promise (§17.3) and the opt-in metrics `ruff_violations`, `file_sloc`, `docstring_example` and `diff_coverage` (§21) complete the release. Q8 resolved, Q1 partially answered (§19). `Config.extra_tables` now carries every entry `Config` does not own, `[hooks]` and `[guardrails]` included, so an `init` re-run and `check --refresh` write them back (§7.1, §7.2). The launcher and OpenCode shim templates are engine wiring, not content: they ship in the package as `templates/hook_shims/`, next to the pre-commit template (§5.1). The engine's content tree `content/` (v0.19) is renamed `catalog/` (§5.1): the wheel ships it as `coding_agent_playbook/_catalog/`, `bundled_content.py` becomes `catalog.py` (`catalog_root`, `catalog_layer_root`, `CatalogMissingError`; §20.3), the missing-tree error line reads `error: the engine's catalog was not found (…)` (§12), and the engine's own pytest marker and dev pre-commit hook are `catalog` and `catalog-checks`. Eval tasks stay a per-layer kind: a bundled plugin may ship `catalog/plugins/<name>/eval_tasks/` (§6.5.2). Claude Code's rules move out of `.claude/CLAUDE.md` (§10.3.1): the `claude_code` adapter writes every rule section, hook advisory and the heartbeat line to one unscoped rules file, `.claude/rules/coding-agent-playbook.md` (no `paths:` frontmatter, so Claude Code loads it at launch with the same priority as `.claude/CLAUDE.md`), and leaves `.claude/CLAUDE.md` a rule-free four-line stub, so OpenCode v1, which attaches `.claude/CLAUDE.md` when its read tool opens a file under `.claude/` (once per uncompacted session, §10.6), no longer loads the rules twice or sees the Claude-only heartbeat line (§10.6). The stub stays because a `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` in the working directory or above it stops Claude Code (default `claude-md-or-agents-md` mode) from also reading the root `AGENTS.md`, while a rules file does not; the next `playbook sync` rewrites it (MIGRATION.md).
 - **0.19** — Bundled content leaves the Python package, and packs become **bundled plugins**. Every engine rule, prompt and eval task now lives in a top-level `content/core/` (now `catalog/core/`), and every bundled plugin in `content/plugins/<name>/`, in the same repository; the contributor guide is `content/README.md`. Hatch copies `content/` into the one wheel at build time (`force-include`, as `coding_agent_playbook/_content/`), so `pip install coding-agent-playbook` behaves as before, and `src/coding_agent_playbook/` holds logic only. The new leaf module `bundled_content.py` (now `catalog.py`) is the only code that knows where that content is: the wheel's `_content/` when it has a `core/`, else a source checkout's `content/`, else `BundledContentMissingError` (now `CatalogMissingError`). Every command that loads that content (`init`, `sync`, `check`, `validate`, `render`, `eval`) then exits 2 with `error: the engine's bundled content was not found (looked in <a>, <b>); reinstall coding-agent-playbook`, where it used to render zero engine artifacts silently. Bundled plugins are pure content: adding `content/plugins/<name>/` ships one, with no Python file. They are enabled as `coding_agent_playbook.plugins.<name>`. `coding_agent_playbook.packs.<name>` keeps working as a deprecated alias: the config canonicalizes it on load, and each such name prints one `warning: <file>: overlays_enabled: '<old>' is deprecated; use '<new>'` line (`init` prints `warning: --overlays: '<old>' is deprecated; use '<new>'`). The `coding_agent_playbook.packs` modules and `PACK_NAME` are removed with no shim. The sync preflight checks a bundled-plugin name against `content/plugins/<leaf>/` and never imports it: an unknown leaf is `no such bundled plugin`, a bare namespace is `the bundled plugin namespace, not a plugin`, and the hint reads ` (bundled plugins: …)`. Eval `--show` labels and the eval prompt lookup follow the layer instead of searching for a `resources` path segment, and the pre-commit template moves to `src/coding_agent_playbook/templates/precommit/`. Rendered output is unchanged under both spellings, and the third-party overlay contract (`<pkg>/resources/…`) is unchanged.
 - **0.18** — No command writes local overrides into the committed config: an `init` re-run and `playbook check --refresh` now rewrite `.coding-agent-playbook.toml` from the committed file alone (new `FileSystemStateSource.read_committed_config_table`, shared through `commands/_committed_config.py`), not from the `.local.toml` merge `load_config` returns. Both used to save that merge, which wrote one engineer's `adapters_enabled` (reordered), `overlays_enabled`, `[user_choices]` and `[output]` into the team's file (an `init` re-run also swapped the committed hooks to match a personal `[output] commit`), and both deleted every key `Config` does not read — `[links]`, `[metrics]`, a future table, `[project] homepage`. Now an `init` re-run replaces, not merges, the keys `Config` owns (`config_entries.CONFIG_MANAGED_KEYS`; inside `[project]`/`[engine]`/`[storage]`/`[output]` only the keys it reads, `config_entries.CONFIG_MANAGED_TABLE_KEYS`) with the updated config and writes everything else back with the same parsed values; `check --refresh` replaces `[detector_cache]` alone and writes every other entry back as parsed, not through `Config` (whose round trip dropped explicit empty lists and filled defaults). `FileSystemStateSource.save_config_table` is the committed file's one writer and `commands/_committed_config.ConfigRewrite.save` its one caller, built only by that module's `plan_*` functions — an AST test pins it. Before writing, both commands check that the result still loads with the local file merged on top (`preview_config`; a first `init` too), and a committed file missing a required key only the local file supplies exits 2 with nothing written, where it used to be completed with that personal value. Each config file is checked whole on its own, naming it, in every command: a file `tomllib` cannot read (syntax, not UTF-8, nested too deeply), a `project`/`engine`/`storage`/`output`/`detector_cache`/`user_choices` that is not a table, and a malformed `[output]` are `ConfigError`s (exit 2) where they were tracebacks or were reported against the wrong file, and a committed non-table is refused even when a local table hides it. A missing required key (`schema_version`, `[project] name`/`kind`, `[engine] version`) is a `ConfigError` (exit 2) in every command, no longer a `KeyError` traceback. `init` checks `--overlays` even when a local `overlays_enabled` replaces it for its own sync, since that list is what gets committed. The TOML writer (`_toml.dump_toml`, moved from `sources/filesystem.py::_dump_toml`, + `_toml.format_scalar`) now writes anything `tomllib` parses — floats (a NaN's sign included), dates/times, tables, arrays of tables and inline values at any depth (both walks are iterative: no `RecursionError`), keys that need quoting — and fixes four latent writer bugs: a non-ASCII bare key and a raw U+007F made the file unparseable; an integer past Python's int-to-str limit (which `tomllib` reads from `0x`/`0o`/`0b` literals) raised `ValueError`, and is now written in hex; and keys and header parts were written unquoted, so a dotted `[detector_cache]` dependency name (`ruamel.yaml`) or a `[user_choices]` key such as `"docs.style"` was re-read as a nested table. Config/lockfile/manifest bytes change only where the old writer crashed or its output was refused or misread; the `agent_harness` manifest now also carries float and date frontmatter values, which used to stop `sync` with a `TypeError` (§7.1, §7.2, §12.1, §12.4, §12.5, §20.3, §20.10).
@@ -36,7 +36,7 @@ Prior art that shaped this design:
 - **The ACE paper (Agentic Context Engineering)** — argues for contexts as evolving playbooks; influences the versioning and incremental-update semantics here.
 ## 2. Goals and non-goals
 ### 2.1 v1 goals
-**G1 — One canonical source, multi-harness output.** A team writes a rule once. The tool renders it to `.continue/rules/`, Claude Code's `.claude/rules/coding-agent-playbook.md`, `.opencode/command/`, and `AGENTS.md` automatically, using each harness's native features (frontmatter, globs, sections). v1 primary adapters: Continue, Claude Code, OpenCode. Universal fallback: AGENTS.md.
+**G1 — One canonical source, multi-harness output.** A team writes a rule once. The tool renders it to `.continue/rules/`, Claude Code's `.claude/rules/coding-agent-playbook.md`, `.opencode/command/`, and `AGENTS.md` automatically, using each harness's native features (frontmatter, globs, sections): always rules go to always-loaded files; a scoped rule becomes a reference inside the skill it names, and Continue still gets one rule file per rule. v1 primary adapters: Continue, Claude Code, OpenCode. Universal fallback: AGENTS.md.
 **G2 — Detect-and-condition.** Rules and prompts are gated by what's actually in the repo: Python version, installed frameworks, presence of notebooks, etc. A FastAPI rule does not ship to a non-FastAPI repo.
 **G3 — Three-layer overlay model.** Engine package ships generic content. Organization-specific packages (e.g. `playbook-rules-bnp`) ship overlay content. Consumer repos can override locally.
 **G4 — Pre-commit-native distribution.** Installation produces pre-commit-managed sync hooks. By default (`[output] commit = false`, §7.1) generated output is **local-only**: it is gitignored, re-rendered automatically after every checkout and merge, and a commit that stages any of it fails. Repos that opt into committed output (`commit = true`) keep the legacy guarantee instead: drift between the canonical source and what is checked into the repo fails the commit and CI.
@@ -79,6 +79,7 @@ Delivered: OpenCode plugin generation from canonical hook descriptions — liste
                                     │  │   ├── core/                │  │
                                     │  │   │   ├── rules/*.md|.j2   │  │
                                     │  │   │   ├── prompts/*.md|.j2 │  │
+                                    │  │   │   ├── skills/<id>/     │  │
                                     │  │   │   └── hooks/**/HOOK.md │  │
                                     │  │   └── plugins/<name>/      │  │
                                     │  │       └── skills/<id>/     │  │
@@ -136,6 +137,7 @@ Delivered: OpenCode plugin generation from canonical hook descriptions — liste
               │                              │         │     coding-agent-playbook.md │
               │                              │         │   .claude/commands/*.md      │
               │                              │         │   .claude/skills/*/          │
+              │                              │         │       references/*.md        │
               └──────────────┬───────────────┘         │   .opencode/command/*.md     │
                              │                         │   .opencode/skills/*/        │
                              │                         │   .agents/skills/*/          │
@@ -180,7 +182,7 @@ The end-to-end flow of `playbook sync` in a consumer repo:
 2. **Run detector.** Inspect `pyproject.toml`, lockfiles, filesystem. Produce a facts dictionary.
 3. **Resolve overlays.** Query the configured `ArtifactSource` (filesystem in v1; see Section 20) for rules, prompts, skills, hooks, and eval tasks across the engine's catalog, each declared overlay package or bundled plugin, and the consumer's `playbook/` directory. Build a unified artifact list, with later layers overriding earlier ones by ID — except hooks, whose layers merge additively (`OverlayResolver.resolve_hooks` + `hook_policy.merge_hook_layers`, §11.6).
 4. **Filter.** For each artifact, evaluate its `applies_if` predicate against the facts dictionary. Drop non-matching artifacts. Hooks are gated in one place only, `hook_policy.resolve_effective_hooks`: the `[hooks]` on-formula (`enabled`, `tiers`, `enable`, `disable`, `mandatory`), `applies_if` ANDed with a `linked_rule`'s, the `[guardrails]` domain merge, and `supports ∩ [hooks] adapters`. It returns the on hooks as `ResolvedHook`s and the off ones as `SkippedHook`s (reported by `playbook check`); with `[hooks]` off both lists are empty.
-5. **Render.** Apply Jinja2 to each surviving artifact's template with `facts | config` as context. A `HOOK.md.j2` body renders the same way (without `rule()`); hook frontmatter, handler commands and scripts never pass through Jinja.
+5. **Render.** Apply Jinja2 to each surviving artifact's template with `facts | config` as context. Then compose skills (`skill_membership.compose_skills`): a skill with a `playbook:` block gets its surviving member rules, rendered, and is dropped when none survived step 4; every other skill passes through (§6.3.3). The adapters receive the composed skills. A `HOOK.md.j2` body renders the same way (without `rule()`); hook frontmatter, handler commands and scripts never pass through Jinja.
 6. **Dispatch to adapters.** For each enabled adapter (`continue`, `claude_code`, `opencode`, `shared_skills`, `agents_md`), call `begin_sync(repo_root, prior_lock)` (the real repo and the previous lockfile, even under `--check`), pass the rendered artifacts, then every `ResolvedHook` through `write_hook`, then `finalize`; the adapter writes to its harness-specific locations. Claude Code merges its managed entries into `.claude/settings.json` and writes the launcher `.claude/hooks/playbook/launch.sh`, OpenCode writes the one shim `.opencode/plugins/playbook-hooks.js`, and every other adapter degrades a hook to its advisory text (§10). `managed_lock_entries()` then reports the sub-file elements the adapter owns. Before the first adapter writes, sync checks on the real repo every runtime output an adapter is about to write whole (`planned_runtime_outputs`, §10.1): a same-named file without the line-1 sentinel, a hard link (even a sentinel-tagged one: writing it whole would truncate the other name too), or a symlink at that path or at a directory between it and the repo root, stops every mode with exit 1 naming the file, and nothing is written.
 7. **`AGENTS.md` is always among the outputs.** The `agents_md` adapter is force-enabled, so step 6 writes `AGENTS.md` (in its `finalize()`) whichever other adapters are enabled, as long as at least one always rule survived step 4, a skill contributes a Where line or a hook advisory exists (§10.4). With hooks on it gains a Guardrails section holding the on hooks' advisory text. **Sync-level hook output:** whenever `[hooks] enabled` and a hook-capable adapter is on, sync itself (not an adapter) writes `.coding-agent-playbook/hooks/guard_config.json` — the machine-independent record the dispatcher reads (`guard_config.render_guard_config`) — and byte-copies external handlers' scripts beside it.
 8. **Stamp.** Write a `.coding-agent-playbook.lock` file containing the rendered file hashes via the configured `StateSource`; used by `playbook sync --check` to detect drift. Paths are recorded resolved through the repo's own symlinks, and a written file that resolves outside the repo (an output dir linked to a folder elsewhere, `.claude/skills -> /shared/skills`) gets no entry: the lockfile never owns output there (step 9 releases such an entry, so the leftover policy never deletes it; the adapters' sentinel-based `cleanup_stale` still removes a stale tagged file through the link), so the lockfile never holds an absolute, machine-specific path. The lockfile is schema 2: every entry records its provenance (`kind`, `artifact_id`, `source`, `adapter`), and each managed element of a co-owned file (`.claude/settings.json`) is a scoped entry hashed on its canonical JSON (§14.4).
@@ -223,14 +225,16 @@ coding-agent-playbook/
 ├── .pre-commit-hooks.yaml                  # exposes hooks to consumers
 ├── catalog/                                # everything content maintainers edit; not a Python package
 │   ├── README.md                           # contributor guide: where each kind lives, how to add one
-│   ├── core/                               # the engine layer, always on; no skills/ (Section 6.3)
+│   ├── core/                               # the engine layer, always on (Section 6.3.3 for its skills)
 │   │   ├── ATTRIBUTIONS.md
 │   │   ├── rules/
 │   │   │   ├── always/
 │   │   │   │   ├── 00-project-context.md.j2    # uses {{ project_name }}
-│   │   │   │   ├── 10-python-house-style.md    # plain markdown, no vars
+│   │   │   │   ├── 10-python-house-style.md    # plain markdown, no vars: eight bullets
 │   │   │   │   └── 20-tooling-baseline.md.j2   # branches on dev_tools
 │   │   │   ├── languages/python/
+│   │   │   │   ├── data-shapes.md              # python-coding member (priority 44)
+│   │   │   │   ├── idioms.md                   # python-coding member (priority 58)
 │   │   │   │   ├── typing.md.j2                # branches on python_version
 │   │   │   │   ├── error-handling.md           # plain markdown
 │   │   │   │   └── logging.md                  # plain markdown
@@ -253,6 +257,7 @@ coding-agent-playbook/
 │   │   ├── hooks/                          # canonical <id>/HOOK.md dirs, builtin handlers only (Section 6.6.7)
 │   │   │   ├── protect/  verify/  feedback/
 │   │   │   └── safety/  audit/                 # category folders carry no meaning
+│   │   ├── skills/                         # python-coding/ python-testing/ python-tooling/ ml-data/: SKILL.md only
 │   │   └── eval_tasks/
 │   │       ├── ATTRIBUTIONS.md
 │   │       ├── generate-tests-happy-path/
@@ -408,6 +413,7 @@ risk-models/                                # the user's project
 │   │   ├── 10-python-house-style.md
 │   │   ├── 20-tooling-baseline.md
 │   │   ├── 30-bnp-banking.md               # from overlay
+│   │   ├── 44-python-data-shapes.md        # a python-coding member: Continue still gets one file per rule
 │   │   ├── 50-python-typing.md
 │   │   ├── 60-fastapi.md                   # only because fastapi detected
 │   │   └── 70-pydantic-v2.md
@@ -432,6 +438,9 @@ risk-models/                                # the user's project
 │   │   ├── review.md
 │   │   └── explain.md
 │   └── skills/                             # AUTOGENERATED — Claude Code native skills
+│       ├── python-coding/                  # AUTOGENERATED: core skill; references rendered from its member rules
+│       │   ├── SKILL.md                    #   (composed description + generated references index, §6.1.6)
+│       │   └── references/python-typing.md …
 │       └── query-db/
 │           ├── SKILL.md
 │           └── scripts/run.py
@@ -444,6 +453,7 @@ risk-models/                                # the user's project
 │   ├── plugins/
 │   │   └── playbook-hooks.js               # AUTOGENERATED (hooks on): the one generated OpenCode plugin
 │   └── skills/                             # AUTOGENERATED — OpenCode native skills
+│       ├── python-coding/                  #   (byte-identical to .claude/skills/python-coding/)
 │       └── query-db/                       #   (byte-identical to .claude/skills/query-db/)
 ├── .agents/
 │   └── skills/                             # AUTOGENERATED — shared skill root (Codex, OpenCode), §10.8
@@ -516,6 +526,7 @@ name: Python typing standards        # required, human-readable
 description: Type hints everywhere   # required, used by Continue for agentic pull-in
 version: 1                           # bump on breaking content change
 scope: scoped                        # one of: always | scoped
+skill: python-coding                 # required when scope=scoped, forbidden when scope=always: the one skill that owns this rule's topic (§6.3.3)
 globs:                               # optional, list. When scope=scoped, these gate inclusion in Continue
   - "**/*.py"
 applies_if:                          # optional Python expression evaluated against facts dict
@@ -529,6 +540,8 @@ lint_codes:                          # optional: the ruff codes a rule-linked li
     - applies_if: {python_version: ">=3.12"}
       warn: [UP040]
 ```
+`skill` must name a skill that exists after the layer merge and declares a `playbook:` block (§6.3.3, §11.2), so an overlay or `playbook/rules/` adds a rule to a core skill just by naming it; Continue ignores the field (§10.2). Because the engine delivers a scoped rule as a reference of that skill, `description` is the rule's line in the skill's references index: write it as one actionable sentence. `name` is the rule's label in the skill's Covers clause, so keep it a short topic label (`Typing`, not `Python typing conventions`).
+
 `lint_codes` links the rule's text to the hook that enforces it: a hook whose `linked_rule` names this rule inherits its `applies_if` and `globs`, and the resolved code list (`warn` plus every `when` row whose predicate holds at sync) is merged into the hook's handler `config` (§6.6.7). There is no `block` key: lint feedback is warn-only. `playbook validate` checks the shape and the predicates, and an empty `lint_codes` is dropped from the markdown round trip, so unlinked rules stay byte-identical.
 #### 6.1.2 Example: `catalog/core/rules/languages/python/typing.md.j2`
 ```markdown
@@ -538,6 +551,7 @@ name: Python typing standards
 description: Apply when writing or reviewing Python code with type hints
 version: 1
 scope: scoped
+skill: python-coding
 globs:
   - "**/*.py"
 applies_if:
@@ -595,23 +609,62 @@ Target Python version: 3.12.
 - All public functions and methods have full type annotations...
 [body, fully rendered with Jinja substitutions]
 ```
-#### 6.1.4 Rendered output for Claude Code: section of `.claude/rules/coding-agent-playbook.md`
+#### 6.1.4 Rendered output for Claude Code: always rules in `.claude/rules/coding-agent-playbook.md`
 ```markdown
-## Python typing standards
+## Python house style
 
-*Applies to: `**/*.py`*
+[the body of python-house-style, verbatim]
 
-# Python typing standards
-Target Python version: 3.12.
-## Always
-- All public functions and methods have full type annotations...
-[rest of the body, verbatim]
+---
+
+## Where guidance lives
+
+Detailed conventions live in skills. Before you edit one of these files, load its skill and open the references its index lists.
+
+- Code that loads or saves models, checkpoints or caches: skill `ml-data`
+- Any Python file: skill `python-coding`
+- Test files and conftest.py: skill `python-testing`
+- FastAPI apps, routers, dependency providers and error handlers: skill `python-tooling`
+
+Lint feedback names a rule id; that rule's reference in the skill has the fix.
 
 ---
 ```
-The Claude Code adapter concatenates the rules that name no skill into one rules file, `.claude/rules/coding-agent-playbook.md`, then the generated `## Where guidance lives` section, and leaves `.claude/CLAUDE.md` a rule-free stub (§10.3.1). A member rule (a scoped rule that names a skill in `skill:`) is not in this file: it is a reference of that skill (`docs/adr/0001-scoped-rules-are-delivered-as-skill-references.md`). Each section gets a `## {name}` heading and, for scoped rules, their globs in italics; the italic line is advisory only. The body follows verbatim — its own headings, a leading `# ` title included, are not demoted.
+The Claude Code adapter concatenates the rules that name no skill into one rules file, `.claude/rules/coding-agent-playbook.md`, then the generated `## Where guidance lives` section, and leaves `.claude/CLAUDE.md` a rule-free stub (§10.3.1). A member rule (a scoped rule that names a skill in `skill:`, every scoped rule in core among them) is not in this file: it is a reference of that skill (§6.1.6, `docs/adr/0001-scoped-rules-are-delivered-as-skill-references.md`). Each section gets a `## {name}` heading and, for scoped rules, their globs in italics; the italic line is advisory only. The body follows verbatim — its own headings, a leading `# ` title included, are not demoted.
 #### 6.1.5 Rendered output for AGENTS.md: section
 Same shape as the Claude Code rules file, plus the Guardrails section (§10.4). Identical rule sections and the same `## Where guidance lives` section, byte for byte.
+#### 6.1.6 Rendered output as a skill reference: `.claude/skills/python-coding/references/python-typing.md`
+A member rule is written as `<skill root>/<skill>/references/<rule-id>.md` in every enabled skill root (§6.3.3), the same bytes everywhere: one italic line naming the rule and its globs, a blank line, then the body after Jinja, unchanged. A member without globs gets ``*Rule `<id>`.*``; the globs line is advisory. Reference files carry no sentinel: like copied references, they are owned through the lockfile, as `kind = "rule"` entries (§14.4).
+```markdown
+*Rule `python-typing`; applies to `**/*.py`.*
+
+# Python typing conventions
+[rest of the body, verbatim]
+```
+The skill's `SKILL.md` carries the composed description and, after the authored body, the generated index, one line per active member in `(priority, id)` order (`python-coding` on a repo where all nine members apply):
+```markdown
+---
+name: python-coding
+id: python-coding
+description: Library-agnostic Python conventions. Covers Dependency injection, Pure
+  core, Data shapes, Typing, Error handling, Context managers, Docstrings, Timeouts
+  and retries, Idioms. Use when writing, changing or reviewing Python code.
+---
+<!-- AUTOGENERATED by coding-agent-playbook — edit in source, run 'playbook sync' -->
+
+# Python coding
+[the authored body]
+
+## References
+
+Each reference is one rule. Open only the ones the current task needs.
+
+- [python-dependency-injection](references/python-dependency-injection.md) — Dependency injection: Pass I/O collaborators in as parameters; pick concrete implementations in one composition root per entry point.
+- [python-pure-core](references/python-pure-core.md) — Pure core: Keep business logic free of I/O, clocks, randomness and hidden mutation; perform effects in a thin outer shell.
+- [python-data-shapes](references/python-data-shapes.md) — Data shapes: Model records as dataclasses, not string dicts or parallel lists; freeze them with tuple fields; return at most three values; name magic constants.
+- [python-typing](references/python-typing.md) — Typing: Prefer a concrete type or a Protocol to Any, write X | None, and take abstract read-only types as inputs.
+[one line per remaining active member]
+```
 ### 6.2 Prompts
 A prompt is a named, invokable instruction. In Continue it becomes a slash command; in Claude Code it lives under `.claude/commands/`.
 Prompts can pull rules into their body — this is important enough to warrant a dedicated subsection (6.2.5). The mechanism lets a prompt declare "always include the Python typing rule and the pytest rule in my context when I'm invoked", so the assistant sees those rules even if its globs wouldn't have triggered them.
@@ -768,7 +821,7 @@ A rule cannot itself reference other rules via `includes_rules:`. Only prompts h
 **Why not let rules be included by globs too?**
 A natural follow-on idea: a prompt declares `includes_rules_matching: { tags: ["python", "testing"] }` and the engine picks up all matching rules. Rejected for v1 because it makes the rendered prompt non-deterministic from a glance at the source — you need to mentally execute the matcher against the current rule registry. Explicit lists are uglier but trivially readable. Revisit in v2 if the explicit lists become unwieldy.
 ### 6.3 Skills
-Skills follow the **Agent Skills** layout that Claude Code and OpenCode both read natively. The engine's core content (`catalog/core/`) ships none; the engine wheel bundles skills only in opt-in bundled plugins (`catalog/plugins/superpowers/` and `catalog/plugins/python_design/`), which are off unless a consumer enables them (Section 11.5). Overlay packages and repo-local `playbook/skills/<id>/` may ship them today. They are written natively by the `claude_code` (`.claude/skills/`), `opencode` (`.opencode/skills/`) and `shared_skills` (`.agents/skills/`) adapters through one shared `SkillWriter` (§10.8), so every copy is byte-identical; the opt-in `agent_harness` adapter writes them natively in its own tree (`skills/<id>/SKILL.md`, §10.7). Adapters that keep the ABC default `write_skill` (Continue) degrade a skill to a prompt (§6.3.2); the rules-only `agents_md` adapter does not emit skills at all.
+Skills follow the **Agent Skills** layout that Claude Code and OpenCode both read natively. Core (`catalog/core/skills/`) ships the skills that own its scoped rules: `python-coding`, `python-testing`, `python-tooling` and `ml-data` (§6.3.3). The skills of the opt-in bundled plugins (`catalog/plugins/superpowers/` and `catalog/plugins/python_design/`, off unless a consumer enables them, Section 11.5) own none. Overlay packages and repo-local `playbook/skills/<id>/` may ship either kind. They are written natively by the `claude_code` (`.claude/skills/`), `opencode` (`.opencode/skills/`) and `shared_skills` (`.agents/skills/`) adapters through one shared `SkillWriter` (§10.8), so every copy is byte-identical; the opt-in `agent_harness` adapter writes them natively in its own tree (`skills/<id>/SKILL.md`, §10.7). Adapters that keep the ABC default `write_skill` (Continue) degrade a skill to a prompt, except a skill with member rules (§6.3.2); the rules-only `agents_md` adapter does not emit skills at all (a skill with member rules adds its line to the Where map, §10.4).
 
 **Every canonical skill must declare `id:` in its `SKILL.md` frontmatter.** The `id` — not the source folder name — is the overlay merge key (§11), the output directory name (`<root>/<id>/`) and the emitted `name`. A skill without `id:` falls back to the id `skill`, so several id-less skills collapse into one and all but the last are silently dropped; `playbook validate` reports every id-less (or non-string-id) skill (§12.6).
 
@@ -794,6 +847,16 @@ When the Continue adapter encounters a skill, it:
 3. Inlines a note in the prompt: *"Helper scripts are available at `.coding-agent-playbook/skills/<skill-id>/scripts/`. You can read them if useful."*
 This is graceful — the user loses the auto-discovery of skills but keeps the content and the scripts.
 As implemented, only step 1 happens: `Adapter.write_skill` degrades through `Skill.to_prompt`, so neither `scripts/` nor `references/` reaches Continue, and no note is added (Section 11.5.1).
+A skill with member rules (§6.3.3) is never degraded: its members already reach Continue as their own rule files, and the prompt would index `references/` files Continue never receives. So no `.continue/prompts/<core-skill>.md` is written.
+#### 6.3.3 Skills with member rules
+A scoped rule names the one skill that owns its topic in `skill:` (§6.1.1); seen from that skill it is a **member rule** (`CONTEXT.md`). Membership is resolved after the layer merge (§11.2), so an overlay or `playbook/rules/` joins a core skill by naming it, and an override of the skill keeps its members.
+- **Which skills take members.** Only a skill that declares the catalog-only `playbook:` block; `playbook validate` rejects a rule naming any other skill (V14, §12.6), such as a bundled plugin skill.
+- **Presence.** Such a skill is written only when at least one member passes `applies_if` (`skill_membership.compose_skills`); with none, it is absent from every root, and its earlier output is settled by the leftover policy (§4.2 step 9).
+- **References.** Each active member is rendered as `references/<rule-id>.md` (§6.1.6) in every root the `SkillWriter` writes, and the emitted `SKILL.md` gains a generated `## References` index, one line per member in `(priority, id)` order: ``- [<rule-id>](references/<rule-id>.md) — <name>: <description>``.
+- **The `playbook:` block.** `use_when` (the condition only) and `files` (a file-kind phrase of at most 80 characters, no trailing period) are read by the engine and never emitted: the emitted frontmatter keeps `name`, `id`, `description` and any other authored key.
+- **Description.** The emitted description is `<capability sentence> Covers <member names>. Use when <use_when>.`, at most 300 characters by construction: when every name does not fit, the clause names the highest-priority members that do and ends with `and N more` (`skill_document.compose_description`).
+- **Where map.** Each written skill with members and a `files` phrase adds one line, `- <files>: skill `<id>``, to the `## Where guidance lives` section of `AGENTS.md` and the Claude Code rules file (§10.3.1, §10.4).
+- **Authoring.** The capability sentence is third person and has no `Use when`; the body says what the skill is for and how to pick a reference, never lists the references, names no rule id, has no Jinja and no markdown links, and stays well under 500 lines; hand-written files in the skill's own `references/` may sit next to the rendered ones, but none may take a member's file name (V12). Core's four skills are pinned by `tests/integration/test_core_skills.py` (§16.3).
 ### 6.4 The `applies_if` predicate
 `applies_if` is a small DSL that gates artifact inclusion. It is intentionally restricted to a handful of operators to keep it auditable; arbitrary Python is not allowed.
 ```yaml
@@ -810,6 +873,7 @@ applies_if:
 ```
 Multiple keys are ANDed together. The evaluator lives in `coding_agent_playbook.detector.evaluate_predicate(predicate, facts) -> bool`. `playbook validate` checks each key on its own, so a malformed key is reported even when an earlier key does not hold (v0.21; hooks and `lint_codes.when` were already checked this way).
 The framework operators (`has_framework`, `any_framework`) read `facts["frameworks"]`; the ML-stack operators (`has_ml_stack`, `any_ml_stack`) read the separate `facts["ml_stack"]` fact (torch, tensorflow, scikit-learn, … — see Section 8.2). Use the ML-stack operators to gate ML-specific rules and prompts, since ML libraries never appear in `frameworks`.
+Skills carry no `applies_if`. A skill with member rules follows its members' gates: it is written only when at least one member passes (§6.3.3). There is no `any_of` combinator, so a skill whose members span stacks gates each member on its own (`ml-data`'s serialization rule on `any_ml_stack`).
 `has_dev_dependency` reads `facts["dev_dependencies"]` (Section 8.2) and compares names PEP 503-normalized, so `pytest_cov` matches `pytest-cov`. It mirrors `has_framework` for tools that live only in a dev group, and gates artifacts that need one: the opt-in coverage-diff-gate hook applies only with `has_dev_dependency: [pytest-cov]`.
 `package_manager` reads the single-valued `facts["package_manager"]` (Section 8.2). Its value is one of `uv`, `poetry`, `pip-tools` or `pip`, or a non-empty list of them meaning any of them (a list of alternatives is the only useful reading of a single-valued fact). A repo whose detector sets no package manager never matches. The value is validated before the fact is read, so an unknown name, a wrong case, an empty list or a non-string is a `playbook validate` error in every repo, even one without the fact, naming the offending value and the four allowed names.
 Note that `has_framework` appears in two distinct places with different shapes — once as a predicate key here (taking a list of required framework names), and once as a Jinja helper in the rendering context (taking a single framework name and returning a bool, see Section 9.4). The same split applies to the ML stack: `has_ml_stack`/`any_ml_stack` are `applies_if:` predicate keys (lists), while `has_ml_dep("torch")` is the Jinja callable (single name) used inside `{% if %}`. They share concepts but live at different evaluation layers (frontmatter is parsed before Jinja runs). When reading or writing artifacts, the rule is: lists in `applies_if:`, callables inside `{% if %}`.
@@ -1549,7 +1613,7 @@ rendered_plain = renderer.render_artifact(
 The renderer exposes per-format transforms applied after Jinja substitution:
 | Format | Transform |
 | --- | --- |
-| `continue_rule` | Emit the sentinel on line 1, then a new frontmatter: `name`, `description`, `alwaysApply` (`true` for `scope: always`, whose `globs` are dropped; `false` for `scoped`, plus `globs` when non-empty). Canonical-only keys (`id`, `version`, `scope`, `priority`, `applies_if`, `tags`) are dropped. Then the body. |
+| `continue_rule` | Emit the sentinel on line 1, then a new frontmatter: `name`, `description`, `alwaysApply` (`true` for `scope: always`, whose `globs` are dropped; `false` for `scoped`, plus `globs` when non-empty). Canonical-only keys (`id`, `version`, `scope`, `skill`, `priority`, `applies_if`, `tags`) are dropped. Then the body. |
 | `claude_md_section` | Drop frontmatter; emit a `## {name}` heading, then `` *Applies to: `g1`, `g2`* `` (each glob in backticks, comma-separated) when the rule is `scope: scoped` with non-empty `globs` (advisory only — nothing gates on it), then the body verbatim (its own headings are not demoted) and a `---` separator. Emitted into the Claude Code rules file `.claude/rules/coding-agent-playbook.md` (§10.3.1); the name predates the rules' move out of `.claude/CLAUDE.md` and stays, since `--format claude_md_section` is CLI surface. The composite adapters render it only for rules that name no skill (§10.3.1, §10.4); a member rule is a skill reference instead. |
 | `agents_md_section` | Same as `claude_md_section`. |
 | `prompt_continue` | Emit the sentinel on line 1, then a new frontmatter `name`, `description`, `invokable: true`, then the body. If `includes_rules:` is set and the prompt's *template* body has no `{{ rule() }}` calls, append the auto-generated "Reference rules" section. Callers pass `template_body=` to `render_for`, because the rendered body no longer shows the calls Jinja expanded; deciding on it re-appended every inlined rule. |
@@ -1624,11 +1688,21 @@ class Adapter(ABC):
         """Write a rendered prompt."""
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
-        """Default: degrade to prompt. Subclasses with native skill support
-        (claude_code, opencode, shared_skills) override this and delegate to the
-        shared SkillWriter (Section 10.8); rules-only adapters return []."""
+        """Default: degrade to prompt, except a skill with member rules (§6.3.2),
+        which returns []. Subclasses with native skill support (claude_code,
+        opencode, shared_skills) override this and delegate to the shared
+        SkillWriter (Section 10.8); rules-only adapters return []."""
+        if skill.member_references:
+            return []
         prompt = skill.to_prompt()
         return self.write_prompt(prompt, repo_root)
+
+    def note_native_skill_roots(self, roots: frozenset[str]) -> None:
+        """Called once per sync, before begin_sync, with the native_skills_root
+        of every enabled adapter (empty when none writes Agent Skills). agents_md
+        keeps its Where map only when it is not empty (§10.4). A separate call,
+        not a begin_sync keyword, so an existing begin_sync override keeps
+        working. Default: no-op."""
 
     def begin_sync(
         self,
@@ -1728,10 +1802,10 @@ Continue loads rules in lexicographical order, so the file name controls priorit
 | Priority | Used for |
 | --- | --- |
 | `00` | Project context (project name, kind, top-level description) |
-| `10` | House style (formatting, naming, structure) |
+| `10` | Python house style (the eight always-loaded conventions) |
 | `20` | Tooling baseline (ruff, mypy, pytest, package manager) |
 | `30` | Compliance and security (overlay territory) |
-| `50` | Language-specific scoped rules (typing, error handling, logging) |
+| `40`-`59` | Language-specific scoped rules (dependency injection, pure core, data shapes, typing, error handling, idioms) |
 | `60` | Framework-specific scoped rules (fastapi, pydantic, sqlalchemy) |
 | `70` | Domain-specific scoped rules |
 | `90` | Per-repo customizations from `playbook/` |
@@ -1784,7 +1858,7 @@ class ClaudeCodeAdapter(Adapter):
             write_engine_owned(rules_path, repo_root, rules.encode("utf-8")),
         ]
 ```
-Skills are written natively to `.claude/skills/<id>/` (`SKILL.md` + byte-copied `scripts/` and `references/`) by the shared `SkillWriter`, with `name` = id and the sentinel as the first body line (§6.3). `stale_outputs` (and so `cleanup_stale`) combines two passes: the anchored sentinel scan (`_sentinel.has_sentinel`) over `.claude/commands/` and the launcher directory `.claude/hooks/playbook/`, and the single-file check of `.claude/CLAUDE.md` and `.claude/rules/coding-agent-playbook.md` (each reported only when it carries the sentinel and was not re-written this sync). It never scans `.claude/rules/`: every other file there is the user's. It never deletes inside `.claude/skills/`: stale skill output is settled by the lockfile leftover policy (§4.2 step 9, §10.8). `.claude/settings.json` is never stale: managed elements are removed inside `finalize`, and the file itself is never deleted. Hooks are §10.3.2.
+Skills are written natively to `.claude/skills/<id>/` (`SKILL.md` + byte-copied `scripts/` and `references/`) by the shared `SkillWriter`, with `name` = id and the sentinel as the first body line (§6.3). Core's skills are among them: a skill with member rules also gets one `references/<rule-id>.md` per active member and the generated index (§6.1.6, §6.3.3). `stale_outputs` (and so `cleanup_stale`) combines two passes: the anchored sentinel scan (`_sentinel.has_sentinel`) over `.claude/commands/` and the launcher directory `.claude/hooks/playbook/`, and the single-file check of `.claude/CLAUDE.md` and `.claude/rules/coding-agent-playbook.md` (each reported only when it carries the sentinel and was not re-written this sync). It never scans `.claude/rules/`: every other file there is the user's. It never deletes inside `.claude/skills/`: stale skill output is settled by the lockfile leftover policy (§4.2 step 9, §10.8). `.claude/settings.json` is never stale: managed elements are removed inside `finalize`, and the file itself is never deleted. Hooks are §10.3.2.
 #### 10.3.1 Rule composition: the rules file and the `CLAUDE.md` stub
 `finalize()` writes two files. The always rules, then the generated `## Where guidance lives` section, go to `.claude/rules/coding-agent-playbook.md`:
 ```markdown
@@ -1858,7 +1932,7 @@ A read-only prompt (`write_scope: {read_only: true}`) renders as a command whose
 - *Concurrent handlers.* Claude Code runs every matching handler in parallel, the user's own included, and the playbook group always sees the original `tool_input`. A user, plugin or skill hook returning `updatedInput` can still change the executed input after the playbook's verdict, a known gap that ordering cannot close.
 - *Incidental reach.* Other harnesses read `.claude/settings.json` too (Cursor, GitHub Copilot CLI, VS Code's opt-in Claude format); the dispatcher goes inert on a payload that is not Claude-shaped. Copilot CLI's `preToolUse` fails closed on errors, so a repo used with Copilot CLI, on Windows above all, must be verified against the real CLI before relying on hooks (OQ-15). Gemini CLI's `gemini hooks migrate --from-claude` copies `timeout` into a milliseconds field: never migrate playbook-managed entries.
 ### 10.4 AGENTS.md adapter
-Always enabled (the orchestrator adds `agents_md` to every enabled set). Produces a single `AGENTS.md` at the repo root. Identical in shape to the Claude Code rules file (§10.3.1, title `# AGENTS.md`; rule sections byte-identical) but lives at the root because that's where Codex, Cursor, and Copilot look for it; hook advisories go to a trailing Guardrails section (below) instead of being sorted in with the rules. It holds the always rules (a member rule, one that names a skill in `skill:`, is dropped: it is a reference of that skill), then the generated `## Where guidance lives` section, byte-identical to the rules file's, then the Guardrails section. Without member skills the file is byte-identical to the rules-only composition. With no always rule left after `applies_if` filtering, no Where line and no hook advisory, nothing is written and a stale engine-owned `AGENTS.md` is removed. When member rules are active and no enabled adapter delivers them (`Adapter.delivers_member_rules`, False only here), `playbook sync` prints `warning: no enabled adapter delivers scoped rules (only agents_md is on); skill <id> reaches no assistant: add claude_code, opencode or shared_skills to adapters_enabled` on stderr; nothing is inlined into `AGENTS.md` instead.
+Always enabled (the orchestrator adds `agents_md` to every enabled set). Produces a single `AGENTS.md` at the repo root. Identical in shape to the Claude Code rules file (§10.3.1, title `# AGENTS.md`; rule sections byte-identical) but lives at the root because that's where Codex, Cursor, and Copilot look for it; hook advisories go to a trailing Guardrails section (below) instead of being sorted in with the rules. It holds the always rules (a member rule, one that names a skill in `skill:`, is dropped: it is a reference of that skill), then the generated `## Where guidance lives` section, byte-identical to the rules file's, then the Guardrails section. Without member skills the file is byte-identical to the rules-only composition. The map names only skills a sync writes, so it is kept only when some enabled adapter declares a `native_skills_root` (`Adapter.note_native_skill_roots`, §10.1): with `adapters_enabled = []` or only `continue`, `AGENTS.md` has no Where section. With no always rule left after `applies_if` filtering, no Where line and no hook advisory, nothing is written and a stale engine-owned `AGENTS.md` is removed. When member rules are active and no enabled adapter delivers them (`Adapter.delivers_member_rules`, False only here), `playbook sync` prints `warning: no enabled adapter delivers scoped rules (only agents_md is on); skill <id> reaches no assistant: add claude_code, opencode or shared_skills to adapters_enabled` on stderr; nothing is inlined into `AGENTS.md` instead.
 ```python
 class AgentsMdAdapter(Adapter):
     name = "agents_md"
@@ -2050,6 +2124,7 @@ For each artifact ID across all layers:
 - If only one layer defines it, use it.
 - If multiple layers define it, the later layer wins (overrides). The original is not merged; it is replaced.
 - If a layer wants to *extend* rather than *replace*, it ships an artifact with a different ID (e.g. `python-typing-banking-extras`) and relies on both being loaded.
+- Skill membership is resolved after the merge, so a rule's `skill:` names the winning skill of that id, and an override of a skill keeps its member rules (§6.3.3).
 - **Hooks are the one exception** (v0.20): an overlay's same-id hook replaces the definition but may only add to it, and builtin handler config merges key by key across layers (Section 11.6).
 This is intentionally non-magic. We considered Jinja-based block inheritance across layers and rejected it as too implicit — the user reading `playbook render --show-source python-typing` should see exactly one source file.
 ### 11.3 Example
@@ -2093,6 +2168,7 @@ bnp = "playbook_rules_bnp:OVERLAY"
 That's the entire integration surface. The overlay then drops its content into `resources/rules/`, `resources/prompts/`, etc., with the same kind layout as the engine's `catalog/core/`. This overlay contract is unchanged by the move of the engine's own content to `catalog/` (v0.19).
 ### 11.5 Bundled opt-in plugins
 A **bundled plugin** (called a *pack* before v0.19) is a directory `catalog/plugins/<name>/` whose kind directories (`rules/`, `prompts/`, `skills/`, `eval_tasks/`, `hooks/`) are layered **exactly like an overlay package's `resources/`** (Section 11.1, layer 2; same ID-collision rule as Section 11.2, and hooks merge additively as Section 11.6 says), but ship **inside the engine wheel**: enabling one needs no extra install, package index, or network access (G5). Bundled plugins are **pure content**. There is no Python file per plugin, so adding `catalog/plugins/<name>/` is all it takes to ship a new one. The leaf rule: `<name>` must be a Python identifier (`str.isidentifier()`) that does not start with `_` or `.`, and the directory must hold at least one kind directory (a content gate in `tests/integration/test_catalog_layout.py` pins both). Bundled plugins are **off by default**. The engine layer never walks them. A consumer opts in by listing `coding_agent_playbook.plugins.<name>` in the top-level `overlays_enabled` key, and `FileSystemArtifactSource` resolves `catalog/plugins/<name>/<kind>/` through `catalog.catalog_layer_root` (Section 20.3). Nothing is imported, and no entry point is involved. Both namespaces, `coding_agent_playbook.plugins.*` and `coding_agent_playbook.packs.*`, are reserved for bundled plugins: a third-party package under either one is not supported. Repo-local artifacts still win on ID collision, so a consumer overrides one plugin skill by shipping `playbook/skills/<id>/`.
+Skills from a bundled plugin own no rules: they declare no `playbook:` block, so no rule can name them (V14, §6.3.3). A bundled plugin may still add a rule to a core skill by naming it in `skill:`. Every enabled plugin's skill descriptions count toward the skill-listing budget, which CI caps at 6,000 characters for core plus every bundled plugin on the reference probe (§16.3); §11.5.2's "reconciled with the engine's shipped Python and FastAPI rules" stays true.
 ```toml
 # .coding-agent-playbook.toml (top-level keys, above the first [table] header: the form `playbook init` writes and Config reads)
 overlays_enabled = ["coding_agent_playbook.plugins.superpowers"]
@@ -2969,6 +3045,15 @@ artifact_id = "query-db"
 source = "<repo-local>"
 adapter = "claude_code"
 
+[[entries]]                           # a member rule's reference: its rule's provenance (§6.3.3)
+path = ".claude/skills/python-coding/references/python-typing.md"
+sha256 = "5d07…"
+bytes = 2641
+kind = "rule"
+artifact_id = "python-typing"
+source = "coding_agent_playbook"
+adapter = "claude_code"
+
 [[entries]]
 path = ".continue/rules/10-python-house-style.md"
 sha256 = "9c1e…"
@@ -3181,6 +3266,7 @@ tests/fixtures/golden/continue/python-typing/
 Test asserts the adapter output matches `output.md` byte-for-byte. Update via `pytest --snapshot-update`.
 ### 16.3 Integration tests
 `tests/integration/test_end_to_end.py` builds a synthetic consumer repo in a `tmp_path`, runs the full `playbook init` → `playbook sync` flow, and asserts the resulting file tree matches expectations.
+The **reference probe** (`tests/_budget_probe.py`, synced once per module by `tests/integration/conftest.py`: a FastAPI + ML service with a pytest suite and a notebook, hooks on, both bundled plugins, the adapters `claude_code`, `opencode`, `shared_skills` and `continue`) carries two gates. `tests/integration/test_context_budget.py` enforces the context budget: the always rules plus the Where map at most 800 words, the two always sections alone at most 240, `AGENTS.md` before its Guardrails section at most 1,500 (the whole file is a strict xfail until the guardrails shrink to one line each), each core skill description at most 300 characters, core descriptions at most 2,000 in total, core plus every bundled plugin at most 6,000. `tests/integration/test_core_skills.py` pins the core skill inventory, each scoped rule's owning skill, the description shape, the Where phrases, plain-markdown bodies within 500 lines with references one level deep, and the emitted skills on the probe; plugin skills are exempt from its static checks, because their vendored or distilled text fails them as written. `tests/integration/test_core_always_rules.py` reads the catalog, not the probe: it pins the eight house-style bullets, the two project-context reminders and one owner, `python-data-shapes` or `python-idioms`, for every item that left the house style.
 ### 16.4 CI
 GitHub Actions (`.github/workflows/ci.yml`, ubuntu, Python 3.12 and 3.13) runs the tools directly rather than through pre-commit, installed with pip and first-party actions only:
 1. `python -m pip install -e ".[dev]"` (no `metrics` extra: the gate must pass without radon)
@@ -3863,6 +3949,11 @@ Skills-first context (design `specs/prS-skills-context.md`; decision record `doc
 - **Sections 7.1 / 11.5 / 12.1 / 12.2**: `playbook init` enables `claude_code`, `opencode`, `shared_skills` by default; `continue` is opt-in (`--adapters …,continue`), a committed `continue` survives every re-run and renders unchanged. The default set, the interactive choices (no `codex`), the question and the `--adapters` help text live in the new `commands/_init_adapters.py`. A listed `codex` adds `'codex' is not an adapter: Codex reads AGENTS.md and .agents/skills/ (the shared_skills adapter); remove it from adapters_enabled.` to the missing-adapter warning.
 - **CI (shared skill root, Continue opt-in)**: `tests/adapters/test_shared_skills.py` pins the three native roots, the retired location and that no adapter writes a file directly in its skills root; `tests/unit/test_output_locations.py` pins the order-independent prune (2 orders × 2 link directions); `tests/cli/test_sync_skill_root_move.py` runs the upgrade from `shared_skills/` end to end; `tests/cli/test_init_adapters.py` pins the init default, choices and flag help; `tests/unit/test_docs_skill_roots.py` pins §10.8, §12.1 and every documented init default.
 - **Always-only composites (§6.1.4, §6.1.5, §9.7, §10.3, §10.3.1, §10.4, §10.6)**: `AgentsMdAdapter` and `ClaudeCodeAdapter` drop every member rule (`skill_membership.is_skill_member`: the rule names a skill in `skill:`) in `write_rule`, since dispatch still hands every rule to every adapter (E3), and buffer one `skill_document.where_entry` per skill handed to `write_skill` (a skill with active member rules and a `playbook.files` phrase; `adapters/_where_guidance.WhereGuidanceBuffer`, keyed by skill id). `AGENTS.md` is the title, the always sections by `(priority, id)`, one `## Where guidance lives` section, then the unchanged Guardrails section; the Claude Code rules file is its title, the same sections and Where section, then the heartbeat line. Both files render the Where section with the one `where_guidance_section` function from the same skills, so it is byte-identical; it is written even when no always rule is (a Where line alone writes either file). Advisory rules of hooks Claude Code cannot enforce carry `skill=None` and keep their full sections in the rules file. Without member skills both files are byte-identical to before, and `.claude/CLAUDE.md` stays the four-line stub. `playbook sync` prints the undelivered-member warning when member rules are active and only `agents_md` is on. CI: `tests/adapters/test_always_only_composites.py`, `tests/unit/test_where_guidance_buffer.py` and two end-to-end cases in `tests/cli/test_sync_skill_references.py`.
+- **Core skills (§2.1, §4.1, §4.2, §5.1, §5.3, §6.1.1, §6.1.2, §6.1.4, §6.1.6, §6.3, §6.3.2, §6.3.3, §6.4, §9.7, §10.3, §11.2, §11.5, §14.4, §16.3)**: core ships four skills, `catalog/core/skills/{python-coding,python-testing,python-tooling,ml-data}/SKILL.md`, each a third-person capability sentence plus a `playbook:` block (`use_when`, `files`). The 11 scoped rules in core name their skill in `skill:` (seven in `python-coding`, `pytest` in `python-testing`, the two FastAPI rules in `python-tooling`, `ml-serialization-security` in `ml-data`); the seven `python-coding` members get short topic-label names (`Typing`, `Error handling`, …), and `python-typing`, `python-error-handling`, `pytest` and `fastapi-app-wiring` get one-line descriptions, because a member's name is its Covers label and its description its line in the skill's index. So on every repo those rules leave `AGENTS.md` and the Claude Code rules file and arrive as `<root>/<skill>/references/<rule-id>.md`, each skill being written only while one of its members applies. New §6.1.6 shows a rendered reference and the composed `SKILL.md`; new §6.3.3 documents skills with member rules; §6.3.2 says such a skill is never degraded to a Continue prompt.
+- **Sections 10.1 / 10.4**: new concrete `Adapter.note_native_skill_roots(roots)`, called once per sync before `begin_sync` with the `native_skills_root` of every enabled adapter. `agents_md` keeps its `## Where guidance lives` map only when that set is not empty, so with `adapters_enabled = []` or only `continue` the map no longer names skills no adapter writes.
+- **CI (core skills)**: the reference probe (`tests/_budget_probe.py`, the module-scoped `reference_probe_repo` fixture of `tests/integration/conftest.py`) feeds `tests/integration/test_context_budget.py` (always rules plus the Where map at most 800 words, `AGENTS.md` before Guardrails at most 1,500, the whole file a strict xfail until the guardrails shrink, core descriptions at most 300 each and 2,000 in total, core plus every bundled plugin at most 6,000) and `tests/integration/test_core_skills.py` (the core inventory, `EXPECTED_MEMBERSHIP`, `EXPECTED_WHERE`, the static D13 checks over core skills only, the emitted skills, the byte-identical references and their `kind = "rule"` lock rows on the probe).
+- **Always text (§5.1, §5.3, §6.1.6, §10.2.1, §16.3)**: `project-context` and `python-house-style` are rewritten to the D17 text at version 2. `project-context` renders the name, `(project kind: …)` (still the detector's `project_kind`) and the description, then two reminders: ask before coding when the scope or approach is unclear, and report a problem outside the task instead of fixing it in the same change. `python-house-style` is eight bullets, four of them with a one-line reason. Neither body has a title heading (the adapters add one) or names a skill. Every other item of the old house style has one owner in a new `python-coding` member: `python-data-shapes` (records, shallow freezing, return shapes, constants and settings; priority 44) or `python-idioms` (the `os.path` exception, flag-driven functions, composition, strings, imports, small idioms; priority 58). On the reference probe the two always sections total 231 words, down from 691, and `python-coding`'s composed description names all nine members in 226 characters. Continue, when enabled, gains `44-python-data-shapes.md` and `58-python-idioms.md`; §10.2.1's `10` and `40`-`59` rows say so.
+- **CI (always text)**: `tests/integration/test_core_always_rules.py` pins the eight bullets, the D17 phrases, the two rendered reminders, the description layout, the cut reminders, that neither always body names a skill, and one owner for every moved item; `test_context_budget.py` caps the two always sections at 240 words; `test_core_skills.py` adds the two members to `EXPECTED_MEMBERSHIP` and checks their Continue rule files.
 ### v0.20 (2026-10-16)
 Assistant lifecycle hooks (PR K). `Hook` joins `Rule`, `Prompt` and `Skill` as the fourth emitted canonical kind, rendered natively for Claude Code and OpenCode and as advisory text everywhere else, with one import-light dispatcher for every harness event. **Opt-in, with no hook output on upgrade:** a repo without `[hooks] enabled = true` gets no settings entries, launcher, shim or advisory text, only one notice line from `playbook sync`; the Claude Code rules file below is the one non-hook layout change. Authoritative design: `specs/prK-lifecycle-hooks.md` and `specs/prK-hook-pack.md`; migration: `MIGRATION.md`.
 - **Layout (on top of v0.19)**: the engine's hooks live in the catalog, `catalog/core/hooks/<category>/<id>/HOOK.md`, found through the `catalog` module like every other engine kind; a bundled plugin may ship `catalog/plugins/<name>/hooks/` and an overlay package `<pkg>/resources/hooks/`. The launcher and OpenCode shim templates are engine wiring and stay in the package, `src/coding_agent_playbook/templates/hook_shims/`, next to `templates/precommit/`. The protected `resource_roots` ids keep their `pkg:<layer>/resources` spelling, and a bundled layer's id resolves to its content directory (`catalog/core/`, `catalog/plugins/<name>/`). In the engine checkout, validate-then-sync-on-canonical-edit and control-plane-guard treat `catalog/core/<kind>/**` and `catalog/plugins/*/<kind>/**` as canonical sources, as they treat an overlay checkout's `src/*/resources/<kind>/**`.

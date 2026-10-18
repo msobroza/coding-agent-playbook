@@ -62,7 +62,7 @@ def test_every_shipped_task_prompt_renders_strictly(task_dir: Path) -> None:
 def test_rule_helper_inlines_the_referenced_rule() -> None:
     """``{{ rule("python-error-handling") }}`` inlines that rule's header + body."""
     prompt = render_prompt(_shipped("review-spot-the-bug"), strict=True)
-    assert "### Python error handling" in prompt
+    assert "### Error handling" in prompt
 
 
 def test_mocked_ml_stack_list_satisfies_any_ml_stack() -> None:
@@ -387,7 +387,7 @@ def test_overlay_override_with_false_applies_if_drops_the_rule(overlay_package: 
     )
     task = _overlay_task(overlay_package, 'Start.\n{{ rule("python-error-handling") }}\nEnd.\n')
     prompt = render_prompt(task, strict=True)
-    assert "### Python error handling" not in prompt  # the engine body did not leak back
+    assert "### Error handling" not in prompt  # the engine body did not leak back
     assert "Overlay body" not in prompt
 
 

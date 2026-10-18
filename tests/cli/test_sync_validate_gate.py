@@ -193,6 +193,7 @@ def test_sync_writes_nothing_on_a_membership_error(
     err = capsys.readouterr().err
     assert (
         f"FAIL {bad}: skill 'python-codng' does not exist after merging every layer; expected "
-        "one of: none, no skill declares a 'playbook:' block (or enable the overlay that ships it)"
+        "one of: ml-data, python-coding, python-testing, python-tooling (or enable the overlay "
+        "that ships it)"
     ) in err
     assert _ABORT_LINE in err

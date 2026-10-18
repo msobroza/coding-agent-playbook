@@ -116,7 +116,7 @@ def test_sandbox_violation_in_included_rule_aborts_before_any_write(
 def test_render_reports_sandbox_violation(
     tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """``playbook render <prompt>`` renders every resolved rule: one escaping rule
+    """``playbook render <prompt>`` renders every applicable rule: one escaping rule
     exits 1 naming its file instead of an uncaught traceback."""
     repo = make_synthetic_repo(tmp_path, prompts=[("tidy", {"body": "Tidy up.\n"})])
     _write_templated_rule(repo, "escape", _ESCAPE_BODY)

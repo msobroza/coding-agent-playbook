@@ -1,25 +1,18 @@
 ---
 id: project-context
 name: Project context
-description: Project name, kind, and description; always-on context for every interaction.
-version: 1
+description: Project name, kind and description, plus the two working agreements every task needs.
+version: 2
 scope: always
 priority: 0
 tags: [always, context]
 ---
 
-# About this project
-
-You are working on **{{ project_name }}**, a `{{ project_kind }}` project.
-
+You are working on **{{ project_name }}** (project kind: `{{ project_kind }}`).
 {% if project_description %}
+
 {{ project_description }}
 {% endif %}
 
-## Reminders that apply everywhere
-
-- Read existing code before making changes. Match the repo's conventions for naming, layout, and style — when something feels stylistically off, copy a neighbour rather than inventing a new pattern.
-- Prefer clarity over cleverness. Write code that the next reader will find obvious; choose the boring option when in doubt.
-- When uncertain about scope, approach, or a tradeoff, surface the question before coding. A clarifying paragraph is cheaper than the wrong implementation.
-- Keep changes minimal. Touch only what the task requires; resist the urge to "improve" adjacent code that isn't broken.
-- If you discover a real problem outside the immediate task (a latent bug, dead code, missing test), call it out — don't silently fix it in the same change.
+- Ask before writing code when the scope or the approach is unclear: a short question costs less than the wrong change.
+- Report a problem you find outside the task (a latent bug, dead code, a missing test) instead of fixing it in the same change.

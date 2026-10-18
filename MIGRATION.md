@@ -32,7 +32,9 @@ subsection after it when a row is not enough. The SPEC changelog entry is v0.21.
 | Tooling that points at `shared_skills/` | Point it at `.agents/skills/`. |
 | `codex` in `adapters_enabled` | Remove it. |
 | Continue users | Existing repos: nothing, a committed `continue` stays. New repos: add `continue` to `--adapters`. |
+| Only using engine content (core, bundled plugins) | Nothing. The next `playbook sync` (the post-checkout hook runs it) rewrites `AGENTS.md` and the Claude Code rules file and adds the core skill directories. See "Scoped rules arrive as skill references". |
 | A repo, overlay or bundled plugin whose scoped rules name a skill (`skill:`) | Nothing: the next `playbook sync` drops those rules from `AGENTS.md` and the Claude Code rules file and adds a generated `## Where guidance lives` section that names their skills. With only `agents_md` on (`adapters_enabled = []`), sync warns that they reach no assistant: add `claude_code`, `opencode` or `shared_skills`. See "AGENTS.md and the Claude Code rules file hold only always rules". |
+| Overriding `project-context` or `python-house-style` by id | Nothing: your text keeps winning. Consider trimming it, since the engine's own text is now much shorter. See "The always text is shorter". |
 
 ### `package_manager` and per-key validation
 
@@ -166,14 +168,84 @@ the two, with one line per written skill that has member rules and a
 `AGENTS.md` then ends with its Guardrails section, unchanged; the rules file
 ends with the heartbeat line when the session-start briefing is on. A rule that
 names no skill, and the guardrail text of a hook Claude Code cannot enforce,
-keep their full sections. `.claude/CLAUDE.md` stays the four-line stub. A repo
-whose rules name no skill sees no change in either file.
+keep their full sections. `.claude/CLAUDE.md` stays the four-line stub. Every
+scoped rule in core names a skill, so every repo sees the change: in a typical
+FastAPI + ML repo with hooks on, `AGENTS.md` shrinks from about 6,800 words to
+about 1,850, of which about 330 come before the Guardrails section, and the
+Claude Code rules file from about 5,300 words to about 350 (with the shorter
+always text below). A later change of this release shortens the guardrails.
+
+The map names only skills that a sync writes. When no enabled adapter writes a
+skills root (`adapters_enabled = []`, or only `continue`), `AGENTS.md` has no
+`## Where guidance lives` section.
 
 When member rules are active but every enabled adapter is `agents_md`
 (`adapters_enabled = []`), nothing delivers them, and `playbook sync` says so on
 stderr instead of inlining them into `AGENTS.md`:
 
     warning: no enabled adapter delivers scoped rules (only agents_md is on); skill risk-models reaches no assistant: add claude_code, opencode or shared_skills to adapters_enabled
+
+### Scoped rules arrive as skill references
+
+Core now ships four skills: `python-coding`, `python-testing`, `python-tooling`
+and `ml-data`. Each scoped rule in core names one of them, and is now
+`<skills root>/<skill>/references/<rule-id>.md`, listed in that skill's index,
+for example `.claude/skills/python-coding/references/python-typing.md`. A skill
+is written only when at least one of its rules applies to the repo, so a repo
+without FastAPI has no `python-tooling`. Rule ids, `lint_codes`, hook links and
+prompt `includes_rules` are unchanged, so lint feedback still names the rule id;
+open the reference with that id. The `python-coding` members have short display
+names (`Typing`, `Error handling`, …) because each name is its label in the
+skill's description, and `python-typing`, `python-error-handling`, `pytest` and
+`fastapi-app-wiring` have new one-line descriptions, because a description is
+now the rule's line in its skill's index. Prompts that inline these rules show
+the new names in their `## Reference rules` headings (`### Error handling`).
+
+### The always text is shorter
+
+`project-context` keeps the name, kind and description and two reminders: ask
+before coding when the scope or approach is unclear, and report problems outside
+the task instead of fixing them in the same change. The kind now reads
+`(project kind: …)` and is still the detector's. The reminders "read existing
+code first", "prefer clarity over cleverness" and "keep changes minimal" are
+gone. `python-house-style` keeps eight bullets, four of them with a one-line
+reason; the rest moved to two new rules in `python-coding`:
+`python-data-shapes` (records, frozen dataclasses, return shapes, constants) and
+`python-idioms` (paths, flag-driven functions, composition, strings, imports,
+small idioms). Neither always rule has a title heading of its own any more (the
+`## Project context` and `## Python house style` headings stay), and both are at
+`version: 2`. In a typical FastAPI + ML repo the two sections shrink from about
+690 words to about 230. An override of either always rule by id keeps its own
+text, and with it its old length.
+
+### Continue and the new rules
+
+Continue still gets one rule file per rule and ignores `skill:`.
+`.continue/rules/` gains `44-python-data-shapes.md` and `58-python-idioms.md`;
+`00-project-context.md` and `10-python-house-style.md` get the shorter text.
+Seven rule files (`40-python-dependency-injection.md` and the other
+`python-coding` members) show their new short names, and four show their new
+descriptions.
+Core skills are not turned into Continue prompts, so no
+`.continue/prompts/<core-skill>.md` is ever written.
+
+### New output and the lockfile
+
+Each written core skill adds `<root>/<id>/SKILL.md` and `references/` under
+every enabled skills root, one lockfile entry per file (`kind = "skill"` for
+`SKILL.md`, `kind = "rule"` with the rule id for each reference, so the
+generated-output guard points an editor at the rule) and, with
+`[output] commit = false`, one managed `.gitignore` line per skill directory.
+Nothing is removed. A hand-written skill directory of yours named
+`python-coding` (or another core id) is left alone with a warning; rename it, or
+move it to `playbook/skills/python-coding/` to override the core skill (keep its
+`playbook:` block: the core rules still attach to it).
+
+### Not changed (skill references)
+
+Rule ids and file names in `catalog/`, `lint_codes`, `linked_rule` hooks,
+prompt rendering (`includes_rules` still inlines rule bodies), the lockfile
+schema and Claude Code's `.claude/CLAUDE.md` stub.
 
 ## v0.20 — Assistant lifecycle hooks (PR K)
 
