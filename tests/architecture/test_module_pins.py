@@ -58,6 +58,9 @@ def _entry_point_groups() -> frozenset[str]:
 
 
 def _is_module_name(value: str, not_modules: Set[str]) -> bool:
+    # A trailing dot is a ``startswith`` prefix for a package's submodules
+    # (``"coding_agent_playbook.x."``): it goes stale just like the bare name.
+    value = value.removesuffix(".")
     if not _ENGINE_NAME.match(value) or value in not_modules:
         return False
     return not any(value == ns or value.startswith(f"{ns}.") for ns in _OVERLAY_NAMESPACES)
@@ -143,11 +146,14 @@ def test_deferred_raw_pins_still_exist() -> None:
         '_GATE_SCAN = "coding_agent_playbook.gate_scan"',
         'assert not {"yaml", "coding_agent_playbook.gate_scan"} & loaded',
         'assert not [m for m in loaded if m.startswith("coding_agent_playbook.gate_scan")]',
+        '_H = "coding_agent_playbook.gate_scan."',
     ],
-    ids=["not-in", "module-constant", "set-display", "startswith"],
+    ids=["not-in", "module-constant", "set-display", "startswith", "startswith-dotted-prefix"],
 )
 def test_raw_pins_flags_each_vacuous_spelling(source: str) -> None:
-    assert [pin.name for pin in raw_pins(source, "t.py")] == ["coding_agent_playbook.gate_scan"]
+    names = [pin.name.removesuffix(".") for pin in raw_pins(source, "t.py")]
+
+    assert names == ["coding_agent_playbook.gate_scan"]
 
 
 @pytest.mark.parametrize(

@@ -19,6 +19,7 @@ from coding_agent_playbook.hook_policy import RegistryCatalog, merged_handler_co
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.handlers._dependency_tiers import dependency_policy
 from coding_agent_playbook.hooks_config import HooksConfig, parse_guardrails_config
+from tests.engine_modules import engine_module
 from tests.hook_runtime.fakes import FakeGit
 from tests.hooks.pack_repo import engine_hook
 
@@ -35,7 +36,7 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "dependency-allowlist-guard"
-_HANDLERS: Final = "coding_agent_playbook.hook_runtime.handlers."
+_HANDLERS: Final = f"{engine_module('coding_agent_playbook.hook_runtime.handlers')}."
 #: What ``detect()`` reads from :data:`PYPROJECT` with a ``uv.lock`` beside it.
 UV_FACTS: Final = {
     "package_manager": "uv",
