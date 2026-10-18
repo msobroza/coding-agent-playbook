@@ -150,6 +150,25 @@ def _show_source(artifact: _Artifact, kind: str, ctx: SyncContext) -> str:
     return "\n".join(lines)
 
 
+def _rule_applies(rule: Rule, ctx: SyncContext) -> bool:
+    """Whether ``rule``'s ``applies_if`` holds for the repo; a malformed predicate does not.
+
+    The one predicate rule of ``playbook render``: an empty predicate holds, and
+    ``evaluate_predicate``'s ``ValueError`` (a predicate validate would reject) reads as
+    false, as ``--show-rules`` has always printed it. ``orchestrator.filter_applies_if``
+    is not reused because it raises there, and render has no validate gate to run first.
+
+    Example: ``_rule_applies(rule, SyncContext.from_repo(repo))`` -> ``False`` without fastapi.
+    """
+    predicate = rule.frontmatter.applies_if or {}
+    if not predicate:
+        return True
+    try:
+        return evaluate_predicate(predicate, ctx.facts, repo_root=ctx.repo_root)
+    except ValueError:
+        return False
+
+
 def _show_rules(prompt: Prompt, ctx: SyncContext) -> str:
     rule_index = {rule.frontmatter.id: rule for rule in ctx.rules_resolved}
     lines = [f"Prompt:    {prompt.frontmatter.id}", "includes_rules:"]
@@ -161,14 +180,7 @@ def _show_rules(prompt: Prompt, ctx: SyncContext) -> str:
         if rule is None:
             lines.append(f"  - {rule_id}  (UNKNOWN)")
             continue
-        predicate = rule.frontmatter.applies_if or {}
-        if not predicate:
-            applies = True
-        else:
-            try:
-                applies = evaluate_predicate(predicate, ctx.facts, repo_root=ctx.repo_root)
-            except ValueError:
-                applies = False
+        applies = _rule_applies(rule, ctx)
         marker = "INLINED" if applies else "OMITTED"
         lines.append(f"  - {rule_id}  ({rule.source_package}, applies_if={applies} -> {marker})")
     return "\n".join(lines)
@@ -191,7 +203,13 @@ def _render_prompt(ctx: SyncContext, prompt: Prompt, resolved_format: str) -> st
     base_env = build_environment([], is_prompt_context=False)
     base_env.globals["_facts"] = dict(ctx.facts)
     context = build_jinja_context(ctx)
-    rendered_rules = [render_rule_body(rule, context, base_env) for rule in ctx.rules_resolved]
+    # Only applicable rules enter the registry, as sync delivers them (SPEC §6.2.5);
+    # the prompt itself renders whatever its own applies_if.
+    rendered_rules = [
+        render_rule_body(rule, context, base_env)
+        for rule in ctx.rules_resolved
+        if _rule_applies(rule, ctx)
+    ]
     registry, prompt_env = build_prompt_environment(rendered_rules, ctx.facts)
     rendered_prompt = render_prompt_body(prompt, context, prompt_env)
     return render_for(
@@ -273,7 +291,7 @@ def run(args: argparse.Namespace) -> int:
     try:
         print(_render_artifact(ctx, kind, artifact, resolved_format))
     except TemplateSecurityError as exc:
-        # Every resolved rule renders here, so one escaping template anywhere
+        # Every applicable rule renders here, so one escaping template anywhere
         # names its file instead of dumping a traceback (prK §P1).
         return report_sandbox_violation(exc, ctx.repo_root, outcome="playbook render aborted.")
     except UndefinedError as exc:
