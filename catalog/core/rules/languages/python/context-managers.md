@@ -1,9 +1,10 @@
 ---
 id: python-context-managers
-name: Python context managers
+name: Context managers
 description: "Bind every releasable resource to a with block; turn repeated try/finally into context managers that never swallow errors."
 version: 1
 scope: scoped
+skill: python-coding
 globs:
   - "**/*.py"
 priority: 56

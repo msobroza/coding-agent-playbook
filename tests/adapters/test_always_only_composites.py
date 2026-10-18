@@ -174,6 +174,46 @@ def test_agents_md_lists_a_skill_once_however_often_it_is_written(tmp_path: Path
     assert content == _AGENTS_HEAD + _WHERE
 
 
+def test_agents_md_drops_the_where_map_when_no_enabled_adapter_writes_skills(
+    tmp_path: Path,
+) -> None:
+    """Regression (C7): the map may name only skills a sync writes to a native skill root.
+
+    With ``adapters_enabled = []`` or only ``continue``, no adapter writes Agent
+    Skills, so a Where line would send the agent to a skill that does not exist.
+    """
+    adapter = AgentsMdAdapter()
+    adapter.note_native_skill_roots(frozenset())
+    adapter.write_rule(_always_rule(), tmp_path)
+    adapter.write_skill(_member_skill(), tmp_path)
+    adapter.finalize(tmp_path)
+
+    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == _AGENTS_HEAD + _ALWAYS_SECTION
+
+
+def test_agents_md_without_a_native_skill_root_is_not_written_for_member_skills_alone(
+    tmp_path: Path,
+) -> None:
+    adapter = AgentsMdAdapter()
+    adapter.note_native_skill_roots(frozenset())
+    adapter.write_rule(_member_rule(), tmp_path)
+    adapter.write_skill(_member_skill(), tmp_path)
+
+    assert adapter.finalize(tmp_path) == []
+    assert not (tmp_path / "AGENTS.md").exists()
+
+
+def test_agents_md_keeps_the_where_map_when_an_enabled_adapter_writes_skills(
+    tmp_path: Path,
+) -> None:
+    adapter = AgentsMdAdapter()
+    adapter.note_native_skill_roots(frozenset({".agents/skills"}))
+    adapter.write_skill(_member_skill(), tmp_path)
+    adapter.finalize(tmp_path)
+
+    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == _AGENTS_HEAD + _WHERE
+
+
 # --------------------------------------------------------------------------- #
 # The Claude Code rules file
 # --------------------------------------------------------------------------- #

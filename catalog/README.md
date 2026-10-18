@@ -16,6 +16,8 @@ catalog/
 │   ├── rules/                always/, languages/python/, frameworks/, ml/
 │   ├── prompts/              one <id>.md or <id>.md.j2 per prompt
 │   ├── hooks/                one <category>/<id>/HOOK.md per lifecycle hook
+│   ├── skills/               one <id>/SKILL.md per core skill; its
+│   │                         references come from the rules that name it
 │   └── eval_tasks/           one <task-id>/ per task, plus ATTRIBUTIONS.md
 └── plugins/                  bundled plugins: off until a consumer enables one
     └── <name>/
@@ -25,9 +27,12 @@ catalog/
         └── skills/           one <dir>/SKILL.md per skill, plus scripts/, references/
 ```
 
-`core/` ships no skills: every bundled skill belongs to a bundled plugin. A
-bundled plugin may also hold `rules/`, `prompts/`, `hooks/` or `eval_tasks/`,
-laid out exactly as in `core/`.
+`core/` ships four skills, `python-coding`, `python-testing`, `python-tooling`
+and `ml-data`. Each one's references are rendered from the scoped rules that
+name it. Only a skill that declares a `playbook:` block takes rules, so the
+skills of `superpowers` and `python_design` own none. A bundled plugin may also
+hold `rules/`, `prompts/`, `hooks/` or `eval_tasks/`, laid out exactly as in
+`core/`.
 
 The files at a layer root (`README.md`, `LICENSE`, `ATTRIBUTIONS.md`) sit
 outside every kind directory, so sync never copies them into a consumer repo.
@@ -64,11 +69,20 @@ the consumer's `playbook/`) replaces an artifact with the same `id`.
 1. Create `core/rules/<group>/<file>.md`, where `<group>` is `always/`,
    `languages/python/`, `frameworks/` or `ml/`.
 2. Give it frontmatter with `id` (unique across every layer), `name`,
-   `description`, `version` and `scope` (`always` or `scoped`). Add `globs`
-   for a scoped rule, `applies_if` to gate it on detector facts, `priority`
-   (lower comes first; the default is 50) and `tags`. SPEC §6.1 has the full
-   schema.
-3. Keep the body to guidance an assistant can act on. A rule cannot call
+   `description`, `version` and `scope` (`always` or `scoped`). A scoped rule
+   also names the skill that delivers it in `skill:`, which an always rule must
+   not carry; the skill must exist after the layer merge, so an overlay or a
+   consumer's `playbook/rules/` may name a core skill. Add `globs` for a scoped
+   rule, `applies_if` to gate it on detector facts, `priority` (lower comes
+   first; the default is 50) and `tags`. SPEC §6.1 has the full schema.
+3. For a scoped rule, pick the skill by topic: `python-coding` when no library
+   is needed, `python-testing` for tests, `python-tooling` for one named
+   framework or tool, `ml-data` for ML and data libraries. Write `description`
+   as the one actionable line the skill's references index shows for the rule,
+   and keep `name` a short topic label (`Typing`, `Error handling`): it is the
+   rule's label in the skill's "Covers ..." clause. Add the rule to
+   `EXPECTED_MEMBERSHIP` in `tests/integration/test_core_skills.py`.
+4. Keep the body to guidance an assistant can act on. A rule cannot call
    `{{ rule(...) }}`.
 
 ## Add a prompt
@@ -128,11 +142,23 @@ wiring, not content: their templates stay in the package, under
 
 ## Add a skill
 
-1. Pick the bundled plugin it belongs to, or add a new one (below).
-2. Create `plugins/<name>/skills/<dir>/SKILL.md`. Its frontmatter must declare
+1. Pick its layer: `core/skills/<id>/` for a skill that owns rules in core,
+   otherwise the bundled plugin it belongs to, or a new one (below).
+2. Create `<layer>/skills/<dir>/SKILL.md`. Its frontmatter must declare
    `id`, which must match `^[a-z0-9]+(-[a-z0-9]+)*$` (at most 64 characters) and
    becomes the output directory name. It also needs a `description` of 1 to
    1024 characters.
+   - A skill that owns rules (every core skill) gives `id`, `name` and the
+     directory the same value, writes `description` as one third-person
+     capability sentence without "Use when", and declares a `playbook:` block
+     with `use_when` (the condition only: the engine writes "Use when
+     <use_when>.") and `files` (a file-kind phrase of at most 80 characters with
+     no trailing period, for the "Where guidance lives" map). The engine strips
+     the block, appends a "Covers ..." clause naming the active member rules and
+     a generated `## References` index, and keeps the result within 300
+     characters. The body says what the skill is for and how to pick a
+     reference; it never lists the references, never names a rule id, and holds
+     no Jinja and no markdown links.
 3. Put optional helpers in `scripts/` and optional long-form material in
    `references/`. Sync copies only `SKILL.md`, `scripts/` and `references/`.
    Make scripts executable. Keep Python scripts stdlib-only and valid on
@@ -162,8 +188,9 @@ wiring, not content: their templates stay in the package, under
        raise SystemExit(main(sys.argv[1:]))
    ```
 
-4. Each plugin's gates under `tests/plugins/` pin its skill inventory. Update
-   them in the same change.
+4. Each plugin's gates under `tests/plugins/` pin its skill inventory, and
+   `tests/integration/test_core_skills.py` pins the core one. Update them in
+   the same change.
 
 The `superpowers` plugin is vendored: its upstream files must stay
 byte-identical, and ruff never touches that directory. Add new skills to a

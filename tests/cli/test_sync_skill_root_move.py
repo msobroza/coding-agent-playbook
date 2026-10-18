@@ -27,6 +27,7 @@ import pytest
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.gitignore import BLOCK_END, BLOCK_START, apply_managed_block
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from tests._catalog import core_skill_ids
 from tests.cli.test_sync_skills import _lock_paths, _skill_tree, _write_repo_local_skill
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import consumer_config
@@ -98,11 +99,13 @@ def test_first_sync_after_upgrade_moves_pristine_shared_skills_tree(
     tmp_path: Path, make_synthetic_repo: MakeRepo, capsys: pytest.CaptureFixture[str]
 ) -> None:
     repo = _synced_then_rewound(make_synthetic_repo(tmp_path, config_text=_config()))
+    # query-db's SKILL.md + run.py, and the core python-coding skill every synthetic sync writes.
+    old_files = sum(1 for path in (repo / _OLD_ROOT).rglob("*") if path.is_file())
     capsys.readouterr()
 
     assert _sync.execute(repo, git=FakeGitClient()) == 0
 
-    assert re.search(r", 2 removed$", capsys.readouterr().out, re.MULTILINE)  # SKILL.md + run.py
+    assert re.search(rf", {old_files} removed$", capsys.readouterr().out, re.MULTILINE)
     assert not (repo / _OLD_ROOT).exists()
     moved = repo / _NEW_ROOT / "query-db"
     assert _skill_tree(moved) == _skill_tree(repo / ".claude" / "skills" / "query-db")
@@ -196,8 +199,9 @@ def test_sync_writes_no_loose_file_at_any_skill_root(
 
     for root in _SKILL_ROOTS:
         children = sorted((repo / root).iterdir())
-        assert len(children) == 3, root  # query-db + the two python_design skills
         assert all(child.is_dir() for child in children), root
+        # query-db + the two python_design skills, next to the core skills that apply here.
+        assert len([c for c in children if c.name not in core_skill_ids()]) == 3, root
     for path in _lock_paths(repo):
         for root in _SKILL_ROOTS:
             below = Path(path).relative_to(root).parts if path.startswith(f"{root}/") else ()

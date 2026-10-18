@@ -498,7 +498,7 @@ def test_list_skills_constructs_from_directory(tmp_path: Path, temp_pkg_cleanup:
         repo_root=tmp_path,
         overlay_packages=["temp_overlay_skills"],
     )
-    skills = source.list_skills()
+    skills = [s for s in source.list_skills() if s.source_package == "temp_overlay_skills"]
     assert len(skills) == 1
     skill = skills[0]
     assert skill.frontmatter["name"] == "My skill"
@@ -546,7 +546,7 @@ def test_iter_skills_skips_directories_without_skill_md(
         repo_root=tmp_path,
         overlay_packages=["temp_overlay_skills"],
     )
-    skills = source.list_skills()
+    skills = [s for s in source.list_skills() if s.source_package == "temp_overlay_skills"]
     assert len(skills) == 1
     assert skills[0].frontmatter["name"] == "Good"
 
@@ -559,9 +559,9 @@ def test_list_skills_includes_repo_local_playbook_skills(tmp_path: Path) -> None
         encoding="utf-8",
     )
     source = FileSystemArtifactSource(repo_root=tmp_path)
-    skills = source.list_skills()
+    skills = [s for s in source.list_skills() if s.source_package == "<repo-local>"]
     assert len(skills) == 1
-    assert skills[0].source_package == "<repo-local>"
+    assert skills[0].frontmatter["name"] == "Local skill"
 
 
 def test_dump_toml_round_trips_nested_dict_in_list_of_tables() -> None:

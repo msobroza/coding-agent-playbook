@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook._member_reference import member_reference_path
 from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of
+from coding_agent_playbook.commands._sync_output import native_skill_roots
 from coding_agent_playbook.lockfile import (
     LockEntry,
     Lockfile,
@@ -149,8 +150,10 @@ def dispatch_to_adapters(
     tagging each returned path with the artifact (or composite output) that produced it.
 
     ``adapters`` maps the entry-point name to the instance, e.g.
-    ``{"continue": ContinueAdapter()}``. Each adapter's scoped lock entries are
-    collected on ``recorder.managed`` after its ``finalize``.
+    ``{"continue": ContinueAdapter()}``. Each adapter first hears the native
+    skill roots of the whole set (``note_native_skill_roots``), so ``agents_md``
+    can drop its skills map when nothing writes skills. Each adapter's scoped
+    lock entries are collected on ``recorder.managed`` after its ``finalize``.
 
     Example::
 
@@ -159,7 +162,9 @@ def dispatch_to_adapters(
     """
     plan = hooks if hooks is not None else HookDispatch()
     recorder = ProvenanceRecorder()
+    skill_roots = native_skill_roots(adapters)
     for name, adapter in adapters.items():
+        adapter.note_native_skill_roots(skill_roots)
         adapter.begin_sync(
             plan.source_root or output_root, plan.prior_lock, hooks_config=plan.config
         )

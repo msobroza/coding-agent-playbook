@@ -20,6 +20,7 @@ import pytest
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.lockfile import compute_hash
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from tests._catalog import core_skill_ids
 from tests.conftest import _DEFAULT_CONFIG
 from tests.fakes import FakeGitClient, pre_gate_validate
 
@@ -55,6 +56,16 @@ def _commit_output(repo: Path) -> None:
     config.write_text(config.read_text() + "\n[output]\ncommit = true\n")
 
 
+def _only_core_skills_left(skills_root: Path) -> bool:
+    """Whether ``skills_root`` holds no skill directory but the engine's core skills.
+
+    ``make_synthetic_repo`` syncs the real engine catalog, so a core skill whose
+    member rules apply (``python-coding``) stays next to the removed test skill.
+    """
+    names = {entry.name for entry in skills_root.iterdir() if entry.is_dir()}
+    return _SKILL not in names and names <= core_skill_ids()
+
+
 def _lock_paths(repo: Path) -> set[str]:
     lockfile = FileSystemStateSource(repo_root=repo).load_lockfile()
     assert lockfile is not None
@@ -76,8 +87,8 @@ def test_removed_skill_pristine_leftovers_are_deleted(
     _remove_skill_source(repo)
     capsys.readouterr()
     assert _sync.execute(repo, git=FakeGitClient()) == 0
-    for root in _SKILL_ROOTS:  # files deleted, empty dirs pruned up to the skills root
-        assert not (repo / root).exists(), root
+    for root in _SKILL_ROOTS:  # files deleted, the emptied skill dir pruned
+        assert _only_core_skills_left(repo / root), root
     assert f"/{_SKILL_OUT}/" not in (repo / ".gitignore").read_text()
     assert not any(path.startswith(_SKILL_OUT) for path in _lock_paths(repo))
     # 2 roots x (SKILL.md + run.sh) as orphans, plus Continue's degraded prompt
@@ -138,7 +149,7 @@ def test_user_file_dropped_into_engine_owned_skill_dir_survives_removal(repo: Pa
     assert sorted(p.name for p in (repo / _SKILL_OUT).iterdir()) == ["notes.md"]
     assert "notes.md" not in (repo / ".gitignore").read_text()  # the user's, not ours
     assert not any(path.startswith(_SKILL_OUT) for path in _lock_paths(repo))
-    assert not (repo / ".opencode" / "skills").exists()  # untouched root still pruned
+    assert _only_core_skills_left(repo / ".opencode" / "skills")  # untouched copy still pruned
 
 
 def test_stale_script_of_a_live_skill_pristine_deleted_edited_kept(repo: Path) -> None:
@@ -184,7 +195,7 @@ def test_commit_true_settles_skill_leftovers_with_the_same_policy(
     assert (repo / _SKILL_OUT / "SKILL.md").is_file()  # tracked: kept
     assert notes.read_text() == "mine\n"  # user file: never deleted
     assert not (repo / _SKILL_OUT / "scripts").exists()  # pristine + untracked: deleted
-    assert not (repo / ".opencode" / "skills").exists()
+    assert _only_core_skills_left(repo / ".opencode" / "skills")
     assert f"{_SKILL_OUT}/SKILL.md" in _lock_paths(repo)  # still owned
     err = capsys.readouterr().err
     assert f"  {_SKILL_OUT}/SKILL.md\n" in err
@@ -316,7 +327,7 @@ def test_harness_removed_skill_settles_through_the_leftover_policy(
     assert _sync.execute(repo, check=True, git=FakeGitClient()) == 0
     edited.unlink()
     assert _sync.execute(repo, git=FakeGitClient()) == 0
-    assert not (repo / "skills").exists()  # emptied harness root pruned
+    assert _only_core_skills_left(repo / "skills")  # the emptied skill dir pruned
     assert _sync.execute(repo, check=True, git=FakeGitClient()) == 0
 
 

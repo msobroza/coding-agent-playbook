@@ -1,9 +1,10 @@
 ---
 id: python-error-handling
-name: Python error handling
-description: "Exception handling: specific over generic; never silent fallthrough."
+name: Error handling
+description: "Catch only what you can handle, never swallow an exception, chain with raise ... from, and translate errors once at the boundary."
 version: 1
 scope: scoped
+skill: python-coding
 globs:
   - "**/*.py"
 priority: 55

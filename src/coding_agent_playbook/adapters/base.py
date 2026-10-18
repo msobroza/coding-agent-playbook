@@ -119,6 +119,22 @@ class Adapter(ABC):
             return []
         return self.write_prompt(skill.to_prompt(), repo_root)
 
+    # Concrete on purpose (B027), like begin_sync. A separate call, not a new
+    # begin_sync keyword: an out-of-tree override of begin_sync without it would
+    # raise TypeError the moment the dispatch passed one.
+    def note_native_skill_roots(self, roots: frozenset[str]) -> None:  # noqa: B027
+        """Called once per sync, before :meth:`begin_sync`, with the native skill roots it writes.
+
+        ``roots`` holds the :attr:`native_skills_root` of every enabled adapter,
+        this one included; it is empty when no enabled adapter writes Agent
+        Skills (``adapters_enabled = []``, or only ``continue``). ``agents_md``
+        keeps its ``## Where guidance lives`` map only when it is not empty,
+        because the map names skills (specs/prS-skills-context.md C7).
+        Default: no-op.
+
+        Example: ``adapter.note_native_skill_roots(frozenset({".claude/skills"}))``.
+        """
+
     # Concrete on purpose (B027): an abstract hook would break every out-of-tree adapter.
     def begin_sync(  # noqa: B027
         self,

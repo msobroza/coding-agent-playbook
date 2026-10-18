@@ -1,9 +1,10 @@
 ---
 id: python-docstrings
-name: Python docstrings
+name: Docstrings
 description: "Every public module, class and function gets a docstring: an intent line, then one usage example."
 version: 1
 scope: scoped
+skill: python-coding
 globs:
   - "**/*.py"
 priority: 56
