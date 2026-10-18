@@ -438,7 +438,7 @@ Vendored with listed changes, user-invoked.
   it'll start to look generic." (D23).
 - `references/HTML-REPORT.md` L13-L17 (v1.3.1): the Tailwind script tag and the
   Mermaid module script deleted, and with them both URLs and both CDN assets
-  (D4, D23).
+  (D4, D23, D30).
 - `references/HTML-REPORT.md` L18-L24 (v1.3.1): the `<style>` block becomes the
   report's only stylesheet. L19's comment becomes "the report's only
   stylesheet: page, cards, badges, labels, diagram parts,"; L20 stays; 30 rules,
@@ -469,7 +469,7 @@ Vendored with listed changes, user-invoked.
   Mermaid flowchart replaced by a 16-line `<div class="card">` holding an
   inline SVG of the same four modules and three calls; the leak is a solid red
   `.edge.leak` arrow with a "leak" label between red-outlined modules, never
-  dashed, because dashed means seam (D23).
+  dashed, because dashed means seam (D23, D30).
 - `references/HTML-REPORT.md` L78 (v1.3.1): "(when Mermaid's layout fights
   you)" becomes "(when the deep module needs visual weight)" (D23).
 - `references/HTML-REPORT.md` L80 (v1.3.1): "since Mermaid won't render that"
@@ -494,12 +494,15 @@ Vendored with listed changes, user-invoked.
   `disable-model-invocation`, which only Claude Code honours, and the guard
   line (D19).
 - Dropped: the report's two CDN assets (the Tailwind script and Mermaid's ESM
-  build) and the three OS opener commands `xdg-open`, `open` and `start`. The
+  build, from the hosts cdn.tailwindcss.com and cdn.jsdelivr.net) and the three
+  OS opener commands `xdg-open`, `open` and `start`. The
   report is now offline-only inline CSS plus inline SVG; opening it depends on
   the harness's file-opening capability, and the absolute path is always given.
   A standard-library `webbrowser` fallback was considered and rejected under
   D20: it can launch a blocking console browser on headless Linux when `TERM` is
-  set, and it shells out to `osascript` on macOS (D2, D20, D23).
+  set, and it shells out to `osascript` on macOS. A run-time file URL would
+  leave no literal in the plugin, so the URL gate is not the reason (D2, D20,
+  D23).
 - For T10 (global correction): "Dropped and why" names the report's CDN assets
   but not this skill's three OS openers or the rejected `webbrowser` fallback;
   the bullet above states both. "Imposed tools removed" already lists the

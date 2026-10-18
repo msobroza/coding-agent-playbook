@@ -23,6 +23,7 @@ from coding_agent_playbook.links import extract_markdown_links
 from tests.plugins.mattpocock_skills._expectations import (
     GUARD_LINE,
     LOAD_RE,
+    PLUGIN_ROOT,
     SKILLS_ROOT,
     load_allowlist,
     present_skill_ids,
@@ -801,3 +802,29 @@ def test_relative_link_scan_sees_every_t06_link() -> None:
     # throwaway-prototype: SKILL.md 2, LOGIC.md 2, UI.md 2; improve-codebase-architecture: 1.
     counts = {skill_id: len(_relative_links(skill_id)) for skill_id in (DESIGN, PROTOTYPE, ICA)}
     assert counts == {DESIGN: 8, PROTOTYPE: 6, ICA: 1}
+
+
+# --- ATTRIBUTIONS.md: the improve-codebase-architecture section (A.T06.1) ---------
+
+_ICA_ATTRIBUTION_TEXTS: Final[tuple[str, ...]] = (
+    # Change 37: both CDN hosts, written bare so no URL gate matches them.
+    "from the hosts cdn.tailwindcss.com and cdn.jsdelivr.net",
+    # Change 37: the URL gate is not why the webbrowser fallback was rejected.
+    "A run-time file URL would leave no literal in the plugin, so the URL gate is not the reason",
+    # Changes 19 and 26: the decision tags the spec gives.
+    "both URLs and both CDN assets (D4, D23, D30).",
+    "dashed means seam (D23, D30).",
+)
+
+
+def _ica_attribution_section() -> str:
+    """The section's text with line wraps collapsed, so a rewrap never fails a check."""
+    text = (PLUGIN_ROOT / "ATTRIBUTIONS.md").read_text(encoding="utf-8")
+    start = text.index(f"### {ICA}\n")
+    end = text.find("\n### ", start + 1)
+    return " ".join((text[start:] if end == -1 else text[start:end]).split())
+
+
+@pytest.mark.parametrize("expected", _ICA_ATTRIBUTION_TEXTS, ids=lambda t: t[:40])
+def test_ica_attribution_records_change_37_and_the_spec_tags(expected: str) -> None:
+    assert expected in _ica_attribution_section(), f"missing from the {ICA} section: {expected!r}"
