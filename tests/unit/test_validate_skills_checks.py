@@ -107,3 +107,38 @@ def test_check_rule_skills_skips_the_description_fit_on_a_malformed_block() -> N
 
     assert len(findings.errors) == 1
     assert "'playbook' must be a mapping" in findings.errors[0].message
+
+
+def _long_named_members() -> list[Rule]:
+    """Four members whose 68-char names cannot all fit the composed description (W3)."""
+    members = [_rule(f"member-{letter}") for letter in "abcd"]
+    for rule in members:
+        rule.frontmatter.name = f"{rule.frontmatter.id} " + "x" * 59
+    return members
+
+
+def test_check_rule_skills_warns_when_a_sound_block_truncates_the_member_list() -> None:
+    """The control for the test below: these members do trip W3 on a sound block."""
+    findings = check_rule_skills(_long_named_members(), [_skill("python-coding", block=_BLOCK)])
+
+    assert findings.errors == []
+    assert ["... and 1 more" in warning.message for warning in findings.warnings] == [True]
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        {"use_when": "Use when editing", "files": "Any"},
+        {**_BLOCK, "covers": "x"},
+        {**_BLOCK, "files": "f" * 90},
+    ],
+    ids=["V10-use-when-prefix", "V8-unknown-key", "V9-long-files"],
+)
+def test_check_rule_skills_skips_the_truncation_warning_on_a_malformed_block(
+    block: dict[str, str],
+) -> None:
+    """W3 measures the block's phrases, so a rejected block reports only its error."""
+    findings = check_rule_skills(_long_named_members(), [_skill("python-coding", block=block)])
+
+    assert len(findings.errors) == 1
+    assert findings.warnings == []

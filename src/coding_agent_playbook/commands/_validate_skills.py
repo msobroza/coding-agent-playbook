@@ -316,6 +316,9 @@ def _rule_skill_warnings(skill: Skill, members: Sequence[Rule]) -> list[str]:
             f"has member rules but no '{PLAYBOOK_BLOCK_KEY}.files'; it is left out of the "
             "'Where guidance lives' section"
         )
+    # W3 measures the block's phrases, so like V11 it waits until V7-V10 accept them.
+    if _block_problems(block):
+        return warnings
     return [*warnings, *_truncation_warning(skill, members)]
 
 
