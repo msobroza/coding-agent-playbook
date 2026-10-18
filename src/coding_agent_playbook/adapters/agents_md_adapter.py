@@ -2,7 +2,8 @@
 
 Composes a single ``AGENTS.md`` file at the repo root: the always rules' sections,
 then a generated ``## Where guidance lives`` section mapping file kinds to the
-skills that hold the detailed conventions, then a trailing ``## Guardrails``
+skills that hold the detailed conventions (kept only while an enabled adapter
+writes a native skills root), then a trailing ``## Guardrails``
 section holding every enabled hook's advisory (specs/prK-lifecycle-hooks.md
 §C.4.2). A member rule (one that names a skill in ``skill:``) is dropped here:
 it reaches its readers as a reference of that skill, written by the skill
@@ -66,6 +67,22 @@ class AgentsMdAdapter(Adapter):
         # (L1), not interleaved with the rules by priority as write_rule would.
         self._buffered_hooks: list[tuple[str, str]] = []
         self._where = WhereGuidanceBuffer()
+        # The map names skills, so it needs an enabled adapter that writes them
+        # (C7). True until the dispatch says otherwise: a caller driving this
+        # adapter by hand keeps the map, as before note_native_skill_roots existed.
+        self._skills_are_written = True
+
+    def note_native_skill_roots(self, roots: frozenset[str]) -> None:
+        """Keep the ``## Where guidance lives`` map only when some enabled adapter writes skills.
+
+        With ``adapters_enabled = []`` or only ``continue``, no skill root is
+        written, so a Where line would name a skill no AGENTS.md reader can load
+        (specs/prS-skills-context.md C7). Called by the dispatch before
+        :meth:`begin_sync`.
+
+        Example: ``adapter.note_native_skill_roots(frozenset())`` -> no Where section.
+        """
+        self._skills_are_written = bool(roots)
 
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
         """Render a rule that names no skill to the shared markdown-section format; buffer it.
@@ -115,9 +132,12 @@ class AgentsMdAdapter(Adapter):
         ``opencode``, ``shared_skills``), which share one ``SkillWriter``. This
         adapter never degrades a skill to a prompt either (the default Adapter
         degrade path). Only a skill with member rules and a ``playbook.files``
-        phrase adds a line. Example: ``adapter.write_skill(python_coding, root)`` -> ``[]``.
+        phrase adds a line, and only when an enabled adapter writes skills
+        (:meth:`note_native_skill_roots`).
+        Example: ``adapter.write_skill(python_coding, root)`` -> ``[]``.
         """
-        self._where.add(skill)
+        if self._skills_are_written:
+            self._where.add(skill)
         return []
 
     def finalize(self, repo_root: Path) -> list[Path]:

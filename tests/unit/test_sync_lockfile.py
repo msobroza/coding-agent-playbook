@@ -159,6 +159,51 @@ class FakeRuntimeAdapter(Adapter):
         return written
 
 
+class FakeSkillRootsAdapter(FakeRuntimeAdapter):
+    """Records the native skill roots the dispatch announces, and when."""
+
+    name = "fake_roots"
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, frozenset[str] | None]] = []
+
+    def note_native_skill_roots(self, roots: frozenset[str]) -> None:
+        self.calls.append(("note_native_skill_roots", roots))
+
+    def begin_sync(
+        self,
+        repo_root: Path,
+        prior_lock: Lockfile | None,
+        *,
+        hooks_config: HooksConfig | None = None,
+    ) -> None:
+        self.calls.append(("begin_sync", None))
+
+
+def test_dispatch_tells_every_adapter_the_enabled_native_skill_roots_first(
+    tmp_path: Path,
+) -> None:
+    """C7: agents_md keeps its Where map only when some enabled adapter writes skills."""
+    adapter = FakeSkillRootsAdapter()
+
+    dispatch_to_adapters(
+        {"fake_roots": adapter, "shared_skills": SharedSkillsAdapter()}, [], [], [], tmp_path
+    )
+
+    assert adapter.calls == [
+        ("note_native_skill_roots", frozenset({".agents/skills"})),
+        ("begin_sync", None),
+    ]
+
+
+def test_dispatch_announces_no_native_skill_root_without_a_skill_adapter(tmp_path: Path) -> None:
+    adapter = FakeSkillRootsAdapter()
+
+    dispatch_to_adapters({"fake_roots": adapter}, [], [], [], tmp_path)
+
+    assert adapter.calls[0] == ("note_native_skill_roots", frozenset())
+
+
 def test_dispatch_tags_declared_runtime_outputs_runtime_and_the_rest_composite(
     tmp_path: Path,
 ) -> None:

@@ -4,7 +4,10 @@ One test per row of specs/prS-skills-context.md section 6.6, each asserting the
 exact ``FAIL`` (stdout) or ``warning:`` (stderr) line. V1 and V2 (a scoped rule
 without ``skill:``) arrive with the contract step; until then such a rule
 validates. The fixtures are repo-local: ``playbook/skills/<id>/SKILL.md`` and
-``playbook/rules/<id>.md`` in a synthetic consumer repo.
+``playbook/rules/<id>.md`` in a synthetic consumer repo. Core ships four skills
+that take members, so they are the known skills every message lists, and a
+repo-local ``python-coding`` overrides the core one and keeps its core members:
+the tests that count members use their own skill, ``risk-models``.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands import validate as _validate
 
 if TYPE_CHECKING:
@@ -26,6 +30,10 @@ _PLAYBOOK_BLOCK = "playbook:\n  use_when: editing Python code\n  files: Any Pyth
 _PATTERN = "^[a-z0-9]+(-[a-z0-9]+)*$ (1-64 chars)"
 _REPO_LOCAL = "(<repo-local>)"
 _PYTHON_DESIGN = "coding_agent_playbook.plugins.python_design"
+#: The skills that take members in every synthetic repo: core's four.
+_KNOWN_SKILLS = "ml-data, python-coding, python-testing, python-tooling"
+#: A repo-local skill no core rule names, for the tests that count members.
+_OWN_SKILL = "risk-models"
 
 _CONFIG_WITH_PYTHON_DESIGN = f"""\
 schema_version = 1
@@ -109,6 +117,25 @@ def test_rule_joining_a_repo_local_skill_validates(
     assert "warning:" not in err
 
 
+def test_repo_local_rule_may_join_a_core_skill(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """D2: naming the core ``python-coding`` is enough; membership is resolved after the merge."""
+    repo = make_synthetic_repo(tmp_path)
+    write_rule(repo, "risk-naming", name="Risk naming")
+
+    rc, out, err = run_validate(repo, capsys)
+    assert rc == 0, out
+    assert "warning:" not in err
+
+    assert _sync.run(argparse.Namespace(repo_root=str(repo), check=False)) == 0
+    skill_dir = repo / ".claude" / "skills" / "python-coding"
+    assert (skill_dir / "references" / "risk-naming.md").is_file()
+    skill_md = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    assert "- [risk-naming](references/risk-naming.md) — Risk naming: One line." in skill_md
+    assert "Risk naming" in skill_md.partition("\n---\n")[0], "the Covers clause names it"
+
+
 def test_always_rule_with_skill_fails(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
     rule = write_rule(repo, "house-style", scope="always")
 
@@ -149,7 +176,7 @@ def test_skill_must_exist_after_the_merge(repo: Path, capsys: pytest.CaptureFixt
     assert rc == 1
     assert fail_lines(out) == [
         f"FAIL {rule}: skill 'python-codng' does not exist after merging every layer; "
-        "expected one of: python-coding (or enable the overlay that ships it)"
+        f"expected one of: {_KNOWN_SKILLS} (or enable the overlay that ships it)"
     ]
 
 
@@ -273,9 +300,9 @@ def test_description_that_cannot_fit_one_member_name_fails_with_length_and_text(
     The first member by priority (``Typing``) would fit; the longest one decides.
     """
     block = f"playbook:\n  use_when: {_LONG_USE_WHEN!r}\n  files: Any Python file\n"
-    write_skill(repo, "python-coding", description=_LONG_DESCRIPTION, block=block)
-    write_rule(repo, "python-typing", name="Typing", priority=40)
-    write_rule(repo, "python-errors", name="Error handling and logging conventions")
+    write_skill(repo, _OWN_SKILL, description=_LONG_DESCRIPTION, block=block)
+    write_rule(repo, "risk-typing", skill=_OWN_SKILL, name="Typing", priority=40)
+    write_rule(repo, "risk-errors", skill=_OWN_SKILL, name="Error handling and logging conventions")
 
     rc, out, _ = run_validate(repo, capsys)
 
@@ -285,10 +312,10 @@ def test_description_that_cannot_fit_one_member_name_fails_with_length_and_text(
     )
     assert rc == 1
     assert fail_lines(out) == [
-        f"FAIL skills/python-coding {_REPO_LOCAL}: the composed description cannot fit 300 "
+        f"FAIL skills/{_OWN_SKILL} {_REPO_LOCAL}: the composed description cannot fit 300 "
         f"chars even when the Covers clause names one member: '{worst}' is 311 chars; shorten "
         "'description' (127 chars), 'playbook.use_when' (115 chars) or the longest member "
-        "name (python-errors: 'Error handling and logging conventions')"
+        "name (risk-errors: 'Error handling and logging conventions')"
     ]
 
 
@@ -338,8 +365,8 @@ def test_references_heading_in_a_plain_skill_is_allowed(
 def _v14_line(rule: Path, skill_id: str, source: str) -> str:
     return (
         f"FAIL {rule}: skill '{skill_id}' ({source}) declares no 'playbook:' block, so it "
-        "cannot take member rules; name one that does (python-coding), or add a 'playbook:' "
-        "block to a skill of your own (an override of a core skill must keep one)"
+        f"cannot take member rules; name one that does ({_KNOWN_SKILLS}), or add a "
+        "'playbook:' block to a skill of your own (an override of a core skill must keep one)"
     )
 
 
@@ -366,11 +393,14 @@ def test_rule_naming_a_skill_without_a_playbook_block_fails(
 def test_playbook_block_without_members_warns(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """The fixture's python-coding keeps core's members; a skill of its own has none."""
+    write_skill(repo, _OWN_SKILL)
+
     rc, out, err = run_validate(repo, capsys)
 
     assert rc == 0, out
     assert err.splitlines() == [
-        f"warning: skills/python-coding {_REPO_LOCAL}: declares 'playbook' but no rule names "
+        f"warning: skills/{_OWN_SKILL} {_REPO_LOCAL}: declares 'playbook' but no rule names "
         "it in 'skill:'; it is never written"
     ]
 
@@ -393,14 +423,16 @@ def test_truncated_member_list_warns_with_counts(
 ) -> None:
     """Four 67-69 char names: all four make 348 chars, three make 290 (D21)."""
     tail = "conventions with a display name long enough to crowd the list"
+    write_skill(repo, _OWN_SKILL)
     for priority, word in enumerate(["Alpha", "Bravo", "Charlie", "Delta"], start=40):
-        write_rule(repo, f"python-{word.lower()}", name=f"{word} {tail}", priority=priority)
+        rule_id, name = f"risk-{word.lower()}", f"{word} {tail}"
+        write_rule(repo, rule_id, skill=_OWN_SKILL, name=name, priority=priority)
 
     rc, out, err = run_validate(repo, capsys)
 
     assert rc == 0, out
     assert err.splitlines() == [
-        f"warning: skills/python-coding {_REPO_LOCAL}: the composed description names 3 of 4 "
+        f"warning: skills/{_OWN_SKILL} {_REPO_LOCAL}: the composed description names 3 of 4 "
         "member rules within 300 chars ('... and 1 more'); shorten member names or the "
         "authored parts to list them all"
     ]
