@@ -109,14 +109,16 @@ def test_spec_section_21_body_drops_deleted_symbols(symbol: str) -> None:
 
 def test_spec_version_bumped_and_changelog_preserved() -> None:
     spec = _read("SPEC.md")
-    # v0.20 (assistant lifecycle hooks, PR K) is the current header, on top of
-    # v0.19 (bundled content moves to content/, now catalog/; packs become bundled plugins),
+    # v0.21 (skills-first context, the shared release of the skills-first spec) is the
+    # current header, on top of v0.20 (assistant lifecycle hooks, PR K), v0.19 (bundled
+    # content moves to content/, now catalog/; packs become bundled plugins),
     # v0.18 (init and check --refresh never commit local overrides), v0.17
     # (bundled opt-in packs), v0.16 (gitignored generated output) and v0.15
     # (native skills + shared_skills); the guard cares that the refactor's
     # changelog entries survive later revisions.
-    assert "| Version | 0.20 (draft) |" in spec
-    assert "*End of SPEC.md v0.20.*" in spec
+    assert "| Version | 0.21 (draft) |" in spec
+    assert "*End of SPEC.md v0.21.*" in spec
+    assert "### v0.21" in spec  # the changelog appendix entry for skills-first context
     assert "### v0.20" in spec  # the changelog appendix entry for lifecycle hooks
     assert "### v0.19" in spec  # the appendix entry for content/ (now catalog/) and plugins
     assert "### v0.18" in spec  # the changelog appendix entry for the committed-config rewrite

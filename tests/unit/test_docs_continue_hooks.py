@@ -3,8 +3,9 @@
 Continue ships no wired lifecycle-hook mechanism (the ``cn`` CLI's hook code is
 unreachable in every published bundle; the IDE ``config.yaml`` has no hooks
 key), and ``adapters/base.py`` has no HTTP-hook API. The SPEC must say Continue
-gets the advisory degrade only, so no Continue hook track starts from a false
-premise. Prose-only: these tests read markdown, never engine behaviour.
+gets guardrail text only, so no Continue hook track starts from a false premise.
+The statement lives in §10.2: CONTEXT.md is the only glossary, and SPEC §3 is a
+pointer to it. Prose-only: these tests read markdown, never engine behaviour.
 """
 
 from __future__ import annotations
@@ -35,15 +36,15 @@ def test_spec_carries_no_refuted_hook_claim(claim: str) -> None:
     assert claim not in _SPEC.read_text(encoding="utf-8")
 
 
-def test_glossary_hook_entry_gives_continue_the_advisory_degrade_only() -> None:
-    glossary = _spec_section("## 3. Glossary", "## 4. Architecture overview")
-    assert "Continue ships no wired hook mechanism" in glossary
-    assert "Continue receives the advisory degrade only" in glossary
+def test_continue_section_states_no_wired_hook_mechanism() -> None:
+    section = _spec_section("### 10.2 Continue adapter", "### 10.3 Claude Code adapter")
+    assert "Continue ships no wired hook mechanism" in section
+    assert "guardrail text only" in section
 
 
 def test_continue_adapter_section_states_no_hooks() -> None:
     section = _spec_section("### 10.2 Continue adapter", "### 10.3 Claude Code adapter")
-    assert "Hooks: none — advisory degrade only." in section
+    assert "Hooks: none — guardrail text only." in section
 
 
 def test_air_gapped_section_rejects_http_hook_handlers() -> None:

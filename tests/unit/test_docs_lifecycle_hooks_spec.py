@@ -1,9 +1,10 @@
 """Docs-consistency guard: SPEC.md v0.20 documents the lifecycle-hooks model (prK §J).
 
 Track K11 applies the §J SPEC amendment rows. These tests cover the model,
-config and architecture rows: the version bump, the non-goals, the glossary,
-the architecture and layouts, the canonical ``Hook`` types, the ``[hooks]`` /
-``[guardrails]`` / ``[metrics]`` tables, the renderer formats, the overlay merge
+config and architecture rows: the version bump, the non-goals, the facts the
+glossary used to carry (CONTEXT.md is the only glossary now; they live in §6.6.7
+and §10.6.2), the architecture and layouts, the canonical ``Hook`` types, the
+``[hooks]`` / ``[guardrails]`` / ``[metrics]`` tables, the renderer formats, the overlay merge
 policies, the open questions and the storage seams. Each test takes the names it
 expects from the landed code (dataclass fields, ``BUILTIN_FORMATS``, the merge
 key policies, the manifest kinds), so adding a key or a field without
@@ -139,6 +140,19 @@ def test_spec_footer_matches_header_version() -> None:
     assert f"\n### v{version} (" in text
 
 
+def test_spec_top_changelog_bullet_is_the_header_version() -> None:
+    # The version race the skills-first spec warns about (P1-10): a release opened in the
+    # header and the appendix but not in the top changelog leaves readers on the old entry.
+    header = _HEADER_VERSION.search(_spec_text())
+    assert header is not None, "SPEC header has no '| Version | X.Y (draft) |' row"
+    top = _spec_section("**Changelog**", "## 1. Context")
+    newest = re.search(r"^- \*\*(\d+\.\d+)\*\* —", top, re.MULTILINE)
+    assert newest is not None, "SPEC top changelog has no '- **X.Y** —' bullet"
+    assert newest.group(1) == header.group(1), (
+        f"top bullet {newest.group(1)}, header {header.group(1)}"
+    )
+
+
 def test_spec_top_changelog_has_v0_20_bullet() -> None:
     top = _spec_section("**Changelog**", "## 1. Context")
     assert "- **0.20** —" in top
@@ -154,10 +168,14 @@ def test_spec_non_goals_allow_exactly_one_generated_opencode_plugin() -> None:
     assert not [line for line in bullets if "plugin" in line.lower()]
 
 
-def test_glossary_lists_hook_as_fourth_emitted_kind_and_one_generated_plugin() -> None:
-    glossary = _spec_section("## 3. Glossary", "## 4. Architecture overview")
-    assert "fourth emitted canonical kind" in glossary
-    assert "`.opencode/plugins/playbook-hooks.js`" in glossary
+def test_hook_kind_and_generated_plugin_are_documented_outside_the_glossary() -> None:
+    # CONTEXT.md is the only glossary (SPEC §3 is a pointer), so the two facts the old
+    # glossary entries carried must live in the sections that own them.
+    hooks = _spec_section("#### 6.6.7 Hooks", "## 7. Configuration files")
+    assert "fourth emitted canonical kind" in hooks
+    plugin = _spec_section("#### 10.6.2", "#### 10.6.3")
+    assert "`.opencode/plugins/playbook-hooks.js`" in plugin
+    assert "exactly one file" in plugin
 
 
 @pytest.mark.parametrize(

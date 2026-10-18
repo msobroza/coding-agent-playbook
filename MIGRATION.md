@@ -12,6 +12,21 @@
 > `Normalizer`. Read the v0.13 section before the v0.12 one; the v0.12 section still
 > applies to the engine `Metric`/`Check`/`Rubric` API and the entry-point group renames.
 
+## v0.21 — Skills-first context
+
+v0.21 is the skills-first release. Its goal is to keep only always rules in
+always-loaded context and to deliver every scoped rule as a reference inside the
+skill that owns its topic (design `specs/prS-skills-context.md`; decision record
+`docs/adr/0001-scoped-rules-are-delivered-as-skill-references.md`). The release
+is built change by change: each change adds a row to the table below, and a
+subsection after it when a row is not enough. The SPEC changelog entry is v0.21.
+
+### TL;DR — who needs to do anything
+
+| You are… | Migration |
+|---|---|
+| Anything that cites **SPEC §3** for a term's definition (docs, overlay READMEs, tests) | Use `CONTEXT.md` at the repository root, now the project's only glossary. SPEC §3 is a one-line pointer to it, and the two facts only the old glossary carried moved to SPEC §6.6.7 and §10.2. The move alters no generated file. |
+
 ## v0.20 — Assistant lifecycle hooks (PR K)
 
 v0.20 adds **lifecycle hooks**, the fourth canonical kind: rendered natively for
