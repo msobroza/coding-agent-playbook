@@ -134,6 +134,9 @@ src = ["src", "tests"]
 # because newer, unpinned ruff versions also reformat code blocks inside
 # markdown (CI has gone red on that before), and its fenced examples include
 # deliberate "before" code.
+# The vendored mattpocock_skills plugin (specs/prT-mattpocock-skills.md D32) gets
+# the same split: its markdown is upstream text kept near-verbatim, while its two
+# Python script rewrites stay linted and formatted.
 # Eval-task fixtures under setup/ are deliberately unclean needle material (the
 # find-injected-vuln-* bugs live there), so `ruff check --fix` / `ruff format`
 # must never rewrite them either (specs/prK-lifecycle-hooks.md §P9). Eval tasks
@@ -142,6 +145,7 @@ src = ["src", "tests"]
 extend-exclude = [
     "catalog/plugins/superpowers",
     "catalog/plugins/python_design/**/*.md",
+    "catalog/plugins/mattpocock_skills/**/*.md",
     "catalog/core/eval_tasks/*/setup",
     "catalog/plugins/*/eval_tasks/*/setup",
 ]
