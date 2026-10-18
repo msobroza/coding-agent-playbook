@@ -288,7 +288,91 @@ _Filled by T06._
 
 ### diagnosing-bugs
 
-_Filled by T07._
+Upstream `skills/engineering/diagnosing-bugs/`; synced as `.agents/skills/diagnosing-bugs/`.
+Vendored with listed changes, model-invoked.
+
+- `SKILL.md` L2 (v1.3.1): `id: diagnosing-bugs` inserted as the first
+  frontmatter key, before "name: diagnosing-bugs"; `name` and `description`
+  stay byte for byte (Frontmatter, D11).
+- `SKILL.md` L10 (v1.3.1): " (or `CONTEXT.md` if the repo already has one)"
+  inserted after the code span `GLOSSARY.md`; nothing else on the line changes.
+  The file never names `GLOSSARY-MAP.md` (D21).
+- `SKILL.md` L27 (v1.3.1): "Curl / " deleted, so option 2 reads "**HTTP
+  script** against a running dev server"; the dev server is project toolchain
+  and stays (D2, D22).
+- `SKILL.md` L29 (v1.3.1): " / Puppeteer" deleted, so option 4 names only
+  Playwright, which is pip-installable; Puppeteer is a Node-only library (D2,
+  D22).
+- `SKILL.md` L35 (v1.3.1): option 10 "**HITL bash script.**" becomes "**HITL
+  Python script.**" and its path `scripts/hitl-loop.template.sh` becomes
+  `scripts/hitl_loop_template.py` (D22).
+- `SKILL.md` L59 (v1.3.1): ", a curl" deleted from "(a script path, a test
+  invocation, a curl)"; the rest of the line is unchanged (D2, D22).
+- `SKILL.md` L64 (v1.3.1): the Agent-runnable criterion names
+  `scripts/hitl_loop_template.py` instead of the bash script (D22).
+- `SKILL.md` L112 (v1.3.1): recorded with no edit. The JS timer
+  `performance.now()` is kept verbatim as a stack assumption, next to the
+  language-neutral "timing harness, ... profiler, query plan" (D27).
+- `scripts/hitl-loop.template.sh` L1-L44 (v1.3.1): rewritten in Python as
+  `scripts/hitl_loop_template.py` (Python 3.10 or later, standard library only,
+  `#!/usr/bin/env python3`, mode 100755, `mypy --strict` and ruff clean); the
+  `.sh` file is not shipped. The stem is snake_case because a dotted stem is not
+  a module name (D22, D10). Matt's text stays:
+  - every comment line of L2-L16 survives in the module docstring without its
+    leading `# `, except the rewordings below;
+  - the edit markers of L32 and L40 are copied byte for byte (indented inside
+    `hitl_steps()`), and the prompts of L36 and L38 stay verbatim;
+  - `step` and `capture` keep their names and output; the `read -p` prompts
+    still go to stderr, and answers are trimmed of leading and trailing blanks
+    as `read -r` trims them;
+  - a `capture` name that is not an identifier raises `ValueError` before
+    anything is shown, as `printf -v` accepts only shell identifiers; a dict of
+    captures replaces the shell variables, so a repeated name keeps its first
+    position and takes the last value;
+  - upstream L18 `set -euo pipefail` has no counterpart: an uncaught exception
+    stops the run with status 1.
+- `scripts/hitl-loop.template.sh` L7 (v1.3.1): the usage line becomes
+  `python3 hitl_loop_template.py`, which names the file as the scripts gate
+  requires (D22, D30).
+- `scripts/hitl-loop.template.sh` L10-L11 (v1.3.1): the two helper lines are
+  written in Python call syntax, and "read response into VAR" becomes "store the
+  answer under VAR", because no shell variable is set any more (D22).
+- `scripts/hitl-loop.template.sh` L34 (v1.3.1): the example step's localhost
+  address with port 3000 becomes "Open the app at its local dev server address
+  and sign in." The plugin carries no URL, and that address is a JS dev-server
+  default (D4, D22).
+- `scripts/hitl-loop.template.sh` L42-L44 (v1.3.1): the Captured block prints
+  every capture in capture order instead of the two hard-coded example names,
+  so renaming a capture no longer means editing the library part; with the
+  default example the output is identical (D22).
+- `scripts/hitl_loop_template.py` (new behaviour): `run_hitl_loop` checks
+  `sys.stdin.isatty()` before any step is shown and catches `EOFError` from an
+  answer; either way it writes to stderr that this HITL loop needs a human at an
+  interactive terminal, asks the agent to have the user run
+  `python3 <absolute path of the copy>` in their own terminal and paste back the
+  "--- Captured ---" block, and exits with status 2 with no Captured block.
+  Ctrl-C prints a newline and exits with status 130 with no traceback, as bash
+  does. The steps sit in `hitl_steps()`, so the file can be loaded without
+  running them. Matt's L4 ("The agent runs the script; the user follows prompts
+  in their terminal.") and `SKILL.md` L35 stay verbatim; the guard is what makes
+  them work where an agent shell has no TTY (D22).
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies).
+- `agents/openai.yaml`: not shipped (Restructure). It holds only
+  `interface.display_name` and `interface.short_description`, with no `policy`
+  block, so Codex loses only this skill's display name and short description.
+- Project-toolchain allowlist: none. After the changes no line of `SKILL.md` or
+  the script names an imposed tool or runs an ambiguous word, so
+  `allowlist/diagnosing-bugs.txt` holds only its comment line.
+- Continue: `.continue/prompts/diagnosing-bugs.md` carries only the name,
+  description and body. The model can no longer pick the skill from its
+  description, so the user starts it as `/diagnosing-bugs`.
+  `scripts/hitl_loop_template.py` does not travel, so option 10 (L35) and the
+  Agent-runnable criterion (L64) name a file that is not there, and a
+  human-in-the-loop script has to be written by hand. No licence copy travels.
+  This holds unless the Continue IDE also reads the full skill natively from
+  `.claude/skills/`. The six-phase method itself is self-contained in the body
+  (D29).
 
 ### domain-modeling
 
@@ -415,7 +499,140 @@ _Filled by T04._
 
 ### wizard
 
-_Filled by T07._
+Upstream `skills/engineering/wizard/`; synced as `.agents/skills/wizard/`.
+Vendored with listed changes, model-invoked.
+
+- `SKILL.md` L2 (v1.3.1): `id: wizard` inserted as the first frontmatter key,
+  before "name: wizard" (Frontmatter, D11).
+- `SKILL.md` L3 (v1.3.1): the description's "Generate an interactive bash
+  wizard" becomes "Generate an interactive Python wizard"; the rest of the
+  description is verbatim (313 characters upstream, 315 now; plugins are exempt
+  from the 300-character lint) (D22, D28).
+- `SKILL.md` L8 (v1.3.1): "A **wizard** is a bash script" becomes "A
+  **wizard** is a Python script", and "(`.env`, GitHub secrets)" becomes
+  "(`.env`, or GitHub secrets it walks the human through setting)", because the
+  forge CLI write is gone (D2, D22).
+- `SKILL.md` L10 (v1.3.1): the link `[template.sh](template.sh)` becomes
+  `[wizard_template.py](scripts/wizard_template.py)`; "cross-platform URL
+  opening (including WSL)" becomes "cross-platform URL opening (Python's
+  `webbrowser`, printing the URL when no browser opens)"; the forge CLI's
+  secret and variable writes become "guided GitHub secret/variable steps" (D2,
+  D10, D22).
+- `SKILL.md` L20 (v1.3.1): the setup read list becomes only the `.env`
+  templates (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`, with
+  "never `.env` itself or any other `.env.*`, which hold live values") and
+  `.github/workflows/*`; `.env`, `.env.*`, `README`, `docker-compose*` and
+  framework config leave the list. Existing values still reach the human at run
+  time, because `ask` offers them as defaults (D22).
+- `SKILL.md` L35 (v1.3.1): "Copy `template.sh`" becomes "Copy
+  `scripts/wizard_template.py`"; the rest of the line, every helper name and
+  `TOTAL_STAGES` included, is verbatim (D10, D22).
+- `SKILL.md` L41 (v1.3.1): `bash -n` and `shellcheck` become a syntax check with
+  `ast.parse` (a `python3 -c` one-liner, which writes no `__pycache__/`, unlike
+  `py_compile`) and "run `ruff check` or `mypy` if available" (D2, D22).
+- `SKILL.md` L42 (v1.3.1): `chmod +x` becomes "Make it executable with
+  `os.chmod`" (a `python3 -c` one-liner) "or tell the user to run it as
+  `python3 <script>`", because a copy written with the harness's file tool does
+  not keep the template's mode bit (D22).
+- `template.sh` L1-L204 (v1.3.1): rewritten in Python as
+  `scripts/wizard_template.py` (Python 3.10 or later, standard library only,
+  `#!/usr/bin/env python3`, mode 100755, `mypy --strict` and ruff clean) and
+  moved from the skill root into `scripts/`; the `.sh` file is not shipped
+  (D22, which overrides the `references/` default of D10 for this script). The
+  library/STAGES split, every helper name, every user-facing string and the
+  upstream comments survive; the comments that describe a helper become its
+  docstring in call syntax; the comment blocks of L11-L13, L182-L185 and the
+  example-stage rules of L191 and L202 are byte for byte. Upstream L9
+  `set -euo pipefail` has no counterpart: an uncaught exception stops the run
+  with status 1. `ENV_FILE` keeps bash's `${ENV_FILE:-.env}` (unset or empty
+  both give `.env`).
+- `template.sh` L2-L7 (v1.3.1): the header becomes the module docstring; the
+  bare `#` of L2 is dropped and a usage block naming `wizard_template.py` is
+  added, as the scripts gate requires (D22, D30).
+- `template.sh` L4 (v1.3.1): "Generated by the /wizard skill." becomes
+  "Generated by the `wizard` skill.": agent-facing provenance uses the plain
+  name (D17).
+- `template.sh` L15-L20 (v1.3.1): the terminal-colour utility becomes ANSI SGR
+  codes, on only when stdout is a terminal and `TERM` is set and not `dumb`;
+  `RED` stays defined and unused, as upstream's is (D2, D22).
+- `template.sh` L31-L36 (v1.3.1): `_clear` writes upstream's own fallback escape
+  sequence only when stdout is a terminal and `TERM` is not `dumb` (D2, D22).
+- `template.sh` L29 (v1.3.1): the `SKIPPED` comment becomes "things left for the
+  human to do by hand", so no forge CLI text remains (D2).
+- `template.sh` L65-L75 (v1.3.1): `open_url` uses Python's `webbrowser` (a new
+  tab) instead of the four OS openers; an argument without a scheme and a host
+  (the example's placeholder, a bare host and port) is only printed, after "↗ go
+  to". L73's and L74's warnings are kept for "no browser opened" and "the
+  browser failed". Losses: no WSL opener (the standard library has none; it
+  honours the `BROWSER` environment variable); opener output is no longer
+  silenced; on headless Linux with `TERM` set, `webbrowser` may start a console
+  browser in the wizard's terminal until the human quits it (D2, D22).
+- `template.sh` L91-L96 (v1.3.1): `_existing` reads the last `KEY=` line of
+  `ENV_FILE` as bytes, so `AB=` and `export KEY=` never match `KEY`, as with
+  upstream's `^KEY=` (D22).
+- `template.sh` L98-L126 (v1.3.1): `ask` and `ask_secret` return the value
+  instead of setting a shell variable (`value = ask("KEY", "Prompt:")`);
+  `ask_secret` reads through `getpass`; the "Enter keeps current" default, the
+  trimming and the empty answer at end of file match upstream, and the current
+  value is never printed. A key that is not an identifier raises `ValueError`,
+  as in `write_env` (D22).
+- `template.sh` L128-L139 (v1.3.1): `write_env` is an atomic, idempotent upsert:
+  every old `KEY=` line goes, every other line stays byte for byte, and the new
+  file is written to a temporary file in the same directory, flushed, synced and
+  moved into place with `os.replace`; on any failure the temporary file is
+  removed and the old file stays. The result is owner-only (mode 0600), as
+  upstream's `mktemp` and `mv` left it (D22).
+- `template.sh` L141-L154 (v1.3.1): `set_secret` keeps its name and signature as
+  a guided manual step: it shows where to add the GitHub Actions repository
+  secret and its name, never its value, asks the human to confirm, and records
+  it for the summary; a "no" (or end of file) leaves it on the still-to-do list
+  without the forge command (D2, D22).
+- `template.sh` L156-L167 (v1.3.1): `set_var` is the same guided step for a
+  repository variable, showing the name and the value; a "yes" is recorded in
+  the new `WRITTEN_VAR` list (upstream never recorded variables), a "no" keeps
+  upstream's "GitHub variable NAME" still-to-do item (D2, D22).
+- `template.sh` L169-L180 (v1.3.1): `finish` gains a third summary line for the
+  variables set this run (D22).
+- `scripts/wizard_template.py` (new behaviour): `run_wizard` refuses to run when
+  stdin is not a terminal, before the banner, writing to stderr that the wizard
+  needs a human at an interactive terminal and asking the agent to have the user
+  run `python3 <absolute path of the copy>` in their own terminal, with exit
+  status 2: nothing is opened or written, and `getpass` cannot echo a secret.
+  This enforces `SKILL.md` L43 ("Don't run it end-to-end yourself"). Ctrl-C ends
+  any colour, prints the "stopped. Re-run it later; it remembers values already
+  saved." warning and exits with status 130 without a traceback. End of file in
+  the middle of a run is an empty answer, upstream's `|| true` (D22).
+- `template.sh` L187-L204 (v1.3.1): the stages run inside `wizard_stages()`,
+  after `TOTAL_STAGES = 1`, so the file can be loaded without running them; the
+  `__main__` block calls `run_wizard(wizard_stages)` (D22).
+- `template.sh` L194 (v1.3.1): the Stripe dashboard's test-mode API keys address
+  becomes the scheme-less placeholder "<Stripe dashboard, test mode: Developers
+  → API keys>", which `open_url` prints; an author replaces it in the consumer's
+  copy. The rest of the example stage is rewritten statement by statement with
+  its strings verbatim (D4, D22).
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies).
+- `agents/openai.yaml`: not shipped (Restructure). It holds only
+  `interface.display_name` and `interface.short_description`, with no `policy`
+  block, so Codex loses only the display name "Wizard" and the short
+  description.
+- Project-toolchain allowlist: none. "GitHub", `.github/workflows/*` and
+  `webbrowser` match no imposed-tool name, the prose "open" of L8, L29, L37 and
+  L43 is not in command position, and the script runs no subprocess, so
+  `allowlist/wizard.txt` holds only its comment line.
+- Continue: `.continue/prompts/wizard.md` carries only the name, description
+  and body. Model invocation is lost: the agent no longer builds a wizard on its
+  own when it reaches a step only the human can take, so the user starts it as
+  `/wizard`. `scripts/wizard_template.py` does not travel, so the L10 link
+  dangles and step 3 has no library to copy; the progress, gates, hidden entry,
+  `.env` upsert and summary are lost, and an agent would write a script from
+  scratch. No licence copy travels. This holds unless the Continue IDE also
+  reads the full skill natively from `.claude/skills/` (D29).
+- For T10 (global sections, not edited here): "Script ports" could also name
+  the HITL loop's exit with status 2 on end of file and both scripts' exit with
+  status 130 on Ctrl-C, and the wizard's new `WRITTEN_VAR` summary line;
+  "Dropped and why" could add the two smaller `open_url` losses recorded above
+  (silenced opener output, a console browser on headless Linux).
 
 ### writing-for-agents
 
