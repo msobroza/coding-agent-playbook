@@ -205,7 +205,7 @@ def test_post_edit_golden_ruff_json_d103_on_new_def_line_only(
     [d1] = ruff.argvs("d1")
     assert value_of(d1, "--extend-select") == CODES
     assert context(report) == [
-        'rule python-docstrings: "src/x.py:6 D103 Missing docstring in public function"'
+        'rule python-docstrings (skill python-coding): "src/x.py:6 D103 Missing docstring in public function"'
     ]
 
 

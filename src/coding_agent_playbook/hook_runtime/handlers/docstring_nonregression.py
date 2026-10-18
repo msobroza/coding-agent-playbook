@@ -182,7 +182,7 @@ def docstring_nonregression_post_edit(
     Example::
 
         >>> docstring_nonregression_post_edit(edit_adding_load, ctx).context  # doctest: +SKIP
-        ('rule python-docstrings: "src/x.py:3 D103 Missing docstring in public function"',)
+        ('rule python-docstrings (skill python-coding): "src/x.py:3 D103 Missing docstring in public function"',)
     """
     if ctx.config.get("lint_feedback") is False:
         return None  # switched off: its codes are not in D1 either

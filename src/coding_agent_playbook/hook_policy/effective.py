@@ -387,7 +387,8 @@ def _linked_lint_codes(hook: Hook, inputs: _Inputs) -> dict[str, Any]:
     """``{"lint_codes": ...}`` from the linked rule's ``lint_codes`` (§A.7 item 3), else ``{}``.
 
     The rule is the one source: it replaces any value, and the key is no
-    handler's ``CONFIG_SCHEMA`` key, so no layer can set it.
+    handler's ``CONFIG_SCHEMA`` key, so no layer can set it. The rule's owning
+    skill rides along, so lint feedback can name it (D16).
     """
     rule = inputs.rules.get(hook.frontmatter.linked_rule or "")
     if rule is None or not rule.frontmatter.lint_codes:
@@ -395,7 +396,8 @@ def _linked_lint_codes(hook: Hook, inputs: _Inputs) -> dict[str, Any]:
     codes = resolve_lint_codes(
         rule.frontmatter.lint_codes, inputs.facts, lambda p, _facts: _predicate_holds(p, inputs)
     )
-    return {LINT_CODES_KEY: linked_lint_config(rule.frontmatter.id, codes)}
+    config = linked_lint_config(rule.frontmatter.id, codes, rule.frontmatter.skill)
+    return {LINT_CODES_KEY: config}
 
 
 def _builtin(name: str, config: dict[str, Any], handlers: HandlerCatalog | None) -> ResolvedHandler:

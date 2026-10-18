@@ -32,7 +32,7 @@ pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "pytest-conventions-feedback"
 TEST: Final = "tests/test_app.py"
-PREFIX: Final = "rule pytest: "
+PREFIX: Final = "rule pytest (skill python-testing): "
 PYTEST: Final[Mapping[str, Any]] = {"frameworks": {"pytest": ">=8"}}
 LOOPS: Final = (
     "def test_values():\n"  # 1
@@ -124,7 +124,7 @@ def test_unittest_class_and_unmarked_async_test_when_on(
 
     report = _edit_new(pack_repo, deps, FakeRuff())
 
-    assert [line.split()[3] for line in context(report)] == [
+    assert [line.removeprefix(PREFIX).split()[1] for line in context(report)] == [
         "pytest-unittest-class",
         "pytest-asyncio-mark",
     ]
