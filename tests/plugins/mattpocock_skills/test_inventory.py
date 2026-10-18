@@ -159,3 +159,37 @@ def test_readme_names_each_superpowers_pair_together(pair: tuple[str, ...]) -> N
     section = _readme().split("\n## Coexistence\n", 1)[1].split("\n## ", 1)[0]
     bullets = _BULLET_RE.split(section)  # nested bullets too, so each pair is its own item
     assert any(all(f"`{name}`" in bullet for name in pair) for bullet in bullets), pair
+
+
+# --- ATTRIBUTIONS.md global sections state the finished facts (T10 fix round 1) ---
+
+
+def _attributions_global(heading: str) -> str:
+    """One global ``## <heading>`` section of ``ATTRIBUTIONS.md``, whitespace folded."""
+    text = (PLUGIN_ROOT / "ATTRIBUTIONS.md").read_text(encoding="utf-8")
+    section = text.split(f"\n## {heading}\n", 1)[1].split("\n## ", 1)[0]
+    return " ".join(section.split())
+
+
+def test_restructure_does_not_limit_moved_file_edits_to_links_and_glossary() -> None:
+    # HTML-REPORT.md, issue-tracker-local.md, CREDITS.md and others carry
+    # decision-forced rewording too, each listed in its skill's own section.
+    section = _attributions_global("Restructure")
+    assert "except the link and glossary edits" not in section
+    assert "except the edits listed in the skill's own section" in section
+
+
+def test_rendering_does_not_call_the_synced_skill_md_byte_identical() -> None:
+    # Sync re-dumps the frontmatter and inserts the sentinel (see test_sync.py).
+    section = _attributions_global("Rendering per adapter")
+    assert "byte-identical copies of `SKILL.md`" not in section
+    assert "byte-identical copies of `references/` and `scripts/`" in section
+    assert "the three native roots hold the same bytes" in section
+
+
+def test_frontmatter_names_exactly_the_two_changed_descriptions() -> None:
+    section = _attributions_global("Frontmatter")
+    assert "(expected:" not in section
+    assert "Descriptions are verbatim except two" in section
+    for skill_id in ("wizard", "domain-modeling"):
+        assert f"{skill_id}'s" in section, skill_id
