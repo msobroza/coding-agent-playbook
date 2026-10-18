@@ -10,6 +10,8 @@ is already over 900 lines.
 from __future__ import annotations
 
 import dataclasses
+import os
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -165,3 +167,24 @@ def test_member_reference_blocked_by_user_directory_is_skipped_with_warning(
     err = capsys.readouterr().err
     assert f"not writing {blocked}" in err
     assert "is in the way" in err
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_member_reference_behind_a_link_leaving_the_skill_dir_is_skipped(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression (PR #38 guard): a member reference is never written through such a link."""
+    skill = sample_member_skill("python-coding", _TYPING)
+    _write(skill, tmp_path / "repo")  # the engine owns the skill dir from here
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    skill_dir = tmp_path / "repo" / ".claude" / "skills" / "python-coding"
+    shutil.rmtree(skill_dir / "references")
+    (skill_dir / "references").symlink_to(outside, target_is_directory=True)
+
+    written = _write(skill, tmp_path / "repo")
+
+    assert written == [skill_dir / SKILL_FILENAME]
+    assert list(outside.iterdir()) == []
+    assert (skill_dir / "references").is_symlink()
+    assert "leading outside the skill directory" in capsys.readouterr().err
