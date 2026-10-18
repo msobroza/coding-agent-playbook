@@ -3,8 +3,9 @@
 The always tier rides every turn, so it keeps only the project's identity, two
 working agreements and eight house-style bullets. Everything else the old house
 style said moved to one of two ``python-coding`` members, ``python-data-shapes``
-and ``python-idioms`` (spec 6.5.4); the one-owner table below is the "nothing
-silently lost" regression for that move.
+and ``python-idioms`` (spec 6.5.4), and its class-design items later on to
+``python-classes-and-protocols`` (spec 9.8); the one-owner table below is the
+"nothing silently lost" regression for those moves.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ HOUSE_STYLE: Final = "python-house-style"
 PROJECT_CONTEXT: Final = "project-context"
 DATA_SHAPES: Final = "python-data-shapes"
 IDIOMS: Final = "python-idioms"
+CLASSES: Final = "python-classes-and-protocols"
 ALWAYS_RULES: Final = (PROJECT_CONTEXT, HOUSE_STYLE)
 
 #: Phrases the eight D17 bullets must keep. The ``None`` and ``excepted`` clauses
@@ -48,6 +50,8 @@ D17_HOUSE_STYLE_PHRASES: Final = (
     "layout axis",
 )
 #: Each item that left the house style (spec 6.5.4) -> the one member rule that owns it now.
+#: The two class-design items moved on from python-idioms to python-classes-and-protocols
+#: with the python-best-practices distillation (spec 9.8).
 MOVED_ITEM_OWNERS: Final = (
     ("three or more fields", DATA_SHAPES),
     ("parallel lists", DATA_SHAPES),
@@ -61,8 +65,8 @@ MOVED_ITEM_OWNERS: Final = (
     ("os.path", IDIOMS),
     ("count_lines", IDIOMS),
     ("split the function", IDIOMS),
-    ("composition over inheritance", IDIOMS),
-    ("DeclarativeBase", IDIOMS),
+    ("composition over inheritance", CLASSES),
+    ("DeclarativeBase", CLASSES),
     ("f-strings", IDIOMS),
     ("single quotes", IDIOMS),
     ("first-party", IDIOMS),

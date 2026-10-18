@@ -57,8 +57,8 @@ Two rules keep the content self-contained:
   distilled plugin such as `python_design`), the credit goes in the layer
   root's `ATTRIBUTIONS.md` and nowhere else. CI scans every other file of
   `core/` and of every bundled plugin for the names of the sources the scan
-  knows (today, `python_design`'s source). Distilling from a new source means
-  adding its name to `_PLUGIN_MARKER_RE` in
+  knows (today, `python_design`'s source and the two sources core distills).
+  Distilling from a new source means adding its name to `_PLUGIN_MARKER_RE` in
   `tests/integration/test_resources_self_contained.py`. A vendored plugin such
   as `superpowers` is exempt: it keeps its upstream wording, source name
   included.

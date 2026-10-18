@@ -26,6 +26,7 @@ A class that builds its own database session, HTTP client or mailer can only be 
 - Concrete implementations are chosen in exactly one place per entry point: `main()`, the web app factory or its lifespan and dependency providers, or the root CLI group. A CLI root builds services and hands them to subcommands through its context object; subcommands never construct clients.
 - Wiring modules may create an engine, a session factory, the app or a router at import time, since none of those opens a connection. Business code never imports them, and nothing connects, opens a session or calls the network at import time.
 - No class-based singletons (metaclass instance caches, a caching `__new__`) and no service locator or global registry queried from business code. Module-level loggers and constants are fine.
+- No lazy accessor such as `get_db()` that fills a module global on first call, and no module-level client instance that business code imports as a locator. Build a shared pool, session or HTTP client in the composition root or the app's lifespan, and inject it. Process-wide things that are fine: logging configured once at startup, read-only settings loaded in `main`, and the framework's app object.
 
 ## Configuration
 

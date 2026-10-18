@@ -436,7 +436,7 @@ its topic (`skill:` in its frontmatter):
 
 | Skill | Its rules | Written when |
 | --- | --- | --- |
-| `python-coding` | dependency injection, pure core, data shapes, typing, error handling, context managers, docstrings, timeouts and retries, idioms | always (most of its rules are ungated) |
+| `python-coding` | dependency injection, pure core, data shapes, typing, performance idioms, asyncio (Python 3.11+), classes and protocols, error handling, context managers, docstrings, timeouts and retries, idioms | always (most of its rules are ungated) |
 | `python-testing` | `pytest` | pytest is detected |
 | `python-tooling` | `fastapi-app-wiring`, `fastapi-error-boundaries` | FastAPI is a dependency |
 | `ml-data` | `ml-serialization-security` | the ML stack includes torch, TensorFlow, JAX, transformers, scikit-learn, XGBoost or LightGBM |

@@ -45,6 +45,7 @@ changelog entry is v0.21.
 | Overriding `project-context` or `python-house-style` by id | Nothing: your text keeps winning. Consider trimming it, since the engine's own text is now much shorter. See "The always text is shorter". |
 | Keeping your own scoped rules in `playbook/rules/` or an overlay | Add `skill: <skill-id>` to each before upgrading ("Add skill: to your own scoped rules"). Until then `playbook validate` fails and `playbook sync` refuses to run. |
 | Tooling or prompts that match lint-feedback lines (`rule <id>: …`) | Accept the new `rule <id> (skill <skill>): …` prefix and the ` (rule <id>, skill <skill>)` suffix; the next `playbook sync` turns them on. See "Guardrails and lint feedback point at skills". |
+| Any repo with Python code (distilled python-best-practices content) | Nothing but `playbook sync`: `python-coding` gains three references and six change text. An overlay or repo-local rule with one of the three new ids now replaces the core rule. See "Distilled python-best-practices content". |
 
 ### `package_manager` and per-key validation
 
@@ -305,6 +306,35 @@ the old prefix exactly should accept the `(skill …)` part. Decision-log rule
 ids and the resync hook's "rule <id>" message are unchanged. On OpenCode v2 the
 generated plugin is an inert `setup()` stub (SPEC §10.6.2), so no lint feedback
 runs there at all until the shim is ported.
+
+### Distilled python-best-practices content
+
+Core now distills a second outside source, the python-best-practices agent
+skills collection (MIT), credited in `catalog/core/ATTRIBUTIONS.md` only; its
+ideas are written fresh in the catalog's own words. There is nothing to do but
+`playbook sync`.
+
+- **Three new `python-coding` references.** `python-performance-idioms`,
+  `python-async` (only in a repo that targets Python 3.11 or later) and
+  `python-classes-and-protocols`. The next sync writes them under every enabled
+  skills root, adds one lockfile entry per copy and names them in the skill's
+  description and index. With Continue enabled, `.continue/rules/` gains
+  `51-python-performance-idioms.md`, `53-python-async.md` and
+  `53-python-classes-and-protocols.md`.
+- **Six references change text.** `python-classes-and-protocols` takes over
+  the composition and framework-base-class bullets of `python-idioms`, whose
+  description no longer says "prefer composition"; `python-data-shapes` gains
+  `slots=True` for many small records; `python-error-handling`,
+  `python-typing`, `python-docstrings` and `python-dependency-injection` gain a
+  few bullets each. The prompts that inline these rules (`includes_rules`)
+  carry the new text too.
+- **Overrides.** An overlay or repo-local rule whose id is one of the three new
+  ids now replaces the core rule, like any rule with the same id; `playbook
+  check` shows which one won.
+- **Not changed.** Rule ids, gates and priorities of the existing rules; every
+  rule's `lint_codes`, so lint feedback reports exactly what it did before; the
+  always rules, `AGENTS.md` and the Claude Code rules file. `playbook sync
+  --check` reports drift until the repo re-syncs, as for any content upgrade.
 
 ## v0.20 — Assistant lifecycle hooks (PR K)
 

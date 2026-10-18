@@ -12,7 +12,7 @@ skill-listing budget in ``test_context_budget.py`` still counts every plugin.
 from __future__ import annotations
 
 import re
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final
 
 import pytest
@@ -42,6 +42,9 @@ EXPECTED_MEMBERSHIP: Final[Mapping[str, str]] = {
     "python-pure-core": "python-coding",
     "python-data-shapes": "python-coding",
     "python-typing": "python-coding",
+    "python-performance-idioms": "python-coding",
+    "python-async": "python-coding",
+    "python-classes-and-protocols": "python-coding",
     "python-error-handling": "python-coding",
     "python-context-managers": "python-coding",
     "python-docstrings": "python-coding",
@@ -60,6 +63,54 @@ EXPECTED_WHERE: Final[Mapping[str, str]] = {
     "ml-data": "Code that loads or saves models, checkpoints or caches",
 }
 CORE_SKILLS: Final = sorted(EXPECTED_WHERE)
+#: python-coding's member count after the python-best-practices distillation (spec 9.6.2, H13).
+PYTHON_CODING_MEMBER_COUNT: Final = 12
+
+
+@dataclass(frozen=True)
+class DistilledRuleRow:
+    """One row of spec 9.6.1: a distilled rule's file, skill, label, gate and priority."""
+
+    path: str
+    skill: str
+    name: str
+    globs: tuple[str, ...]
+    applies_if: Mapping[str, object]
+    priority: int
+    tags: tuple[str, ...]
+
+
+_PY_FILES: Final = ("**/*.py",)
+#: Distilled rule id -> its spec 9.6.1 row; ``path`` is relative to ``catalog/core/rules``.
+DISTILLED_RULES: Final[Mapping[str, DistilledRuleRow]] = {
+    "python-performance-idioms": DistilledRuleRow(
+        "languages/python/performance-idioms.md",
+        "python-coding",
+        "Performance idioms",
+        _PY_FILES,
+        {},
+        51,
+        ("python", "performance"),
+    ),
+    "python-async": DistilledRuleRow(
+        "languages/python/async.md",
+        "python-coding",
+        "Asyncio",
+        _PY_FILES,
+        {"python_version": ">=3.11"},
+        53,
+        ("python", "async", "concurrency"),
+    ),
+    "python-classes-and-protocols": DistilledRuleRow(
+        "languages/python/classes-and-protocols.md",
+        "python-coding",
+        "Classes and protocols",
+        _PY_FILES,
+        {},
+        53,
+        ("python", "design", "oop"),
+    ),
+}
 SKILLS_ROOT: Final = CORE_ROOT / "skills"
 #: The python_design plugin's third-person regex, extended with "use" (a "Use when" opener).
 _NOT_THIRD_PERSON: Final = re.compile(r"(?i)(i|you|we|use)\b")
@@ -219,6 +270,30 @@ def test_membership_table_covers_every_scoped_core_rule() -> None:
     missing = sorted(scoped - set(EXPECTED_MEMBERSHIP))
     assert not missing, f"scoped rules {missing} in core are missing from EXPECTED_MEMBERSHIP"
     assert scoped == set(EXPECTED_MEMBERSHIP)
+
+
+def test_python_coding_members() -> None:
+    """The twelve members of spec 9.6.2: nine from the always-text move, three distilled."""
+    members = sorted(i for i, r in core_rules().items() if r.frontmatter.skill == "python-coding")
+    expected = sorted(i for i, skill in EXPECTED_MEMBERSHIP.items() if skill == "python-coding")
+    assert members == expected, f"python-coding members are {members}; expected {expected}"
+    assert len(members) == PYTHON_CODING_MEMBER_COUNT, (
+        f"python-coding has {len(members)} members; expected {PYTHON_CODING_MEMBER_COUNT}"
+    )
+
+
+@pytest.mark.parametrize("rule_id", sorted(DISTILLED_RULES))
+def test_distilled_rule_frontmatter(rule_id: str) -> None:
+    """Spec 9.4.1 / 9.6.1: the row's file and frontmatter, version 1 and no ``lint_codes`` (D23)."""
+    row, rule = DISTILLED_RULES[rule_id], core_rules()[rule_id]
+    front = rule.frontmatter
+    assert rule.source_path == CORE_ROOT / "rules" / row.path, rule.source_path
+    actual = (front.skill, front.scope, front.version, front.name, tuple(front.globs))
+    assert actual == (row.skill, "scoped", 1, row.name, row.globs), f"{rule_id}: {actual}"
+    assert (front.applies_if, front.priority) == (row.applies_if, row.priority), rule_id
+    assert tuple(front.tags) == row.tags, f"{rule_id}: tags {front.tags}"
+    assert front.lint_codes == {}, f"{rule_id} carries lint_codes {front.lint_codes} (D23)"
+    assert front.description.endswith("."), f"{rule_id}: one-sentence description"
 
 
 def test_always_core_rules_name_no_skill() -> None:
