@@ -324,7 +324,67 @@ _Filled by T06._
 
 ### pr-body
 
-_Filled by T05._
+Upstream `skills/engineering/pr/`; synced as `.agents/skills/pr-body/`.
+Vendored with listed changes, model-invoked.
+
+- Directory and `SKILL.md` L2 (v1.3.1): `pr` renamed `pr-body`, directory
+  `skills/pr-body/` and "name: pr" to "name: pr-body", because Claude Code
+  registers a feature-gated bundled `pr` skill (D8). Inbound references:
+  `references/CREDITS.md` L3 (below) and ask-matt's `/pr` router label, which
+  ask-matt's ticket changes to `/pr-body`.
+- `SKILL.md` L2 (v1.3.1): `id: pr-body` inserted as the first frontmatter key,
+  before the `name` line (D11).
+- `SKILL.md` L9 (v1.3.1): the `metadata.credits.url` line deleted, the only URL
+  in `SKILL.md`; L4-L8 (`metadata`, `credits`, `skill: show-me`,
+  `author: Dex Horthy`, `organisation: Humanlayer`, upstream's spelling) stay
+  byte for byte (D6, D11, D4).
+- `SKILL.md` L37 (v1.3.1): " (or `CONTEXT.md` if the repo already has one)"
+  inserted after the code span `GLOSSARY.md`; nothing else on the line changes
+  (D21).
+- `CREDITS.md` (v1.3.1): moved to `references/CREDITS.md`; nothing links to it,
+  so no link is rewritten; L1-L2 unchanged (D6, D10).
+- `references/CREDITS.md` L3 (v1.3.1): the two links keep only their link text,
+  "Dex Horthy" and `show-me`, so the phrase reads "come from Dex Horthy's
+  `show-me` skill" (D6, D4); the code span `pr` becomes `pr-body` (D8); the rest
+  of the line, the "it isn't part of this repo" parenthetical included, is
+  upstream's.
+- `references/LICENSE-show-me`: added, HumanLayer's MIT notice, laid out like
+  the plugin `LICENSE` with line 3 "Copyright (c) 2026 HumanLayer" and lines
+  4-21 identical to it; the upstream checkout holds no HumanLayer licence file,
+  so it is built from D6's facts (D6).
+- Third-party content (D6): `.agents/skills/pr-body/SKILL.md`'s Summary section
+  (upstream `skills/engineering/pr/SKILL.md` L39-L156: the menu of visuals and
+  its Guidance) reproduces, almost word for word, the show-me skill by Dex
+  Horthy (HumanLayer): repository humanlayer/skills, commit
+  653b6411c1f70c275a18e37673b042ff99f67ceb, MIT, Copyright (c) 2026 HumanLayer.
+  It ships as upstream v1.3.1 had it, minus the URL removals listed above, and
+  is not authored by Matt Pocock. HumanLayer's MIT notice ships as
+  `.agents/skills/pr-body/references/LICENSE-show-me`; the credit ships as
+  `references/CREDITS.md` and the `metadata.credits` frontmatter block. The
+  global "Third-party content" section already states this; nothing to fold in.
+- Stack assumption (D27): the TSX/JSX and frontend examples stay verbatim: L63-L70
+  (the component tree with `apps/example/src/routes/session.tsx`), L95-L104 (the
+  JSX component diff), L111 (`show-me.ts`), L143-L150 (the `ts` fence) and L170
+  ("layout shift, breakages for consumers, mobile responsiveness").
+- The `mermaid` fence at L83 and "Mermaid" at L81 and in `CREDITS.md` L3 are
+  markup the forge renders inside a PR body, not a CDN asset; no allowlist
+  entry.
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies).
+- `agents/openai.yaml`: not shipped (Restructure); it held only the Codex
+  display name "PR" and a short description.
+- Every other byte is upstream's: the box-drawing trees at L76-L78 and
+  L110-L116 and the leading-space context lines of the `diff` fences. The file
+  stays 170 lines (the `id` line added, the `url` line removed).
+- Sync re-dumps the frontmatter, so the `metadata` block's quoting may differ in
+  the synced copies; the Agent Harness adapter moves `metadata` to its manifest
+  sidecar.
+- Continue: `.continue/prompts/pr-body.md` holds only the body. The
+  `metadata.credits` block, `references/CREDITS.md`, `references/LICENSE-show-me`
+  and `references/LICENSE` are all dropped, so neither the HumanLayer notice nor
+  the Matt Pocock notice travels, and a repo that renders this skill only for
+  Continue keeps both notices itself. As a user-started prompt, the model no
+  longer reaches for it on its own whenever it writes a PR (D29).
 
 ### research
 
@@ -340,7 +400,44 @@ _Filled by T03._
 
 ### tdd
 
-_Filled by T05._
+Upstream `skills/engineering/tdd/`; synced as `.agents/skills/tdd/`.
+Vendored with listed changes, model-invoked.
+
+- `SKILL.md` L2 (v1.3.1): `id: tdd` inserted as the first frontmatter key,
+  before "name: tdd" (D11). `name` and `description` are upstream's; no
+  `disable-model-invocation`, because implement and implement-spec load it.
+- `tests.md` and `mocking.md` (v1.3.1): moved to `references/tests.md` and
+  `references/mocking.md` with their bytes unchanged; neither links to another
+  file (D10).
+- `SKILL.md` L10 (v1.3.1): " (or `CONTEXT.md` if the repo already has one)"
+  inserted after the code span `GLOSSARY.md`; upstream's own "(if it exists)"
+  stays, so the two parentheticals stand side by side (D21).
+- `SKILL.md` L16 (v1.3.1): the link targets `tests.md` and `mocking.md` become
+  `references/tests.md` and `references/mocking.md`; the plain link texts stay
+  (D10).
+- `SKILL.md` L26 (v1.3.1): "call the Skill tool with "codebase-design" for the
+  vocabulary." becomes "load the `codebase-design` skill for the vocabulary.";
+  the rest of the line is upstream's (D17).
+- `SKILL.md` L38 (v1.3.1): the code span `code-review` becomes
+  `two-axis-review`, a prose mention of the renamed skill (D8).
+- Stack assumption (D27): the TypeScript and Jest examples stay verbatim:
+  `SKILL.md` L31 (`expect(add(a, b)).toBe(a + b)`); `references/tests.md` fences
+  L7-L15, L29-L36, L47-L61 and L65-L77 (`jest.mock` at L32);
+  `references/mocking.md` fences L24-L35 and L41-L53 (`process.env.STRIPE_KEY`
+  at L32, `fetch` at L44-L46 and L51). None names an imposed tool, so there is
+  no allowlist entry.
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies).
+- `agents/openai.yaml`: not shipped (Restructure); it held only the Codex
+  display name "TDD" and a short description.
+- Every other byte is upstream's, including the U+2192 arrows at L8, L32 and
+  L38.
+- Continue: `.continue/prompts/tdd.md` holds only the body; `references/tests.md`
+  and `references/mocking.md` do not travel, so the L16 links are dead, and no
+  `references/LICENSE` travels. The `codebase-design` load, and the inbound
+  loads from implement and implement-spec, resolve only where the Continue IDE
+  also reads the skills natively from `.claude/skills`. As a user-started
+  prompt, tdd is no longer picked up from its description (D29).
 
 ### teach
 
@@ -382,7 +479,51 @@ _Filled by T03._
 
 ### two-axis-review
 
-_Filled by T05._
+Upstream `skills/engineering/code-review/`; synced as `.agents/skills/two-axis-review/`.
+Vendored with listed changes, model-invoked.
+
+- Directory and `SKILL.md` L2 (v1.3.1): `code-review` renamed
+  `two-axis-review`, directory `skills/two-axis-review/` and "name:
+  code-review" to "name: two-axis-review", because the id collides with Claude
+  Code's bundled `code-review` skill (D8). Inbound references: tdd `SKILL.md`
+  L38 (this ticket), implement L13 and implement-spec L36 (T04), and ask-matt's
+  `/code-review` router labels at L28 and L32 (ask-matt's ticket).
+- `SKILL.md` L2 (v1.3.1): `id: two-axis-review` inserted as the first
+  frontmatter key, before the `name` line (D11).
+- `SKILL.md` L3 (v1.3.1): the description is kept verbatim, double quotes and
+  the two `\"` escapes included: 419 characters between the quotes, 417 once
+  parsed. Bundled plugins are exempt from the 300-character lint (D28).
+- `SKILL.md` L11 (v1.3.1): "Both axes run as **parallel sub-agents** so they
+  don't pollute each other's context, then this skill aggregates their
+  findings." becomes "If your harness can run subagents, both axes run as
+  **parallel sub-agents** so they don't pollute each other's context, then this
+  skill aggregates their findings; otherwise you run the two reviews yourself,
+  one after the other, as step 4 describes, and aggregate them the same way."
+  (D17, D18.6).
+- `SKILL.md` after L59 (v1.3.1): under the unchanged "### 4. Spawn both
+  sub-agents in parallel" heading, a paragraph and a blank line inserted:
+  without subagents, run the Standards review first, with any spec contents step
+  2 fetched set aside, write it in full, then run the Spec review (or report "no
+  spec available"), and never revise the Standards report afterwards (D17,
+  D18.6). The other sub-agent sentences (L23, L32, L60, L63, L66, L72) stay
+  verbatim; step 2 is not changed.
+- `SKILL.md` L29 (v1.3.1): the "GitLab `!67`" example stays verbatim (D18.7).
+- `SKILL.md` L13 (v1.3.1): "tell the user to run `/setup-matt-pocock-skills`"
+  keeps the slash (D17); the plugin always rule makes "The issue tracker should
+  have been provided to you" true.
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies).
+- `agents/openai.yaml`: not shipped (Restructure); it held only the Codex
+  display name "Code Review", stale after the rename, and a short description.
+- The git commands at L21 and L23 are allowed (D2); no allowlist entry.
+- Every other byte is upstream's, including the fifteen U+2192 arrows. The file
+  grows from 87 to 90 lines.
+- Continue: `.continue/prompts/two-axis-review.md` holds only the body, with no
+  `references/LICENSE`. As a user-started prompt it is no longer picked up from
+  its description; the loads from implement and implement-spec resolve only
+  where the Continue IDE also reads the skill natively from `.claude/skills`;
+  where subagents are unavailable, the step-4 sequential fallback is the only
+  path (D29).
 
 ### wait-what
 
