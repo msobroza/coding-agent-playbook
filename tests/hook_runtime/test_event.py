@@ -33,6 +33,7 @@ from coding_agent_playbook.hook_runtime.event import (
     sanitize_session_id,
 )
 from coding_agent_playbook.hook_runtime.shell import ShellConfig
+from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
 
 _NINE_EVENTS = [
@@ -250,7 +251,7 @@ def test_building_a_shell_call_imports_no_shell_parser() -> None:
         "shell=ShellSource(text='rm -rf x'))"
     )
 
-    assert "coding_agent_playbook.hook_runtime.shell" not in loaded
+    assert engine_module("coding_agent_playbook.hook_runtime.shell") not in loaded
     assert "shlex" not in loaded
 
 
