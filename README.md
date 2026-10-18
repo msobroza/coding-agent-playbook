@@ -66,8 +66,12 @@ judged rubric scoring live via `--judge`), and the code-quality metrics gate.
 v0.20 adds the opt-in [assistant lifecycle hooks](#assistant-lifecycle-hooks):
 a shipped pack of guards that Claude Code and OpenCode enforce natively and every
 other assistant reads as advice, all run by one dispatcher, the `playbook-hook`
-runtime (`dispatch` for the harnesses; `simulate` and `doctor` for you). See
-`SPEC.md` for the full design.
+runtime (`dispatch` for the harnesses; `simulate` and `doctor` for you). v0.21
+delivers scoped rules as references inside skills ([Rules inside
+skills](#rules-inside-skills)). See `SPEC.md` for the full design, and
+`CONTEXT.md` for the vocabulary these docs use (always rule, scoped rule,
+member rule, skill, reference, layer, bundled plugin, adapter): it is the
+project's only glossary.
 
 Working on the engine itself:
 
@@ -829,7 +833,7 @@ reason, at most `max_blocks` times per stop chain.
 | `dependency-allowlist-guard` | `default` | Claude Code, OpenCode | Deny the wrong package manager and lockfile hand edits; ask before a new direct dependency. |
 | `exfil-channel-guard` | `default` | Claude Code, OpenCode | Ask before repository data leaves through ordinary tools (a new remote, an upload, `scp`). |
 | `taint-escalation` | `opt-in` | Claude Code, OpenCode | After the session reads untrusted content, ask before pushes, installs and network calls. |
-| `command-convention-guard` | `opt-in` | Claude Code, OpenCode | Apply your repository's Bash convention rows (the engine ships none). |
+| `command-convention-guard` | `opt-in` | Claude Code, OpenCode | Apply your repository's Bash convention rows (the engine provides no rows of its own). |
 | `network-egress-guard` | `overlay` | Claude Code, OpenCode | Restrict agent network egress to approved hosts; an air-gapped overlay activates it. |
 | `sensitive-data-read-guard` | `overlay` | Claude Code, OpenCode | Ask before raw-data reads (data globs, large CSVs, notebook outputs); a regulated overlay activates it. |
 | `pii-prompt-guard` | `overlay` | Claude Code | Block a prompt carrying checksum-validated personal data; a regulated overlay activates it. |

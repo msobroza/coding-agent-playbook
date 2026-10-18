@@ -18,12 +18,16 @@
 
 ## v0.21 — Skills-first context
 
-v0.21 is the skills-first release. Its goal is to keep only always rules in
-always-loaded context and to deliver every scoped rule as a reference inside the
-skill that owns its topic (design `specs/prS-skills-context.md`; decision record
-`docs/adr/0001-scoped-rules-are-delivered-as-skill-references.md`). The release
-is built change by change: each change adds a row to the table below, and a
-subsection after it when a row is not enough. The SPEC changelog entry is v0.21.
+v0.21 is the skills-first release. It keeps only always rules in always-loaded
+context: every scoped rule names the one skill that owns its topic (`skill:` in
+its frontmatter), and the engine writes it as a reference inside that skill
+(design `specs/prS-skills-context.md`; decision record
+`docs/adr/0001-scoped-rules-are-delivered-as-skill-references.md`). Core now
+ships four skills: `python-coding`, `python-testing`, `python-tooling` and
+`ml-data`. Each change of the release has a row in the table below, and a
+subsection after it when a row is not enough. The terms always rule, scoped
+rule, member rule, skill and reference mean what `CONTEXT.md` says. The SPEC
+changelog entry is v0.21.
 
 ### TL;DR — who needs to do anything
 

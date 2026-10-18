@@ -6,6 +6,11 @@ package (`src/coding_agent_playbook/`) to add or change content. The build
 copies this whole tree into the wheel, so what you commit here is what
 `pip install coding-agent-playbook` ships.
 
+The terms this guide uses (always rule, scoped rule, member rule, skill,
+reference, layer, core, bundled plugin) mean what `CONTEXT.md` at the
+repository root says. That file is the project's only glossary; it is not part
+of the catalog, so never link to it from content.
+
 ## Where each kind lives
 
 ```text
