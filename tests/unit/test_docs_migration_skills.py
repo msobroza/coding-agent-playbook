@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+import pytest
+
 from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of
 from coding_agent_playbook.catalog import ENGINE_PACKAGE
 from coding_agent_playbook.commands._validate_skills import SCOPED_RULE_NEEDS_SKILL_MESSAGE
@@ -61,6 +63,22 @@ def test_migration_v0_21_section_is_first_with_tldr() -> None:
 def test_migration_v0_21_tldr_names_the_glossary_move() -> None:
     rows = [row for row in _tldr_table(_v021_section())[2:] if "CONTEXT.md" in row]
     assert rows, "the v0.21 TL;DR table needs a row saying the glossary moved to CONTEXT.md"
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "skill:",
+        "Where guidance lives",
+        "CLAUDE_RULES_PATH",
+        "python-coding",
+        "44-python-data-shapes.md",
+        "58-python-idioms.md",
+        "playbook validate",
+    ],
+)
+def test_migration_v0_21_covers_topic(phrase: str) -> None:
+    assert phrase in _v021_section(), f"the v0.21 MIGRATION section never mentions {phrase!r}"
 
 
 def _core_rule_skill_ids(repo_root: Path) -> list[str]:

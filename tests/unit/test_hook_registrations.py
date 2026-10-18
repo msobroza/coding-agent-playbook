@@ -43,6 +43,7 @@ from coding_agent_playbook.hook_registrations import (
 )
 from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
 from coding_agent_playbook.types import HookMatcher
+from tests.engine_modules import engine_module
 from tests.hook_samples import hook_frontmatter, resolved_hook
 from tests.import_probe import new_modules_after
 
@@ -513,8 +514,8 @@ def test_hook_registrations_imports_only_the_stdlib() -> None:
         and name.split(".")[0] not in sys.stdlib_module_names
     ]
     assert foreign == []
-    assert "coding_agent_playbook.types" not in loaded
-    assert "coding_agent_playbook.renderer" not in loaded
+    assert engine_module("coding_agent_playbook.types") not in loaded
+    assert engine_module("coding_agent_playbook.renderer") not in loaded
 
 
 # --- handler routes: the decision sink and OQ-19's async registration ----------------

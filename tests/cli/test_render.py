@@ -234,3 +234,88 @@ def test_render_hook_show_source(tmp_path, make_synthetic_repo, capsys):
     out = capsys.readouterr().out
     assert "playbook/hooks/protect/guard-x/HOOK.md" in out
     assert "applies_if evaluated: True" in out
+
+
+# --- B1: render omits included rules whose applies_if is false (SPEC §6.2.5, §12.7) ------
+
+
+def _write_gated_rule(repo: Path, rule_id: str, predicate: str, body: str) -> None:
+    """Write a repo-local ``scope: always`` rule gated on ``has_framework: <predicate>``."""
+    target = repo / "playbook" / "rules" / f"{rule_id}.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        f"---\nid: {rule_id}\nname: Gated\ndescription: d\nscope: always\npriority: 50\n"
+        f"applies_if:\n  has_framework: {predicate}\n---\n{body}",
+        encoding="utf-8",
+    )
+
+
+def _tidy_repo(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path], includes: list[str], **extras: Any
+) -> Path:
+    """A repo whose prompt ``tidy`` includes ``includes`` (the caller writes those rules)."""
+    prompt = {"slash": "tidy", "includes_rules": includes, "body": "Tidy up.\n"}
+    return make_synthetic_repo(tmp_path, prompts=[("tidy", prompt)], **extras)
+
+
+def _inlined_ids(show_rules_out: str) -> set[str]:
+    """Rule ids that ``--show-rules`` marks ``INLINED`` (lines ``  - <id>  (... -> INLINED)``)."""
+    return {
+        line.split()[1]
+        for line in show_rules_out.splitlines()
+        if line.startswith("  - ") and line.endswith("-> INLINED)")
+    }
+
+
+def test_render_prompt_omits_an_included_rule_whose_applies_if_is_false(
+    tmp_path, make_synthetic_repo, capsys
+):
+    repo = _tidy_repo(tmp_path, make_synthetic_repo, ["gated"])
+    _write_gated_rule(repo, "gated", '["fastapi"]', "GATED-BODY\n")
+
+    rc = _render.run(_ns(repo, "tidy", fmt="prompt_continue"))
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "GATED-BODY" not in out
+    assert "## Reference rules" not in out
+
+
+def test_render_prompt_inlines_an_applicable_included_rule(tmp_path, make_synthetic_repo, capsys):
+    """The control: the same repo with fastapi installed inlines the gated rule."""
+    repo = _tidy_repo(
+        tmp_path, make_synthetic_repo, ["gated"], pyproject_extras={"dependencies": ["fastapi"]}
+    )
+    _write_gated_rule(repo, "gated", '["fastapi"]', "GATED-BODY\n")
+
+    assert _render.run(_ns(repo, "tidy", fmt="prompt_continue")) == 0
+    assert "GATED-BODY" in capsys.readouterr().out
+
+
+def test_render_prompt_agrees_with_show_rules(tmp_path, make_synthetic_repo, capsys):
+    repo = _tidy_repo(
+        tmp_path, make_synthetic_repo, ["gated", "plain"], rules=[("plain", "PLAIN-BODY\n")]
+    )
+    _write_gated_rule(repo, "gated", '["fastapi"]', "GATED-BODY\n")
+    bodies = {"gated": "GATED-BODY", "plain": "PLAIN-BODY"}
+
+    assert _render.run(_ns(repo, "tidy", show_rules=True)) == 0
+    inlined = _inlined_ids(capsys.readouterr().out)
+    assert _render.run(_ns(repo, "tidy", fmt="prompt_continue")) == 0
+    rendered = capsys.readouterr().out
+
+    assert inlined == {rule_id for rule_id, body in bodies.items() if body in rendered}
+    assert inlined == {"plain"}
+
+
+def test_render_prompt_omits_an_included_rule_with_a_malformed_predicate(
+    tmp_path, make_synthetic_repo, capsys
+):
+    """``has_framework: "fastapi"`` (a string, not a list) makes the detector raise."""
+    repo = _tidy_repo(tmp_path, make_synthetic_repo, ["gated"])
+    _write_gated_rule(repo, "gated", '"fastapi"', "GATED-BODY\n")
+
+    rc = _render.run(_ns(repo, "tidy", fmt="prompt_continue"))
+
+    assert rc == 0
+    assert "GATED-BODY" not in capsys.readouterr().out

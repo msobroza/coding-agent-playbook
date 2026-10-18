@@ -45,9 +45,11 @@ _PYTHON_DESIGN = "coding_agent_playbook.plugins.python_design"
 #: dependencies): every member but python-retries-and-timeouts, which needs an HTTP client.
 _SYNTHETIC_PYTHON_CODING_MEMBERS = (
     "python-context-managers",
+    "python-data-shapes",
     "python-dependency-injection",
     "python-docstrings",
     "python-error-handling",
+    "python-idioms",
     "python-pure-core",
     "python-typing",
 )
@@ -126,8 +128,8 @@ def test_first_sync_after_upgrade_moves_pristine_shared_skills_tree(
 
     assert _sync.execute(repo, git=FakeGitClient()) == 0
 
-    # query-db's SKILL.md + run.py, python-coding's SKILL.md + its 6 references.
-    assert re.search(r", 9 removed$", capsys.readouterr().out, re.MULTILINE)
+    # query-db's SKILL.md + run.py, python-coding's SKILL.md + its 8 references: 11.
+    assert re.search(rf", {len(_OLD_TREE_FILES)} removed$", capsys.readouterr().out, re.MULTILINE)
     assert not (repo / _OLD_ROOT).exists()
     moved = repo / _NEW_ROOT / "query-db"
     assert _skill_tree(moved) == _skill_tree(repo / ".claude" / "skills" / "query-db")
