@@ -3,22 +3,28 @@
 The sync's render step hands the adapters composed skills: a skill with a
 ``playbook:`` block carries its active member rules, rendered, and is dropped
 when none is active. When member rules are active but no enabled adapter
-delivers them, it prints one ``warning:`` line on stderr.
+delivers them, it prints one ``warning:`` line on stderr. A composed
+description that cannot fit 300 characters raises before any adapter runs.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.commands._sync_render import render_artifacts
+import pytest
+
+from coding_agent_playbook.commands._sync_render import (
+    SkillDescriptionOverflowError,
+    render_artifacts,
+    report_description_overflow,
+)
 from coding_agent_playbook.orchestrator import SyncContext
+from coding_agent_playbook.skill_document import DescriptionOverflowError
 from tests.member_skill_samples import write_repo_member_rule, write_repo_member_skill
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
-
-    import pytest
 
 _CONFIG = """\
 schema_version = 1
@@ -118,3 +124,58 @@ def test_render_artifacts_prints_no_warning_with_a_skill_adapter(
     render_artifacts(SyncContext.from_repo(repo))
 
     assert "warning:" not in capsys.readouterr().err
+
+
+# 287 chars: with one Covers name and the Use-when tail the description is 339 (over 300).
+_OVERFLOWING_DESCRIPTION = ("Risk conventions. " * 16).strip()
+
+
+def test_render_artifacts_raises_when_a_composed_description_cannot_fit(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path]
+) -> None:
+    """Regression: the overflow first surfaced inside ``write_skill``, mid-dispatch."""
+    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG.format(adapters='["claude_code"]'))
+    write_repo_member_skill(repo, description=_OVERFLOWING_DESCRIPTION)
+    write_repo_member_rule(repo, "risk-naming")
+
+    with pytest.raises(SkillDescriptionOverflowError) as raised:
+        render_artifacts(SyncContext.from_repo(repo))
+
+    assert raised.value.subject == "skills/risk-models (<repo-local>)"
+    assert raised.value.overflow.length == 339
+    assert raised.value.overflow.text.endswith(
+        "Covers Risk naming. Use when changing a risk model."
+    )
+    assert str(raised.value).startswith("skills/risk-models (<repo-local>): the composed ")
+
+
+def test_render_artifacts_leaves_a_long_description_without_members_as_authored(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path]
+) -> None:
+    """A skill without ``playbook:`` is never composed, so no length limit applies to it."""
+    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG.format(adapters='["claude_code"]'))
+    skill_dir = repo / "playbook" / "skills" / "long-notes"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nid: long-notes\nname: long-notes\ndescription: {_OVERFLOWING_DESCRIPTION * 2}\n"
+        "---\n# Notes\n",
+        encoding="utf-8",
+    )
+
+    skills = render_artifacts(SyncContext.from_repo(repo)).skills
+
+    [skill] = [s for s in skills if s.frontmatter.get("id") == "long-notes"]
+    assert skill.frontmatter["description"] == _OVERFLOWING_DESCRIPTION * 2
+
+
+def test_report_description_overflow_prints_the_skill_and_the_outcome(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    overflow = DescriptionOverflowError("X. Covers Y. Use when Z.")
+    exc = SkillDescriptionOverflowError("skills/x (pkg)", overflow)
+
+    assert report_description_overflow(exc, outcome="playbook sync aborted.") == 1
+
+    first, second = capsys.readouterr().err.splitlines()
+    assert first == f"error: skills/x (pkg): {overflow}"
+    assert second == "error: playbook sync aborted."

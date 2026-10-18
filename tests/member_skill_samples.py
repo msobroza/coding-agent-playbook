@@ -67,8 +67,15 @@ def sample_member_skill(
 # --- a synthetic repo's own skill with member rules (tests/conftest.make_synthetic_repo) ---
 
 
-def write_repo_member_skill(repo: Path, skill_id: str = "risk-models") -> Path:
+def write_repo_member_skill(
+    repo: Path,
+    skill_id: str = "risk-models",
+    *,
+    description: str = "Conventions for the risk models.",
+) -> Path:
     """Write ``playbook/skills/<skill_id>/SKILL.md`` with a ``playbook:`` block; return its dir.
+
+    ``description`` is the authored capability sentence (one YAML plain scalar).
 
     Example: ``write_repo_member_skill(repo)`` -> ``repo/"playbook/skills/risk-models"``.
     """
@@ -78,7 +85,7 @@ def write_repo_member_skill(repo: Path, skill_id: str = "risk-models") -> Path:
         "---\n"
         f"id: {skill_id}\n"
         f"name: {skill_id}\n"
-        "description: Conventions for the risk models.\n"
+        f"description: {description}\n"
         "playbook:\n"
         "  use_when: changing a risk model\n"
         "  files: Risk model modules\n"

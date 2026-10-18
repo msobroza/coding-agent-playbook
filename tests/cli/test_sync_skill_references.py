@@ -6,7 +6,8 @@ writes each active member as ``references/<rule-id>.md`` in every skill root,
 records it in the lockfile as ``kind = "rule"``, and settles the references of
 members that turn off (and the whole skill once none is on) by the lockfile
 leftover policy. Assertions stay on the test's own skill: core skills may sit
-next to it in every root.
+next to it in every root. A skill whose composed description cannot fit 300
+characters aborts every mode before the first write.
 """
 
 from __future__ import annotations
@@ -14,9 +15,12 @@ from __future__ import annotations
 import argparse
 from typing import TYPE_CHECKING
 
+import pytest
+
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from coding_agent_playbook.types import split_frontmatter
+from tests.fakes import FakeGitClient, pre_gate_validate
 from tests.member_skill_samples import (
     skill_tree_bytes,
     write_repo_member_rule,
@@ -27,8 +31,6 @@ from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
-
-    import pytest
 
     from coding_agent_playbook.lockfile import LockEntry
 
@@ -58,13 +60,17 @@ def _ns(repo: Path, *, check: bool = False) -> argparse.Namespace:
 
 
 def _repo(
-    tmp_path: Path, make_synthetic_repo: Callable[..., Path], *, ungated: bool = True
+    tmp_path: Path,
+    make_synthetic_repo: Callable[..., Path],
+    *,
+    ungated: bool = True,
+    description: str = "Conventions for the risk models.",
 ) -> Path:
     """The synthetic repo with ``click`` declared, so both members start active."""
     repo = make_synthetic_repo(
         tmp_path, config_text=_CONFIG, pyproject_extras={"dependencies": ["click"]}
     )
-    write_repo_member_skill(repo, _SKILL)
+    write_repo_member_skill(repo, _SKILL, description=description)
     if ungated:
         write_repo_member_rule(repo, _UNGATED, skill_id=_SKILL, priority=60)
     write_repo_member_rule(repo, _GATED, skill_id=_SKILL, priority=40, framework_gate="click")
@@ -188,3 +194,49 @@ def test_gitignore_covers_member_references_through_their_skill_directory(
     for root in NATIVE_SKILL_ROOTS:
         assert f"/{root}/{_SKILL}/" in lines, root
     assert not any("/references/" in line for line in lines)
+
+
+# 283 chars: with one Covers name and the Use-when tail the description is 345 (over 300).
+_OVERFLOWING_DESCRIPTION = (
+    "Conventions for every risk model, its inputs and its calibration data. " * 4
+).strip()
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [{}, {"check": True}, {"check_staged": True}],
+    ids=["write", "check", "check-staged"],
+)
+def test_sync_aborts_before_any_write_when_a_composed_description_cannot_fit(
+    tmp_path: Path,
+    make_synthetic_repo: Callable[..., Path],
+    capsys: pytest.CaptureFixture[str],
+    mode: dict[str, bool],
+) -> None:
+    """Regression: the description was first composed inside ``write_skill``, mid-dispatch.
+
+    So the overflow escaped as a traceback after earlier adapters had written
+    ``AGENTS.md`` and commands, with no lockfile saved. The gate is stubbed
+    (V11 would refuse this skill in write and ``--check`` mode); ``--check-staged``
+    never runs it.
+    """
+    repo = _repo(tmp_path, make_synthetic_repo, description=_OVERFLOWING_DESCRIPTION)
+    before = skill_tree_bytes(repo)  # every file in the repo, by relative path
+    git = FakeGitClient(staged=["AGENTS.md"])
+
+    rc = _sync.execute(
+        repo,
+        check=mode.get("check", False),
+        check_staged=mode.get("check_staged", False),
+        git=git,
+        validate=pre_gate_validate,
+    )
+
+    assert rc == 1
+
+    err = capsys.readouterr().err
+    assert f"error: skills/{_SKILL} (<repo-local>): the composed description is " in err
+    assert "over the 300-char limit even when the Covers clause names one member" in err
+    assert err.rstrip().endswith("error: playbook sync aborted; no files were written.")
+    assert "Traceback" not in err
+    assert skill_tree_bytes(repo) == before
