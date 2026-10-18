@@ -10,12 +10,13 @@ sync`` — the adapters' sentinel cleanup and the lockfile leftover policy.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-    from pathlib import Path
 
 
 @dataclass
@@ -46,14 +47,14 @@ class FileSet:
 
     def add(self, path: Path) -> None:
         """Add ``path`` (its identity too, when it exists)."""
-        self.paths.add(path.resolve())
+        self.paths.add(_real(path))
         identity = file_identity(path)
         if identity is not None:
             self.identities.add(identity)
 
     def holds(self, path: Path) -> bool:
         """True when ``path`` resolves to a member or is the same file as one."""
-        if path.resolve() in self.paths:
+        if _real(path) in self.paths:
             return True
         identity = file_identity(path)
         return identity is not None and identity in self.identities
@@ -72,3 +73,8 @@ def file_identity(path: Path) -> tuple[int, int] | None:
     except OSError:
         return None
     return (status.st_dev, status.st_ino)
+
+
+def _real(path: Path) -> Path:
+    """``path`` resolved without ``Path.resolve()``, which raises on a link loop on Python 3.12."""
+    return Path(os.path.realpath(path))

@@ -27,13 +27,16 @@ adapter writes OpenCode's own native outputs:
   is refused, never overwritten (``_owned_files``).
   Hook advisories reach OpenCode through ``AGENTS.md``, like rules.
 
-OpenCode *also* scans ``.claude/skills/`` (Claude-compatibility discovery), so
-with ``claude_code`` enabled the same skill is found twice. That is safe:
-OpenCode keeps one skill per key, last write wins — v1.19.x keys a record by
-frontmatter ``name`` and logs a "duplicate skill name" warning
-(``packages/opencode/src/skill/index.ts:125-134``), v2 keys a ``Map`` by the
-skill directory name (``packages/core/src/skill.ts:100-101``). The engine
-writes ``name`` = id = directory name and both copies are byte-identical.
+OpenCode *also* scans ``.agents/skills/`` and ``.claude/skills/`` (compatibility
+roots), so with ``shared_skills`` and ``claude_code`` enabled the same skill is
+found up to three times. That is safe: OpenCode keeps one skill per key — v2
+keys a ``Map`` by the skill directory name (``packages/core/src/skill.ts:100-101``)
+and registers one copy per id with precedence ``.opencode > .agents > .claude``;
+v1.19.x keys a record by frontmatter ``name`` and logs one "duplicate skill name"
+warning per extra copy (``packages/opencode/src/skill/index.ts:125-134``), which
+``OPENCODE_DISABLE_EXTERNAL_SKILLS`` / ``OPENCODE_DISABLE_CLAUDE_CODE_SKILLS``
+silence; the engine sets neither. The engine writes ``name`` = id = directory
+name and every copy is byte-identical.
 """
 
 from __future__ import annotations
@@ -43,6 +46,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._file_identity import FileSet
+from coding_agent_playbook._output_io import write_output_text
+from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters._owned_files import write_engine_owned
 from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters.base import Adapter
@@ -85,6 +90,7 @@ class OpenCodeAdapter(Adapter):
 
     #: Native skills root; OpenCode discovers ``.opencode/skills/<name>/SKILL.md``.
     _SKILL_WRITER: ClassVar[SkillWriter] = SkillWriter(Path(".opencode") / "skills")
+    native_skills_root: ClassVar[str | None] = _SKILL_WRITER.root.as_posix()
 
     #: The shim is declared as a file, never its directory: the leftover policy
     #: may delete a pristine stale shim but never prunes the user's plugins dir.
@@ -141,16 +147,16 @@ class OpenCodeAdapter(Adapter):
             rule_registry=self._rule_registry,
             template_body=prompt.template_body,
         )
-        target.write_text(rendered, encoding="utf-8")
+        write_output_text(target, rendered)
         return [target]
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
         """Write a native skill directory under ``.opencode/skills/<id>/``.
 
         Delegates to the shared :class:`SkillWriter`, so the bytes are
-        identical to the ``.claude/skills/`` and ``shared_skills/`` copies.
-        Duplicate discovery via ``.claude/skills/`` is safe (see the module
-        docstring: OpenCode keeps one skill per name/id, last wins).
+        identical to the ``.claude/skills/`` and ``.agents/skills/`` copies.
+        Duplicate discovery via those roots is safe (see the module
+        docstring: OpenCode keeps one skill per name/id).
         """
         return self._SKILL_WRITER.write(skill, repo_root)
 
@@ -214,7 +220,8 @@ class OpenCodeAdapter(Adapter):
     def _is_stale_shim(self, shim: Path, written: FileSet, repo_root: Path) -> bool:
         """Engine-owned (sentinel, reached without a symlink, not a secret) and not written."""
         spelled = repo_root.resolve().joinpath(OPENCODE_SHIM_PATH)
-        if spelled.resolve() != spelled or written.holds(shim):
+        # real_path: Path.resolve() raises on a link loop on Python 3.12
+        if real_path(spelled) != spelled or written.holds(shim):
             return False
         return bool(self._scan_targets([shim], repo_root)) and self._carries_sentinel(shim)
 

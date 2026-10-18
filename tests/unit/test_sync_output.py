@@ -14,6 +14,7 @@ from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.commands._sync_output import (
     file_drift,
     gitignore_drift,
+    native_skill_roots,
     report_kept_leftovers,
     report_staged_output,
     shared_outputs,
@@ -202,3 +203,162 @@ def test_file_drift_is_clean_when_the_exec_bit_matches(tmp_path: Path) -> None:
     scratch, repo, rendered = _scratch_pair(tmp_path, 0o755)
 
     assert file_drift([rendered], scratch, repo) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_file_drift_names_what_write_mode_stops_on(tmp_path: Path) -> None:
+    """A missing output names the blocker write mode stops on and never removes:
+    a dangling dir link, a link to a file where a dir goes, a dangling file link
+    whose target dir is missing. A dangling file link the write creates the
+    target of, or one at a shared (atomically replaced) output, is no blocker."""
+    scratch, repo = tmp_path / "scratch", tmp_path / "repo"
+    names = ("dangling/x.md", "to-file/y.md", "AGENTS.md", "CLAUDE.md")
+    rendered = [scratch / name for name in names]
+    for path in rendered:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x\n", encoding="utf-8")
+    (repo / "docs").mkdir(parents=True)
+    (repo / "README.md").write_text("r\n", encoding="utf-8")
+    (repo / "dangling").symlink_to("../gone", target_is_directory=True)
+    (repo / "to-file").symlink_to("README.md")
+    (repo / "AGENTS.md").symlink_to("gone/AGENTS.md")
+    (repo / "CLAUDE.md").symlink_to("docs/CLAUDE.md")
+
+    dir_link, to_file, file_link, creatable = file_drift(rendered, scratch, repo)
+
+    assert "dangling is a dangling symbolic link: its target ../gone does not exist" in dir_link
+    assert "to-file is a symbolic link to README.md, which is not a directory" in to_file
+    assert "Re-point or remove the link, then run 'playbook sync'." in to_file
+    assert "AGENTS.md is a dangling symbolic link: its target gone/AGENTS.md" in file_link
+    assert creatable.endswith("Missing on disk; run 'playbook sync' to create.")
+    shared = file_drift(rendered[2:3], scratch, repo, shared=frozenset({"AGENTS.md"}))
+    assert shared[0].endswith("Missing on disk; run 'playbook sync' to create.")
+
+
+def _skill_scratch(tmp_path: Path, root: str) -> tuple[Path, Path, Path]:
+    """A scratch render of ``<root>/demo/scripts/run.sh`` and the real repo beside it."""
+    scratch, repo = tmp_path / "scratch", tmp_path / "repo"
+    skill = scratch / root / "demo"
+    (skill / "scripts").mkdir(parents=True)
+    (skill / "SKILL.md").write_text("s\n", encoding="utf-8")
+    (skill / "scripts" / "run.sh").write_text("x\n", encoding="utf-8")
+    (repo / root / "demo").mkdir(parents=True)
+    return scratch, repo, skill / "scripts" / "run.sh"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_file_drift_counts_output_written_into_a_character_device_as_delivered(
+    tmp_path: Path,
+) -> None:
+    """``AGENTS.md -> /dev/null`` is how a repo discards a force-enabled output: write
+    mode writes into it, so there is nothing to compare and nothing sync could fix."""
+    scratch, repo = tmp_path / "scratch", tmp_path / "repo"
+    scratch.mkdir()
+    repo.mkdir()
+    (scratch / "AGENTS.md").write_text("x\n", encoding="utf-8")
+    (repo / "AGENTS.md").symlink_to(os.devnull)
+
+    assert file_drift([scratch / "AGENTS.md"], scratch, repo) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_file_drift_reports_a_character_device_inside_a_native_skill_dir(tmp_path: Path) -> None:
+    """The skill writer replaces a link at its destination with the real file, so
+    ``scripts/run.sh -> /dev/null`` there is drift sync clears, not delivered output."""
+    scratch, repo, rendered = _skill_scratch(tmp_path, ".claude/skills")
+    (repo / ".claude/skills/demo/scripts").mkdir()
+    (repo / ".claude/skills/demo/scripts/run.sh").symlink_to(os.devnull)
+
+    [hint] = file_drift([rendered], scratch, repo, skill_roots=frozenset({".claude/skills"}))
+
+    assert hint.endswith("Missing on disk; run 'playbook sync' to create.")
+
+
+def test_file_drift_keeps_the_swap_hint_inside_a_native_skill_dir(tmp_path: Path) -> None:
+    """Inside ``<root>/<id>/`` of a native skills root the skill writer displaces what
+    is in the way when it is its own unchanged output (§10.8): the hint says that."""
+    scratch, repo, rendered = _skill_scratch(tmp_path, ".claude/skills")
+    (repo / ".claude/skills/demo/scripts").write_text("old file\n", encoding="utf-8")
+
+    [hint] = file_drift([rendered], scratch, repo, skill_roots=frozenset({".claude/skills"}))
+
+    assert ".claude/skills/demo/scripts is in the way. 'playbook sync' replaces it only" in hint
+
+
+def test_file_drift_gives_agent_harness_skills_the_blocker_write_mode_stops_on(
+    tmp_path: Path,
+) -> None:
+    """``skills/`` is ``agent_harness``'s, not a native root: it never displaces anything."""
+    scratch, repo, rendered = _skill_scratch(tmp_path, "skills")
+    (repo / "skills/demo/scripts").write_text("old file\n", encoding="utf-8")
+
+    [hint] = file_drift([rendered], scratch, repo, skill_roots=frozenset({".claude/skills"}))
+
+    assert "skills/demo/scripts is not a directory, but sync writes generated files" in hint
+    assert "replaces it only" not in hint
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_file_drift_names_the_link_even_when_a_file_is_behind_it(tmp_path: Path) -> None:
+    """ "Run 'playbook sync' to regenerate" would be a drift no sync clears: sync never
+    writes through a link leading out of the skill dir, so the hint names the link."""
+    scratch, repo, rendered = _skill_scratch(tmp_path, ".claude/skills")
+    (tmp_path / "elsewhere").mkdir()
+    (tmp_path / "elsewhere" / "run.sh").write_text("their version\n", encoding="utf-8")
+    (repo / ".claude/skills/demo/scripts").symlink_to(tmp_path / "elsewhere")
+
+    [hint] = file_drift([rendered], scratch, repo, skill_roots=frozenset({".claude/skills"}))
+
+    assert "is a symbolic link leading outside the skill directory" in hint
+    assert "regenerate" not in hint
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_file_drift_names_a_link_leaving_a_native_skill_dir(tmp_path: Path) -> None:
+    """The skill writer skips a file under such a link with a warning: name the link."""
+    scratch, repo, rendered = _skill_scratch(tmp_path, ".claude/skills")
+    (tmp_path / "elsewhere").mkdir()
+    (repo / ".claude/skills/demo/scripts").symlink_to(tmp_path / "elsewhere")
+
+    [hint] = file_drift([rendered], scratch, repo, skill_roots=frozenset({".claude/skills"}))
+
+    assert hint.endswith(
+        "    Missing on disk: .claude/skills/demo/scripts is a symbolic link leading outside the "
+        "skill directory, and sync never writes through one.\n"
+        "    Remove or re-point the link, then run 'playbook sync'."
+    )
+
+
+def test_native_skill_roots_are_the_skill_writer_roots_of_the_given_adapters() -> None:
+    from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
+    from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
+    from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
+    from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
+    from coding_agent_playbook.adapters.shared_skills_adapter import (
+        SHARED_SKILLS_ROOT,
+        SharedSkillsAdapter,
+    )
+
+    native = {
+        "claude_code": ClaudeCodeAdapter(),
+        "opencode": OpenCodeAdapter(),
+        "shared_skills": SharedSkillsAdapter(),
+    }
+    others = {"continue": ContinueAdapter(), "agent_harness": AgentHarnessAdapter()}
+
+    assert native_skill_roots({**native, **others}) == {
+        ".claude/skills",
+        ".opencode/skills",
+        SHARED_SKILLS_ROOT.as_posix(),
+    }
+    assert native_skill_roots(others) == frozenset()
+
+
+def test_native_skill_roots_read_the_public_class_attribute() -> None:
+    """An out-of-tree adapter opts in by declaring ``native_skills_root``."""
+    from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
+
+    class _ThirdPartySkills(ContinueAdapter):
+        native_skills_root = ".acme/skills"
+
+    assert native_skill_roots({"acme": _ThirdPartySkills()}) == {".acme/skills"}

@@ -14,7 +14,7 @@ of the **Superpowers** skills library.
   skill directory into consumer repositories, so a byte-identical copy also
   ships as `references/LICENSE` inside every skill and travels with each synced
   skill directory (`.claude/skills/<id>/`, `.opencode/skills/<id>/`,
-  `shared_skills/<id>/`, and the opt-in Agent Harness `skills/<id>/`). Continue
+  `.agents/skills/<id>/`, and the opt-in Agent Harness `skills/<id>/`). Continue
   has no native skills: its degraded prompts
   (`.continue/prompts/<id>.md`) carry only the `SKILL.md` body, so a repository
   that renders this pack only for Continue must keep a copy of `LICENSE` next to

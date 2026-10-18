@@ -203,6 +203,32 @@ def test_sync_check_findings_take_only_the_entry_lines() -> None:
         sync_check_findings(b"error: no .coding-agent-playbook.toml\n")
 
 
+_CANNOT_VERIFY = (
+    b"Cannot verify .claude: it is not a directory, but sync writes generated files inside it.\n"
+    b"Move or rename it (sync never deletes it), then re-run 'playbook sync --check'.\n"
+)
+
+
+def test_sync_check_findings_read_a_check_that_cannot_verify() -> None:
+    """Regression: a ``--check`` stopped by something in the way prints ``Cannot verify
+    <path>: …`` and no drift header; the parser raised, so the stage read as a crash."""
+    settings = b"Cannot verify .claude/settings.json: Expecting value at 1:1.\nFix the file.\n"
+
+    assert sync_check_findings(_CANNOT_VERIFY) == [DriftFinding(".claude", "cannot verify")]
+    assert sync_check_findings(settings) == [DriftFinding(".claude/settings.json", "cannot verify")]
+
+
+def test_a_check_that_cannot_verify_is_red_not_skipped(repo: PackRepo) -> None:
+    proc = FakeProc()
+    proc.script(playbook_child("sync"), stdout=_CANNOT_VERIFY, returncode=1)
+    stage = _stage(repo, proc=proc)
+
+    result = stage.run(_plan(stage, "canonical"), stage.ctx.deadline)
+
+    assert result.status == "red"
+    assert result.lines == (f'Playbook drift: ".claude" (cannot verify). {ADVICE}',)
+
+
 # --- activation and the slow path --------------------------------------------------------
 
 

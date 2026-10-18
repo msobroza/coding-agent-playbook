@@ -119,7 +119,9 @@ def _load_lockfile_entries(repo_root: Path) -> dict[str, LockEntry]:
 def _repo_relative_spellings(path: Path, repo_root: Path) -> list[str]:
     """``path`` relative to ``repo_root`` as resolved (the lockfile's form) and as spelled."""
     spellings: list[str] = []
-    for candidate, root in ((path.resolve(), repo_root.resolve()), (path, repo_root)):
+    # realpath: Path.resolve() raises on a link loop (a user's SKILL.md -> SKILL.md) on 3.12
+    resolved = Path(os.path.realpath(path))
+    for candidate, root in ((resolved, repo_root.resolve()), (path, repo_root)):
         with contextlib.suppress(ValueError):
             spellings.append(candidate.relative_to(root).as_posix())
     return spellings

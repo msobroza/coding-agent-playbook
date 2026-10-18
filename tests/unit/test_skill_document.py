@@ -15,6 +15,7 @@ from coding_agent_playbook.skill_document import (
     DESCRIPTION_MAX_CHARS,
     DescriptionOverflowError,
     compose_description,
+    covered_member_count,
     covers_clause,
     worst_case_description,
 )
@@ -162,9 +163,26 @@ def test_worst_case_description_has_no_tail_for_one_member() -> None:
     )
 
 
-@pytest.mark.parametrize("compose", [compose_description, worst_case_description])
+def test_covered_member_count_is_every_member_when_the_list_fits() -> None:
+    assert covered_member_count("Python conventions.", PYTHON_CODING_NAMES, "editing code") == 9
+
+
+def test_covered_member_count_matches_the_truncated_description() -> None:
+    text = compose_description(LONG_DESCRIPTION, PYTHON_CODING_NAMES, LONG_USE_WHEN)
+    shown = covered_member_count(LONG_DESCRIPTION, PYTHON_CODING_NAMES, LONG_USE_WHEN)
+    assert 0 < shown < len(PYTHON_CODING_NAMES)
+    assert f"and {len(PYTHON_CODING_NAMES) - shown} more." in text
+
+
+def test_covered_member_count_is_zero_when_one_name_cannot_fit() -> None:
+    assert covered_member_count("x" * 280, ["Typing", "Error handling"], "editing code") == 0
+
+
+@pytest.mark.parametrize(
+    "compose", [compose_description, worst_case_description, covered_member_count]
+)
 def test_composing_without_members_is_an_error(
-    compose: Callable[[str, Sequence[str], str | None], str],
+    compose: Callable[[str, Sequence[str], str | None], object],
 ) -> None:
     with pytest.raises(ValueError, match=r"at least one member name, got \[\]"):
         compose("X.", [], None)

@@ -22,6 +22,7 @@ from coding_agent_playbook.adapters._skill_writer import (
     is_engine_owned_skill_dir,
     render_skill_md,
     skill_id_of,
+    swap_blocker,
 )
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands._output_locations import OutputLocations
@@ -37,7 +38,9 @@ from tests.fakes import FakeGitClient
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
-_ROOTS = (Path(".claude") / "skills", Path(".opencode") / "skills", Path("shared_skills"))
+_ROOTS = (Path(".claude") / "skills", Path(".opencode") / "skills", Path(".agents") / "skills")
+#: The root the single-writer tests use; the writer is root-agnostic (SPEC §10.8).
+_WRITER_ROOT = Path(".agents") / "skills"
 
 needs_symlinks = pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
 
@@ -186,13 +189,13 @@ def test_agent_skill_issues_flags_overlong_description() -> None:
 
 
 def test_skills_root_is_repo_relative(tmp_path: Path) -> None:
-    writer = SkillWriter(Path("shared_skills"))
-    assert writer.skills_root(tmp_path) == tmp_path / "shared_skills"
+    writer = SkillWriter(_WRITER_ROOT)
+    assert writer.skills_root(tmp_path) == tmp_path / _WRITER_ROOT
 
 
 def test_write_creates_skill_md_and_returns_it(tmp_path: Path) -> None:
-    written = SkillWriter(Path("shared_skills")).write(_make_skill(skill_id="demo"), tmp_path)
-    skill_md = tmp_path / "shared_skills" / "demo" / SKILL_FILENAME
+    written = SkillWriter(_WRITER_ROOT).write(_make_skill(skill_id="demo"), tmp_path)
+    skill_md = tmp_path / _WRITER_ROOT / "demo" / SKILL_FILENAME
     assert written == [skill_md]
     assert skill_md.read_text(encoding="utf-8") == render_skill_md(_make_skill(skill_id="demo"))
 
@@ -205,9 +208,9 @@ def test_write_copies_scripts_and_references_byte_for_byte(tmp_path: Path) -> No
     refs = _seed_tree(tmp_path / "src" / "references", {"guide.md": b"# Guide\n"})
     skill = _make_skill(skill_id="demo", scripts_dir=scripts, references_dir=refs)
 
-    written = SkillWriter(Path("shared_skills")).write(skill, tmp_path / "repo")
+    written = SkillWriter(_WRITER_ROOT).write(skill, tmp_path / "repo")
 
-    skill_dir = tmp_path / "repo" / "shared_skills" / "demo"
+    skill_dir = tmp_path / "repo" / _WRITER_ROOT / "demo"
     assert set(written) == {path for path in skill_dir.rglob("*") if path.is_file()}
     assert _tree_bytes(skill_dir / "scripts") == _tree_bytes(scripts)
     assert _tree_bytes(skill_dir / "references") == _tree_bytes(refs)
@@ -263,35 +266,68 @@ def test_write_rejects_path_traversal_and_writes_nothing(tmp_path: Path, skill_i
     repo = tmp_path / "repo"
     repo.mkdir()
     with pytest.raises(ValueError, match="not path-safe"):
-        SkillWriter(Path("shared_skills")).write(_make_skill(skill_id=skill_id), repo)
+        SkillWriter(_WRITER_ROOT).write(_make_skill(skill_id=skill_id), repo)
     assert list(tmp_path.rglob("SKILL.md")) == []
 
 
 @needs_symlinks
-def test_write_refuses_symlinked_skill_dir_escaping_root(tmp_path: Path) -> None:
+def test_write_skips_symlinked_skill_dir_escaping_root(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression: a ``ValueError`` here stopped every ``playbook sync`` mode with a traceback."""
     outside = tmp_path / "outside"
     outside.mkdir()
-    root = tmp_path / "repo" / "shared_skills"
+    root = tmp_path / "repo" / _WRITER_ROOT
     root.mkdir(parents=True)
     (root / "demo").symlink_to(outside, target_is_directory=True)
-    with pytest.raises(ValueError, match="outside the skills root"):
-        SkillWriter(Path("shared_skills")).write(_make_skill(skill_id="demo"), tmp_path / "repo")
+    writer = SkillWriter(_WRITER_ROOT)
+
+    assert writer.write(_make_skill(skill_id="demo"), tmp_path / "repo") == []
+    assert "outside the skills root" in capsys.readouterr().err
+    with _skill_writer.deciding_ownership_against(tmp_path / "repo"):  # check modes skip it too
+        assert writer.write(_make_skill(skill_id="demo"), tmp_path / "scratch") == []
+    assert "outside the skills root" in capsys.readouterr().err
     assert list(outside.iterdir()) == []
 
 
 @needs_symlinks
-def test_write_refuses_escaping_intermediate_dir(tmp_path: Path) -> None:
+@pytest.mark.parametrize("dangling", [False, True], ids=["live", "dangling"])
+def test_write_skips_files_under_a_link_leaving_the_skill_dir(
+    tmp_path: Path, dangling: bool, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression: a ``ValueError`` ("refusing to write") stopped ``playbook sync``.
+
+    Skipped with a warning like any other blocker inside a skill dir: nothing is
+    written outside it, and the rest of the skill is still written.
+    """
     outside = tmp_path / "outside"
-    outside.mkdir()
+    if not dangling:
+        outside.mkdir()
     scripts = _seed_tree(tmp_path / "src" / "scripts", {"deep/x.py": b"x\n"})
-    writer = SkillWriter(Path("shared_skills"))
+    writer = SkillWriter(_WRITER_ROOT)
     writer.write(_make_skill(skill_id="demo"), tmp_path / "repo")  # engine-owned dir
-    skill_dir = tmp_path / "repo" / "shared_skills" / "demo"
+    skill_dir = tmp_path / "repo" / _WRITER_ROOT / "demo"
     (skill_dir / "scripts").symlink_to(outside, target_is_directory=True)
-    skill = _make_skill(skill_id="demo", scripts_dir=scripts)
-    with pytest.raises(ValueError, match="refusing to write"):
-        writer.write(skill, tmp_path / "repo")
-    assert list(outside.iterdir()) == []
+    capsys.readouterr()
+
+    written = writer.write(_make_skill(skill_id="demo", scripts_dir=scripts), tmp_path / "repo")
+
+    assert written == [skill_dir / SKILL_FILENAME]
+    err = capsys.readouterr().err
+    assert f"not writing {skill_dir / 'scripts' / 'deep' / 'x.py'}" in err
+    assert f"{skill_dir / 'scripts'} is a symbolic link leading outside the skill directory" in err
+    assert not outside.exists() or list(outside.iterdir()) == []
+    assert (skill_dir / "scripts").is_symlink()
+
+
+def test_swap_blocker_ignores_links_and_names_a_file_or_dir_in_the_way(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skill"
+    (skill_dir / "refs" / "api.md").mkdir(parents=True)  # a dir where a file goes
+    (skill_dir / "scripts").write_text("a file where a dir goes\n", encoding="utf-8")
+
+    assert swap_blocker(skill_dir / "scripts" / "run.sh", skill_dir) == skill_dir / "scripts"
+    assert swap_blocker(skill_dir / "refs" / "api.md", skill_dir) == skill_dir / "refs" / "api.md"
+    assert swap_blocker(skill_dir / "new" / "x.md", skill_dir) is None
 
 
 @needs_symlinks
@@ -300,9 +336,9 @@ def test_write_replaces_symlinked_script_instead_of_writing_through(tmp_path: Pa
     victim.write_text("keep me\n", encoding="utf-8")
     scripts = _seed_tree(tmp_path / "src" / "scripts", {"run.sh": b"#!/bin/sh\n"})
     skill = _make_skill(skill_id="demo", scripts_dir=scripts)
-    writer = SkillWriter(Path("shared_skills"))
+    writer = SkillWriter(_WRITER_ROOT)
     writer.write(skill, tmp_path / "repo")
-    script = tmp_path / "repo" / "shared_skills" / "demo" / "scripts" / "run.sh"
+    script = tmp_path / "repo" / _WRITER_ROOT / "demo" / "scripts" / "run.sh"
     script.unlink()
     script.symlink_to(victim)
 
@@ -320,13 +356,11 @@ def test_write_skips_dir_whose_skill_md_is_a_symlink(
     """A symlinked SKILL.md is not engine-owned: the dir is left untouched."""
     victim = tmp_path / "victim.txt"
     victim.write_text("keep me\n", encoding="utf-8")
-    skill_dir = tmp_path / "repo" / "shared_skills" / "demo"
+    skill_dir = tmp_path / "repo" / _WRITER_ROOT / "demo"
     skill_dir.mkdir(parents=True)
     (skill_dir / SKILL_FILENAME).symlink_to(victim)
 
-    written = SkillWriter(Path("shared_skills")).write(
-        _make_skill(skill_id="demo"), tmp_path / "repo"
-    )
+    written = SkillWriter(_WRITER_ROOT).write(_make_skill(skill_id="demo"), tmp_path / "repo")
 
     assert written == []
     assert victim.read_text(encoding="utf-8") == "keep me\n"
@@ -338,16 +372,16 @@ def test_write_skips_dir_whose_skill_md_is_a_symlink(
 def test_write_skips_symlinked_skill_dir_inside_root(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    writer = SkillWriter(Path("shared_skills"))
+    writer = SkillWriter(_WRITER_ROOT)
     writer.write(_make_skill(skill_id="real"), tmp_path)
-    alias = tmp_path / "shared_skills" / "alias"
-    alias.symlink_to(tmp_path / "shared_skills" / "real", target_is_directory=True)
-    before = _tree_bytes(tmp_path / "shared_skills" / "real")
+    alias = tmp_path / _WRITER_ROOT / "alias"
+    alias.symlink_to(tmp_path / _WRITER_ROOT / "real", target_is_directory=True)
+    before = _tree_bytes(tmp_path / _WRITER_ROOT / "real")
 
     assert writer.write(_make_skill(skill_id="alias"), tmp_path) == []
 
     assert alias.is_symlink()
-    assert _tree_bytes(tmp_path / "shared_skills" / "real") == before
+    assert _tree_bytes(tmp_path / _WRITER_ROOT / "real") == before
     assert str(alias) in capsys.readouterr().err
 
 
@@ -374,9 +408,10 @@ def test_write_skips_a_dangling_symlinked_skills_root(
 def test_write_skips_a_skills_root_that_is_a_file(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    (tmp_path / "shared_skills").write_bytes(b"not a dir\n")
-    assert SkillWriter(Path("shared_skills")).write(_make_skill(skill_id="demo"), tmp_path) == []
-    assert (tmp_path / "shared_skills").read_bytes() == b"not a dir\n"
+    (tmp_path / _WRITER_ROOT).parent.mkdir(parents=True)
+    (tmp_path / _WRITER_ROOT).write_bytes(b"not a dir\n")
+    assert SkillWriter(_WRITER_ROOT).write(_make_skill(skill_id="demo"), tmp_path) == []
+    assert (tmp_path / _WRITER_ROOT).read_bytes() == b"not a dir\n"
     assert "dangling symlink or a file" in capsys.readouterr().err
 
 
@@ -430,16 +465,16 @@ def test_writer_never_deletes_stale_files(tmp_path: Path) -> None:
     """Superseded A-era cleanup: stale output is settled by sync's lockfile leftover
     policy (SPEC §4.2 step 9), never by the writer — rewriting a skill without a
     script leaves the old copy (and any user file) where it is."""
-    writer = SkillWriter(Path("shared_skills"))
+    writer = SkillWriter(_WRITER_ROOT)
     v1 = _seed_tree(tmp_path / "v1", {"keep.py": b"k\n", "gone.py": b"g\n"})
     writer.write(_make_skill(skill_id="demo", scripts_dir=v1), tmp_path)
-    user_file = tmp_path / "shared_skills" / "demo" / "notes.md"
+    user_file = tmp_path / _WRITER_ROOT / "demo" / "notes.md"
     user_file.write_bytes(b"mine\n")
     v2 = _seed_tree(tmp_path / "v2", {"keep.py": b"k2\n"})
 
     written = writer.write(_make_skill(skill_id="demo", scripts_dir=v2), tmp_path)
 
-    scripts_out = tmp_path / "shared_skills" / "demo" / "scripts"
+    scripts_out = tmp_path / _WRITER_ROOT / "demo" / "scripts"
     assert scripts_out / "gone.py" not in written
     assert (scripts_out / "gone.py").read_bytes() == b"g\n"
     assert user_file.read_bytes() == b"mine\n"
@@ -489,7 +524,7 @@ def test_write_skips_user_authored_dir_with_colliding_id(
 ) -> None:
     """A hand-written ``<root>/<id>/`` (no sentinel) keeps every file."""
     user_dir = _seed_tree(
-        tmp_path / "shared_skills" / "deploy",
+        tmp_path / _WRITER_ROOT / "deploy",
         {
             "SKILL.md": b"---\nname: deploy\ndescription: mine\n---\nmine\n",
             "checklist.md": b"- step\n",
@@ -497,7 +532,7 @@ def test_write_skips_user_authored_dir_with_colliding_id(
         },
     )
     before = _tree_bytes(user_dir)
-    writer = SkillWriter(Path("shared_skills"))
+    writer = SkillWriter(_WRITER_ROOT)
 
     written = writer.write(_make_skill(skill_id="deploy"), tmp_path)
 
@@ -511,20 +546,20 @@ def test_write_skips_user_authored_dir_with_colliding_id(
 def test_write_skips_plain_file_at_skill_path(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    blocker = tmp_path / "shared_skills" / "demo"
+    blocker = tmp_path / _WRITER_ROOT / "demo"
     blocker.parent.mkdir(parents=True)
     blocker.write_bytes(b"not a dir\n")
 
-    assert SkillWriter(Path("shared_skills")).write(_make_skill(skill_id="demo"), tmp_path) == []
+    assert SkillWriter(_WRITER_ROOT).write(_make_skill(skill_id="demo"), tmp_path) == []
 
     assert blocker.read_bytes() == b"not a dir\n"
     assert str(blocker) in capsys.readouterr().err
 
 
 def test_write_claims_empty_existing_dir(tmp_path: Path) -> None:
-    (tmp_path / "shared_skills" / "demo").mkdir(parents=True)
-    written = SkillWriter(Path("shared_skills")).write(_make_skill(skill_id="demo"), tmp_path)
-    assert written == [tmp_path / "shared_skills" / "demo" / SKILL_FILENAME]
+    (tmp_path / _WRITER_ROOT / "demo").mkdir(parents=True)
+    written = SkillWriter(_WRITER_ROOT).write(_make_skill(skill_id="demo"), tmp_path)
+    assert written == [tmp_path / _WRITER_ROOT / "demo" / SKILL_FILENAME]
 
 
 def test_write_claims_legacy_sentinel_less_dir_listed_in_prior_lockfile(tmp_path: Path) -> None:
@@ -568,10 +603,10 @@ def test_write_skips_listed_sentinel_less_dir_whose_skill_md_changed(
 
 
 def test_write_skips_sentinel_less_dir_when_lockfile_is_unreadable(tmp_path: Path) -> None:
-    user_dir = _seed_tree(tmp_path / "shared_skills" / "demo", {"SKILL.md": b"mine\n"})
+    user_dir = _seed_tree(tmp_path / _WRITER_ROOT / "demo", {"SKILL.md": b"mine\n"})
     (tmp_path / ".coding-agent-playbook.lock").write_text("not = [valid toml", encoding="utf-8")
 
-    assert SkillWriter(Path("shared_skills")).write(_make_skill(skill_id="demo"), tmp_path) == []
+    assert SkillWriter(_WRITER_ROOT).write(_make_skill(skill_id="demo"), tmp_path) == []
     assert (user_dir / "SKILL.md").read_bytes() == b"mine\n"
 
 
@@ -586,7 +621,7 @@ def _sync_like_write(writer: SkillWriter, skill: Skill, repo: Path) -> list[Path
 
 
 def test_rewrite_handles_reference_file_becoming_a_folder(tmp_path: Path) -> None:
-    writer = SkillWriter(Path("shared_skills"))
+    writer = SkillWriter(_WRITER_ROOT)
     v1 = _seed_tree(tmp_path / "v1", {"api": b"flat\n"})
     _sync_like_write(writer, _make_skill(skill_id="demo", references_dir=v1), tmp_path)
     v2 = _seed_tree(tmp_path / "v2", {"api/v1.md": b"nested\n"})
@@ -594,14 +629,14 @@ def test_rewrite_handles_reference_file_becoming_a_folder(tmp_path: Path) -> Non
     with _under_sync_policy(tmp_path) as policy:
         written = writer.write(_make_skill(skill_id="demo", references_dir=v2), tmp_path)
 
-    refs = tmp_path / "shared_skills" / "demo" / "references"
+    refs = tmp_path / _WRITER_ROOT / "demo" / "references"
     assert (refs / "api" / "v1.md").read_bytes() == b"nested\n"
     assert refs / "api" / "v1.md" in written
     assert policy.displaced == [refs / "api"]  # counted as removed by sync
 
 
 def test_rewrite_handles_reference_folder_becoming_a_file(tmp_path: Path) -> None:
-    writer = SkillWriter(Path("shared_skills"))
+    writer = SkillWriter(_WRITER_ROOT)
     v1 = _seed_tree(tmp_path / "v1", {"api/v1.md": b"nested\n", "api/deep/x.md": b"x\n"})
     _sync_like_write(writer, _make_skill(skill_id="demo", references_dir=v1), tmp_path)
     v2 = _seed_tree(tmp_path / "v2", {"api": b"flat\n"})
@@ -609,7 +644,7 @@ def test_rewrite_handles_reference_folder_becoming_a_file(tmp_path: Path) -> Non
     with _under_sync_policy(tmp_path) as policy:
         written = writer.write(_make_skill(skill_id="demo", references_dir=v2), tmp_path)
 
-    api = tmp_path / "shared_skills" / "demo" / "references" / "api"
+    api = tmp_path / _WRITER_ROOT / "demo" / "references" / "api"
     assert api.is_file()
     assert api.read_bytes() == b"flat\n"
     assert all(path.is_file() for path in written)  # never records a directory
@@ -624,10 +659,10 @@ def _flip_reference_folder_to_file(
 ) -> tuple[SkillWriter, Skill, Path]:
     """Sync ``references/api/v1.md``; return the writer, a skill whose ``api`` is a file,
     and the old (optionally user-edited) ``v1.md``."""
-    writer = SkillWriter(Path("shared_skills"))
+    writer = SkillWriter(_WRITER_ROOT)
     v1 = _seed_tree(tmp_path / "v1", {"api/v1.md": b"nested\n"})
     _sync_like_write(writer, _make_skill(skill_id="demo", references_dir=v1), tmp_path)
-    old = tmp_path / "shared_skills" / "demo" / "references" / "api" / "v1.md"
+    old = tmp_path / _WRITER_ROOT / "demo" / "references" / "api" / "v1.md"
     if edit:
         old.write_bytes(b"MY IMPORTANT EDITS\n")
     v2 = _seed_tree(tmp_path / "v2", {"api": b"flat\n"})
@@ -650,7 +685,7 @@ def test_swap_never_displaces_an_edited_leftover(
 
 def test_swap_never_displaces_a_tracked_leftover(tmp_path: Path) -> None:
     writer, skill, old = _flip_reference_folder_to_file(tmp_path)
-    git = FakeGitClient(tracked={"shared_skills/demo/references/api/v1.md"})
+    git = FakeGitClient(tracked={f"{_WRITER_ROOT.as_posix()}/demo/references/api/v1.md"})
 
     with _under_sync_policy(tmp_path, git):
         writer.write(skill, tmp_path)
@@ -677,10 +712,10 @@ def test_swap_outside_a_sync_displaces_nothing(tmp_path: Path) -> None:
 
 
 def test_file_becoming_a_folder_never_displaces_an_edited_leftover(tmp_path: Path) -> None:
-    writer = SkillWriter(Path("shared_skills"))
+    writer = SkillWriter(_WRITER_ROOT)
     v1 = _seed_tree(tmp_path / "v1", {"tool": b"#!/bin/sh\n"})
     _sync_like_write(writer, _make_skill(skill_id="demo", scripts_dir=v1), tmp_path)
-    tool = tmp_path / "shared_skills" / "demo" / "scripts" / "tool"
+    tool = tmp_path / _WRITER_ROOT / "demo" / "scripts" / "tool"
     tool.write_bytes(b"# my important local edits\n")
     v2 = _seed_tree(tmp_path / "v2", {"tool/main.sh": b"#!/bin/sh\n"})
 
@@ -696,10 +731,10 @@ def test_file_becoming_a_folder_never_displaces_an_edited_leftover(tmp_path: Pat
 def test_folder_becoming_a_file_never_deletes_a_user_file_inside_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    writer = SkillWriter(Path("shared_skills"))
+    writer = SkillWriter(_WRITER_ROOT)
     v1 = _seed_tree(tmp_path / "v1", {"api/v1.md": b"nested\n"})
     _sync_like_write(writer, _make_skill(skill_id="demo", references_dir=v1), tmp_path)
-    api = tmp_path / "shared_skills" / "demo" / "references" / "api"
+    api = tmp_path / _WRITER_ROOT / "demo" / "references" / "api"
     (api / "mine.md").write_bytes(b"user notes\n")
     v2 = _seed_tree(tmp_path / "v2", {"api": b"flat\n", "other.md": b"o\n"})
 
@@ -716,9 +751,9 @@ def test_folder_becoming_a_file_never_deletes_a_user_file_inside_it(
 def test_file_becoming_a_folder_never_deletes_a_user_file_in_the_way(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    writer = SkillWriter(Path("shared_skills"))
+    writer = SkillWriter(_WRITER_ROOT)
     _sync_like_write(writer, _make_skill(skill_id="demo"), tmp_path)
-    user_file = tmp_path / "shared_skills" / "demo" / "references"
+    user_file = tmp_path / _WRITER_ROOT / "demo" / "references"
     user_file.write_bytes(b"not ours\n")  # never in the lockfile
     v2 = _seed_tree(tmp_path / "v2", {"api.md": b"a\n"})
 
@@ -726,16 +761,16 @@ def test_file_becoming_a_folder_never_deletes_a_user_file_in_the_way(
         written = writer.write(_make_skill(skill_id="demo", references_dir=v2), tmp_path)
 
     assert user_file.read_bytes() == b"not ours\n"
-    assert written == [tmp_path / "shared_skills" / "demo" / SKILL_FILENAME]
+    assert written == [tmp_path / _WRITER_ROOT / "demo" / SKILL_FILENAME]
     assert "is in the way" in capsys.readouterr().err
 
 
 @needs_symlinks
 def test_folder_with_a_symlink_inside_is_never_displaced(tmp_path: Path) -> None:
-    writer = SkillWriter(Path("shared_skills"))
+    writer = SkillWriter(_WRITER_ROOT)
     v1 = _seed_tree(tmp_path / "v1", {"api/v1.md": b"nested\n"})
     _sync_like_write(writer, _make_skill(skill_id="demo", references_dir=v1), tmp_path)
-    api = tmp_path / "shared_skills" / "demo" / "references" / "api"
+    api = tmp_path / _WRITER_ROOT / "demo" / "references" / "api"
     (api / "link").symlink_to(tmp_path / "v1", target_is_directory=True)
     v2 = _seed_tree(tmp_path / "v2", {"api": b"flat\n"})
 
@@ -750,7 +785,7 @@ def test_folder_with_a_symlink_inside_is_never_displaced(tmp_path: Path) -> None
 def test_rewrite_over_read_only_copy_from_earlier_sync(tmp_path: Path) -> None:
     scripts = _seed_tree(tmp_path / "src" / "scripts", {"run.sh": b"#!/bin/sh\necho 1\n"})
     (scripts / "run.sh").chmod(0o555)
-    writer = SkillWriter(Path("shared_skills"))
+    writer = SkillWriter(_WRITER_ROOT)
     writer.write(_make_skill(skill_id="demo", scripts_dir=scripts), tmp_path / "repo")
     (scripts / "run.sh").chmod(0o755)
     (scripts / "run.sh").write_bytes(b"#!/bin/sh\necho 2\n")
@@ -758,7 +793,7 @@ def test_rewrite_over_read_only_copy_from_earlier_sync(tmp_path: Path) -> None:
 
     writer.write(_make_skill(skill_id="demo", scripts_dir=scripts), tmp_path / "repo")
 
-    out = tmp_path / "repo" / "shared_skills" / "demo" / "scripts" / "run.sh"
+    out = tmp_path / "repo" / _WRITER_ROOT / "demo" / "scripts" / "run.sh"
     assert out.read_bytes() == b"#!/bin/sh\necho 2\n"
 
 
@@ -769,14 +804,14 @@ def test_case_only_id_rename_keeps_skill_on_case_insensitive_fs(tmp_path: Path) 
     """Default macOS APFS / Windows: ``QueryDB`` -> ``querydb`` renames the dir in place."""
     if not _fs_is_case_insensitive(tmp_path):
         pytest.skip("needs a case-insensitive filesystem")
-    writer = SkillWriter(Path("shared_skills"))
+    writer = SkillWriter(_WRITER_ROOT)
     writer.write(_make_skill(skill_id="QueryDB"), tmp_path)
 
     written = writer.write(_make_skill(skill_id="querydb"), tmp_path)
 
-    assert written == [tmp_path / "shared_skills" / "querydb" / SKILL_FILENAME]
-    assert [entry.name for entry in (tmp_path / "shared_skills").iterdir()] == ["querydb"]
-    text = (tmp_path / "shared_skills" / "querydb" / SKILL_FILENAME).read_text(encoding="utf-8")
+    assert written == [tmp_path / _WRITER_ROOT / "querydb" / SKILL_FILENAME]
+    assert [entry.name for entry in (tmp_path / _WRITER_ROOT).iterdir()] == ["querydb"]
+    text = (tmp_path / _WRITER_ROOT / "querydb" / SKILL_FILENAME).read_text(encoding="utf-8")
     assert text.startswith("---\nname: querydb\n")
 
 
@@ -784,12 +819,12 @@ def test_case_only_id_rename_writes_a_new_dir_on_case_sensitive_fs(tmp_path: Pat
     """The old dir is a separate leftover there; sync's leftover policy removes it."""
     if _fs_is_case_insensitive(tmp_path):
         pytest.skip("needs a case-sensitive filesystem")
-    writer = SkillWriter(Path("shared_skills"))
+    writer = SkillWriter(_WRITER_ROOT)
     writer.write(_make_skill(skill_id="QueryDB"), tmp_path)
 
     writer.write(_make_skill(skill_id="querydb"), tmp_path)
 
-    names = sorted(entry.name for entry in (tmp_path / "shared_skills").iterdir())
+    names = sorted(entry.name for entry in (tmp_path / _WRITER_ROOT).iterdir())
     assert names == ["QueryDB", "querydb"]
 
 
@@ -809,15 +844,15 @@ def test_ownership_is_decided_against_the_real_tree_when_rendering_elsewhere(
     """``--check`` renders into an empty scratch dir; a user-owned dir in the real
     repo must be skipped there too, else the check reports false drift."""
     real, scratch = tmp_path / "real", tmp_path / "scratch"
-    user_dir = _seed_tree(real / "shared_skills" / "deploy", {"SKILL.md": b"---\nname: x\n---\n"})
-    writer = SkillWriter(Path("shared_skills"))
+    user_dir = _seed_tree(real / _WRITER_ROOT / "deploy", {"SKILL.md": b"---\nname: x\n---\n"})
+    writer = SkillWriter(_WRITER_ROOT)
 
     with _skill_writer.deciding_ownership_against(real):
         assert writer.write(_make_skill(skill_id="deploy"), scratch) == []
         written = writer.write(_make_skill(skill_id="fresh"), scratch)
 
-    assert written == [scratch / "shared_skills" / "fresh" / SKILL_FILENAME]
-    assert not (scratch / "shared_skills" / "deploy").exists()
+    assert written == [scratch / _WRITER_ROOT / "fresh" / SKILL_FILENAME]
+    assert not (scratch / _WRITER_ROOT / "deploy").exists()
     assert str(user_dir) in capsys.readouterr().err  # names the real dir, not scratch
     # Outside the context the scratch tree decides again (nothing there to collide).
     assert writer.write(_make_skill(skill_id="deploy"), scratch) != []

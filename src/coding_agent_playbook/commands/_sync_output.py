@@ -22,10 +22,14 @@ from __future__ import annotations
 import os
 import shlex
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook._file_identity import FileSet
+from coding_agent_playbook._output_io import is_character_device, refuse_special_file
+from coding_agent_playbook._symlinks import link_leaving, real_path
+from coding_agent_playbook.adapters._skill_writer import swap_blocker
+from coding_agent_playbook.commands._output_blockers import write_blocker
 from coding_agent_playbook.gitignore import (
     GITIGNORE_FILENAME,
     LOCKFILE_NAME,
@@ -38,7 +42,7 @@ from coding_agent_playbook.gitignore import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Collection, Iterable, Mapping, Sequence
     from typing import TextIO
 
     from coding_agent_playbook.adapters.base import Adapter
@@ -70,6 +74,7 @@ def update_gitignore(repo_root: Path, written: Sequence[Path], *, commit: bool) 
         'Updated the managed block in .gitignore'
     """
     target = repo_root / GITIGNORE_FILENAME
+    refuse_special_file(target, reading=True)  # reading a FIFO blocks: name it instead (§12.2)
     if commit:
         changed = remove_managed_block(target)
         return f"Removed the managed block from {GITIGNORE_FILENAME}" if changed else None
@@ -77,14 +82,24 @@ def update_gitignore(repo_root: Path, written: Sequence[Path], *, commit: bool) 
     return f"Updated the managed block in {GITIGNORE_FILENAME}" if changed else None
 
 
-def file_drift(written: Sequence[Path], scratch: Path, repo_root: Path) -> list[str]:
+def file_drift(
+    written: Sequence[Path],
+    scratch: Path,
+    repo_root: Path,
+    *,
+    shared: Collection[str] = (),
+    skill_roots: Collection[str] = (),
+) -> list[str]:
     """``--check``: drift lines for every scratch-rendered file missing/different on disk.
 
     ``_STATE_FILES_TO_SKIP`` (config + lockfile) are StateSource-owned, never
     adapter output, so they are excluded from the diff. A file missing because
-    something on the real tree is in its way (a file/folder swap ``playbook
-    sync`` refused, SPEC §10.8) names the blocker instead of suggesting a sync
-    that cannot fix it.
+    something on the real tree is in its way names it instead of suggesting a
+    sync that cannot fix it: the blocker write mode stops on (§12.2), or, inside
+    ``<root>/<id>/`` of a native skills root (``skill_roots``, repo-relative),
+    what the skill writer skips there (§10.8). ``shared`` (repo-relative, the
+    adapters' co-owned files) are written by atomic replace, so a dangling link
+    at one of them is no blocker.
 
     Example::
 
@@ -96,22 +111,34 @@ def file_drift(written: Sequence[Path], scratch: Path, repo_root: Path) -> list[
         rel = path.resolve().relative_to(scratch.resolve())
         if rel.name in _STATE_FILES_TO_SKIP:
             continue
-        actual_path = repo_root / rel
-        if not actual_path.is_file():
-            drift.append(f"  {rel.as_posix()}\n{_missing_hint(actual_path, repo_root)}")
-        elif actual_path.read_bytes() != path.read_bytes():
-            drift.append(
-                f"  {rel.as_posix()}\n"
-                "    Generated content differs from on-disk content.\n"
-                "    Run 'playbook sync' to regenerate."
-            )
-        elif _lost_exec_bit(path, actual_path):
-            drift.append(
-                f"  {rel.as_posix()}\n"
-                "    Mode differs: generated as executable.\n"
-                "    Run 'playbook sync' to restore it."
-            )
+        hint = _drift_hint(path, rel, repo_root, shared=shared, skill_roots=skill_roots)
+        if hint is not None:
+            drift.append(f"  {rel.as_posix()}\n{hint}")
     return drift
+
+
+def _drift_hint(
+    rendered: Path,
+    rel: Path,
+    repo_root: Path,
+    *,
+    shared: Collection[str],
+    skill_roots: Collection[str],
+) -> str | None:
+    """How ``repo_root / rel`` drifted from ``rendered`` and what fixes it; ``None`` if it did not."""
+    actual = repo_root / rel
+    if _delivered_into_a_device(rel, repo_root, skill_roots):
+        return None
+    if not actual.is_file():
+        return _missing_hint(rel, repo_root, shared=shared, skill_roots=skill_roots)
+    differs = actual.read_bytes() != rendered.read_bytes()
+    if not differs and not _lost_exec_bit(rendered, actual):
+        return None
+    what = "Generated content differs" if differs else "Mode differs"
+    leaving = _link_leaving_skill_dir(rel, repo_root, skill_roots)
+    if leaving is not None:  # sync never writes through it: "regenerate" would never clear this
+        return _link_leaving_hint(leaving, repo_root, what=what)
+    return _DIFFERS_HINT if differs else _MODE_HINT
 
 
 def _lost_exec_bit(rendered: Path, actual: Path) -> bool:
@@ -136,6 +163,22 @@ def shared_outputs(adapters: Mapping[str, Adapter]) -> frozenset[str]:
     return frozenset(path for adapter in adapters.values() for path in type(adapter).shared_outputs)
 
 
+def native_skill_roots(adapters: Mapping[str, Adapter]) -> frozenset[str]:
+    """Each declared ``Adapter.native_skills_root`` of ``adapters`` (``.claude/skills``, …).
+
+    Inside ``<root>/<id>/`` of these roots the skill writer settles what is in
+    the way itself (§10.8), so :func:`file_drift` explains a missing file its
+    way; ``agent_harness``'s ``skills/`` is written plainly and declares none.
+
+    Example::
+
+        >>> native_skill_roots({"claude_code": ClaudeCodeAdapter()})  # doctest: +SKIP
+        frozenset({'.claude/skills'})
+    """
+    roots = (type(adapter).native_skills_root for adapter in adapters.values())
+    return frozenset(root for root in roots if root is not None)
+
+
 def without_shared(paths: Iterable[Path], repo_root: Path, shared: Iterable[str]) -> list[Path]:
     """``paths`` minus every shared output (compared resolved, so a symlinked dir still matches).
 
@@ -144,8 +187,8 @@ def without_shared(paths: Iterable[Path], repo_root: Path, shared: Iterable[str]
         >>> without_shared([Path("/r/AGENTS.md")], Path("/r"), {".claude/settings.json"})
         [PosixPath('/r/AGENTS.md')]
     """
-    excluded = {(repo_root / rel).resolve() for rel in shared}
-    return [path for path in paths if path.resolve() not in excluded]
+    excluded = {real_path(repo_root / rel) for rel in shared}
+    return [path for path in paths if real_path(path) not in excluded]
 
 
 def orphan_drift(orphans: Sequence[Path], repo_root: Path) -> list[str]:
@@ -201,10 +244,72 @@ def unreadable_lockfile_drift(exc: Exception) -> list[str]:
     ]
 
 
-def _missing_hint(actual_path: Path, repo_root: Path) -> str:
-    blocker = _blocker_of(actual_path, repo_root)
+_CREATE_HINT = "    Missing on disk; run 'playbook sync' to create."
+_DIFFERS_HINT = (
+    "    Generated content differs from on-disk content.\n    Run 'playbook sync' to regenerate."
+)
+_MODE_HINT = "    Mode differs: generated as executable.\n    Run 'playbook sync' to restore it."
+
+
+def _missing_hint(
+    rel: Path, repo_root: Path, *, shared: Collection[str], skill_roots: Collection[str]
+) -> str:
+    """Why ``repo_root / rel`` is missing and what fixes it, the way write mode would tell it."""
+    actual_path = repo_root / rel
+    skill_dir = _native_skill_dir(rel, repo_root, skill_roots)
+    stop = write_blocker(actual_path, repo_root, replaces_path=rel.as_posix() in shared)
+    if stop is not None and not _strictly_inside(stop.path, skill_dir):
+        # write mode stops on it and never removes it (§12.2)
+        return f"    Missing on disk: {stop.problem}.\n    {stop.remedy}, then run 'playbook sync'."
+    if skill_dir is None:
+        return _CREATE_HINT
+    return _skill_dir_hint(actual_path, skill_dir, repo_root)
+
+
+def _native_skill_dir(rel: Path, repo_root: Path, skill_roots: Collection[str]) -> Path | None:
+    """``repo_root / <root>/<id>`` when ``rel`` lies strictly inside one, for a native ``<root>``."""
+    for root in skill_roots:
+        depth = len(PurePosixPath(root).parts)
+        if rel.parts[:depth] == PurePosixPath(root).parts and len(rel.parts) > depth + 1:
+            return repo_root.joinpath(*rel.parts[: depth + 1])
+    return None
+
+
+def _delivered_into_a_device(rel: Path, repo_root: Path, skill_roots: Collection[str]) -> bool:
+    """Whether write mode writes ``rel`` into a character device (``AGENTS.md -> /dev/null``).
+
+    Then there is nothing to compare. Not inside a native skill dir: the skill
+    writer replaces a link at its destination with the real file (§10.8).
+    """
+    in_skill_dir = _native_skill_dir(rel, repo_root, skill_roots) is not None
+    return not in_skill_dir and is_character_device(repo_root / rel)
+
+
+def _link_leaving_skill_dir(
+    rel: Path, repo_root: Path, skill_roots: Collection[str]
+) -> Path | None:
+    """The link leading out of the native skill dir ``rel`` lies in, if one is on its way."""
+    skill_dir = _native_skill_dir(rel, repo_root, skill_roots)
+    return None if skill_dir is None else link_leaving((repo_root / rel).parent, skill_dir)
+
+
+def _link_leaving_hint(link: Path, repo_root: Path, *, what: str) -> str:
+    """``<what>: <link> is a symbolic link leading outside the skill directory, …`` and the fix."""
+    return (
+        f"    {what}: {link.relative_to(repo_root).as_posix()} is a symbolic link leading "
+        "outside the skill directory, and sync never writes through one.\n"
+        "    Remove or re-point the link, then run 'playbook sync'."
+    )
+
+
+def _skill_dir_hint(actual_path: Path, skill_dir: Path, repo_root: Path) -> str:
+    """Inside a native skill dir: what the skill writer skips ``actual_path`` for (§10.8)."""
+    link = link_leaving(actual_path.parent, skill_dir)
+    if link is not None:
+        return _link_leaving_hint(link, repo_root, what="Missing on disk")
+    blocker = swap_blocker(actual_path, skill_dir)
     if blocker is None:
-        return "    Missing on disk; run 'playbook sync' to create."
+        return _CREATE_HINT
     shown = blocker.relative_to(repo_root).as_posix()
     return (
         f"    Missing on disk: {shown} is in the way. 'playbook sync' replaces it only\n"
@@ -213,26 +318,26 @@ def _missing_hint(actual_path: Path, repo_root: Path) -> str:
     )
 
 
-def _blocker_of(actual_path: Path, repo_root: Path) -> Path | None:
-    """A non-directory where a parent of ``actual_path`` must go, or a dir at it."""
-    current = repo_root
-    for part in actual_path.relative_to(repo_root).parts[:-1]:
-        current = current / part
-        if current.is_symlink() and not current.exists():
-            return current
-        if current.exists() and not current.is_dir():
-            return current
-    return actual_path if actual_path.is_dir() else None
+def _strictly_inside(path: Path, directory: Path | None) -> bool:
+    """Whether ``path`` lies below ``directory`` (both as spelled, made absolute)."""
+    if directory is None:
+        return False
+    inner, outer = Path(os.path.abspath(path)), Path(os.path.abspath(directory))
+    return inner != outer and inner.is_relative_to(outer)
 
 
 def gitignore_drift(repo_root: Path, entries: Sequence[str]) -> list[str]:
     """``--check``: drift lines for the managed block (empty when current).
+
+    A FIFO, socket or block device at ``.gitignore`` raises ``NotRegularFileError``
+    (reading a FIFO would block), which ``playbook sync`` reports as a blocker.
 
     Example::
 
         >>> gitignore_drift(Path("."), ["/AGENTS.md"])  # doctest: +SKIP
         []
     """
+    refuse_special_file(repo_root / GITIGNORE_FILENAME, reading=True)
     try:
         if block_is_current(repo_root / GITIGNORE_FILENAME, entries):
             return []

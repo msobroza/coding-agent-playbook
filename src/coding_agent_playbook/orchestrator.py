@@ -298,15 +298,18 @@ def discover_adapters(
 
 
 def installed_output_locations() -> tuple[str, ...]:
-    """Every ``output_locations`` entry declared by an installed adapter, enabled or not.
+    """Every current and retired output location of an installed adapter, enabled or not.
 
     Disabled adapters count: their earlier output is exactly what ``playbook
-    sync`` must still be able to clean up (SPEC §4.2 step 9). An adapter whose
-    entry point fails to load declares nothing, so its output is never deleted.
+    sync`` must still be able to clean up (SPEC §4.2 step 9). So do retired
+    locations (``retired_output_locations``, e.g. the pre-v0.21 ``shared_skills/``):
+    the first sync after an upgrade settles the tree an older engine wrote. An
+    adapter whose entry point fails to load declares nothing, so its output is
+    never deleted.
 
     Example::
 
-        >>> ".claude/skills/" in installed_output_locations()  # doctest: +SKIP
+        >>> "shared_skills/" in installed_output_locations()  # doctest: +SKIP
         True
     """
     locations: list[str] = []
@@ -316,6 +319,7 @@ def installed_output_locations() -> tuple[str, ...]:
         except (ImportError, AttributeError):
             continue
         locations.extend(getattr(cls, "output_locations", ()))
+        locations.extend(getattr(cls, "retired_output_locations", ()))
     return tuple(locations)
 
 

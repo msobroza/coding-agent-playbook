@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 # The stdlib-only paths module, not the adapter: this sync-time module stays free
 # of the renderer (jinja2, yaml), and no adapter import can cycle back here.
+from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_CODE_COMPOSITES
 from coding_agent_playbook.lockfile import merge_provenance
 
@@ -258,18 +259,19 @@ def _lock_path_via_repo_links(path: Path, out_root: Path, repo_root: Path) -> st
     ../.agents/skills``) gave ``.agents/skills/…`` rows in write mode but
     ``.claude/skills/…`` in the ``--check`` scratch, a drift no sync clears.
     ``None`` when the path lies outside ``out_root`` or resolves out of the repo
-    (the lockfile keeps such a path absolute; the protected table drops it in
-    both modes).
+    (the lockfile gives such a path no entry, and the protected table drops it
+    in both modes).
 
     Example::
 
         _lock_path_via_repo_links(scratch / ".claude/skills/x/SKILL.md", scratch, repo)
         # -> ".agents/skills/x/SKILL.md" when the repo links .claude/skills there
     """
-    inside = _relative(path.resolve(), out_root.resolve())
+    # real_path, not Path.resolve(): Python 3.12's raises on a link loop in the repo.
+    inside = _relative(real_path(path), real_path(out_root))
     if inside is None:
         return None
-    return _relative((repo_root / inside).resolve(), repo_root.resolve())
+    return _relative(real_path(repo_root / inside), real_path(repo_root))
 
 
 def _relative(path: Path, root: Path) -> str | None:

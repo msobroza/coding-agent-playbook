@@ -34,6 +34,7 @@ from coding_agent_playbook.commands import scan_sinks as scan_sinks_cmd
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as validate_cmd
 from coding_agent_playbook.commands import validate_harness as validate_harness_cmd
+from coding_agent_playbook.commands._init_adapters import ADAPTERS_FLAG_HELP
 from coding_agent_playbook.config import ConfigError
 from coding_agent_playbook.types import HookSchemaError
 
@@ -83,7 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_p.add_argument("--name", help="project name (required in non-interactive mode)")
     init_p.add_argument("--kind", help="project kind (required in non-interactive mode)")
     init_p.add_argument("--description", default="")
-    init_p.add_argument("--adapters", help="comma-separated adapter names")
+    init_p.add_argument("--adapters", help=ADAPTERS_FLAG_HELP)
     init_p.add_argument("--overlays", help="comma-separated overlay package names")
     init_p.add_argument(
         "--no-hooks",

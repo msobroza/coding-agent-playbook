@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 from jinja2 import StrictUndefined, TemplateSyntaxError
 from jinja2.sandbox import SandboxedEnvironment
 
+from coding_agent_playbook.adapters._agent_skill_rules import has_declared_id, skill_id_of
+
 # The one ``{{ rule("<id>") }}`` pattern (group 1 is the rule id), shared with
 # sync's appendix decision: rules and hook bodies may never make such a call, and
 # a prompt only for a rule in its ``includes_rules``.
@@ -22,6 +24,8 @@ from coding_agent_playbook.renderer import RULE_CALL_RE as RULE_CALL_RE
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import TextIO
+
+    from coding_agent_playbook.types import Skill
 
 
 @dataclass(frozen=True)
@@ -50,6 +54,23 @@ class ValidationFindings:
 
     errors: list[ValidationError] = field(default_factory=list)
     warnings: list[ValidationError] = field(default_factory=list)
+
+
+def skill_label(skill: Skill) -> str:
+    """Locate ``skill`` for a finding line (a canonical :class:`Skill` has no source path).
+
+    Shared by the Agent Skills checks (``validate``) and the member-rule checks
+    (``_validate_skills``). An id-less skill is named by its authored ``name``
+    and, when it has one, its ``scripts/``/``references/`` parent dir.
+
+    Example: ``skill_label(query_db)`` -> ``"skills/query-db (<repo-local>)"``.
+    """
+    if has_declared_id(skill):
+        return f"skills/{skill_id_of(skill)} ({skill.source_package})"
+    source_dir = skill.scripts_dir or skill.references_dir
+    where = f", at {source_dir.parent}" if source_dir is not None else ""
+    name = skill.frontmatter.get("name", "?")
+    return f"skills/<no id; name {name!r}{where}> ({skill.source_package})"
 
 
 def jinja_syntax_error(template: str) -> str | None:

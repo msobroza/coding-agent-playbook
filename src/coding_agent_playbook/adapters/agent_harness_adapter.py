@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._file_identity import FileSet
+from coding_agent_playbook._output_io import write_output_bytes, write_output_text
 from coding_agent_playbook.adapters._harness_hooks import (
     copy_scripts,
     emit_hook_sidecars,
@@ -174,9 +175,7 @@ class AgentHarnessAdapter(Adapter):
             description = str(skill.frontmatter.get("description", ""))
             frontmatter = emitter.frontmatter_block({"name": name, "description": description})
             skill_md = skill_dir / "SKILL.md"
-            skill_md.write_text(
-                emitter.with_sentinel_body(frontmatter, skill.body), encoding="utf-8"
-            )
+            write_output_text(skill_md, emitter.with_sentinel_body(frontmatter, skill.body))
             written.append(skill_md)
 
             scripts, script_paths = copy_scripts(
@@ -213,7 +212,7 @@ class AgentHarnessAdapter(Adapter):
         for src in copyable_skill_files(skill.references_dir, dst_root):
             dst = dst_root / src.relative_to(skill.references_dir)
             dst.parent.mkdir(parents=True, exist_ok=True)
-            dst.write_bytes(src.read_bytes())
+            write_output_bytes(dst, src.read_bytes())
             paths.append(dst)
         return paths
 
@@ -240,7 +239,7 @@ class AgentHarnessAdapter(Adapter):
             )
             body = self._prompt_body(prompt)
             skill_md = prompt_dir / "SKILL.md"
-            skill_md.write_text(emitter.with_sentinel_body(frontmatter, body), encoding="utf-8")
+            write_output_text(skill_md, emitter.with_sentinel_body(frontmatter, body))
             written.append(skill_md)
 
             entries.append(
@@ -356,7 +355,7 @@ class AgentHarnessAdapter(Adapter):
         target.parent.mkdir(parents=True, exist_ok=True)
         fm = rule.frontmatter
         frontmatter = emitter.frontmatter_block({"description": fm.description})
-        target.write_text(emitter.with_sentinel_body(frontmatter, rule.body), encoding="utf-8")
+        write_output_text(target, emitter.with_sentinel_body(frontmatter, rule.body))
         if not record_manifest:
             return target
         entries.append(
@@ -392,7 +391,7 @@ class AgentHarnessAdapter(Adapter):
         target = repo_root / dir_name / f"{dir_name.upper()}.md"
         target.parent.mkdir(parents=True, exist_ok=True)
         body = f"Routing index for `{dir_name}/`.\n"
-        target.write_text(emitter.routing_file(description, body), encoding="utf-8")
+        write_output_text(target, emitter.routing_file(description, body))
         return target
 
     # --- HARNESS.md --------------------------------------------------------
@@ -438,16 +437,14 @@ class AgentHarnessAdapter(Adapter):
 
         body = "\n".join(sections)
         target = repo_root / "HARNESS.md"
-        target.write_text(emitter.with_sentinel_body(frontmatter, body), encoding="utf-8")
+        write_output_text(target, emitter.with_sentinel_body(frontmatter, body))
         return target
 
     # --- .leaf-detectors ---------------------------------------------------
 
     def _emit_leaf_detectors(self, repo_root: Path) -> Path:
         target = repo_root / ".leaf-detectors"
-        target.write_text(
-            emitter.leaf_detectors_file({"skill": _SKILL_PRIMARY_FILE}), encoding="utf-8"
-        )
+        write_output_text(target, emitter.leaf_detectors_file({"skill": _SKILL_PRIMARY_FILE}))
         return target
 
     # --- sidecar -----------------------------------------------------------
@@ -455,7 +452,7 @@ class AgentHarnessAdapter(Adapter):
     def _emit_sidecar(self, repo_root: Path, entries: list[ManifestEntry]) -> list[Path]:
         manifest_path = manifest.write_manifest(repo_root, entries)
         leaf_marker = emitter.harnessleaf_path(repo_root / manifest.SIDECAR_DIRNAME)
-        leaf_marker.write_text("", encoding="utf-8")
+        write_output_text(leaf_marker, "")
         return [manifest_path, leaf_marker]
 
     # --- cleanup -----------------------------------------------------------

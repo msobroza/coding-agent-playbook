@@ -18,12 +18,13 @@ Entries are root-anchored (relative to the ``.gitignore``'s own directory, the
 playbook repo root), one per generated file, except that a generated skill
 directory (any directory holding a written ``SKILL.md``) collapses to a single
 ``/<dir>/`` entry. Skill roots are detected generically, never hardcoded, so a
-new adapter root (``.opencode/skills/``, ``shared_skills/`` …) is covered
+new adapter root (``.opencode/skills/``, ``.agents/skills/`` …) is covered
 without touching this module.
 """
 
 from __future__ import annotations
 
+import os
 import unicodedata
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
@@ -72,8 +73,8 @@ def relative_posix_paths(paths: Iterable[Path], repo_root: Path) -> list[str]:
     root = repo_root.resolve()
     relative: set[str] = set()
     for path in paths:
-        try:
-            rel = path.resolve().relative_to(root)
+        try:  # realpath: Path.resolve() raises on a link loop on Python 3.12
+            rel = Path(os.path.realpath(path)).relative_to(root)
         except ValueError:
             continue
         if rel.parts:

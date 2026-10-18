@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
 from coding_agent_playbook._atomic_io import atomic_write_bytes
+from coding_agent_playbook._output_io import refuse_special_file
 from coding_agent_playbook.adapters._json_edits import apply_edits, edit_splices, render_fragment
 from coding_agent_playbook.adapters._json_spans import (
     DEFAULT_STYLE,
@@ -286,7 +287,12 @@ class FileSettingsIO:
     """The real filesystem: atomic byte writes, never text mode."""
 
     def read_bytes(self, path: Path) -> bytes | None:
-        """The file's bytes, or ``None`` when it does not exist."""
+        """The file's bytes, or ``None`` when it does not exist.
+
+        Raises ``NotRegularFileError`` for a FIFO, socket or block device:
+        reading a FIFO would block the sync forever.
+        """
+        refuse_special_file(path, reading=True)
         try:
             return path.read_bytes()
         except FileNotFoundError:

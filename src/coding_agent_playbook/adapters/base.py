@@ -42,6 +42,13 @@ class Adapter(ABC):
     #: §10.1). Declared on the class, so a since-disabled adapter still counts.
     output_locations: ClassVar[tuple[str, ...]] = ()
 
+    #: Locations an earlier engine release wrote for this adapter and it no longer
+    #: writes. They bound the leftover policy exactly like :attr:`output_locations`
+    #: (deletion allowlist and prune boundary), so the first sync after an upgrade
+    #: settles the old tree; they are not current output, so guard_config.json's
+    #: ``generated`` path class never lists them.
+    retired_output_locations: ClassVar[tuple[str, ...]] = ()
+
     #: Whether this adapter's harness receives scoped rules: through its own rule
     #: files (continue, agent_harness) or through skill references (claude_code,
     #: opencode, shared_skills). Only ``agents_md`` sets False: it carries always
@@ -58,8 +65,18 @@ class Adapter(ABC):
     #: Repo-relative files this adapter co-owns with the user and the harness
     #: (Claude Code's ``.claude/settings.json``): it edits managed elements in
     #: place, so ``playbook sync`` never gives one a whole-file lock entry,
-    #: gitignores it, flags it as staged output, or deletes it.
+    #: gitignores it, flags it as staged output, or deletes it. Each must be
+    #: written by atomic replace (``_atomic_io.atomic_write_bytes``): ``sync
+    #: --check`` relies on it to call a dangling link at one no blocker, since
+    #: the rename replaces the link (``_output_blockers.write_blocker``).
     shared_outputs: ClassVar[tuple[str, ...]] = ()
+
+    #: The repo-relative root this adapter's native Agent-Skills writer
+    #: (``adapters._skill_writer.SkillWriter``) writes ``<root>/<id>/`` under,
+    #: such as ``".claude/skills"``; ``None`` (the default) when it writes none.
+    #: Inside ``<root>/<id>/`` that writer settles what is in the way itself
+    #: (§10.8), so ``sync --check`` explains a missing file there its way (§12.3).
+    native_skills_root: ClassVar[str | None] = None
 
     #: Repo-relative files :meth:`finalize` writes that are hook runtime plumbing
     #: (the Claude Code launcher, the OpenCode shim), not composed artifacts: their
