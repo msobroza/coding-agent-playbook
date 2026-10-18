@@ -9,10 +9,19 @@ tests read markdown, never engine behaviour.
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of
+from coding_agent_playbook.catalog import ENGINE_PACKAGE
+from coding_agent_playbook.commands._validate_skills import SCOPED_RULE_NEEDS_SKILL_MESSAGE
+from coding_agent_playbook.skill_membership import is_rule_skill
+from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from tests.unit.test_docs_migration_hooks import _migration
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _V021_HEADING = re.compile(r"^## v0\.21\b.*$", re.MULTILINE)
 _TLDR_HEADING = "### TL;DR — who needs to do anything"
@@ -70,3 +79,35 @@ def test_migration_v0_21_tldr_names_the_glossary_move() -> None:
 )
 def test_migration_v0_21_covers_topic(phrase: str) -> None:
     assert phrase in _v021_section(), f"the v0.21 MIGRATION section never mentions {phrase!r}"
+
+
+def _core_rule_skill_ids(repo_root: Path) -> list[str]:
+    """The sorted ids of the skills in core that take member rules, as V1 lists them."""
+    skills = FileSystemArtifactSource(repo_root=repo_root).list_skills()
+    return sorted(
+        skill_id_of(skill)
+        for skill in skills
+        if skill.source_package == ENGINE_PACKAGE and is_rule_skill(skill)
+    )
+
+
+def test_migration_quotes_the_engine_skill_required_message(tmp_path: Path) -> None:
+    """V1's text, ``{known}`` filled for core, is quoted verbatim (prS §6.9.4)."""
+    known = _core_rule_skill_ids(tmp_path)
+    assert known, "core ships no skill that takes member rules"
+    quote = SCOPED_RULE_NEEDS_SKILL_MESSAGE.format(known=", ".join(known))
+    section = _v021_section()
+    assert f"\n    {quote}\n" in section, f"MIGRATION.md v0.21 must quote {quote!r}"
+
+
+def test_migration_v0_21_tldr_tells_scoped_rule_owners_to_add_skill() -> None:
+    rows = [row for row in _tldr_table(_v021_section())[2:] if "own scoped rules" in row]
+    assert rows, "the v0.21 TL;DR table needs a row for repos keeping their own scoped rules"
+    assert "`skill: <skill-id>`" in rows[0]
+
+
+def test_migration_heads_up_leads_with_v0_21_skill() -> None:
+    text = _migration()
+    heads_up = text[: text.index("\n## ")]
+    assert heads_up.index("v0.21") < heads_up.index("v0.20"), "v0.21 leads the heads-up"
+    assert "`skill: <skill-id>`" in heads_up

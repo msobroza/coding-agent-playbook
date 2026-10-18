@@ -451,7 +451,9 @@ is left out when no enabled adapter writes a skills root.
 
 - **Add a rule to a core skill** by naming it: `skill: python-coding` in
   `playbook/rules/<file>.md` (or in an overlay) is enough, because membership is
-  resolved after every layer is merged.
+  resolved after every layer is merged. Every scoped rule must name one:
+  `playbook validate` fails on a scoped rule without `skill:` and lists the
+  skills it may name, and `playbook sync` writes nothing until it is fixed.
 - **Override a core skill** with `playbook/skills/python-coding/SKILL.md`. The
   core rules still attach to it, so keep its `playbook:` block (`use_when`,
   `files`); a skill without that block, such as a bundled plugin skill, takes no
