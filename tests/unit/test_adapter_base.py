@@ -8,7 +8,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
+from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
+from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
+from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
+from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
 from coding_agent_playbook.hooks_config import HooksConfig
 from coding_agent_playbook.lockfile import Lockfile
 from coding_agent_playbook.renderer import SENTINEL
@@ -258,3 +264,23 @@ def test_third_party_adapter_without_hook_overrides_still_works(tmp_path: Path) 
     assert written == [tmp_path / "legacy" / "guardrail-guard-x.md"]
     assert adapter.finalize(tmp_path) == []
     assert adapter.managed_lock_entries() == []
+
+
+@pytest.mark.parametrize(
+    ("adapter_cls", "delivers"),
+    [
+        (_DummyAdapter, True),
+        (AgentHarnessAdapter, True),
+        (AgentsMdAdapter, False),
+        (ClaudeCodeAdapter, True),
+        (ContinueAdapter, True),
+        (OpenCodeAdapter, True),
+        (SharedSkillsAdapter, True),
+    ],
+)
+def test_delivers_member_rules_defaults_true_and_agents_md_is_false(
+    adapter_cls: type[Adapter], delivers: bool
+) -> None:
+    """An out-of-tree adapter still gets every rule through write_rule, so True is the
+    default; only agents_md carries always rules alone (specs/prS-skills-context.md 6.4.10)."""
+    assert adapter_cls.delivers_member_rules is delivers

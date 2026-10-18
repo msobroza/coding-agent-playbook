@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from coding_agent_playbook._member_reference import MemberReference
 from coding_agent_playbook.evaluators.types import MetricConfig
 from coding_agent_playbook.harness.manifest import ArtifactKind, ManifestEntry
 from coding_agent_playbook.hook_policy import (
@@ -43,6 +44,7 @@ from coding_agent_playbook.types import (
     HookMatcher,
     PromptFrontmatter,
     RuleFrontmatter,
+    Skill,
 )
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -69,6 +71,8 @@ _METRICS_SPELLING = {
 _LISTED_CLASSES = (
     RuleFrontmatter,
     PromptFrontmatter,
+    Skill,
+    MemberReference,
     HookMatcher,
     HookHandler,
     HookFrontmatter,

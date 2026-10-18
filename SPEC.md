@@ -967,6 +967,7 @@ class RuleFrontmatter:
     priority: int = 50
     tags: list[str] = field(default_factory=list)
     lint_codes: dict[str, Any] = field(default_factory=dict)  # {warn, when}; §6.1.1
+    skill: str | None = None  # owning skill; required for scoped, forbidden for always; §6.1.1
 
 
 @dataclass
@@ -1021,7 +1022,24 @@ class Skill:
     scripts_dir: Path | None  # if the skill bundles scripts
     references_dir: Path | None
     source_package: str
+    member_references: tuple[MemberReference, ...] = ()  # active member rules, set at sync
     ...
+
+
+# coding_agent_playbook/_member_reference.py (a stdlib-only leaf types.py imports)
+def member_reference_path(rule_id: str) -> str: ...  # "references/<rule_id>.md"
+
+
+@dataclass(frozen=True)
+class MemberReference:  # one member rule, rendered as its skill's references/<rule_id>.md
+    rule_id: str
+    name: str  # its label in the skill's Covers clause and index
+    description: str  # its line in the skill's index
+    priority: int  # members are ordered by (priority, rule_id)
+    globs: tuple[str, ...]  # shown on the reference's first line
+    text: str  # the whole file, identical in every skill root
+    source_package: str  # lockfile provenance
+    # filename property, plus to_dict / from_dict; a Skill dict without the key still loads
 
 
 # --- Hook: the fourth emitted kind (Section 6.6.7) ---
@@ -1565,6 +1583,11 @@ class Adapter(ABC):
     # ".claude/skills/"). The leftover policy (Section 4.2 step 9) deletes only
     # inside a declared location and never prunes above one.
     output_locations: ClassVar[tuple[str, ...]] = ()
+    # Whether the harness receives scoped rules: through its own rule files
+    # (continue, agent_harness) or as skill references (claude_code, opencode,
+    # shared_skills). Only agents_md sets False (always rules only); sync warns
+    # when every enabled adapter sets False. True for out-of-tree adapters.
+    delivers_member_rules: ClassVar[bool] = True
     # Canonical hook event -> the decisions this adapter renders natively. The
     # empty default means advisory-only: hooks degrade to text (v0.20).
     hook_support: ClassVar[Mapping[str, frozenset[str]]] = MappingProxyType({})
