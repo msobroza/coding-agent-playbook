@@ -13,7 +13,7 @@ The detector never opens a secret path (SPEC §17.3): its only file read is
 from __future__ import annotations
 
 import tomllib
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Final, Literal, TypedDict, get_args
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
@@ -31,10 +31,17 @@ if TYPE_CHECKING:
 _IGNORE_DIRS: frozenset[str] = WALK_SKIP_DIRS
 
 
+#: The installers ``_detect_package_manager`` can report (SPEC §8.2).
+type PackageManager = Literal["uv", "poetry", "pip-tools", "pip"]
+#: The names an ``applies_if.package_manager`` value may use (SPEC §6.4); drawn from
+#: the alias so a fifth installer reaches the predicate with no second edit.
+KNOWN_PACKAGE_MANAGERS: Final[frozenset[str]] = frozenset(get_args(PackageManager.__value__))
+
+
 # All entries are optional — the detector only sets keys it can determine.
 class Facts(TypedDict, total=False):
     python_version: str
-    package_manager: Literal["uv", "poetry", "pip-tools", "pip"]
+    package_manager: PackageManager
     project_kind: Literal[
         "python-application",
         "python-library",
@@ -131,7 +138,7 @@ def _parse_python_version(requires_python: str | None) -> str | None:
 
 def _detect_package_manager(
     repo_root: Path, pyproject: dict[str, Any] | None
-) -> Literal["uv", "poetry", "pip-tools", "pip"] | None:
+) -> PackageManager | None:
     """Lockfile / pyproject cascade per SPEC §8.
 
     ``uv.lock`` → ``uv``; ``poetry.lock`` → ``poetry``; ``[tool.poetry]`` in
@@ -338,6 +345,37 @@ def _has_dev_dependencies(wanted: list[str], facts: Facts) -> bool:
     return all(canonical_name(name) in present for name in wanted)
 
 
+def _package_manager_names(value: object) -> frozenset[str]:
+    """The managers an ``applies_if.package_manager`` value allows; ``ValueError`` when malformed.
+
+    >>> sorted(_package_manager_names(["uv", "poetry"]))
+    ['poetry', 'uv']
+    """
+    names = [value] if isinstance(value, str) else value
+    if not isinstance(names, list) or not names or not all(isinstance(n, str) for n in names):
+        raise ValueError(
+            f"predicate 'package_manager' must be one of {sorted(KNOWN_PACKAGE_MANAGERS)} "
+            f"or a non-empty list of them; got {value!r}"
+        )
+    unknown = sorted(set(names) - KNOWN_PACKAGE_MANAGERS)
+    if unknown:
+        raise ValueError(
+            f"predicate 'package_manager' names unknown package manager(s) {unknown}; "
+            f"expected any of {sorted(KNOWN_PACKAGE_MANAGERS)}"
+        )
+    return frozenset(names)
+
+
+def _package_manager_matches(value: object, facts: Facts) -> bool:
+    """Whether ``facts["package_manager"]`` is one ``value`` allows; an absent fact never matches.
+
+    >>> _package_manager_matches("uv", {"package_manager": "uv"})
+    True
+    """
+    allowed = _package_manager_names(value)  # validates even when the fact is absent
+    return facts.get("package_manager") in allowed
+
+
 def evaluate_predicate(
     predicate: dict[str, Any], facts: Facts, *, repo_root: Path | None = None
 ) -> bool:
@@ -352,6 +390,9 @@ def evaluate_predicate(
       - ``has_dev_dependency: ["pytest-cov"]`` — ALL declared as dev dependencies
         (facts["dev_dependencies"]; names compared PEP 503-normalized)
       - ``has_file: ["Dockerfile"]`` — file exists in repo root (relative paths)
+      - ``package_manager: "uv"`` or ``["uv", "poetry"]`` — facts["package_manager"]
+        is that name, or any of the listed names; an absent fact never matches, and
+        an unknown name raises even then
       - ``banking_mode: true`` — boolean facts compared by equality
 
     Multiple keys are AND-ed together. Unknown keys raise ``ValueError`` so
@@ -396,6 +437,9 @@ def evaluate_predicate(
             if repo_root is None:
                 raise ValueError("predicate 'has_file' requires repo_root keyword argument")
             if not all((repo_root / rel).exists() for rel in paths):
+                return False
+        elif key == "package_manager":
+            if not _package_manager_matches(value, facts):
                 return False
         elif key in _KNOWN_BOOL_FACT_KEYS and isinstance(value, bool):
             # Boolean facts compared by equality. The fact must be explicitly

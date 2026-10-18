@@ -26,6 +26,22 @@ subsection after it when a row is not enough. The SPEC changelog entry is v0.21.
 | You are… | Migration |
 |---|---|
 | Anything that cites **SPEC §3** for a term's definition (docs, overlay READMEs, tests) | Use `CONTEXT.md` at the repository root, now the project's only glossary. SPEC §3 is a one-line pointer to it, and the two facts only the old glossary carried moved to SPEC §6.6.7 and §10.2. The move alters no generated file. |
+| An overlay or repo-local rule or prompt whose `applies_if` has a typo after a key that does not hold | Run `playbook validate` and fix what it reports: validate, and so `playbook sync`, now checks each key on its own. New `applies_if: {package_manager: uv}` gating is available. See "`package_manager` and per-key validation" below. |
+
+### `package_manager` and per-key validation
+
+- **New key.** `applies_if: {package_manager: uv}` gates a rule, prompt or hook on the
+  detector's existing `package_manager` fact; a list such as `[uv, poetry]` means any
+  of them. The names are `uv`, `poetry`, `pip-tools` and `pip`. A repo with no detected
+  package manager never matches, and an unknown name fails `playbook validate` in every
+  repo, naming the value and the four allowed names (SPEC §6.4).
+- **Behaviour change.** `playbook validate` used to pass a rule's or prompt's whole
+  `applies_if` to the evaluator, which stops at the first key that does not hold, so a
+  malformed key after it went unseen: `{has_framework: [django], orm_version: ">=2"}`
+  passed in every repo without Django. Each key is now checked on its own, as hooks
+  and `lint_codes.when` already were, so an overlay or repo-local artifact with such a
+  hidden typo now fails `playbook validate`, and therefore the validate-gated
+  `playbook sync`. Fix the key it names; nothing else changes.
 
 ## v0.20 — Assistant lifecycle hooks (PR K)
 
