@@ -46,7 +46,7 @@ def test_count_chars(text: str, expected: int) -> None:
     assert count_chars(text) == expected
 ```
 
-The `ids=` argument is optional but pays off the moment a failure happens — the reported case is human-readable, not `text0/text1/text2`.
+`ids=` is optional for scalars, which pytest already names by value, but it pays off for long strings and for any non-scalar value, which pytest would report as `text0`, `text1` and so on.
 
 - Scalars get readable ids automatically. For a non-scalar value (a dict, a record), write each case as `pytest.param(value, expected, id="vat-exempt")`.
 - When some cases raise and others return, parametrize the expectation itself: pass `pytest.raises(ValueError)` or `contextlib.nullcontext()` as a parameter and wrap the call in `with expectation:`.
@@ -93,7 +93,7 @@ Aim for one logical assertion per test — if you need three asserts on the same
 
 ## Test data and assertions
 
-- Build fresh objects in each test: inline, from a function-scoped fixture, or through a typed factory. Never mutate a shared module-level instance; test order would then change the results.
+- Build fresh objects in each test: inline, from a function-scoped fixture, or through a typed factory fixture (`pytest-fixtures`). Never mutate a shared module-level instance; test order would then change the results.
 - Assert against literal expected values and put the arithmetic in a comment (`assert total == 1150  # 1000 + 15% tax`). Recomputing the expectation with the production formula only proves the formula equals itself.
 - Unit tests use no unseeded randomness, wall-clock `now()` or network. Use Hypothesis or an explicitly seeded generator; `pytest-test-doubles` covers what stands in for the clock, the network and the environment.
 - Every assertion must be able to fail on wrong output: prefer `== expected` over `is not None` or `len(result) > 0`, and add a case that tells plausible wrong implementations apart (off-by-one, swapped arguments).

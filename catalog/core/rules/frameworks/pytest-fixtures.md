@@ -21,23 +21,19 @@ Fixtures build the world a test runs in. Keep each one narrow, typed and close t
 ## Scope
 
 - Function scope is the default: every test gets a fresh value, so test order cannot change the results.
-- Use `module` or `session` scope only for a resource that is expensive to build and effectively immutable, such as a database engine or a parsed schema. Pair it with a function-scoped fixture that resets state for each test: roll back a transaction, clear a table, re-seed a generator.
+- Use `module` or `session` scope only for a resource that is expensive to build and effectively immutable, such as a database engine or a parsed schema. Give tests a function-scoped fixture on top of it that hands each one its own state: a copy, a rolled-back transaction, a freshly seeded generator.
 
 ```python
 @pytest.fixture(scope="session")
-def ledger_engine() -> Iterator[Engine]:
-    engine = create_engine(TEST_LEDGER_DSN)
-    yield engine
-    engine.dispose()
+def tariff_table() -> Mapping[str, Decimal]:
+    # Parsed once for the whole run; the read-only view stops a test from editing it.
+    return MappingProxyType(load_tariffs(FIXTURES / "tariffs.csv"))
 
 
 @pytest.fixture
-def ledger_session(ledger_engine: Engine) -> Iterator[Session]:
-    connection = ledger_engine.connect()
-    transaction = connection.begin()
-    yield Session(bind=connection)
-    transaction.rollback()
-    connection.close()
+def editable_tariffs(tariff_table: Mapping[str, Decimal]) -> dict[str, Decimal]:
+    # A fresh copy per test, so one test's edits never reach the next.
+    return dict(tariff_table)
 ```
 
 ## Teardown
@@ -49,12 +45,12 @@ def ledger_session(ledger_engine: Engine) -> Iterator[Session]:
 
 - In the test module when only that module uses the fixture.
 - In the nearest `conftest.py` when several modules of one directory share it.
-- In the root `conftest.py` only for suite-wide resources.
+- In the root `conftest.py` for suite-wide resources, and nothing else.
 - Move a fixture up only when a second location needs it. Avoid redefining a fixture of the same name lower in the tree: which one a test gets then depends on where its file sits.
 
 ## Names and types
 
-- Name a fixture after what it returns: `ledger_session` rather than `db`, `tmp_invoice_dir` rather than `tmpdir`.
+- Name a fixture after what it returns: `tariff_table` rather than `data`, `tmp_invoice_dir` rather than `tmpdir`.
 - Annotate every fixture with the type it returns (`Iterator[T]` for a `yield` fixture).
 - Never write `from conftest import ...`. Fixtures arrive by parameter name, and shared helpers belong in an ordinary module.
 

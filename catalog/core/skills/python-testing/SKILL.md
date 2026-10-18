@@ -15,6 +15,6 @@ Conventions for this repo's tests: layout, naming, parametrized cases, test doub
 
 The references index in this file lists only the references that apply to this repo, most important first, each with the one line it requires. Open every reference whose line matches the change and read it in full before writing or changing a test.
 
-- Any new or changed test: the conventions reference.
+- Any new or changed test: conventions.
 - Fakes, mocks, patches, environment variables or the clock in a test: test doubles.
 - Fixtures, factories or `conftest.py`: fixtures.

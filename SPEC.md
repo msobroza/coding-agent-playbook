@@ -734,7 +734,7 @@ You are writing tests for {{ project_name }}, a {{ project_kind }} project.
 - Test files live in `tests/`, mirroring the source layout under `src/`.
 - One test file per source module: `src/foo/bar.py` → `tests/foo/test_bar.py`.
 - Use `parametrize` for table-driven tests. Avoid loops inside test functions.
-- Mock external services with `pytest-mock`'s `mocker` fixture. Do not patch globals directly.
+- Replace external services with named fakes passed in like production collaborators; patch with autospec only at thin third-party seams.
 {%- if "pydantic" in dependencies %}
 - For Pydantic models, prefer constructing real instances over mocking.
 {%- endif %}
