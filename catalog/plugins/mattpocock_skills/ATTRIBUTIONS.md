@@ -441,11 +441,90 @@ _Filled by T08._
 
 ### implement
 
-_Filled by T04._
+Upstream `skills/engineering/implement/`; synced as `.agents/skills/implement/`.
+Vendored with listed changes, user-invoked. No sibling file or script upstream.
+
+- `SKILL.md` L2 (v1.3.1): `id: implement` inserted as the first frontmatter key,
+  before "name: implement"; the other keys are upstream's, including the double
+  quotes around the description (Frontmatter, D11).
+- `SKILL.md` before L7 (v1.3.1): after the blank line that closes the
+  frontmatter, the guard line "Run this only when the user asked for it by name;
+  otherwise stop." inserted as its own paragraph, the first line of body content
+  (D19).
+- `SKILL.md` L9 (v1.3.1): "Use /tdd where possible, at pre-agreed seams."
+  becomes "Load the `tdd` skill and use it where possible, at pre-agreed
+  seams.": an operative `/name` becomes a skill load (D17).
+- `SKILL.md` L13 (v1.3.1): "Once done, use /code-review to review the work."
+  becomes "Once done, load the `two-axis-review` skill to review the work.", the
+  renamed skill (D8, D17).
+- Kept verbatim on purpose: L11 (typechecking and tests: the consumer's project
+  toolchain, no command named, so no allowlist entry) and L15 "Commit your work
+  to the current branch.", which the plugin always rule keeps from staging
+  `.scratch/` (D16).
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies).
+- `agents/openai.yaml`: not shipped (Restructure). With it Codex loses this
+  skill's `policy.allow_implicit_invocation: false`; what remains is
+  `disable-model-invocation`, which only Claude Code honours, and the guard
+  line. Outside Claude Code the guard line is what keeps this skill, which
+  commits by itself, from firing on ordinary implementation requests.
+- Continue: `.continue/prompts/implement.md` holds only the body, guard line
+  included, with no `references/LICENSE` and no `disable-model-invocation`. The
+  tdd and two-axis-review loads resolve only where the IDE also reads those
+  skills natively from `.claude/skills`; nothing else is lost.
 
 ### implement-spec
 
-_Filled by T04._
+Upstream `skills/engineering/implement-spec/`; synced as `.agents/skills/implement-spec/`.
+Vendored with listed changes, user-invoked. No sibling file or script upstream.
+
+- `SKILL.md` L2 (v1.3.1): `id: implement-spec` inserted as the first
+  frontmatter key, before "name: implement-spec"; the other keys are upstream's
+  (Frontmatter, D11). The description keeps its `/to-spec` and `/to-tickets`
+  labels: it is a user-invoked skill's human-facing text (D17).
+- `SKILL.md` before L7 (v1.3.1): after the blank line that closes the
+  frontmatter, the guard line "Run this only when the user asked for it by name;
+  otherwise stop." inserted as its own paragraph, the first line of body content
+  (D19).
+- `SKILL.md` after L17 (v1.3.1): L17 stays byte-identical; one paragraph is
+  inserted after it, before `## Steps`: "If your harness cannot run subagents,
+  do each subagent's job below yourself, one ticket at a time: build each
+  frontier ticket on its own branch off the integration branch and merge it in
+  before taking the next. Each merge is a stop-and-resume point: when your
+  context is getting full, stop there and tell the user to start a fresh
+  context and run `/implement-spec` again. A resumed run reuses the integration
+  branch and skips the tickets already merged into it." It is the single
+  no-subagent fallback for the exploration, implementer and merger subagents
+  and the worktree cleanup (L23, L27-L30, L32, L34, L36, L40); `/implement-spec`
+  keeps its slash because the sentence is addressed to the user (D17, D18.5).
+- `SKILL.md` L25 (v1.3.1): "open a draft PR after the first merge in step 5"
+  becomes "open a draft PR, as the issue tracker describes, after the first
+  merge in step 5": the forge mechanics come only from the tracker description,
+  and no forge CLI is named (D18.5).
+- `SKILL.md` L29 (v1.3.1): "calls the Skill tool with `tdd` to build the
+  ticket;" becomes "loads the `tdd` skill to build the ticket;", with upstream's
+  three leading spaces (D17).
+- `SKILL.md` L36 (v1.3.1): "call the Skill tool with `code-review` on the
+  integration branch." becomes "load the `two-axis-review` skill and run it on
+  the integration branch.", the renamed skill; "the code review" later on the
+  line is a plain noun and stays (D8, D17).
+- Kept verbatim on purpose: the tracker lines (L9, L11, L13, L15, L23, L27,
+  L38), which rely on the local tracker seed of setup-matt-pocock-skills and on
+  the plugin always rule for the D16 conventions (absolute main-checkout paths
+  for pointers handed to subagents and worktrees, `resolved` on merge,
+  `.scratch/` never staged); "tell the user to run `/setup-matt-pocock-skills`"
+  at L9 (D17); "main" at L25.
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies).
+- `agents/openai.yaml`: not shipped (Restructure). With it Codex loses this
+  skill's `policy.allow_implicit_invocation: false` and its short description;
+  what remains is `disable-model-invocation`, which only Claude Code honours,
+  and the guard line.
+- Continue: `.continue/prompts/implement-spec.md` holds only the body, guard
+  line included, with no `references/LICENSE` and no `disable-model-invocation`.
+  The tdd and two-axis-review loads resolve only where the IDE also reads those
+  skills natively from `.claude/skills`, and where it cannot run subagents the
+  sequential stop-and-resume fallback after L17 replaces the parallel frontier.
 
 ### improve-codebase-architecture
 
@@ -919,7 +998,65 @@ Layout-only keep, user-invoked.
 
 ### wayfinder
 
-_Filled by T04._
+Upstream `skills/engineering/wayfinder/`; synced as `.agents/skills/wayfinder/`.
+Vendored with listed changes, user-invoked. No sibling file or script upstream,
+so nothing moves and no link is rewritten.
+
+- `SKILL.md` L2 (v1.3.1): `id: wayfinder` inserted as the first frontmatter key,
+  before "name: wayfinder"; every other frontmatter line is upstream's
+  (Frontmatter, D11). The description has no `/name`, so D17 changes nothing in
+  it.
+- `SKILL.md` before L7 (v1.3.1): after the blank line that closes the
+  frontmatter, the guard line "Run this only when the user asked for it by name;
+  otherwise stop." inserted as its own paragraph, the first line of body content
+  (D19).
+- `SKILL.md` L77 (v1.3.1): "Resolved by a subagent that calls the Skill tool
+  with "research"." becomes "Resolved by a subagent that loads the `research`
+  skill; if your harness cannot run subagents, the session working through the
+  map loads the `research` skill itself (charting leaves the ticket on the
+  frontier)." (D17, D18.4).
+- `SKILL.md` L78 (v1.3.1): "by calling the Skill tool with "prototype"" becomes
+  "by loading the `throwaway-prototype` skill", the renamed skill. The
+  "**Prototype** (HITL)" label and "Links the prototype as an asset" name the
+  ticket type, not the skill, and stay (D8, D17).
+- `SKILL.md` L79 (v1.3.1): "Always call the Skill tool twice, for "grilling"
+  and "domain-modeling"." becomes "Always load the `grilling` skill, and load
+  the `domain-modeling` skill." (D17, D18.1).
+- `SKILL.md` L111 (v1.3.1): "Call the Skill tool twice, for "grilling" and
+  "domain-modeling", to pin down" becomes "Load the `grilling` skill, and load
+  the `domain-modeling` skill, to pin down" (D17, D18.1).
+- `SKILL.md` L115 (v1.3.1): "For each `research` ticket you just created, spin
+  up a subagent that calls the Skill tool with "research"" becomes "If your
+  harness can run subagents, then for each `research` ticket you just created,
+  spin up a subagent that loads the `research` skill", and the sentence
+  "Otherwise, leave the research tickets on the frontier for a later session."
+  is appended; charting still hand-resolves nothing (L116) (D17, D18.4).
+- `SKILL.md` L120 (v1.3.1): "a map (URL or number)" becomes "a map (URL,
+  number, or path)": on the local markdown tracker, the default and only one
+  shipped, a map is the file `.scratch/<effort>/map.md` (D13, D14).
+- `SKILL.md` L124 (v1.3.1): "call the Skill tool for whichever skills the
+  `## Notes` block names. If in doubt, call the Skill tool twice, for
+  "grilling" and "domain-modeling"." becomes "load each skill the `## Notes`
+  block names. If in doubt, load the `grilling` skill, and load the
+  `domain-modeling` skill.", one load per skill (D17, D18.1).
+- Kept verbatim on purpose: the tracker lines (L17, L21, L25, L42, L44, L52,
+  L65, L67, L69, L101, L113, L123, L125, L128), which rely on the local tracker
+  seed of setup-matt-pocock-skills and on the plugin always rule for the D16
+  conventions; "tell the user to run `/setup-matt-pocock-skills`" at L25 (D17);
+  the `wayfinder:map` and `wayfinder:<type>` tracker labels; and the
+  `prototype` ticket type in L65's label list (D8).
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies).
+- `agents/openai.yaml`: not shipped (Restructure). With it Codex loses this
+  skill's `policy.allow_implicit_invocation: false`; what remains is
+  `disable-model-invocation`, which only Claude Code honours, and the guard
+  line.
+- Continue: `.continue/prompts/wayfinder.md` holds only the body, guard line
+  included, with no `references/LICENSE` and no `disable-model-invocation`. The
+  loads of research, throwaway-prototype, grilling and domain-modeling resolve
+  only where the IDE also reads those skills natively from `.claude/skills`, and
+  where it cannot run subagents the research tickets wait on the frontier
+  (D18.4).
 
 ### wizard
 
