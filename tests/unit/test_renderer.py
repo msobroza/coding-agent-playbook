@@ -20,7 +20,6 @@ from coding_agent_playbook.renderer import (
     TemplateSecurityError,
     appendix_rule_ids,
     build_environment,
-    includes_rules_appendix,
     render_artifact_body,
     render_for,
     render_sandboxed,
@@ -585,12 +584,11 @@ def test_appendix_rule_ids_follow_includes_rules_unless_template_inlines_them() 
     assert appendix_rule_ids([], "body") == []
 
 
-def test_appendix_rule_ids_agree_with_includes_rules_appendix() -> None:
+def test_appendix_rule_ids_agree_with_render_for(tmp_path: Path) -> None:
     """Sync's pre-render and ``render_for`` decide the appendix on the same template body."""
-    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
     for template_body in ('Intro\n{{rule("x")}}\n', "Plain body\n"):
-        has_appendix = includes_rules_appendix(template_body, _INLINE_FRONTMATTER, registry) != ""
-        assert bool(appendix_rule_ids(["x"], template_body)) is has_appendix
+        out = _continue_prompt(tmp_path, "rendered body\n", template_body)
+        assert bool(appendix_rule_ids(["x"], template_body)) is ("## Reference rules" in out)
 
 
 #: The jinja2 release closing the published sandbox escapes (CVE-2024-56326,
@@ -616,6 +614,18 @@ def test_pyproject_pins_the_jinja_sandbox_floor() -> None:
 
 _PROMPT_FORMATS = ["prompt_continue", "prompt_claude_command", "prompt_opencode_command"]
 _INLINE_FRONTMATTER = {"name": "P", "description": "D", "includes_rules": ["x"]}
+
+
+def _continue_prompt(tmp_path: Path, body: str, template_body: str) -> str:
+    """The prompt including rule ``x``, as Continue gets it: ``body``, then any appendix."""
+    return render_for(
+        tmp_path / "p.md.j2",
+        body,
+        "prompt_continue",
+        frontmatter=_INLINE_FRONTMATTER,
+        rule_registry=StubRuleRegistry({"x": "### X\n\nrule body\n"}),
+        template_body=template_body,
+    )
 
 
 @pytest.mark.parametrize("fmt", _PROMPT_FORMATS)
@@ -663,18 +673,19 @@ def test_render_for_appends_appendix_when_template_has_no_rule_call(
         '{% raw %}{{ rule("x") }}{% endraw %}',
     ],
 )
-def test_includes_rules_appendix_suppressed_for_any_rule_call_spelling(template_body: str) -> None:
-    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
+def test_render_for_no_appendix_for_any_rule_call_spelling(
+    tmp_path: Path, template_body: str
+) -> None:
+    out = _continue_prompt(tmp_path, "Plain body\n", template_body)
 
-    assert includes_rules_appendix(template_body, _INLINE_FRONTMATTER, registry) == ""
+    assert out.endswith("Plain body\n")
+    assert "## Reference rules" not in out
 
 
-def test_includes_rules_appendix_lists_rules_for_a_template_without_calls() -> None:
-    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
+def test_render_for_appendix_follows_the_body_for_a_template_without_calls(tmp_path: Path) -> None:
+    out = _continue_prompt(tmp_path, "Plain body\n", "no calls here")
 
-    appendix = includes_rules_appendix("no calls here", _INLINE_FRONTMATTER, registry)
-
-    assert appendix == "\n## Reference rules\n\n### X\n\nrule body\n"
+    assert out.endswith("Plain body\n\n## Reference rules\n\n### X\n\nrule body\n")
 
 
 # --- engine-output detection (sentinel position) ----------------------------
