@@ -2,8 +2,8 @@
 
 specs/prT-mattpocock-skills.md section 7.5: prS D5 as amended by D31. The test
 measures what the engine itself would list, per layer, with the engine's own
-functions (E13), so it holds today, when core ships no skills, and after ticket
-10, when core's rule skills get their descriptions composed at sync.
+functions (E13): core's rule skills (shipped by ticket 10, #72) are counted at the
+longest description sync composes for them, every plugin skill at its authored one.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def _of_layer[Artifact: (Rule, Skill)](items: list[Artifact], label: str) -> lis
 def listing_chars(plugin: str, repo_root: Path) -> dict[str, int]:
     """Emitted description length per skill id for core plus ``plugin``, every member rule active.
 
-    Example: ``sum(listing_chars(PLUGIN_NAME, tmp_path).values())`` -> about 3,734 at T10.
+    Example: ``sum(listing_chars(PLUGIN_NAME, tmp_path).values())`` -> 4,542 at T10b (core 762, plugin 3,780).
     """
     source = FileSystemArtifactSource(repo_root=repo_root, overlay_packages=[plugin])
     resolver = OverlayResolver()
@@ -69,3 +69,12 @@ def test_budget_counts_every_present_plugin_skill(tmp_path: Path) -> None:
     measured = set(listing_chars(PLUGIN_NAME, tmp_path))
     assert plugin_ids == set(present_skill_ids())
     assert plugin_ids <= measured, f"not measured: {sorted(plugin_ids - measured)}"
+
+
+def test_budget_counts_every_core_skill(tmp_path: Path) -> None:
+    """Core's skills are in the sum, so the budget is core plus the plugin, never the plugin alone."""
+    source = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[])
+    core_ids = {skill_id_of(s) for s in _of_layer(source.list_skills(), ENGINE_PACKAGE)}
+    measured = set(listing_chars(PLUGIN_NAME, tmp_path))
+    assert core_ids, "no core skill found under the engine layer"
+    assert core_ids <= measured, f"core skills not measured: {sorted(core_ids - measured)}"

@@ -253,6 +253,7 @@ stays as he wrote it (D4), and nothing in the plugin carries a URL, attribution 
 | Core skill descriptions today | 0 | no `catalog/core/skills/` at `a9e48e5` |
 | Core after ticket 10 (#50) / after PR 4 (#56) / after PR 8 | 762 / 1,043 / 1,238 | `specs/prS-skills-context.md:46-52`, `:2035-2046` |
 | Core plus this plugin: today / after #50 / after PR 8 | about 3,734 / 4,496 / 4,974 | D30 |
+| Core plus this plugin, measured at T10b (after #72) | 4,542 (core 762, plugin 3,780) | `test_budget.py` |
 | Limit for core plus each bundled plugin | 6,000 | prS D5 as amended by D31 |
 
 The listed description edits (wizard's "bash" for D22, the D21 clause where a description names
@@ -896,11 +897,15 @@ def test_core_plus_each_bundled_plugin_listing_within_6000_chars(
   counts its authored description (`emitted_frontmatter` returns it unchanged).
 - Today `layer_roots("skills")` has no core entry, so the core share is 0 and the test measures
   the plugin alone. After #50, core's four skills are counted with no edit here.
+- A third test, `test_budget_counts_every_core_skill` (added at T10b, once #72 shipped
+  `catalog/core/skills/`), asserts that every core skill id is among the measured ids, so the sum
+  is core plus the plugin and never the plugin alone. At T10b the core share is 762 characters
+  (python-coding 226, python-tooling 197, ml-data 194, python-testing 145).
 - A second test, `test_budget_counts_every_present_plugin_skill`, asserts that the ids measured
   for `PLUGIN_NAME` are exactly `present_skill_ids()`, so the budget can never pass by counting
   nothing.
 - Parametrising over every bundled plugin implements D31's "each"; superpowers (2,285) and
-  python_design (1,113) are far under the limit.
+  python_design (1,113) are far under the limit (3,047 and 1,875 with core at T10b).
 - If tickets 7-10 change the signatures of `compose_skills` or `emitted_frontmatter`, T10 adapts
   this helper when it rebases (section 8).
 
