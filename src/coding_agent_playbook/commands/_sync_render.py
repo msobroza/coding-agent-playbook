@@ -8,6 +8,11 @@ by ``_sync_hooks``, specs/prK-lifecycle-hooks.md §C.1.3). So a template the Jin
 sandbox rejects aborts the sync with nothing written and the offending file
 named (:class:`~coding_agent_playbook.renderer.TemplateSecurityError`,
 specs/prK-lifecycle-hooks.md §P1).
+
+Skills are composed here too (``skill_membership.compose_skills``, ADR 0001): a
+skill with a ``playbook:`` block gets its active member rules, rendered by the
+same pass as every other rule, and is dropped when none of them passes
+``applies_if``; any other skill passes through unchanged.
 """
 
 from __future__ import annotations
@@ -28,6 +33,7 @@ from coding_agent_playbook.renderer import (
     render_sandboxed,
 )
 from coding_agent_playbook.rule_registry import build_prompt_environment
+from coding_agent_playbook.skill_membership import compose_skills, undelivered_member_warning
 
 if TYPE_CHECKING:
     from jinja2 import Environment
@@ -45,6 +51,8 @@ class RenderedArtifacts:
     ``registry`` resolves ``includes_rules`` for the adapters (already
     exercised once per included rule, so the adapters' repeat cannot fail).
     ``hooks`` holds the ``[hooks]`` policy and the on hooks, bodies rendered.
+    ``skills`` are composed: each carries its active member rules as
+    ``member_references``, while ``rules`` still holds every active rule.
 
     Example::
 
@@ -128,20 +136,15 @@ def render_hook_body(hook: Hook, context: dict[str, object], env: Environment) -
     return render_sandboxed(hook.template_body, dict(context), env=env, source=source)
 
 
-def filter_skills(skills: list[Skill]) -> list[Skill]:
-    """Skills are unconditional in v1 (no ``applies_if`` in the SKILL.md
-    schema). Returned unchanged; kept as a hook for v2 to filter on a
-    ``conditions:`` extension without churning the call site."""
-    return list(skills)
-
-
 def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
-    """Filter by ``applies_if`` and run every template a sync needs; write nothing.
+    """Filter by ``applies_if``, run every template a sync needs and compose skills; write nothing.
 
     Inputs (``applies_if`` file checks included) are read from the real repo
     through ``ctx``. Raises :class:`TemplateSecurityError` (or, for a malformed
     ``[hooks]`` table, ``_sync_hooks.HookPolicyError``) before any adapter has
-    written a file.
+    written a file. Skills come from ``skill_membership.compose_skills``; when
+    member rules are active but no enabled adapter delivers them, one
+    ``warning:`` line goes to stderr (E12: there is no fallback).
 
     Example::
 
@@ -159,13 +162,27 @@ def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
     rendered_prompts = [render_prompt_body(p, base_context, prompt_env) for p in prompts]
     _prerender_inclusions(rendered_prompts, registry)
     hooks = resolve_sync_hooks(ctx, lambda hook: _with_body(hook, base_context, base_env))
+    skills = compose_skills(ctx.skills_resolved, ctx.rules_resolved, rendered_rules)
+    _warn_undelivered_members(ctx, skills)
     return RenderedArtifacts(
         rules=rendered_rules,
         prompts=rendered_prompts,
-        skills=filter_skills(ctx.skills_resolved),
+        skills=skills,
         registry=registry,
         hooks=hooks,
     )
+
+
+def _warn_undelivered_members(ctx: SyncContext, skills: list[Skill]) -> None:
+    """Print the undelivered-member warning when no enabled adapter delivers member rules.
+
+    ``ctx.adapters`` is populated by ``SyncContext.from_config``; the sync
+    re-discovers the same adapters with a rule registry afterwards, and
+    ``delivers_member_rules`` is a class attribute, so either set answers alike.
+    """
+    warning = undelivered_member_warning(ctx.adapters.values(), skills)
+    if warning is not None:
+        print(warning, file=sys.stderr)
 
 
 def _with_body(hook: ResolvedHook, context: dict[str, object], env: Environment) -> ResolvedHook:

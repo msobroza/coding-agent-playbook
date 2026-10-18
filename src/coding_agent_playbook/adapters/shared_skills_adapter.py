@@ -5,10 +5,12 @@ Emits every canonical skill as a native Agent-Skills directory under
 agent-neutral, committed copy of the skills that any Agent-Skills-aware tool
 (or a human) can be pointed at, independent of which harness adapters are on.
 
-Rules and prompts are no-ops here: rules reach every assistant through
-``AGENTS.md`` and prompts through the harness adapters. The skill bytes come
-from the shared :class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter`
-and are identical to the ``.claude/skills/`` and ``.opencode/skills/`` copies.
+Rules and prompts are no-ops here: always rules reach every assistant through
+``AGENTS.md``, scoped rules travel inside the skills this adapter writes (as
+the references of the skill each one names), and prompts go through the
+harness adapters. The skill bytes come from the shared
+:class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter` and are
+identical to the ``.claude/skills/`` and ``.opencode/skills/`` copies.
 
 On by default (``playbook init`` lists it in ``adapters_enabled``) but **not**
 force-enabled like ``agents_md`` — remove it from the top-level
@@ -51,7 +53,7 @@ class SharedSkillsAdapter(Adapter):
     output_locations: ClassVar[tuple[str, ...]] = (_SKILL_WRITER.location,)
 
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
-        """Return ``[]`` — rules reach every assistant through ``AGENTS.md``."""
+        """Return ``[]``: always rules go to ``AGENTS.md``, scoped ones into the skills written here."""
         del rule, repo_root
         return []
 

@@ -20,6 +20,7 @@ from coding_agent_playbook.lockfile import Lockfile
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.types import Prompt, Rule, Skill
 from tests.hook_samples import resolved_hook
+from tests.member_skill_samples import sample_member_reference, sample_member_skill
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -89,6 +90,19 @@ def test_write_skill_default_degrades_to_write_prompt(tmp_path):
     assert isinstance(forwarded, Prompt)
     assert forwarded.frontmatter.id == "demo"
     assert forwarded.body == "body\n"
+
+
+def test_default_write_skill_skips_skill_with_members(tmp_path: Path) -> None:
+    """E4: a skill's member rules already reach this adapter as rules, and a degraded
+    prompt would index references it never receives (specs/prS-skills-context.md 6.4.7)."""
+    adapter = _DummyAdapter()
+
+    skill = sample_member_skill("python-coding", sample_member_reference())
+
+    written = adapter.write_skill(skill, tmp_path)
+
+    assert written == []
+    assert adapter.written_prompts == []
 
 
 def test_default_output_directories_is_empty():

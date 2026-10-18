@@ -14,14 +14,17 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
 from coding_agent_playbook.commands._sync_lockfile import (
     HookDispatch,
+    _skill_write_provenance,
     build_lockfile,
     dispatch_to_adapters,
 )
 from coding_agent_playbook.hooks_config import HooksConfig
 from coding_agent_playbook.lockfile import LockEntry, Lockfile, Provenance, compute_hash
 from tests.hook_samples import resolved_hook
+from tests.member_skill_samples import sample_member_reference, sample_member_skill
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -186,6 +189,72 @@ def test_build_lockfile_skips_shared_outputs_without_scoped_entries(tmp_path: Pa
     )
 
     assert lockfile.entries == []
+
+
+_TYPING = sample_member_reference("python-typing", source_package="acme_overlay")
+
+
+def test_skill_write_provenance_gives_member_references_their_rules_provenance(
+    tmp_path: Path,
+) -> None:
+    """E9: guard-generated-outputs then points an editor at the rule, the real source."""
+    skill_dir = tmp_path / ".claude" / "skills" / "python-coding"
+    skill_md, guide, typing_ref = (
+        skill_dir / "SKILL.md",
+        skill_dir / "references" / "guide.md",
+        skill_dir / "references" / "python-typing.md",
+    )
+
+    groups = _skill_write_provenance(
+        [skill_md, guide, typing_ref], sample_member_skill("python-coding", _TYPING), "opencode"
+    )
+
+    skill_origin = Provenance(
+        kind="skill",
+        artifact_id="python-coding",
+        source="coding_agent_playbook",
+        adapter="opencode",
+    )
+    rule_origin = Provenance(
+        kind="rule", artifact_id="python-typing", source="acme_overlay", adapter="opencode"
+    )
+    assert groups == [([skill_md, guide], skill_origin), ([typing_ref], rule_origin)]
+
+
+@pytest.mark.parametrize(
+    "rel",
+    [
+        "python-coding/scripts/python-typing.md",  # not under references/
+        "python-coding/references/deep/python-typing.md",  # not one level deep
+        "other-skill/references/python-typing.md",  # another skill's directory
+        "python-coding/references/python-idioms.md",  # not a member's name
+    ],
+)
+def test_skill_write_provenance_keeps_skill_provenance_off_a_members_path(
+    tmp_path: Path, rel: str
+) -> None:
+    path = tmp_path / rel
+
+    [(paths, origin)] = _skill_write_provenance(
+        [path], sample_member_skill("python-coding", _TYPING), "claude_code"
+    )
+
+    assert paths == [path]
+    assert origin.kind == "skill"
+
+
+def test_dispatch_records_member_references_with_rule_provenance(tmp_path: Path) -> None:
+    skill = sample_member_skill("python-coding", _TYPING)
+
+    recorder = dispatch_to_adapters(
+        {"shared_skills": SharedSkillsAdapter()}, [], [], [skill], tmp_path
+    )
+
+    by_name = {path.name: origin for path, origin in recorder.provenance.items()}
+    assert by_name["SKILL.md"].kind == "skill"
+    assert by_name["python-typing.md"] == Provenance(
+        kind="rule", artifact_id="python-typing", source="acme_overlay", adapter="shared_skills"
+    )
 
 
 @pytest.mark.skipif(os.name != "posix", reason="exec bits are POSIX-only")

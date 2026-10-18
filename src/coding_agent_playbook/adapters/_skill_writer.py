@@ -12,6 +12,13 @@ every root. Each directory holds ``SKILL.md`` plus byte-copies (copies, not
 symlinks) of the canonical ``scripts/`` and ``references/`` subtrees, minus
 Python bytecode caches (:mod:`coding_agent_playbook.adapters._skill_files`).
 
+A skill with member rules (ADR 0001) also gets one ``references/<rule-id>.md``
+per active member, written from ``MemberReference.text`` after the copies and
+guarded like them; its ``SKILL.md`` carries the composed description and the
+generated ``## References`` index (:mod:`coding_agent_playbook.skill_document`).
+The catalog-only ``playbook:`` block is never emitted, so a skill without
+members (a bundled plugin's) is written exactly as authored.
+
 ``SKILL.md`` follows the Agent Skills standard read by Claude Code and OpenCode:
 frontmatter ``name`` is forced to the skill id (= the directory name) and must
 match :data:`AGENT_SKILL_NAME_PATTERN`; ``description`` must be non-empty. The
@@ -47,6 +54,7 @@ from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook._member_reference import member_reference_path
 from coding_agent_playbook._sentinel import has_sentinel
 
 # The Agent Skills naming rules live in _agent_skill_rules (file-size budget); this
@@ -68,6 +76,7 @@ from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of as ski
 from coding_agent_playbook.adapters._prior_output import PriorOutput
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.harness.emitter import with_sentinel_body
+from coding_agent_playbook.skill_document import emitted_body, emitted_frontmatter
 from coding_agent_playbook.types import format_frontmatter
 
 if TYPE_CHECKING:
@@ -135,14 +144,19 @@ def render_skill_md(skill: Skill) -> str:
 
     Frontmatter stays on line 1 with ``name`` forced to the skill id (every
     other key, including ``id``, is kept in authored order after it); the
-    sentinel HTML comment is the first body line.
+    sentinel HTML comment is the first body line. Frontmatter and body come
+    from :mod:`~coding_agent_playbook.skill_document`: the catalog-only
+    ``playbook`` block is never emitted, and a skill with member rules gets its
+    composed description and the ``## References`` index. A plain skill (a
+    bundled plugin's) is rendered exactly as authored.
 
     Example: ``render_skill_md(skill).splitlines()[0]`` -> ``"---"``.
     """
     skill_id = ensure_path_safe_skill_id(skill_id_of(skill))
-    others = {key: value for key, value in skill.frontmatter.items() if key != "name"}
+    emitted = emitted_frontmatter(skill)
+    others = {key: value for key, value in emitted.items() if key != "name"}
     frontmatter = format_frontmatter({"name": skill_id, **others}, "")
-    return with_sentinel_body(frontmatter, skill.body)
+    return with_sentinel_body(frontmatter, emitted_body(skill))
 
 
 @dataclass(frozen=True)
@@ -339,7 +353,7 @@ def _is_same_file(first: Path, second: Path) -> bool:
 def _write_skill_files(
     skill: Skill, skill_md_text: str, skill_dir: Path, prior: PriorOutput
 ) -> list[Path]:
-    """Write ``SKILL.md`` plus the copied subtrees into the claimed ``skill_dir``."""
+    """Write ``SKILL.md``, the copied subtrees, then the member references into ``skill_dir``."""
     skill_dir.mkdir(parents=True, exist_ok=True)
     skill_md = skill_dir / SKILL_FILENAME
     if not _prepare_destination(skill_md, skill_dir, prior):
@@ -348,6 +362,30 @@ def _write_skill_files(
     written = [skill_md]
     written.extend(_copy_subtree(skill.scripts_dir, skill_dir / "scripts", skill_dir, prior))
     written.extend(_copy_subtree(skill.references_dir, skill_dir / "references", skill_dir, prior))
+    written.extend(_write_member_references(skill, skill_dir, prior))
+    return written
+
+
+def _write_member_references(skill: Skill, skill_dir: Path, prior: PriorOutput) -> list[Path]:
+    """Write ``references/<rule-id>.md`` for every member, as UTF-8 LF bytes.
+
+    The same ``_prepare_destination`` guard as copied files: inside this
+    engine-owned skill dir a regular file at the destination is replaced, as a
+    copied reference is; a real directory there, or a file where a parent
+    directory must go, that holds files the previous lockfile does not list is
+    kept with a warning and the reference is skipped. The bytes are
+    ``MemberReference.text``, computed once per sync, so every root gets the
+    same file (specs/prS-skills-context.md section 6.4.5). Validation (V12)
+    keeps a hand-written reference from taking a member's file name. Example::
+
+        written = _write_member_references(skill, repo / ".claude/skills/python-coding", prior)
+    """
+    written: list[Path] = []
+    for member in skill.member_references:
+        destination = skill_dir / member_reference_path(member.rule_id)
+        if _prepare_destination(destination, skill_dir, prior):
+            destination.write_bytes(member.text.encode("utf-8"))
+            written.append(destination)
     return written
 
 

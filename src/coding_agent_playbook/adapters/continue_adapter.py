@@ -8,7 +8,9 @@ layout Continue expects under ``.continue/`` at the repo root:
 - Prompts go to ``.continue/prompts/{prompt.slash}.md`` with the
   ``prompt_continue`` transform applied.
 - Skills degrade to prompts via the ABC's default ``write_skill`` path,
-  which calls :meth:`Skill.to_prompt`.
+  which calls :meth:`Skill.to_prompt`, except a skill with member rules:
+  Continue reads no skills, so each member arrives as its own rule file
+  instead, and no prompt is written for the skill.
 
 Cleanup walks ``.continue/rules`` and ``.continue/prompts`` and removes any
 sentinel-tagged file whose absolute path is not in ``written_paths``. Files
