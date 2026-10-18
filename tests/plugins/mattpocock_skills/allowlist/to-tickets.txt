@@ -1,0 +1,1 @@
+# to-tickets: no project-toolchain entry (A.T03.3); "can start immediately" is prose, not a command, so the gate finds no hit to allowlist.
