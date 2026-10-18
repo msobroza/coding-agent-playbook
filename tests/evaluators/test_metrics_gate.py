@@ -29,6 +29,7 @@ from coding_agent_playbook.evaluators.normalizer import Identity
 from coding_agent_playbook.evaluators.scope import Scope
 from coding_agent_playbook.evaluators.types import EvalContext, Measurement, MetricConfig
 from tests.cli.test_metrics import _BASELINE_SOURCE, _WORSE_SOURCE
+from tests.engine_modules import engine_module
 from tests.fakes import FakeBaselineGit, FakeGitRunner, FakeProjectFactory
 from tests.import_probe import new_modules_after
 
@@ -522,9 +523,11 @@ def test_default_file_cap_is_one_megabyte() -> None:
 def test_metrics_gate_imports_no_jinja_yaml_cli_or_argparse() -> None:
     loaded = new_modules_after("import coding_agent_playbook.evaluators.metrics_gate")
 
-    forbidden = ("jinja2", "markupsafe", "yaml", "argparse", "coding_agent_playbook.cli")
+    cli = engine_module("coding_agent_playbook.cli")
+    forbidden = ("jinja2", "markupsafe", "yaml", "argparse", cli)
     assert [m for m in loaded if m.split(".")[0] in forbidden or m in forbidden] == []
-    assert [m for m in loaded if m.startswith("coding_agent_playbook.commands")] == []
+    commands = engine_module("coding_agent_playbook.commands")
+    assert [m for m in loaded if m.startswith(commands)] == []
 
 
 def test_default_deps_measure_with_the_static_metrics() -> None:

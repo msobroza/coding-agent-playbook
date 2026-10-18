@@ -27,6 +27,7 @@ from coding_agent_playbook.hook_runtime.harness import (
     WireOutput,
 )
 from coding_agent_playbook.hook_runtime.harness.claude import parse_claude, render_claude
+from tests.engine_modules import engine_module
 from tests.hook_payloads import (
     PROJECT_DIR,
     check_golden,
@@ -442,8 +443,9 @@ def test_an_edit_event_parse_never_loads_the_shell_parser() -> None:
     )
     engine = {m for m in loaded if m.startswith("coding_agent_playbook.")}
 
-    assert all(m.startswith("coding_agent_playbook.hook_runtime") for m in engine), engine
-    assert "coding_agent_playbook.hook_runtime.shell" not in loaded
+    runtime = engine_module("coding_agent_playbook.hook_runtime")
+    assert all(m.startswith(runtime) for m in engine), engine
+    assert engine_module("coding_agent_playbook.hook_runtime.shell") not in loaded
     assert not {"tomllib", "argparse", "importlib.metadata", "jinja2", "yaml", "shlex"} & set(
         loaded
     )
