@@ -35,6 +35,7 @@ subsection after it when a row is not enough. The SPEC changelog entry is v0.21.
 | Only using engine content (core, bundled plugins) | Nothing. The next `playbook sync` (the post-checkout hook runs it) rewrites `AGENTS.md` and the Claude Code rules file and adds the core skill directories. See "Scoped rules arrive as skill references". |
 | A repo, overlay or bundled plugin whose scoped rules name a skill (`skill:`) | Nothing: the next `playbook sync` drops those rules from `AGENTS.md` and the Claude Code rules file and adds a generated `## Where guidance lives` section that names their skills. With only `agents_md` on (`adapters_enabled = []`), sync warns that they reach no assistant: add `claude_code`, `opencode` or `shared_skills`. See "AGENTS.md and the Claude Code rules file hold only always rules". |
 | Overriding `project-context` or `python-house-style` by id | Nothing: your text keeps winning. Consider trimming it, since the engine's own text is now much shorter. See "The always text is shorter". |
+| Tooling or prompts that match lint-feedback lines (`rule <id>: …`) | Accept the new `rule <id> (skill <skill>): …` prefix and the ` (rule <id>, skill <skill>)` suffix; the next `playbook sync` turns them on. See "Guardrails and lint feedback point at skills". |
 
 ### `package_manager` and per-key validation
 
@@ -193,8 +194,9 @@ and `ml-data`. Each scoped rule in core names one of them, and is now
 for example `.claude/skills/python-coding/references/python-typing.md`. A skill
 is written only when at least one of its rules applies to the repo, so a repo
 without FastAPI has no `python-tooling`. Rule ids, `lint_codes`, hook links and
-prompt `includes_rules` are unchanged, so lint feedback still names the rule id;
-open the reference with that id. The `python-coding` members have short display
+prompt `includes_rules` are unchanged; lint feedback now names the rule id and
+its skill (see "Guardrails and lint feedback point at skills"), so open that
+skill's reference with that id. The `python-coding` members have short display
 names (`Typing`, `Error handling`, …) because each name is its label in the
 skill's description, and `python-typing`, `python-error-handling`, `pytest` and
 `fastapi-app-wiring` have new one-line descriptions, because a description is
@@ -246,6 +248,25 @@ move it to `playbook/skills/python-coding/` to override the core skill (keep its
 Rule ids and file names in `catalog/`, `lint_codes`, `linked_rule` hooks,
 prompt rendering (`includes_rules` still inlines rule bodies), the lockfile
 schema and Claude Code's `.claude/CLAUDE.md` stub.
+
+### Guardrails and lint feedback point at skills
+
+Lint feedback names the skill that holds the fix. After the next
+`playbook sync`, a lint hook linked to a rule that names a skill prints
+
+    rule python-error-handling (skill python-coding): "src/app.py:4 E722 Do not use bare `except`"
+
+instead of `rule python-error-handling: …`, and a finding CI also fails on ends
+in `(rule python-error-handling, skill python-coding)` instead of
+`(rule python-error-handling)`. The skill travels in `guard_config.json`, as
+`"skill"` next to `"rule"` and `"warn"` in the hook's `lint_codes`. A rule
+without a skill (an always rule that carries `lint_codes`) keeps the old
+`rule <id>:` prefix, and so does a `guard_config.json` written before this
+change until sync rewrites it: nothing fails in between. Tooling that matches
+the old prefix exactly should accept the `(skill …)` part. Decision-log rule
+ids and the resync hook's "rule <id>" message are unchanged. On OpenCode v2 the
+generated plugin is an inert `setup()` stub (SPEC §10.6.2), so no lint feedback
+runs there at all until the shim is ported.
 
 ## v0.20 — Assistant lifecycle hooks (PR K)
 
