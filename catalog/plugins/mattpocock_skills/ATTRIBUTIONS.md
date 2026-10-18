@@ -336,7 +336,183 @@ _Filled by T08._
 
 ### setup-matt-pocock-skills
 
-_Filled by T03._
+Upstream `skills/engineering/setup-matt-pocock-skills/`; synced as
+`.agents/skills/setup-matt-pocock-skills/`. Vendored with listed changes,
+user-invoked. `SKILL.md` shrinks from 116 to 81 lines; the skill directory holds
+`SKILL.md` and `references/` (`LICENSE`, `domain.md`, `issue-tracker-local.md`,
+`triage-labels.md`).
+
+`SKILL.md`:
+
+- L2 (v1.3.1): `id: setup-matt-pocock-skills` inserted as the first frontmatter
+  key, before "name: setup-matt-pocock-skills" (D11). The other keys and the
+  quoted description are byte-identical.
+- L6 (v1.3.1): after the blank line that closes the frontmatter, the guard line
+  "Run this only when the user asked for it by name; otherwise stop." inserted
+  as its own paragraph, above the H1 (D19).
+- L11 (v1.3.1): "(GitHub by default; local markdown is also supported out of
+  the box)" became "(local markdown by default; any other tracker works once
+  the user describes it)" (D13, D14).
+- L13 (v1.3.1): " (or `CONTEXT.md` if the repo already has one)" inserted after
+  the code span `GLOSSARY.md` (D21).
+- L24 (v1.3.1): the `AGENTS.md`/`CLAUDE.md` check became read-only: "is there
+  an old `## Agent skills` section in either? Read them only to answer that:
+  this skill never edits or creates either file (step 5 says what to tell the
+  user)." (D14).
+- L25 (v1.3.1): the `CONTEXT.md` and `CONTEXT-MAP.md` fallbacks inserted after
+  the code spans `GLOSSARY.md` and `GLOSSARY-MAP.md` (D21).
+- L29 (v1.3.1): the "Is the `triage` skill installed?" bullet deleted (D7,
+  D14).
+- L30 (v1.3.1): kept verbatim on purpose: the JS-only monorepo markers
+  (`pnpm-workspace.yaml`, the `workspaces` field of `package.json`) are a
+  consumer-repo file read and a stack assumption, not a command (D28).
+- L36 (v1.3.1): "(Section B when `triage` isn't installed, Section C when
+  there's no monorepo)" became "(Section C when there's no monorepo). Section B
+  is written without asking." (D7, D14).
+- L40 (v1.3.1): `triage` left the explainer's skill list (D7), and the clause
+  "call `gh issue create`," went (D2, D13): "whether to write a markdown file
+  under `.scratch/` or follow some other workflow you describe".
+- L42 (v1.3.1): the GitHub/GitLab default posture, with the bare GitLab host
+  name, became "Default posture: propose local markdown, even when a
+  `git remote` points at a forge; a user who tracks work in that forge's
+  issues, or anywhere else, picks **Other**. Offer:" (D13, D14).
+- L44 (v1.3.1): the **GitHub** option ("uses the `gh` CLI") deleted (D2, D13,
+  D14).
+- L45 (v1.3.1): the **GitLab** option deleted; it named `glab` and carried the
+  skill's only URL (D2, D4, D13, D14).
+- L46 (v1.3.1): "(good for solo projects or repos without a remote)" became
+  "(the default; needs no remote or CLI)" (D14).
+- L47 (v1.3.1): **Other** keeps "(Jira, Linear, etc.)" verbatim; the
+  one-paragraph freeform description became a description "for each section
+  of" the local seed (a link to `./references/issue-tracker-local.md`) "after
+  its Conventions: publish, fetch, close, blocking (default: a plain
+  `Blocked by:` line near the top of each ticket) and the Wayfinding
+  operations", recorded under each section's heading (D13, D14).
+- L49 (v1.3.1): the two sentences about the "PRs as a request surface" flag
+  deleted; "Record the choice in `docs/agents/issue-tracker.md`." stays (D7,
+  D14).
+- L51-L57 (v1.3.1): Section B is no longer gated on `triage` and asks no
+  question: "Always written, without asking: `to-spec` and `to-tickets` apply
+  these labels.", then the five default roles, "Write them as-is.", and label
+  overrides through the step 3 draft. The question at L53-L55 is deleted (D7,
+  D14).
+- L59 and L61 (v1.3.1): the `CONTEXT.md` and `CONTEXT-MAP.md` fallbacks
+  inserted after every `GLOSSARY.md` and `GLOSSARY-MAP.md` code span (D21).
+- L67 (v1.3.1): the "`## Agent skills` block to add" draft bullet deleted (D14,
+  D15).
+- L68 (v1.3.1): " (the last only when `triage` is installed)" deleted (D7,
+  D14).
+- L74-L104 (v1.3.1), step 4: (a) removed the "Pick the file to edit"
+  subsection, L74-L82 (D14); (b) removed "The block:" and the fenced
+  `## Agent skills` block, L84-L100, which the plugin always rule
+  `mattpocock-skills-tracker` replaces (D15); (c) removed L102's
+  `### Triage labels` condition (D7, D14); (d) added "Write only
+  `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md` and
+  `docs/agents/domain.md`. Never edit or create `CLAUDE.md` or `AGENTS.md`: the
+  always rule this plugin ships (`mattpocock-skills-tracker`) already points
+  every session at these files.", and "Then write" became "Write" at L104
+  (D14).
+- L106-L110 (v1.3.1): the `issue-tracker-github.md` and
+  `issue-tracker-gitlab.md` seed links deleted (D14); the three remaining links
+  point at `./references/` (D10); "(only if `triage` is installed)" deleted (D7,
+  D14).
+- L112 (v1.3.1): the "other" tracker is written "under the same `##` headings
+  as" the local seed (a link to `./references/issue-tracker-local.md`) "after
+  its Conventions; keep the `## Wayfinding operations` heading verbatim, since
+  `wayfinder` looks it up by name." (D14, D16).
+- L116 (v1.3.1), step 5: appended "If exploration found an old
+  `## Agent skills` section in a root `CLAUDE.md` or `AGENTS.md`, tell them
+  the always rule this plugin ships (`mattpocock-skills-tracker`) supersedes
+  it and that they may delete it; don't edit the file yourself." (D14).
+- Kept verbatim on purpose: L23 "is this a GitHub repo? Which one?" (git is
+  allowed, D2, and the posture line uses its answer).
+
+`references/domain.md` (moved from the skill root, D10; no links; still 51
+lines):
+
+- L7, L8, L26 and L43 (v1.3.1): the `CONTEXT.md` and `CONTEXT-MAP.md` fallbacks
+  inserted after each `GLOSSARY.md` and `GLOSSARY-MAP.md` mention on prose lines
+  (D21). The fenced trees L17-L24 and L28-L39 stay byte-identical, box-drawing
+  characters and arrows included.
+- L11 and L45 (v1.3.1): the leading slashes of `/domain-modeling`,
+  `/grill-with-docs` and `/improve-codebase-architecture` dropped, since the
+  consumer's `docs/agents/domain.md` is agent-facing prose (D17).
+
+`references/issue-tracker-local.md` (moved from the skill root, D10; no links;
+30 lines grow to 41):
+
+- After L9 (v1.3.1): "Every issue file (the spec, each ticket) and every map
+  opens with a `# <title>` heading: its name" (D16).
+- After L11 (v1.3.1): "`.scratch/` is untracked working state: never stage it
+  in a commit" and "Worktrees do not contain untracked files: when you point a
+  subagent or a worktree at a spec, ticket or map, give its absolute path in
+  the main checkout" (D16).
+- After L19 (v1.3.1): the new section `## When a skill says "close" or
+  "resolve" a ticket` (closed is a terminal `Status:`, `resolved` or
+  `out-of-scope`; an implementation ticket is set `resolved` once merged;
+  to-tickets' bold `**Status:** ready-for-agent` line is rewritten in place)
+  and the new section `## Blocking` (a plain `Blocked by:` line by default,
+  bold in a to-tickets ticket; unblocked when every ticket it lists is closed)
+  (D14, D16).
+- L23 (v1.3.1): "Used by `/wayfinder`." became "Used by `wayfinder`."; the
+  `## Wayfinding operations` heading at L21 stays verbatim (D16, D17).
+- L26 (v1.3.1): the `Status:` values gained `/out-of-scope` (D16).
+- L27 (v1.3.1): "is `resolved`" became "is closed (`resolved` or
+  `out-of-scope`)" (D16).
+- L30 (v1.3.1): appended "Only the session driving the map appends to
+  `map.md`; a research subagent writes only its own ticket file." (D16).
+- L10's code span `triage-labels.md` is not a link and stays; it names the
+  consumer's `docs/agents/triage-labels.md`, which Section B now always writes.
+- The `prototype` ticket type at L26 is not a skill id and stays (D8).
+
+Other files:
+
+- `references/triage-labels.md`: moved from the skill root, byte-identical
+  (D10). The "Label in mattpocock/skills" column header is a repository name,
+  not a URL or a coupling marker.
+- `issue-tracker-github.md` and `issue-tracker-gitlab.md`: not shipped. They
+  told the agent to run the forge CLIs and their `api` subcommands and a JSON
+  utility, the GitLab one held a URL (L3), and they alone defined the "PRs
+  (MRs) as a request surface" flag that triage read. A GitHub or GitLab user
+  takes **Other** and records the same sections in their own words (D2, D4,
+  D13, D14).
+- `agents/openai.yaml`: not shipped (D10). With it Codex loses this skill's
+  `policy.allow_implicit_invocation: false`; what remains is
+  `disable-model-invocation`, which only Claude Code honours, and the guard
+  line (D19).
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (D4).
+- Added, not vendored: the plugin always rule
+  `rules/mattpocock-skills-tracker.md` replaces the "## Agent skills" block
+  upstream's step 4 wrote into `CLAUDE.md` or `AGENTS.md` (D15); see "Plugin
+  always rule".
+
+For T10 (global sections, recorded here per section 5.3):
+
+- "Plugin always rule": the rule narrows "when they are missing" to "If a skill
+  needs one that is missing", opens with "When present", so it never presents
+  the setup-only files as always there and does not prompt for setup in
+  sessions that use no tracker skill; its `.scratch/` sentence reads "never
+  stage or commit it". It is `priority: 50`, after the core always rules.
+- "Dropped and why", triage: upstream `skills/engineering/triage/` (`SKILL.md`
+  112 lines, `AGENT-BRIEF.md` 207, `OUT-OF-SCOPE.md` 105, `agents/openai.yaml`
+  5) works with labels, reporter replies, `wontfix` closes, an
+  `.out-of-scope/` knowledge base and a request-surface flag that only the
+  dropped GitHub and GitLab seeds defined. A repo-local triage reads the same
+  `docs/agents/issue-tracker.md` and `docs/agents/triage-labels.md`, and with no
+  request-surface flag in the local seed it handles issues only.
+- "Imposed tools removed": setup's own `SKILL.md` also lost `gh issue create`
+  (L40), the `gh` option (L44), the `glab` option and its URL (L45) and the
+  bare GitLab host name (L42), besides the two seeds.
+
+Continue: `.continue/prompts/setup-matt-pocock-skills.md` holds only the body,
+guard line included. `references/` does not travel, so the three seed links
+dangle and the agent writes `docs/agents/*.md` from the prose alone, without the
+seeds' close, blocking and Wayfinding operations conventions, the `.scratch/`
+and absolute-path rules, the domain-doc consumer rules and the label table. No
+licence copy travels and `disable-model-invocation` is dropped, but a Continue
+prompt is always started by the user. The always rule still reaches Continue as
+its own `.continue/rules/` file.
 
 ### tdd
 
@@ -374,11 +550,73 @@ Layout-only keep, user-invoked.
 
 ### to-spec
 
-_Filled by T03._
+Upstream `skills/engineering/to-spec/`; synced as `.agents/skills/to-spec/`.
+Vendored with listed changes, user-invoked. `SKILL.md` grows from 75 to 78
+lines; the skill directory holds `SKILL.md` and `references/LICENSE`.
+
+- `SKILL.md` L2 (v1.3.1): `id: to-spec` inserted as the first frontmatter key,
+  before "name: to-spec" (D11). The other keys and the quoted description are
+  byte-identical.
+- `SKILL.md` L6 (v1.3.1): after the blank line that closes the frontmatter, the
+  guard line "Run this only when the user asked for it by name; otherwise stop."
+  inserted as its own paragraph, the first line of body content (D19).
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (D4).
+- `agents/openai.yaml`: not shipped (D10). With it Codex loses this skill's
+  `policy.allow_implicit_invocation: false`; what remains is
+  `disable-model-invocation`, which only Claude Code honours, and the guard
+  line (D19).
+- Kept verbatim on purpose: L9 "If not, tell the user to run
+  `/setup-matt-pocock-skills`." is a human-facing pointer, so the slash stays
+  (D17), and its "should have been provided to you" is made true by the plugin
+  always rule and the always-written `docs/agents/triage-labels.md` (D14, D15);
+  L13 names the glossary abstractly, so no `CONTEXT.md` fallback applies (D21);
+  L19's "no need for additional triage" is the activity, not the dropped skill
+  (D7); L57's "a prototype" is a common noun, not the renamed skill (D8).
+- Continue: `.continue/prompts/to-spec.md` holds only the body, guard line
+  included, with no `references/LICENSE` and no `disable-model-invocation`.
+  Nothing functional is lost: the body is self-contained, the tracker docs live
+  in the consumer repo, the always rule reaches Continue as its own rule file,
+  and a Continue prompt is always started by the user.
 
 ### to-tickets
 
-_Filled by T03._
+Upstream `skills/engineering/to-tickets/`; synced as
+`.agents/skills/to-tickets/`. Vendored with listed changes, user-invoked.
+`SKILL.md` grows from 105 to 108 lines; the skill directory holds `SKILL.md` and
+`references/LICENSE`.
+
+- `SKILL.md` L2 (v1.3.1): `id: to-tickets` inserted as the first frontmatter
+  key, before "name: to-tickets" (D11). The other keys and the unquoted
+  description are byte-identical.
+- `SKILL.md` L6 (v1.3.1): after the blank line that closes the frontmatter, the
+  guard line "Run this only when the user asked for it by name; otherwise stop."
+  inserted as its own paragraph, above the H1 (D19).
+- `SKILL.md` L60 (v1.3.1): "the tracker `/setup-matt-pocock-skills`
+  configured" became "the tracker `setup-matt-pocock-skills` configured": this
+  is agent-facing process prose, not a "tell the user to run" line (D17).
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (D4).
+- `agents/openai.yaml`: not shipped (D10). With it Codex loses this skill's
+  `policy.allow_implicit_invocation: false`; what remains is
+  `disable-model-invocation`, which only Claude Code honours, and the guard
+  line (D19).
+- Kept verbatim on purpose: L11 "If not, tell the user to run
+  `/setup-matt-pocock-skills`." (human-facing, D17); L21 names the glossary
+  abstractly (no D21 edit); L62's local branch already matches the shipped
+  seed; L63 "(GitHub, Linear, …)" names products, not CLIs, and its native
+  blocking relationship now comes from the Blocking section setup records
+  (D13, D14); L65's "blockers are all done" reads as closed under the seed;
+  L71's `# <NN>: <Ticket title>` already is the title heading and L77's
+  `**Status:** ready-for-agent` is the bold line the seed's close section
+  rewrites in place (D16); L105's "a prototype" is a common noun (D8); L17's
+  "an issue number or URL" is the word, not a URL. The en dash at L40, the
+  arrows at L62-L63 and the ellipsis at L63 are upstream's characters.
+- Continue: `.continue/prompts/to-tickets.md` holds only the body, guard line
+  included, with no `references/LICENSE` and no `disable-model-invocation`.
+  Nothing functional is lost: the body and both ticket templates are inline,
+  the tracker docs live in the consumer repo, and the always rule reaches
+  Continue as its own rule file.
 
 ### two-axis-review
 

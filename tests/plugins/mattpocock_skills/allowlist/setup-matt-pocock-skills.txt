@@ -1,0 +1,1 @@
+# setup-matt-pocock-skills: no project-toolchain entry (A.T03.1); L30 `pnpm-workspace.yaml` is a file name, not the command, so the gate finds no hit to allowlist.
