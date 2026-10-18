@@ -8,13 +8,14 @@ modules in ``coding_agent_playbook.commands`` consume. The pieces here:
 - :class:`OverlayResolver` — three-layer merge per SPEC §11 (engine, overlays,
   repo-local). Records collisions for ``playbook check``; hooks merge through
   the additive ``hook_policy.merge_hook_layers`` (specs/prK-lifecycle-hooks.md §A.6).
-- :class:`RuleRegistryImpl` — concrete ``RuleRegistry`` from the renderer
-  Protocol. Built once per sync from the applies_if-filtered rule list.
-- :func:`filter_applies_if` / :func:`build_prompt_environment` — the shared
-  applies_if filter and the rule-aware Jinja environments every prompt render
-  (``sync``, ``render``, the eval runner) builds the same way.
+- :func:`filter_applies_if` — the shared applies_if filter every render
+  (``sync``, ``render``, the eval runner) applies the same way.
 - :func:`discover_adapters` — entry-point discovery + always-enable
   ``agents_md``.
+
+The rule registry that prompts include rules through lives in
+:mod:`coding_agent_playbook.rule_registry`, which imports
+:func:`template_source` from here; this module never imports it back.
 
 PR 10's invariants:
   - The orchestrator never instantiates an adapter directly; everything goes
@@ -40,7 +41,6 @@ from coding_agent_playbook.hook_policy import (
     split_hook_layers,
 )
 from coding_agent_playbook.hooks_config import PolicyTables
-from coding_agent_playbook.renderer import build_environment, render_sandboxed
 from coding_agent_playbook.sources.filesystem import (
     ENGINE_PACKAGE,
     FileSystemArtifactSource,
@@ -49,8 +49,6 @@ from coding_agent_playbook.sources.filesystem import (
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from jinja2 import Environment
 
     from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.config import Config
@@ -250,43 +248,6 @@ def template_source(artifact: Rule | Prompt) -> str:
     return str(path) if path is not None else artifact_id_of(artifact)
 
 
-class RuleRegistryImpl:
-    """Concrete :class:`RuleRegistry` used by the orchestrator.
-
-    Built once per sync from the merged + applies_if-filtered rule list. The
-    ``render_for_inclusion`` method returns the inline body for a rule (with
-    ``### {rule.name}`` header) or ``""`` when the rule is filtered out — the
-    silent-omission contract from SPEC §6.2.5.
-    """
-
-    def __init__(self, rules: list[Rule], facts: Facts, env: Environment) -> None:
-        self._by_id = {rule.frontmatter.id: rule for rule in rules}
-        self._facts = facts
-        self._env = env
-
-    def render_for_inclusion(self, rule_id: str, context: dict[str, object]) -> str:
-        """Render ``rule_id`` for inline placement in a prompt (``""`` if filtered out).
-
-        A sandbox violation raises :class:`TemplateSecurityError` naming the
-        rule's source file (specs/prK-lifecycle-hooks.md §P1).
-        """
-        rule = self._by_id.get(rule_id)
-        if rule is None:
-            return ""
-        if rule.is_templated:
-            # Merge stored facts beneath the caller-supplied context so callers
-            # can pass {} (the auto-appended-appendix path in renderer.py does)
-            # without hitting StrictUndefined on every templated rule that
-            # references a fact. Caller-supplied keys win on collision.
-            merged_context = {**self._facts, **context}
-            body = render_sandboxed(
-                rule.template_body, merged_context, env=self._env, source=template_source(rule)
-            )
-        else:
-            body = rule.body
-        return f"### {rule.frontmatter.name}\n\n{body}"
-
-
 def filter_applies_if[T: "Rule | Prompt"](
     artifacts: list[T],
     facts: Facts,
@@ -306,28 +267,6 @@ def filter_applies_if[T: "Rule | Prompt"](
         if not predicate or evaluate_predicate(predicate, facts, repo_root=repo_root):
             kept.append(artifact)
     return kept
-
-
-def build_prompt_environment(
-    rules: list[Rule], facts: Facts
-) -> tuple[RuleRegistryImpl, Environment]:
-    """Build the rule registry and the prompt Jinja environment that renders through it.
-
-    The registry renders included rules in an environment *without* ``rule()``
-    (rules cannot include rules, SPEC §6.2.5); the returned prompt environment
-    registers ``rule()`` against that registry. Both see ``facts`` for the
-    ``has_framework``/``has_ml_dep`` helpers.
-
-    Example::
-
-        registry, prompt_env = build_prompt_environment(applicable_rules, facts)
-    """
-    rule_env = build_environment([], is_prompt_context=False)
-    rule_env.globals["_facts"] = dict(facts)
-    registry = RuleRegistryImpl(rules, facts, rule_env)
-    prompt_env = build_environment([], is_prompt_context=True, rule_registry=registry)
-    prompt_env.globals["_facts"] = dict(facts)
-    return registry, prompt_env
 
 
 def discover_adapters(
@@ -359,15 +298,18 @@ def discover_adapters(
 
 
 def installed_output_locations() -> tuple[str, ...]:
-    """Every ``output_locations`` entry declared by an installed adapter, enabled or not.
+    """Every current and retired output location of an installed adapter, enabled or not.
 
     Disabled adapters count: their earlier output is exactly what ``playbook
-    sync`` must still be able to clean up (SPEC §4.2 step 9). An adapter whose
-    entry point fails to load declares nothing, so its output is never deleted.
+    sync`` must still be able to clean up (SPEC §4.2 step 9). So do retired
+    locations (``retired_output_locations``, e.g. the pre-v0.21 ``shared_skills/``):
+    the first sync after an upgrade settles the tree an older engine wrote. An
+    adapter whose entry point fails to load declares nothing, so its output is
+    never deleted.
 
     Example::
 
-        >>> ".claude/skills/" in installed_output_locations()  # doctest: +SKIP
+        >>> "shared_skills/" in installed_output_locations()  # doctest: +SKIP
         True
     """
     locations: list[str] = []
@@ -377,6 +319,7 @@ def installed_output_locations() -> tuple[str, ...]:
         except (ImportError, AttributeError):
             continue
         locations.extend(getattr(cls, "output_locations", ()))
+        locations.extend(getattr(cls, "retired_output_locations", ()))
     return tuple(locations)
 
 

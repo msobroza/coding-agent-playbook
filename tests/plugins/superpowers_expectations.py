@@ -146,22 +146,24 @@ PLUGIN_ROOT: Path = plugin_files_root("superpowers")
 SKILLS_ROOT: Path = PLUGIN_ROOT / "skills"
 
 #: The native skill roots the default adapters write through the shared
-#: ``SkillWriter`` (SPEC §10.8): claude_code, opencode, and the shared_skills hub.
-NATIVE_SKILL_ROOTS: tuple[str, ...] = (".claude/skills", ".opencode/skills", "shared_skills")
+#: ``SkillWriter`` (SPEC §10.8): claude_code, opencode, and the shared skill root
+#: ``.agents/skills`` (the ``shared_skills`` adapter).
+NATIVE_SKILL_ROOTS: tuple[str, ...] = (".claude/skills", ".opencode/skills", ".agents/skills")
 
-#: The adapter list ``playbook init`` writes (``agents_md`` is always on).
-DEFAULT_ADAPTERS: tuple[str, ...] = ("continue", "claude_code", "opencode", "shared_skills")
+#: Every built-in adapter that emits skills, natively or degraded; continue is opt-in at
+#: init since v0.21 and listed here so the degraded prompts stay covered.
+SKILL_ADAPTERS: tuple[str, ...] = ("continue", "claude_code", "opencode", "shared_skills")
 
 
-def consumer_config(*, overlays: list[str], adapters: tuple[str, ...] = DEFAULT_ADAPTERS) -> str:
+def consumer_config(*, overlays: list[str], adapters: tuple[str, ...] = SKILL_ADAPTERS) -> str:
     """Return a ``.coding-agent-playbook.toml`` enabling ``adapters`` (top-level keys).
 
-    The default is the adapter set ``playbook init`` enables (``agents_md`` is
-    always on), so a plugin skill lands in every :data:`NATIVE_SKILL_ROOTS` root
-    and as a degraded Continue prompt. Example::
+    The default is :data:`SKILL_ADAPTERS` (``agents_md`` is always on), so a
+    plugin skill lands in every :data:`NATIVE_SKILL_ROOTS` root and as a degraded
+    Continue prompt. Example::
 
         consumer_config(overlays=[PLUGIN_NAME])  # opt the consumer into the plugin
-        consumer_config(overlays=[], adapters=(*DEFAULT_ADAPTERS, "agent_harness"))
+        consumer_config(overlays=[], adapters=(*SKILL_ADAPTERS, "agent_harness"))
     """
     overlay_list = ", ".join(f'"{name}"' for name in overlays)
     adapter_list = ", ".join(f'"{name}"' for name in adapters)
@@ -184,7 +186,7 @@ def consumer_config(*, overlays: list[str], adapters: tuple[str, ...] = DEFAULT_
 
 
 def write_consumer_repo(
-    repo: Path, *, overlays: list[str], adapters: tuple[str, ...] = DEFAULT_ADAPTERS
+    repo: Path, *, overlays: list[str], adapters: tuple[str, ...] = SKILL_ADAPTERS
 ) -> Path:
     """Write a minimal consumer repo (``pyproject.toml`` + playbook config) at ``repo``.
 

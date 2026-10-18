@@ -25,13 +25,16 @@ adapter writes OpenCode's own native outputs:
   is refused, never overwritten (``_owned_files``).
   Hook advisories reach OpenCode through ``AGENTS.md``, like rules.
 
-OpenCode *also* scans ``.claude/skills/`` (Claude-compatibility discovery), so
-with ``claude_code`` enabled the same skill is found twice. That is safe:
-OpenCode keeps one skill per key, last write wins — v1.19.x keys a record by
-frontmatter ``name`` and logs a "duplicate skill name" warning
-(``packages/opencode/src/skill/index.ts:125-134``), v2 keys a ``Map`` by the
-skill directory name (``packages/core/src/skill.ts:100-101``). The engine
-writes ``name`` = id = directory name and both copies are byte-identical.
+OpenCode *also* scans ``.agents/skills/`` and ``.claude/skills/`` (compatibility
+roots), so with ``shared_skills`` and ``claude_code`` enabled the same skill is
+found up to three times. That is safe: OpenCode keeps one skill per key — v2
+keys a ``Map`` by the skill directory name (``packages/core/src/skill.ts:100-101``)
+and registers one copy per id with precedence ``.opencode > .agents > .claude``;
+v1.19.x keys a record by frontmatter ``name`` and logs one "duplicate skill name"
+warning per extra copy (``packages/opencode/src/skill/index.ts:125-134``), which
+``OPENCODE_DISABLE_EXTERNAL_SKILLS`` / ``OPENCODE_DISABLE_CLAUDE_CODE_SKILLS``
+silence; the engine sets neither. The engine writes ``name`` = id = directory
+name and every copy is byte-identical.
 """
 
 from __future__ import annotations
@@ -148,9 +151,9 @@ class OpenCodeAdapter(Adapter):
         """Write a native skill directory under ``.opencode/skills/<id>/``.
 
         Delegates to the shared :class:`SkillWriter`, so the bytes are
-        identical to the ``.claude/skills/`` and ``shared_skills/`` copies.
-        Duplicate discovery via ``.claude/skills/`` is safe (see the module
-        docstring: OpenCode keeps one skill per name/id, last wins).
+        identical to the ``.claude/skills/`` and ``.agents/skills/`` copies.
+        Duplicate discovery via those roots is safe (see the module
+        docstring: OpenCode keeps one skill per name/id).
         """
         return self._SKILL_WRITER.write(skill, repo_root)
 

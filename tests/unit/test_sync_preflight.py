@@ -199,3 +199,24 @@ def test_warn_missing_adapters_names_adapter(capsys: pytest.CaptureFixture[str])
     err = capsys.readouterr().err
     assert err.startswith("warning: ")
     assert "codex" in err
+
+
+def test_warn_missing_adapters_explains_codex(capsys: pytest.CaptureFixture[str]) -> None:
+    """Older ``init`` offered ``codex``, which no adapter provides (SPEC v0.21)."""
+    warn_missing_adapters(["claude_code_typo", "codex"])
+    err = capsys.readouterr().err
+    assert (
+        "\n'codex' is not an adapter: Codex reads AGENTS.md and .agents/skills/ "
+        "(the shared_skills adapter); remove it from adapters_enabled.\n"
+    ) in err
+    assert err.count("is not an adapter") == 1
+    assert "additional_dependencies" in err  # the hook-venv hint still follows
+
+
+def test_warn_missing_adapters_gives_no_hint_for_other_names(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    warn_missing_adapters(["custom"])
+    err = capsys.readouterr().err
+    assert "custom" in err
+    assert "is not an adapter" not in err

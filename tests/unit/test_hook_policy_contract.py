@@ -345,6 +345,15 @@ def test_h17_checks_every_key_even_after_a_false_one() -> None:
     assert _messages(hook) == ["applies_if: unknown predicate key: 'orm_version'"]
 
 
+def test_hook_applies_if_accepts_package_manager() -> None:
+    # The H17 check calls evaluate_predicate, so hooks gain the key with no contract change.
+    assert _messages(sample_hook(applies_if={"package_manager": "uv"})) == []
+    assert _messages(sample_hook(applies_if={"package_manager": "pipenv"})) == [
+        "applies_if: predicate 'package_manager' names unknown package manager(s) "
+        "['pipenv']; expected any of ['pip', 'pip-tools', 'poetry', 'uv']"
+    ]
+
+
 def test_h18_linked_rule_must_resolve() -> None:
     ctx = HookCheckContext(rule_ids=frozenset({"python-error-handling"}))
     hook = sample_hook(linked_rule="python-error-handlng")

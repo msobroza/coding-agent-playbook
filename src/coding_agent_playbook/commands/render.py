@@ -26,7 +26,7 @@ from coding_agent_playbook.commands._sync_render import (
     report_template_error,
 )
 from coding_agent_playbook.detector import evaluate_predicate
-from coding_agent_playbook.orchestrator import SyncContext, artifact_id_of, build_prompt_environment
+from coding_agent_playbook.orchestrator import SyncContext, artifact_id_of
 from coding_agent_playbook.renderer import (
     BUILTIN_FORMATS,
     FORMAT_ALIASES,
@@ -34,6 +34,7 @@ from coding_agent_playbook.renderer import (
     build_environment,
     render_for,
 )
+from coding_agent_playbook.rule_registry import build_prompt_environment
 from coding_agent_playbook.types import Hook, Prompt, Rule, Skill
 
 if TYPE_CHECKING:

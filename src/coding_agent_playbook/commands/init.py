@@ -29,6 +29,13 @@ from coding_agent_playbook.commands._committed_config import (
     plan_committed_update,
     plan_first_config,
 )
+from coding_agent_playbook.commands._init_adapters import (
+    ADAPTER_CHOICES,
+    ADAPTERS_QUESTION,
+    DEFAULT_ADAPTERS,
+    adapters_from_flag,
+    adapters_union,
+)
 from coding_agent_playbook.commands._precommit_merge import merge_pre_commit
 from coding_agent_playbook.config import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.detector import detect
@@ -57,9 +64,6 @@ class _Answers(TypedDict):
     hooks: bool | None
 
 
-# ``shared_skills`` (the cross-agent skills hub, SPEC §10.8) is on by default but,
-# unlike ``agents_md``, not force-enabled: users may drop it from adapters_enabled.
-_DEFAULT_ADAPTERS = ("continue", "claude_code", "opencode", "shared_skills")
 _VALID_KINDS = (
     "python-application",
     "python-library",
@@ -151,8 +155,7 @@ def _collect_answers(args: argparse.Namespace) -> _Answers:
                 file=sys.stderr,
             )
             raise SystemExit(2)
-        adapters_raw = getattr(args, "adapters", None) or ",".join(_DEFAULT_ADAPTERS)
-        adapters = [a.strip() for a in str(adapters_raw).split(",") if a.strip()]
+        adapters = adapters_from_flag(getattr(args, "adapters", None))
         overlays_raw = getattr(args, "overlays", "") or ""
         overlays = [o.strip() for o in str(overlays_raw).split(",") if o.strip()]
         return _Answers(
@@ -173,9 +176,7 @@ def _collect_answers(args: argparse.Namespace) -> _Answers:
         print(f"  valid kinds: {', '.join(_VALID_KINDS)}")
         kind = _prompt("Project kind", default="python-application")
     adapters = _prompt_multi_select(
-        "Which assistants will the team use?",
-        [*_DEFAULT_ADAPTERS, "codex"],
-        list(_DEFAULT_ADAPTERS),
+        ADAPTERS_QUESTION, list(ADAPTER_CHOICES), list(DEFAULT_ADAPTERS)
     )
     overlays = _prompt_multi_select(
         "Enable overlay packages?",
@@ -286,7 +287,8 @@ def _apply_answers(
     """``committed`` updated by a re-run: what each managed field becomes.
 
     ``[project]`` and ``overlays_enabled`` come from the answers, the adapters are
-    :func:`_adapters_union`, ``[detector_cache]`` is fresh, ``[output]`` is kept
+    :func:`~coding_agent_playbook.commands._init_adapters.adapters_union`,
+    ``[detector_cache]`` is fresh, ``[output]`` is kept
     (else ``commit = false``); ``[engine]``, ``[storage]`` and the committed
     ``[user_choices]`` are kept as they are.
 
@@ -298,25 +300,11 @@ def _apply_answers(
     return dataclasses.replace(
         committed,
         project=_project_meta(answers),
-        adapters_enabled=_adapters_union(committed.adapters_enabled, answers["adapters"]),
+        adapters_enabled=adapters_union(committed.adapters_enabled, answers["adapters"]),
         overlays_enabled=list(answers["overlays"]),
         detector_cache=detector_cache,
         output=committed.output if committed.output is not None else OutputConfig(commit=False),
     )
-
-
-def _adapters_union(committed: list[str], answered: list[str]) -> list[str]:
-    """The committed adapters in their order, then each answered one not listed yet.
-
-    A re-run never drops an adapter the team enabled by hand, and adds the
-    answered (default) ones it lacks — e.g. a newly shipped default adapter.
-
-    Example::
-
-        >>> _adapters_union(["continue", "custom"], ["claude_code", "continue"])
-        ['continue', 'custom', 'claude_code']
-    """
-    return [*committed, *(name for name in dict.fromkeys(answered) if name not in committed)]
 
 
 def _write_local_config(repo_root: Path) -> Path:

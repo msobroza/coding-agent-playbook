@@ -5,7 +5,7 @@ that ships skills natively delegates here, differing only in the root:
 
 - ``claude_code``   -> ``.claude/skills/<id>/``
 - ``opencode``      -> ``.opencode/skills/<id>/``
-- ``shared_skills`` -> ``shared_skills/<id>/`` (the cross-agent skills hub)
+- ``shared_skills`` -> ``.agents/skills/<id>/`` (the shared skill root: Codex, OpenCode)
 
 Because the bytes never depend on the root, the same skill is byte-identical in
 every root. Each directory holds ``SKILL.md`` plus byte-copies (copies, not

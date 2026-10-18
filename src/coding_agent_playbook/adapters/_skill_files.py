@@ -1,7 +1,7 @@
 """Which files of a skill's ``scripts/`` and ``references/`` a sync copies (SPEC §10.8).
 
 Both native skill writers — the shared ``SkillWriter`` (``.claude/skills/``,
-``.opencode/skills/``, ``shared_skills/``) and the ``agent_harness`` adapter
+``.opencode/skills/``, ``.agents/skills/``) and the ``agent_harness`` adapter
 (``skills/``) — walk a skill's subtrees through :func:`skill_subtree_files`
 (via :func:`~coding_agent_playbook.adapters._skill_sources.copyable_skill_files`,
 which then refuses secret paths and links leaving the skill), so the skip rule

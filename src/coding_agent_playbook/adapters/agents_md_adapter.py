@@ -45,6 +45,11 @@ class AgentsMdAdapter(Adapter):
 
     output_locations: ClassVar[tuple[str, ...]] = ("AGENTS.md",)
 
+    # AGENTS.md is the always-rules surface (ADR 0001): a member rule reaches its
+    # readers as a reference of the skill it names, which a skill adapter writes,
+    # so this adapter alone never counts as delivering member rules.
+    delivers_member_rules: ClassVar[bool] = False
+
     def __init__(self) -> None:
         # (priority, rule_id, rendered_section). Buffered now, sorted and
         # written at finalize() time so the on-disk order is stable across

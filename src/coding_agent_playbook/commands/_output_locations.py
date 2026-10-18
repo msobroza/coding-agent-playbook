@@ -1,6 +1,7 @@
 """Where engine output may live: the leftover policy's bounds (SPEC §4.2 step 9, §10.1).
 
-Built from the adapters' declared ``output_locations``, it does two jobs:
+Built from the adapters' declared ``output_locations`` (current and retired), it
+does two jobs:
 
 - **Deletion allowlist.** An orphan is deleted only inside a declared location,
   so a hand-edited (or merged, under ``commit = true``) lockfile can never aim
@@ -11,7 +12,14 @@ Built from the adapters' declared ``output_locations``, it does two jobs:
   ``.claude/skills -> ../.agents/skills`` an entry reads
   ``.agents/skills/demo/SKILL.md``: pruning stops below ``.agents/skills`` (the
   link's target) instead of removing it — and ``.agents`` — and leaving the
-  user's link dangling.
+  user's link dangling. That holds whatever order the adapters declare the two
+  roots in, and in either link direction (specs/prS-skills-context.md 5.4.3).
+
+Paths resolve through ``_symlinks.real_path`` (:func:`os.path.realpath`), not
+``Path.resolve()``: on Python 3.12 the latter raises ``RuntimeError`` on a
+symlink loop, so ``OutputLocations`` keeps a looping path as spelled and never
+raises on one. The sync path's other loop-prone resolutions use the same helper
+(``_sync_orphans._owned_path``, the protected rows, the stale-output scan).
 """
 
 from __future__ import annotations
@@ -23,7 +31,7 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook._symlinks import real_path
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
 
 @dataclass(frozen=True)
@@ -55,21 +63,19 @@ class OutputLocations:
         Unusable entries (absolute, empty, ``..``) are ignored: they can never
         widen the allowlist to the repo root or beyond.
         """
-        root = repo_root.resolve()
+        root = real_path(repo_root)
         files: set[str] = set()
-        roots: list[_Root] = []
+        dirs: list[tuple[PurePosixPath, PurePosixPath | None]] = []
         for location in locations:
             spelled = PurePosixPath(location.rstrip("/"))
             if spelled.is_absolute() or not spelled.parts or ".." in spelled.parts:
                 continue
             resolved = _resolved_rel(root.joinpath(*spelled.parts), root)
-            if not location.endswith("/"):
+            if location.endswith("/"):
+                dirs.append((spelled, resolved))
+            else:
                 files.update(rel.as_posix() for rel in (spelled, resolved) if rel is not None)
-                continue
-            roots.append(_Root(spelled, prunable=resolved == spelled))
-            if resolved is not None and resolved.parts and resolved != spelled:
-                roots.append(_Root(resolved, prunable=False))
-        return cls(frozenset(files), tuple(roots))
+        return cls(frozenset(files), _declared_roots(dirs))
 
     def contains(self, rel: str) -> bool:
         """True when the repo-relative POSIX ``rel`` lies in a declared location."""
@@ -83,7 +89,7 @@ class OutputLocations:
         and removes the declared directory itself only when it is prunable.
         Files outside every declared directory prune nothing.
         """
-        root = repo_root.resolve()
+        root = real_path(repo_root)
         for path in deleted:
             rel = _resolved_rel(path, root)
             owner = None if rel is None else self._root_of(rel)
@@ -94,6 +100,32 @@ class OutputLocations:
         """The deepest declared directory strictly containing ``rel``."""
         holders = [candidate for candidate in self.roots if candidate.rel in rel.parents]
         return max(holders, key=lambda holder: len(holder.rel.parts), default=None)
+
+
+def _declared_roots(
+    dirs: Sequence[tuple[PurePosixPath, PurePosixPath | None]],
+) -> tuple[_Root, ...]:
+    """Each declared directory as spelled and, through a symlink, as resolved.
+
+    A directory is prunable only when it is real as spelled and no other declared
+    directory is a symlink to it, whatever order the adapters declared them in:
+    every ``_Root`` sharing a ``rel`` then agrees on ``prunable``, so the
+    tie-break in :meth:`OutputLocations._root_of` cannot remove a link target.
+
+    Example::
+
+        >>> _declared_roots([(PurePosixPath("a"), PurePosixPath("a"))])
+        (_Root(rel=PurePosixPath('a'), prunable=True),)
+    """
+    link_targets = {
+        resolved for spelled, resolved in dirs if resolved is not None and resolved != spelled
+    }
+    roots: list[_Root] = []
+    for spelled, resolved in dirs:
+        roots.append(_Root(spelled, prunable=resolved == spelled and spelled not in link_targets))
+        if resolved is not None and resolved.parts and resolved != spelled:
+            roots.append(_Root(resolved, prunable=False))
+    return tuple(roots)
 
 
 def _resolved_rel(path: Path, root: Path) -> PurePosixPath | None:

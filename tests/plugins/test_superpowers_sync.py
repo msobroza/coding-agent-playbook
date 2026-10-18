@@ -3,7 +3,7 @@
 Drives ``playbook sync`` / ``playbook validate`` / ``playbook sync --check`` on a
 synthetic consumer repo the same way ``tests/cli/`` does, and checks that the
 pack lands natively and byte-identically under every native skill root
-(``.claude/skills/``, ``.opencode/skills/``, ``shared_skills/``): ``SKILL.md``
+(``.claude/skills/``, ``.opencode/skills/``, ``.agents/skills/``): ``SKILL.md``
 with the sentinel as its first body line and the vendored body after it,
 ``references/`` incl. the MIT notice, executable ``scripts/``. It also checks the
 degraded Continue prompts and that nothing is written without the opt-in.
@@ -40,13 +40,13 @@ from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from coding_agent_playbook.types import split_frontmatter
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import (
-    DEFAULT_ADAPTERS,
     EXPECTED_LICENSE_COPIES,
     EXPECTED_SCRIPTS,
     EXPECTED_SKILL_IDS,
     NATIVE_SKILL_ROOTS,
     PLUGIN_NAME,
     PLUGIN_ROOT,
+    SKILL_ADAPTERS,
     SKILLS_ROOT,
     consumer_config,
     write_consumer_repo,
@@ -99,7 +99,7 @@ def git_pack_repo(tmp_path: Path, hermetic_git_env: None) -> Path:
     a git work tree the leftover policy deletes a leftover only once git
     confirms that, so these scenarios exercise the real tracked/untracked call.
     """
-    return _init_git_pack_repo(tmp_path, adapters=DEFAULT_ADAPTERS)
+    return _init_git_pack_repo(tmp_path, adapters=SKILL_ADAPTERS)
 
 
 def _init_git_pack_repo(repo: Path, *, adapters: tuple[str, ...]) -> Path:
@@ -132,7 +132,7 @@ def _lock_paths(repo: Path) -> set[str]:
     return {entry.path for entry in lockfile.entries}
 
 
-def _opt_out(repo: Path, *, adapters: tuple[str, ...] = DEFAULT_ADAPTERS) -> None:
+def _opt_out(repo: Path, *, adapters: tuple[str, ...] = SKILL_ADAPTERS) -> None:
     (repo / ".coding-agent-playbook.toml").write_text(
         consumer_config(overlays=[], adapters=adapters), encoding="utf-8"
     )
@@ -288,7 +288,7 @@ def test_opting_out_keeps_a_consumer_added_and_a_consumer_edited_file(
     # Written by sync but edited since: no longer pristine, so it is kept.
     # (Edited only now: a rewritten SKILL.md makes the dir the consumer's at
     # the next opted-in sync, which is a different scenario.)
-    edited = repo / "shared_skills" / "writing-plans" / "SKILL.md"
+    edited = repo / ".agents" / "skills" / "writing-plans" / "SKILL.md"
     edited.write_text("Our own planning notes.\n", encoding="utf-8")
     _opt_out(repo)
     capsys.readouterr()
@@ -304,9 +304,9 @@ def test_opting_out_keeps_a_consumer_added_and_a_consumer_edited_file(
         assert not (repo / root / "writing-plans").exists(), root
     # The edited leftover stays engine-owned (lockfile + managed block); the
     # consumer's file never was.
-    assert "shared_skills/writing-plans/SKILL.md" in _lock_paths(repo)
+    assert ".agents/skills/writing-plans/SKILL.md" in _lock_paths(repo)
     gitignore = (repo / ".gitignore").read_text(encoding="utf-8")
-    assert "\n/shared_skills/writing-plans/\n" in gitignore
+    assert "\n/.agents/skills/writing-plans/\n" in gitignore
     assert "our-team-notes" not in gitignore
 
 
@@ -371,7 +371,7 @@ def test_an_override_shipping_fewer_references_removes_the_pack_only_files(
 def test_agent_harness_renders_the_pack_and_opting_out_removes_it(
     tmp_path: Path, hermetic_git_env: None
 ) -> None:
-    adapters = (*DEFAULT_ADAPTERS, "agent_harness")
+    adapters = (*SKILL_ADAPTERS, "agent_harness")
     repo = _init_git_pack_repo(tmp_path, adapters=adapters)
 
     for skill_id in sorted(EXPECTED_SKILL_IDS):

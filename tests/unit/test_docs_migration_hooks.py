@@ -30,6 +30,7 @@ from coding_agent_playbook.evaluators.checks.execution import CoverageCheck
 
 _ROOT = Path(__file__).resolve().parents[2]
 _V020 = "## v0.20 — Assistant lifecycle hooks (PR K)"
+_RELEASE_VERSION = re.compile(r"^## v(\d+)\.(\d+)\b", re.MULTILINE)
 
 #: The ``Adapter`` members PR K added; out-of-tree adapter authors read about each.
 _ADAPTER_HOOK_MEMBERS = (
@@ -69,11 +70,19 @@ def _v020_section() -> str:
     return text[start : end if end > 0 else len(text)]
 
 
+def _release_versions(text: str) -> list[tuple[int, int]]:
+    """The ``(major, minor)`` of every ``## v<major>.<minor>`` release heading, in file order."""
+    headings = re.findall(r"^## v.*$", text, re.MULTILINE)
+    versions = [(int(major), int(minor)) for major, minor in _RELEASE_VERSION.findall(text)]
+    assert len(versions) == len(headings), f"a release heading has no vX.Y version: {headings}"
+    return versions
+
+
 def test_migration_has_v0_20_lifecycle_hooks_section() -> None:
     text = _migration()
     assert _V020 in text
-    newest = re.search(r"^## v\d", text, re.MULTILINE)
-    assert newest is not None and newest.start() == text.index(_V020), "newest release first"
+    versions = _release_versions(text)
+    assert versions == sorted(versions, reverse=True), f"newest release first, got {versions}"
     assert "### TL;DR — who needs to do anything" in _v020_section()
 
 

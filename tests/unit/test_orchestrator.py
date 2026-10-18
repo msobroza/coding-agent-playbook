@@ -1,9 +1,11 @@
 """Tests for the orchestrator module (PR 10).
 
-Covers the three load-bearing pieces:
+Covers the load-bearing pieces:
 - :class:`OverlayResolver` — three-layer merge by ID with collision tracking.
-- :class:`RuleRegistryImpl` — inline-inclusion contract from SPEC §6.2.5.
+- :func:`template_source` — how an artifact's template is named in error messages.
 - :func:`discover_adapters` + :class:`SyncContext.from_repo` smoke test.
+
+The rule registry (``RuleRegistryImpl``) is tested in ``test_rule_registry.py``.
 """
 
 from __future__ import annotations
@@ -15,13 +17,11 @@ import pytest
 from coding_agent_playbook.config import Config, ProjectMeta, StorageConfig
 from coding_agent_playbook.orchestrator import (
     OverlayResolver,
-    RuleRegistryImpl,
     SyncContext,
     artifact_id_of,
     discover_adapters,
     template_source,
 )
-from coding_agent_playbook.renderer import TemplateSecurityError, build_environment
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import (
     Prompt,
@@ -129,95 +129,16 @@ def test_overlay_resolver_handles_prompts_and_skills():
     assert skill_result[0].source_package == "<repo-local>"
 
 
-# --- RuleRegistryImpl ------------------------------------------------------
+# --- template_source -------------------------------------------------------
 
 
-def test_rule_registry_returns_formatted_body_for_known_rule(tmp_path):
-    rule = _make_rule("style", "engine", name="Style", body="Body of style\n")
-    env = build_environment([])
-    env.globals["_facts"] = {}
-    registry = RuleRegistryImpl([rule], {}, env)
-    assert registry.render_for_inclusion("style", {}) == "### Style\n\nBody of style\n"
-
-
-def test_rule_registry_names_the_rule_file_on_a_sandbox_violation(tmp_path):
-    """The ``includes_rules`` render runs inside adapters; a sandbox violation there
-    must name the rule's source file, never surface as a bare ``SecurityError``."""
+def test_template_source_names_the_source_path_else_the_artifact_id(tmp_path):
     source = tmp_path / "playbook" / "rules" / "gated.md.j2"
-    rule = dataclasses.replace(
-        _make_rule("gated", "<repo-local>"),
-        template_body='{{ lipsum.__globals__["os"] }}',
-        is_templated=True,
-        source_path=source,
-    )
-    env = build_environment([])
-    env.globals["_facts"] = {}
-    registry = RuleRegistryImpl([rule], {}, env)
-    with pytest.raises(TemplateSecurityError) as caught:
-        registry.render_for_inclusion("gated", {})
-    assert caught.value.source == str(source)
+    rule = dataclasses.replace(_make_rule("gated", "<repo-local>"), source_path=source)
+
+    assert template_source(rule) == str(source)
     assert template_source(dataclasses.replace(rule, source_path=None)) == "gated"
-
-
-def test_rule_registry_returns_empty_string_for_unknown_rule():
-    env = build_environment([])
-    env.globals["_facts"] = {}
-    registry = RuleRegistryImpl([], {}, env)
-    assert registry.render_for_inclusion("missing", {}) == ""
-
-
-def test_rule_registry_re_renders_templated_body():
-    rule = Rule(
-        frontmatter=RuleFrontmatter(
-            id="ver",
-            name="Version",
-            description="d",
-            scope="always",
-            priority=50,
-        ),
-        body="placeholder",
-        template_body="Python {{ python_version }}\n",
-        is_templated=True,
-        source_path=None,
-        source_package="engine",
-    )
-    env = build_environment([])
-    env.globals["_facts"] = {"python_version": "3.12"}
-    registry = RuleRegistryImpl([rule], {}, env)
-    assert registry.render_for_inclusion("ver", {"python_version": "3.12"}) == (
-        "### Version\n\nPython 3.12\n"
-    )
-
-
-def test_rule_registry_falls_back_to_stored_facts_when_caller_passes_empty_context():
-    """Regression — the auto-appended `includes_rules` appendix path in
-    renderer.py calls ``render_for_inclusion(rule_id, {})``. The registry
-    must merge its stored facts into the render context so templated rule
-    bodies don't fail under StrictUndefined. Caller-supplied keys still win.
-    """
-    rule = Rule(
-        frontmatter=RuleFrontmatter(
-            id="ver",
-            name="Version",
-            description="d",
-            scope="always",
-            priority=50,
-        ),
-        body="placeholder",
-        template_body="Python {{ python_version }}\n",
-        is_templated=True,
-        source_path=None,
-        source_package="engine",
-    )
-    env = build_environment([])
-    env.globals["_facts"] = {"python_version": "3.12"}
-    registry = RuleRegistryImpl([rule], {"python_version": "3.12"}, env)
-    # Auto-append path passes {} — must still succeed
-    assert registry.render_for_inclusion("ver", {}) == "### Version\n\nPython 3.12\n"
-    # Caller override wins on key collision
-    assert registry.render_for_inclusion("ver", {"python_version": "3.13"}) == (
-        "### Version\n\nPython 3.13\n"
-    )
+    assert template_source(_make_prompt("review", "engine")) == "review"
 
 
 # --- discover_adapters + SyncContext.from_repo -----------------------------

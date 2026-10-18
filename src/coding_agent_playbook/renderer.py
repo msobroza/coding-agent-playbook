@@ -28,6 +28,7 @@ from coding_agent_playbook.hook_registrations import (
     claude_settings_projection,
     declared_stop_budget_s,
 )
+from coding_agent_playbook.prompt_rule_delivery import includes_rules_appendix
 from coding_agent_playbook.types import HookFrontmatter
 
 if TYPE_CHECKING:
@@ -252,10 +253,10 @@ def render_for(
     ``FORMAT_ALIASES``). Behaviour per format is documented in SPEC §9.7.
 
     For prompt formats, pass the prompt's un-rendered ``template_body``: whether
-    the ``includes_rules:`` appendix is generated depends on the template, since
-    a rendered ``body`` no longer shows the ``rule()`` calls Jinja expanded (see
-    :func:`includes_rules_appendix`). It defaults to ``body`` for callers that
-    pass an un-rendered body.
+    the ``includes_rules:`` appendix (``prompt_rule_delivery.includes_rules_appendix``)
+    is generated depends on the template, since a rendered ``body`` no longer
+    shows the ``rule()`` calls Jinja expanded. It defaults to ``body`` for
+    callers that pass an un-rendered body.
 
     ``_template_path`` is reserved for future format-specific dispatch
     (SPEC §9.7); current transforms key off ``fmt`` and ``frontmatter`` only,
@@ -274,7 +275,7 @@ def render_for(
         return _render_hook_advisory(body, frontmatter)
     if resolved == "hook_claude_settings":
         return _render_hook_claude_settings(_template_path, frontmatter)
-    appendix = includes_rules_appendix(
+    appendix = _prompt_appendix(
         body if template_body is None else template_body, frontmatter, rule_registry
     )
     if resolved == "prompt_continue":
@@ -365,26 +366,19 @@ def _render_hook_claude_settings(source: Path, frontmatter: dict[str, Any]) -> s
     return json.dumps(projection, indent=2, ensure_ascii=False) + "\n"
 
 
-def includes_rules_appendix(
-    template_body: str,
-    frontmatter: dict[str, Any],
-    rule_registry: RuleRegistry | None,
+def _prompt_appendix(
+    template_body: str, frontmatter: dict[str, Any], rule_registry: RuleRegistry | None
 ) -> str:
     """The ``## Reference rules`` appendix a prompt gets, or ``""`` (SPEC §6.2.5).
 
-    The appendix is only for prompts whose template never calls ``{{ rule() }}``:
-    a prompt that places its rules itself owns the inclusion layout. Decide this
-    on the *template* body. Checking the rendered body (the old behaviour) never
-    saw a call Jinja had already expanded, so every inlined rule was emitted
-    twice: once in place, once in the appendix.
-
-    Example::
-
-        includes_rules_appendix(prompt.template_body, frontmatter, registry)
+    Only for prompts whose template never calls ``{{ rule() }}``: one that places
+    its rules itself owns the inclusion layout. Decided on the *template* body:
+    the rendered body no longer shows a call Jinja expanded, and checking it
+    emitted every inlined rule twice (once in place, once in the appendix).
     """
     if RULE_CALL_RE.search(template_body):
         return ""
-    return _build_includes_rules_appendix(frontmatter, rule_registry)
+    return includes_rules_appendix(frontmatter.get("includes_rules") or [], rule_registry)
 
 
 def appendix_rule_ids(includes_rules: Sequence[str], template_body: str) -> list[str]:
@@ -392,35 +386,14 @@ def appendix_rule_ids(includes_rules: Sequence[str], template_body: str) -> list
 
     ``includes_rules`` in order, or none when the prompt's un-rendered
     ``template_body`` calls ``rule()`` itself (the author owns the layout, SPEC
-    §6.2.5) — the same :data:`RULE_CALL_RE` decision as
-    :func:`includes_rules_appendix`. ``playbook sync`` pre-renders exactly these
-    before any adapter writes, so a template error in an included rule aborts
-    the sync before the first file lands.
+    §6.2.5) — the same :data:`RULE_CALL_RE` decision :func:`render_for` makes.
+    ``playbook sync`` pre-renders exactly these before any adapter writes, so a
+    template error in an included rule aborts the sync before the first file
+    lands.
 
     Example: ``appendix_rule_ids(["style"], "Refactor.\\n")`` -> ``["style"]``.
     """
     return [] if RULE_CALL_RE.search(template_body) else list(includes_rules)
-
-
-def _build_includes_rules_appendix(
-    frontmatter: dict[str, Any], rule_registry: RuleRegistry | None
-) -> str:
-    """Render the ``## Reference rules`` appendix from ``includes_rules:``.
-
-    Returns an empty string when no appendix is needed (no rules listed, no
-    registry, or every fragment came back empty).
-    """
-    rules = frontmatter.get("includes_rules") or []
-    if not rules or rule_registry is None:
-        return ""
-    fragments: list[str] = []
-    for rule_id in rules:
-        fragment = rule_registry.render_for_inclusion(rule_id, {})
-        if fragment:
-            fragments.append(fragment.rstrip("\n"))
-    if not fragments:
-        return ""
-    return "\n## Reference rules\n\n" + "\n\n".join(fragments) + "\n"
 
 
 def _render_prompt_continue(
