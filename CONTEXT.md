@@ -121,3 +121,15 @@ _Avoid_: ported, adapted
 **Vendored content**:
 Third-party files copied into a bundled plugin together with their license and a list of changes.
 _Avoid_: imported, mirrored
+
+### What a skill may run
+
+**Harness built-in**:
+A capability the harness itself gives the agent, such as loading a skill, running a subagent or asking the user a question; each harness names it differently and some lack it.
+
+**Imposed tool**:
+An executable a skill tells the agent to run whatever the consumer repo is, such as a forge CLI or a bundled shell script.
+_Avoid_: external tool, dependency
+
+**Project toolchain**:
+The commands a consumer repo already runs for itself, such as its test, typecheck, lint or build commands; a skill that runs them imposes no tool.
