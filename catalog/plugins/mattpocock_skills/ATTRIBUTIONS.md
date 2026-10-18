@@ -93,7 +93,7 @@ change from the upstream text listed in this file.
   included: `code-review` becomes `two-axis-review`, `pr` becomes `pr-body` and
   `prototype` becomes `throwaway-prototype`. In Claude Code a project skill named
   like a bundled skill replaces its slash command, and the bundled `pr` builds
-  on a forge CLI.
+  on the `gh` CLI.
 - What moved with each rename: the directory, `id`, `name`, every inbound load,
   every prose mention and every router label.
 - Unchanged on purpose: wayfinder's `prototype` ticket type and UI.md's
@@ -130,13 +130,13 @@ change from the upstream text listed in this file.
   the forge CLIs, the JavaScript package runners as instructions, JSON and
   terminal utilities, HTTP clients, OS openers, shell linters, containers,
   headless browsers, any bash script and any CDN asset.
-- **What it removed:** the forge CLIs (setup's GitHub and GitLab seeds; wizard's
-  secret and variable writes); the terminal-colour utility and the OS openers of
+- **What it removed:** the forge CLIs (`gh`, `glab`: setup's GitHub and GitLab
+  seeds; wizard's secret and variable writes); `tput` and the OS openers of
   wizard and improve-codebase-architecture (`wslview`, `explorer.exe`,
-  `xdg-open`, `open`, `start`); the HTTP-client and headless-browser options of
+  `xdg-open`, `open`, `start`); the `curl` and Puppeteer options of
   diagnosing-bugs `SKILL.md` L27, L29 and L59 and the localhost URL in its
-  script; the shell linter and `bash -n` in wizard's verify step; Tailwind and
-  Mermaid loaded from a CDN in the architecture report; and both bash scripts.
+  script; `shellcheck` and `bash -n` in wizard's verify step; Tailwind and
+  Mermaid via CDN in the architecture report; and both bash scripts.
 - **Kept:** the project toolchain examples (TypeScript, Jest and JS-frontend
   examples, setup's JS-only monorepo markers), recorded as stack assumptions
   under "Consumer-repo conventions".
@@ -207,7 +207,7 @@ change from the upstream text listed in this file.
 - setup's GitHub and GitLab tracker seeds and its PR/MR-as-request flag, and
   setup's steps that wrote into `CLAUDE.md` or `AGENTS.md`.
 - `agents/openai.yaml` in every skill.
-- wizard's automatic forge writes, its terminal-colour utility and its OS
+- wizard's automatic forge writes, its `tput` colours and its OS
   openers (`wslview`, `explorer.exe`, `xdg-open`, `open`); ANSI escapes and
   `webbrowser` replace them, and the WSL opener is lost.
 - The architecture report's CDN assets.

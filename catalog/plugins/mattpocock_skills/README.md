@@ -1,10 +1,11 @@
 # mattpocock_skills (bundled plugin)
 
 Vendored content of Matt Pocock's engineering and productivity skills: 26
-skills, pinned to upstream v1.3.1 and kept near-verbatim, rewritten only where
-a skill told the agent to run a tool a consumer repo may not have. The skills
-are MIT-licensed; `LICENSE` next to this file holds the notice, and
-`ATTRIBUTIONS.md` records the provenance and every change from upstream.
+skills, pinned to upstream v1.3.1 and kept near-verbatim. The skills are
+MIT-licensed; `LICENSE` next to this file holds the notice, and
+`ATTRIBUTIONS.md` records the provenance and every change from upstream (the
+renames, the removed imposed tools, the reworded harness built-ins, the
+user-invoked guard line and the glossary fallback).
 
 ## Enable it
 
