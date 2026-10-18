@@ -280,7 +280,136 @@ These are paths inside the consumer repo, not dependencies:
 
 ### ask-matt
 
-_Filled by T09._
+Upstream `skills/engineering/ask-matt/`; synced as `.agents/skills/ask-matt/`.
+Vendored with listed changes, user-invoked. Router labels keep their `/name`
+throughout (human-facing, Cross-skill references); only `/clear` and
+`/compact` lose theirs.
+
+- `SKILL.md` L2 (v1.3.1): `id: ask-matt` inserted as the first frontmatter key,
+  before "name: ask-matt" (Frontmatter). `name`, the 83-character description
+  and `disable-model-invocation` are byte-identical to upstream L2-L4; the
+  description keeps "A router over the skills in this repo." verbatim (D28).
+- `SKILL.md` L6 (v1.3.1): after the blank line that closes the frontmatter, the
+  guard line "Run this only when the user asked for it by name; otherwise stop."
+  inserted as its own paragraph above "# Ask Matt", the first line of body
+  content (D19).
+- `SKILL.md` L17 (v1.3.1): " (or `CONTEXT.md` if the repo already has one)"
+  inserted after the code span `GLOSSARY.md` (D21).
+- `SKILL.md` L20 (v1.3.1): the label `/prototype` becomes
+  `/throwaway-prototype` (Renames); the plain noun "a prototype" on L18 stays.
+- `SKILL.md` L24 (v1.3.1): "**`/clear`ing context between each one**" becomes
+  "**starting a fresh context between each one**" (D17).
+- `SKILL.md` L25 (v1.3.1): " (one ticket at a time where your harness cannot
+  run subagents)" inserted after "in parallel", mirroring implement-spec's
+  sequential fallback (D17, D18.5).
+- `SKILL.md` L28 (v1.3.1): the three `/code-review` labels become
+  `/two-axis-review` (Renames).
+- `SKILL.md` L30 (v1.3.1): the label `/pr` becomes `/pr-body` (Renames); "It's
+  model-invoked" stays, since pr-body has no `disable-model-invocation`.
+- `SKILL.md` L32 (v1.3.1): `/code-review` becomes `/two-axis-review`
+  (Renames); "steering files" stays.
+- `SKILL.md` L38 (v1.3.1): the bold "smart zone" link loses its external
+  target and keeps its text as plain bold text (No external URLs); "`/compact`
+  at the nearest phase boundary" becomes "summarise and start a fresh context
+  at the nearest phase boundary" (D17).
+- `SKILL.md` L44-L47 (v1.3.1): the triage on-ramp bullet, its continuation
+  paragraph and their two blank lines deleted (D7, Dropped and why). L11's "two
+  **on-ramps**" is left as written: two on-ramps remain (diagnosing-bugs,
+  wayfinder), so the line is now accurate.
+- `SKILL.md` L64 (v1.3.1): " (or `CONTEXT.md` if the repo already has one)"
+  inserted after the code span `GLOSSARY.md` (D21).
+- `SKILL.md` L72 (v1.3.1): the option label "**`/clear`**" becomes "**Clear**
+  (start a fresh context)" (D17).
+- `SKILL.md` L74 (v1.3.1): " (if your harness can run one)" inserted after the
+  "**Subagent**" label (D17).
+- `SKILL.md` L75 (v1.3.1): the option label "**`/compact`**" becomes
+  "**Compact** (summarise this context, then start a fresh context from the
+  summary)"; Matt's description of the option stays (D17).
+- `SKILL.md` L77 (v1.3.1): the link target becomes
+  `references/PHASE-BOUNDARIES.md`, link text unchanged (Restructure); ", if
+  your harness can run subagents," inserted after "continue or" (D17).
+- `SKILL.md` L83 (v1.3.1): " (or `CONTEXT.md` if the repo already has one)"
+  inserted after the code span `GLOSSARY.md` (D21).
+- `SKILL.md` L84 (v1.3.1): "and `/triage`, `/wayfinder` and
+  `/improve-codebase-architecture` all run it internally" becomes "and
+  `/wayfinder` and `/improve-codebase-architecture` both run it internally"
+  (D7).
+- `SKILL.md` L85 (v1.3.1): the label `/prototype` becomes
+  `/throwaway-prototype` (Renames); the noun "the prototype itself" and the
+  branch name `prototype/<name>` stay, since neither is a skill id.
+- `SKILL.md` L86 (v1.3.1): one sentence inserted after "Keep working while it
+  reads.": "If your harness cannot run a background agent, the agent hands the
+  reading to a subagent, or does it itself in this session." Matt's sentences
+  are byte-identical (D17, D18.3).
+- `SKILL.md` L88 (v1.3.1): "an interactive bash script that opens each URL,
+  captures each value, and writes it into `.env` and GitHub secrets" becomes
+  "an interactive Python script that opens each URL, captures each value,
+  writes it into `.env`, and guides you through setting each GitHub secret or
+  variable by hand", matching the shipped `scripts/wizard_template.py` (D22,
+  D2). "Model-invoked" stays: wizard has no `disable-model-invocation`.
+- `SKILL.md` L89 (v1.3.1): " (or `CONTEXT.md` if the repo already has one)"
+  inserted after the code span `GLOSSARY.md` (D21).
+- `PHASE-BOUNDARIES.md`: moved to `references/PHASE-BOUNDARIES.md`
+  (Restructure). It has no links, so nothing in it points back at `SKILL.md`;
+  it keeps its 55 lines and upstream numbering.
+- `references/PHASE-BOUNDARIES.md` L5 (v1.3.1): ", if your harness can run
+  subagents," inserted after "continue, or"; "Compacting mid-phase" stays, a
+  plain verb (D17).
+- `references/PHASE-BOUNDARIES.md` L12 (v1.3.1): the label cell "**`/clear`**"
+  becomes "**Clear** (start a fresh context)"; the description cell and its
+  padding are byte-identical (D17).
+- `references/PHASE-BOUNDARIES.md` L14 (v1.3.1): the label cell "**Subagent**"
+  gains " (if your harness can run one)" (D17).
+- `references/PHASE-BOUNDARIES.md` L15 (v1.3.1): the label cell
+  "**`/compact`**" becomes "**Compact** (summarise, then start a fresh context
+  from the summary)" (D17). The table is not realigned: upstream's L13 and L15
+  rows were already wider than the separator row, and ruff stays off this
+  markdown.
+- `references/PHASE-BOUNDARIES.md` L21 (v1.3.1): the "smart zone" link loses
+  its external target and stays as plain text (No external URLs).
+- `references/PHASE-BOUNDARIES.md` L23 (v1.3.1): "If so, **`/clear`**." becomes
+  "If so, **clear** (start a fresh context)." and "`/clear` also isn't
+  terminal" becomes "Clearing also isn't terminal" (D17).
+- `references/PHASE-BOUNDARIES.md` L36 (v1.3.1): "Then send it to a
+  **subagent** and leave this session untouched." becomes "Then, if your
+  harness can run subagents, send it to a **subagent** and leave this session
+  untouched; if it can't, go on to question 5.", so a yes that cannot be acted
+  on falls through the tree (D17).
+- `references/PHASE-BOUNDARIES.md` L38 (v1.3.1): the heading "**5. Otherwise,
+  `/compact`.**" becomes "**5. Otherwise, compact (summarise, then start a
+  fresh context from the summary).**", and the Claude Code argument syntax goes
+  from the example, leaving "(`we're going to QA this area`)" (D17).
+- `references/PHASE-BOUNDARIES.md` L40 (v1.3.1): "`/compact` is" becomes
+  "Starting a fresh context from a summary is" (D17).
+- `references/PHASE-BOUNDARIES.md` L49 (v1.3.1): `/compact` in the Secondary
+  row becomes "fresh context from a summary"; the `/handoff` label stays and
+  the row is not realigned (D17).
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies).
+- `agents/openai.yaml`: not shipped (Restructure); it held the Codex display
+  name "Ask Matt", the short description "Find the right skill or workflow" and
+  `policy.allow_implicit_invocation: false`. With it Codex loses this skill's
+  user-only invocation policy; what remains is `disable-model-invocation`,
+  which only Claude Code honours, and the guard line (D10, D19).
+- Kept verbatim on purpose: the H1 "# Ask Matt" and the label
+  `/setup-matt-pocock-skills` (no collision, no coupling marker); L36's plain
+  verbs "don't compact or clear", "before you clear; after clearing" and "starts
+  fresh"; L95's "triage labels" and "Custom issue trackers also work." (setup is
+  kept and always writes the labels file); PHASE-BOUNDARIES L29's illustrative
+  "(Claude → Codex)" pair. The allowlist has no entry: no word is in command
+  position.
+- For T10 (global sections): "Harness built-ins reworded" says `/clear` and
+  `/compact` become "start a fresh context"; here Compact is worded as a fresh
+  context started from a summary, so the five phase-boundary options stay
+  distinct. "Imposed tools removed" may also list this router's "bash script"
+  wording at L88, which follows wizard's Python port.
+- Continue: `.continue/prompts/ask-matt.md` holds only the `SKILL.md` body,
+  guard line included, which a user-started prompt satisfies. `references/`
+  does not travel, so the `references/PHASE-BOUNDARIES.md` link dangles and
+  the ordered five-question tree and the primary/secondary trade-off table are
+  lost, leaving only the five-option summary. The "model-invoked, so the agent
+  reaches for it" claims at L30, L62 and L88 do not hold there, and no licence
+  copy travels (D29).
 
 ### codebase-design
 
