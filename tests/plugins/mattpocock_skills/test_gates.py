@@ -322,7 +322,9 @@ def test_g16_glossary_names_carry_the_context_fallback(path: Path) -> None:
 
 def test_g17_one_allowlist_file_per_present_skill() -> None:
     names = sorted(p.name for p in ALLOWLIST_DIR.iterdir())
-    assert names == [f"{skill_id}.txt" for skill_id in _SKILLS]
+    # Sort the expected names too: "implement-spec.txt" sorts before "implement.txt"
+    # ("-" < "."), though the id "implement" sorts before "implement-spec".
+    assert names == sorted(f"{skill_id}.txt" for skill_id in _SKILLS)
     for skill_id in _SKILLS:
         load_allowlist(skill_id)  # raises with the file and line on a malformed entry
 
