@@ -5,8 +5,11 @@ coding_agent_playbook.hook_runtime dispatch ...``, in a fresh interpreter
 against a synced fixture repo, and reads every imported module from the
 ``importtime`` report. The hot path (``pre_tool_use`` for an Edit and for a
 Bash command, and ``post_tool_use`` after a Python edit) may import only the
-stdlib, ``hook_runtime.*`` and ``security.*``; ``tomllib`` loads only on
-``session_start`` or when the lockfile's stat changed (§D.8.1). P-D1 (the lazy
+stdlib, ``hook_runtime.*`` and the stdlib leaves (``security.*`` and the others in
+``tests.engine_modules.STDLIB_LEAVES``): ``FORBIDDEN`` is every other engine module,
+derived from the package tree, so a new package is forbidden by default.
+``tomllib`` loads only on ``session_start`` or when the lockfile's stat changed
+(§D.8.1). P-D1 (the lazy
 ``__version__``) is what keeps ``importlib.metadata`` off this path. The first
 pack guard (guard-generated-outputs, Track K5) denies a protected edit from the
 rendered tables alone: no TOML, no render, no subprocess. control-plane-guard
@@ -37,6 +40,12 @@ import pytest
 from coding_agent_playbook._sentinel import SENTINEL, sentinel_line
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.harness import DENY_EXIT
+from tests.engine_modules import (
+    ENGINE,
+    engine_module,
+    non_leaf_modules,
+    runtime_dependency_imports,
+)
 from tests.hook_runtime.guard_repo import GuardRepo, hook_record
 from tests.import_probe import PROBE_TIMEOUT_S, probe_env
 
@@ -45,28 +54,19 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.proc import SubprocessProc
 
-FORBIDDEN: Final = (
-    "jinja2",
-    "yaml",
+#: The engine's runtime dependencies (pyproject.toml) and the stdlib modules the
+#: dispatch hot path never loads (§D.1).
+_FORBIDDEN_LIBRARIES: Final = (
+    *runtime_dependency_imports(),
     "importlib.metadata",
     "tomllib",
-    "packaging",
     "argparse",
-    *(
-        f"coding_agent_playbook.{name}"
-        for name in (
-            "cli",
-            "renderer",
-            "orchestrator",
-            "adapters",
-            "sources",
-            "commands",
-            "evaluators",
-            "evals",
-            "detector",
-        )
-    ),
 )
+#: Plus every engine module outside the hook runtime and its stdlib leaves. Derived
+#: from the package tree, so a new top-level package is forbidden until it joins
+#: ``tests.engine_modules.STDLIB_LEAVES`` on purpose.
+FORBIDDEN: Final = (*_FORBIDDEN_LIBRARIES, *non_leaf_modules("hook_runtime"))
+_GIT_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.git")
 _IMPORT_LINE: Final = re.compile(r"^import time:\s+\d+ \|\s+\d+ \|\s*(\S+)\s*$")
 
 
@@ -128,6 +128,14 @@ def _attributable(module: str) -> bool:
 
 
 def _forbidden(imported: set[str], allowed: tuple[str, ...] = ()) -> list[str]:
+    """The ``FORBIDDEN`` modules in ``imported``, apart from the branch-local ``allowed`` ones.
+
+    Every engine name in ``allowed`` must still resolve (``engine_module``): a stale
+    allowance would let the moved module's new name through unnoticed.
+    """
+    for name in allowed:
+        if name.startswith(f"{ENGINE}."):
+            engine_module(name)
     return sorted(
         name
         for name in imported
@@ -177,7 +185,7 @@ def test_bash_without_git_spawns_no_process_module(
     imported = _imports(real_proc, synced, EventName.PRE_TOOL_USE, payload)
 
     assert "subprocess" not in imported
-    assert "coding_agent_playbook.hook_runtime.git" not in imported
+    assert _GIT_MODULE not in imported
 
 
 def test_tomllib_loads_only_on_session_start_or_lock_stat_change(
@@ -208,10 +216,11 @@ def test_the_import_probe_reads_the_importtime_report(
         real_proc, synced, EventName.STOP, synced.payload(EventName.STOP, stop_hook_active=False)
     )
 
-    assert {"json", "coding_agent_playbook.hook_runtime.cli"} <= imported
+    assert {"json", engine_module("coding_agent_playbook.hook_runtime.cli")} <= imported
 
 
-_PROTECTED_MODULE: Final = "coding_agent_playbook.hook_runtime.protected"
+_PROTECTED_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.protected")
+_PIN_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.pin")
 
 
 @pytest.fixture
@@ -259,10 +268,12 @@ def test_protected_edit_denied_without_toml_render_or_subprocess(
     assert _PROTECTED_MODULE in imported  # the guard ran (and denied: exit 10)
     assert _forbidden(imported) == []
     assert "subprocess" not in imported
-    assert "coding_agent_playbook.hook_runtime.pin" not in imported  # no machine.json read
+    assert _PIN_MODULE not in imported  # no machine.json read
 
 
-_CPG_PREFIX: Final = "coding_agent_playbook.hook_runtime.handlers._control_plane_"
+_CPG_PREFIX: Final = (
+    f"{engine_module('coding_agent_playbook.hook_runtime.handlers')}._control_plane_"
+)
 
 
 @pytest.fixture
@@ -454,13 +465,32 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
     assert "yaml" in imported and "coding_agent_playbook.sources.filesystem" in imported
     # The compile resolves check/gate/metric entry points (importlib.metadata), never
     # the runner or judge groups; the prompts come from sources.filesystem (yaml).
+    # evals.validator compiles the task through config and the canonical types:
+    # every engine module that branch loads is named, so a new one fails here.
     branch_local = (
         "tomllib",
         "yaml",
         "importlib.metadata",
-        "coding_agent_playbook.evals",
-        "coding_agent_playbook.evaluators",
-        "coding_agent_playbook.sources",
+        *(
+            engine_module(f"{ENGINE}.{name}")
+            for name in (
+                "_hook_frontmatter",
+                "_hook_schema",
+                "_layers",
+                "_member_reference",
+                "_table_shapes",
+                "_toml",
+                "config",
+                "config_entries",
+                "config_schema",
+                "evals",
+                "evaluators",
+                "hooks_config",
+                "metrics_config",
+                "sources",
+                "types",
+            )
+        ),
     )
     assert _forbidden(imported, allowed=branch_local) == []
     assert "jinja2" not in imported
@@ -468,9 +498,9 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
 
 # --- K5 step 4: the briefing and the drift stage (§D.1 rows: lockfile + tomllib) ------
 
-_LOCKFILE_MODULE: Final = "coding_agent_playbook.lockfile"
-_BRIEFING: Final = "coding_agent_playbook.hook_runtime.handlers._briefing_probes"
-_DRIFT_FAST_PATH: Final = "coding_agent_playbook.hook_runtime.handlers._drift"
+_LOCKFILE_MODULE: Final = engine_module("coding_agent_playbook.lockfile")
+_BRIEFING: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._briefing_probes")
+_DRIFT_FAST_PATH: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._drift")
 
 
 @pytest.fixture
@@ -536,7 +566,8 @@ def test_stop_drift_stage_loads_the_lockfile_only_when_active(
 
 # --- K7 step 2: the post-edit ruff branch (specs/prK-hook-pack.md §E.3) ------------------
 
-_RUFF_PIPELINE: Final = "coding_agent_playbook.hook_runtime.handlers._ruff_pipeline"
+_RUFF_PIPELINE: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._ruff_pipeline")
+_GUARD_CONFIG_RUFF: Final = engine_module("coding_agent_playbook._guard_config_ruff")
 
 
 @pytest.fixture
@@ -573,10 +604,10 @@ def test_python_edit_branch_imports_no_forbidden_module(
     assert _RUFF_PIPELINE in imported  # the post-edit handler ran up to its pin check
     assert _forbidden(imported) == []
     assert "subprocess" not in imported
-    assert "coding_agent_playbook._guard_config_ruff" not in imported  # sync-time (tomllib)
+    assert _GUARD_CONFIG_RUFF not in imported  # sync-time (tomllib)
 
 
-_SECRET_POLICY: Final = "coding_agent_playbook.hook_runtime.handlers._secret_policy"
+_SECRET_POLICY: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._secret_policy")
 
 
 @pytest.fixture
@@ -622,7 +653,7 @@ def test_secret_guards_deny_from_paths_and_bytes_alone(
     assert _SECRET_POLICY in imported  # a secret guard ran (and denied: exit 10)
     assert _forbidden(imported) == []
     assert "subprocess" not in imported
-    assert "coding_agent_playbook.hook_runtime.git" not in imported
+    assert _GIT_MODULE not in imported
 
 
 @pytest.fixture
@@ -666,12 +697,12 @@ def test_bash_guards_need_no_git_and_no_process_off_git_segments(
 
     assert _forbidden(imported) == []
     assert "subprocess" not in imported
-    assert "coding_agent_playbook.hook_runtime.git" not in imported
+    assert _GIT_MODULE not in imported
 
 
 #: The helpers each guard imports at module load: their presence shows the guard ran.
-_INSTALL_CMDS: Final = "coding_agent_playbook.hook_runtime.handlers._install_cmds"
-_EGRESS: Final = "coding_agent_playbook.hook_runtime.handlers._egress"
+_INSTALL_CMDS: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._install_cmds")
+_EGRESS: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._egress")
 _BRANCH_LOCAL: Final = ("tomllib", "difflib", "ipaddress")
 
 
@@ -774,13 +805,13 @@ def test_async_audit_branch_imports_nothing_forbidden(
     assert "coding_agent_playbook.hook_runtime.handlers._activity_record" in imported
     assert _forbidden(imported) == []
     assert "subprocess" not in imported
-    assert "coding_agent_playbook.hook_runtime.git" not in imported
+    assert _GIT_MODULE not in imported
     (log,) = audited.state_root.glob("audit-*.jsonl")
     assert '"event":"post_tool_use"' in log.read_text(encoding="ascii")
 
 
 #: network-egress-guard's destination parser: its presence shows the guard ran (K9 step 4).
-_NET_TARGETS: Final = "coding_agent_playbook.hook_runtime.handlers._net_targets"
+_NET_TARGETS: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._net_targets")
 
 
 @pytest.fixture
@@ -836,4 +867,4 @@ def test_network_guard_bash_branch_imports_nothing_forbidden(
     assert _forbidden(imported) == []
     assert "subprocess" not in imported
     assert "socket" not in imported
-    assert "coding_agent_playbook.hook_runtime.git" not in imported
+    assert _GIT_MODULE not in imported

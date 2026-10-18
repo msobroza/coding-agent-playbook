@@ -112,6 +112,22 @@ A named OpenCode mode with its own model, permissions and system prompt; it is n
 **Consumer repo**:
 A repository the playbook is installed into.
 
+**Generated output**:
+A file the engine writes and owns in a consumer repo, marked by the sentinel and recorded in the lockfile.
+_Avoid_: owned file, managed file
+
+**Lockfile**:
+The engine's record, in a consumer repo, of every generated output it wrote, with its source and content hash; sync uses it to find drift and leftovers.
+
+### Checks and grading
+
+**Guard twin**:
+A CLI command that runs the same judge as a guard hook, so the check also runs outside an agent session, in CI or pre-commit.
+
+**Grading kernel**:
+The engine's shared machinery for scoring work (metrics, checks, rubrics and how they compose), used by eval tasks and the metrics gate.
+_Avoid_: evaluators
+
 ### Third-party content
 
 **Distilled content**:

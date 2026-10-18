@@ -6,6 +6,9 @@ It is recorded **without changing the adapter return type**: the dispatch
 wraps each ``write_rule``/``write_prompt``/``write_skill``/``finalize`` call
 and tags every path it returns. Orphans the leftover policy keeps
 (``_sync_orphans``) ride along in the new lockfile with their old entries.
+One ``write_skill`` call can produce two kinds of entry: the member references
+of a skill with member rules are ``kind = "rule"`` entries naming their rule
+(specs/prS-skills-context.md section 6.4.11), everything else ``kind = "skill"``.
 
 Hooks (specs/prK-lifecycle-hooks.md §C.1.3): every adapter first gets
 ``begin_sync`` with the real repo and the prior lockfile, receives
@@ -25,6 +28,9 @@ import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook._member_reference import member_reference_path
+from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of
+from coding_agent_playbook.commands._sync_output import native_skill_roots
 from coding_agent_playbook.lockfile import (
     LockEntry,
     Lockfile,
@@ -38,6 +44,7 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, Sequence
     from pathlib import Path
 
+    from coding_agent_playbook._member_reference import MemberReference
     from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.commands._sync_hooks import SyncHooks
     from coding_agent_playbook.hook_policy import ResolvedHook
@@ -143,8 +150,10 @@ def dispatch_to_adapters(
     tagging each returned path with the artifact (or composite output) that produced it.
 
     ``adapters`` maps the entry-point name to the instance, e.g.
-    ``{"continue": ContinueAdapter()}``. Each adapter's scoped lock entries are
-    collected on ``recorder.managed`` after its ``finalize``.
+    ``{"continue": ContinueAdapter()}``. Each adapter first hears the native
+    skill roots of the whole set (``note_native_skill_roots``), so ``agents_md``
+    can drop its skills map when nothing writes skills. Each adapter's scoped
+    lock entries are collected on ``recorder.managed`` after its ``finalize``.
 
     Example::
 
@@ -153,7 +162,9 @@ def dispatch_to_adapters(
     """
     plan = hooks if hooks is not None else HookDispatch()
     recorder = ProvenanceRecorder()
+    skill_roots = native_skill_roots(adapters)
     for name, adapter in adapters.items():
+        adapter.note_native_skill_roots(skill_roots)
         adapter.begin_sync(
             plan.source_root or output_root, plan.prior_lock, hooks_config=plan.config
         )
@@ -203,9 +214,58 @@ def _write_artifacts(
             adapter.write_prompt(prompt, output_root), _artifact_provenance("prompt", prompt, name)
         )
     for skill in skills:
-        recorder.record(
-            adapter.write_skill(skill, output_root), _artifact_provenance("skill", skill, name)
-        )
+        written = adapter.write_skill(skill, output_root)
+        for paths, provenance in _skill_write_provenance(written, skill, name):
+            recorder.record(paths, provenance)
+
+
+def _skill_write_provenance(
+    paths: Sequence[Path], skill: Skill, adapter_name: str
+) -> list[tuple[list[Path], Provenance]]:
+    """Split ``write_skill``'s paths: member references carry their rule's provenance (E9).
+
+    ``<skill-id>/references/<rule-id>.md`` for a rule in ``skill.member_references``
+    is recorded as ``kind = "rule"`` with that rule's id and source package, so
+    guard-generated-outputs tells an editor to override the rule, the file's
+    real source (specs/prS-skills-context.md section 6.4.11); every other path
+    keeps the skill's provenance. Validation keeps a hand-written reference from
+    taking a member's name. Example::
+
+        groups = _skill_write_provenance(written, python_coding, "claude_code")
+        # [([.../SKILL.md], skill provenance), ([.../references/python-typing.md], rule ...)]
+    """
+    skill_paths: list[Path] = []
+    member_groups: list[tuple[list[Path], Provenance]] = []
+    for path in paths:
+        member = _member_written_at(path, skill)
+        if member is None:
+            skill_paths.append(path)
+        else:
+            member_groups.append(([path], _member_provenance(member, adapter_name)))
+    return [(skill_paths, _artifact_provenance("skill", skill, adapter_name)), *member_groups]
+
+
+def _member_written_at(path: Path, skill: Skill) -> MemberReference | None:
+    """The member of ``skill`` whose reference ``path`` is, judged by its spelling.
+
+    ``path`` must be ``<skill-id>/`` + ``member_reference_path(<rule-id>)``, the
+    one spelling the writer uses (E16); nothing is resolved, so a symlinked
+    skills root cannot change the answer.
+    """
+    if path.parent.parent.name != skill_id_of(skill):
+        return None
+    spelled = f"{path.parent.name}/{path.name}"
+    return next(
+        (m for m in skill.member_references if member_reference_path(m.rule_id) == spelled),
+        None,
+    )
+
+
+def _member_provenance(member: MemberReference, adapter_name: str) -> Provenance:
+    """A member reference's lock origin: the rule it renders, from that rule's package."""
+    return Provenance(
+        kind="rule", artifact_id=member.rule_id, source=member.source_package, adapter=adapter_name
+    )
 
 
 def _hook_provenance(hook: ResolvedHook, adapter_name: str) -> Provenance:
@@ -229,7 +289,11 @@ def build_lockfile(
 
     One provenance-bearing whole-file entry per written path, sorted by path
     (``provenance`` is keyed by resolved path; a path without one gets the v1
-    unknown provenance, ``kind=""``). A path owned element-wise by ``managed``
+    unknown provenance, ``kind=""``). A path that resolves outside ``repo_root``
+    — written through an output dir linked out of the repo — gets no entry:
+    the lockfile never owns output there (SPEC §4.2 step 9 releases such an
+    entry), and an absolute, machine-specific path must not reach a lockfile
+    that may be committed (§14.4). A path owned element-wise by ``managed``
     scoped entries, or co-owned with the user (``shared``, repo-relative), gets
     no whole-file entry; the scoped entries follow. ``carried`` are the kept
     orphans (``_sync_orphans``): output an earlier sync wrote that is still
@@ -258,12 +322,14 @@ def build_lockfile(
 
 
 def _whole_file_entry(path: Path, repo_root: Path, origin: Provenance | None) -> LockEntry | None:
-    """Whole-file entry for resolved ``path``; ``None`` if it is unreadable."""
+    """Whole-file entry for resolved ``path``; ``None`` if it is outside the repo or unreadable."""
+    rel = _repo_relative(path, repo_root)
+    if rel is None:
+        return None
     try:
         content = path.read_bytes()
     except OSError:
         return None
-    rel = _repo_relative(path, repo_root)
     if origin is None:
         return LockEntry(path=rel, sha256=compute_hash(content), bytes=len(content))
     entry = LockEntry.from_provenance(rel, content, origin)
@@ -277,9 +343,9 @@ def _is_executable(path: Path) -> bool:
     return os.name == "posix" and bool(path.stat().st_mode & 0o111)
 
 
-def _repo_relative(path: Path, repo_root: Path) -> str:
-    """POSIX resolved ``path`` relative to the resolved ``repo_root`` (as is if outside)."""
+def _repo_relative(path: Path, repo_root: Path) -> str | None:
+    """POSIX resolved ``path`` relative to the resolved ``repo_root``; ``None`` outside it."""
     try:
         return path.relative_to(repo_root.resolve()).as_posix()
     except ValueError:
-        return path.as_posix()
+        return None

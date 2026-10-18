@@ -3,14 +3,19 @@
 Translates canonical ``Rule`` / ``Prompt`` / ``Skill`` artifacts into Claude
 Code's native layout:
 
-- Rules are **buffered** during ``write_rule`` and composed during ``finalize``
-  (priority then ``id`` order) into one unscoped rules file,
+- Always rules are **buffered** during ``write_rule`` and composed during
+  ``finalize`` (priority then ``id`` order) into one unscoped rules file,
   ``.claude/rules/coding-agent-playbook.md``, next to a rule-free
-  ``.claude/CLAUDE.md`` stub (SPEC §10.3.1).
+  ``.claude/CLAUDE.md`` stub (SPEC §10.3.1). A generated ``## Where guidance
+  lives`` section follows them, byte-identical to the one in ``AGENTS.md``. A
+  member rule (one that names a skill in ``skill:``) is not in that file: it is
+  a reference of its skill under ``.claude/skills/<skill>/references/``
+  (ADR 0001, specs/prS-skills-context.md 6.4.6).
 - Prompts are written immediately to ``.claude/commands/{slash}.md`` as pure
   markdown (no top-level frontmatter — Claude Code commands are plain md).
 - Skills are written natively to ``.claude/skills/{id}/`` (``SKILL.md`` plus
-  byte-copied ``scripts/`` and ``references/``) through the shared
+  byte-copied ``scripts/`` and ``references/``, and the rendered member rules)
+  through the shared
   :class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter`, so the
   output is byte-identical to the ``opencode`` / ``shared_skills`` skill roots.
 - Hooks it enforces become managed groups in the co-owned
@@ -43,6 +48,7 @@ import dataclasses
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Final
 
+from coding_agent_playbook._output_io import write_output_bytes, write_output_text
 from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._claude_hooks import ClaudeHookEmitter, plans_launcher
 from coding_agent_playbook.adapters._owned_files import (
@@ -52,6 +58,7 @@ from coding_agent_playbook.adapters._owned_files import (
     write_engine_owned,
 )
 from coding_agent_playbook.adapters._skill_writer import SkillWriter
+from coding_agent_playbook.adapters._where_guidance import WhereGuidanceBuffer
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_rule_paths import (
     CLAUDE_CODE_COMPOSITES,
@@ -62,6 +69,7 @@ from coding_agent_playbook.adapters.claude_settings import CLAUDE_SETTINGS_PATH
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT
 from coding_agent_playbook.hook_registrations import LAUNCHER_PATH
 from coding_agent_playbook.renderer import render_for
+from coding_agent_playbook.skill_membership import is_skill_member
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -117,7 +125,7 @@ def _write_output(path: Path, text: str) -> Path:
     ``write_text`` would write the stub CRLF on Windows (final review).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(text.encode("utf-8"))
+    write_output_bytes(path, text.encode("utf-8"))
     return path
 
 
@@ -136,6 +144,7 @@ class ClaudeCodeAdapter(Adapter):
 
     #: Native skills root; Claude Code discovers ``.claude/skills/<name>/SKILL.md``.
     _SKILL_WRITER: ClassVar[SkillWriter] = SkillWriter(Path(".claude") / "skills")
+    native_skills_root: ClassVar[str | None] = _SKILL_WRITER.root.as_posix()
 
     output_locations: ClassVar[tuple[str, ...]] = (
         *CLAUDE_CODE_COMPOSITES,
@@ -158,6 +167,7 @@ class ClaudeCodeAdapter(Adapter):
         # Buffer of (priority, rule_id, rendered_section) tuples populated by
         # ``write_rule``. ``finalize`` sorts by (priority, rule_id) and joins.
         self._buffered_rules: list[tuple[int, str, str]] = []
+        self._where = WhereGuidanceBuffer()
         self._rule_registry = rule_registry
         self._hooks = ClaudeHookEmitter(self.name, self.hook_support)
 
@@ -212,8 +222,15 @@ class ClaudeCodeAdapter(Adapter):
         Claude Code consumes rules through one composed rules file rather than
         per-rule files, so this method writes nothing immediately. The
         buffered tuple records (priority, rule_id, rendered_section) so
-        ``finalize`` can sort by ``(priority, rule_id)`` for stable output.
+        ``finalize`` can sort by ``(priority, rule_id)`` for stable output. A
+        member rule is skipped (E3): its skill's reference delivers it. The
+        advisory rule of a hook this adapter cannot enforce has ``skill=None``,
+        so it keeps its full section (H16).
+
+        Example: ``adapter.write_rule(member_rule, repo_root)`` -> ``[]``, nothing buffered.
         """
+        if is_skill_member(rule):
+            return []
         rendered_section = render_for(
             rule.source_path or Path("inline"),
             rule.body,
@@ -242,18 +259,22 @@ class ClaudeCodeAdapter(Adapter):
         )
         output_path = repo_root / ".claude" / "commands" / f"{prompt.frontmatter.slash}.md"
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(rendered, encoding="utf-8")
+        write_output_text(output_path, rendered)
         return [output_path]
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
         """Write a native skill directory under ``.claude/skills/<id>/``.
 
-        Delegates to the shared :class:`SkillWriter` (``SKILL.md`` with
-        ``name`` = id and the sentinel as first body line, plus byte-copied
-        ``scripts/`` and ``references/``). This adapter does NOT degrade to
-        ``Skill.to_prompt`` — siblings without native skill support (e.g.
-        Continue) use the ABC default.
+        Buffers the skill's ``## Where guidance lives`` line for the rules
+        file, then delegates to the shared :class:`SkillWriter` (``SKILL.md``
+        with ``name`` = id and the sentinel as first body line, plus byte-copied
+        ``scripts/`` and ``references/`` and the member references). This
+        adapter does NOT degrade to ``Skill.to_prompt`` — siblings without
+        native skill support (e.g. Continue) use the ABC default.
+
+        Example: ``adapter.write_skill(skill, repo_root)`` -> ``[.../SKILL.md, ...]``.
         """
+        self._where.add(skill)
         return self._SKILL_WRITER.write(skill, repo_root)
 
     def finalize(self, repo_root: Path) -> list[Path]:
@@ -298,19 +319,20 @@ class ClaudeCodeAdapter(Adapter):
         ]
 
     def _rules_body(self) -> str | None:
-        """The rules file's body, or ``None`` when no section and no heartbeat line exist.
+        """The rules file's body, or ``None`` when no section, Where entry or heartbeat exists.
 
-        Sections (rules, and advisories of hooks this adapter cannot enforce)
-        are sorted by ``(priority, rule_id)`` and joined by the blank lines
-        ``claude_md_section`` already emits, so they stay byte-identical to the
-        ``AGENTS.md`` sections. The fixed heartbeat line closes the body when the
+        Sections (always rules, and advisories of hooks this adapter cannot
+        enforce) are sorted by ``(priority, rule_id)`` and joined by the blank
+        lines ``claude_md_section`` already emits, so they stay byte-identical
+        to the ``AGENTS.md`` sections; the ``## Where guidance lives`` section
+        follows them. The fixed heartbeat line closes the body when the
         session-start briefing runs here.
         """
         heartbeat = self._hooks.heartbeat()
-        if not (self._buffered_rules or heartbeat):
-            return None
         ordered = sorted(self._buffered_rules, key=lambda item: (item[0], item[1]))
-        sections = [section for _, _, section in ordered]
+        sections = self._where.after([section for _, _, section in ordered])
+        if not (sections or heartbeat):
+            return None
         body = "\n".join(sections)
         if heartbeat:
             body += ("\n" if sections else "") + heartbeat + "\n"

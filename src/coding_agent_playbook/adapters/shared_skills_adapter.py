@@ -12,10 +12,12 @@ so the first sync after an upgrade settles it by the leftover policy (SPEC §4.2
 step 9): pristine copies are deleted, edited or tracked ones kept and owned
 (reported when tracked, or under ``commit = true``; MIGRATION.md, v0.21).
 
-Rules and prompts are no-ops here: rules reach every assistant through
-``AGENTS.md`` and prompts through the harness adapters. The skill bytes come
-from the shared :class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter`
-and are identical to the ``.claude/skills/`` and ``.opencode/skills/`` copies.
+Rules and prompts are no-ops here: always rules reach every assistant through
+``AGENTS.md``, scoped rules travel inside the skills this adapter writes (as
+the references of the skill each one names), and prompts go through the
+harness adapters. The skill bytes come from the shared
+:class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter` and are
+identical to the ``.claude/skills/`` and ``.opencode/skills/`` copies.
 
 On by default (``playbook init`` lists it in ``adapters_enabled``) but **not**
 force-enabled like ``agents_md`` — remove it from the top-level
@@ -57,12 +59,13 @@ class SharedSkillsAdapter(Adapter):
     name = "shared_skills"
 
     _SKILL_WRITER: ClassVar[SkillWriter] = SkillWriter(SHARED_SKILLS_ROOT)
+    native_skills_root: ClassVar[str | None] = _SKILL_WRITER.root.as_posix()
 
     output_locations: ClassVar[tuple[str, ...]] = (_SKILL_WRITER.location,)
     retired_output_locations: ClassVar[tuple[str, ...]] = (RETIRED_SHARED_SKILLS_LOCATION,)
 
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
-        """Return ``[]`` — rules reach every assistant through ``AGENTS.md``."""
+        """Return ``[]``: always rules go to ``AGENTS.md``, scoped ones into the skills written here."""
         del rule, repo_root
         return []
 

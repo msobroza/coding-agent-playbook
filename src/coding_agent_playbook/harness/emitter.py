@@ -17,11 +17,11 @@ Invariants honoured (``specs/prH-agent-harness.md`` §B + CLAUDE.md):
 from __future__ import annotations
 
 import os
-import shutil
 from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from coding_agent_playbook._output_io import copy_output
 from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.harness.leaf_detectors import HARNESS_LEAF_MARKER
 
@@ -108,5 +108,5 @@ def copy_script(src: Path, dst: Path) -> bool:
     """
     executable = bool(os.stat(src).st_mode & 0o111)
     dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dst)
+    copy_output(src, dst)
     return executable

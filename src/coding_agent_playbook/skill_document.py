@@ -144,15 +144,30 @@ def compose_description(description: str, member_names: Sequence[str], use_when:
         compose_description("Python conventions.", ["Docstrings"], "editing a module")
         # 'Python conventions. Covers Docstrings. Use when editing a module.'
     """
+    shown = covered_member_count(description, member_names, use_when)
+    if shown == 0:
+        raise DescriptionOverflowError(
+            _joined(description, covers_clause(member_names, 1), use_when)
+        )
+    return _joined(description, covers_clause(member_names, shown), use_when)
+
+
+def covered_member_count(
+    description: str, member_names: Sequence[str], use_when: str | None
+) -> int:
+    """How many names :func:`compose_description` lists; ``0`` when even one does not fit.
+
+    ``playbook validate`` warns (W3) when this is below ``len(member_names)``, so
+    the warning and the composed text cannot disagree on where truncation starts.
+
+    Example: ``covered_member_count("X.", ["Typing", "Idioms"], None)`` -> ``2``.
+    """
     _require_members(member_names)
-    for shown in range(len(member_names), 1, -1):
+    for shown in range(len(member_names), 0, -1):
         text = _joined(description, covers_clause(member_names, shown), use_when)
         if len(text) <= DESCRIPTION_MAX_CHARS:
-            return text
-    fallback = _joined(description, covers_clause(member_names, 1), use_when)
-    if len(fallback) > DESCRIPTION_MAX_CHARS:
-        raise DescriptionOverflowError(fallback)
-    return fallback
+            return shown
+    return 0
 
 
 def worst_case_description(

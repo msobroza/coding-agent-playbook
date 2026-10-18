@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook._output_io import write_output_text
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.harness import emitter, manifest
 from coding_agent_playbook.types import format_frontmatter
@@ -66,7 +67,7 @@ def _emit_sidecar(hook: Hook, repo_root: Path, entries: list[manifest.ManifestEn
     mapping = hook.frontmatter.to_mapping()
     target = hook_dir / _MARKER
     head = format_frontmatter(mapping, "")
-    target.write_text(emitter.with_sentinel_body(head, hook.template_body), encoding="utf-8")
+    write_output_text(target, emitter.with_sentinel_body(head, hook.template_body))
     scripts, copied = copy_scripts(hook.scripts_dir, hook_dir / "scripts", repo_root)
     entries.append(
         manifest.ManifestEntry(

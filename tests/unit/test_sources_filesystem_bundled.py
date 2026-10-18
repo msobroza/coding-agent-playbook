@@ -38,7 +38,10 @@ _SHIPPED_PROMPT_FILE = "explain.md"
 #: The id the shipped prompt declares, and the plugin task's id (distinctive, for output scans).
 _SHIPPED_PROMPT_ID = "explain"
 _DEMO_TASK_ID = "demo-plugin-eval-task"
-_ENGINE_RULE_COUNT = 13
+#: Two always rules and 13 scoped rules, each scoped one a member of a core skill.
+_ENGINE_RULE_COUNT = 15
+#: python-coding, python-testing, python-tooling and ml-data (spec D4).
+_ENGINE_SKILL_COUNT = 4
 _SUPERPOWERS_SKILL_COUNT = 15
 
 
@@ -50,6 +53,17 @@ def test_engine_rules_come_from_catalog_core(tmp_path: Path) -> None:
     for rule in engine_rules:
         assert rule.source_path is not None
         assert rule.source_path.resolve().is_relative_to(rules_root), rule.source_path
+
+
+def test_engine_skills_come_from_catalog_core(tmp_path: Path) -> None:
+    skills = FileSystemArtifactSource(repo_root=tmp_path).list_skills()
+    engine_skills = [skill for skill in skills if skill.source_package == ENGINE_PACKAGE]
+    assert len(engine_skills) == _ENGINE_SKILL_COUNT
+    skills_root = (CORE_ROOT / "skills").resolve()
+    for skill in engine_skills:
+        assert skill.references_dir is None and skill.scripts_dir is None, skill.frontmatter
+        skill_md = skills_root / str(skill.frontmatter["id"]) / "SKILL.md"
+        assert skill_md.is_file(), f"engine skill {skill.frontmatter['id']!r} is not {skill_md}"
 
 
 def test_pack_names_resolve_to_catalog_plugins(tmp_path: Path) -> None:

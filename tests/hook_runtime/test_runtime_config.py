@@ -35,6 +35,7 @@ from coding_agent_playbook.hook_runtime.state import StateStore
 from coding_agent_playbook.lockfile import Lockfile
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 from coding_agent_playbook.types import HookMatcher
+from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
 
 if TYPE_CHECKING:
@@ -499,8 +500,9 @@ def test_config_module_never_imports_tomllib_or_the_lockfile_module() -> None:
     loaded = new_modules_after("import coding_agent_playbook.hook_runtime.config")
 
     assert "tomllib" not in loaded
-    assert "coding_agent_playbook.lockfile" not in loaded
-    assert not [m for m in loaded if m.startswith("coding_agent_playbook.hook_policy")]
+    assert engine_module("coding_agent_playbook.lockfile") not in loaded
+    hook_policy = engine_module("coding_agent_playbook.hook_policy")
+    assert not [m for m in loaded if m.startswith(hook_policy)]
 
 
 def test_toml_loader_protocol_accepts_the_spy() -> None:

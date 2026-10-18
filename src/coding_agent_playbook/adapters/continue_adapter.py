@@ -8,7 +8,9 @@ layout Continue expects under ``.continue/`` at the repo root:
 - Prompts go to ``.continue/prompts/{prompt.slash}.md`` with the
   ``prompt_continue`` transform applied.
 - Skills degrade to prompts via the ABC's default ``write_skill`` path,
-  which calls :meth:`Skill.to_prompt`.
+  which calls :meth:`Skill.to_prompt`, except a skill with member rules:
+  Continue reads no skills, so each member arrives as its own rule file
+  instead, and no prompt is written for the skill.
 
 Cleanup walks ``.continue/rules`` and ``.continue/prompts`` and removes any
 sentinel-tagged file whose absolute path is not in ``written_paths``. Files
@@ -20,6 +22,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
+from coding_agent_playbook._output_io import write_output_text
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.renderer import render_for
 
@@ -66,7 +69,7 @@ class ContinueAdapter(Adapter):
             "continue_rule",
             frontmatter=rule.frontmatter.__dict__,
         )
-        target.write_text(rendered, encoding="utf-8")
+        write_output_text(target, rendered)
         return [target]
 
     def write_prompt(self, prompt: Prompt, repo_root: Path) -> list[Path]:
@@ -80,7 +83,7 @@ class ContinueAdapter(Adapter):
             rule_registry=self._rule_registry,
             template_body=prompt.template_body,
         )
-        target.write_text(rendered, encoding="utf-8")
+        write_output_text(target, rendered)
         return [target]
 
     def _output_directories(self, repo_root: Path) -> Iterable[Path]:

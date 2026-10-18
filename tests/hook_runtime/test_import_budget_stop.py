@@ -16,8 +16,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.hook_runtime.event import EventName
+from tests.engine_modules import engine_module
 from tests.hook_runtime.guard_repo import GuardRepo, hook_record
-from tests.hook_runtime.test_import_budget import _forbidden, _imports
+from tests.hook_runtime.test_import_budget import _DRIFT_FAST_PATH, _forbidden, _imports
 from tests.hooks.stop_kit import TREE
 
 if TYPE_CHECKING:
@@ -25,9 +26,10 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.proc import SubprocessProc
 
-_COORDINATOR = "coding_agent_playbook.hook_runtime.stop.coordinator"
-_GATE_SCAN = "coding_agent_playbook.gate_scan"
-_METRICS_GATE = "coding_agent_playbook.evaluators.metrics_gate"
+_COORDINATOR = engine_module("coding_agent_playbook.hook_runtime.stop.coordinator")
+_GATE_SCAN = engine_module("coding_agent_playbook.gate_scan")
+_GATE_SCAN_FILES = engine_module("coding_agent_playbook._gate_scan_files")
+_METRICS_GATE = engine_module("coding_agent_playbook.evaluators.metrics_gate")
 
 
 def test_stop_coordinator_imports_no_forbidden_module(
@@ -61,7 +63,7 @@ def test_stop_coordinator_imports_no_forbidden_module(
     )
 
     assert _COORDINATOR in imported
-    assert "coding_agent_playbook.hook_runtime.handlers._drift" not in imported  # inactive stage
+    assert _DRIFT_FAST_PATH not in imported  # inactive stage
     assert _forbidden(imported) == []
 
 
@@ -138,4 +140,5 @@ def test_pre_edit_companion_loads_gate_scan_only_for_test_paths(
     assert _GATE_SCAN not in source
     assert _GATE_SCAN in test
     assert "tomllib" not in source | test
-    assert _forbidden(source) == _forbidden(test) == []
+    assert _forbidden(source) == []
+    assert _forbidden(test, allowed=(_GATE_SCAN, _GATE_SCAN_FILES)) == []

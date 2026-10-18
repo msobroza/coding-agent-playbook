@@ -43,6 +43,10 @@ dev = [
     "pytest>=8.3.0",
     "pytest-cov>=5.0.0",
     "types-pyyaml>=6.0",
+    # Pinned like ruff: the contracts in [tool.importlinter] run from pytest
+    # (tests/architecture/test_import_contracts.py), so a release that changes a
+    # contract type's semantics must not change the CI verdict on its own.
+    "import-linter==2.15",
 ]
 
 [project.scripts]
@@ -216,6 +220,466 @@ addopts = [
 xfail_strict = true
 filterwarnings = ["error"]
 markers = ["catalog: checks over the engine catalog under catalog/ (pre-commit catalog-checks hook)"]
+
+# --- import-linter (ADR 0002: the package dependency direction) ---
+# Run by tests/architecture/test_import_contracts.py, so the CI gate stays ruff,
+# ruff format, mypy and pytest. An ignore_imports line is a known edge, commented
+# with the PR that removes it (or, for the stacks, the deferred branch it is); a
+# line that no longer matches any import fails the run. The forbidden lists and
+# exhaustive_ignores are pinned to the package tree by the same test file. The PR
+# ids are those of specs/prT-package-layout.md section 7.
+
+[tool.importlinter]
+root_packages = ["coding_agent_playbook"]
+# TYPE_CHECKING imports count: an interface that names a higher layer's type
+# depends on that layer even when nothing imports it at run time.
+exclude_type_checking_imports = false
+# The third-party top-level packages join the graph, so the stacks and the leaves can
+# forbid the engine's runtime dependencies (jinja2, packaging, yaml) statically.
+include_external_packages = true
+contract_types = ["private_modules: tests.architecture.private_modules_contract.PrivateModulesContract"]
+
+[[tool.importlinter.contracts]]
+id = "engine-layers"
+name = "A package imports only packages below it"
+type = "layers"
+containers = ["coding_agent_playbook"]
+# Highest first. A parenthesised layer does not exist yet; the PR that creates the
+# package drops the parentheses. hook_runtime is a separate stack, never a layer.
+layers = [
+    "cli",
+    "commands",
+    "(sync)",
+    "(validation)",
+    "(agent_harness) | evals | (precommit)",
+    "adapters",
+    "(rendering)",
+    "(hooks)",
+    "(skills)",
+    "(metrics_gate)",
+    "config",
+    "catalog",
+    "detector | lockfile",
+    "(grading)",
+    "(generated_output)",
+    "(artifacts)",
+    "security | (toml_writer) | (_plugin_registry)",
+]
+exhaustive = true
+# Top-level modules not yet in their target package: each move PR deletes its
+# names. hook_runtime stays here for good.
+exhaustive_ignores = [
+    "_atomic_io",
+    "_canonical_json",
+    "_file_identity",
+    "_gate_scan_files",
+    "_guard_config_allowlists",
+    "_guard_config_detect",
+    "_guard_config_prompts",
+    "_guard_config_protect",
+    "_guard_config_quality",
+    "_guard_config_ruff",
+    "_guard_config_secrets",
+    "_guard_config_toolchain",
+    "_guard_config_verify",
+    "_hook_frontmatter",
+    "_hook_schema",
+    "_layers",
+    "_lock_drift",
+    "_member_reference",
+    "_output_io",
+    "_pep503",
+    "_pyproject_deps",
+    "_sentinel",
+    "_symlinks",
+    "_table_shapes",
+    "_toml",
+    "_typing",
+    "config_entries",
+    "config_schema",
+    "evaluators",
+    "gate_scan",
+    "git_client",
+    "git_env",
+    "gitignore",
+    "guard_config",
+    "harness",
+    "hook_policy",
+    "hook_registrations",
+    "hook_runtime",
+    "hooks_config",
+    "links",
+    "metrics_config",
+    "orchestrator",
+    "prompt_rule_delivery",
+    "renderer",
+    "rule_registry",
+    "skill_document",
+    "skill_membership",
+    "sources",
+    "types",
+]
+ignore_imports = [
+    # CF-2 deletes _typing.py (after #62)
+    "coding_agent_playbook._typing -> coding_agent_playbook.evals.task",
+    # kept: catalog-layers (the artifact source parses eval tasks) is not scheduled (L12); N3 renames it
+    "coding_agent_playbook.sources.filesystem -> coding_agent_playbook.evals.**",
+]
+broken_contract_guidance = """
+A lower layer may not import a higher one, directly or through modules outside the layers.
+Move the shared code down, or pass the value in from the caller. A new top-level module
+belongs in a layer, or (old layout only) in exhaustive_ignores.
+"""
+
+[[tool.importlinter.contracts]]
+id = "stdlib-leaves"
+name = "A stdlib leaf imports only the stdlib and other leaves"
+type = "forbidden"
+# tests/engine_modules.py STDLIB_LEAVES: the only engine modules the two stacks import.
+source_modules = [
+    "coding_agent_playbook._atomic_io",
+    "coding_agent_playbook._canonical_json",
+    "coding_agent_playbook._lock_drift",
+    "coding_agent_playbook._pep503",
+    "coding_agent_playbook._pyproject_deps",
+    "coding_agent_playbook._sentinel",
+    "coding_agent_playbook.catalog",
+    "coding_agent_playbook.lockfile",
+    "coding_agent_playbook.security",
+]
+# Every top-level module except STDLIB_LEAVES, then the runtime dependencies
+# (tests/engine_modules.py; test_leaf_contract_covers_every_stdlib_leaf prints the
+# expected list).
+forbidden_modules = [
+    "coding_agent_playbook._file_identity",
+    "coding_agent_playbook._gate_scan_files",
+    "coding_agent_playbook._guard_config_allowlists",
+    "coding_agent_playbook._guard_config_detect",
+    "coding_agent_playbook._guard_config_prompts",
+    "coding_agent_playbook._guard_config_protect",
+    "coding_agent_playbook._guard_config_quality",
+    "coding_agent_playbook._guard_config_ruff",
+    "coding_agent_playbook._guard_config_secrets",
+    "coding_agent_playbook._guard_config_toolchain",
+    "coding_agent_playbook._guard_config_verify",
+    "coding_agent_playbook._hook_frontmatter",
+    "coding_agent_playbook._hook_schema",
+    "coding_agent_playbook._layers",
+    "coding_agent_playbook._member_reference",
+    "coding_agent_playbook._output_io",
+    "coding_agent_playbook._symlinks",
+    "coding_agent_playbook._table_shapes",
+    "coding_agent_playbook._toml",
+    "coding_agent_playbook._typing",
+    "coding_agent_playbook.adapters",
+    "coding_agent_playbook.cli",
+    "coding_agent_playbook.commands",
+    "coding_agent_playbook.config",
+    "coding_agent_playbook.config_entries",
+    "coding_agent_playbook.config_schema",
+    "coding_agent_playbook.detector",
+    "coding_agent_playbook.evals",
+    "coding_agent_playbook.evaluators",
+    "coding_agent_playbook.gate_scan",
+    "coding_agent_playbook.git_client",
+    "coding_agent_playbook.git_env",
+    "coding_agent_playbook.gitignore",
+    "coding_agent_playbook.guard_config",
+    "coding_agent_playbook.harness",
+    "coding_agent_playbook.hook_policy",
+    "coding_agent_playbook.hook_registrations",
+    "coding_agent_playbook.hook_runtime",
+    "coding_agent_playbook.hooks_config",
+    "coding_agent_playbook.links",
+    "coding_agent_playbook.metrics_config",
+    "coding_agent_playbook.orchestrator",
+    "coding_agent_playbook.prompt_rule_delivery",
+    "coding_agent_playbook.renderer",
+    "coding_agent_playbook.rule_registry",
+    "coding_agent_playbook.skill_document",
+    "coding_agent_playbook.skill_membership",
+    "coding_agent_playbook.sources",
+    "coding_agent_playbook.types",
+    "jinja2",
+    "packaging",
+    "yaml",
+]
+broken_contract_guidance = """
+A stdlib leaf is imported by the hook runtime and the grading kernel, so it imports only the
+stdlib and other leaves (tests/engine_modules.py STDLIB_LEAVES).
+"""
+
+[[tool.importlinter.contracts]]
+id = "hook-runtime-stack"
+name = "The hook runtime imports only stdlib leaves"
+type = "forbidden"
+source_modules = ["coding_agent_playbook.hook_runtime"]
+# Every top-level module except hook_runtime and STDLIB_LEAVES, then the runtime
+# dependencies (tests/engine_modules.py; test_stack_contract_forbids_every_non_leaf_module
+# prints the expected list).
+forbidden_modules = [
+    "coding_agent_playbook._file_identity",
+    "coding_agent_playbook._gate_scan_files",
+    "coding_agent_playbook._guard_config_allowlists",
+    "coding_agent_playbook._guard_config_detect",
+    "coding_agent_playbook._guard_config_prompts",
+    "coding_agent_playbook._guard_config_protect",
+    "coding_agent_playbook._guard_config_quality",
+    "coding_agent_playbook._guard_config_ruff",
+    "coding_agent_playbook._guard_config_secrets",
+    "coding_agent_playbook._guard_config_toolchain",
+    "coding_agent_playbook._guard_config_verify",
+    "coding_agent_playbook._hook_frontmatter",
+    "coding_agent_playbook._hook_schema",
+    "coding_agent_playbook._layers",
+    "coding_agent_playbook._member_reference",
+    "coding_agent_playbook._output_io",
+    "coding_agent_playbook._symlinks",
+    "coding_agent_playbook._table_shapes",
+    "coding_agent_playbook._toml",
+    "coding_agent_playbook._typing",
+    "coding_agent_playbook.adapters",
+    "coding_agent_playbook.cli",
+    "coding_agent_playbook.commands",
+    "coding_agent_playbook.config",
+    "coding_agent_playbook.config_entries",
+    "coding_agent_playbook.config_schema",
+    "coding_agent_playbook.detector",
+    "coding_agent_playbook.evals",
+    "coding_agent_playbook.evaluators",
+    "coding_agent_playbook.gate_scan",
+    "coding_agent_playbook.git_client",
+    "coding_agent_playbook.git_env",
+    "coding_agent_playbook.gitignore",
+    "coding_agent_playbook.guard_config",
+    "coding_agent_playbook.harness",
+    "coding_agent_playbook.hook_policy",
+    "coding_agent_playbook.hook_registrations",
+    "coding_agent_playbook.hooks_config",
+    "coding_agent_playbook.links",
+    "coding_agent_playbook.metrics_config",
+    "coding_agent_playbook.orchestrator",
+    "coding_agent_playbook.prompt_rule_delivery",
+    "coding_agent_playbook.renderer",
+    "coding_agent_playbook.rule_registry",
+    "coding_agent_playbook.skill_document",
+    "coding_agent_playbook.skill_membership",
+    "coding_agent_playbook.sources",
+    "coding_agent_playbook.types",
+    "jinja2",
+    "packaging",
+    "yaml",
+]
+# The deferred branches (specs/prK-lifecycle-hooks.md §D.1): modules the dispatcher
+# loads only on their branch, pinned per branch by tests/hook_runtime/test_import_budget*.py.
+ignore_imports = [
+    "coding_agent_playbook.hook_runtime.deps -> coding_agent_playbook.evaluators.**",
+    "coding_agent_playbook.hook_runtime.handlers._coverage_report -> coding_agent_playbook.evaluators.**",
+    "coding_agent_playbook.hook_runtime.handlers._metrics_pass -> coding_agent_playbook.evaluators.**",
+    "coding_agent_playbook.hook_runtime.handlers.coverage_diff_gate -> coding_agent_playbook.evaluators.**",
+    "coding_agent_playbook.hook_runtime.handlers.docstring_nonregression -> coding_agent_playbook.evaluators.**",
+    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.evals.**",
+    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.sources.**",
+    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.types",
+    # N15 moves the judge into hook_runtime/judges/ and deletes these two lines
+    "coding_agent_playbook.hook_runtime.handlers.gate_weakening -> coding_agent_playbook.gate_scan",
+    "coding_agent_playbook.hook_runtime.handlers.gate_weakening_edit -> coding_agent_playbook.gate_scan",
+    "coding_agent_playbook.hook_runtime.handlers.quality_metrics -> coding_agent_playbook.evaluators.**",
+    "coding_agent_playbook.hook_runtime.handlers.resync_on_detector_input_change -> coding_agent_playbook.detector",
+    "coding_agent_playbook.hook_runtime.stop.suite -> coding_agent_playbook.evaluators.**",
+]
+broken_contract_guidance = """
+The hook runtime imports only the stdlib, itself and STDLIB_LEAVES (tests/engine_modules.py).
+An import that runs only on one dispatch branch goes in ignore_imports as
+"<importing module> -> <package>.**", with a branch-local row in the import-budget tests.
+"""
+
+[[tool.importlinter.contracts]]
+id = "grading-kernel"
+name = "The grading kernel imports only stdlib leaves"
+type = "forbidden"
+source_modules = ["coding_agent_playbook.evaluators"]
+# Every top-level module except evaluators and STDLIB_LEAVES, then the runtime
+# dependencies (tests/engine_modules.py; test_stack_contract_forbids_every_non_leaf_module
+# prints the expected list).
+forbidden_modules = [
+    "coding_agent_playbook._file_identity",
+    "coding_agent_playbook._gate_scan_files",
+    "coding_agent_playbook._guard_config_allowlists",
+    "coding_agent_playbook._guard_config_detect",
+    "coding_agent_playbook._guard_config_prompts",
+    "coding_agent_playbook._guard_config_protect",
+    "coding_agent_playbook._guard_config_quality",
+    "coding_agent_playbook._guard_config_ruff",
+    "coding_agent_playbook._guard_config_secrets",
+    "coding_agent_playbook._guard_config_toolchain",
+    "coding_agent_playbook._guard_config_verify",
+    "coding_agent_playbook._hook_frontmatter",
+    "coding_agent_playbook._hook_schema",
+    "coding_agent_playbook._layers",
+    "coding_agent_playbook._member_reference",
+    "coding_agent_playbook._output_io",
+    "coding_agent_playbook._symlinks",
+    "coding_agent_playbook._table_shapes",
+    "coding_agent_playbook._toml",
+    "coding_agent_playbook._typing",
+    "coding_agent_playbook.adapters",
+    "coding_agent_playbook.cli",
+    "coding_agent_playbook.commands",
+    "coding_agent_playbook.config",
+    "coding_agent_playbook.config_entries",
+    "coding_agent_playbook.config_schema",
+    "coding_agent_playbook.detector",
+    "coding_agent_playbook.evals",
+    "coding_agent_playbook.gate_scan",
+    "coding_agent_playbook.git_client",
+    "coding_agent_playbook.git_env",
+    "coding_agent_playbook.gitignore",
+    "coding_agent_playbook.guard_config",
+    "coding_agent_playbook.harness",
+    "coding_agent_playbook.hook_policy",
+    "coding_agent_playbook.hook_registrations",
+    "coding_agent_playbook.hook_runtime",
+    "coding_agent_playbook.hooks_config",
+    "coding_agent_playbook.links",
+    "coding_agent_playbook.metrics_config",
+    "coding_agent_playbook.orchestrator",
+    "coding_agent_playbook.prompt_rule_delivery",
+    "coding_agent_playbook.renderer",
+    "coding_agent_playbook.rule_registry",
+    "coding_agent_playbook.skill_document",
+    "coding_agent_playbook.skill_membership",
+    "coding_agent_playbook.sources",
+    "coding_agent_playbook.types",
+    "jinja2",
+    "packaging",
+    "yaml",
+]
+ignore_imports = [
+    # N22: the metrics gate leaves the kernel and takes MetricConfig with it
+    "coding_agent_playbook.evaluators.metrics_gate -> coding_agent_playbook.config",
+    "coding_agent_playbook.evaluators.types -> coding_agent_playbook.metrics_config",
+    # N15: TEST_PATH_GLOBS moves to artifacts/path_classes.py
+    "coding_agent_playbook.evaluators.paths -> coding_agent_playbook.gate_scan",
+    # A12: the glob grammar moves to artifacts/path_globs.py (after #62)
+    "coding_agent_playbook.evaluators.paths -> coding_agent_playbook.hook_runtime.**",
+    # N15 or N22, whichever lands first: FIXTURE_GLOBS leaves types.py
+    "coding_agent_playbook.evaluators.types -> coding_agent_playbook.hook_runtime.**",
+]
+broken_contract_guidance = """
+The grading kernel is shared by eval tasks and the metrics gate, so it imports neither, nor
+the hook runtime: only the stdlib, itself and STDLIB_LEAVES (tests/engine_modules.py).
+"""
+
+[[tool.importlinter.contracts]]
+id = "command-independence"
+name = "No command imports another command"
+type = "independence"
+# Every public module of commands/ (test_command_independence_lists_every_command).
+modules = [
+    "coding_agent_playbook.commands.check",
+    "coding_agent_playbook.commands.check_commit_trailers",
+    "coding_agent_playbook.commands.check_deps",
+    "coding_agent_playbook.commands.check_notebooks",
+    "coding_agent_playbook.commands.ci",
+    "coding_agent_playbook.commands.eval",
+    "coding_agent_playbook.commands.gate_scan",
+    "coding_agent_playbook.commands.import_harness",
+    "coding_agent_playbook.commands.init",
+    "coding_agent_playbook.commands.metrics",
+    "coding_agent_playbook.commands.render",
+    "coding_agent_playbook.commands.scan_secrets",
+    "coding_agent_playbook.commands.scan_sinks",
+    "coding_agent_playbook.commands.sync",
+    "coding_agent_playbook.commands.validate",
+    "coding_agent_playbook.commands.validate_harness",
+]
+ignore_imports = [
+    # N8: resolve_range moves to commands/twins/_git_scope.py
+    "coding_agent_playbook.commands._secret_scope -> coding_agent_playbook.commands.gate_scan",
+    "coding_agent_playbook.commands.check_commit_trailers -> coding_agent_playbook.commands.gate_scan",
+    "coding_agent_playbook.commands.scan_sinks -> coding_agent_playbook.commands.gate_scan",
+    # A6: init calls sync.pipeline.execute, not the sync command (after #62)
+    "coding_agent_playbook.commands.init -> coding_agent_playbook.commands.sync",
+    # A4: the sync command imports validation/, not the validate command (after #62)
+    "coding_agent_playbook.commands.sync -> coding_agent_playbook.commands.validate",
+]
+broken_contract_guidance = """
+Shared code goes below commands (a domain package) or into a commands/_helper module that
+imports no command.
+"""
+
+[[tool.importlinter.contracts]]
+id = "private-modules"
+name = "An underscore module is imported only from inside its own package"
+type = "private_modules"
+containers = ["coding_agent_playbook"]
+ignore_imports = [
+    # A7: adapters/_skill_files.py becomes generated_output/source_files.py (after #62)
+    "coding_agent_playbook.commands._import_files -> coding_agent_playbook.adapters._skill_files",
+    # N13: becomes adapters/claude_code/settings/drift.py
+    "coding_agent_playbook.commands.check -> coding_agent_playbook.adapters._settings_drift",
+    # CP-3: init's configure() owns --adapters (after #62)
+    "coding_agent_playbook.cli -> coding_agent_playbook.commands._init_adapters",
+    # N22: becomes metrics_gate/inputs.py
+    "coding_agent_playbook.hook_runtime.handlers._metrics_pass -> coding_agent_playbook.evaluators._metrics_inputs",
+    # N22: becomes metrics_gate/suite.py
+    "coding_agent_playbook.hook_runtime.handlers.coverage_diff_gate -> coding_agent_playbook.evaluators._metrics_suite",
+    # N15: FIXTURE_GLOBS moves to the stdlib leaf artifacts/path_classes.py
+    "coding_agent_playbook.evaluators.paths -> coding_agent_playbook.hook_runtime.handlers._eval_paths",
+    "coding_agent_playbook.evaluators.types -> coding_agent_playbook.hook_runtime.handlers._eval_paths",
+    "coding_agent_playbook.gate_scan -> coding_agent_playbook.hook_runtime.handlers._eval_paths",
+    "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._eval_paths",
+    # A16: hook_runtime/_ruff.py becomes the public hook_runtime/ruff.py (after #62)
+    "coding_agent_playbook._guard_config_quality -> coding_agent_playbook.hook_runtime._ruff",
+    "coding_agent_playbook._guard_config_ruff -> coding_agent_playbook.hook_runtime._ruff",
+    # N16: becomes hook_runtime/config/keys.py
+    "coding_agent_playbook._guard_config_secrets -> coding_agent_playbook.hook_runtime._config_keys",
+    "coding_agent_playbook.hook_policy.handler_catalog -> coding_agent_playbook.hook_runtime._config_keys",
+    # N17: becomes hook_runtime/shell/wrappers.py
+    "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime._shell_wrappers",
+    # GC-1: the constants move to hook_runtime/config/schema.py (after #62)
+    "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._control_plane_paths",
+    "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._control_plane_text",
+    # N14: the twin-shared judges get public modules in hook_runtime/judges/
+    "coding_agent_playbook.commands.check_deps -> coding_agent_playbook.hook_runtime.handlers._dependency_tiers",
+    "coding_agent_playbook.commands.check_deps -> coding_agent_playbook.hook_runtime.handlers._manifest_diff",
+    "coding_agent_playbook.commands.check_notebooks -> coding_agent_playbook.hook_runtime.handlers._notebook_check",
+    "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._notebook_check",
+    "coding_agent_playbook.commands.scan_sinks -> coding_agent_playbook.hook_runtime.handlers._notebook_cells",
+    # N18: becomes hook_runtime/git/parse.py
+    "coding_agent_playbook.commands._secret_scope -> coding_agent_playbook.hook_runtime._git_parse",
+    "coding_agent_playbook.commands.check_notebooks -> coding_agent_playbook.hook_runtime._git_parse",
+    "coding_agent_playbook.commands.scan_sinks -> coding_agent_playbook.hook_runtime._git_parse",
+    # N15: the gate judge moves inside hook_runtime, where _git_parse is its own package's
+    "coding_agent_playbook.gate_scan -> coding_agent_playbook.hook_runtime._git_parse",
+    # N21: becomes hook_runtime/harness/payload.py
+    "coding_agent_playbook.hook_runtime.dispatch -> coding_agent_playbook.hook_runtime.harness._payload",
+    # A3: becomes skills/naming.py (after #62)
+    "coding_agent_playbook.commands._sync_lockfile -> coding_agent_playbook.adapters._agent_skill_rules",
+    "coding_agent_playbook.commands._sync_render -> coding_agent_playbook.adapters._agent_skill_rules",
+    "coding_agent_playbook.commands._validate_skills -> coding_agent_playbook.adapters._agent_skill_rules",
+    "coding_agent_playbook.commands._validation -> coding_agent_playbook.adapters._agent_skill_rules",
+    "coding_agent_playbook.skill_document -> coding_agent_playbook.adapters._agent_skill_rules",
+    "coding_agent_playbook.skill_membership -> coding_agent_playbook.adapters._agent_skill_rules",
+    # A9: becomes adapters/skill_dirs/ownership.py (after #62)
+    "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._prior_output",
+    # A7: becomes generated_output/write_guard.py (after #62)
+    "coding_agent_playbook.commands._sync_hooks -> coding_agent_playbook.adapters._owned_files",
+    "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._owned_files",
+    # A9: becomes adapters/skill_dirs/writer.py (after #62)
+    "coding_agent_playbook.commands._sync_output -> coding_agent_playbook.adapters._skill_writer",
+    "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._skill_writer",
+    "coding_agent_playbook.commands.validate -> coding_agent_playbook.adapters._skill_writer",
+    # A7: becomes generated_output/source_files.py (after #62)
+    "coding_agent_playbook.commands.validate -> coding_agent_playbook.adapters._skill_sources",
+    "coding_agent_playbook.guard_config -> coding_agent_playbook.adapters._skill_sources",
+    # A17: becomes hooks/contract/findings.py (after #62)
+    "coding_agent_playbook.commands._validate_hooks -> coding_agent_playbook.hook_policy._findings",
+]
+broken_contract_guidance = """
+Import a public module of the owning package, or move the importer inside that package.
+"""
 
 # --- coverage ---
 

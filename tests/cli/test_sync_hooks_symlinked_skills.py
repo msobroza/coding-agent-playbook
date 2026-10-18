@@ -11,6 +11,7 @@ sync, and no sync could clear it.
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 from typing import TYPE_CHECKING, Any
 
@@ -77,6 +78,30 @@ def test_protected_rows_name_the_resolved_skill_path_like_the_lockfile(
 
     assert f".agents/skills/{_SKILL}/SKILL.md" in paths
     assert f".claude/skills/{_SKILL}/SKILL.md" not in paths
+
+
+def test_check_survives_a_looping_link_inside_a_skill_dir(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression (Python 3.12, where ``Path.resolve()`` raises on a symlink loop): the
+    protected rows map each scratch path onto the repo through its links, and a loop
+    there crashed ``sync --check``."""
+    repo = make_hook_repo(tmp_path / "repo", make_synthetic_repo)
+    source = repo / "playbook" / "skills" / _SKILL
+    (source / "scripts").mkdir(parents=True)
+    (source / "SKILL.md").write_text(
+        f"---\nid: {_SKILL}\nname: {_SKILL}\ndescription: A demo skill\n---\nDo it.\n"
+    )
+    (source / "scripts" / "run.sh").write_text("echo hi\n")
+    assert _sync_repo(repo, tmp_path) == 0
+    scripts = repo / ".claude" / "skills" / _SKILL / "scripts"
+    shutil.rmtree(scripts)
+    scripts.symlink_to("scripts")
+
+    assert _sync_repo(repo, tmp_path, check=True) == 1
+    assert _sync_repo(repo, tmp_path) == 0
+    capsys.readouterr()
+    assert _sync_repo(repo, tmp_path, check=True) == 0, capsys.readouterr().out
 
 
 def test_check_reports_no_drift_with_a_symlinked_scanned_dir(

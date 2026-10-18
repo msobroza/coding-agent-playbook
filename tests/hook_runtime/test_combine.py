@@ -48,6 +48,7 @@ from coding_agent_playbook.hook_runtime.policy import (
     failure_decision,
     is_unattended,
 )
+from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
 
 D, A, C, N = Decision.DENY, Decision.ASK, Decision.CONTEXT, Decision.NONE
@@ -453,5 +454,6 @@ def test_decision_modules_import_only_the_stdlib_and_the_runtime() -> None:
     )
     engine = {m for m in loaded if m.startswith("coding_agent_playbook.")}
 
-    assert all(m.startswith("coding_agent_playbook.hook_runtime") for m in engine), engine
+    runtime = engine_module("coding_agent_playbook.hook_runtime")
+    assert all(m.startswith(runtime) for m in engine), engine
     assert not {"tomllib", "argparse", "importlib.metadata", "jinja2", "yaml"} & set(loaded)

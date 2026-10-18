@@ -28,6 +28,7 @@ from coding_agent_playbook.security.trust import (
     repo_key,
     sha256_of_json,
 )
+from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
 
 _HOME = Path("/home/dev")
@@ -368,7 +369,7 @@ def test_trust_module_is_import_light() -> None:
     foreign = [
         name
         for name in loaded
-        if not name.startswith("coding_agent_playbook.security")
+        if not name.startswith(engine_module("coding_agent_playbook.security"))
         and name.split(".")[0] not in sys.stdlib_module_names
     ]
     assert foreign == []

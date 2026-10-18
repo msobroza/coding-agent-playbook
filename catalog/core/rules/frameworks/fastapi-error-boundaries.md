@@ -4,6 +4,7 @@ name: FastAPI error boundaries
 description: "FastAPI errors: framework-free domain exceptions, one mapping to HTTP status codes, one error body shape."
 version: 1
 scope: scoped
+skill: python-tooling
 globs:
   - "**/*.py"
 applies_if:

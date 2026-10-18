@@ -15,7 +15,9 @@ adapter writes OpenCode's own native outputs:
 - skills  -> ``.opencode/skills/<id>/`` (``SKILL.md`` + ``scripts/`` +
   ``references/``) through the shared
   :class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter`, so OpenCode
-  no longer depends on the ``claude_code`` adapter being enabled for skills;
+  no longer depends on the ``claude_code`` adapter being enabled for skills. A
+  scoped rule that names a skill (a member rule, ADR 0001) reaches OpenCode
+  here, as ``references/<rule-id>.md`` of that skill;
 - hooks   -> exactly one generated V1 plugin, ``.opencode/plugins/playbook-hooks.js``
   (specs/prK-lifecycle-hooks.md §C.3), which forwards the events OpenCode can
   enforce to ``playbook-hook``. It is the one exception to SPEC §10.6.4's "never
@@ -44,6 +46,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._file_identity import FileSet
+from coding_agent_playbook._output_io import write_output_text
+from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters._owned_files import write_engine_owned
 from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters.base import Adapter
@@ -66,9 +70,10 @@ if TYPE_CHECKING:
 class OpenCodeAdapter(Adapter):
     """Translate canonical prompts, skills and hooks into OpenCode's native layout.
 
-    Rules are an intentional no-op on this adapter: OpenCode picks them up from
-    the AGENTS.md adapter's output (``AGENTS.md`` at repo root). See SPEC.md
-    §10.6 and §10.6.4 for the OpenCode-touches/does-not-touch matrix.
+    Rules are an intentional no-op on this adapter: OpenCode picks up always
+    rules from the AGENTS.md adapter's output (``AGENTS.md`` at repo root), and
+    member rules as references of the skills :meth:`write_skill` writes. See
+    SPEC.md §10.6 and §10.6.4 for the OpenCode-touches/does-not-touch matrix.
 
     The optional ``rule_registry`` is plumbed into :func:`render_for` so the
     ``includes_rules:`` appendix in prompts can be rendered. When the
@@ -85,6 +90,7 @@ class OpenCodeAdapter(Adapter):
 
     #: Native skills root; OpenCode discovers ``.opencode/skills/<name>/SKILL.md``.
     _SKILL_WRITER: ClassVar[SkillWriter] = SkillWriter(Path(".opencode") / "skills")
+    native_skills_root: ClassVar[str | None] = _SKILL_WRITER.root.as_posix()
 
     #: The shim is declared as a file, never its directory: the leftover policy
     #: may delete a pristine stale shim but never prunes the user's plugins dir.
@@ -141,7 +147,7 @@ class OpenCodeAdapter(Adapter):
             rule_registry=self._rule_registry,
             template_body=prompt.template_body,
         )
-        target.write_text(rendered, encoding="utf-8")
+        write_output_text(target, rendered)
         return [target]
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
@@ -214,7 +220,8 @@ class OpenCodeAdapter(Adapter):
     def _is_stale_shim(self, shim: Path, written: FileSet, repo_root: Path) -> bool:
         """Engine-owned (sentinel, reached without a symlink, not a secret) and not written."""
         spelled = repo_root.resolve().joinpath(OPENCODE_SHIM_PATH)
-        if spelled.resolve() != spelled or written.holds(shim):
+        # real_path: Path.resolve() raises on a link loop on Python 3.12
+        if real_path(spelled) != spelled or written.holds(shim):
             return False
         return bool(self._scan_targets([shim], repo_root)) and self._carries_sentinel(shim)
 

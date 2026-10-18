@@ -23,7 +23,7 @@ import shutil
 import socket
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -104,11 +104,11 @@ def _spy_scratch_trees(monkeypatch: pytest.MonkeyPatch) -> list[set[str]]:
     trees: list[set[str]] = []
     real_file_drift = _sync_output.file_drift
 
-    def spy(written: list[Path], scratch: Path, repo_root: Path) -> list[str]:
+    def spy(written: list[Path], scratch: Path, repo_root: Path, **options: Any) -> list[str]:
         trees.append(
             {p.relative_to(scratch).as_posix() for p in scratch.rglob("*") if not p.is_dir()}
         )
-        return real_file_drift(written, scratch, repo_root)
+        return real_file_drift(written, scratch, repo_root, **options)
 
     monkeypatch.setattr(_sync_output, "file_drift", spy)
     return trees

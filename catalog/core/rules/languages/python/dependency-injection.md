@@ -1,9 +1,10 @@
 ---
 id: python-dependency-injection
-name: Python dependency injection
+name: Dependency injection
 description: "Pass I/O collaborators in as parameters; pick concrete implementations in one composition root per entry point."
 version: 1
 scope: scoped
+skill: python-coding
 globs:
   - "**/*.py"
 priority: 40

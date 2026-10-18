@@ -167,6 +167,7 @@ def _rule_from_entry(path: Path, entry: ManifestEntry) -> Rule:
             priority=entry.priority if entry.priority is not None else 50,
             tags=list(entry.tags),
             lint_codes=dict(entry.lint_codes),
+            skill=entry.skill,
         ),
         body=body,
         template_body=body,
@@ -395,9 +396,11 @@ def _best_effort_content(item: ContentFile | RawAsset, top: str, result: ImportR
     scope = "scoped" if top == "references" else "always"
     if (lossy := guardrail_warning(rule_id)) is not None:
         result.warnings.append(lossy)
+    skill_hint = "; a scoped rule needs 'skill: <skill-id>' before playbook sync accepts it"
     result.warnings.append(
         f"rule {rule_id!r}: scope inferred as {scope!r} from {top}/ placement; "
         "globs/applies_if/priority/tags/version not recoverable without sidecar"
+        + (skill_hint if scope == "scoped" else "")
     )
     result.rules.append(
         Rule(

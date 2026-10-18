@@ -27,6 +27,7 @@ import pytest
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.gitignore import BLOCK_END, BLOCK_START, apply_managed_block
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from tests._catalog import core_skill_ids
 from tests.cli.test_sync_skills import _lock_paths, _skill_tree, _write_repo_local_skill
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import consumer_config
@@ -40,6 +41,28 @@ _OLD_ROOT = "shared_skills"
 _NEW_ROOT = ".agents/skills"
 _SKILL_ROOTS = (".claude/skills", ".opencode/skills", _NEW_ROOT)
 _PYTHON_DESIGN = "coding_agent_playbook.plugins.python_design"
+#: The python-coding members active on the synthetic repo (requires-python >=3.12, no
+#: dependencies): every member but python-retries-and-timeouts, which needs an HTTP client.
+_SYNTHETIC_PYTHON_CODING_MEMBERS = (
+    "python-context-managers",
+    "python-data-shapes",
+    "python-dependency-injection",
+    "python-docstrings",
+    "python-error-handling",
+    "python-idioms",
+    "python-pure-core",
+    "python-typing",
+)
+#: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:
+#: query-db's two, and the core python-coding skill with one reference per active member.
+_OLD_TREE_FILES = frozenset(
+    {
+        "query-db/SKILL.md",
+        "query-db/scripts/run.py",
+        "python-coding/SKILL.md",
+        *(f"python-coding/references/{rule_id}.md" for rule_id in _SYNTHETIC_PYTHON_CODING_MEMBERS),
+    }
+)
 
 needs_posix_symlinks = pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
 
@@ -98,11 +121,15 @@ def test_first_sync_after_upgrade_moves_pristine_shared_skills_tree(
     tmp_path: Path, make_synthetic_repo: MakeRepo, capsys: pytest.CaptureFixture[str]
 ) -> None:
     repo = _synced_then_rewound(make_synthetic_repo(tmp_path, config_text=_config()))
+    old_root = repo / _OLD_ROOT
+    old_files = {p.relative_to(old_root).as_posix() for p in old_root.rglob("*") if p.is_file()}
+    assert old_files == _OLD_TREE_FILES
     capsys.readouterr()
 
     assert _sync.execute(repo, git=FakeGitClient()) == 0
 
-    assert re.search(r", 2 removed$", capsys.readouterr().out, re.MULTILINE)  # SKILL.md + run.py
+    # query-db's SKILL.md + run.py, python-coding's SKILL.md + its 8 references: 11.
+    assert re.search(rf", {len(_OLD_TREE_FILES)} removed$", capsys.readouterr().out, re.MULTILINE)
     assert not (repo / _OLD_ROOT).exists()
     moved = repo / _NEW_ROOT / "query-db"
     assert _skill_tree(moved) == _skill_tree(repo / ".claude" / "skills" / "query-db")
@@ -196,8 +223,9 @@ def test_sync_writes_no_loose_file_at_any_skill_root(
 
     for root in _SKILL_ROOTS:
         children = sorted((repo / root).iterdir())
-        assert len(children) == 3, root  # query-db + the two python_design skills
         assert all(child.is_dir() for child in children), root
+        # query-db + the two python_design skills, next to the core skills that apply here.
+        assert len([c for c in children if c.name not in core_skill_ids()]) == 3, root
     for path in _lock_paths(repo):
         for root in _SKILL_ROOTS:
             below = Path(path).relative_to(root).parts if path.startswith(f"{root}/") else ()

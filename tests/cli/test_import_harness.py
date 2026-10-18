@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import stat
 from typing import TYPE_CHECKING
 
@@ -101,6 +102,7 @@ def _emit_full_harness(tmp_path: Path) -> Path:
                 name="sql-guidelines",
                 description="Use params",
                 scope="scoped",
+                skill="python-coding",
                 globs=["**/*.sql"],
                 priority=40,
             ),
@@ -254,3 +256,58 @@ def test_import_foreign_harness_prints_warnings(tmp_path, capsys):
     assert rc == 0
     err = capsys.readouterr().err
     assert err.strip(), "best-effort import must print lossiness warnings to stderr"
+
+
+# --- member rules (specs/prS-skills-context.md 6.4.9, 6.8.7) -------------------
+
+
+def _emit_member_rule_harness(tmp_path: Path) -> Path:
+    repo = tmp_path / "harness"
+    repo.mkdir()
+    adapter = AgentHarnessAdapter()
+    body = "# Typing\n\nUse type hints.\n"
+    frontmatter = RuleFrontmatter(
+        id="python-typing",
+        name="Typing",
+        description="Prefer a concrete type.",
+        scope="scoped",
+        globs=["**/*.py"],
+        skill="python-coding",
+    )
+    adapter.write_rule(Rule(frontmatter, body, body, False, None, "test"), repo)
+    adapter.finalize(repo)
+    return repo
+
+
+def test_lossless_import_restores_rule_skill(tmp_path: Path) -> None:
+    harness = _emit_member_rule_harness(tmp_path)
+
+    [rule] = _import.import_harness(harness).rules
+
+    assert (rule.frontmatter.id, rule.frontmatter.skill) == ("python-typing", "python-coding")
+
+
+def test_best_effort_import_warns_that_scoped_rules_need_a_skill(tmp_path: Path) -> None:
+    harness = _emit_member_rule_harness(tmp_path)
+    shutil.rmtree(harness / ".playbook")  # no sidecar: best-effort (foreign) import
+
+    result = _import.import_harness(harness)
+
+    [rule] = result.rules
+    assert rule.frontmatter.skill is None
+    assert (
+        "rule 'python-typing': scope inferred as 'scoped' from references/ placement; "
+        "globs/applies_if/priority/tags/version not recoverable without sidecar; a scoped "
+        "rule needs 'skill: <skill-id>' before playbook sync accepts it"
+    ) in result.warnings
+
+
+def test_best_effort_import_of_an_always_rule_asks_for_no_skill(tmp_path: Path) -> None:
+    """Regression: only a rule inferred as scoped is told it needs ``skill:``."""
+    harness = _emit_full_harness(tmp_path)
+    shutil.rmtree(harness / ".playbook")
+
+    warnings = _import.import_harness(harness).warnings
+
+    [always] = [w for w in warnings if w.startswith("rule 'python-house-style'")]
+    assert "skill" not in always

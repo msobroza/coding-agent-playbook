@@ -33,7 +33,8 @@ nothing (§P P8, §B.5). Validate's warnings print as ``warning:`` lines, and a
 ``[hooks]`` / ``[guardrails]`` table in ``.local.toml`` is only one of them
 here (§B.1). ``--check-staged`` is the pre-commit hot path and is not gated. A
 template the Jinja sandbox rejects aborts every mode with exit 1, naming the
-source file, before any adapter writes (specs/prK-lifecycle-hooks.md §P P1).
+source file, before any adapter writes (specs/prK-lifecycle-hooks.md §P P1); so
+does a skill whose composed description cannot fit 300 characters, naming it.
 
 Hooks (§C.1.3, ``_sync_hooks``): every mode renders the on hooks through the
 adapters (each told the real repo and the prior lockfile) plus the sync-level
@@ -43,7 +44,10 @@ and never whole-file locked, gitignored or flagged as staged output. The
 launcher, the OpenCode shim and (hooks or not) the Claude Code rules file are
 written whole, so every mode first refuses (exit 1, naming the file) a user
 file or a symlink at a path it is about to write, and a symlinked or
-hard-linked ``.claude/CLAUDE.md`` stub. Write mode then pins the interpreter,
+hard-linked ``.claude/CLAUDE.md`` stub. A write stopped by something in the way
+(a dangling symlink such as ``.claude/commands -> ../tools/cc``, a file where an
+output directory goes, a directory, FIFO or socket where an output file goes)
+exits 1 naming it, never a traceback or a hang (``_output_blockers``). Write mode then pins the interpreter,
 says when OpenCode must restart (the shim's lock entry changed), and asks the
 TTY-only trust questions.
 """
@@ -57,12 +61,19 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
 from coding_agent_playbook.adapters._skill_writer import deciding_ownership_against
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_settings import SettingsMergeError
-from coding_agent_playbook.commands import _sync_hooks, _sync_orphans, _sync_output, _sync_preflight
+from coding_agent_playbook.commands import (
+    _output_blockers,
+    _sync_hooks,
+    _sync_orphans,
+    _sync_output,
+    _sync_preflight,
+)
 from coding_agent_playbook.commands._output_locations import OutputLocations
 from coding_agent_playbook.commands._sync_hook_local import SyncHookDeps
 from coding_agent_playbook.commands._sync_lockfile import (
@@ -71,7 +82,12 @@ from coding_agent_playbook.commands._sync_lockfile import (
     build_lockfile,
     dispatch_to_adapters,
 )
-from coding_agent_playbook.commands._sync_render import render_artifacts, report_sandbox_violation
+from coding_agent_playbook.commands._sync_render import (
+    SkillDescriptionOverflowError,
+    render_artifacts,
+    report_description_overflow,
+    report_sandbox_violation,
+)
 from coding_agent_playbook.commands._validation import report_validation_errors
 from coding_agent_playbook.commands.validate import sync_gate_errors
 from coding_agent_playbook.git_client import SubprocessGitClient
@@ -188,10 +204,15 @@ def execute(
     validate`` rule set; tests inject a fake). ``hook_deps`` holds write
     mode's machine-local hook seams (pins, trust store, TTY); tests inject
     fakes. Returns 1, having written nothing, on any validate finding, when a
-    template is rejected by the Jinja sandbox, when ``settings.json`` is
+    template is rejected by the Jinja sandbox, when a skill's composed
+    description cannot fit 300 characters, when ``settings.json`` is
     not valid JSON, or when a user file (or a symlink) holds the path of the
     launcher, the OpenCode shim or the Claude Code rules file, or when
     ``.claude/CLAUDE.md`` is a symlink, a hard link or not a regular file.
+    Returns 1 too, without a traceback, naming the entry, when a write is stopped
+    by something in the way in the repo: a dangling symlink (``.claude/commands
+    -> ../tools/cc``), a file where an output directory goes, or a directory,
+    FIFO or socket where an output file goes.
 
     Example::
 
@@ -216,6 +237,8 @@ def execute(
         return _run_write(ctx, git_client, hook_deps or SyncHookDeps())
     except TemplateSecurityError as exc:
         return report_sandbox_violation(exc, ctx.repo_root, outcome=_ABORT_OUTCOME)
+    except SkillDescriptionOverflowError as exc:
+        return report_description_overflow(exc, outcome=_ABORT_OUTCOME)
     except SettingsMergeError as exc:
         return _sync_hooks.report_settings_error(exc, check=check or check_staged)
     except UserOwnedFileError as exc:
@@ -223,6 +246,14 @@ def execute(
     except _sync_hooks.HookPolicyError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    except OSError as exc:
+        # A write stopped by something in the way (a dangling link, a file where an
+        # output dir goes, a dir, FIFO or socket where an output file goes): name
+        # it instead of a traceback. Any other OSError (EACCES, ENOSPC, a bug) keeps its traceback.
+        blocker = _output_blockers.blocker_in(exc, ctx.repo_root)
+        if blocker is None:
+            raise
+        return _output_blockers.report_blocker(blocker, check=check or check_staged)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -396,7 +427,13 @@ def _run_check(ctx: SyncContext, git: GitClient) -> int:
     """
     previous, lockfile_drift = _check_lockfile(ctx)
     with _rendered_scratch(ctx, previous) as (scratch, written):
-        drift = _sync_output.file_drift(written, scratch, ctx.repo_root)
+        drift = _sync_output.file_drift(
+            written,
+            scratch,
+            ctx.repo_root,
+            shared=_sync_output.shared_outputs(ctx.adapters),
+            skill_roots=_sync_output.native_skill_roots(ctx.adapters),
+        )
         real_written = _on_real_tree(written, scratch, ctx.repo_root)
     stale = _stale_outputs(ctx, real_written)
     # Settled as in write mode, where cleanup_stale has already deleted ``stale``.
@@ -424,7 +461,7 @@ def _stale_outputs(ctx: SyncContext, real_written: Sequence[Path]) -> list[Path]
     cleanup deletes, so it is skipped with a warning rather than reporting
     orphans its own cleanup may never remove (a drift no sync could clear).
     """
-    resolved = {path.resolve() for path in real_written}
+    resolved = {real_path(path) for path in real_written}  # may pass through a user's loop
     stale: list[Path] = []
     for name, adapter in ctx.adapters.items():
         if _has_legacy_cleanup(adapter):

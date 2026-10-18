@@ -49,7 +49,6 @@ the ``network`` table (network-egress-guard's mode, for the briefing) from
 from __future__ import annotations
 
 import json
-import shutil
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
@@ -88,6 +87,7 @@ from coding_agent_playbook._guard_config_verify import (
     prompts_table,
     repo_layout,
 )
+from coding_agent_playbook._output_io import copy_output, write_output_bytes
 from coding_agent_playbook._sentinel import SENTINEL
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.hook_policy import HOOK_SCRIPTS_DIR
@@ -345,7 +345,7 @@ def write_guard_config(out_root: Path, cfg: Mapping[str, Any]) -> Path:
     """
     path = out_root / GUARD_CONFIG_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(serialize_guard_config(cfg))
+    write_output_bytes(path, serialize_guard_config(cfg))
     return path
 
 
@@ -378,8 +378,7 @@ def copy_hook_scripts(hooks: Iterable[ResolvedHook], out_root: Path) -> list[Cop
 
 def _copy(src: Path, dst: Path) -> Path:
     dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dst)
-    return dst
+    return copy_output(src, dst)
 
 
 def _runs_a_script(hook: ResolvedHook) -> bool:

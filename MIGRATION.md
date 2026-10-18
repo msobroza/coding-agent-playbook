@@ -1,6 +1,10 @@
 # Migration guide
 
-> **Heads-up:** **v0.20** (assistant lifecycle hooks, below) asks one thing of every
+> **Heads-up:** **v0.21** moves every scoped rule into a skill. A repo or overlay with its own
+> scoped rules must add `skill: <skill-id>` to each one, or `playbook sync` refuses them. Run
+> `playbook validate` before upgrading.
+>
+> **v0.20** (assistant lifecycle hooks, below) asks one thing of every
 > consumer: run `playbook validate` before upgrading, because `playbook sync` now
 > refuses content that validate rejects. Everything else in v0.20 is opt-in or a
 > one-time diff; its TL;DR says who must act.
@@ -32,6 +36,10 @@ subsection after it when a row is not enough. The SPEC changelog entry is v0.21.
 | Tooling that points at `shared_skills/` | Point it at `.agents/skills/`. |
 | `codex` in `adapters_enabled` | Remove it. |
 | Continue users | Existing repos: nothing, a committed `continue` stays. New repos: add `continue` to `--adapters`. |
+| Only using engine content (core, bundled plugins) | Nothing. The next `playbook sync` (the post-checkout hook runs it) rewrites `AGENTS.md` and the Claude Code rules file and adds the core skill directories. See "Scoped rules arrive as skill references". |
+| A repo, overlay or bundled plugin whose scoped rules name a skill (`skill:`) | Nothing: the next `playbook sync` drops those rules from `AGENTS.md` and the Claude Code rules file and adds a generated `## Where guidance lives` section that names their skills. With only `agents_md` on (`adapters_enabled = []`), sync warns that they reach no assistant: add `claude_code`, `opencode` or `shared_skills`. See "AGENTS.md and the Claude Code rules file hold only always rules". |
+| Overriding `project-context` or `python-house-style` by id | Nothing: your text keeps winning. Consider trimming it, since the engine's own text is now much shorter. See "The always text is shorter". |
+| Keeping your own scoped rules in `playbook/rules/` or an overlay | Add `skill: <skill-id>` to each before upgrading ("Add skill: to your own scoped rules"). Until then `playbook validate` fails and `playbook sync` refuses to run. |
 
 ### `package_manager` and per-key validation
 
@@ -149,6 +157,130 @@ Remove `"codex"` from `adapters_enabled`. Codex is served by `AGENTS.md` and
 - The lockfile schema (still 2) and the adapter id `shared_skills`, so a
   committed `adapters_enabled` needs no edit.
 
+### AGENTS.md and the Claude Code rules file hold only always rules
+
+A member rule, a scoped rule that names a skill in `skill:`, is no longer
+written into `AGENTS.md` or `.claude/rules/coding-agent-playbook.md`
+(`CLAUDE_RULES_PATH`). It reaches Claude Code, OpenCode and Codex as a
+reference of its skill, `<skills root>/<skill>/references/<rule-id>.md`, and
+Continue still gets it as its own rule file. Both files now carry the always
+rules, then one generated `## Where guidance lives` section, byte-identical in
+the two, with one line per written skill that has member rules and a
+`playbook.files` phrase:
+
+    - Risk model modules: skill `risk-models`
+
+`AGENTS.md` then ends with its Guardrails section, unchanged; the rules file
+ends with the heartbeat line when the session-start briefing is on. An always
+rule, and the guardrail text of a hook Claude Code cannot enforce, keep their
+full sections. `.claude/CLAUDE.md` stays the four-line stub. Every
+scoped rule in core names a skill, so every repo sees the change: in a typical
+FastAPI + ML repo with hooks on, `AGENTS.md` shrinks from about 6,800 words to
+about 1,850, of which about 330 come before the Guardrails section, and the
+Claude Code rules file from about 5,300 words to about 350 (with the shorter
+always text below). A later change of this release shortens the guardrails.
+
+The map names only skills that a sync writes. When no enabled adapter writes a
+skills root (`adapters_enabled = []`, or only `continue`), `AGENTS.md` has no
+`## Where guidance lives` section.
+
+When member rules are active but every enabled adapter is `agents_md`
+(`adapters_enabled = []`), nothing delivers them, and `playbook sync` says so on
+stderr instead of inlining them into `AGENTS.md`:
+
+    warning: no enabled adapter delivers scoped rules (only agents_md is on); skill risk-models reaches no assistant: add claude_code, opencode or shared_skills to adapters_enabled
+
+### Scoped rules arrive as skill references
+
+Core now ships four skills: `python-coding`, `python-testing`, `python-tooling`
+and `ml-data`. Each scoped rule in core names one of them, and is now
+`<skills root>/<skill>/references/<rule-id>.md`, listed in that skill's index,
+for example `.claude/skills/python-coding/references/python-typing.md`. A skill
+is written only when at least one of its rules applies to the repo, so a repo
+without FastAPI has no `python-tooling`. Rule ids, `lint_codes`, hook links and
+prompt `includes_rules` are unchanged, so lint feedback still names the rule id;
+open the reference with that id. The `python-coding` members have short display
+names (`Typing`, `Error handling`, …) because each name is its label in the
+skill's description, and `python-typing`, `python-error-handling`, `pytest` and
+`fastapi-app-wiring` have new one-line descriptions, because a description is
+now the rule's line in its skill's index. Prompts that inline these rules show
+the new names in their `## Reference rules` headings (`### Error handling`).
+
+### The always text is shorter
+
+`project-context` keeps the name, kind and description and two reminders: ask
+before coding when the scope or approach is unclear, and report problems outside
+the task instead of fixing them in the same change. The kind now reads
+`(project kind: …)` and is still the detector's. The reminders "read existing
+code first", "prefer clarity over cleverness" and "keep changes minimal" are
+gone. `python-house-style` keeps eight bullets, four of them with a one-line
+reason; the rest moved to two new rules in `python-coding`:
+`python-data-shapes` (records, frozen dataclasses, return shapes, constants) and
+`python-idioms` (paths, flag-driven functions, composition, strings, imports,
+small idioms). Neither always rule has a title heading of its own any more (the
+`## Project context` and `## Python house style` headings stay), and both are at
+`version: 2`. In a typical FastAPI + ML repo the two sections shrink from about
+690 words to about 230. An override of either always rule by id keeps its own
+text, and with it its old length.
+
+### Add skill: to your own scoped rules
+
+```yaml
+# playbook/rules/risk-models-specific.md.j2: before
+scope: scoped
+globs: ["src/risk/**/*.py"]
+
+# after
+scope: scoped
+skill: python-coding
+globs: ["src/risk/**/*.py"]
+```
+
+Without it, `playbook validate` and `playbook sync` stop with:
+
+    scope 'scoped' needs 'skill: <skill-id>' naming the skill whose references deliver this rule; known skills: ml-data, python-coding, python-testing, python-tooling
+
+The list names every skill that can take rules after your layers are merged, so
+a skill of your own joins it. When the rule overrides a rule in core by id, the
+line ends with the skill the overridden rule named, for example
+`; the rule it overrides (coding_agent_playbook) names 'python-coding'`.
+
+Pick the skill by topic: `python-coding` for library-agnostic Python,
+`python-testing` for tests, `python-tooling` for one named framework or tool,
+`ml-data` for ML and data libraries. To keep a rule in a skill of your own, add
+`playbook/skills/<id>/SKILL.md` with a capability sentence in `description` and
+a `playbook:` block (`use_when`, `files`); a skill without that block, such as a
+bundled plugin skill, cannot take rules. Always rules must not carry `skill:`.
+
+### Continue and the new rules
+
+Continue still gets one rule file per rule and ignores `skill:`.
+`.continue/rules/` gains `44-python-data-shapes.md` and `58-python-idioms.md`;
+`00-project-context.md` and `10-python-house-style.md` get the shorter text.
+Seven rule files (`40-python-dependency-injection.md` and the other
+`python-coding` members) show their new short names, and four show their new
+descriptions.
+Core skills are not turned into Continue prompts, so no
+`.continue/prompts/<core-skill>.md` is ever written.
+
+### New output and the lockfile
+
+Each written core skill adds `<root>/<id>/SKILL.md` and `references/` under
+every enabled skills root, one lockfile entry per file (`kind = "skill"` for
+`SKILL.md`, `kind = "rule"` with the rule id for each reference, so the
+generated-output guard points an editor at the rule) and, with
+`[output] commit = false`, one managed `.gitignore` line per skill directory.
+Nothing is removed. A hand-written skill directory of yours named
+`python-coding` (or another core id) is left alone with a warning; rename it, or
+move it to `playbook/skills/python-coding/` to override the core skill (keep its
+`playbook:` block: the core rules still attach to it).
+
+### Not changed (skill references)
+
+Rule ids and file names in `catalog/`, `lint_codes`, `linked_rule` hooks,
+prompt rendering (`includes_rules` still inlines rule bodies), the lockfile
+schema and Claude Code's `.claude/CLAUDE.md` stub.
+
 ## v0.20 — Assistant lifecycle hooks (PR K)
 
 v0.20 adds **lifecycle hooks**, the fourth canonical kind: rendered natively for
@@ -186,6 +318,12 @@ unknown provenance, and the first write-mode `playbook sync` rewrites it as
 schema 2. Under the default `[output] commit = false` the lockfile is local
 state, so there is nothing to do. Under `commit = true` that first sync changes
 the committed lockfile once: commit it together with the engine bump.
+
+A file written through an output dir linked out of the repo (`.claude/skills ->
+/shared/skills`) now gets no entry: the lockfile never owns such output. Earlier
+engines recorded it under its absolute, machine-specific path on every sync; the
+first sync with this version leaves that entry out (and never deletes the
+file). Under `commit = true`, commit that one-time lockfile change.
 
 ### 2. Run `playbook validate` first: `playbook sync` is validate-gated
 
@@ -363,6 +501,12 @@ Sync calls them in one order per adapter: `begin_sync`, the `write_rule` /
 `write_prompt` / `write_skill` loops, `write_hook`, `finalize`, then
 `managed_lock_entries`; `cleanup_stale` still runs after every adapter's
 `finalize` (SPEC §10.1).
+
+One more optional class attribute, `native_skills_root` (default `None`): an
+adapter whose `write_skill` delegates to the shared `SkillWriter` names its root
+there (`".claude/skills"`), so `playbook sync --check` explains a file missing
+inside `<root>/<id>/` the way that writer settles it (SPEC §10.8, §12.3). Leave
+it unset otherwise.
 
 #### Override `stale_outputs`, not `cleanup_stale`
 

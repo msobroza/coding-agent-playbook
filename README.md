@@ -20,7 +20,9 @@ Multi-harness playbook engine
   frameworks, ML stack, project kind) and each artifact's `applies_if` predicate
   decides what ships — a FastAPI rule only reaches FastAPI repos, the ML
   serialization-security rule only ML repos. Assistants get the rules that
-  actually apply.
+  actually apply. Only a short always-loaded core rides every turn; scoped rules
+  load on demand, as references inside skills the assistant picks by
+  description.
 - **Built for organizations.** Three layers compose by artifact `id`: engine
   generic content → pip-installable org overlay packages → repo-local
   `playbook/` overrides. Central teams distribute standards as versioned
@@ -86,16 +88,20 @@ hooks on, one dispatcher answers every harness event at run time:
  engine catalog/core/  ─┐            OverlayResolver: one winner per id    sandboxed Jinja,
  overlays, plugins     ─┼──────────► (hooks: overlays only add)  ────────► StrictUndefined
  repo-local playbook/  ─┘            detector facts + applies_if                 │
- rules, prompts, skills, hooks       resolve_effective_hooks ([hooks])           │
+ rules, prompts, skills, hooks       scoped rules join the skill they name       │
+                                     resolve_effective_hooks ([hooks])           │
                                                                                  ▼
  adapters: each writes what its harness reads
-   continue       .continue/rules/ + .continue/prompts/ (opt-in)
-   claude_code    .claude/ (rules in .claude/rules/coding-agent-playbook.md,
-                           a rule-free .claude/CLAUDE.md stub)
+   continue       .continue/rules/ (one file per rule) + .continue/prompts/ (opt-in)
+   claude_code    .claude/ (always rules + "Where guidance lives" in
+                           .claude/rules/coding-agent-playbook.md,
+                           a rule-free .claude/CLAUDE.md stub,
+                           skills with their rule references in .claude/skills/<id>/)
                            + managed hook entries in .claude/settings.json
                            + .claude/hooks/playbook/launch.sh
    opencode       .opencode/ + .opencode/plugins/playbook-hooks.js
-   agents_md      AGENTS.md (always; a ## Guardrails section when hooks are on)
+   agents_md      AGENTS.md (always; always rules + "Where guidance lives";
+                           a ## Guardrails section when hooks are on)
    shared_skills  .agents/skills/ (the shared skill root: Codex, OpenCode)
    agent_harness  HARNESS.md tree + .playbook/ sidecar (opt-in)
  sync-level       .coding-agent-playbook.lock
@@ -131,9 +137,10 @@ Everything the playbook ships as content lives in `catalog/`, outside the
 Python package; `src/coding_agent_playbook/` is engine logic only. Writing a
 rule, prompt, eval task, skill or hook never means touching Python:
 
-- `catalog/core/` holds the engine's built-ins: `rules/`, `prompts/`,
-  `eval_tasks/` and the lifecycle `hooks/`, always on (a hook still runs only
-  where `[hooks]` turns it on).
+- `catalog/core/` holds the engine's built-ins: `rules/`, `skills/`,
+  `prompts/`, `eval_tasks/` and the lifecycle `hooks/`, always on (a hook still
+  runs only where `[hooks]` turns it on, and a core skill is written only where
+  one of its rules applies).
 - `catalog/plugins/<name>/` holds one **bundled plugin** per directory
   (today `superpowers` and `python_design`), off until a consumer lists
   `coding_agent_playbook.plugins.<name>` in `overlays_enabled`. A new
@@ -150,7 +157,7 @@ sdist (`uv build` or `python -m build`, never `--wheel`).
 ```mermaid
 flowchart LR
     subgraph catalog["catalog/ (playbook content, no Python)"]
-        core["core/: rules, prompts, eval_tasks, hooks (always on)"]
+        core["core/: rules, skills, prompts, eval_tasks, hooks (always on)"]
         plugins["plugins/: one directory per bundled plugin (opt-in)"]
     end
     subgraph src["src/coding_agent_playbook/ (engine logic)"]
@@ -241,8 +248,11 @@ the legacy committed-output flow and CI there; under the default it is only
 meaningful in a working copy that has already been synced.) From then on the `post-checkout` / `post-merge`
 hook re-runs it after every checkout and pull; run it by hand whenever you
 change `playbook/` or the config. `AGENTS.md` is always generated regardless of
-which adapters are enabled (as long as at least one rule or hook advisory applies).
-Claude Code gets the same rule sections in `.claude/rules/coding-agent-playbook.md`,
+which adapters are enabled (as long as at least one always rule, Where line (a skill with member
+rules and a `playbook.files` phrase, while an enabled adapter writes a skills root) or hook advisory applies). A scoped rule that names a skill (`skill:`) is not in it: it
+arrives as a reference inside that skill, and a generated `## Where guidance lives`
+section maps file kinds to those skills (core ships four, "Rules inside skills" below).
+Claude Code gets the same always-rule sections and the same map in `.claude/rules/coding-agent-playbook.md`,
 which it loads natively; the generated `.claude/CLAUDE.md` is a rule-free stub, so
 OpenCode v1 (which attaches that file when it reads under `.claude/`) never loads
 the rules twice (SPEC §10.3.1). Any other `.claude/rules/` file is yours, and
@@ -324,6 +334,7 @@ Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
    ```text
    playbook/
    ├── rules/         # add a new rule, or override one by reusing its id
+   │                  # (a scoped rule names its skill with `skill:`)
    ├── prompts/
    ├── skills/        # <id>/SKILL.md (+ scripts/, references/)
    └── eval_tasks/
@@ -332,14 +343,16 @@ Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
 Not every resource renders everywhere: the detector inspects the repo and each
 artifact's `applies_if` predicate gates it (a FastAPI rule won't ship to a
 non-FastAPI repo; the ML serialization-security rule ships only to repos with an
-ML stack). Run `playbook check` to see the detected facts and exactly which
-rules/prompts are active — the fastest way to debug *"why isn't my rule
-appearing?"*
+ML stack). A skill that owns rules follows them: it is written only when at
+least one of its rules applies. Run `playbook check` to see the detected facts
+and exactly which rules/prompts are active — the fastest way to debug *"why
+isn't my rule appearing?"*
 
 ## Skills: one source, every Agent-Skills root
 
 A canonical skill (`playbook/skills/<dir>/SKILL.md` + optional `scripts/` and
-`references/`, or one shipped by an overlay) is written **natively** by three
+`references/`, one shipped by an overlay, or one shipped by core) is written
+**natively** by three
 adapters that share one `SkillWriter`, so every copy is byte-identical:
 
 ```text
@@ -347,7 +360,7 @@ playbook/skills/<dir>/  ──►  SkillWriter  ──┬──►  .claude/skil
   SKILL.md (id: <id>)                       ├──►  .opencode/skills/<id>/   (opencode)
   scripts/ references/                      └──►  .agents/skills/<id>/     (shared_skills: Codex, OpenCode)
                                      Continue: degraded to a prompt (.continue/prompts/<id>.md)
-                                     AGENTS.md: skills are not emitted (rules only)
+                                     AGENTS.md: skills are not emitted (a skill with rules gets a "Where guidance lives" line)
 ```
 
 - **Every skill must declare `id:` in its `SKILL.md` frontmatter.** That `id` —
@@ -396,6 +409,58 @@ playbook/skills/<dir>/  ──►  SkillWriter  ──┬──►  .claude/skil
   the way is left alone with a warning, and `playbook sync --check` names it
   until you move it. A path you re-point through a symlink, or a skill dir whose
   `SKILL.md` you rewrote, is yours from then on.
+- Output written through a link out of the repo (`.claude/skills ->
+  /shared/skills`) gets no lockfile entry, so the leftover policy never deletes
+  it: a removed skill's files there stay until you delete them (a stale
+  sentinel-tagged command or rule file there is still removed, and
+  `playbook sync --check` reports it). Anywhere else (the rules above cover
+  skill directories, and a skills root that is a dangling link or a file is
+  skipped with a warning), something in the way of output stops
+  `playbook sync` with exit 1 naming it, and is never deleted: a dangling link
+  (`.claude/commands -> ../tools/cc` with no `tools/cc`; create the target, or
+  re-point or remove the link), a file where an output directory goes (a file
+  at `.claude/commands`), or a directory, FIFO or socket where an output file
+  goes (an `AGENTS.md/` directory, `mkfifo AGENTS.md`). Move or fix it, then
+  re-run. Inside a skill directory a link that leads out of it is never written
+  through: the files under it are skipped with a warning, and
+  `playbook sync --check` names the link until you remove or re-point it.
+
+### Rules inside skills
+
+Core ships four skills, and every scoped rule in core names the one that owns
+its topic (`skill:` in its frontmatter):
+
+| Skill | Its rules | Written when |
+| --- | --- | --- |
+| `python-coding` | dependency injection, pure core, data shapes, typing, error handling, context managers, docstrings, timeouts and retries, idioms | always (most of its rules are ungated) |
+| `python-testing` | `pytest` | pytest is detected |
+| `python-tooling` | `fastapi-app-wiring`, `fastapi-error-boundaries` | FastAPI is a dependency |
+| `ml-data` | `ml-serialization-security` | the ML stack includes torch, TensorFlow, JAX, transformers, scikit-learn, XGBoost or LightGBM |
+
+Sync renders each rule that applies as `<skills root>/<skill>/references/<rule-id>.md`
+and appends a `## References` index to the skill's `SKILL.md`, one line per
+rule with its description. The skill's description gains a generated "Covers
+..." clause naming those rules (`Library-agnostic Python conventions. Covers
+Dependency injection, Pure core, ... Use when writing, changing or reviewing
+Python code.`). The engine keeps it within 300 characters by listing the
+highest-priority rules and ending with "and N more" when not all names fit.
+`AGENTS.md` and
+`.claude/rules/coding-agent-playbook.md` then carry only the always rules and a
+generated `## Where guidance lives` map from file kinds to these skills; the map
+is left out when no enabled adapter writes a skills root.
+
+- **Add a rule to a core skill** by naming it: `skill: python-coding` in
+  `playbook/rules/<file>.md` (or in an overlay) is enough, because membership is
+  resolved after every layer is merged. Every scoped rule must name one:
+  `playbook validate` fails on a scoped rule without `skill:` and lists the
+  skills it may name, and `playbook sync` writes nothing until it is fixed.
+- **Override a core skill** with `playbook/skills/python-coding/SKILL.md`. The
+  core rules still attach to it, so keep its `playbook:` block (`use_when`,
+  `files`); a skill without that block, such as a bundled plugin skill, takes no
+  rules.
+- **Continue** reads no skills: when enabled it still gets one
+  `.continue/rules/` file per rule, and a skill with rules is never turned into
+  a Continue prompt.
 
 ## Bundled plugins: superpowers, python_design
 

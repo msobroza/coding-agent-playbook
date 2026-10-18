@@ -29,6 +29,7 @@ from coding_agent_playbook.security.pii import (
     pii_config,
     scan_pii,
 )
+from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
 
 ALL_NAMED = PiiConfig(detectors=tuple(PII_DETECTORS))
@@ -311,7 +312,7 @@ def test_pii_module_is_import_light() -> None:
     foreign = [
         name
         for name in loaded
-        if not name.startswith("coding_agent_playbook.security")
+        if not name.startswith(engine_module("coding_agent_playbook.security"))
         and name.split(".")[0] not in sys.stdlib_module_names
     ]
     assert foreign == []

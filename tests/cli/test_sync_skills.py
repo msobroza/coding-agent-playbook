@@ -18,6 +18,7 @@ import pytest
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.lockfile import compute_hash
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from tests._catalog import core_skill_ids
 from tests.fakes import FakeGitClient, pre_gate_validate
 
 if TYPE_CHECKING:
@@ -247,9 +248,10 @@ def test_sync_never_reclaims_an_adopted_leftover(tmp_path, make_synthetic_repo, 
 
 
 def test_sync_check_names_the_blocker_of_a_refused_swap(tmp_path, make_synthetic_repo, capsys):
-    """A file/folder swap blocked by a file ``playbook sync`` did not write is the one
-    documented exception to check-mode parity: ``--check`` keeps failing until the user
-    moves the file, so it says so instead of "run 'playbook sync'" (SPEC §12.3)."""
+    """A file/folder swap blocked by a file ``playbook sync`` did not write is one of the
+    two documented exceptions to check-mode parity (a file under a link leading out of
+    its skill dir is the other): ``--check`` keeps failing until the user moves the
+    file, so it says so instead of "run 'playbook sync'" (SPEC §12.3)."""
     repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
     source = _write_repo_local_skill(repo, "query-db")
     (source / "references" / "api").mkdir(parents=True)
@@ -351,7 +353,8 @@ def _rename_skill_id_case_and_sync(
     out: str = capsys.readouterr().out
 
     for root in _SKILL_ROOTS:
-        assert [entry.name for entry in (repo / root).iterdir()] == ["demo"], root
+        entries = [entry.name for entry in (repo / root).iterdir()]
+        assert [name for name in entries if name not in core_skill_ids()] == ["demo"], root
         assert (repo / root / "demo" / "scripts" / "run.py").is_file(), root
         assert (repo / root / "demo" / "SKILL.md").read_text().startswith("---\nname: demo\n")
     assert not any("/Demo/" in path for path in _lock_paths(repo))
