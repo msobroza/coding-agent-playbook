@@ -30,6 +30,7 @@ id: {id}
 name: {name}
 description: {description}
 scope: scoped
+skill: python-coding
 globs:
   - "**/*.py"
 ---

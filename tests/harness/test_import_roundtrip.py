@@ -81,6 +81,7 @@ def _make_scoped_rule() -> Rule:
             name="SQL Guidelines (Human)",
             description="Use parameterized queries",
             scope="scoped",
+            skill="python-coding",
             globs=["**/*.sql"],
             priority=40,
             tags=[],

@@ -1,6 +1,10 @@
 # Migration guide
 
-> **Heads-up:** **v0.20** (assistant lifecycle hooks, below) asks one thing of every
+> **Heads-up:** **v0.21** moves every scoped rule into a skill. A repo or overlay with its own
+> scoped rules must add `skill: <skill-id>` to each one, or `playbook sync` refuses them. Run
+> `playbook validate` before upgrading.
+>
+> **v0.20** (assistant lifecycle hooks, below) asks one thing of every
 > consumer: run `playbook validate` before upgrading, because `playbook sync` now
 > refuses content that validate rejects. Everything else in v0.20 is opt-in or a
 > one-time diff; its TL;DR says who must act.
@@ -35,6 +39,7 @@ subsection after it when a row is not enough. The SPEC changelog entry is v0.21.
 | Only using engine content (core, bundled plugins) | Nothing. The next `playbook sync` (the post-checkout hook runs it) rewrites `AGENTS.md` and the Claude Code rules file and adds the core skill directories. See "Scoped rules arrive as skill references". |
 | A repo, overlay or bundled plugin whose scoped rules name a skill (`skill:`) | Nothing: the next `playbook sync` drops those rules from `AGENTS.md` and the Claude Code rules file and adds a generated `## Where guidance lives` section that names their skills. With only `agents_md` on (`adapters_enabled = []`), sync warns that they reach no assistant: add `claude_code`, `opencode` or `shared_skills`. See "AGENTS.md and the Claude Code rules file hold only always rules". |
 | Overriding `project-context` or `python-house-style` by id | Nothing: your text keeps winning. Consider trimming it, since the engine's own text is now much shorter. See "The always text is shorter". |
+| Keeping your own scoped rules in `playbook/rules/` or an overlay | Add `skill: <skill-id>` to each before upgrading ("Add skill: to your own scoped rules"). Until then `playbook validate` fails and `playbook sync` refuses to run. |
 | Tooling or prompts that match lint-feedback lines (`rule <id>: …`) | Accept the new `rule <id> (skill <skill>): …` prefix and the ` (rule <id>, skill <skill>)` suffix; the next `playbook sync` turns them on. See "Guardrails and lint feedback point at skills". |
 
 ### `package_manager` and per-key validation
@@ -167,9 +172,9 @@ the two, with one line per written skill that has member rules and a
     - Risk model modules: skill `risk-models`
 
 `AGENTS.md` then ends with its Guardrails section, unchanged; the rules file
-ends with the heartbeat line when the session-start briefing is on. A rule that
-names no skill, and the guardrail text of a hook Claude Code cannot enforce,
-keep their full sections. `.claude/CLAUDE.md` stays the four-line stub. Every
+ends with the heartbeat line when the session-start briefing is on. An always
+rule, and the guardrail text of a hook Claude Code cannot enforce, keep their
+full sections. `.claude/CLAUDE.md` stays the four-line stub. Every
 scoped rule in core names a skill, so every repo sees the change: in a typical
 FastAPI + ML repo with hooks on, `AGENTS.md` shrinks from about 6,800 words to
 about 1,850, of which about 330 come before the Guardrails section, and the
@@ -219,6 +224,35 @@ small idioms). Neither always rule has a title heading of its own any more (the
 `version: 2`. In a typical FastAPI + ML repo the two sections shrink from about
 690 words to about 230. An override of either always rule by id keeps its own
 text, and with it its old length.
+
+### Add skill: to your own scoped rules
+
+```yaml
+# playbook/rules/risk-models-specific.md.j2: before
+scope: scoped
+globs: ["src/risk/**/*.py"]
+
+# after
+scope: scoped
+skill: python-coding
+globs: ["src/risk/**/*.py"]
+```
+
+Without it, `playbook validate` and `playbook sync` stop with:
+
+    scope 'scoped' needs 'skill: <skill-id>' naming the skill whose references deliver this rule; known skills: ml-data, python-coding, python-testing, python-tooling
+
+The list names every skill that can take rules after your layers are merged, so
+a skill of your own joins it. When the rule overrides a rule in core by id, the
+line ends with the skill the overridden rule named, for example
+`; the rule it overrides (coding_agent_playbook) names 'python-coding'`.
+
+Pick the skill by topic: `python-coding` for library-agnostic Python,
+`python-testing` for tests, `python-tooling` for one named framework or tool,
+`ml-data` for ML and data libraries. To keep a rule in a skill of your own, add
+`playbook/skills/<id>/SKILL.md` with a capability sentence in `description` and
+a `playbook:` block (`use_when`, `files`); a skill without that block, such as a
+bundled plugin skill, cannot take rules. Always rules must not carry `skill:`.
 
 ### Continue and the new rules
 

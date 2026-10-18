@@ -102,6 +102,7 @@ def _emit_full_harness(tmp_path: Path) -> Path:
                 name="sql-guidelines",
                 description="Use params",
                 scope="scoped",
+                skill="python-coding",
                 globs=["**/*.sql"],
                 priority=40,
             ),

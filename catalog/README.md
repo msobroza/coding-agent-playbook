@@ -70,8 +70,9 @@ the consumer's `playbook/`) replaces an artifact with the same `id`.
    `languages/python/`, `frameworks/` or `ml/`.
 2. Give it frontmatter with `id` (unique across every layer), `name`,
    `description`, `version` and `scope` (`always` or `scoped`). A scoped rule
-   also names the skill that delivers it in `skill:`, which an always rule must
-   not carry; the skill must exist after the layer merge, so an overlay or a
+   also names the skill that delivers it in `skill:` (`playbook validate`
+   fails on a scoped rule without one), which an always rule must not carry;
+   the skill must exist after the layer merge, so an overlay or a
    consumer's `playbook/rules/` may name a core skill. Add `globs` for a scoped
    rule, `applies_if` to gate it on detector facts, `priority` (lower comes
    first; the default is 50) and `tags`. SPEC §6.1 has the full schema.

@@ -30,7 +30,7 @@ _ABORT_LINE = "playbook sync aborted; no files were written."
 
 _UNKNOWN_FACT_RULE = (
     "---\nid: bad-fact\nname: Bad\ndescription: d\nscope: scoped\n"
-    "applies_if:\n  orm_version: '>=2'\n---\nBody\n"
+    "skill: python-coding\napplies_if:\n  orm_version: '>=2'\n---\nBody\n"
 )
 
 _CONFIG_WITH_MISSING_OVERLAY = """\
@@ -196,4 +196,35 @@ def test_sync_writes_nothing_on_a_membership_error(
         "one of: ml-data, python-coding, python-testing, python-tooling (or enable the overlay "
         "that ships it)"
     ) in err
+    assert _ABORT_LINE in err
+
+
+_SCOPED_WITHOUT_SKILL_RULE = (
+    "---\nid: risk-naming\nname: Risk naming\ndescription: d\nscope: scoped\n---\nBody\n"
+)
+
+
+@pytest.mark.parametrize("check", [False, True])
+def test_sync_writes_nothing_for_a_scoped_rule_without_skill(
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    capsys: pytest.CaptureFixture[str],
+    check: bool,
+) -> None:
+    """V1 (prS §6.10 item 10): write mode and ``--check`` stop before any write."""
+    repo = make_synthetic_repo(tmp_path, rules=[("good", "Good body.\n")])
+    bad = repo / "playbook" / "rules" / "risk-naming.md"
+    bad.write_text(_SCOPED_WITHOUT_SKILL_RULE, encoding="utf-8")
+    before = _tree_snapshot(repo)
+
+    rc = _sync.execute(repo, check=check, git=FakeGitClient())
+
+    assert rc == 1
+    assert _tree_snapshot(repo) == before
+    err = capsys.readouterr().err
+    assert (
+        f"FAIL {bad}: scope 'scoped' needs 'skill: <skill-id>' naming the skill whose "
+        "references deliver this rule; known skills: ml-data, python-coding, python-testing, "
+        "python-tooling"
+    ) in err.splitlines()
     assert _ABORT_LINE in err

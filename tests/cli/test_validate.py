@@ -48,6 +48,7 @@ def test_validate_flags_applies_if_unknown_fact(tmp_path, make_synthetic_repo, c
         "name: Bad\n"
         "description: bad\n"
         "scope: scoped\n"
+        "skill: python-coding\n"
         "applies_if:\n"
         "  orm_version: '>=2'\n"
         "---\n"
@@ -421,7 +422,7 @@ def test_validate_warns_about_skill_files_sync_never_copies(
 
 _UNKNOWN_FACT_RULE = (
     "---\nid: bad\nname: Bad\ndescription: bad\nscope: scoped\n"
-    "applies_if:\n  orm_version: '>=2'\n---\nBody\n"
+    "skill: python-coding\napplies_if:\n  orm_version: '>=2'\n---\nBody\n"
 )
 
 
