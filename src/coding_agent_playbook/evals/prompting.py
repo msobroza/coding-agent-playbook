@@ -31,12 +31,13 @@ from jinja2 import TemplateError
 
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.detector import detect, evaluate_predicate
-from coding_agent_playbook.orchestrator import OverlayResolver, RuleRegistryImpl
+from coding_agent_playbook.orchestrator import OverlayResolver
 from coding_agent_playbook.renderer import (
     TemplateSecurityError,
     build_environment,
     render_string,
 )
+from coding_agent_playbook.rule_registry import RuleRegistryImpl
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import Prompt
 

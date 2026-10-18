@@ -20,23 +20,21 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.commands._sync_hooks import SyncHooks, resolve_sync_hooks
-from coding_agent_playbook.orchestrator import (
-    build_prompt_environment,
-    filter_applies_if,
-    template_source,
-)
+from coding_agent_playbook.orchestrator import filter_applies_if, template_source
 from coding_agent_playbook.renderer import (
     TemplateSecurityError,
     appendix_rule_ids,
     build_environment,
     render_sandboxed,
 )
+from coding_agent_playbook.rule_registry import build_prompt_environment
 
 if TYPE_CHECKING:
     from jinja2 import Environment
 
     from coding_agent_playbook.hook_policy import ResolvedHook
-    from coding_agent_playbook.orchestrator import RuleRegistryImpl, SyncContext
+    from coding_agent_playbook.orchestrator import SyncContext
+    from coding_agent_playbook.rule_registry import RuleRegistryImpl
     from coding_agent_playbook.types import Hook, Prompt, Rule, Skill
 
 
