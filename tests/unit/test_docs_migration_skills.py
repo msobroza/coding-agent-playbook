@@ -111,3 +111,19 @@ def test_migration_heads_up_leads_with_v0_21_skill() -> None:
     heads_up = text[: text.index("\n## ")]
     assert heads_up.index("v0.21") < heads_up.index("v0.20"), "v0.21 leads the heads-up"
     assert "`skill: <skill-id>`" in heads_up
+
+
+def _subsection_titles(section: str) -> list[str]:
+    """The ``### `` subsection titles of ``section``, in file order."""
+    return re.findall(r"^### (.+)$", section, re.MULTILINE)
+
+
+def test_migration_v0_21_tldr_pointers_follow_subsection_order() -> None:
+    """Rows that name a subsection ("See ...") name them in file order (SPEC v0.21 entry)."""
+    section = _v021_section()
+    titles = _subsection_titles(section)
+    rows = _tldr_table(section)[2:]
+    quoted = [name for row in rows for name in re.findall(r'"([^"]+)"', row)]
+    pointed = [titles.index(name) for name in quoted if name in titles]
+    assert len(pointed) >= 4, f"expected the TL;DR to point at subsections, found {quoted}"
+    assert pointed == sorted(pointed), f"TL;DR points at {quoted} out of subsection order {titles}"
