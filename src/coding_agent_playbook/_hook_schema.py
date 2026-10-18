@@ -3,17 +3,17 @@
 Also the vocabulary Literals and the two nested levels (``HookMatcher``,
 ``HookHandler``), whose public home is ``coding_agent_playbook.types``.
 
-``types.HookFrontmatter.from_mapping`` uses this module to enforce H1 (unknown
-keys at every level, required keys, types) and to give the H8 contract keys
-their own message. It checks structure only. Value domains (canonical event
-names, per-event decisions, the id pattern, timeout bounds: H2-H13) are left to
-``hook_policy.classify_hook``, so ``playbook validate`` can report every
-problem of a hook at once instead of stopping at the first
-(specs/prK-lifecycle-hooks.md §A.2, §B.5).
+``HookFrontmatter.from_mapping`` (defined in ``_hook_frontmatter``, public home
+``types``) uses this module to enforce H1 (unknown keys at every level, required
+keys, types) and to give the H8 contract keys their own message. It checks
+structure only. Value domains (canonical event names, per-event decisions, the id
+pattern, timeout bounds: H2-H13) are left to ``hook_policy.classify_hook``, so
+``playbook validate`` can report every problem of a hook at once instead of
+stopping at the first (specs/prK-lifecycle-hooks.md §A.2, §B.5).
 
 Split out of ``types.py`` for the file-size budget. It imports nothing from the
-package, so ``types.py`` and the stdlib-only ``hook_policy`` can both import it
-without a cycle.
+package, so ``types.py``, ``_hook_frontmatter.py`` and the stdlib-only
+``hook_policy`` can all import it without a cycle.
 """
 
 from __future__ import annotations
