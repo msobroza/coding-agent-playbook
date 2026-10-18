@@ -1132,8 +1132,9 @@ Acceptance:
 
 ### 9.3 T02 - grilling, grill-me, grill-with-docs, domain-modeling (A.T02)
 
-Acceptance: grill-me and grill-with-docs load grilling (and grill-with-docs also domain-modeling)
-by two separate "Load the `x` skill" sentences with no order implied (D18.1); grilling delegates
+Acceptance: grill-me loads grilling by one "Load the `x` skill" clause; grill-with-docs loads
+grilling and domain-modeling in one sentence with two load clauses and no order implied ("Load the
+`grilling` skill, and load the `domain-modeling` skill", D18.1); grilling delegates
 fact-finding only to a background agent and otherwise looks the fact up before sending the round,
 with "Don't block on it" kept only on the background path (D18.2); domain-modeling's `SKILL.md`
 and `references/GLOSSARY-FORMAT.md` carry the D21 fallback, and its two format files moved under
