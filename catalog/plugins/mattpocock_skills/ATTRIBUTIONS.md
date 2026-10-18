@@ -48,7 +48,8 @@ change from the upstream text listed in this file.
   each folder name equals the final id.
 - **Only `SKILL.md`, `scripts/` and `references/` sync.** The engine copies
   nothing else from a skill directory, so every other upstream file at a skill
-  root moves to `references/<same name>` with its content unchanged:
+  root moves to `references/<same name>`, its content unchanged except the
+  link and glossary edits listed in the skill's own section:
   ask-matt `PHASE-BOUNDARIES.md`; codebase-design `DEEPENING.md`,
   `DESIGN-IT-TWICE.md`; domain-modeling `ADR-FORMAT.md`, `GLOSSARY-FORMAT.md`;
   improve-codebase-architecture `HTML-REPORT.md`; pr-body `CREDITS.md`;
@@ -104,7 +105,8 @@ change from the upstream text listed in this file.
 - "Call the Skill tool with X" and an operative "/x" become "Load the `x`
   skill", a plain capability every harness has.
 - A step that needs two skills becomes two separate loads, with no order
-  implied.
+  implied: one sentence with two load clauses, such as "Load the `grilling`
+  skill, and load the `domain-modeling` skill".
 - Human-facing `/name` stays: router labels, user-invoked descriptions, and
   "tell the user to run `/x`".
 - Every load target ships in this plugin and is model-invoked.
@@ -131,12 +133,15 @@ change from the upstream text listed in this file.
   terminal utilities, HTTP clients, OS openers, shell linters, containers,
   headless browsers, any bash script and any CDN asset.
 - **What it removed:** the forge CLIs (`gh`, `glab`: setup's GitHub and GitLab
-  seeds; wizard's secret and variable writes); `tput` and the OS openers of
+  seeds, and in setup's own `SKILL.md` `gh issue create` at L40, the bare
+  GitLab host name at L42, the `gh` option at L44 and the `glab` option and its
+  URL at L45; wizard's secret and variable writes); `tput` and the OS openers of
   wizard and improve-codebase-architecture (`wslview`, `explorer.exe`,
   `xdg-open`, `open`, `start`); the `curl` and Puppeteer options of
   diagnosing-bugs `SKILL.md` L27, L29 and L59 and the localhost URL in its
   script; `shellcheck` and `bash -n` in wizard's verify step; Tailwind and
-  Mermaid via CDN in the architecture report; and both bash scripts.
+  Mermaid via CDN in the architecture report; and both bash scripts, with
+  ask-matt's L88 "bash script" wording, which now names wizard's Python port.
 - **Kept:** the project toolchain examples (TypeScript, Jest and JS-frontend
   examples, setup's JS-only monorepo markers), recorded as stack assumptions
   under "Consumer-repo conventions".
@@ -147,7 +152,12 @@ change from the upstream text listed in this file.
   user, todo lists, the harness's own web search and fetch, opening files) is
   named as a capability with an inline fallback for a harness that lacks it,
   never by one harness's tool name.
-- `/clear` and `/compact` become "start a fresh context".
+- `/clear` and `/compact` become "start a fresh context"; ask-matt words
+  Compact as a fresh context started from a summary, so its five
+  phase-boundary options stay distinct.
+- handoff's suggested-skills line names the skills "the next session should
+  use" instead of calling the Skill tool: a rewording, not a load, since those
+  skills are often user-invoked.
 - The fallbacks where a capability is missing: two separate loads instead of a
   combined one; grilling's fact-finding goes through a background agent only,
   and otherwise the fact is looked up before the round is sent; research does
@@ -159,7 +169,8 @@ change from the upstream text listed in this file.
   two-axis-review without subagents runs Standards first, writes it in full,
   then runs Spec; the "GitLab `!67`" example stays verbatim.
 - Opening a generated file reads "Open it for the user if your harness can open
-  files, and tell them the absolute path either way."
+  files, and tell them the absolute path either way." (teach uses the same
+  sentence from "open it" on, after a lead-in clause).
 - Each of the 15 user-invoked skills (`disable-model-invocation: true`) starts
   its body with the line "Run this only when the user asked for it by name;
   otherwise stop.", because only Claude Code honours the key.
@@ -173,13 +184,15 @@ change from the upstream text listed in this file.
   `#!/usr/bin/env python3`.
 - **Both scripts:** a non-TTY guard exits with status 2 and asks the agent to
   have the user run `python3 <copy>` in their own terminal; the HITL loop also
-  asks for the Captured block back.
-- **wizard:** ANSI escapes instead of the terminal-colour utility; `webbrowser`
+  asks for the Captured block back. Ctrl-C exits with status 130 and no
+  traceback, and the HITL loop exits with status 2 on end of file.
+- **wizard:** ANSI escapes instead of `tput`; `webbrowser`
   instead of the OS openers, with scheme-less arguments printed rather than
   launched, so the WSL opener is lost; `getpass` for secrets; Ctrl-C handling;
   end of file mid-run read as an empty answer; `set_secret` and `set_var` kept
   by name as guided manual steps instead of forge writes; an atomic `.env`
-  upsert; a placeholder for the dashboard address.
+  upsert; a new `WRITTEN_VAR` summary line for the variables it recorded; a
+  placeholder for the dashboard address.
 - **wizard's `SKILL.md`** reads only the `.env` templates (`.env.example`,
   `.env.sample`, `.env.template`, `.env.dist`) and the CI configuration, and
   verifies a script with `ast.parse`, which leaves no bytecode cache behind.
@@ -187,30 +200,45 @@ change from the upstream text listed in this file.
 ## Plugin always rule
 
 - `rules/mattpocock-skills-tracker.md` (id `mattpocock-skills-tracker`,
-  `scope: always`) is engine-authored, not upstream text.
+  `scope: always`, `priority: 50`, so it renders after the core always rules)
+  is engine-authored, not upstream text.
 - It replaces the "## Agent skills" block that upstream's setup skill wrote into
   the consumer repo's `CLAUDE.md` or `AGENTS.md`: setup no longer edits either
   file.
 - It names `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md` and
-  `docs/agents/domain.md` as this repo's tracker, label and domain
-  configuration for these skills, says to tell the user to run
-  `/setup-matt-pocock-skills` when they are missing, and says that `.scratch/`
-  is untracked working state that is never staged. Its text lives only in the
-  rule file.
+  `docs/agents/domain.md` "when present" as this repo's tracker, label and
+  domain configuration for these skills, so it never presents the setup-only
+  files as always there; says to tell the user to run
+  `/setup-matt-pocock-skills` only if a skill needs one that is missing, so
+  sessions that use no tracker skill are not prompted for setup; and says that
+  `.scratch/` is untracked working state, never staged or committed. Its text
+  lives only in the rule file.
 
 ## Dropped and why
 
-- `triage`: the local markdown tracker has no category field, close-as-wontfix,
+- `triage` (upstream `skills/engineering/triage/`: `SKILL.md`,
+  `AGENT-BRIEF.md`, `OUT-OF-SCOPE.md`, `agents/openai.yaml`): it works with
+  labels, reporter replies, `wontfix` closes, an `.out-of-scope/` knowledge
+  base and a request-surface flag that only the dropped GitHub and GitLab seeds
+  defined; the local markdown tracker has no category field, close-as-wontfix,
   reporter loop or pull-request surface for it to drive. A consumer may add it
-  back repo-locally at `playbook/skills/triage/`; setup still writes the label
-  vocabulary it would need.
+  back repo-locally at `playbook/skills/triage/`; it reads the same
+  `docs/agents/issue-tracker.md` and `docs/agents/triage-labels.md` (setup
+  still writes the label vocabulary), and with no request-surface flag in the
+  local seed it handles issues only.
 - setup's GitHub and GitLab tracker seeds and its PR/MR-as-request flag, and
   setup's steps that wrote into `CLAUDE.md` or `AGENTS.md`.
 - `agents/openai.yaml` in every skill.
 - wizard's automatic forge writes, its `tput` colours and its OS
   openers (`wslview`, `explorer.exe`, `xdg-open`, `open`); ANSI escapes and
-  `webbrowser` replace them, and the WSL opener is lost.
-- The architecture report's CDN assets.
+  `webbrowser` replace them. Losses: the WSL opener; opener output is no
+  longer silenced; on headless Linux with `TERM` set, `webbrowser` may start a
+  console browser in the wizard's terminal.
+- The architecture report's CDN assets, and improve-codebase-architecture's
+  three OS openers (`xdg-open`, `open`, `start`): opening the report depends on
+  the harness's file-opening capability, and the absolute path is always given.
+  A standard-library `webbrowser` fallback was rejected: it can launch a
+  blocking console browser on headless Linux and shells out on macOS.
 - pr-body's `metadata.credits.url`.
 - Upstream's `skills/misc/`, `skills/in-progress/` and `skills/deprecated/`,
   and the repository-level files.
@@ -398,11 +426,6 @@ throughout (human-facing, Cross-skill references); only `/clear` and
   kept and always writes the labels file); PHASE-BOUNDARIES L29's illustrative
   "(Claude → Codex)" pair. The allowlist has no entry: no word is in command
   position.
-- For T10 (global sections): "Harness built-ins reworded" says `/clear` and
-  `/compact` become "start a fresh context"; here Compact is worded as a fresh
-  context started from a summary, so the five phase-boundary options stay
-  distinct. "Imposed tools removed" may also list this router's "bash script"
-  wording at L88, which follows wizard's Python port.
 - Continue: `.continue/prompts/ask-matt.md` holds only the `SKILL.md` body,
   guard line included, which a user-started prompt satisfies. `references/`
   does not travel, so the `references/PHASE-BOUNDARIES.md` link dangles and
@@ -621,10 +644,6 @@ Layout-only keep with the glossary fallback, model-invoked.
   names and the file created is still named `GLOSSARY.md`. The examples
   (Postgres, AWS, GraphQL and REST, an ORM, a `src/` tree) are illustrations,
   not a stack assumption (D27).
-- For the global sections: "Restructure" says each moved file keeps its content
-  unchanged, but `references/GLOSSARY-FORMAT.md` is moved with the four D21
-  insertions above. That sentence should add "except the changes listed in the
-  skill's own section".
 - Continue: `.continue/prompts/domain-modeling.md` is the user-run
   `/domain-modeling` prompt. `references/` is not carried, so the two format
   links (L62 and L74) dangle and the glossary and ADR formats are lost. The
@@ -749,9 +768,6 @@ Vendored with listed changes, user-invoked.
   directory of the user's OS" (nothing is opened, so D20 does not apply) and
   L12's "Reference them by path or URL instead" (the word URL, not an address;
   with the local tracker an issue is referenced by path, D13).
-- Note for the global sections (T10): D25 is not listed under "Harness built-ins
-  reworded". This skill's suggested-skills line is a rewording, not a load, so
-  the load-target gate has no target to check for it.
 - Continue: `.continue/prompts/handoff.md` holds only the body, guard line
   included; `argument-hint` is dropped, so no hint shows, and no
   `references/LICENSE` travels. A prompt the user runs satisfies the guard
@@ -971,10 +987,6 @@ Vendored with listed changes, user-invoked.
   set, and it shells out to `osascript` on macOS. A run-time file URL would
   leave no literal in the plugin, so the URL gate is not the reason (D2, D20,
   D23).
-- For T10 (global correction): "Dropped and why" names the report's CDN assets
-  but not this skill's three OS openers or the rejected `webbrowser` fallback;
-  the bullet above states both. "Imposed tools removed" already lists the
-  openers.
 - Every other byte is upstream's, including `git log --oneline` at L23 (git is
   allowed), the ellipsis at L56, the repo-name placeholder in the scaffold's
   `<title>` (`references/` files are copied, never rendered) and the non-ASCII
@@ -1028,7 +1040,7 @@ Vendored with listed changes, model-invoked.
   is not authored by Matt Pocock. HumanLayer's MIT notice ships as
   `.agents/skills/pr-body/references/LICENSE-show-me`; the credit ships as
   `references/CREDITS.md` and the `metadata.credits` frontmatter block. The
-  global "Third-party content" section already states this; nothing to fold in.
+  global "Third-party content" section already states this.
 - Stack assumption (D27): the TSX/JSX and frontend examples stay verbatim: L63-L70
   (the component tree with `apps/example/src/routes/session.tsx`), L95-L104 (the
   JSX component diff), L111 (`show-me.ts`), L143-L150 (the `ts` fence) and L170
@@ -1299,24 +1311,6 @@ Other files:
   upstream's step 4 wrote into `CLAUDE.md` or `AGENTS.md` (D15); see "Plugin
   always rule".
 
-For T10 (global sections, recorded here per section 5.3):
-
-- "Plugin always rule": the rule narrows "when they are missing" to "If a skill
-  needs one that is missing", opens with "When present", so it never presents
-  the setup-only files as always there and does not prompt for setup in
-  sessions that use no tracker skill; its `.scratch/` sentence reads "never
-  stage or commit it". It is `priority: 50`, after the core always rules.
-- "Dropped and why", triage: upstream `skills/engineering/triage/` (`SKILL.md`
-  112 lines, `AGENT-BRIEF.md` 207, `OUT-OF-SCOPE.md` 105, `agents/openai.yaml`
-  5) works with labels, reporter replies, `wontfix` closes, an
-  `.out-of-scope/` knowledge base and a request-surface flag that only the
-  dropped GitHub and GitLab seeds defined. A repo-local triage reads the same
-  `docs/agents/issue-tracker.md` and `docs/agents/triage-labels.md`, and with no
-  request-surface flag in the local seed it handles issues only.
-- "Imposed tools removed": setup's own `SKILL.md` also lost `gh issue create`
-  (L40), the `gh` option (L44), the `glab` option and its URL (L45) and the
-  bare GitLab host name (L42), besides the two seeds.
-
 Continue: `.continue/prompts/setup-matt-pocock-skills.md` holds only the body,
 guard line included. `references/` does not travel, so the three seed links
 dangle and the agent writes `docs/agents/*.md` from the prose alone, without the
@@ -1449,12 +1443,6 @@ Vendored with listed changes, user-invoked.
   repo `CONTEXT.md` exists and the fallback never fires; only teach run at a
   repo root that already has a domain `CONTEXT.md` would read that file as its
   glossary. Dropping the two D21 edits above would not affect any other change.
-- Note for the global sections (T10): "Restructure" says each moved file keeps
-  its content unchanged, but three of teach's moved files and writing-for-agents'
-  `SKILL-MECHANICS.md` carry the listed link and glossary edits, so it can read
-  "with only the listed link and glossary edits". "Harness built-ins reworded"
-  quotes the open-a-file sentence with a capital "Open"; teach's is the same
-  sentence from "open it" on, after a lead-in clause.
 - Continue: `.continue/prompts/teach.md` holds only the body, without
   `references/`. The three format links (L14, L16, L17) dangle, so MISSION.md,
   RESOURCES.md and the learning records lose their formats, and the unlinked
@@ -1877,13 +1865,6 @@ Vendored with listed changes, model-invoked.
   `.env` upsert and summary are lost, and an agent would write a script from
   scratch. No licence copy travels. This holds unless the Continue IDE also
   reads the full skill natively from `.claude/skills/` (D29).
-- For T10 (global sections, not edited here): "Script ports" could also name
-  the HITL loop's exit with status 2 on end of file and both scripts' exit with
-  status 130 on Ctrl-C, and the wizard's new `WRITTEN_VAR` summary line;
-  "Dropped and why" could add the two smaller `open_url` losses recorded above
-  (silenced opener output, a console browser on headless Linux); and global
-  L177 should say `tput` instead of "the terminal-colour utility", as "Imposed
-  tools removed" and "Dropped and why" already do.
 
 ### writing-for-agents
 

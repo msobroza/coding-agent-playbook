@@ -649,9 +649,12 @@ def test_wizard_attributions_name_the_removed_tools() -> None:
         "the four OS openers (`wslview`, `explorer.exe`, `xdg-open`, `open`)",
         "(upstream 'e.g. gh missing')",
         "without the `gh secret set` command (and without the `gh auth status` check)",
-        'global L177 should say `tput` instead of "the terminal-colour utility"',
     ):
         assert named in section, named
+    # T10 folded the lane's note into "Script ports": the tool is named, not paraphrased.
+    attributions = " ".join((PLUGIN_ROOT / "ATTRIBUTIONS.md").read_text(encoding="utf-8").split())
+    assert "- **wizard:** ANSI escapes instead of `tput`;" in attributions
+    assert "terminal-colour utility" not in attributions
     for vague in ("terminal-colour utility becomes", "the forge CLI's secret", "(D22, D28)"):
         assert vague not in section, vague
     assert "(D22; the lint exemption is prS D24)" in section
