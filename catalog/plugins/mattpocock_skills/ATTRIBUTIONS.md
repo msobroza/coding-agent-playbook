@@ -471,11 +471,11 @@ Other files:
   (D10). The "Label in mattpocock/skills" column header is a repository name,
   not a URL or a coupling marker.
 - `issue-tracker-github.md` and `issue-tracker-gitlab.md`: not shipped. They
-  told the agent to run the forge CLIs and their `api` subcommands and a JSON
-  utility, the GitLab one held a URL (L3), and they alone defined the "PRs
-  (MRs) as a request surface" flag that triage read. A GitHub or GitLab user
-  takes **Other** and records the same sections in their own words (D2, D4,
-  D13, D14).
+  told the agent to run `gh`, `glab`, `jq` and `gh api`/`glab api`, the GitLab
+  one held a URL (L3), and they alone defined the "PRs (MRs) as a request
+  surface" flag that triage read. Only the local-markdown template ships. A
+  GitHub or GitLab user takes **Other** and records the same sections in their
+  own words (D2, D4, D13, D14).
 - `agents/openai.yaml`: not shipped (D10). With it Codex loses this skill's
   `policy.allow_implicit_invocation: false`; what remains is
   `disable-model-invocation`, which only Claude Code honours, and the guard

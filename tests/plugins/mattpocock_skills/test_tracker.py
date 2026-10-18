@@ -496,6 +496,18 @@ def test_setup_replay_guard() -> None:
     assert "never edits or creates either file" in text
 
 
+def test_attributions_name_the_dropped_forge_seed_tools() -> None:
+    # Section 5.3 and change 42: the Dropped bullet names gh, glab, jq and the
+    # api subcommands, not a generic "forge CLIs" (regression of b679b29).
+    text = " ".join((PLUGIN_ROOT / "ATTRIBUTIONS.md").read_text(encoding="utf-8").split())
+    for needle in (
+        "They told the agent to run `gh`, `glab`, `jq` and `gh api`/`glab api`,",
+        "Only the local-markdown template ships.",
+    ):
+        assert needle in text, needle
+    assert "the forge CLIs and their `api` subcommands" not in text
+
+
 @pytest.mark.parametrize("rel", ["SKILL.md", "references/domain.md"])
 def test_glossary_prose_lines_carry_the_context_fallback(rel: str) -> None:
     """D21 per prose line; fenced trees stay verbatim (A.T03 ambiguity 2)."""
