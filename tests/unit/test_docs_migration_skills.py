@@ -77,6 +77,8 @@ def test_migration_v0_21_tldr_names_the_glossary_move() -> None:
         "playbook validate",
         "Distilled python-best-practices content",
         "53-python-classes-and-protocols.md",
+        "61-pytest-test-doubles.md",
+        "63-pytest-fixtures.md",
     ],
 )
 def test_migration_v0_21_covers_topic(phrase: str) -> None:

@@ -1,7 +1,7 @@
 ---
 id: pytest
 name: pytest conventions
-description: "Mirror the source layout, test one behaviour per test, parametrize case tables, keep fixtures narrow and assert literal expected values."
+description: "Mirror the source layout, test one behaviour per test, parametrize case tables and expected outcomes, keep logic out of test bodies and assert literal expected values."
 version: 1
 scope: scoped
 skill: python-testing
@@ -22,7 +22,7 @@ These apply to anything under `tests/`. They keep the suite fast, readable, and 
 ## File layout
 
 - One test file per source module, mirroring the source layout: `src/myapp/foo.py` is tested by `tests/test_foo.py` (or `tests/myapp/test_foo.py` for deeper trees). The mirror lets you find a file's tests at a glance.
-- Test functions are named `test_<unit>_<scenario>` (e.g. `test_parse_rejects_empty_input`). The scenario half is the part you read first when a failure flashes by.
+- Test functions are named `test_<unit>_<scenario>` (e.g. `test_parse_rejects_empty_input`), annotated `-> None`. The scenario half names the condition and the expected outcome; it is the part you read first when a failure flashes by. A plain class (no base class) may group related scenarios under one name.
 
 ## Use `pytest.mark.parametrize` for table-driven tests
 
@@ -46,14 +46,11 @@ def test_count_chars(text: str, expected: int) -> None:
     assert count_chars(text) == expected
 ```
 
-The `ids=` argument is optional but pays off the moment a failure happens — the reported case is human-readable, not `text0/text1/text2`.
+`ids=` is optional for scalars, which pytest already names by value, but it pays off for long strings and for any non-scalar value, which pytest would report as `text0`, `text1` and so on.
 
-## Fixtures
-
-- Name fixtures after what they return, scoped clearly: `db_session` rather than `db`, `tmp_repo_root` rather than `tmpdir`.
-- Default to the narrowest scope (`function`) that works. Promote to `module` or `session` only when teardown is expensive — and then weigh test isolation carefully.
-- Conftest fixtures live as close to the tests that use them as possible. A `conftest.py` for a single test file is fine.
-- Annotate every test `-> None` and every fixture with the type it returns (`Iterator[T]` for a yield fixture). Never write `from conftest import ...`; fixtures arrive by name, and shared helpers belong in an ordinary module.
+- Scalars get readable ids automatically. For a non-scalar value (a dict, a record), write each case as `pytest.param(value, expected, id="vat-exempt")`.
+- When some cases raise and others return, parametrize the expectation itself: pass `pytest.raises(ValueError)` or `contextlib.nullcontext()` as a parameter and wrap the call in `with expectation:`.
+- Stacked `parametrize` decorators multiply: two values times three values is six tests. Stack them only when every combination is a case you mean to run.
 
 {% if has_framework("pytest-asyncio") %}
 ## Async tests
@@ -90,10 +87,14 @@ pytest discovers `def test_*` functions. `unittest.TestCase` works but loses `pa
 
 Aim for one logical assertion per test — if you need three asserts on the same object's state, that's still "one thing" (the state after the action). If you find yourself testing two distinct behaviours in one test, split it. Keep Arrange, Act and Assert visibly separate, with one Act per test.
 
+- `with pytest.raises(InvoiceError, match="negative"):` wraps only the Act statement, never the setup, so the error cannot come from the wrong line.
+- Never catch the exception with `try`/`except` and assert on a flag afterwards; `pytest.raises` already fails when nothing is raised.
+- Keep `if` and `for` out of test bodies. A branch hides which path ran, and a loop hides which case failed: parametrize instead.
+
 ## Test data and assertions
 
-- Build fresh objects in each test: inline, from a function-scoped fixture, or through a typed factory. Never mutate a shared module-level instance; test order would then change the results.
+- Build fresh objects in each test: inline, from a function-scoped fixture, or through a typed factory fixture (`pytest-fixtures`). Never mutate a shared module-level instance; test order would then change the results.
 - Assert against literal expected values and put the arithmetic in a comment (`assert total == 1150  # 1000 + 15% tax`). Recomputing the expectation with the production formula only proves the formula equals itself.
-- Unit tests use no unseeded randomness, wall-clock `now()` or network. Use Hypothesis or an explicitly seeded generator, and `monkeypatch` rather than a hand-written setattr-then-restore.
+- Unit tests use no unseeded randomness, wall-clock `now()` or network. Use Hypothesis or an explicitly seeded generator; `pytest-test-doubles` covers what stands in for the clock, the network and the environment.
 - Every assertion must be able to fail on wrong output: prefer `== expected` over `is not None` or `len(result) > 0`, and add a case that tells plausible wrong implementations apart (off-by-one, swapped arguments).
 - Never add `skip` or `xfail` to turn a red suite green. Characterization tests assert today's output, quirks included. Use `xfail(strict=True, reason=...)` only for a test of the intended behavior whose fix is already agreed, and `skipif` only for environment conditions, always with a `reason`.
