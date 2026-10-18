@@ -25,6 +25,7 @@ from coding_agent_playbook.renderer import build_environment
 from tests._catalog import core_rules
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
     from coding_agent_playbook.detector import Facts
@@ -124,14 +125,18 @@ def reference_probe_facts(repo: Path) -> Facts:
     return detect(repo)
 
 
-def render_core_rule(rule_id: str, facts: Facts) -> str:
+def render_core_rule(
+    rule_id: str, facts: Facts, metadata: Mapping[str, object] | None = None
+) -> str:
     """The body of core rule ``rule_id`` rendered as sync renders it, with ``facts``.
 
     Same sandboxed base environment and context shape as ``render_artifacts``
-    (facts, then the probe's project metadata). Raises ``KeyError`` naming the
-    id when core ships no such rule.
+    (facts, then the project metadata). ``metadata`` replaces the probe's
+    ``project_name`` and empty ``project_description``, or any fact such as
+    ``project_kind``, for tests that pin how an always rule renders them.
+    Raises ``KeyError`` naming the id when core ships no such rule.
 
-    Example: ``render_core_rule("pytest", reference_probe_facts(tmp_path))``.
+    Example: ``render_core_rule("project-context", facts, {"project_name": "demo"})``.
     """
     rules = core_rules()
     if rule_id not in rules:
@@ -142,6 +147,7 @@ def render_core_rule(rule_id: str, facts: Facts) -> str:
         **facts,
         "project_name": REFERENCE_PROBE_NAME,
         "project_description": "",
+        **(metadata or {}),
     }
     return render_rule_body(rules[rule_id], context, env).body
 

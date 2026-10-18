@@ -24,6 +24,7 @@ from coding_agent_playbook.security.secrets import (
     scan_text,
     screen_regex,
 )
+from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
 
 
@@ -251,7 +252,7 @@ def test_secrets_module_imports_only_stdlib() -> None:
     foreign = [
         name
         for name in loaded
-        if not name.startswith("coding_agent_playbook.security")
+        if not name.startswith(engine_module("coding_agent_playbook.security"))
         and name.split(".")[0] not in sys.stdlib_module_names
     ]
     assert foreign == []

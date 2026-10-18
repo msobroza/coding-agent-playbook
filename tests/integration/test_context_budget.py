@@ -29,6 +29,8 @@ from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 pytestmark = pytest.mark.catalog
 
 ALWAYS_RULES_MAX_WORDS: Final = 800
+#: The two always sections alone, after the D17 rewrite (spec 6.10 item 3; 231 on the probe).
+ALWAYS_SECTIONS_MAX_WORDS: Final = 240
 AGENTS_MD_MAX_WORDS: Final = 1500
 CORE_DESCRIPTION_MAX_CHARS: Final = 300
 CORE_DESCRIPTIONS_MAX_CHARS: Final = 2000
@@ -85,6 +87,17 @@ def test_always_rules_within_800_words(reference_probe_repo: Path) -> None:
     total = sum(map(_words, sections)) + _words(where)
     assert total <= ALWAYS_RULES_MAX_WORDS, (
         f"always rules plus the Where section are {total} words; D5 allows {ALWAYS_RULES_MAX_WORDS}"
+    )
+
+
+def test_always_sections_within_240_words(reference_probe_repo: Path) -> None:
+    """``## Project context`` plus ``## Python house style``, without the map (D17)."""
+    sections, _ = _always_text(reference_probe_repo, "agents_md_section")
+    headings = sorted(section.splitlines()[0] for section in sections)
+    assert headings == ["## Project context", "## Python house style"], headings
+    total = sum(map(_words, sections))
+    assert total <= ALWAYS_SECTIONS_MAX_WORDS, (
+        f"the two always sections are {total} words; D17 allows {ALWAYS_SECTIONS_MAX_WORDS}"
     )
 
 

@@ -1,9 +1,9 @@
-"""``playbook validate`` over skill membership and ``playbook:`` blocks (prS §6.6, V3-V14, W1-W3).
+"""``playbook validate`` over skill membership and ``playbook:`` blocks (prS §6.6, V1-V14, W1-W3).
 
 One test per row of specs/prS-skills-context.md section 6.6, each asserting the
-exact ``FAIL`` (stdout) or ``warning:`` (stderr) line. V1 and V2 (a scoped rule
-without ``skill:``) arrive with the contract step; until then such a rule
-validates. The fixtures are repo-local: ``playbook/skills/<id>/SKILL.md`` and
+exact ``FAIL`` (stdout) or ``warning:`` (stderr) line. V1 and V2 are the
+contract step: a scoped rule without ``skill:`` fails, and an override of a
+rule in core that named one is told which. The fixtures are repo-local: ``playbook/skills/<id>/SKILL.md`` and
 ``playbook/rules/<id>.md`` in a synthetic consumer repo. Core ships four skills
 that take members, so they are the known skills every message lists, and a
 repo-local ``python-coding`` overrides the core one and keeps its core members:
@@ -134,6 +134,36 @@ def test_repo_local_rule_may_join_a_core_skill(
     skill_md = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
     assert "- [risk-naming](references/risk-naming.md) — Risk naming: One line." in skill_md
     assert "Risk naming" in skill_md.partition("\n---\n")[0], "the Covers clause names it"
+
+
+def test_scoped_rule_without_skill_fails_naming_known_skills(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rule = write_rule(repo, "risk-naming", skill=None)
+
+    rc, out, _ = run_validate(repo, capsys)
+
+    assert rc == 1
+    assert fail_lines(out) == [
+        f"FAIL {rule}: scope 'scoped' needs 'skill: <skill-id>' naming the skill whose "
+        f"references deliver this rule; known skills: {_KNOWN_SKILLS}"
+    ]
+
+
+def test_scoped_override_without_skill_suggests_the_overridden_rules_skill(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """V2: the override of core's ``python-typing`` drops the ``skill`` core gave it."""
+    rule = write_rule(repo, "python-typing", skill=None, name="Typing")
+
+    rc, out, _ = run_validate(repo, capsys)
+
+    assert rc == 1
+    assert fail_lines(out) == [
+        f"FAIL {rule}: scope 'scoped' needs 'skill: <skill-id>' naming the skill whose "
+        f"references deliver this rule; known skills: {_KNOWN_SKILLS}; the rule it overrides "
+        "(coding_agent_playbook) names 'python-coding'"
+    ]
 
 
 def test_always_rule_with_skill_fails(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:

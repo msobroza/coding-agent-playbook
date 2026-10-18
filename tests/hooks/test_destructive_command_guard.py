@@ -4,7 +4,8 @@ The golden red-team table runs the shipped ``HOOK.md`` through ``playbook-hook
 simulate pre_tool_use`` against a fixture repo whose ``[hooks]
 wrapper_prefixes`` is ``["proxy"]``. ``FakeGit`` answers the local git queries
 (current branch ``feat/x``, default ``main``, a status per case); ``FakeProc``
-fails the test on any spawn.
+fails the test on any spawn. The native-prefix parity test runs every entry of
+``security.patterns.DESTRUCTIVE_NATIVE_PREFIXES`` through the same pipeline.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import pytest
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.handlers._destructive_git import STASH_RECIPE
 from coding_agent_playbook.hook_runtime.handlers._destructive_paths import ROOT_REASON
+from coding_agent_playbook.security.patterns import DESTRUCTIVE_NATIVE_PREFIXES
 from tests.hook_runtime.fakes import FakeGit
 
 if TYPE_CHECKING:
@@ -126,6 +128,28 @@ GOLDEN: Final[list[tuple[str, Decision]]] = [
 @pytest.mark.parametrize(("command", "expected"), GOLDEN)
 def test_golden(repo: PackRepo, deps: Deps, command: str, expected: Decision) -> None:
     assert _decision(_bash(repo, deps, command)) is expected
+
+
+@pytest.mark.parametrize(
+    "suffix", [pytest.param("", id="alone"), pytest.param(" x", id="with-argument")]
+)
+@pytest.mark.parametrize("prefix", DESTRUCTIVE_NATIVE_PREFIXES)
+def test_the_hook_denies_every_native_prefix(
+    repo: PackRepo, deps: Deps, prefix: str, suffix: str
+) -> None:
+    """A native ``Bash(<prefix> *)`` row is never stricter than the hook.
+
+    The claude_code adapter renders each of ``DESTRUCTIVE_NATIVE_PREFIXES`` as a
+    ``permissions.deny`` row that Claude Code enforces even when the hook
+    interpreter is missing. A prefix the hook only asks about, or lets through,
+    would make that row the stricter of the two: deny the shape in the guard, or
+    drop the prefix from the tuple.
+    """
+    command = prefix + suffix
+
+    decision = _decision(_bash(repo, deps, command))
+
+    assert decision is Decision.DENY, f"{command!r} is {decision.name}; a native deny row says DENY"
 
 
 @pytest.mark.parametrize(

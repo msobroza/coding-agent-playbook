@@ -165,7 +165,7 @@ def test_sync_warns_when_no_enabled_adapter_delivers_member_rules(
     assert _sync.run(_ns(repo)) == 0
 
     err_lines = capsys.readouterr().err.splitlines()
-    # python-coding is core's: seven ungated members put it in every synthetic repo.
+    # python-coding is core's: most of its members are ungated, so every synthetic repo has it.
     assert (
         "warning: no enabled adapter delivers scoped rules (only agents_md is on); skills "
         f"python-coding, {_SKILL} reach no assistant: add claude_code, opencode or "

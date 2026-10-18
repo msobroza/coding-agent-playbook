@@ -48,6 +48,7 @@ from coding_agent_playbook.security.decision_summary import (
     read_decisions,
     summarize_decisions,
 )
+from tests.engine_modules import engine_module
 from tests.hook_runtime.dispatch_kit import verdict
 from tests.hook_runtime.fakes import FakeClock, FakeHandlerResolver, FakeProc
 from tests.hook_runtime.guard_repo import GuardRepo, hook_record
@@ -370,7 +371,7 @@ def test_audit_module_imports_only_the_stdlib() -> None:
     foreign = [
         name
         for name in loaded
-        if not name.startswith("coding_agent_playbook.security")
+        if not name.startswith(engine_module("coding_agent_playbook.security"))
         and name.split(".")[0] not in sys.stdlib_module_names
     ]
     assert foreign == []
