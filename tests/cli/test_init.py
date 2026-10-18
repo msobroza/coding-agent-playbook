@@ -13,6 +13,7 @@ import yaml
 from coding_agent_playbook._toml import dump_toml
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands import init as _init
+from coding_agent_playbook.commands._init_adapters import DEFAULT_ADAPTERS
 from coding_agent_playbook.config import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.gitignore import BLOCK_START
 from tests.hook_samples import write_hook
@@ -62,7 +63,7 @@ def test_init_non_interactive_writes_expected_files(tmp_path):
         data = tomllib.load(f)
     assert data["project"]["name"] == "my-repo"
     assert data["project"]["kind"] == "python-application"
-    assert "continue" in data["adapters_enabled"]
+    assert data["adapters_enabled"] == ["claude_code", "opencode", "shared_skills"]
     assert "agents_md" not in data["adapters_enabled"]  # always-on, not stored
 
     local = tmp_path / ".coding-agent-playbook.local.toml"
@@ -103,17 +104,18 @@ def test_init_non_interactive_writes_expected_files(tmp_path):
     assert parsed["default_install_hook_types"] == ["pre-commit", "post-checkout", "post-merge"]
 
 
-def test_init_default_adapters_include_shared_skills(tmp_path):
-    """The cross-agent skills hub (SPEC §10.8) is on by default, after the
-    three harness adapters; ``agents_md`` stays implicit (force-enabled)."""
+def test_init_default_adapters_leave_continue_opt_in(tmp_path):
+    """The shared skill root (SPEC §10.8) is on by default, after the two harness
+    adapters; ``continue`` is opt-in since v0.21 and ``agents_md`` stays implicit
+    (force-enabled)."""
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n'
     )
-    assert _init._DEFAULT_ADAPTERS == ("continue", "claude_code", "opencode", "shared_skills")
+    assert DEFAULT_ADAPTERS == ("claude_code", "opencode", "shared_skills")
     assert _init.run(_ns(tmp_path, name="r", kind="python-library")) == 0
     with (tmp_path / ".coding-agent-playbook.toml").open("rb") as f:
         data = tomllib.load(f)
-    assert data["adapters_enabled"] == list(_init._DEFAULT_ADAPTERS)
+    assert data["adapters_enabled"] == list(DEFAULT_ADAPTERS)
 
 
 def test_init_adapters_flag_can_opt_out_of_shared_skills(tmp_path):
@@ -590,7 +592,7 @@ def test_init_rerun_never_writes_local_overrides_into_the_committed_config(
     assert local.read_text() == _LOCAL_OVERRIDES  # the local file is never rewritten
     data = tomllib.loads(primary.read_text())
     assert data["user_choices"] == {"docstring_style": "numpy"}
-    assert data["adapters_enabled"] == list(_init._DEFAULT_ADAPTERS)
+    assert data["adapters_enabled"] == list(DEFAULT_ADAPTERS)
     assert "overlays_enabled" not in data
     assert data["output"] == {"commit": False}
     assert {"metrics", "personal_table"}.isdisjoint(data)
@@ -717,7 +719,7 @@ def test_init_rerun_replaces_the_tables_config_manages_without_resurrecting(
     assert data["detector_cache"]["python_version"] != "3.11"
     assert data["adapters_enabled"] == [
         "continue",
-        *(name for name in _init._DEFAULT_ADAPTERS if name != "continue"),
+        *(name for name in DEFAULT_ADAPTERS if name != "continue"),
     ]
 
 
@@ -766,15 +768,6 @@ def test_init_rerun_keeps_unknown_keys_inside_the_tables_config_manages(tmp_path
     assert_toml_identical(data["project"], expected_project)
     for table in ("engine", "storage", "output"):
         assert_toml_identical(data[table], before[table])
-
-
-def test_adapters_union_keeps_the_committed_order_then_appends_new_answers() -> None:
-    answered = ["claude_code", "continue", "claude_code"]
-    assert _init._adapters_union(["continue", "custom"], answered) == [
-        "continue",
-        "custom",
-        "claude_code",
-    ]
 
 
 @pytest.mark.parametrize(

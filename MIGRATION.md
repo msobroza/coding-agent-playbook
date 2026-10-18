@@ -27,6 +27,11 @@ subsection after it when a row is not enough. The SPEC changelog entry is v0.21.
 |---|---|
 | Anything that cites **SPEC §3** for a term's definition (docs, overlay READMEs, tests) | Use `CONTEXT.md` at the repository root, now the project's only glossary. SPEC §3 is a one-line pointer to it, and the two facts only the old glossary carried moved to SPEC §6.6.7 and §10.2. The move alters no generated file. |
 | An overlay or repo-local rule or prompt whose `applies_if` has a typo after a key that does not hold | Run `playbook validate` and fix what it reports: validate, and so `playbook sync`, now checks each key on its own. New `applies_if: {package_manager: uv}` gating is available. See "`package_manager` and per-key validation" below. |
+| Every consumer repo (`commit = false`) | Nothing: the next `playbook sync` writes `.agents/skills/`, deletes the unchanged `shared_skills/` copies and updates the managed block. |
+| A repo with `commit = true` | Run `playbook sync`, then `git rm -r shared_skills` and commit `.agents/skills/`. |
+| Tooling that points at `shared_skills/` | Point it at `.agents/skills/`. |
+| `codex` in `adapters_enabled` | Remove it. |
+| Continue users | Existing repos: nothing, a committed `continue` stays. New repos: add `continue` to `--adapters`. |
 
 ### `package_manager` and per-key validation
 
@@ -42,6 +47,107 @@ subsection after it when a row is not enough. The SPEC changelog entry is v0.21.
   and `lint_codes.when` already were, so an overlay or repo-local artifact with such a
   hidden typo now fails `playbook validate`, and therefore the validate-gated
   `playbook sync`. Fix the key it names; nothing else changes.
+
+### The shared_skills adapter writes .agents/skills/
+
+The shared-skills adapter (`shared_skills`, id unchanged) used to write its
+copies to `shared_skills/<id>/`, a directory no harness reads. It now writes the
+shared skill root `.agents/skills/<id>/`, which Codex reads natively (in every
+directory from the project root to the working directory) and OpenCode scans as
+a compatibility root. The bytes are unchanged: each copy is still identical to
+`.claude/skills/<id>/` and `.opencode/skills/<id>/`.
+
+The engine declares `shared_skills/` as a *retired output location*, so the
+first write-mode `playbook sync` after the upgrade (run by hand, or by the
+post-checkout / post-merge hook) settles it like any leftover:
+
+1. It writes `.agents/skills/<id>/` and records those lockfile rows with
+   `adapter = "shared_skills"`.
+2. It deletes every `shared_skills/` file the previous lockfile lists whose
+   bytes still match and that git does not track, then prunes the emptied
+   directories, `shared_skills/` included.
+3. It swaps `/shared_skills/<id>/` for `/.agents/skills/<id>/` in the managed
+   `.gitignore` block; with hooks on, `guard_config.json` follows.
+
+What is kept, never silently left behind:
+
+- A file you edited, or one git tracks, stays on disk and stays owned: it is
+  still in the lockfile and, under `commit = false`, in the managed block (as
+  `/shared_skills/<id>/` while its `SKILL.md` is kept, else one entry per file).
+  Under `commit = true` the sync lists it on stderr (`note: kept output …`);
+  delete it with `git rm -r shared_skills` once you have committed
+  `.agents/skills/`. Until then the legacy `playbook-sync-check` hook reports
+  drift.
+- A file you wrote yourself inside `shared_skills/` was never in the lockfile,
+  so it is never deleted.
+- While an enabled adapter is missing (including a listed `codex`, below),
+  every leftover is kept and the cleanup waits until the list is fixed.
+
+Before that first sync, `playbook sync --check` exits 1 and lists the move:
+
+```text
+Drift detected:
+  .agents/skills/<id>/SKILL.md
+    Missing on disk; run 'playbook sync' to create.
+  shared_skills/<id>/SKILL.md
+    Orphaned generated file; run 'playbook sync' to remove.
+  .gitignore
+    Managed block is missing or stale ([output] commit = false).
+    Run 'playbook sync' to regenerate.
+```
+
+Scripts, CI globs and mypy or ruff excludes that point at `shared_skills/` must
+point at `.agents/skills/`. `mypy .` skips dot-directories, so the default
+adapters no longer expose any skill script copy to it: the duplicate-module
+error that `shared_skills/` plus `agent_harness`'s `skills/` used to cause is
+gone. `ruff check .` behaves as before.
+
+OpenCode now finds each skill in up to three roots (`.opencode/skills/`,
+`.agents/skills/`, `.claude/skills/`). v2 keeps one copy by precedence
+(`.opencode` over `.agents` over `.claude`). v1 logs one duplicate-skill warning
+per extra copy; set `OPENCODE_DISABLE_EXTERNAL_SKILLS` (drops `.agents` and
+`.claude`) or `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS` (drops `.claude`) to silence
+it. The engine sets neither.
+
+### playbook init no longer enables Continue
+
+`playbook init` without `--adapters` now writes
+`adapters_enabled = ["claude_code", "opencode", "shared_skills"]`. Continue is
+opt-in: its upstream is in a maintenance freeze, and its IDE already loads the
+root `AGENTS.md` and `.claude/skills/` without an adapter of its own. To opt in:
+
+```bash
+playbook init --adapters claude_code,opencode,shared_skills,continue
+```
+
+A repo whose committed `adapters_enabled` already lists `continue` keeps it on
+every `init` re-run and every sync, and its `.continue/` output is exactly what
+it was. To drop Continue, remove `"continue"` from `adapters_enabled`: the next
+sync deletes its unchanged `.continue/rules/` and `.continue/prompts/` files as
+leftovers.
+
+### "codex" in adapters_enabled
+
+Older versions of the interactive `playbook init` offered a `codex` choice, but
+no adapter provides it. A listed `codex` made every sync warn that an adapter is
+missing and keep every leftover, which also blocks the `shared_skills/`
+cleanup above. The interactive choices no longer offer it, and the warning now
+names the fix:
+
+```text
+'codex' is not an adapter: Codex reads AGENTS.md and .agents/skills/ (the shared_skills adapter); remove it from adapters_enabled.
+```
+
+Remove `"codex"` from `adapters_enabled`. Codex is served by `AGENTS.md` and
+`.agents/skills/`.
+
+### Not changed (shared_skills and Continue)
+
+- Continue output when `continue` is enabled: `.continue/rules/` and
+  `.continue/prompts/` are byte-identical to the previous release.
+- `.claude/skills/` and `.opencode/skills/`, and the skill bytes in every root.
+- The lockfile schema (still 2) and the adapter id `shared_skills`, so a
+  committed `adapters_enabled` needs no edit.
 
 ## v0.20 — Assistant lifecycle hooks (PR K)
 

@@ -1,7 +1,7 @@
 """End-to-end ``playbook sync`` tests for native skills (SPEC §6.3, §10.8).
 
 A repo-local skill must land byte-identically in all three native skill roots
-(``.claude/skills``, ``.opencode/skills``, ``shared_skills``), survive
+(``.claude/skills``, ``.opencode/skills``, ``.agents/skills``), survive
 ``sync --check`` without drift, and be cleaned from all three when removed.
 """
 
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-_SKILL_ROOTS = (".claude/skills", ".opencode/skills", "shared_skills")
+_SKILL_ROOTS = (".claude/skills", ".opencode/skills", ".agents/skills")
 
 _CONFIG_WITH_SHARED_SKILLS = """\
 schema_version = 1
@@ -111,9 +111,9 @@ def test_sync_check_reports_no_drift_after_sync_and_flags_edits(
     assert _sync.run(_ns(repo, check=True)) == 0
     assert "No drift" in capsys.readouterr().out
 
-    (repo / "shared_skills" / "query-db" / "scripts" / "run.py").write_text("tampered\n")
+    (repo / ".agents" / "skills" / "query-db" / "scripts" / "run.py").write_text("tampered\n")
     assert _sync.run(_ns(repo, check=True)) == 1
-    assert "shared_skills/query-db/scripts/run.py" in capsys.readouterr().out
+    assert ".agents/skills/query-db/scripts/run.py" in capsys.readouterr().out
 
 
 def test_sync_removes_deleted_skill_from_all_three_roots(tmp_path, make_synthetic_repo, capsys):
@@ -139,8 +139,9 @@ def test_sync_removes_deleted_skill_from_all_three_roots(tmp_path, make_syntheti
         assert (repo / generated).is_file(), generated
 
 
-def test_sync_without_shared_skills_adapter_skips_hub(tmp_path, make_synthetic_repo):
-    """``shared_skills`` is opt-out: drop it from adapters_enabled and no hub is written."""
+def test_sync_without_shared_skills_adapter_writes_no_agents_skills(tmp_path, make_synthetic_repo):
+    """``shared_skills`` is opt-out: drop it from adapters_enabled and no shared skill
+    root (``.agents/skills/``) is written."""
     repo = make_synthetic_repo(tmp_path)  # default fixture config omits shared_skills
     _write_repo_local_skill(repo, "query-db")
 
@@ -148,7 +149,7 @@ def test_sync_without_shared_skills_adapter_skips_hub(tmp_path, make_synthetic_r
 
     assert (repo / ".claude" / "skills" / "query-db" / "SKILL.md").is_file()
     assert (repo / ".opencode" / "skills" / "query-db" / "SKILL.md").is_file()
-    assert not (repo / "shared_skills").exists()
+    assert not (repo / ".agents" / "skills").exists()
 
 
 # --- review-finding regressions -----------------------------------------------
@@ -184,7 +185,7 @@ def test_sync_never_touches_user_authored_skill_dir_with_colliding_id(
     captured = capsys.readouterr()
     assert re.search(r", 0 removed$", captured.out, re.MULTILINE)
     assert f"not writing {user_dir}" in captured.err
-    for root in (".claude/skills", "shared_skills"):
+    for root in (".claude/skills", ".agents/skills"):
         assert (repo / root / "query-db" / "scripts" / "run.py").is_file(), root
     # Check modes decide ownership against the real tree, like write mode:
     # no false drift, and the user's own files are never "generated output".
@@ -214,7 +215,7 @@ def test_sync_takes_over_legacy_sentinel_less_claude_skill(tmp_path, make_synthe
 
     assert not (legacy_dir / "scripts" / "stale.py").exists()
     assert (legacy_dir / "notes.md").read_text() == "mine\n"
-    shared = _skill_tree(repo / "shared_skills" / "query-db")
+    shared = _skill_tree(repo / ".agents" / "skills" / "query-db")
     assert _skill_tree(legacy_dir) == {**shared, "notes.md": b"mine\n"}
 
 
@@ -241,7 +242,7 @@ def test_sync_never_reclaims_an_adopted_leftover(tmp_path, make_synthetic_repo, 
 
     assert _skill_tree(adopted) == before
     assert f"not writing {adopted}" in capsys.readouterr().err
-    assert (repo / "shared_skills" / "query-db" / "scripts" / "run.py").is_file()
+    assert (repo / ".agents" / "skills" / "query-db" / "scripts" / "run.py").is_file()
     assert _sync.run(_ns(repo, check=True)) == 0
 
 
@@ -254,7 +255,9 @@ def test_sync_check_names_the_blocker_of_a_refused_swap(tmp_path, make_synthetic
     (source / "references" / "api").mkdir(parents=True)
     (source / "references" / "api" / "v1.md").write_text("nested\n")
     assert _sync.run(_ns(repo)) == 0
-    (repo / "shared_skills" / "query-db" / "references" / "api" / "mine.md").write_text("mine\n")
+    (repo / ".agents" / "skills" / "query-db" / "references" / "api" / "mine.md").write_text(
+        "mine\n"
+    )
     shutil.rmtree(source / "references" / "api")
     (source / "references" / "api").write_text("flat\n")
     assert _sync.run(_ns(repo)) == 0
@@ -263,7 +266,7 @@ def test_sync_check_names_the_blocker_of_a_refused_swap(tmp_path, make_synthetic
     assert _sync.run(_ns(repo, check=True)) == 1
 
     out = capsys.readouterr().out
-    assert "shared_skills/query-db/references/api is in the way" in out
+    assert ".agents/skills/query-db/references/api is in the way" in out
     assert "move those\n    files" in out
     for root in (".claude/skills", ".opencode/skills"):  # unblocked roots were swapped
         assert (repo / root / "query-db" / "references" / "api").read_text() == "flat\n"
@@ -412,10 +415,10 @@ def _scenario_symlinked_skill_dir(repo: Path) -> FakeGitClient:
     if sys.platform == "win32":
         pytest.skip("POSIX symlinks")
     _write_repo_local_skill(repo, "query-db")
-    target = repo / "shared_skills" / "hand-written"
+    target = repo / ".agents" / "skills" / "hand-written"
     target.mkdir(parents=True)
     (target / "SKILL.md").write_text("---\nname: hand-written\ndescription: d\n---\nmine\n")
-    (repo / "shared_skills" / "query-db").symlink_to(target, target_is_directory=True)
+    (repo / ".agents" / "skills" / "query-db").symlink_to(target, target_is_directory=True)
     return FakeGitClient()
 
 
@@ -437,7 +440,7 @@ def _scenario_removed_skill(repo: Path) -> FakeGitClient:
 
 def _scenario_removed_skill_with_edited_leftover(repo: Path) -> FakeGitClient:
     git = _scenario_removed_skill(repo)
-    (repo / "shared_skills" / "query-db" / "scripts" / "run.py").write_text("edited\n")
+    (repo / ".agents" / "skills" / "query-db" / "scripts" / "run.py").write_text("edited\n")
     return git
 
 
@@ -489,6 +492,11 @@ def _scenario_sentinel_stripped_by_user(repo: Path) -> FakeGitClient:
 
 
 def _scenario_symlinked_skills_root_removed_skill(repo: Path) -> FakeGitClient:
+    """``.claude/skills -> ../.agents/skills`` while ``shared_skills`` writes the target.
+
+    Both roots are declared, so this exercises the order-independent prune
+    (specs/prS-skills-context.md section 5.4.3): the link target must survive.
+    """
     if sys.platform == "win32":
         pytest.skip("POSIX symlinks")
     (repo / ".agents" / "skills").mkdir(parents=True)

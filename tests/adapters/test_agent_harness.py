@@ -755,9 +755,9 @@ def test_entry_point_discoverable():
 def test_entry_point_not_in_defaults():
     # Opt-in adapter: registered via its entry point but absent from the
     # default-adapter set, so a plain `init` never enables it.
-    from coding_agent_playbook.commands.init import _DEFAULT_ADAPTERS
+    from coding_agent_playbook.commands._init_adapters import DEFAULT_ADAPTERS
 
-    assert "agent_harness" not in _DEFAULT_ADAPTERS
+    assert "agent_harness" not in DEFAULT_ADAPTERS
 
     # Complementary check: it IS discoverable via its entry point. Together these
     # prove "registered but opt-in" — this test fails if anyone adds
