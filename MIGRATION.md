@@ -32,6 +32,7 @@ subsection after it when a row is not enough. The SPEC changelog entry is v0.21.
 | Tooling that points at `shared_skills/` | Point it at `.agents/skills/`. |
 | `codex` in `adapters_enabled` | Remove it. |
 | Continue users | Existing repos: nothing, a committed `continue` stays. New repos: add `continue` to `--adapters`. |
+| A repo, overlay or bundled plugin whose scoped rules name a skill (`skill:`) | Nothing: the next `playbook sync` drops those rules from `AGENTS.md` and the Claude Code rules file and adds a generated `## Where guidance lives` section that names their skills. With only `agents_md` on (`adapters_enabled = []`), sync warns that they reach no assistant: add `claude_code`, `opencode` or `shared_skills`. See "AGENTS.md and the Claude Code rules file hold only always rules". |
 
 ### `package_manager` and per-key validation
 
@@ -148,6 +149,31 @@ Remove `"codex"` from `adapters_enabled`. Codex is served by `AGENTS.md` and
 - `.claude/skills/` and `.opencode/skills/`, and the skill bytes in every root.
 - The lockfile schema (still 2) and the adapter id `shared_skills`, so a
   committed `adapters_enabled` needs no edit.
+
+### AGENTS.md and the Claude Code rules file hold only always rules
+
+A member rule, a scoped rule that names a skill in `skill:`, is no longer
+written into `AGENTS.md` or `.claude/rules/coding-agent-playbook.md`
+(`CLAUDE_RULES_PATH`). It reaches Claude Code, OpenCode and Codex as a
+reference of its skill, `<skills root>/<skill>/references/<rule-id>.md`, and
+Continue still gets it as its own rule file. Both files now carry the always
+rules, then one generated `## Where guidance lives` section, byte-identical in
+the two, with one line per written skill that has member rules and a
+`playbook.files` phrase:
+
+    - Risk model modules: skill `risk-models`
+
+`AGENTS.md` then ends with its Guardrails section, unchanged; the rules file
+ends with the heartbeat line when the session-start briefing is on. A rule that
+names no skill, and the guardrail text of a hook Claude Code cannot enforce,
+keep their full sections. `.claude/CLAUDE.md` stays the four-line stub. A repo
+whose rules name no skill sees no change in either file.
+
+When member rules are active but every enabled adapter is `agents_md`
+(`adapters_enabled = []`), nothing delivers them, and `playbook sync` says so on
+stderr instead of inlining them into `AGENTS.md`:
+
+    warning: no enabled adapter delivers scoped rules (only agents_md is on); skill risk-models reaches no assistant: add claude_code, opencode or shared_skills to adapters_enabled
 
 ## v0.20 — Assistant lifecycle hooks (PR K)
 

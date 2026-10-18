@@ -1,9 +1,13 @@
 """AGENTS.md adapter. See SPEC.md §10.4.
 
-Composes a single ``AGENTS.md`` file at the repo root from buffered rule
-sections, then a trailing ``## Guardrails`` section holding every enabled
-hook's advisory (specs/prK-lifecycle-hooks.md §C.4.2). Prompts and skills are
-no-ops: AGENTS.md is rules-only.
+Composes a single ``AGENTS.md`` file at the repo root: the always rules' sections,
+then a generated ``## Where guidance lives`` section mapping file kinds to the
+skills that hold the detailed conventions, then a trailing ``## Guardrails``
+section holding every enabled hook's advisory (specs/prK-lifecycle-hooks.md
+§C.4.2). A member rule (one that names a skill in ``skill:``) is dropped here:
+it reaches its readers as a reference of that skill, written by the skill
+adapters (ADR 0001, specs/prS-skills-context.md 6.4.6). Prompts are no-ops, and
+a skill only contributes its Where line.
 
 This adapter always runs regardless of which other adapters are enabled (the
 orchestrator enforces that invariant — the adapter itself just buffers rules
@@ -17,9 +21,11 @@ from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._output_io import write_output_text
 from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.adapters._where_guidance import WhereGuidanceBuffer
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.hook_policy import advisory_block
 from coding_agent_playbook.renderer import render_for
+from coding_agent_playbook.skill_membership import is_skill_member
 
 if TYPE_CHECKING:
     from coding_agent_playbook._typing import Prompt, Rule, Skill
@@ -34,11 +40,12 @@ _GUARDRAILS_HEADING = (
 
 
 class AgentsMdAdapter(Adapter):
-    """Translate canonical rules into a single ``AGENTS.md`` at repo root.
+    """Translate canonical always rules into a single ``AGENTS.md`` at repo root.
 
-    Rules-only by design: prompts and skills route through other adapters
-    (Continue / Claude Code / OpenCode / shared_skills) — AGENTS.md is the
-    universal "rules" surface every coding assistant agrees to read.
+    Always rules only, by design: prompts, skills and the member rules they
+    deliver route through other adapters (Continue / Claude Code / OpenCode /
+    shared_skills) — AGENTS.md is the universal always-loaded surface every
+    coding assistant agrees to read, so it points at those skills instead.
     """
 
     name = "agents_md"
@@ -58,13 +65,19 @@ class AgentsMdAdapter(Adapter):
         # (hook_id, hook_advisory block). One contiguous section sorted by id
         # (L1), not interleaved with the rules by priority as write_rule would.
         self._buffered_hooks: list[tuple[str, str]] = []
+        self._where = WhereGuidanceBuffer()
 
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
-        """Render a rule to the shared markdown-section format and buffer it.
+        """Render a rule that names no skill to the shared markdown-section format; buffer it.
 
-        Returns ``[]``: nothing is written until ``finalize`` composes the
-        single ``AGENTS.md`` file.
+        A member rule is skipped (E3): dispatch hands every rule to every
+        adapter, and its skill's reference delivers it, not this file. Returns ``[]``:
+        nothing is written until ``finalize`` composes the single ``AGENTS.md``.
+
+        Example: ``adapter.write_rule(member_rule, repo_root)`` -> ``[]``, nothing buffered.
         """
+        if is_skill_member(rule):
+            return []
         rendered = render_for(
             rule.source_path or Path("inline"),
             rule.body,
@@ -96,29 +109,34 @@ class AgentsMdAdapter(Adapter):
         return []
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
-        """No-op: AGENTS.md is rules-only.
+        """Buffer ``skill``'s ``## Where guidance lives`` line; write nothing.
 
         Native skill emission belongs to the skill adapters (``claude_code``,
         ``opencode``, ``shared_skills``), which share one ``SkillWriter``. This
         adapter never degrades a skill to a prompt either (the default Adapter
-        degrade path), since prompts are also no-ops here.
+        degrade path). Only a skill with member rules and a ``playbook.files``
+        phrase adds a line. Example: ``adapter.write_skill(python_coding, root)`` -> ``[]``.
         """
+        self._where.add(skill)
         return []
 
     def finalize(self, repo_root: Path) -> list[Path]:
-        """Compose ``AGENTS.md`` at ``repo_root`` from the buffered rules and hooks.
+        """Compose ``AGENTS.md`` at ``repo_root`` from the buffered rules, skills and hooks.
 
-        Rules are sorted by ``(priority, id)`` and the Guardrails blocks by hook
-        id, so the on-disk layout is stable across syncs. The file is *always*
-        overwritten if there is at least one rule or hook advisory (a hooks-only
-        repo still gets one, SPEC §4.3); with neither, nothing is written (and
-        any stale file is cleaned up by :meth:`cleanup_stale`). Without hook
+        Title, always rules sorted by ``(priority, id)``, the Where section,
+        then the Guardrails blocks sorted by hook id, so the on-disk layout is
+        stable across syncs. The file is *always* overwritten if there is at
+        least one rule, Where entry or hook advisory (a hooks-only repo still
+        gets one, SPEC §4.3); with none, nothing is written (and any stale file
+        is cleaned up by :meth:`cleanup_stale`). Without member skills or hook
         advisories the bytes are exactly the rules-only file.
+
+        Example: ``adapter.finalize(repo_root)`` -> ``[repo_root / "AGENTS.md"]``.
         """
-        if not (self._buffered_rules or self._buffered_hooks):
-            return []
         sorted_rules = sorted(self._buffered_rules, key=lambda entry: (entry[0], entry[1]))
-        sections = [rendered for _, _, rendered in sorted_rules]
+        sections = self._where.after([rendered for _, _, rendered in sorted_rules])
+        if not (sections or self._buffered_hooks):
+            return []
         # Each section already ends with the section separator + trailing
         # newline. Joining with "\n" stacks them without introducing blank
         # gaps; the sentinel + title preamble seeds the file.

@@ -90,12 +90,15 @@ hooks on, one dispatcher answers every harness event at run time:
                                                                                  ▼
  adapters: each writes what its harness reads
    continue       .continue/rules/ + .continue/prompts/ (opt-in)
-   claude_code    .claude/ (rules in .claude/rules/coding-agent-playbook.md,
-                           a rule-free .claude/CLAUDE.md stub)
+   claude_code    .claude/ (always rules + "Where guidance lives" in
+                           .claude/rules/coding-agent-playbook.md,
+                           a rule-free .claude/CLAUDE.md stub,
+                           skills with their rule references in .claude/skills/<id>/)
                            + managed hook entries in .claude/settings.json
                            + .claude/hooks/playbook/launch.sh
    opencode       .opencode/ + .opencode/plugins/playbook-hooks.js
-   agents_md      AGENTS.md (always; a ## Guardrails section when hooks are on)
+   agents_md      AGENTS.md (always; always rules + "Where guidance lives";
+                           a ## Guardrails section when hooks are on)
    shared_skills  .agents/skills/ (the shared skill root: Codex, OpenCode)
    agent_harness  HARNESS.md tree + .playbook/ sidecar (opt-in)
  sync-level       .coding-agent-playbook.lock
@@ -241,8 +244,11 @@ the legacy committed-output flow and CI there; under the default it is only
 meaningful in a working copy that has already been synced.) From then on the `post-checkout` / `post-merge`
 hook re-runs it after every checkout and pull; run it by hand whenever you
 change `playbook/` or the config. `AGENTS.md` is always generated regardless of
-which adapters are enabled (as long as at least one rule or hook advisory applies).
-Claude Code gets the same rule sections in `.claude/rules/coding-agent-playbook.md`,
+which adapters are enabled (as long as at least one rule, member skill or hook
+advisory applies). A scoped rule that names a skill (`skill:`) is not in it: it
+arrives as a reference inside that skill, and a generated `## Where guidance lives`
+section maps file kinds to those skills.
+Claude Code gets the same always-rule sections and the same map in `.claude/rules/coding-agent-playbook.md`,
 which it loads natively; the generated `.claude/CLAUDE.md` is a rule-free stub, so
 OpenCode v1 (which attaches that file when it reads under `.claude/`) never loads
 the rules twice (SPEC §10.3.1). Any other `.claude/rules/` file is yours, and
@@ -347,7 +353,7 @@ playbook/skills/<dir>/  ──►  SkillWriter  ──┬──►  .claude/skil
   SKILL.md (id: <id>)                       ├──►  .opencode/skills/<id>/   (opencode)
   scripts/ references/                      └──►  .agents/skills/<id>/     (shared_skills: Codex, OpenCode)
                                      Continue: degraded to a prompt (.continue/prompts/<id>.md)
-                                     AGENTS.md: skills are not emitted (rules only)
+                                     AGENTS.md: skills are not emitted (a skill with rules gets a "Where guidance lives" line)
 ```
 
 - **Every skill must declare `id:` in its `SKILL.md` frontmatter.** That `id` —

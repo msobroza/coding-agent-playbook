@@ -2,8 +2,10 @@
 
 The AGENTS.md adapter is unique among the four built-ins:
 
-- It is *rules-only*: ``write_prompt`` and ``write_skill`` are no-ops because
-  AGENTS.md is a single repo-root file that aggregates rule sections.
+- It is *rules-only*: ``write_prompt`` and ``write_skill`` write no file because
+  AGENTS.md is a single repo-root file that aggregates rule sections (a skill
+  with member rules only adds its "Where guidance lives" line; those cases are
+  in ``test_always_only_composites.py``).
 - It is *single-file*: cleanup_stale is a one-path check rather than the
   shared directory-walking default — see Task 8.4.
 - It *always runs*, regardless of which other adapters are enabled; the
