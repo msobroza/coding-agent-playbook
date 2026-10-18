@@ -308,7 +308,41 @@ _Filled by T02._
 
 ### handoff
 
-_Filled by T08._
+Upstream `skills/productivity/handoff/`; synced as `.agents/skills/handoff/`.
+Vendored with listed changes, user-invoked.
+
+- `SKILL.md` L2 (v1.3.1): `id: handoff` inserted as the first frontmatter key,
+  before "name: handoff" (D11). `name`, `description`, `argument-hint` (with its
+  quotes) and `disable-model-invocation: true` are upstream's and keep their
+  order.
+- `SKILL.md` L7-L8 (v1.3.1): upstream's blank L7 stays; the guard line "Run this
+  only when the user asked for it by name; otherwise stop." is inserted as the
+  first line of body content, followed by one blank line, before "Write a
+  handoff document summarising ..." (D19).
+- `SKILL.md` L10 (v1.3.1): "naming which skills the next agent should call the
+  Skill tool for." becomes "naming which skills the next session should use."
+  "Use" is neutral on purpose: the suggested skills are often user-invoked
+  (retro, teach, handoff itself), which the next agent cannot load, and the
+  person who starts that session runs those. The edit also removes the Claude
+  Code tool name (D25, D17).
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies, D4).
+- `agents/openai.yaml`: not shipped (Restructure, D10). It held the Codex
+  display name, a short description and `policy.allow_implicit_invocation:
+  false`, the Codex half of upstream's user-only invocation. Codex reads the
+  shared skill root `.agents/skills/`, so outside Claude Code the guard line is
+  the only guard left (D19).
+- Every other byte is upstream's, including L8's "Save to the temporary
+  directory of the user's OS" (nothing is opened, so D20 does not apply) and
+  L12's "Reference them by path or URL instead" (the word URL, not an address;
+  with the local tracker an issue is referenced by path, D13).
+- Note for the global sections (T10): D25 is not listed under "Harness built-ins
+  reworded". This skill's suggested-skills line is a rewording, not a load, so
+  the load-target gate has no target to check for it.
+- Continue: `.continue/prompts/handoff.md` holds only the body, guard line
+  included; `argument-hint` is dropped, so no hint shows, and no
+  `references/LICENSE` travels. A prompt the user runs satisfies the guard
+  (D29).
 
 ### implement
 
@@ -328,11 +362,96 @@ _Filled by T05._
 
 ### research
 
-_Filled by T08._
+Upstream `skills/engineering/research/`; synced as `.agents/skills/research/`.
+Vendored with listed changes, model-invoked.
+
+- `SKILL.md` L2 (v1.3.1): `id: research` inserted as the first frontmatter key,
+  before "name: research" (D11). `name` and `description` are upstream's; there
+  is no `disable-model-invocation`, so no guard line. The description's
+  "delegated to a background agent" describes what the user asks for, not an
+  instruction, so it stays.
+- `SKILL.md` L6 (v1.3.1): "Spin up a **background agent** to do the research, so
+  you keep working while it reads." becomes "If you are already running as a
+  subagent or background agent, do the job below yourself. Otherwise, if your
+  harness can run a **background agent**, spin one up to do the research, so you
+  keep working while it reads. If it cannot, give the job to a subagent if your
+  harness can run one, or else do it yourself." The first sentence is the
+  nesting guard: wayfinder starts research inside a subagent, and upstream's
+  unconditional spawn made that agent spawn again, which this fixes (upstream
+  issue 530). It comes first so a delegate reads it before any spawn
+  instruction. The rest is the capability phrasing with a subagent-then-yourself
+  fallback, and "the job below" points at L8 "Its job:", which stays verbatim
+  with steps L10-L12, so the steps apply to whoever does the research (D17,
+  D18.3).
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies, D4).
+- `agents/openai.yaml`: not shipped (Restructure, D10). It held only the Codex
+  display name and a short description, no policy block, so no invocation guard
+  is lost.
+- Every other byte is upstream's. The skill names no command: the
+  primary-source reading uses the harness's own web search and fetch, which the
+  text never names.
+- Continue: `.continue/prompts/research.md` holds only the body. As a prompt the
+  user runs, its description no longer fires it from the model, and wayfinder's
+  two loads reach it only where the Continue IDE also reads `.claude/skills`
+  natively. The body is complete and its fallback lets the user's own session
+  do the research inline. No `references/LICENSE` travels (D29).
 
 ### retro
 
-_Filled by T08._
+Upstream `skills/engineering/retro/`; synced as `.agents/skills/retro/`.
+Vendored with listed changes, user-invoked.
+
+- `SKILL.md` L2 (v1.3.1): `id: retro` inserted as the first frontmatter key,
+  before "name: retro" (D11). `name`, `description` (with its double quotes) and
+  `disable-model-invocation: true` are upstream's. The description is
+  human-facing and holds no `/name`.
+- `SKILL.md` L6-L7 (v1.3.1): upstream's blank L6 stays; the guard line "Run this
+  only when the user asked for it by name; otherwise stop." is inserted as the
+  first line of body content, followed by one blank line, before "The user has
+  asked for a **retrospective**." (D19).
+- `SKILL.md` L11 (v1.3.1): "1. Call the Skill tool with `writing-for-agents` for
+  the writing style guide." becomes "1. Load the `writing-for-agents` skill for
+  the writing style guide." The target is model-invoked, keeps its id and ships
+  in this plugin; a user-invoked skill may load a model-invoked one (D17).
+- `SKILL.md` L41 (v1.3.1): the `CLAUDE.md`/`AGENTS.md` bullet gains, after
+  "usually only for **navigation pointers** to other files.", one space and the
+  generated-file clause: "A file carrying the playbook's AUTOGENERATED sentinel
+  (on line 1, or on the first line after a `SKILL.md` frontmatter), synced skill
+  directories included, is changed in its source (the repo-local `playbook/`
+  layer or the plugin that ships it), never by hand." The clause names the
+  sentinel and never quotes it. It covers every candidate that targets a
+  generated file: the "Global AGENTS.md" category (L20), "No-ops" in steering
+  files (L22) and the "Skills" bullet (L44), whose synced skill directories are
+  sync output. Those lines stay verbatim and no second sentence is added at L20.
+  In a consumer repo `.claude/CLAUDE.md`, `.claude/rules/*.md`, `AGENTS.md` and
+  every synced `SKILL.md` carry the sentinel, so a hand edit would be
+  overwritten at the next `playbook sync`; elsewhere only the
+  guard-generated-outputs hook (Claude Code and OpenCode) catches such an edit
+  (D26).
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies, D4).
+- `agents/openai.yaml`: not shipped (Restructure, D10). It held the Codex
+  display name, a short description and `policy.allow_implicit_invocation:
+  false`, the Codex half of upstream's user-only invocation. Codex reads the
+  shared skill root `.agents/skills/`, so there the guard line is the only guard
+  left (D19).
+- Every other byte is upstream's: L13's "searching through session logs on this
+  machine", the seven categories at L17-L23, the "reviewer agent" and
+  `CODING_STANDARDS.md` wording at L19 and L42 (retro never names code-review,
+  so the two-axis-review rename does not reach it, D8), and L44's prose mention
+  "Follow the advice in the `writing-for-agents` skill." (a plain name, D17).
+  The project-toolchain examples (L18's `package.json`/build-tool `lint` and
+  `check` scripts and CI workflow, L19's linter, hook and CI job, L23's dev
+  server logs) flag no denied name, so no allowlist entry exists; L18's
+  `package.json` is a JS-first consumer-file example kept as written, a stack
+  assumption recorded here, not a change (D27).
+- Continue: `.continue/prompts/retro.md` holds only the body, guard line and
+  generated-file clause included. Step 1's load cannot fire, because
+  writing-for-agents is only a prompt there unless the Continue IDE also reads
+  `.claude/skills` natively, so the user runs `/writing-for-agents` first to get
+  the style guide. `disable-model-invocation` (harmless for a prompt the user
+  runs) and `references/LICENSE` do not travel (D29).
 
 ### setup-matt-pocock-skills
 
@@ -344,7 +463,98 @@ _Filled by T05._
 
 ### teach
 
-_Filled by T08._
+Upstream `skills/productivity/teach/`; synced as `.agents/skills/teach/`.
+Vendored with listed changes, user-invoked.
+
+- `SKILL.md` L2 (v1.3.1): `id: teach` inserted as the first frontmatter key,
+  before "name: teach" (D11). `name`, `description`,
+  `disable-model-invocation: true` and `argument-hint` (with its quotes) are
+  upstream's and keep upstream's key order.
+- `SKILL.md` L7-L8 (v1.3.1): upstream's blank L7 stays; the guard line "Run this
+  only when the user asked for it by name; otherwise stop." is inserted as the
+  first line of body content, followed by one blank line, before "The user has
+  asked you to teach them something." (D19).
+- `SKILL.md` L12 (v1.3.1): "Treat the current directory as a teaching
+  workspace." becomes "Treat the current directory as a teaching workspace,
+  never this skill's own directory."; the rest of the line stays. This guards
+  against upstream issue 377, where agents resolved `./lessons/` and the other
+  `./` workspace paths against the skill's install directory. Here the cost is
+  higher: the skill now has a `references/` folder next to the workspace's
+  `./reference/`, and the moved `LEARNING-RECORD-FORMAT.md` sits one level
+  deeper, so a misplaced course would land in a synced skill directory such as
+  `.claude/skills/teach/` (D24).
+- `SKILL.md` L14, L16 and L17 (v1.3.1): the three links to the moved format
+  files keep their text and lose the leading `./` of the target: for example
+  `[MISSION-FORMAT.md](./MISSION-FORMAT.md)` becomes
+  `[MISSION-FORMAT.md](references/MISSION-FORMAT.md)`, and the same for
+  RESOURCES-FORMAT.md and LEARNING-RECORD-FORMAT.md. The anchor
+  `[Assets](#assets)` at L19 and the workspace paths `./reference/*.html`,
+  `./learning-records/*.md`, `./lessons/*.html`, `./assets/*`, `./lessons/` and
+  `./assets/` stay: they are paths in the current directory, not this skill's
+  `references/` (D10).
+- `SKILL.md` L55 (v1.3.1): "If possible, open the lesson file for the user by
+  running a CLI command." becomes "When the lesson file is written, open it for
+  the user if your harness can open files, and tell them the absolute path
+  either way." From "open it" on this is the shared open-a-file sentence; the
+  lead-in clause gives "it" an antecedent because L55 is its own paragraph. "If
+  possible" goes because the capability condition replaces it, and "by running
+  a CLI command" goes because it implied an OS-specific launcher, an imposed
+  tool (D20, D2).
+- `MISSION-FORMAT.md` (v1.3.1): moved to `references/MISSION-FORMAT.md`,
+  byte-identical; it has no links, addresses or glossary mentions (D10).
+- `RESOURCES-FORMAT.md` (v1.3.1): moved to `references/RESOURCES-FORMAT.md`
+  (D10) with the two edits that follow.
+- `references/RESOURCES-FORMAT.md` L12, L14 and L19 (v1.3.1), inside the fenced
+  template (L7-L23): each link keeps its markdown shape and its text, and only
+  the target changes, to the placeholder `{link}` in the template's own `{...}`
+  style (compare `{gym name}` at L21). The two example addresses and the
+  community address go; `r/weightroom` stays as link text. This is the one
+  exception to link text as plain text (D24, D4).
+- `references/RESOURCES-FORMAT.md` L29 (v1.3.1): `[SKILL.md](./SKILL.md)`
+  becomes `[SKILL.md](../SKILL.md)`, so the back-link from the moved file
+  resolves to the skill's `SKILL.md` inside the synced skill directory (D10).
+- `LEARNING-RECORD-FORMAT.md` (v1.3.1): moved to
+  `references/LEARNING-RECORD-FORMAT.md` (D10). L41: after `[[GLOSSARY.md]]` the
+  words "(or `[[CONTEXT.md]]` if the repo already has one)" are inserted, in the
+  mention's own wiki-link form; the space after `]]` keeps the link extractor
+  from reading `]] (` as an inline link. The wiki-links `[[MISSION.md]]` (L36)
+  and `[[GLOSSARY.md]]` name workspace files and need no rewrite (D21).
+- `GLOSSARY-FORMAT.md` (v1.3.1): moved to `references/GLOSSARY-FORMAT.md` (D10).
+  L3: "`GLOSSARY.md` is the canonical language for this teaching workspace."
+  gains " (or `CONTEXT.md` if the repo already has one)" after the code span.
+  The L1 heading "# GLOSSARY.md Format" stays, and so does the fenced example
+  (L7-L25), which does not name the file. Upstream links to this file from
+  nowhere and none is added (D21).
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies, D4).
+- `agents/openai.yaml`: not shipped (Restructure, D10). It held the Codex
+  display name, a short description and `policy.allow_implicit_invocation:
+  false`, the Codex half of upstream's user-only invocation. Codex reads the
+  shared skill root `.agents/skills/`, so there the guard line is the only guard
+  left (D19).
+- Every other byte is upstream's, including L30's "Never trust your parametric
+  knowledge" (resource finding uses the harness's own web search and fetch,
+  which the text never names), L95's citations ("links to external resources"
+  are what the agent writes into the user's lessons, not plugin text), the
+  self-authored components of L65-L69 and the U+2026 at `MISSION-FORMAT.md` L16
+  and U+2013 at `GLOSSARY-FORMAT.md` L23.
+- teach's `GLOSSARY.md` is the teaching workspace's own glossary, not a
+  domain glossary. A teaching workspace is normally its own directory, where no
+  repo `CONTEXT.md` exists and the fallback never fires; only teach run at a
+  repo root that already has a domain `CONTEXT.md` would read that file as its
+  glossary. Dropping the two D21 edits above would not affect any other change.
+- Note for the global sections (T10): "Restructure" says each moved file keeps
+  its content unchanged, but three of teach's moved files and writing-for-agents'
+  `SKILL-MECHANICS.md` carry the listed link and glossary edits, so it can read
+  "with only the listed link and glossary edits". "Harness built-ins reworded"
+  quotes the open-a-file sentence with a capital "Open"; teach's is the same
+  sentence from "open it" on, after a lead-in clause.
+- Continue: `.continue/prompts/teach.md` holds only the body, without
+  `references/`. The three format links (L14, L16, L17) dangle, so MISSION.md,
+  RESOURCES.md and the learning records lose their formats, and the unlinked
+  glossary format is gone too. `argument-hint` and `references/LICENSE` are
+  dropped. The guard line, the L12 workspace clause and the open-the-lesson
+  sentence still travel (D29).
 
 ### throwaway-prototype
 
@@ -419,4 +629,60 @@ _Filled by T07._
 
 ### writing-for-agents
 
-_Filled by T08._
+Upstream `skills/productivity/writing-for-agents/`; synced as `.agents/skills/writing-for-agents/`.
+Vendored with listed changes, model-invoked.
+
+- `SKILL.md` L2 (v1.3.1): `id: writing-for-agents` inserted as the first
+  frontmatter key, before "name: writing-for-agents" (D11). `name` and
+  `description` are upstream's. There is no `disable-model-invocation`, so no
+  guard line, and the description's trigger "modifying AGENTS.md or CLAUDE.md"
+  stays: the skill guides the wording and never writes those files itself.
+- `SKILL.md` after L7 (v1.3.1): L6 ("Reference for writing any document an agent
+  consumes: ...") and the blank L7 stay byte for byte, and the generated-file
+  clause is inserted as its own paragraph, followed by one blank line, before
+  L8: "A file carrying the playbook's AUTOGENERATED sentinel (on line 1, or on
+  the first line after a `SKILL.md` frontmatter), synced skill directories
+  included, is changed in its source (the repo-local `playbook/` layer or the
+  plugin that ships it), never by hand." It names the sentinel and never quotes
+  it. It sits right after the paragraph that names the document kinds, because
+  every branch needs it (a skill, an `AGENTS.md`/`CLAUDE.md`, a pointed-at
+  doc), and ahead of the skill-only pointer. In a consumer repo this skill fires
+  on exactly the generated files (`AGENTS.md`, `.claude/CLAUDE.md`,
+  `.claude/rules/*.md` and synced skill directories), so the clause sends the
+  edit to its source (D26).
+- `SKILL.md` L8 (v1.3.1): in "read ... for frontmatter",
+  ``[`SKILL-MECHANICS.md`](SKILL-MECHANICS.md)`` becomes
+  ``[`references/SKILL-MECHANICS.md`](references/SKILL-MECHANICS.md)``. The link
+  text is a code-formatted path, so it carries the new location too (D10).
+- `SKILL.md` L59 (v1.3.1): in the "By invocation" bullet, the same link becomes
+  ``[`references/SKILL-MECHANICS.md`](references/SKILL-MECHANICS.md)``, text and
+  target (D10).
+- `SKILL-MECHANICS.md` (v1.3.1): moved to `references/SKILL-MECHANICS.md` (D10).
+  L3: ``[`writing-for-agents`](SKILL.md)`` becomes
+  ``[`writing-for-agents`](../SKILL.md)``; the link text is the skill name, so it
+  stays. The three inline `SKILL.md` mentions (L3, L9 and L18) name the skill's
+  main file, which did not move, so they stay too.
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies, D4).
+- `agents/openai.yaml`: not shipped (Restructure, D10). It held only the Codex
+  display name and a short description, no policy block.
+- Verbatim on purpose (D28): the sibling-file advice, `SKILL.md` L35 ("Spans a
+  sibling file in the same folder ...") and `SKILL-MECHANICS.md` L14 ("Push it
+  to a plain file outside the skill system ..."). The engine syncs only
+  `SKILL.md`, `scripts/` and `references/`, and this skill's own sibling file
+  had to move, but Matt's advice stays. `SKILL-MECHANICS.md` L10 stays too, with
+  no qualifier on `disable-model-invocation`: support for a frontmatter key is
+  not a harness built-in, and the plugin README says that only Claude Code
+  honours it.
+- Every other byte is upstream's, including L49's "a hand-off or a subagent
+  dispatch" (it explains context boundaries and does not instruct a dispatch),
+  the `AGENTS.md`/`CLAUDE.md` mentions at L6, L12 and L24 (they name document
+  kinds), the U+2192 arrows at L69 and L70, and L79's `package.json` example,
+  a JS-first consumer-file example kept as written: a stack assumption recorded
+  here, not a change (D27).
+- Continue: `.continue/prompts/writing-for-agents.md` holds only the body,
+  generated-file clause included. As a prompt the user runs, the model no
+  longer reaches it when editing skills, `AGENTS.md` or `CLAUDE.md`, and retro's
+  step-1 load cannot reach it. The two `references/SKILL-MECHANICS.md` links
+  dangle, so the invocation and router-skill mechanics are lost. No
+  `references/LICENSE` travels (D29).
