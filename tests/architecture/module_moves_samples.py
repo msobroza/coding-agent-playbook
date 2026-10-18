@@ -78,9 +78,14 @@ N3_N4_TREE = {
     "src/coding_agent_playbook/detector/__init__.py": '"""The detector."""\n',
     "src/coding_agent_playbook/detector/facts.py": "def detect() -> None: ...\n",
 }
-#: AH-1: the Agent Harness adapter joins the ``agent_harness`` package.
-AH1_OLD = "coding_agent_playbook.adapters.agent_harness_adapter"
-AH1_NEW = "coding_agent_playbook.agent_harness.adapter"
+#: AH-1: the Agent Harness adapter joins the ``agent_harness`` package. The pair is
+#: move-map sample data for a ``tmp_path`` tree, not a pin on the installed engine
+#: (the new name must not resolve today), so it stays out of ``engine_module`` and
+#: out of the module-constant position test_module_pins.py rejects (D0-4).
+AH1_OLD, AH1_NEW = (
+    "coding_agent_playbook.adapters.agent_harness_adapter",
+    "coding_agent_playbook.agent_harness.adapter",
+)
 AH1_TREE = {
     "src/coding_agent_playbook/adapters/__init__.py": "",
     "src/coding_agent_playbook/agent_harness/__init__.py": "",

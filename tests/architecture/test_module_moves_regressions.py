@@ -8,6 +8,7 @@ refused. The rules themselves are in ``test_module_moves.py`` (specs/prT-package
 from __future__ import annotations
 
 import textwrap
+import tomllib
 from typing import TYPE_CHECKING
 
 import pytest
@@ -31,7 +32,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _WRITER = {"src/coding_agent_playbook/toml_writer.py": "def dumps() -> str: ...\n"}
-_CONFIG = "coding_agent_playbook.config"
+#: The package N2 splits into ``.model`` and ``.schema``, read from the sample map:
+#: move data for a ``tmp_path`` tree, not a pin on the installed engine (D0-4).
+_CONFIG: str = tomllib.loads(N2_MAP)["module"][0]["old"]
 _SPLIT_LABEL = (
     f"from {_CONFIG} import Config, ConfigError"
     f" -> from {_CONFIG}.model import Config; from {_CONFIG}.schema import ConfigError"
