@@ -515,7 +515,7 @@ Vendored with listed changes, user-invoked.
   resolves to the skill's `SKILL.md` inside the synced skill directory (D10).
 - `LEARNING-RECORD-FORMAT.md` (v1.3.1): moved to
   `references/LEARNING-RECORD-FORMAT.md` (D10). L41: after `[[GLOSSARY.md]]` the
-  words "(or `[[CONTEXT.md]]` if the repo already has one)" are inserted, in the
+  words `(or [[CONTEXT.md]] if the repo already has one)` are inserted, in the
   mention's own wiki-link form; the space after `]]` keeps the link extractor
   from reading `]] (` as an inline link. The wiki-links `[[MISSION.md]]` (L36)
   and `[[GLOSSARY.md]]` name workspace files and need no rewrite (D21).
