@@ -23,7 +23,12 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from tests.plugins.mattpocock_skills._expectations import SKILLS_ROOT, skill_files, split_skill
+from tests.plugins.mattpocock_skills._expectations import (
+    PLUGIN_ROOT,
+    SKILLS_ROOT,
+    skill_files,
+    split_skill,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -237,6 +242,12 @@ def _is_main_block(node: ast.stmt) -> bool:
     return isinstance(node, ast.If) and ast.unparse(node.test) == "__name__ == '__main__'"
 
 
+def _docstring(tree: ast.Module, name: str) -> str:
+    """The top-level function's docstring, with its line breaks collapsed to spaces."""
+    node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name)
+    return " ".join((ast.get_docstring(node) or "").split())
+
+
 # --- diagnosing-bugs: SKILL.md (A.T07.1 changes 1-7) ------------------------------
 
 _DIAGNOSING_DESCRIPTION = (
@@ -351,6 +362,10 @@ def test_hitl_template_keeps_matt_text() -> None:
         assert upstream not in source, upstream
     defs = _top_level_defs(tree)
     assert {"step", "capture", "run_hitl_loop", "hitl_steps"} <= set(defs)
+    assert _docstring(tree, "hitl_steps") == (
+        "The steps the human takes, in order: one step() or capture() call each."
+    )
+    assert "# capture() stores each answer here, in capture order.\nCAPTURED" in source
     assert _is_main_block(tree.body[-1])
     assert source.endswith(
         'if __name__ == "__main__":\n    raise SystemExit(run_hitl_loop(hitl_steps))\n'
@@ -584,6 +599,64 @@ def test_wizard_template_keeps_upstream_strings() -> None:
         assert upstream not in source, upstream
 
 
+_WIZARD_SCRIPT_NEW_TEXTS = (
+    "WRITTEN_ENV: list[str] = []  # KEYs written to ENV_FILE this run\n"
+    "WRITTEN_SECRET: list[str] = []  # secret NAMEs set this run\n"
+    "SKIPPED: list[str] = []  # things left for the human to do by hand\n"
+    "WRITTEN_VAR: list[str] = []  # variable NAMEs set this run\n",
+)
+_WIZARD_DOCSTRINGS = {
+    "confirm": 'confirm("question") is a y/N gate; returns success on yes.',
+    "open_url": (
+        "open_url(url) opens it in the human's browser through Python's webbrowser module; "
+        "an argument without a scheme and host is only printed."
+    ),
+    "set_secret": (
+        "set_secret(name, value) walks the human through adding a GitHub Actions repository "
+        "secret by hand: it shows the name, never the value, waits for their confirmation and "
+        'records it for the summary; a "no" leaves it on the still-to-do list.'
+    ),
+    "set_var": (
+        "set_var(name, value) walks the human through adding a GitHub Actions repository "
+        "variable (not secret) by hand: it shows the name and the value, waits for their "
+        "confirmation and records it for the summary."
+    ),
+    "wizard_stages": (
+        "The stages, in dependency order: banner first, one stage() per step, finish() last."
+    ),
+}
+
+
+def test_wizard_template_new_texts_and_state_order() -> None:
+    source = _WIZARD_SCRIPT.read_text(encoding="utf-8")
+    tree = _module_tree(_WIZARD_SCRIPT)
+    assert [t for t in _WIZARD_SCRIPT_NEW_TEXTS if t not in source] == []
+    docstrings = {name: _docstring(tree, name) for name in _WIZARD_DOCSTRINGS}
+    assert docstrings == _WIZARD_DOCSTRINGS
+
+
+def _wizard_attributions() -> str:
+    text = (PLUGIN_ROOT / "ATTRIBUTIONS.md").read_text(encoding="utf-8")
+    section = text.split("\n### wizard\n", 1)[1].split("\n### ", 1)[0]
+    return " ".join(section.split())
+
+
+def test_wizard_attributions_name_the_removed_tools() -> None:
+    section = _wizard_attributions()
+    for named in (
+        "the `gh secret`/`gh variable` writes become",
+        "the `tput` colours (`tput bold`, `dim`, `sgr0`, `setaf`) become ANSI SGR codes",
+        "the four OS openers (`wslview`, `explorer.exe`, `xdg-open`, `open`)",
+        "(upstream 'e.g. gh missing')",
+        "without the `gh secret set` command (and without the `gh auth status` check)",
+        'global L177 should say `tput` instead of "the terminal-colour utility"',
+    ):
+        assert named in section, named
+    for vague in ("terminal-colour utility becomes", "the forge CLI's secret", "(D22, D28)"):
+        assert vague not in section, vague
+    assert "(D22; the lint exemption is prS D24)" in section
+
+
 def test_wizard_without_a_terminal_exits_2_and_touches_nothing(tmp_path: Path) -> None:
     proc = _run_without_a_terminal(_WIZARD_SCRIPT, tmp_path)
     assert proc.returncode == 2
@@ -756,6 +829,10 @@ def test_set_var_shows_the_value_and_records_it(tmp_path: Path) -> None:
     done = _wizard(tmp_path, stdin=["y"], calls=[["set_var", "V", "42"]])
     assert done["state"]["WRITTEN_VAR"] == ["V"]
     assert "give it this value: 42" in done["stdout"]
+    assert (
+        "In the GitHub repo: Settings → Secrets and variables → Actions → Variables → "
+        "New repository variable." in done["stdout"]
+    )
     assert done["stdout"].endswith("  ✓ set GitHub variable V\n")
     skipped = _wizard(tmp_path, stdin=["n"], calls=[["set_var", "V", "42"]])
     assert skipped["state"]["SKIPPED"] == ["GitHub variable V"]

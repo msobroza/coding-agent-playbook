@@ -60,8 +60,8 @@ _STAGE_INDEX = 0
 ENV_FILE = os.environ.get("ENV_FILE") or ".env"
 WRITTEN_ENV: list[str] = []  # KEYs written to ENV_FILE this run
 WRITTEN_SECRET: list[str] = []  # secret NAMEs set this run
-WRITTEN_VAR: list[str] = []  # variable NAMEs set this run
 SKIPPED: list[str] = []  # things left for the human to do by hand
+WRITTEN_VAR: list[str] = []  # variable NAMEs set this run
 
 EXIT_NO_TERMINAL = 2
 EXIT_INTERRUPTED = 130
@@ -159,7 +159,7 @@ def pause(message: str = "Press Enter to continue") -> None:
 
 
 def confirm(question: str) -> bool:
-    """confirm("question") is a y/N gate; returns True on yes."""
+    """confirm("question") is a y/N gate; returns success on yes."""
     _out(f"  {YELLOW}? {question} [y/N] ")
     return _read_line().startswith(("y", "Y"))
 
