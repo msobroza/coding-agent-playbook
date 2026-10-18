@@ -28,6 +28,9 @@ Validates:
   ``^[a-z0-9]+(-[a-z0-9]+)*$`` (1-64 chars), and it has a 1-1024 char
   ``description``. OpenCode silently drops a skill that fails these, so authors
   learn here instead.
+- Member rules and ``playbook:`` blocks (prS §6.6 V3-V14, W1-W3,
+  ``_validate_skills``): a rule's ``skill`` names a merged skill that takes
+  members, and that skill's block, description fit and references are sound.
 - Every hook honours the trust contract H1-H21 (specs/prK-lifecycle-hooks.md
   §B.5, ``_validate_hooks``): a malformed ``HOOK.md`` is a ``FAIL`` line, not a
   traceback (P8c); degraded cells and clamped timeouts are ``warning:`` lines.
@@ -51,11 +54,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.adapters._skill_sources import refused_skill_files
-from coding_agent_playbook.adapters._skill_writer import (
-    agent_skill_issues,
-    has_declared_id,
-    skill_id_of,
-)
+from coding_agent_playbook.adapters._skill_writer import agent_skill_issues, has_declared_id
 from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands._validate_context import (
     config_less_context,
@@ -68,6 +67,10 @@ from coding_agent_playbook.commands._validate_frontmatter import (
 )
 from coding_agent_playbook.commands._validate_hooks import check_hooks
 from coding_agent_playbook.commands._validate_links import check_markdown_links, load_links_config
+from coding_agent_playbook.commands._validate_skills import (
+    check_rule_skills,
+    check_skill_membership,
+)
 from coding_agent_playbook.commands._validation import (
     RULE_CALL_RE,
     ValidationError,
@@ -75,6 +78,7 @@ from coding_agent_playbook.commands._validation import (
     jinja_syntax_error,
     report_validation_errors,
     report_validation_warnings,
+    skill_label,
 )
 from coding_agent_playbook.detector import evaluate_predicate
 from coding_agent_playbook.evals.loader import (
@@ -299,24 +303,10 @@ def _check_agent_skills(resolved: list[Skill], loaded: list[Skill]) -> list[Vali
     with_id = [skill for skill in resolved if has_declared_id(skill)]
     without_id = [skill for skill in loaded if not has_declared_id(skill)]
     return [
-        ValidationError(path=_skill_label(skill), message=issue)
+        ValidationError(path=skill_label(skill), message=issue)
         for skill in [*with_id, *without_id]
         for issue in agent_skill_issues(skill)
     ]
-
-
-def _skill_label(skill: Skill) -> str:
-    """Locate ``skill`` for an error line (a canonical :class:`Skill` has no source path).
-
-    Example: ``skills/query-db (<repo-local>)``; an id-less skill is named by its
-    authored ``name`` and, when it has one, its ``scripts/``/``references/`` parent dir.
-    """
-    if has_declared_id(skill):
-        return f"skills/{skill_id_of(skill)} ({skill.source_package})"
-    source_dir = skill.scripts_dir or skill.references_dir
-    where = f", at {source_dir.parent}" if source_dir is not None else ""
-    name = skill.frontmatter.get("name", "?")
-    return f"skills/<no id; name {name!r}{where}> ({skill.source_package})"
 
 
 def _warn_refused_skill_files(skills: list[Skill]) -> list[str]:
@@ -327,7 +317,7 @@ def _warn_refused_skill_files(skills: list[Skill]) -> list[str]:
         _warn_refused_skill_files(ctx.skills_resolved)  # [] for a clean skill set
     """
     lines = [
-        f"warning: {_skill_label(skill)}: {item.path} is never copied: {item.reason}"
+        f"warning: {skill_label(skill)}: {item.path} is never copied: {item.reason}"
         for skill in skills
         for item in refused_skill_files(skill)
     ]
@@ -355,8 +345,11 @@ def collect_validation_findings(
         []
     """
     errors = _artifact_errors(ctx, config_less=config_less)
+    skills = check_rule_skills(ctx.rules_resolved, ctx.skills_resolved)
     hook_errors, hook_warnings = check_hooks(ctx, local_policy_is_error=local_policy_is_error)
-    return ValidationFindings([*errors, *hook_errors], hook_warnings)
+    return ValidationFindings(
+        [*errors, *skills.errors, *hook_errors], [*skills.warnings, *hook_warnings]
+    )
 
 
 def collect_validation_errors(
@@ -412,6 +405,7 @@ def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationE
     errors.extend(links_errors)
     errors.extend(check_markdown_links(ctx.artifact_source, ctx.repo_root, links_config))
     errors.extend(_check_agent_skills(ctx.skills_resolved, ctx.artifact_source.list_skills()))
+    errors.extend(check_skill_membership(rules, ctx.skills_resolved))
     return errors
 
 
