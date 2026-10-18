@@ -51,6 +51,8 @@ EXPECTED_MEMBERSHIP: Final[Mapping[str, str]] = {
     "python-retries-and-timeouts": "python-coding",
     "python-idioms": "python-coding",
     "pytest": "python-testing",
+    "pytest-test-doubles": "python-testing",
+    "pytest-fixtures": "python-testing",
     "fastapi-app-wiring": "python-tooling",
     "fastapi-error-boundaries": "python-tooling",
     "ml-serialization-security": "ml-data",
@@ -65,6 +67,8 @@ EXPECTED_WHERE: Final[Mapping[str, str]] = {
 CORE_SKILLS: Final = sorted(EXPECTED_WHERE)
 #: python-coding's member count after the python-best-practices distillation (spec 9.6.2, H13).
 PYTHON_CODING_MEMBER_COUNT: Final = 12
+#: python-testing's members after the pytest distillation (spec 9.6.2): pytest plus two.
+PYTHON_TESTING_MEMBERS: Final = ("pytest", "pytest-fixtures", "pytest-test-doubles")
 
 
 @dataclass(frozen=True)
@@ -81,6 +85,8 @@ class DistilledRuleRow:
 
 
 _PY_FILES: Final = ("**/*.py",)
+_TEST_FILES: Final = ("tests/**/*.py", "**/conftest.py")
+_PYTEST_GATE: Final[Mapping[str, object]] = {"has_framework": ["pytest"]}
 #: Distilled rule id -> its spec 9.6.1 row; ``path`` is relative to ``catalog/core/rules``.
 DISTILLED_RULES: Final[Mapping[str, DistilledRuleRow]] = {
     "python-performance-idioms": DistilledRuleRow(
@@ -109,6 +115,24 @@ DISTILLED_RULES: Final[Mapping[str, DistilledRuleRow]] = {
         {},
         53,
         ("python", "design", "oop"),
+    ),
+    "pytest-test-doubles": DistilledRuleRow(
+        "frameworks/pytest-test-doubles.md",
+        "python-testing",
+        "pytest test doubles",
+        _TEST_FILES,
+        _PYTEST_GATE,
+        61,
+        ("python", "testing", "pytest", "mocking"),
+    ),
+    "pytest-fixtures": DistilledRuleRow(
+        "frameworks/pytest-fixtures.md",
+        "python-testing",
+        "pytest fixtures",
+        _TEST_FILES,
+        _PYTEST_GATE,
+        63,
+        ("python", "testing", "pytest", "fixtures"),
     ),
 }
 SKILLS_ROOT: Final = CORE_ROOT / "skills"
@@ -279,6 +303,14 @@ def test_python_coding_members() -> None:
     assert members == expected, f"python-coding members are {members}; expected {expected}"
     assert len(members) == PYTHON_CODING_MEMBER_COUNT, (
         f"python-coding has {len(members)} members; expected {PYTHON_CODING_MEMBER_COUNT}"
+    )
+
+
+def test_python_testing_members() -> None:
+    """Spec 9.6.2: pytest plus the two distilled members, test doubles and fixtures."""
+    members = sorted(i for i, r in core_rules().items() if r.frontmatter.skill == "python-testing")
+    assert tuple(members) == PYTHON_TESTING_MEMBERS, (
+        f"python-testing members are {members}; expected {list(PYTHON_TESTING_MEMBERS)}"
     )
 
 

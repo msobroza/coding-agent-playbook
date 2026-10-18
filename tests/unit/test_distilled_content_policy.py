@@ -36,13 +36,23 @@ DROPPED_RECOMMENDATIONS: Final = (
 )
 #: The new rules distilled from python-best-practices; later content PRs extend it.
 PBP_DISTILLED_RULES: Final = frozenset(
-    {"python-performance-idioms", "python-async", "python-classes-and-protocols"}
+    {
+        "python-performance-idioms",
+        "python-async",
+        "python-classes-and-protocols",
+        "pytest-test-doubles",
+        "pytest-fixtures",
+    }
 )
 #: A topic that changed owner (spec 9.4.7) -> the one core rule whose body holds it.
 MOVED_GUIDANCE_OWNERS: Final = (
     ("composition over inheritance", "python-classes-and-protocols"),
     ("slots=True", "python-data-shapes"),
+    ("monkeypatch", "pytest-test-doubles"),
+    ("from conftest import", "pytest-fixtures"),
 )
+#: The ``generate-tests`` prompt's line on doubles (spec H18): named fakes come first (D8).
+_GENERATE_TESTS_PROMPT: Final = CORE_ROOT / "prompts" / "generate-tests.md.j2"
 _PBP_SECTION_HEADING: Final = "## Python best-practices guidance"
 
 
@@ -102,6 +112,29 @@ def test_moved_guidance_has_one_owner(needle: str, owner: str) -> None:
         if needle.casefold() in rule.body.casefold()
     )
     assert holders == [owner], f"{needle!r} must live only in {owner}; found in {holders}"
+
+
+def test_pytest_test_doubles_puts_named_fakes_first(tmp_path: Path) -> None:
+    """D8: a named fake is the default double; autospec is the fallback at thin seams."""
+    body = render_core_rule("pytest-test-doubles", reference_probe_facts(tmp_path))
+    fake, autospec = body.find("Fake"), body.find("autospec")
+    assert fake != -1 and autospec != -1, "pytest-test-doubles must name both Fake and autospec"
+    assert fake < autospec, (
+        f"pytest-test-doubles names autospec (offset {autospec}) before a named Fake "
+        f"(offset {fake}); D8 makes named fakes the default"
+    )
+
+
+def test_generate_tests_prompt_recommends_named_fakes() -> None:
+    """H18 / R3-4: the prompt no longer sends the agent to ``mocker`` for external services."""
+    text = _GENERATE_TESTS_PROMPT.read_text(encoding="utf-8")
+    assert "`mocker`" not in text, "generate-tests still recommends pytest-mock's mocker fixture"
+    doubles = [line for line in text.splitlines() if "named fakes" in line]
+    assert len(doubles) == 1, f"generate-tests needs one named-fakes line; got {doubles}"
+    autospec = doubles[0].find("autospec")
+    assert autospec > doubles[0].find("named fakes"), (
+        f"generate-tests must name autospec after named fakes, as the fallback: {doubles[0]!r}"
+    )
 
 
 def test_docstrings_rule_keeps_the_example_contract(tmp_path: Path) -> None:
