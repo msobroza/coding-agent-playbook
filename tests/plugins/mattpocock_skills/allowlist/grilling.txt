@@ -1,0 +1,2 @@
+# grilling: no project-toolchain entry (A.T02.4); the gate finds no hit to allowlist.
+# Not an entry: "still open in this round" (upstream L24) is prose, so `open` is not in command position.

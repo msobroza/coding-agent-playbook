@@ -1,0 +1,1 @@
+# grill-with-docs: no project-toolchain entry (A.T02.1); the gate finds no hit to allowlist.

@@ -1,0 +1,3 @@
+# domain-modeling: no project-toolchain entry (A.T02.2); the gate finds no hit to allowlist.
+# Not an entry: "consumes them to start picking" (references/GLOSSARY-FORMAT.md, upstream L49) sits
+# on a fenced line, but its first word is "-", so `start` is not in command position.
