@@ -22,6 +22,9 @@ Give every new public module, class, function and method a docstring, and keep t
 - The first line is one sentence that states the intent: what the caller gets, not how the body works.
 - After a blank line, show one usage example.
 - Document the error a caller must handle, and any non-obvious argument.
+- Google-style `Args:`, `Returns:` and `Raises:` sections are optional: use them where the module already does. The intent line and the usage example are the required parts.
+- Don't repeat in prose a type the annotation already states. Say what the value means, its units and its limits (`timeout_s`: seconds, at most 30).
+- Update the docstring in the same change that alters the behavior, the parameters or the errors raised.
 
 ## Example forms
 

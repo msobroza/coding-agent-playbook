@@ -22,6 +22,7 @@ The default for error handling is to let exceptions propagate. Catch only when y
 - No bare `except:`. `except Exception` is the loosest acceptable form, and only when the recovery ends by surfacing the error (roll back or clean up, then re-raise). A retry catches only an explicit set of transient errors, never `Exception`. Logging and continuing is allowed only at an isolation boundary (see "Across layers").
 - Catch the most specific type you actually expect. `except ValueError` beats `except Exception` beats `except:`.
 - No `try`/`except` without a concrete recovery. Don't swallow exceptions to "make it pass": `except Exception: pass` is never acceptable, and logging then `pass` is still swallowing.
+- Cancellation and process-control exceptions (`asyncio.CancelledError`, `KeyboardInterrupt`, `SystemExit`) always propagate. A boundary that must clean up when one arrives catches it, cleans up, and re-raises it.
 
 ## Chaining
 
@@ -50,6 +51,7 @@ except json.JSONDecodeError as exc:
 - Follow the codebase's existing absence convention. If it has none, required lookups raise a domain not-found error, `T | None` is returned only where absence is a normal outcome, and the function name makes the difference visible to the caller.
 - `ValueError` and `TypeError` are for violations of the argument contract. Domain failures get subclasses of the project base exception, with the offending identifier in the message.
 - Validate where data enters (request parsing, config loading, file readers) and trust the validated values inside. Let unexpected exceptions reach the default handler instead of wrapping internal calls defensively.
+- An intentional fallback is documented where it happens, observable (a warning log that names the cause) and limited to named exceptions. Never return a plausible-looking default for a failure nobody expected.
 
 ```python
 def main(argv: list[str]) -> int:

@@ -44,12 +44,15 @@ _PYTHON_DESIGN = "coding_agent_playbook.plugins.python_design"
 #: The python-coding members active on the synthetic repo (requires-python >=3.12, no
 #: dependencies): every member but python-retries-and-timeouts, which needs an HTTP client.
 _SYNTHETIC_PYTHON_CODING_MEMBERS = (
+    "python-async",
+    "python-classes-and-protocols",
     "python-context-managers",
     "python-data-shapes",
     "python-dependency-injection",
     "python-docstrings",
     "python-error-handling",
     "python-idioms",
+    "python-performance-idioms",
     "python-pure-core",
     "python-typing",
 )

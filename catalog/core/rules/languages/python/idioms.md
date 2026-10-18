@@ -1,7 +1,7 @@
 ---
 id: python-idioms
 name: Idioms
-description: "Keep os.path for legacy str APIs, use f-strings, group imports, split flag-driven functions, prefer composition, and avoid star imports and shadowed builtins."
+description: "Keep os.path for legacy str APIs, use f-strings, group imports, split flag-driven functions, guard with early returns, and avoid star imports and shadowed builtins."
 version: 1
 scope: scoped
 skill: python-coding
@@ -31,11 +31,10 @@ def count_lines_legacy(path):  # avoid: no type hints, no encoding, no Path, lea
     return len(open(path).read().splitlines())
 ```
 
-## Functions and classes
+## Functions
 
 - When a boolean flag selects a different algorithm, split the function in two instead of branching on the flag.
-- Prefer composition over inheritance. Subclass only when the relationship is genuinely substitutable.
-- Framework base classes (`BaseModel`, `BaseSettings`, `DeclarativeBase`, Django views), exception hierarchies and documented ABC extension points are normal subclassing; the house-style rule to wrap rather than subclass does not apply to them.
+- Class design (composition, subclassing, protocols) is covered in `python-classes-and-protocols`.
 
 ## Strings
 
@@ -58,4 +57,16 @@ from myapp.orders import place_order  # first-party
 ## Small things reviewers flag
 
 - Don't shadow builtins (`list`, `dict`, `id`, `type`, `vars`) with local names.
-- Prefer an early `return` over deeply nested `if`/`else`.
+- Prefer an early `return` over deeply nested `if`/`else`. Give each guard clause one condition, use `continue` to skip an item inside a loop, and move a condition that combines several checks into a named predicate function.
+
+```python
+def is_billable(fee: ShippingFee) -> bool:
+    return fee.cents > 0 and not fee.waived and fee.region in BILLED_REGIONS
+
+
+def post_fees(fees: Iterable[ShippingFee], ledger: Ledger) -> None:
+    for fee in fees:
+        if not is_billable(fee):
+            continue
+        ledger.post(fee)
+```
