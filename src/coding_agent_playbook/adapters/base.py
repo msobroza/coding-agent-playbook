@@ -99,13 +99,24 @@ class Adapter(ABC):
         """Write a rendered prompt and return the paths written."""
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
-        """Degrade a skill to a prompt.
+        """Degrade a skill to a prompt, unless it carries member rules.
 
         The default treats a skill as a prompt. Subclasses with native skill
         support (``claude_code``, ``opencode``, ``shared_skills``) override this
         and delegate to the shared ``SkillWriter``; rules-only adapters (e.g.
         ``agents_md``) override it to return an empty list.
+
+        A skill with ``member_references`` is never degraded (E4,
+        specs/prS-skills-context.md section 6.4.7): its member rules already
+        reach this adapter through :meth:`write_rule`, and the prompt would
+        index ``references/`` files this harness never receives. So Continue
+        writes no prompt for it, and nor does an out-of-tree adapter that keeps
+        this default.
+
+        Example: ``adapter.write_skill(composed_skill, repo_root)`` -> ``[]``.
         """
+        if skill.member_references:
+            return []
         return self.write_prompt(skill.to_prompt(), repo_root)
 
     # Concrete on purpose (B027): an abstract hook would break every out-of-tree adapter.

@@ -6,6 +6,9 @@ It is recorded **without changing the adapter return type**: the dispatch
 wraps each ``write_rule``/``write_prompt``/``write_skill``/``finalize`` call
 and tags every path it returns. Orphans the leftover policy keeps
 (``_sync_orphans``) ride along in the new lockfile with their old entries.
+One ``write_skill`` call can produce two kinds of entry: the member references
+of a skill with member rules are ``kind = "rule"`` entries naming their rule
+(specs/prS-skills-context.md section 6.4.11), everything else ``kind = "skill"``.
 
 Hooks (specs/prK-lifecycle-hooks.md §C.1.3): every adapter first gets
 ``begin_sync`` with the real repo and the prior lockfile, receives
@@ -25,6 +28,8 @@ import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook._member_reference import member_reference_path
+from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of
 from coding_agent_playbook.lockfile import (
     LockEntry,
     Lockfile,
@@ -38,6 +43,7 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, Sequence
     from pathlib import Path
 
+    from coding_agent_playbook._member_reference import MemberReference
     from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.commands._sync_hooks import SyncHooks
     from coding_agent_playbook.hook_policy import ResolvedHook
@@ -203,9 +209,58 @@ def _write_artifacts(
             adapter.write_prompt(prompt, output_root), _artifact_provenance("prompt", prompt, name)
         )
     for skill in skills:
-        recorder.record(
-            adapter.write_skill(skill, output_root), _artifact_provenance("skill", skill, name)
-        )
+        written = adapter.write_skill(skill, output_root)
+        for paths, provenance in _skill_write_provenance(written, skill, name):
+            recorder.record(paths, provenance)
+
+
+def _skill_write_provenance(
+    paths: Sequence[Path], skill: Skill, adapter_name: str
+) -> list[tuple[list[Path], Provenance]]:
+    """Split ``write_skill``'s paths: member references carry their rule's provenance (E9).
+
+    ``<skill-id>/references/<rule-id>.md`` for a rule in ``skill.member_references``
+    is recorded as ``kind = "rule"`` with that rule's id and source package, so
+    guard-generated-outputs tells an editor to override the rule, the file's
+    real source (specs/prS-skills-context.md section 6.4.11); every other path
+    keeps the skill's provenance. Validation keeps a hand-written reference from
+    taking a member's name. Example::
+
+        groups = _skill_write_provenance(written, python_coding, "claude_code")
+        # [([.../SKILL.md], skill provenance), ([.../references/python-typing.md], rule ...)]
+    """
+    skill_paths: list[Path] = []
+    member_groups: list[tuple[list[Path], Provenance]] = []
+    for path in paths:
+        member = _member_written_at(path, skill)
+        if member is None:
+            skill_paths.append(path)
+        else:
+            member_groups.append(([path], _member_provenance(member, adapter_name)))
+    return [(skill_paths, _artifact_provenance("skill", skill, adapter_name)), *member_groups]
+
+
+def _member_written_at(path: Path, skill: Skill) -> MemberReference | None:
+    """The member of ``skill`` whose reference ``path`` is, judged by its spelling.
+
+    ``path`` must be ``<skill-id>/`` + ``member_reference_path(<rule-id>)``, the
+    one spelling the writer uses (E16); nothing is resolved, so a symlinked
+    skills root cannot change the answer.
+    """
+    if path.parent.parent.name != skill_id_of(skill):
+        return None
+    spelled = f"{path.parent.name}/{path.name}"
+    return next(
+        (m for m in skill.member_references if member_reference_path(m.rule_id) == spelled),
+        None,
+    )
+
+
+def _member_provenance(member: MemberReference, adapter_name: str) -> Provenance:
+    """A member reference's lock origin: the rule it renders, from that rule's package."""
+    return Provenance(
+        kind="rule", artifact_id=member.rule_id, source=member.source_package, adapter=adapter_name
+    )
 
 
 def _hook_provenance(hook: ResolvedHook, adapter_name: str) -> Provenance:

@@ -15,7 +15,9 @@ adapter writes OpenCode's own native outputs:
 - skills  -> ``.opencode/skills/<id>/`` (``SKILL.md`` + ``scripts/`` +
   ``references/``) through the shared
   :class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter`, so OpenCode
-  no longer depends on the ``claude_code`` adapter being enabled for skills;
+  no longer depends on the ``claude_code`` adapter being enabled for skills. A
+  scoped rule that names a skill (a member rule, ADR 0001) reaches OpenCode
+  here, as ``references/<rule-id>.md`` of that skill;
 - hooks   -> exactly one generated V1 plugin, ``.opencode/plugins/playbook-hooks.js``
   (specs/prK-lifecycle-hooks.md §C.3), which forwards the events OpenCode can
   enforce to ``playbook-hook``. It is the one exception to SPEC §10.6.4's "never
@@ -68,9 +70,10 @@ if TYPE_CHECKING:
 class OpenCodeAdapter(Adapter):
     """Translate canonical prompts, skills and hooks into OpenCode's native layout.
 
-    Rules are an intentional no-op on this adapter: OpenCode picks them up from
-    the AGENTS.md adapter's output (``AGENTS.md`` at repo root). See SPEC.md
-    §10.6 and §10.6.4 for the OpenCode-touches/does-not-touch matrix.
+    Rules are an intentional no-op on this adapter: OpenCode picks up always
+    rules from the AGENTS.md adapter's output (``AGENTS.md`` at repo root), and
+    member rules as references of the skills :meth:`write_skill` writes. See
+    SPEC.md §10.6 and §10.6.4 for the OpenCode-touches/does-not-touch matrix.
 
     The optional ``rule_registry`` is plumbed into :func:`render_for` so the
     ``includes_rules:`` appendix in prompts can be rendered. When the

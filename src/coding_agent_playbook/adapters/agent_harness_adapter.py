@@ -376,6 +376,7 @@ class AgentHarnessAdapter(Adapter):
                 tags=list(fm.tags),
                 version=fm.version,
                 lint_codes=dict(fm.lint_codes),
+                skill=fm.skill,
             )
         )
         return target

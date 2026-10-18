@@ -33,7 +33,8 @@ nothing (§P P8, §B.5). Validate's warnings print as ``warning:`` lines, and a
 ``[hooks]`` / ``[guardrails]`` table in ``.local.toml`` is only one of them
 here (§B.1). ``--check-staged`` is the pre-commit hot path and is not gated. A
 template the Jinja sandbox rejects aborts every mode with exit 1, naming the
-source file, before any adapter writes (specs/prK-lifecycle-hooks.md §P P1).
+source file, before any adapter writes (specs/prK-lifecycle-hooks.md §P P1); so
+does a skill whose composed description cannot fit 300 characters, naming it.
 
 Hooks (§C.1.3, ``_sync_hooks``): every mode renders the on hooks through the
 adapters (each told the real repo and the prior lockfile) plus the sync-level
@@ -81,7 +82,12 @@ from coding_agent_playbook.commands._sync_lockfile import (
     build_lockfile,
     dispatch_to_adapters,
 )
-from coding_agent_playbook.commands._sync_render import render_artifacts, report_sandbox_violation
+from coding_agent_playbook.commands._sync_render import (
+    SkillDescriptionOverflowError,
+    render_artifacts,
+    report_description_overflow,
+    report_sandbox_violation,
+)
 from coding_agent_playbook.commands._validation import report_validation_errors
 from coding_agent_playbook.commands.validate import sync_gate_errors
 from coding_agent_playbook.git_client import SubprocessGitClient
@@ -198,7 +204,8 @@ def execute(
     validate`` rule set; tests inject a fake). ``hook_deps`` holds write
     mode's machine-local hook seams (pins, trust store, TTY); tests inject
     fakes. Returns 1, having written nothing, on any validate finding, when a
-    template is rejected by the Jinja sandbox, when ``settings.json`` is
+    template is rejected by the Jinja sandbox, when a skill's composed
+    description cannot fit 300 characters, when ``settings.json`` is
     not valid JSON, or when a user file (or a symlink) holds the path of the
     launcher, the OpenCode shim or the Claude Code rules file, or when
     ``.claude/CLAUDE.md`` is a symlink, a hard link or not a regular file.
@@ -230,6 +237,8 @@ def execute(
         return _run_write(ctx, git_client, hook_deps or SyncHookDeps())
     except TemplateSecurityError as exc:
         return report_sandbox_violation(exc, ctx.repo_root, outcome=_ABORT_OUTCOME)
+    except SkillDescriptionOverflowError as exc:
+        return report_description_overflow(exc, outcome=_ABORT_OUTCOME)
     except SettingsMergeError as exc:
         return _sync_hooks.report_settings_error(exc, check=check or check_staged)
     except UserOwnedFileError as exc:

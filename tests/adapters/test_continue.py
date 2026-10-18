@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import dataclasses
+from pathlib import Path
+from typing import Any
 
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
-from coding_agent_playbook.renderer import SENTINEL, with_sentinel_body
+from coding_agent_playbook.renderer import SENTINEL, render_for, with_sentinel_body
 from coding_agent_playbook.types import (
     Prompt,
     PromptFrontmatter,
@@ -14,9 +16,7 @@ from coding_agent_playbook.types import (
     Skill,
 )
 from tests.hook_samples import resolved_hook
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from tests.member_skill_samples import sample_member_reference, sample_member_skill
 
 
 class _StubRegistry:
@@ -265,6 +265,42 @@ def test_continue_write_skill_degrades_to_prompt_path(tmp_path: Path) -> None:
     assert "Demo skill body" in content
     # The Continue prompt shape ships invokable: true at the top.
     assert "invokable: true" in content
+
+
+# --- member rules (specs/prS-skills-context.md 6.4.7, 6.8.6) ------------------
+
+
+def test_member_rule_file_is_byte_identical_to_before(tmp_path: Path) -> None:
+    """D11: Continue keeps one rule file per rule and projects no ``skill`` key."""
+    plain = _make_rule(rule_id="python-typing", globs=["**/*.py"])
+    member = dataclasses.replace(
+        plain, frontmatter=dataclasses.replace(plain.frontmatter, skill="python-coding")
+    )
+    expected = render_for(
+        Path("inline"), plain.body, "continue_rule", frontmatter=plain.frontmatter.__dict__
+    )
+
+    [written] = ContinueAdapter().write_rule(member, repo_root=tmp_path)
+
+    assert written == tmp_path / ".continue" / "rules" / "50-python-typing.md"
+    assert written.read_text(encoding="utf-8") == expected
+    assert "skill" not in written.read_text(encoding="utf-8")
+
+
+def test_skill_with_members_is_not_degraded_to_a_prompt(tmp_path: Path) -> None:
+    skill = sample_member_skill("python-coding", sample_member_reference())
+
+    assert ContinueAdapter().write_skill(skill, repo_root=tmp_path) == []
+    assert not (tmp_path / ".continue").exists()
+
+
+def test_plain_skill_is_still_degraded_to_a_prompt(tmp_path: Path) -> None:
+    """Regression: a skill without members (a plugin skill) keeps its Continue prompt."""
+    plain = Skill({"id": "demo", "description": "D"}, "# Demo\n", None, None, "superpowers")
+
+    written = ContinueAdapter().write_skill(plain, repo_root=tmp_path)
+
+    assert written == [tmp_path / ".continue" / "prompts" / "demo.md"]
 
 
 # --- K3: hooks degrade to one advisory rule (specs/prK-lifecycle-hooks.md §C.4.2, P5) ----

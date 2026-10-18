@@ -85,6 +85,8 @@ class ManifestEntry:
     version: int | None = None
     # Rule-only, emitted only when non-empty so existing sidecars stay byte-identical.
     lint_codes: dict[str, Any] = field(default_factory=dict)
+    # Rule-only: the skill a scoped rule names (ADR 0001); emitted only when set.
+    skill: str | None = None
     # Prompt-only.
     slash: str | None = None
     input_variables: list[dict[str, Any]] = field(default_factory=list)
@@ -152,6 +154,8 @@ def _entry_to_table(entry: ManifestEntry) -> dict[str, Any]:
         table["applies_if"] = entry.applies_if
     if entry.kind == "rule" and entry.lint_codes:
         table["lint_codes"] = entry.lint_codes
+    if entry.kind == "rule" and entry.skill is not None:
+        table["skill"] = entry.skill
     if entry.kind == "prompt" and entry.write_scope:
         # Optional fields (specs/prK-lifecycle-hooks.md §A.7) are emitted only
         # when set: listing them in _KIND_FIELDS would add an empty inline table
@@ -184,6 +188,7 @@ def _entry_from_table(table: dict[str, Any]) -> ManifestEntry:
         tags=list(table.get("tags", [])),
         version=table.get("version"),
         lint_codes=dict(table.get("lint_codes", {})),
+        skill=table.get("skill"),
         slash=table.get("slash"),
         input_variables=list(table.get("input_variables", [])),
         includes_rules=list(table.get("includes_rules", [])),

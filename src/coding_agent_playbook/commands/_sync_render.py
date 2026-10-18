@@ -8,6 +8,13 @@ by ``_sync_hooks``, specs/prK-lifecycle-hooks.md §C.1.3). So a template the Jin
 sandbox rejects aborts the sync with nothing written and the offending file
 named (:class:`~coding_agent_playbook.renderer.TemplateSecurityError`,
 specs/prK-lifecycle-hooks.md §P1).
+
+Skills are composed here too (``skill_membership.compose_skills``, ADR 0001): a
+skill with a ``playbook:`` block gets its active member rules, rendered by the
+same pass as every other rule, and is dropped when none of them passes
+``applies_if``; any other skill passes through unchanged. Each composed skill's
+description is composed here once as well, so one that cannot fit 300 characters
+aborts the sync with nothing written (:class:`SkillDescriptionOverflowError`).
 """
 
 from __future__ import annotations
@@ -19,6 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
+from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of
 from coding_agent_playbook.commands._sync_hooks import SyncHooks, resolve_sync_hooks
 from coding_agent_playbook.orchestrator import filter_applies_if, template_source
 from coding_agent_playbook.renderer import (
@@ -28,8 +36,12 @@ from coding_agent_playbook.renderer import (
     render_sandboxed,
 )
 from coding_agent_playbook.rule_registry import build_prompt_environment
+from coding_agent_playbook.skill_document import DescriptionOverflowError, emitted_frontmatter
+from coding_agent_playbook.skill_membership import compose_skills, undelivered_member_warning
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from jinja2 import Environment
 
     from coding_agent_playbook.hook_policy import ResolvedHook
@@ -45,6 +57,8 @@ class RenderedArtifacts:
     ``registry`` resolves ``includes_rules`` for the adapters (already
     exercised once per included rule, so the adapters' repeat cannot fail).
     ``hooks`` holds the ``[hooks]`` policy and the on hooks, bodies rendered.
+    ``skills`` are composed: each carries its active member rules as
+    ``member_references``, while ``rules`` still holds every active rule.
 
     Example::
 
@@ -57,6 +71,27 @@ class RenderedArtifacts:
     skills: list[Skill]
     registry: RuleRegistryImpl
     hooks: SyncHooks = field(default_factory=SyncHooks)
+
+
+class SkillDescriptionOverflowError(ValueError):
+    """A composed skill whose description cannot fit 300 chars even with one Covers name.
+
+    Raised by :func:`render_artifacts` before any adapter writes. ``subject``
+    names the skill as ``playbook validate`` does (``skills/<id> (<package>)``);
+    ``overflow`` is the :class:`DescriptionOverflowError` with the text and its
+    length. Validate's V11 refuses such a skill in write and ``--check`` mode;
+    ``--check-staged`` skips validate, so there only this check stops it.
+
+    Example::
+
+        except SkillDescriptionOverflowError as exc:
+            print(exc.subject, exc.overflow.length)
+    """
+
+    def __init__(self, subject: str, overflow: DescriptionOverflowError) -> None:
+        self.subject = subject
+        self.overflow = overflow
+        super().__init__(f"{subject}: {overflow}")
 
 
 def build_jinja_context(ctx: SyncContext) -> dict[str, object]:
@@ -128,20 +163,17 @@ def render_hook_body(hook: Hook, context: dict[str, object], env: Environment) -
     return render_sandboxed(hook.template_body, dict(context), env=env, source=source)
 
 
-def filter_skills(skills: list[Skill]) -> list[Skill]:
-    """Skills are unconditional in v1 (no ``applies_if`` in the SKILL.md
-    schema). Returned unchanged; kept as a hook for v2 to filter on a
-    ``conditions:`` extension without churning the call site."""
-    return list(skills)
-
-
 def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
-    """Filter by ``applies_if`` and run every template a sync needs; write nothing.
+    """Filter by ``applies_if``, run every template a sync needs and compose skills; write nothing.
 
     Inputs (``applies_if`` file checks included) are read from the real repo
     through ``ctx``. Raises :class:`TemplateSecurityError` (or, for a malformed
-    ``[hooks]`` table, ``_sync_hooks.HookPolicyError``) before any adapter has
-    written a file.
+    ``[hooks]`` table, ``_sync_hooks.HookPolicyError``, and for a composed
+    description over 300 chars, :class:`SkillDescriptionOverflowError`) before
+    any adapter has written a file. Skills come from
+    ``skill_membership.compose_skills``; when member rules are active but no
+    enabled adapter delivers them, one ``warning:`` line goes to stderr (E12:
+    there is no fallback).
 
     Example::
 
@@ -159,13 +191,50 @@ def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
     rendered_prompts = [render_prompt_body(p, base_context, prompt_env) for p in prompts]
     _prerender_inclusions(rendered_prompts, registry)
     hooks = resolve_sync_hooks(ctx, lambda hook: _with_body(hook, base_context, base_env))
+    skills = compose_skills(ctx.skills_resolved, ctx.rules_resolved, rendered_rules)
+    _check_composed_descriptions(skills)
+    _warn_undelivered_members(ctx, skills)
     return RenderedArtifacts(
         rules=rendered_rules,
         prompts=rendered_prompts,
-        skills=filter_skills(ctx.skills_resolved),
+        skills=skills,
         registry=registry,
         hooks=hooks,
     )
+
+
+def _check_composed_descriptions(skills: Sequence[Skill]) -> None:
+    """Compose the description of every skill with members now, before any write.
+
+    The writers compose it again inside ``write_skill``; that is deterministic,
+    so it cannot raise once this pass has not. Without this pass an overflow
+    escaped mid-dispatch, after earlier adapters had written and with no
+    lockfile saved.
+    """
+    for skill in skills:
+        if skill.member_references:
+            _compose_description_of(skill)
+
+
+def _compose_description_of(skill: Skill) -> None:
+    """Compose ``skill``'s emitted frontmatter; wrap an overflow with the skill's name."""
+    try:
+        emitted_frontmatter(skill)
+    except DescriptionOverflowError as exc:
+        subject = f"skills/{skill_id_of(skill)} ({skill.source_package})"
+        raise SkillDescriptionOverflowError(subject, exc) from exc
+
+
+def _warn_undelivered_members(ctx: SyncContext, skills: list[Skill]) -> None:
+    """Print the undelivered-member warning when no enabled adapter delivers member rules.
+
+    ``ctx.adapters`` is populated by ``SyncContext.from_config``; the sync
+    re-discovers the same adapters with a rule registry afterwards, and
+    ``delivers_member_rules`` is a class attribute, so either set answers alike.
+    """
+    warning = undelivered_member_warning(ctx.adapters.values(), skills)
+    if warning is not None:
+        print(warning, file=sys.stderr)
 
 
 def _with_body(hook: ResolvedHook, context: dict[str, object], env: Environment) -> ResolvedHook:
@@ -203,6 +272,20 @@ def report_sandbox_violation(exc: TemplateSecurityError, repo_root: Path, *, out
     """
     detail = f"template rejected by the Jinja sandbox: {exc.detail}"
     return report_template_error(exc.source, detail, repo_root, outcome=outcome)
+
+
+def report_description_overflow(exc: SkillDescriptionOverflowError, *, outcome: str) -> int:
+    """Print ``error: skills/<id> (<package>): <detail>`` and ``error: <outcome>``; return 1.
+
+    Both lines go to stderr; the detail carries the shortest text and its length.
+
+    Example::
+
+        return report_description_overflow(exc, outcome="playbook sync aborted.")
+    """
+    print(f"error: {exc}", file=sys.stderr)
+    print(f"error: {outcome}", file=sys.stderr)
+    return 1
 
 
 def report_template_error(source: str, detail: str, repo_root: Path, *, outcome: str) -> int:
