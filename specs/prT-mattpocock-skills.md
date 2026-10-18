@@ -250,7 +250,7 @@ stays as he wrote it (D4), and nothing in the plugin carries a URL, attribution 
 | Quantity | Characters | Source |
 | --- | --- | --- |
 | The 26 vendored descriptions as of v1.3.1 (two-axis-review 417 after YAML unescaping; D28's 419 counts the two backslash escapes) | 3,734 | measured over the upstream frontmatter |
-| Core skill descriptions today | 0 | no `catalog/core/skills/` at `a9e48e5` |
+| Core skill descriptions at `a9e48e5` (before #72) | 0 | no `catalog/core/skills/` at `a9e48e5` |
 | Core after ticket 10 (#50) / after PR 4 (#56) / after PR 8 | 762 / 1,043 / 1,238 | `specs/prS-skills-context.md:46-52`, `:2035-2046` |
 | Core plus this plugin: today / after #50 / after PR 8 | about 3,734 / 4,496 / 4,974 | D30 |
 | Core plus this plugin, measured at T10b (after #72) | 4,542 (core 762, plugin 3,780) | `test_budget.py` |
@@ -852,8 +852,8 @@ SKILL.md: `bun <path>`
 ### 7.5 Listing budget test (`test_budget.py`, T01)
 
 The test measures what the engine itself would list, per layer, with the engine's own functions
-(E13), so it works today, when core ships no skills, and after ticket 10, when core ships four
-rule skills whose descriptions are composed at sync.
+(E13): core's rule skills (shipped by ticket 10, #72) are counted at the longest description sync
+composes for them, every plugin skill at its authored one.
 
 ```python
 LISTING_BUDGET_CHARS: Final = 6_000  # prS D5, as amended by D31: core plus EACH bundled plugin
@@ -862,7 +862,7 @@ LISTING_BUDGET_CHARS: Final = 6_000  # prS D5, as amended by D31: core plus EACH
 def listing_chars(plugin: str, repo_root: Path) -> dict[str, int]:
     """Emitted description length per skill id for core plus ``plugin``, every member rule active.
 
-    Example: ``sum(listing_chars(PLUGIN_NAME, tmp_path).values())`` -> about 3,734 today.
+    Example: ``sum(listing_chars(PLUGIN_NAME, tmp_path).values())`` -> 4,542 at T10b (core 762, plugin 3,780).
     """
     source = FileSystemArtifactSource(repo_root=repo_root, overlay_packages=[plugin])
     resolver = OverlayResolver()
@@ -895,8 +895,7 @@ def test_core_plus_each_bundled_plugin_listing_within_6000_chars(
   characters by construction, `skill_document.py:32`); a rule skill without any member is dropped,
   as sync drops it. A plain skill (every plugin skill, and `playbook-guardrails` after PR 4)
   counts its authored description (`emitted_frontmatter` returns it unchanged).
-- Today `layer_roots("skills")` has no core entry, so the core share is 0 and the test measures
-  the plugin alone. After #50, core's four skills are counted with no edit here.
+- Since #72 core ships four rule skills (762 characters), which this test counts with no edit.
 - A third test, `test_budget_counts_every_core_skill` (added at T10b, once #72 shipped
   `catalog/core/skills/`), asserts that every core skill id is among the measured ids, so the sum
   is core plus the plugin and never the plugin alone. At T10b the core share is 762 characters
@@ -1258,7 +1257,7 @@ done; the docs tests pass (`tests/unit/test_docs_*.py`, including the SPEC versi
 - **R1. Eager tokens of the plugin always rule.** Its at most 60 words reach every session in
   every harness (`AGENTS.md`, the Claude rules file, Continue's rules). Mitigation: the word cap
   is gated; the prS reference probe never enables this plugin (D31), because its always rules sit
-  at about 769 of 800 words after ticket 10.
+  at 309 of 800 words on the probe at T10b (362 with this plugin enabled; section 8.2).
 - **R2. Listing headroom.** Core plus this plugin is about 4,974 of 6,000 characters after PR 8.
   Growth in core descriptions shrinks the margin; the test fails loudly and names the longest
   descriptions. Claude Code drops the 15 user-invoked descriptions from its listing, so the test
