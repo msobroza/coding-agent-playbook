@@ -32,7 +32,7 @@ A class earns its place when it keeps state together with the behavior that prot
 - Expose plain attributes, not `get_x()` and `set_x()` methods.
 - When an attribute later needs validation, turn it into a `@property` with a setter; callers stay unchanged. Values computed from other fields are covered in `python-data-shapes`.
 - Keep properties cheap. For an expensive computed value on a class without `__slots__`, use `functools.cached_property`.
-- Never decorate a method with `functools.lru_cache`: the cache holds a reference to `self`, so instances are never freed.
+- Never decorate a method with `functools.lru_cache`: the cache holds a reference to `self`, so it keeps instances alive long after their last use (until they age out of the cache).
 
 ## Composition first
 

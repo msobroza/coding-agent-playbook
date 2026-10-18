@@ -4,8 +4,11 @@ A scoped rule reaches the agent as one reference of its skill, opened in a singl
 read. 100 lines is the Agent Skills threshold above which a reference needs a
 table of contents, and 750 words keeps one reference to one topic, so CI bounds
 every core scoped rule, rendered as sync renders it with the reference-probe facts
-(``tests/_budget_probe.py``). Those facts take the long branch of every Jinja
-rule; the sanity test below pins that, so the bound measures the longest form.
+(``tests/_budget_probe.py``). Those facts reach the ``pytest-asyncio`` branch of
+``pytest`` and the torch, NumPy, pandas and scikit-learn sections of
+``ml-serialization-security`` (spec 9.15); the sanity test below pins each one.
+The probe declares no ``transformers``, so the Hugging Face section of
+``ml-serialization-security`` is not rendered and the bound does not measure it.
 """
 
 from __future__ import annotations
@@ -58,6 +61,6 @@ def test_core_scoped_rule_fits_one_reference_read(rule_id: str, probe_facts: Fac
 def test_reference_probe_facts_render_every_jinja_branch_once(
     rule_id: str, marker: str, probe_facts: Facts
 ) -> None:
-    """The size bound measures the long form: the probe reaches each library branch once."""
+    """The size bound measures these sections: the probe renders each listed branch once."""
     count = render_core_rule(rule_id, probe_facts).count(marker)
     assert count == 1, f"{rule_id}: {marker!r} renders {count} times with the probe facts"
