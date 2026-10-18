@@ -80,6 +80,9 @@ _VENDORED_PLUGIN_GATES: dict[str, str] = {
 #: The engine-owned pre-commit template (engine wiring, not content) ships too.
 _PRECOMMIT_TEMPLATE_PREFIX = "templates/precommit/"
 
+#: The python-best-practices commit core's distilled rules were written from (spec 9.1).
+_PBP_COMMIT = "bf64c51d2f4c8255f126c98359bdbcd5e2587b92"
+
 _EVAL_TASKS_SUBDIR = "eval_tasks"
 #: Per-task fixture trees: ``eval_tasks/<id>/setup/**`` and ``eval_tasks/<id>/solution/**``.
 _FIXTURE_DIRS = frozenset({"setup", "solution"})
@@ -99,9 +102,13 @@ _URL_RE = re.compile(
 #: The distilled plugin's name (any spacing), its copyright holder, the author and
 #: their course, and its install-path tokens: the ``${CLAUDE_PLUGIN_ROOT}/...``
 #: footer is the likeliest copy-paste leak. ``\b`` keeps names like "Marjan" clean.
+#: And the python-best-practices collection that core distills (its name, its
+#: publisher, and the publisher's analyzer, which D8 drops); plain "best
+#: practices" and a "ludo" board game stay clean.
 _PLUGIN_MARKER_RE = re.compile(
     r"(?i)python[\s_-]*clean[\s_-]*architecture|\barjan|\bmk[\s_-]*toronto"
     r"|software[\s_-]*designer[\s_-]*mindset|claude_plugin_root|\.claude/plugins"
+    r"|python[\s_-]*best[\s_-]*practices|\bludo[\s_-]*technologies|\bpyscn\b"
 )
 
 
@@ -321,6 +328,13 @@ def test_attributions_credit_the_distilled_source(attributions: Path) -> None:
     assert "MIT" in text
 
 
+def test_core_attributions_credit_python_best_practices() -> None:
+    """Core's second distilled source: its name, publisher, pinned commit and license."""
+    text = (CORE_ROOT / _ATTRIBUTIONS_NAME).read_text(encoding="utf-8")
+    for needle in ("python-best-practices", "Ludo Technologies LLC", _PBP_COMMIT, "MIT"):
+        assert needle in text, f"core ATTRIBUTIONS.md must credit {needle!r}"
+
+
 # --------------------------------------------------------------------------- #
 # The scanner itself, on synthetic input (independent of shipped content).
 # --------------------------------------------------------------------------- #
@@ -355,6 +369,10 @@ _BOTH = ScanPolicy(urls=True, markers=True)
         ("from the Software Designer Mindset course", "plugin-marker", "Software Designer Mindset"),
         ("Load `${CLAUDE_PLUGIN_ROOT}/skills/x.md`.", "plugin-marker", "CLAUDE_PLUGIN_ROOT"),
         ("Copied from ~/.claude/plugins/cache/foo.", "plugin-marker", ".claude/plugins"),
+        ("Distilled from python-best-practices.", "plugin-marker", "python-best-practices"),
+        ("Python Best Practices skills", "plugin-marker", "Python Best Practices"),
+        ("Copyright (c) 2026 Ludo Technologies LLC", "plugin-marker", "Ludo Technologies"),
+        ("Run pyscn check before merging.", "plugin-marker", "pyscn"),
     ],
 )
 def test_scan_text_flags_leaks(line: str, kind: str, text: str) -> None:
@@ -369,6 +387,7 @@ def test_scan_text_passes_clean_text() -> None:
         "Edit pyproject.toml; from shop.orders import place_order\n"
         "asyncio.run(main()) reads settings.api_url\n"
         "self.io, pkg.net and user.org stay attributes; half = total // 2\n"
+        "Follow these best practices for fixtures.\nThe ludo board game is fine.\n"
     )
     assert scan_text(clean, "x.md", _BOTH) == []
 

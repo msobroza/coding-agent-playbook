@@ -83,6 +83,20 @@ def bundled_eval_task_roots() -> list[Path]:
     return [CORE_ROOT / "eval_tasks", *(r for r in plugin_roots if r.is_dir())]
 
 
+def core_markdown_sources(kind: str) -> list[Path]:
+    """Every ``.md`` and ``.md.j2`` source under ``CORE_ROOT / kind``, at any depth, sorted.
+
+    Raises ``FileNotFoundError`` naming the directory when core has no such kind,
+    so a gate never iterates an empty listing by mistake.
+
+    Example: ``core_markdown_sources("prompts")[0].name`` -> ``"characterize.md"``.
+    """
+    root = CORE_ROOT / kind
+    if not root.is_dir():
+        raise FileNotFoundError(f"core has no {kind!r} directory at {root}")
+    return sorted(p for p in root.rglob("*") if p.name.endswith((".md", ".md.j2")))
+
+
 def core_rules() -> dict[str, Rule]:
     """Every rule under ``CORE_ROOT / "rules"``, parsed from its file, by id.
 
@@ -91,10 +105,7 @@ def core_rules() -> dict[str, Rule]:
 
     Example: ``core_rules()["python-typing"].frontmatter.skill`` -> ``"python-coding"``.
     """
-    paths = sorted(
-        p for p in (CORE_ROOT / "rules").rglob("*") if p.name.endswith((".md", ".md.j2"))
-    )
-    rules = (Rule.from_markdown(path, ENGINE_PACKAGE) for path in paths)
+    rules = (Rule.from_markdown(path, ENGINE_PACKAGE) for path in core_markdown_sources("rules"))
     return {rule.frontmatter.id: rule for rule in rules}
 
 

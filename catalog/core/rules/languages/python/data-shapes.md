@@ -21,6 +21,7 @@ A value with a name and a type tells the next reader what it holds and lets the 
 - Never keep parallel lists indexed together (`names[i]` beside `prices[i]`); zip them into one list of records.
 - Return at most three values as a tuple. Beyond that, return a dataclass or a `NamedTuple`, so callers read fields by name.
 - Compute derived values with `@property` instead of storing a copy that can go stale.
+- For a dataclass with many small instances (one per sensor reading or invoice line), add `slots=True`: each instance takes less memory, and assigning a misspelled attribute raises instead of adding a new one.
 
 ## Frozen is shallow
 

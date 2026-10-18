@@ -53,6 +53,7 @@ def first(items: list[T]) -> T | None:
 
 - Reach for a concrete type first; reach for a `Protocol` second; reach for `object` third; reach for `Any` only when the alternative is making types lie.
 - When you do use `Any`, suppress the corresponding mypy diagnostic with `# type: ignore[<code>]` and a comment that explains *why* a precise type isn't available.
+- Identifiers that must never be mixed up get their own type: `InvoiceId = NewType("InvoiceId", str)` beside `CustomerId`. When the value also needs validation, make it a small value object instead.
 
 ## Optional types
 
@@ -69,6 +70,16 @@ def total(items: Sequence[int] = ()) -> int:             # read-only input: immu
 def push(items: list[int] | None = None) -> list[int]:   # needs its own copy
     items = [] if items is None else list(items)         # never `items or []`
     ...
+```
+
+A mutable class-level default on a plain class is one object shared by every instance. Initialize it in `__init__`, annotate it `ClassVar[...]` when sharing is intended, or use an immutable default.
+
+```python
+class SensorBuffer:
+    unit: ClassVar[str] = "celsius"  # shared on purpose
+
+    def __init__(self) -> None:
+        self.readings: list[float] = []  # one list per instance
 ```
 
 ## Read-only parameters
