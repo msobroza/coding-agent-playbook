@@ -79,6 +79,19 @@ def _imports(
     exit_code: int = 0,
     extra: tuple[str, ...] = (),
 ) -> set[str]:
+    return _dispatch(proc, repo, event, payload, exit_code=exit_code, extra=extra)[0]
+
+
+def _dispatch(
+    proc: SubprocessProc,
+    repo: GuardRepo,
+    event: EventName,
+    payload: bytes,
+    *,
+    exit_code: int = 0,
+    extra: tuple[str, ...] = (),
+) -> tuple[set[str], str]:
+    """The modules one fresh-interpreter dispatch imported, and what it wrote to stdout."""
     argv = [
         sys.executable,
         "-I",
@@ -96,7 +109,8 @@ def _imports(
     result = proc.run(argv, timeout=PROBE_TIMEOUT_S, env=env, input=payload, cwd=str(repo.root))
     assert result.returncode == exit_code, result.stderr.decode()
     lines = result.stderr.decode("utf-8", "replace").splitlines()
-    return {m.group(1) for line in lines if (m := _IMPORT_LINE.match(line))}
+    imported = {m.group(1) for line in lines if (m := _IMPORT_LINE.match(line))}
+    return imported, result.stdout.decode("utf-8", "replace")
 
 
 @functools.cache
@@ -605,6 +619,37 @@ def test_python_edit_branch_imports_no_forbidden_module(
     assert _forbidden(imported) == []
     assert "subprocess" not in imported
     assert _GUARD_CONFIG_RUFF not in imported  # sync-time (tomllib)
+
+
+# --- skill-nudge (specs/prS-skills-context.md 8.5.3) -----------------------------------------
+
+
+def test_skill_nudge_loads_nothing_forbidden_on_a_python_edit(
+    tmp_path: Path, real_proc: SubprocessProc
+) -> None:
+    """Its glob table is in ``guard_config.json``: naming the skill needs no catalog, no TOML."""
+    repo = GuardRepo.create(tmp_path)
+    (repo.root / "src").mkdir()
+    (repo.root / "src" / "app.py").write_text("x = 1\n", encoding="utf-8")
+    skills = [{"id": "python-coding", "globs": ["**/*.py"]}]
+    nudge = hook_record(
+        "skill-nudge",
+        events=["post_tool_use"],
+        decisions=("context", "none"),
+        on_error="open",
+        priority=30,
+        matcher={"post_tool_use": {"tools": ["edit", "write"]}},
+        handler={"kind": "builtin", "name": "skill_nudge", "config": {"skills": skills}},
+    )
+    repo.install(nudge)
+    _imports(real_proc, repo, EventName.SESSION_START, repo.payload(EventName.SESSION_START))
+    payload = _post_edit(repo, "src/app.py")
+
+    imported, stdout = _dispatch(real_proc, repo, EventName.POST_TOOL_USE, payload)
+
+    assert "Conventions for this file: skill python-coding." in stdout  # the nudge ran
+    assert _forbidden(imported) == []
+    assert "subprocess" not in imported
 
 
 _SECRET_POLICY: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._secret_policy")

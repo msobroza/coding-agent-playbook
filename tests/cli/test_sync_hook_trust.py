@@ -214,6 +214,7 @@ def test_handler_approval_mirrors_the_runtime_record(repo: Path, tmp_path: Path)
         "error-handling-lint-feedback",
         "typing-lint-feedback",
         "toolchain-missing-hint",
+        "skill-nudge",
         "secrets-path-guard",
         "secret-content-guard",
         "destructive-command-guard",
