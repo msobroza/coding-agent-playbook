@@ -38,6 +38,9 @@ from coding_agent_playbook._hook_schema import HookSchemaError as HookSchemaErro
 from coding_agent_playbook._hook_schema import HookTier as HookTier
 from coding_agent_playbook._hook_schema import ToolClass as ToolClass
 
+# Imported at run time: Skill.from_dict rebuilds member references from dicts.
+from coding_agent_playbook._member_reference import MemberReference
+
 _FENCE = "---"
 
 
@@ -86,13 +89,18 @@ class RuleFrontmatter:
     # §A.7): ``{warn: [...], when: [{applies_if, warn}]}``, resolved at sync.
     # ``_without_empty`` drops it when ``{}``, so unlinked rules stay byte-identical.
     lint_codes: dict[str, Any] = field(default_factory=dict)
+    # The skill whose references deliver this rule (ADR 0001). Required for a
+    # scoped rule, forbidden for an always rule; ``_without_empty`` drops None,
+    # so a rule without it keeps byte-identical markdown.
+    skill: str | None = None
 
     def __post_init__(self) -> None:
         # YAML parses 'key:' (blank value) as None; the dataclass default does
         # not fire for an explicit None argument. Coerce so the declared field
         # types hold and markdown round-trip stays lossless (SPEC §6.6.3).
         # This also normalises None passed from Python code: callers should
-        # pass {} or [] for "empty/always", never None.
+        # pass {} or [] for "empty/always", never None. A blank ``skill:`` stays
+        # None, which reads as absent.
         if self.version is None:
             self.version = 1
         if self.globs is None:
@@ -239,13 +247,16 @@ class Skill:
     """A skill directory (SPEC §6.3): ``SKILL.md`` + optional ``scripts/`` and
     ``references/``. Written natively (Agent Skills layout) by the
     ``claude_code`` / ``opencode`` / ``shared_skills`` adapters through the shared
-    ``SkillWriter``; other adapters degrade it via :meth:`to_prompt`."""
+    ``SkillWriter``; other adapters degrade it via :meth:`to_prompt`.
+    ``member_references`` are the skill's active member rules, rendered (ADR 0001)."""
 
     frontmatter: dict[str, Any]
     body: str
     scripts_dir: Path | None
     references_dir: Path | None
     source_package: str
+    # Set by compose_skills at sync: the active member rules, rendered.
+    member_references: tuple[MemberReference, ...] = ()
 
     def to_prompt(self) -> Prompt:
         """Degrade this Skill to a Prompt.
@@ -283,18 +294,22 @@ class Skill:
             "scripts_dir": None if self.scripts_dir is None else str(self.scripts_dir),
             "references_dir": None if self.references_dir is None else str(self.references_dir),
             "source_package": self.source_package,
+            "member_references": [member.to_dict() for member in self.member_references],
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Skill:
         scripts_dir = data["scripts_dir"]
         references_dir = data["references_dir"]
+        # A dict written before member references existed has no such key.
+        members = data.get("member_references", ())
         return cls(
             dict(data["frontmatter"]),
             data["body"],
             None if scripts_dir is None else Path(scripts_dir),
             None if references_dir is None else Path(references_dir),
             data["source_package"],
+            tuple(MemberReference.from_dict(member) for member in members),
         )
 
 

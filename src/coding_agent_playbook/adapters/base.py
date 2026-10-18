@@ -42,6 +42,14 @@ class Adapter(ABC):
     #: §10.1). Declared on the class, so a since-disabled adapter still counts.
     output_locations: ClassVar[tuple[str, ...]] = ()
 
+    #: Whether this adapter's harness receives scoped rules: through its own rule
+    #: files (continue, agent_harness) or through skill references (claude_code,
+    #: opencode, shared_skills). Only ``agents_md`` sets False: it carries always
+    #: rules only. ``playbook sync`` warns when every enabled adapter sets False
+    #: (``skill_membership.undelivered_member_warning``). True by default, because
+    #: an out-of-tree adapter still receives every rule through ``write_rule``.
+    delivers_member_rules: ClassVar[bool] = True
+
     #: Canonical hook event -> the decisions this adapter renders natively. The
     #: empty default means advisory-only: hooks degrade to text (§C.1.1, §C.5.1).
     #: Built-in hook-capable adapters take their row from ``hook_policy.HOOK_SUPPORT``.
