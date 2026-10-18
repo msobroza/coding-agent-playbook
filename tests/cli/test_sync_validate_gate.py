@@ -169,3 +169,30 @@ def test_sync_runs_validate_once_and_proceeds_when_clean(
     assert rc == 0
     assert len(spy.calls) == 1
     assert (repo / "AGENTS.md").is_file()
+
+
+_MEMBER_OF_MISSING_SKILL_RULE = (
+    "---\nid: python-typing\nname: Typing\ndescription: d\nscope: scoped\n"
+    "skill: python-codng\n---\nBody\n"
+)
+
+
+def test_sync_writes_nothing_on_a_membership_error(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A member rule naming no merged skill (V5) stops the sync before any write."""
+    repo = make_synthetic_repo(tmp_path, rules=[("good", "Good body.\n")])
+    bad = repo / "playbook" / "rules" / "python-typing.md"
+    bad.write_text(_MEMBER_OF_MISSING_SKILL_RULE, encoding="utf-8")
+    before = _tree_snapshot(repo)
+
+    rc = _sync.execute(repo, git=FakeGitClient())
+
+    assert rc == 1
+    assert _tree_snapshot(repo) == before
+    err = capsys.readouterr().err
+    assert (
+        f"FAIL {bad}: skill 'python-codng' does not exist after merging every layer; expected "
+        "one of: none, no skill declares a 'playbook:' block (or enable the overlay that ships it)"
+    ) in err
+    assert _ABORT_LINE in err
