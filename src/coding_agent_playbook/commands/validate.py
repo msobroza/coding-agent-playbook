@@ -2,9 +2,9 @@
 
 Validates:
 
-- ``applies_if`` predicates use only known fact keys (delegates to
-  :func:`coding_agent_playbook.detector.evaluate_predicate` and treats a
-  ``ValueError`` raised for an unknown key as an error).
+- ``applies_if`` predicates use only known fact keys and well-formed values
+  (delegates to :func:`coding_agent_playbook.detector.evaluate_predicate` one key
+  at a time, as hooks do, and treats each ``ValueError`` as an error).
 - Prompts that call ``{{ rule("X") }}`` declare ``X`` in ``includes_rules:``.
 - Every prompt ``output_contract`` entry compiles as a Python regex (fail-closed,
   like ``AnswerMatchesCheck``; specs/prK-hook-pack.md §E.2).
@@ -48,7 +48,7 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.adapters._skill_sources import refused_skill_files
 from coding_agent_playbook.adapters._skill_writer import (
@@ -88,7 +88,7 @@ from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 
 if TYPE_CHECKING:
     import argparse
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from coding_agent_playbook.detector import Facts
     from coding_agent_playbook.evals.task import EvalTask
@@ -107,40 +107,42 @@ def _check_overlays_usable(overlays: Sequence[str]) -> list[ValidationError]:
     ]
 
 
+def _applies_if_errors(
+    path: str, predicate: Mapping[str, Any], facts: Facts, repo_root: Path
+) -> list[ValidationError]:
+    """One error per ``applies_if`` key that ``evaluate_predicate`` rejects, each key alone.
+
+    ``evaluate_predicate`` returns at the first key that does not hold, so a
+    malformed key after it would pass unseen; hook predicates are already
+    checked key by key (hook_policy/contract.py).
+
+    Example: ``_applies_if_errors("r.md", {"package_manager": "pipenv"}, {}, root)``
+    returns one error naming ``'pipenv'`` and the four allowed managers.
+    """
+    errors: list[ValidationError] = []
+    for key, value in predicate.items():
+        try:
+            evaluate_predicate({key: value}, facts, repo_root=repo_root)
+        except ValueError as exc:
+            errors.append(ValidationError(path=path, message=f"applies_if: {exc}"))
+    return errors
+
+
 def _check_applies_if(
     rules: list[Rule], prompts: list[Prompt], facts: Facts, repo_root: Path
 ) -> list[ValidationError]:
-    """Pass each artifact's ``applies_if`` to :func:`evaluate_predicate`; if
-    it raises ``ValueError`` (unknown key) record the error.
-    """
-    errors: list[ValidationError] = []
-    for rule in rules:
-        predicate = rule.frontmatter.applies_if or {}
-        if not predicate:
-            continue
-        try:
-            evaluate_predicate(predicate, facts, repo_root=repo_root)
-        except ValueError as exc:
-            errors.append(
-                ValidationError(
-                    path=str(rule.source_path or rule.frontmatter.id),
-                    message=f"applies_if: {exc}",
-                )
-            )
-    for prompt in prompts:
-        predicate = prompt.frontmatter.applies_if or {}
-        if not predicate:
-            continue
-        try:
-            evaluate_predicate(predicate, facts, repo_root=repo_root)
-        except ValueError as exc:
-            errors.append(
-                ValidationError(
-                    path=str(prompt.source_path or prompt.frontmatter.id),
-                    message=f"applies_if: {exc}",
-                )
-            )
-    return errors
+    """Validate every rule's and prompt's ``applies_if``, key by key."""
+    artifacts: list[Rule | Prompt] = [*rules, *prompts]
+    return [
+        error
+        for artifact in artifacts
+        for error in _applies_if_errors(
+            str(artifact.source_path or artifact.frontmatter.id),
+            artifact.frontmatter.applies_if or {},
+            facts,
+            repo_root,
+        )
+    ]
 
 
 def _check_prompt_rule_calls(prompts: list[Prompt]) -> list[ValidationError]:
