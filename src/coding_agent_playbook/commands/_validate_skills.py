@@ -20,6 +20,11 @@ Every check runs over the merged sets and ignores ``applies_if``, so overlay
 authors and consumers see the same findings whatever the detector facts.
 V11 measures with ``skill_document.worst_case_description``, the bound sync's
 ``compose_description`` holds, so a skill that validates cannot make sync raise.
+
+The user-facing text is documented, not only coded: SPEC §12.6 lists every check
+with a sample line, and MIGRATION.md quotes V1 (:data:`SCOPED_RULE_NEEDS_SKILL_MESSAGE`,
+``{known}`` filled for core) verbatim, which ``tests/unit/test_docs_migration_skills.py``
+pins. Change a message here and update both docs in the same change.
 """
 
 from __future__ import annotations
