@@ -1,9 +1,12 @@
 """How an ``includes_rules`` list becomes prompt text (specs/prS-skills-context.md §7.4.2).
 
-:func:`includes_rules_appendix` builds the ``## Reference rules`` appendix that
-Continue prompts, agent_harness prompt leaves and the eval runner append, with
-every included rule's text inline. ``renderer.render_for`` decides whether a
-prompt gets it (its template placed no ``rule()`` call itself) and calls this.
+:func:`includes_rules_appendix` builds the ``## Reference rules`` appendix, with
+every included rule's text inline, that ``renderer.render_for`` adds to every
+prompt format: Continue prompts, Claude Code commands and OpenCode commands
+(``prompt_continue``, ``prompt_claude_command``, ``prompt_opencode_command``).
+The agent_harness prompt leaf gets it through the Claude command format.
+``render_for`` decides whether a prompt gets it (its template placed no
+``rule()`` call itself) and calls this.
 
 Stdlib only, and ``RuleRegistry`` is imported for type checking only:
 ``renderer`` imports this module, so a runtime import back would be a cycle.

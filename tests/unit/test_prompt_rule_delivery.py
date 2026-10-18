@@ -1,7 +1,8 @@
 """Tests for how ``includes_rules`` becomes prompt text (specs/prS-skills-context.md §7.4.2).
 
-``prompt_rule_delivery`` builds the ``## Reference rules`` appendix that Continue
-prompts, agent_harness prompt leaves and the eval runner append. Two seams:
+``prompt_rule_delivery`` builds the ``## Reference rules`` appendix that
+``renderer.render_for`` adds to every prompt format (Continue, Claude Code and
+OpenCode commands, and the agent_harness prompt leaf through it). Two seams:
 - :func:`includes_rules_appendix` — one ``### <name>`` section per included rule.
 - The module boundary: stdlib-only, with ``RuleRegistry`` imported for type
   checking only, so ``renderer`` can import it without a cycle.
