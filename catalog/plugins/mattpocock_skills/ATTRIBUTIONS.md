@@ -505,19 +505,161 @@ Vendored with listed changes, model-invoked.
 
 ### domain-modeling
 
-_Filled by T02._
+Upstream `skills/engineering/domain-modeling/`; synced as `.agents/skills/domain-modeling/`.
+Layout-only keep with the glossary fallback, model-invoked.
+
+- `SKILL.md` L2 (v1.3.1): `id: domain-modeling` inserted as the first
+  frontmatter key, before "name: domain-modeling" (Frontmatter).
+- `SKILL.md` L3 (v1.3.1): the description gains " (or CONTEXT.md if the repo
+  already has one)" after "GLOSSARY.md", growing from 151 to 195 characters
+  (D21). This changes a value the Frontmatter rule otherwise keeps verbatim:
+  D21 covers every file that names `GLOSSARY.md`, and the description is what
+  makes the skill discoverable in a repo that already uses `CONTEXT.md`.
+- `SKILL.md` L8 (v1.3.1): " (or `CONTEXT.md` if the repo already has one)"
+  inserted after the code span `GLOSSARY.md`; nothing else on the line changes
+  (D21).
+- `SKILL.md` L24 (v1.3.1): " (or `CONTEXT-MAP.md` if the repo already has one)"
+  inserted after the code span `GLOSSARY-MAP.md` (D21).
+- `SKILL.md` L40 (v1.3.1): the `CONTEXT.md` clause inserted after the code span
+  in "If no `GLOSSARY.md` exists" (D21).
+- `SKILL.md` L46 (v1.3.1): the `CONTEXT.md` clause inserted after the code span
+  in "the existing language in `GLOSSARY.md`" (D21).
+- `SKILL.md` L62 (v1.3.1): the `CONTEXT.md` clause inserted after the code span
+  in "update `GLOSSARY.md` right there" (D21), and the link
+  "[GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md)" now targets
+  `references/GLOSSARY-FORMAT.md` (Restructure). The link text stays, because it
+  is not a code-formatted path.
+- `SKILL.md` L64 (v1.3.1): the `CONTEXT.md` clause inserted after the first code
+  span in "`GLOSSARY.md` should be totally devoid of implementation details"
+  (D21).
+- `SKILL.md` L74 (v1.3.1): the link "[ADR-FORMAT.md](./ADR-FORMAT.md)" now
+  targets `references/ADR-FORMAT.md`, link text kept (Restructure).
+- `references/GLOSSARY-FORMAT.md`: moved from the skill root (Restructure); its
+  only content changes are the four insertions below.
+- `references/GLOSSARY-FORMAT.md` L34 (v1.3.1): the `CONTEXT.md` clause inserted
+  after the code span in "One `GLOSSARY.md` at the repo root" (D21).
+- `references/GLOSSARY-FORMAT.md` L36 (v1.3.1): the `CONTEXT-MAP.md` clause
+  inserted after the code span in "A `GLOSSARY-MAP.md` at the repo root lists the
+  contexts" (D21).
+- `references/GLOSSARY-FORMAT.md` L56 (v1.3.1): the `CONTEXT-MAP.md` clause
+  inserted after the code span in "If `GLOSSARY-MAP.md` exists" (D21).
+- `references/GLOSSARY-FORMAT.md` L57 (v1.3.1): the `CONTEXT.md` clause inserted
+  after the code span in "If only a root `GLOSSARY.md` exists" (D21).
+- `references/ADR-FORMAT.md`: moved from the skill root, byte for byte
+  (Restructure). It names no glossary file and has no links.
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies).
+- `agents/openai.yaml`: not shipped (Restructure). It held Codex interface
+  metadata and no invocation policy.
+- Unchanged on purpose in `SKILL.md`: the mentions inside the fenced trees (L16,
+  L28, L33, L36); the heading "### Update GLOSSARY.md inline" (L60), because L62
+  directly under it carries the fallback; and the second mention in L64, "Do not
+  treat `GLOSSARY.md` as a spec", because the first mention in the same pair of
+  sentences carries it. In `references/GLOSSARY-FORMAT.md`: the L1 heading; the
+  fenced example at L38-L52, whose `./src/<context>/GLOSSARY.md` links sit inside
+  the fence, so the link check masks them and they need no rewrite after the
+  move; and L58 "If neither exists, create a root `GLOSSARY.md` lazily when the
+  first term is resolved", because after L56-L57 "neither" already covers both
+  names and the file created is still named `GLOSSARY.md`. The examples
+  (Postgres, AWS, GraphQL and REST, an ORM, a `src/` tree) are illustrations,
+  not a stack assumption (D27).
+- For the global sections: "Restructure" says each moved file keeps its content
+  unchanged, but `references/GLOSSARY-FORMAT.md` is moved with the four D21
+  insertions above. That sentence should add "except the changes listed in the
+  skill's own section".
+- Continue: `.continue/prompts/domain-modeling.md` is the user-run
+  `/domain-modeling` prompt. `references/` is not carried, so the two format
+  links (L62 and L74) dangle and the glossary and ADR formats are lost. The
+  description no longer triggers the skill from the model, grill-with-docs
+  cannot load it, and no licence copy travels.
 
 ### grill-me
 
-_Filled by T02._
+Upstream `skills/productivity/grill-me/`; synced as `.agents/skills/grill-me/`.
+Vendored with listed changes, user-invoked.
+
+- `SKILL.md` L2 (v1.3.1): `id: grill-me` inserted as the first frontmatter key,
+  before "name: grill-me" (Frontmatter).
+- `SKILL.md` L6 (v1.3.1): after upstream's blank line that closes the
+  frontmatter, the guard line "Run this only when the user asked for it by name;
+  otherwise stop." inserted as the first line of body content, followed by one
+  blank line (D19).
+- `SKILL.md` L7 (v1.3.1): "Call the Skill tool with "grilling"." becomes "Load
+  the `grilling` skill." The Claude-only tool name goes; the target is
+  model-invoked and keeps its id (Cross-skill references, D17).
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies).
+- `agents/openai.yaml`: not shipped (Restructure). It carried
+  `policy.allow_implicit_invocation: false`, the Codex half of upstream's
+  user-only invocation (upstream `.agents/invocation.md` L10). Without it Codex,
+  which reads the shared skill root `.agents/skills/`, no longer keeps the model
+  from invoking this skill, and the guard line is the only guard left outside
+  Claude Code, which honours `disable-model-invocation` (D10, D19).
+- Continue: `.continue/prompts/grill-me.md` is the user-run `/grill-me` prompt.
+  Its only instruction, "Load the `grilling` skill.", cannot fire there, because
+  grilling is only a prompt, so the user runs `/grilling` directly. No licence
+  copy travels.
 
 ### grill-with-docs
 
-_Filled by T02._
+Upstream `skills/engineering/grill-with-docs/`; synced as `.agents/skills/grill-with-docs/`.
+Vendored with listed changes, user-invoked.
+
+- `SKILL.md` L2 (v1.3.1): `id: grill-with-docs` inserted as the first
+  frontmatter key, before "name: grill-with-docs" (Frontmatter).
+- `SKILL.md` L6 (v1.3.1): after upstream's blank line that closes the
+  frontmatter, the guard line "Run this only when the user asked for it by name;
+  otherwise stop." inserted as the first line of body content, followed by one
+  blank line (D19).
+- `SKILL.md` L7 (v1.3.1): "Call the Skill tool twice, for "grilling" and
+  "domain-modeling"." becomes "Load the `grilling` skill, and load the
+  `domain-modeling` skill." These are two separate loads with no order implied:
+  upstream explains "twice" only as one skill per call. The Claude-only tool
+  name goes, and both targets are model-invoked, ship in this plugin and keep
+  their ids (Cross-skill references, D17, D18.1).
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies).
+- `agents/openai.yaml`: not shipped (Restructure). It carried
+  `policy.allow_implicit_invocation: false`, the Codex half of upstream's
+  user-only invocation (upstream `.agents/invocation.md` L10). Without it Codex,
+  which reads the shared skill root `.agents/skills/`, no longer keeps the model
+  from invoking this skill, and the guard line is the only guard left outside
+  Claude Code, which honours `disable-model-invocation` (D10, D19).
+- Every other byte is upstream's, including "ADR's" in the description.
+- Continue: `.continue/prompts/grill-with-docs.md` is the user-run
+  `/grill-with-docs` prompt. Its body asks for two loads, and Continue gets
+  grilling and domain-modeling only as prompts, so neither load fires and the
+  combined docs-writing interview is lost; the user can run `/grilling` and then
+  `/domain-modeling` instead. `disable-model-invocation` (harmless, since
+  prompts are user-run) and `references/LICENSE` are dropped.
 
 ### grilling
 
-_Filled by T02._
+Upstream `skills/productivity/grilling/`; synced as `.agents/skills/grilling/`.
+Vendored with listed changes, model-invoked.
+
+- `SKILL.md` L2 (v1.3.1): `id: grilling` inserted as the first frontmatter key,
+  before "name: grilling" (Frontmatter).
+- `SKILL.md` L26 (v1.3.1): fact-finding is delegated only to a background agent,
+  with an inline fallback, and "Don't block on it" applies only to that path
+  (Harness built-ins reworded, D17, D18.2). Three edits on the line:
+  "dispatch a sub-agent to find it; don't ask the user" becomes "dispatch a
+  background agent to find it if your harness can run one; otherwise look the
+  fact up yourself before you send the round. Don't ask the user"; "Don't block
+  on it:" becomes "If you dispatched a background agent, don't block on it:";
+  and "wait for the sub-agent to report" becomes "wait for the background agent
+  to report".
+- `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
+  (License copies).
+- `agents/openai.yaml`: not shipped (Restructure). It held Codex interface
+  metadata and no invocation policy.
+- Every other byte is upstream's, including the emoji round template in the
+  fence at L12-L22 and "still open in this round" at L24.
+- Continue: `.continue/prompts/grilling.md` is the user-run `/grilling` prompt.
+  The 'grill' trigger phrases no longer reach it from the model, and the loads in
+  grill-me, grill-with-docs and the other skills that name it cannot reach it.
+  The body is complete without references, and its inline lookup fallback covers
+  a session without background agents. No licence copy travels.
 
 ### handoff
 
