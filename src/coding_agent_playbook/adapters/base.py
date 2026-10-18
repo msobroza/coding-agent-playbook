@@ -42,6 +42,13 @@ class Adapter(ABC):
     #: §10.1). Declared on the class, so a since-disabled adapter still counts.
     output_locations: ClassVar[tuple[str, ...]] = ()
 
+    #: Locations an earlier engine release wrote for this adapter and it no longer
+    #: writes. They bound the leftover policy exactly like :attr:`output_locations`
+    #: (deletion allowlist and prune boundary), so the first sync after an upgrade
+    #: settles the old tree; they are not current output, so guard_config.json's
+    #: ``generated`` path class never lists them.
+    retired_output_locations: ClassVar[tuple[str, ...]] = ()
+
     #: Whether this adapter's harness receives scoped rules: through its own rule
     #: files (continue, agent_harness) or through skill references (claude_code,
     #: opencode, shared_skills). Only ``agents_md`` sets False: it carries always

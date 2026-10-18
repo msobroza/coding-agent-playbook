@@ -25,7 +25,8 @@ import importlib
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.catalog import (
     ENGINE_PACKAGE,
@@ -38,7 +39,7 @@ from coding_agent_playbook.catalog import (
 from coding_agent_playbook.catalog import bundled_plugins as bundled_plugins
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
     from types import ModuleType
 
 _HOOK_VENV_HINT = (
@@ -54,6 +55,13 @@ _PLUGIN_NAMESPACE_REASON = "the bundled plugin namespace, not a plugin"
 
 #: How close a name's last segment must be to a bundled plugin's to earn the hint.
 _PLUGIN_NAME_SIMILARITY = 0.75
+
+#: Names that are a harness, not an adapter, with where that harness's output comes
+#: from. ``playbook init`` offered ``codex`` before SPEC v0.21; listed, it makes every
+#: sync keep all leftovers (``keep_all``), so the warning names the fix.
+_NOT_ADAPTERS: Final[Mapping[str, str]] = MappingProxyType(
+    {"codex": "Codex reads AGENTS.md and .agents/skills/ (the shared_skills adapter)"}
+)
 
 
 @dataclass(frozen=True)
@@ -124,12 +132,35 @@ def report_unusable_overlays(problems: Sequence[UnusableOverlay]) -> None:
 
 
 def warn_missing_adapters(names: Sequence[str]) -> None:
-    """Warn on stderr that enabled adapters were skipped (their old output is kept)."""
+    """Warn on stderr that enabled adapters were skipped (their old output is kept).
+
+    A name no adapter provides by design (``codex``) gets a one-line fix hint.
+
+    Example::
+
+        >>> warn_missing_adapters(["codex"])  # doctest: +SKIP
+    """
     print(
         f"warning: enabled adapter(s) not installed, skipped: {', '.join(names)}.\n"
         "Their previously generated output is kept (and stays gitignored) until they are\n"
-        f"installed or removed from adapters_enabled.\n{_HOOK_VENV_HINT}",
+        f"installed or removed from adapters_enabled.\n{_not_adapter_hints(names)}"
+        f"{_HOOK_VENV_HINT}",
         file=sys.stderr,
+    )
+
+
+def _not_adapter_hints(names: Sequence[str]) -> str:
+    """One line per name in ``names`` that no adapter provides by design.
+
+    Example::
+
+        >>> _not_adapter_hints(["codex", "custom"]).count("\\n")
+        1
+    """
+    return "".join(
+        f"'{name}' is not an adapter: {_NOT_ADAPTERS[name]}; remove it from adapters_enabled.\n"
+        for name in names
+        if name in _NOT_ADAPTERS
     )
 
 

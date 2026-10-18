@@ -38,7 +38,11 @@ from coding_agent_playbook.types import split_frontmatter
 from tests._catalog import plugin_root
 from tests.conftest import apply_hermetic_git_env
 from tests.fakes import FakeGitClient
-from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS, SYNCED_SKILL_ENTRIES
+from tests.plugins.superpowers_expectations import (
+    NATIVE_SKILL_ROOTS,
+    SKILL_ADAPTERS,
+    SYNCED_SKILL_ENTRIES,
+)
 
 pytestmark = pytest.mark.catalog
 
@@ -70,6 +74,11 @@ _SENTINEL_BODY_PREFIX = f"<!-- {SENTINEL} -->\n\n"
 def _relative_files(root: Path) -> list[str]:
     """Every file under ``root`` (POSIX, sorted), bytecode caches included."""
     return sorted(p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file())
+
+
+def _tree_bytes(root: Path) -> dict[str, bytes]:
+    """Every file under ``root`` (POSIX path) with its bytes."""
+    return {rel: (root / rel).read_bytes() for rel in _relative_files(root)}
 
 
 def _is_bytecode_cache(rel: str) -> bool:
@@ -252,12 +261,16 @@ def _init_probe(repo: Path, *, overlays: str | None, adapters: str | None = None
 
 @pytest.fixture(scope="module")
 def opted_in_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """One probe consumer repo, opted in with the default adapters, shared read-only."""
+    """One probe consumer repo, opted in with every skill adapter, shared read-only.
+
+    ``continue`` is opt-in at init since v0.21; it is listed so the degraded
+    Continue prompts stay covered.
+    """
     repo = tmp_path_factory.mktemp("python-design-consumer")
     with pytest.MonkeyPatch.context() as patch:
         config_home = tmp_path_factory.mktemp("xdg-config")
         apply_hermetic_git_env(patch, ceiling=repo.parent, config_home=config_home)
-        return _init_probe(repo, overlays=PLUGIN_NAME)
+        return _init_probe(repo, overlays=PLUGIN_NAME, adapters=",".join(SKILL_ADAPTERS))
 
 
 def test_init_writes_the_top_level_overlay_key(opted_in_repo: Path) -> None:
@@ -290,6 +303,17 @@ def test_sync_copies_scripts_and_references_byte_for_byte(
             assert (synced / rel).read_bytes() == (source / rel).read_bytes(), rel
             if subdir == "scripts" and rel.endswith(".py") and os.name != "nt":
                 assert os.access(synced / rel, os.X_OK), f"{root}/{skill_id}/scripts/{rel}"
+
+
+@pytest.mark.parametrize("skill_id", sorted(EXPECTED_SKILL_IDS))
+def test_every_skill_root_holds_the_same_bytes_and_shared_skills_is_unused(
+    opted_in_repo: Path, skill_id: str
+) -> None:
+    """D10: ``.agents/skills/<id>/`` equals the other roots; the pre-v0.21 root is gone."""
+    trees = [_tree_bytes(opted_in_repo / root / skill_id) for root in NATIVE_SKILL_ROOTS]
+    assert trees[0]
+    assert all(tree == trees[0] for tree in trees[1:])
+    assert not (opted_in_repo / "shared_skills").exists()
 
 
 @pytest.mark.parametrize("skill_id", sorted(EXPECTED_SKILL_IDS))
@@ -373,4 +397,4 @@ def test_skills_land_only_in_the_roots_of_enabled_adapters(tmp_path: Path) -> No
     for skill_id in sorted(EXPECTED_SKILL_IDS):
         assert (repo / ".claude" / "skills" / skill_id / "SKILL.md").is_file()
         assert not (repo / ".opencode" / "skills" / skill_id).exists()
-        assert not (repo / "shared_skills" / skill_id).exists()
+        assert not (repo / ".agents" / "skills" / skill_id).exists()

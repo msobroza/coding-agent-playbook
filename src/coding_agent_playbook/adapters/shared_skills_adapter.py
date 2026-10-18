@@ -1,9 +1,15 @@
 """Shared-skills adapter. See SPEC.md §10.8.
 
-Emits every canonical skill as a native Agent-Skills directory under
-``<repo>/shared_skills/<id>/`` — the **cross-agent skills hub**: one
-agent-neutral, committed copy of the skills that any Agent-Skills-aware tool
-(or a human) can be pointed at, independent of which harness adapters are on.
+Emits every canonical skill as a native Agent-Skills directory under the
+**shared skill root** ``<repo>/.agents/skills/<id>/``. Codex reads it natively
+(``.agents/skills`` in every directory from the project root to cwd), and
+OpenCode v1/v2 scans it as a compatibility root. Claude Code and Continue do
+not read it: they read ``.claude/skills/``.
+
+Engines before SPEC v0.21 wrote this adapter's skills to ``shared_skills/``,
+which no harness reads. That tree is declared as a *retired* output location,
+so the first sync after an upgrade settles it by the leftover policy (SPEC §4.2
+step 9): pristine copies are deleted, edited or tracked ones kept and reported.
 
 Rules and prompts are no-ops here: rules reach every assistant through
 ``AGENTS.md`` and prompts through the harness adapters. The skill bytes come
@@ -26,12 +32,15 @@ from coding_agent_playbook.adapters.base import Adapter
 if TYPE_CHECKING:
     from coding_agent_playbook._typing import Prompt, Rule, Skill
 
-#: Repo-relative root of the cross-agent skills hub.
-SHARED_SKILLS_ROOT = Path("shared_skills")
+#: Repo-relative shared skill root; Codex and OpenCode read ``.agents/skills/`` natively.
+SHARED_SKILLS_ROOT = Path(".agents") / "skills"
+#: Where engines before SPEC v0.21 wrote this adapter's skills. Declared as a retired
+#: location so the next sync settles that tree by the leftover policy (SPEC §4.2 step 9).
+RETIRED_SHARED_SKILLS_LOCATION = "shared_skills/"
 
 
 class SharedSkillsAdapter(Adapter):
-    """Write canonical skills to ``shared_skills/<id>/``; ignore rules and prompts.
+    """Write canonical skills to ``.agents/skills/<id>/``; ignore rules and prompts.
 
     Registered under ``coding_agent_playbook.adapters`` as ``shared_skills``.
     Takes no ``rule_registry`` (it renders no prompts), so
@@ -41,7 +50,7 @@ class SharedSkillsAdapter(Adapter):
     Example::
 
         adapter = SharedSkillsAdapter()
-        adapter.write_skill(skill, repo_root)  # -> [repo_root/"shared_skills"/<id>/"SKILL.md", ...]
+        adapter.write_skill(skill, repo_root)  # -> [repo_root/".agents"/"skills"/<id>/"SKILL.md", ...]
     """
 
     name = "shared_skills"
@@ -49,6 +58,7 @@ class SharedSkillsAdapter(Adapter):
     _SKILL_WRITER: ClassVar[SkillWriter] = SkillWriter(SHARED_SKILLS_ROOT)
 
     output_locations: ClassVar[tuple[str, ...]] = (_SKILL_WRITER.location,)
+    retired_output_locations: ClassVar[tuple[str, ...]] = (RETIRED_SHARED_SKILLS_LOCATION,)
 
     def write_rule(self, rule: Rule, repo_root: Path) -> list[Path]:
         """Return ``[]`` — rules reach every assistant through ``AGENTS.md``."""
@@ -61,7 +71,7 @@ class SharedSkillsAdapter(Adapter):
         return []
 
     def write_skill(self, skill: Skill, repo_root: Path) -> list[Path]:
-        """Write ``shared_skills/<id>/`` via the shared :class:`SkillWriter`.
+        """Write ``.agents/skills/<id>/`` via the shared :class:`SkillWriter`.
 
         No ``cleanup_stale`` override (the ABC default scans nothing): a removed
         skill's dir is settled by ``playbook sync``'s lockfile leftover policy.
