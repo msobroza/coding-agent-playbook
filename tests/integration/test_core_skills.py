@@ -241,6 +241,9 @@ def test_reference_probe_emits_each_core_skill_within_budget(
     description = str(frontmatter["description"])
     assert len(description) <= 300, f"{skill_id}: {len(description)} chars"
     assert description.startswith(str(authored["description"]))
+    # The generated clause follows the authored sentence: "<sentence> Covers <names>."
+    assert description.startswith(f"{authored['description']} Covers "), description
+    assert description.count(" Covers ") == 1, description
     assert description.endswith(f"Use when {block['use_when']}.")
     assert description.count(" Use when ") == 1
     assert not _TRUNCATION_TAIL.search(description), f"{skill_id} truncates: {description!r}"

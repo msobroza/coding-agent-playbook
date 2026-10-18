@@ -440,9 +440,11 @@ its topic (`skill:` in its frontmatter):
 Sync renders each rule that applies as `<skills root>/<skill>/references/<rule-id>.md`
 and appends a `## References` index to the skill's `SKILL.md`, one line per
 rule with its description. The skill's description gains a generated "Covers
-..." clause naming those rules, so it stays within 300 characters
-(`Library-agnostic Python conventions. Covers Dependency injection, Pure core,
-... Use when writing, changing or reviewing Python code.`). `AGENTS.md` and
+..." clause naming those rules (`Library-agnostic Python conventions. Covers
+Dependency injection, Pure core, ... Use when writing, changing or reviewing
+Python code.`). The engine keeps it within 300 characters by listing the
+highest-priority rules and ending with "and N more" when not all names fit.
+`AGENTS.md` and
 `.claude/rules/coding-agent-playbook.md` then carry only the always rules and a
 generated `## Where guidance lives` map from file kinds to these skills; the map
 is left out when no enabled adapter writes a skills root.
