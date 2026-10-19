@@ -25,18 +25,18 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.evals.checks.files import (
+    FileContainsCheck,
+    FileExistsCheck,
+    FileForbiddenCheck,
+    FileUnchangedCheck,
+)
 from coding_agent_playbook.evaluators.check import (
     MeasurementSet,
     NonRegressionCheck,
     ThresholdCheck,
 )
 from coding_agent_playbook.evaluators.checks.execution import CoverageCheck
-from coding_agent_playbook.evaluators.checks.files import (
-    FileContainsCheck,
-    FileExistsCheck,
-    FileForbiddenCheck,
-    FileUnchangedCheck,
-)
 from coding_agent_playbook.evaluators.metric import Metric
 from coding_agent_playbook.evaluators.normalizer import PercentNormalizer, RampNormalizer
 from coding_agent_playbook.evaluators.scope import CostTier, Determinism, Scope

@@ -7,7 +7,7 @@ out-of-tree package ships and a task references by name: the handle builder
 (:mod:`coding_agent_playbook.evals.compile._handles`) resolves a gate-layer
 ``[gate.bind] <handle> = { ref = "<name>" }`` through :func:`get_gate`. This
 module is to a
-composed gate what :mod:`coding_agent_playbook.evaluators.rubrics` is to a named
+composed gate what :mod:`coding_agent_playbook.evals.compile.rubric_registry` is to a named
 rubric: a verbatim mirror of that registry idiom.
 
 :func:`register_gate` is a decorator **factory** keyed on an explicit ``name``
@@ -62,7 +62,7 @@ def _load_gate_entry_points() -> dict[str, Callable[..., Check]]:
 
     In-tree registrations take precedence: an entry point reusing a registered
     name is ignored (mirrors
-    :func:`~coding_agent_playbook.evaluators.rubrics._load_rubric_entry_points`).
+    :func:`~coding_agent_playbook.evals.compile.rubric_registry._load_rubric_entry_points`).
     """
     discovered: dict[str, Callable[..., Check]] = {}
     for ep in metadata.entry_points(group=ENTRY_POINT_GROUP):

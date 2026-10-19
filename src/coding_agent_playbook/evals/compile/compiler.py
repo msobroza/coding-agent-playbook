@@ -56,8 +56,8 @@ from coding_agent_playbook.evaluators.rubric import Rubric
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
+    from coding_agent_playbook.evals.checks.aggregate import AggregateCheck
     from coding_agent_playbook.evaluators.check import Check
-    from coding_agent_playbook.evaluators.checks.aggregate import AggregateCheck
     from coding_agent_playbook.evaluators.types import CheckResult, EvaluationReport
 
 #: The default ``[verdict].trial`` expression: both layers must pass.
@@ -112,7 +112,7 @@ class CompiledTask:
 
     :attr:`aggregate` is the compiled ``[aggregate]`` layer - one composed
     :class:`~coding_agent_playbook.evaluators.check.Check` over the
-    :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
+    :class:`~coding_agent_playbook.evals.checks.aggregate.AggregateCheck`
     handles - or ``None`` when the task authored no ``[aggregate]`` block.
     :attr:`trials_needed` is the number of runner trials the aggregate layer needs
     (``max`` of every aggregate handle's ``k``), defaulting to **1** with no
@@ -246,7 +246,7 @@ def compile_task(
 
     The ``[aggregate]`` layer is compiled the same way as gate/rubric - its bind
     table builds
-    :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
+    :class:`~coding_agent_playbook.evals.checks.aggregate.AggregateCheck`
     handles (via the ``metric``-alone fallback in
     :func:`~coding_agent_playbook.evals.compile._handles._build_one`), and its ``expr``
     composes them - into :attr:`CompiledTask.aggregate` (``None`` when absent).
@@ -358,7 +358,7 @@ def _compile_aggregate(
 
     Returns ``(None, 1, frozenset())`` when ``bind_table`` is absent/empty (no
     aggregate ⇒ the runner runs a single trial). Otherwise builds the
-    :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
+    :class:`~coding_agent_playbook.evals.checks.aggregate.AggregateCheck`
     handle map (the ``metric``-alone fallback in
     :func:`~coding_agent_playbook.evals.compile._handles._build_one`), compiles ``expr``
     over it (defaulting to the sole handle's name for a single-handle layer; a
@@ -391,7 +391,7 @@ def _aggregate_leaves(checks: Iterable[Check]) -> list[AggregateCheck]:
     so a composed aggregate expression (e.g. ``pass_at_k(k=5) and pass_pow_k(k=3)``)
     yields both leaves.
     """
-    from coding_agent_playbook.evaluators.checks.aggregate import AggregateCheck
+    from coding_agent_playbook.evals.checks.aggregate import AggregateCheck
     from coding_agent_playbook.evaluators.checks.compose import AllOf, AnyOf, Not
 
     out: list[AggregateCheck] = []
