@@ -95,6 +95,18 @@ def test_for_config_takes_the_installed_version_when_the_config_pins_none() -> N
     assert context.as_dict()["python_version"] == "3.12"
 
 
+def test_for_config_prefers_the_pinned_engine_version() -> None:
+    """A pinned ``[engine] version`` wins over the installed one (RS-D6 keeps today's order)."""
+    pinned = "9.9.9"
+    assert pinned != coding_agent_playbook.__version__  # else the test cannot tell them apart
+    config = Config(1, ProjectMeta("demo", "python-library"), pinned)
+
+    context = TemplateContext.for_config(config, {})
+
+    assert context.engine_version == pinned
+    assert context.as_dict()["engine_version"] == pinned
+
+
 def test_registry_holds_only_applicable_rules(tmp_path: Path) -> None:
     session = RenderSession.open([_GATED, _OPEN], _CONTEXT, repo_root=tmp_path)
 

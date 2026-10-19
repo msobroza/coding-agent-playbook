@@ -58,7 +58,7 @@ class TemplateContext:
     def for_config(cls, config: Config, facts: Facts) -> TemplateContext:
         """Sync and ``playbook render``: ``[project]``, ``user_choices``, the pinned or installed version.
 
-        Example: ``TemplateContext.for_config(ctx.config, ctx.facts).engine_version`` -> ``"0.1.0a0"``.
+        Example: ``for_config(config, facts).engine_version`` -> the ``[engine] version`` pin, else the installed version.
         """
         return cls(
             facts=facts,
