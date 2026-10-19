@@ -109,6 +109,8 @@ changelog entry is v0.21.
 | A repo with hooks on (the new `skill-nudge` hook) | Nothing: the next `playbook sync` turns it on. To keep it off, add `disable = ["skill-nudge"]` to `[hooks]`. See "Guardrails and lint feedback point at skills". |
 | A repo with hooks on (the new `playbook-guardrails` skill) | Nothing: the next `playbook sync` writes it to `.opencode/skills/` and `.agents/skills/`, and settles it as a leftover once hooks are off. See "Guardrails and lint feedback point at skills". |
 | Any repo with Python code (distilled python-best-practices content) | Nothing but `playbook sync`: `python-coding` gains three references and six change text; with pytest, `python-testing` gains two and `pytest` changes text; `python-tooling` is now written in every Python repo, with up to four new references and a new (or, with FastAPI, reworded) "Where guidance lives" line; and with NumPy, pandas or polars, `ml-data` gains four references and its "Where guidance lives" line is reworded. An overlay or repo-local rule with one of the thirteen new ids now replaces the core rule. See "Distilled python-best-practices content". |
+| Only using engine prompts | Nothing: the next `playbook sync` rewrites every Claude Code and OpenCode command with an `includes_rules` list to open with a `## Before you start` block that names skills instead of carrying rule text; Continue prompts keep the text, now at the end. See "Prompts point at skills". |
+| A repo-local or overlay prompt that calls `{{ rule("<id>") }}` | Delete the call (and any hand-written `## Reference rules` heading around it) and keep the id in `includes_rules`. Until then `playbook validate` fails and `playbook sync` refuses to run. See "Prompts point at skills". |
 
 ### `package_manager` and per-key validation
 
@@ -348,7 +350,7 @@ move it to `playbook/skills/python-coding/` to override the core skill (keep its
 ### Not changed (skill references)
 
 Rule ids and file names in `catalog/`, `lint_codes`, `linked_rule` hooks,
-prompt rendering (`includes_rules` still inlines rule bodies), the lockfile
+prompt rendering (until "Prompts point at skills" below), the lockfile
 schema and Claude Code's `.claude/CLAUDE.md` stub.
 
 ### Guardrails and lint feedback point at skills
@@ -492,6 +494,100 @@ ideas are written fresh in the catalog's own words. There is nothing to do but
   without FastAPI and reworded in one with it, and in their reworded `ml-data`
   line. `playbook sync --check` reports drift until the repo re-syncs, as for
   any content upgrade.
+
+### Prompts point at skills
+
+`includes_rules` is now the only way a prompt declares the rules it needs, and
+each harness gets them its own way. Claude Code and OpenCode commands carry no
+rule text: a command whose `includes_rules` lists an active scoped rule opens
+with a generated `## Before you start` block, before its first `##` section,
+naming the skill and the reference to read, for example in
+`.claude/commands/review.md`:
+
+```markdown
+## Before you start
+
+1. Load skill `python-coding` and read its references `references/python-typing.md`, `references/python-error-handling.md`.
+2. For each file in scope, also load any other listed skill whose description matches it.
+```
+
+| Consumer | Before | After |
+|---|---|---|
+| Claude Code `.claude/commands/<slash>.md` | rule bodies: in place for `review`, `generate-tests` and `security-review`, else a `## Reference rules` appendix | the `## Before you start` block; no rule body |
+| OpenCode `.opencode/command/<slash>.md` | as Claude Code | the same block, after the `description:` envelope |
+| Continue `.continue/prompts/<slash>.md` | as Claude Code | a `## Reference rules` appendix at the end, each included rule once |
+| agent_harness `prompts/<slash>/SKILL.md` | the Claude Code command text | the appendix at the end (byte-identical for a prompt that never called `rule()`) |
+| `playbook eval` | the body with the three prompts' `rule()` expansions, never an appendix | the body plus the appendix, the text Continue gets |
+
+An always rule, a rule whose `applies_if` is false and an unknown id get no
+line, and a prompt with no active reference gets no block at all: `/explain`
+and `/find-injected-vulnerability` render byte-identically. For `review` on
+Continue the rules now follow `## Output format` instead of preceding it.
+
+The `{{ rule() }}` Jinja helper is gone from every template. A repo-local or
+overlay prompt that still calls it fails `playbook validate`, and so
+`playbook sync` writes nothing, with the message below; the pre-commit
+`playbook sync --check-staged` (not otherwise validate-gated) refuses the
+commit with it too:
+
+    <path>: body calls {{ rule("python-typing") }}; prompts no longer inline rules. Remove the call and keep 'python-typing' in includes_rules: Claude Code and OpenCode commands then point at its skill, Continue appends its text
+
+Before:
+
+```markdown
+---
+id: tidy
+name: Tidy
+description: Tidy a module
+slash: tidy
+includes_rules:
+  - python-typing
+---
+Tidy the module without changing behaviour.
+
+## Reference rules
+
+{{ rule("python-typing") }}
+```
+
+After (the file may now be plain `.md` when nothing else in it needs Jinja):
+
+```markdown
+---
+id: tidy
+name: Tidy
+description: Tidy a module
+slash: tidy
+includes_rules:
+  - python-typing
+---
+Tidy the module without changing behaviour.
+```
+
+Two more validate errors guard the list, since a typo there would now drop
+guidance silently: `includes_rules` must be a list of rule ids (a bare
+`includes_rules: python-typing` used to be read letter by letter), and every id
+must name a rule in core, an enabled overlay or `playbook/rules/`, with a
+did-you-mean. A rule that `applies_if` filters out in your repo is still a
+valid id. `playbook render <prompt> --show-rules` now names each rule's
+delivery (`-> skill python-coding, references/python-typing.md`, `-> always
+loaded`, `OMITTED`, `UNKNOWN`).
+
+No file is added or removed, so there are no orphans. The next sync rewrites
+every `.claude/commands/*.md` and `.opencode/command/*.md` of a prompt with
+`includes_rules`, the three Continue prompts and agent_harness leaves of
+`review`, `generate-tests` and `security-review`, and their lockfile hashes;
+`playbook sync --check` reports drift until then. Eval scores taken before this
+release are not directly comparable: the runner now appends the rules to every
+task whose prompt lists them. On OpenCode, `/review` and `/security-review` run
+as the read-only `plan` agent; that this agent may load a skill is not yet
+verified on OpenCode v1.19.3 and v2.0.32 (SPEC §10.6.1).
+
+Python API, for overlay code that calls the renderer: `build_environment` takes
+only the template search paths (`is_prompt_context` and `rule_registry` are
+gone), `render_for` takes `skill_references` and no longer `template_body`, and
+`renderer.appendix_rule_ids` and `harness.emitter.strip_leading_sentinel` are
+removed.
 
 ## v0.20 — Assistant lifecycle hooks (PR K)
 
@@ -997,9 +1093,9 @@ The `Source:` line of `playbook eval --show` is built from the task's layer:
 repo-local task under `playbook/eval_tasks/` now finds its prompt in
 `playbook/prompts/` (it never found one before).
 
-Caveat: when `playbook eval` renders a repo-local prompt, its
-`{{ rule("<id>") }}` includes resolve only the engine's rules and the task's own
-`setup/playbook/rules/`. A repo-local prompt that includes a rule from your
+Caveat: when `playbook eval` renders a repo-local prompt, the rules of its
+`includes_rules` appendix (v0.21; before, its `{{ rule("<id>") }}` includes)
+resolve only the engine's rules and the task's own `setup/playbook/rules/`. A repo-local prompt that includes a rule from your
 `playbook/rules/` or from an overlay renders that rule as empty text during
 `playbook eval`, while `playbook sync` writes the full body. Widening that scope
 is a follow-up.

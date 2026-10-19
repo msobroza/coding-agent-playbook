@@ -15,13 +15,14 @@ from packaging.requirements import Requirement
 from packaging.version import Version
 
 from coding_agent_playbook._sentinel import has_sentinel
+from coding_agent_playbook.prompt_rule_delivery import SkillReference
 from coding_agent_playbook.renderer import (
     SENTINEL,
     TemplateSecurityError,
-    appendix_rule_ids,
     build_environment,
     render_artifact_body,
     render_for,
+    render_inline_prompt_markdown,
     render_sandboxed,
     render_string,
     with_sentinel_body,
@@ -104,21 +105,14 @@ def test_has_ml_dep_helper_does_not_read_frameworks(tmp_path: Path) -> None:
     assert render_string(template, {}, env=env) == ""
 
 
-def test_rule_helper_registered_in_prompt_env(tmp_path: Path) -> None:
-    registry = StubRuleRegistry({"foo": "### Foo\n\nbody of foo\n"})
-    env = build_environment([tmp_path], is_prompt_context=True, rule_registry=registry)
-    assert render_string('{{ rule("foo") }}', {}, env=env) == "### Foo\n\nbody of foo\n"
-
-
-def test_rule_helper_not_registered_in_rule_env(tmp_path: Path) -> None:
-    env = build_environment([tmp_path])
-    with pytest.raises(UndefinedError):
+@pytest.mark.parametrize("search_dirs", [[], ["prompts"]], ids=["bare", "loader"])
+def test_rule_helper_is_undefined_in_every_environment(
+    tmp_path: Path, search_dirs: list[str]
+) -> None:
+    """Regression (D15): ``rule()`` is gone, so a rule, prompt or hook body calling it fails."""
+    env = build_environment([tmp_path / name for name in search_dirs])
+    with pytest.raises(UndefinedError, match="'rule' is undefined"):
         render_string('{{ rule("foo") }}', {}, env=env)
-
-
-def test_rule_helper_requires_registry_in_prompt_env(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="rule_registry"):
-        build_environment([tmp_path], is_prompt_context=True)
 
 
 # --- Task B.4 step 1: continue_rule + alias resolution + unknown-format ----
@@ -320,30 +314,6 @@ def test_render_for_prompt_continue_with_includes_rules_appendix(tmp_path: Path)
     assert SENTINEL in out
 
 
-def test_render_for_prompt_continue_no_appendix_when_inline_rule_call(
-    tmp_path: Path,
-) -> None:
-    frontmatter = {
-        "id": "review-code",
-        "name": "Review code",
-        "description": "Review a diff for safety.",
-        "slash": "/review",
-        "includes_rules": ["x"],
-    }
-    # Body already references the rule inline — author placed it themselves.
-    body = 'Read this rule: {{ rule("x") }}\nThen review.\n'
-    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
-    out = render_for(
-        tmp_path / "prompts" / "review-code.md",
-        body,
-        "prompt_continue",
-        frontmatter=frontmatter,
-        rule_registry=registry,
-    )
-    assert "## Reference rules" not in out
-    assert "Then review." in out
-
-
 def test_render_for_prompt_opencode_command_single_arg_substitution(
     tmp_path: Path,
 ) -> None:
@@ -408,6 +378,119 @@ def test_render_for_prompt_claude_command_emits_title_and_body(tmp_path: Path) -
     )
     assert "# Review" in out
     assert "Step 1: read the diff." in out
+
+
+# --- D15: Claude Code and OpenCode commands point at skills -----------------
+
+
+class FakeSkillReferenceIndex:
+    """In-memory ``SkillReferenceIndex``: one fixed reference per rule id, ``None`` otherwise."""
+
+    def __init__(self, references: dict[str, SkillReference]) -> None:
+        self._references = references
+
+    def reference_for(self, rule_id: str) -> SkillReference | None:
+        return self._references.get(rule_id)
+
+
+_TYPING_REFERENCE = SkillReference("python-coding", "references/python-typing.md")
+_POINTER_FRONTMATTER = {
+    "name": "Review",
+    "description": "Review a diff.",
+    "includes_rules": ["python-typing"],
+}
+_POINTER_BODY = "# Review\n\nYou are reviewing code.\n\n## Tone\n\nBe kind.\n"
+_POINTER_BLOCK = (
+    "## Before you start\n\n"
+    "1. Load skill `python-coding` and read its reference `references/python-typing.md`.\n"
+    "2. For each file in scope, also load any other listed skill whose description matches it.\n"
+)
+
+
+def _pointer_command(fmt: str, frontmatter: dict[str, Any] = _POINTER_FRONTMATTER) -> str:
+    """The pointer prompt as ``fmt`` renders it, with a registry AND a reference index."""
+    return render_for(
+        Path("review.md"),
+        _POINTER_BODY,
+        fmt,
+        frontmatter=frontmatter,
+        rule_registry=StubRuleRegistry({"python-typing": "### Typing\n\nTYPING BODY\n"}),
+        skill_references=FakeSkillReferenceIndex({"python-typing": _TYPING_REFERENCE}),
+    )
+
+
+def test_render_for_prompt_claude_command_inserts_pointer_block_and_no_rule_body() -> None:
+    out = _pointer_command("prompt_claude_command")
+
+    assert out == (
+        f"<!-- {SENTINEL} -->\n# Review\n\nYou are reviewing code.\n\n"
+        f"{_POINTER_BLOCK}\n## Tone\n\nBe kind.\n"
+    )
+
+
+def test_render_for_prompt_claude_command_read_only_keeps_disallowed_tools_with_block() -> None:
+    out = _pointer_command(
+        "prompt_claude_command", {**_POINTER_FRONTMATTER, "write_scope": {"read_only": True}}
+    )
+
+    assert out.startswith(
+        f"---\ndisallowed-tools: Edit Write NotebookEdit\n---\n<!-- {SENTINEL} -->\n# Review\n"
+    )
+    assert f"\n\n{_POINTER_BLOCK}\n## Tone\n" in out
+    assert "TYPING BODY" not in out
+
+
+def test_render_for_prompt_opencode_command_inserts_block_after_envelope() -> None:
+    out = _pointer_command("prompt_opencode_command")
+
+    assert out == (
+        f"---\ndescription: Review a diff.\n---\n<!-- {SENTINEL} -->\n\n"
+        f"# Review\n\nYou are reviewing code.\n\n{_POINTER_BLOCK}\n## Tone\n\nBe kind.\n"
+    )
+
+
+@pytest.mark.parametrize("fmt", ["prompt_claude_command", "prompt_opencode_command"])
+def test_render_for_prompt_without_skill_references_has_no_block(fmt: str) -> None:
+    """Without an index ``includes_rules`` is declarative only: no block, no appendix."""
+    out = render_for(
+        Path("review.md"),
+        _POINTER_BODY,
+        fmt,
+        frontmatter=_POINTER_FRONTMATTER,
+        rule_registry=StubRuleRegistry({"python-typing": "### Typing\n\nTYPING BODY\n"}),
+    )
+
+    assert "## Before you start" not in out
+    assert "## Reference rules" not in out
+    assert out.endswith(_POINTER_BODY)
+
+
+def test_render_for_prompt_continue_appends_the_appendix_and_no_block() -> None:
+    out = _pointer_command("prompt_continue")
+
+    assert out.endswith(f"{_POINTER_BODY}\n## Reference rules\n\n### Typing\n\nTYPING BODY\n")
+    assert "## Before you start" not in out
+
+
+# --- render_inline_prompt_markdown (agent_harness prompt leaf) --------------
+
+
+def test_render_inline_prompt_markdown_titles_the_body_and_appends_the_appendix() -> None:
+    out = render_inline_prompt_markdown(
+        "Tidy the code.\n",
+        {"name": "Tidy", "includes_rules": ["x"]},
+        StubRuleRegistry({"x": "### X\n\nrule body\n"}),
+    )
+
+    assert out == "# Tidy\n\nTidy the code.\n\n## Reference rules\n\n### X\n\nrule body\n"
+
+
+def test_render_inline_prompt_markdown_keeps_a_body_title_and_has_no_sentinel() -> None:
+    out = render_inline_prompt_markdown(
+        "# Own title\n\nBody.\n", {"name": "Tidy", "write_scope": {"read_only": True}}, None
+    )
+
+    assert out == "# Own title\n\nBody.\n"
 
 
 def test_render_for_prompt_opencode_command_escapes_special_description(
@@ -532,10 +615,8 @@ _SANDBOX_ESCAPES = (
 )
 
 
-@pytest.mark.parametrize("is_prompt_context", [False, True], ids=["rule-env", "prompt-env"])
-def test_build_environment_is_sandboxed(tmp_path: Path, is_prompt_context: bool) -> None:
-    registry = StubRuleRegistry({}) if is_prompt_context else None
-    env = build_environment([tmp_path], is_prompt_context=is_prompt_context, rule_registry=registry)
+def test_build_environment_is_sandboxed(tmp_path: Path) -> None:
+    env = build_environment([tmp_path])
     assert isinstance(env, SandboxedEnvironment)
     # Mutable sandbox on purpose: the escape-to-``os`` threat does not need the
     # immutable variant, which would also reject in-template list/dict mutation.
@@ -577,20 +658,6 @@ def test_render_sandboxed_names_the_source_on_a_violation(tmp_path: Path) -> Non
     assert render_sandboxed("{{ x }}", {"x": "ok"}, env=env, source="s") == "ok"
 
 
-def test_appendix_rule_ids_follow_includes_rules_unless_template_inlines_them() -> None:
-    assert appendix_rule_ids(["a", "b"], "Refactor.\n") == ["a", "b"]
-    assert appendix_rule_ids(["a"], "{{ rule('a') }}\n") == []
-    assert appendix_rule_ids(["a"], "{{- rule('a') -}}\n") == []
-    assert appendix_rule_ids([], "body") == []
-
-
-def test_appendix_rule_ids_agree_with_render_for(tmp_path: Path) -> None:
-    """Sync's pre-render and ``render_for`` decide the appendix on the same template body."""
-    for template_body in ('Intro\n{{rule("x")}}\n', "Plain body\n"):
-        out = _continue_prompt(tmp_path, "rendered body\n", template_body)
-        assert bool(appendix_rule_ids(["x"], template_body)) is ("## Reference rules" in out)
-
-
 #: The jinja2 release closing the published sandbox escapes (CVE-2024-56326,
 #: fixed in 3.1.5; CVE-2025-27516, fixed in 3.1.6). Keep in step with the
 #: ``jinja2>=`` floor in ``pyproject.toml`` (SPEC §9.3, §17).
@@ -608,84 +675,6 @@ def test_pyproject_pins_the_jinja_sandbox_floor() -> None:
     [jinja] = [Requirement(dep) for dep in dependencies if dep.startswith("jinja2")]
     assert jinja.specifier.contains(str(_JINJA_SANDBOX_FLOOR))
     assert not jinja.specifier.contains("3.1.5")
-
-
-# --- includes_rules appendix is decided on the template body (SPEC §6.2.5) ---
-
-_PROMPT_FORMATS = ["prompt_continue", "prompt_claude_command", "prompt_opencode_command"]
-_INLINE_FRONTMATTER = {"name": "P", "description": "D", "includes_rules": ["x"]}
-
-
-def _continue_prompt(tmp_path: Path, body: str, template_body: str) -> str:
-    """The prompt including rule ``x``, as Continue gets it: ``body``, then any appendix."""
-    return render_for(
-        tmp_path / "p.md.j2",
-        body,
-        "prompt_continue",
-        frontmatter=_INLINE_FRONTMATTER,
-        rule_registry=StubRuleRegistry({"x": "### X\n\nrule body\n"}),
-        template_body=template_body,
-    )
-
-
-@pytest.mark.parametrize("fmt", _PROMPT_FORMATS)
-def test_render_for_no_appendix_when_template_inlines_an_already_rendered_rule(
-    tmp_path: Path, fmt: str
-) -> None:
-    """Regression: sync hands render_for the RENDERED body, where the ``rule()``
-    call is already expanded. Deciding on it emitted every inlined rule twice."""
-    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
-    out = render_for(
-        tmp_path / "p.md.j2",
-        "Intro\n### X\n\nrule body\n",
-        fmt,
-        frontmatter=_INLINE_FRONTMATTER,
-        rule_registry=registry,
-        template_body='Intro\n{{ rule("x") }}\n',
-    )
-    assert out.count("rule body") == 1
-    assert "## Reference rules" not in out
-
-
-@pytest.mark.parametrize("fmt", _PROMPT_FORMATS)
-def test_render_for_appends_appendix_when_template_has_no_rule_call(
-    tmp_path: Path, fmt: str
-) -> None:
-    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
-    out = render_for(
-        tmp_path / "p.md",
-        "Plain body\n",
-        fmt,
-        frontmatter=_INLINE_FRONTMATTER,
-        rule_registry=registry,
-        template_body="Plain body\n",
-    )
-    assert out.count("rule body") == 1
-    assert "## Reference rules" in out
-
-
-@pytest.mark.parametrize(
-    "template_body",
-    [
-        '{{rule("x")}}',
-        "{{- rule('x') }}",
-        '{{  rule ( "x" ) }}',
-        '{% raw %}{{ rule("x") }}{% endraw %}',
-    ],
-)
-def test_render_for_no_appendix_for_any_rule_call_spelling(
-    tmp_path: Path, template_body: str
-) -> None:
-    out = _continue_prompt(tmp_path, "Plain body\n", template_body)
-
-    assert out.endswith("Plain body\n")
-    assert "## Reference rules" not in out
-
-
-def test_render_for_appendix_follows_the_body_for_a_template_without_calls(tmp_path: Path) -> None:
-    out = _continue_prompt(tmp_path, "Plain body\n", "no calls here")
-
-    assert out.endswith("Plain body\n\n## Reference rules\n\n### X\n\nrule body\n")
 
 
 # --- engine-output detection (sentinel position) ----------------------------
