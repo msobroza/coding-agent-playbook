@@ -11,17 +11,17 @@ import dataclasses
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
-from coding_agent_playbook.hook_runtime.caps import OutputCaps, clamp_lines
 from coding_agent_playbook.hook_runtime.combine import combine
-from coding_agent_playbook.hook_runtime.decision import CombinedResult
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.caps import OutputCaps, clamp_lines
+from coding_agent_playbook.hook_runtime.dispatch.decision import CombinedResult
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from coding_agent_playbook.hook_runtime._execute import Ran
-    from coding_agent_playbook.hook_runtime.decision import HandlerResult
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
     from coding_agent_playbook.hook_runtime.state.session import SessionState
     from coding_agent_playbook.hook_runtime.watchdog import OutputGate

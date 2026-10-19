@@ -20,9 +20,9 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.guard_config import DetectInputs
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.escape import WRAPPER_PREFIXES_VAR
-from coding_agent_playbook.hook_runtime.event import EventName
 from tests.hook_runtime.fakes import FakeGit
 from tests.hook_runtime.handlers.stop_kit import (
     changed_git,

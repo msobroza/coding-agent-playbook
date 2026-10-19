@@ -27,9 +27,9 @@ import posixpath
 import re
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.caps import clean_text, clip
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.handlers._git_identity import (
     IDENTITY_REASON,
     identity_rule,
@@ -40,7 +40,7 @@ from coding_agent_playbook.hook_runtime.shell.git_options import git_args
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
 
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.git_command import GitInvocation
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
@@ -220,7 +220,7 @@ def _green_verdict(ctx: HandlerContext) -> Verdict | None:
 
 def _other_worktree(git: GitInvocation, repo: RepoInfo) -> bool:
     """Whether the commit's effective cwd is known and inside another worktree."""
-    from coding_agent_playbook.hook_runtime.paths import find_repo
+    from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
 
     if git.git_dir is not None or git.work_tree is not None:
         return True

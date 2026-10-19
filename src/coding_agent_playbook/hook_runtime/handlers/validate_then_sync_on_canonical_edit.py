@@ -28,7 +28,7 @@ import posixpath
 import re
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.globs import compile_globs
 from coding_agent_playbook.hook_runtime.handlers._source_changed import (
     DEBOUNCE_S,
@@ -43,9 +43,9 @@ from coding_agent_playbook.hook_runtime.registry import register_hook_handler
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.hook_runtime.decision import HandlerResult
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.paths import NormalizedPath
+    from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
 __all__ = ["CANONICAL_GLOBS", "NO_AUTO_SYNC_GLOBS", "validate_then_sync_on_canonical_edit"]

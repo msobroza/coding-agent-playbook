@@ -17,10 +17,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.event import ToolClass
+from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.hook_runtime.event import ToolCall
+    from coding_agent_playbook.hook_runtime.dispatch.event import ToolCall
 
 __all__ = ["preview_after"]
 

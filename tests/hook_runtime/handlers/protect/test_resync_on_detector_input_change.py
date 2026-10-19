@@ -18,8 +18,8 @@ from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.detector import facts as detector
 from coding_agent_playbook.guard_config import DetectInputs, applicability_rows
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.handlers import resync_on_detector_input_change as resync
 from coding_agent_playbook.hook_runtime.handlers._detector_inputs import detector_triggers
 from coding_agent_playbook.hooks.resolution.resolved import EffectiveHooks
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
-    from coding_agent_playbook.hook_runtime.event import ToolCall
+    from coding_agent_playbook.hook_runtime.dispatch.event import ToolCall
     from tests.hook_payloads import HookPayloadCase
 
     type Payload = Callable[[str, str, str], HookPayloadCase]

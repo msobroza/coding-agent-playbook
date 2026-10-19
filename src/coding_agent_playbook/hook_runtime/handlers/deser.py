@@ -25,8 +25,8 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook.hook_runtime.caps import quote_data
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.handlers._sink_writes import SinkWrite, sink_writes
 from coding_agent_playbook.hook_runtime.judges.sink_scan import (
     SinkHit,
@@ -39,7 +39,7 @@ from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
 __all__ = ["CONFIG_SCHEMA", "deser_sink_guard"]

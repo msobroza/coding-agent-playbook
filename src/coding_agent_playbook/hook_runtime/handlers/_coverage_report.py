@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.grading.execution_metrics.diff_coverage import format_ranges
 from coding_agent_playbook.grading.execution_metrics.git_diff import every_line
-from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

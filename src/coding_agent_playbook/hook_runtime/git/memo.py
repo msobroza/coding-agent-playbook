@@ -26,7 +26,7 @@ from coding_agent_playbook.hook_runtime.git.safe_git import SafeGit
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
     from coding_agent_playbook.hook_runtime.proc import ProcResult
 
 __all__ = ["MEMOIZED_SUBCOMMANDS", "MemoGit", "memo_key"]

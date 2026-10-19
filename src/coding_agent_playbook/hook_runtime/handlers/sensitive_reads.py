@@ -28,10 +28,10 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.event import ToolClass
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
 from coding_agent_playbook.hook_runtime.handlers._data_reads import is_pattern, read_candidates
 from coding_agent_playbook.hook_runtime.handlers._secret_policy import spelled
 from coding_agent_playbook.hook_runtime.handlers._targets import shell_target
@@ -49,8 +49,8 @@ from coding_agent_playbook.security.paths import PathPolicy
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
 
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
-    from coding_agent_playbook.hook_runtime.paths import NormalizedPath
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
+    from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
 __all__ = ["CONFIG_SCHEMA", "DEFAULT_CSV_MAX_SAMPLE_BYTES", "MODES", "sensitive_read_guard"]

@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.handlers._detector_inputs import (
     INSTALL_PROGRAMS,
     detector_triggers,
@@ -50,8 +50,8 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
-    from coding_agent_playbook.hook_runtime.decision import HandlerResult
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
+    from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
 __all__ = ["resync_on_detector_input_change"]

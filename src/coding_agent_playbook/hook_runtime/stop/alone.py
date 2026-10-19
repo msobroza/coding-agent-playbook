@@ -12,12 +12,12 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.stop.output import not_verified_note, red_note
 from coding_agent_playbook.hook_runtime.stop.stages import StageResult, StopPlan
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import Stage
 

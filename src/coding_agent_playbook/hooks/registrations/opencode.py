@@ -25,7 +25,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, Literal, NotRequired, TypedDict
 
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
-from coding_agent_playbook.hook_runtime.event import Harness
+from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.hook_runtime.harness.opencode import (
     NATIVE_TOOL_NAMES,
     OPENCODE_SHIM_REL,

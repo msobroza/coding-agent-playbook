@@ -21,17 +21,17 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime._decision_log import DISPATCHER_ID, LogLine
 from coding_agent_playbook.hook_runtime.config.guard_config import CONFIG_FAULT_REASON
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.diagnostics.heartbeat import degraded_line
-from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName
-from coding_agent_playbook.hook_runtime.policy import is_unattended
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, EventName
+from coding_agent_playbook.hook_runtime.dispatch.policy import is_unattended
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.config.guard_config import ConfigFault
-    from coding_agent_playbook.hook_runtime.decision import Outcome
-    from coding_agent_playbook.hook_runtime.event import Harness
+    from coding_agent_playbook.hook_runtime.dispatch.decision import Outcome
+    from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 
 __all__ = [
     "CONFIG_FAULT_NOTE",

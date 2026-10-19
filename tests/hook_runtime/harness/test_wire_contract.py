@@ -20,8 +20,8 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.decision import CombinedResult, Decision
-from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.decision import CombinedResult, Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.harness._render import DEFAULT_REASONS
 from coding_agent_playbook.hook_runtime.harness._tools import TOOL_CLASSES, classify
 from coding_agent_playbook.hook_runtime.harness.opencode import (

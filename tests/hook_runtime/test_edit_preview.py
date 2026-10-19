@@ -13,8 +13,8 @@ from typing import Any
 
 import pytest
 
+from coding_agent_playbook.hook_runtime.dispatch.event import ToolCall, ToolClass
 from coding_agent_playbook.hook_runtime.edit_preview import preview_after
-from coding_agent_playbook.hook_runtime.event import ToolCall, ToolClass
 
 
 def _call(name: str, raw: dict[str, Any], *classes: ToolClass) -> ToolCall:

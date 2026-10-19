@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics._doctor_checks import Severity
-    from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
 
 __all__ = [
     "DISABLE_PROJECT_CONFIG",

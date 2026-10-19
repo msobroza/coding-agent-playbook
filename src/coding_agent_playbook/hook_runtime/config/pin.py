@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.paths import find_repo
+from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
 from coding_agent_playbook.hook_runtime.state.store import (
     STATE_DIR_NAME,
     StateStore,

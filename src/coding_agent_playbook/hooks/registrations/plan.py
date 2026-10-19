@@ -19,8 +19,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, Protocol
 
 from coding_agent_playbook.artifacts.hook_schema import HookMatcher
-from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.policy import effective_on_error
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.policy import effective_on_error
 from coding_agent_playbook.hook_runtime.routing import ASYNC_EVENT, HandlerRoute, handler_route
 from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
 from coding_agent_playbook.hooks.registrations.stop_gate import (

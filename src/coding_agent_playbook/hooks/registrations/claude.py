@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hook_runtime.cli import ASYNC_FLAG
-from coding_agent_playbook.hook_runtime.event import Harness
+from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
 from coding_agent_playbook.hooks.registrations._templates import (
     SENTINEL_PLACEHOLDER,

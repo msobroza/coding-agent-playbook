@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT
 from coding_agent_playbook.hook_runtime.registry import (
     HANDLER_ATTR,
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext, HandlerFn
     from tests.hook_runtime.fakes import FakeHandlerResolver
     from tests.hook_runtime.guard_repo import GuardRepo
@@ -370,7 +370,7 @@ def test_non_tool_matchers(
     event: EventName, fields: dict[str, Any], dims: dict[str, Any], accepted: bool
 ) -> None:
     from coding_agent_playbook.hook_runtime._selection import matcher_accepts
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
 
     ev = CanonicalEvent(
         name=event,
@@ -407,7 +407,7 @@ def test_invalid_matcher_values_never_match(
 def test_a_result_is_attributed_to_the_hook_that_ran(
     repo: GuardRepo, resolver: FakeHandlerResolver, make_deps: Callable[..., RuntimeDeps]
 ) -> None:
-    from coding_agent_playbook.hook_runtime.decision import HandlerResult
+    from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
 
     repo.install(hook_record("guard-a"))
     resolver.handlers["guard-a"] = lambda ev, ctx: HandlerResult(

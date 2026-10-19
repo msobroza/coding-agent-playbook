@@ -13,10 +13,10 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import Harness
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import Harness
+from coding_agent_playbook.hook_runtime.dispatch.policy import UNATTENDED_ENV_VAR
 from coding_agent_playbook.hook_runtime.handlers.precommit_bypass import reason_for
-from coding_agent_playbook.hook_runtime.policy import UNATTENDED_ENV_VAR
 
 if TYPE_CHECKING:
     from collections.abc import Callable

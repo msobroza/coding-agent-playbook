@@ -18,8 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.hook_runtime.decision import CombinedResult, Decision
-from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.decision import CombinedResult, Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.harness.opencode import render_opencode
 from coding_agent_playbook.hooks.registrations.opencode import (
     OPENCODE_SHIM_PATH,

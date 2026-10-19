@@ -16,8 +16,8 @@ import pytest
 
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.guard_config import DetectInputs
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.handlers.toolchain import missing_tool
 from tests.hook_runtime.handlers.pack_repo import engine_hook
 

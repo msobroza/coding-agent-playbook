@@ -12,15 +12,15 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.event import ToolClass
-from coding_agent_playbook.hook_runtime.paths import normalize_path
+from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
+from coding_agent_playbook.hook_runtime.dispatch.paths import normalize_path
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
-    from coding_agent_playbook.hook_runtime.paths import NormalizedPath
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
+    from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 

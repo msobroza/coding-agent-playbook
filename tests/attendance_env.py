@@ -1,6 +1,6 @@
 """The environment variables that mark a hook run unattended (specs/prK-lifecycle-hooks.md §D.3.6).
 
-``hook_runtime.policy.is_unattended`` turns every ``ask`` into a ``deny`` when
+``hook_runtime.dispatch.policy.is_unattended`` turns every ``ask`` into a ``deny`` when
 one of these is set, and CI runners export them to every step (GitHub Actions:
 ``CI=true``, ``GITHUB_ACTIONS=true``). A test that inherits them runs the
 unattended path by accident, on CI only. So the suite never inherits them:

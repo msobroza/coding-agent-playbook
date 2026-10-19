@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, cast
 import pytest
 
 from coding_agent_playbook.hook_runtime.config.guard_tables import GuardTables
-from coding_agent_playbook.hook_runtime.event import ShellSource, ToolCall, ToolClass
+from coding_agent_playbook.hook_runtime.dispatch.event import ShellSource, ToolCall, ToolClass
 from coding_agent_playbook.hook_runtime.shell.parse import ShellConfig
 from coding_agent_playbook.hook_runtime.stop.verify_tag import verify_ids
 
