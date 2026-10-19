@@ -7,7 +7,8 @@
 - :func:`includes_rules_appendix` — the ``## Reference rules`` appendix of
   Continue prompts, the agent_harness leaf and the eval runner.
 - The module boundary: stdlib-only, with ``RuleRegistry`` imported for type
-  checking only, so ``rendering.formats`` can import it without a cycle.
+  checking only, so ``rendering.rule_registry`` (which defines it) can import
+  this module without a cycle.
 
 Which format gets which is decided by ``rendering.formats.render_for``;
 ``test_formats.py`` covers that.
@@ -277,7 +278,7 @@ def test_insert_pointer_block_with_empty_block_returns_the_body_unchanged() -> N
 
 
 def test_prompt_rule_delivery_imports_nothing_from_the_engine_at_runtime() -> None:
-    """Stdlib only: ``rendering.formats`` imports it, so any runtime import back would be a cycle.
+    """Stdlib only: ``rendering.rule_registry`` imports it, so a runtime import back is a cycle.
 
     Only engine modules count: ``SkillReference`` is a dataclass, and
     ``dataclasses`` loads stdlib modules of its own.
