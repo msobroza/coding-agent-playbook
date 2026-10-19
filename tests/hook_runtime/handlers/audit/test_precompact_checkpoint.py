@@ -51,8 +51,8 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "precompact-checkpoint"
-# A13 moved this file from tests/hooks/ to tests/hook_runtime/handlers/audit/: two
-# levels deeper, so parents[3] (not parents[1]) is still tests/.
+# A13 moved this file two directory levels deeper, into tests/hook_runtime/handlers/audit/,
+# so parents[3] (not parents[1]) is still tests/.
 TRANSCRIPTS: Final = Path(__file__).parents[3] / "fixtures" / "transcripts" / "claude_code"
 SESSION: Final = "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c"
 #: What the non-genuine entries of ``precompact.jsonl`` try to make the model believe.

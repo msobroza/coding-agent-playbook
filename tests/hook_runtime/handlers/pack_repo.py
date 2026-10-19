@@ -69,8 +69,8 @@ if TYPE_CHECKING:
 ENGINE_PACKAGE = "coding_agent_playbook"
 ENGINE_HOOKS = CORE_ROOT / "hooks"
 #: Data-only overlay trees (``<name>/resources/hooks/...``), copied into a package per test.
-# A13 moved this file from tests/hooks/ to tests/hook_runtime/handlers/: one level
-# deeper, so parents[2] (was .parent.parent) is still tests/.
+# A13 moved this file one directory level deeper, into tests/hook_runtime/handlers/,
+# so parents[2] (was .parent.parent) is still tests/.
 FIXTURE_OVERLAYS = Path(__file__).resolve().parents[2] / "fixtures" / "overlays"
 #: Every enabled adapter of the fixture consumer.
 ADAPTERS = ("claude_code", "continue", "opencode", "agents_md")
