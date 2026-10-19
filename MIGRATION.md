@@ -42,6 +42,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.adapters.claude_settings` | `coding_agent_playbook.adapters.claude_code.settings.managed_merge` | N13 |
 | `coding_agent_playbook.catalog` | `coding_agent_playbook.catalog.roots` | N3 |
 | `coding_agent_playbook.cli.build_parser` | `coding_agent_playbook.cli.parser.build_parser` | N7 |
+| `coding_agent_playbook.commands._committed_config` | `coding_agent_playbook.config.committed` | N10 |
 | `coding_agent_playbook.config` | `coding_agent_playbook.config.model` | N2 |
 | `coding_agent_playbook.config.ConfigError` | `coding_agent_playbook.config.schema.ConfigError` | N2 |
 | `coding_agent_playbook.config.GuardrailsConfig` | `coding_agent_playbook.config.tables.hooks.GuardrailsConfig` | N2 |

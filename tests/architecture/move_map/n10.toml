@@ -1,0 +1,13 @@
+# N10 (#92, specs/prT-package-layout.md 7.4): committed-config planning leaves
+# commands/ for its own module in the config package (H13: not merged into
+# config/files.py, which B2 grows).
+
+[[module]]
+pr = "N10"
+old = "coding_agent_playbook.commands._committed_config"
+new = "coding_agent_playbook.config.committed"
+
+[[path]]
+pr = "N10"
+old = "tests/unit/test_committed_config.py"
+new = "tests/config/test_committed.py"
