@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook._atomic_io import atomic_write_bytes
-from coding_agent_playbook.lockfile import Lockfile
+from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 
 if TYPE_CHECKING:

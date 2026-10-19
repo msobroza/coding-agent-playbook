@@ -48,7 +48,7 @@ from coding_agent_playbook.hook_runtime.config import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.simulate import SimulateArgs, run
 from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
-from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
+from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from coding_agent_playbook.types import Hook, Prompt, Rule
 from tests._catalog import CORE_ROOT
@@ -58,7 +58,7 @@ from tests.hook_runtime.guard_repo import GuardRepo
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.simulate import SimulateReport

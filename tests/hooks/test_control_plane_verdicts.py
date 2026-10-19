@@ -12,7 +12,6 @@ from typing import Any
 
 import pytest
 
-from coding_agent_playbook._canonical_json import element_sha256
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.handlers._control_plane_json import (
     load_json_object,
@@ -32,6 +31,7 @@ from coding_agent_playbook.hook_runtime.handlers._control_plane_toml import (
     toml_verdict,
 )
 from coding_agent_playbook.hook_runtime.shell import parse_shell
+from coding_agent_playbook.lockfile.canonical_json import element_sha256
 
 DENY, ASK, NONE = Decision.DENY, Decision.ASK, Decision.NONE
 _GROUP = {"matcher": "Bash", "hooks": [{"type": "command", "command": "launch.sh pre"}]}

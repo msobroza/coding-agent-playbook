@@ -1,6 +1,8 @@
 """skill-nudge: name the skill that covers a file the first time a session edits it (specs/prS-skills-context.md 8.5.3).
 
-Default, ``post_tool_use`` on ``edit`` and ``write``. Scoped rules are delivered
+Default, ``post_tool_use`` on ``edit``, ``write`` and ``notebook_edit`` (the ml-data
+members glob ``**/*.ipynb``, spec 12.2; OpenCode has no notebook tool, so
+``playbook check`` labels the hook degraded there). Scoped rules are delivered
 as skill references (ADR 0001), so nothing in always-loaded context carries
 their text: this hook points the agent at the skill to load. Sync derives
 ``config["skills"]``, one ``{"id", "globs"}`` row per written skill, from the

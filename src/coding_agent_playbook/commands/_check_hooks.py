@@ -4,7 +4,7 @@
 is labelled per enabled adapter (``enforced`` / ``degraded`` / ``advisory`` /
 ``—``, from the adapter class's ``hook_support``), so advice is never mistaken
 for enforcement (QC-10); every off hook gets its reason. The scoped drift lines
-moved to ``lockfile.drift_entries`` (shared with the ``drift`` Stop stage).
+moved to ``lockfile.drift.drift_entries`` (shared with the ``drift`` Stop stage).
 """
 
 from __future__ import annotations

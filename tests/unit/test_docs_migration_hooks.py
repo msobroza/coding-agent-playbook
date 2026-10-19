@@ -19,13 +19,13 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook._pep503 import canonical_name
 from coding_agent_playbook.adapters._claude_hooks import CLAUDE_HEARTBEAT_LINE
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_RULES_PATH
 from coding_agent_playbook.commands._sync_hooks import HOOKS_NOTICE
 from coding_agent_playbook.commands._sync_lockfile import LOCKFILE_SCHEMA
 from coding_agent_playbook.commands.sync import _ABORT_OUTCOME
+from coding_agent_playbook.detector.pep503 import canonical_name
 from coding_agent_playbook.evaluators.checks.execution import CoverageCheck
 
 _ROOT = Path(__file__).resolve().parents[2]

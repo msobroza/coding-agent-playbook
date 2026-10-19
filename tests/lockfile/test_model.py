@@ -11,16 +11,18 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.adapters.claude_settings import scoped_lock_entry
-from coding_agent_playbook.lockfile import (
+from coding_agent_playbook.lockfile.drift import (
     DriftItem,
+    ScopedUnreadable,
+    drift_entries,
+    parse_json_document,
+)
+from coding_agent_playbook.lockfile.model import (
     LockEntry,
     Lockfile,
     LockfileFormatError,
     Provenance,
-    ScopedUnreadable,
     compute_hash,
-    drift_entries,
-    parse_json_document,
 )
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 

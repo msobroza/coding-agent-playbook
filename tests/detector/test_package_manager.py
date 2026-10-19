@@ -1,6 +1,6 @@
 """Tests for the ``package_manager`` applies_if key (SPEC §6.4, §8.2).
 
-A sibling of ``test_detector.py``: the key reads the detector's existing
+A sibling of ``test_facts.py``: the key reads the detector's existing
 ``package_manager`` fact, and these tests pin its predicate semantics (a name, or a
 non-empty list meaning any of them; an absent fact never matches; a malformed value
 raises even when the fact is absent) and that every value the detector can report is
@@ -13,18 +13,17 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.detector import (
-    KNOWN_PACKAGE_MANAGERS,
+from coding_agent_playbook.detector.facts import KNOWN_PACKAGE_MANAGERS, detect
+from coding_agent_playbook.detector.predicate import (
     _package_manager_matches,
     _package_manager_names,
-    detect,
     evaluate_predicate,
 )
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
 
 _ALLOWED = "['pip', 'pip-tools', 'poetry', 'uv']"
 

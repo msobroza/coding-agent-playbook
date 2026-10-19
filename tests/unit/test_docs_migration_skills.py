@@ -81,6 +81,9 @@ def test_migration_v0_21_tldr_names_the_glossary_move() -> None:
         "63-pytest-fixtures.md",
         "21-python-static-checks.md",
         "Tool configuration and framework wiring",
+        "71-ml-vectorization.md",
+        "73-ml-reproducibility-and-testing.md",
+        "NotebookEdit",
     ],
 )
 def test_migration_v0_21_covers_topic(phrase: str) -> None:

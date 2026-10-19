@@ -25,7 +25,7 @@ from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
 
 _COMMITTED = FileSystemStateSource._CONFIG_FILENAME
 

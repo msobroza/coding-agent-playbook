@@ -15,7 +15,7 @@ from coding_agent_playbook.adapters.claude_settings import (
     parse_settings,
     scoped_lock_entry,
 )
-from coding_agent_playbook.lockfile import DriftItem, ScopedUnreadable
+from coding_agent_playbook.lockfile.drift import DriftItem, ScopedUnreadable
 
 _LAUNCH = 'sh "$D/.claude/hooks/playbook/launch.sh" dispatch stop --harness claude_code'
 _GROUP = {"hooks": [{"type": "command", "command": _LAUNCH, "timeout": 5}]}

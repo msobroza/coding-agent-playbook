@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.git import GitPort
     from coding_agent_playbook.hook_runtime.handlers._drift import DriftFinding
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.lockfile import Lockfile
+    from coding_agent_playbook.lockfile.model import Lockfile
 
 __all__ = [
     "COMPACT_PROBES",

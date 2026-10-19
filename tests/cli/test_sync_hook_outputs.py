@@ -23,7 +23,7 @@ from coding_agent_playbook.adapters._destructive_native import (
 )
 from coding_agent_playbook.adapters._secret_native import SECRETS_PATH_GUARD, secret_native_rows
 from coding_agent_playbook.commands import sync as _sync
-from coding_agent_playbook.lockfile import Lockfile, compute_hash
+from coding_agent_playbook.lockfile.model import Lockfile, compute_hash
 from tests.cli.hook_repo import (
     CONFIG,
     GUARD_CONFIG,
@@ -412,8 +412,9 @@ def test_summary_lines_counts_and_hand_edit_warning(
     # precompact-checkpoint, coverage-diff-gate) are skipped, as are the inert overlay-tier
     # pii-prompt-guard, network-egress-guard and sensitive-data-read-guard (K9). The briefing, the two lint hooks,
     # the decision sink and skill-nudge have no advisory body, so Continue gets five fewer; the
-    # sink registers nothing and skill-nudge's edit and write classes are already in the
-    # PostToolUse matcher, so the managed entries are unchanged. Each registered event's
+    # sink registers nothing and skill-nudge joins the existing PostToolUse group (its
+    # notebook_edit class only widens that group's matcher), so the managed entries are
+    # unchanged. Each registered event's
     # group is one entry (toolchain-missing-hint's PostToolUseFailure among them; no
     # UserPromptSubmit, finding #6), and each native deny row (secrets and destructive
     # prefixes) one more.

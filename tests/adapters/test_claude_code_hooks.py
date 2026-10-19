@@ -50,7 +50,7 @@ from coding_agent_playbook.hook_registrations import (
     render_claude_launcher,
 )
 from coding_agent_playbook.hooks_config import HooksConfig
-from coding_agent_playbook.lockfile import Lockfile
+from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.security.patterns import DESTRUCTIVE_NATIVE_PREFIXES
 from coding_agent_playbook.types import Rule, RuleFrontmatter
 from tests.hook_samples import resolved_hook

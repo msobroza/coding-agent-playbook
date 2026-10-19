@@ -20,7 +20,7 @@ from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.commands._validate_frontmatter import lint_codes_problems
-from coding_agent_playbook.detector import evaluate_predicate
+from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.hook_policy import resolve_lint_codes
 from coding_agent_playbook.types import Rule
 from tests._catalog import CORE_ROOT
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.adapters.base import Adapter
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
 
 pytestmark = pytest.mark.catalog
 
