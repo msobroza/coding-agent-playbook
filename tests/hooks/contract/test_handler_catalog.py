@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hooks.contract.contract import HookCheckContext, classify_hook
 from coding_agent_playbook.hooks.contract.contract_set import HookSetInputs, classify_hook_set
 from coding_agent_playbook.hooks.contract.handler_catalog import (

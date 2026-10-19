@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
-    from coding_agent_playbook.hook_runtime.proc import SubprocessProc
+    from coding_agent_playbook.hook_runtime.dispatch.proc import SubprocessProc
 
 GIT = "/usr/bin/git"
 FILTER_LISTING = b"file:.git/config\x00filter.lfs.clean\ngit-lfs clean -- %f\x00"

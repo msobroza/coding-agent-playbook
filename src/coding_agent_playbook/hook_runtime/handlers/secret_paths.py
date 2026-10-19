@@ -40,6 +40,7 @@ from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
 from coding_agent_playbook.hook_runtime.dispatch.paths import normalize_path
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._secret_inodes import (
     InodeIndex,
     build_inode_index,
@@ -52,7 +53,6 @@ from coding_agent_playbook.hook_runtime.handlers._secret_policy import (
     spelled,
 )
 from coding_agent_playbook.hook_runtime.handlers._targets import shell_target
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.security.files import user_home
 
 if TYPE_CHECKING:
@@ -60,7 +60,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
     from coding_agent_playbook.security.paths import PathPolicy
 

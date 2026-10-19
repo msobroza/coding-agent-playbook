@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
 
 __all__ = [
     "CANARY_SESSION_PREFIX",

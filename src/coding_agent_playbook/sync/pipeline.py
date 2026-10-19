@@ -65,7 +65,7 @@ from coding_agent_playbook.adapters.skill_dirs.ownership import judging_leftover
 from coding_agent_playbook.generated_output.gitignore import LOCKFILE_NAME
 from coding_agent_playbook.generated_output.write_guard import UserOwnedFileError
 from coding_agent_playbook.guard_config import SYNC_OUTPUT_LOCATIONS
-from coding_agent_playbook.renderer import TemplateSecurityError
+from coding_agent_playbook.rendering.jinja import TemplateSecurityError
 from coding_agent_playbook.sync import _hook_outputs as _sync_hooks
 from coding_agent_playbook.sync import _leftovers as _sync_orphans
 from coding_agent_playbook.sync import _output_blockers

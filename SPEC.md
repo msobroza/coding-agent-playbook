@@ -302,7 +302,7 @@ coding-agent-playbook/
 │           └── skills/<id>/                # 15 skills: SKILL.md + scripts/ + references/
 ├── src/coding_agent_playbook/              # logic only: no rule, prompt, eval task, skill or hook file
 │   ├── __init__.py
-│   ├── cli/                                # `playbook` entrypoint: __init__ (main), parser, __main__
+│   ├── cli/                                # `playbook` entrypoint: __init__ (main), parser, __main__, _command (the Command protocol)
 │   ├── artifacts/                          # Rule, Prompt, Skill, Hook dataclasses (Section 6.6)
 │   │   ├── rule.py, prompt.py, skill.py, hook.py   # one module per artifact
 │   │   ├── frontmatter.py                  # the markdown + YAML frontmatter format they share
@@ -333,7 +333,11 @@ coding-agent-playbook/
 │   │   └── pyproject_deps.py               # pyproject dependency tables, one parser
 │   ├── sync/                               # the sync pipeline (§12.2, §12.3): pipeline (execute), render, git_client (GitClient), check modes, leftovers
 │   ├── validation/                         # the validation rule set: checks, findings, context (SyncContext), preflight, prompts, link_check (§12.6)
-│   ├── renderer.py                         # Jinja2 environment
+│   ├── rendering/                          # the Renderer (Section 9)
+│   │   ├── jinja.py                        # the sandboxed Jinja2 environment (Section 9.3)
+│   │   ├── formats.py                      # render_for: the per-format post-processing (Section 9.7)
+│   │   ├── rule_registry.py                # RuleRegistry protocol + RuleRegistryImpl (Section 6.2.5)
+│   │   └── prompt_rule_delivery.py         # includes_rules as pointer block or Reference rules appendix
 │   ├── generated_output/                   # the files the engine writes and owns in a consumer repo
 │   │   ├── sentinel.py                     # SENTINEL, import-light (Section 4.3)
 │   │   ├── gitignore.py                    # managed .gitignore block ([output] commit = false)
@@ -357,7 +361,7 @@ coding-agent-playbook/
 │   ├── guard_config.py                     # the sync-level guard_config.json (§4.2 step 7)
 │   ├── hook_runtime/                       # the playbook-hook dispatcher: import-light, never imports cli/
 │   │   ├── diagnostics/                    # playbook-hook doctor and simulate, the canaries, the heartbeat
-│   │   ├── dispatch/                       # the dispatch pipeline and its event, decision and failure-policy model
+│   │   ├── dispatch/                       # the dispatch pipeline, handler registry and selection, event and decision model
 │   │   ├── handlers/                       # builtin hook handlers (@register_hook_handler)
 │   │   ├── harness/                        # per-harness payload parsers and wire renderers
 │   │   ├── judges/                         # the checks a guard hook shares with its guard twin
@@ -409,8 +413,8 @@ coding-agent-playbook/
 │   ├── artifacts/                          # test_artifacts.py, test_hook.py, test_hook_frontmatter.py, ...
 │   ├── catalog/                            # test_roots.py, test_source.py, ...
 │   ├── detector/                           # test_facts.py, test_predicate.py, ...
+│   ├── rendering/                          # test_jinja.py, test_formats.py, test_rule_registry.py, ...
 │   ├── unit/
-│   │   ├── test_renderer.py
 │   │   ├── test_overlays.py
 │   │   └── test_eval_tasks.py
 │   ├── lockfile/
@@ -1652,7 +1656,7 @@ def evaluate_predicate(predicate: dict, facts: Facts) -> bool: ...
 Render canonical templates with the merged context (facts + user_choices + project metadata). Two paths depending on file extension (see Section 6.0): `.md.j2` files go through Jinja2; `.md` files are returned verbatim.
 ### 9.2 Extension dispatch
 ```python
-# coding_agent_playbook/renderer.py
+# coding_agent_playbook/rendering/jinja.py
 def render_artifact_body(template_path: Path, context: dict) -> str:
     if template_path.suffix == ".j2":
         return jinja_env.get_template(str(template_path)).render(**context)
@@ -1675,7 +1679,7 @@ env = SandboxedEnvironment(
 ```
 `StrictUndefined` is important: a typo'd `{{ python_versoin }}` should raise, not silently render as empty. Renders are cheap; failure modes should be loud.
 
-The environment is sandboxed because templates are author-controlled *and* agent-writable (`playbook/**/*.md.j2`, overlay `resources/`), and rendering runs inside `playbook sync`, `render`, `init` and the eval runner. Under a plain `Environment`, `{{ lipsum.__globals__["os"] }}` reaches the `os` module; under `SandboxedEnvironment` every such attribute escape raises `SecurityError`. `playbook sync` (every mode) and `playbook render` report it as `error: <file>: template rejected by the Jinja sandbox: <reason>`, naming the source file relative to the repo, and exit 1. `sync` writes nothing: every template — rule and prompt bodies, and each rule a prompt lists in `includes_rules` (pre-rendered, since the Continue and `agent_harness` adapters repeat that render for their appendix inside `write_prompt`) — runs before the first adapter write. It is the mutable sandbox, not `ImmutableSandboxedEnvironment`: blocking the escape does not require rejecting in-template list/dict mutation, which authored templates may use. Every engine construction site is sandboxed, including `playbook validate`'s parse-only syntax check. The sandbox does not bound CPU beyond Jinja's `MAX_RANGE`. Every shipped `.md.j2` renders byte-identically under it. The runtime floor is `jinja2>=3.1.6`: older releases have published sandbox escapes for anyone who controls a template (CVE-2024-56326, an indirect `str.format` call, fixed in 3.1.5; CVE-2025-27516, the `|attr` filter returning the raw `format` method, fixed in 3.1.6), and `tests/unit/test_renderer.py` pins the floor.
+The environment is sandboxed because templates are author-controlled *and* agent-writable (`playbook/**/*.md.j2`, overlay `resources/`), and rendering runs inside `playbook sync`, `render`, `init` and the eval runner. Under a plain `Environment`, `{{ lipsum.__globals__["os"] }}` reaches the `os` module; under `SandboxedEnvironment` every such attribute escape raises `SecurityError`. `playbook sync` (every mode) and `playbook render` report it as `error: <file>: template rejected by the Jinja sandbox: <reason>`, naming the source file relative to the repo, and exit 1. `sync` writes nothing: every template — rule and prompt bodies, and each rule a prompt lists in `includes_rules` (pre-rendered, since the Continue and `agent_harness` adapters repeat that render for their appendix inside `write_prompt`) — runs before the first adapter write. It is the mutable sandbox, not `ImmutableSandboxedEnvironment`: blocking the escape does not require rejecting in-template list/dict mutation, which authored templates may use. Every engine construction site is sandboxed, including `playbook validate`'s parse-only syntax check. The sandbox does not bound CPU beyond Jinja's `MAX_RANGE`. Every shipped `.md.j2` renders byte-identically under it. The runtime floor is `jinja2>=3.1.6`: older releases have published sandbox escapes for anyone who controls a template (CVE-2024-56326, an indirect `str.format` call, fixed in 3.1.5; CVE-2025-27516, the `|attr` filter returning the raw `format` method, fixed in 3.1.6), and `tests/rendering/test_jinja.py` pins the floor.
 ### 9.4 Rendering context
 The context passed to every template render:
 ```python
@@ -2420,6 +2424,8 @@ coding-agent-playbook = "coding_agent_playbook.cli:main"
 playbook = "coding_agent_playbook.cli:main"
 playbook-hook = "coding_agent_playbook.hook_runtime.cli:main"   # the hook runtime, §12.13 (v0.20)
 ```
+Each subcommand's module declares its flags (`NAME`, `HELP`, `configure`, `run`); `cli` lists them in `_SUBCOMMANDS` order (`cli/parser.py`), and `cli/_command.py` holds the `Command` protocol the modules satisfy structurally, so no command imports `cli`. `init`, `sync`, `validate` and `render` still have their flags declared in `cli/parser.py` until they move onto the protocol.
+
 **Missing catalog.** Every command that loads the engine's catalog (`init`, `sync` in every mode, `check`, `validate`, `render`, `eval`) locates it through `catalog_root()`, which raises `CatalogMissingError` when it cannot be found. The error carries every path it tried: the wheel's `<package>/_catalog` (which must hold `core/`) and a source checkout's `<repo>/catalog` (used only when the package directory sits under `src/` and `catalog/core` exists). `cli.main` catches it and exits 2, printing this line to stderr, with the two tried paths as `<a>` and `<b>`:
 
 `error: the engine's catalog was not found (looked in <a>, <b>); reinstall coding-agent-playbook`

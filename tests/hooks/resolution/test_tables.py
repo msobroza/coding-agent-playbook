@@ -219,17 +219,17 @@ def test_hooks_package_imports_only_the_stdlib() -> None:
         "coding_agent_playbook.catalog",
         "coding_agent_playbook.catalog.layers",
         "coding_agent_playbook.hook_runtime",
-        "coding_agent_playbook.hook_runtime._event_memo",  # HandlerContext.memo (K7)
         "coding_agent_playbook.hook_runtime.config",
         "coding_agent_playbook.hook_runtime.config.keys",
         "coding_agent_playbook.hook_runtime.dispatch",
         "coding_agent_playbook.hook_runtime.dispatch.decision",
         "coding_agent_playbook.hook_runtime.dispatch.event",
+        "coding_agent_playbook.hook_runtime.dispatch.event_memo",  # HandlerContext.memo (K7)
         "coding_agent_playbook.hook_runtime.dispatch.paths",
         "coding_agent_playbook.hook_runtime.dispatch.policy",
+        "coding_agent_playbook.hook_runtime.dispatch.registry",
         "coding_agent_playbook.hook_runtime.harness",
         "coding_agent_playbook.hook_runtime.harness.wire",
-        "coding_agent_playbook.hook_runtime.registry",
         "coding_agent_playbook.hook_runtime.shell",
         # H21's wrapper-prefix rule, one source with the dispatcher's env check
         "coding_agent_playbook.hook_runtime.shell.wrapper_policy",

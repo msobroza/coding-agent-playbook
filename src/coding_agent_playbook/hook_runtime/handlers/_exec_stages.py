@@ -43,10 +43,10 @@ from coding_agent_playbook.hook_runtime.stop.tools import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.deps import Clock
+    from coding_agent_playbook.hook_runtime.dispatch.deps import Clock
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.runner import StageRunner
     from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
     from coding_agent_playbook.hook_runtime.stop.suite import SuiteOutcome

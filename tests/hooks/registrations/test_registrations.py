@@ -530,7 +530,7 @@ def test_registrations_import_only_the_stdlib() -> None:
     assert foreign == []
     for artifact in ("frontmatter", "rule", "prompt", "skill", "hook"):
         assert engine_module(f"coding_agent_playbook.artifacts.{artifact}") not in loaded
-    assert engine_module("coding_agent_playbook.renderer") not in loaded
+    assert engine_module("coding_agent_playbook.rendering") not in loaded
 
 
 # --- handler routes: the decision sink and OQ-19's async registration ----------------

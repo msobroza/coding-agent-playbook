@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
-from coding_agent_playbook.hook_runtime.escape import pragma_at_head
+from coding_agent_playbook.hook_runtime.dispatch.escape import pragma_at_head
 from coding_agent_playbook.hook_runtime.handlers._secret_policy import (
     content_rules,
     finding_line,
@@ -46,8 +46,8 @@ from coding_agent_playbook.security.secrets import is_binary, scan_added_lines, 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.git.safe_git import AddedLine
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.security.pii import PiiConfig
     from coding_agent_playbook.security.secrets import SecretFinding
 

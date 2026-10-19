@@ -22,7 +22,7 @@ under the file-size budget:
 The shim templates they fill are package data under ``templates/`` here. The
 event, tool-class and support tables live in ``hooks.resolution.tables`` (§A.11);
 this package only reads them. Stdlib-only. Handler routes
-(``hook_runtime.routing``, :func:`member_route`) keep the decision sink out of
+(``hook_runtime.dispatch.routing``, :func:`member_route`) keep the decision sink out of
 every registration and put local-audit-log's ``post_tool_use`` on the one async
 registration (OQ-19): Claude's ``async: true`` group and the shim ``REG``'s
 ``async`` pre-filter.

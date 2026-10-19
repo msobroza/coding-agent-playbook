@@ -36,6 +36,7 @@ from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
 from coding_agent_playbook.hook_runtime.dispatch.paths import normalize_path
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.judges.dependency_tiers import (
     NEW_DEPENDENCY,
     DependencyPolicy,
@@ -53,16 +54,15 @@ from coding_agent_playbook.hook_runtime.judges.manifest_diff import (
     added_names,
     manifest_kind,
 )
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.judges.install_commands import InstallRequest
     from coding_agent_playbook.hook_runtime.judges.manifest_diff import ManifestKind
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["CONFIG_SCHEMA", "dependency_guard"]

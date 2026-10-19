@@ -46,7 +46,7 @@ from tests.import_probe import probe_env
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.proc import SubprocessProc
+    from coding_agent_playbook.hook_runtime.dispatch.proc import SubprocessProc
 
 DAY = 86_400.0
 

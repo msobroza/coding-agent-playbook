@@ -9,7 +9,7 @@ constants below, so no nested ``pyproject.toml`` or ``.ipynb`` is committed unde
 content-size tests then read its output.
 
 :func:`render_core_rule` is the one place tests build the rule environment, so a
-change to ``renderer.build_environment``'s signature touches this helper only.
+change to ``rendering.jinja.build_environment``'s signature touches this helper only.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.detector.facts import detect
-from coding_agent_playbook.renderer import build_environment
+from coding_agent_playbook.rendering.jinja import build_environment
 from coding_agent_playbook.sync.render import render_rule_body
 from tests._catalog import core_rules
 

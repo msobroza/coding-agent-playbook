@@ -29,6 +29,7 @@ from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.paths import normalize_path
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._egress import EGRESS_ARGV0S, segment_egress
 from coding_agent_playbook.hook_runtime.handlers._secret_policy import (
     classify_path,
@@ -36,7 +37,6 @@ from coding_agent_playbook.hook_runtime.handlers._secret_policy import (
     spelled,
 )
 from coding_agent_playbook.hook_runtime.judges.hosts import host_matches, is_loopback
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, session_key
 from coding_agent_playbook.security.files import user_home
 
@@ -44,8 +44,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.handlers._egress import Egress, Remotes
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["CONFIG_SCHEMA", "REMOTES_DOCUMENT", "exfil_guard", "remote_snapshot"]

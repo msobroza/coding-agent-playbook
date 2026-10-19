@@ -32,14 +32,14 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.hook_runtime.config.lock_digest import expected_digest
 from coding_agent_playbook.hook_runtime.config.schema import LOCKFILE_REL
 from coding_agent_playbook.hook_runtime.diagnostics._doctor_checks import Check, read_regular_file
+from coding_agent_playbook.hook_runtime.dispatch.proc import ProcTimeout
 from coding_agent_playbook.hook_runtime.harness.opencode import OPENCODE_SHIM_REL
-from coding_agent_playbook.hook_runtime.proc import ProcTimeout
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics._doctor_checks import Severity
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
 
 __all__ = [

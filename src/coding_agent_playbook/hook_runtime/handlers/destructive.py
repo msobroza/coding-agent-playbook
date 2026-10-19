@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._destructive_git import (
     DEFAULT_PROTECTED_BRANCHES,
     GitFacts,
@@ -41,14 +42,13 @@ from coding_agent_playbook.hook_runtime.handlers._destructive_paths import (
     path_hit,
     pipe_hit,
 )
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from typing import Any
 
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.parse import Segment, ShellCommand
 
 __all__ = ["ARGV0S", "CONFIG_SCHEMA", "destructive_command_guard", "extra_row_hits"]
@@ -133,7 +133,7 @@ def extra_row_hits(segments: Sequence[Segment], rows: object) -> list[Hit]:
         ... # doctest: +SKIP
         ['extra_row:kubectl']
     """
-    from coding_agent_playbook.hook_runtime._prefilter import argv0_matches
+    from coding_agent_playbook.hook_runtime.dispatch.prefilter import argv0_matches
 
     hits: list[Hit] = []
     for row in rows if isinstance(rows, list | tuple) else ():

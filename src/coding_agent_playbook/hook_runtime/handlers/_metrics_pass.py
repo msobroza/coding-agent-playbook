@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.artifacts.path_globs import fold_key
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip, quote_data
-from coding_agent_playbook.hook_runtime.proc import ProcTimeout
+from coding_agent_playbook.hook_runtime.dispatch.proc import ProcTimeout
 from coding_agent_playbook.hook_runtime.stop.tools import edited_py
 
 if TYPE_CHECKING:
@@ -43,9 +43,9 @@ if TYPE_CHECKING:
     from coding_agent_playbook.grading.static_metrics.ruff_violations import RuffHit
     from coding_agent_playbook.grading.tool_runner import ToolRunner
     from coding_agent_playbook.grading.types import ScopeDetail, ToolSetup
-    from coding_agent_playbook.hook_runtime.deps import Clock, ProcPort
+    from coding_agent_playbook.hook_runtime.dispatch.deps import Clock, ProcPort
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
 
     type Gate = Callable[[Any, Any], Any]  # (MetricsGateRequest, MetricsGateDeps) -> result

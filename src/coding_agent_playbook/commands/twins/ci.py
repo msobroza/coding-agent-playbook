@@ -61,7 +61,11 @@ from coding_agent_playbook.commands.twins._ci_commit_convention import (
     run_cz_commands,
 )
 from coding_agent_playbook.commands.twins._ci_report import json_report, log_step, summary_text
-from coding_agent_playbook.commands.twins._git_scope import open_git, resolve_merge_base
+from coding_agent_playbook.commands.twins._git_scope import (
+    BASE_FLAG_HELP,
+    open_git,
+    resolve_merge_base,
+)
 from coding_agent_playbook.commands.twins.policy import (
     commit_convention_configured,
     dependency_policy_set,
@@ -82,6 +86,8 @@ if TYPE_CHECKING:
 __all__ = [
     "CI_STEPS",
     "DEFAULT_STEP_TIMEOUT_S",
+    "HELP",
+    "NAME",
     "CiContext",
     "CiStep",
     "CiStepRunner",
@@ -89,10 +95,14 @@ __all__ = [
     "StepRun",
     "SubprocessCiStepRunner",
     "aggregate_exit",
+    "configure",
     "run",
     "run_ci",
     "select_steps",
 ]
+
+NAME: Final = "ci"
+HELP: Final = "run the CI twins as child processes (prK §F.5)"
 
 #: Per child step: generous, since a CI runner is slow and K10's coverage row runs a suite.
 DEFAULT_STEP_TIMEOUT_S: Final = 600.0
@@ -256,23 +266,18 @@ def _commit_convention_run(
     return run_cz_commands(checks, ctx.repo_root, runner, timeout_s)
 
 
+def _range_argv(command: str) -> Callable[[CiContext], list[str]]:
+    """The argv builder of a row that runs ``command`` over ``<merge base>..HEAD``."""
+    return lambda ctx: [command, "--range", f"{ctx.merge_base}..HEAD"]
+
+
 CI_STEPS: Final[tuple[CiStep, ...]] = (
     CiStep("sync-check", "prerequisites", lambda ctx: ["sync", "--check"], _sync_check_skip),
     CiStep("validate", "existing", lambda ctx: ["validate"]),
     CiStep("metrics", "F.2/F.3", _metrics_argv, needs_base=True),
     CiStep("coverage", "F.1", _coverage_argv, _coverage_skip, needs_base=True),
-    CiStep(
-        "gate-scan",
-        "E.2",
-        lambda ctx: ["gate-scan", "--range", f"{ctx.merge_base}..HEAD"],
-        needs_base=True,
-    ),
-    CiStep(
-        "scan-secrets",
-        "E.4",
-        lambda ctx: ["scan-secrets", "--range", f"{ctx.merge_base}..HEAD"],
-        needs_base=True,
-    ),
+    CiStep("gate-scan", "E.2", _range_argv("gate-scan"), needs_base=True),
+    CiStep("scan-secrets", "E.4", _range_argv("scan-secrets"), needs_base=True),
     CiStep(
         COMMIT_STEP,
         "F.4",
@@ -284,7 +289,7 @@ CI_STEPS: Final[tuple[CiStep, ...]] = (
     CiStep(
         "commit-trailers",
         "E.4",
-        lambda ctx: ["check-commit-trailers", "--range", f"{ctx.merge_base}..HEAD"],
+        _range_argv("check-commit-trailers"),
         _commit_trailers_skip,
         needs_base=True,
     ),
@@ -295,13 +300,7 @@ CI_STEPS: Final[tuple[CiStep, ...]] = (
         _check_deps_skip,
         needs_base=True,
     ),
-    CiStep(
-        "scan-sinks",
-        "E.3",
-        lambda ctx: ["scan-sinks", "--range", f"{ctx.merge_base}..HEAD"],
-        _scan_sinks_skip,
-        needs_base=True,
-    ),
+    CiStep("scan-sinks", "E.3", _range_argv("scan-sinks"), _scan_sinks_skip, needs_base=True),
 )
 
 
@@ -332,6 +331,17 @@ class SubprocessCiStepRunner:
         except OSError as exc:
             return StepRun(127, f"cannot start {argv[0]}: {exc.strerror}\n")
         return StepRun(done.returncode, _decoded(done.stdout))
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook ci [--base REF] [--steps NAMES] [--format F]`` (SPEC §12.11).
+
+    Example: ``configure(argparse.ArgumentParser(prog="playbook ci"))``.
+    """
+    parser.add_argument("--base", help=BASE_FLAG_HELP)
+    parser.add_argument("--steps", help="comma-separated CI_STEPS names (default: every row)")
+    parser.add_argument("--format", choices=("text", "json"), default="text")
+    parser.add_argument("--repo-root", help="repo to check (defaults to cwd)")
 
 
 def run(

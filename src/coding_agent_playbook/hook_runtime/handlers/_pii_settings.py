@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.registry import ConfigKey
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey
 
 if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
