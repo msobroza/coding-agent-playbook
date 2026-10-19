@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.guard_config import GUARD_CONFIG_PATH
+from coding_agent_playbook.hooks.guard_config.compile import GUARD_CONFIG_PATH
 from coding_agent_playbook.hooks.registrations.opencode import OPENCODE_SHIM_PATH
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 from coding_agent_playbook.sync._hook_outputs import opencode_restart_notice

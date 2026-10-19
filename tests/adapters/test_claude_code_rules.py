@@ -89,8 +89,11 @@ def test_path_constants_name_the_two_engine_files() -> None:
 
 
 def test_paths_module_is_a_stdlib_leaf() -> None:
-    """The guard tables import the paths without the adapter's renderer (jinja2, yaml)."""
-    loaded = new_modules_after("import coding_agent_playbook._guard_config_protect")
+    """The sync-side protected-set assembly (sync._protect) imports the paths.
+
+    It does so without the adapter's renderer (jinja2, yaml).
+    """
+    loaded = new_modules_after("import coding_agent_playbook.sync._protect")
 
     assert "coding_agent_playbook.adapters.claude_code.paths" in loaded
     renderer = engine_module("coding_agent_playbook.rendering")

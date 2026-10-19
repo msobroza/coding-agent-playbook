@@ -6,7 +6,7 @@ members glob ``**/*.ipynb``, spec 12.2; OpenCode has no notebook tool, so
 as skill references (ADR 0001), so nothing in always-loaded context carries
 their text: this hook points the agent at the skill to load. Sync derives
 ``config["skills"]``, one ``{"id", "globs"}`` row per written skill, from the
-member rules' globs (``_guard_config_skills``); no ``CONFIG_SCHEMA`` key exists,
+member rules' globs (``hooks.guard_config._tables_skills``); no ``CONFIG_SCHEMA`` key exists,
 so no layer can set it. Each written path's ``NormalizedPath.key`` is matched
 against every row with the same glob grammar every hook uses; a path outside
 the repository is skipped (its key is absolute, and ``**/*.py`` would match it).

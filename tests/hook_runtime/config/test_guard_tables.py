@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 import coding_agent_playbook.hook_runtime as hook_runtime_package
-from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_runtime.config.guard_config import (
     GuardConfig,
     load_guard_config,
@@ -35,6 +34,7 @@ from coding_agent_playbook.hook_runtime.config.guard_tables import (
     VerifyCommand,
 )
 from coding_agent_playbook.hook_runtime.stop.coordinator import GatePolicy
+from coding_agent_playbook.hooks.guard_config.inputs import DetectInputs
 from coding_agent_playbook.security.trust import sha256_of_json
 from tests.engine_modules import engine_module
 from tests.hook_runtime.guard_repo import canonical
