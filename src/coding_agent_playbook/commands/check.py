@@ -19,7 +19,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
-from coding_agent_playbook.adapters._settings_drift import settings_document, stray_launcher_edited
+from coding_agent_playbook.adapters.claude_code.settings.drift import (
+    settings_document,
+    stray_launcher_edited,
+)
 from coding_agent_playbook.commands import _committed_config, _sync_preflight
 from coding_agent_playbook.commands._check_hooks import format_hooks_section
 from coding_agent_playbook.config.files import FileSystemStateSource

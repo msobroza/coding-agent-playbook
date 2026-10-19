@@ -37,6 +37,9 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook._pep503` | `coding_agent_playbook.detector.pep503` | N4 |
 | `coding_agent_playbook._pyproject_deps` | `coding_agent_playbook.detector.pyproject_deps` | N4 |
 | `coding_agent_playbook._toml` | `coding_agent_playbook.toml_writer` | N1 |
+| `coding_agent_playbook.adapters._settings_drift` | `coding_agent_playbook.adapters.claude_code.settings.drift` | N13 |
+| `coding_agent_playbook.adapters.claude_rule_paths` | `coding_agent_playbook.adapters.claude_code.paths` | N13 |
+| `coding_agent_playbook.adapters.claude_settings` | `coding_agent_playbook.adapters.claude_code.settings.managed_merge` | N13 |
 | `coding_agent_playbook.catalog` | `coding_agent_playbook.catalog.roots` | N3 |
 | `coding_agent_playbook.cli.build_parser` | `coding_agent_playbook.cli.parser.build_parser` | N7 |
 | `coding_agent_playbook.config` | `coding_agent_playbook.config.model` | N2 |
