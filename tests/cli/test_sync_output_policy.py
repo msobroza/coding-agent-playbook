@@ -18,7 +18,7 @@ import pytest
 from coding_agent_playbook.cli.parser import build_parser
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.config.files import FileSystemStateSource
-from coding_agent_playbook.gitignore import BLOCK_END, BLOCK_START
+from coding_agent_playbook.generated_output.gitignore import BLOCK_END, BLOCK_START
 from coding_agent_playbook.sync import pipeline as _sync
 from tests.conftest import _DEFAULT_CONFIG
 from tests.fakes import FakeGitClient

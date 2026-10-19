@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH
 from coding_agent_playbook.lockfile.model import Lockfile, compute_hash
 from coding_agent_playbook.sync import pipeline as _sync
