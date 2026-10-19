@@ -42,7 +42,7 @@ concern).
 supported** for the aggregate layer - only the absolute ``warn``/``fail`` path
 executes. A ``max_worsening`` present on the binding is accepted by the validator
 but ignored here (see the ``# NOTE`` in
-:func:`~coding_agent_playbook.evaluators.checks.aggregate._pass_at_k` callers).
+:func:`~coding_agent_playbook.evals.checks.aggregate._pass_at_k` callers).
 """
 
 from __future__ import annotations

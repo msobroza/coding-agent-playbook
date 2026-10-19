@@ -1,7 +1,7 @@
 """Concrete :class:`~coding_agent_playbook.evaluators.check.Check` families.
 
 The ``Check`` layer groups its concrete checks by family. T3 ships the
-deterministic file checks (:mod:`coding_agent_playbook.evaluators.checks.files`),
+deterministic file checks (:mod:`coding_agent_playbook.evals.checks.files`),
 the ``Check``-layer counterpart of the ``[expected]`` predicates; the metric-backed
 :class:`~coding_agent_playbook.evaluators.check.ThresholdCheck` /
 :class:`~coding_agent_playbook.evaluators.check.NonRegressionCheck` live in the
@@ -13,15 +13,16 @@ T4b adds the boolean composers (:mod:`coding_agent_playbook.evaluators.checks.co
 
 It also ships the :class:`~coding_agent_playbook.evaluators.checks.judge_metric.JudgeMetric`
 adapter, the across-trial aggregate checks
-(:mod:`coding_agent_playbook.evaluators.checks.aggregate`: ``PassAtK`` /
+(:mod:`coding_agent_playbook.evals.checks.aggregate`: ``PassAtK`` /
 ``PassPowK``), and the Check **registry**
 (:mod:`coding_agent_playbook.evaluators.checks.registry`: ``register_check`` /
 ``get_check`` / ``all_check_ids``), and the artifact-side gate
-(:mod:`coding_agent_playbook.evaluators.checks.answer`: ``AnswerMatchesCheck`` —
+(:mod:`coding_agent_playbook.evals.checks.answer`: ``AnswerMatchesCheck`` —
 the file checks' counterpart for what the agent *said* rather than what it *did*).
 Importing this package fires each module's ``@register_check`` decorator (the
-file + answer + execution + aggregate checks) and the ``threshold`` /
-``non_regression`` factories defined in ``registry``.
+execution checks) and the ``threshold`` / ``non_regression`` factories defined in
+``registry``. The file, answer and aggregate checks register when the handle
+builder imports them.
 
 The eval task pipeline consumes the registry: the handle builder
 (:mod:`coding_agent_playbook.evals.compile._handles`) resolves a task's ``[gate.bind]`` /
@@ -30,16 +31,8 @@ The eval task pipeline consumes the registry: the handle builder
 
 from __future__ import annotations
 
-from coding_agent_playbook.evaluators.checks.aggregate import AggregateCheck, PassAtK, PassPowK
-from coding_agent_playbook.evaluators.checks.answer import AnswerMatchesCheck
 from coding_agent_playbook.evaluators.checks.compose import AllOf, AnyOf, Not
 from coding_agent_playbook.evaluators.checks.execution import CoverageCheck, TestsPassCheck
-from coding_agent_playbook.evaluators.checks.files import (
-    FileContainsCheck,
-    FileExistsCheck,
-    FileForbiddenCheck,
-    FileUnchangedCheck,
-)
 
 # Import order matters: the leaf check families (which carry the
 # ``@register_check`` decorators) come first, then ``registry`` last so its own
@@ -54,20 +47,12 @@ from coding_agent_playbook.evaluators.checks.registry import (
 )
 
 __all__ = [
-    "AggregateCheck",
     "AllOf",
-    "AnswerMatchesCheck",
     "AnyOf",
     "CoverageCheck",
-    "FileContainsCheck",
-    "FileExistsCheck",
-    "FileForbiddenCheck",
-    "FileUnchangedCheck",
     "JudgeCheck",
     "JudgeMetric",
     "Not",
-    "PassAtK",
-    "PassPowK",
     "TestsPassCheck",
     "all_check_ids",
     "get_check",

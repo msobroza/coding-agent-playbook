@@ -211,7 +211,7 @@ class TrialResult:
     reduces a list of these. ``report`` is the per-trial
     :class:`EvaluationReport` (its ``checks`` expose the ``gate`` / ``rubric``
     layers); ``verdict`` is the per-trial verdict already derived from those
-    layers (skipped-neutral). An :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
+    layers (skipped-neutral). An :class:`~coding_agent_playbook.evals.checks.aggregate.AggregateCheck`
     reads the per-trial boolean off each via
     :func:`~coding_agent_playbook.evals.compile.compiler.over_boolean`.
     """
@@ -286,7 +286,7 @@ class EvalContext:
     the structural :class:`JudgeLike` so this package never imports ``evals``.
 
     The ``[expected]`` file checks
-    (:mod:`coding_agent_playbook.evaluators.checks.files`) read ``tree`` (the
+    (:mod:`coding_agent_playbook.evals.checks.files`) read ``tree`` (the
     candidate repo root after the agent ran) and ``baseline_tree`` (the pristine
     ``setup/`` snapshot, for the ``file_unchanged`` check). The runner sets both;
     every other family ignores them.
@@ -302,7 +302,7 @@ class EvalContext:
     ignores them.
 
     ``trials`` carries the across-trial run results the
-    :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
+    :class:`~coding_agent_playbook.evals.checks.aggregate.AggregateCheck`
     family reduces (``pass@k`` / ``pass^k``). The runner runs ``N = max(k)``
     trials, collects one :class:`TrialResult` per trial, and grades the compiled
     aggregate layer over a context carrying them; every other family ignores it

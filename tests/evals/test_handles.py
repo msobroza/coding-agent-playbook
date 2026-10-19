@@ -19,21 +19,25 @@ shape-keys, and a non-normalized rubric weight set when enforcement is on).
 
 from __future__ import annotations
 
+import ast
 import math
 
 import pytest
 
+from coding_agent_playbook.evals.checks.files import FileExistsCheck
+from coding_agent_playbook.evals.compile import _handles
+from coding_agent_playbook.evals.compile import gate_registry as gates_mod
+from coding_agent_playbook.evals.compile import rubric_registry as rubrics_mod
 from coding_agent_playbook.evals.compile._handles import build_handles
-from coding_agent_playbook.evaluators import gates as gates_mod
-from coding_agent_playbook.evaluators import rubrics as rubrics_mod
+from coding_agent_playbook.evals.compile.gate_registry import register_gate
+from coding_agent_playbook.evals.compile.rubric_registry import register_rubric
 from coding_agent_playbook.evaluators.check import Check, ThresholdCheck
 from coding_agent_playbook.evaluators.checks.compose import AllOf, AnyOf
 from coding_agent_playbook.evaluators.checks.compose import Not as NotCheck
-from coding_agent_playbook.evaluators.checks.files import FileExistsCheck
 from coding_agent_playbook.evaluators.checks.judged import JudgeCheck
-from coding_agent_playbook.evaluators.gates import register_gate
+from coding_agent_playbook.evaluators.checks.registry import all_check_ids
 from coding_agent_playbook.evaluators.rubric import Rubric
-from coding_agent_playbook.evaluators.rubrics import register_rubric
+from tests.import_probe import run_python_probe
 
 # --------------------------------------------------------------------------- #
 # Standalone check shape.
@@ -291,3 +295,45 @@ def test_rubric_weights_not_summing_to_one_raises() -> None:
             },
             layer="rubric",
         )
+
+
+# --------------------------------------------------------------------------- #
+# Registration by import: the handle builder alone sees every check family.
+# --------------------------------------------------------------------------- #
+
+#: Every check id the eval pipeline could look up before the eval-only families
+#: (files, answer, aggregate) left the kernel's checks package (N24).
+_BASELINE_CHECK_IDS = [
+    "answer_matches",
+    "coverage",
+    "file_contains",
+    "file_exists",
+    "file_forbidden",
+    "file_unchanged",
+    "non_regression",
+    "pass_at_k",
+    "pass_pow_k",
+    "tests_pass",
+    "threshold",
+]
+
+
+def test_handles_sees_every_check_family() -> None:
+    """Importing only the handle builder registers every family before its first lookup.
+
+    A fresh interpreter, because this process has already imported the families
+    through other tests, which would hide a family that registers too late.
+    """
+    probe = (
+        f"import {_handles.__name__}; "
+        f"from {all_check_ids.__module__} import all_check_ids; "
+        "print(sorted(all_check_ids()))"
+    )
+    assert ast.literal_eval(run_python_probe(probe)) == _BASELINE_CHECK_IDS
+
+
+def test_all_check_ids_lists_the_file_check_families() -> None:
+    """The file-check ids register once the handle builder is imported (moved from the kernel tests)."""
+    ids = all_check_ids()
+    for expected in ("file_exists", "file_contains", "file_unchanged", "file_forbidden"):
+        assert expected in ids

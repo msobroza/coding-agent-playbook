@@ -22,11 +22,6 @@ from coding_agent_playbook.evaluators.metric import (
 )
 from coding_agent_playbook.evaluators.parse import ModuleModel, parse_module
 from coding_agent_playbook.evaluators.rubric import Rubric
-from coding_agent_playbook.evaluators.rubrics import (
-    all_rubric_names,
-    get_rubric,
-    register_rubric,
-)
 from coding_agent_playbook.evaluators.scope import Determinism, Scope
 from coding_agent_playbook.evaluators.types import (
     AbsoluteThreshold,
@@ -56,12 +51,9 @@ __all__ = [
     "Scope",
     "TrialResult",
     "all_metrics",
-    "all_rubric_names",
     "execution_metrics",
     "get_metric",
-    "get_rubric",
     "parse_module",
     "register_metric",
-    "register_rubric",
     "static_metrics",
 ]

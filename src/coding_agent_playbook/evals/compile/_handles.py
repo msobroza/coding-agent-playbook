@@ -29,17 +29,19 @@ shape-keys (plus the aggregate ``metric``-alone fallback described in
 * **standalone check** - ``{check = "threshold"|"file_exists"|…, …kwargs}`` ->
   :func:`~coding_agent_playbook.evaluators.checks.registry.get_check`;
 * **ref** - ``{ref = "name"}`` -> the gate registry
-  (:func:`~coding_agent_playbook.evaluators.gates.get_gate`) when ``layer ==
+  (:func:`~coding_agent_playbook.evals.compile.gate_registry.get_gate`) when ``layer ==
   "gate"``, else the named-rubric registry
-  (:func:`~coding_agent_playbook.evaluators.rubrics.get_rubric`).
+  (:func:`~coding_agent_playbook.evals.compile.rubric_registry.get_rubric`).
 
 Handles are all **boolean** checks: weights live only *inside* a rubric group's
 ``JudgeCheck``\\ s, never on a handle itself. The ``0-1`` thresholds from C3 are
 already in effect, so ``fail=0.5`` is a normalized-score cutoff.
 
-Acyclic by construction: this module imports from :mod:`coding_agent_playbook.evaluators`
-only (the registries, ``compose``, ``Rubric``, ``ThresholdCheck``) - never the
-reverse. It is wired into the task pipeline by
+Acyclic by construction: this module imports the grading kernel (the check
+registry, ``compose``, ``Rubric``, ``ThresholdCheck``), the gate and rubric
+registries beside it and the eval-only check families - never the reverse. Importing
+the families here fires their ``@register_check`` decorators, so ``get_check`` sees
+them before its first lookup. It is wired into the task pipeline by
 :mod:`coding_agent_playbook.evals.compile.compiler`, which builds each layer's handle map
 from this factory before compiling its ``expr``.
 """
@@ -48,17 +50,23 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from coding_agent_playbook.evals.checks import aggregate, answer, files
+from coding_agent_playbook.evals.compile.gate_registry import get_gate
+from coding_agent_playbook.evals.compile.rubric_registry import get_rubric
 from coding_agent_playbook.evaluators.check import ThresholdCheck
 from coding_agent_playbook.evaluators.checks import compose
 from coding_agent_playbook.evaluators.checks.registry import get_check
-from coding_agent_playbook.evaluators.gates import get_gate
 from coding_agent_playbook.evaluators.rubric import Rubric
-from coding_agent_playbook.evaluators.rubrics import get_rubric
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from coding_agent_playbook.evaluators.check import Check
+
+#: The eval-only check families, imported for their ``@register_check`` side effect:
+#: the kernel's checks package does not import them, and a family imported after
+#: the first ``get_check`` lookup would be missing from it.
+_EVAL_CHECK_FAMILIES = (aggregate, answer, files)
 
 #: The six mutually-exclusive shape-keys a binding may carry, in dispatch order.
 #: (The aggregate ``metric``-alone fallback in :func:`_build_one` is *not* one of

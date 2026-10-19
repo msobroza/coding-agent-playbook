@@ -67,7 +67,7 @@ class Rubric(Metric):
     #: named-rubric registry) can build it from the class alone. Each pair is
     #: ``(criterion, weight)``; the engine ships no subclasses (named rubrics are
     #: an out-of-tree extension point - see
-    #: :mod:`coding_agent_playbook.evaluators.rubrics`).
+    #: :mod:`coding_agent_playbook.evals.compile.rubric_registry`).
     CRITERIA: tuple[tuple[str, float], ...] = ()
 
     def __init__(self, checks: list[Check], *, name: str = "rubric") -> None:
@@ -135,7 +135,7 @@ class Rubric(Metric):
         :attr:`CRITERIA` and defaults the rubric ``name`` to ``cls.__name__``.
         The remaining keyword arguments (``threshold``, ``normalize``) flow
         through to :meth:`of`. This is the entry point the named-rubric registry
-        (:func:`coding_agent_playbook.evaluators.rubrics.get_rubric`) calls.
+        (:func:`coding_agent_playbook.evals.compile.rubric_registry.get_rubric`) calls.
         """
         return cls.of(*cls.CRITERIA, name=cls.__name__, **kw)  # type: ignore[arg-type]
 

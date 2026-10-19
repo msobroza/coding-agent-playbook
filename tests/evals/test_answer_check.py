@@ -1,4 +1,4 @@
-"""Tests for the deterministic ``answer_matches`` check (``evaluators/checks/answer.py``).
+"""Tests for the deterministic ``answer_matches`` check (``evals/checks/answer.py``).
 
 Unlike the file checks (which read ``ctx.tree``), this one grades the **graded
 artifact** — ``ctx.artifact`` — so a review-only task, whose agent produces no
@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.evals.checks.answer import AnswerMatchesCheck
 from coding_agent_playbook.evaluators.check import MeasurementSet
-from coding_agent_playbook.evaluators.checks.answer import AnswerMatchesCheck
 from coding_agent_playbook.evaluators.checks.registry import get_check
 from coding_agent_playbook.evaluators.scope import CostTier, Determinism
 from coding_agent_playbook.evaluators.types import CheckResult, EvalContext, ScopeDetail

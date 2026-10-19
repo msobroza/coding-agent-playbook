@@ -1,7 +1,7 @@
 """The Check registry — built :class:`Check` instances by id prefix (FACTORIES).
 
 This is to :class:`~coding_agent_playbook.evaluators.check.Check` what
-:mod:`coding_agent_playbook.evaluators.rubrics` is to ``Rubric`` and
+:mod:`coding_agent_playbook.evals.compile.rubric_registry` is to ``Rubric`` and
 :mod:`coding_agent_playbook.evaluators.metric` is to ``Metric``: a registry that
 lets a task (and out-of-tree packages) build a check by a short id. It mirrors the
 rubric idiom with one deliberate difference — the registry **values are
@@ -156,9 +156,10 @@ def _non_regression(
 def _load_check_builtins() -> None:
     """Import the checks package so each module's ``@register_check`` fires.
 
-    Importing the package runs ``checks/__init__.py``, which imports the file +
+    Importing the package runs ``checks/__init__.py``, which imports the
     execution check modules (and this module's own ``threshold`` /
-    ``non_regression`` factories), populating the registry.
+    ``non_regression`` factories), populating the registry. The eval-only file,
+    answer and aggregate checks register when the handle builder imports them.
     """
     import coding_agent_playbook.evaluators.checks  # noqa: F401
 

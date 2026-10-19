@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import pytest
 
+from coding_agent_playbook.evals.checks.files import FileExistsCheck
 from coding_agent_playbook.evaluators.check import NonRegressionCheck, ThresholdCheck
-from coding_agent_playbook.evaluators.checks.files import FileExistsCheck
 from coding_agent_playbook.evaluators.checks.judge_metric import JudgeMetric
 from coding_agent_playbook.evaluators.checks.registry import (
     _resolve_metric_source,
@@ -84,10 +84,6 @@ def test_all_check_ids_membership() -> None:
     for expected in (
         "threshold",
         "non_regression",
-        "file_exists",
-        "file_contains",
-        "file_unchanged",
-        "file_forbidden",
         "tests_pass",
         "coverage",
     ):
