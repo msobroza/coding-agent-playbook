@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.detector.pep503 import canonical_name, requirement_names
-from coding_agent_playbook.hook_runtime.handlers._cli_words import (
+from coding_agent_playbook.hook_runtime.judges.cli_words import (
     CliWords,
     split_words,
     value_options,

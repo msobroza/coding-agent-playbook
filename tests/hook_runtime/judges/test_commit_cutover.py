@@ -13,13 +13,13 @@ from typing import Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.cutover import (
+from coding_agent_playbook.hook_runtime.git_log import LoggedCommit, parse_commit_log
+from coding_agent_playbook.hook_runtime.judges.commit_cutover import (
     CzPlan,
     committed_since,
     parse_cutover,
     plan_cz_checks,
 )
-from coding_agent_playbook.hook_runtime.git_log import LoggedCommit, parse_commit_log
 
 CUTOVER: Final = date(2026, 10, 15)
 NEW: Final = "2026-10-16T09:00:00+02:00"

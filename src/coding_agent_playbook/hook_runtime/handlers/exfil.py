@@ -16,7 +16,7 @@ The configured remotes are snapshotted by the ``session_start`` companion
 (OpenCode, a missed start) the guard reads ``git remote -v`` instead, only for
 a push. Overlay ``extra_rows`` (``{argv0, regex, decision, reason}``, the
 destructive guard's row shape) add verdicts, never relax one. ``ipaddress``
-loads only for an address-shaped host (``_hosts``).
+loads only for an address-shaped host (``judges.hosts``).
 """
 
 from __future__ import annotations
@@ -25,7 +25,6 @@ import re
 from contextlib import suppress
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._hosts import host_matches, is_loopback
 from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.handlers._egress import EGRESS_ARGV0S, segment_egress
@@ -34,6 +33,7 @@ from coding_agent_playbook.hook_runtime.handlers._secret_policy import (
     path_policy,
     spelled,
 )
+from coding_agent_playbook.hook_runtime.judges.hosts import host_matches, is_loopback
 from coding_agent_playbook.hook_runtime.paths import normalize_path
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.state import StateUnavailable, session_key

@@ -35,7 +35,7 @@ from coding_agent_playbook.detector.pep503 import (
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from coding_agent_playbook.hook_runtime.handlers._install_cmds import Index
+    from coding_agent_playbook.hook_runtime.judges.install_commands import Index
 
 __all__ = ["LOCKFILES", "ManifestKind", "added_indexes", "added_names", "manifest_kind"]
 

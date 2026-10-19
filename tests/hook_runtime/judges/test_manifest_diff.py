@@ -10,7 +10,7 @@ from typing import Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.handlers._manifest_diff import (
+from coding_agent_playbook.hook_runtime.judges.manifest_diff import (
     LOCKFILES,
     added_indexes,
     added_names,
