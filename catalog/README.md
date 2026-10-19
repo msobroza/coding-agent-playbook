@@ -34,7 +34,9 @@ catalog/
 
 `core/` ships four skills, `python-coding`, `python-testing`, `python-tooling`
 and `ml-data`. Each one's references are rendered from the scoped rules that
-name it. Only a skill that declares a `playbook:` block takes rules, so the
+name it. A fifth, `playbook-guardrails`, takes no rules: sync appends one
+section per enabled hook's guardrail text to its authored intro, so edit the
+hook's `HOOK.md` body, not the skill, to change a section. Only a skill that declares a `playbook:` block takes rules, so the
 skills of `superpowers` and `python_design` own none. A bundled plugin may also
 hold `rules/`, `prompts/`, `hooks/` or `eval_tasks/`, laid out exactly as in
 `core/`.

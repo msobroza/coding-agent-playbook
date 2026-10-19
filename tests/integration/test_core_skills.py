@@ -2,7 +2,9 @@
 
 Core ships one skill per topic, and every scoped rule in core names the one that
 owns it (ADR 0001). The two tables below are the contract later content PRs
-extend. The D13 static checks (description shape, 500 lines, references one
+extend. Core also ships one plain skill, ``playbook-guardrails``, which takes no
+member rules: sync composes it from the on hooks' guardrail text (D6), so it has
+no ``playbook:`` block and its authored description carries its own "Use when". The D13 static checks (description shape, 500 lines, references one
 level deep, plain markdown) cover the core skills only: bundled plugin skills are
 exempt (D24) because their vendored or distilled descriptions and bodies fail them
 as written, and rewording vendored text would change upstream wording. The
@@ -20,18 +22,26 @@ import pytest
 from coding_agent_playbook.adapters._skill_writer import agent_skill_issues, render_skill_md
 from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_RULES_PATH
 from coding_agent_playbook.catalog import ENGINE_PACKAGE
+from coding_agent_playbook.hook_policy.guardrails_skill import (
+    GUARDRAILS_SKILL_ID,
+    compose_guardrails_skill,
+)
 from coding_agent_playbook.links import extract_markdown_links
+from coding_agent_playbook.skill_document import DESCRIPTION_MAX_CHARS
 from coding_agent_playbook.skill_membership import compose_skills
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, FileSystemStateSource
 from coding_agent_playbook.types import split_frontmatter
 from tests._budget_probe import reference_probe_facts, render_core_rule
 from tests._catalog import CORE_ROOT, core_rules
+from tests.hook_samples import resolved_hook
+from tests.hooks.pack_repo import engine_hook, engine_hook_paths
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
+    from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.types import Rule, Skill
 
 pytestmark = pytest.mark.catalog
@@ -65,6 +75,9 @@ EXPECTED_WHERE: Final[Mapping[str, str]] = {
     "ml-data": "Code that loads or saves models, checkpoints or caches",
 }
 CORE_SKILLS: Final = sorted(EXPECTED_WHERE)
+#: Core skills that take no member rules: no ``playbook:`` block, an authored "Use when".
+EXPECTED_PLAIN_CORE_SKILLS: Final = frozenset({GUARDRAILS_SKILL_ID})
+EVERY_CORE_SKILL: Final = sorted({*CORE_SKILLS, *EXPECTED_PLAIN_CORE_SKILLS})
 #: python-coding's member count after the python-best-practices distillation (spec 9.6.2, H13).
 PYTHON_CODING_MEMBER_COUNT: Final = 12
 #: python-testing's members after the pytest distillation (spec 9.6.2): pytest plus two.
@@ -177,8 +190,8 @@ def _probe_skill_md(repo: Path, skill_id: str) -> str:
 
 def test_core_ships_exactly_the_d4_skills() -> None:
     """An inventory pin: a later PR adding a hand-written reference or a skill updates it."""
-    assert sorted(p.name for p in SKILLS_ROOT.iterdir()) == CORE_SKILLS
-    for skill_id in CORE_SKILLS:
+    assert sorted(p.name for p in SKILLS_ROOT.iterdir()) == EVERY_CORE_SKILL
+    for skill_id in EVERY_CORE_SKILL:
         entries = sorted(p.name for p in (SKILLS_ROOT / skill_id).iterdir())
         assert entries == ["SKILL.md"], f"core skill {skill_id!r} holds {entries}"
 
@@ -206,6 +219,26 @@ def test_core_skill_identity_and_description_shape(skill_id: str) -> None:
     assert not use_when.lower().startswith("use when"), f"{skill_id}: {use_when!r}"
 
 
+@pytest.mark.parametrize("skill_id", sorted(EXPECTED_PLAIN_CORE_SKILLS))
+def test_plain_core_skill_identity_and_description_shape(skill_id: str) -> None:
+    """The D13 description lint for a core skill without members (spec 8.4.3, H15).
+
+    No ``playbook:`` block, so the engine composes nothing: the authored
+    description is emitted as is and carries its one "Use when" clause itself.
+    """
+    frontmatter, _ = _authored(skill_id)
+    identity = (frontmatter.get("id"), frontmatter.get("name"))
+    assert identity == (skill_id, skill_id), f"core skill {skill_id!r}: (id, name) is {identity}"
+    assert "playbook" not in frontmatter, f"core skill {skill_id!r} takes no member rules"
+    description = str(frontmatter.get("description"))
+    shaped = not _NOT_THIRD_PERSON.match(description) and description.endswith(".")
+    assert shaped and description.count(" Use when ") == 1, (
+        f"core skill {skill_id!r}: description {description!r} must be third person, end "
+        "with '.', and carry exactly one ' Use when ' clause"
+    )
+    assert len(description) <= DESCRIPTION_MAX_CHARS, f"{skill_id}: {len(description)} chars"
+
+
 @pytest.mark.parametrize("skill_id", CORE_SKILLS)
 def test_core_skill_declares_where_phrase(skill_id: str) -> None:
     block = _authored(skill_id)[0].get("playbook")
@@ -216,7 +249,7 @@ def test_core_skill_declares_where_phrase(skill_id: str) -> None:
     assert 1 <= len(files) <= 80 and not files.endswith(".")
 
 
-@pytest.mark.parametrize("skill_id", CORE_SKILLS)
+@pytest.mark.parametrize("skill_id", EVERY_CORE_SKILL)
 def test_core_skill_md_is_plain_markdown(skill_id: str) -> None:
     """The D13 body hygiene (no Jinja, links, URLs or rule ids), over core skills only.
 
@@ -253,7 +286,28 @@ def test_core_skill_md_within_500_lines_with_every_member(skill_id: str, tmp_pat
     assert lines <= 500, f"core skill {skill_id!r}: SKILL.md is {lines} lines; the limit is 500"
 
 
-@pytest.mark.parametrize("skill_id", CORE_SKILLS)
+def _every_core_guardrail() -> list[ResolvedHook]:
+    """Every core hook with a body, ungated, as a hook whose guardrail text is that body."""
+    hooks = (engine_hook(hook_id) for hook_id in engine_hook_paths())
+    return [
+        resolved_hook(hook.frontmatter.id, name=hook.frontmatter.name, body=hook.body)
+        for hook in hooks
+        if hook.body.strip()
+    ]
+
+
+def test_guardrails_skill_md_within_500_lines_with_every_core_hook(tmp_path: Path) -> None:
+    """The D13 500-line limit for ``playbook-guardrails``, every opt-in hook on too (8.4.3)."""
+    hooks = _every_core_guardrail()
+    composed = compose_guardrails_skill(_loaded_skill(GUARDRAILS_SKILL_ID, tmp_path), hooks)
+    assert composed is not None
+    text = render_skill_md(composed)
+    assert text.count("\n## ") == len(hooks), "one section per core hook with a body"
+    lines = text.count("\n")
+    assert lines <= 500, f"playbook-guardrails is {lines} lines with every core hook; limit 500"
+
+
+@pytest.mark.parametrize("skill_id", EVERY_CORE_SKILL)
 def test_core_skill_references_are_one_level_deep(skill_id: str) -> None:
     """The D13 one-level reference check, over core skills only.
 
@@ -273,7 +327,7 @@ def test_core_skill_references_are_one_level_deep(skill_id: str) -> None:
     )
 
 
-@pytest.mark.parametrize("skill_id", CORE_SKILLS)
+@pytest.mark.parametrize("skill_id", EVERY_CORE_SKILL)
 def test_core_skills_pass_agent_skill_issues(skill_id: str, tmp_path: Path) -> None:
     assert agent_skill_issues(_loaded_skill(skill_id, tmp_path)) == []
 
@@ -371,6 +425,23 @@ def test_reference_probe_where_section_lists_every_core_skill(reference_probe_re
         for skill_id, files in EXPECTED_WHERE.items():
             assert f"- {files}: skill `{skill_id}`" in text, f"{relative} lacks {skill_id}"
         assert "Lint feedback names a rule id" in text, relative
+
+
+def test_reference_probe_writes_the_guardrails_skill_to_opencode_and_agents_roots_only(
+    reference_probe_repo: Path,
+) -> None:
+    """D6: Claude Code runs every probe hook natively, so its skill listing pays for nothing."""
+    relative = f"{GUARDRAILS_SKILL_ID}/SKILL.md"
+    copies = [reference_probe_repo / root / relative for root in NATIVE_SKILL_ROOTS[1:]]
+    assert copies[0].read_bytes() == copies[1].read_bytes(), "the copies must be byte-identical"
+    assert not (reference_probe_repo / NATIVE_SKILL_ROOTS[0] / GUARDRAILS_SKILL_ID).exists()
+    prompt = reference_probe_repo / ".continue" / "prompts" / f"{GUARDRAILS_SKILL_ID}.md"
+    assert not prompt.exists(), "Continue keeps its 30-guardrail rule files instead"
+    frontmatter, body = split_frontmatter(copies[0].read_text(encoding="utf-8"))
+    assert frontmatter == _authored(GUARDRAILS_SKILL_ID)[0]
+    guardrails = (reference_probe_repo / "AGENTS.md").read_text(encoding="utf-8")
+    blocks = guardrails.partition("## Guardrails\n")[2].count("\n### ")
+    assert body.count("\n## ") == blocks, "one skill section per AGENTS.md guardrail"
 
 
 def test_reference_probe_member_reference_is_byte_identical_in_every_skill_root(
