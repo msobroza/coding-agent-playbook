@@ -31,10 +31,10 @@ from coding_agent_playbook.hook_runtime.handlers._targets import (
 )
 
 if TYPE_CHECKING:
+    from coding_agent_playbook.artifacts.path_globs import GlobSet
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.globs import GlobSet
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["SKIP_RULES", "gate_weakening_pre_edit"]

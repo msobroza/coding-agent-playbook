@@ -28,10 +28,10 @@ import posixpath
 import re
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.artifacts.path_globs import compile_globs
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.proc import ProcTimeout
 from coding_agent_playbook.hook_runtime.dispatch.registry import register_hook_handler
-from coding_agent_playbook.hook_runtime.globs import compile_globs
 from coding_agent_playbook.hook_runtime.handlers._source_changed import (
     DEBOUNCE_S,
     context_result,
