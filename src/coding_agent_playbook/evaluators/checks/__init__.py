@@ -1,8 +1,6 @@
 """Concrete :class:`~coding_agent_playbook.evaluators.check.Check` families.
 
-The ``Check`` layer groups its concrete checks by family. T3 ships the
-deterministic file checks (:mod:`coding_agent_playbook.evals.checks.files`),
-the ``Check``-layer counterpart of the ``[expected]`` predicates; the metric-backed
+The ``Check`` layer groups its concrete checks by family. The metric-backed
 :class:`~coding_agent_playbook.evaluators.check.ThresholdCheck` /
 :class:`~coding_agent_playbook.evaluators.check.NonRegressionCheck` live in the
 parent :mod:`coding_agent_playbook.evaluators.check` module. T4a adds the judged
@@ -12,17 +10,19 @@ T4b adds the boolean composers (:mod:`coding_agent_playbook.evaluators.checks.co
 ``AllOf`` / ``AnyOf`` / ``Not``).
 
 It also ships the :class:`~coding_agent_playbook.evaluators.checks.judge_metric.JudgeMetric`
-adapter, the across-trial aggregate checks
-(:mod:`coding_agent_playbook.evals.checks.aggregate`: ``PassAtK`` /
-``PassPowK``), and the Check **registry**
+adapter and the Check **registry**
 (:mod:`coding_agent_playbook.evaluators.checks.registry`: ``register_check`` /
-``get_check`` / ``all_check_ids``), and the artifact-side gate
-(:mod:`coding_agent_playbook.evals.checks.answer`: ``AnswerMatchesCheck`` —
-the file checks' counterpart for what the agent *said* rather than what it *did*).
+``get_check`` / ``all_check_ids``).
 Importing this package fires each module's ``@register_check`` decorator (the
 execution checks) and the ``threshold`` / ``non_regression`` factories defined in
-``registry``. The file, answer and aggregate checks register when the handle
-builder imports them.
+``registry``.
+
+The eval-only families live in :mod:`coding_agent_playbook.evals.checks`, not here:
+the deterministic file checks (:mod:`coding_agent_playbook.evals.checks.files`),
+the across-trial aggregate checks (:mod:`coding_agent_playbook.evals.checks.aggregate`:
+``PassAtK`` / ``PassPowK``) and the artifact-side gate
+(:mod:`coding_agent_playbook.evals.checks.answer`: ``AnswerMatchesCheck``). They
+register when :mod:`coding_agent_playbook.evals.compile._handles` imports them.
 
 The eval task pipeline consumes the registry: the handle builder
 (:mod:`coding_agent_playbook.evals.compile._handles`) resolves a task's ``[gate.bind]`` /

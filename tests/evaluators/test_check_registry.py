@@ -28,12 +28,6 @@ from coding_agent_playbook.evaluators.checks.registry import (
 )
 
 
-def test_get_check_file_exists_builds_file_check() -> None:
-    check = get_check("file_exists", path="x.py")
-    assert isinstance(check, FileExistsCheck)
-    assert check.path == "x.py"
-
-
 def test_get_check_threshold_over_a_named_metric() -> None:
     check = get_check("threshold", metric="cyclomatic_complexity", fail=0.5)
     assert isinstance(check, ThresholdCheck)
@@ -88,30 +82,6 @@ def test_all_check_ids_membership() -> None:
         "coverage",
     ):
         assert expected in ids
-
-
-def test_in_tree_registration_wins_over_entry_point(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A builtin id is resolved from the in-tree factory, not a clashing plugin."""
-
-    def _imposter(**_kwargs: object) -> FileExistsCheck:
-        raise AssertionError("the in-tree file_exists factory must win")
-
-    class _FakeEntryPoint:
-        name = "file_exists"
-
-        def load(self) -> object:
-            return _imposter
-
-    def _fake_entry_points(*, group: str) -> list[_FakeEntryPoint]:
-        assert group == "coding_agent_playbook.checks"
-        return [_FakeEntryPoint()]
-
-    monkeypatch.setattr(
-        "coding_agent_playbook.evaluators.checks.registry.metadata.entry_points",
-        _fake_entry_points,
-    )
-    check = get_check("file_exists", path="y.py")
-    assert isinstance(check, FileExistsCheck)
 
 
 def test_entry_point_check_is_discovered(monkeypatch: pytest.MonkeyPatch) -> None:

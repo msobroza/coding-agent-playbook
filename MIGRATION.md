@@ -1648,8 +1648,9 @@ my_check = "my_pkg.checks:MyCheck"
 
 A `Check` implements `grade(self, ctx, measurements) -> CheckResult` and sets
 `id`, `weight`, `required`, `determinism`, and `cost: CostTier`. See
-`evaluators/check.py` (`ThresholdCheck`/`NonRegressionCheck`) and
-`evaluators/checks/` (file/judge/compose) for the built-in shapes.
+`evaluators/check.py` (`ThresholdCheck`/`NonRegressionCheck`),
+`evaluators/checks/` (judge/compose) and `evals/checks/files.py` (file) for the
+built-in shapes.
 
 ### 4. `grade()` → `Rubric.evaluate`
 
