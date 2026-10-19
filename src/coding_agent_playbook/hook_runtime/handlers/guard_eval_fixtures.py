@@ -112,10 +112,7 @@ def _formatter_paths(argv: Sequence[str]) -> list[str]:
 
 
 def _fixture_globs(ctx: HandlerContext) -> GlobSet:
-    table = ctx.cfg.tables.get("eval")
-    globs = table.get("fixture_globs") if isinstance(table, dict) else None
-    if not isinstance(globs, list) or not all(isinstance(g, str) for g in globs):
-        globs = list(FIXTURE_GLOBS)
+    globs = ctx.cfg.tables.eval_fixture_globs(FIXTURE_GLOBS)
     return compile_globs(globs, platform=ctx.platform)
 
 

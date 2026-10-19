@@ -209,9 +209,8 @@ def identity_probe(inputs: BriefingInputs) -> str | None:
 
 def network_probe(inputs: BriefingInputs) -> str | None:
     """8. The network / air-gap mode as a category (``guard_config.network``; inert until K9)."""
-    table = inputs.ctx.cfg.tables.get("network")
-    mode = table.get("mode") if isinstance(table, dict) else None
-    return f"Network mode: {quote_data(mode, 40)}." if isinstance(mode, str) and mode else None
+    mode = inputs.ctx.cfg.tables.network_mode()
+    return None if mode is None else f"Network mode: {quote_data(mode, 40)}."
 
 
 def escape_probe(inputs: BriefingInputs) -> str | None:

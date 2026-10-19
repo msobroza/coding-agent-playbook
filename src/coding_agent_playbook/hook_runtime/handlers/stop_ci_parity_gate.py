@@ -107,7 +107,7 @@ def stop_ci_parity_gate(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResul
     """
     if ev.repo is None:
         return None
-    policy = GatePolicy.from_table(ctx.cfg.tables.get("stop_gate"))
+    policy = GatePolicy.from_gate(ctx.cfg.tables.stop_gate())
     scope = StopScope(
         agent_id=ev.agent_id if ev.name is EventName.SUBAGENT_STOP else None,
         can_block=ev.harness is not Harness.OPENCODE,
@@ -178,16 +178,11 @@ def _factory(stage: str) -> StageFactory | None:
 
 def _own_stages(ctx: HandlerContext) -> list[tuple[str, float]]:
     """``(name, timeout_s)`` of each ``stop_gate.stages`` record this coordinator owns."""
-    table = ctx.cfg.tables.get("stop_gate")
-    records = table.get("stages") if isinstance(table, dict) else None
-    owned: list[tuple[str, float]] = []
-    for record in records if isinstance(records, list) else ():
-        if not isinstance(record, dict) or record.get("owner") != ctx.hook.id:
-            continue
-        name, timeout_s = record.get("name"), record.get("timeout_s")
-        if isinstance(name, str) and isinstance(timeout_s, int | float) and timeout_s > 0:
-            owned.append((name, float(timeout_s)))
-    return owned
+    return [
+        (record.name, record.timeout_s)
+        for record in ctx.cfg.tables.stop_gate().stages
+        if record.owner == ctx.hook.id and record.timeout_s is not None
+    ]
 
 
 def trust_opener(repo: RepoInfo, ctx: HandlerContext) -> Callable[[], TrustPort | None]:

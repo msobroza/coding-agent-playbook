@@ -318,9 +318,7 @@ def metrics_gated(ctx: HandlerContext, root: str) -> bool:
 
     Example: ``metrics_gated(ctx, root)`` is ``True`` with ``playbook-metrics`` configured.
     """
-    table = ctx.cfg.tables.get("precommit")
-    rendered = table.get("playbook_hook_ids") if isinstance(table, dict) else None
-    if isinstance(rendered, list) and METRICS_HOOK_IDS.intersection(rendered):
+    if METRICS_HOOK_IDS.intersection(ctx.cfg.tables.precommit_hook_ids()):
         return True
     return bool(METRICS_HOOK_IDS.intersection(_live_precommit_ids(root)))
 

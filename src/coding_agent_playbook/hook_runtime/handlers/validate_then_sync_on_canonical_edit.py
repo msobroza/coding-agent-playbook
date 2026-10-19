@@ -32,7 +32,6 @@ from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.globs import compile_globs
 from coding_agent_playbook.hook_runtime.handlers._source_changed import (
     DEBOUNCE_S,
-    auto_sync_enabled,
     context_result,
     fail_lines,
     run_playbook,
@@ -104,7 +103,7 @@ def validate_then_sync_on_canonical_edit(
         return timed_out(ctx, "playbook validate")
     if not validated.ok:
         return _failures(ctx, edited, validated.stdout)
-    if not auto_sync_enabled(ctx.cfg):
+    if not ctx.cfg.tables.auto_sync():
         return None
     return _auto_sync(ctx, root, edited)
 
@@ -126,7 +125,7 @@ def _failures(
     if lines:
         head = f"playbook validate fails for {_quoted(paths)}; {_RESOLVE}"
         return context_result(ctx, "\n".join([head, *lines]), "validate")
-    if not auto_sync_enabled(ctx.cfg):
+    if not ctx.cfg.tables.auto_sync():
         return None
     return context_result(
         ctx, f"playbook validate fails elsewhere, so playbook sync was not run; {_ADVICE}.", "sync"
@@ -154,9 +153,7 @@ def _auto_sync(
 
 
 def _never_auto_sync(ctx: HandlerContext, path: NormalizedPath) -> bool:
-    protected = ctx.cfg.tables.get("protected")
-    artifacts = protected.get("hook_artifacts", []) if isinstance(protected, dict) else []
-    globs = [*NO_AUTO_SYNC_GLOBS, *(a for a in artifacts if isinstance(a, str))]
+    globs = [*NO_AUTO_SYNC_GLOBS, *ctx.cfg.tables.protected().hook_artifacts]
     return compile_globs(globs, platform=ctx.platform).matches(path.key)
 
 
