@@ -2,6 +2,7 @@
 id: subagent-stop-verify
 name: Verify a subagent before it stops
 description: Run the Stop gate's scoped stages on the files an editing subagent changed and block its stop while they are red.
+summary: A subagent that edits files leaves them passing `ruff check .` and `ruff format --check .` before it reports back.
 version: 1
 tier: opt-in
 priority: 20

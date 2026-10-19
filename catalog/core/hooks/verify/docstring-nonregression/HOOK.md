@@ -2,6 +2,7 @@
 id: docstring-nonregression
 name: No docstring regressions
 description: The docstrings Stop stage plus a post-edit bucket; flag removed docstrings and new undocumented public symbols in touched Python files.
+summary: Give every new public function, class and module a docstring with an intent line and one usage example.
 version: 1
 tier: default
 priority: 60

@@ -67,6 +67,7 @@ changelog entry is v0.21.
 | Tooling or prompts that match lint-feedback lines (`rule <id>: …`) | Accept the new `rule <id> (skill <skill>): …` prefix and the ` (rule <id>, skill <skill>)` suffix; the next `playbook sync` turns them on. See "Guardrails and lint feedback point at skills". |
 | A repo with hooks on (the new `skill-nudge` hook) | Nothing: the next `playbook sync` turns it on. To keep it off, add `disable = ["skill-nudge"]` to `[hooks]`. See "Guardrails and lint feedback point at skills". |
 | A repo with hooks on (the new `playbook-guardrails` skill) | Nothing: the next `playbook sync` writes it to `.opencode/skills/` and `.agents/skills/`, and settles it as a leftover once hooks are off. See "Guardrails and lint feedback point at skills". |
+| A repo with hooks on (the `AGENTS.md` Guardrails section) | Nothing: the next `playbook sync` turns each guardrail into one line. Overlay and repo-local hooks may add a `summary:` line to `HOOK.md`; without one they get the first sentence of their body. Tooling that reads the old `### <name>` blocks should read the skill. See "Guardrails and lint feedback point at skills". |
 | Any repo with Python code (distilled python-best-practices content) | Nothing but `playbook sync`: `python-coding` gains three references and six change text; with pytest, `python-testing` gains two and `pytest` changes text; and `python-tooling` is now written in every Python repo, with up to four new references and a new (or, with FastAPI, reworded) "Where guidance lives" line. An overlay or repo-local rule with one of the nine new ids now replaces the core rule. See "Distilled python-best-practices content". |
 
 ### `package_manager` and per-key validation
@@ -198,10 +199,9 @@ the two, with one line per written skill that has member rules and a
 
     - Risk model modules: skill `risk-models`
 
-`AGENTS.md` then ends with its Guardrails section, unchanged; the rules file
-ends with the heartbeat line when the session-start briefing is on. An always
-rule, and the guardrail text of a hook Claude Code cannot enforce, keep their
-full sections. `.claude/CLAUDE.md` stays the four-line stub. Every
+`AGENTS.md` then ends with its Guardrails section; the rules file ends with the
+heartbeat line when the session-start briefing is on. An always rule keeps its
+full section. `.claude/CLAUDE.md` stays the four-line stub. Every
 scoped rule in core names a skill, so every repo sees the change: in a typical
 FastAPI + ML repo with hooks on, `AGENTS.md` shrinks from about 6,800 words to
 about 1,850, of which about 330 come before the Guardrails section, and the
@@ -361,13 +361,52 @@ hooks on: …" line under a ``## <name> (`<id>`)`` heading. The next
 lockfile entry each (`kind = "skill"`, artifact id `playbook-guardrails`) and,
 with `[output] commit = false`, one managed `.gitignore` line each. Claude Code
 runs the core hooks itself, so `.claude/skills/` gets the skill only for a hook
-it cannot run (an overlay hook without `claude_code` in `supports`); Continue,
-`agent_harness` and `AGENTS.md` keep their guardrail text as before, and
-Continue gets no prompt for the skill. With `[hooks] enabled = false`, or
+it cannot run (an overlay hook without `claude_code` in `supports`); Continue
+and `agent_harness` keep their guardrail text as before (`AGENTS.md` keeps one
+line per hook, below), and Continue gets no prompt for the skill. With
+`[hooks] enabled = false`, or
 `advisory = false`, no copy is written, and the copies an earlier sync wrote are
 settled by the leftover policy like any removed skill. A skill of yours with the
 id `playbook-guardrails` in `playbook/skills/` or an overlay replaces the
 authored description and intro; the hook sections are still added.
+
+`AGENTS.md`'s `## Guardrails` section shrinks to one line per hook with
+guardrail text, sorted by hook id, under a new preface that names the skill:
+
+    ## Guardrails
+
+    Lifecycle hooks enforce these on assistants that run them; on every other assistant, follow them yourself. Skill `playbook-guardrails` has the full text of each one and where it is enforced.
+
+    - `block-precommit-bypass`: This repository's pre-commit hooks must run on every commit.
+    - `stop-ci-parity-gate`: Before claiming done, run `ruff check .`, `ruff format --check .`, the type checker and the tests; report the results.
+
+The `### <name>` block and the italic "Enforced by lifecycle hooks on: …" line
+of each hook move to the skill. In a FastAPI + ML repo with the default hooks
+the section drops from about 1,500 words to about 470, and the whole file to
+about 780. Each line is the hook's new optional `summary` in `HOOK.md`: one line
+of 1-120 characters without `{{` or `{%` (frontmatter is never rendered), which
+every core hook with a body now declares. An overlay or repo-local hook needs no
+edit: without `summary` its line is the first sentence of its rendered body, cut
+at a word boundary with `…` once it passes 120 characters. A malformed one is a
+`FAIL` line of `playbook validate`, and so stops `playbook sync`:
+
+    FAIL playbook/hooks/x/HOOK.md: summary: expected a single line of 1-120 characters without '{{' or '{%', got '…'
+
+A hook Claude Code cannot run (an overlay hook without `claude_code` in
+`supports`) gets one line in a `## Guardrails` section of
+`.claude/rules/coding-agent-playbook.md`, after the Where section, instead of a
+full `## Guardrail: <name>` section; its full text is in
+`.claude/skills/playbook-guardrails/`. With the core hooks every hook runs
+natively, so the rules file has no Guardrails section. With `[hooks] enabled =
+false` or `advisory = false` there is no Guardrails section anywhere. Continue's
+`.continue/rules/30-guardrail-<id>.md` and `agent_harness`'s
+`rules/30-guardrail-<id>.md` are byte-identical; the `.playbook/hooks/<id>/HOOK.md`
+sidecar and its `.playbook/manifest.toml` entry copy the canonical frontmatter,
+so they gain `summary`. With
+`opencode` and `shared_skills` both off, the preface names a skill no
+`AGENTS.md` reader can load, like the Where lines; enable one of them. On
+OpenCode v2, whose plugin is the inert stub above, these lines and the Where
+section are what point at skills.
 
 ### Distilled python-best-practices content
 

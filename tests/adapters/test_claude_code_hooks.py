@@ -326,18 +326,17 @@ def test_settings_json_never_reported_stale(tmp_path: Path) -> None:
     assert tmp_path / CLAUDE_SETTINGS_PATH not in adapter.stale_outputs(set(), tmp_path)
 
 
-def test_unenforced_hook_advisory_goes_to_the_rules_file(tmp_path: Path) -> None:
+def test_unenforced_hook_goes_to_the_rules_file_as_one_guardrail_line(tmp_path: Path) -> None:
+    """D26: one line, no ``## Guardrail: <name>`` section; the skill holds the full text."""
     elsewhere = resolved_hook("guard-b", name="Guard B", supports=("opencode",))
 
     _, written = _sync(tmp_path, [elsewhere, resolved_hook()])
 
     rules_file = (tmp_path / _RULES_FILE).read_text("utf-8")
     assert {tmp_path / _CLAUDE_MD, tmp_path / _RULES_FILE} <= set(written)
-    assert (
-        "## Guardrail: Guard B\n\nAdvice.\n\n*Enforced by lifecycle hooks on: OpenCode."
-        in rules_file
-    )
-    assert "Guard X" not in rules_file  # enforced natively: nothing to advise
+    assert rules_file.endswith("\n\n- `guard-b`: Advice.\n")
+    assert "## Guardrail: " not in rules_file and "*Enforced by" not in rules_file
+    assert "guard-x" not in rules_file  # enforced natively: nothing to advise
 
 
 def test_claude_md_stub_never_carries_advisories_or_the_heartbeat(tmp_path: Path) -> None:
@@ -351,7 +350,7 @@ def test_claude_md_stub_never_carries_advisories_or_the_heartbeat(tmp_path: Path
 
     assert (tmp_path / _CLAUDE_MD).read_text("utf-8") == _STUB
     rules_file = (tmp_path / _RULES_FILE).read_text("utf-8")
-    assert "## Guardrail: Guard B" in rules_file
+    assert "- `guard-b`: Advice." in rules_file
     assert CLAUDE_HEARTBEAT_LINE in rules_file
 
 

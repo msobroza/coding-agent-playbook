@@ -339,3 +339,30 @@ def test_with_rendered_body_without_a_definition_uses_the_record() -> None:
     assert rendered.declared_supports == resolved.supports
     assert rendered.advisory is not None
     assert rendered.advisory.body.startswith("Other.\n\n*Enforced")
+
+
+# --- D6: the one-line guardrail (specs/prS-skills-context.md 8.4.1) -----------------------
+
+
+def test_guardrail_text_is_the_authored_summary() -> None:
+    resolved = _resolved(sample_hook(summary="Ask before editing x."))
+
+    assert resolved.guardrail_text == "Ask before editing x."
+
+
+def test_guardrail_text_falls_back_to_the_rendered_body_first_sentence() -> None:
+    resolved = _resolved(_templated("Use {{ tool }}. Then stop.\n"))
+
+    assert resolved.with_rendered_body("Use ruff. Then stop.\n").guardrail_text == "Use ruff."
+
+
+def test_guardrail_text_without_a_definition_reads_the_advisory_body() -> None:
+    resolved = dataclasses.replace(_resolved(sample_hook()), definition=None)
+
+    assert resolved.guardrail_text == "Advice."
+
+
+def test_guardrail_text_is_empty_without_a_definition_or_an_advisory() -> None:
+    resolved = dataclasses.replace(_resolved(sample_hook()), definition=None, advisory=None)
+
+    assert resolved.guardrail_text == ""

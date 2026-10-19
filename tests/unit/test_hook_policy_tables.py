@@ -212,6 +212,8 @@ def test_hook_policy_imports_only_the_stdlib() -> None:
         "coding_agent_playbook.hook_policy.contract",
         "coding_agent_playbook.hook_policy.contract_set",
         "coding_agent_playbook.hook_policy.effective",
+        # GUARDRAILS_SKILL_ID, named by the AGENTS.md Guardrails preface (D6)
+        "coding_agent_playbook.hook_policy.guardrails_skill",
         "coding_agent_playbook.hook_policy.handler_catalog",
         "coding_agent_playbook.hook_policy.labels",
         "coding_agent_playbook.hook_policy.lint_codes",  # a linked rule's lint_codes (K7)

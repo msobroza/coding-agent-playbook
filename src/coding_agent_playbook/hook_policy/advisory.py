@@ -1,22 +1,30 @@
 """The advisory projection of a hook body (specs/prK-lifecycle-hooks.md §A.8, §C.4.1).
 
-Every advisory target (AGENTS.md's Guardrails section, Continue's
-``30-guardrail-<id>.md``, the Claude Code rules file
-``.claude/rules/coding-agent-playbook.md`` for hooks Claude Code cannot enforce) gets
-the same text: the rendered body plus **one** enforcement line, so advice is
-never mistaken for enforcement (QC-10).
+Every full-text guardrail target (Continue's ``30-guardrail-<id>.md``,
+agent_harness's ``rules/30-guardrail-<id>.md``, a section of the
+``playbook-guardrails`` skill) gets the same text: the rendered body plus **one**
+enforcement line, so advice is never mistaken for enforcement (QC-10).
 
 The line is static. It comes from the hook's *declared* ``supports`` crossed
 with the §C.5.1 event reachability (:data:`HOOK_SUPPORT`, :data:`DEGRADED_EVENTS`),
 never from the adapters a repo enables, so committed bytes do not vary with a
-teammate's ``.local.toml``. Stdlib-only, like the rest of ``hook_policy``.
+teammate's ``.local.toml``.
+
+Always-loaded context gets one line per guardrail instead (D6,
+specs/prS-skills-context.md 8.4.1): AGENTS.md's ``## Guardrails`` section, and
+the Claude Code rules file for a hook Claude Code cannot run, hold
+:func:`guardrails_section` over :func:`guardrail_line` of each hook's
+:func:`guardrail_summary`. Stdlib-only, like the rest of ``hook_policy``.
 """
 
 from __future__ import annotations
 
+import re
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook._hook_schema import GUARDRAIL_SUMMARY_MAX_CHARS
+from coding_agent_playbook.hook_policy.guardrails_skill import GUARDRAILS_SKILL_ID
 from coding_agent_playbook.hook_policy.tables import DEGRADED_EVENTS, HOOK_SUPPORT
 
 if TYPE_CHECKING:
@@ -24,10 +32,14 @@ if TYPE_CHECKING:
 
 __all__ = [
     "ADAPTER_LABELS",
+    "GUARDRAIL_SUMMARY_MAX_CHARS",
     "advisory_block",
     "advisory_text",
     "enforcement_line",
     "enforcement_targets",
+    "guardrail_line",
+    "guardrail_summary",
+    "guardrails_section",
 ]
 
 #: How the enforcement line names each hook-capable adapter.
@@ -36,6 +48,15 @@ ADAPTER_LABELS: Final[Mapping[str, str]] = MappingProxyType(
 )
 _GUIDANCE: Final = "Everywhere else this is guidance: apply it yourself."
 _NOT_ENFORCED: Final = "*Not enforced automatically; apply it yourself.*"
+
+#: A code span, skipped so ``ruff check .`` ends no sentence, or a sentence end.
+_SENTENCE_END: Final = re.compile(r"`[^`]*`|[.!?](?=\s|$)")
+_ELLIPSIS: Final = "…"
+_GUARDRAILS_PREFACE: Final = (
+    "Lifecycle hooks enforce these on assistants that run them; on every other assistant, "
+    f"follow them yourself. Skill `{GUARDRAILS_SKILL_ID}` has the full text of each one and "
+    "where it is enforced."
+)
 
 
 def enforcement_targets(
@@ -112,3 +133,61 @@ def advisory_block(name: str, text: str) -> str:
 
 def _labels(adapters: Iterable[str]) -> str:
     return ", ".join(ADAPTER_LABELS.get(adapter, adapter) for adapter in adapters)
+
+
+def guardrail_summary(summary: str, body: str) -> str:
+    """The one-line guardrail text: ``summary``, else the body's first sentence, cut to 120.
+
+    The fallback keeps a hook without an authored ``summary`` (an overlay or
+    repo-local one) working unedited: its body's first sentence, its wrapped
+    lines joined, cut at the last word boundary with ``…`` appended when it is
+    longer than :data:`GUARDRAIL_SUMMARY_MAX_CHARS` (D6, P4-3).
+
+    Example::
+
+        >>> guardrail_summary("", "Ask first. Then act.")
+        'Ask first.'
+    """
+    if summary:
+        return summary
+    return _cut_to_cap(_first_sentence(" ".join(body.split())))
+
+
+def _first_sentence(text: str) -> str:
+    """``text`` up to its first ``.``, ``!`` or ``?`` before a space or the end, else all of it."""
+    for match in _SENTENCE_END.finditer(text):
+        if not match.group().startswith("`"):
+            return text[: match.end()]
+    return text
+
+
+def _cut_to_cap(sentence: str) -> str:
+    """``sentence``, or its longest word-boundary prefix plus ``…`` within the cap."""
+    if len(sentence) <= GUARDRAIL_SUMMARY_MAX_CHARS:
+        return sentence
+    head = sentence[:GUARDRAIL_SUMMARY_MAX_CHARS]
+    kept = head.rsplit(" ", 1)[0] if " " in head else head[:-1]
+    if kept.count("`") % 2:  # an open code span would swallow the rest of the line
+        kept = kept[: kept.rindex("`")]
+    return kept.rstrip(" ,;:") + _ELLIPSIS
+
+
+def guardrail_line(hook_id: str, summary: str) -> str:
+    """One AGENTS.md guardrail line (D6).
+
+    Example: ``guardrail_line("x", "Ask first.")`` -> ``"- `x`: Ask first."``.
+    """
+    return f"- `{hook_id}`: {summary}"
+
+
+def guardrails_section(lines: Iterable[tuple[str, str]]) -> str:
+    """``## Guardrails``, the preface, then each ``(hook id, line)`` sorted by hook id.
+
+    The preface says once what each line used to say on its own: hooks enforce
+    these only where they run, and the skill holds the full text and where (QC-10).
+
+    Example: ``guardrails_section([("x", guardrail_line("x", "Ask first."))])``.
+    """
+    ordered = sorted(lines, key=lambda pair: pair[0])
+    listed = "\n".join(line for _, line in ordered)
+    return f"## Guardrails\n\n{_GUARDRAILS_PREFACE}\n\n{listed}\n"

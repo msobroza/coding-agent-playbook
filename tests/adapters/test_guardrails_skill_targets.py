@@ -18,6 +18,7 @@ from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
+from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_RULES_PATH
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
@@ -28,7 +29,7 @@ from coding_agent_playbook.hook_policy.guardrails_skill import (
 )
 from coding_agent_playbook.hooks_config import HooksConfig
 from coding_agent_playbook.types import Skill
-from tests.hook_samples import resolved_hook
+from tests.hook_samples import GUARDRAILS_SECTION_HEAD, resolved_hook
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -47,6 +48,16 @@ _CONTINUE_GUARDRAIL = (
     "description: Deny x.\n"
     "alwaysApply: true\n"
     "---\n"
+    "Advice.\n\n"
+    "*Enforced by lifecycle hooks on: Claude Code. "
+    "Everywhere else this is guidance: apply it yourself.*\n"
+)
+#: guard-x as agent_harness's rules/30-guardrail file holds it before and after D6 (byte pin).
+_HARNESS_GUARDRAIL = (
+    "---\n"
+    "description: Deny x.\n"
+    "---\n"
+    f"{sentinel_line('html')}\n\n"
     "Advice.\n\n"
     "*Enforced by lifecycle hooks on: Claude Code. "
     "Everywhere else this is guidance: apply it yourself.*\n"
@@ -120,14 +131,23 @@ def test_claude_code_skips_the_skill_when_every_hook_is_native(tmp_path: Path) -
     assert not (tmp_path / ".claude" / "skills" / GUARDRAILS_SKILL_ID).exists()
 
 
-def test_claude_code_writes_the_skill_for_a_hook_it_cannot_run(tmp_path: Path) -> None:
-    """D26 (open question Q3): an overlay hook without ``claude_code`` in ``supports``."""
-    hooks = [resolved_hook(), resolved_hook("overlay-only", supports=("opencode",))]
+def test_claude_code_writes_skill_and_line_for_a_hook_it_cannot_run(tmp_path: Path) -> None:
+    """D26 (open question Q3, R4-5): an overlay hook without ``claude_code`` in ``supports``.
+
+    The skill holds every hook's full text; the rules file gets one guardrail line
+    for the hook Claude Code cannot run, none for the native one, and no full section.
+    """
+    overlay = resolved_hook("overlay-only", supports=("opencode",), summary="Ask first.")
+    hooks = [resolved_hook(), overlay]
 
     _dispatch(tmp_path, hooks, {"claude_code": ClaudeCodeAdapter()})
 
     text = (tmp_path / ".claude" / "skills" / _SKILL_MD).read_text(encoding="utf-8")
     assert "(`overlay-only`)" in text and "(`guard-x`)" in text
+    rules = (tmp_path / CLAUDE_RULES_PATH).read_text(encoding="utf-8")
+    assert rules.endswith(f"\n{GUARDRAILS_SECTION_HEAD}- `overlay-only`: Ask first.\n")
+    assert rules.count("## Guardrails\n") == 1
+    assert "guard-x" not in rules and "## Guardrail: " not in rules and "Advice." not in rules
 
 
 def test_continue_guardrail_rule_files_are_byte_identical(tmp_path: Path) -> None:
@@ -139,6 +159,18 @@ def test_continue_guardrail_rule_files_are_byte_identical(tmp_path: Path) -> Non
     assert sorted(p.name for p in (tmp_path / ".continue").rglob("*") if p.is_file()) == [
         "30-guardrail-guard-x.md"
     ]
+
+
+def test_agent_harness_guardrail_rule_file_is_byte_identical(tmp_path: Path) -> None:
+    """Regression (D6): the summary is AGENTS.md's line only; the sidecar copies the key."""
+    _dispatch(
+        tmp_path, [resolved_hook(summary="Ask first.")], {"agent_harness": AgentHarnessAdapter()}
+    )
+
+    rule = (tmp_path / "rules" / "30-guardrail-guard-x.md").read_text(encoding="utf-8")
+    assert rule == _HARNESS_GUARDRAIL
+    sidecar = (tmp_path / ".playbook" / "hooks" / "guard-x" / "HOOK.md").read_text(encoding="utf-8")
+    assert "\nsummary: Ask first.\n" in sidecar
 
 
 def test_agent_harness_never_writes_the_skill(tmp_path: Path) -> None:
