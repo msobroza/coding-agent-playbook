@@ -4,16 +4,22 @@
 It also asks whether to enable assistant lifecycle hooks and writes the answer
 as ``[hooks] enabled`` (specs/prK-lifecycle-hooks.md §B.1, OQ-3): an absent
 table means off, so an engine upgrade never switches executable hooks on.
+
+The module is the ``init`` Command (``NAME``, ``HELP``, ``configure``, ``run``):
+it declares its own flags and reads them once into :class:`InitArgs`, and its
+questions go through an injected ``ask`` (CP-3, specs/prT-package-layout.md AC.5).
 """
 
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.catalog.roots import canonical_overlay_list, catalog_root
-from coding_agent_playbook.commands._init_answers import collect_answers
+from coding_agent_playbook.commands._init_adapters import ADAPTERS_FLAG_HELP
+from coding_agent_playbook.commands._init_answers import collect_answers, console_ask
 from coding_agent_playbook.commands._init_config_plan import plan_config
 from coding_agent_playbook.commands._init_overlays import (
     overlay_lists_to_check,
@@ -26,6 +32,67 @@ from coding_agent_playbook.sync import pipeline as _sync
 
 if TYPE_CHECKING:
     import argparse
+
+    from coding_agent_playbook.commands._init_answers import Ask
+
+NAME: Final = "init"
+HELP: Final = "bootstrap a fresh repo (SPEC §12.1)"
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook init``'s flags (SPEC §12.1), moved verbatim from ``cli/parser.py``.
+
+    Example::
+
+        >>> configure(argparse.ArgumentParser(prog="playbook init"))  # doctest: +SKIP
+    """
+    parser.add_argument("--repo-root", help="repo to initialise (defaults to cwd)")
+    parser.add_argument("--non-interactive", action="store_true")
+    parser.add_argument("--name", help="project name (required in non-interactive mode)")
+    parser.add_argument("--kind", help="project kind (required in non-interactive mode)")
+    parser.add_argument("--description", default="")
+    parser.add_argument("--adapters", help=ADAPTERS_FLAG_HELP)
+    parser.add_argument("--overlays", help="comma-separated overlay package names")
+    parser.add_argument(
+        "--no-hooks",
+        dest="no_hooks",
+        action="store_true",
+        help="do not enable assistant lifecycle hooks (writes [hooks] enabled = false)",
+    )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class InitArgs:
+    """The parsed ``playbook init`` flags, read once (``None``/blank text reads as unset)."""
+
+    repo_root: Path
+    non_interactive: bool = False
+    name: str | None = None
+    kind: str | None = None
+    description: str = ""
+    adapters: str | None = None
+    overlays: str = ""
+    no_hooks: bool = False
+
+    @classmethod
+    def from_namespace(cls, args: argparse.Namespace) -> InitArgs:
+        """``getattr`` with the flags' defaults, so a partial ``Namespace`` still works.
+
+        Example::
+
+            >>> InitArgs.from_namespace(argparse.Namespace(repo_root="r")).overlays
+            ''
+        """
+        return cls(
+            repo_root=Path(getattr(args, "repo_root", None) or Path.cwd()),
+            non_interactive=bool(getattr(args, "non_interactive", False)),
+            name=getattr(args, "name", None),
+            kind=getattr(args, "kind", None),
+            description=str(getattr(args, "description", "") or ""),
+            adapters=getattr(args, "adapters", None),
+            overlays=str(getattr(args, "overlays", "") or ""),
+            no_hooks=bool(getattr(args, "no_hooks", False)),
+        )
 
 
 #: The three git hook types a ``commit = false`` repo needs installed.
@@ -87,8 +154,11 @@ def _uses_commitizen(repo_root: Path) -> bool:
     return commit_convention_configured(repo_root)
 
 
-def run(args: argparse.Namespace) -> int:
+def run(args: argparse.Namespace, *, ask: Ask = console_ask) -> int:
     """Bootstrap the repo: write the config files and pre-commit hooks, then sync.
+
+    An interactive run asks each question through ``ask`` (the console by
+    default; a test passes a scripted fake).
 
     Exit 2, before writing anything, on a usage error: missing flags, an unusable
     overlay in ``--overlays`` (what the committed file gets) or in the local
@@ -103,9 +173,15 @@ def run(args: argparse.Namespace) -> int:
     ``coding_agent_playbook.packs.*`` name in ``--overlays`` is written in its
     canonical ``plugins`` spelling (on a re-run too: the migration path for the
     committed file) and warned about once the overlay preflight passes.
+
+    Example::
+
+        >>> run(argparse.Namespace(non_interactive=True, name="r", kind="notebook"))  # doctest: +SKIP
+        0
     """
-    repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
-    answers = collect_answers(args)
+    init_args = InitArgs.from_namespace(args)
+    repo_root = init_args.repo_root
+    answers = collect_answers(init_args, ask)
     answers["overlays"], deprecated_flags = canonical_overlay_list(answers["overlays"])
     files = ConfigFiles(repo_root)
     local = files.local_overrides()
