@@ -1,0 +1,56 @@
+# A3 (#116, specs/prT-package-layout.md 4.12, 7.6): skill composition leaves the
+# package root for skills/, and the Agent Skills naming rules leave adapters/ for the
+# public skills/naming.py, which ends the skills -> adapters private import. The
+# re-export ladder of adapters/_skill_writer.py is removed (L2, H22): importers name
+# the defining module. _skill_writer keeps skill_id_of as a plain import (it calls
+# it), so the script treats that one name as current there; A3 rewrites its
+# importers by hand.
+
+[[module]]
+pr = "A3"
+old = "coding_agent_playbook.skill_document"
+new = "coding_agent_playbook.skills.document"
+
+[[module]]
+pr = "A3"
+old = "coding_agent_playbook.skill_membership"
+new = "coding_agent_playbook.skills.membership"
+
+[[module]]
+pr = "A3"
+old = "coding_agent_playbook.adapters._agent_skill_rules"
+new = "coding_agent_playbook.skills.naming"
+
+# adapters/_skill_writer.py:63-78 before A3.
+[[names]]
+pr = "A3"
+old = "coding_agent_playbook.adapters._skill_writer"
+new = "coding_agent_playbook.skills.naming"
+names = [
+    "AGENT_SKILL_DESCRIPTION_MAX_CHARS",
+    "AGENT_SKILL_NAME_MAX_CHARS",
+    "AGENT_SKILL_NAME_PATTERN",
+    "agent_skill_issues",
+    "has_declared_id",
+    "skill_id_of",
+]
+
+[[path]]
+pr = "A3"
+old = "tests/unit/test_skill_document.py"
+new = "tests/skills/test_document.py"
+
+[[path]]
+pr = "A3"
+old = "tests/unit/test_skill_document_sections.py"
+new = "tests/skills/test_document_sections.py"
+
+[[path]]
+pr = "A3"
+old = "tests/unit/test_skill_membership.py"
+new = "tests/skills/test_membership.py"
+
+[[path]]
+pr = "A3"
+old = "tests/adapters/test_agent_skill_rules.py"
+new = "tests/skills/test_naming.py"
