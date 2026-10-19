@@ -19,7 +19,12 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook._sentinel import sentinel_line
-from coding_agent_playbook.adapters._claude_hooks import CLAUDE_HEARTBEAT_LINE, REMEDIATION_ALLOW
+from coding_agent_playbook.adapters._claude_hooks import (
+    CLAUDE_HEARTBEAT_LINE,
+    REMEDIATION_ALLOW,
+    ClaudeHookEmitter,
+    runs_natively,
+)
 from coding_agent_playbook.adapters._destructive_native import (
     DESTRUCTIVE_COMMAND_GUARD,
     destructive_native_rows,
@@ -110,6 +115,22 @@ def test_class_declares_hook_support_shared_settings_and_the_launcher_dir() -> N
         CLAUDE_SETTINGS_PATH.startswith(loc) or loc == CLAUDE_SETTINGS_PATH
         for loc in ClaudeCodeAdapter.output_locations
     )
+
+
+def test_runs_natively_agrees_with_claude_hooks_add() -> None:
+    """One native test decides both the settings groups and the guardrails skill (D6)."""
+    support = {"pre_tool_use": frozenset({"deny", "none"})}
+    hooks = [
+        resolved_hook("native"),
+        resolved_hook("elsewhere", supports=("opencode",)),
+        resolved_hook("unreachable", events=("stop",)),
+    ]
+
+    natively = [runs_natively(hook, "claude_code", support) for hook in hooks]
+    added = [ClaudeHookEmitter("claude_code", support).add(hook) for hook in hooks]
+
+    assert natively == [True, False, False]
+    assert added == natively
 
 
 def test_creates_settings_when_absent(tmp_path: Path) -> None:
