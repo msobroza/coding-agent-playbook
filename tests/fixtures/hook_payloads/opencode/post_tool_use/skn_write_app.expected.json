@@ -1,0 +1,64 @@
+{
+  "context": {
+    "env": {},
+    "project_dir": "/playbook-fixture/proj"
+  },
+  "parsed": {
+    "name": "post_tool_use",
+    "harness": "opencode",
+    "session_id": "ses_5e6f7a8b9c0d",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "unattended": true,
+    "truncated": false,
+    "raw_event_name": "PostToolUse",
+    "tool": {
+      "name": "Write",
+      "native_name": "write",
+      "tool_class": "write",
+      "tool_classes": [
+        "write"
+      ],
+      "use_id": "call_skn_01",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/src/app.py",
+          "repo_rel": "src/app.py",
+          "key": "src/app.py"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/src/app.py",
+          "repo_rel": "src/app.py",
+          "key": "src/app.py"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/src/app.py",
+          "content",
+          "def run() -> int:\n    return 1\n"
+        ]
+      ],
+      "response": {
+        "ok": true,
+        "is_interrupt": false
+      }
+    }
+  },
+  "result": {
+    "decision": "context",
+    "context": [
+      "Conventions for this file: skill ml-data.",
+      "Conventions for this file: skill python-coding.",
+      "Conventions for this file: skill python-tooling."
+    ]
+  },
+  "wire": {
+    "stdout": "{\"v\":1,\"decision\":\"context\",\"reason\":\"\",\"context\":[\"Conventions for this file: skill ml-data.\",\"Conventions for this file: skill python-coding.\",\"Conventions for this file: skill python-tooling.\"],\"notice\":\"\"}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

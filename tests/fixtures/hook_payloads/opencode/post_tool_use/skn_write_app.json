@@ -1,0 +1,20 @@
+{
+  "_fixture": {
+    "harness_version": "1.19.0",
+    "source": "prS-skill-nudge"
+  },
+  "hook_event_name": "PostToolUse",
+  "session_id": "ses_5e6f7a8b9c0d",
+  "cwd": "/playbook-fixture/proj",
+  "tool_use_id": "call_skn_01",
+  "tool_name": "Write",
+  "tool_input": {
+    "filePath": "/playbook-fixture/proj/src/app.py",
+    "content": "def run() -> int:\n    return 1\n",
+    "file_path": "/playbook-fixture/proj/src/app.py"
+  },
+  "tool_response": {
+    "output": "Wrote file successfully.",
+    "title": "src/app.py"
+  }
+}

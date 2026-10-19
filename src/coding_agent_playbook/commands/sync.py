@@ -157,7 +157,7 @@ def _render_into(
         hooks=rendered.hooks.dispatch(ctx.repo_root, prior),
     )
     _sync_hooks.write_runtime_outputs(
-        ctx, rendered.hooks, output_root, recorder, prompts=rendered.prompts
+        ctx, rendered.hooks, output_root, recorder, prompts=rendered.prompts, rules=rendered.rules
     )
     return recorder, rendered.hooks
 

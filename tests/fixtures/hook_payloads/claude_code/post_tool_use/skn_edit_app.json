@@ -1,0 +1,22 @@
+{
+  "_fixture": {
+    "harness_version": "2.1.296",
+    "source": "prS-skill-nudge"
+  },
+  "session_id": "4d7e2a9c-1b3f-4c5d-8e6f-7a8b9c0d1e2f",
+  "transcript_path": "/playbook-fixture/home/.claude/projects/proj/8c2d.jsonl",
+  "cwd": "/playbook-fixture/proj",
+  "permission_mode": "acceptEdits",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "/playbook-fixture/proj/src/app.py",
+    "old_string": "def run():\n    return 1\n",
+    "new_string": "def run() -> int:\n    return 1\n"
+  },
+  "tool_response": {
+    "filePath": "/playbook-fixture/proj/src/app.py",
+    "success": true
+  },
+  "tool_use_id": "toolu_01SkillNudge"
+}

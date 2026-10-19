@@ -1,0 +1,62 @@
+{
+  "parsed": {
+    "name": "post_tool_use",
+    "harness": "claude_code",
+    "session_id": "4d7e2a9c-1b3f-4c5d-8e6f-7a8b9c0d1e2f",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "acceptEdits",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/8c2d.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PostToolUse",
+    "tool": {
+      "name": "Edit",
+      "native_name": "Edit",
+      "tool_class": "edit",
+      "tool_classes": [
+        "edit"
+      ],
+      "use_id": "toolu_01SkillNudge",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/src/app.py",
+          "repo_rel": "src/app.py",
+          "key": "src/app.py"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/src/app.py",
+          "repo_rel": "src/app.py",
+          "key": "src/app.py"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/src/app.py",
+          "new_string",
+          "def run() -> int:\n    return 1\n"
+        ]
+      ],
+      "response": {
+        "ok": true,
+        "is_interrupt": false
+      }
+    }
+  },
+  "result": {
+    "decision": "context",
+    "context": [
+      "Conventions for this file: skill ml-data.",
+      "Conventions for this file: skill python-coding.",
+      "Conventions for this file: skill python-tooling."
+    ]
+  },
+  "wire": {
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Conventions for this file: skill ml-data.\\nConventions for this file: skill python-coding.\\nConventions for this file: skill python-tooling.\"}}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}
