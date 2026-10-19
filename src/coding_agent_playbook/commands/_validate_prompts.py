@@ -11,8 +11,9 @@ A typo there would silently drop guidance, so three checks guard it (P3-7):
   iterated character by character);
 - every id names a rule of the merged set, with a did-you-mean.
 
-A module of its own beside ``validate`` (which is over 400 lines), like the
-other ``_validate_*`` check modules.
+``check_prompt_rule_calls`` is the first check alone, for ``playbook sync
+--check-staged``, which is not validate-gated. A module of its own beside
+``validate`` (which is over 400 lines), like the other ``_validate_*`` check modules.
 """
 
 from __future__ import annotations
@@ -49,13 +50,38 @@ def check_prompt_rule_references(
     """
     errors: list[ValidationError] = []
     for prompt in prompts:
-        where = str(prompt.source_path or prompt.frontmatter.id)
-        messages = [
-            _rule_call_message(m.group(1)) for m in RULE_CALL_RE.finditer(prompt.template_body)
-        ]
+        messages = _rule_call_messages(prompt)
         messages.extend(_includes_rules_messages(prompt.frontmatter.includes_rules, rule_ids))
-        errors.extend(ValidationError(path=where, message=message) for message in messages)
+        errors.extend(ValidationError(path=_where(prompt), message=m) for m in messages)
     return errors
+
+
+def check_prompt_rule_calls(prompts: Sequence[Prompt]) -> list[ValidationError]:
+    """D15: one finding per ``{{ rule() }}`` call left in a prompt body, nothing else.
+
+    The one prompt check ``playbook sync --check-staged`` runs: that pre-commit
+    path skips the validate gate, yet rendering such a body raises a bare
+    jinja2 ``UndefinedError`` instead of the section 7.5 migration message.
+
+    Example::
+
+        check_prompt_rule_calls(ctx.prompts_resolved)
+    """
+    return [
+        ValidationError(path=_where(prompt), message=message)
+        for prompt in prompts
+        for message in _rule_call_messages(prompt)
+    ]
+
+
+def _where(prompt: Prompt) -> str:
+    """A finding's path: the prompt's source path, else its id."""
+    return str(prompt.source_path or prompt.frontmatter.id)
+
+
+def _rule_call_messages(prompt: Prompt) -> list[str]:
+    """The migration message of every ``rule()`` call in ``prompt``'s body, in order."""
+    return [_rule_call_message(m.group(1)) for m in RULE_CALL_RE.finditer(prompt.template_body)]
 
 
 def _rule_call_message(rule_id: str) -> str:

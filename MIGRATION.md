@@ -490,7 +490,9 @@ Continue the rules now follow `## Output format` instead of preceding it.
 
 The `{{ rule() }}` Jinja helper is gone from every template. A repo-local or
 overlay prompt that still calls it fails `playbook validate`, and so
-`playbook sync` writes nothing, with:
+`playbook sync` writes nothing, with the message below; the pre-commit
+`playbook sync --check-staged` (not otherwise validate-gated) refuses the
+commit with it too:
 
     <path>: body calls {{ rule("python-typing") }}; prompts no longer inline rules. Remove the call and keep 'python-typing' in includes_rules: Claude Code and OpenCode commands then point at its skill, Continue appends its text
 

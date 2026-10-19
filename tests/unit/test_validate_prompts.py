@@ -2,8 +2,8 @@
 
 ``includes_rules`` is the only declaration of the rules a prompt needs (D15),
 so :func:`check_prompt_rule_references` refuses a ``{{ rule() }}`` call, an
-``includes_rules`` that is not a list of rule ids, and an id that names no rule.
-The CLI wiring is covered in ``tests/cli/test_validate.py``.
+``includes_rules`` that is not a list of rule ids, and an id that names no rule;
+:func:`check_prompt_rule_calls` is the first check alone. The CLI wiring is covered in ``tests/cli/test_validate.py``.
 """
 
 from __future__ import annotations
@@ -12,7 +12,10 @@ from typing import Any
 
 import pytest
 
-from coding_agent_playbook.commands._validate_prompts import check_prompt_rule_references
+from coding_agent_playbook.commands._validate_prompts import (
+    check_prompt_rule_calls,
+    check_prompt_rule_references,
+)
 from coding_agent_playbook.commands._validation import ValidationError
 from coding_agent_playbook.types import Prompt, PromptFrontmatter
 
@@ -94,6 +97,20 @@ def test_an_unknown_id_far_from_every_rule_gets_no_suggestion() -> None:
     [error] = check_prompt_rule_references([prompt], _RULE_IDS)
 
     assert error.message.endswith("an enabled overlay or playbook/rules/")
+
+
+def test_the_rule_call_check_alone_ignores_includes_rules() -> None:
+    """``check_prompt_rule_calls`` (sync --check-staged) reports only ``rule()`` calls."""
+    calling = _prompt('{{ rule("pytest") }}\n{{ rule("python-typing") }}\n', includes_rules="x")
+    unknown_id = _prompt(includes_rules=["zzz"])
+
+    errors = check_prompt_rule_calls([calling, unknown_id])
+
+    assert [(e.path, e.message.split(";")[0]) for e in errors] == [
+        ("p", 'body calls {{ rule("pytest") }}'),
+        ("p", 'body calls {{ rule("python-typing") }}'),
+    ]
+    assert errors == check_prompt_rule_references([calling], _RULE_IDS)[:2]
 
 
 def test_a_finding_names_the_prompt_source_file(tmp_path: Any) -> None:

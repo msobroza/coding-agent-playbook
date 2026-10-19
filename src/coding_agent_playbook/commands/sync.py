@@ -31,10 +31,12 @@ contract H1-H21 included (:func:`~coding_agent_playbook.commands.validate.sync_g
 and exit 1 on any finding, printing its ``FAIL`` lines to stderr and writing
 nothing (§P P8, §B.5). Validate's warnings print as ``warning:`` lines, and a
 ``[hooks]`` / ``[guardrails]`` table in ``.local.toml`` is only one of them
-here (§B.1). ``--check-staged`` is the pre-commit hot path and is not gated. A
-template the Jinja sandbox rejects aborts every mode with exit 1, naming the
-source file, before any adapter writes (specs/prK-lifecycle-hooks.md §P P1); so
-does a skill whose composed description cannot fit 300 characters, naming it.
+here (§B.1). ``--check-staged`` is the pre-commit hot path and is not gated,
+except that a prompt still calling the removed ``rule()`` fails with validate's
+message (D15) instead of a jinja2 traceback. A template the Jinja sandbox
+rejects aborts every mode with exit 1, naming the source file, before any
+adapter writes (specs/prK-lifecycle-hooks.md §P P1); so does a skill whose
+composed description cannot fit 300 characters, naming it.
 
 Hooks (§C.1.3, ``_sync_hooks``): every mode renders the on hooks through the
 adapters (each told the real repo and the prior lockfile) plus the sync-level
@@ -88,6 +90,7 @@ from coding_agent_playbook.commands._sync_render import (
     report_description_overflow,
     report_sandbox_violation,
 )
+from coding_agent_playbook.commands._validate_prompts import check_prompt_rule_calls
 from coding_agent_playbook.commands._validation import report_validation_errors
 from coding_agent_playbook.commands.validate import sync_gate_errors
 from coding_agent_playbook.git_client import SubprocessGitClient
@@ -284,8 +287,9 @@ def _passes_validation(ctx: SyncContext, validate: ValidateFn) -> bool:
 
     Any rendering of content ``playbook validate`` rejects — an unknown
     ``applies_if`` fact, a broken eval-task reference, an invalid Agent Skill
-    — is refused before the first write (prK §P P8b, OQ-4). ``--check-staged``
-    never comes here: it is the ``commit = false`` pre-commit hot path.
+    — is refused before the first write (prK §P P8b, OQ-4). ``--check-staged``,
+    the ``commit = false`` pre-commit hot path, comes here only with the
+    ``rule()`` call check (D15).
     """
     errors = validate(ctx)
     if not errors:
@@ -526,13 +530,18 @@ def _run_check_staged(ctx: SyncContext, git: GitClient) -> int:
     """``playbook sync --check-staged``: fail when generated output is staged.
 
     Exit 0 outside a git repo or with nothing staged (fast path: no render).
-    Otherwise render into a scratch dir and exit 1 listing every staged path
-    covered by an entry for this render's output *or* any earlier output still
-    on disk (every orphan in the previous lockfile, pristine or not).
+    Exit 1 on a prompt that still calls ``rule()``. Otherwise render into a
+    scratch dir and exit 1 listing every staged path covered by an entry for
+    this render's output *or* any earlier output still on disk (every orphan
+    in the previous lockfile, pristine or not).
     """
     staged = git.staged_paths(ctx.repo_root)
     if not staged:
         return 0
+    # Rendering a leftover rule() call (D15) raises a bare UndefinedError; refuse it
+    # with the section 7.5 message, as the validate gate does for the other modes.
+    if not _passes_validation(ctx, lambda c: check_prompt_rule_calls(c.prompts_resolved)):
+        return 1
     previous = _previous_lockfile(ctx)
     with _rendered_scratch(ctx, previous) as (scratch, written):
         real_written = _on_real_tree(written, scratch, ctx.repo_root)
