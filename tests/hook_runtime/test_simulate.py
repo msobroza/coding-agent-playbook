@@ -324,12 +324,12 @@ SMOKE_CONFIG: Final = (
 
 def smoke_guard_config_bytes() -> bytes:
     """``render_guard_config`` for the shipped destructive-command-guard, canonical bytes."""
+    from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
     from coding_agent_playbook.guard_config import (
         GuardConfigInputs,
         render_guard_config,
         serialize_guard_config,
     )
-    from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
     from tests.hooks.pack_repo import ENGINE_VERSION, resolve_engine_hooks
 
     hooks = resolve_engine_hooks(["destructive-command-guard"], Path("/playbook-fixture/proj"))

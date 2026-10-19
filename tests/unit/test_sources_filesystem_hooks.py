@@ -19,8 +19,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.hooks_config import PolicyTables
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, FileSystemStateSource
+from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.config.tables.hooks import PolicyTables
+from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import HookSchemaError
 
 if TYPE_CHECKING:

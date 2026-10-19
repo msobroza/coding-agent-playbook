@@ -9,12 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.links import (
-    LinksConfig,
-    MarkdownLink,
-    classify_link,
-    extract_markdown_links,
-)
+from coding_agent_playbook.config.tables.links import LinksConfig
+from coding_agent_playbook.links import MarkdownLink, classify_link, extract_markdown_links
 
 if TYPE_CHECKING:
     from pathlib import Path

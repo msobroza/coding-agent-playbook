@@ -14,11 +14,11 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
+from coding_agent_playbook.config.tables.hooks import HooksConfig, parse_guardrails_config
 from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_policy import RegistryCatalog, merged_handler_config
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.handlers._dependency_tiers import dependency_policy
-from coding_agent_playbook.hooks_config import HooksConfig, parse_guardrails_config
 from tests.engine_modules import engine_module
 from tests.hook_runtime.fakes import FakeGit
 from tests.hooks.pack_repo import engine_hook

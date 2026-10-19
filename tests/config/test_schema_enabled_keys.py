@@ -16,15 +16,14 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.config import (
+from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.config.model import (
     Config,
-    ConfigError,
     OutputConfig,
     ProjectMeta,
-    check_enabled_keys,
     parse_output_config,
 )
-from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from coding_agent_playbook.config.schema import ConfigError, check_enabled_keys
 
 if TYPE_CHECKING:
     from pathlib import Path

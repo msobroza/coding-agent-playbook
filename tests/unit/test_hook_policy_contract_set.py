@@ -3,7 +3,7 @@
 ``classify_hook_set`` is pure over a ``HookSetInputs``: merged hooks and rules,
 the parsed committed ``[hooks]`` table and what the effective view switched on.
 It owns H15's config half, H16, H20 and H21 (table parsing itself is the
-parser's, ``test_hooks_config.py``).
+parser's, ``tests/config/test_tables_hooks.py``).
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ from typing import Any
 
 import pytest
 
+from coding_agent_playbook.config.tables.hooks import parse_hooks_config
 from coding_agent_playbook.hook_policy import HookIssue, HookSetInputs, Severity, classify_hook_set
-from coding_agent_playbook.hooks_config import parse_hooks_config
 from coding_agent_playbook.types import Rule, RuleFrontmatter
 from tests.hook_samples import sample_hook
 

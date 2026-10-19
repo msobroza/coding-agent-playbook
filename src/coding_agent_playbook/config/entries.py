@@ -8,7 +8,7 @@ those entries must survive the rewrite: ``Config.from_dict`` keeps
 :func:`unmanaged_config_entries` of the file in ``Config.extra_tables`` (copied
 with :func:`copy_toml_value`) and ``Config.to_dict`` writes them back after the
 config's own keys with :func:`with_unmanaged_entries` (P6). A leaf module (no
-engine imports), split from ``config.py``.
+engine imports), split from ``config.py`` (now ``config/model.py``).
 """
 
 from __future__ import annotations
@@ -19,9 +19,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-#: The top-level keys :class:`~coding_agent_playbook.config.Config` owns: exactly
+#: The top-level keys :class:`~coding_agent_playbook.config.model.Config` owns: exactly
 #: what ``Config.from_dict`` reads and a fully populated ``Config.to_dict`` writes
-#: (pinned against the dataclass fields by ``tests/unit/test_config.py``). Derived
+#: (pinned against the dataclass fields by ``tests/config/test_model.py``). Derived
 #: ``compare=False`` fields (``deprecated_overlay_names``) are exempt: ``Config``
 #: computes them from other fields and never writes them. Every other top-level
 #: key is parsed from the raw TOML by its own command; ``Config`` only carries it,
@@ -44,7 +44,7 @@ CONFIG_MANAGED_KEYS: frozenset[str] = frozenset(
 
 #: The managed tables whose keys ``Config`` reads one by one, with those keys:
 #: exactly what ``Config.to_dict`` writes in each (pinned against the dataclass
-#: fields by ``tests/unit/test_config.py``). Any other key in them
+#: fields by ``tests/config/test_model.py``). Any other key in them
 #: (``[project] homepage``) is not ``Config``'s, so a rewrite keeps it. Not listed:
 #: ``[detector_cache]`` is regenerated whole (a stale entry must go) and
 #: ``[user_choices]`` travels whole inside ``Config``, so each is owned outright.

@@ -27,14 +27,14 @@ import yaml
 
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands._ci_commit_convention import COMMIT_STEP, PR_TITLE_ENV
-from coding_agent_playbook.hook_runtime.cutover import parse_cutover
-from coding_agent_playbook.hooks_config import (
+from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.config.tables.hooks import (
     CommitConventionConfig,
     GuardrailsConfig,
     HooksConfig,
     policy_tables,
 )
-from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from coding_agent_playbook.hook_runtime.cutover import parse_cutover
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT / ".coding-agent-playbook.toml"
