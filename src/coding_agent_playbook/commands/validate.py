@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.orchestrator import SyncContext
-from coding_agent_playbook.validation.checks import (
-    collect_validation_findings,
-    warn_refused_skill_files,
-)
+
+# The rule set through its module, so this command binds none of its names: the
+# move map (tests/architecture/move_map/a04.toml) keeps seeing them as moved.
+from coding_agent_playbook.validation import checks
 from coding_agent_playbook.validation.context import (
     config_less_context,
     config_less_notes,
@@ -46,8 +46,8 @@ def run(args: argparse.Namespace) -> int:
         if config_less
         else SyncContext.from_repo(repo_root, tolerate_hook_errors=True)
     )
-    findings = collect_validation_findings(ctx, config_less=config_less)
-    warn_refused_skill_files(ctx.skills_resolved)
+    findings = checks.collect_validation_findings(ctx, config_less=config_less)
+    checks.warn_refused_skill_files(ctx.skills_resolved)
     report_validation_warnings(findings.warnings, sys.stderr)
     if findings.errors:
         report_validation_errors(findings.errors, sys.stdout)
