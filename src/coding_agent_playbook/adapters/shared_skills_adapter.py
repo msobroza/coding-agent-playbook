@@ -15,9 +15,10 @@ step 9): pristine copies are deleted, edited or tracked ones kept and owned
 Rules and prompts are no-ops here: always rules reach every assistant through
 ``AGENTS.md``, scoped rules travel inside the skills this adapter writes (as
 the references of the skill each one names), and prompts go through the
-harness adapters. The skill bytes come from the shared
-:class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter` and are
-identical to the ``.claude/skills/`` and ``.opencode/skills/`` copies.
+harness adapters. With any on hook carrying guardrail text, the composed
+``playbook-guardrails`` skill is written here too (D6). The skill bytes come
+from the shared :class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter`
+and are identical to the ``.claude/skills/`` and ``.opencode/skills/`` copies.
 
 On by default (``playbook init`` lists it in ``adapters_enabled``) but **not**
 force-enabled like ``agents_md`` — remove it from the top-level
@@ -31,9 +32,13 @@ from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from coding_agent_playbook._typing import Prompt, Rule, Skill
+    from coding_agent_playbook.hook_policy import ResolvedHook
 
 #: Repo-relative shared skill root; Codex and OpenCode read ``.agents/skills/`` natively.
 SHARED_SKILLS_ROOT = Path(".agents") / "skills"
@@ -81,3 +86,10 @@ class SharedSkillsAdapter(Adapter):
         skill's dir is settled by ``playbook sync``'s lockfile leftover policy.
         """
         return self._SKILL_WRITER.write(skill, repo_root)
+
+    def writes_guardrails_skill(self, hooks: Sequence[ResolvedHook]) -> bool:
+        """``True`` when any on hook has guardrail text: Codex reads the ``AGENTS.md`` lines.
+
+        Example: ``SharedSkillsAdapter().writes_guardrails_skill([])`` -> ``False``.
+        """
+        return has_guardrail_text(hooks)
