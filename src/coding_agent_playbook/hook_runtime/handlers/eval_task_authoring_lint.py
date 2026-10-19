@@ -164,7 +164,7 @@ def _label(task_dir: Path, root: str) -> str:
 
 def _prompts(task_dir: Path, root: str, cfg: GuardConfig) -> list[Prompt] | None:
     """Every layer's prompts (later layers win by id in the validator), or ``None`` on failure."""
-    from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
+    from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
     from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 
     packages = _layer_packages(cfg) or [ENGINE_PACKAGE]

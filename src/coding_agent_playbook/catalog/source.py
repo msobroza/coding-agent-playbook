@@ -87,7 +87,7 @@ def _resource_subdir(package: str, subdir: str) -> Path | None:
 
     A bundled layer (the engine, or a bundled plugin under either namespace)
     reads ``<subdir>`` from its directory in the catalog root
-    (``catalog.catalog_layer_root``) and is never imported. Every other
+    (``catalog.roots.catalog_layer_root``) and is never imported. Every other
     package resolves ``<package>/resources/<subdir>`` via importlib.resources.
 
     Returns ``None`` if the package is not importable, has no ``resources/``
