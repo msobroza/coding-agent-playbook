@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook._guard_config_toolchain import (
+from coding_agent_playbook.hooks.guard_config._tables_toolchain import (
     ToolchainInputs,
     asyncio_marks_required,
     derived_hook_config,

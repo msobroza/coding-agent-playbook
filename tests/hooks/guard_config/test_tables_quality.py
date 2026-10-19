@@ -11,12 +11,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook._guard_config_quality import (
+from coding_agent_playbook.hooks.guard_config._tables_quality import (
     QualityLint,
     quality_hook_config,
     read_quality_lint,
 )
-from coding_agent_playbook._guard_config_ruff import RuffSelection
+from coding_agent_playbook.hooks.guard_config._tables_ruff import RuffSelection
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -34,13 +34,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook import __version__ as _installed_version
-from coding_agent_playbook._guard_config_quality import read_quality_lint
-from coding_agent_playbook._guard_config_ruff import (
-    read_project_ruff_selection,
-    ruff_candidate_codes,
-)
-from coding_agent_playbook._guard_config_skills import skill_glob_rows
-from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
 from coding_agent_playbook.adapters.claude_code.adapter import (
     ClaudeCodeAdapter,
     check_rule_files_writable,
@@ -54,23 +47,27 @@ from coding_agent_playbook.catalog.source import engine_package_of
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.generated_output.output_io import refuse_special_file
 from coding_agent_playbook.generated_output.write_guard import check_engine_owned
-from coding_agent_playbook.guard_config import (
-    SYNC_OUTPUT_LOCATIONS,
-    DetectInputs,
-    GuardConfigInputs,
-    ProtectInputs,
-    adapter_output_dirs,
-    applicability_rows,
-    copy_hook_scripts,
-    precommit_hook_ids,
-    protected_rows,
-    render_guard_config,
-    repo_layout,
-    resolve_resource_roots,
-    write_guard_config,
-)
 from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
 from coding_agent_playbook.hooks.enforcement import HOOK_LABELS, adapter_label
+from coding_agent_playbook.hooks.guard_config._tables_precommit import precommit_hook_ids
+from coding_agent_playbook.hooks.guard_config._tables_quality import read_quality_lint
+from coding_agent_playbook.hooks.guard_config._tables_ruff import read_project_ruff_selection
+from coding_agent_playbook.hooks.guard_config._tables_skills import skill_glob_rows
+from coding_agent_playbook.hooks.guard_config._tables_toolchain import read_toolchain_inputs
+from coding_agent_playbook.hooks.guard_config._tables_verify import repo_layout
+from coding_agent_playbook.hooks.guard_config.compile import (
+    SYNC_OUTPUT_LOCATIONS,
+    GuardConfigInputs,
+    render_guard_config,
+    write_guard_config,
+)
+from coding_agent_playbook.hooks.guard_config.inputs import (
+    DetectInputs,
+    ProtectInputs,
+    applicability_rows,
+)
+from coding_agent_playbook.hooks.guard_config.resource_roots import resolve_resource_roots
+from coding_agent_playbook.hooks.guard_config.ruff_probe import ruff_candidate_codes
 from coding_agent_playbook.hooks.registrations.opencode import OPENCODE_SHIM_PATH
 from coding_agent_playbook.hooks.registrations.stop_gate import stop_stage_records
 from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
@@ -78,7 +75,9 @@ from coding_agent_playbook.hooks.resolution.tables import HOOK_CAPABLE_ADAPTERS
 from coding_agent_playbook.lockfile.model import Provenance
 from coding_agent_playbook.sync import _machine_local as _sync_hook_local
 from coding_agent_playbook.sync._dispatch import HookDispatch
+from coding_agent_playbook.sync._hook_scripts import copy_hook_scripts
 from coding_agent_playbook.sync._output_policy import shared_outputs
+from coding_agent_playbook.sync._protect import adapter_output_dirs, protected_rows
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence

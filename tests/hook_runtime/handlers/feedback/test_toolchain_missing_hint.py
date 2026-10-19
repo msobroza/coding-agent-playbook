@@ -1,7 +1,7 @@
 """toolchain-missing-hint: name the project's install command when a dev tool is missing (specs/prK-hook-pack.md §E.3).
 
 The install hint is derived at sync from the detected package manager and the
-repository's pyproject (``_guard_config_toolchain``); the hook only matches
+repository's pyproject (``hooks.guard_config._tables_toolchain``); the hook only matches
 the Bash output and says it once per session per tool. Every case runs the
 shipped ``HOOK.md`` through ``playbook-hook simulate``; nothing spawns.
 """
@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.commands import validate as _validate
-from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.handlers.toolchain import missing_tool
+from coding_agent_playbook.hooks.guard_config.inputs import DetectInputs
 from tests.hook_runtime.handlers.pack_repo import engine_hook
 
 if TYPE_CHECKING:
