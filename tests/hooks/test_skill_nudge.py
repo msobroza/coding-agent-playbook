@@ -51,6 +51,8 @@ def _line(skill_id: str) -> str:
 #: Every core skill with members, as in the reference probe (FastAPI + pytest + ML):
 #: ``**/*.py`` reaches ml-data, python-coding and python-tooling; tests reach python-testing.
 SOURCE_LINES: Final = [_line("ml-data"), _line("python-coding"), _line("python-tooling")]
+#: The config files ``python-static-checks`` matches besides Python files and pyproject.
+STATIC_CHECK_CONFIGS: Final = ("ruff.toml", ".ruff.toml", "mypy.ini", ".mypy.ini")
 
 
 @pytest.fixture
@@ -240,7 +242,11 @@ def test_claude_and_opencode_payloads_carry_the_nudge(
 def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
     tmp_path: Path, make_synthetic_repo: Callable[..., Path]
 ) -> None:
-    """Only rules that pass ``applies_if`` reach the table: no pytest, no FastAPI, no ML here."""
+    """Only rules that pass ``applies_if`` reach the table: no pytest, no FastAPI, no ML here.
+
+    python-tooling still appears, with the globs of its one ungated member,
+    python-static-checks (Python files plus the ruff and mypy config files).
+    """
     (tmp_path / "repo").mkdir()
     repo = make_synthetic_repo(tmp_path / "repo", config_text=CONFIG + "[hooks]\nenabled = true\n")
 
@@ -249,7 +255,13 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
     hooks = json.loads((repo / GUARD_CONFIG).read_bytes())["hooks"]
     config = hooks[HOOK_ID]["handlers"]["post_tool_use"]["config"]
     assert rc == 0
-    assert config == {"skills": [{"id": "python-coding", "globs": ["**/*.py"]}]}
+    static_checks = ["**/*.py", "pyproject.toml", *STATIC_CHECK_CONFIGS]
+    assert config == {
+        "skills": [
+            {"id": "python-coding", "globs": ["**/*.py"]},
+            {"id": "python-tooling", "globs": static_checks},
+        ]
+    }
 
 
 def test_a_consumer_cannot_set_the_skills_table(

@@ -1,0 +1,11 @@
+# N1 (#80): rename the TOML writer, the pilot move of the rewrite script.
+
+[[module]]
+pr = "N1"
+old = "coding_agent_playbook._toml"
+new = "coding_agent_playbook.toml_writer"
+
+[[path]]
+pr = "N1"
+old = "tests/unit/test_toml.py"
+new = "tests/unit/test_toml_writer.py"

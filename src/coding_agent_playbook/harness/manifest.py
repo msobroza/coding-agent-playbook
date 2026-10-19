@@ -25,7 +25,7 @@ import tomllib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-from coding_agent_playbook import _toml
+from coding_agent_playbook import toml_writer as _toml
 from coding_agent_playbook._output_io import write_output_text
 
 if TYPE_CHECKING:
@@ -207,7 +207,7 @@ def _entry_from_table(table: dict[str, Any]) -> ManifestEntry:
 def _format_scalar(value: Any) -> str:
     """Render a scalar/collection as a TOML value (inline forms only).
 
-    Thin wrapper over :func:`coding_agent_playbook._toml.format_scalar` with
+    Thin wrapper over :func:`coding_agent_playbook.toml_writer.format_scalar` with
     inline tables enabled: bool before int (``isinstance(True, int)``),
     control-char-safe basic strings, inline arrays, and inline tables for dicts.
     Since v0.18 it also writes floats and dates/datetimes/times, which YAML
