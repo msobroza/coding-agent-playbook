@@ -97,7 +97,7 @@ def write_output_text(path: Path, text: str) -> None:
 def write_output_bytes(path: Path, data: bytes) -> None:
     """``path.write_bytes(data)``, refusing a FIFO, socket or block device there.
 
-    Example: ``write_output_bytes(out / GUARD_CONFIG_PATH, serialized)``.
+    Example: ``write_output_bytes(out / GUARD_CONFIG_REL, serialized)``.
     """
     refuse_special_file(path)
     path.write_bytes(data)

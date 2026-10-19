@@ -28,6 +28,8 @@ from tests.hook_samples import resolved_from_disk
 if TYPE_CHECKING:
     from pathlib import Path
 
+    import pytest
+
 
 def _ns(path: Path | None, *, strict: bool = False) -> argparse.Namespace:
     return argparse.Namespace(path=None if path is None else str(path), strict=strict)
@@ -326,3 +328,58 @@ def test_emitted_tree_with_hooks_has_zero_findings(tmp_path, capsys):
     assert rc == 0, captured.err
     assert "warning" not in captured.err.lower()
     assert "error" not in captured.err.lower()
+
+
+# --- the report (AH-2 #143 moved the checks to agent_harness.lint; these lines stay) ---
+
+
+def test_report_prints_errors_to_stdout_warnings_to_stderr_then_the_summary(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _minimal_harness(tmp_path)
+    (root / ".leaf-detectors").write_text("skill=SKILL.md\n", encoding="utf-8")
+    leaf = root / "skills" / "blank"
+    leaf.mkdir(parents=True)
+    (leaf / "SKILL.md").write_text('---\nname: ""\ndescription: d\n---\nb\n', encoding="utf-8")
+
+    rc = _validate_harness.run(_ns(root))
+
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert captured.out == (
+        f"ERROR {leaf}: skill leaf has empty 'name'\n"
+        "validation failed with 1 error(s), 1 warning(s)\n"
+    )
+    assert captured.err == (
+        f"warning: {root / 'skills'}: grouping directory lacks its routing file 'SKILLS.md'\n"
+    )
+
+
+def test_report_names_the_strict_promotion_only_when_warnings_alone_fail(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _minimal_harness(tmp_path)
+    (root / "docs").mkdir()
+
+    assert _validate_harness.run(_ns(root)) == 0
+    assert capsys.readouterr().out == "OK harness validated (1 warning(s))\n"
+    assert _validate_harness.run(_ns(root, strict=True)) == 1
+    assert capsys.readouterr().out == (
+        "validation failed with 0 error(s), 1 warning(s) (warnings promoted by --strict)\n"
+    )
+
+
+def test_malformed_harness_md_is_a_validation_error_not_a_usage_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = tmp_path / "malformed"
+    root.mkdir()
+    (root / "HARNESS.md").write_text('---\nname: ""\n---\nbody\n', encoding="utf-8")
+
+    rc = _validate_harness.run(_ns(root))
+
+    assert rc == 1  # deliberately not 2 (import-harness's usage error)
+    assert capsys.readouterr().out == (
+        f"ERROR {root}: HARNESS.md requires non-empty 'name' and 'description'\n"
+        "validation failed with 1 error(s), 0 warning(s)\n"
+    )

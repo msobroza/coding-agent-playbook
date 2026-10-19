@@ -348,17 +348,22 @@ def test_cutover_date_rendered_from_the_commit_convention_table(pack_repo: PackR
         HooksConfig,
     )
     from coding_agent_playbook.hooks.guard_config.compile import (
-        GuardConfigInputs,
-        render_guard_config,
+        GuardConfigRequest,
+        compile_guard_config,
     )
     from tests.hook_runtime.handlers.pack_repo import resolve_engine_hooks
 
-    hooks = resolve_engine_hooks([HOOK_ID], pack_repo.root)
     convention = CommitConventionConfig(cutover_date="2026-10-15")
-    config = HooksConfig(enabled=True, commit_convention=convention)
-    inputs = GuardConfigInputs(hooks, config, GuardrailsConfig(), "0.1.0a0")
+    request = GuardConfigRequest(
+        repo_root=pack_repo.root,
+        hooks=resolve_engine_hooks([HOOK_ID], pack_repo.root),
+        hooks_config=HooksConfig(enabled=True, commit_convention=convention),
+        guardrails=GuardrailsConfig(),
+        engine_version="0.1.0a0",
+    )
 
-    rendered = render_guard_config(inputs)["hooks"][HOOK_ID]["handlers"]["pre_tool_use"]
+    compiled = compile_guard_config(request).document
+    rendered = compiled["hooks"][HOOK_ID]["handlers"]["pre_tool_use"]
 
     assert rendered["config"] == {"check_push": False, "cutover_date": "2026-10-15"}
 

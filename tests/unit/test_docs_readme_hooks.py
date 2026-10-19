@@ -29,11 +29,11 @@ from coding_agent_playbook.commands.twins._ci_commit_convention import PR_TITLE_
 from coding_agent_playbook.commands.twins.ci import CI_STEPS
 from coding_agent_playbook.config.tables.hooks import parse_guardrails_config, parse_hooks_config
 from coding_agent_playbook.grading.metric import all_metrics
+from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.diagnostics._doctor_opencode import OPENCODE_MIN_VERSION
 from coding_agent_playbook.hook_runtime.dispatch.escape import HATCH_VARS
 from coding_agent_playbook.hook_runtime.dispatch.policy import UNATTENDED_ENV_VAR
 from coding_agent_playbook.hooks.enforcement import ADAPTER_LABELS, enforcement_targets
-from coding_agent_playbook.hooks.guard_config.compile import GUARD_CONFIG_PATH
 from coding_agent_playbook.hooks.registrations.launcher import LAUNCHER_PATH
 from coding_agent_playbook.hooks.registrations.opencode import OPENCODE_SHIM_PATH
 from coding_agent_playbook.metrics_gate.config import parse_metrics_config
@@ -142,7 +142,7 @@ def test_readme_lists_every_shipped_lifecycle_hook_with_its_tier(hook: HookFront
 def test_readme_architecture_overview_names_the_dispatcher() -> None:
     overview = _section("## Architecture")
     assert _blocks(overview, "text"), "the overview is an ASCII diagram in a ```text block"
-    guard_config = GUARD_CONFIG_PATH.rsplit("/", 1)[-1]
+    guard_config = GUARD_CONFIG_REL.rsplit("/", 1)[-1]
     for token in ("playbook-hook", guard_config, LAUNCHER_PATH, OPENCODE_SHIM_PATH):
         assert token in overview, f"README architecture overview lacks {token!r}"
     assert "resolve_effective_hooks" in overview

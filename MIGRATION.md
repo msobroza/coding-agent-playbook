@@ -561,6 +561,20 @@ change.
 <!-- module-moves: end-keep -->
 
 <!-- module-moves: keep -->
+The `guard_config.json` writer has one entry point,
+`coding_agent_playbook.hooks.guard_config.compile.compile_guard_config`. It takes a
+`GuardConfigRequest` holding only what sync computes (the resolved hooks, the
+`[hooks]` and `[guardrails]` policy, the engine version, the generated locations,
+the protected set, the detector facts and the rendered prompts and rules), reads the
+repo's pre-commit config, ruff config, pyproject and committed `[metrics]` from its
+`repo_root` itself, and returns a `CompiledGuardConfig`: the document, its canonical
+`data` and `write(out_root)`. `GuardConfigInputs`, `render_guard_config` and
+`write_guard_config` are gone, and so is `GUARD_CONFIG_PATH`: use
+`coding_agent_playbook.hook_runtime.config.schema.GUARD_CONFIG_REL`. The bytes of
+`guard_config.json` do not change.
+<!-- module-moves: end-keep -->
+
+<!-- module-moves: keep -->
 Out-of-tree hook handler authors: the event and decision model moved into the
 `coding_agent_playbook.hook_runtime.dispatch` package, with no shim at the old
 paths. Import `CanonicalEvent` from `coding_agent_playbook.hook_runtime.dispatch.event`
@@ -571,6 +585,27 @@ dispatcher: import `register_hook_handler` and `HandlerContext` from
 `coding_agent_playbook.hook_runtime.dispatch.registry` (was
 `coding_agent_playbook.hook_runtime.registry`). Hook ids, registry names and the
 `hook_handlers` entry-point group do not change.
+<!-- module-moves: end-keep -->
+
+<!-- module-moves: keep -->
+Out-of-tree code that reads an Agent Harness tree: the parsed tree
+`coding_agent_playbook.agent_harness.models.Harness` is now `HarnessTree`, with no
+alias (Harness names a coding-agent runtime), and `parse_harness` returns it. The
+`playbook validate-harness` checks are `coding_agent_playbook.agent_harness.lint.lint_harness`,
+which returns `HarnessFindings`; `HarnessFindings.failed(strict=...)` is the
+`--strict` choice. A hook sidecar entry reads back through
+`coding_agent_playbook.agent_harness.hook_sidecars.read_hook_sidecar(path, entry, source_package=...)`;
+the keyword names the package recorded on the rebuilt `Hook` (the importer passes
+`"<imported>"`). The command output, the exit codes and every byte the adapter
+writes do not change.
+<!-- module-moves: end-keep -->
+
+<!-- module-moves: keep -->
+Code that catches `coding_agent_playbook.precommit.PrecommitTemplateMissingError`
+programmatically: it now subclasses the CLI's shared exit-2 error type,
+`coding_agent_playbook.exit_two.ExitTwoError`, instead of `RuntimeError`, so an
+`except RuntimeError` no longer catches it. `playbook init` still prints the same
+`error:` line and exits 2.
 <!-- module-moves: end-keep -->
 
 Out-of-tree `Metric` authors: at grade time, a threshold or non-regression check

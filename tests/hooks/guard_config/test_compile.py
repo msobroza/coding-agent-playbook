@@ -1,127 +1,77 @@
-"""The sync-level ``guard_config.json`` and copied hook scripts (specs/prK-lifecycle-hooks.md §C.0, §D.8).
+"""``compile_guard_config``: the sync-level ``guard_config.json`` (specs/prK-lifecycle-hooks.md §C.0, §D.8).
 
-The file is committed and byte-compared by ``sync --check`` on every machine,
-so its bytes depend only on the resolved hooks and the committed policy: no
-absolute path, no ``sys.prefix``, no ``$HOME`` (§D.8.3). The runtime reads it
-back through ``hook_runtime.config.guard_config``, so the schema is pinned against that parser.
+Sync hands the writer a ``GuardConfigRequest`` holding only what sync owns; the
+writer reads every other input from the repository itself (specs/prT-package-layout.md
+9 AC.2.3), and a missing or broken file keeps its reader's default. The file is
+committed and byte-compared by ``sync --check`` on every machine, so its bytes depend
+only on the request and the repository: no absolute path, no ``sys.prefix``, no
+``$HOME`` (§D.8.3). The envelope and the hook records are tested in ``test_envelope``,
+the pack tables in ``test_pack_tables`` and ``test_tables_*``, and the runtime's read
+of the written file in ``test_round_trip``.
 """
 
 from __future__ import annotations
 
 import dataclasses
-import hashlib
 import json
-import os
-import stat
 import sys
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import pytest
 
-from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
-from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
-from coding_agent_playbook.adapters.continue_ import ContinueAdapter
-from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
-from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
-from coding_agent_playbook.config.tables.hooks import (
-    GuardrailsConfig,
-    HooksConfig,
-    SecretsGuardrails,
-)
-from coding_agent_playbook.generated_output.sentinel import SENTINEL
-from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
-from coding_agent_playbook.hook_runtime.config.schema import (
-    CONTROL_PLANE,
-    GUARD_CONFIG_REL,
-    playbook_precommit_ids,
-)
-from coding_agent_playbook.hook_runtime.dispatch.event import EventName
-from coding_agent_playbook.hooks.guard_config._tables_precommit import precommit_hook_ids
-from coding_agent_playbook.hooks.guard_config._tables_verify import RepoLayout, repo_layout
+from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FILENAME
+from coding_agent_playbook.detector.facts import detect
+from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hooks.guard_config.compile import (
-    GUARD_CONFIG_PATH,
-    HOOK_ARTIFACTS,
-    SYNC_OUTPUT_LOCATIONS,
-    GuardConfigInputs,
-    render_guard_config,
+    GuardConfigRequest,
+    compile_guard_config,
     serialize_guard_config,
-    write_guard_config,
 )
-from coding_agent_playbook.hooks.guard_config.inputs import (
-    DetectInputs,
-    ProtectInputs,
-    applicability_rows,
+from coding_agent_playbook.hooks.guard_config.inputs import DetectInputs
+from tests.hook_samples import resolved_hook
+from tests.hooks.guard_config.compile_kit import (
+    compiled_document,
+    handler_config,
+    request_for,
+    two_hooks,
 )
-from coding_agent_playbook.hooks.guard_config.resource_roots import resource_root_ids
-from coding_agent_playbook.hooks.registrations.plan import resolved_deadlines_ms
-from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
-from coding_agent_playbook.lockfile.model import LockEntry, Provenance
-from coding_agent_playbook.security.patterns import (
-    SECRET_CONTENT_RULES,
-    SECRET_GLOB_EXEMPT,
-    SECRET_PATH_EXEMPT,
-    SECRET_PATH_GLOBS,
-    SECRET_RULESET_ID,
-    SECRET_RULESET_VERSION,
-)
-from coding_agent_playbook.sync._dispatch import build_lockfile
-from coding_agent_playbook.sync._hook_scripts import copy_hook_scripts
-from coding_agent_playbook.sync._protect import (
-    COMPOSITE_SINGLETONS,
-    adapter_output_dirs,
-    protected_rows,
-)
-from tests._catalog import CORE_ROOT, plugin_root
-from tests.hook_runtime.handlers.pack_repo import resolve_engine_hooks
-from tests.hook_samples import resolved_from_disk, resolved_hook, sample_hook
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
     from pathlib import Path
 
-    from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 
-_PROTECT = ProtectInputs(
-    entries=(),
-    output_dirs=(".claude/commands/", "AGENTS.md"),
-    packages=("coding_agent_playbook", "coding_agent_playbook.plugins.superpowers"),
-)
+# --- the interface: what sync hands over, what comes back -----------------------------
 
 
-def _inputs(hooks: list[ResolvedHook], protect: ProtectInputs = _PROTECT) -> GuardConfigInputs:
-    return GuardConfigInputs(
-        hooks=hooks,
-        hooks_config=HooksConfig(enabled=True),
-        guardrails=GuardrailsConfig(),
-        engine_version="0.2.0",
-        generated=(".claude/commands/", "AGENTS.md"),
-        protected=protect,
-    )
+def test_request_fields_are_only_what_sync_owns() -> None:
+    """GC-D2: sync hands over what it computes; the writer reads every repo file itself."""
+    assert {field.name for field in dataclasses.fields(GuardConfigRequest)} == {
+        "repo_root",
+        "hooks",
+        "hooks_config",
+        "guardrails",
+        "engine_version",
+        "generated",
+        "protected",
+        "detect",
+        "prompts",
+        "rules",
+    }
 
 
-def _two_hooks(tmp_path: Path) -> list[ResolvedHook]:
-    return [
-        resolved_from_disk(tmp_path / "src", "guard-ext"),
-        resolved_hook("guard-y", events=("stop",), timeout=1.5),
-    ]
+def test_compiled_data_is_the_canonical_serialization(repo: Path) -> None:
+    hooks = [resolved_hook("guard-y", config={"note": "café"})]
 
+    result = compile_guard_config(request_for(repo, hooks))
 
-def test_render_is_machine_independent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    hooks = _two_hooks(tmp_path)
-    rendered: list[bytes] = []
-    for prefix, home in (("/opt/venv-a", tmp_path / "home-a"), ("/srv/venv-b", tmp_path / "b")):
-        monkeypatch.setattr(sys, "prefix", prefix)
-        monkeypatch.setenv("HOME", str(home))
-        rendered.append(serialize_guard_config(render_guard_config(_inputs(hooks))))
-
-    assert rendered[0] == rendered[1]
-    text = rendered[0].decode("ascii")
-    assert str(tmp_path) not in text
-    assert "/opt/" not in text and "/srv/" not in text
-    assert '"protected":' in text and '"sentinel":' in text
-    assert "site-packages" not in text
+    assert result.data == serialize_guard_config(result.document)
+    assert b'"note":"caf\\u00e9"' in result.data
+    assert result.data.isascii()
+    assert result.data.endswith(b"}\n") and result.data.count(b"\n") == 1
 
 
 def test_canonical_serialization_sorted_compact_ascii_newline() -> None:
@@ -135,316 +85,147 @@ def test_canonical_serialization_sorted_compact_ascii_newline() -> None:
     ).encode("ascii")
 
 
-def test_envelope_and_k3_tables_present(tmp_path: Path) -> None:
-    extra = SecretsGuardrails(extra_globs=("*.vault",))
-    inputs = GuardConfigInputs(
-        hooks=_two_hooks(tmp_path),
-        hooks_config=HooksConfig(
-            enabled=True,
-            unattended_ask="warn",
-            wrapper_prefixes=("proxy",),
-            allow_code_from=("<repo-local>",),
-            state_ttl_days=3,
+def test_check_mode_reads_the_real_repo_not_the_output_root(repo: Path, tmp_path: Path) -> None:
+    """GC-D3: ``sync --check`` writes into an empty scratch dir, yet every repo input is read
+    from ``repo_root``, so both output roots get the same bytes."""
+    (repo / "ruff.toml").write_text('[lint]\nselect = ["I"]\n', encoding="utf-8")
+    result = compile_guard_config(request_for(repo))
+    scratch = tmp_path / "scratch"
+
+    written = [result.write(out_root) for out_root in (repo, scratch)]
+
+    assert written == [repo / GUARD_CONFIG_REL, scratch / GUARD_CONFIG_REL]
+    assert written[0].read_bytes() == written[1].read_bytes() == result.data
+    assert b'"project_select":["I"]' in result.data
+    assert not (scratch / "ruff.toml").exists()
+
+
+def test_compile_is_machine_independent(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hooks = two_hooks(tmp_path)
+    datas: list[bytes] = []
+    for prefix, home in (("/opt/venv-a", tmp_path / "home-a"), ("/srv/venv-b", tmp_path / "b")):
+        monkeypatch.setattr(sys, "prefix", prefix)
+        monkeypatch.setenv("HOME", str(home))
+        datas.append(compile_guard_config(request_for(repo, hooks)).data)
+
+    assert datas[0] == datas[1]
+    text = datas[0].decode("ascii")
+    assert str(tmp_path) not in text
+    assert "/opt/" not in text and "/srv/" not in text
+    assert '"protected":' in text and '"sentinel":' in text
+    assert "site-packages" not in text
+
+
+# --- the repo inputs the writer reads itself (GC-D2, GC-D5) ----------------------------
+
+
+def test_compile_reads_the_project_ruff_selection(repo: Path) -> None:
+    (repo / "ruff.toml").write_text('[lint]\nselect = ["I"]\n', encoding="utf-8")
+
+    table = compiled_document(request_for(repo))["ruff"]
+
+    assert table == {
+        "default_select": False,
+        "project_select": ["I"],
+        "project_ignore": [],
+        "safe_fix_select": ["I"],
+        "safe_fix_ignore": [],
+    }
+
+
+@pytest.mark.parametrize(
+    ("name", "text", "selection"),
+    [
+        (
+            "pyproject.toml",
+            '[tool.ruff.lint]\nselect = ["E", "I", "UP"]\nextend-select = ["B"]\n'
+            'ignore = ["E501"]\nextend-ignore = ["UP007"]\n',
+            (False, ["B", "E", "I", "UP"], ["E501", "UP007"]),
         ),
-        guardrails=GuardrailsConfig(secrets=extra),
-        engine_version="0.2.0",
-        generated=(".continue/rules/", "AGENTS.md"),
+        ("pyproject.toml", '[tool.ruff]\nselect = ["F", "I"]\n', (False, ["F", "I"], [])),
+        ("ruff.toml", '[lint]\nselect = ["ALL"]\nignore = ["D"]\n', (False, ["ALL"], ["D"])),
+        ("ruff.toml", 'line-length = 100\n[lint]\nextend-select = ["I"]\n', (True, ["I"], [])),
+        ("pyproject.toml", '[project]\nname = "x"\n', (True, [], [])),
+    ],
+    ids=["pyproject-lint", "pyproject-legacy", "all", "defaults+extend", "no-tool-ruff"],
+)
+def test_compile_reads_every_ruff_config_shape(
+    repo: Path, name: str, text: str, selection: tuple[bool, list[str], list[str]]
+) -> None:
+    """``[lint]`` keys first, the deprecated top-level ones as a fallback; a pyproject
+    without ``[tool.ruff]`` is no ruff config, so ruff's defaults stay implicit."""
+    (repo / name).write_text(text, encoding="utf-8")
+
+    table = compiled_document(request_for(repo))["ruff"]
+
+    assert (table["default_select"], table["project_select"], table["project_ignore"]) == selection
+
+
+def test_compile_reads_the_ruff_config_ruff_itself_would_read(repo: Path) -> None:
+    """Ruff's precedence: ``.ruff.toml`` over ``ruff.toml`` over ``pyproject.toml``."""
+    (repo / "pyproject.toml").write_text('[tool.ruff.lint]\nselect = ["E"]\n', "utf-8")
+    (repo / "ruff.toml").write_text('[lint]\nselect = ["F"]\n', "utf-8")
+    over_pyproject = compiled_document(request_for(repo))["ruff"]["project_select"]
+    (repo / ".ruff.toml").write_text('[lint]\nselect = ["I"]\n', "utf-8")
+    over_both = compiled_document(request_for(repo))["ruff"]["project_select"]
+
+    assert (over_pyproject, over_both) == (["F"], ["I"])
+
+
+@pytest.mark.parametrize(
+    ("pyproject", "hints"),
+    [
+        (
+            '[project]\nname = "x"\n\n[dependency-groups]\ndev = ["ruff>=0.6"]\n',
+            {"install_hint": "uv sync --group dev", "cz_install_hint": ""},
+        ),
+        (
+            '[project]\nname = "x"\n[project.optional-dependencies]\ndev = ["commitizen>=3"]\n',
+            {"install_hint": "uv sync --extra dev", "cz_install_hint": "uv sync --extra dev"},
+        ),
+    ],
+    ids=["dev-group-without-pytest", "commitizen-in-the-dev-extra"],
+)
+def test_compile_reads_toolchain_hints_from_pyproject(
+    repo: Path, pyproject: str, hints: dict[str, str]
+) -> None:
+    """``uv.lock`` makes the detector report uv; the dev extra or group names the command."""
+    (repo / "uv.lock").write_text("version = 1\n", encoding="utf-8")
+    (repo / "pyproject.toml").write_text(pyproject, encoding="utf-8")
+    hook = resolved_hook("toolchain-missing-hint", events=("post_tool_use",))
+    request = dataclasses.replace(
+        request_for(repo, [hook]), detect=DetectInputs(facts=detect(repo))
     )
 
-    cfg = render_guard_config(inputs)
-
-    assert cfg["schema_version"] == 1
-    assert cfg["engine_version"] == "0.2.0"
-    assert cfg["unattended_ask"] == "warn"
-    assert cfg["logging"] == {"decisions": False, "audit": False, "audit_mode": ""}
-    assert cfg["shell"]["wrapper_prefixes"] == ["proxy"]
-    assert "uv run" in cfg["shell"]["runner_wrappers"]
-    assert cfg["secret_path_globs"] == [*SECRET_PATH_GLOBS, "*.vault"]
-    assert cfg["allow_code_from"] == ["<repo-local>"]
-    assert cfg["state_ttl_days"] == 3
-    classes = cfg["path_classes"]
-    assert {"canonical", "control_plane", "generated", "py", "test"} <= set(classes)
-    assert classes["generated"] == sorted([".continue/rules/", "AGENTS.md", *SYNC_OUTPUT_LOCATIONS])
-    assert ".claude/settings.json" in classes["control_plane"]
+    assert handler_config(compiled_document(request), "toolchain-missing-hint") == hints
 
 
-def test_hooks_are_resolvedhook_to_json(tmp_path: Path) -> None:
-    hooks = _two_hooks(tmp_path)
-
-    cfg = render_guard_config(_inputs(hooks))
-
-    assert cfg["hooks"] == {hook.id: hook.to_json() for hook in hooks}
-
-
-def test_deadlines_match_registration_formula(tmp_path: Path) -> None:
-    hooks = _two_hooks(tmp_path)
-
-    cfg = render_guard_config(_inputs(hooks))
-
-    assert cfg["deadlines_ms"] == resolved_deadlines_ms(hooks)
-    assert cfg["deadlines_ms"]["pre_tool_use"] == 2000
+_QUALITY_HOOK = "clean-code-metrics-nonregression"
+_METRICS_TABLE = """\
+[metrics.ruff_violations]
+families = { quality = ["C901", "PLR1702"] }
+config = { "lint.mccabe.max-complexity" = 10, "lint.pylint.max-nested-blocks" = 3 }
+preview = true
+"""
 
 
-def test_runtime_parses_the_rendered_config(tmp_path: Path) -> None:
-    hooks = _two_hooks(tmp_path)
-
-    parsed = parse_guard_config(serialize_guard_config(render_guard_config(_inputs(hooks))))
-
-    assert isinstance(parsed, GuardConfig), parsed
-    assert sorted(parsed.hooks) == ["guard-ext", "guard-y"]
-    assert GUARD_CONFIG_PATH == GUARD_CONFIG_REL
-
-
-def test_write_guard_config_writes_canonical_bytes(tmp_path: Path) -> None:
-    cfg = render_guard_config(_inputs([]))
-
-    path = write_guard_config(tmp_path, cfg)
-
-    assert path == tmp_path / GUARD_CONFIG_PATH
-    assert path.read_bytes() == serialize_guard_config(cfg)
-
-
-@pytest.mark.skipif(os.name != "posix", reason="exec bits are POSIX-only")
-def test_external_argv_repo_relative_and_scripts_copied_with_exec_bit(tmp_path: Path) -> None:
-    hook = resolved_from_disk(tmp_path / "src", "guard-ext")
-    builtin = resolved_hook("guard-y")
-    out = tmp_path / "out"
-
-    copies = copy_hook_scripts([builtin, hook], out)
-
-    argv = render_guard_config(_inputs([hook]))["hooks"]["guard-ext"]["handlers"]
-    assert argv["pre_tool_use"]["argv"] == [
-        "sh",
-        ".coding-agent-playbook/hooks/scripts/guard-ext/check.sh",
-        "--fast",
-    ]
-    [copy] = copies
-    assert copy.hook is hook
-    root = out / ".coding-agent-playbook" / "hooks" / "scripts" / "guard-ext"
-    assert copy.paths == (root / "check.sh", root / "lib" / "data.txt")
-    assert (root / "check.sh").read_bytes() == b"#!/bin/sh\nexit 0\n"
-    assert (root / "check.sh").stat().st_mode & stat.S_IXUSR
-    assert not (root / "lib" / "data.txt").stat().st_mode & 0o111
-
-
-# --- the §E.0.5 protect tables (Track K5 step 1) ------------------------------------------------
-
-
-def _written_tree(root: Path) -> tuple[dict[Path, Provenance], list[LockEntry]]:
-    """A synced tree: two whole-file outputs, a composite and a co-owned settings file."""
-    files = {
-        ".claude/skills/demo/SKILL.md": Provenance("skill", "demo", "<repo-local>", "claude_code"),
-        ".continue/rules/10-x.md": Provenance("rule", "x", "coding_agent_playbook", "continue"),
-        "AGENTS.md": Provenance("composite", adapter="agents_md"),
-        ".claude/settings.json": Provenance("composite", adapter="claude_code"),
-    }
-    provenance: dict[Path, Provenance] = {}
-    for rel, origin in files.items():
-        path = root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(f"{rel}\n", encoding="utf-8")
-        provenance[path.resolve()] = origin
-    managed = [
-        LockEntry(
-            path=".claude/settings.json",
-            sha256="ab" * 32,
-            bytes=40,
-            kind="runtime",
-            artifact_id="registration:pre_tool_use",
-            adapter="claude_code",
-            scope="json:/hooks/PreToolUse",
-        )
-    ]
-    return provenance, managed
-
-
-def test_protected_entries_mirror_lockfile_provenance(tmp_path: Path) -> None:
-    provenance, managed = _written_tree(tmp_path)
-    shared = (".claude/settings.json",)
-
-    rows = protected_rows(provenance, managed, tmp_path, shared=shared)
-
-    lock = build_lockfile(
-        list(provenance), tmp_path, "0.2.0", provenance=provenance, managed=managed, shared=shared
+def test_compile_reads_the_quality_family_from_the_committed_metrics_table(repo: Path) -> None:
+    """Team policy: the committed file only; ``.local.toml`` never applies to ``[metrics]``."""
+    (repo / CONFIG_FILENAME).write_text(_METRICS_TABLE, encoding="utf-8")
+    (repo / CONFIG_LOCAL_FILENAME).write_text(
+        "[metrics.ruff_violations]\npreview = false\n", encoding="utf-8"
     )
-    columns = ("path", "kind", "artifact_id", "source", "scope")
-    assert [{c: row.to_json()[c] for c in columns} for row in rows] == [
-        {c: getattr(entry, c) for c in columns} for entry in lock.entries
-    ]
+    hook = resolved_hook(_QUALITY_HOOK, events=("post_tool_use",))
 
+    document = compiled_document(request_for(repo, [hook]))
 
-def test_scoped_entries_carry_sha256(tmp_path: Path) -> None:
-    provenance, managed = _written_tree(tmp_path)
-
-    rows = [row.to_json() for row in protected_rows(provenance, managed, tmp_path)]
-
-    scoped = [row for row in rows if row["scope"]]
-    assert scoped == [
-        {
-            "path": ".claude/settings.json",
-            "kind": "runtime",
-            "artifact_id": "registration:pre_tool_use",
-            "source": "",
-            "scope": "json:/hooks/PreToolUse",
-            "sha256": "ab" * 32,
-        }
-    ]
-    assert all("sha256" not in row for row in rows if not row["scope"])
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
-def test_protected_rows_map_a_scratch_path_through_the_repos_symlinks(tmp_path: Path) -> None:
-    """A ``--check`` scratch row names what write mode records: the resolved repo path."""
-    repo, scratch = tmp_path / "repo", tmp_path / "scratch"
-    (repo / ".agents" / "skills").mkdir(parents=True)
-    (repo / ".claude").mkdir()
-    (repo / ".claude" / "skills").symlink_to("../.agents/skills", target_is_directory=True)
-    written = scratch / ".claude" / "skills" / "demo" / "SKILL.md"
-    provenance = {written.resolve(): Provenance(kind="skill", artifact_id="demo")}
-
-    rows = protected_rows(provenance, [], scratch, repo_root=repo)
-
-    assert [row.path for row in rows] == [".agents/skills/demo/SKILL.md"]
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
-def test_protected_rows_drop_a_path_the_repo_links_outside_itself(tmp_path: Path) -> None:
-    repo, scratch, elsewhere = tmp_path / "repo", tmp_path / "scratch", tmp_path / "elsewhere"
-    elsewhere.mkdir()
-    (repo / ".claude").mkdir(parents=True)
-    (repo / ".claude" / "skills").symlink_to(elsewhere, target_is_directory=True)
-    written = scratch / ".claude" / "skills" / "demo" / "SKILL.md"
-    provenance = {written.resolve(): Provenance(kind="skill", artifact_id="demo")}
-
-    assert protected_rows(provenance, [], scratch, repo_root=repo) == []
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
-def test_protected_output_dirs_list_a_linked_scan_dir_by_its_target(tmp_path: Path) -> None:
-    repo, scratch = tmp_path / "repo", tmp_path / "scratch"
-    (repo / "tools" / "claude-commands").mkdir(parents=True)
-    (repo / ".claude" / "commands").parent.mkdir()
-    (repo / ".claude" / "commands").symlink_to("../tools/claude-commands", target_is_directory=True)
-
-    dirs = adapter_output_dirs({"claude_code": ClaudeCodeAdapter()}, scratch, repo_root=repo)
-
-    assert "tools/claude-commands/" in dirs
-    assert ".claude/commands/" not in dirs
-    assert dirs == adapter_output_dirs({"claude_code": ClaudeCodeAdapter()}, repo)
-
-
-def test_protected_output_dirs_match_adapter_stale_scan_dirs(tmp_path: Path) -> None:
-    adapters = {
-        "claude_code": ClaudeCodeAdapter(),
-        "continue": ContinueAdapter(),
-        "opencode": OpenCodeAdapter(),
-        "agents_md": AgentsMdAdapter(),
+    assert handler_config(document, _QUALITY_HOOK) == {
+        "lint_codes": {"warn": ["C901", "PLR1702"]},
+        "ruff_config": ["lint.mccabe.max-complexity=10", "lint.pylint.max-nested-blocks=3"],
+        "ruff_preview": True,
     }
-
-    dirs = adapter_output_dirs(adapters, tmp_path)
-
-    scanned = {
-        f"{path.relative_to(tmp_path).as_posix()}/"
-        for adapter in adapters.values()
-        for path in adapter._output_directories(tmp_path)
-    }
-    composites = {".claude/CLAUDE.md", ".claude/rules/coding-agent-playbook.md", "AGENTS.md"}
-    assert set(dirs) == scanned | composites
-    assert ".claude/skills/" not in dirs  # skill output is lockfile-only (main #25)
-    assert ".claude/rules/" not in dirs  # every other rules file is the user's
-    assert dirs == sorted(dirs)
-    assert adapter_output_dirs({"continue": ContinueAdapter()}, tmp_path) == [
-        ".continue/prompts/",
-        ".continue/rules/",
-    ]
-
-
-@pytest.mark.parametrize("name", sorted(COMPOSITE_SINGLETONS))
-def test_composite_singletons_are_exactly_what_finalize_writes(tmp_path: Path, name: str) -> None:
-    """The guard, the drift scan and ``sync`` must agree on every multi-source file.
-
-    Since the Claude Code rules moved to ``.claude/rules/coding-agent-playbook.md``
-    (SPEC §10.3.1) ``claude_code`` composes two files; both are singletons.
-    """
-    adapter = {"claude_code": ClaudeCodeAdapter, "agents_md": AgentsMdAdapter}[name]()
-    body = "Use type hints.\n"
-    fm = RuleFrontmatter(id="typing", name="Typing", description="d", scope="always")
-    adapter.write_rule(Rule(fm, body, body, False, None, "test"), tmp_path)
-
-    written = adapter.finalize(tmp_path)
-
-    relative = tuple(path.relative_to(tmp_path).as_posix() for path in written)
-    assert relative == COMPOSITE_SINGLETONS[name]
-
-
-def test_resource_roots_are_package_relative_ids() -> None:
-    packages = ("coding_agent_playbook", "coding_agent_playbook.plugins.superpowers")
-
-    table = render_guard_config(_inputs([]))["protected"]
-
-    assert resource_root_ids(packages) == [
-        "pkg:coding_agent_playbook/resources",
-        "pkg:coding_agent_playbook.plugins.superpowers/resources",
-    ]
-    assert table["resource_roots"] == resource_root_ids(packages)
-    assert table["hook_artifacts"] == list(HOOK_ARTIFACTS)
-    assert table["hook_artifacts"] == [
-        ".coding-agent-playbook/hooks/",
-        ".claude/hooks/playbook/",
-        ".opencode/plugins/playbook-hooks.js",
-    ]
-    assert table["output_dirs"] == [".claude/commands/", "AGENTS.md"]
-
-
-@pytest.mark.catalog
-def test_bundled_layers_resolve_to_their_catalog_dirs_never_importing() -> None:
-    """The engine and a bundled plugin resolve through ``catalog`` (SPEC v0.19):
-    the ids keep their ``resources`` spelling, the paths are the layers' content dirs,
-    and an unknown plugin leaf is left out like an unimportable overlay."""
-    from coding_agent_playbook.hooks.guard_config.resource_roots import resolve_resource_roots
-
-    roots = resolve_resource_roots(
-        [
-            "coding_agent_playbook",
-            "coding_agent_playbook.plugins.superpowers",
-            "coding_agent_playbook.plugins.no_such_plugin",
-            "json",  # importable, ships no resources/
-        ]
-    )
-
-    assert roots == {
-        "pkg:coding_agent_playbook/resources": str(CORE_ROOT),
-        "pkg:coding_agent_playbook.plugins.superpowers/resources": str(plugin_root("superpowers")),
-    }
-
-
-def test_sentinel_key_is_the_generated_output_sentinel() -> None:
-    cfg = render_guard_config(_inputs([]))
-
-    assert cfg["sentinel"] == SENTINEL
-
-
-def test_runtime_reads_the_protect_tables_back(tmp_path: Path) -> None:
-    provenance, managed = _written_tree(tmp_path)
-    protect = ProtectInputs(entries=protected_rows(provenance, managed, tmp_path))
-
-    parsed = parse_guard_config(serialize_guard_config(render_guard_config(_inputs([], protect))))
-
-    assert isinstance(parsed, GuardConfig), parsed
-    assert parsed.tables["sentinel"] == SENTINEL
-    paths = [row["path"] for row in parsed.tables["protected"]["entries"]]
-    assert paths == sorted(paths)
-
-
-def test_control_plane_rows_are_engine_constants(tmp_path: Path) -> None:
-    """Rendered from the runtime's own constants; no input changes them (overlays: extra_paths)."""
-    bare = render_guard_config(_inputs([]))["control_plane"]
-    other = render_guard_config(_inputs(_two_hooks(tmp_path), ProtectInputs()))["control_plane"]
-
-    assert bare == {key: list(rows) for key, rows in CONTROL_PLANE.items()}
-    assert other == bare
-    assert ".claude/settings.json" in bare["settings"]
-    assert bare["toml_deny"] == ["hooks", "guardrails"]
 
 
 _PRECOMMIT = """\
@@ -458,344 +239,13 @@ repos:
 """
 
 
-def test_precommit_ids_use_the_runtime_regex(tmp_path: Path) -> None:
-    (tmp_path / ".pre-commit-config.yaml").write_text(_PRECOMMIT, encoding="utf-8")
+def test_compile_reads_precommit_ids_from_the_repo_config(repo: Path) -> None:
+    """The runtime's own regex, so control-plane-guard and sync never disagree on the ids."""
+    (repo / ".pre-commit-config.yaml").write_text(_PRECOMMIT, encoding="utf-8")
 
-    ids = precommit_hook_ids(tmp_path)
-    rendered = render_guard_config(dataclasses.replace(_inputs([]), precommit_ids=ids))
+    table = compiled_document(request_for(repo))["precommit"]
 
-    assert ids == playbook_precommit_ids(_PRECOMMIT)
-    assert rendered["precommit"] == {
-        "playbook_hook_ids": ["coding-agent-playbook-sync", "playbook-sync-check"]
-    }
-    assert precommit_hook_ids(tmp_path / "no-such-repo") == []
-
-
-def test_runtime_reads_the_control_plane_tables_back() -> None:
-    inputs = dataclasses.replace(_inputs([]), precommit_ids=["playbook-sync-check"])
-
-    parsed = parse_guard_config(serialize_guard_config(render_guard_config(inputs)))
-
-    assert isinstance(parsed, GuardConfig), parsed
-    assert parsed.tables["precommit"] == {"playbook_hook_ids": ["playbook-sync-check"]}
-    assert parsed.tables["control_plane"]["mcp"] == [".mcp.json"]
-
-
-# --- K5 step 3: facts, applicability, eval, auto_sync (§E.0.5) -------------------------
-
-_ML_RULE = Rule(
-    RuleFrontmatter(
-        id="ml-serialization-security",
-        name="ML serialization",
-        description="Never unpickle untrusted data.",
-        scope="always",
-        applies_if={"any_ml_stack": ["torch"]},
-    ),
-    "Use safetensors.\n",
-    "Use safetensors.\n",
-    False,
-    None,
-    "coding_agent_playbook",
-)
-
-
-def _prompt(prompt_id: str, applies_if: dict[str, Any] | None = None) -> Prompt:
-    frontmatter = PromptFrontmatter(
-        id=prompt_id, name=prompt_id, description="d", slash=prompt_id, applies_if=applies_if or {}
-    )
-    return Prompt(frontmatter, "Body.\n", "Body.\n", False, None, "<repo-local>")
-
-
-def test_facts_carry_dependency_names_and_presence_flags() -> None:
-    facts: Facts = {
-        "dependencies": {"torch": ">=2", "fastapi": ""},
-        "dev_dependencies": {"pytest": ">=8"},
-        "ml_stack": {"torch": ">=2"},
-        "has_dockerfile": True,
-        "has_ci": False,
-        "python_version": "3.12",
-    }
-    inputs = dataclasses.replace(_inputs([]), detect=DetectInputs(facts=facts))
-
-    rendered = render_guard_config(inputs)["facts"]
-
-    assert rendered == {
-        "dependencies": ["fastapi", "torch"],
-        "dev_dependencies": ["pytest"],
-        "has_ci": False,
-        "has_dockerfile": True,
-        "has_notebooks": False,
-    }
-
-
-def test_applicability_rows_cover_rules_prompts_and_skipped_hooks(tmp_path: Path) -> None:
-    linked = sample_hook(
-        "coding_agent_playbook", id="ml-guard", linked_rule=_ML_RULE.frontmatter.id
-    )
-    gated = sample_hook(id="nb-guard", applies_if={"has_notebooks": True})
-    opt_in = sample_hook(id="later", tier="opt-in", applies_if={"has_notebooks": True})
-    always = sample_hook(id="guard-x")
-    hooks = [linked, gated, opt_in, always]
-    view = resolve_effective_hooks(
-        hooks,
-        [_ML_RULE],
-        HooksConfig(enabled=True),
-        GuardrailsConfig(),
-        {},
-        tmp_path,
-        adapters_enabled=["claude_code"],
-    )
-    rows = applicability_rows(
-        rules=[_ML_RULE],
-        prompts=[_prompt("security-review", {"any_ml_stack": ["torch"]}), _prompt("explain")],
-        hooks=hooks,
-        view=view,
-        facts={},
-        repo_root=tmp_path,
-    )
-
-    table = render_guard_config(
-        dataclasses.replace(_inputs([]), detect=DetectInputs(applicability=rows))
-    )["applicability"]
-
-    torch = [{"any_ml_stack": ["torch"]}]
-    assert table == [
-        {
-            "kind": "hook",
-            "id": "guard-x",
-            "applies_if": [],
-            "source": "<repo-local>",
-            "active": True,
-        },
-        {
-            "kind": "hook",
-            "id": "ml-guard",
-            "applies_if": torch,
-            "source": "coding_agent_playbook",
-            "active": False,
-        },
-        {
-            "kind": "hook",
-            "id": "nb-guard",
-            "applies_if": [{"has_notebooks": True}],
-            "source": "<repo-local>",
-            "active": False,
-        },
-        {
-            "kind": "prompt",
-            "id": "explain",
-            "applies_if": [],
-            "source": "<repo-local>",
-            "active": True,
-        },
-        {
-            "kind": "prompt",
-            "id": "security-review",
-            "applies_if": torch,
-            "source": "<repo-local>",
-            "active": False,
-        },
-        {
-            "kind": "rule",
-            "id": "ml-serialization-security",
-            "applies_if": torch,
-            "source": "coding_agent_playbook",
-            "active": False,
-        },
-    ]  # the opt-in hook is off by tier: new facts can never turn it on
-
-
-def test_eval_fixture_globs_default() -> None:
-    rendered = render_guard_config(_inputs([]))
-
-    assert rendered["eval"] == {"fixture_globs": ["**/eval_tasks/*/setup/**"]}
-    assert rendered["path_classes"]["eval_fixture"] == rendered["eval"]["fixture_globs"]
-
-
-def test_auto_sync_rendered_from_hooks_table() -> None:
-    on = dataclasses.replace(_inputs([]), hooks_config=HooksConfig(enabled=True, auto_sync=True))
-
-    assert render_guard_config(_inputs([]))["auto_sync"] is False
-    assert render_guard_config(on)["auto_sync"] is True
-    parsed = parse_guard_config(serialize_guard_config(render_guard_config(on)))
-    assert isinstance(parsed, GuardConfig) and parsed.tables["auto_sync"] is True
-
-
-# --- K6: the stop_gate table and the stop deadline (prK-hook-pack.md §E.0.5, §D.4) ------
-
-
-def _stop_hooks(config: dict[str, Any] | None = None) -> list[ResolvedHook]:
-    return [
-        resolved_hook("stop-ci-parity-gate", events=("stop",), config=config or {}),
-        resolved_hook(
-            "coverage-diff-gate", events=("stop",), timeout=60.0, config={"stage": "coverage"}
-        ),
-        resolved_hook(
-            "stop-drift-and-orphan-gate", events=("stop",), timeout=5.0, config={"stage": "drift"}
-        ),
-    ]
-
-
-def _stop_gate(hooks: list[ResolvedHook], facts: dict[str, Any] | None = None) -> dict[str, Any]:
-    inputs = dataclasses.replace(_inputs(hooks), detect=DetectInputs(facts=facts or {}))
-    gate: dict[str, Any] = render_guard_config(inputs)["stop_gate"]
-    return gate
-
-
-def test_stop_gate_derived_from_hook_config_and_dev_tools() -> None:
-    config = {
-        "budget_s": 4.5,
-        "max_blocks": 3,
-        "verify_commands": ["uv run --frozen --no-sync pytest -q"],
-        "claim_patterns": ["(?i)shipped it"],
-    }
-
-    gate = _stop_gate(_stop_hooks(config), {"dev_tools": {"ruff"}})
-
-    assert (gate["budget_s"], gate["max_blocks"]) == (4.5, 3)
-    assert gate["stages"] == [
-        {
-            "name": "drift",
-            "owner": "stop-drift-and-orphan-gate",
-            "cost": "deterministic",
-            "tool": "",
-            "args": [],
-            "timeout_s": 5.0,
-            "needs_diff": False,
-            "mode": "block",
-        },
-        {
-            "name": "lint",
-            "owner": "stop-ci-parity-gate",
-            "cost": "deterministic",
-            "tool": "ruff",
-            "args": ["check", "--output-format=json", "."],
-            "timeout_s": 3.0,
-            "needs_diff": True,
-            "mode": "block",
-        },
-        {
-            "name": "verify-claim",
-            "owner": "stop-ci-parity-gate",
-            "cost": "deterministic",
-            "tool": "",
-            "args": [],
-            "timeout_s": 1.0,
-            "needs_diff": True,
-            "mode": "block",
-        },
-        {  # K10: the coverage stage runs the project's pytest (STAGE_HOOK_COMMANDS)
-            "name": "coverage",
-            "owner": "coverage-diff-gate",
-            "cost": "execution",
-            "tool": "project_python",
-            "args": ["-m", "pytest", "-o", "addopts=", "-p", "no:cacheprovider", "-q"],
-            "timeout_s": 60.0,
-            "needs_diff": True,
-            "mode": "block",
-        },
-    ]
-    assert gate["verify_commands"] == [
-        {"id": "custom-1", "argv": ["uv", "run", "--frozen", "--no-sync", "pytest", "-q"]}
-    ]
-    assert gate["claim_patterns"][-1] == "(?i)shipped it" and len(gate["claim_patterns"]) > 1
-    parsed = parse_guard_config(serialize_guard_config(render_guard_config(_inputs([]))))
-    assert isinstance(parsed, GuardConfig) and parsed.tables["stop_gate"]["stages"] == []
-
-
-def test_opted_in_execution_stages_join_the_table_and_the_deadline() -> None:
-    hooks = _stop_hooks({"stages": ["tests", "typecheck"]})[:1]
-
-    gate = _stop_gate(hooks)
-    deadlines = render_guard_config(_inputs(hooks))["deadlines_ms"]
-
-    rows = [(r["name"], r["owner"], r["cost"], r["tool"], r["args"]) for r in gate["stages"]]
-    assert rows == [
-        (
-            "lint",
-            "stop-ci-parity-gate",
-            "deterministic",
-            "ruff",
-            ["check", "--output-format=json", "."],
-        ),
-        ("verify-claim", "stop-ci-parity-gate", "deterministic", "", []),
-        ("typecheck", "stop-ci-parity-gate", "execution", "project_python", ["-m", "mypy"]),
-        ("tests", "stop-ci-parity-gate", "execution", "project_python", ["-m", "pytest", "-q"]),
-    ]
-    assert deadlines["stop"] == 423_000  # 1000 * (budget_s 3.0 + typecheck 120 + tests 300)
-
-
-def test_verify_commands_derived_when_absent() -> None:
-    gate = _stop_gate(_stop_hooks(), {"dev_tools": {"pytest", "mypy", "ruff"}})
-
-    assert gate["verify_commands"] == [
-        {"id": "lint", "argv": ["ruff", "check"]},
-        {"id": "format", "argv": ["ruff", "format"]},
-        {"id": "typecheck", "argv": ["mypy"]},
-        {"id": "tests", "argv": ["pytest"]},
-    ]
-    assert (gate["budget_s"], gate["max_blocks"]) == (3.0, 2)
-    assert _stop_gate(_stop_hooks())["verify_commands"] == []
-
-
-def test_stop_gate_is_machine_independent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    rendered: list[bytes] = []
-    for prefix, home in (("/opt/venv-a", tmp_path / "home-a"), ("/srv/venv-b", tmp_path / "b")):
-        monkeypatch.setattr(sys, "prefix", prefix)
-        monkeypatch.setenv("HOME", str(home))
-        gate = _stop_gate(_stop_hooks({"budget_s": 4.0}), {"dev_tools": {"ruff", "pytest"}})
-        rendered.append(serialize_guard_config(gate))
-
-    assert rendered[0] == rendered[1]
-    text = rendered[0].decode("ascii")
-    assert str(tmp_path) not in text and "/opt/" not in text and "/srv/" not in text
-
-
-def test_stop_deadline_formula_includes_exec_timeouts() -> None:
-    hooks = _stop_hooks({"budget_s": 4.0})
-    coverage = {"stage": "coverage"}
-    slow = [
-        hooks[0],
-        resolved_hook("coverage-diff-gate", events=("stop",), timeout=900.0, config=coverage),
-    ]
-
-    deadlines = render_guard_config(_inputs(hooks))["deadlines_ms"]
-
-    assert deadlines["stop"] == 64_000  # 1000 * (budget_s 4.0 + the coverage stage's 60 s)
-    assert deadlines == resolved_deadlines_ms(hooks)
-    assert resolved_deadlines_ms(slow)["stop"] == 595_000  # the engine cap
-
-
-# --- the verify-pack tables (specs/prK-hook-pack.md §E.0.5, §E.2) --------------------------
-
-
-def _contract_prompt(prompt_id: str, slash: str, contract: list[str]) -> Prompt:
-    fm = PromptFrontmatter(
-        id=prompt_id, name=prompt_id, description="d", slash=slash, output_contract=contract
-    )
-    return Prompt(fm, "Body\n", "Body\n", False, None, "coding_agent_playbook")
-
-
-def test_prompts_table_maps_slash_to_contract() -> None:
-    verdict = r"(?im)^\W*(approve|request changes)\W*$"
-    prompts = [
-        _contract_prompt("review", "review", [verdict]),
-        _contract_prompt("explain", "explain", []),
-        _contract_prompt(
-            "review-overlay", "review", ["shadowed"]
-        ),  # the first prompt per slash wins
-    ]
-    inputs = dataclasses.replace(_inputs([]), prompts=prompts)
-
-    table = render_guard_config(inputs)["prompts"]
-
-    assert table == {
-        "review": {"id": "review", "output_contract": [verdict]},
-        "explain": {"id": "explain", "output_contract": []},
-    }
-    parsed = parse_guard_config(serialize_guard_config(render_guard_config(inputs)))
-    assert isinstance(parsed, GuardConfig) and parsed.tables["prompts"] == table
-    assert render_guard_config(_inputs([]))["prompts"] == {}
+    assert table == {"playbook_hook_ids": ["coding-agent-playbook-sync", "playbook-sync-check"]}
 
 
 def _nudge_hook(config: dict[str, Any] | None = None) -> ResolvedHook:
@@ -804,153 +254,169 @@ def _nudge_hook(config: dict[str, Any] | None = None) -> ResolvedHook:
     return dataclasses.replace(hook, handlers={"stop": handler})
 
 
-def test_tests_nudge_roots_from_src_and_testpaths(tmp_path: Path) -> None:
-    (tmp_path / "src").mkdir()
-    (tmp_path / "pyproject.toml").write_text(
+def test_tests_nudge_roots_from_src_and_testpaths(repo: Path, tmp_path: Path) -> None:
+    """``src`` (else ``.``) and pytest's ``testpaths`` (else ``tests``), read from the repo."""
+    (repo / "src").mkdir()
+    (repo / "pyproject.toml").write_text(
         '[tool.pytest.ini_options]\ntestpaths = ["tests/unit", "integration/"]\n', "utf-8"
     )
     bare = tmp_path / "bare"
     bare.mkdir()
 
-    layout = repo_layout(tmp_path)
-    inputs = dataclasses.replace(_inputs([_nudge_hook(), resolved_hook()]), layout=layout)
-    hooks = render_guard_config(inputs)["hooks"]
-    consumer = dataclasses.replace(
-        _inputs([_nudge_hook({"test_roots": ["checks"]})]), layout=layout
-    )
+    hooks = compiled_document(request_for(repo, [_nudge_hook(), resolved_hook()]))
+    consumer = compiled_document(request_for(repo, [_nudge_hook({"test_roots": ["checks"]})]))
+    default = compiled_document(request_for(bare, [_nudge_hook()]))
 
-    assert layout == RepoLayout(source_roots=("src",), test_roots=("tests/unit", "integration"))
-    assert repo_layout(bare) == RepoLayout(source_roots=(".",), test_roots=("tests",))
-    assert hooks["tests-with-source-nudge"]["handlers"]["stop"]["config"] == {
+    assert handler_config(hooks, "tests-with-source-nudge") == {
         "source_roots": ["src"],
         "test_roots": ["tests/unit", "integration"],
     }
-    assert "source_roots" not in hooks["guard-x"]["handlers"]["pre_tool_use"]["config"]
-    rendered = render_guard_config(consumer)["hooks"]["tests-with-source-nudge"]
-    assert rendered["handlers"]["stop"]["config"]["test_roots"] == ["checks"]  # consumer wins
-
-
-# --- prompt-write-scope-guard scopes (specs/prK-hook-pack.md §E.3) ----------------------
-
-
-def _scoped_prompt(slash: str, scope: dict[str, Any]) -> Prompt:
-    prompt = _prompt(slash)
-    prompt.frontmatter.write_scope = scope
-    return prompt
-
-
-def test_prompt_scopes_rendered_into_the_scope_guard_config_only() -> None:
-    guard = resolved_hook("prompt-write-scope-guard", config={"keep": 1})
-    other = resolved_hook("guard-y")
-    prompts = [
-        _scoped_prompt("review", {"read_only": True}),
-        _scoped_prompt("generate-tests", {"globs": ["tests/**", "**/conftest.py"]}),
-        _prompt("refactor"),  # no write_scope: no row
-    ]
-    inputs = dataclasses.replace(_inputs([guard, other]), prompts=prompts)
-
-    hooks = render_guard_config(inputs)["hooks"]
-
-    assert hooks["prompt-write-scope-guard"]["handlers"]["pre_tool_use"]["config"] == {
-        "keep": 1,
-        "scopes": {
-            "generate-tests": {"globs": ["tests/**", "**/conftest.py"]},
-            "review": {"read_only": True},
-        },
-    }
-    assert hooks["guard-y"] == other.to_json()
-    assert guard.handlers["pre_tool_use"].config == {"keep": 1}  # the resolved hook is untouched
-
-
-def test_runtime_reads_the_scopes_back() -> None:
-    guard = resolved_hook("prompt-write-scope-guard")
-    scoped = [_scoped_prompt("x", {"read_only": True})]
-    inputs = dataclasses.replace(_inputs([guard]), prompts=scoped)
-
-    parsed = parse_guard_config(serialize_guard_config(render_guard_config(inputs)))
-
-    assert isinstance(parsed, GuardConfig)
-    spec = parsed.hooks["prompt-write-scope-guard"].handlers[EventName.PRE_TOOL_USE]
-    assert spec.config["scopes"] == {"x": {"read_only": True}}
-
-
-def test_secret_rules_table_rendered() -> None:
-    """The §E.4 secret tables: exemptions beside the globs, the ruleset and overlay rows."""
-    acme = {"id": "acme-token", "regex": "acme_[0-9a-f]{32}", "label": "Acme token"}
-    content = resolved_hook(
-        "secret-content-guard",
-        config={"extra_patterns": [acme, "corp_[A-Z0-9]{20}", "(a+)+$"]},
-    )
-    sweep = resolved_hook("stop-diff-sweep", events=("stop",), config={"extra_patterns": [acme]})
-    inputs = dataclasses.replace(
-        _inputs([content, sweep]),
-        guardrails=GuardrailsConfig(secrets=SecretsGuardrails(allow_paths=("tests/fixtures/**",))),
-    )
-
-    cfg = render_guard_config(inputs)
-
-    assert cfg["secret_path_exempt"] == [*SECRET_PATH_EXEMPT, "tests/fixtures/**"]
-    assert cfg["secret_glob_exempt"] == {g: list(e) for g, e in SECRET_GLOB_EXEMPT.items()}
-    rules = cfg["secret_rules"]
-    assert (rules["ruleset"], rules["version"]) == (SECRET_RULESET_ID, SECRET_RULESET_VERSION)
-    assert rules["rule_ids"] == [rule_id for rule_id, _, _ in SECRET_CONTENT_RULES]
-    corp_id = "extra-" + hashlib.sha256(b"corp_[A-Z0-9]{20}").hexdigest()[:8]
-    assert rules["extra_patterns"] == [  # deduped across both hooks; the ReDoS row dropped
-        acme,
-        {"id": corp_id, "regex": "corp_[A-Z0-9]{20}", "label": "overlay secret pattern"},
-    ]
-    parsed = parse_guard_config(serialize_guard_config(cfg))
-    assert isinstance(parsed, GuardConfig)
-    assert parsed.tables["secret_rules"] == rules
-
-
-def test_facts_carry_the_package_manager_when_detected() -> None:
-    """dependency-allowlist-guard's tier (a) reads ``facts.package_manager`` (§E.4)."""
-    detected = dataclasses.replace(
-        _inputs([]), detect=DetectInputs(facts={"package_manager": "uv"})
-    )
-
-    assert render_guard_config(detected)["facts"]["package_manager"] == "uv"
-    assert "package_manager" not in render_guard_config(_inputs([]))["facts"]
-
-
-def test_allowlists_table_rendered_from_the_guards_configs() -> None:
-    """§D.8.2 ``allowlists``: the dependency allowlist, its index and the egress hosts."""
-    deps = resolved_hook(
-        "dependency-allowlist-guard",
-        config={"allowlist": ["Foo_Bar", "numpy"], "required_index": "https://pypi.corp/simple"},
-    )
-    egress = resolved_hook("exfil-channel-guard", config={"allowed_hosts": ["Corp.Example"]})
-
-    table = render_guard_config(_inputs([deps, egress]))["allowlists"]
-
-    assert table == {
-        "dependencies": ["foo-bar", "numpy"],
-        "required_index": "https://pypi.corp/simple",
-        "egress_hosts": ["corp.example"],
-    }
-    assert render_guard_config(_inputs([]))["allowlists"] == {
-        "dependencies": [],
-        "required_index": "",
-        "egress_hosts": [],
+    assert "source_roots" not in handler_config(hooks, "guard-x")
+    nudge = handler_config(consumer, "tests-with-source-nudge")
+    assert nudge["test_roots"] == ["checks"]  # the consumer's own roots win
+    assert handler_config(default, "tests-with-source-nudge") == {
+        "source_roots": ["."],
+        "test_roots": ["tests"],
     }
 
 
-@pytest.mark.catalog
-def test_logging_block_follows_hook_enablement(tmp_path: Path) -> None:
-    """guard-decision-log switches the decision log on; local-audit-log the async audit route."""
-    sink = resolve_engine_hooks(["guard-decision-log"], tmp_path)
-    both = resolve_engine_hooks(["guard-decision-log", "local-audit-log"], tmp_path)
+def _member_rule(
+    rule_id: str,
+    skill: str | None,
+    globs: list[str],
+    *,
+    scope: Literal["always", "scoped"] = "scoped",
+) -> Rule:
+    """A rendered rule with ``skill`` and ``globs``; the body is irrelevant to the table."""
+    fm = RuleFrontmatter(
+        id=rule_id, name=rule_id, description="d", scope=scope, globs=globs, skill=skill
+    )
+    return Rule(fm, "Body.\n", "Body.\n", False, None, "coding_agent_playbook")
 
-    rendered = [render_guard_config(_inputs(hooks)) for hooks in ([], sink, both)]
 
-    assert [cfg["logging"] for cfg in rendered] == [
-        {"decisions": False, "audit": False, "audit_mode": ""},
-        {"decisions": True, "audit": False, "audit_mode": ""},
-        {"decisions": True, "audit": True, "audit_mode": "async"},
+def test_compile_derives_skill_globs_from_rendered_member_rules(repo: Path) -> None:
+    """skill-nudge's table (specs/prS-skills-context.md 8.5.2): globs grouped by skill, rows
+    sorted by skill id, each glob once in first-seen order; a rule without ``skill`` or
+    ``globs`` adds no row."""
+    rules = [
+        _member_rule("fastapi-app-wiring", "python-tooling", ["**/api/**/*.py", "tests/**/*.py"]),
+        _member_rule("python-typing", "python-coding", ["**/*.py"]),
+        _member_rule("fastapi-error-boundaries", "python-tooling", ["**/*.py", "tests/**/*.py"]),
+        _member_rule("python-error-handling", "python-coding", ["src/**/*.py", "**/*.py"]),
+        _member_rule("python-house-style", None, [], scope="always"),
+        _member_rule("project-context", None, ["**/*.py"], scope="always"),
+        _member_rule("python-pure-core", "python-design", []),
     ]
-    assert rendered[1]["deadlines_ms"] == {}  # the sink adds to no §D.4 deadline
-    assert "post_tool_use" not in rendered[2]["deadlines_ms"]  # nor does an async member
-    runtime = parse_guard_config(serialize_guard_config(rendered[2]))
-    assert isinstance(runtime, GuardConfig)
-    assert (runtime.logging.decisions, runtime.logging.audit_mode) == (True, "async")
+    nudge = resolved_hook("skill-nudge", events=("post_tool_use",))
+    request = dataclasses.replace(request_for(repo, [nudge]), rules=rules)
+
+    config = handler_config(compiled_document(request), "skill-nudge")
+
+    assert config["skills"] == [
+        {"id": "python-coding", "globs": ["**/*.py", "src/**/*.py"]},
+        {"id": "python-tooling", "globs": ["**/api/**/*.py", "tests/**/*.py", "**/*.py"]},
+    ]
+
+
+_DEFAULT_RUFF: dict[str, Any] = {
+    "default_select": True,
+    "project_select": [],
+    "project_ignore": [],
+    "safe_fix_select": [],
+    "safe_fix_ignore": [],
+}
+_DEFAULT_QUALITY: dict[str, Any] = {
+    "lint_codes": {"warn": ["C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915"]},
+    "ruff_config": [],
+    "ruff_preview": False,
+}
+
+
+def _quality(document: Mapping[str, Any]) -> dict[str, Any]:
+    return handler_config(document, _QUALITY_HOOK)
+
+
+def _ruff_table(document: Mapping[str, Any]) -> dict[str, Any]:
+    return dict(document["ruff"])
+
+
+_UNREADABLE: list[Any] = [
+    ("pyproject.toml", b"[tool.ruff\n", _ruff_table, _DEFAULT_RUFF),
+    ("pyproject.toml", b"\xff", _ruff_table, _DEFAULT_RUFF),
+    (
+        "pyproject.toml",
+        b"[project\n",
+        lambda doc: handler_config(doc, "toolchain-missing-hint"),
+        {"install_hint": "uv sync", "cz_install_hint": ""},
+    ),
+    (
+        "pyproject.toml",
+        b"[tool.pytest.ini_options\n",
+        lambda doc: handler_config(doc, "tests-with-source-nudge"),
+        {"source_roots": ["."], "test_roots": ["tests"]},
+    ),
+    ("ruff.toml", b"[lint\n", _ruff_table, _DEFAULT_RUFF),
+    (
+        ".pre-commit-config.yaml",
+        b"- id: playbook-sync-check\n" + b"#" * (1024 * 1024),
+        lambda doc: doc["precommit"],
+        {"playbook_hook_ids": []},
+    ),
+    (  # no committed config: a local [metrics] never applies
+        CONFIG_LOCAL_FILENAME,
+        b'[metrics.ruff_violations]\nfamilies = { quality = ["C901"] }\n',
+        _quality,
+        _DEFAULT_QUALITY,
+    ),
+    *(
+        (CONFIG_FILENAME, committed, _quality, _DEFAULT_QUALITY)
+        for committed in (
+            b'[metrics]\nmode = "sideways"\n',
+            b'metrics = "x"\n',
+            b"[metrics]\nmode = \n",
+            b"\xff",
+            b'[metrics.ruff_violations]\nfamilies = { quality = ["nope"] }\n',
+        )
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("name", "content", "table_of", "default"),
+    _UNREADABLE,
+    ids=[
+        "malformed-pyproject-ruff",
+        "pyproject-not-utf8",
+        "malformed-pyproject-toolchain",
+        "malformed-pyproject-layout",
+        "malformed-ruff-toml",
+        "precommit-over-1-mib",
+        "no-committed-config",
+        "invalid-metrics-value",
+        "metrics-not-a-table",
+        "committed-not-toml",
+        "committed-not-utf8",
+        "unknown-quality-code",
+    ],
+)
+def test_compile_keeps_defaults_for_unreadable_repo_inputs(
+    repo: Path,
+    name: str,
+    content: bytes,
+    table_of: Callable[[Mapping[str, Any]], Any],
+    default: dict[str, Any],
+) -> None:
+    """GC-D5: a sync-time reader degrades rather than raises. ``[metrics]`` is read after
+    the adapters wrote, so a bad value keeps the defaults where ``playbook metrics``
+    exits 2 (spec B.14 question 2: a follow-up makes ``playbook validate`` refuse it)."""
+    (repo / name).write_bytes(content)
+    hooks = [
+        resolved_hook("toolchain-missing-hint", events=("post_tool_use",)),
+        resolved_hook(_QUALITY_HOOK, events=("post_tool_use",)),
+        _nudge_hook(),
+    ]
+    request = dataclasses.replace(
+        request_for(repo, hooks), detect=DetectInputs(facts={"package_manager": "uv"})
+    )
+
+    assert table_of(compiled_document(request)) == default

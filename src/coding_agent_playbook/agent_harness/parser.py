@@ -27,8 +27,8 @@ from coding_agent_playbook.agent_harness.leaf_detectors import (
 )
 from coding_agent_playbook.agent_harness.models import (
     ContentFile,
-    Harness,
     HarnessDirectory,
+    HarnessTree,
     LeafMarker,
     NotAHarnessError,
     RawAsset,
@@ -50,8 +50,8 @@ REFERENCES_DIRNAME = "references"
 SKILL_LEAF_TYPE = "skill"
 
 
-def parse_harness(root: Path) -> Harness:
-    """Parse the harness rooted at ``root`` into a :class:`Harness`.
+def parse_harness(root: Path) -> HarnessTree:
+    """Parse the harness rooted at ``root`` into a :class:`HarnessTree`.
 
     Raises:
         NotAHarnessError: if ``root/HARNESS.md`` is absent.
@@ -78,7 +78,7 @@ def parse_harness(root: Path) -> Harness:
         _parse_directory(child, routing_file_name(child.name), detectors)
         for child in _iter_subdirs(root)
     )
-    return Harness(
+    return HarnessTree(
         name=name, description=description, body=body, path=root, directories=directories
     )
 
