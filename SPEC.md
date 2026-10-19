@@ -164,7 +164,7 @@ Delivered: OpenCode plugin generation from canonical hook descriptions — liste
                                                        │       local.toml (gitignored)│
                                                        └──────────────────────────────┘
 ```
-**Runtime path, only with `[hooks] enabled = true`.** One dispatcher serves every harness event; nothing in it imports `cli.py`, Jinja or YAML, and it reads only the compiled `guard_config.json`, never the canonical sources (`specs/prK-lifecycle-hooks.md` §D):
+**Runtime path, only with `[hooks] enabled = true`.** One dispatcher serves every harness event; nothing in it imports the `cli` package, Jinja or YAML, and it reads only the compiled `guard_config.json`, never the canonical sources (`specs/prK-lifecycle-hooks.md` §D):
 ```
   Claude Code ── .claude/settings.json `hooks` ──► sh .claude/hooks/playbook/launch.sh ──┐
                                                                                          │
@@ -293,7 +293,7 @@ coding-agent-playbook/
 │           └── skills/<id>/                # 15 skills: SKILL.md + scripts/ + references/
 ├── src/coding_agent_playbook/              # logic only: no rule, prompt, eval task, skill or hook file
 │   ├── __init__.py
-│   ├── cli.py                              # `playbook` entrypoint
+│   ├── cli/                                # `playbook` entrypoint: __init__ (main), parser, __main__
 │   ├── types.py                            # Rule, Prompt, Skill, Hook dataclasses (Section 6.6)
 │   ├── config.py                           # .toml loading + merge
 │   ├── hooks_config.py                     # [hooks] / [guardrails] tables (Section 7.1.1)
@@ -313,7 +313,7 @@ coding-agent-playbook/
 │   ├── hook_policy/                        # sync-time: hook layer merge, effective view, validate H1-H21
 │   ├── hook_registrations/                 # per-harness registrations: Claude groups, OpenCode REG + shim
 │   ├── guard_config.py                     # the sync-level guard_config.json (§4.2 step 7)
-│   ├── hook_runtime/                       # the playbook-hook dispatcher: import-light, never imports cli.py
+│   ├── hook_runtime/                       # the playbook-hook dispatcher: import-light, never imports cli/
 │   │   ├── handlers/                       # builtin hook handlers (@register_hook_handler)
 │   │   ├── harness/                        # per-harness payload parsers and wire renderers
 │   │   └── stop/                           # the Stop stage contract and coordinator

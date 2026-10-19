@@ -16,9 +16,9 @@ from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.commands._init_adapters import DEFAULT_ADAPTERS
 from coding_agent_playbook.config import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.gitignore import BLOCK_START
+from tests.cli.test_cli import break_catalog
 from tests.hook_samples import write_hook
 from tests.toml_equality import assert_toml_identical
-from tests.unit.test_cli import break_catalog
 from tests.unit.test_precommit_merge import LEGACY_APPENDED, LEGACY_STARTER
 
 if TYPE_CHECKING:

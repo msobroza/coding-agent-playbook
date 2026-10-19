@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.cli import build_parser
+from coding_agent_playbook.cli.parser import build_parser
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.gitignore import BLOCK_END, BLOCK_START
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource

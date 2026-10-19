@@ -22,7 +22,7 @@ from typing import Any
 import pytest
 import yaml
 
-from coding_agent_playbook.cli import _SUBCOMMANDS
+from coding_agent_playbook.cli.parser import _SUBCOMMANDS
 from coding_agent_playbook.commands._ci_commit_convention import PR_TITLE_ENV
 from coding_agent_playbook.commands.ci import CI_STEPS
 from coding_agent_playbook.evaluators.metric import all_metrics

@@ -32,7 +32,7 @@ from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
-from coding_agent_playbook.cli import _SUBCOMMANDS, build_parser
+from coding_agent_playbook.cli.parser import _SUBCOMMANDS, build_parser
 from coding_agent_playbook.commands._ci_commit_convention import PR_TITLE_ENV
 from coding_agent_playbook.commands._sync_hooks import HOOKS_NOTICE
 from coding_agent_playbook.commands._validate_context import config_less_notes
