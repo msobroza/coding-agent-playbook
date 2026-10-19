@@ -16,15 +16,15 @@ from typing import TYPE_CHECKING, ClassVar
 
 import pytest
 
-from coding_agent_playbook.adapters._owned_files import (
+from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
+from coding_agent_playbook.generated_output.write_guard import (
     UserOwnedFileError,
     check_engine_owned,
     check_unlinked,
     crosses_symlink,
     write_engine_owned,
 )
-from coding_agent_playbook.adapters.base import Adapter
-from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from tests.fakes import record_opens
 from tests.hook_samples import resolved_hook
 

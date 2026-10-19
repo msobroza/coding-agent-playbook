@@ -24,7 +24,7 @@ file + answer + execution + aggregate checks) and the ``threshold`` /
 ``non_regression`` factories defined in ``registry``.
 
 The eval task pipeline consumes the registry: the handle builder
-(:mod:`coding_agent_playbook.evals._handles`) resolves a task's ``[gate.bind]`` /
+(:mod:`coding_agent_playbook.evals.compile._handles`) resolves a task's ``[gate.bind]`` /
 ``[rubric.bind]`` / ``[aggregate.bind]`` bindings through ``get_check``.
 """
 

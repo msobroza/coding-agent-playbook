@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.evals._compile import compile_task
-from coding_agent_playbook.evals._handles import build_handles
+from coding_agent_playbook.evals.compile._handles import build_handles
+from coding_agent_playbook.evals.compile.compiler import compile_task
 from coding_agent_playbook.evaluators.check import MeasurementSet
 from coding_agent_playbook.evaluators.checks.aggregate import (
     AggregateCheck,

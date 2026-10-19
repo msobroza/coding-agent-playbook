@@ -79,9 +79,9 @@ filesystem = "coding_agent_playbook.config.files:FileSystemStateSource"
 [project.entry-points."coding_agent_playbook.runners"]
 # The hermetic FakeRunner ships in v1.1 (PR R1); ClaudeCodeRunner lands in R1c
 # and OpenCodeRunner in R3 Track O (opt-in real runners, never exercised in CI).
-fake = "coding_agent_playbook.evals.fake_runner:FakeRunner"
-claude_code = "coding_agent_playbook.evals.claude_code_runner:ClaudeCodeRunner"
-opencode = "coding_agent_playbook.evals.opencode_runner:OpenCodeRunner"
+fake = "coding_agent_playbook.evals.run.fake_runner:FakeRunner"
+claude_code = "coding_agent_playbook.evals.run.claude_code_runner:ClaudeCodeRunner"
+opencode = "coding_agent_playbook.evals.run.opencode_runner:OpenCodeRunner"
 
 [project.entry-points."coding_agent_playbook.judges"]
 # PR R2 — the opt-in LLMJudge shells out to the `claude` CLI (available()-gated,
@@ -276,7 +276,6 @@ exhaustive_ignores = [
     "_guard_config_toolchain",
     "_guard_config_verify",
     "evaluators",
-    "git_env",
     "guard_config",
     "harness",
     "hook_registrations",
@@ -352,8 +351,9 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
+    "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
-    "coding_agent_playbook.git_env",
+    "coding_agent_playbook.generated_output.write_guard",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
     "coding_agent_playbook.hook_registrations",
@@ -420,8 +420,9 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
+    "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
-    "coding_agent_playbook.git_env",
+    "coding_agent_playbook.generated_output.write_guard",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
     "coding_agent_playbook.hook_registrations",
@@ -508,8 +509,9 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
+    "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
-    "coding_agent_playbook.git_env",
+    "coding_agent_playbook.generated_output.write_guard",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
     "coding_agent_playbook.hook_registrations",
@@ -572,8 +574,6 @@ name = "An underscore module is imported only from inside its own package"
 type = "private_modules"
 containers = ["coding_agent_playbook"]
 ignore_imports = [
-    # A7: adapters/_skill_files.py becomes generated_output/source_files.py (after #62)
-    "coding_agent_playbook.commands._import_files -> coding_agent_playbook.adapters._skill_files",
     # CP-3: init's configure() owns --adapters (after #62)
     "coding_agent_playbook.cli.parser -> coding_agent_playbook.commands._init_adapters",
     # A16: hook_runtime/_ruff.py becomes the public hook_runtime/ruff.py (after #62)
@@ -594,12 +594,6 @@ ignore_imports = [
     "coding_agent_playbook.commands.twins.scan_sinks -> coding_agent_playbook.hook_runtime._git_parse",
     # N21: becomes hook_runtime/harness/payload.py
     "coding_agent_playbook.hook_runtime.dispatch -> coding_agent_playbook.hook_runtime.harness._payload",
-    # A7: becomes generated_output/write_guard.py (after #62)
-    "coding_agent_playbook.sync._hook_outputs -> coding_agent_playbook.adapters._owned_files",
-    "coding_agent_playbook.sync.pipeline -> coding_agent_playbook.adapters._owned_files",
-    # A7: becomes generated_output/source_files.py (after #62)
-    "coding_agent_playbook.validation.checks -> coding_agent_playbook.adapters._skill_sources",
-    "coding_agent_playbook.guard_config -> coding_agent_playbook.adapters._skill_sources",
 ]
 broken_contract_guidance = """
 Import a public module of the owning package, or move the importer inside that package.
