@@ -19,7 +19,7 @@ from coding_agent_playbook.hook_runtime.handlers._destructive_paths import (
     PATH_ARGV0S,
 )
 from coding_agent_playbook.hook_runtime.handlers._egress import EGRESS_ARGV0S
-from coding_agent_playbook.hook_runtime.handlers._install_cmds import _READERS
+from coding_agent_playbook.hook_runtime.judges.install_commands import _READERS
 from coding_agent_playbook.hook_runtime.registry import (
     builtin_handler_modules,
     registered_handlers,

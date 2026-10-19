@@ -18,7 +18,7 @@ from coding_agent_playbook.config.tables.hooks import HooksConfig, parse_guardra
 from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_policy import RegistryCatalog, merged_handler_config
 from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.handlers._dependency_tiers import dependency_policy
+from coding_agent_playbook.hook_runtime.judges.dependency_tiers import dependency_policy
 from tests.engine_modules import engine_module
 from tests.hook_runtime.fakes import FakeGit
 from tests.hooks.pack_repo import engine_hook
@@ -36,7 +36,14 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "dependency-allowlist-guard"
-_HANDLERS: Final = f"{engine_module('coding_agent_playbook.hook_runtime.handlers')}."
+#: The guard's handler and its judges (hook_runtime/judges/ since N14): the import spy's importers.
+_GUARD_PACKAGES: Final = tuple(
+    f"{engine_module(package)}."
+    for package in (
+        "coding_agent_playbook.hook_runtime.handlers",
+        "coding_agent_playbook.hook_runtime.judges",
+    )
+)
 #: What ``detect()`` reads from :data:`PYPROJECT` with a ``uv.lock`` beside it.
 UV_FACTS: Final = {
     "package_manager": "uv",
@@ -260,7 +267,7 @@ def import_spy(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
 
     def spy(name: str, globals: Any = None, *args: Any, **kwargs: Any) -> Any:
         importer = (globals or {}).get("__name__", "")
-        if name in ("tomllib", "difflib") and importer.startswith(_HANDLERS):
+        if name in ("tomllib", "difflib") and importer.startswith(_GUARD_PACKAGES):
             seen.append(name)
         return real_import(name, globals, *args, **kwargs)
 

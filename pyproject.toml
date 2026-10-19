@@ -596,12 +596,10 @@ ignore_imports = [
     # GC-1: the constants move to hook_runtime/config/schema.py (after #62)
     "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._control_plane_paths",
     "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._control_plane_text",
-    # N14: the twin-shared judges get public modules in hook_runtime/judges/
-    "coding_agent_playbook.commands.twins.check_deps -> coding_agent_playbook.hook_runtime.handlers._dependency_tiers",
-    "coding_agent_playbook.commands.twins.check_deps -> coding_agent_playbook.hook_runtime.handlers._manifest_diff",
-    "coding_agent_playbook.commands.twins.check_notebooks -> coding_agent_playbook.hook_runtime.handlers._notebook_check",
-    "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._notebook_check",
-    "coding_agent_playbook.commands.twins.scan_sinks -> coding_agent_playbook.hook_runtime.handlers._notebook_cells",
+    # N14 (R1): the sink judge's lazy regex fallback, visible since the judge left
+    # handlers/; A16 moves _sink_regex to handlers/feedback/ (apply renames this
+    # line); no scheduled PR removes it: the fallback would have to join judges/
+    "coding_agent_playbook.hook_runtime.judges.sink_scan -> coding_agent_playbook.hook_runtime.handlers._sink_regex",
     # N18: becomes hook_runtime/git/parse.py
     "coding_agent_playbook.commands.twins._secret_scope -> coding_agent_playbook.hook_runtime._git_parse",
     "coding_agent_playbook.commands.twins.check_notebooks -> coding_agent_playbook.hook_runtime._git_parse",

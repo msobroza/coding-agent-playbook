@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
-from coding_agent_playbook.hook_runtime.handlers._notebook_cells import cell_source, is_code_cell
+from coding_agent_playbook.hook_runtime.judges.notebook_cells import cell_source, is_code_cell
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Sequence

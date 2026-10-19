@@ -12,8 +12,8 @@ from typing import Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.handlers._notebook_cells import notebook_code
-from coding_agent_playbook.hook_runtime.handlers._sink_scan import (
+from coding_agent_playbook.hook_runtime.judges.notebook_cells import notebook_code
+from coding_agent_playbook.hook_runtime.judges.sink_scan import (
     SinkTable,
     new_sink_calls,
 )
