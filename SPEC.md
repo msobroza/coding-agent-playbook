@@ -299,10 +299,13 @@ coding-agent-playbook/
 │   ├── hooks_config.py                     # [hooks] / [guardrails] tables (Section 7.1.1)
 │   ├── metrics_config.py                   # [metrics] table (Section 7.1.1)
 │   ├── catalog.py                          # the only code that knows where catalog/ is (Section 20.3)
-│   ├── detector.py                         # facts dictionary
+│   ├── detector/                           # the Detector (Section 8)
+│   │   ├── facts.py                        # facts dictionary (Facts, detect)
+│   │   ├── predicate.py                    # applies_if evaluator and filter (Section 6.4)
+│   │   ├── pep503.py                       # PEP 503 package-name normalization
+│   │   └── pyproject_deps.py               # pyproject dependency tables, one parser
 │   ├── renderer.py                         # Jinja2 environment
 │   ├── _sentinel.py                        # SENTINEL, import-light (Section 4.3)
-│   ├── _pep503.py                          # PEP 503 package-name normalization
 │   ├── overlays.py                         # overlay resolution
 │   ├── lockfile.py                         # .coding-agent-playbook.lock
 │   ├── gitignore.py                        # managed .gitignore block ([output] commit = false)
@@ -348,8 +351,8 @@ coding-agent-playbook/
 │           └── config.yaml.j2              # starter .pre-commit-config.yaml (engine wiring, not content; Section 13.2)
 ├── tests/
 │   ├── plugins/                            # bundled-plugin gates (Sections 11.5.1, 11.5.2)
+│   ├── detector/                           # test_facts.py, test_predicate.py, ...
 │   ├── unit/
-│   │   ├── test_detector.py
 │   │   ├── test_renderer.py
 │   │   ├── test_overlays.py
 │   │   ├── test_eval_tasks.py
@@ -882,7 +885,7 @@ applies_if:
   package_manager: "uv"              # facts["package_manager"] is this name (a list: any of them) (v0.21)
   banking_mode: true                 # boolean facts
 ```
-Multiple keys are ANDed together. The evaluator lives in `coding_agent_playbook.detector.evaluate_predicate(predicate, facts) -> bool`. `playbook validate` checks each key on its own, so a malformed key is reported even when an earlier key does not hold (v0.21; hooks and `lint_codes.when` were already checked this way).
+Multiple keys are ANDed together. The evaluator lives in `coding_agent_playbook.detector.predicate.evaluate_predicate(predicate, facts) -> bool`. `playbook validate` checks each key on its own, so a malformed key is reported even when an earlier key does not hold (v0.21; hooks and `lint_codes.when` were already checked this way).
 The framework operators (`has_framework`, `any_framework`) read `facts["frameworks"]`; the ML-stack operators (`has_ml_stack`, `any_ml_stack`) read the separate `facts["ml_stack"]` fact (torch, tensorflow, scikit-learn, … — see Section 8.2). Use the ML-stack operators to gate ML-specific rules and prompts, since ML libraries never appear in `frameworks`.
 Skills carry no `applies_if`. A skill with member rules follows its members' gates: it is written only when at least one member passes (§6.3.3). There is no `any_of` combinator, so a skill whose members span stacks gates each member on its own (`ml-data`'s serialization rule on `any_ml_stack`).
 `has_dev_dependency` reads `facts["dev_dependencies"]` (Section 8.2) and compares names PEP 503-normalized, so `pytest_cov` matches `pytest-cov`. It mirrors `has_framework` for tools that live only in a dev group, and gates artifacts that need one: the opt-in coverage-diff-gate hook applies only with `has_dev_dependency: [pytest-cov]`.
@@ -1528,7 +1531,7 @@ For Max's `risk-models` repo with FastAPI + Pydantic + pytest, the detector retu
 ```
 ### 8.5 API
 ```python
-# coding_agent_playbook/detector.py
+# coding_agent_playbook/detector/facts.py
 from pathlib import Path
 from typing import TypedDict
 
@@ -1548,6 +1551,9 @@ class Facts(TypedDict, total=False):
 
 
 def detect(repo_root: Path) -> Facts: ...
+
+
+# coding_agent_playbook/detector/predicate.py
 def evaluate_predicate(predicate: dict, facts: Facts) -> bool: ...
 ```
 ## 9. Renderer subsystem
@@ -3268,7 +3274,7 @@ The `coding_agent_playbook/evals/` package ships `task.py`, `loader.py`, `valida
 - The `[project.entry-points."coding_agent_playbook.runners"]` group is populated (`fake`, `claude_code`, `opencode`); the `coding_agent_playbook.judges` group is populated with `llm`; the engine ships no builtin `coding_agent_playbook.gates` / `coding_agent_playbook.rubrics` / `coding_agent_playbook.checks` entries — those are the third-party extension points a task references by `ref`/`check` name.
 ## 16. Testing strategy
 ### 16.1 Unit tests
-- `test_detector.py` — synthetic `pyproject.toml` files in `tests/fixtures/repos/`; assert facts dict matches expected.
+- `tests/detector/test_facts.py` (and `test_predicate.py` for `applies_if`) — synthetic `pyproject.toml` files in `tests/fixtures/repos/`; assert facts dict matches expected.
 - `test_renderer.py` — render templates with hand-crafted context; assert exact output.
 - `test_overlays.py` — registration, ordering, override resolution.
 - `test_lockfile.py` — hash compute, drift detection.

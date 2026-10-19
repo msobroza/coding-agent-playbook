@@ -41,7 +41,7 @@ from tests.hook_samples import sample_hook
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
 
 OVERLAY = "acme_rules"
 FASTAPI: Facts = {"frameworks": {"fastapi": "0.110"}}

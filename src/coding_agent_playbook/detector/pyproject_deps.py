@@ -7,7 +7,7 @@ runtime may not import ``detector`` on its cheap path (it imports
 ``packaging``), so the parser lives here, stdlib-only, and both sides share
 it: the comparison can never disagree with the detector.
 
-Names are PEP 503-normalized through ``_pep503`` (``pytest_asyncio`` is
+Names are PEP 503-normalized through ``detector.pep503`` (``pytest_asyncio`` is
 ``pytest-asyncio``), the one normalization the §E.4 dependency guard and its
 twin also use; :func:`manifest_dependency_names` is their view of every
 direct dependency.
@@ -20,7 +20,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook._pep503 import canonical_name, requirement_name, split_requirement
+from coding_agent_playbook.detector.pep503 import (
+    canonical_name,
+    requirement_name,
+    split_requirement,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping

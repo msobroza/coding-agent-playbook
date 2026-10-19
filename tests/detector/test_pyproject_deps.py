@@ -10,7 +10,8 @@ from __future__ import annotations
 import tomllib
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._pyproject_deps import (
+from coding_agent_playbook.detector.facts import detect
+from coding_agent_playbook.detector.pyproject_deps import (
     DEV_GROUP_NAMES,
     dependency_names,
     dependency_specs,
@@ -18,7 +19,6 @@ from coding_agent_playbook._pyproject_deps import (
     parse_dep_name,
     parse_dep_spec,
 )
-from coding_agent_playbook.detector import detect
 
 if TYPE_CHECKING:
     from pathlib import Path

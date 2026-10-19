@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook._pep503 import canonical_name
+from coding_agent_playbook.detector.pep503 import canonical_name
 from coding_agent_playbook.hook_runtime._hosts import url_host
 from coding_agent_playbook.hook_runtime.caps import clean_text, clip, quote_data
 from coding_agent_playbook.hook_runtime.decision import Decision

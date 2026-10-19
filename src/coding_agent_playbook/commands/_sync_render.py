@@ -28,7 +28,8 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of
 from coding_agent_playbook.commands._sync_hooks import SyncHooks, resolve_sync_hooks
-from coding_agent_playbook.orchestrator import filter_applies_if, template_source
+from coding_agent_playbook.detector.predicate import filter_applies_if
+from coding_agent_playbook.orchestrator import template_source
 from coding_agent_playbook.renderer import (
     TemplateSecurityError,
     appendix_rule_ids,

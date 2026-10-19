@@ -25,7 +25,7 @@ from coding_agent_playbook.commands._sync_render import (
     report_sandbox_violation,
     report_template_error,
 )
-from coding_agent_playbook.detector import evaluate_predicate
+from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.orchestrator import SyncContext, artifact_id_of
 from coding_agent_playbook.renderer import (
     BUILTIN_FORMATS,

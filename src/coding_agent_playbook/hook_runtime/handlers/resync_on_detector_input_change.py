@@ -49,7 +49,7 @@ from coding_agent_playbook.hook_runtime.registry import register_hook_handler
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_runtime.config import GuardConfig
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
@@ -123,7 +123,8 @@ def _first_time(ctx: HandlerContext, change: str, rows: Sequence[_Row]) -> list[
 
 def _changes(cfg: GuardConfig, root: str) -> tuple[list[_Row], list[_Row]]:
     """The rows that hold now but did not at sync, and those that no longer hold."""
-    from coding_agent_playbook import detector  # branch-local: only after a real change
+    # branch-local: only after a real change
+    from coding_agent_playbook.detector import facts as detector
 
     facts = detector.detect(Path(root))
     turned_on: list[_Row] = []
@@ -138,13 +139,11 @@ def _changes(cfg: GuardConfig, root: str) -> tuple[list[_Row], list[_Row]]:
 
 
 def _holds(row: _Row, facts: Facts, root: str) -> bool:
-    from coding_agent_playbook import detector
+    # N4: evaluate_predicate left the facts module for detector/predicate.py.
+    from coding_agent_playbook.detector.predicate import evaluate_predicate
 
     try:
-        return all(
-            detector.evaluate_predicate(dict(p), facts, repo_root=Path(root))
-            for p in row.applies_if
-        )
+        return all(evaluate_predicate(dict(p), facts, repo_root=Path(root)) for p in row.applies_if)
     except ValueError:
         return False  # validate rejects an invalid predicate before sync renders it
 

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook._pep503 import canonical_name
+from coding_agent_playbook.detector.pep503 import canonical_name
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
