@@ -91,7 +91,7 @@ _HOOK_INVARIANTS = (
 _ENGINE_PATHS = (
     "hook_runtime/",
     "hooks/",
-    "hook_registrations/",
+    "hooks/registrations/",
     "security/",
     "guard_config.py",
     "config/tables/hooks.py",
@@ -99,7 +99,7 @@ _ENGINE_PATHS = (
     "detector/pep503.py",
     "hook_runtime/judges/gate_weakening.py",
     "precommit.py",
-    "templates/hook_shims/",
+    "hooks/registrations/templates/",
 )
 #: Catalog paths §5.1 must show, under ``catalog/`` (SPEC v0.19: content left the package).
 _CATALOG_PATHS = ("core/hooks/",)

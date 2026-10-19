@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, Literal
 
 from coding_agent_playbook.adapters.claude_code.settings._json_edits import ArrayEdit
+from coding_agent_playbook.hooks.registrations.launcher import LAUNCHER_TOKEN
 from coding_agent_playbook.lockfile.canonical_json import canonical_json, pointer_keys
 from coding_agent_playbook.lockfile.model import LockEntry, compute_hash
 
@@ -25,7 +26,6 @@ if TYPE_CHECKING:
 
 __all__ = [
     "CLAUDE_SETTINGS_PATH",
-    "LAUNCHER_TOKEN",
     "MANAGED_STRING_POINTERS",
     "DesiredGroup",
     "SettingsPlan",
@@ -37,8 +37,6 @@ __all__ = [
 ]
 
 CLAUDE_SETTINGS_PATH: Final = ".claude/settings.json"
-#: The secondary ownership signal inside a handler ``command`` (§C.2.3).
-LAUNCHER_TOKEN: Final = "/.claude/hooks/playbook/launch.sh"
 #: The string arrays the engine may manage, one lock entry per string (§C.2.4 step 6, E-Q2).
 MANAGED_STRING_POINTERS: Final = (
     "/permissions/allow",
