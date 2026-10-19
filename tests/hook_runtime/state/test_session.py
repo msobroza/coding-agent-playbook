@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.hook_runtime.session import MAX_DEBOUNCE_KEYS, SessionState
-from coding_agent_playbook.hook_runtime.state import StateStore
+from coding_agent_playbook.hook_runtime.state.session import MAX_DEBOUNCE_KEYS, SessionState
+from coding_agent_playbook.hook_runtime.state.store import StateStore
 from tests.hook_runtime.fakes import FakeClock
 
 if TYPE_CHECKING:

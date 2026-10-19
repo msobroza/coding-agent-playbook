@@ -38,7 +38,7 @@ from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
 from coding_agent_playbook.hook_runtime.dispatch import dispatch_event
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.policy import UNATTENDED_ENV_VAR
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME, StateStore
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME, StateStore
 
 if TYPE_CHECKING:
     import argparse

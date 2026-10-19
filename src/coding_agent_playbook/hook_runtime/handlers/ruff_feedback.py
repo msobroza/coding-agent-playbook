@@ -66,7 +66,7 @@ from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import (
     skip_note,
 )
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.state import StateUnavailable
+from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
 
 if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime._ruff import RuffRunner
@@ -78,7 +78,7 @@ if TYPE_CHECKING:
         HeadBlob,
     )
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [
     "CONFIG_SCHEMA",

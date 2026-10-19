@@ -25,7 +25,7 @@ if TYPE_CHECKING:
         LoggedCommit,
     )
     from coding_agent_playbook.hook_runtime.globs import GlobSet
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = ["LazyGit", "open_trust_store"]
 

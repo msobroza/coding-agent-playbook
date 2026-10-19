@@ -35,19 +35,19 @@ from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from coding_agent_playbook.hook_runtime._prompt_boundary import (
+from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.state._prompt_boundary import (
     last_prompt_boundary,
     slash_of_prompt,
 )
-from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.state import StateUnavailable, session_key
+from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, session_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [
     "ACTIVE_PROMPT_CONSUMERS",

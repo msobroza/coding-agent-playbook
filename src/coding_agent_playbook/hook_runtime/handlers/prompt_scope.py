@@ -3,7 +3,7 @@
 Default, ``pre_tool_use``, Claude Code only: the defense in depth behind the
 native constraints (``disallowed-tools`` in the Claude command, ``agent: plan``
 on OpenCode). The active prompt is resolved per turn
-(``hook_runtime.active_prompt``: the transcript's turn-opening entry, or a
+(``hook_runtime.state.active_prompt``: the transcript's turn-opening entry, or a
 model-run ``Skill``; no ``user_prompt_submit`` process); its scope comes from
 this hook's ``scopes`` config, rendered at sync from each prompt's
 ``write_scope``. After the first call of a turn, the guard costs one small
@@ -26,7 +26,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.active_prompt import resolve_active_prompt
 from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.globs import compile_globs
@@ -35,6 +34,7 @@ from coding_agent_playbook.hook_runtime.handlers._targets import (
     shell_write_targets,
 )
 from coding_agent_playbook.hook_runtime.registry import register_hook_handler
+from coding_agent_playbook.hook_runtime.state.active_prompt import resolve_active_prompt
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

@@ -1,0 +1,68 @@
+# N19 (#100, specs/prT-package-layout.md 7.4): the runtime state becomes the
+# hook_runtime/state/ package. hook_runtime/state.py -> state/store.py is a
+# same-name conversion; security's audit writer and decision summary join it.
+
+[[module]]
+pr = "N19"
+old = "coding_agent_playbook.hook_runtime.state"
+new = "coding_agent_playbook.hook_runtime.state.store"
+
+[[module]]
+pr = "N19"
+old = "coding_agent_playbook.hook_runtime._state_files"
+new = "coding_agent_playbook.hook_runtime.state._files"
+
+[[module]]
+pr = "N19"
+old = "coding_agent_playbook.hook_runtime._state_sweep"
+new = "coding_agent_playbook.hook_runtime.state._sweep"
+
+[[module]]
+pr = "N19"
+old = "coding_agent_playbook.hook_runtime.session"
+new = "coding_agent_playbook.hook_runtime.state.session"
+
+[[module]]
+pr = "N19"
+old = "coding_agent_playbook.hook_runtime.ledger"
+new = "coding_agent_playbook.hook_runtime.state.ledger"
+
+[[module]]
+pr = "N19"
+old = "coding_agent_playbook.hook_runtime.active_prompt"
+new = "coding_agent_playbook.hook_runtime.state.active_prompt"
+
+[[module]]
+pr = "N19"
+old = "coding_agent_playbook.hook_runtime._prompt_boundary"
+new = "coding_agent_playbook.hook_runtime.state._prompt_boundary"
+
+[[module]]
+pr = "N19"
+old = "coding_agent_playbook.security.audit"
+new = "coding_agent_playbook.hook_runtime.state.audit_log"
+
+[[module]]
+pr = "N19"
+old = "coding_agent_playbook.security.decision_summary"
+new = "coding_agent_playbook.hook_runtime.state.decision_summary"
+
+[[path]]
+pr = "N19"
+old = "tests/hook_runtime/test_state.py"
+new = "tests/hook_runtime/state/test_store.py"
+
+[[path]]
+pr = "N19"
+old = "tests/hook_runtime/test_session.py"
+new = "tests/hook_runtime/state/test_session.py"
+
+[[path]]
+pr = "N19"
+old = "tests/hook_runtime/test_prompt_boundary.py"
+new = "tests/hook_runtime/state/test_prompt_boundary.py"
+
+[[path]]
+pr = "N19"
+old = "tests/security/test_audit.py"
+new = "tests/hook_runtime/state/test_audit_log.py"

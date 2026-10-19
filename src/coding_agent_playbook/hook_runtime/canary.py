@@ -30,7 +30,7 @@ from coding_agent_playbook.hook_runtime.dispatch import dispatch_event
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.harness import CLAUDE_EVENT_NAMES
 from coding_agent_playbook.hook_runtime.paths import find_repo
-from coding_agent_playbook.hook_runtime.state import StateStore, session_key
+from coding_agent_playbook.hook_runtime.state.store import StateStore, session_key
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence

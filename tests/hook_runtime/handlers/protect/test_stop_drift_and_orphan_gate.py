@@ -33,8 +33,8 @@ from coding_agent_playbook.hook_runtime.handlers.stop_drift_and_orphan_gate impo
     DriftStage,
 )
 from coding_agent_playbook.hook_runtime.registry import HandlerContext
-from coding_agent_playbook.hook_runtime.session import SessionState
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME, session_key
+from coding_agent_playbook.hook_runtime.state.session import SessionState
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME, session_key
 from coding_agent_playbook.hook_runtime.stop.stages import (
     STOP_STAGE_ORDER,
     StageCost,

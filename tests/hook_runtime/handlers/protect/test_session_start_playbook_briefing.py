@@ -28,7 +28,7 @@ from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.handlers._briefing_probes import (
     installed_engine_version,
 )
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 from tests.hook_runtime.fakes import FakeGit
 from tests.hook_runtime.guard_repo import canonical, hook_record
 from tests.hook_runtime.handlers.pack_repo import ENGINE_VERSION, RENDERED_AT, PackRepo

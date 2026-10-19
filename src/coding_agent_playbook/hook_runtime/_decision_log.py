@@ -1,7 +1,7 @@
 """guard-decision-log lines for one dispatch (specs/prK-lifecycle-hooks.md §D.6.2).
 
 One line per decision, ids and flags only (D-10): the record type is
-``security.audit.GuardDecisionRecord``, whose writer refuses any other key, so
+``state.audit_log.GuardDecisionRecord``, whose writer refuses any other key, so
 no command text, path, prompt, reason or environment value can reach the log.
 Writing never blocks and never raises: a failure is one stderr note per
 session, returned to the caller.
@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.escape import WRAPPER_PREFIXES_VAR
-from coding_agent_playbook.hook_runtime.state import StateUnavailable, iso_utc
-from coding_agent_playbook.security.audit import GuardDecisionRecord, append_decision
+from coding_agent_playbook.hook_runtime.state.audit_log import GuardDecisionRecord, append_decision
+from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, iso_utc
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.decision import Outcome
     from coding_agent_playbook.hook_runtime.escape import EscapeHatches
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [
     "DISPATCHER_ID",

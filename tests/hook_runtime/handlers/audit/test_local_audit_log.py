@@ -21,8 +21,12 @@ from coding_agent_playbook.hook_runtime.handlers._activity_record import (
     fitted,
     flag_name,
 )
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
-from coding_agent_playbook.security.audit import MAX_LINE_BYTES, encode_jsonl_line, verify_chain
+from coding_agent_playbook.hook_runtime.state.audit_log import (
+    MAX_LINE_BYTES,
+    encode_jsonl_line,
+    verify_chain,
+)
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -259,7 +263,7 @@ def test_session_start_prunes_month_files_past_retention(
 
 
 def test_oversized_record_is_trimmed_to_one_atomic_line() -> None:
-    """A line stays one O_APPEND write even with the chain's ``prev`` (``security.audit``)."""
+    """A line stays one O_APPEND write even with the chain's ``prev`` (``state.audit_log``)."""
     flags = [f"--flag-{n:02d}-{'x' * 28}" for n in range(8)]
     record = {
         "v": 1,

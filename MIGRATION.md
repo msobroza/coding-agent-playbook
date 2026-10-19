@@ -241,6 +241,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime._shell_wrappers` | `coding_agent_playbook.hook_runtime.shell.wrappers` | N17 |
 | `coding_agent_playbook.hook_runtime._shell_writes` | `coding_agent_playbook.hook_runtime.shell.writes` | N17 |
 | `coding_agent_playbook.hook_runtime._verify_tag` | `coding_agent_playbook.hook_runtime.stop.verify_tag` | N17 |
+| `coding_agent_playbook.hook_runtime.active_prompt` | `coding_agent_playbook.hook_runtime.state.active_prompt` | N19 |
 | `coding_agent_playbook.hook_runtime.config` | `coding_agent_playbook.hook_runtime.config.guard_config` | N16 |
 | `coding_agent_playbook.hook_runtime.config.guard_config.GUARD_CONFIG_REL` | `coding_agent_playbook.hook_runtime.config.schema.GUARD_CONFIG_REL` | GC-1 |
 | `coding_agent_playbook.hook_runtime.config.guard_config.LOCKFILE_REL` | `coding_agent_playbook.hook_runtime.config.schema.LOCKFILE_REL` | GC-1 |
@@ -268,9 +269,12 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime.handlers.deser.SinkTable` | `coding_agent_playbook.hook_runtime.judges.sink_scan.SinkTable` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers.deser.new_sink_calls` | `coding_agent_playbook.hook_runtime.judges.sink_scan.new_sink_calls` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers.deser.trusted_artifact_line` | `coding_agent_playbook.hook_runtime.judges.sink_scan.trusted_artifact_line` | N14 |
+| `coding_agent_playbook.hook_runtime.ledger` | `coding_agent_playbook.hook_runtime.state.ledger` | N19 |
 | `coding_agent_playbook.hook_runtime.pin` | `coding_agent_playbook.hook_runtime.config.pin` | N16 |
 | `coding_agent_playbook.hook_runtime.protected` | `coding_agent_playbook.hook_runtime.config.protected` | N16 |
+| `coding_agent_playbook.hook_runtime.session` | `coding_agent_playbook.hook_runtime.state.session` | N19 |
 | `coding_agent_playbook.hook_runtime.shell` | `coding_agent_playbook.hook_runtime.shell.parse` | N17 |
+| `coding_agent_playbook.hook_runtime.state` | `coding_agent_playbook.hook_runtime.state.store` | N19 |
 | `coding_agent_playbook.hook_runtime.stop.coordinator.DEFAULT_MAX_BLOCKS` | `coding_agent_playbook.hook_runtime.config.guard_tables.DEFAULT_MAX_BLOCKS` | B3 |
 | `coding_agent_playbook.hook_runtime.wrapper_policy` | `coding_agent_playbook.hook_runtime.shell.wrapper_policy` | N17 |
 | `coding_agent_playbook.hooks_config` | `coding_agent_playbook.config.tables.hooks` | N2 |
@@ -297,6 +301,8 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.orchestrator.installed_output_locations` | `coding_agent_playbook.adapters.registry.installed_output_locations` | A5 |
 | `coding_agent_playbook.orchestrator.template_source` | `coding_agent_playbook.artifacts.identity.template_source` | A5 |
 | `coding_agent_playbook.renderer.SENTINEL` | `coding_agent_playbook.generated_output.sentinel.SENTINEL` | N6 |
+| `coding_agent_playbook.security.audit` | `coding_agent_playbook.hook_runtime.state.audit_log` | N19 |
+| `coding_agent_playbook.security.decision_summary` | `coding_agent_playbook.hook_runtime.state.decision_summary` | N19 |
 | `coding_agent_playbook.skill_document` | `coding_agent_playbook.skills.document` | A3 |
 | `coding_agent_playbook.skill_membership` | `coding_agent_playbook.skills.membership` | A3 |
 | `coding_agent_playbook.sources.base` | `coding_agent_playbook.catalog.source` | N3 |

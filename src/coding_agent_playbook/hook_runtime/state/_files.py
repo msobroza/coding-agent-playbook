@@ -1,6 +1,6 @@
 """File primitives of the state root: private dirs, no-follow reads, atomic writes (§D.6.1).
 
-Split from ``state.py`` to keep both under §D.1's 300-line module rule. Every
+Split from ``store.py`` to keep both under §D.1's 300-line module rule. Every
 helper refuses to follow a symlink, because the agent runs as the same user
 and could plant one to redirect state onto a file of its choosing.
 """
