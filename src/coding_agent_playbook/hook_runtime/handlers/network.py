@@ -28,11 +28,11 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook.hook_runtime._hosts import host_matches, is_loopback, url_host
 from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import ToolClass
 from coding_agent_playbook.hook_runtime.handlers._net_targets import segment_target
+from coding_agent_playbook.hook_runtime.judges.hosts import host_matches, is_loopback, url_host
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 
 if TYPE_CHECKING:

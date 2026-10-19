@@ -6,6 +6,7 @@ import os
 import stat
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.harness.emitter import (
     copy_script,
     frontmatter_block,
@@ -16,7 +17,6 @@ from coding_agent_playbook.harness.emitter import (
     with_sentinel_body,
 )
 from coding_agent_playbook.harness.leaf_detectors import HARNESS_LEAF_MARKER
-from coding_agent_playbook.renderer import SENTINEL
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -16,8 +16,8 @@ from coding_agent_playbook.catalog.roots import CatalogMissingError
 
 # Aliased private so build_parser has one spelling (cli.parser), not a second one here.
 from coding_agent_playbook.cli.parser import build_parser as _build_parser
-from coding_agent_playbook.commands import init as init_cmd
 from coding_agent_playbook.config.schema import ConfigError
+from coding_agent_playbook.precommit import PrecommitTemplateMissingError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -40,7 +40,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     that order; it used to render zero engine artifacts silently. Only commands
     that load the catalog raise it (``init``, ``sync``, ``check``, ``validate``,
     ``render``, ``eval``). A missing pre-commit template
-    (:class:`~coding_agent_playbook.commands.init.PrecommitTemplateMissingError`)
+    (:class:`~coding_agent_playbook.precommit.PrecommitTemplateMissingError`)
     prints ``error: <message>``.
 
     Example::
@@ -60,7 +60,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         FileNotFoundError,
         ConfigError,
         HookSchemaError,
-        init_cmd.PrecommitTemplateMissingError,
+        PrecommitTemplateMissingError,
     ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

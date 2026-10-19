@@ -15,7 +15,11 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook._sentinel import SENTINEL, file_has_sentinel, sentinel_line
+from coding_agent_playbook.generated_output.sentinel import (
+    SENTINEL,
+    file_has_sentinel,
+    sentinel_line,
+)
 from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
 from coding_agent_playbook.hook_runtime.config.pin import MachinePins
 from coding_agent_playbook.hook_runtime.config.protected import (

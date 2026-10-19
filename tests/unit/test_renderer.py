@@ -14,10 +14,9 @@ from jinja2.sandbox import ImmutableSandboxedEnvironment, SandboxedEnvironment
 from packaging.requirements import Requirement
 from packaging.version import Version
 
-from coding_agent_playbook._sentinel import has_sentinel
+from coding_agent_playbook.generated_output.sentinel import SENTINEL, has_sentinel
 from coding_agent_playbook.prompt_rule_delivery import SkillReference
 from coding_agent_playbook.renderer import (
-    SENTINEL,
     TemplateSecurityError,
     build_environment,
     render_artifact_body,

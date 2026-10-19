@@ -1,6 +1,6 @@
 """Named fakes for external I/O, shared across the test suite.
 
-``FakeGitClient`` stands in for :class:`coding_agent_playbook.git_client.SubprocessGitClient`
+``FakeGitClient`` stands in for :class:`coding_agent_playbook.sync.git_client.SubprocessGitClient`
 so ``playbook sync`` tests never shell out to git (and never monkeypatch
 :mod:`subprocess`). ``None`` models "git cannot answer" (not a repository, git
 missing, timeout) exactly like the real client. :func:`pre_gate_validate` stands
@@ -45,14 +45,14 @@ if TYPE_CHECKING:
 
     import pytest
 
-    from coding_agent_playbook.commands._validation import ValidationError
     from coding_agent_playbook.hook_policy import ConfigKeySpec
-    from coding_agent_playbook.orchestrator import SyncContext
+    from coding_agent_playbook.validation.context import SyncContext
+    from coding_agent_playbook.validation.findings import ValidationError
 
 
 @dataclass
 class FakeGitClient:
-    """In-memory :class:`~coding_agent_playbook.git_client.GitClient`.
+    """In-memory :class:`~coding_agent_playbook.sync.git_client.GitClient`.
 
     ``tracked`` is the set of tracked repo-relative paths, in the index's own
     spelling (``None`` = git cannot answer); ``staged`` is what ``staged_paths``
@@ -275,7 +275,7 @@ class FakeHandlerSchemas:
 
 @dataclass
 class FakePinWriter:
-    """In-memory :class:`~coding_agent_playbook.commands._sync_hook_local.PinWriter`.
+    """In-memory :class:`~coding_agent_playbook.sync._machine_local.PinWriter`.
 
     ``git=False`` models a repository outside git (both writers return ``None``).
     The interpreter pin follows the real first-writer-wins rule: ``pinned`` holds

@@ -1,9 +1,9 @@
 """Rewrite ``.coding-agent-playbook.toml`` from itself alone (SPEC §7.2).
 
 Shared by ``playbook init`` and ``playbook check --refresh``. Both update the
-*committed* config, never the effective one ``FileSystemStateSource.load_config``
-returns: that one has the gitignored ``.coding-agent-playbook.local.toml`` merged
-in, so saving it commits one engineer's personal overrides for the whole team.
+*committed* config, never the effective one ``ConfigFiles.load`` returns: that
+one has the gitignored ``.coding-agent-playbook.local.toml`` merged in, so
+saving it commits one engineer's personal overrides for the whole team.
 Before v0.18 both commands did that, and their round trip through ``Config``
 also dropped the committed tables it does not manage (``[hooks]``, ``[links]``,
 ``[metrics]``); ``Config.extra_tables`` now carries those (P6).
@@ -19,15 +19,16 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.config.files import CONFIG_FILENAME
 from coding_agent_playbook.config.model import Config
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from coding_agent_playbook.config.files import ConfigFiles
     from coding_agent_playbook.detector.facts import Facts
 
-_COMMITTED = FileSystemStateSource._CONFIG_FILENAME
+_COMMITTED = CONFIG_FILENAME
 
 
 @dataclasses.dataclass(frozen=True)
@@ -46,61 +47,57 @@ class ConfigRewrite:
     config: Config
     table: dict[str, Any]
 
-    def save(self, state: FileSystemStateSource) -> Config:
+    def save(self, files: ConfigFiles) -> Config:
         """Write ``table`` to the committed file; return its ``Config``.
 
         Example::
 
-            >>> plan_detector_cache_refresh(state, {}).save(state)  # doctest: +SKIP
+            >>> plan_detector_cache_refresh(files, {}).save(files)  # doctest: +SKIP
         """
-        state.save_config_table(self.table)
+        files.write_committed(self.table)
         return self.config
 
 
-def _checked_rewrite(
-    state: FileSystemStateSource, config: Config, table: dict[str, Any]
-) -> ConfigRewrite:
+def _checked_rewrite(files: ConfigFiles, config: Config, table: dict[str, Any]) -> ConfigRewrite:
     """``ConfigRewrite(config, table)``, once ``table`` is known to load with the local file.
 
-    ``state.preview_config`` merges the local file over ``table`` and runs the
-    result through ``Config.from_dict``, so a ``ConfigError`` (exit 2) surfaces
-    here, before anything is written, and not from the next command.
+    ``files.preview`` merges the local file over ``table`` and runs the result
+    through ``Config.from_dict``, so a ``ConfigError`` (exit 2) surfaces here,
+    before anything is written, and not from the next command.
     """
-    state.preview_config(table)
+    files.preview(table)
     return ConfigRewrite(config, table)
 
 
-def plan_first_config(state: FileSystemStateSource, config: Config) -> ConfigRewrite:
+def plan_first_config(files: ConfigFiles, config: Config) -> ConfigRewrite:
     """The checked rewrite that creates the committed file from ``config`` (a first ``init``).
 
     Refuses with ``FileExistsError`` when the file exists: an existing file is
     rewritten only from itself (:func:`plan_committed_update`), never from a
-    ``Config`` built elsewhere — such as ``load_config``'s merge with the local file.
+    ``Config`` built elsewhere — such as ``ConfigFiles.load``'s merge with the local file.
 
     Example::
 
-        >>> plan_first_config(state, config).table == config.to_dict()  # doctest: +SKIP
+        >>> plan_first_config(files, config).table == config.to_dict()  # doctest: +SKIP
         True
     """
-    if state.has_committed_config():
+    if files.has_committed():
         raise FileExistsError(
             f"{_COMMITTED} exists; rewrite it with plan_committed_update, "
             "which starts from the file itself"
         )
-    return _checked_rewrite(state, config, config.to_dict())
+    return _checked_rewrite(files, config, config.to_dict())
 
 
-def plan_committed_update(
-    state: FileSystemStateSource, update: Callable[[Config], Config]
-) -> ConfigRewrite:
+def plan_committed_update(files: ConfigFiles, update: Callable[[Config], Config]) -> ConfigRewrite:
     """The checked rewrite of the committed file with ``update`` applied to its ``Config``.
 
-    Reads the committed file alone (``read_committed_config_table``; the local
-    file is never merged in), hands its ``Config`` to ``update`` and writes the
-    result through ``Config.to_dict``. Everything ``Config`` does not own rides
-    along verbatim in ``Config.extra_tables`` (``config.entries``), so ``update``
-    keeps it by building its result with ``dataclasses.replace`` — and may change
-    it, as init's ``[hooks] enabled`` answer does. Nothing is written. ``init``
+    Reads the committed file alone (``ConfigFiles.committed``; the local file is
+    never merged in), hands its ``Config`` to ``update`` and writes the result
+    through ``Config.to_dict``. Everything ``Config`` does not own rides along
+    verbatim in ``Config.extra_tables`` (``config.entries``), so ``update`` keeps
+    it by building its result with ``dataclasses.replace`` — and may change it,
+    as init's ``[hooks] enabled`` answer does. Nothing is written. ``init``
     re-runs use it: the answers replace what ``Config`` owns.
 
     Raises ``FileNotFoundError`` without the committed file and ``ConfigError``
@@ -111,17 +108,15 @@ def plan_committed_update(
     Example::
 
         >>> plan = plan_committed_update(  # doctest: +SKIP
-        ...     state, lambda c: dataclasses.replace(c, overlays_enabled=[])
+        ...     files, lambda c: dataclasses.replace(c, overlays_enabled=[])
         ... )
     """
-    committed = state.read_committed_config_table()
+    committed = dict(files.committed().data)
     updated = update(Config.from_dict(committed, source=_COMMITTED))
-    return _checked_rewrite(state, updated, updated.to_dict())
+    return _checked_rewrite(files, updated, updated.to_dict())
 
 
-def plan_detector_cache_refresh(
-    state: FileSystemStateSource, cache: dict[str, Any]
-) -> ConfigRewrite:
+def plan_detector_cache_refresh(files: ConfigFiles, cache: dict[str, Any]) -> ConfigRewrite:
     """The checked rewrite of the committed file with only ``[detector_cache]`` replaced.
 
     The committed table is written back as parsed with that one entry swapped
@@ -133,11 +128,11 @@ def plan_detector_cache_refresh(
 
     Example::
 
-        >>> plan_detector_cache_refresh(state, {"has_ci": True}).table["detector_cache"]  # doctest: +SKIP
+        >>> plan_detector_cache_refresh(files, {"has_ci": True}).table["detector_cache"]  # doctest: +SKIP
         {'has_ci': True}
     """
-    table = {**state.read_committed_config_table(), "detector_cache": cache}
-    return _checked_rewrite(state, Config.from_dict(table, source=_COMMITTED), table)
+    table = {**files.committed().data, "detector_cache": cache}
+    return _checked_rewrite(files, Config.from_dict(table, source=_COMMITTED), table)
 
 
 def detector_cache_table(facts: Facts) -> dict[str, Any]:

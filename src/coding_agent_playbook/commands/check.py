@@ -4,7 +4,7 @@
 re-serialized (comments and layout are lost) and no local override is written.
 
 A diagnostic, so it exits 0 whatever it finds (drift included). An overlay in
-``overlays_enabled`` that ``playbook sync`` would refuse (``_sync_preflight``) is
+``overlays_enabled`` that ``playbook sync`` would refuse (``validation.preflight``) is
 flagged under Environment, and the Drift section then never reports a clean state.
 The Hooks block comes from :mod:`._check_hooks` (specs/prK-lifecycle-hooks.md
 §A.8). The Drift lines are ``lockfile.drift.drift_entries``, the definition the
@@ -23,21 +23,24 @@ from coding_agent_playbook.adapters.claude_code.settings.drift import (
     settings_document,
     stray_launcher_edited,
 )
-from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands._check_hooks import format_hooks_section
-from coding_agent_playbook.config import committed as _committed_config
-from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.config.committed import (
+    detector_cache_table,
+    plan_detector_cache_refresh,
+)
+from coding_agent_playbook.config.files import CONFIG_FILENAME, ConfigFiles
 from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.lockfile.drift import drift_entries
-from coding_agent_playbook.orchestrator import SyncContext
+from coding_agent_playbook.validation import preflight as _sync_preflight
+from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
     import argparse
     from collections.abc import Sequence
 
-    from coding_agent_playbook.commands._sync_preflight import UnusableOverlay
     from coding_agent_playbook.lockfile.model import Lockfile
+    from coding_agent_playbook.validation.preflight import UnusableOverlay
 
 _SYNC_REFUSES = "'playbook sync' refuses to run until every overlay in overlays_enabled is usable"
 
@@ -217,12 +220,12 @@ def _refresh(repo_root: Path) -> None:
     """Re-run the detector and write ``[detector_cache]`` — only it — to the committed config.
 
     The committed file is rewritten from itself alone
-    (:func:`_committed_config.plan_detector_cache_refresh`): every other key
-    keeps its parsed value, as written — not as ``Config`` would rewrite it —
-    while comments and layout are lost; nothing from the gitignored local file
-    is written. Hence its own state source rather than ``SyncContext.config``,
-    which is the config *merged* with that file (and still what the report
-    describes).
+    (:func:`~coding_agent_playbook.config.committed.plan_detector_cache_refresh`):
+    every other key keeps its parsed value, as written — not as ``Config`` would
+    rewrite it — while comments and layout are lost; nothing from the gitignored
+    local file is written. Hence its own ``ConfigFiles`` rather than
+    ``SyncContext.config``, which is the config *merged* with that file (and
+    still what the report describes).
 
     Raises ``ConfigError`` (exit 2) before writing for a committed file ``Config``
     would misread on its own, e.g. one missing ``[engine] version`` that only the
@@ -232,9 +235,9 @@ def _refresh(repo_root: Path) -> None:
 
         >>> _refresh(repo_root)  # doctest: +SKIP
     """
-    state = FileSystemStateSource(repo_root=repo_root)
-    cache = _committed_config.detector_cache_table(detect(repo_root))
-    _committed_config.plan_detector_cache_refresh(state, cache).save(state)
+    files = ConfigFiles(repo_root)
+    cache = detector_cache_table(detect(repo_root))
+    plan_detector_cache_refresh(files, cache).save(files)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -248,7 +251,7 @@ def run(args: argparse.Namespace) -> int:
     unusable = _sync_preflight.unusable_overlays(ctx.config.overlays_enabled)
     if getattr(args, "refresh", False):
         _refresh(repo_root)
-        print(f"Refreshed detector_cache in {FileSystemStateSource._CONFIG_FILENAME}.")
+        print(f"Refreshed detector_cache in {CONFIG_FILENAME}.")
     print(_format_env_section(ctx, unusable))
     print(_format_detected_section(ctx))
     print(_format_artifacts_section(ctx))

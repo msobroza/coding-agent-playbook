@@ -18,18 +18,19 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook import renderer
 from coding_agent_playbook._guard_config_protect import COMPOSITE_SINGLETONS
-from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
-from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
-from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
-from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
-from coding_agent_playbook.commands._sync_lockfile import build_lockfile
+from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
+from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
+from coding_agent_playbook.adapters.continue_ import ContinueAdapter
+from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
+from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.config.tables.hooks import (
     GuardrailsConfig,
     HooksConfig,
     SecretsGuardrails,
 )
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.guard_config import (
     GUARD_CONFIG_PATH,
     HOOK_ARTIFACTS,
@@ -70,10 +71,10 @@ from coding_agent_playbook.security.patterns import (
     SECRET_RULESET_ID,
     SECRET_RULESET_VERSION,
 )
-from coding_agent_playbook.types import Prompt, PromptFrontmatter, Rule, RuleFrontmatter
+from coding_agent_playbook.sync._dispatch import build_lockfile
 from tests._catalog import CORE_ROOT, plugin_root
+from tests.hook_runtime.handlers.pack_repo import resolve_engine_hooks
 from tests.hook_samples import resolved_from_disk, resolved_hook, sample_hook
-from tests.hooks.pack_repo import resolve_engine_hooks
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -417,10 +418,10 @@ def test_bundled_layers_resolve_to_their_catalog_dirs_never_importing() -> None:
     }
 
 
-def test_sentinel_key_is_renderer_sentinel() -> None:
+def test_sentinel_key_is_the_generated_output_sentinel() -> None:
     cfg = render_guard_config(_inputs([]))
 
-    assert cfg["sentinel"] == renderer.SENTINEL
+    assert cfg["sentinel"] == SENTINEL
 
 
 def test_runtime_reads_the_protect_tables_back(tmp_path: Path) -> None:
@@ -430,7 +431,7 @@ def test_runtime_reads_the_protect_tables_back(tmp_path: Path) -> None:
     parsed = parse_guard_config(serialize_guard_config(render_guard_config(_inputs([], protect))))
 
     assert isinstance(parsed, GuardConfig), parsed
-    assert parsed.tables["sentinel"] == renderer.SENTINEL
+    assert parsed.tables["sentinel"] == SENTINEL
     paths = [row["path"] for row in parsed.tables["protected"]["entries"]]
     assert paths == sorted(paths)
 

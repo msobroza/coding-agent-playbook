@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 from coding_agent_playbook._guard_config_quality import (
     QualityLint,
     quality_hook_config,
@@ -50,6 +52,28 @@ def test_read_quality_lint_defaults_on_absent_or_bad_table(tmp_path: Path) -> No
     )
 
     assert absent == QualityLint()
+    assert read_quality_lint(tmp_path) == QualityLint()
+
+
+@pytest.mark.parametrize(
+    "committed",
+    [
+        b'[metrics]\nmode = "sideways"\n',
+        b'metrics = "x"\n',
+        b"[metrics]\nmode = \n",
+        b"\xff",
+    ],
+    ids=["invalid-value", "not-a-table", "not-toml", "not-utf8"],
+)
+def test_read_quality_lint_keeps_the_defaults_for_an_invalid_metrics_value(
+    tmp_path: Path, committed: bytes
+) -> None:
+    """Sync-time policy (spec B.14 question 2): sync reads ``[metrics]`` after its
+    adapters wrote, so it keeps the defaults where ``playbook metrics`` exits 2.
+    The follow-up makes ``playbook validate`` refuse the value; this pins today's
+    behaviour until then."""
+    (tmp_path / ".coding-agent-playbook.toml").write_bytes(committed)
+
     assert read_quality_lint(tmp_path) == QualityLint()
 
 

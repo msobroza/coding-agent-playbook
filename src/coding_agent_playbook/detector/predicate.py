@@ -18,8 +18,9 @@ from coding_agent_playbook.detector.pep503 import canonical_name
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.detector.facts import Facts
-    from coding_agent_playbook.types import Prompt, Rule
 
 
 _SUPPORTED_OPERATORS = (">=", "<=", "==", "~=", ">", "<")

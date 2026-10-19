@@ -42,10 +42,10 @@ from coding_agent_playbook.hook_runtime.registry import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping
 
+    from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.hook_schema import HookHandler
     from coding_agent_playbook.hook_policy._findings import Finding
     from coding_agent_playbook.hook_runtime.registry import HandlerDeclaration
-    from coding_agent_playbook.types import Hook
 
 __all__ = [
     "ENTRY_POINT_GROUP",

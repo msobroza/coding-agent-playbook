@@ -20,8 +20,9 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from coding_agent_playbook.adapters._skill_writer import agent_skill_issues, render_skill_md
 from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_RULES_PATH
+from coding_agent_playbook.adapters.skill_dirs.writer import render_skill_md
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.files import FileSystemStateSource
@@ -29,22 +30,23 @@ from coding_agent_playbook.hook_policy.guardrails_skill import (
     GUARDRAILS_SKILL_ID,
     compose_guardrails_skill,
 )
-from coding_agent_playbook.links import extract_markdown_links
-from coding_agent_playbook.skill_document import DESCRIPTION_MAX_CHARS
-from coding_agent_playbook.skill_membership import compose_skills
-from coding_agent_playbook.types import split_frontmatter
+from coding_agent_playbook.skills.document import DESCRIPTION_MAX_CHARS
+from coding_agent_playbook.skills.membership import compose_skills
+from coding_agent_playbook.skills.naming import agent_skill_issues
+from coding_agent_playbook.validation.link_check import extract_markdown_links
 from tests._budget_probe import reference_probe_facts, render_core_rule
 from tests._catalog import CORE_ROOT, core_rules
+from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_hook_paths
 from tests.hook_samples import resolved_hook
-from tests.hooks.pack_repo import engine_hook, engine_hook_paths
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.hook_policy import ResolvedHook
-    from coding_agent_playbook.types import Rule, Skill
 
 pytestmark = pytest.mark.catalog
 

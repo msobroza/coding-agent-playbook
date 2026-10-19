@@ -122,7 +122,13 @@ _Avoid_: owned file, managed file
 **Lockfile**:
 The engine's record, in a consumer repo, of every generated output it wrote, with its source and content hash; sync uses it to find drift and leftovers.
 
+**Sync**:
+One `playbook sync` run: resolve the catalog, render every adapter's Generated output and write the Lockfile.
+
 ### Checks and grading
+
+**Validation**:
+The checks `playbook validate` and the sync gate run over canonical artifacts before anything is written.
 
 **Guard twin**:
 A CLI command that runs the same judge as a guard hook, so the check also runs outside an agent session, in CI or pre-commit.

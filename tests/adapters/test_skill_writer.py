@@ -11,28 +11,27 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.adapters import _skill_files, _skill_writer
-from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
-from coding_agent_playbook.adapters._skill_writer import (
+from coding_agent_playbook.adapters import _skill_files
+from coding_agent_playbook.adapters.registry import installed_output_locations
+from coding_agent_playbook.adapters.skill_dirs import writer as _skill_writer
+from coding_agent_playbook.adapters.skill_dirs.ownership import judging_leftovers_with
+from coding_agent_playbook.adapters.skill_dirs.writer import (
     SKILL_FILENAME,
     SkillWriter,
-    agent_skill_issues,
     ensure_path_safe_skill_id,
-    has_declared_id,
     is_engine_owned_skill_dir,
     render_skill_md,
-    skill_id_of,
     swap_blocker,
 )
-from coding_agent_playbook.commands import sync as _sync
-from coding_agent_playbook.commands._output_locations import OutputLocations
-from coding_agent_playbook.commands._sync_orphans import LeftoverPolicy
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.harness.manifest import read_manifest
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
-from coding_agent_playbook.orchestrator import installed_output_locations
-from coding_agent_playbook.renderer import SENTINEL
-from coding_agent_playbook.types import Skill, split_frontmatter
+from coding_agent_playbook.skills.naming import agent_skill_issues, has_declared_id, skill_id_of
+from coding_agent_playbook.sync import pipeline as _sync
+from coding_agent_playbook.sync._leftovers import LeftoverPolicy, OutputLocations
 from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:

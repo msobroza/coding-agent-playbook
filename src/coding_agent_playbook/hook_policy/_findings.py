@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Literal, NamedTuple
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from coding_agent_playbook.types import Hook
+    from coding_agent_playbook.artifacts.hook import Hook
 
 #: ``error`` fails validate (and so sync); ``warning`` is printed and passes.
 Severity = Literal["error", "warning"]

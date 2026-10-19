@@ -1,0 +1,29 @@
+# A8 (#121, specs/prT-package-layout.md 4.9, 7.6): the Claude Code adapter, its hook
+# emitter and the three native-row modules move into adapters/claude_code/, beside the
+# paths leaf and the settings/ subpackage N13 created. The row modules stay private
+# under their names; merging them into native_rows.py is not scheduled (L12).
+
+[[module]]
+pr = "A8"
+old = "coding_agent_playbook.adapters.claude_code_adapter"
+new = "coding_agent_playbook.adapters.claude_code.adapter"
+
+[[module]]
+pr = "A8"
+old = "coding_agent_playbook.adapters._claude_hooks"
+new = "coding_agent_playbook.adapters.claude_code.hooks"
+
+[[module]]
+pr = "A8"
+old = "coding_agent_playbook.adapters._secret_native"
+new = "coding_agent_playbook.adapters.claude_code._secret_native"
+
+[[module]]
+pr = "A8"
+old = "coding_agent_playbook.adapters._destructive_native"
+new = "coding_agent_playbook.adapters.claude_code._destructive_native"
+
+[[module]]
+pr = "A8"
+old = "coding_agent_playbook.adapters._overlay_native"
+new = "coding_agent_playbook.adapters.claude_code._overlay_native"

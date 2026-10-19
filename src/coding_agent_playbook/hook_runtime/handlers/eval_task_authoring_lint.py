@@ -43,12 +43,12 @@ from coding_agent_playbook.hook_runtime.proc import ProcTimeout
 from coding_agent_playbook.hook_runtime.registry import register_hook_handler
 
 if TYPE_CHECKING:
+    from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.types import Prompt
 
 __all__ = ["ESCAPE_HINT", "MAX_SHOW_LINES", "eval_task_authoring_lint"]
 

@@ -13,9 +13,10 @@ from typing import Any
 
 import pytest
 
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FILENAME
 from coding_agent_playbook.config.tables.hooks import parse_hooks_config
 from coding_agent_playbook.hook_policy import HookIssue, HookSetInputs, Severity, classify_hook_set
-from coding_agent_playbook.types import Rule, RuleFrontmatter
 from tests.hook_samples import sample_hook
 
 OVERLAY = "acme_rules"
@@ -49,6 +50,13 @@ def _messages(inputs: HookSetInputs, *, severity: str = "error") -> list[str]:
 def test_nothing_to_report_without_config() -> None:
     assert classify_hook_set(HookSetInputs()) == []
     assert classify_hook_set(_inputs()) == []
+
+
+def test_the_where_defaults_name_the_two_config_files() -> None:
+    """The defaults take the one spelling from ``config.files`` (spec B.5.4)."""
+    inputs = HookSetInputs()
+
+    assert (inputs.config_where, inputs.local_where) == (CONFIG_FILENAME, CONFIG_LOCAL_FILENAME)
 
 
 def test_a_clean_hooks_table_has_no_issues() -> None:

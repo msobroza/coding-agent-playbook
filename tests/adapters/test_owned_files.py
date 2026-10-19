@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, ClassVar
 
 import pytest
 
-from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._owned_files import (
     UserOwnedFileError,
     check_engine_owned,
@@ -25,6 +24,7 @@ from coding_agent_playbook.adapters._owned_files import (
     write_engine_owned,
 )
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from tests.fakes import record_opens
 from tests.hook_samples import resolved_hook
 
@@ -32,7 +32,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from coding_agent_playbook._typing import Prompt, Rule
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
 
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks and FIFOs")
 

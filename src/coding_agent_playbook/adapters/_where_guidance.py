@@ -4,7 +4,7 @@
 with active member rules and a ``playbook.files`` phrase becomes one line of a
 generated section placed after the always sections. Both adapters buffer it
 through :class:`WhereGuidanceBuffer` and render it with the one
-:func:`~coding_agent_playbook.skill_document.where_guidance_section`, so the
+:func:`~coding_agent_playbook.skills.document.where_guidance_section`, so the
 section is byte-identical in the two files (E10).
 """
 
@@ -12,13 +12,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.skill_document import where_entry, where_guidance_section
+from coding_agent_playbook.skills.document import where_entry, where_guidance_section
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.skill_document import WhereEntry
-    from coding_agent_playbook.types import Skill
+    from coding_agent_playbook.artifacts.skill import Skill
+    from coding_agent_playbook.skills.document import WhereEntry
 
 
 class WhereGuidanceBuffer:
