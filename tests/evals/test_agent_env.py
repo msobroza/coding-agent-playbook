@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evals.agent_env import UNATTENDED_ENV_VAR, unattended_agent_env
+from coding_agent_playbook.evals.run.agent_env import UNATTENDED_ENV_VAR, unattended_agent_env
 
 if TYPE_CHECKING:
     import pytest

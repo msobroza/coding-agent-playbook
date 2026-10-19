@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.evals._compile import (
+from coding_agent_playbook.evals.compile.compiler import (
     CompiledTask,
     VerdictSpec,
     compile_task,
@@ -325,7 +325,7 @@ _E2E_RUBRIC_BIND = {"quality": {"rubric": [{"judge": "a", "weight": 1.0}], "fail
 
 def _measured_ctx(tmp_path: Path, judge: StubJudge) -> tuple[EvalContext, MeasurementSet]:
     """A candidate tree + a ctx/MeasurementSet with the rubric composite pre-measured."""
-    from coding_agent_playbook.evals._handles import build_handles
+    from coding_agent_playbook.evals.compile._handles import build_handles
 
     (tmp_path / "x.py").write_text("print('hi')\n", encoding="utf-8")
 

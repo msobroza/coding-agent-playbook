@@ -2,7 +2,7 @@
 
 Loads every ``catalog/core/eval_tasks/<id>/task.toml`` the engine ships, asserts the
 whole set validates clean (compile-based rules), and runs each task end-to-end
-through :func:`~coding_agent_playbook.evals.scoring.score` — once deterministic-only
+through :func:`~coding_agent_playbook.evals.run.scoring.score` — once deterministic-only
 (no judge ⇒ the judged rubric layer skips, so the verdict reduces to the gate) and
 once with a :class:`~coding_agent_playbook.evals.judge.StubJudge` (the rubric layer
 contributes and a high stub score keeps it passing).
@@ -13,7 +13,7 @@ step fails here.
 
 Since C11 the shipped fixtures carry a ``setup/pyproject.toml`` (so the runner
 ``uv sync``'s their deps); the integration suite must stay hermetic, so the
-fixtures that exercise :func:`~coding_agent_playbook.evals.runner.materialize`
+fixtures that exercise :func:`~coding_agent_playbook.evals.run.harness_runner.materialize`
 monkeypatch ``subprocess.run`` to treat ``uv`` invocations as no-ops (returning
 a success ``CompletedProcess``) — git calls pass through unchanged.
 
@@ -34,14 +34,14 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.artifacts.prompt import Prompt
-from coding_agent_playbook.evals.fake_runner import write_files
 from coding_agent_playbook.evals.judge import StubJudge
 from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
 )
-from coding_agent_playbook.evals.runner import capture, materialize
-from coding_agent_playbook.evals.scoring import score
+from coding_agent_playbook.evals.run.fake_runner import write_files
+from coding_agent_playbook.evals.run.harness_runner import capture, materialize
+from coding_agent_playbook.evals.run.scoring import score
 from coding_agent_playbook.evals.task import Verdict
 from coding_agent_playbook.evals.validator import validate_tasks
 from tests._catalog import CORE_ROOT
@@ -72,9 +72,9 @@ def stub_uv_sync(monkeypatch: pytest.MonkeyPatch) -> None:
             return subprocess.CompletedProcess(args, 0, "", "")
         return real_run(args, **kwargs)
 
-    monkeypatch.setattr("coding_agent_playbook.evals.runner.subprocess.run", _stub_run)
+    monkeypatch.setattr("coding_agent_playbook.evals.run.harness_runner.subprocess.run", _stub_run)
     monkeypatch.setattr(
-        "coding_agent_playbook.evals.runner.shutil.which", lambda _binary: "/fake/uv"
+        "coding_agent_playbook.evals.run.harness_runner.shutil.which", lambda _binary: "/fake/uv"
     )
 
 

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.evals.runner import capture, materialize
+from coding_agent_playbook.evals.run.harness_runner import capture, materialize
 from coding_agent_playbook.evals.task import EvalTask
 
 if TYPE_CHECKING:

@@ -16,7 +16,7 @@ The class is a **template method**: :meth:`HarnessRunner.run_task` owns the fixe
 pipeline (materialize → render prompt → invoke agent → capture → score → assemble
 a :class:`TaskResult`) and the only per-assistant step is the abstract
 :meth:`_invoke_agent` hook. The hermetic default + unit-test driver is
-:class:`~coding_agent_playbook.evals.fake_runner.FakeRunner`; the thin
+:class:`~coding_agent_playbook.evals.run.fake_runner.FakeRunner`; the thin
 ``ClaudeCodeRunner`` ships in R1c. Discovery is via the
 ``coding_agent_playbook.runners`` entry-point group — never instantiate runners
 directly.
@@ -39,12 +39,9 @@ from pathlib import Path
 from time import monotonic
 from typing import TYPE_CHECKING
 
-# Prompt rendering lives in ``evals.prompting``; re-exported here for callers
-# that import it from the runner (its home before it was split out).
-from coding_agent_playbook.evals.prompting import PromptResolutionError as PromptResolutionError
-from coding_agent_playbook.evals.prompting import render_prompt as render_prompt
-from coding_agent_playbook.evals.scoring import score
-from coding_agent_playbook.git_env import without_repo_location
+from coding_agent_playbook.evals.prompting import render_prompt
+from coding_agent_playbook.evals.run.git_env import without_repo_location
+from coding_agent_playbook.evals.run.scoring import score
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.task import EvalTask
@@ -348,7 +345,7 @@ class HarnessRunner(ABC):
 
     :attr:`requires_resolved_prompt` controls prompt strictness in
     :func:`render_prompt`: the hermetic
-    :class:`~coding_agent_playbook.evals.fake_runner.FakeRunner` leaves it ``False``
+    :class:`~coding_agent_playbook.evals.run.fake_runner.FakeRunner` leaves it ``False``
     (it tolerates the placeholder a synthetic test task yields), while a real
     runner like ``ClaudeCodeRunner`` sets it ``True`` so an unresolvable prompt
     raises :class:`PromptResolutionError` rather than driving a live agent with a
@@ -371,7 +368,7 @@ class HarnessRunner(ABC):
     ) -> TaskResult:
         """Run ``task`` over ``N`` trials in ``scratch_dir`` and grade a :class:`TaskResult`.
 
-        ``N`` is :attr:`~coding_agent_playbook.evals._compile.CompiledTask.trials_needed`
+        ``N`` is :attr:`~coding_agent_playbook.evals.compile.compiler.CompiledTask.trials_needed`
         — **1** for a task with no ``[aggregate]`` block (the single-trial default;
         this path is one ``materialize → render → invoke → capture → score``), and
         ``max(k)`` over the aggregate handles otherwise.
@@ -380,7 +377,7 @@ class HarnessRunner(ABC):
         (a fresh ``setup/`` materialization, so the agent never inherits a prior
         trial's edits): :func:`materialize` → :meth:`_invoke_agent` (the only
         per-assistant step) → :func:`capture` →
-        :func:`~coding_agent_playbook.evals.scoring.score`. Each yields a
+        :func:`~coding_agent_playbook.evals.run.scoring.score`. Each yields a
         :class:`~coding_agent_playbook.evaluators.types.TrialResult` (the per-trial
         report + its derived verdict). The prompt is resolved **once** up front
         (identical across trials) via :func:`render_prompt` — so a real runner's
@@ -399,9 +396,9 @@ class HarnessRunner(ABC):
         ``judge`` each trial's report is deterministic-only (judged evaluators are
         skipped). ``fail_fast`` defaults to ``True`` — the per-trial scheduler's
         cost-saving short-circuit; ``--full-scoring`` flips it off, and
-        :func:`~coding_agent_playbook.evals.scoring.score` ignores it for a task
+        :func:`~coding_agent_playbook.evals.run.scoring.score` ignores it for a task
         whose result it could change
-        (:attr:`~coding_agent_playbook.evals._compile.CompiledTask.short_circuit_safe`).
+        (:attr:`~coding_agent_playbook.evals.compile.compiler.CompiledTask.short_circuit_safe`).
         """
         from coding_agent_playbook.evals.task import compile_eval_task
 

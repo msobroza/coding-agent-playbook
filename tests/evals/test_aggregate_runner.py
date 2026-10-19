@@ -1,7 +1,7 @@
 """Runner-level tests for the C8 across-trial aggregate layer (hermetic).
 
 These exercise the N-trial loop in
-:meth:`~coding_agent_playbook.evals.runner.HarnessRunner.run_task`: a task with an
+:meth:`~coding_agent_playbook.evals.run.harness_runner.HarnessRunner.run_task`: a task with an
 ``[aggregate]`` block runs ``N = max(k)`` trials, collects one
 :class:`~coding_agent_playbook.evaluators.types.TrialResult` per trial, and grades
 the compiled aggregate layer over them. The two headline guarantees:
@@ -25,8 +25,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.evals.fake_runner import FakeRunner, write_files
-from coding_agent_playbook.evals.runner import AgentRun, HarnessRunner
+from coding_agent_playbook.evals.run.fake_runner import FakeRunner, write_files
+from coding_agent_playbook.evals.run.harness_runner import AgentRun, HarnessRunner
 from coding_agent_playbook.evals.task import EvalTask
 
 if TYPE_CHECKING:
