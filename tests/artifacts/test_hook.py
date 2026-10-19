@@ -2,7 +2,7 @@
 
 specs/prK-lifecycle-hooks.md §A.2 (schema) and §A.3 (dataclasses). Value
 domains (H2-H13) are ``hook_policy.classify_hook``'s job and are tested there;
-round trips and the advisory envelope live in test_types_hook_roundtrip.py.
+round trips and the advisory envelope live in test_hook_roundtrip.py.
 """
 
 from __future__ import annotations
@@ -11,9 +11,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.artifacts.hook import Hook
 from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
 from coding_agent_playbook.artifacts.hook_schema import HookHandler, HookMatcher, HookSchemaError
-from coding_agent_playbook.types import Hook
 from tests.hook_samples import HOOK_WHERE, hook_frontmatter, hook_mapping, write_hook_md
 
 if TYPE_CHECKING:

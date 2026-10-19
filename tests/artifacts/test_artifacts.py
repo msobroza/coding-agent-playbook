@@ -7,15 +7,10 @@ from typing import Any
 
 import pytest
 
-from coding_agent_playbook.types import (
-    Prompt,
-    PromptFrontmatter,
-    Rule,
-    RuleFrontmatter,
-    Skill,
-    format_frontmatter,
-    split_frontmatter,
-)
+from coding_agent_playbook.artifacts.frontmatter import format_frontmatter, split_frontmatter
+from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from coding_agent_playbook.artifacts.skill import Skill
 
 RULE_MD = """\
 ---

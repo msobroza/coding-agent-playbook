@@ -18,7 +18,8 @@ from coding_agent_playbook.validation.findings import ValidationError
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
 
-    from coding_agent_playbook.types import Prompt, Rule
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
 
 __all__ = [
     "LINT_CODES_SHAPE",

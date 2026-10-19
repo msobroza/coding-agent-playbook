@@ -120,6 +120,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.sources.filesystem.ENGINE_PACKAGE` | `coding_agent_playbook.catalog.layers.ENGINE_PACKAGE` | N3 |
 | `coding_agent_playbook.sources.filesystem.FileSystemStateSource` | `coding_agent_playbook.config.files.FileSystemStateSource` | N2 |
 | `coding_agent_playbook.sources.filesystem.REPO_LOCAL_SOURCE` | `coding_agent_playbook.catalog.layers.REPO_LOCAL_SOURCE` | N3 |
+| `coding_agent_playbook.types.Hook` | `coding_agent_playbook.artifacts.hook.Hook` | A2 |
 | `coding_agent_playbook.types.HookDecision` | `coding_agent_playbook.artifacts.hook_schema.HookDecision` | A1 |
 | `coding_agent_playbook.types.HookEvent` | `coding_agent_playbook.artifacts.hook_schema.HookEvent` | A1 |
 | `coding_agent_playbook.types.HookFrontmatter` | `coding_agent_playbook.artifacts.hook_frontmatter.HookFrontmatter` | A1 |
@@ -129,7 +130,14 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.types.HookOnError` | `coding_agent_playbook.artifacts.hook_schema.HookOnError` | A1 |
 | `coding_agent_playbook.types.HookSchemaError` | `coding_agent_playbook.artifacts.hook_schema.HookSchemaError` | A1 |
 | `coding_agent_playbook.types.HookTier` | `coding_agent_playbook.artifacts.hook_schema.HookTier` | A1 |
+| `coding_agent_playbook.types.Prompt` | `coding_agent_playbook.artifacts.prompt.Prompt` | A2 |
+| `coding_agent_playbook.types.PromptFrontmatter` | `coding_agent_playbook.artifacts.prompt.PromptFrontmatter` | A2 |
+| `coding_agent_playbook.types.Rule` | `coding_agent_playbook.artifacts.rule.Rule` | A2 |
+| `coding_agent_playbook.types.RuleFrontmatter` | `coding_agent_playbook.artifacts.rule.RuleFrontmatter` | A2 |
+| `coding_agent_playbook.types.Skill` | `coding_agent_playbook.artifacts.skill.Skill` | A2 |
 | `coding_agent_playbook.types.ToolClass` | `coding_agent_playbook.artifacts.hook_schema.ToolClass` | A1 |
+| `coding_agent_playbook.types.format_frontmatter` | `coding_agent_playbook.artifacts.frontmatter.format_frontmatter` | A2 |
+| `coding_agent_playbook.types.split_frontmatter` | `coding_agent_playbook.artifacts.frontmatter.split_frontmatter` | A2 |
 <!-- module-moves:end -->
 
 ## v0.21 — Skills-first context

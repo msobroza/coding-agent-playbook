@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
+from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.detector import facts as detector
 from coding_agent_playbook.guard_config import DetectInputs, applicability_rows
@@ -22,7 +23,6 @@ from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.handlers import resync_on_detector_input_change as resync
 from coding_agent_playbook.hook_runtime.handlers._detector_inputs import detector_triggers
-from coding_agent_playbook.types import Rule
 from tests.hook_runtime.fakes import FakeProc
 from tests.hooks.pack_repo import PackRepo, playbook_calls, playbook_child
 

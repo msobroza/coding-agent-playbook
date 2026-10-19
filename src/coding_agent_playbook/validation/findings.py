@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import TextIO
 
-    from coding_agent_playbook.types import Skill
+    from coding_agent_playbook.artifacts.skill import Skill
 
 
 @dataclass(frozen=True)

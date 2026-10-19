@@ -26,16 +26,12 @@ import stat
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
+from coding_agent_playbook.artifacts.hook import Hook
+from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.commands import import_harness as _import
 from coding_agent_playbook.commands.import_harness import import_harness
-from coding_agent_playbook.types import (
-    Hook,
-    Prompt,
-    PromptFrontmatter,
-    Rule,
-    RuleFrontmatter,
-    Skill,
-)
 from tests.hook_samples import resolved_from_disk
 
 if TYPE_CHECKING:
