@@ -15,7 +15,7 @@ import pytest
 
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
-from coding_agent_playbook.hook_runtime.git import GitError
+from coding_agent_playbook.hook_runtime.git.safe_git import GitError
 from coding_agent_playbook.hook_runtime.policy import UNATTENDED_ENV_VAR
 from tests.hook_runtime.fakes import FakeGit
 

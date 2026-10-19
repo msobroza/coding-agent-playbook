@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     import argparse
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.git import GitPort
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
 
 __all__ = ["load_policy", "run", "scan_range"]
 

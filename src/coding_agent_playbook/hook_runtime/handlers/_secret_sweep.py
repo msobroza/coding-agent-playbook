@@ -46,7 +46,7 @@ from coding_agent_playbook.security.secrets import is_binary, scan_added_lines, 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from coding_agent_playbook.hook_runtime.git import AddedLine
+    from coding_agent_playbook.hook_runtime.git.safe_git import AddedLine
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.security.pii import PiiConfig
     from coding_agent_playbook.security.secrets import SecretFinding

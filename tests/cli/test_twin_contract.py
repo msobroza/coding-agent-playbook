@@ -19,15 +19,15 @@ import pytest
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.cli.parser import build_parser
 from coding_agent_playbook.commands.twins import gate_scan, scan_secrets, scan_sinks
-from coding_agent_playbook.hook_runtime._git_parse import AddedLine, DiffLines
 from coding_agent_playbook.hook_runtime.event import RepoInfo
+from coding_agent_playbook.hook_runtime.git.parse import AddedLine, DiffLines
 from coding_agent_playbook.hook_runtime.paths import find_repo
 from tests.hook_runtime.fakes import FakeGit
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.git import SafeGit
+    from coding_agent_playbook.hook_runtime.git.safe_git import SafeGit
 
 #: The committed config check-commit-trailers needs before it opens git: with no
 #: trailer rows it exits 0 without reading a commit.

@@ -20,7 +20,7 @@ from coding_agent_playbook.hook_runtime.state import StateUnavailable, session_k
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.hook_runtime.git import GitPort
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.session import SessionState
 
 __all__ = ["HeadSnapshot", "head_moved_note", "head_snapshot_doc", "read_head_snapshot"]

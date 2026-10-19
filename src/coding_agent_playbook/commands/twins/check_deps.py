@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.git import GitPort
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.judges.manifest_diff import ManifestKind
 
 __all__ = ["finding_lines", "manifest_findings", "run"]
