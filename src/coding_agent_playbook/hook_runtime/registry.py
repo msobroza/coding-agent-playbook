@@ -38,8 +38,8 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.escape import EscapeHatches
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
-    from coding_agent_playbook.hook_runtime.ledger import Ledger
-    from coding_agent_playbook.hook_runtime.session import SessionState
+    from coding_agent_playbook.hook_runtime.state.ledger import Ledger
+    from coding_agent_playbook.hook_runtime.state.session import SessionState
 
 __all__ = [
     "HANDLER_ATTR",

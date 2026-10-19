@@ -335,7 +335,6 @@ def test_control_plane_guard_loads_nothing_new_off_its_files(
     assert sorted(m for m in imported if m.startswith(_CPG_PREFIX)) == [
         f"{_CPG_PREFIX}paths",
         f"{_CPG_PREFIX}shell",
-        f"{_CPG_PREFIX}toml",  # the policy key rows only: tomllib stays unloaded
     ]
     assert "subprocess" not in imported
 

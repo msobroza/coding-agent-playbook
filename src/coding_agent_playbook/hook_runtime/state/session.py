@@ -18,12 +18,12 @@ from __future__ import annotations
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.state import StateUnavailable, session_key
+from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, session_key
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [
     "MAX_ASKED_IDS",

@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import ToolClass
 from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths, repo_file
@@ -78,15 +79,10 @@ def limits_of(ctx: HandlerContext) -> NotebookLimits:
     """
     return NotebookLimits(
         max_bytes=ctx.cfg.tables.notebook_max_bytes(NOTEBOOK_MAX_BYTES),
-        max_cell_output_kb=_positive(
-            ctx.config.get("max_cell_output_kb"), DEFAULT_MAX_CELL_OUTPUT_KB
+        max_cell_output_kb=HookConfig(ctx.config, CONFIG_SCHEMA).integer(
+            "max_cell_output_kb", DEFAULT_MAX_CELL_OUTPUT_KB, minimum=1
         ),
     )
-
-
-def _positive(value: object, default: int) -> int:
-    """``value`` when a positive integer (never a bool), else ``default``."""
-    return value if type(value) is int and value > 0 else default
 
 
 @register_hook_handler(

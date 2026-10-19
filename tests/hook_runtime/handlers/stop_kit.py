@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.git.safe_git import Fingerprint
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME, session_key
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME, session_key
 from coding_agent_playbook.hook_runtime.stop.runner import ToolRun
 from tests.hook_payloads import load_hook_payload
 from tests.hook_runtime.fakes import FakeGit, FakeStageRunner, FakeTrustStore

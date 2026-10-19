@@ -1,0 +1,37 @@
+# GC-1 (#127, specs/prT-package-layout.md 9 AC.2.5): every guard_config.json contract
+# name the sync writer imports without a public home moves, verbatim, into the new
+# stdlib-only hook_runtime/config/schema.py beside guard_tables.py. The writer, the
+# runtime and the tests import each name from there (no re-export). The resource-root
+# id format was private to the protected-table module and crosses a package, so it
+# takes the spec's public name RESOURCE_ROOT_ID_FORMAT by hand (no importer used the
+# old name, so it has no row). Literal merges are GC-4's.
+
+[[names]]
+pr = "GC-1"
+old = "coding_agent_playbook.hook_runtime.config.guard_config"
+new = "coding_agent_playbook.hook_runtime.config.schema"
+names = ["GUARD_CONFIG_REL", "LOCKFILE_REL", "SUPPORTED_SCHEMA_VERSIONS"]
+
+[[names]]
+pr = "GC-1"
+old = "coding_agent_playbook.guard_config"
+new = "coding_agent_playbook.hook_runtime.config.schema"
+names = ["GUARD_CONFIG_SCHEMA", "HOOKS_OUTPUT_DIR", "PRECOMMIT_CONFIG"]
+
+[[names]]
+pr = "GC-1"
+old = "coding_agent_playbook.hook_runtime.handlers._control_plane_paths"
+new = "coding_agent_playbook.hook_runtime.config.schema"
+names = ["CONTROL_PLANE"]
+
+[[names]]
+pr = "GC-1"
+old = "coding_agent_playbook.hook_runtime.handlers._control_plane_toml"
+new = "coding_agent_playbook.hook_runtime.config.schema"
+names = ["DEFAULT_POLICY_KEYS", "PolicyKeys"]
+
+[[names]]
+pr = "GC-1"
+old = "coding_agent_playbook.hook_runtime.handlers._control_plane_text"
+new = "coding_agent_playbook.hook_runtime.config.schema"
+names = ["PRECOMMIT_ID_RE", "playbook_precommit_ids"]

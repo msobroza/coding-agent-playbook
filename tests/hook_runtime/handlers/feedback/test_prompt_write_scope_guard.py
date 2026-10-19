@@ -17,19 +17,19 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.commands import validate as _validate
-from coding_agent_playbook.hook_runtime.active_prompt import (
-    TurnRecord,
-    active_prompt_document,
-    read_turn_record,
-    write_turn_record,
-)
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.handlers.prompt_scope import (
     READ_ONLY_REASON,
     TESTS_ONLY_REASON,
 )
 from coding_agent_playbook.hook_runtime.registry import load_builtin
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME, StateStore
+from coding_agent_playbook.hook_runtime.state.active_prompt import (
+    TurnRecord,
+    active_prompt_document,
+    read_turn_record,
+    write_turn_record,
+)
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME, StateStore
 from tests.hook_runtime.guard_repo import SESSION_ID, hook_record
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_hook_paths, engine_prompts
 from tests.hook_runtime.transcript_kit import SessionTranscript

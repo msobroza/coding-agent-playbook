@@ -17,7 +17,7 @@ Opt-in, Claude only (``PreCompact`` and ``SessionStart`` with source
 
 Any surprise in the unversioned transcript fails open: no checkpoint, no
 injection. Stale checkpoints are TTL-pruned at session start with the rest of
-the state root (``_state_sweep``). No LLM, no network, stdlib JSONL only.
+the state root (``state._sweep``). No LLM, no network, stdlib JSONL only.
 """
 
 from __future__ import annotations
@@ -33,6 +33,7 @@ from coding_agent_playbook.hook_runtime.caps import (
     clip,
     quote_data,
 )
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.handlers._pii_settings import (
     PII_CONFIG_KEY,
@@ -47,7 +48,7 @@ from coding_agent_playbook.hook_runtime.handlers._transcript_prompts import (
     tail_lines,
 )
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.state import StateUnavailable, iso_utc, session_key
+from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, iso_utc, session_key
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -114,8 +115,11 @@ def precompact_checkpoint(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerRes
     ``<state>/checkpoints/<key>.json`` holds ``{"entries": [{"uuid", "offset"}], "files": [...]}``.
     """
     store, rel = ctx.session.store, checkpoint_rel(ev.session_id)
+    max_prompts = HookConfig(ctx.config, CONFIG_SCHEMA).integer(
+        "max_prompts", DEFAULT_MAX_PROMPTS, minimum=1, maximum=_MAX_PROMPTS_CEILING, above="clamp"
+    )
     try:
-        refs = _prompt_refs(ev.transcript_path, _max_prompts(ctx.config))
+        refs = _prompt_refs(ev.transcript_path, max_prompts)
     except TranscriptShapeError:
         refs = None
     with suppress(StateUnavailable):
@@ -146,7 +150,10 @@ def precompact_reinject(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResul
         checkpoint = ctx.session.store.read_json(checkpoint_rel(ev.session_id))
     except StateUnavailable:
         return None
-    refs = _refs(checkpoint)[-_max_prompts(ctx.config) :]
+    max_prompts = HookConfig(ctx.config, CONFIG_SCHEMA).integer(
+        "max_prompts", DEFAULT_MAX_PROMPTS, minimum=1, maximum=_MAX_PROMPTS_CEILING, above="clamp"
+    )
+    refs = _refs(checkpoint)[-max_prompts:]
     try:
         prompts = read_prompts(ev.transcript_path, refs)
     except TranscriptShapeError:
@@ -268,10 +275,3 @@ def _refs(checkpoint: Mapping[str, Any]) -> list[EntryRef]:
 
 def _strings(value: object) -> list[str]:
     return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
-
-
-def _max_prompts(config: Mapping[str, Any]) -> int:
-    value = config.get("max_prompts")
-    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
-        return min(value, _MAX_PROMPTS_CEILING)
-    return DEFAULT_MAX_PROMPTS

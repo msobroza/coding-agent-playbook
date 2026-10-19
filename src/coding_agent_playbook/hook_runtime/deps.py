@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.proc import ProcResult
     from coding_agent_playbook.hook_runtime.registry import HandlerResolver
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
     from coding_agent_playbook.hook_runtime.stop.runner import StageRunner
     from coding_agent_playbook.hook_runtime.stop.suite import SuiteSpec
     from coding_agent_playbook.security.trust import HandlerApproval
