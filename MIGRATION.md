@@ -280,11 +280,13 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime._shell_writes` | `coding_agent_playbook.hook_runtime.shell.writes` | N17 |
 | `coding_agent_playbook.hook_runtime._verify_tag` | `coding_agent_playbook.hook_runtime.stop.verify_tag` | N17 |
 | `coding_agent_playbook.hook_runtime.active_prompt` | `coding_agent_playbook.hook_runtime.state.active_prompt` | N19 |
+| `coding_agent_playbook.hook_runtime.canary` | `coding_agent_playbook.hook_runtime.diagnostics.canary` | N20 |
 | `coding_agent_playbook.hook_runtime.config` | `coding_agent_playbook.hook_runtime.config.guard_config` | N16 |
 | `coding_agent_playbook.hook_runtime.config.guard_config.GUARD_CONFIG_REL` | `coding_agent_playbook.hook_runtime.config.schema.GUARD_CONFIG_REL` | GC-1 |
 | `coding_agent_playbook.hook_runtime.config.guard_config.LOCKFILE_REL` | `coding_agent_playbook.hook_runtime.config.schema.LOCKFILE_REL` | GC-1 |
 | `coding_agent_playbook.hook_runtime.config.guard_config.SUPPORTED_SCHEMA_VERSIONS` | `coding_agent_playbook.hook_runtime.config.schema.SUPPORTED_SCHEMA_VERSIONS` | GC-1 |
 | `coding_agent_playbook.hook_runtime.cutover` | `coding_agent_playbook.hook_runtime.judges.commit_cutover` | N14 |
+| `coding_agent_playbook.hook_runtime.doctor` | `coding_agent_playbook.hook_runtime.diagnostics.doctor` | N20 |
 | `coding_agent_playbook.hook_runtime.git` | `coding_agent_playbook.hook_runtime.git.safe_git` | N18 |
 | `coding_agent_playbook.hook_runtime.git_log` | `coding_agent_playbook.hook_runtime.git.log` | N18 |
 | `coding_agent_playbook.hook_runtime.git_range` | `coding_agent_playbook.hook_runtime.git.range` | N18 |
@@ -307,11 +309,13 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime.handlers.deser.SinkTable` | `coding_agent_playbook.hook_runtime.judges.sink_scan.SinkTable` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers.deser.new_sink_calls` | `coding_agent_playbook.hook_runtime.judges.sink_scan.new_sink_calls` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers.deser.trusted_artifact_line` | `coding_agent_playbook.hook_runtime.judges.sink_scan.trusted_artifact_line` | N14 |
+| `coding_agent_playbook.hook_runtime.heartbeat` | `coding_agent_playbook.hook_runtime.diagnostics.heartbeat` | N20 |
 | `coding_agent_playbook.hook_runtime.ledger` | `coding_agent_playbook.hook_runtime.state.ledger` | N19 |
 | `coding_agent_playbook.hook_runtime.pin` | `coding_agent_playbook.hook_runtime.config.pin` | N16 |
 | `coding_agent_playbook.hook_runtime.protected` | `coding_agent_playbook.hook_runtime.config.protected` | N16 |
 | `coding_agent_playbook.hook_runtime.session` | `coding_agent_playbook.hook_runtime.state.session` | N19 |
 | `coding_agent_playbook.hook_runtime.shell` | `coding_agent_playbook.hook_runtime.shell.parse` | N17 |
+| `coding_agent_playbook.hook_runtime.simulate` | `coding_agent_playbook.hook_runtime.diagnostics.simulate` | N20 |
 | `coding_agent_playbook.hook_runtime.state` | `coding_agent_playbook.hook_runtime.state.store` | N19 |
 | `coding_agent_playbook.hook_runtime.stop.coordinator.DEFAULT_MAX_BLOCKS` | `coding_agent_playbook.hook_runtime.config.guard_tables.DEFAULT_MAX_BLOCKS` | B3 |
 | `coding_agent_playbook.hook_runtime.wrapper_policy` | `coding_agent_playbook.hook_runtime.shell.wrapper_policy` | N17 |
