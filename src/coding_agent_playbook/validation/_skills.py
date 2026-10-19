@@ -35,11 +35,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, TypeGuard
 
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
-from coding_agent_playbook.commands._validation import (
-    ValidationError,
-    ValidationFindings,
-    skill_label,
-)
 from coding_agent_playbook.skills.document import (
     DESCRIPTION_MAX_CHARS,
     PLAYBOOK_BLOCK_KEY,
@@ -54,11 +49,17 @@ from coding_agent_playbook.skills.naming import (
     AGENT_SKILL_NAME_PATTERN,
     skill_id_of,
 )
+from coding_agent_playbook.validation.findings import (
+    ValidationError,
+    ValidationFindings,
+    skill_label,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.types import Rule, Skill
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
 
 _NAME_SHAPE: Final = f"{AGENT_SKILL_NAME_PATTERN.pattern} (1-{AGENT_SKILL_NAME_MAX_CHARS} chars)"
 _BLOCK_KEYS: Final = ("files", "use_when")

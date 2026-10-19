@@ -7,14 +7,10 @@ from pathlib import Path
 from typing import Any
 
 from coding_agent_playbook.adapters.continue_ import ContinueAdapter
+from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.renderer import SENTINEL, render_for, with_sentinel_body
-from coding_agent_playbook.types import (
-    Prompt,
-    PromptFrontmatter,
-    Rule,
-    RuleFrontmatter,
-    Skill,
-)
 from tests.hook_samples import resolved_hook
 from tests.member_skill_samples import sample_member_reference, sample_member_skill
 

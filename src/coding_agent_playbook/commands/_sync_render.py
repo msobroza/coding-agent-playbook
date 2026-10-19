@@ -52,10 +52,13 @@ if TYPE_CHECKING:
 
     from jinja2 import Environment
 
+    from coding_agent_playbook.artifacts.hook import Hook
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.orchestrator import SyncContext
     from coding_agent_playbook.rule_registry import RuleRegistryImpl
-    from coding_agent_playbook.types import Hook, Prompt, Rule, Skill
 
 
 @dataclass(frozen=True)

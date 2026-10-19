@@ -3,7 +3,7 @@
 The canonical dataclasses accept any value for their open-dict fields (YAML
 gives no types), so ``playbook validate`` is where an author learns that a
 field is malformed: each finding names the field, the offending value and the
-expected shape. Kept apart from ``validate`` for its file-size budget:
+expected shape. Kept apart from ``checks`` for its file-size budget:
 ``PromptFrontmatter.write_scope`` (§E.3) and ``RuleFrontmatter.lint_codes``
 (specs/prK-lifecycle-hooks.md §A.7).
 """
@@ -13,12 +13,13 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.commands._validation import ValidationError
+from coding_agent_playbook.validation.findings import ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
 
-    from coding_agent_playbook.types import Prompt, Rule
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
 
 __all__ = [
     "LINT_CODES_SHAPE",

@@ -1,7 +1,7 @@
 """The finding types every ``playbook validate`` check returns, and their report (SPEC §12.6).
 
-A module of its own so the check modules (``_validate_links``, ``_validate_hooks``),
-``validate`` and the validate-gated ``sync`` can all share it, its report format
+A module of its own so the check modules (``validation._links``, ``validation._hooks``),
+``checks`` and the validate-gated ``sync`` can all share it, its report format
 and the two body checks rules, prompts and hooks have in common (a template
 calling ``rule()``, a Jinja syntax error), without importing each other.
 """
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import TextIO
 
-    from coding_agent_playbook.types import Skill
+    from coding_agent_playbook.artifacts.skill import Skill
 
 
 @dataclass(frozen=True)
@@ -58,8 +58,8 @@ class ValidationFindings:
 def skill_label(skill: Skill) -> str:
     """Locate ``skill`` for a finding line (a canonical :class:`Skill` has no source path).
 
-    Shared by the Agent Skills checks (``validate``) and the member-rule checks
-    (``_validate_skills``). An id-less skill is named by its authored ``name``
+    Shared by the Agent Skills checks (``checks``) and the member-rule checks
+    (``validation._skills``). An id-less skill is named by its authored ``name``
     and, when it has one, its ``scripts/``/``references/`` parent dir.
 
     Example: ``skill_label(query_db)`` -> ``"skills/query-db (<repo-local>)"``.

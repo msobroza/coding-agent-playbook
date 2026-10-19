@@ -3,7 +3,7 @@
 ``RuleFrontmatter.skill`` names the skill whose references deliver a scoped rule;
 ``Skill.member_references`` holds the rendered member rules ``compose_skills``
 attaches at sync. Both must round-trip, and neither may change what a rule or
-skill written before them serializes to. Kept apart from ``test_types.py`` for
+skill written before them serializes to. Kept apart from ``test_artifacts.py`` for
 the file-size budget.
 """
 
@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from coding_agent_playbook.artifacts.member_reference import MemberReference
-from coding_agent_playbook.types import Rule, RuleFrontmatter, Skill
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from coding_agent_playbook.artifacts.skill import Skill
 
 _TYPING_RULE_MD = """\
 ---

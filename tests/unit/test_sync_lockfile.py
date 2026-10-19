@@ -29,8 +29,9 @@ from tests.member_skill_samples import sample_member_reference, sample_member_sk
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.hook_policy import ResolvedHook
-    from coding_agent_playbook.types import Prompt, Rule
 
 _SCOPED = LockEntry(
     path=".claude/settings.json",

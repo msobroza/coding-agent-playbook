@@ -7,7 +7,7 @@ distilled from. Credit for that source lives only in a layer root's
 ``ATTRIBUTIONS.md``: ``catalog/core/ATTRIBUTIONS.md`` for the engine's own
 artifacts and ``catalog/plugins/<name>/ATTRIBUTIONS.md`` for a bundled plugin
 (today the distilled ``python_design``).
-The PR-L link gate (``links.py``) cannot enforce this: it recognizes only
+The PR-L link gate (``validation/link_check.py``) cannot enforce this: it recognizes only
 markdown link syntax, masks code spans, and reads only ``.md``/``.md.j2``. This
 scan applies no masking and reads every text file.
 

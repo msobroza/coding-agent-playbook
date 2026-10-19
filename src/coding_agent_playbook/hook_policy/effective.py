@@ -49,12 +49,13 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.hook_schema import HookHandler
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_policy.handler_catalog import HandlerCatalog
     from coding_agent_playbook.hook_policy.merge import ConfigKeySpec, ConfigSchemaLookup
-    from coding_agent_playbook.types import Hook, Rule
 
 _OVERLAY_TIER: Final = "overlay"
 

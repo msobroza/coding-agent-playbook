@@ -19,17 +19,13 @@ from coding_agent_playbook.adapters.shared_skills import (
     SHARED_SKILLS_ROOT,
     SharedSkillsAdapter,
 )
+from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.commands._sync_hooks import _generated_locations
 from coding_agent_playbook.config.model import Config, ProjectMeta
 from coding_agent_playbook.orchestrator import discover_adapters, installed_output_locations
 from coding_agent_playbook.renderer import SENTINEL
-from coding_agent_playbook.types import (
-    Prompt,
-    PromptFrontmatter,
-    Rule,
-    RuleFrontmatter,
-    Skill,
-)
 
 if TYPE_CHECKING:
     from pathlib import Path

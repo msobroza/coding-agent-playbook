@@ -22,6 +22,8 @@ from coding_agent_playbook.adapters.skill_dirs.writer import (
     render_skill_md,
     swap_blocker,
 )
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands._output_locations import OutputLocations
 from coding_agent_playbook.commands._sync_orphans import LeftoverPolicy
@@ -31,7 +33,6 @@ from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_ha
 from coding_agent_playbook.orchestrator import installed_output_locations
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.skills.naming import agent_skill_issues, has_declared_id, skill_id_of
-from coding_agent_playbook.types import Skill, split_frontmatter
 from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:

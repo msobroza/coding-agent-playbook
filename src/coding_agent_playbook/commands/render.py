@@ -18,6 +18,10 @@ from typing import TYPE_CHECKING
 
 from jinja2.exceptions import UndefinedError
 
+from coding_agent_playbook.artifacts.hook import Hook
+from coding_agent_playbook.artifacts.prompt import Prompt
+from coding_agent_playbook.artifacts.rule import Rule
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.commands._sync_render import (
     build_jinja_context,
     render_hook_body,
@@ -36,7 +40,6 @@ from coding_agent_playbook.renderer import (
     render_for,
 )
 from coding_agent_playbook.rule_registry import build_prompt_environment, skill_reference_of
-from coding_agent_playbook.types import Hook, Prompt, Rule, Skill
 
 if TYPE_CHECKING:
     import argparse
