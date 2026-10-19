@@ -8,7 +8,9 @@
 from __future__ import annotations
 
 import ast
-from typing import TYPE_CHECKING
+import inspect
+import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -21,10 +23,8 @@ from coding_agent_playbook.config.files import (
 )
 from coding_agent_playbook.config.model import Config, ProjectMeta
 from coding_agent_playbook.config.tables.hooks import PolicyTables
-from tests.config._engine_trees import engine_module_trees
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from tests.config._engine_trees import PACKAGE_ROOT, engine_module_file, engine_module_trees
+from tests.engine_modules import StaleModulePin
 
 
 class _DummyStateSource(StateSource):
@@ -125,6 +125,27 @@ def test_filesystem_state_source_delegates_its_config_half(tmp_path: Path) -> No
     )
 
 
+def test_filesystem_state_source_keeps_its_committed_file_methods(tmp_path: Path) -> None:
+    """Spec B.5.3: the entry's other config methods stay too, each a ``ConfigFiles`` call,
+    so out-of-tree code that reads or rewrites the committed file through it still runs."""
+    (tmp_path / CONFIG_LOCAL_FILENAME).write_text('adapters_enabled = ["opencode"]\n', "utf-8")
+    source, files = FileSystemStateSource(repo_root=tmp_path), ConfigFiles(tmp_path)
+    table = tomllib.loads(_COMMITTED)
+    with pytest.raises(FileNotFoundError, match=r"; run `playbook init`$"):
+        source.read_committed_config_table()
+
+    assert (source.has_committed_config(), files.has_committed()) == (False, False)
+    assert source.preview_config(table) == files.preview(table)
+    assert source.preview_config(table).adapters_enabled == ["opencode"]
+    assert not files.has_committed()  # a preview writes nothing
+    source.save_config_table(table)
+
+    assert (source.has_committed_config(), files.has_committed()) == (True, True)
+    committed = source.read_committed_config_table()
+    assert isinstance(committed, dict)  # a copy the caller may change, as before B2
+    assert committed == dict(files.committed().data) == table
+
+
 def test_dump_toml_escapes_control_characters(tmp_path: Path) -> None:
     """Strings with control chars (\\x00, \\x08) must be \\uXXXX-escaped so
     the emitted TOML is valid (code-quality review I1)."""
@@ -152,12 +173,15 @@ def test_entry_point_registers_filesystem_state_source() -> None:
 
 #: The engine modules outside ``config/`` that may import ``FileSystemStateSource``
 #: (spec B.5.8); everything else reads the config files through ``ConfigFiles``.
-_STATE_SOURCE_USERS = {
-    # builds the sync context's state source; A5 moves it to validation/context.py
-    "orchestrator.py",
-    # reads the lockfile through it
-    "adapters/_prior_output.py",
-}
+#: Named dotted, so ``module_moves apply`` follows a move (``engine_module_file``).
+_STATE_SOURCE_USERS = frozenset(
+    {
+        # builds the sync context's state source; A5 moves it to validation/context.py
+        engine_module_file("coding_agent_playbook.orchestrator"),
+        # reads the lockfile through it
+        engine_module_file("coding_agent_playbook.adapters.skill_dirs.ownership"),
+    }
+)
 
 
 def _imported_names(tree: ast.Module) -> set[str]:
@@ -183,3 +207,19 @@ def test_only_the_state_source_users_import_filesystem_state_source() -> None:
     """The allowlist is exact, so it only shrinks: a module that stops importing it
     must leave the list too."""
     assert _state_source_importers() == _STATE_SOURCE_USERS
+
+
+@pytest.mark.parametrize("defined", [ConfigFiles, PolicyTables])
+def test_engine_module_file_is_the_trees_key_of_the_module(defined: type) -> None:
+    """Guard the guard: a dotted name becomes the path the pins compare (no raw path
+    here either, so a later move cannot strand this test)."""
+    expected = Path(inspect.getfile(defined)).relative_to(PACKAGE_ROOT).as_posix()
+
+    assert engine_module_file(defined.__module__) == expected
+
+
+def test_engine_module_file_refuses_a_stale_name() -> None:
+    """A name that no longer resolves fails, instead of leaving an allowlist entry
+    that matches no module."""
+    with pytest.raises(StaleModulePin, match="no longer resolves"):
+        engine_module_file("coding_agent_playbook.config.no_such_module")

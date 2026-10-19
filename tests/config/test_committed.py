@@ -23,7 +23,7 @@ from coding_agent_playbook.config.committed import (
 from coding_agent_playbook.config.files import ConfigFiles
 from coding_agent_playbook.config.model import Config
 from coding_agent_playbook.config.schema import ConfigError
-from tests.config._engine_trees import engine_module_trees
+from tests.config._engine_trees import engine_module_file, engine_module_trees
 from tests.engine_modules import engine_module
 from tests.toml_equality import assert_toml_identical
 
@@ -225,20 +225,23 @@ def test_detector_cache_table_writes_sets_as_sorted_lists() -> None:
     assert table == {"dev_tools": ["mypy", "ruff"], "has_ci": True}
 
 
-#: The committed file's writers (``ConfigFiles.write_committed`` and the ``StateSource``
-#: method ``save_config``) and the ``ConfigRewrite`` builders that may call them:
-#: production code names them in one module only.
-_WRITERS = frozenset({"save_config", "write_committed"})
+#: The committed file's writers (``ConfigFiles.write_committed``, the ``StateSource``
+#: method ``save_config`` and ``FileSystemStateSource.save_config_table``, spec B.5.6)
+#: and the ``ConfigRewrite`` builders that may call them: production code names them
+#: in one module only.
+_WRITERS = frozenset({"save_config", "save_config_table", "write_committed"})
 _BUILDERS = frozenset({"ConfigRewrite", "_checked_rewrite"})
 #: The merged config, local overrides included: ``FileSystemStateSource.load_config``,
-#: ``ConfigFiles.load`` and the ``ConfigFiles.preview`` of a planned write.
-_MERGED_READS = frozenset({"load_config", "load", "preview"})
-_HOME = "config/committed.py"
-#: ``_HOME`` as a dotted module: what ``check`` and ``init`` import the builders from.
-_HOME_MODULE = engine_module(f"coding_agent_playbook.{_HOME.removesuffix('.py').replace('/', '.')}")
-#: Where the writers are defined (``FileSystemStateSource.save_config`` delegates to
-#: ``ConfigFiles.write_committed``; N2 put both in this one module).
-_WRITERS_HOME = "config/files.py"
+#: ``ConfigFiles.load`` and the preview of a planned write (``ConfigFiles.preview``,
+#: which ``FileSystemStateSource.preview_config`` delegates to).
+_MERGED_READS = frozenset({"load_config", "load", "preview", "preview_config"})
+#: What ``check`` and ``init`` import the builders from; the pins name their modules
+#: dotted, so ``module_moves apply`` follows a move.
+_HOME_MODULE = engine_module("coding_agent_playbook.config.committed")
+_HOME = engine_module_file(_HOME_MODULE)
+#: Where the writers are defined (``FileSystemStateSource``'s two delegate to
+#: ``ConfigFiles.write_committed``; N2 put both classes in this one module).
+_WRITERS_HOME = engine_module_file("coding_agent_playbook.config.files")
 
 
 def _referenced_names(tree: ast.Module) -> Iterator[tuple[int, str]]:
@@ -281,13 +284,15 @@ def _imports_committed_config(tree: ast.Module) -> bool:
 def test_only_committed_config_writes_the_committed_file() -> None:
     """SPEC §7.2 invariant: local overrides are never written back to the committed file.
 
-    Pins, by walking the engine's AST: (1) the writers ``save_config`` and
-    ``write_committed`` are referenced only in ``config/committed`` (and where
-    they are defined), (2) a ``ConfigRewrite`` — whose ``save`` is the one caller —
-    is built only there too, by ``plan_*`` builders that each read the committed
-    file itself or require none; and (3) no module importing ``config.committed``
-    references the merged config (``load_config``, ``ConfigFiles.load`` or
-    ``preview``), which ``init`` and ``check --refresh`` each saved before v0.18.
+    Pins, by walking the engine's AST: (1) the writers ``save_config``,
+    ``save_config_table`` and ``write_committed`` are referenced only in
+    ``config/committed`` (and where they are defined), (2) a ``ConfigRewrite`` —
+    whose ``save`` is the one caller — is built only there too, by ``plan_*``
+    builders that each read the committed file itself or require none; and (3) no
+    module importing ``config.committed`` references the merged config
+    (``load_config``, ``preview_config``, ``ConfigFiles.load`` or
+    ``ConfigFiles.preview``), which ``init`` and ``check --refresh`` each saved
+    before v0.18.
     It cannot see a merged config reaching a plan another way
     (``SyncContext.config`` returned from an ``update`` callback); the CLI tests
     pin both commands' output for that.
@@ -314,5 +319,7 @@ def test_the_writer_pin_sees_the_names_it_guards() -> None:
     assert {"ConfigRewrite", "_checked_rewrite"} <= {
         name for _, name in _called_names(modules[_HOME])
     }
-    assert _imports_committed_config(modules["commands/check.py"])
-    assert _imports_committed_config(modules["commands/init.py"])
+    check = engine_module_file("coding_agent_playbook.commands.check")
+    init = engine_module_file("coding_agent_playbook.commands.init")
+    assert _imports_committed_config(modules[check])
+    assert _imports_committed_config(modules[init])

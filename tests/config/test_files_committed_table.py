@@ -21,7 +21,7 @@ from coding_agent_playbook.config.files import (
     ConfigFiles,
 )
 from coding_agent_playbook.config.schema import ConfigError
-from tests.config._engine_trees import engine_module_trees
+from tests.config._engine_trees import engine_module_file, engine_module_trees
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -31,12 +31,14 @@ _COMMITTED = ".coding-agent-playbook.toml"
 _LOCAL = ".coding-agent-playbook.local.toml"
 
 #: The one module that spells the two names (as ``CONFIG_FILENAME``/``CONFIG_LOCAL_FILENAME``).
-_HOME = "config/files.py"
+#: Both pins name their modules dotted, so ``module_moves apply`` follows a move.
+_HOME = engine_module_file("coding_agent_playbook.config.files")
 #: Engine modules that still spell a name, until the PR named beside each takes it
 #: away; the pin compares exact sets, so a fixed module must leave the list.
 _ALLOWED = frozenset(
     {
-        "guard_config.py",  # GC-3 (spec B.13): the writer side, from the runtime's schema module
+        # GC-3 (spec B.13): the writer side, from the runtime's schema module
+        engine_module_file("coding_agent_playbook.guard_config"),
     }
 )
 #: The hook runtime keeps its own spellings: it must not import the sync-side config/

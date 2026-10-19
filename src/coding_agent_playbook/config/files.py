@@ -410,9 +410,10 @@ class StateSource(ABC):
 class FileSystemStateSource(StateSource):
     """Reads + writes the three TOML files in the consumer repo (SPEC §7, §14.4, §20.3).
 
-    The ``state_sources`` entry point (L2). Its config half delegates to the
-    :class:`ConfigFiles` it builds, the two config files' one reader and
-    writer; the lockfile half (``.coding-agent-playbook.lock``) is its own.
+    The ``state_sources`` entry point (L2). Every config method delegates to the
+    :class:`ConfigFiles` it builds, the two config files' one reader and writer,
+    so code calling them keeps working (spec B.5.3). The lockfile half
+    (``.coding-agent-playbook.lock``) is its own.
     """
 
     name = "filesystem"
@@ -428,38 +429,46 @@ class FileSystemStateSource(StateSource):
         self._files = ConfigFiles(repo_root)
 
     def load_config(self) -> Config:
-        """The effective config (:meth:`ConfigFiles.load`): the local file merged on top, never saved.
+        """The effective config, local file merged on top, never saved (:meth:`ConfigFiles.load`).
 
-        Example::
-
-            >>> FileSystemStateSource(repo_root=Path("/no/such/repo")).load_config()
-            Traceback (most recent call last):
-            ...
-            FileNotFoundError: missing .coding-agent-playbook.toml; run `playbook init`
+        Example: ``FileSystemStateSource(repo_root=repo).load_config().adapters_enabled``.
         """
         return self._files.load()
 
     def load_primary_config(self) -> Config:
-        """The committed file alone as a ``Config`` (:meth:`ConfigFiles.load_committed`, P6).
+        """The committed file alone as a ``Config`` (P6; :meth:`ConfigFiles.load_committed`).
 
-        Example::
-
-            >>> FileSystemStateSource(repo_root=Path("/no/such/repo")).load_primary_config()
-            Traceback (most recent call last):
-            ...
-            FileNotFoundError: missing .coding-agent-playbook.toml; run `playbook init`
+        Example: ``FileSystemStateSource(repo_root=repo).load_primary_config().extra_tables``.
         """
         return self._files.load_committed()
 
     def load_local_overrides(self) -> dict[str, Any]:
-        """The checked local file (:meth:`ConfigFiles.local_overrides`), ``{}`` when absent.
+        """The checked local file, ``{}`` when absent (:meth:`ConfigFiles.local_overrides`).
 
-        Example::
-
-            >>> FileSystemStateSource(repo_root=Path("/no/such/repo")).load_local_overrides()
-            {}
+        Example: ``FileSystemStateSource(repo_root=Path("/no/repo")).load_local_overrides()`` is ``{}``.
         """
         return self._files.local_overrides()
+
+    def has_committed_config(self) -> bool:
+        """Whether the committed file exists (:meth:`ConfigFiles.has_committed`).
+
+        Example: ``FileSystemStateSource(repo_root=Path("/no/repo")).has_committed_config()`` is False.
+        """
+        return self._files.has_committed()
+
+    def read_committed_config_table(self) -> dict[str, Any]:
+        """The checked committed file alone, every key, in a new dict (:meth:`ConfigFiles.committed`).
+
+        Example: ``FileSystemStateSource(repo_root=repo).read_committed_config_table().get("links")``.
+        """
+        return dict(self._files.committed().data)
+
+    def preview_config(self, table: Mapping[str, Any]) -> Config:
+        """:meth:`load_config` once ``table`` is saved, nothing written (:meth:`ConfigFiles.preview`).
+
+        Example: ``state.preview_config(rewrite.table).commit_output``.
+        """
+        return self._files.preview(table)
 
     def save_config(self, config: Config) -> None:
         """The :class:`StateSource` contract: ``config.to_dict()`` through ``write_committed``.
@@ -469,11 +478,18 @@ class FileSystemStateSource(StateSource):
         ``init`` and ``check --refresh`` rewrite the committed file through
         ``config/committed`` (SPEC §7.2).
 
-        Example::
-
-            >>> state.save_config(config)  # doctest: +SKIP
+        Example: ``state.save_config(config)``.
         """
         self._files.write_committed(config.to_dict())
+
+    def save_config_table(self, table: Mapping[str, Any]) -> None:
+        """Atomically write ``table`` to the committed file as is (:meth:`ConfigFiles.write_committed`).
+
+        Never hand it :meth:`load_config`'s merged config (SPEC §7.2); no command calls it.
+
+        Example: ``state.save_config_table({**state.read_committed_config_table(), "x": {}})``.
+        """
+        self._files.write_committed(table)
 
     def load_lockfile(self) -> Lockfile | None:
         """Read the lockfile. Returns ``None`` if no lockfile exists (= first
