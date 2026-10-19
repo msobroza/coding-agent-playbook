@@ -9,6 +9,7 @@ for the failure policy, never an exception.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -24,7 +25,11 @@ from coding_agent_playbook.hook_runtime.config.guard_config import (
     GuardConfig,
     load_guard_config,
 )
-from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL, LOCKFILE_REL
+from coding_agent_playbook.hook_runtime.config.schema import (
+    GUARD_CONFIG_REL,
+    HOOK_RECORD_KEYS,
+    LOCKFILE_REL,
+)
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName, RepoInfo
 from coding_agent_playbook.hook_runtime.paths import fold_key
@@ -276,11 +281,34 @@ def test_hook_records_parse_the_resolved_hook_to_json_schema(tmp_path: Path) -> 
     assert record.raw == _resolved_hook().to_json()
 
 
+_HANDLER_OF_EACH_KIND = {
+    "builtin": ResolvedHandler("builtin", name="guard_generated_outputs"),
+    "entry_point": ResolvedHandler("entry_point", target="acme.rules:check", dist="acme==1.0"),
+    "external": ResolvedHandler("external", argv=("python", "scripts/check.py")),
+}
+
+
+@pytest.mark.parametrize("kind", sorted(_HANDLER_OF_EACH_KIND))
+def test_resolved_hook_json_has_exactly_the_record_keys(tmp_path: Path, kind: str) -> None:
+    """The writer's record and the runtime's schema name the same twelve keys (GC-4)."""
+    handlers = {"pre_tool_use": _HANDLER_OF_EACH_KIND[kind]}
+    resolved = dataclasses.replace(_resolved_hook(), handlers=handlers)
+
+    record = resolved.to_json()
+
+    assert set(record) == HOOK_RECORD_KEYS
+    assert record["handlers"]["pre_tool_use"]["kind"] == kind
+    repo = _repo(tmp_path)
+    _install(repo, _document(hooks={resolved.id: record}))
+    assert isinstance(_load(repo), GuardConfig)
+
+
 HOOK = "guard-generated-outputs"
 
 
 def _with_record(change: Callable[[dict[str, Any]], object]) -> dict[str, Any]:
-    record = _resolved_hook().to_json()
+    # A plain dict, not the typed record: the changes write malformed values on purpose.
+    record: dict[str, Any] = dict(_resolved_hook().to_json())
     change(record)
     return _document(hooks={HOOK: record})
 

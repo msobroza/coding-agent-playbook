@@ -190,7 +190,6 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.git_client` | `coding_agent_playbook.sync.git_client` | A6 |
 | `coding_agent_playbook.git_env` | `coding_agent_playbook.evals.run.git_env` | N23 |
 | `coding_agent_playbook.gitignore` | `coding_agent_playbook.generated_output.gitignore` | N6 |
-| `coding_agent_playbook.guard_config.GUARD_CONFIG_SCHEMA` | `coding_agent_playbook.hook_runtime.config.schema.GUARD_CONFIG_SCHEMA` | GC-1 |
 | `coding_agent_playbook.guard_config.HOOKS_OUTPUT_DIR` | `coding_agent_playbook.hook_runtime.config.schema.HOOKS_OUTPUT_DIR` | GC-1 |
 | `coding_agent_playbook.guard_config.PRECOMMIT_CONFIG` | `coding_agent_playbook.hook_runtime.config.schema.PRECOMMIT_CONFIG` | GC-1 |
 | `coding_agent_playbook.harness` | `coding_agent_playbook.agent_harness` | N12 |
@@ -400,6 +399,17 @@ rubric and gate registries are
 `coding_agent_playbook.evals.compile.rubric_registry` and
 `coding_agent_playbook.evals.compile.gate_registry`. There is no shim, and the
 entry-point groups do not change.
+<!-- module-moves: end-keep -->
+
+<!-- module-moves: keep -->
+The `guard_config.json` contract names have one definition each, in
+`coding_agent_playbook.hook_runtime.config.schema`. The writer's schema version,
+`coding_agent_playbook.guard_config.GUARD_CONFIG_SCHEMA` before GC-1, is now
+`GUARD_CONFIG_SCHEMA_VERSION`, and `SUPPORTED_SCHEMA_VERSIONS` ends at it. The
+module also types one `hooks.<id>` record: `HookRecordJson` (with
+`HandlerRecordJson` for each handler) is what `ResolvedHook.to_json()` returns,
+and `HOOK_RECORD_KEYS` is its key set. The bytes of `guard_config.json` do not
+change.
 <!-- module-moves: end-keep -->
 
 Out-of-tree `Metric` authors: at grade time, a threshold or non-regression check

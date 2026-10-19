@@ -102,7 +102,7 @@ from coding_agent_playbook.hook_registrations import (
 from coding_agent_playbook.hook_runtime.config.schema import (
     CONTROL_PLANE,
     GUARD_CONFIG_REL,
-    GUARD_CONFIG_SCHEMA,
+    GUARD_CONFIG_SCHEMA_VERSION,
     HOOKS_OUTPUT_DIR,
     PRECOMMIT_CONFIG,
     playbook_precommit_ids,
@@ -268,7 +268,7 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
         SKILL_NUDGE_HOOK_ID: {"skills": [dict(row) for row in inputs.skill_globs]},
     }
     return {
-        "schema_version": GUARD_CONFIG_SCHEMA,
+        "schema_version": GUARD_CONFIG_SCHEMA_VERSION,
         "engine_version": inputs.engine_version,
         "hooks": {
             hook.id: bake_layout(
