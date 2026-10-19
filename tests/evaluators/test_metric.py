@@ -78,7 +78,7 @@ def test_static_metrics_excludes_execution() -> None:
 
 def test_default_static_selection_unchanged_by_opt_in_metrics() -> None:
     """K10 Done-when: the new metrics register as static yet stay out of the default set."""
-    from coding_agent_playbook.evaluators.policy import OPT_IN_METRICS, resolve_metric_selection
+    from coding_agent_playbook.metrics_gate.policy import OPT_IN_METRICS, resolve_metric_selection
 
     registered = {m.name for m in static_metrics()}
     default = {m.name for m in resolve_metric_selection(static_metrics())}

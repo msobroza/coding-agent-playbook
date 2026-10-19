@@ -166,8 +166,8 @@ flowchart LR
         plugins["plugins/: one directory per bundled plugin (opt-in)"]
     end
     subgraph src["src/coding_agent_playbook/ (engine logic)"]
-        resolver["catalog.py: the only code that locates the catalog"]
-        engine["sources, renderer, adapters, CLI"]
+        resolver["catalog/roots.py: the only code that locates the catalog"]
+        engine["catalog source, renderer, adapters, CLI"]
         template["templates/: the starter pre-commit config, the hook shims"]
     end
     wheel["installed wheel: coding_agent_playbook/_catalog/"]

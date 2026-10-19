@@ -1,0 +1,67 @@
+# N22 (#83, specs/prT-package-layout.md 4.13, 7.4): the metrics gate leaves the grading
+# kernel for the metrics_gate/ package. The two underscore modules become public
+# (Stop handlers import them), and metrics_config.py takes MetricConfig from
+# evaluators/types.py (H9), which ends the types.py <-> metrics_config lazy cycle.
+
+[[module]]
+pr = "N22"
+old = "coding_agent_playbook.evaluators.metrics_gate"
+new = "coding_agent_playbook.metrics_gate.run"
+
+[[module]]
+pr = "N22"
+old = "coding_agent_playbook.evaluators._metrics_inputs"
+new = "coding_agent_playbook.metrics_gate.inputs"
+
+[[module]]
+pr = "N22"
+old = "coding_agent_playbook.evaluators._metrics_suite"
+new = "coding_agent_playbook.metrics_gate.suite"
+
+[[module]]
+pr = "N22"
+old = "coding_agent_playbook.evaluators.measurement_snapshot"
+new = "coding_agent_playbook.metrics_gate.snapshot"
+
+[[module]]
+pr = "N22"
+old = "coding_agent_playbook.evaluators.policy"
+new = "coding_agent_playbook.metrics_gate.policy"
+
+[[module]]
+pr = "N22"
+old = "coding_agent_playbook.metrics_config"
+new = "coding_agent_playbook.metrics_gate.config"
+
+# MetricConfig leaves the kernel, and the evaluators/__init__.py re-export goes (L2).
+[[names]]
+pr = "N22"
+old = "coding_agent_playbook.evaluators.types"
+new = "coding_agent_playbook.metrics_gate.config"
+names = ["MetricConfig"]
+
+[[names]]
+pr = "N22"
+old = "coding_agent_playbook.evaluators"
+new = "coding_agent_playbook.metrics_gate.config"
+names = ["MetricConfig"]
+
+[[path]]
+pr = "N22"
+old = "tests/evaluators/test_metrics_gate.py"
+new = "tests/metrics_gate/test_run.py"
+
+[[path]]
+pr = "N22"
+old = "tests/evaluators/test_metrics_gate_selection.py"
+new = "tests/metrics_gate/test_run_selection.py"
+
+[[path]]
+pr = "N22"
+old = "tests/evaluators/test_metric_selection.py"
+new = "tests/metrics_gate/test_policy.py"
+
+[[path]]
+pr = "N22"
+old = "tests/evaluators/test_measurement_snapshot.py"
+new = "tests/metrics_gate/test_snapshot.py"

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.catalog import ENGINE_PACKAGE
+from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
 from coding_agent_playbook.types import Hook
 from tests._catalog import core_markdown_sources
 

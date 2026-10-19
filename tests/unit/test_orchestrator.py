@@ -14,6 +14,7 @@ import dataclasses
 
 import pytest
 
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.model import Config, ProjectMeta, StorageConfig
 from coding_agent_playbook.orchestrator import (
     OverlayResolver,
@@ -22,7 +23,6 @@ from coding_agent_playbook.orchestrator import (
     discover_adapters,
     template_source,
 )
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import (
     Prompt,
     PromptFrontmatter,

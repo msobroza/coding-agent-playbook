@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.catalog import ENGINE_PACKAGE
+from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
 from coding_agent_playbook.renderer import RULE_CALL_RE
 from coding_agent_playbook.types import Prompt
 from tests._catalog import CORE_ROOT, bundled_plugin_dirs, core_rules

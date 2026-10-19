@@ -1,9 +1,9 @@
 """What the metrics gate measures statically: targets, candidate and baseline sources.
 
 These are the helpers behind
-:func:`~coding_agent_playbook.evaluators.metrics_gate.run_metrics_gate`
+:func:`~coding_agent_playbook.metrics_gate.run.run_metrics_gate`
 (prK §F.0.3 items 1 and 7), moved out of ``commands/metrics.py``; the suite runs
-live in ``_metrics_suite``. Import the public names from ``metrics_gate``. Every
+live in :mod:`~coding_agent_playbook.metrics_gate.suite`. Every
 input the gate cannot use raises :class:`MetricsGateUsageError`, whose message
 ``playbook metrics`` prints verbatim before exiting 2.
 """

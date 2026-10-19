@@ -15,18 +15,13 @@ from coding_agent_playbook.evaluators.builtins.ruff_violations import (
     RuffViolationsMetric,
     ruff_family,
 )
-from coding_agent_playbook.evaluators.metrics_gate import (
+from coding_agent_playbook.evaluators.parse import parse_module
+from coding_agent_playbook.evaluators.types import EvalContext, Measurement, RuffSettings, ToolSetup
+from coding_agent_playbook.metrics_gate.config import MetricConfig
+from coding_agent_playbook.metrics_gate.run import (
     MetricsGateDeps,
     MetricsGateRequest,
     run_metrics_gate,
-)
-from coding_agent_playbook.evaluators.parse import parse_module
-from coding_agent_playbook.evaluators.types import (
-    EvalContext,
-    Measurement,
-    MetricConfig,
-    RuffSettings,
-    ToolSetup,
 )
 from tests.fakes import FakeBaselineGit, FakeRuffRunner, ruff_row
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.catalog import CatalogMissingError
+from coding_agent_playbook.catalog.roots import CatalogMissingError
 
 # Aliased private so build_parser has one spelling (cli.parser), not a second one here.
 from coding_agent_playbook.cli.parser import build_parser as _build_parser

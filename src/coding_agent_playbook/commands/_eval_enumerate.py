@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.catalog import is_bundled_layer
+from coding_agent_playbook.catalog.roots import is_bundled_layer
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.task import EvalTask
