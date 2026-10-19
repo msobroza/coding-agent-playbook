@@ -19,12 +19,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, Protocol
 
 from coding_agent_playbook.artifacts.hook_schema import HookMatcher
-from coding_agent_playbook.hook_policy import (
-    ENGINE_DEADLINE_CAP_MS,
-    HOOK_CAPABLE_ADAPTERS,
-    HOOK_EVENTS,
-    HOOK_SUPPORT,
-)
 from coding_agent_playbook.hook_registrations.stop_gate import (
     STOP_COORDINATOR_ID,
     budget_of,
@@ -35,13 +29,19 @@ from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.policy import effective_on_error
 from coding_agent_playbook.hook_runtime.routing import ASYNC_EVENT, HandlerRoute, handler_route
 from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
+from coding_agent_playbook.hooks.resolution.tables import (
+    ENGINE_DEADLINE_CAP_MS,
+    HOOK_CAPABLE_ADAPTERS,
+    HOOK_EVENTS,
+    HOOK_SUPPORT,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
     from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
     from coding_agent_playbook.artifacts.hook_schema import HookHandler
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 __all__ = [
     "BOOTSTRAP_DEADLINE_MS",
@@ -85,7 +85,7 @@ class BoundHandler(Protocol):
 
 
 class RegistrationMember(Protocol):
-    """What planning reads of a hook; :class:`~coding_agent_playbook.hook_policy.ResolvedHook` fits.
+    """What planning reads of a hook; :class:`~coding_agent_playbook.hooks.resolution.resolved.ResolvedHook` fits.
 
     ``on_error`` is already clamped per event; ``supports`` lists the adapters
     that render the hook; ``handlers`` and ``decisions`` decide its route.

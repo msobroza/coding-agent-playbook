@@ -1,6 +1,6 @@
 """The canonical event model (specs/prK-lifecycle-hooks.md §D.2.1).
 
-The runtime may not import ``types`` or ``hook_policy`` (§D.1), so its
+The runtime may not import ``types`` or ``hooks`` (§D.1), so its
 enumerations are re-declared in ``hook_runtime.event``; these tests pin them to
 the sync-side single sources so the two can never drift apart.
 """
@@ -14,7 +14,6 @@ from typing import get_args
 import pytest
 
 from coding_agent_playbook.artifacts import hook_schema
-from coding_agent_playbook.hook_policy import HOOK_CAPABLE_ADAPTERS, HOOK_EVENTS, TOOL_CLASS_NAMES
 from coding_agent_playbook.hook_runtime.event import (
     SESSION_ID_MAX_CHARS,
     STOP_MESSAGE_MAX_CHARS,
@@ -33,6 +32,11 @@ from coding_agent_playbook.hook_runtime.event import (
     sanitize_session_id,
 )
 from coding_agent_playbook.hook_runtime.shell import ShellConfig
+from coding_agent_playbook.hooks.resolution.tables import (
+    HOOK_CAPABLE_ADAPTERS,
+    HOOK_EVENTS,
+    TOOL_CLASS_NAMES,
+)
 from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
 

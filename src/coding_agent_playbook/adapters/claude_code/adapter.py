@@ -49,12 +49,6 @@ import dataclasses
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Final
 
-from coding_agent_playbook.adapters._owned_files import (
-    check_engine_owned,
-    check_unlinked,
-    crosses_symlink,
-    write_engine_owned,
-)
 from coding_agent_playbook.adapters._where_guidance import WhereGuidanceBuffer
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_code.hooks import (
@@ -71,9 +65,16 @@ from coding_agent_playbook.adapters.claude_code.settings.managed_merge import CL
 from coding_agent_playbook.adapters.skill_dirs.writer import SkillWriter
 from coding_agent_playbook.generated_output.output_io import write_output_bytes, write_output_text
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
-from coding_agent_playbook.hook_policy import HOOK_SUPPORT, guardrail_line, guardrails_section
-from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
+from coding_agent_playbook.generated_output.write_guard import (
+    check_engine_owned,
+    check_unlinked,
+    crosses_symlink,
+    write_engine_owned,
+)
 from coding_agent_playbook.hook_registrations import LAUNCHER_PATH
+from coding_agent_playbook.hooks.enforcement import guardrail_line, guardrails_section
+from coding_agent_playbook.hooks.guardrails_skill import has_guardrail_text
+from coding_agent_playbook.hooks.resolution.tables import HOOK_SUPPORT
 from coding_agent_playbook.renderer import render_for
 from coding_agent_playbook.skills.membership import is_skill_member
 
@@ -85,7 +86,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.config.tables.hooks import HooksConfig
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
     from coding_agent_playbook.prompt_rule_delivery import SkillReferenceIndex
 
@@ -107,7 +108,7 @@ def _generated_header(title: str) -> str:
 
 
 def check_rule_files_writable(repo_root: Path) -> None:
-    """Raise :class:`~._owned_files.UserOwnedFileError` unless both rule files may be written.
+    """Raise :class:`~.write_guard.UserOwnedFileError` unless both rule files may be written.
 
     The rules file must be engine-owned (nothing there, or an unshared
     sentinel-tagged regular file; no symlink on the way): ``.claude/rules/``
@@ -129,7 +130,7 @@ def check_rule_files_writable(repo_root: Path) -> None:
 def _write_output(path: Path, text: str) -> Path:
     """Write ``text`` to ``path`` as UTF-8 LF bytes (creating its parent) and return ``path``.
 
-    Bytes, not text, like the rules file (:func:`~._owned_files.write_engine_owned`):
+    Bytes, not text, like the rules file (:func:`~.write_guard.write_engine_owned`):
     ``write_text`` would write the stub CRLF on Windows (final review).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -311,7 +312,7 @@ class ClaudeCodeAdapter(Adapter):
         ``settings.json`` is merged first: a file that cannot be merged safely
         raises :class:`~.claude_code.settings.managed_merge.SettingsMergeError`
         before this adapter writes anything. A rules-file path the user holds,
-        or a symlinked stub, raises :class:`~._owned_files.UserOwnedFileError`
+        or a symlinked stub, raises :class:`~.write_guard.UserOwnedFileError`
         (``playbook sync`` checks both on the real repo before any adapter
         runs). Returns the paths written; ``settings.json`` only when the
         merge changed it.
@@ -331,7 +332,7 @@ class ClaudeCodeAdapter(Adapter):
         Nothing buffered and no heartbeat line writes neither file, so a stale
         engine-owned pair is left to :meth:`stale_outputs`. Both paths are
         checked (:func:`check_rule_files_writable`) before either is written, so
-        a refusal (:class:`~._owned_files.UserOwnedFileError`) leaves neither
+        a refusal (:class:`~.write_guard.UserOwnedFileError`) leaves neither
         half-written: the rules file only over nothing or a sentinel-tagged
         file, the stub over any regular file that is not a hard link, and
         neither through a symlink.

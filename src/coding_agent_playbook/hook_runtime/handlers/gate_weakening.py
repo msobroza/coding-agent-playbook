@@ -1,6 +1,6 @@
 """gate-weakening-guard: the ``gate-integrity`` Stop stage (specs/prK-hook-pack.md §E.2).
 
-It applies ``gate_scan.scan``, the one policy its CI twin ``playbook gate-scan``
+It applies ``judges.gate_weakening.scan``, the one policy its CI twin ``playbook gate-scan``
 also applies, to the working tree's change from ``HEAD``: the added and
 removed lines of ``git diff HEAD -U0`` plus every line of untracked text files,
 and the protected config files before and after. Secret paths are never read.
@@ -15,8 +15,8 @@ and the protected config files before and after. Secret paths are never read.
 The policy is the engine default extended by the hook's merged config
 (``added_line_patterns`` and ``protected_config_keys`` extend,
 ``justification_regex`` replaces): the shipped ``HOOK.md`` adds nothing, so
-the hook and the CLI twin share ``gate_scan``'s defaults as their one source.
-``gate_scan`` is imported only when the stage runs. The ``pre_edit``
+the hook and the CLI twin share ``judges.gate_weakening``'s defaults as their one source.
+``judges.gate_weakening`` is imported only when the stage runs. The ``pre_edit``
 companion lives in :mod:`.gate_weakening_edit`.
 """
 
@@ -36,9 +36,14 @@ from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResul
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.gate_scan import AddedLine, Finding, ScanPolicy, ScanReport
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.judges.gate_weakening import (
+        AddedLine,
+        Finding,
+        ScanPolicy,
+        ScanReport,
+    )
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
 
@@ -54,7 +59,7 @@ __all__ = [
 ]
 
 STAGE_NAME: Final = "gate-integrity"
-#: The ``[hooks.gate-weakening-guard]`` keys ``gate_scan.policy_from_table`` reads.
+#: The ``[hooks.gate-weakening-guard]`` keys ``judges.gate_weakening.policy_from_table`` reads.
 POLICY_KEYS: Final = ("added_line_patterns", "protected_config_keys", "justification_regex")
 CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
     "stage": ConfigKey("string", "replace", (STAGE_NAME,)),
@@ -70,14 +75,17 @@ _NOTE_LABEL: Final = {"loosening": "Gate loosened", "pragma": "Escape pragma add
 
 
 def scan_policy(config: Mapping[str, Any], root: str) -> ScanPolicy:
-    """``gate_scan``'s default policy extended by the hook's merged ``config``.
+    """``judges.gate_weakening``'s default policy extended by the hook's merged ``config``.
 
     Source roots are ``src`` when the worktree has one, else the root (as the CLI twin).
     Raises ``ValueError`` naming a malformed key.
 
     Example: ``scan_policy({}, "/repo") == ScanPolicy(source_roots=("src",))`` with ``src/``.
     """
-    from coding_agent_playbook.gate_scan import ScanPolicy, policy_from_table
+    from coding_agent_playbook.hook_runtime.judges.gate_weakening import (
+        ScanPolicy,
+        policy_from_table,
+    )
 
     roots = ("src",) if os.path.isdir(os.path.join(root, "src")) else ("",)
     table = {key: config[key] for key in POLICY_KEYS if key in config}
@@ -117,7 +125,11 @@ class GateIntegrityStage:
         return StageResult(STAGE_NAME, "red", lines=lines, user_lines=notes)
 
     def _scan(self) -> ScanReport:
-        from coding_agent_playbook.gate_scan import ConfigPair, is_config_path, scan
+        from coding_agent_playbook.hook_runtime.judges.gate_weakening import (
+            ConfigPair,
+            is_config_path,
+            scan,
+        )
 
         git, secret = self.ctx.git, self._secret
         diff = git.diff_worktree("HEAD")
@@ -165,7 +177,7 @@ def gate_weakening_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResu
 
 def _untracked_lines(root: str, rels: list[str]) -> list[AddedLine]:
     """Every line of each untracked UTF-8 text file (a new file is all added lines)."""
-    from coding_agent_playbook.gate_scan import AddedLine
+    from coding_agent_playbook.hook_runtime.judges.gate_weakening import AddedLine
 
     lines: list[AddedLine] = []
     for rel in rels:
@@ -204,7 +216,7 @@ def _block_line(finding: Finding) -> str:
 
 
 def _note(finding: Finding) -> str:
-    """The user's line: the detail is already one sanitized, clipped line (``gate_scan``)."""
+    """The user's line: the detail is already one sanitized, clipped line (``judges.gate_weakening``)."""
     label = _NOTE_LABEL.get(finding.kind, "Gate weakened")
     justified = " (justified)" if finding.justified else ""
     where = (

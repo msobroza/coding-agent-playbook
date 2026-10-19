@@ -10,14 +10,13 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook import gate_scan
+from coding_agent_playbook.artifacts import path_classes
 from coding_agent_playbook.evaluators.paths import (
     EVAL_FIXTURE_GLOBS,
     TEST_PATH_GLOBS,
     is_test_path,
     matches_any_glob,
 )
-from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
 
 
 @pytest.mark.parametrize(
@@ -51,8 +50,8 @@ def test_eval_fixture_glob_matches_engine_and_consumer_setup_trees() -> None:
 
 
 def test_constants_are_the_hooks_single_source() -> None:
-    assert EVAL_FIXTURE_GLOBS is FIXTURE_GLOBS
-    assert TEST_PATH_GLOBS is gate_scan.TEST_PATH_GLOBS
+    assert EVAL_FIXTURE_GLOBS is path_classes.FIXTURE_GLOBS
+    assert TEST_PATH_GLOBS is path_classes.TEST_PATH_GLOBS
 
 
 @pytest.mark.parametrize(

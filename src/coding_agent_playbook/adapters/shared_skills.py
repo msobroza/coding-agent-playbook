@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.skill_dirs.writer import SkillWriter
-from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
+from coding_agent_playbook.hooks.guardrails_skill import has_guardrail_text
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 #: Repo-relative shared skill root; Codex and OpenCode read ``.agents/skills/`` natively.
 SHARED_SKILLS_ROOT = Path(".agents") / "skills"

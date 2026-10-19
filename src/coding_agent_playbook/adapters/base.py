@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.config.tables.hooks import HooksConfig
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 
 
@@ -61,7 +61,7 @@ class Adapter(ABC):
 
     #: Canonical hook event -> the decisions this adapter renders natively. The
     #: empty default means advisory-only: hooks degrade to text (§C.1.1, §C.5.1).
-    #: Built-in hook-capable adapters take their row from ``hook_policy.HOOK_SUPPORT``.
+    #: Built-in hook-capable adapters take their row from ``hooks.resolution.tables.HOOK_SUPPORT``.
     hook_support: ClassVar[Mapping[str, frozenset[str]]] = MappingProxyType({})
 
     #: Repo-relative files this adapter co-owns with the user and the harness
@@ -85,7 +85,8 @@ class Adapter(ABC):
     #: lock entries get ``kind = "runtime"`` and no artifact id (§B.6), which tells
     #: guard-generated-outputs there is no source artifact to point an editor at.
     #: Each is written whole at a fixed path, so sync refuses one the user holds
-    #: (:meth:`planned_runtime_outputs`, ``_owned_files``) instead of overwriting it.
+    #: (:meth:`planned_runtime_outputs`, ``generated_output.write_guard``) instead
+    #: of overwriting it.
     runtime_outputs: ClassVar[tuple[str, ...]] = ()
 
     @abstractmethod
@@ -188,7 +189,7 @@ class Adapter(ABC):
         """The :attr:`runtime_outputs` :meth:`finalize` will write for ``hooks`` (repo-relative).
 
         ``playbook sync`` checks each one on the real repo before any adapter
-        writes and exits 1 when it is the user's (``_owned_files``: a same-named
+        writes and exits 1 when it is the user's (``generated_output.write_guard``: a same-named
         file without the sentinel line, a hard link, or a symlink on the way).
         The default is
         conservative, so declaring a runtime output is enough to guard it: every

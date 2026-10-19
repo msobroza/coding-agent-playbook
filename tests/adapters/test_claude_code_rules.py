@@ -22,7 +22,6 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.claude_code.paths import (
@@ -32,6 +31,7 @@ from coding_agent_playbook.adapters.claude_code.paths import (
 )
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
+from coding_agent_playbook.generated_output.write_guard import UserOwnedFileError
 from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
 

@@ -3,7 +3,7 @@
 :class:`OverlayResolver` merges the engine, overlay and repo-local layers by id
 (later wins) and records each :class:`Collision` for ``playbook check``; hooks
 instead merge every layer's definition through the additive
-``hook_policy.merge_hook_layers`` (specs/prK-lifecycle-hooks.md §A.6). Split out
+``hooks.resolution.merge.merge_hook_layers`` (specs/prK-lifecycle-hooks.md §A.6). Split out
 of the sync orchestration module in A5 (specs/prT-package-layout.md 4.14).
 """
 
@@ -13,14 +13,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.artifacts.identity import artifact_id_of, source_package_of
-from coding_agent_playbook.hook_policy import NO_HANDLER_SCHEMAS, merge_hook_layers
+from coding_agent_playbook.hooks.resolution.merge import NO_HANDLER_SCHEMAS, merge_hook_layers
 
 if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
-    from coding_agent_playbook.hook_policy import (
+    from coding_agent_playbook.hooks.resolution.merge import (
         ConfigSchemaLookup,
         HookLayerMerger,
         HookViolation,

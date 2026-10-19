@@ -26,7 +26,7 @@ from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.files import FileSystemStateSource
-from coding_agent_playbook.hook_policy.guardrails_skill import (
+from coding_agent_playbook.hooks.guardrails_skill import (
     GUARDRAILS_SKILL_ID,
     compose_guardrails_skill,
 )
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 pytestmark = pytest.mark.catalog
 
