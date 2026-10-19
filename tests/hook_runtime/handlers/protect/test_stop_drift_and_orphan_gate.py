@@ -21,8 +21,9 @@ from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL, LOCKFILE_REL
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.escape import EscapeHatches
 from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, EventName, Harness
-from coding_agent_playbook.hook_runtime.escape import EscapeHatches
+from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
 from coding_agent_playbook.hook_runtime.handlers._drift import (
     DriftFinding,
     drift_summary,
@@ -32,7 +33,6 @@ from coding_agent_playbook.hook_runtime.handlers.stop_drift_and_orphan_gate impo
     STAGE_NAME,
     DriftStage,
 )
-from coding_agent_playbook.hook_runtime.registry import HandlerContext
 from coding_agent_playbook.hook_runtime.state.session import SessionState
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME, session_key
 from coding_agent_playbook.hook_runtime.stop.stages import (
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
 
 pytestmark = pytest.mark.catalog
 

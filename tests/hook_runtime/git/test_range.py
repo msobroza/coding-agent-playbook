@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.hook_runtime._ports import LazyGit
 from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
+from coding_agent_playbook.hook_runtime.dispatch.ports import LazyGit
 from coding_agent_playbook.hook_runtime.git.parse import (
     AddedLine,
     DiffLines,
@@ -34,8 +34,8 @@ from tests.hook_runtime.guard_repo import GuardRepo
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.proc import SubprocessProc
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.proc import SubprocessProc
 
 GIT = "/usr/bin/git"
 

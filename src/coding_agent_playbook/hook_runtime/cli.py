@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
     from typing import BinaryIO, TextIO
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
 
 __all__ = ["ASYNC_FLAG", "USAGE", "DispatchArgs", "async_problem", "main", "parse_dispatch_argv"]
 
@@ -186,7 +186,7 @@ def _dispatch(args: Sequence[str], deps: RuntimeDeps | None, stdin: BinaryIO | N
         return 0  # no event to render for: inert, never an exit 2
     if deps is not None:
         return _run(parsed, parsed.event, deps, stdin or sys.stdin.buffer)
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
 
     with _real_stdout() as out:
         return _run(parsed, parsed.event, RuntimeDeps.default(out=out), sys.stdin.buffer)

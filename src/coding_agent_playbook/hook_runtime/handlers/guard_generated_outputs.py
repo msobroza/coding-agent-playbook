@@ -31,11 +31,11 @@ from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.config.protected import classify, protected_paths
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._targets import (
     file_write_paths,
     shell_write_targets,
 )
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.config.protected import ProtectedEntry, ProtectedHit
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["CONFIG_SCHEMA", "deny_reason", "guard_generated_outputs"]

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
 from tests.hook_runtime.fakes import FakeClock, FakeProc, FakeTrustStore
 from tests.hook_runtime.handlers.pack_repo import PackRepo, install_fixture_overlay
 

@@ -15,7 +15,7 @@ import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.hook_runtime.proc import ProcResult, ProcTimeout
+from coding_agent_playbook.hook_runtime.dispatch.proc import ProcResult, ProcTimeout
 from tests.fakes import FakeProjectHandle, empty_run
 
 if TYPE_CHECKING:

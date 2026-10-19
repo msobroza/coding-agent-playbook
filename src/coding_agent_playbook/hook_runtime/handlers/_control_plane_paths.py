@@ -37,8 +37,8 @@ from coding_agent_playbook.hook_runtime.config.schema import (
     CONTROL_PLANE,
     PolicyKeys,
 )
+from coding_agent_playbook.hook_runtime.dispatch.escape import settings_files
 from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
-from coding_agent_playbook.hook_runtime.escape import settings_files
 from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 

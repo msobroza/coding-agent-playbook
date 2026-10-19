@@ -19,12 +19,12 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.adapters.claude_code._overlay_native import network_native_rows
-from coding_agent_playbook.hook_runtime.combine import ASK_DENIED_PREFIX
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
+from coding_agent_playbook.hook_runtime.dispatch.combine import ASK_DENIED_PREFIX
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.hook_runtime.dispatch.policy import UNATTENDED_ENV_VAR
-from coding_agent_playbook.hook_runtime.registry import load_builtin
+from coding_agent_playbook.hook_runtime.dispatch.registry import load_builtin
 from tests.hook_payloads import load_hook_payload
 from tests.hook_runtime.fakes import FakeGit
 from tests.hook_samples import resolved_hook
@@ -32,8 +32,8 @@ from tests.hook_samples import resolved_hook
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 
     type Deps = Callable[..., RuntimeDeps]

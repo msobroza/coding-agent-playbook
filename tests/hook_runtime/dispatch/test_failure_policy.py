@@ -14,21 +14,21 @@ import pytest
 
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
-from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT
-from coding_agent_playbook.hook_runtime.registry import (
+from coding_agent_playbook.hook_runtime.dispatch.registry import (
     HANDLER_ATTR,
     HandlerDeclaration,
     Untrusted,
 )
+from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT
 from tests.hook_runtime.dispatch_kit import POST, body, boom, dispatch, verdict
 from tests.hook_runtime.guard_repo import hook_record
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext, HandlerFn
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext, HandlerFn
     from tests.hook_runtime.fakes import FakeHandlerResolver
     from tests.hook_runtime.guard_repo import GuardRepo
 
@@ -369,8 +369,8 @@ def _matcher(**dims: Any) -> Any:
 def test_non_tool_matchers(
     event: EventName, fields: dict[str, Any], dims: dict[str, Any], accepted: bool
 ) -> None:
-    from coding_agent_playbook.hook_runtime._selection import matcher_accepts
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.selection import matcher_accepts
 
     ev = CanonicalEvent(
         name=event,

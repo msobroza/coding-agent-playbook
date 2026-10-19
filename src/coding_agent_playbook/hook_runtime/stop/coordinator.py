@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.config.guard_tables import StopGate
-    from coding_agent_playbook.hook_runtime.deps import Clock, TrustPort
+    from coding_agent_playbook.hook_runtime.dispatch.deps import Clock, TrustPort
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.git.safe_git import Fingerprint, GitPort
     from coding_agent_playbook.hook_runtime.state.session import SessionState

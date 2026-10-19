@@ -22,8 +22,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import ProcPort, RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.dispatch.deps import ProcPort, RuntimeDeps
     from tests.hook_runtime.fakes import StageCall
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 
