@@ -23,6 +23,7 @@ from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, Provenance, compute_hash
 from coding_agent_playbook.orchestrator import SyncContext
+from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.types import Prompt, PromptFrontmatter, Rule, RuleFrontmatter
 from tests.fakes import FakeGitClient
 
@@ -437,7 +438,7 @@ def test_kept_orphan_keeps_its_provenance(
     assert _provenance_of(kept) == ("skill", "query-db", "<repo-local>", "claude_code")
 
 
-# --- includes_rules appendix decided on the template body (SPEC §6.2.5) -------
+# --- includes_rules: commands point at skills, Continue inlines (D15) -----------
 
 
 _ALL_PROMPT_ADAPTERS_CONFIG = """\
@@ -457,7 +458,7 @@ artifact_source = "filesystem"
 state_source = "filesystem"
 """
 
-_INLINE_RULE_PROMPT = """\
+_RULE_CALLING_PROMPT = """\
 ---
 id: inline-review
 name: Inline review
@@ -471,19 +472,135 @@ Review it.
 {{rule("house-rule")}}
 """
 
-
-def _generated_prompt_files(repo: Path, slash: str) -> list[Path]:
-    return [
-        repo / ".claude" / "commands" / f"{slash}.md",
-        repo / ".continue" / "prompts" / f"{slash}.md",
-        repo / ".opencode" / "command" / f"{slash}.md",
-        repo / "prompts" / slash / "SKILL.md",
-    ]
+#: The closing step every ``## Before you start`` block ends with.
+_CLOSING_STEP = (
+    "For each file in scope, also load any other listed skill whose description matches it."
+)
 
 
-def test_sync_emits_an_inlined_rule_once_in_every_prompt_adapter(tmp_path, make_synthetic_repo):
-    """Regression: an inlined ``rule()`` was also re-appended as a
-    ``## Reference rules`` appendix (SPEC §6.2.5 forbids that)."""
+def _generated_prompt_files(repo: Path, slash: str) -> dict[str, Path]:
+    return {
+        "claude_code": repo / ".claude" / "commands" / f"{slash}.md",
+        "opencode": repo / ".opencode" / "command" / f"{slash}.md",
+        "continue": repo / ".continue" / "prompts" / f"{slash}.md",
+        "agent_harness": repo / "prompts" / slash / "SKILL.md",
+    }
+
+
+def _write_member_rule(repo: Path, rule_id: str, body: str, *, applies_if: str = "") -> None:
+    """A repo-local scoped rule owned by core skill ``python-coding`` (a member rule)."""
+    target = repo / "playbook" / "rules" / f"{rule_id}.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        f"---\nid: {rule_id}\nname: {rule_id.title()}\ndescription: A house rule.\n"
+        f"scope: scoped\nskill: python-coding\nglobs:\n  - '**/*.py'\n{applies_if}"
+        f"priority: 50\n---\n{body}",
+        encoding="utf-8",
+    )
+
+
+def _member_repo(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path], includes: list[str]
+) -> Path:
+    """All four prompt adapters and a prompt ``plain`` listing ``includes`` (callers add rules)."""
+    prompt = {"body": "# Plain\n\nDo it.\n\n## Steps\n\nOne.\n", "includes_rules": includes}
+    return make_synthetic_repo(
+        tmp_path, config_text=_ALL_PROMPT_ADAPTERS_CONFIG, prompts=[("plain", prompt)]
+    )
+
+
+def test_sync_points_claude_and_opencode_commands_at_skills(tmp_path, make_synthetic_repo):
+    repo = _member_repo(tmp_path, make_synthetic_repo, ["house-rule"])
+    _write_member_rule(repo, "house-rule", "HOUSE RULE BODY\n")
+
+    assert _sync.run(_ns(repo)) == 0
+
+    files = _generated_prompt_files(repo, "plain")
+    block = (
+        "## Before you start\n\n"
+        "1. Load skill `python-coding` and read its reference `references/house-rule.md`.\n"
+        f"2. {_CLOSING_STEP}\n\n## Steps\n"
+    )
+    for harness in ("claude_code", "opencode"):
+        content = files[harness].read_text(encoding="utf-8")
+        assert f"Do it.\n\n{block}" in content, harness
+        assert "HOUSE RULE BODY" not in content, harness
+    for harness in ("continue", "agent_harness"):
+        content = files[harness].read_text(encoding="utf-8")
+        assert content.count("HOUSE RULE BODY") == 1, harness
+        assert "## Before you start" not in content, harness
+    reference = repo / ".claude" / "skills" / "python-coding" / "references" / "house-rule.md"
+    assert "HOUSE RULE BODY" in reference.read_text(encoding="utf-8")
+
+
+def test_sync_appends_each_rule_once_to_continue_prompts(tmp_path, make_synthetic_repo):
+    repo = make_synthetic_repo(
+        tmp_path,
+        config_text=_ALL_PROMPT_ADAPTERS_CONFIG,
+        rules=[("house-rule", "HOUSE RULE BODY\n")],
+        prompts=[("plain", {"body": "Do it.\n", "includes_rules": ["house-rule", "house-rule"]})],
+    )
+
+    assert _sync.run(_ns(repo)) == 0
+
+    files = _generated_prompt_files(repo, "plain")
+    for harness in ("continue", "agent_harness"):
+        content = files[harness].read_text(encoding="utf-8")
+        assert content.count("HOUSE RULE BODY") == 1, harness
+        assert "## Reference rules" in content, harness
+    for harness in ("claude_code", "opencode"):
+        content = files[harness].read_text(encoding="utf-8")
+        assert "HOUSE RULE BODY" not in content, harness  # an always rule: already loaded
+        assert "## Before you start" not in content, harness
+
+
+def test_sync_shipped_review_command_carries_no_rule_body(tmp_path, make_synthetic_repo):
+    repo = make_synthetic_repo(tmp_path)
+
+    assert _sync.run(_ns(repo)) == 0
+
+    review = (repo / ".claude" / "commands" / "review.md").read_text(encoding="utf-8")
+    assert "### Typing" not in review
+    assert "### Error handling" not in review
+    assert "## Before you start" in review
+    continued = (repo / ".continue" / "prompts" / "review.md").read_text(encoding="utf-8")
+    assert continued.count("### Typing") == 1
+    assert continued.count("### Error handling") == 1
+    assert continued.index("## Output format") < continued.index("## Reference rules")
+
+
+def test_sync_omits_the_pointer_line_of_a_filtered_rule(tmp_path, make_synthetic_repo):
+    repo = _member_repo(tmp_path, make_synthetic_repo, ["gated-rule", "house-rule"])
+    _write_member_rule(
+        repo, "gated-rule", "GATED\n", applies_if="applies_if:\n  has_framework: [fastapi]\n"
+    )
+    _write_member_rule(repo, "house-rule", "HOUSE RULE BODY\n")
+
+    assert _sync.run(_ns(repo)) == 0
+
+    command = _generated_prompt_files(repo, "plain")["claude_code"].read_text(encoding="utf-8")
+    assert "read its reference `references/house-rule.md`." in command
+    assert "gated-rule" not in command
+
+
+def test_sync_writes_no_block_when_every_included_rule_is_filtered(tmp_path, make_synthetic_repo):
+    repo = _member_repo(tmp_path, make_synthetic_repo, ["gated-rule"])
+    _write_member_rule(
+        repo, "gated-rule", "GATED\n", applies_if="applies_if:\n  has_framework: [fastapi]\n"
+    )
+
+    assert _sync.run(_ns(repo)) == 0
+
+    files = _generated_prompt_files(repo, "plain")
+    command = files["claude_code"].read_text(encoding="utf-8")
+    assert command == f"<!-- {SENTINEL} -->\n# Plain\n\nDo it.\n\n## Steps\n\nOne.\n"
+    assert "GATED" not in files["continue"].read_text(encoding="utf-8")
+
+
+def test_sync_refuses_a_prompt_calling_rule_and_writes_nothing(
+    tmp_path, make_synthetic_repo, capsys
+):
+    """Acceptance (prS §7.9 item 5): the validate gate names the call; no file is written."""
     repo = make_synthetic_repo(
         tmp_path,
         config_text=_ALL_PROMPT_ADAPTERS_CONFIG,
@@ -491,41 +608,18 @@ def test_sync_emits_an_inlined_rule_once_in_every_prompt_adapter(tmp_path, make_
     )
     (repo / "playbook" / "prompts").mkdir(parents=True)
     (repo / "playbook" / "prompts" / "inline-review.md.j2").write_text(
-        _INLINE_RULE_PROMPT, encoding="utf-8"
+        _RULE_CALLING_PROMPT, encoding="utf-8"
     )
+    before = sorted(p.relative_to(repo) for p in repo.rglob("*"))
 
-    assert _sync.run(_ns(repo)) == 0
+    assert _sync.run(_ns(repo)) == 1
 
-    for path in _generated_prompt_files(repo, "inline-review"):
-        content = path.read_text(encoding="utf-8")
-        assert content.count("HOUSE RULE BODY") == 1, path
-        assert "## Reference rules" not in content, path
-
-
-def test_sync_still_appends_rules_to_a_prompt_without_inline_calls(tmp_path, make_synthetic_repo):
-    repo = make_synthetic_repo(
-        tmp_path,
-        config_text=_ALL_PROMPT_ADAPTERS_CONFIG,
-        rules=[("house-rule", "HOUSE RULE BODY\n")],
-        prompts=[("plain", {"body": "Do it.\n", "includes_rules": ["house-rule"]})],
-    )
-
-    assert _sync.run(_ns(repo)) == 0
-
-    for path in _generated_prompt_files(repo, "plain"):
-        content = path.read_text(encoding="utf-8")
-        assert content.count("HOUSE RULE BODY") == 1, path
-        assert "## Reference rules" in content, path
-
-
-def test_sync_shipped_review_command_inlines_each_rule_once(tmp_path, make_synthetic_repo):
-    repo = make_synthetic_repo(tmp_path)
-
-    assert _sync.run(_ns(repo)) == 0
-
-    review = (repo / ".claude" / "commands" / "review.md").read_text(encoding="utf-8")
-    assert review.count("### Typing") == 1
-    assert review.count("### Error handling") == 1
+    err = capsys.readouterr().err
+    assert (
+        'body calls {{ rule("house-rule") }}; prompts no longer inline rules. Remove the '
+        "call and keep 'house-rule' in includes_rules"
+    ) in err
+    assert sorted(p.relative_to(repo) for p in repo.rglob("*")) == before
 
 
 def test_sync_migrates_legacy_opencode_commands_to_frontmatter_first(tmp_path, make_synthetic_repo):
@@ -540,8 +634,6 @@ def test_sync_migrates_legacy_opencode_commands_to_frontmatter_first(tmp_path, m
     commands = repo / ".opencode" / "command"
     commands.mkdir(parents=True)
     legacy = "<!-- {s} -->\n---\ndescription: old\n---\nold body\n"
-    from coding_agent_playbook.renderer import SENTINEL
-
     (commands / "tidy-up.md").write_text(legacy.format(s=SENTINEL), encoding="utf-8")
     (commands / "gone.md").write_text(legacy.format(s=SENTINEL), encoding="utf-8")
 

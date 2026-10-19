@@ -1,17 +1,21 @@
 """Render an eval task's prompt the way ``playbook sync`` renders it.
 
 The runner drives an agent with the task's prompt, so that prompt must be the
-one a consumer actually gets: the ``rule()`` helper resolves through a rule
-registry (filtered by each rule's ``applies_if``), and the Jinja context carries
-the detector facts plus project metadata. Rendering with a bare environment
-instead crashed 7 of the 20 shipped tasks with ``UndefinedError`` (``rule`` for
-the review prompts, ``project_name`` for generate-tests) before any agent ran.
+one a consumer actually gets: the Jinja context carries the detector facts plus
+project metadata. Rendering with a bare environment instead crashed 7 of the 20
+shipped tasks with ``UndefinedError`` (``rule`` for the review prompts, before
+D15 removed that helper, and ``project_name`` for generate-tests) before any
+agent ran.
+
+The runner hands the agent the Continue-shaped text: the rendered body plus the
+``## Reference rules`` appendix of its ``includes_rules`` (D15, D22), resolved
+through a rule registry filtered by each rule's ``applies_if``. A Claude Code
+command would point at skills instead, but the eval scratch repo has no synced
+skills a pointer could name.
 
 The facts come from running the detector over the task's ``setup/`` tree (the
 same bytes the runner materializes into the scratch repo), overlaid with the
-task's authored mock facts (``[setup] project_kind`` + extra keys). The prompt's
-``includes_rules:`` appendix is *not* expanded: that is adapter output (the
-slash-command file), and the runner hands the agent the prompt body only.
+task's authored mock facts (``[setup] project_kind`` + extra keys).
 
 Mirrors the prompt half of ``commands/_sync_render.py::render_artifacts``
 without touching it; the two should converge on one shared helper.
@@ -34,6 +38,7 @@ from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.orchestrator import OverlayResolver
+from coding_agent_playbook.prompt_rule_delivery import includes_rules_appendix
 from coding_agent_playbook.renderer import (
     TemplateSecurityError,
     build_environment,
@@ -68,8 +73,8 @@ _NAME_MAP_FACTS = ("dependencies", "dev_dependencies", "frameworks", "ml_stack")
 #: What rendering a prompt can raise on bad *inputs* rather than engine bugs: a
 #: Jinja error (typo'd variable), a mis-shaped mock fact reaching a predicate
 #: (``ml_stack = "torch"``, ``python_version = 3.12``), an unreadable or
-#: malformed rule file (bad YAML frontmatter, a directory named ``*.md``), or a
-#: rule inlined by ``rule()`` that the Jinja sandbox rejects. That last one is
+#: malformed rule file (bad YAML frontmatter, a directory named ``*.md``), or an
+#: included rule that the Jinja sandbox rejects. That last one is
 #: ``RuleRegistryImpl``'s :class:`TemplateSecurityError`, a plain ``Exception``
 #: (not a jinja ``TemplateError``), so it must be listed or ``playbook eval
 #: --run`` crashes with exit 1, the "task failed" code, instead of exit 2.
@@ -98,10 +103,11 @@ class PromptResolutionError(RuntimeError):
 def render_prompt(task: EvalTask, *, strict: bool = False) -> str:
     """Resolve ``task.prompt_id`` to its :class:`Prompt` and render it like sync.
 
-    The rendered body is followed by ``task.invocation.prompt_args``. When the
-    prompt cannot be resolved at all (e.g. an out-of-tree test task) ``strict``
-    decides: ``False`` (the ``FakeRunner``, which never reads the text) returns a
-    stable ``[prompt:<id>] <args>`` placeholder, ``True`` (a real runner) raises
+    The rendered body and its ``## Reference rules`` appendix are followed by
+    ``task.invocation.prompt_args``. When the prompt cannot be resolved at all
+    (e.g. an out-of-tree test task) ``strict`` decides: ``False`` (the
+    ``FakeRunner``, which never reads the text) returns a stable
+    ``[prompt:<id>] <args>`` placeholder, ``True`` (a real runner) raises
     :class:`PromptResolutionError`. A resolved prompt that fails to render always
     raises :class:`PromptResolutionError`, naming the task and prompt.
 
@@ -112,7 +118,7 @@ def render_prompt(task: EvalTask, *, strict: bool = False) -> str:
     prompt = _resolve_prompt(task)
     if prompt is None:
         return _placeholder(task, strict=strict)
-    body = _render_body(task, prompt)
+    body = _render_with_references(task, prompt)
     args = task.invocation.prompt_args
     return f"{body}\n\n{args}".rstrip() if args else body
 
@@ -129,21 +135,40 @@ def _placeholder(task: EvalTask, *, strict: bool) -> str:
     return f"[prompt:{task.prompt_id}] {task.invocation.prompt_args}".strip()
 
 
-def _render_body(task: EvalTask, prompt: Prompt) -> str:
-    """Render a templated prompt body; a plain ``.md`` prompt passes through.
+def _render_with_references(task: EvalTask, prompt: Prompt) -> str:
+    """The rendered body plus the ``## Reference rules`` appendix Continue also gets (D15).
 
-    Raises :class:`PromptResolutionError` (chaining the Jinja error) on failure.
+    Facts are computed only when the prompt is templated or lists
+    ``includes_rules``, so a plain prompt without rules never runs the detector.
+    Any render error, including a sandbox violation in an included rule or a
+    leftover ``{{ rule() }}`` call, raises :class:`PromptResolutionError` naming
+    the task and the prompt.
+
+    Example::
+
+        _render_with_references(task, prompt)  # "You are reviewing…\\n## Reference rules…"
     """
-    if not prompt.is_templated:
+    includes_rules = prompt.frontmatter.includes_rules
+    if not (prompt.is_templated or includes_rules):
         return prompt.template_body
     try:
         facts = _task_facts(task)
-        env = _prompt_environment(task, facts)
-        return render_string(prompt.template_body, _render_context(task, facts), env=env)
+        # The body first, so an error in the prompt's own template is the one
+        # reported even when an included rule file is broken too.
+        body = _render_body(task, prompt, facts)
+        return body + includes_rules_appendix(includes_rules, _LazyRuleRegistry(task, facts))
     except _RENDER_ERRORS as exc:
         raise PromptResolutionError(
             f"prompt {task.prompt_id!r} for task {task.id!r} failed to render: {exc}"
         ) from exc
+
+
+def _render_body(task: EvalTask, prompt: Prompt, facts: Facts) -> str:
+    """Render a templated prompt body with ``facts``; a plain ``.md`` prompt passes through."""
+    if not prompt.is_templated:
+        return prompt.template_body
+    env = _prompt_environment(facts)
+    return render_string(prompt.template_body, _render_context(task, facts), env=env)
 
 
 # --------------------------------------------------------------------------- #
@@ -206,20 +231,19 @@ def _setup_project_table(task: EvalTask) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 
 
-def _prompt_environment(task: EvalTask, facts: Facts) -> Environment:
-    """A prompt-context Jinja env whose ``rule()`` resolves the in-scope rules."""
-    env = build_environment(
-        [], is_prompt_context=True, rule_registry=_LazyRuleRegistry(task, facts)
-    )
+def _prompt_environment(facts: Facts) -> Environment:
+    """The base Jinja env with ``facts`` for ``has_framework``/``has_ml_dep``; no registry."""
+    env = build_environment([])
     env.globals["_facts"] = dict(facts)
     return env
 
 
 class _LazyRuleRegistry:
-    """A ``RuleRegistry`` that loads the rules on the first ``rule()`` call.
+    """A ``RuleRegistry`` that loads the rules on the first included rule it renders.
 
-    A prompt that never inlines a rule then never parses a rule file, so a
-    broken rule under ``setup/playbook/rules/`` cannot fail it.
+    The ``## Reference rules`` appendix is its only consumer, so a prompt
+    without ``includes_rules`` never parses a rule file, and a broken rule
+    under ``setup/playbook/rules/`` cannot fail it.
     """
 
     def __init__(self, task: EvalTask, facts: Facts) -> None:
@@ -229,7 +253,7 @@ class _LazyRuleRegistry:
 
     def render_for_inclusion(self, rule_id: str, context: dict[str, Any]) -> str:
         if self._registry is None:
-            base_env = build_environment([], is_prompt_context=False)
+            base_env = build_environment([])
             base_env.globals["_facts"] = dict(self._facts)
             rules = _applicable_rules(self._task, self._facts)
             self._registry = RuleRegistryImpl(rules, self._facts, base_env)

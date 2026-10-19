@@ -19,6 +19,7 @@ import pytest
 from jinja2 import UndefinedError
 
 from coding_agent_playbook import orchestrator
+from coding_agent_playbook.prompt_rule_delivery import SkillReference
 from coding_agent_playbook.renderer import TemplateSecurityError, build_environment, render_string
 from coding_agent_playbook.rule_registry import RuleRegistryImpl, build_prompt_environment
 from coding_agent_playbook.types import Rule, RuleFrontmatter
@@ -158,18 +159,53 @@ def test_rule_registry_falls_back_to_stored_facts_when_caller_passes_empty_conte
     )
 
 
+# --- reference_for (D15) -----------------------------------------------------
+
+
+def _member_rule(rule_id: str, skill: str) -> Rule:
+    """A scoped rule owned by ``skill``: a member rule, delivered as one of its references."""
+    rule = _make_rule(rule_id, "engine")
+    scoped = dataclasses.replace(rule.frontmatter, scope="scoped", skill=skill)
+    return dataclasses.replace(rule, frontmatter=scoped)
+
+
+def test_reference_for_names_the_skill_and_reference_of_an_active_scoped_rule() -> None:
+    registry, _ = build_prompt_environment([_member_rule("pytest", "python-testing")], {})
+
+    assert registry.reference_for("pytest") == SkillReference(
+        "python-testing", "references/pytest.md"
+    )
+
+
+def test_reference_for_is_none_for_unknown_filtered_and_always_rules() -> None:
+    """The registry holds only applicable rules, so a filtered-out rule is simply absent."""
+    always = _make_rule("project-context", "engine")
+    registry, _ = build_prompt_environment([always], {})
+
+    assert registry.reference_for("no-such-rule") is None
+    assert registry.reference_for("pytest") is None  # filtered out: never registered
+    assert registry.reference_for("project-context") is None
+
+
 # --- build_prompt_environment ----------------------------------------------
 
 
 def test_build_prompt_environment_renders_included_rules_through_the_registry() -> None:
     rule = _make_rule("style", "engine", name="Style", body="Body of style\n")
 
-    registry, prompt_env = build_prompt_environment([rule], {})
+    registry, _ = build_prompt_environment([rule], {})
 
     assert registry.render_for_inclusion("style", {}) == "### Style\n\nBody of style\n"
-    assert (
-        render_string('{{ rule("style") }}', {}, env=prompt_env) == "### Style\n\nBody of style\n"
-    )
+
+
+def test_build_prompt_environment_gives_prompts_no_rule_helper() -> None:
+    """Regression (D15): a prompt can no longer inline a rule; it lists it in ``includes_rules``."""
+    rule = _make_rule("style", "engine", name="Style")
+
+    _, prompt_env = build_prompt_environment([rule], {})
+
+    with pytest.raises(UndefinedError, match="'rule' is undefined"):
+        render_string('{{ rule("style") }}', {}, env=prompt_env)
 
 
 def test_build_prompt_environment_gives_included_rules_the_detector_facts() -> None:

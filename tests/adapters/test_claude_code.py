@@ -13,6 +13,7 @@ import pytest
 
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
+from coding_agent_playbook.prompt_rule_delivery import SkillReference
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.types import (
     Prompt,
@@ -177,19 +178,24 @@ def test_claude_code_write_prompt_prepends_h1_when_body_lacks_one(tmp_path):
     assert lines[1] == "# Audit"
 
 
-def test_claude_code_write_prompt_appendix_when_rule_registry_set(tmp_path):
-    """When the adapter is constructed with a ``rule_registry`` and the prompt
-    declares ``includes_rules:``, the rendered command contains the
-    ``## Reference rules`` appendix. Without the plumbing the appendix would
-    silently be omitted (the bug Fix 2 closes).
+class FakeSkillRegistry:
+    """The two faces of the sync's registry: rule text and skill references (D15).
+
+    Every rule id renders a body and lives in skill ``s`` as
+    ``references/<id>.md``, so a command that inlined text would show both.
     """
 
-    class _StubRegistry:
-        def render_for_inclusion(self, rule_id: str, context: dict[str, object]) -> str:
-            del context
-            return f"### Rule {rule_id}\n\nrendered body.\n"
+    def render_for_inclusion(self, rule_id: str, context: dict[str, object]) -> str:
+        del context
+        return f"### Rule {rule_id}\n\nrendered body.\n"
 
-    adapter = ClaudeCodeAdapter(rule_registry=_StubRegistry())
+    def reference_for(self, rule_id: str) -> SkillReference | None:
+        return SkillReference("s", f"references/{rule_id}.md")
+
+
+def test_claude_code_write_prompt_points_at_skills_when_registry_set(tmp_path):
+    """With the sync's registry the command names the skill reference, never the rule text."""
+    adapter = ClaudeCodeAdapter(rule_registry=FakeSkillRegistry())
     prompt = _make_prompt(
         prompt_id="x",
         name="X",
@@ -200,14 +206,19 @@ def test_claude_code_write_prompt_appendix_when_rule_registry_set(tmp_path):
     )
     [written_path] = adapter.write_prompt(prompt, repo_root=tmp_path)
     content = written_path.read_text(encoding="utf-8")
-    assert "## Reference rules" in content
-    assert "### Rule foo" in content
+    assert content == (
+        f"<!-- {SENTINEL} -->\n# X\n\n## Before you start\n\n"
+        "1. Load skill `s` and read its reference `references/foo.md`.\n"
+        "2. For each file in scope, also load any other listed skill whose description "
+        "matches it.\n\nbody line\n"
+    )
+    assert "### " not in content
 
 
-def test_claude_code_write_prompt_no_appendix_when_rule_registry_absent(tmp_path):
-    """Without a registry, ``includes_rules:`` is declarative-only — the
-    appendix is silently omitted. This is the documented default behaviour
-    when the orchestrator hasn't (yet) built a merged-overlay registry.
+def test_claude_code_write_prompt_no_block_when_registry_absent(tmp_path):
+    """Without a registry, ``includes_rules:`` is declarative-only: no block, no
+    rule text. This is the documented default when the orchestrator has not
+    built a merged-overlay registry.
     """
     adapter = ClaudeCodeAdapter()  # no rule_registry
     prompt = _make_prompt(
@@ -220,7 +231,7 @@ def test_claude_code_write_prompt_no_appendix_when_rule_registry_absent(tmp_path
     )
     [written_path] = adapter.write_prompt(prompt, repo_root=tmp_path)
     content = written_path.read_text(encoding="utf-8")
-    assert "## Reference rules" not in content
+    assert content == f"<!-- {SENTINEL} -->\n# X\n\nbody line\n"
 
 
 def test_claude_code_cleanup_round_trip_after_slash_rename(tmp_path):

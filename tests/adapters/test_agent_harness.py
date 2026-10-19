@@ -21,6 +21,7 @@ import pytest
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.harness.manifest import read_manifest
+from coding_agent_playbook.prompt_rule_delivery import SkillReference
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.types import (
     Prompt,
@@ -416,6 +417,65 @@ def test_prompt_includes_rules_inlined_via_registry(tmp_path):
     content = (repo / "prompts" / "review" / "SKILL.md").read_text(encoding="utf-8")
     assert "### Rule foo" in content
     assert "inlined body." in content
+
+
+#: The leaf the engine wrote before D15 for a ``refactor``-like prompt (no title in
+#: its body, two included rules, one input variable), captured from that engine.
+_REFACTOR_LEAF_BEFORE_D15 = (
+    "---\nname: Refactor\ndescription: Refactor code\n---\n"
+    f"<!-- {SENTINEL} -->\n\n"
+    "# Refactor\n\nRefactor the code without changing behaviour.\n\n"
+    "## The contract\n\nKeep tests green.\n\n"
+    "## Reference rules\n\n### Rule foo\n\ninlined body.\n\n### Rule bar\n\ninlined body.\n\n"
+    "## Input variables\n\n- `target` — what to refactor\n"
+)
+
+
+class _InliningRegistry:
+    """Renders every rule id as ``### Rule <id>`` and points it at skill ``s`` too.
+
+    Implements both faces of the sync's registry, so a leaf that took the
+    Claude command's pointer block would show it.
+    """
+
+    def render_for_inclusion(self, rule_id: str, context: dict[str, object]) -> str:
+        del context
+        return f"### Rule {rule_id}\n\ninlined body.\n"
+
+    def reference_for(self, rule_id: str) -> SkillReference | None:
+        return SkillReference("s", f"references/{rule_id}.md")
+
+
+def _refactor_leaf(tmp_path: Path) -> str:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    adapter = AgentHarnessAdapter(rule_registry=_InliningRegistry())
+    body = "Refactor the code without changing behaviour.\n\n## The contract\n\nKeep tests green.\n"
+    prompt = _make_prompt(
+        slash="refactor",
+        prompt_id="refactor",
+        name="Refactor",
+        description="Refactor code",
+        body=body,
+        includes_rules=["foo", "bar"],
+        input_variables=[{"name": "target", "description": "what to refactor"}],
+    )
+    _populate(adapter, prompt, repo_root=repo)
+    adapter.finalize(repo)
+    return (repo / "prompts" / "refactor" / "SKILL.md").read_text(encoding="utf-8")
+
+
+def test_prompt_leaf_bytes_unchanged_for_a_prompt_without_rule_calls(tmp_path):
+    """Regression (P3-6): a prompt that never called ``rule()`` keeps its leaf byte for byte."""
+    assert _refactor_leaf(tmp_path) == _REFACTOR_LEAF_BEFORE_D15
+
+
+def test_prompt_leaf_has_no_pointer_block(tmp_path):
+    """The harness tree's scoped rules are not skill references: the leaf stays inline."""
+    leaf = _refactor_leaf(tmp_path)
+
+    assert "## Before you start" not in leaf
+    assert "Load skill" not in leaf
 
 
 def test_prompt_input_variables_noted_in_body(tmp_path):

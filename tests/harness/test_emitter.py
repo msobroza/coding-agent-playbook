@@ -6,7 +6,6 @@ import os
 import stat
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.harness.emitter import (
     copy_script,
     frontmatter_block,
@@ -14,7 +13,6 @@ from coding_agent_playbook.harness.emitter import (
     input_variables_note,
     leaf_detectors_file,
     routing_file,
-    strip_leading_sentinel,
     with_sentinel_body,
 )
 from coding_agent_playbook.harness.leaf_detectors import HARNESS_LEAF_MARKER
@@ -153,13 +151,6 @@ def test_copy_script_copy2_preserves_exec_bit_on_disk(tmp_path: Path) -> None:
 
 
 # --- prompt-leaf body helpers ----------------------------------------------
-
-
-def test_strip_leading_sentinel_drops_only_a_first_line_sentinel() -> None:
-    marked = f"{sentinel_line('html')}\n# Title\n"
-
-    assert strip_leading_sentinel(marked) == "# Title\n"
-    assert strip_leading_sentinel("# Title\n" + marked) == "# Title\n" + marked
 
 
 def test_input_variables_note_lists_names_and_descriptions() -> None:
