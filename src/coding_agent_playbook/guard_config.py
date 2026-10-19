@@ -235,6 +235,8 @@ class GuardConfigInputs:
     ruff: RuffSelection = field(default_factory=RuffSelection)
     toolchain: ToolchainInputs = field(default_factory=ToolchainInputs)
     quality: QualityLint = field(default_factory=QualityLint)
+    # SkillGlobRow, not spec 8.5.2's Mapping[str, Any]: mypy then checks the
+    # {"id", "globs"} shape the skill-nudge runtime parses.
     skill_globs: Sequence[SkillGlobRow] = ()
 
 
