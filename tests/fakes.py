@@ -38,7 +38,7 @@ from coding_agent_playbook.evaluators.execution.coverage_xml import CoverageRepo
 from coding_agent_playbook.evaluators.execution.junit import JunitSummary
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle, RunArtifacts
 from coding_agent_playbook.evaluators.tool_runner import ToolRunError
-from coding_agent_playbook.hook_runtime.pin import PinResult
+from coding_agent_playbook.hook_runtime.config.pin import PinResult
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence

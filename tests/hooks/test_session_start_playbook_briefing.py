@@ -21,13 +21,13 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook._sentinel import sentinel_line
-from coding_agent_playbook.hook_runtime.config import GUARD_CONFIG_REL
+from coding_agent_playbook.hook_runtime.config.guard_config import GUARD_CONFIG_REL
+from coding_agent_playbook.hook_runtime.config.pin import write_machine_pins
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.handlers._briefing_probes import (
     installed_engine_version,
 )
-from coding_agent_playbook.hook_runtime.pin import write_machine_pins
 from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
 from tests.hook_runtime.fakes import FakeGit
 from tests.hook_runtime.guard_repo import canonical, hook_record

@@ -52,6 +52,13 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.config_schema` | `coding_agent_playbook.config.schema` | N2 |
 | `coding_agent_playbook.detector` | `coding_agent_playbook.detector.facts` | N4 |
 | `coding_agent_playbook.detector.evaluate_predicate` | `coding_agent_playbook.detector.predicate.evaluate_predicate` | N4 |
+| `coding_agent_playbook.hook_runtime._config_keys` | `coding_agent_playbook.hook_runtime.config.keys` | N16 |
+| `coding_agent_playbook.hook_runtime._config_reader` | `coding_agent_playbook.hook_runtime.config.reader` | N16 |
+| `coding_agent_playbook.hook_runtime._hook_records` | `coding_agent_playbook.hook_runtime.config.hook_records` | N16 |
+| `coding_agent_playbook.hook_runtime._lock_digest` | `coding_agent_playbook.hook_runtime.config.lock_digest` | N16 |
+| `coding_agent_playbook.hook_runtime.config` | `coding_agent_playbook.hook_runtime.config.guard_config` | N16 |
+| `coding_agent_playbook.hook_runtime.pin` | `coding_agent_playbook.hook_runtime.config.pin` | N16 |
+| `coding_agent_playbook.hook_runtime.protected` | `coding_agent_playbook.hook_runtime.config.protected` | N16 |
 | `coding_agent_playbook.hooks_config` | `coding_agent_playbook.config.tables.hooks` | N2 |
 | `coding_agent_playbook.links.LinksConfig` | `coding_agent_playbook.config.tables.links.LinksConfig` | N2 |
 | `coding_agent_playbook.lockfile` | `coding_agent_playbook.lockfile.model` | N5 |

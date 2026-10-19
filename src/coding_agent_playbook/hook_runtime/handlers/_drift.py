@@ -28,20 +28,20 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook._sentinel import file_has_sentinel
-from coding_agent_playbook.hook_runtime._config_reader import read_small_file
-from coding_agent_playbook.hook_runtime._lock_digest import MAX_LOCK_BYTES, load_toml
 from coding_agent_playbook.hook_runtime.caps import quote_data
-from coding_agent_playbook.hook_runtime.config import LOCKFILE_REL
+from coding_agent_playbook.hook_runtime.config.guard_config import LOCKFILE_REL
+from coding_agent_playbook.hook_runtime.config.lock_digest import MAX_LOCK_BYTES, load_toml
+from coding_agent_playbook.hook_runtime.config.protected import protected_paths
+from coding_agent_playbook.hook_runtime.config.reader import read_small_file
 from coding_agent_playbook.hook_runtime.paths import fold_key
-from coding_agent_playbook.hook_runtime.protected import protected_paths
 from coding_agent_playbook.lockfile.drift import drift_entries
 from coding_agent_playbook.lockfile.model import Lockfile
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
-    from coding_agent_playbook.hook_runtime.config import GuardConfig
-    from coding_agent_playbook.hook_runtime.protected import ProtectedSet
+    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
+    from coding_agent_playbook.hook_runtime.config.protected import ProtectedSet
     from coding_agent_playbook.lockfile.drift import DriftItem
 
 __all__ = [

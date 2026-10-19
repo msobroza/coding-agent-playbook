@@ -18,7 +18,10 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.hook_runtime.canary import DEFAULT_CANARIES, run_canaries
-from coding_agent_playbook.hook_runtime.config import CONFIG_FAULT_REASON, GUARD_CONFIG_REL
+from coding_agent_playbook.hook_runtime.config.guard_config import (
+    CONFIG_FAULT_REASON,
+    GUARD_CONFIG_REL,
+)
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import Harness
 from coding_agent_playbook.lockfile.canonical_json import element_sha256

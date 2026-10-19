@@ -30,7 +30,7 @@ from coding_agent_playbook.guard_config import (
     serialize_guard_config,
 )
 from coding_agent_playbook.hook_policy import ResolvedHandler
-from coding_agent_playbook.hook_runtime.config import GuardConfig, parse_guard_config
+from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
 from coding_agent_playbook.hook_runtime.state import StateStore
 from tests.fakes import FakePinWriter
 from tests.hook_runtime.fakes import FakeRuff

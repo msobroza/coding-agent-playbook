@@ -18,7 +18,7 @@ from coding_agent_playbook.hook_runtime.event import ShellSource, ToolCall, Tool
 from coding_agent_playbook.hook_runtime.shell import ShellConfig
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.hook_runtime.config import GuardConfig
+    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
 
 ROWS: list[dict[str, Any]] = [
     {"id": "lint", "argv": ["ruff", "check"]},

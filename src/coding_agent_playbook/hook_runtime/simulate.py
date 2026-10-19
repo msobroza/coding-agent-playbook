@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 from coding_agent_playbook.hook_runtime.cli import async_problem
-from coding_agent_playbook.hook_runtime.config import GuardConfig, parse_guard_config
+from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
 from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
 from coding_agent_playbook.hook_runtime.dispatch import dispatch_event
 from coding_agent_playbook.hook_runtime.event import EventName, Harness

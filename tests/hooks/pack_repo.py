@@ -46,7 +46,7 @@ from coding_agent_playbook.guard_config import (
 )
 from coding_agent_playbook.hook_policy import RegistryCatalog, resolve_effective_hooks
 from coding_agent_playbook.hook_policy.merge import merge_hook_layers
-from coding_agent_playbook.hook_runtime.config import GUARD_CONFIG_REL
+from coding_agent_playbook.hook_runtime.config.guard_config import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.simulate import SimulateArgs, run
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash

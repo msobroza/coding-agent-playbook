@@ -16,23 +16,23 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook._sentinel import SENTINEL, file_has_sentinel, sentinel_line
-from coding_agent_playbook.hook_runtime._config_reader import Malformed
-from coding_agent_playbook.hook_runtime.config import GuardConfig, parse_guard_config
-from coding_agent_playbook.hook_runtime.event import RepoInfo
-from coding_agent_playbook.hook_runtime.paths import normalize_path
-from coding_agent_playbook.hook_runtime.pin import MachinePins
-from coding_agent_playbook.hook_runtime.protected import (
+from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
+from coding_agent_playbook.hook_runtime.config.pin import MachinePins
+from coding_agent_playbook.hook_runtime.config.protected import (
     ENGINE_RESOURCES_ID,
     ProtectedHit,
     classify,
     protected_paths,
 )
+from coding_agent_playbook.hook_runtime.config.reader import Malformed
+from coding_agent_playbook.hook_runtime.event import RepoInfo
+from coding_agent_playbook.hook_runtime.paths import normalize_path
 from tests.hook_runtime.guard_repo import canonical
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.protected import ProtectedSet
+    from coding_agent_playbook.hook_runtime.config.protected import ProtectedSet
 
 _HTML = sentinel_line("html")
 _ENTRIES: list[dict[str, str]] = [

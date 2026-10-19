@@ -25,7 +25,7 @@ from coding_agent_playbook.commands._sync_hook_local import (
 from coding_agent_playbook.commands._sync_render import render_artifacts
 from coding_agent_playbook.hook_registrations import stop_gate_table
 from coding_agent_playbook.hook_runtime._external import approval_of
-from coding_agent_playbook.hook_runtime.config import GuardConfig, parse_guard_config
+from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
 from coding_agent_playbook.hook_runtime.stop.coordinator import GatePolicy
 from coding_agent_playbook.orchestrator import SyncContext
 from coding_agent_playbook.security.trust import TrustStore

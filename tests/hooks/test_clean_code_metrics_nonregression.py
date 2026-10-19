@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.hook_runtime._git_parse import AddedLine
-from coding_agent_playbook.hook_runtime.config import (
+from coding_agent_playbook.hook_runtime.config.guard_config import (
     GUARD_CONFIG_REL,
     GuardConfig,
     parse_guard_config,

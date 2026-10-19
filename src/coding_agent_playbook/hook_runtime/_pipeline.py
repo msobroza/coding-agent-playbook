@@ -32,7 +32,7 @@ from coding_agent_playbook.hook_runtime._post_write import PostWrite, record_aft
 from coding_agent_playbook.hook_runtime._selection import select_hooks
 from coding_agent_playbook.hook_runtime._tail import DispatchTrace
 from coding_agent_playbook.hook_runtime.active_prompt import observe as observe_active_prompt
-from coding_agent_playbook.hook_runtime.config import ConfigFault, load_guard_config
+from coding_agent_playbook.hook_runtime.config.guard_config import ConfigFault, load_guard_config
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.harness import WireOutput
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime._selection import Selected
     from coding_agent_playbook.hook_runtime._tail import Responder
-    from coding_agent_playbook.hook_runtime.config import GuardConfig
+    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.decision import CombinedResult
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps, TrustPort
     from coding_agent_playbook.hook_runtime.escape import EscapeHatches

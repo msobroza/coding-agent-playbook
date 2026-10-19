@@ -24,7 +24,7 @@ import shutil
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.config import LOCKFILE_REL
+from coding_agent_playbook.hook_runtime.config.guard_config import LOCKFILE_REL
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch import dispatch_event
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
@@ -35,7 +35,7 @@ from coding_agent_playbook.hook_runtime.state import StateStore, session_key
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.hook_runtime.config import HookRecord
+    from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
 
 __all__ = [
