@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hook_registrations import HookRegistration
     from coding_agent_playbook.hooks_config import HooksConfig
-    from coding_agent_playbook.lockfile import LockEntry, Lockfile
+    from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 
 __all__ = [
     "BRIEFING_HOOK_ID",

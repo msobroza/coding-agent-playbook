@@ -2,7 +2,7 @@
 
 About 0.1 s and stdlib-only, never a render:
 
-- ``lockfile.drift_entries``: every whole-file entry hashed against disk,
+- ``lockfile.drift.drift_entries``: every whole-file entry hashed against disk,
   every scoped ``json:<pointer>`` entry matched by its canonical hash; secret
   paths are never read;
 - the orphan scan: files under ``protected.output_dirs`` (each enabled
@@ -34,14 +34,15 @@ from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.config import LOCKFILE_REL
 from coding_agent_playbook.hook_runtime.paths import fold_key
 from coding_agent_playbook.hook_runtime.protected import protected_paths
-from coding_agent_playbook.lockfile import Lockfile, drift_entries
+from coding_agent_playbook.lockfile.drift import drift_entries
+from coding_agent_playbook.lockfile.model import Lockfile
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
     from coding_agent_playbook.hook_runtime.config import GuardConfig
     from coding_agent_playbook.hook_runtime.protected import ProtectedSet
-    from coding_agent_playbook.lockfile import DriftItem
+    from coding_agent_playbook.lockfile.drift import DriftItem
 
 __all__ = [
     "DRIFT_ADVICE",

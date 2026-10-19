@@ -21,7 +21,7 @@ from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
 )
-from coding_agent_playbook.lockfile import Lockfile
+from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.sources._hook_walk import walk_hook_layer
 from coding_agent_playbook.sources.base import ArtifactSource, StateSource
 from coding_agent_playbook.toml_writer import dump_toml

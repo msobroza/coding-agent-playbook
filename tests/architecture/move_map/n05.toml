@@ -1,0 +1,43 @@
+# N5 (#85, specs/prT-package-layout.md 7.4): the lockfile modules become the lockfile/
+# package. lockfile.py -> lockfile/model.py is a same-name conversion.
+
+[[module]]
+pr = "N5"
+old = "coding_agent_playbook.lockfile"
+new = "coding_agent_playbook.lockfile.model"
+
+[[module]]
+pr = "N5"
+old = "coding_agent_playbook._lock_drift"
+new = "coding_agent_playbook.lockfile.drift"
+
+[[module]]
+pr = "N5"
+old = "coding_agent_playbook._canonical_json"
+new = "coding_agent_playbook.lockfile.canonical_json"
+
+# The drift re-export of lockfile.py is gone (L2): importers name lockfile.drift.
+[[names]]
+pr = "N5"
+old = "coding_agent_playbook.lockfile"
+new = "coding_agent_playbook.lockfile.drift"
+names = [
+    "DriftItem",
+    "DriftKind",
+    "EditedProbe",
+    "ScopedParser",
+    "ScopedUnreadable",
+    "drift_entries",
+    "managed_drift",
+    "parse_json_document",
+]
+
+[[path]]
+pr = "N5"
+old = "tests/unit/test_lockfile.py"
+new = "tests/lockfile/test_model.py"
+
+[[path]]
+pr = "N5"
+old = "tests/unit/test_canonical_json.py"
+new = "tests/lockfile/test_canonical_json.py"

@@ -14,7 +14,7 @@ step 9). Every new field has a default and is omitted from the TOML at that defa
 lockfiles load unchanged and an older engine reading a v2 file still finds
 ``path`` / ``sha256`` / ``bytes``.
 
-:func:`drift_entries` (``_lock_drift``, re-exported here) is the one jinja2-free
+:func:`~coding_agent_playbook.lockfile.drift.drift_entries` is the one jinja2-free
 definition of drift against these entries, shared by ``playbook check`` and the
 hook runtime (specs/prK-hook-pack.md §E.1).
 """
@@ -25,17 +25,6 @@ import dataclasses
 import hashlib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, Literal, get_args
-
-from coding_agent_playbook._lock_drift import (
-    DriftItem,
-    DriftKind,
-    EditedProbe,
-    ScopedParser,
-    ScopedUnreadable,
-    drift_entries,
-    managed_drift,
-    parse_json_document,
-)
 
 if TYPE_CHECKING:
     import builtins
@@ -53,21 +42,13 @@ PROVENANCE_KINDS: Final[tuple[str, ...]] = get_args(ProvenanceKind)
 
 __all__ = [
     "PROVENANCE_KINDS",
-    "DriftItem",
-    "DriftKind",
-    "EditedProbe",
     "LockEntry",
     "Lockfile",
     "LockfileFormatError",
     "Provenance",
     "ProvenanceKind",
-    "ScopedParser",
-    "ScopedUnreadable",
     "compute_hash",
-    "drift_entries",
-    "managed_drift",
     "merge_provenance",
-    "parse_json_document",
 ]
 
 # Always serialized, even at a falsy value: the v1 core every engine reads.

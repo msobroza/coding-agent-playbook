@@ -2,7 +2,7 @@
 
 The one definition of lockfile drift, shared by ``playbook check`` (its Drift
 section) and the hook runtime (the ``drift`` Stop stage and the session-start
-briefing), so humans and hooks never disagree. ``lockfile`` re-exports it.
+briefing), so humans and hooks never disagree.
 
 - A **whole-file** entry drifts when its file is missing (or not a regular
   file), no longer hashes to the recorded ``sha256``, or lost the exec bit it
@@ -10,14 +10,14 @@ briefing), so humans and hooks never disagree. ``lockfile`` re-exports it.
   never writes one, so a link where an output was is a hash mismatch.
 - A **scoped** ``json:<pointer>`` entry owns one element of a JSON file it
   shares with the user (§C.2.6). It is present when some element of the array
-  at its pointer has the recorded canonical hash (``_canonical_json``), so user
-  keys, reformatting and key order never count. ``playbook check`` passes the
+  at its pointer has the recorded canonical hash (``lockfile.canonical_json``), so
+  user keys, reformatting and key order never count. ``playbook check`` passes the
   strict Claude settings parser and the "edited" probe; the runtime uses the
   stdlib defaults.
 
 An entry outside the repository (absolute, or with a ``..`` step) is never
 read, and ``skip`` keeps secret paths unread (SPEC §17.3). Stdlib and
-``_canonical_json`` only: the runtime imports this on ``stop`` and
+``lockfile.canonical_json`` only: the runtime imports this on ``stop`` and
 ``session_start`` (§D.1 branch-local row), so it may not pull jinja2 or adapters.
 """
 
@@ -30,13 +30,13 @@ import stat
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook._canonical_json import array_at, element_sha256
+from coding_agent_playbook.lockfile.canonical_json import array_at, element_sha256
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.lockfile import LockEntry, Lockfile
+    from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 
 __all__ = [
     "DriftItem",
