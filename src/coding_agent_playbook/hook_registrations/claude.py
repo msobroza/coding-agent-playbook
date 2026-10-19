@@ -24,7 +24,7 @@ from coding_agent_playbook.hook_registrations.plan import (
     plan_registrations,
 )
 from coding_agent_playbook.hook_runtime.cli import ASYNC_FLAG
-from coding_agent_playbook.hook_runtime.event import Harness
+from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
 from coding_agent_playbook.hooks.resolution.tables import TOOL_CLASS_NAMES
 

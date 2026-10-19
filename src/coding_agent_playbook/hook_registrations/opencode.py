@@ -37,7 +37,7 @@ from coding_agent_playbook.hook_registrations.plan import (
     plan_registrations,
     resolved_deadlines_ms,
 )
-from coding_agent_playbook.hook_runtime.event import Harness
+from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.hook_runtime.harness.opencode import (
     NATIVE_TOOL_NAMES,
     OPENCODE_SHIM_REL,

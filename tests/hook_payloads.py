@@ -26,8 +26,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.hook_runtime.decision import CombinedResult, Decision
-from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, RepoInfo
+from coding_agent_playbook.hook_runtime.dispatch.decision import CombinedResult, Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, EventName, RepoInfo
 from coding_agent_playbook.hook_runtime.harness.wire import (
     ContractFault,
     ForeignPayload,
@@ -39,8 +39,8 @@ from coding_agent_playbook.hook_runtime.harness.wire import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.event import ToolCall
-    from coding_agent_playbook.hook_runtime.paths import NormalizedPath
+    from coding_agent_playbook.hook_runtime.dispatch.event import ToolCall
+    from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
 
     type Renderer = Callable[[EventName, CombinedResult], WireOutput]
 

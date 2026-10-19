@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Final
 import pytest
 
 from coding_agent_playbook.commands import validate as _validate
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from tests.hook_runtime.fakes import FakeRuff, ruff_row
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_rules, resolve_engine_hooks
 from tests.hook_runtime.handlers.ruff_kit import (

@@ -8,7 +8,7 @@ with ``(+N more)``.
 
 from __future__ import annotations
 
-from coding_agent_playbook.hook_runtime.caps import OutputCaps
+from coding_agent_playbook.hook_runtime.dispatch.caps import OutputCaps
 from coding_agent_playbook.hook_runtime.stop.output import (
     compose_reason,
     toolchain_advice,

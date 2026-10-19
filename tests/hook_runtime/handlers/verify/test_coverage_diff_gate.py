@@ -21,8 +21,8 @@ from coding_agent_playbook.grading.execution_metrics.project import RunArtifacts
 from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_runtime.config.guard_tables import GuardTables
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.git.parse import AddedLine, DiffLines
 from coding_agent_playbook.hook_runtime.handlers._coverage_report import (
     ADVICE_LINE,

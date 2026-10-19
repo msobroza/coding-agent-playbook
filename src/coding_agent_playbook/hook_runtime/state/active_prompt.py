@@ -35,7 +35,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.state._prompt_boundary import (
     last_prompt_boundary,
     slash_of_prompt,
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [

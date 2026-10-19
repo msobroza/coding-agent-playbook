@@ -17,8 +17,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.detector.pep503 import canonical_name
-from coding_agent_playbook.hook_runtime.caps import clean_text, clip, quote_data
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip, quote_data
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.judges.hosts import url_host
 from coding_agent_playbook.hook_runtime.judges.install_commands import DEFAULT_INDEXES
 

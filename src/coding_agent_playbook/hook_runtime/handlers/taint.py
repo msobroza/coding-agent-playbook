@@ -26,10 +26,10 @@ import os
 import re
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.event import ToolClass
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
 from coding_agent_playbook.hook_runtime.judges.hosts import is_loopback
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.security.files import user_home
@@ -37,8 +37,8 @@ from coding_agent_playbook.security.files import user_home
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
-    from coding_agent_playbook.hook_runtime.paths import NormalizedPath
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
+    from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 

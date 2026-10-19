@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
     from coding_agent_playbook.hook_runtime.deps import Clock
-    from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
     from coding_agent_playbook.hook_runtime.state._sweep import SweepReport
 
 __all__ = [

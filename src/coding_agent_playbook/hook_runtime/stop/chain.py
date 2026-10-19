@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, Final
 from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, session_key
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [

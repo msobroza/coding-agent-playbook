@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.hook_runtime._prefilter import argv0_matches, command_argv0s
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.registry import register_hook_handler
 from coding_agent_playbook.hook_runtime.shell.parse import parse_shell
 from tests.hook_runtime.dispatch_kit import PRE, body, dispatch
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from tests.hook_runtime.fakes import FakeHandlerResolver
     from tests.hook_runtime.guard_repo import GuardRepo

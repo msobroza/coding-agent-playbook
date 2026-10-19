@@ -12,13 +12,13 @@ import json
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.caps import OutputCaps, clean_text, clip
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.caps import OutputCaps, clean_text, clip
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.hook_runtime.decision import CombinedResult
+    from coding_agent_playbook.hook_runtime.dispatch.decision import CombinedResult
 
 #: Shown when a deny or ask arrives without a reason: the harness must say something.
 DEFAULT_REASONS: Final[Mapping[Decision, str]] = MappingProxyType(

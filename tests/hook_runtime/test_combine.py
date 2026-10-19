@@ -14,7 +14,13 @@ import json
 import pytest
 
 from coding_agent_playbook.evals.run.agent_env import UNATTENDED_ENV_VAR as EVALS_UNATTENDED_ENV_VAR
-from coding_agent_playbook.hook_runtime.caps import (
+from coding_agent_playbook.hook_runtime.combine import (
+    ASK_DENIED_PREFIX,
+    ASK_WARNED_PREFIX,
+    OPENCODE_ASK_PREFIX,
+    combine,
+)
+from coding_agent_playbook.hook_runtime.dispatch.caps import (
     LineCap,
     OutputCaps,
     clamp_lines,
@@ -22,21 +28,15 @@ from coding_agent_playbook.hook_runtime.caps import (
     clip,
     quote_data,
 )
-from coding_agent_playbook.hook_runtime.combine import (
-    ASK_DENIED_PREFIX,
-    ASK_WARNED_PREFIX,
-    OPENCODE_ASK_PREFIX,
-    combine,
-)
-from coding_agent_playbook.hook_runtime.decision import (
+from coding_agent_playbook.hook_runtime.dispatch.decision import (
     EVENT_DECISIONS,
     CombinedResult,
     Decision,
     HandlerResult,
     supported_decision,
 )
-from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, Harness
-from coding_agent_playbook.hook_runtime.policy import (
+from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.policy import (
     CLASS_RANK,
     ENGINE_DEADLINE_CAP_MS,
     ON_ERROR_ALLOWED,
@@ -452,7 +452,8 @@ def test_engine_deadline_caps_match_the_hooks_tables() -> None:
 def test_decision_modules_import_only_the_stdlib_and_the_runtime() -> None:
     loaded = new_modules_after(
         "import coding_agent_playbook.hook_runtime.combine, "
-        "coding_agent_playbook.hook_runtime.policy, coding_agent_playbook.hook_runtime.caps"
+        "coding_agent_playbook.hook_runtime.dispatch.policy, "
+        "coding_agent_playbook.hook_runtime.dispatch.caps"
     )
     engine = {m for m in loaded if m.startswith("coding_agent_playbook.")}
 

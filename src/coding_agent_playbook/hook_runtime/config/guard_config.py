@@ -40,9 +40,9 @@ from coding_agent_playbook.hook_runtime.config.schema import (
     LOCKFILE_REL,
     SUPPORTED_SCHEMA_VERSIONS,
 )
-from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.policy import ENGINE_DEADLINE_CAP_MS
 from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs
-from coding_agent_playbook.hook_runtime.policy import ENGINE_DEADLINE_CAP_MS
 from coding_agent_playbook.hook_runtime.shell.wrappers import DEFAULT_RUNNER_WRAPPERS, ShellConfig
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 
@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from coding_agent_playbook.hook_runtime.config.lock_digest import TomlLoader
-    from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
     from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [

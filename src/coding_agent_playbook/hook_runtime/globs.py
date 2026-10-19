@@ -19,7 +19,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.hook_runtime.paths import fold_key
+from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

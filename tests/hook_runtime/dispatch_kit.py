@@ -10,13 +10,13 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.dispatch import run_event
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.run import run_event
 
 if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
     from coding_agent_playbook.hook_runtime.registry import HandlerContext, HandlerFn
     from tests.hook_runtime.guard_repo import GuardRepo

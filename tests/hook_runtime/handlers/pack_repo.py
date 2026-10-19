@@ -49,7 +49,7 @@ from coding_agent_playbook.guard_config import (
 )
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateArgs, run
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
 from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
 from coding_agent_playbook.hooks.resolution.merge import merge_hook_layers

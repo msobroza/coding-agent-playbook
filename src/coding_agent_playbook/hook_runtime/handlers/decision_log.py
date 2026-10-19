@@ -14,12 +14,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.registry import register_hook_handler
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.hook_runtime.decision import HandlerResult
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
 __all__ = ["decision_log"]

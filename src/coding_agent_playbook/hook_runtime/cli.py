@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
@@ -193,7 +193,7 @@ def _dispatch(args: Sequence[str], deps: RuntimeDeps | None, stdin: BinaryIO | N
 
 
 def _run(parsed: DispatchArgs, event: EventName, deps: RuntimeDeps, stdin: BinaryIO) -> int:
-    from coding_agent_playbook.hook_runtime.dispatch import run_event
+    from coding_agent_playbook.hook_runtime.dispatch.run import run_event
 
     wire = run_event(
         event,

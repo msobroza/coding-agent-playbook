@@ -25,8 +25,8 @@ from coding_agent_playbook.hook_registrations.stop_gate import (
     coordinator_budget_s,
     execution_timeouts_s,
 )
-from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.policy import effective_on_error
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.policy import effective_on_error
 from coding_agent_playbook.hook_runtime.routing import ASYNC_EVENT, HandlerRoute, handler_route
 from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
 from coding_agent_playbook.hooks.resolution.tables import (

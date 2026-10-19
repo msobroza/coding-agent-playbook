@@ -29,9 +29,9 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
 from coding_agent_playbook.hook_runtime.git.parse import parse_status_paths, split_z
 from coding_agent_playbook.hook_runtime.git.safe_git import Fingerprint
-from coding_agent_playbook.hook_runtime.paths import fold_key
 from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
 
 if TYPE_CHECKING:
