@@ -12,13 +12,13 @@ import json
 
 import pytest
 
-from coding_agent_playbook.adapters._json_edits import (
+from coding_agent_playbook.adapters.claude_code.settings._json_edits import (
     ArrayEdit,
     apply_edits,
     edit_splices,
     render_fragment,
 )
-from coding_agent_playbook.adapters._json_spans import (
+from coding_agent_playbook.adapters.claude_code.settings._json_spans import (
     DEFAULT_STYLE,
     JsonSpanError,
     JsonSpanIndex,

@@ -215,7 +215,7 @@ def engine_layer_root(*, catalog_dir: Path | None = None) -> Path:
     """``<root>/core``: the engine's own layer, which every consumer repo gets.
 
     :func:`catalog_layer_root` for the engine, typed as never ``None``, for
-    callers that read one known engine file (``commands/scan_sinks`` reads a
+    callers that read one known engine file (``commands/twins/scan_sinks`` reads a
     shipped ``HOOK.md``). Raises :class:`CatalogMissingError` when
     ``catalog_dir`` is omitted and no catalog root is found.
 

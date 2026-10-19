@@ -4,13 +4,13 @@ Sync records a managed ``settings.json`` element as ``sha256(canonical_json(elem
 and control-plane-guard recognizes the element at run time by the same hash,
 so both must use one function. It lives in the import-light
 ``lockfile.canonical_json`` (the runtime may not import ``adapters``), and K3's
-``_settings_plan`` imports it from there (no re-export, L2).
+``adapters.claude_code.settings._plan`` imports it from there (no re-export, L2).
 """
 
 from __future__ import annotations
 
-from coding_agent_playbook.adapters import _settings_plan
-from coding_agent_playbook.adapters._settings_plan import scoped_lock_entry
+from coding_agent_playbook.adapters.claude_code.settings import _plan as _settings_plan
+from coding_agent_playbook.adapters.claude_code.settings._plan import scoped_lock_entry
 from coding_agent_playbook.lockfile import canonical_json as _canonical_json
 from coding_agent_playbook.lockfile.canonical_json import canonical_json, element_sha256
 from tests.import_probe import run_python_probe

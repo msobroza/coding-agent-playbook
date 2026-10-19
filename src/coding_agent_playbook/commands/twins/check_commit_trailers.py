@@ -10,7 +10,7 @@ only: subject form is commitizen's, §F.4):
 - ``check-commit-trailers --range A..B``: every commit of a range (``playbook
   ci`` runs ``<merge base>..HEAD``), each line prefixed by its short sha.
 
-The rows come from ``_twin_policy`` (the guard's merged config, whatever
+The rows come from ``policy`` (the guard's merged config, whatever
 ``[hooks]`` says). Exit 0 when nothing breaks a row (always, with no rows),
 1 on a violation, 2 when the message, the range or the config cannot be read.
 """
@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.commands._twin_policy import commit_trailer_policy
+from coding_agent_playbook.commands.twins.policy import commit_trailer_policy
 from coding_agent_playbook.hook_runtime.git import GitError
 from coding_agent_playbook.hook_runtime.gitargv import MESSAGE_MAX_BYTES
 from coding_agent_playbook.security.commit_trailers import commit_msg_violations
@@ -88,7 +88,7 @@ def range_messages(git: SafeGit, text: str) -> list[tuple[str, str]]:
         >>> range_messages(git, "origin/main..HEAD")  # doctest: +SKIP
         [('9f2c1a7b3d4e', 'feat: x\\n\\nRefs: AB-1\\n')]
     """
-    from coding_agent_playbook.commands.gate_scan import resolve_range
+    from coding_agent_playbook.commands.twins._git_scope import resolve_range
     from coding_agent_playbook.hook_runtime.git_range import checked_rev
 
     span = resolve_range(git, text)
@@ -107,7 +107,7 @@ def _messages(
     args: argparse.Namespace, repo_root: Path, git: SafeGit | None
 ) -> list[tuple[str, str]]:
     if args.rev_range is not None:
-        from coding_agent_playbook.commands._git_base import open_git
+        from coding_agent_playbook.commands.twins._git_scope import open_git
 
         return range_messages(git if git is not None else open_git(repo_root), args.rev_range)
     path = Path(args.msgfile)

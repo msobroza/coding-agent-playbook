@@ -6,7 +6,7 @@ proven by a scoped lockfile hash, and edits them by splicing the original text:
 
 1. read (absent means ``{}``; whitespace-only means ``{}`` with a warning);
 2. parse strictly (no duplicate keys, ``NaN``, comments or trailing commas);
-3-4. plan per Claude event and per managed string array (:mod:`._settings_plan`);
+3-4. plan per Claude event and per managed string array (:mod:`._plan`);
 5. leave the text alone when the plan is empty (byte stability);
 6. splice only the managed spans, in the file's own indent/newline/BOM;
 7. re-parse the result and compare it with the plan;
@@ -24,8 +24,12 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from coding_agent_playbook._atomic_io import atomic_write_bytes
 from coding_agent_playbook._output_io import refuse_special_file
-from coding_agent_playbook.adapters._json_edits import apply_edits, edit_splices, render_fragment
-from coding_agent_playbook.adapters._json_spans import (
+from coding_agent_playbook.adapters.claude_code.settings._json_edits import (
+    apply_edits,
+    edit_splices,
+    render_fragment,
+)
+from coding_agent_playbook.adapters.claude_code.settings._json_spans import (
     DEFAULT_STYLE,
     JsonSpanError,
     JsonSpanIndex,
@@ -33,7 +37,7 @@ from coding_agent_playbook.adapters._json_spans import (
     detect_style,
     line_col,
 )
-from coding_agent_playbook.adapters._settings_plan import (
+from coding_agent_playbook.adapters.claude_code.settings._plan import (
     CLAUDE_SETTINGS_PATH,
     LAUNCHER_TOKEN,
     MANAGED_STRING_POINTERS,
@@ -50,7 +54,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.adapters._json_spans import Splice
+    from coding_agent_playbook.adapters.claude_code.settings._json_spans import Splice
     from coding_agent_playbook.lockfile.model import LockEntry
 
 __all__ = [

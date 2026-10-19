@@ -1,6 +1,6 @@
 """Decide which managed elements of ``.claude/settings.json`` change (specs/prK-lifecycle-hooks.md §C.2.3-§C.2.5, §C.2.8).
 
-The plan works on the parsed document only; :mod:`.claude_settings` turns it
+The plan works on the parsed document only; :mod:`.managed_merge` turns it
 into splices. Ownership comes from the prior lockfile alone: an element is
 ``owned`` when its canonical-JSON hash equals a prior scoped entry, and
 ``suspect`` when it carries no recorded hash but every handler runs the
@@ -14,14 +14,14 @@ import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from coding_agent_playbook.adapters._json_edits import ArrayEdit
+from coding_agent_playbook.adapters.claude_code.settings._json_edits import ArrayEdit
 from coding_agent_playbook.lockfile.canonical_json import canonical_json, pointer_keys
 from coding_agent_playbook.lockfile.model import LockEntry, compute_hash
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
-    from coding_agent_playbook.adapters._json_spans import PathStep
+    from coding_agent_playbook.adapters.claude_code.settings._json_spans import PathStep
 
 __all__ = [
     "CLAUDE_SETTINGS_PATH",

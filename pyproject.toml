@@ -547,30 +547,27 @@ the hook runtime: only the stdlib, itself and STDLIB_LEAVES (tests/engine_module
 id = "command-independence"
 name = "No command imports another command"
 type = "independence"
-# Every public module of commands/ (test_command_independence_lists_every_command).
+# Every public module of commands/ and commands/twins/ but the shared twins.policy
+# (test_command_independence_lists_every_command).
 modules = [
     "coding_agent_playbook.commands.check",
-    "coding_agent_playbook.commands.check_commit_trailers",
-    "coding_agent_playbook.commands.check_deps",
-    "coding_agent_playbook.commands.check_notebooks",
-    "coding_agent_playbook.commands.ci",
     "coding_agent_playbook.commands.eval",
-    "coding_agent_playbook.commands.gate_scan",
     "coding_agent_playbook.commands.import_harness",
     "coding_agent_playbook.commands.init",
     "coding_agent_playbook.commands.metrics",
     "coding_agent_playbook.commands.render",
-    "coding_agent_playbook.commands.scan_secrets",
-    "coding_agent_playbook.commands.scan_sinks",
     "coding_agent_playbook.commands.sync",
+    "coding_agent_playbook.commands.twins.check_commit_trailers",
+    "coding_agent_playbook.commands.twins.check_deps",
+    "coding_agent_playbook.commands.twins.check_notebooks",
+    "coding_agent_playbook.commands.twins.ci",
+    "coding_agent_playbook.commands.twins.gate_scan",
+    "coding_agent_playbook.commands.twins.scan_secrets",
+    "coding_agent_playbook.commands.twins.scan_sinks",
     "coding_agent_playbook.commands.validate",
     "coding_agent_playbook.commands.validate_harness",
 ]
 ignore_imports = [
-    # N8: resolve_range moves to commands/twins/_git_scope.py
-    "coding_agent_playbook.commands._secret_scope -> coding_agent_playbook.commands.gate_scan",
-    "coding_agent_playbook.commands.check_commit_trailers -> coding_agent_playbook.commands.gate_scan",
-    "coding_agent_playbook.commands.scan_sinks -> coding_agent_playbook.commands.gate_scan",
     # A6: init calls sync.pipeline.execute, not the sync command (after #62)
     "coding_agent_playbook.commands.init -> coding_agent_playbook.commands.sync",
     # A4: the sync command imports validation/, not the validate command (after #62)
@@ -589,8 +586,6 @@ containers = ["coding_agent_playbook"]
 ignore_imports = [
     # A7: adapters/_skill_files.py becomes generated_output/source_files.py (after #62)
     "coding_agent_playbook.commands._import_files -> coding_agent_playbook.adapters._skill_files",
-    # N13: becomes adapters/claude_code/settings/drift.py
-    "coding_agent_playbook.commands.check -> coding_agent_playbook.adapters._settings_drift",
     # CP-3: init's configure() owns --adapters (after #62)
     "coding_agent_playbook.cli.parser -> coding_agent_playbook.commands._init_adapters",
     # N15: FIXTURE_GLOBS moves to the stdlib leaf artifacts/path_classes.py
@@ -610,15 +605,15 @@ ignore_imports = [
     "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._control_plane_paths",
     "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._control_plane_text",
     # N14: the twin-shared judges get public modules in hook_runtime/judges/
-    "coding_agent_playbook.commands.check_deps -> coding_agent_playbook.hook_runtime.handlers._dependency_tiers",
-    "coding_agent_playbook.commands.check_deps -> coding_agent_playbook.hook_runtime.handlers._manifest_diff",
-    "coding_agent_playbook.commands.check_notebooks -> coding_agent_playbook.hook_runtime.handlers._notebook_check",
+    "coding_agent_playbook.commands.twins.check_deps -> coding_agent_playbook.hook_runtime.handlers._dependency_tiers",
+    "coding_agent_playbook.commands.twins.check_deps -> coding_agent_playbook.hook_runtime.handlers._manifest_diff",
+    "coding_agent_playbook.commands.twins.check_notebooks -> coding_agent_playbook.hook_runtime.handlers._notebook_check",
     "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._notebook_check",
-    "coding_agent_playbook.commands.scan_sinks -> coding_agent_playbook.hook_runtime.handlers._notebook_cells",
+    "coding_agent_playbook.commands.twins.scan_sinks -> coding_agent_playbook.hook_runtime.handlers._notebook_cells",
     # N18: becomes hook_runtime/git/parse.py
-    "coding_agent_playbook.commands._secret_scope -> coding_agent_playbook.hook_runtime._git_parse",
-    "coding_agent_playbook.commands.check_notebooks -> coding_agent_playbook.hook_runtime._git_parse",
-    "coding_agent_playbook.commands.scan_sinks -> coding_agent_playbook.hook_runtime._git_parse",
+    "coding_agent_playbook.commands.twins._secret_scope -> coding_agent_playbook.hook_runtime._git_parse",
+    "coding_agent_playbook.commands.twins.check_notebooks -> coding_agent_playbook.hook_runtime._git_parse",
+    "coding_agent_playbook.commands.twins.scan_sinks -> coding_agent_playbook.hook_runtime._git_parse",
     # N15: the gate judge moves inside hook_runtime, where _git_parse is its own package's
     "coding_agent_playbook.gate_scan -> coding_agent_playbook.hook_runtime._git_parse",
     # N21: becomes hook_runtime/harness/payload.py
