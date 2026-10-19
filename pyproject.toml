@@ -306,8 +306,6 @@ ignore_imports = [
     "coding_agent_playbook._typing -> coding_agent_playbook.evals.task",
     # kept: catalog-layers (the artifact source parses eval tasks) is not scheduled (L12)
     "coding_agent_playbook.catalog.source -> coding_agent_playbook.evals.**",
-    # SK-1 types undelivered_member_warning with a local Protocol (TYPE_CHECKING Adapter)
-    "coding_agent_playbook.skills.membership -> coding_agent_playbook.adapters.base",
 ]
 broken_contract_guidance = """
 A lower layer may not import a higher one, directly or through modules outside the layers.
