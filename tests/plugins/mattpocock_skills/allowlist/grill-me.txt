@@ -1,0 +1,1 @@
+# grill-me: no project-toolchain entry (A.T02.3); the gate finds no hit to allowlist.

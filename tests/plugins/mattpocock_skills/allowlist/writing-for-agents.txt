@@ -1,0 +1,1 @@
+# writing-for-agents: no project-toolchain entry (A.T08); the gate finds no hit to allowlist.

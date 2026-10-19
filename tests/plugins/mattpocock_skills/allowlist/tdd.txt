@@ -1,0 +1,1 @@
+# tdd: no project-toolchain entry (A.T05); the gate finds no hit to allowlist.

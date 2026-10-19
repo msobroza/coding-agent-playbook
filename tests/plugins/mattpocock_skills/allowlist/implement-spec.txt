@@ -1,0 +1,1 @@
+# implement-spec: no project-toolchain entry (A.T04.3); "open a draft PR" and "start a fresh context" are prose, not command position.

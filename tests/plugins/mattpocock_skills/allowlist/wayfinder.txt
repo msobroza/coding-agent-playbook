@@ -1,0 +1,1 @@
+# wayfinder: no project-toolchain entry (A.T04.1); "open" and "starts" appear only as prose, so the gate finds no hit to allowlist.

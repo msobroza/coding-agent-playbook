@@ -1,0 +1,1 @@
+# wait-what: no project-toolchain entry (A.T01.2); the gate finds no hit to allowlist.
