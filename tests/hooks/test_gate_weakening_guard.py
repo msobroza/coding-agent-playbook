@@ -12,10 +12,10 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from coding_agent_playbook.gate_scan import ScanPolicy
 from coding_agent_playbook.hook_runtime._git_parse import AddedLine, DiffLines
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.handlers.gate_weakening import FIX_HINT, scan_policy
+from coding_agent_playbook.hook_runtime.judges.gate_weakening import ScanPolicy
 from coding_agent_playbook.hook_runtime.policy import UNATTENDED_ENV_VAR
 from coding_agent_playbook.hook_runtime.registry import load_builtin
 from tests.hooks.pack_repo import engine_hook
@@ -232,7 +232,7 @@ def test_deleting_test_file_asks(
 
 
 def test_hook_md_config_equals_gate_scan_defaults(tmp_path: Path) -> None:
-    """The shipped hook adds nothing to ``gate_scan``'s policy: hook and CLI twin agree."""
+    """The shipped hook adds nothing to ``judges.gate_weakening``'s policy: hook and CLI twin agree."""
     fm = engine_hook(HOOK_ID).frontmatter
     stop_handler, edit_handler = fm.handlers["stop"], fm.handlers["pre_tool_use"]
     assert stop_handler.builtin is not None and edit_handler.builtin is not None

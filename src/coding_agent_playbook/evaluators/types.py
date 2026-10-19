@@ -15,8 +15,8 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final, Literal, Protocol, runtime_checkable
 
 # The eval-fixture globs are defined once, for the hooks' ``eval_fixture`` path
-# class; ``_eval_paths`` imports only ``re``, so the evaluators stay light.
-from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
+# class; ``artifacts.path_classes`` imports only ``re``, so the evaluators stay light.
+from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping

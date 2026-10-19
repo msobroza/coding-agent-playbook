@@ -100,7 +100,7 @@ _ENGINE_PATHS = (
     "config/tables/hooks.py",
     "_sentinel.py",
     "detector/pep503.py",
-    "gate_scan.py",
+    "hook_runtime/judges/gate_weakening.py",
     "templates/hook_shims/",
 )
 #: Catalog paths §5.1 must show, under ``catalog/`` (SPEC v0.19: content left the package).

@@ -1,6 +1,6 @@
-"""gate_scan's file-level rules: loosened checker config and removed gates (specs/prK-hook-pack.md §E.2).
+"""gate_weakening's file-level rules: loosened checker config and removed gates (specs/prK-hook-pack.md §E.2).
 
-Split from ``gate_scan`` for its size budget; pure, and ``tomllib`` / ``shlex``
+Split from ``gate_weakening`` for its size budget; pure, and ``tomllib`` / ``shlex``
 load inside the functions that need them, so importing this module stays as
 cheap as ``re`` (the Stop stage imports it on every scanned stop).
 
@@ -14,7 +14,7 @@ cheap as ``re`` (the Stop stage imports it on every scanned stop).
   workflow step a diff removes without re-adding in the same file, and any
   change to ``.gitleaks.toml``.
 
-Each rule yields a :class:`FileWeakening`; ``gate_scan`` decides justification
+Each rule yields a :class:`FileWeakening`; ``gate_weakening`` decides justification
 from the ``tokens`` a justifying added line must mention.
 """
 

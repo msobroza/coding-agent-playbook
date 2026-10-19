@@ -1,6 +1,6 @@
 """``playbook gate-scan`` — gate-weakening-guard's off-workstation twin (specs/prK-hook-pack.md §E.2).
 
-Scans a commit range with the same :func:`coding_agent_playbook.gate_scan.scan`
+Scans a commit range with the same :func:`coding_agent_playbook.hook_runtime.judges.gate_weakening.scan`
 the ``gate-integrity`` Stop stage uses, so CI and the hook share one policy:
 
 - ``--range A..B`` diffs ``A`` to ``B``; ``A...B`` diffs their merge base to
@@ -25,7 +25,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands._git_base import open_git, resolve_merge_base
-from coding_agent_playbook.gate_scan import (
+from coding_agent_playbook.hook_runtime.git import GitError
+from coding_agent_playbook.hook_runtime.judges.gate_weakening import (
     ConfigPair,
     ScanPolicy,
     ScanReport,
@@ -33,7 +34,6 @@ from coding_agent_playbook.gate_scan import (
     policy_from_table,
     scan,
 )
-from coding_agent_playbook.hook_runtime.git import GitError
 
 if TYPE_CHECKING:
     import argparse

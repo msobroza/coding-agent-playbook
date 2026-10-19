@@ -50,7 +50,7 @@ def test_child_modules_lists_modules_and_packages(make_package: Callable[..., st
 
 def test_child_modules_rejects_a_plain_module() -> None:
     with pytest.raises(ValueError, match="importable package"):
-        child_modules(f"{ENGINE}.gate_scan")
+        child_modules(f"{ENGINE}.hook_runtime.judges.gate_weakening")
 
 
 def test_non_leaf_modules_forbids_a_new_top_level_package(

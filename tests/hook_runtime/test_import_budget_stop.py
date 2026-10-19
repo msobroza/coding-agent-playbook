@@ -5,7 +5,7 @@ A real ``dispatch stop`` in a fresh interpreter, with the coordinator and the
 planning load, an inactive stage loads nothing of its own, and no forbidden
 module (jinja2, yaml, tomllib without an active stage, the CLI, the
 renderers, ``evaluators``) is imported. K6's §D.1 rows: ``evaluators.metrics_gate``
-loads only once ``quality-metrics`` measures something, and ``gate_scan`` only
+loads only once ``quality-metrics`` measures something, and ``judges.gate_weakening`` only
 when ``gate-integrity`` scans or gate-weakening-guard's ``pre_edit`` companion
 judges a test-file edit, never ``tomllib`` on that ``pre_tool_use`` path. The
 helpers are ``test_import_budget``'s, so both files read the same report.
@@ -27,8 +27,8 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.proc import SubprocessProc
 
 _COORDINATOR = engine_module("coding_agent_playbook.hook_runtime.stop.coordinator")
-_GATE_SCAN = engine_module("coding_agent_playbook.gate_scan")
-_GATE_SCAN_FILES = engine_module("coding_agent_playbook._gate_scan_files")
+_GATE_SCAN = engine_module("coding_agent_playbook.hook_runtime.judges.gate_weakening")
+_GATE_SCAN_FILES = engine_module("coding_agent_playbook.hook_runtime.judges._gate_weakening_files")
 _METRICS_GATE = engine_module("coding_agent_playbook.evaluators.metrics_gate")
 
 

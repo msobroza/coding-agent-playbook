@@ -47,6 +47,7 @@ STDLIB_LEAVES: Final = frozenset(
     {
         "_atomic_io",
         "_sentinel",
+        "artifacts.path_classes",
         "catalog",
         "detector.pep503",
         "detector.pyproject_deps",

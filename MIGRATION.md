@@ -52,6 +52,9 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.config_schema` | `coding_agent_playbook.config.schema` | N2 |
 | `coding_agent_playbook.detector` | `coding_agent_playbook.detector.facts` | N4 |
 | `coding_agent_playbook.detector.evaluate_predicate` | `coding_agent_playbook.detector.predicate.evaluate_predicate` | N4 |
+| `coding_agent_playbook.gate_scan` | `coding_agent_playbook.hook_runtime.judges.gate_weakening` | N15 |
+| `coding_agent_playbook.gate_scan.TEST_PATH_GLOBS` | `coding_agent_playbook.artifacts.path_classes.TEST_PATH_GLOBS` | N15 |
+| `coding_agent_playbook.hook_runtime.handlers._eval_paths` | `coding_agent_playbook.artifacts.path_classes` | N15 |
 | `coding_agent_playbook.hooks_config` | `coding_agent_playbook.config.tables.hooks` | N2 |
 | `coding_agent_playbook.links.LinksConfig` | `coding_agent_playbook.config.tables.links.LinksConfig` | N2 |
 | `coding_agent_playbook.lockfile` | `coding_agent_playbook.lockfile.model` | N5 |

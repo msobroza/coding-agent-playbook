@@ -31,8 +31,8 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.artifacts.path_classes import task_path
 from coding_agent_playbook.hook_runtime.caps import clean_text, quote_data
-from coding_agent_playbook.hook_runtime.handlers._eval_paths import task_path
 from coding_agent_playbook.hook_runtime.handlers._source_changed import (
     DEBOUNCE_S,
     MAX_FAIL_LINES,
