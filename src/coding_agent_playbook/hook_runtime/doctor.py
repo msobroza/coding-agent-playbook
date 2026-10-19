@@ -35,9 +35,9 @@ from coding_agent_playbook.hook_runtime._doctor_decisions import (
     decision_log_checks,
 )
 from coding_agent_playbook.hook_runtime._doctor_opencode import opencode_checks
+from coding_agent_playbook.hook_runtime.config.pin import ensure_interpreter_pin
 from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
 from coding_agent_playbook.hook_runtime.paths import find_repo
-from coding_agent_playbook.hook_runtime.pin import ensure_interpreter_pin
 
 if TYPE_CHECKING:
     import argparse

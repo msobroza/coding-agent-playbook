@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.rule import Rule
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 __all__ = [
     "HOOKS_SIDECAR",

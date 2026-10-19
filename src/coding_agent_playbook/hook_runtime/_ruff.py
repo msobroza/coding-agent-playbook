@@ -39,8 +39,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
     from coding_agent_playbook.hook_runtime._event_memo import EventMemo
+    from coding_agent_playbook.hook_runtime.config.pin import MachinePins
     from coding_agent_playbook.hook_runtime.deps import ProcPort
-    from coding_agent_playbook.hook_runtime.pin import MachinePins
     from coding_agent_playbook.hook_runtime.proc import ProcResult
 
 __all__ = [

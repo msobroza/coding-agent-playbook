@@ -45,7 +45,7 @@ from coding_agent_playbook.hook_runtime.state import StateUnavailable, session_k
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from coding_agent_playbook.hook_runtime.config import GuardConfig
+    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.state import StateStore
 

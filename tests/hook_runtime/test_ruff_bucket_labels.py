@@ -13,8 +13,8 @@ from typing import Any, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime._hook_records import HandlerSpec, HookRecord
 from coding_agent_playbook.hook_runtime._ruff import RuffDiagnostic
+from coding_agent_playbook.hook_runtime.config.hook_records import HandlerSpec, HookRecord
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._ruff_buckets import (
     BUCKETS,

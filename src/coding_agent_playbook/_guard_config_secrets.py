@@ -19,7 +19,7 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime._config_keys import regex_of
+from coding_agent_playbook.hook_runtime.config.keys import regex_of
 from coding_agent_playbook.security.patterns import (
     SECRET_CONTENT_RULES,
     SECRET_GLOB_EXEMPT,
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
     from coding_agent_playbook.config.tables.hooks import GuardrailsConfig
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 __all__ = ["PATTERN_SOURCES", "extra_pattern_rows", "secret_tables"]
 

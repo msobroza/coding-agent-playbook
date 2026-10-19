@@ -11,7 +11,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.hook_runtime.pin import MachinePins, parse_machine_pins, tool_signature
+from coding_agent_playbook.hook_runtime.config.pin import (
+    MachinePins,
+    parse_machine_pins,
+    tool_signature,
+)
 from coding_agent_playbook.hook_runtime.stop.runner import PinnedStageRunner
 from tests.hook_runtime.fakes import FakeProc
 

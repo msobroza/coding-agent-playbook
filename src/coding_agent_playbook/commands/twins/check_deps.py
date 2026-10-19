@@ -20,14 +20,12 @@ Exit codes: 0 no deny-class finding, 1 a deny-class finding, 2 a git or config e
 from __future__ import annotations
 
 import posixpath
-import sys
-from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands.twins._git_scope import open_git, resolve_merge_base
+from coding_agent_playbook.commands.twins._runner import TWIN_ERRORS, TwinOutcome, run_twin
 from coding_agent_playbook.commands.twins.policy import dependency_twin_config
 from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.git import GitError
 from coding_agent_playbook.hook_runtime.judges.dependency_tiers import (
     DependencyPolicy,
     Finding,
@@ -44,6 +42,7 @@ from coding_agent_playbook.hook_runtime.judges.manifest_diff import (
 if TYPE_CHECKING:
     import argparse
     from collections.abc import Iterable
+    from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.git import GitPort
     from coding_agent_playbook.hook_runtime.judges.manifest_diff import ManifestKind
@@ -62,18 +61,18 @@ def run(args: argparse.Namespace, *, git: GitPort | None = None) -> int:
         ... # doctest: +SKIP
         0
     """
-    repo_root = Path(args.repo_root or ".").resolve()
-    try:
-        policy = dependency_policy({}, dependency_twin_config(repo_root))
-        port = git if git is not None else open_git(repo_root)
-        base = resolve_merge_base(port, args.base).sha
-        found = manifest_findings(port, repo_root, base, policy)
-    except (GitError, ValueError, OSError) as exc:  # GitBaseError is a ValueError
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-    for line in finding_lines(found):
-        print(line)
-    return 1 if any(finding.decision is Decision.DENY for _, finding in found) else 0
+    return run_twin(
+        args.repo_root, lambda root: _outcome(args.base, root, git), errors=(*TWIN_ERRORS, OSError)
+    )
+
+
+def _outcome(base_ref: str | None, repo_root: Path, git: GitPort | None) -> TwinOutcome:
+    policy = dependency_policy({}, dependency_twin_config(repo_root))
+    port = git if git is not None else open_git(repo_root)
+    base = resolve_merge_base(port, base_ref).sha
+    found = manifest_findings(port, repo_root, base, policy)
+    denied = any(finding.decision is Decision.DENY for _, finding in found)
+    return TwinOutcome(1 if denied else 0, "\n".join(finding_lines(found)))
 
 
 def manifest_findings(

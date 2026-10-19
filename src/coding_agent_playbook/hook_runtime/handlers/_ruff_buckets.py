@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from coding_agent_playbook.hook_runtime._ruff import RuffDiagnostic
-    from coding_agent_playbook.hook_runtime.config import HookRecord
+    from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
     from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import FileReport
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 

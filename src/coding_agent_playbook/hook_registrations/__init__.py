@@ -17,7 +17,7 @@ from here, not from the submodules:
   (:func:`stop_gate_table`) and the execution-stage timeouts the stop
   deadline adds (prK-hook-pack.md §E.0.5).
 
-The event, tool-class and support tables live in ``hook_policy`` (§A.11); this
+The event, tool-class and support tables live in ``hooks.resolution.tables`` (§A.11); this
 package only reads them. Stdlib-only. Handler routes (``hook_runtime.routing``,
 :func:`member_route`) keep the decision sink out of every registration and put
 local-audit-log's ``post_tool_use`` on the one async registration (OQ-19):

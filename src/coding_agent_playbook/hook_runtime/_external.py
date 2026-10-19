@@ -31,7 +31,7 @@ from coding_agent_playbook.hook_runtime.registry import HandlerResolutionError, 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.hook_runtime.config import HookRecord
+    from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, ToolCall
     from coding_agent_playbook.hook_runtime.registry import HandlerContext, ResolveContext
     from coding_agent_playbook.security.trust import HandlerApproval
@@ -49,7 +49,7 @@ __all__ = [
 ]
 
 EVENT_SCHEMA: Final = "playbook.hook.event/1"
-#: Where sync copies hook scripts; the twin of ``hook_policy.HOOK_SCRIPTS_DIR``.
+#: Where sync copies hook scripts; the twin of ``hooks.resolution.tables.HOOK_SCRIPTS_DIR``.
 HOOK_SCRIPTS_DIR: Final = ".coding-agent-playbook/hooks/scripts"
 _OUTPUT_KEYS: Final = frozenset({"decision", "reason", "context", "user_note"})
 _MAX_SCRIPT_BYTES: Final = 16 * 1024 * 1024
@@ -112,7 +112,10 @@ def approval_of(record: HookRecord, argv: Sequence[str] | None = None) -> Handle
 
 def _launcher_argv(launcher: str, ctx: ResolveContext) -> tuple[str, ...]:
     """The launcher as pinned for this worktree (``machine.json``, the interpreter pin), else PATH."""
-    from coding_agent_playbook.hook_runtime.pin import read_interpreter_pin, read_machine_pins
+    from coding_agent_playbook.hook_runtime.config.pin import (
+        read_interpreter_pin,
+        read_machine_pins,
+    )
 
     git_dir = ctx.repo.git_dir
     pins = read_machine_pins(git_dir=git_dir)
@@ -129,7 +132,7 @@ def _launcher_argv(launcher: str, ctx: ResolveContext) -> tuple[str, ...]:
 def copied_scripts_sha256(record: HookRecord, root: str) -> str | None:
     """The digest the trust store approved, recomputed over the copies under ``root``.
 
-    Mirrors ``hook_policy.resolved.script_sha256``: one script's own sha256, or
+    Mirrors ``hooks.resolution.resolved.script_sha256``: one script's own sha256, or
     one sha256 over every ``scripts/<path>\\0<digest>\\n`` pair; ``None`` when
     a copy is missing, a symlink or not a regular file.
     """

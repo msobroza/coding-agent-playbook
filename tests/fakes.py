@@ -11,8 +11,8 @@ diff base, timeout, ``--cov`` sources) would run without running a suite; its
 :class:`coding_agent_playbook.evaluators.baseline_git.SubprocessBaselineGit`;
 ``FakeGitRunner`` stands in for its working-tree reads (``SubprocessGitRunner``).
 ``FakeHandlerSchemas`` stands in for the hook-handler ``CONFIG_SCHEMA`` registry
-(K2) behind :class:`coding_agent_playbook.hook_policy.ConfigSchemaLookup`.
-``FakePinWriter`` stands in for the ``hook_runtime.pin`` writers ``playbook sync``
+(K2) behind :class:`coding_agent_playbook.hooks.resolution.merge.ConfigSchemaLookup`.
+``FakePinWriter`` stands in for the ``hook_runtime.config.pin`` writers ``playbook sync``
 calls (the interpreter pin and ``machine.json`` under the git dir).
 ``FakeCiStepRunner`` stands in for :class:`coding_agent_playbook.commands.twins.ci.SubprocessCiStepRunner`
 so ``playbook ci`` tests see each step's argv without spawning a child.
@@ -38,14 +38,14 @@ from coding_agent_playbook.evaluators.execution.coverage_xml import CoverageRepo
 from coding_agent_playbook.evaluators.execution.junit import JunitSummary
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle, RunArtifacts
 from coding_agent_playbook.evaluators.tool_runner import ToolRunError
-from coding_agent_playbook.hook_runtime.pin import PinResult
+from coding_agent_playbook.hook_runtime.config.pin import PinResult
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     import pytest
 
-    from coding_agent_playbook.hook_policy import ConfigKeySpec
+    from coding_agent_playbook.hooks.resolution.merge import ConfigKeySpec
     from coding_agent_playbook.validation.context import SyncContext
     from coding_agent_playbook.validation.findings import ValidationError
 
@@ -253,7 +253,7 @@ class FakeGitRunner:
 
 @dataclass
 class FakeHandlerSchemas:
-    """In-memory :class:`~coding_agent_playbook.hook_policy.ConfigSchemaLookup`.
+    """In-memory :class:`~coding_agent_playbook.hooks.resolution.merge.ConfigSchemaLookup`.
 
     ``schemas`` maps a builtin handler name to its config key policies; an
     unknown name has none (``{}``), like a handler without a ``CONFIG_SCHEMA``.

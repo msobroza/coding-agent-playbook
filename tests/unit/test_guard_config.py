@@ -3,7 +3,7 @@
 The file is committed and byte-compared by ``sync --check`` on every machine,
 so its bytes depend only on the resolved hooks and the committed policy: no
 absolute path, no ``sys.prefix``, no ``$HOME`` (§D.8.3). The runtime reads it
-back through ``hook_runtime.config``, so the schema is pinned against that parser.
+back through ``hook_runtime.config.guard_config``, so the schema is pinned against that parser.
 """
 
 from __future__ import annotations
@@ -50,9 +50,8 @@ from coding_agent_playbook.guard_config import (
     serialize_guard_config,
     write_guard_config,
 )
-from coding_agent_playbook.hook_policy import resolve_effective_hooks
 from coding_agent_playbook.hook_registrations import resolved_deadlines_ms
-from coding_agent_playbook.hook_runtime.config import (
+from coding_agent_playbook.hook_runtime.config.guard_config import (
     GUARD_CONFIG_REL,
     GuardConfig,
     parse_guard_config,
@@ -62,6 +61,7 @@ from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import CON
 from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
     playbook_precommit_ids,
 )
+from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
 from coding_agent_playbook.lockfile.model import LockEntry, Provenance
 from coding_agent_playbook.security.patterns import (
     SECRET_CONTENT_RULES,
@@ -80,7 +80,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.detector.facts import Facts
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 
 _PROTECT = ProtectInputs(
