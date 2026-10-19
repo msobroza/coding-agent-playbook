@@ -111,7 +111,7 @@ def _resource_subdir(package: str, subdir: str) -> Path | None:
         # ``files()`` imports the package, and an overlay's import may raise
         # anything (its own code, a missing dependency, an empty name). Skip it
         # like a missing one: sync/validate/check/init run the shared
-        # ``_sync_preflight.unusable_overlays`` check, which names it and the
+        # ``validation.preflight.unusable_overlays`` check, which names it and the
         # error, so discovery must not crash before that check can report it.
         return None
     # We need a ``Path`` for ``rglob``-based walking, not just a

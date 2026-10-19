@@ -1,4 +1,4 @@
-"""The public checks of ``commands/_validate_skills.py`` on in-memory rules and skills.
+"""The public checks of ``validation/_skills.py`` on in-memory rules and skills.
 
 The exact messages are pinned end to end in ``tests/cli/test_validate_skills.py``;
 these tests pin what each check looks at and what it leaves alone.
@@ -13,7 +13,7 @@ import pytest
 
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
-from coding_agent_playbook.commands._validate_skills import (
+from coding_agent_playbook.validation._skills import (
     SCOPED_RULE_NEEDS_SKILL_MESSAGE,
     check_rule_skills,
     check_skill_membership,

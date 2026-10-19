@@ -15,9 +15,9 @@ import pytest
 
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
-from coding_agent_playbook.commands._validate_skills import SCOPED_RULE_NEEDS_SKILL_MESSAGE
 from coding_agent_playbook.skills.membership import is_rule_skill
 from coding_agent_playbook.skills.naming import skill_id_of
+from coding_agent_playbook.validation._skills import SCOPED_RULE_NEEDS_SKILL_MESSAGE
 from tests.unit.test_docs_migration_hooks import _migration
 
 if TYPE_CHECKING:

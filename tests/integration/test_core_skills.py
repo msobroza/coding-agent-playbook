@@ -30,10 +30,10 @@ from coding_agent_playbook.hook_policy.guardrails_skill import (
     GUARDRAILS_SKILL_ID,
     compose_guardrails_skill,
 )
-from coding_agent_playbook.links import extract_markdown_links
 from coding_agent_playbook.skills.document import DESCRIPTION_MAX_CHARS
 from coding_agent_playbook.skills.membership import compose_skills
 from coding_agent_playbook.skills.naming import agent_skill_issues
+from coding_agent_playbook.validation.link_check import extract_markdown_links
 from tests._budget_probe import reference_probe_facts, render_core_rule
 from tests._catalog import CORE_ROOT, core_rules
 from tests.hook_samples import resolved_hook

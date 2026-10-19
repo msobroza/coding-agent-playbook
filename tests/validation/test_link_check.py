@@ -1,4 +1,4 @@
-"""Tests for ``coding_agent_playbook.links`` (PR L).
+"""Tests for ``coding_agent_playbook.validation.link_check`` (PR L).
 
 Covers markdown-link extraction (masking of frontmatter, fenced code blocks,
 and inline code spans) and per-target self-containedness classification —
@@ -10,7 +10,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.config.tables.links import LinksConfig
-from coding_agent_playbook.links import MarkdownLink, classify_link, extract_markdown_links
+from coding_agent_playbook.validation.link_check import (
+    MarkdownLink,
+    classify_link,
+    extract_markdown_links,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
