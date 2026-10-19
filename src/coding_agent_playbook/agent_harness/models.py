@@ -1,7 +1,7 @@
 """Object model for a parsed Agent Harness tree (Track H1).
 
 These frozen dataclasses are the in-memory representation produced by
-:func:`coding_agent_playbook.harness.parser.parse_harness`. They mirror the
+:func:`coding_agent_playbook.agent_harness.parser.parse_harness`. They mirror the
 artifact catalog in ``specs/prH-agent-harness.md`` §A:
 
 - :class:`Harness` — the root (``HARNESS.md`` + every top-level branch).

@@ -352,6 +352,7 @@ coding-agent-playbook/
 │   │   └── stop/                           # the Stop stage contract and coordinator
 │   ├── security/                           # secret paths/patterns, PII, trust store, audit log (stdlib)
 │   ├── gate_scan.py                        # added-line suppression/loosening scan (`playbook gate-scan`)
+│   ├── agent_harness/                      # the Agent Harness format round trip: models, leaf_detectors, parser, emitter, manifest
 │   ├── adapters/
 │   │   ├── __init__.py
 │   │   ├── base.py                         # Adapter ABC

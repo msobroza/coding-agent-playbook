@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from coding_agent_playbook.agent_harness.manifest import ArtifactKind, ManifestEntry
 from coding_agent_playbook.artifacts.hook import Hook
 from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
 from coding_agent_playbook.artifacts.hook_schema import HookHandler, HookMatcher
@@ -33,7 +34,6 @@ from coding_agent_playbook.config.tables.hooks import (
     GuardrailsConfig,
     HooksConfig,
 )
-from coding_agent_playbook.harness.manifest import ArtifactKind, ManifestEntry
 from coding_agent_playbook.hook_policy import (
     DEGRADED_EVENTS,
     HOOK_EVENTS,

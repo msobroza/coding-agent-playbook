@@ -32,12 +32,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.agent_harness.manifest import read_manifest
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
-from coding_agent_playbook.harness.manifest import read_manifest
 from coding_agent_playbook.sync import pipeline as _sync
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import (
@@ -60,7 +60,7 @@ pytestmark = pytest.mark.catalog
 
 #: What the ``SkillWriter`` puts between the frontmatter and the vendored body:
 #: the sentinel HTML comment as the first body line, then one blank separator
-#: line (SPEC §6.3; ``harness.emitter.with_sentinel_body``).
+#: line (SPEC §6.3; ``agent_harness.emitter.with_sentinel_body``).
 _SENTINEL_BODY_PREFIX = f"<!-- {SENTINEL} -->\n\n"
 
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH")

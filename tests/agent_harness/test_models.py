@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.harness.models import (
+from coding_agent_playbook.agent_harness.models import (
     ContentFile,
     Harness,
     HarnessDirectory,

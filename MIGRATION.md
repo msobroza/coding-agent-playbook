@@ -113,6 +113,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.evaluators.types.MetricConfig` | `coding_agent_playbook.metrics_gate.config.MetricConfig` | N22 |
 | `coding_agent_playbook.git_client` | `coding_agent_playbook.sync.git_client` | A6 |
 | `coding_agent_playbook.gitignore` | `coding_agent_playbook.generated_output.gitignore` | N6 |
+| `coding_agent_playbook.harness` | `coding_agent_playbook.agent_harness` | N12 |
 | `coding_agent_playbook.hook_runtime._hosts` | `coding_agent_playbook.hook_runtime.judges.hosts` | N14 |
 | `coding_agent_playbook.hook_runtime.cutover` | `coding_agent_playbook.hook_runtime.judges.commit_cutover` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers._cli_words` | `coding_agent_playbook.hook_runtime.judges.cli_words` | N14 |
