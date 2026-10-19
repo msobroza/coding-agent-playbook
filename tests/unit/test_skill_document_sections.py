@@ -32,7 +32,7 @@ DI_DESCRIPTION = (
     "Pass I/O collaborators in as parameters; pick concrete implementations in one "
     "composition root per entry point."
 )
-TOOLING_FILES = "FastAPI apps, routers, dependency providers and error handlers"
+TOOLING_FILES = "Tool configuration and framework wiring"
 
 
 def _member(rule_id: str, name: str, description: str) -> MemberReference:
