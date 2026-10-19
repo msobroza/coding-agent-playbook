@@ -369,7 +369,7 @@ coding-agent-playbook/
 │   │   ├── state/                          # runtime state root, session, ledger, active prompt, audit log
 │   │   └── stop/                           # the Stop stage contract and coordinator
 │   ├── security/                           # secret paths/patterns, PII, trust store (stdlib)
-│   ├── agent_harness/                      # the Agent Harness format round trip: models, leaf_detectors, parser, emitter, manifest
+│   ├── agent_harness/                      # the Agent Harness format round trip: models, leaf_detectors, parser, emitter, manifest, adapter (AgentHarnessAdapter), hook_sidecars, importer
 │   ├── adapters/
 │   │   ├── __init__.py
 │   │   ├── base.py                         # Adapter ABC
@@ -2081,7 +2081,7 @@ claude_code = "coding_agent_playbook.adapters.claude_code.adapter:ClaudeCodeAdap
 opencode = "coding_agent_playbook.adapters.opencode:OpenCodeAdapter"
 shared_skills = "coding_agent_playbook.adapters.shared_skills:SharedSkillsAdapter"
 agents_md = "coding_agent_playbook.adapters.agents_md:AgentsMdAdapter"
-agent_harness = "coding_agent_playbook.adapters.agent_harness_adapter:AgentHarnessAdapter"
+agent_harness = "coding_agent_playbook.agent_harness.adapter:AgentHarnessAdapter"
 ```
 ### 10.6 OpenCode adapter
 OpenCode is structurally close to Claude Code but with one architectural twist: rules are not in a dedicated directory. OpenCode reads `AGENTS.md` as its primary rules source, walking up the directory tree. This means the AGENTS.md adapter already delivers the always rules to OpenCode, while member rules reach it as references in `.opencode/skills/<skill>/` — the OpenCode adapter's job is prompts, skills and, with hooks on, the one generated plugin (§10.6.2). **Hooks need OpenCode ≥ 1.18.29**, the floor of the V1 plugin API the shim targets; `playbook-hook doctor` warns below it (§12.13), and the README states it. The lookup differs by version (verified against anomalyco/opencode source; the docs lag it):
