@@ -13,10 +13,10 @@ from coding_agent_playbook.agent_harness.emitter import (
     input_variables_note,
     leaf_detectors_file,
     routing_file,
-    with_sentinel_body,
 )
 from coding_agent_playbook.agent_harness.leaf_detectors import HARNESS_LEAF_MARKER
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
+from coding_agent_playbook.rendering.formats import with_sentinel_body
 
 if TYPE_CHECKING:
     from pathlib import Path

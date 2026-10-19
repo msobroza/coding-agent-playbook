@@ -60,7 +60,7 @@ pytestmark = pytest.mark.catalog
 
 #: What the ``SkillWriter`` puts between the frontmatter and the vendored body:
 #: the sentinel HTML comment as the first body line, then one blank separator
-#: line (SPEC §6.3; ``renderer.with_sentinel_body``).
+#: line (SPEC §6.3; ``rendering.formats.with_sentinel_body``).
 _SENTINEL_BODY_PREFIX = f"<!-- {SENTINEL} -->\n\n"
 
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH")

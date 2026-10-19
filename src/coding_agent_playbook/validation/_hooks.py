@@ -33,11 +33,8 @@ from coding_agent_playbook.hooks.contract.contract_set import HookSetInputs, cla
 from coding_agent_playbook.hooks.contract.findings import HookIssue, hook_location
 from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
 from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
-from coding_agent_playbook.validation.findings import (
-    RULE_CALL_RE,
-    ValidationError,
-    jinja_syntax_error,
-)
+from coding_agent_playbook.rendering.jinja import RULE_CALL_RE
+from coding_agent_playbook.validation.findings import ValidationError, jinja_syntax_error
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator

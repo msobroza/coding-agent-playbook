@@ -11,7 +11,7 @@ from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
-from coding_agent_playbook.renderer import render_for, with_sentinel_body
+from coding_agent_playbook.rendering.formats import render_for, with_sentinel_body
 from tests.hook_samples import resolved_hook
 from tests.member_skill_samples import sample_member_reference, sample_member_skill
 

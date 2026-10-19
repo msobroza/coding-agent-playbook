@@ -75,7 +75,7 @@ from coding_agent_playbook.hooks.enforcement import guardrail_line, guardrails_s
 from coding_agent_playbook.hooks.guardrails_skill import has_guardrail_text
 from coding_agent_playbook.hooks.registrations.launcher import LAUNCHER_PATH
 from coding_agent_playbook.hooks.resolution.tables import HOOK_SUPPORT
-from coding_agent_playbook.renderer import render_for
+from coding_agent_playbook.rendering.formats import render_for
 from coding_agent_playbook.skills.membership import is_skill_member
 
 if TYPE_CHECKING:
@@ -88,7 +88,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
-    from coding_agent_playbook.prompt_rule_delivery import SkillReferenceIndex
+    from coding_agent_playbook.rendering.prompt_rule_delivery import SkillReferenceIndex
 
 #: The committed launcher's directory: sentinel-scanned, and a declared output location.
 _LAUNCHER_DIR = LAUNCHER_PATH.rsplit("/", 1)[0]

@@ -24,7 +24,7 @@ from importlib import resources
 from pathlib import Path
 
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
-from coding_agent_playbook.renderer import build_environment, render_artifact_body
+from coding_agent_playbook.rendering.jinja import build_environment, render_artifact_body
 
 LEGACY_HOOK_ID = "coding-agent-playbook-sync"
 GUARD_HOOK_ID = "coding-agent-playbook-no-generated-output"
