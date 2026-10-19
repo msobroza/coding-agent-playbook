@@ -20,7 +20,7 @@ secrets and dependency twins) instead of adding a second CI entry point.
   ``--steps`` names it.
 - ``gate-scan`` and ``scan-secrets`` (E.4: always on, so CI scans every
   change for secret tokens and credential files) diff ``<merge base>..HEAD``;
-  the base is ``--base`` or the default branch (``_git_base``), resolved only
+  the base is ``--base`` or the default branch (``_git_scope``), resolved only
   when a selected step needs it.
 - ``commit-trailers`` (E.4) checks every commit of that range against
   git-commit-push-policy-guard's trailer rows, and runs only when one is
@@ -35,7 +35,7 @@ secrets and dependency twins) instead of adding a second CI entry point.
   committer-date cut-over, plus ``PLAYBOOK_PR_TITLE`` as one argv element. It
   runs when ``[tool.commitizen]`` or ``[hooks.commit_convention]`` is set, and
   a missing ``cz`` fails it. The readers that decide which rows run live in
-  ``_ci_policy``; each fails closed.
+  ``policy``; each fails closed.
 
 Exit codes: 0 every run step passed, 1 any failed or timed out, 2 a usage
 error or an unresolvable base (nothing ran). ``--format json`` prints one
@@ -54,13 +54,15 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, Protocol
 
-from coding_agent_playbook.commands._ci_commit_convention import (
+from coding_agent_playbook.commands.twins._ci_commit_convention import (
     COMMIT_STEP,
     CzCommands,
     cz_commands,
     run_cz_commands,
 )
-from coding_agent_playbook.commands._ci_policy import (
+from coding_agent_playbook.commands.twins._ci_report import json_report, log_step, summary_text
+from coding_agent_playbook.commands.twins._git_scope import open_git, resolve_merge_base
+from coding_agent_playbook.commands.twins.policy import (
     CONFIG_FILE,
     commit_convention_configured,
     dependency_policy_set,
@@ -68,8 +70,6 @@ from coding_agent_playbook.commands._ci_policy import (
     output_committed,
     trailer_rows_configured,
 )
-from coding_agent_playbook.commands._ci_report import json_report, log_step, summary_text
-from coding_agent_playbook.commands._git_base import open_git, resolve_merge_base
 from coding_agent_playbook.hook_runtime.git import GitError
 
 if TYPE_CHECKING:
