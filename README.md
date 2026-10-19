@@ -819,6 +819,7 @@ reason, at most `max_blocks` times per stop chain.
 | `pytest-conventions-feedback` | `default` | Claude Code, OpenCode | Report unittest-style asserts, broad `pytest.raises`, composite asserts (warn only). |
 | `prompt-write-scope-guard` | `default` | Claude Code | Keep read-only playbook prompts from editing code, and test-writing prompts inside their test globs. |
 | `toolchain-missing-hint` | `default` | Claude Code, OpenCode | When ruff, mypy, pytest or commitizen is missing, name the project's install command once. |
+| `skill-nudge` | `default` | Claude Code, OpenCode | Name the skill that covers a file the first time a session edits it. |
 | `notebook-output-hygiene` | `opt-in` | Claude Code, OpenCode | Warn when an edited notebook keeps cell outputs, embedded images or base64 payloads. |
 
 #### Secrets and risky actions

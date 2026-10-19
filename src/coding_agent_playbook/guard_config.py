@@ -35,7 +35,8 @@ quality companion's codes and ``--config`` thresholds from the committed
 ``[metrics.ruff_violations]`` into clean-code-metrics-nonregression's
 (``_guard_config_quality``, §F.2.2); ``[hooks.commit_convention] cutover_date``
 into commit-message-convention's (§F.4.2: one source for the push scan and the
-``playbook ci`` step).
+``playbook ci`` step); skill-nudge's per-skill globs from the rendered member
+rules (``_guard_config_skills``, specs/prS-skills-context.md 8.5.2).
 ``notebooks.max_bytes`` is the engine's parse cap for a notebook (a larger
 one is reported unparsed), shared by the notebook-reading hooks. The K8
 secret tables (``secret_path_exempt``, ``secret_glob_exempt``,
@@ -76,6 +77,7 @@ from coding_agent_playbook._guard_config_quality import (
 )
 from coding_agent_playbook._guard_config_ruff import RuffSelection, ruff_table
 from coding_agent_playbook._guard_config_secrets import secret_tables
+from coding_agent_playbook._guard_config_skills import SKILL_NUDGE_HOOK_ID
 from coding_agent_playbook._guard_config_toolchain import (
     ToolchainInputs,
     derived_hook_config,
@@ -112,6 +114,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from pathlib import Path
 
+    from coding_agent_playbook._guard_config_skills import SkillGlobRow
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
     from coding_agent_playbook.types import Prompt
@@ -211,7 +214,8 @@ class GuardConfigInputs:
     (``read_project_ruff_selection``); ``toolchain`` the hook config derived
     from its pyproject (``read_toolchain_inputs``: the install hint, pytest's
     asyncio marks); ``quality`` the committed ``[metrics.ruff_violations]``
-    (``read_quality_lint``).
+    (``read_quality_lint``); ``skill_globs`` skill-nudge's table, one
+    ``{"id", "globs"}`` row per skill (``skill_glob_rows`` of the rendered rules).
 
     Example::
 
@@ -231,6 +235,9 @@ class GuardConfigInputs:
     ruff: RuffSelection = field(default_factory=RuffSelection)
     toolchain: ToolchainInputs = field(default_factory=ToolchainInputs)
     quality: QualityLint = field(default_factory=QualityLint)
+    # SkillGlobRow, not spec 8.5.2's Mapping[str, Any]: mypy then checks the
+    # {"id", "globs"} shape the skill-nudge runtime parses.
+    skill_globs: Sequence[SkillGlobRow] = ()
 
 
 @dataclass(frozen=True)
@@ -263,6 +270,7 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
         **derived_hook_config(inputs.toolchain),
         QUALITY_HOOK_ID: quality_hook_config(inputs.quality, inputs.ruff),
         COMMIT_CONVENTION_HOOK_ID: {"cutover_date": cfg.commit_convention.cutover_date or ""},
+        SKILL_NUDGE_HOOK_ID: {"skills": [dict(row) for row in inputs.skill_globs]},
     }
     return {
         "schema_version": GUARD_CONFIG_SCHEMA,

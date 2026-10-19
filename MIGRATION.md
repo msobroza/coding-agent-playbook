@@ -45,6 +45,7 @@ changelog entry is v0.21.
 | Overriding `project-context` or `python-house-style` by id | Nothing: your text keeps winning. Consider trimming it, since the engine's own text is now much shorter. See "The always text is shorter". |
 | Keeping your own scoped rules in `playbook/rules/` or an overlay | Add `skill: <skill-id>` to each before upgrading ("Add skill: to your own scoped rules"). Until then `playbook validate` fails and `playbook sync` refuses to run. |
 | Tooling or prompts that match lint-feedback lines (`rule <id>: …`) | Accept the new `rule <id> (skill <skill>): …` prefix and the ` (rule <id>, skill <skill>)` suffix; the next `playbook sync` turns them on. See "Guardrails and lint feedback point at skills". |
+| A repo with hooks on (the new `skill-nudge` hook) | Nothing: the next `playbook sync` turns it on. To keep it off, add `disable = ["skill-nudge"]` to `[hooks]`. See "Guardrails and lint feedback point at skills". |
 | Any repo with Python code (distilled python-best-practices content) | Nothing but `playbook sync`: `python-coding` gains three references and six change text; with pytest, `python-testing` gains two and `pytest` changes text; and `python-tooling` is now written in every Python repo, with up to four new references and a reworded "Where guidance lives" line. An overlay or repo-local rule with one of the nine new ids now replaces the core rule. See "Distilled python-best-practices content". |
 
 ### `package_manager` and per-key validation
@@ -307,6 +308,28 @@ ids and the resync hook's "rule <id>" message are unchanged. On OpenCode v2 the
 generated plugin is an inert `setup()` stub (SPEC §10.6.2), so no lint feedback
 runs there at all until the shim is ported.
 
+A new feedback hook, `skill-nudge` (tier `default`, on whenever hooks are on),
+names the skill that covers a file the first time a session edits it:
+
+    Conventions for this file: skill python-coding.
+
+It prints one line per skill whose member rules' globs match the edited file,
+each line at most once per session, and stays silent when the hook state
+directory is unusable (it could not keep the once-per-session promise). In a
+FastAPI + ML repo the first Python edit names `ml-data`, `python-coding` and
+`python-tooling`, and the first test edit after it names `python-testing`
+alone. Sync derives the glob table from the member rules it writes, as
+`"skills"` in the hook's `guard_config.json` record; no layer can set it. The
+`✓ Hooks:` summary counts one more hook (`30 enabled` where 29 were on, and
+`claude_code: 30 enforced`), `playbook check` lists it as enforced on Claude
+Code and OpenCode, and `.claude/settings.json` gains no managed entry: edits and
+writes already reach the hook launcher. The hook has no body, so `AGENTS.md`
+and Continue get no text for it. To turn it off, add
+`disable = ["skill-nudge"]` to `[hooks]`. OpenCode v2 runs neither the nudge
+nor the `rule <id> (skill <skill>)` lint feedback: its plugin is the inert stub
+above, so there only always-loaded context and the skill listing point at
+skills until the shim is ported (SPEC OQ-11).
+
 ### Distilled python-best-practices content
 
 Core now distills a second outside source, the python-best-practices agent
@@ -348,7 +371,9 @@ ideas are written fresh in the catalog's own words. There is nothing to do but
   `pytest-configuration` with pytest, `python-uv-workflow` in a repo with a
   `uv.lock`, and `pydantic-boundaries` when `pydantic` is a declared dependency
   (a FastAPI repo that gets Pydantic only through FastAPI does not get it). They
-  also match `pyproject.toml` and the ruff, mypy and pytest config files. With
+  also match `pyproject.toml` and the ruff, mypy and pytest config files, so
+  with hooks on an edit of one of those files makes `skill-nudge` name
+  `python-tooling` (still at most once per session). With
   Continue enabled, `.continue/rules/` gains `21-python-static-checks.md` and,
   where their gates hold, `23-pytest-configuration.md`,
   `28-python-uv-workflow.md` and `63-pydantic-boundaries.md`. Creating a

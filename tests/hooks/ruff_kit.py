@@ -8,7 +8,7 @@ is real. ``FakeGit`` answers the HEAD blob. Every edit runs the full
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook._guard_config_ruff import (
     probe_ruff_rules,
@@ -57,12 +57,15 @@ def head_git(head: str | None, rel: str) -> FakeGit:
 
 
 def edit(
-    repo: PackRepo, deps: RuntimeDeps, rel: str, *, state: Path | None = None
+    repo: PackRepo, deps: RuntimeDeps, rel: str, *, state: Path | None = None, **fields: Any
 ) -> SimulateReport:
-    """A Claude ``Edit`` of ``rel`` (repo-relative or absolute) through ``simulate post_tool_use``."""
+    """A Claude ``Edit`` of ``rel`` (repo-relative or absolute) through ``simulate post_tool_use``.
+
+    ``fields`` override payload keys (``session_id="s-2"``: another session).
+    """
     path = rel if rel.startswith("/") else str(repo.root / rel)
     tool_input = {"file_path": path, "old_string": "a", "new_string": "b"}
-    payload = repo.tool_payload("Edit", tool_input, event=EventName.POST_TOOL_USE)
+    payload = repo.tool_payload("Edit", tool_input, event=EventName.POST_TOOL_USE, **fields)
     return repo.simulate(payload, deps, event=EventName.POST_TOOL_USE, state=state)
 
 

@@ -2406,7 +2406,7 @@ The others read `error: .claude/commands is not a directory, but sync writes gen
 **Hooks (v0.20).** Without a `[hooks]` table, every mode renders byte for byte what v0.19 rendered (apart from the Claude Code rules' move to `.claude/rules/coding-agent-playbook.md`, §10.3.1) and write mode prints one line, `hooks available: add [hooks] enabled = true or re-run playbook init`. With `[hooks] enabled = true`, every mode resolves the on hooks (`hook_policy.resolve_effective_hooks`, §7.1.1), dispatches them to the adapters (§10.1), and writes the sync-level `.coding-agent-playbook/hooks/guard_config.json` and the copied external-handler scripts beside it whenever a hook-capable adapter is enabled. Write mode then, after the `Summary:` line, pins the interpreter (§10.3.2) and prints:
 ```
 ✓ Pinned the hook interpreter for this worktree: /repo/.venv/bin/python
-✓ Hooks: 29 enabled, 14 skipped (claude_code: 29 enforced; opencode: 21 enforced, 3 degraded, 5 advisory; agents_md: 29 advisory)
+✓ Hooks: 30 enabled, 12 skipped (agents_md: 23 advisory; claude_code: 30 enforced; continue: 23 advisory; opencode: 14 enforced, 15 degraded, 1 advisory; shared_skills: 23 advisory)
 ✓ .claude/settings.json: 9 managed entries updated, 0 removed (user keys untouched)
 ! .opencode/plugins/playbook-hooks.js changed: restart OpenCode to load it
 ```
