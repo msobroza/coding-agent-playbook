@@ -15,11 +15,12 @@ from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.commands._init_adapters import DEFAULT_ADAPTERS
 from coding_agent_playbook.config.model import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.gitignore import BLOCK_START
+from coding_agent_playbook.precommit import write_pre_commit
 from coding_agent_playbook.toml_writer import dump_toml
 from tests.cli.test_cli import break_catalog
 from tests.hook_samples import write_hook
 from tests.toml_equality import assert_toml_identical
-from tests.unit.test_precommit_merge import LEGACY_APPENDED, LEGACY_STARTER
+from tests.unit.test_precommit import LEGACY_APPENDED, LEGACY_STARTER
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -517,7 +518,7 @@ def test_fresh_starter_adds_the_cz_twin_only_for_a_commitizen_repo(
         pyproject += "\n[tool.commitizen]\nname = 'cz_conventional_commits'\n"
     (tmp_path / "pyproject.toml").write_text(pyproject)
 
-    path, _ = _init._write_pre_commit(tmp_path)
+    path, _ = write_pre_commit(tmp_path, commitizen=_init._uses_commitizen(tmp_path))
 
     parsed = yaml.safe_load(path.read_text())
     hooks = {hook["id"] for repo in parsed["repos"] for hook in repo["hooks"]}

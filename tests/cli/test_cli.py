@@ -426,11 +426,12 @@ def test_main_translates_missing_precommit_template_to_exit_2(
 ) -> None:
     """A broken install missing the pre-commit template exits 2 with no traceback."""
     from coding_agent_playbook.commands import init as init_cmd
+    from coding_agent_playbook.precommit import PrecommitTemplateMissingError
 
     missing = Path("/broken/templates/precommit/config.yaml.j2")
 
     def raising_run(args: object) -> int:
-        raise init_cmd.PrecommitTemplateMissingError(missing)
+        raise PrecommitTemplateMissingError(missing)
 
     monkeypatch.setattr(init_cmd, "run", raising_run)
     assert main(["init"]) == 2
