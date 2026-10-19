@@ -19,12 +19,6 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.artifacts.hook_schema import HookMatcher
-from coding_agent_playbook.hook_policy import (
-    ENGINE_DEADLINE_CAP_MS,
-    HOOK_EVENTS,
-    HOOK_SUPPORT,
-    ResolvedHandler,
-)
 from coding_agent_playbook.hook_registrations import (
     BOOTSTRAP_DEADLINE_MS,
     STOP_COORDINATOR_ID,
@@ -43,12 +37,18 @@ from coding_agent_playbook.hook_registrations import (
     to_claude_group,
 )
 from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
+from coding_agent_playbook.hooks.resolution.resolved import ResolvedHandler
+from coding_agent_playbook.hooks.resolution.tables import (
+    ENGINE_DEADLINE_CAP_MS,
+    HOOK_EVENTS,
+    HOOK_SUPPORT,
+)
 from tests.engine_modules import engine_module
 from tests.hook_samples import hook_frontmatter, resolved_hook
 from tests.import_probe import new_modules_after
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 _PROJECT_ROOT = "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}"
 #: Claude reads a matcher made only of these characters as an exact list (§C.2.2).

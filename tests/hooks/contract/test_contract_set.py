@@ -16,7 +16,8 @@ import pytest
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FILENAME
 from coding_agent_playbook.config.tables.hooks import parse_hooks_config
-from coding_agent_playbook.hook_policy import HookIssue, HookSetInputs, Severity, classify_hook_set
+from coding_agent_playbook.hooks.contract.contract_set import HookSetInputs, classify_hook_set
+from coding_agent_playbook.hooks.contract.findings import HookIssue, Severity
 from tests.hook_samples import sample_hook
 
 OVERLAY = "acme_rules"

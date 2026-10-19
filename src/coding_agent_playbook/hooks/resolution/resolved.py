@@ -8,7 +8,7 @@ machine-independent (K-6): an external handler's argv holds the logical launcher
 and the repo-relative script copy under :data:`HOOK_SCRIPTS_DIR`, never an
 absolute path; the interpreter comes from the per-machine pin at run time.
 
-Stdlib-only and sync-time only, like the rest of ``hook_policy``.
+Stdlib-only and sync-time only, like the rest of ``hooks``.
 """
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any, Final, Literal, NamedTuple
 
 from coding_agent_playbook.artifacts.hook_schema import MATCHER_KEYS
-from coding_agent_playbook.hook_policy.advisory import advisory_text, guardrail_summary
-from coding_agent_playbook.hook_policy.tables import HOOK_SCRIPTS_DIR
+from coding_agent_playbook.hooks.enforcement import advisory_text, guardrail_summary
+from coding_agent_playbook.hooks.resolution.tables import HOOK_SCRIPTS_DIR
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

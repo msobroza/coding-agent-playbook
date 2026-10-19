@@ -3,7 +3,7 @@
 ``combine`` is pure: the session-scoped dedupe arrives as an injected ``once``
 callable (``FakeOnce`` here) and the ask policy as a plain value, so every rule
 of §D.3.3 is checked without state, git or a config file. The runtime may not
-import ``hook_policy`` (§D.1), so the tables it re-declares are pinned to their
+import ``hooks`` (§D.1), so the tables it re-declares are pinned to their
 sync-side twins here.
 """
 
@@ -14,8 +14,6 @@ import json
 import pytest
 
 from coding_agent_playbook.evals.agent_env import UNATTENDED_ENV_VAR as EVALS_UNATTENDED_ENV_VAR
-from coding_agent_playbook.hook_policy import ENGINE_DEADLINE_CAP_MS as POLICY_DEADLINE_CAP_MS
-from coding_agent_playbook.hook_policy import HOOK_EVENTS
 from coding_agent_playbook.hook_runtime.caps import (
     LineCap,
     OutputCaps,
@@ -48,6 +46,10 @@ from coding_agent_playbook.hook_runtime.policy import (
     failure_decision,
     is_unattended,
 )
+from coding_agent_playbook.hooks.resolution.tables import (
+    ENGINE_DEADLINE_CAP_MS as POLICY_DEADLINE_CAP_MS,
+)
+from coding_agent_playbook.hooks.resolution.tables import HOOK_EVENTS
 from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
 
@@ -322,7 +324,7 @@ def test_supported_decision_keeps_every_allowed_decision(event: EventName) -> No
         )
 
 
-def test_event_decisions_match_hook_policy() -> None:
+def test_event_decisions_match_the_hooks_tables() -> None:
     runtime = {
         event.value: {d.value for d in allowed} for event, allowed in EVENT_DECISIONS.items()
     }
@@ -422,7 +424,7 @@ def test_unknown_on_error_value_fails_open() -> None:
     assert effective_on_error("explode", EventName.PRE_TOOL_USE) == "open"
 
 
-def test_on_error_table_matches_hook_policy() -> None:
+def test_on_error_table_matches_the_hooks_tables() -> None:
     runtime = {event.value: set(allowed) for event, allowed in ON_ERROR_ALLOWED.items()}
 
     assert runtime == {name: set(spec.on_error_allowed) for name, spec in HOOK_EVENTS.items()}
@@ -438,7 +440,7 @@ def test_failure_class_mapping_and_rank() -> None:
     assert CLASS_RANK["guard"] == CLASS_RANK["guard_strict"] < CLASS_RANK["quality"]
 
 
-def test_engine_deadline_caps_match_hook_policy() -> None:
+def test_engine_deadline_caps_match_the_hooks_tables() -> None:
     assert {event.value: cap for event, cap in ENGINE_DEADLINE_CAP_MS.items()} == dict(
         POLICY_DEADLINE_CAP_MS
     )

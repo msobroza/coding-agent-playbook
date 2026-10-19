@@ -7,13 +7,13 @@ Also the vocabulary Literals and the two nested levels (``HookMatcher``,
 this module to enforce H1 (unknown keys at every level, required keys, types) and
 to give the H8 contract keys their own message. It checks structure only. Value
 domains (canonical event names, per-event decisions, the id pattern, timeout
-bounds: H2-H13) are left to ``hook_policy.classify_hook``, so
+bounds: H2-H13) are left to ``hooks.contract.contract.classify_hook``, so
 ``playbook validate`` can report every problem of a hook at once instead of
 stopping at the first (specs/prK-lifecycle-hooks.md §A.2, §B.5).
 
 Split out of ``types.py`` for the file-size budget. It imports nothing from the
 package, so ``artifacts/hook.py``, ``artifacts/hook_frontmatter.py`` and the stdlib-only
-``hook_policy`` can all import it without a cycle.
+``hooks`` package can all import it without a cycle.
 """
 
 from __future__ import annotations
@@ -101,13 +101,13 @@ CONTRACT_MESSAGE: Final = (
     "HTTP/async/rewrite handlers are not part of the hook contract (SPEC §17.1)"
 )
 
-#: The advisory-rule envelope (§A.8). Defined here, not in hook_policy.tables,
-#: because artifacts/hook.py needs them and hook_policy imports it (cycle).
+#: The advisory-rule envelope (§A.8). Defined here, not in hooks.resolution.tables,
+#: because artifacts/hook.py needs them and the hooks package imports it (cycle).
 ADVISORY_RULE_PREFIX: Final = "guardrail-"
 ADVISORY_RULE_PRIORITY: Final = 30
 
 #: The longest one-line guardrail (``summary``, or its fallback), in characters
-#: (specs/prS-skills-context.md 8.4.1). Public home ``hook_policy.advisory``;
+#: (specs/prS-skills-context.md 8.4.1). Public home ``hooks.enforcement``;
 #: defined here because ``from_mapping`` checks it and this module imports nothing
 #: from the package (the ADVISORY_RULE_* cycle above).
 GUARDRAIL_SUMMARY_MAX_CHARS: Final = 120

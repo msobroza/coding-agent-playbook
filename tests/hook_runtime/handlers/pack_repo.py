@@ -47,11 +47,12 @@ from coding_agent_playbook.guard_config import (
     repo_layout,
     serialize_guard_config,
 )
-from coding_agent_playbook.hook_policy import RegistryCatalog, resolve_effective_hooks
-from coding_agent_playbook.hook_policy.merge import merge_hook_layers
 from coding_agent_playbook.hook_runtime.config.guard_config import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.simulate import SimulateArgs, run
+from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
+from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
+from coding_agent_playbook.hooks.resolution.merge import merge_hook_layers
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
 from tests._catalog import CORE_ROOT
 from tests.hook_payloads import PROJECT_DIR, HookPayloadCase
@@ -61,9 +62,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
     from coding_agent_playbook.detector.facts import Facts
-    from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from tests.hook_runtime.fakes import FakeProc
 
 ENGINE_PACKAGE = "coding_agent_playbook"

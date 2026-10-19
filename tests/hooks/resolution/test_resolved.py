@@ -23,16 +23,15 @@ from coding_agent_playbook.artifacts.hook import Hook
 from coding_agent_playbook.artifacts.hook_schema import MATCHER_KEYS
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
-from coding_agent_playbook.hook_policy import (
-    HOOK_SCRIPTS_DIR,
-    ResolvedHook,
-    advisory_text,
-    resolve_effective_hooks,
-)
+from coding_agent_playbook.hooks.enforcement import advisory_text
+from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
+from coding_agent_playbook.hooks.resolution.tables import HOOK_SCRIPTS_DIR
 from tests.hook_samples import sample_hook, write_hook
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 OVERLAY = "acme_rules"
 _EXTERNAL = {"command": "python", "script": "scripts/check.py", "args": ["--max", "5"]}

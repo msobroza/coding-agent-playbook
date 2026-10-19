@@ -29,7 +29,7 @@ from coding_agent_playbook.security.patterns import (
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 __all__ = [
     "DENY_POINTER",

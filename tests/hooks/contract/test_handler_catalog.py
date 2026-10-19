@@ -12,23 +12,22 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
-from coding_agent_playbook.hook_policy import (
-    HookCheckContext,
-    HookSetInputs,
-    RegistryCatalog,
-    classify_hook,
-    classify_hook_set,
-    merge_config,
-    resolve_effective_hooks,
-)
-from coding_agent_playbook.hook_policy.handler_catalog import config_findings, registry_findings
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
+from coding_agent_playbook.hooks.contract.contract import HookCheckContext, classify_hook
+from coding_agent_playbook.hooks.contract.contract_set import HookSetInputs, classify_hook_set
+from coding_agent_playbook.hooks.contract.handler_catalog import (
+    RegistryCatalog,
+    config_findings,
+    registry_findings,
+)
+from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
+from coding_agent_playbook.hooks.resolution.merge import merge_config
 from tests.hook_samples import sample_hook
 
 if TYPE_CHECKING:
     import pytest
 
-    from coding_agent_playbook.hook_policy.merge import ConfigKeySpec
+    from coding_agent_playbook.hooks.resolution.merge import ConfigKeySpec
 
 THIS_MODULE = __name__
 

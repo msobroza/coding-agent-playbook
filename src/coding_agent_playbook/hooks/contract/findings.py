@@ -2,7 +2,7 @@
 
 A rule yields :class:`Finding` (severity + message); ``classify_hook`` and
 ``classify_hook_set`` locate each one as a :class:`HookIssue`, which validate
-prints as a ``FAIL`` or ``warning:`` line. Stdlib-only, like all of ``hook_policy``.
+prints as a ``FAIL`` or ``warning:`` line. Stdlib-only, like all of ``hooks``.
 """
 
 from __future__ import annotations

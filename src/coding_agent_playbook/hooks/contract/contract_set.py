@@ -30,16 +30,16 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
-from coding_agent_playbook.hook_policy._contract_handlers import handler_slots
-from coding_agent_playbook.hook_policy._findings import (
+from coding_agent_playbook.hook_runtime.wrapper_policy import hidden_program
+from coding_agent_playbook.hooks.contract._contract_handlers import handler_slots
+from coding_agent_playbook.hooks.contract.findings import (
     HookIssue,
     Severity,
     did_you_mean,
     hook_location,
 )
-from coding_agent_playbook.hook_policy.handler_catalog import config_findings
-from coding_agent_playbook.hook_policy.tables import ADVISORY_RULE_PREFIX
-from coding_agent_playbook.hook_runtime.wrapper_policy import hidden_program
+from coding_agent_playbook.hooks.contract.handler_catalog import config_findings
+from coding_agent_playbook.hooks.resolution.tables import ADVISORY_RULE_PREFIX
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.config.tables.hooks import HooksConfig
-    from coding_agent_playbook.hook_policy.handler_catalog import HandlerCatalog
+    from coding_agent_playbook.hooks.contract.handler_catalog import HandlerCatalog
 
 #: The stages ``[hooks.stop-ci-parity-gate] stages`` may enable (§B.1): the two
 #: that run repo-controlled code, so trust-gated (§B.4).
@@ -56,7 +56,7 @@ _STOP_GATE: Final = "stop-ci-parity-gate"
 
 
 def _committed_config_name() -> str:
-    """``CONFIG_FILENAME``, imported on use: importing hook_policy loads no config module."""
+    """``CONFIG_FILENAME``, imported on use: importing hooks loads no config module."""
     from coding_agent_playbook.config.files import CONFIG_FILENAME
 
     return CONFIG_FILENAME
@@ -97,7 +97,7 @@ class HookSetInputs:
     local_keys: tuple[str, ...] = ()
     overlays_enabled: tuple[str, ...] = ()
     engine_package: str = ENGINE_PACKAGE
-    # Factories, not the constants: hook_policy stays import-light (its stdlib-only
+    # Factories, not the constants: hooks stays import-light (its stdlib-only
     # import probe), so config.files loads only when a default is needed.
     config_where: str = field(default_factory=_committed_config_name)
     local_where: str = field(default_factory=_local_config_name)
