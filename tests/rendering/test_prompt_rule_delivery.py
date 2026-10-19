@@ -21,13 +21,14 @@ from typing import Any
 import pytest
 
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from coding_agent_playbook.rendering.jinja import build_environment
 from coding_agent_playbook.rendering.prompt_rule_delivery import (
     SkillReference,
     includes_rules_appendix,
     insert_pointer_block,
     skill_pointer_block,
 )
-from coding_agent_playbook.rendering.rule_registry import build_prompt_environment
+from coding_agent_playbook.rendering.rule_registry import RuleRegistryImpl
 from tests.import_probe import new_modules_after
 
 
@@ -119,7 +120,7 @@ def test_includes_rules_appendix_is_empty_without_a_registry() -> None:
 def test_includes_rules_appendix_renders_templated_rules_with_the_registry_facts() -> None:
     """The appendix asks with an empty context; the registry supplies the detector facts."""
     version = _rule("ver", "Version", "Python {{ python_version }}\n", templated=True)
-    registry, _ = build_prompt_environment([version], {"python_version": "3.12"})
+    registry = RuleRegistryImpl([version], {"python_version": "3.12"}, build_environment([]))
 
     appendix = includes_rules_appendix(["ver"], registry)
 
@@ -129,7 +130,7 @@ def test_includes_rules_appendix_renders_templated_rules_with_the_registry_facts
 def test_includes_rules_appendix_omits_a_rule_the_real_registry_does_not_hold() -> None:
     """The registry holds only the rules whose ``applies_if`` passed: others render ``""``."""
     kept = _rule("kept", "Kept", "kept body\n")
-    registry, _ = build_prompt_environment([kept], {})
+    registry = RuleRegistryImpl([kept], {}, build_environment([]))
 
     appendix = includes_rules_appendix(["not-applicable", "kept"], registry)
 

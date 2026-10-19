@@ -8,25 +8,25 @@ constants below, so no nested ``pyproject.toml`` or ``.ipynb`` is committed unde
 :func:`init_and_sync_reference_probe`; the context-budget, core-skill and
 content-size tests then read its output.
 
-:func:`render_core_rule` is the one place tests build the rule environment, so a
-change to ``rendering.jinja.build_environment``'s signature touches this helper only.
+:func:`render_core_rule` renders through ``rendering.session.RenderSession``, the
+render pass sync opens, so the size and content tests read what sync would write.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
+import coding_agent_playbook
 from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.detector.facts import detect
-from coding_agent_playbook.rendering.jinja import build_environment
-from coding_agent_playbook.sync.render import render_rule_body
+from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
 from tests._catalog import core_rules
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from pathlib import Path
 
     from coding_agent_playbook.detector.facts import Facts
 
@@ -130,26 +130,27 @@ def render_core_rule(
 ) -> str:
     """The body of core rule ``rule_id`` rendered as sync renders it, with ``facts``.
 
-    Same sandboxed base environment and context shape as ``render_artifacts``
-    (facts, then the project metadata). ``metadata`` replaces the probe's
-    ``project_name`` and empty ``project_description``, or any fact such as
-    ``project_kind``, for tests that pin how an always rule renders them.
-    Raises ``KeyError`` naming the id when core ships no such rule.
+    A render session like ``render_artifacts``' (facts, then the project
+    metadata, then the installed engine version). ``metadata`` replaces the
+    probe's ``project_name`` and empty ``project_description``, or any fact such
+    as ``project_kind``, for tests that pin how an always rule renders them. The
+    rule renders whatever its ``applies_if``. Raises ``KeyError`` naming the id
+    when core ships no such rule.
 
     Example: ``render_core_rule("project-context", facts, {"project_name": "demo"})``.
     """
     rules = core_rules()
     if rule_id not in rules:
         raise KeyError(f"core ships no rule {rule_id!r}; expected one of {sorted(rules)}")
-    env = build_environment([])
-    env.globals["_facts"] = dict(facts)
-    context: dict[str, object] = {
-        **facts,
-        "project_name": REFERENCE_PROBE_NAME,
-        "project_description": "",
-        **(metadata or {}),
-    }
-    return render_rule_body(rules[rule_id], context, env).body
+    context = TemplateContext(
+        facts=facts,
+        project_name=REFERENCE_PROBE_NAME,
+        engine_version=coding_agent_playbook.__version__,
+        overrides=dict(metadata or {}),
+    )
+    # No rule to filter, so no has_file path to anchor: the session renders one rule.
+    session = RenderSession.open((), context, repo_root=Path())
+    return session.render_rule(rules[rule_id]).body
 
 
 def init_and_sync_reference_probe(repo: Path) -> None:

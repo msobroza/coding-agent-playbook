@@ -25,19 +25,10 @@ from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.rendering.formats import BUILTIN_FORMATS, FORMAT_ALIASES, render_for
-from coding_agent_playbook.rendering.jinja import TemplateSecurityError, build_environment
-from coding_agent_playbook.rendering.rule_registry import (
-    build_prompt_environment,
-    skill_reference_of,
-)
-from coding_agent_playbook.sync.render import (
-    build_jinja_context,
-    render_hook_body,
-    render_prompt_body,
-    render_rule_body,
-    report_sandbox_violation,
-    report_template_error,
-)
+from coding_agent_playbook.rendering.jinja import TemplateSecurityError
+from coding_agent_playbook.rendering.rule_registry import skill_reference_of
+from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
+from coding_agent_playbook.sync.render import report_sandbox_violation, report_template_error
 from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
@@ -161,28 +152,21 @@ def _show_source(artifact: _Artifact, kind: str, ctx: SyncContext) -> str:
         raw = frontmatter.get("applies_if") or {}
         if isinstance(raw, dict):
             predicate = dict(raw)
-    if predicate:
-        try:
-            evaluated = evaluate_predicate(predicate, ctx.facts, repo_root=ctx.repo_root)
-        except ValueError:
-            evaluated = False
-    else:
-        evaluated = True
-    lines.append(f"applies_if evaluated: {evaluated}")
+    lines.append(f"applies_if evaluated: {_predicate_holds(predicate, ctx)}")
     return "\n".join(lines)
 
 
-def _rule_applies(rule: Rule, ctx: SyncContext) -> bool:
-    """Whether ``rule``'s ``applies_if`` holds for the repo; a malformed predicate does not.
+def _predicate_holds(predicate: dict[str, object], ctx: SyncContext) -> bool:
+    """Whether ``predicate`` holds for the repo; a malformed predicate does not.
 
-    The one predicate rule of ``playbook render``: an empty predicate holds, and
-    ``evaluate_predicate``'s ``ValueError`` (a predicate validate would reject) reads as
-    false, as ``--show-rules`` has always printed it. ``detector.predicate.filter_applies_if``
-    is not reused because it raises there, and render has no validate gate to run first.
+    The applies_if report of ``--show-source`` and ``--show-rules``: an empty
+    predicate holds, and a ``ValueError`` (a predicate validate would reject) reads
+    as false, as it always has, since render has no validate gate to run first. The
+    run's render session drops the same rules (``on_malformed_predicate="omit"``),
+    so the report matches the rendered output.
 
-    Example: ``_rule_applies(rule, SyncContext.from_repo(repo))`` -> ``False`` without fastapi.
+    Example: ``_predicate_holds({"has_framework": ["fastapi"]}, ctx)`` -> ``False`` without fastapi.
     """
-    predicate = rule.frontmatter.applies_if or {}
     if not predicate:
         return True
     try:
@@ -207,7 +191,7 @@ def _show_rules(prompt: Prompt, ctx: SyncContext) -> str:
         if rule is None:
             lines.append(f"  - {rule_id}  (UNKNOWN)")
             continue
-        applies = _rule_applies(rule, ctx)
+        applies = _predicate_holds(rule.frontmatter.applies_if, ctx)
         marker = _delivery(rule) if applies else "OMITTED"
         lines.append(f"  - {rule_id}  ({rule.source_package}, applies_if={applies} -> {marker})")
     return "\n".join(lines)
@@ -225,11 +209,9 @@ def _delivery(rule: Rule) -> str:
     return "always loaded" if rule.frontmatter.scope == "always" else "no skill"
 
 
-def _render_rule(ctx: SyncContext, rule: Rule, resolved_format: str) -> str:
-    base_env = build_environment([])
-    base_env.globals["_facts"] = dict(ctx.facts)
-    context = build_jinja_context(ctx)
-    rendered = render_rule_body(rule, context, base_env)
+def _render_rule(session: RenderSession, rule: Rule, resolved_format: str) -> str:
+    """``rule`` in ``resolved_format``, rendered whatever its own ``applies_if``."""
+    rendered = session.render_rule(rule)
     return render_for(
         rendered.source_path or Path("inline"),
         rendered.body,
@@ -238,25 +220,19 @@ def _render_rule(ctx: SyncContext, rule: Rule, resolved_format: str) -> str:
     )
 
 
-def _render_prompt(ctx: SyncContext, prompt: Prompt, resolved_format: str) -> str:
+def _render_prompt(session: RenderSession, prompt: Prompt, resolved_format: str) -> str:
     """``prompt`` in ``resolved_format``: the pointer block for commands, the appendix for Continue.
 
-    Raises :class:`PromptBodyUndefinedError` naming the prompt when its own
-    body uses an undefined name (a leftover ``rule()`` call, a typo).
+    Only applicable rules are in the session's registry, as sync delivers them
+    (SPEC §6.2.5); the prompt itself renders whatever its own applies_if. Raises
+    :class:`PromptBodyUndefinedError` naming the prompt when its own body uses an
+    undefined name (a leftover ``rule()`` call, a typo).
     """
-    base_env = build_environment([])
-    base_env.globals["_facts"] = dict(ctx.facts)
-    context = build_jinja_context(ctx)
-    # Only applicable rules enter the registry, as sync delivers them (SPEC §6.2.5);
-    # the prompt itself renders whatever its own applies_if.
-    rendered_rules = [
-        render_rule_body(rule, context, base_env)
-        for rule in ctx.rules_resolved
-        if _rule_applies(rule, ctx)
-    ]
-    registry, prompt_env = build_prompt_environment(rendered_rules, ctx.facts)
+    # Every applicable rule renders first, as in sync: one escaping template
+    # anywhere names its file (prK §P1) instead of showing the prompt.
+    session.render_rules()
     try:
-        rendered_prompt = render_prompt_body(prompt, context, prompt_env)
+        rendered_prompt = session.render_prompt(prompt)
     except UndefinedError as exc:
         raise PromptBodyUndefinedError(template_source(prompt), str(exc)) from exc
     return render_for(
@@ -264,41 +240,47 @@ def _render_prompt(ctx: SyncContext, prompt: Prompt, resolved_format: str) -> st
         rendered_prompt.body,
         resolved_format,
         frontmatter=dataclasses.asdict(rendered_prompt.frontmatter),
-        rule_registry=registry,
-        skill_references=registry,
+        rule_registry=session.registry,
+        skill_references=session.registry,
     )
 
 
-def _render_hook(ctx: SyncContext, hook: Hook, resolved_format: str) -> str:
+def _render_hook(session: RenderSession, hook: Hook, resolved_format: str) -> str:
     """The hook's advisory markdown, or its Claude registration JSON (§C.4.1).
 
-    Only the body renders, in the sandboxed base environment, where ``rule()``
-    is undefined (H19); both formats read the declared frontmatter.
+    Only the body renders, in the session's sandbox, where ``rule()`` is
+    undefined (H19); both formats read the declared frontmatter.
     """
-    base_env = build_environment([])
-    base_env.globals["_facts"] = dict(ctx.facts)
-    body = render_hook_body(hook, build_jinja_context(ctx), base_env)
     return render_for(
         hook.source_path or Path("inline"),
-        body,
+        session.render_hook_body(hook),
         resolved_format,
         frontmatter=hook.frontmatter.to_mapping(),
     )
 
 
+def _run_session(ctx: SyncContext) -> RenderSession:
+    """The run's one render session; render has no validate gate, so a malformed predicate omits."""
+    context = TemplateContext.for_config(ctx.config, ctx.facts)
+    return RenderSession.open(
+        ctx.rules_resolved, context, repo_root=ctx.repo_root, on_malformed_predicate="omit"
+    )
+
+
 def _render_artifact(ctx: SyncContext, kind: str, artifact: _Artifact, resolved_format: str) -> str:
+    session = _run_session(ctx)
     if kind == "hook":
         assert isinstance(artifact, Hook)
-        return _render_hook(ctx, artifact, resolved_format)
+        return _render_hook(session, artifact, resolved_format)
     if kind == "rule":
         assert isinstance(artifact, Rule)
-        return _render_rule(ctx, artifact, resolved_format)
+        return _render_rule(session, artifact, resolved_format)
     if kind == "prompt":
         assert isinstance(artifact, Prompt)
-        return _render_prompt(ctx, artifact, resolved_format)
+        return _render_prompt(session, artifact, resolved_format)
     # skills degrade to prompts for render purposes
     assert isinstance(artifact, Skill)
-    return _render_prompt(ctx, artifact.to_prompt(), resolved_format)
+    return _render_prompt(session, artifact.to_prompt(), resolved_format)
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
