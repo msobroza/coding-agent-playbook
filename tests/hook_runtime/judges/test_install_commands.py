@@ -17,7 +17,7 @@ from coding_agent_playbook.hook_runtime.judges.install_commands import (
     InstallRequest,
     install_requests,
 )
-from coding_agent_playbook.hook_runtime.shell import parse_shell
+from coding_agent_playbook.hook_runtime.shell.parse import parse_shell
 
 TORCH_INDEX: Final = "https://download.pytorch.org/whl/cu121"
 

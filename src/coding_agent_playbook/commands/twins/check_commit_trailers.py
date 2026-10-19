@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands.twins._runner import TWIN_ERRORS, TwinOutcome, run_twin
 from coding_agent_playbook.commands.twins.policy import commit_trailer_policy
-from coding_agent_playbook.hook_runtime.gitargv import MESSAGE_MAX_BYTES
+from coding_agent_playbook.hook_runtime.shell.git_command import MESSAGE_MAX_BYTES
 from coding_agent_playbook.security.commit_trailers import commit_msg_violations
 
 if TYPE_CHECKING:

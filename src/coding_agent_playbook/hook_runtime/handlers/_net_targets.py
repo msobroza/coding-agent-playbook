@@ -30,16 +30,16 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook.hook_runtime.gitargv import parse_git
 from coding_agent_playbook.hook_runtime.handlers._egress import network_hosts
 from coding_agent_playbook.hook_runtime.judges.cli_words import split_words, value_options
 from coding_agent_playbook.hook_runtime.judges.hosts import extract_hosts, url_host
 from coding_agent_playbook.hook_runtime.judges.install_commands import install_requests
+from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["NetKind", "NetTarget", "Remotes", "image_registry", "segment_target"]
 

@@ -4,7 +4,7 @@ Each simple command becomes one ``Segment``: keywords and ``NAME=value``
 prefixes are stripped, launchers are unwrapped, and the cwd follows ``cd X &&``
 (a subshell's ``cd`` ends at its ``)``). The command lists a command runs while
 it expands its words (substitutions) come first; the ones it runs itself
-(shell ``-c``, ``eval``, ``find -exec``) come right after it. ``shell.py``
+(shell ``-c``, ``eval``, ``find -exec``) come right after it. ``parse.py``
 re-exports ``Redirect`` and ``Segment``.
 """
 
@@ -14,15 +14,15 @@ import posixpath
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._shell_scan import scan
-from coding_agent_playbook.hook_runtime._shell_tokens import Op, RawRedirect, RawWord, ScanLimit
-from coding_agent_playbook.hook_runtime._shell_wrappers import unwrap
+from coding_agent_playbook.hook_runtime.shell._scan import scan
+from coding_agent_playbook.hook_runtime.shell.tokens import Op, RawRedirect, RawWord, ScanLimit
+from coding_agent_playbook.hook_runtime.shell.wrappers import unwrap
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from coding_agent_playbook.hook_runtime._shell_tokens import Token, Word
-    from coding_agent_playbook.hook_runtime._shell_wrappers import SegmentOrigin, ShellConfig
+    from coding_agent_playbook.hook_runtime.shell.tokens import Token, Word
+    from coding_agent_playbook.hook_runtime.shell.wrappers import SegmentOrigin, ShellConfig
 
 MAX_SEGMENTS: Final = 256
 

@@ -2,7 +2,7 @@
 
 The targets are the file tool's write paths (Edit, MultiEdit, Write,
 NotebookEdit, OpenCode's ``apply_patch`` headers) and every Bash write target
-``shell.write_targets`` extracts. Each is classified against the rendered
+``shell.parse.write_targets`` extracts. Each is classified against the rendered
 protected set (``protected.classify``); the first protected one denies with
 a reason of at most 4 lines chosen by its provenance, which always ends in
 ``then run playbook validate && playbook sync`` (the next sync would silently
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["CONFIG_SCHEMA", "deny_reason", "guard_generated_outputs"]
 
@@ -179,14 +179,14 @@ def _targets(ev: CanonicalEvent, ctx: HandlerContext) -> list[NormalizedPath]:
 
 
 def _any_write_target(segments: Sequence[Segment]) -> bool:
-    from coding_agent_playbook.hook_runtime.shell import write_targets  # Bash branch only
+    from coding_agent_playbook.hook_runtime.shell.parse import write_targets  # Bash branch only
 
     return any(write_targets(segment) for segment in segments)
 
 
 def _segment_targets(segment: Segment, restore: Sequence[tuple[str, ...]]) -> list[str]:
     """``write_targets`` of ``segment``; a restore command keeps only its redirect targets."""
-    from coding_agent_playbook.hook_runtime.shell import write_targets  # Bash branch only
+    from coding_agent_playbook.hook_runtime.shell.parse import write_targets  # Bash branch only
 
     if _is_restore(segment.argv, restore):
         return write_targets(dataclasses.replace(segment, argv=()))

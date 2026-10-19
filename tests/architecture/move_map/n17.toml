@@ -1,0 +1,78 @@
+# N17 (#98, specs/prT-package-layout.md 7.4): the shell parser becomes the
+# hook_runtime/shell/ package. hook_runtime/shell.py -> shell/parse.py is a
+# same-name conversion; _verify_tag joins the stop/ package.
+
+[[module]]
+pr = "N17"
+old = "coding_agent_playbook.hook_runtime.shell"
+new = "coding_agent_playbook.hook_runtime.shell.parse"
+
+[[module]]
+pr = "N17"
+old = "coding_agent_playbook.hook_runtime._shell_scan"
+new = "coding_agent_playbook.hook_runtime.shell._scan"
+
+[[module]]
+pr = "N17"
+old = "coding_agent_playbook.hook_runtime._shell_segments"
+new = "coding_agent_playbook.hook_runtime.shell.segments"
+
+[[module]]
+pr = "N17"
+old = "coding_agent_playbook.hook_runtime._shell_tokens"
+new = "coding_agent_playbook.hook_runtime.shell.tokens"
+
+[[module]]
+pr = "N17"
+old = "coding_agent_playbook.hook_runtime._shell_wrappers"
+new = "coding_agent_playbook.hook_runtime.shell.wrappers"
+
+[[module]]
+pr = "N17"
+old = "coding_agent_playbook.hook_runtime._shell_writes"
+new = "coding_agent_playbook.hook_runtime.shell.writes"
+
+[[module]]
+pr = "N17"
+old = "coding_agent_playbook.hook_runtime._shell_options"
+new = "coding_agent_playbook.hook_runtime.shell._options"
+
+[[module]]
+pr = "N17"
+old = "coding_agent_playbook.hook_runtime.wrapper_policy"
+new = "coding_agent_playbook.hook_runtime.shell.wrapper_policy"
+
+[[module]]
+pr = "N17"
+old = "coding_agent_playbook.hook_runtime.gitargv"
+new = "coding_agent_playbook.hook_runtime.shell.git_command"
+
+[[module]]
+pr = "N17"
+old = "coding_agent_playbook.hook_runtime._git_options"
+new = "coding_agent_playbook.hook_runtime.shell.git_options"
+
+[[module]]
+pr = "N17"
+old = "coding_agent_playbook.hook_runtime._verify_tag"
+new = "coding_agent_playbook.hook_runtime.stop.verify_tag"
+
+[[path]]
+pr = "N17"
+old = "tests/hook_runtime/test_shell.py"
+new = "tests/hook_runtime/shell/test_parse.py"
+
+[[path]]
+pr = "N17"
+old = "tests/hook_runtime/test_gitargv.py"
+new = "tests/hook_runtime/shell/test_git_command.py"
+
+[[path]]
+pr = "N17"
+old = "tests/hook_runtime/test_wrapper_policy.py"
+new = "tests/hook_runtime/shell/test_wrapper_policy.py"
+
+[[path]]
+pr = "N17"
+old = "tests/hook_runtime/test_verify_tag.py"
+new = "tests/hook_runtime/stop/test_verify_tag.py"

@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.globs import GlobSet
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["SKIP_RULES", "gate_weakening_pre_edit"]
 
@@ -82,7 +82,7 @@ def gate_weakening_pre_edit(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerR
 
 def _deleted_operands(segment: Segment) -> list[str]:
     """The paths ``rm``, ``git rm`` or ``mv`` (its sources) removes."""
-    from coding_agent_playbook.hook_runtime._shell_writes import operands
+    from coding_agent_playbook.hook_runtime.shell.writes import operands
 
     argv = list(segment.argv)
     program = posixpath.basename(argv[0]) if argv else ""

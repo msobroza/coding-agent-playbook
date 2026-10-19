@@ -23,12 +23,12 @@ import posixpath
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._git_options import git_args
+from coding_agent_playbook.hook_runtime.shell.git_options import git_args
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = [
     "MESSAGE_MAX_BYTES",
@@ -72,7 +72,7 @@ class GitInvocation:
 
     Example::
 
-        >>> from coding_agent_playbook.hook_runtime.shell import parse_shell
+        >>> from coding_agent_playbook.hook_runtime.shell.parse import parse_shell
         >>> segment = parse_shell("git -C sub push", "posix", "/r").segments[0]
         >>> invocation = parse_git(segment)
         >>> (invocation.subcommand, invocation.cwd)
@@ -112,7 +112,7 @@ def parse_git(segment: Segment) -> GitInvocation | None:
 
     Example::
 
-        >>> from coding_agent_playbook.hook_runtime.shell import parse_shell
+        >>> from coding_agent_playbook.hook_runtime.shell.parse import parse_shell
         >>> parse_git(parse_shell("ls", "posix", "/r").segments[0]) is None
         True
     """
@@ -211,7 +211,7 @@ def commit_message_sources(inv: GitInvocation, *, root: str) -> list[str] | Unin
 
     Example::
 
-        >>> from coding_agent_playbook.hook_runtime.shell import parse_shell
+        >>> from coding_agent_playbook.hook_runtime.shell.parse import parse_shell
         >>> seg = parse_shell("git commit -m a -m b", "posix", "/r").segments[0]
         >>> commit_message_sources(parse_git(seg), root="/r")
         ['a\\n\\nb']
@@ -239,7 +239,7 @@ def _inline(value: str) -> str | Uninspectable:
     """One ``-m`` value: literal text, or the body of a ``$(cat <<EOF ... EOF)``."""
     if not value.startswith("$(") or not value.endswith(")"):
         return value if "$(" not in value and "`" not in value else _dynamic()
-    from coding_agent_playbook.hook_runtime.shell import parse_shell
+    from coding_agent_playbook.hook_runtime.shell.parse import parse_shell
 
     inner = parse_shell(value[2:-1], "posix", None)
     segments = inner.segments

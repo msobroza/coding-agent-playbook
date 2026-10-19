@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["READ_ONLY_REASON", "TESTS_ONLY_REASON", "PromptScope", "prompt_scope_guard", "scope_of"]
 
@@ -147,8 +147,8 @@ def _outside_globs(
 
 
 def _write_targets(segment: Segment) -> list[str]:
-    """``shell.write_targets``, imported on the Bash branch only (§D.1)."""
-    from coding_agent_playbook.hook_runtime.shell import write_targets
+    """``shell.parse.write_targets``, imported on the Bash branch only (§D.1)."""
+    from coding_agent_playbook.hook_runtime.shell.parse import write_targets
 
     return write_targets(segment)
 
@@ -170,7 +170,7 @@ def _unnamed_writer(segment: Segment, *, commits: bool) -> bool:
         return False
     if posixpath.basename(segment.argv[0]) in _UNNAMED_WRITERS:
         return True
-    from coding_agent_playbook.hook_runtime.gitargv import parse_git  # Bash branch only
+    from coding_agent_playbook.hook_runtime.shell.git_command import parse_git  # Bash branch only
 
     git = parse_git(segment)
     if git is None:

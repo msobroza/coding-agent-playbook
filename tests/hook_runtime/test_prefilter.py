@@ -16,7 +16,7 @@ import pytest
 from coding_agent_playbook.hook_runtime._prefilter import argv0_matches, command_argv0s
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.registry import register_hook_handler
-from coding_agent_playbook.hook_runtime.shell import parse_shell
+from coding_agent_playbook.hook_runtime.shell.parse import parse_shell
 from tests.hook_runtime.dispatch_kit import PRE, body, dispatch
 from tests.hook_runtime.guard_repo import hook_record
 

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerDeclaration
-    from coding_agent_playbook.hook_runtime.shell import ShellCommand
+    from coding_agent_playbook.hook_runtime.shell.parse import ShellCommand
 
 __all__ = ["argv0_matches", "command_argv0s", "skips_call"]
 
@@ -33,7 +33,7 @@ def command_argv0s(command: ShellCommand) -> frozenset[str] | None:
 
     Example::
 
-        >>> from coding_agent_playbook.hook_runtime.shell import parse_shell
+        >>> from coding_agent_playbook.hook_runtime.shell.parse import parse_shell
         >>> sorted(command_argv0s(parse_shell("cd a && /bin/rm -rf b | tee x", "posix", "/r")))
         ['cd', 'rm', 'tee']
     """

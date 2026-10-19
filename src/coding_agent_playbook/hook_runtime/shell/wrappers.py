@@ -1,4 +1,4 @@
-"""Wrapper unwrapping for ``shell.parse_shell`` (specs/prK-lifecycle-hooks.md §D.2.5).
+"""Wrapper unwrapping for ``parse.parse_shell`` (specs/prK-lifecycle-hooks.md §D.2.5).
 
 ``env FOO=1 sudo -u root timeout 5 rm -rf /`` runs ``rm``, so guards judge the
 effective argv, not its launcher. ``unwrap`` strips launchers, matching each on
@@ -22,14 +22,14 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook.hook_runtime._shell_options import (
+from coding_agent_playbook.hook_runtime.shell._options import (
     OptionSpec,
     has_letter,
     long_names,
     option_arity,
     skip_options,
 )
-from coding_agent_playbook.hook_runtime._shell_tokens import ScanError, Word
+from coding_agent_playbook.hook_runtime.shell.tokens import ScanError, Word
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
