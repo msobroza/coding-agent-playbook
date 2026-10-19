@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.handlers._cz import CzRunner
+    from coding_agent_playbook.hook_runtime.handlers.safety._cz import CzRunner
     from coding_agent_playbook.hook_runtime.shell.git_command import GitInvocation
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
@@ -122,7 +122,7 @@ def _check(
     ctx: HandlerContext, repo: RepoInfo, ask: Callable[[CzRunner], str | None]
 ) -> HandlerResult | None:
     """Run ``ask`` with the pinned cz: a deny reason, ``None`` when it passed or could not run."""
-    from coding_agent_playbook.hook_runtime.handlers._cz import cz_runner, missing_note
+    from coding_agent_playbook.hook_runtime.handlers.safety._cz import cz_runner, missing_note
 
     cz = cz_runner(ctx, repo)
     if isinstance(cz, str):
@@ -152,7 +152,7 @@ def _check(
 def _push(git: GitInvocation, cz: CzRunner, ctx: HandlerContext) -> str | None:
     """Check the commits the push publishes past the cut-over; ``None`` when they pass."""
     from coding_agent_playbook.hook_runtime.git.safe_git import GitError
-    from coding_agent_playbook.hook_runtime.handlers._cz import push_ranges
+    from coding_agent_playbook.hook_runtime.handlers.safety._cz import push_ranges
     from coding_agent_playbook.hook_runtime.judges.commit_cutover import (
         parse_cutover,
         plan_cz_checks,

@@ -158,7 +158,10 @@ def _risky_action(
 
 
 def _segment_action(segment: Segment) -> tuple[str, str] | None:
-    from coding_agent_playbook.hook_runtime.handlers._egress import network_hosts, segment_egress
+    from coding_agent_playbook.hook_runtime.handlers.safety._egress import (
+        network_hosts,
+        segment_egress,
+    )
     from coding_agent_playbook.hook_runtime.judges.install_commands import install_requests
     from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
 
@@ -177,7 +180,7 @@ def _control_plane(
     ev: CanonicalEvent, ctx: HandlerContext, *, shell: bool
 ) -> tuple[str, str] | None:
     """An edit of the guard configuration control-plane-guard owns (settings, hooks, MCP, ...)."""
-    from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import (
+    from coding_agent_playbook.hook_runtime.handlers._shared.control_plane_paths import (
         load_plane,
         route_of,
     )
@@ -198,7 +201,7 @@ def _control_plane(
 
 
 def _shell_writes(ev: CanonicalEvent, ctx: HandlerContext) -> list[NormalizedPath]:
-    from coding_agent_playbook.hook_runtime.handlers._targets import shell_write_targets
+    from coding_agent_playbook.hook_runtime.handlers._shared.targets import shell_write_targets
     from coding_agent_playbook.hook_runtime.shell.parse import write_targets
 
     return shell_write_targets(ev, ctx, write_targets)

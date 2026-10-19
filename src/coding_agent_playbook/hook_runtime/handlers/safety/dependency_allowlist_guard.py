@@ -158,7 +158,7 @@ def _edit_findings(
     tool: ToolCall, path: NormalizedPath, kind: ManifestKind, policy: DependencyPolicy
 ) -> list[Finding]:
     """The names an edit of one manifest adds, judged; it is simulated, never written."""
-    from coding_agent_playbook.hook_runtime.edit_preview import preview_after
+    from coding_agent_playbook.hook_runtime.handlers._shared.edit_preview import preview_after
 
     readable, before = _read(path)
     after = preview_after(tool, before) if readable else None

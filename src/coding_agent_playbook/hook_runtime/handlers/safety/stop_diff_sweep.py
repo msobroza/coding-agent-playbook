@@ -34,12 +34,12 @@ from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._pii_settings import (
+from coding_agent_playbook.hook_runtime.handlers._shared.pii_settings import (
     PII_CONFIG_KEY,
     PII_KEY,
     pii_settings,
 )
-from coding_agent_playbook.hook_runtime.handlers._secret_sweep import (
+from coding_agent_playbook.hook_runtime.handlers.safety._secret_sweep import (
     SweepLimits,
     SweepReport,
     sweep_tree,

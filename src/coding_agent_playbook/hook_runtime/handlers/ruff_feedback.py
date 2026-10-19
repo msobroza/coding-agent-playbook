@@ -1,6 +1,6 @@
 """The §E.3 ruff consumers: post-edit-ruff-format and the rule-linked lint hooks (specs/prK-hook-pack.md §E.3).
 
-Both builtins run on the shared pipeline (``_ruff_pipeline``) and read the
+Both builtins run on the shared pipeline (``_shared.ruff_pipeline``) and read the
 same per-event partition (``_ruff_buckets``), so D1 runs once per edited file
 whatever the number of consumers.
 
@@ -55,7 +55,7 @@ from coding_agent_playbook.hook_runtime._ruff import (
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._ruff_buckets import event_lines
-from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import (
+from coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline import (
     edited_python_files,
     enabled_consumers,
     file_codes,
@@ -73,7 +73,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import (
+    from coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline import (
         EditedFile,
         FileReport,
         HeadBlob,

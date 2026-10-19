@@ -17,12 +17,12 @@ from coding_agent_playbook.hook_runtime.dispatch.registry import (
     builtin_handler_modules,
     registered_handlers,
 )
-from coding_agent_playbook.hook_runtime.handlers._data_reads import READER_ARGV0S
-from coding_agent_playbook.hook_runtime.handlers._destructive_paths import (
+from coding_agent_playbook.hook_runtime.handlers.safety._data_reads import READER_ARGV0S
+from coding_agent_playbook.hook_runtime.handlers.safety._destructive_paths import (
     INTERPRETERS,
     PATH_ARGV0S,
 )
-from coding_agent_playbook.hook_runtime.handlers._egress import EGRESS_ARGV0S
+from coding_agent_playbook.hook_runtime.handlers.safety._egress import EGRESS_ARGV0S
 from coding_agent_playbook.hook_runtime.judges.install_commands import _READERS
 from coding_agent_playbook.hook_runtime.shell.parse import ShellConfig, parse_shell
 from coding_agent_playbook.hook_runtime.shell.wrapper_policy import (
