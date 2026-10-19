@@ -3,7 +3,7 @@
 eval-task-authoring-lint and guard-eval-fixtures both locate an edited file's
 task directory (``.../eval_tasks/<id>/``); sync renders :data:`FIXTURE_GLOBS`
 as ``guard_config.eval.fixture_globs`` and the ``eval_fixture`` path class
-from the same constant. A private module: it registers no handler.
+from the same constant; :data:`TEST_PATH_GLOBS` names the test-code paths. Stdlib-only.
 """
 
 from __future__ import annotations
@@ -12,10 +12,11 @@ import re
 from dataclasses import dataclass
 from typing import Final
 
-__all__ = ["FIXTURE_GLOBS", "TaskPath", "task_path"]
+__all__ = ["FIXTURE_GLOBS", "TEST_PATH_GLOBS", "TaskPath", "task_path"]
 
 #: The frozen eval fixtures (runtime glob grammar); an engine constant (§E.0.5 ``eval``).
 FIXTURE_GLOBS: Final[tuple[str, ...]] = ("**/eval_tasks/*/setup/**",)
+TEST_PATH_GLOBS: Final = ("**/tests/**", "**/test/**", "test_*.py", "*_test.py", "conftest.py")
 
 _TASK = re.compile(r"(?P<dir>(?:.*/)?eval_tasks/(?P<id>[^/]+))(?:/(?P<rest>.*))?")
 

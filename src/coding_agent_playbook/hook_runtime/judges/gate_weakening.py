@@ -15,7 +15,7 @@ What it flags:
   escape pragmas of §E.4. A trailing reason (:data:`DEFAULT_JUSTIFICATION_REGEX`)
   after the match exempts a suppression, e.g.
   ``# type: ignore[attr-defined]  # stub gap``.
-- **Loosened config** (``_gate_scan_files``): the protected TOML keys of
+- **Loosened config** (``_gate_weakening_files``): the protected TOML keys of
   :data:`DEFAULT_PROTECTED_CONFIG_KEYS`, removed pre-commit hooks and workflow
   steps, and any ``.gitleaks.toml`` change. These and the escape pragmas always
   reach the user as notes (:attr:`ScanReport.notes`), justified or not.
@@ -34,16 +34,16 @@ import re
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook._gate_scan_files import (
+from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS, TEST_PATH_GLOBS
+from coding_agent_playbook.hook_runtime._git_parse import AddedLine, RemovedLine
+from coding_agent_playbook.hook_runtime.caps import clean_text, clip
+from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs
+from coding_agent_playbook.hook_runtime.judges._gate_weakening_files import (
     TOML_PREFIXES,
     FileWeakening,
     removal_weakenings,
     toml_loosenings,
 )
-from coding_agent_playbook.hook_runtime._git_parse import AddedLine, RemovedLine
-from coding_agent_playbook.hook_runtime.caps import clean_text, clip
-from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs
-from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -71,7 +71,6 @@ PYTHON_GLOBS: Final = ("*.py", "*.pyi")
 ANY_FILE: Final = ("**",)
 #: control-plane-guard owns the playbook policy files (§E.1).
 POLICY_FILE_GLOBS: Final = (".coding-agent-playbook*.toml",)
-TEST_PATH_GLOBS: Final = ("**/tests/**", "**/test/**", "test_*.py", "*_test.py", "conftest.py")
 CONSUMER_TABLE: Final = "[hooks.gate-weakening-guard]"
 #: git reports exact paths: match them without the darwin/win32 case folding.
 _GLOB_PLATFORM: Final = "linux"
