@@ -7,7 +7,7 @@ the OpenCode shim ``.opencode/plugins/playbook-hooks.js`` (an adapter's
 ``.claude/rules/coding-agent-playbook.md`` (SPEC §10.3.1). Those directories
 also hold the user's own files, so the path is the engine's only when nothing
 is there yet, or when the file there carries the sentinel line
-(``_sentinel.file_has_sentinel``, the same predicate the stale-output scans and
+(``generated_output.sentinel.file_has_sentinel``, the same predicate the stale-output scans and
 hook guards decide on). Anything else is refused,
 never overwritten (code review of claude/prk-hooks-impl, findings #1 and #2):
 

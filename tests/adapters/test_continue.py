@@ -365,7 +365,7 @@ def test_hooks_never_write_continue_hook_config(tmp_path: Path) -> None:
 def test_cleanup_reads_the_frontmatter_first_sentinel_like_every_scanner(
     tmp_path: Path,
 ) -> None:
-    """One anchored detector (``_sentinel.has_sentinel``) decides ownership for
+    """One anchored detector (``generated_output.sentinel.has_sentinel``) decides ownership for
     every adapter (prK §P3): a stale file in the :func:`with_sentinel_body`
     layout is engine output in a Continue folder too. A copied generated
     ``SKILL.md`` becomes the user's once its sentinel line is removed."""

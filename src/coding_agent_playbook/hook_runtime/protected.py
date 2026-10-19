@@ -19,8 +19,8 @@ sync rendered: nothing is rendered and nothing is spawned here. The order of
    control-plane-guard;
 5. the handler's ``extra_protected`` globs;
 6. last, a file under an output dir carrying the sentinel at its anchored
-   position (``_sentinel.file_has_sentinel``), never read when it is a
-   symlink, on a secret path or when it is not a regular file.
+   position (``generated_output.sentinel.file_has_sentinel``), never read when
+   it is a symlink, on a secret path or when it is not a regular file.
 
 Stdlib, ``hook_runtime``, the zero-import ``generated_output.sentinel`` and the stdlib-only
 ``catalog.roots`` module (a leaf) only (§D.1).
@@ -174,9 +174,9 @@ def classify(
 ) -> ProtectedHit | None:
     """Why ``npath`` is protected, or ``None`` when an edit of it may proceed.
 
-    ``read_sentinel`` defaults to ``_sentinel.file_has_sentinel``; it is called
-    only for an existing regular file under an output dir, never through a
-    symlink or on a secret path.
+    ``read_sentinel`` defaults to ``generated_output.sentinel.file_has_sentinel``;
+    it is called only for an existing regular file under an output dir, never
+    through a symlink or on a secret path.
 
     Example::
 

@@ -23,7 +23,7 @@ never emits an ``evals/`` directory — consistent with the five built-in adapte
 
 The playbook sentinel is written as the **first body line** of every generated
 text file (frontmatter must stay on line 1 for the harness parser), one of the
-two anchored positions ``_sentinel.has_sentinel`` accepts; a sentinel quoted
+two anchored positions ``generated_output.sentinel.has_sentinel`` accepts; a sentinel quoted
 anywhere else is user prose. ``cleanup_stale`` never deletes inside a skill
 directory (``skills/<id>/``): stale skill output — the ``SKILL.md``, copied
 scripts and references — is settled only by ``playbook sync``'s lockfile

@@ -28,7 +28,7 @@ closing fence — the same placement as the ``agent_harness`` adapter (§10.7.3)
 
 Ownership is decided **before** any write: ``<root>/<id>/`` is engine-owned iff
 its ``SKILL.md`` carries the sentinel at an anchored position
-(``_sentinel.has_sentinel``: here the first body line, so a ``SKILL.md`` that
+(``generated_output.sentinel.has_sentinel``: here the first body line, so a ``SKILL.md`` that
 only quotes it in prose is the user's), or the previous sync's lockfile lists
 it with unchanged bytes (pre-sentinel engines wrote ``.claude/skills/`` without
 one). A user-authored directory with a colliding id is skipped with a
@@ -244,7 +244,7 @@ class SkillWriter:
 def is_engine_owned_skill_dir(skill_dir: Path) -> bool:
     """Return whether ``skill_dir`` is a real dir whose ``SKILL.md`` has the sentinel.
 
-    The sentinel must sit at an anchored position (``_sentinel.has_sentinel``;
+    The sentinel must sit at an anchored position (``generated_output.sentinel.has_sentinel``;
     :func:`render_skill_md` writes it as the first body line), so a hand-written
     ``SKILL.md`` that merely quotes it is never claimed. Binary, undecodable or
     unreadable files never raise: they are user-owned (``False``).

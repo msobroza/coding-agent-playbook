@@ -394,7 +394,7 @@ class ClaudeCodeAdapter(Adapter):
           user-authored or linked file at either path is preserved. No other
           ``.claude/rules/`` file is ever reported.
 
-        "Sentinel-tagged" is the shared anchored rule (``_sentinel.has_sentinel``
+        "Sentinel-tagged" is the shared anchored rule (``generated_output.sentinel.has_sentinel``
         via :meth:`Adapter._carries_sentinel`). ``.claude/skills/`` is
         deliberately left out: a skill dir mixes engine output with files a user
         may have edited or added, so only the lockfile leftover policy

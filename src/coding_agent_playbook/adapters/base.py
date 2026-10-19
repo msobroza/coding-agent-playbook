@@ -321,7 +321,7 @@ class Adapter(ABC):
 
     @staticmethod
     def _carries_sentinel(path: Path) -> bool:
-        """Whether ``path`` is engine-generated per :func:`_sentinel.file_has_sentinel`.
+        """Whether ``path`` is engine-generated per :func:`~coding_agent_playbook.generated_output.sentinel.file_has_sentinel`.
 
         The sentinel line must be line 1, or the first body line after a
         leading YAML frontmatter block; anywhere else it is user prose. Binary,

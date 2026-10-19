@@ -241,7 +241,7 @@ class OpenCodeAdapter(Adapter):
         Commands carry the sentinel as the first body line, after the
         ``description`` frontmatter (OpenCode's gray-matter only reads
         frontmatter at offset 0) — the second anchored position
-        ``_sentinel.has_sentinel`` accepts; commands older engines wrote with
+        ``generated_output.sentinel.has_sentinel`` accepts; commands older engines wrote with
         the sentinel on line 1 are still recognised.
 
         ``.opencode/skills/`` is never scanned: stale skill output is settled by
