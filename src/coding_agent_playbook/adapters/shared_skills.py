@@ -17,7 +17,7 @@ Rules and prompts are no-ops here: always rules reach every assistant through
 the references of the skill each one names), and prompts go through the
 harness adapters. With any on hook carrying guardrail text, the composed
 ``playbook-guardrails`` skill is written here too (D6). The skill bytes come
-from the shared :class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter`
+from the shared :class:`~coding_agent_playbook.adapters.skill_dirs.writer.SkillWriter`
 and are identical to the ``.claude/skills/`` and ``.opencode/skills/`` copies.
 
 On by default (``playbook init`` lists it in ``adapters_enabled``) but **not**
@@ -30,14 +30,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.adapters.skill_dirs.writer import SkillWriter
 from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook._typing import Prompt, Rule, Skill
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.hook_policy import ResolvedHook
 
 #: Repo-relative shared skill root; Codex and OpenCode read ``.agents/skills/`` natively.

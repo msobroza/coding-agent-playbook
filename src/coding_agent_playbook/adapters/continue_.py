@@ -29,7 +29,8 @@ from coding_agent_playbook.renderer import render_for
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from coding_agent_playbook._typing import Prompt, Rule
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.renderer import RuleRegistry
 
 
