@@ -1,7 +1,8 @@
 """Suite runs for the metrics gate's execution metrics (``run_tests``; PR-M M4, prK §F.0.3).
 
 One :class:`SuiteRun` runs the project's suite once per root and measures
-``test_pass_rate`` / ``coverage`` / ``diff_coverage`` from it;
+``test_pass_rate`` / ``coverage`` / ``diff_coverage`` from it through the grading
+kernel's measuring pass (:func:`~coding_agent_playbook.grading.measuring.measure_suite`);
 :func:`suite_baseline` runs it again on a ``git:`` ref (through a temporary
 worktree) or a baseline directory. Only the candidate run gets a diff base, so a
 diff-based metric measures nothing on the baseline.
@@ -10,14 +11,14 @@ diff-based metric measures nothing on the baseline.
 from __future__ import annotations
 
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evaluators.baseline_git import BaselineGitError
-from coding_agent_playbook.evaluators.execution.diff_coverage import DIFF_COVERAGE
-from coding_agent_playbook.evaluators.execution.project import import_roots
-from coding_agent_playbook.evaluators.types import EvalContext, ToolSetup
+from coding_agent_playbook.grading.baseline_git import BaselineGitError
+from coding_agent_playbook.grading.execution_metrics.diff_coverage import DIFF_COVERAGE
+from coding_agent_playbook.grading.execution_metrics.project import import_roots
+from coding_agent_playbook.grading.measuring import measure_suite
 from coding_agent_playbook.metrics_gate.inputs import (
     GIT_PREFIX,
     JSON_PREFIX,
@@ -27,35 +28,13 @@ from coding_agent_playbook.metrics_gate.inputs import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
 
-    from coding_agent_playbook.evaluators.baseline_git import BaselineGit
-    from coding_agent_playbook.evaluators.execution.project import ProjectHandle
-    from coding_agent_playbook.evaluators.metric import Metric
-    from coding_agent_playbook.evaluators.types import Measurement
+    from coding_agent_playbook.grading.baseline_git import BaselineGit
+    from coding_agent_playbook.grading.execution_metrics.project import ProjectFactory
+    from coding_agent_playbook.grading.metric import Metric
+    from coding_agent_playbook.grading.types import Measurement, MeasureSetup
     from coding_agent_playbook.metrics_gate.run import MetricsGateRequest
-
-#: MODULE label the execution metrics key their suite-wide measurements on.
-SUITE_LABEL = "suite"
-
-
-class ProjectFactory(Protocol):
-    """Builds the :class:`ProjectHandle` a suite run measures (``ProjectHandle.create``).
-
-    ``diff_base`` is set on the candidate handle only; ``timeout_s`` bounds the
-    run; ``cov_sources`` shape the default command (never an explicit one).
-    """
-
-    def __call__(
-        self,
-        root: Path,
-        report_dir: Path,
-        test_cmd: list[str] | None = None,
-        *,
-        diff_base: str | None = None,
-        timeout_s: float | None = None,
-        cov_sources: Sequence[str] = (),
-    ) -> ProjectHandle: ...
 
 
 @dataclass(frozen=True)
@@ -67,18 +46,17 @@ class SuiteRun:
     each run (``[metrics] test_timeout_s``). ``source_mode`` puts the default
     command's coverage in source mode (``--cov=<import root>``), so a
     never-imported file counts as uncovered for ``diff_coverage``.
-    ``tool_setup`` is how a diff-based metric reads git, and ``diff_base`` the
-    ref it diffs the candidate against (:func:`run_suites` gives it to the
+    ``setup.tool_setup`` is how a diff-based metric reads git, and ``diff_base``
+    the ref it diffs the candidate against (:func:`run_suites` gives it to the
     candidate run only).
     """
 
     metrics: Sequence[Metric]
     test_cmd: list[str] | None
     project_factory: ProjectFactory
-    tool_paths: Mapping[str, str]
+    setup: MeasureSetup
     timeout_s: float | None = None
     source_mode: bool = False
-    tool_setup: ToolSetup = field(default_factory=ToolSetup)
     diff_base: str | None = None
 
     def measure(
@@ -98,22 +76,10 @@ class SuiteRun:
             timeout_s=self.timeout_s,
             cov_sources=import_roots(root) if self.source_mode and self.test_cmd is None else (),
         )
-        ctx = EvalContext(
-            module=None,
-            source="",
-            label=SUITE_LABEL,
-            project=handle,
-            tool_paths=self.tool_paths,
-            tool_setup=self.tool_setup,
-        )
-        measurements: list[Measurement] = []
         try:
-            for metric in self.metrics:
-                if metric.available(ctx):
-                    measurements.extend(metric.measure(ctx))
+            return measure_suite(handle, self.metrics, self.setup)
         except RuntimeError as exc:
             raise MetricsGateUsageError(str(exc)) from exc
-        return measurements
 
     @property
     def diff_based_only(self) -> bool:
@@ -125,7 +91,7 @@ def gate_suite(
     request: MetricsGateRequest,
     execution: Sequence[Metric],
     factory: ProjectFactory,
-    setup: ToolSetup,
+    setup: MeasureSetup,
 ) -> SuiteRun:
     """The suite run of one gate request: its command, bound, diff base and coverage mode.
 
@@ -144,10 +110,9 @@ def gate_suite(
         execution,
         None if request.test_cmd is None else list(request.test_cmd),
         factory,
-        request.tool_paths,
+        setup,
         timeout_s=request.config.test_timeout_s,
         source_mode=diff_base is not None and measures_diff,
-        tool_setup=setup,
         diff_base=diff_base,
     )
 

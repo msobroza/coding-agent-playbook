@@ -26,6 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.security.pii import mask, pii_config, scan_pii
@@ -177,11 +178,13 @@ def pii_prompt_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult |
     cfg = pii_config(ctx.config)
     if not cfg.finders():
         return None  # the engine's inert definition: nothing to look for
-    scan = scan_prompt(ev.prompt, cfg, max_bytes=_max_bytes(ctx.config))
+    config = HookConfig(ctx.config, CONFIG_SCHEMA)
+    max_bytes = config.integer("max_prompt_bytes", DEFAULT_MAX_PROMPT_BYTES, minimum=1)
+    scan = scan_prompt(ev.prompt, cfg, max_bytes=max_bytes)
     if not scan.blocked:
         return None
     rule_id = ",".join(scan.categories())
-    if _overridden(ev.prompt, ctx.config):
+    if _overridden(ev.prompt, config.choice("override_token", "")):
         return HandlerResult(
             decision=Decision.NONE, hook_id=ctx.hook.id, rule_id=rule_id, escape=OVERRIDE_ESCAPE
         )
@@ -190,13 +193,5 @@ def pii_prompt_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult |
     )
 
 
-def _overridden(prompt: str, config: Mapping[str, object]) -> bool:
-    token = config.get("override_token")
-    return isinstance(token, str) and bool(token.strip()) and token in prompt
-
-
-def _max_bytes(config: Mapping[str, object]) -> int:
-    value = config.get("max_prompt_bytes")
-    if type(value) is int and value > 0:
-        return value
-    return DEFAULT_MAX_PROMPT_BYTES
+def _overridden(prompt: str, token: str) -> bool:
+    return bool(token.strip()) and token in prompt

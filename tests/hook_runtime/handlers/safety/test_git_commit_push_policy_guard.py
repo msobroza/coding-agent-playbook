@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 
     type Deps = Callable[..., RuntimeDeps]
@@ -245,7 +245,7 @@ def test_push_requires_green_is_advisory_and_opt_in(
 
 
 def _record_green(state: Path, key: str) -> None:
-    from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME, StateStore
+    from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME, StateStore
     from tests.hook_runtime.fakes import FakeClock
 
     write_last_green(StateStore(str(state / STATE_DIR_NAME), clock=FakeClock()), key)

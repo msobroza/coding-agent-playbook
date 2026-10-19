@@ -21,13 +21,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands.twins._git_scope import resolve_range
-from coding_agent_playbook.hook_runtime._git_parse import AddedLine, parse_diff_lines, split_z
-from coding_agent_playbook.hook_runtime.git_range import PATCH_FLAGS, checked_rev
+from coding_agent_playbook.hook_runtime.git.parse import AddedLine, parse_diff_lines, split_z
+from coding_agent_playbook.hook_runtime.git.range import PATCH_FLAGS, checked_rev
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.hook_runtime.git import SafeGit
+    from coding_agent_playbook.hook_runtime.git.safe_git import SafeGit
 
 __all__ = ["SecretScope", "paths_scope", "range_scope", "staged_scope", "worktree_scope"]
 

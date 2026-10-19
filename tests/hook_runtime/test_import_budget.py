@@ -39,7 +39,7 @@ import pytest
 
 from coding_agent_playbook.generated_output.sentinel import SENTINEL, sentinel_line
 from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.harness import DENY_EXIT
+from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT
 from tests.engine_modules import (
     ENGINE,
     engine_module,
@@ -66,7 +66,7 @@ _FORBIDDEN_LIBRARIES: Final = (
 #: from the package tree, so a new top-level package is forbidden until it joins
 #: ``tests.engine_modules.STDLIB_LEAVES`` on purpose.
 FORBIDDEN: Final = (*_FORBIDDEN_LIBRARIES, *non_leaf_modules("hook_runtime"))
-_GIT_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.git")
+_GIT_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.git.safe_git")
 _IMPORT_LINE: Final = re.compile(r"^import time:\s+\d+ \|\s+\d+ \|\s*(\S+)\s*$")
 
 
@@ -335,7 +335,6 @@ def test_control_plane_guard_loads_nothing_new_off_its_files(
     assert sorted(m for m in imported if m.startswith(_CPG_PREFIX)) == [
         f"{_CPG_PREFIX}paths",
         f"{_CPG_PREFIX}shell",
-        f"{_CPG_PREFIX}toml",  # the policy key rows only: tomllib stays unloaded
     ]
     assert "subprocess" not in imported
 
@@ -509,7 +508,7 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
                 "catalog.source",
                 "config",
                 "evals",
-                "evaluators",
+                "grading",
                 "metrics_gate",
                 "toml_writer",
             )

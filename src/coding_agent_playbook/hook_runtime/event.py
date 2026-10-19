@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
-    from coding_agent_playbook.hook_runtime.shell import ShellCommand, ShellConfig, ShellKind
+    from coding_agent_playbook.hook_runtime.shell.parse import ShellCommand, ShellConfig, ShellKind
 
 SESSION_ID_MAX_CHARS: Final = 128
 STOP_MESSAGE_MAX_CHARS: Final = 8_000
@@ -247,7 +247,7 @@ class ToolCall:
 
 def _parse_shell(source: ShellSource) -> ShellCommand:
     # Imported here so that an Edit or Read event never loads the shell parser (§D.1).
-    from coding_agent_playbook.hook_runtime.shell import DEFAULT_SHELL_CONFIG, parse_shell
+    from coding_agent_playbook.hook_runtime.shell.parse import DEFAULT_SHELL_CONFIG, parse_shell
 
     return parse_shell(source.text, source.kind, source.cwd, source.config or DEFAULT_SHELL_CONFIG)
 

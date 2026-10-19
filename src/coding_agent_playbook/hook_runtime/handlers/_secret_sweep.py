@@ -46,7 +46,7 @@ from coding_agent_playbook.security.secrets import is_binary, scan_added_lines, 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from coding_agent_playbook.hook_runtime.git import AddedLine
+    from coding_agent_playbook.hook_runtime.git.safe_git import AddedLine
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.security.pii import PiiConfig
     from coding_agent_playbook.security.secrets import SecretFinding
@@ -130,7 +130,7 @@ def _fix(finding: SecretFinding) -> str:
 
 def _secret_names(ctx: HandlerContext, rels: Iterable[str]) -> frozenset[str]:
     """The ``rels`` the rendered secret path policy names (each path matched once)."""
-    policy, home = path_policy(ctx.cfg, {}), ctx.home or user_home()
+    policy, home = path_policy(ctx.cfg), ctx.home or user_home()
     return frozenset(rel for rel in rels if policy.matches(rel, home=home, platform=ctx.platform))
 
 

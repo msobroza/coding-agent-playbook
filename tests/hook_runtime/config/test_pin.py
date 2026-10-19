@@ -26,7 +26,7 @@ from coding_agent_playbook.hook_runtime.config.pin import (
     tool_signature,
     write_machine_pins,
 )
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 
 
 def _git_dir(tmp_path: Path) -> Path:

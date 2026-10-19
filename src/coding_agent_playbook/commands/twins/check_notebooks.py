@@ -84,7 +84,7 @@ def _outcome(named: list[str], root: Path) -> TwinOutcome:
 
 def tracked_notebooks(root: Path) -> list[Path]:
     """Every ``.ipynb`` file git tracks under ``root``, repo-relative."""
-    from coding_agent_playbook.hook_runtime._git_parse import split_z
+    from coding_agent_playbook.hook_runtime.git.parse import split_z
 
     listed = open_git(root).run(["ls-files", "-z", "--", "*.ipynb"])
     return [Path(rel) for rel in split_z(listed.stdout)]

@@ -28,7 +28,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import clean_text, clip
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.handlers._verify_claim import completion_claim
+from coding_agent_playbook.hook_runtime.handlers.stop_ci_parity_gate import CONFIG_SCHEMA
 from coding_agent_playbook.hook_runtime.paths import fold_key
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult
 from coding_agent_playbook.hook_runtime.stop.tools import (
@@ -43,7 +45,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.deps import Clock
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.git import GitPort
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.runner import StageRunner
     from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
@@ -154,7 +156,7 @@ def tests_stage(ev: CanonicalEvent, ctx: HandlerContext) -> ExecStage | None:
 
             return shared_suite(plan, ctx, repo).outcome(deadline)
 
-    elif ctx.config.get("tests_scope") == "touched":
+    elif HookConfig(ctx.config, CONFIG_SCHEMA).choice("tests_scope", "all") == "touched":
         args = _targeted(args, repo.worktree_root, ctx)
     return ExecStage(
         name="tests",

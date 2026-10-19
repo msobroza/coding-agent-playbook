@@ -23,15 +23,15 @@ from coding_agent_playbook.hook_runtime.event import (
     ToolClass,
     ToolResponse,
 )
-from coding_agent_playbook.hook_runtime.harness._payload import host_path, opt_str
+from coding_agent_playbook.hook_runtime.harness.payload import host_path, opt_str
 from coding_agent_playbook.hook_runtime.paths import NormalizedPath, normalize_path
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.harness import ParseContext
-    from coding_agent_playbook.hook_runtime.harness._payload import Payload
+    from coding_agent_playbook.hook_runtime.harness.payload import Payload
+    from coding_agent_playbook.hook_runtime.harness.wire import ParseContext
 
 __all__ = ["APPLY_PATCH", "TOOL_CLASSES", "build_tool_call", "classify"]
 

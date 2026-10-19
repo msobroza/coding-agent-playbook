@@ -33,6 +33,7 @@ import functools
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.config.reader import read_small_file
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.edit_preview import preview_after
@@ -54,7 +55,7 @@ if TYPE_CHECKING:
     )
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import ShellCommand
+    from coding_agent_playbook.hook_runtime.shell.parse import ShellCommand
 
 __all__ = ["CONFIG_SCHEMA", "REASON", "control_plane_guard"]
 
@@ -118,9 +119,7 @@ def control_plane_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResul
 
 def _load(ev: CanonicalEvent, ctx: HandlerContext) -> ControlPlane:
     assert ev.repo is not None  # checked by the handler before any target is routed
-    extra = ctx.config.get("extra_paths", [])
-    if not isinstance(extra, list) or not all(isinstance(item, str) for item in extra):
-        raise ValueError(f"handler config 'extra_paths' must be a list of strings, got {extra!r}")
+    extra = HookConfig(ctx.config, CONFIG_SCHEMA).strings("extra_paths", blanks="keep", strict=True)
     return load_plane(
         ctx.cfg,
         ev.repo,
@@ -152,7 +151,7 @@ def _shell_verdicts(
     command: ShellCommand, ev: CanonicalEvent, ctx: HandlerContext, plane: PlaneFn
 ) -> list[Verdict]:
     """The command rows of each segment, then its write targets routed like file paths."""
-    from coding_agent_playbook.hook_runtime.shell import write_targets  # Bash branch only
+    from coding_agent_playbook.hook_runtime.shell.parse import write_targets  # Bash branch only
 
     found: list[Verdict] = []
     pipes_in: dict[int, bool] = {}  # depth -> the previous segment there pipes into the next

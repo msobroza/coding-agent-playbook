@@ -36,7 +36,7 @@ from coding_agent_playbook.hook_runtime.event import (
     ToolCall,
     ToolClass,
 )
-from coding_agent_playbook.hook_runtime.harness import DENY_EXIT
+from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT
 from coding_agent_playbook.hook_runtime.registry import (
     HANDLER_ATTR,
     ConfigKey,
@@ -519,7 +519,7 @@ def test_lazy_git_builds_safe_git_only_when_first_used(
     tmp_path: Path, runtime_deps: Callable[..., RuntimeDeps]
 ) -> None:
     from coding_agent_playbook.hook_runtime._ports import LazyGit
-    from coding_agent_playbook.hook_runtime.git import SafeGit
+    from coding_agent_playbook.hook_runtime.git.safe_git import SafeGit
     from tests.hook_runtime.fakes import FakeGit
 
     repo = GuardRepo.create(tmp_path)

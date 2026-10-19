@@ -1,0 +1,137 @@
+# N25 (#105, specs/prT-package-layout.md 4.18, 7.4): evaluators/ is renamed grading/
+# (L6, CONTEXT Grading kernel). builtins/ becomes static_metrics/, execution/ becomes
+# execution_metrics/, and the kernel's checks/ is flattened into grading/ (registry.py
+# as check_registry.py, execution.py as execution_checks.py). Every package __init__.py
+# is a docstring only, so the package re-exports go (L2, L5).
+
+[[module]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators"
+new = "coding_agent_playbook.grading"
+package = true
+
+[[module]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators.builtins"
+new = "coding_agent_playbook.grading.static_metrics"
+package = true
+
+[[module]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators.execution"
+new = "coding_agent_playbook.grading.execution_metrics"
+package = true
+
+[[module]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators.checks.compose"
+new = "coding_agent_playbook.grading.compose"
+
+[[module]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators.checks.execution"
+new = "coding_agent_playbook.grading.execution_checks"
+
+[[module]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators.checks.judge_metric"
+new = "coding_agent_playbook.grading.judge_metric"
+
+[[module]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators.checks.judged"
+new = "coding_agent_playbook.grading.judged"
+
+[[module]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators.checks.registry"
+new = "coding_agent_playbook.grading.check_registry"
+
+# The evaluators/__init__.py re-exports, removed: importers name the defining module.
+[[names]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators"
+new = "coding_agent_playbook.grading.metric"
+names = [
+    "Metric",
+    "all_metrics",
+    "execution_metrics",
+    "get_metric",
+    "register_metric",
+    "static_metrics",
+]
+
+[[names]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators"
+new = "coding_agent_playbook.grading.parse"
+names = ["ModuleModel", "parse_module"]
+
+[[names]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators"
+new = "coding_agent_playbook.grading.rubric"
+names = ["Rubric"]
+
+[[names]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators"
+new = "coding_agent_playbook.grading.scope"
+names = ["Determinism", "Scope"]
+
+[[names]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators"
+new = "coding_agent_playbook.grading.types"
+names = [
+    "AbsoluteThreshold",
+    "EvalContext",
+    "EvaluationReport",
+    "GradePolicy",
+    "JudgeLike",
+    "Measurement",
+    "RegressionPolicy",
+    "ResolvedPolicy",
+    "TrialResult",
+]
+
+# The evaluators/checks/__init__.py re-exports, removed with the package.
+[[names]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators.checks"
+new = "coding_agent_playbook.grading.compose"
+names = ["AllOf", "AnyOf", "Not"]
+
+[[names]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators.checks"
+new = "coding_agent_playbook.grading.execution_checks"
+names = ["CoverageCheck", "TestsPassCheck"]
+
+[[names]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators.checks"
+new = "coding_agent_playbook.grading.judge_metric"
+names = ["JudgeMetric"]
+
+[[names]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators.checks"
+new = "coding_agent_playbook.grading.judged"
+names = ["JudgeCheck"]
+
+[[names]]
+pr = "N25"
+old = "coding_agent_playbook.evaluators.checks"
+new = "coding_agent_playbook.grading.check_registry"
+names = ["all_check_ids", "get_check", "register_check"]
+
+[[path]]
+pr = "N25"
+old = "tests/evaluators/"
+new = "tests/grading/"
+
+[[path]]
+pr = "N25"
+old = "tests/evaluators/test_execution_evaluators.py"
+new = "tests/grading/test_execution_metrics.py"

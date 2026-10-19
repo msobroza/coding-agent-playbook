@@ -27,6 +27,7 @@ import re
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import ToolClass
 from coding_agent_playbook.hook_runtime.judges.hosts import is_loopback
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = [
     "CONFIG_SCHEMA",
@@ -108,7 +109,9 @@ def taint_marker(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult | Non
         return None
     if ToolClass.WEB in tool.tool_classes:
         ctx.session.set_flag("taint:web")
-    elif ToolClass.MCP in tool.tool_classes and _mcp_pattern(ctx.config).search(tool.name):
+    elif ToolClass.MCP in tool.tool_classes and _mcp_pattern(
+        HookConfig(ctx.config, CONFIG_SCHEMA)
+    ).search(tool.name):
         ctx.session.set_flag("taint:mcp")
     return None
 
@@ -155,9 +158,9 @@ def _risky_action(
 
 
 def _segment_action(segment: Segment) -> tuple[str, str] | None:
-    from coding_agent_playbook.hook_runtime.gitargv import parse_git
     from coding_agent_playbook.hook_runtime.handlers._egress import network_hosts, segment_egress
     from coding_agent_playbook.hook_runtime.judges.install_commands import install_requests
+    from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
 
     git = parse_git(segment)
     if git is not None and git.subcommand == "push":
@@ -196,7 +199,7 @@ def _control_plane(
 
 def _shell_writes(ev: CanonicalEvent, ctx: HandlerContext) -> list[NormalizedPath]:
     from coding_agent_playbook.hook_runtime.handlers._targets import shell_write_targets
-    from coding_agent_playbook.hook_runtime.shell import write_targets
+    from coding_agent_playbook.hook_runtime.shell.parse import write_targets
 
     return shell_write_targets(ev, ctx, write_targets)
 
@@ -226,11 +229,9 @@ def _under(path: str, roots: Iterable[str]) -> bool:
     return any(path == root or path.startswith(root + os.sep) for root in roots)
 
 
-def _mcp_pattern(config: Mapping[str, object]) -> re.Pattern[str]:
-    source = config.get("mcp_taint_pattern")
+def _mcp_pattern(config: HookConfig) -> re.Pattern[str]:
+    source = config.choice("mcp_taint_pattern", "")
     try:
-        return re.compile(
-            source if isinstance(source, str) and source else DEFAULT_MCP_TAINT_PATTERN, re.I
-        )
+        return re.compile(source or DEFAULT_MCP_TAINT_PATTERN, re.I)
     except re.error:
         return re.compile(DEFAULT_MCP_TAINT_PATTERN, re.I)

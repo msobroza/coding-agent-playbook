@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 
     type Deps = Callable[..., RuntimeDeps]
@@ -282,3 +282,15 @@ def test_protected_branches_extend_with_the_guardrails_layer(
     report = _bash(pack_repo, deps, "git push --force-with-lease origin prod")
 
     assert (_decision(report), _rule(report)) == (Decision.DENY, "force_push_protected")
+
+
+@pytest.mark.parametrize(("command", "rule"), [("rm -rf .", "rm_repo"), ("rm -rf /", "rm_root")])
+def test_an_empty_safe_rm_dir_does_not_make_the_repo_root_safe(
+    pack_repo: PackRepo, deps: Deps, command: str, rule: str
+) -> None:
+    """An empty ``safe_rm_dirs`` entry is dropped: kept, it would match the basename of ``/``."""
+    pack_repo.install_pack([HOOK_ID], handler_config={HOOK_ID: {"safe_rm_dirs": [""]}})
+
+    report = _bash(pack_repo, deps, command)
+
+    assert (_decision(report), _rule(report)) == (Decision.DENY, rule)

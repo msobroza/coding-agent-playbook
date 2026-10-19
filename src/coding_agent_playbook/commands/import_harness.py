@@ -32,6 +32,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook.agent_harness.manifest import Manifest, ManifestEntry, read_manifest
+from coding_agent_playbook.agent_harness.models import (
+    ContentFile,
+    Harness,
+    HarnessDirectory,
+    LeafMarker,
+    NotAHarnessError,
+    RawAsset,
+    SkillLeaf,
+)
+from coding_agent_playbook.agent_harness.parser import parse_harness
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
@@ -48,17 +59,6 @@ from coding_agent_playbook.commands._import_hooks import (
     write_hook,
 )
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
-from coding_agent_playbook.harness.manifest import Manifest, ManifestEntry, read_manifest
-from coding_agent_playbook.harness.models import (
-    ContentFile,
-    Harness,
-    HarnessDirectory,
-    LeafMarker,
-    NotAHarnessError,
-    RawAsset,
-    SkillLeaf,
-)
-from coding_agent_playbook.harness.parser import parse_harness
 
 if TYPE_CHECKING:
     import argparse

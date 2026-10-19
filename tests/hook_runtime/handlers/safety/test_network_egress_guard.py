@@ -20,7 +20,7 @@ import pytest
 
 from coding_agent_playbook.adapters.claude_code._overlay_native import network_native_rows
 from coding_agent_playbook.hook_runtime.combine import ASK_DENIED_PREFIX
-from coding_agent_playbook.hook_runtime.config.guard_config import GUARD_CONFIG_REL
+from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import Harness
 from coding_agent_playbook.hook_runtime.policy import UNATTENDED_ENV_VAR
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 
     type Deps = Callable[..., RuntimeDeps]

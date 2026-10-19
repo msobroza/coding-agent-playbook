@@ -6,7 +6,7 @@ unwrapped. The convention is the consumer's commitizen config
 (``[tool.commitizen]``, default ``cz_conventional_commits``), which ``cz``
 reads itself: the engine has no linter, only D-Q3's cut-over (``judges.commit_cutover``).
 
-- **commit**: the message ``gitargv.commit_message_sources`` reads (``-m``
+- **commit**: the message ``git_command.commit_message_sources`` reads (``-m``
   paragraphs, a ``-F`` file inside the worktree up to 64 KiB, heredoc bodies)
   goes to ``cz check --message``; a rejection denies with cz's own words,
   sanitized (``_cz``). With nothing to inspect (an editor would open,
@@ -33,6 +33,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 
@@ -40,10 +41,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
-    from coding_agent_playbook.hook_runtime.gitargv import GitInvocation
     from coding_agent_playbook.hook_runtime.handlers._cz import CzRunner
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.git_command import GitInvocation
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["CONFIG_SCHEMA", "LOG_LIMIT", "commit_message_convention"]
 
@@ -83,7 +84,7 @@ def commit_message_convention(ev: CanonicalEvent, ctx: HandlerContext) -> Handle
 
 
 def _segment(segment: Segment, repo: RepoInfo, ctx: HandlerContext) -> HandlerResult | None:
-    from coding_agent_playbook.hook_runtime.gitargv import parse_git
+    from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
 
     git = parse_git(segment)
     if git is None:
@@ -91,15 +92,18 @@ def _segment(segment: Segment, repo: RepoInfo, ctx: HandlerContext) -> HandlerRe
     if git.subcommand == "commit":
         message = _commit_message(git, segment, repo)
         return None if message is None else _check(ctx, repo, lambda cz: cz.message(message))
-    if git.subcommand == "push" and ctx.config.get("check_push") is True:
+    if git.subcommand == "push" and HookConfig(ctx.config, CONFIG_SCHEMA).flag("check_push", False):
         return _check(ctx, repo, lambda cz: _push(git, cz, ctx))
     return None
 
 
 def _commit_message(git: GitInvocation, segment: Segment, repo: RepoInfo) -> str | None:
     """The message the commit records, or ``None`` when it cannot be inspected beforehand."""
-    from coding_agent_playbook.hook_runtime._git_options import git_args
-    from coding_agent_playbook.hook_runtime.gitargv import Uninspectable, commit_message_sources
+    from coding_agent_playbook.hook_runtime.shell.git_command import (
+        Uninspectable,
+        commit_message_sources,
+    )
+    from coding_agent_playbook.hook_runtime.shell.git_options import git_args
 
     if git_args(git.args, "commit").has("--allow-empty-message") or _unresolved(segment):
         return None
@@ -147,7 +151,7 @@ def _check(
 
 def _push(git: GitInvocation, cz: CzRunner, ctx: HandlerContext) -> str | None:
     """Check the commits the push publishes past the cut-over; ``None`` when they pass."""
-    from coding_agent_playbook.hook_runtime.git import GitError
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitError
     from coding_agent_playbook.hook_runtime.handlers._cz import push_ranges
     from coding_agent_playbook.hook_runtime.judges.commit_cutover import (
         parse_cutover,

@@ -3,9 +3,9 @@
 Measures the static metrics (cyclomatic complexity, maintainability index, WMC,
 LCOM4, DIT, CBO≈) over a set of Python files, optionally diffing against a
 baseline (a git ref or a directory), grades the result through the
-:class:`~coding_agent_playbook.evaluators.metric.Metric` /
-:class:`~coding_agent_playbook.evaluators.check.Check` /
-:class:`~coding_agent_playbook.evaluators.rubric.Rubric` stack, and exits non-zero
+:class:`~coding_agent_playbook.grading.metric.Metric` /
+:class:`~coding_agent_playbook.grading.check.Check` /
+:class:`~coding_agent_playbook.grading.rubric.Rubric` stack, and exits non-zero
 on a breach — mirroring ``playbook check``'s convention. With ``--run-tests`` it
 also runs the **execution** metrics (``test_pass_rate``, ``coverage``), which
 shell out to the target's ``pytest``; execution is opt-in (side effects/cost) and
@@ -83,8 +83,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, cast
 
-from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, clean_head_tree
-from coding_agent_playbook.evaluators.types import ScopeDetail
+from coding_agent_playbook.grading.baseline_git import BaselineGitError, clean_head_tree
+from coding_agent_playbook.grading.types import ScopeDetail
 from coding_agent_playbook.metrics_gate.run import (
     MetricsGateDeps,
     MetricsGateRequest,
@@ -97,8 +97,7 @@ from coding_agent_playbook.metrics_gate.run import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.evaluators import EvaluationReport
-    from coding_agent_playbook.evaluators.types import Mode
+    from coding_agent_playbook.grading.types import EvaluationReport, Mode
     from coding_agent_playbook.metrics_gate.config import MetricConfig
     from coding_agent_playbook.metrics_gate.run import MetricsGateResult
 

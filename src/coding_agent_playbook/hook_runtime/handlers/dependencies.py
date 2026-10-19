@@ -63,7 +63,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.judges.manifest_diff import ManifestKind
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["CONFIG_SCHEMA", "dependency_guard"]
 
@@ -103,7 +103,7 @@ def dependency_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult |
     tool = ev.tool
     if tool is None or ev.repo is None:
         return None
-    policy = dependency_policy(ctx.cfg.tables.get("facts"), ctx.config)
+    policy = dependency_policy(ctx.cfg.tables.facts(), ctx.config)
     if tool.tool_class is ToolClass.SHELL:
         found = _shell_findings(ev, ctx, policy)
     else:

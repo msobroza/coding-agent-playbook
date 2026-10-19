@@ -26,6 +26,7 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import ToolClass
 from coding_agent_playbook.hook_runtime.handlers._secret_policy import (
@@ -48,10 +49,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ContentFragment, ToolCall
-    from coding_agent_playbook.hook_runtime.git import AddedLine
+    from coding_agent_playbook.hook_runtime.git.safe_git import AddedLine
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import ShellCommand
+    from coding_agent_playbook.hook_runtime.shell.parse import ShellCommand
     from coding_agent_playbook.security.secrets import SecretFinding, SecretRule
 
 __all__ = ["CONFIG_SCHEMA", "PRAGMA_ADVICE", "secret_content_guard"]
@@ -117,7 +118,7 @@ def secret_content_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResu
 
 
 def _write_scan(tool: ToolCall, ctx: HandlerContext, rules: Sequence[SecretRule]) -> _Scan:
-    cap = _cap(ctx.config.get("max_scan_bytes"))
+    cap = HookConfig(ctx.config, CONFIG_SCHEMA).integer("max_scan_bytes", MAX_SCAN_BYTES, minimum=1)
     window = min(PARTIAL_WINDOW_BYTES, cap // 2)
     by_raw = {path.raw: path for path in tool.write_paths}
     secret = _secret_path_test(ctx)
@@ -188,7 +189,7 @@ def _located(finding: SecretFinding, first: int) -> SecretFinding:
 
 def _secret_path_test(ctx: HandlerContext) -> Callable[[NormalizedPath], bool]:
     """Whether a written path is a credential file (secrets-path-guard's to judge)."""
-    policy, home = path_policy(ctx.cfg, {}), ctx.home or user_home()
+    policy, home = path_policy(ctx.cfg), ctx.home or user_home()
 
     def secret(path: NormalizedPath) -> bool:
         verdict = classify_path(policy, path, home=home, platform=ctx.platform)
@@ -207,13 +208,14 @@ def _push_scan(
         return _Scan()
     git = ctx.git
     upstream = git.upstream()
-    policy, home = path_policy(ctx.cfg, {}), ctx.home or user_home()
+    policy, home = path_policy(ctx.cfg), ctx.home or user_home()
     added = [
         line
         for line in git.unpushed_lines(upstream).added
         if not policy.matches(line.path, home=home, platform=ctx.platform)
     ]
-    kept, partial = _within(added, _cap(ctx.config.get("max_scan_bytes")))
+    cap = HookConfig(ctx.config, CONFIG_SCHEMA).integer("max_scan_bytes", MAX_SCAN_BYTES, minimum=1)
+    kept, partial = _within(added, cap)
     texts = {(line.path, line.line): line.text for line in kept}
     scan = _Scan(partial=["the unpushed commits"] if partial else [], push=True)
     for finding in scan_added_lines(kept, rules=rules):
@@ -226,7 +228,7 @@ def _pushes(command: ShellCommand) -> bool:
     """Whether a segment runs ``git push`` (any ``git`` token text, when the parse failed)."""
     if command.parse_error is not None:
         return _UNPARSED_PUSH.search(command.text) is not None
-    from coding_agent_playbook.hook_runtime.gitargv import parse_git
+    from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
 
     for segment in command.segments:
         invocation = parse_git(segment) if segment.argv[:1] in (("git",), ("git.exe",)) else None
@@ -292,11 +294,6 @@ def _result(scan: _Scan, ctx: HandlerContext) -> HandlerResult | None:
             reason=f"{head}\nConfirm with the user that it holds no secret.",
         )
     return None
-
-
-def _cap(value: object) -> int:
-    """A positive ``max_scan_bytes`` (never a bool), else the 1 MiB default."""
-    return value if type(value) is int and value > 0 else MAX_SCAN_BYTES
 
 
 def _line(text: str, number: int) -> str:

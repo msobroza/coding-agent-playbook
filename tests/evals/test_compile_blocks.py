@@ -3,7 +3,7 @@
 The C7 cutover replaces the fused ``[expected]``/``[metrics]``/``[rubric]`` blocks
 with ``[gate]``/``[rubric]``/``[verdict]``. A task compiles (via
 :func:`~coding_agent_playbook.evals.task.compile_eval_task`) into one per-trial
-:class:`~coding_agent_playbook.evaluators.rubric.Rubric` carrying the two named
+:class:`~coding_agent_playbook.grading.rubric.Rubric` carrying the two named
 layer checks (``id="gate"`` / ``id="rubric"``) plus a derived verdict AST. These
 tests cover the compile result shape, the file/metric/judged check leaves, and the
 judge-dormancy of the rubric layer.
@@ -16,15 +16,15 @@ from typing import Any
 
 import pytest
 
-from coding_agent_playbook.evals.task import EvalTask, compile_eval_task
-from coding_agent_playbook.evaluators.check import ThresholdCheck
-from coding_agent_playbook.evaluators.checks.compose import AllOf
-from coding_agent_playbook.evaluators.checks.files import (
+from coding_agent_playbook.evals.checks.files import (
     FileExistsCheck,
     FileUnchangedCheck,
 )
-from coding_agent_playbook.evaluators.rubric import Rubric
-from coding_agent_playbook.evaluators.types import EvalContext
+from coding_agent_playbook.evals.task import EvalTask, compile_eval_task
+from coding_agent_playbook.grading.check import ThresholdCheck
+from coding_agent_playbook.grading.compose import AllOf
+from coding_agent_playbook.grading.rubric import Rubric
+from coding_agent_playbook.grading.types import EvalContext
 
 
 def _task(data: dict[str, Any]) -> EvalTask:

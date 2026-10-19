@@ -27,18 +27,6 @@ from coding_agent_playbook.hook_runtime.event import (
     Harness,
     sanitize_session_id,
 )
-from coding_agent_playbook.hook_runtime.harness import (
-    CLAUDE_EVENT_NAMES,
-    DENY_EXIT,
-    ForeignPayload,
-    WireOutput,
-)
-from coding_agent_playbook.hook_runtime.harness._payload import (
-    build_event,
-    decode_object,
-    fault,
-    opt_str,
-)
 from coding_agent_playbook.hook_runtime.harness._render import (
     context_items,
     dump,
@@ -46,12 +34,24 @@ from coding_agent_playbook.hook_runtime.harness._render import (
     reason_text,
 )
 from coding_agent_playbook.hook_runtime.harness._tools import build_tool_call
+from coding_agent_playbook.hook_runtime.harness.payload import (
+    build_event,
+    decode_object,
+    fault,
+    opt_str,
+)
+from coding_agent_playbook.hook_runtime.harness.wire import (
+    CLAUDE_EVENT_NAMES,
+    DENY_EXIT,
+    ForeignPayload,
+    WireOutput,
+)
 
 if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.decision import CombinedResult
     from coding_agent_playbook.hook_runtime.event import ToolCall
-    from coding_agent_playbook.hook_runtime.harness import ParseContext, ParseOutcome
-    from coding_agent_playbook.hook_runtime.harness._payload import Payload
+    from coding_agent_playbook.hook_runtime.harness.payload import Payload
+    from coding_agent_playbook.hook_runtime.harness.wire import ParseContext, ParseOutcome
 
 __all__ = ["PROJECT_DIR_ENV", "parse_claude", "render_claude"]
 

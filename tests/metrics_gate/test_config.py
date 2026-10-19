@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.evaluators.types import (
+from coding_agent_playbook.grading.types import (
     AbsoluteThreshold,
     GradePolicy,
     RegressionPolicy,
@@ -120,7 +120,7 @@ def test_parse_metrics_config_rejects_non_string_list_naming_value(key, raw):
 
 def test_exclude_defaults_to_eval_fixture_globs():
     """prK §F.0.3 item 5: intentionally bad eval needle code never gates a commit."""
-    from coding_agent_playbook.evaluators.paths import EVAL_FIXTURE_GLOBS
+    from coding_agent_playbook.grading.paths import EVAL_FIXTURE_GLOBS
     from coding_agent_playbook.metrics_gate.config import MetricConfig
 
     assert parse_metrics_config({}).exclude == EVAL_FIXTURE_GLOBS
@@ -142,7 +142,7 @@ def test_parse_metrics_config_timeouts_positive():
 
 def test_parse_ruff_violations_subtable_defaults_and_overrides():
     """prK §F.2.1: ``[metrics.ruff_violations]`` families (per-family replace), config, preview."""
-    from coding_agent_playbook.evaluators.types import DEFAULT_RUFF_FAMILIES
+    from coding_agent_playbook.grading.types import DEFAULT_RUFF_FAMILIES
 
     defaults = parse_metrics_config({})
     cfg = parse_metrics_config(

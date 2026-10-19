@@ -2,7 +2,7 @@
 
 Opt-in. Each event appends one line to ``<state>/audit-YYYY-MM.jsonl``
 (outside the working tree, 0600, rotated at 5 MiB like the decision log)
-through ``security.audit.append_activity``; :mod:`._activity_record` decides
+through ``state.audit_log.append_activity``; :mod:`._activity_record` decides
 what a line may hold (command structure, masked paths, prompt digests).
 
 ``ASYNC_SAFE = True``: the handler writes no output and decides nothing, so on
@@ -17,7 +17,7 @@ event carries.
 ``config``: ``chain`` adds the ``prev`` hash chain (corruption detection, not
 tamper evidence, unless the org's shipper anchors the head), ``full_commands``
 the redacted command text, ``retain_days`` (also ``[guardrails.audit]``) the
-retention :func:`~coding_agent_playbook.security.audit.prune_audit` applies at
+retention :func:`~coding_agent_playbook.hook_runtime.state.audit_log.prune_audit` applies at
 session start, and ``pii`` (empty in the engine; an overlay lists detectors)
 the PII category counts of a prompt. A write failure is an internal error:
 ``on_error: open``.
@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._activity_record import activity_record, fitted
 from coding_agent_playbook.hook_runtime.handlers._pii_settings import (
@@ -35,7 +36,7 @@ from coding_agent_playbook.hook_runtime.handlers._pii_settings import (
     pii_settings,
 )
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.security.audit import append_activity, prune_audit
+from coding_agent_playbook.hook_runtime.state.audit_log import append_activity, prune_audit
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -80,24 +81,22 @@ def activity_log(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult | Non
     Example: ``activity_log(post_bash_mysql, ctx)`` writes ``argv0 mysql`` and
     flag ``-p``, never the password, and returns ``None``.
     """
+    config = HookConfig(ctx.config, CONFIG_SCHEMA)
     state = ctx.session.store.private_dir("")
     now = ctx.clock.time()
     if ev.name is EventName.SESSION_START:
-        prune_audit(state, retain_days=_retain_days(ctx.config), now=now)
+        prune_audit(
+            state,
+            retain_days=config.integer("retain_days", DEFAULT_RETAIN_DAYS, minimum=1),
+            now=now,
+        )
     record = activity_record(
         ev,
         now=now,
         secret=ctx.cfg.secret_paths,
         platform=ctx.platform,
-        full_commands=ctx.config.get("full_commands") is True,
-        pii=pii_settings(ctx.config) if ev.prompt is not None else None,
+        full_commands=config.flag("full_commands", False),
+        pii=pii_settings(config) if ev.prompt is not None else None,
     )
-    append_activity(state, fitted(record), chain=ctx.config.get("chain") is True)
+    append_activity(state, fitted(record), chain=config.flag("chain", False))
     return None
-
-
-def _retain_days(config: Mapping[str, object]) -> int:
-    days = config.get("retain_days")
-    if isinstance(days, int) and not isinstance(days, bool) and days > 0:
-        return days
-    return DEFAULT_RETAIN_DAYS

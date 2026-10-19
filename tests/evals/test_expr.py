@@ -23,11 +23,11 @@ from coding_agent_playbook.evals.compile._expr import (
     names,
     parse,
 )
-from coding_agent_playbook.evaluators.check import Check, MeasurementSet
-from coding_agent_playbook.evaluators.checks.compose import AllOf, AnyOf
-from coding_agent_playbook.evaluators.checks.compose import Not as NotCheck
-from coding_agent_playbook.evaluators.scope import CostTier, Determinism
-from coding_agent_playbook.evaluators.types import CheckResult, EvalContext
+from coding_agent_playbook.grading.check import Check, MeasurementSet
+from coding_agent_playbook.grading.compose import AllOf, AnyOf
+from coding_agent_playbook.grading.compose import Not as NotCheck
+from coding_agent_playbook.grading.scope import CostTier, Determinism
+from coding_agent_playbook.grading.types import CheckResult, EvalContext
 
 
 class _StubCheck(Check):

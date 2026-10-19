@@ -184,9 +184,7 @@ def _prompts(task_dir: Path, root: str, cfg: GuardConfig) -> list[Prompt] | None
 
 def _layer_packages(cfg: GuardConfig) -> list[str]:
     """The engine then the overlays, from ``protected.resource_roots`` (``pkg:<p>/resources``)."""
-    protected = cfg.tables.get("protected")
-    roots = protected.get("resource_roots", []) if isinstance(protected, dict) else []
-    found = (_RESOURCE_ID.fullmatch(r) for r in roots if isinstance(r, str))
+    found = (_RESOURCE_ID.fullmatch(root) for root in cfg.tables.protected().resource_roots)
     return [match["package"] for match in found if match is not None]
 
 

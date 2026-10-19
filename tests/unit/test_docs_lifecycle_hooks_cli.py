@@ -41,8 +41,8 @@ from coding_agent_playbook.hook_registrations import (
     STRICT_LAUNCH_FLAG,
     claude_command,
 )
-from coding_agent_playbook.hook_runtime._doctor_opencode import OPENCODE_MIN_VERSION
 from coding_agent_playbook.hook_runtime.cli import ASYNC_FLAG, USAGE
+from coding_agent_playbook.hook_runtime.diagnostics._doctor_opencode import OPENCODE_MIN_VERSION
 from coding_agent_playbook.hook_runtime.stop.stages import STOP_STAGE_ORDER
 from coding_agent_playbook.lockfile.model import ProvenanceKind
 from coding_agent_playbook.metrics_gate.policy import METRIC_FAMILIES, OPT_IN_METRICS
@@ -260,8 +260,11 @@ def test_spec_drops_the_gitleaks_promise() -> None:
 
 
 def test_section_17_4_names_the_audit_writer() -> None:
-    assert (_ROOT / "src" / "coding_agent_playbook" / "security" / "audit.py").is_file()
-    assert "security/audit.py" in _spec_section("### 17.4 Audit log", "## 18. Rollout plan")
+    audit_log = _ROOT / "src" / "coding_agent_playbook" / "hook_runtime" / "state" / "audit_log.py"
+    assert audit_log.is_file()
+    assert "hook_runtime/state/audit_log.py" in _spec_section(
+        "### 17.4 Audit log", "## 18. Rollout plan"
+    )
 
 
 def _metric_names() -> list[str]:

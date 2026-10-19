@@ -17,12 +17,10 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.canary import DEFAULT_CANARIES, run_canaries
-from coding_agent_playbook.hook_runtime.config.guard_config import (
-    CONFIG_FAULT_REASON,
-    GUARD_CONFIG_REL,
-)
+from coding_agent_playbook.hook_runtime.config.guard_config import CONFIG_FAULT_REASON
+from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.diagnostics.canary import DEFAULT_CANARIES, run_canaries
 from coding_agent_playbook.hook_runtime.event import Harness
 from coding_agent_playbook.lockfile.canonical_json import element_sha256
 from tests.hook_runtime.fakes import FakeProc
@@ -32,7 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
     from tests.hook_payloads import HookPayloadCase
 
     type Payload = Callable[[str, str, str], HookPayloadCase]

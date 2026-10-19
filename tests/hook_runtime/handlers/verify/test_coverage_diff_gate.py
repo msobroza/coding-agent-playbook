@@ -15,19 +15,20 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
-from coding_agent_playbook.evaluators.execution.coverage_xml import CoverageReport
-from coding_agent_playbook.evaluators.execution.junit import JunitSummary
-from coding_agent_playbook.evaluators.execution.project import RunArtifacts
+from coding_agent_playbook.grading.execution_metrics.coverage_xml import CoverageReport
+from coding_agent_playbook.grading.execution_metrics.junit import JunitSummary
+from coding_agent_playbook.grading.execution_metrics.project import RunArtifacts
 from coding_agent_playbook.guard_config import DetectInputs
-from coding_agent_playbook.hook_runtime._git_parse import AddedLine, DiffLines
-from coding_agent_playbook.hook_runtime.config.guard_config import GUARD_CONFIG_REL
+from coding_agent_playbook.hook_runtime.config.guard_tables import GuardTables
+from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.git.parse import AddedLine, DiffLines
 from coding_agent_playbook.hook_runtime.handlers._coverage_report import (
     ADVICE_LINE,
     NO_SNAPSHOT_LINE,
 )
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 from coding_agent_playbook.hook_runtime.stop.coordinator import GatePolicy
 from coding_agent_playbook.hook_runtime.stop.suite import SuiteUnavailable
 from tests.hook_runtime.fakes import FakeStageRunner, FakeTrustStore
@@ -47,7 +48,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
     from tests.hook_runtime.fakes import FakeGit
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 
@@ -68,7 +69,8 @@ def _install(repo: PackRepo, *, tests: bool = False, **config: Any) -> FakeTrust
         per_hook[COORDINATOR] = {"stages": ["tests"]}
     repo.install_pack([COORDINATOR, HOOK_ID], per_hook=per_hook, detect=PYTEST_COV)
     table = json.loads((repo.root / GUARD_CONFIG_REL).read_bytes())["stop_gate"]
-    return FakeTrustStore(executions={GatePolicy.from_table(table).stages_sha256()})
+    gate = GuardTables({"stop_gate": table}).stop_gate()
+    return FakeTrustStore(executions={GatePolicy.from_gate(gate).stages_sha256()})
 
 
 def _changed(*files: tuple[str, int]) -> DiffLines:
@@ -411,7 +413,8 @@ def test_alone_without_the_coordinator_needs_the_execution_approval(
     """With stop-ci-parity-gate off the stage runs alone, still never without trust."""
     pack_repo.install_pack([HOOK_ID], detect=PYTEST_COV)
     table = json.loads((pack_repo.root / GUARD_CONFIG_REL).read_bytes())["stop_gate"]
-    approved = FakeTrustStore(executions={GatePolicy.from_table(table).stages_sha256()})
+    gate = GuardTables({"stop_gate": table}).stop_gate()
+    approved = FakeTrustStore(executions={GatePolicy.from_gate(gate).stages_sha256()})
     _src(pack_repo, ("src/pkg/a.py", 4))
     lines = {"src/pkg/a.py": _hits(1, range(2, 5))}
     git = changed_git(worktree_diffs={"HEAD": _changed(("src/pkg/a.py", 4))})

@@ -1,0 +1,10 @@
+# B3 (#107, specs/prT-package-layout.md §8 B.6): the [hooks.stop-ci-parity-gate]
+# max_blocks default lives in hook_runtime/config/guard_tables.py, beside the stop_gate
+# reader that the Stop coordinator and subagent-stop-verify share. Not a module move:
+# this entry keeps MIGRATION.md's table and a stale import of the old name in step with that.
+
+[[names]]
+pr = "B3"
+old = "coding_agent_playbook.hook_runtime.stop.coordinator"
+new = "coding_agent_playbook.hook_runtime.config.guard_tables"
+names = ["DEFAULT_MAX_BLOCKS"]

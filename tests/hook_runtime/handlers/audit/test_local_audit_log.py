@@ -15,21 +15,28 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._activity_record import (
     command_structure,
     fitted,
     flag_name,
 )
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
-from coding_agent_playbook.security.audit import MAX_LINE_BYTES, encode_jsonl_line, verify_chain
+from coding_agent_playbook.hook_runtime.handlers._pii_settings import pii_settings
+from coding_agent_playbook.hook_runtime.handlers.activity_log import CONFIG_SCHEMA
+from coding_agent_playbook.hook_runtime.state.audit_log import (
+    MAX_LINE_BYTES,
+    encode_jsonl_line,
+    verify_chain,
+)
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 
     type Deps = Callable[..., RuntimeDeps]
@@ -165,6 +172,30 @@ def test_prompt_pii_category_counts_only_when_enabled(
     assert IBAN[4:] not in raw and CARD not in raw and "wire" not in raw
 
 
+@pytest.mark.parametrize("value", [[], ()])
+def test_an_empty_pii_list_leaves_pii_off(value: object) -> None:
+    assert pii_settings(HookConfig({"pii": value}, CONFIG_SCHEMA)) is None
+
+
+@pytest.mark.parametrize("value", ["iban", False, {"iban": True}])
+def test_a_pii_value_that_is_not_a_list_leaves_pii_off(value: object) -> None:
+    """Validate refuses a non-list ``pii``; read anyway, it is the default (off), as before."""
+    assert pii_settings(HookConfig({"pii": value}, CONFIG_SCHEMA)) is None
+
+
+def test_a_pii_list_enables_the_named_detectors() -> None:
+    settings = pii_settings(HookConfig({"pii": ["iban"]}, CONFIG_SCHEMA))
+
+    assert settings is not None
+    assert settings.detectors == ("iban",)
+
+
+def test_pii_settings_reads_through_the_callers_schema() -> None:
+    """A caller whose ``CONFIG_SCHEMA`` forgot ``pii`` fails loudly instead of reading it."""
+    with pytest.raises(KeyError, match="pii"):
+        pii_settings(HookConfig({"pii": ["iban"]}, {}))
+
+
 def test_async_dispatch_writes_empty_stdout(audit: Audit) -> None:
     report = audit.tool("Read", {"file_path": "README.md"})
 
@@ -259,7 +290,7 @@ def test_session_start_prunes_month_files_past_retention(
 
 
 def test_oversized_record_is_trimmed_to_one_atomic_line() -> None:
-    """A line stays one O_APPEND write even with the chain's ``prev`` (``security.audit``)."""
+    """A line stays one O_APPEND write even with the chain's ``prev`` (``state.audit_log``)."""
     flags = [f"--flag-{n:02d}-{'x' * 28}" for n in range(8)]
     record = {
         "v": 1,

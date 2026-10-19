@@ -2,7 +2,7 @@
 
 :func:`run_metrics_gate` discovers the target files, measures them and their
 baseline, optionally runs the suite, and grades everything through one
-:class:`~coding_agent_playbook.evaluators.rubric.Rubric` of metric-backed checks
+:class:`~coding_agent_playbook.grading.rubric.Rubric` of metric-backed checks
 (one per gated metric, built by the shared
 :func:`~coding_agent_playbook.metrics_gate.policy.metric_check` factory). It never
 prints, never parses argv and never imports the ``cli`` package, argparse or jinja2, so
@@ -34,34 +34,35 @@ Example::
 from __future__ import annotations
 
 import shutil
-import tempfile
-from contextlib import ExitStack
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.config.files import CONFIG_FILENAME, ConfigFiles
 from coding_agent_playbook.config.schema import ConfigError
-from coding_agent_playbook.evaluators.baseline_git import (
+from coding_agent_playbook.grading.baseline_git import (
     BaselineGitError,
     SubprocessBaselineGit,
     SubprocessGitRunner,
     changed_paths,
 )
-from coding_agent_playbook.evaluators.check import MeasurementSet
-from coding_agent_playbook.evaluators.execution.project import ProjectHandle
-from coding_agent_playbook.evaluators.metric import execution_metrics, static_metrics
-from coding_agent_playbook.evaluators.parse import parse_module
-from coding_agent_playbook.evaluators.rubric import Rubric
-from coding_agent_playbook.evaluators.tool_runner import MemoToolRunner, subprocess_tool_runner
-from coding_agent_playbook.evaluators.types import EvalContext, ToolSetup
+from coding_agent_playbook.grading.check import MeasurementSet
+from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle
+from coding_agent_playbook.grading.measuring import SourceMeter, measured_metrics
+from coding_agent_playbook.grading.metric import execution_metrics, static_metrics
+from coding_agent_playbook.grading.rubric import Rubric
+from coding_agent_playbook.grading.tool_runner import MemoToolRunner, subprocess_tool_runner
+from coding_agent_playbook.grading.types import (
+    MAX_FILE_BYTES,
+    EvalContext,
+    MeasureSetup,
+    ToolSetup,
+)
 from coding_agent_playbook.metrics_gate.config import MetricConfig, parse_metrics_config
 from coding_agent_playbook.metrics_gate.inputs import (
     GIT_PREFIX,
     JSON_PREFIX,
-    MAX_FILE_BYTES,
     MetricsGateUsageError,
-    SourceMeter,
     discover_targets,
     filter_targets,
     git_usage_error,
@@ -76,7 +77,6 @@ from coding_agent_playbook.metrics_gate.snapshot import (
     write_snapshot,
 )
 from coding_agent_playbook.metrics_gate.suite import (
-    ProjectFactory,
     gate_suite,
     run_suites,
     without_diff_based,
@@ -85,17 +85,17 @@ from coding_agent_playbook.metrics_gate.suite import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from coding_agent_playbook.evaluators.baseline_git import BaselineGit, GitRunner
-    from coding_agent_playbook.evaluators.check import Check
-    from coding_agent_playbook.evaluators.metric import Metric
-    from coding_agent_playbook.evaluators.tool_runner import ToolRunner
-    from coding_agent_playbook.evaluators.types import EvaluationReport, Measurement, Mode
+    from coding_agent_playbook.grading.baseline_git import BaselineGit, GitRunner
+    from coding_agent_playbook.grading.check import Check
+    from coding_agent_playbook.grading.execution_metrics.project import ProjectFactory
+    from coding_agent_playbook.grading.metric import Metric
+    from coding_agent_playbook.grading.tool_runner import ToolRunner
+    from coding_agent_playbook.grading.types import EvaluationReport, Measurement, Mode
 
 #: The name the Rubric carries (stable per run; the gate has one rubric).
 _RUBRIC_NAME = "metrics"
 
 __all__ = [
-    "MAX_FILE_BYTES",
     "MetricsGateDeps",
     "MetricsGateRequest",
     "MetricsGateResult",
@@ -211,7 +211,7 @@ class MetricsGateDeps:
 
 @dataclass
 class _Measured:
-    """Everything measured for one request, before grading."""
+    """Everything measured for one request, before grading, and the metrics the pass ran."""
 
     static: list[Metric]
     execution: list[Metric]
@@ -219,7 +219,7 @@ class _Measured:
     baseline: list[Measurement] | None
     skipped: list[tuple[str, str]]
     measured_count: int
-    tool_paths: Mapping[str, str] = field(default_factory=dict)
+    measured_metrics: frozenset[str]
 
 
 def load_metrics_config(repo_root: Path) -> MetricConfig:
@@ -264,7 +264,7 @@ def run_metrics_gate(
     """
     measured = _measure(request, deps if deps is not None else MetricsGateDeps())
     config, note = _effective_config(request)
-    report = _grade(measured, config, request.repo_root)
+    report = _grade(measured, config)
     return MetricsGateResult(
         report=report,
         config=config,
@@ -278,19 +278,19 @@ def _measure(request: MetricsGateRequest, deps: MetricsGateDeps) -> _Measured:
     """Static candidate + baseline measurements, the suite when selected, then the snapshot."""
     git = deps.git_factory(request.config.git_timeout_s)
     static, execution = _selected_metrics(request, deps)
-    setup = tool_setup(request, deps)
-    meter = SourceMeter(static, request.tool_paths, request.max_file_bytes, setup)
+    setup = _measure_setup(request, deps)
+    meter = SourceMeter(static, setup)
     targets = _targets(request, deps, git)
     baseline = without_diff_based(_baseline(request, targets, meter, git), execution)
     candidates = measure_candidates(targets, request.repo_root, meter)
     measured = _Measured(
         static,
         execution,
-        candidates.measurements,
+        list(candidates.measurements),
         baseline,
-        candidates.skipped,
+        list(candidates.skipped),
         candidates.measured_count,
-        request.tool_paths,
+        measured_metrics([*static, *execution], setup),
     )
     if measured.execution:
         suite = gate_suite(request, execution, deps.project_factory, setup)
@@ -301,6 +301,15 @@ def _measure(request: MetricsGateRequest, deps: MetricsGateDeps) -> _Measured:
     if request.emit_measurements is not None:
         _emit(request.emit_measurements, measured.candidate, request.snapshot_tree)
     return measured
+
+
+def _measure_setup(request: MetricsGateRequest, deps: MetricsGateDeps) -> MeasureSetup:
+    """What this run's measuring pass may run: the request's tools, how they run, its byte cap."""
+    return MeasureSetup(
+        tool_paths=request.tool_paths,
+        tool_setup=tool_setup(request, deps),
+        max_file_bytes=request.max_file_bytes,
+    )
 
 
 def tool_setup(request: MetricsGateRequest, deps: MetricsGateDeps) -> ToolSetup:
@@ -449,39 +458,21 @@ def build_rubric(metrics: Sequence[Metric], config: MetricConfig) -> Rubric:
     return Rubric(checks, name=_RUBRIC_NAME)
 
 
-def _grade(measured: _Measured, config: MetricConfig, repo_root: Path) -> EvaluationReport:
-    """Grade the pre-built measurements; nothing is re-measured here."""
-    rubric = build_rubric([*measured.static, *measured.execution], config)
-    measurements = MeasurementSet(measured.candidate, measured.baseline)
-    with ExitStack() as stack:
-        ctx = _grading_ctx(measured, repo_root, stack)
-        return rubric.evaluate(ctx, measurements, strict=config.strict, fail_fast=False)
+def _grade(measured: _Measured, config: MetricConfig) -> EvaluationReport:
+    """Grade the pre-built measurements; nothing is re-measured here.
 
-
-def _grading_ctx(measured: _Measured, repo_root: Path, stack: ExitStack) -> EvalContext:
-    """An :class:`EvalContext` whose slots satisfy the metric checks' availability.
-
-    The metric-backed checks gate availability on the slot the metric does
-    (``ctx.module`` for static, ``ctx.project`` for execution, the measuring
-    ``tool_paths`` for ``ruff_violations``). A parsed empty
-    module and a lazy :class:`ProjectHandle` flip them on; the handle only runs
-    pytest when :meth:`ProjectHandle.run` is called, which grading never does,
-    and its throwaway report dir is removed when ``stack`` exits. The
-    measurements ride along so a nested rubric could self-measure.
+    A metric check is available when the pass measured its metric
+    (``measured.measured_metrics``). The measurements ride along so a nested
+    rubric could self-measure.
     """
-    module = parse_module("", _RUBRIC_NAME) if measured.static else None
-    project = None
-    if measured.execution:
-        report_dir = Path(
-            stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-metrics-avail-"))
-        )
-        project = ProjectHandle.create(repo_root, report_dir)
-    return EvalContext(
-        module=module,
+    rubric = build_rubric([*measured.static, *measured.execution], config)
+    ctx = EvalContext(
+        module=None,
         source="",
         label=_RUBRIC_NAME,
-        project=project,
         candidate_measurements=measured.candidate,
         baseline_measurements=measured.baseline,
-        tool_paths=measured.tool_paths,
+        measured_metrics=measured.measured_metrics,
     )
+    measurements = MeasurementSet(measured.candidate, measured.baseline)
+    return rubric.evaluate(ctx, measurements, strict=config.strict, fail_fast=False)

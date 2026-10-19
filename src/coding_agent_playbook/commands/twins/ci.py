@@ -74,14 +74,14 @@ from coding_agent_playbook.commands.twins.policy import (
     trailer_rows_configured,
 )
 from coding_agent_playbook.config.files import CONFIG_FILENAME
-from coding_agent_playbook.hook_runtime.git import GitError
+from coding_agent_playbook.hook_runtime.git.safe_git import GitError
 
 if TYPE_CHECKING:
     import argparse
     from collections.abc import Callable, Mapping, Sequence
     from typing import TextIO
 
-    from coding_agent_playbook.hook_runtime.git import GitPort
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
 
 __all__ = [
     "CI_STEPS",

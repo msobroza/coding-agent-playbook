@@ -11,13 +11,12 @@ PII off pays nothing for it on the prompt path.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.registry import ConfigKey
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
+    from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
     from coding_agent_playbook.security.pii import PiiConfig
 
 __all__ = ["PII_CONFIG_KEY", "PII_KEY", "pii_settings"]
@@ -27,21 +26,23 @@ PII_KEY: Final = "pii"
 PII_CONFIG_KEY: Final = ConfigKey("list", "extend")
 
 
-def pii_settings(config: Mapping[str, Any]) -> PiiConfig | None:
+def pii_settings(config: HookConfig) -> PiiConfig | None:
     """The PII scan ``config`` enables, or ``None`` when its ``pii`` list is empty.
 
+    ``config`` is the calling hook's view over its own ``CONFIG_SCHEMA``, which
+    declares ``pii``; a non-list ``pii`` reads as empty (validate refuses it).
     Raises ``ValueError`` naming an unknown detector (an internal error for
     the failure policy: ``on_error: open``).
 
     Example::
 
-        >>> pii_settings({"pii": ["iban"]}).detectors  # doctest: +SKIP
+        >>> pii_settings(HookConfig({"pii": ["iban"]}, CONFIG_SCHEMA)).detectors  # doctest: +SKIP
         ('iban',)
-        >>> pii_settings({}) is None
+        >>> pii_settings(HookConfig({}, CONFIG_SCHEMA)) is None  # doctest: +SKIP
         True
     """
-    names = config.get(PII_KEY)
-    if not isinstance(names, list | tuple) or not names:
+    names = config.strings(PII_KEY, blanks="keep")
+    if not names:
         return None
     from coding_agent_playbook.security.pii import pii_config
 

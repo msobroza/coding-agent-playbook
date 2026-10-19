@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     import argparse
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.git import GitPort, SafeGit
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort, SafeGit
     from coding_agent_playbook.hook_runtime.judges.sink_scan import SinkHit
 
 __all__ = [
@@ -178,7 +178,7 @@ def range_changes(git: GitPort, base: str, head: str) -> list[SinkChange]:
 
 def staged_changes(git: SafeGit) -> list[SinkChange]:
     """The staged Python files and notebooks (added, copied, modified, renamed) against ``HEAD``."""
-    from coding_agent_playbook.hook_runtime._git_parse import parse_batch_blob, split_z
+    from coding_agent_playbook.hook_runtime.git.parse import parse_batch_blob, split_z
 
     listed = git.run(["diff", "--cached", "--name-only", "-z", "--no-renames", "--diff-filter=ACM"])
     changes: list[SinkChange] = []

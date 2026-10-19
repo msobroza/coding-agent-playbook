@@ -29,10 +29,11 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import ToolClass
 from coding_agent_playbook.hook_runtime.handlers._data_reads import is_pattern, read_candidates
-from coding_agent_playbook.hook_runtime.handlers._secret_policy import spelled, strings
+from coding_agent_playbook.hook_runtime.handlers._secret_policy import spelled
 from coding_agent_playbook.hook_runtime.handlers._targets import shell_target
 from coding_agent_playbook.hook_runtime.judges.notebook_check import (
     NOTEBOOK_MAX_BYTES,
@@ -94,15 +95,15 @@ class _DataPolicy:
     platform: str
 
     @classmethod
-    def of(cls, ctx: HandlerContext) -> _DataPolicy:
-        allow = strings(ctx.config.get("allow_globs"))
-        deny = strings(ctx.config.get("deny_globs"))
+    def of(cls, ctx: HandlerContext, config: HookConfig) -> _DataPolicy:
+        allow = config.strings("allow_globs", blanks="drop_empty")
+        deny = config.strings("deny_globs", blanks="drop_empty")
         exempt = _NO_SCOPED_EXEMPTIONS
         return cls(
             deny=PathPolicy(deny=deny, allow=allow, glob_exempt=exempt, mode="ask"),
             allow=PathPolicy(deny=allow, allow=(), glob_exempt=exempt, mode="ask"),
-            csv_cap=_positive(ctx.config.get("csv_max_sample_bytes"), DEFAULT_CSV_MAX_SAMPLE_BYTES),
-            notebook_cap=_notebook_cap(ctx),
+            csv_cap=config.integer("csv_max_sample_bytes", DEFAULT_CSV_MAX_SAMPLE_BYTES, minimum=1),
+            notebook_cap=ctx.cfg.tables.notebook_max_bytes(NOTEBOOK_MAX_BYTES),
             home=ctx.home or user_home(),
             platform=ctx.platform,
         )
@@ -178,11 +179,12 @@ def sensitive_read_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResu
         ... # doctest: +SKIP
         <Decision.ASK: 'ask'>
     """
-    mode = ctx.config.get("mode")
+    config = HookConfig(ctx.config, CONFIG_SCHEMA)
+    mode = config.choice("mode", "off")
     tool = ev.tool
     if mode not in MODES[1:] or tool is None:
         return None
-    policy = _DataPolicy.of(ctx)
+    policy = _DataPolicy.of(ctx, config)
     hits = _shell_hits(ev, ctx, policy) if tool.tool_class is ToolClass.SHELL else None
     found = next(hits if hits is not None else _file_hits(tool, policy), None)
     if found is None:
@@ -237,19 +239,6 @@ def _reason(hit: _Hit, *, enforce: bool) -> str:
 
 def _raw_line(shown: str) -> str:
     return f"{quote_data(shown)} is raw data under this repository's data policy."
-
-
-def _notebook_cap(ctx: HandlerContext) -> int:
-    """``guard_config.notebooks.max_bytes``, shared with notebook-output-hygiene."""
-    table = ctx.cfg.tables.get("notebooks")
-    return _positive(
-        table.get("max_bytes") if isinstance(table, dict) else None, NOTEBOOK_MAX_BYTES
-    )
-
-
-def _positive(value: object, default: int) -> int:
-    """``value`` when a positive integer (never a bool), else ``default``."""
-    return value if type(value) is int and value > 0 else default
 
 
 def _size(count: int) -> str:

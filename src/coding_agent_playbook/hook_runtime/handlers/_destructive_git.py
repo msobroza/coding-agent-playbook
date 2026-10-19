@@ -24,18 +24,18 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime._git_options import git_args
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.handlers._destructive_paths import Hit
 from coding_agent_playbook.hook_runtime.paths import find_repo
+from coding_agent_playbook.hook_runtime.shell.git_options import git_args
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    from coding_agent_playbook.hook_runtime._git_options import GitArgs
     from coding_agent_playbook.hook_runtime.event import RepoInfo
-    from coding_agent_playbook.hook_runtime.git import GitPort
-    from coding_agent_playbook.hook_runtime.gitargv import GitInvocation
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
+    from coding_agent_playbook.hook_runtime.shell.git_command import GitInvocation
+    from coding_agent_playbook.hook_runtime.shell.git_options import GitArgs
 
 __all__ = ["DEFAULT_PROTECTED_BRANCHES", "STASH_RECIPE", "GitFacts", "git_hit"]
 

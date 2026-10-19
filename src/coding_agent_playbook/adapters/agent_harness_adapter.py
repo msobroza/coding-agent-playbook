@@ -42,20 +42,20 @@ from coding_agent_playbook.adapters._harness_hooks import (
     stale_sidecar_candidates,
 )
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.agent_harness import emitter, manifest
 from coding_agent_playbook.generated_output.file_identity import FileSet
 from coding_agent_playbook.generated_output.output_io import write_output_bytes, write_output_text
 from coding_agent_playbook.generated_output.source_files import copyable_skill_files
-from coding_agent_playbook.harness import emitter, manifest
 from coding_agent_playbook.renderer import render_inline_prompt_markdown
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from pathlib import Path
 
+    from coding_agent_playbook.agent_harness.manifest import ManifestEntry
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
-    from coding_agent_playbook.harness.manifest import ManifestEntry
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from coding_agent_playbook.renderer import RuleRegistry
 

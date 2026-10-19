@@ -2,7 +2,7 @@
 
 The targets are the file tool's write paths (Edit, MultiEdit, Write,
 NotebookEdit, OpenCode's ``apply_patch`` headers) and every Bash write target
-``shell.write_targets`` extracts. Each is classified against the rendered
+``shell.parse.write_targets`` extracts. Each is classified against the rendered
 protected set (``protected.classify``); the first protected one denies with
 a reason of at most 4 lines chosen by its provenance, which always ends in
 ``then run playbook validate && playbook sync`` (the next sync would silently
@@ -28,6 +28,7 @@ import posixpath
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import clean_text, quote_data
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.config.protected import classify, protected_paths
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.handlers._targets import (
@@ -44,7 +45,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["CONFIG_SCHEMA", "deny_reason", "guard_generated_outputs"]
 
@@ -78,14 +79,15 @@ def guard_generated_outputs(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerR
     """
     if ctx.hatches.allow_generated_edit or ev.tool is None or ev.repo is None:
         return None
-    targets = _targets(ev, ctx)
+    config = HookConfig(ctx.config, CONFIG_SCHEMA)
+    targets = _targets(ev, ctx, config)
     if not targets:
         return None
     pset = protected_paths(
         ctx.cfg,
         _machine(ev, targets),
         platform=ctx.platform,
-        extra=_strings(ctx.config, "extra_protected"),
+        extra=config.strings("extra_protected", blanks="keep", strict=True),
     )
     for target in targets:
         hit = classify(pset, target)
@@ -159,7 +161,7 @@ def _generic_fix() -> str:
     return f"Edit the canonical source under playbook/ (or add a same-id override there),\n{_TAIL}"
 
 
-def _targets(ev: CanonicalEvent, ctx: HandlerContext) -> list[NormalizedPath]:
+def _targets(ev: CanonicalEvent, ctx: HandlerContext, config: HookConfig) -> list[NormalizedPath]:
     """Every path the call writes: file-tool write paths, then the Bash write targets.
 
     A Bash command none of whose segments writes anything (``ls``, ``pytest``,
@@ -173,28 +175,30 @@ def _targets(ev: CanonicalEvent, ctx: HandlerContext) -> list[NormalizedPath]:
     found = file_write_paths(tool)
     command = tool.command
     if command is not None and _any_write_target(command.segments):
-        restore = _restore_commands(ctx.config)
+        restore = _restore_commands(config)
         found.extend(shell_write_targets(ev, ctx, lambda s: _segment_targets(s, restore)))
     return found
 
 
 def _any_write_target(segments: Sequence[Segment]) -> bool:
-    from coding_agent_playbook.hook_runtime.shell import write_targets  # Bash branch only
+    from coding_agent_playbook.hook_runtime.shell.parse import write_targets  # Bash branch only
 
     return any(write_targets(segment) for segment in segments)
 
 
 def _segment_targets(segment: Segment, restore: Sequence[tuple[str, ...]]) -> list[str]:
     """``write_targets`` of ``segment``; a restore command keeps only its redirect targets."""
-    from coding_agent_playbook.hook_runtime.shell import write_targets  # Bash branch only
+    from coding_agent_playbook.hook_runtime.shell.parse import write_targets  # Bash branch only
 
     if _is_restore(segment.argv, restore):
         return write_targets(dataclasses.replace(segment, argv=()))
     return write_targets(segment)
 
 
-def _restore_commands(config: Mapping[str, object]) -> list[tuple[str, ...]]:
-    commands = _strings(config, "restore_commands") or DEFAULT_RESTORE_COMMANDS
+def _restore_commands(config: HookConfig) -> list[tuple[str, ...]]:
+    commands = (
+        config.strings("restore_commands", blanks="keep", strict=True) or DEFAULT_RESTORE_COMMANDS
+    )
     return [tuple(command.split()) for command in commands if command.split()]
 
 
@@ -204,13 +208,6 @@ def _is_restore(argv: Sequence[str], restore: Sequence[tuple[str, ...]]) -> bool
         return False
     words = (posixpath.basename(argv[0]), *argv[1:])
     return any(words[: len(command)] == command for command in restore)
-
-
-def _strings(config: Mapping[str, object], key: str) -> tuple[str, ...]:
-    value = config.get(key, ())
-    if not isinstance(value, list | tuple) or not all(isinstance(v, str) for v in value):
-        raise ValueError(f"handler config {key!r} must be a list of strings, got {value!r}")
-    return tuple(value)
 
 
 def _machine(ev: CanonicalEvent, targets: Iterable[NormalizedPath]) -> MachinePins | None:

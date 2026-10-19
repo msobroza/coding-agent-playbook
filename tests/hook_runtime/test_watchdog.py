@@ -17,7 +17,7 @@ import pytest
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch import run_event
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
-from coding_agent_playbook.hook_runtime.harness import DENY_EXIT, WireOutput
+from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT, WireOutput
 from coding_agent_playbook.hook_runtime.registry import HANDLER_ATTR, HandlerDeclaration
 from coding_agent_playbook.hook_runtime.watchdog import OutputGate, Watchdog
 from tests.hook_runtime.fakes import FakeExit, FakeHandlerResolver, FakeTimers, fake_exit
@@ -197,7 +197,7 @@ def test_no_timer_when_no_hook_is_selected(
 _SMOKE = """
 import sys, time
 from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-from coding_agent_playbook.hook_runtime.harness import WireOutput
+from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
 from coding_agent_playbook.hook_runtime.watchdog import OutputGate, Watchdog
 
 deps = RuntimeDeps.default()
