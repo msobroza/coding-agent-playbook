@@ -155,7 +155,7 @@ def _rule_applies(rule: Rule, ctx: SyncContext) -> bool:
 
     The one predicate rule of ``playbook render``: an empty predicate holds, and
     ``evaluate_predicate``'s ``ValueError`` (a predicate validate would reject) reads as
-    false, as ``--show-rules`` has always printed it. ``orchestrator.filter_applies_if``
+    false, as ``--show-rules`` has always printed it. ``detector.predicate.filter_applies_if``
     is not reused because it raises there, and render has no validate gate to run first.
 
     Example: ``_rule_applies(rule, SyncContext.from_repo(repo))`` -> ``False`` without fastapi.
