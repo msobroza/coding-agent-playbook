@@ -584,8 +584,6 @@ ignore_imports = [
     # handlers/; A16 moves _sink_regex to handlers/feedback/ (apply renames this
     # line); no scheduled PR removes it: the fallback would have to join judges/
     "coding_agent_playbook.hook_runtime.judges.sink_scan -> coding_agent_playbook.hook_runtime.handlers._sink_regex",
-    # N21: becomes hook_runtime/harness/payload.py
-    "coding_agent_playbook.hook_runtime.dispatch -> coding_agent_playbook.hook_runtime.harness._payload",
 ]
 broken_contract_guidance = """
 Import a public module of the owning package, or move the importer inside that package.

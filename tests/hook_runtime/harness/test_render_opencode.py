@@ -16,14 +16,14 @@ import pytest
 
 from coding_agent_playbook.hook_runtime.decision import CombinedResult, Decision
 from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, ToolClass
-from coding_agent_playbook.hook_runtime.harness import (
+from coding_agent_playbook.hook_runtime.harness.opencode import parse_opencode, render_opencode
+from coding_agent_playbook.hook_runtime.harness.wire import (
     DENY_EXIT,
     ContractFault,
     ForeignPayload,
     ParseContext,
     WireOutput,
 )
-from coding_agent_playbook.hook_runtime.harness.opencode import parse_opencode, render_opencode
 from coding_agent_playbook.hooks.resolution.tables import TOOL_CLASS_NAMES
 from tests.hook_payloads import PROJECT_DIR, check_golden, fixture_repo_finder, hook_payload_cases
 

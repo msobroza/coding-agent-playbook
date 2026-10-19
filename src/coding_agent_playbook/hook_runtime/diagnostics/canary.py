@@ -28,7 +28,7 @@ from coding_agent_playbook.hook_runtime.config.schema import LOCKFILE_REL
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch import dispatch_event
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
-from coding_agent_playbook.hook_runtime.harness import CLAUDE_EVENT_NAMES
+from coding_agent_playbook.hook_runtime.harness.wire import CLAUDE_EVENT_NAMES
 from coding_agent_playbook.hook_runtime.paths import find_repo
 from coding_agent_playbook.hook_runtime.state.store import StateStore, session_key
 

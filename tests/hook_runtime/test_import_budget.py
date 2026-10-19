@@ -39,7 +39,7 @@ import pytest
 
 from coding_agent_playbook.generated_output.sentinel import SENTINEL, sentinel_line
 from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.harness import DENY_EXIT
+from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT
 from tests.engine_modules import (
     ENGINE,
     engine_module,

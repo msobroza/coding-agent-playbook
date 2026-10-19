@@ -24,7 +24,6 @@ from coding_agent_playbook.hook_registrations import OPENCODE_REG_EVENTS
 from coding_agent_playbook.hook_registrations._templates import shim_template
 from coding_agent_playbook.hook_runtime.decision import CombinedResult, Decision
 from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.harness import CLAUDE_EVENT_NAMES, DENY_EXIT
 from coding_agent_playbook.hook_runtime.harness._render import DEFAULT_REASONS
 from coding_agent_playbook.hook_runtime.harness._tools import TOOL_CLASSES, classify
 from coding_agent_playbook.hook_runtime.harness.opencode import (
@@ -32,6 +31,7 @@ from coding_agent_playbook.hook_runtime.harness.opencode import (
     V1_ARG_ALIASES,
     render_opencode,
 )
+from coding_agent_playbook.hook_runtime.harness.wire import CLAUDE_EVENT_NAMES, DENY_EXIT
 from coding_agent_playbook.hooks.resolution.tables import HOOK_SUPPORT, TOOL_CLASS_NAMES
 from coding_agent_playbook.templates.hook_shims.opencode_wire_port import (
     CAP,
@@ -48,7 +48,9 @@ from coding_agent_playbook.templates.hook_shims.opencode_wire_port import (
 from tests.node_kit import needs_node, run_node
 
 _TEMPLATE = shim_template("opencode-plugin.js")
-_SRC = Path(__file__).resolve().parents[2] / "src" / "coding_agent_playbook"
+# N21 moved this file one level down, into tests/hook_runtime/harness/, so
+# parents[3] (was parents[2]) is still the repository root.
+_SRC = Path(__file__).resolve().parents[3] / "src" / "coding_agent_playbook"
 _PORT_MODULE = "opencode_wire_port"
 _NOT_JSON = "dispatcher wrote non-JSON stdout"
 _GRIN = "\U0001f600"  # one astral character: two UTF-16 code units in JS

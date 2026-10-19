@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.artifacts.hook_schema import ADVISORY_RULE_PREFIX, ADVISORY_RULE_PRIORITY
 from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS
 from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.harness import CLAUDE_EVENT_NAMES
+from coding_agent_playbook.hook_runtime.harness.wire import CLAUDE_EVENT_NAMES
 from coding_agent_playbook.hook_runtime.policy import (
     ENGINE_DEADLINE_CAP_MS as RUNTIME_DEADLINE_CAP_MS,
 )

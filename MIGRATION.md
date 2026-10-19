@@ -309,6 +309,16 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime.handlers.deser.SinkTable` | `coding_agent_playbook.hook_runtime.judges.sink_scan.SinkTable` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers.deser.new_sink_calls` | `coding_agent_playbook.hook_runtime.judges.sink_scan.new_sink_calls` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers.deser.trusted_artifact_line` | `coding_agent_playbook.hook_runtime.judges.sink_scan.trusted_artifact_line` | N14 |
+| `coding_agent_playbook.hook_runtime.harness.CLAUDE_EVENT_NAMES` | `coding_agent_playbook.hook_runtime.harness.wire.CLAUDE_EVENT_NAMES` | N21 |
+| `coding_agent_playbook.hook_runtime.harness.ContractFault` | `coding_agent_playbook.hook_runtime.harness.wire.ContractFault` | N21 |
+| `coding_agent_playbook.hook_runtime.harness.DENY_EXIT` | `coding_agent_playbook.hook_runtime.harness.wire.DENY_EXIT` | N21 |
+| `coding_agent_playbook.hook_runtime.harness.ForeignPayload` | `coding_agent_playbook.hook_runtime.harness.wire.ForeignPayload` | N21 |
+| `coding_agent_playbook.hook_runtime.harness.HARNESS_DENY_EXIT` | `coding_agent_playbook.hook_runtime.harness.wire.HARNESS_DENY_EXIT` | N21 |
+| `coding_agent_playbook.hook_runtime.harness.ParseContext` | `coding_agent_playbook.hook_runtime.harness.wire.ParseContext` | N21 |
+| `coding_agent_playbook.hook_runtime.harness.ParseOutcome` | `coding_agent_playbook.hook_runtime.harness.wire.ParseOutcome` | N21 |
+| `coding_agent_playbook.hook_runtime.harness.STDIN_CAP_BYTES` | `coding_agent_playbook.hook_runtime.harness.wire.STDIN_CAP_BYTES` | N21 |
+| `coding_agent_playbook.hook_runtime.harness.WireOutput` | `coding_agent_playbook.hook_runtime.harness.wire.WireOutput` | N21 |
+| `coding_agent_playbook.hook_runtime.harness._payload` | `coding_agent_playbook.hook_runtime.harness.payload` | N21 |
 | `coding_agent_playbook.hook_runtime.heartbeat` | `coding_agent_playbook.hook_runtime.diagnostics.heartbeat` | N20 |
 | `coding_agent_playbook.hook_runtime.ledger` | `coding_agent_playbook.hook_runtime.state.ledger` | N19 |
 | `coding_agent_playbook.hook_runtime.pin` | `coding_agent_playbook.hook_runtime.config.pin` | N16 |

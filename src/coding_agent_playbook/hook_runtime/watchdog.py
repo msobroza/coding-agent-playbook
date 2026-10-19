@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from typing import TextIO
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps, TimerHandle
-    from coding_agent_playbook.hook_runtime.harness import WireOutput
+    from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
 
 __all__ = ["OutputGate", "Watchdog"]
 
