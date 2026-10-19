@@ -13,7 +13,7 @@ import dataclasses
 from pathlib import Path
 from typing import Any
 
-from coding_agent_playbook._member_reference import MemberReference
+from coding_agent_playbook.artifacts.member_reference import MemberReference
 from coding_agent_playbook.types import Rule, RuleFrontmatter, Skill
 
 _TYPING_RULE_MD = """\

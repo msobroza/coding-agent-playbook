@@ -1,0 +1,159 @@
+"""The emitted skill sections (specs/prS-skills-context.md 6.4.4, 6.8.3).
+
+The frontmatter and body a skill with member rules is written with, its
+``## References`` index, the member reference files and the ``## Where guidance
+lives`` section. Expected texts are the spec's worked examples, copied
+verbatim. Split from ``test_document.py`` (the descriptions) to keep each
+test module under 300 lines.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from coding_agent_playbook.artifacts.member_reference import MemberReference
+from coding_agent_playbook.skills.document import (
+    WhereEntry,
+    emitted_body,
+    emitted_frontmatter,
+    references_index,
+    render_member_reference,
+    skill_catalog_block,
+    where_entry,
+    where_guidance_section,
+)
+from coding_agent_playbook.types import Skill
+
+TYPING_DESCRIPTION = (
+    "Prefer a concrete type or a Protocol to Any, write X | None, and take abstract "
+    "read-only types as inputs."
+)
+DI_DESCRIPTION = (
+    "Pass I/O collaborators in as parameters; pick concrete implementations in one "
+    "composition root per entry point."
+)
+TOOLING_FILES = "Tool configuration and framework wiring"
+
+
+def _member(rule_id: str, name: str, description: str) -> MemberReference:
+    return MemberReference(rule_id, name, description, 50, ("**/*.py",), "text\n", "pkg")
+
+
+MEMBERS = (
+    _member("python-dependency-injection", "Dependency injection", DI_DESCRIPTION),
+    _member("python-typing", "Typing", TYPING_DESCRIPTION),
+)
+
+
+def _python_coding(*members: MemberReference, **playbook: str) -> Skill:
+    """python-coding with ``members``; ``playbook`` replaces the default block."""
+    frontmatter = {
+        "id": "python-coding",
+        "name": "python-coding",
+        "description": "Library-agnostic Python conventions.",
+        "playbook": playbook or {"use_when": "editing Python code", "files": "Any Python file"},
+    }
+    return Skill(frontmatter, "\n# Python coding\n\nIntro.\n", None, None, "pkg", members)
+
+
+def test_emitted_frontmatter_strips_playbook_and_composes_description() -> None:
+    emitted = emitted_frontmatter(_python_coding(*MEMBERS))
+    assert emitted == {
+        "id": "python-coding",
+        "name": "python-coding",
+        "description": (
+            "Library-agnostic Python conventions. Covers Dependency injection, Typing. "
+            "Use when editing Python code."
+        ),
+    }
+    assert list(emitted) == ["id", "name", "description"]
+
+
+def test_emitted_frontmatter_of_a_plain_skill_is_the_authored_mapping() -> None:
+    authored = {"id": "brainstorming", "description": "You MUST use this.", "license": "MIT"}
+    plugin = Skill(dict(authored), "body\n", None, None, "superpowers")
+    emitted = emitted_frontmatter(plugin)
+    assert emitted == authored
+    assert emitted is not plugin.frontmatter
+    assert emitted_body(plugin) == "body\n"
+
+
+def test_emitted_body_appends_references_index_after_authored_body() -> None:
+    assert emitted_body(_python_coding(*MEMBERS)) == (
+        "\n# Python coding\n\nIntro.\n\n"
+        "## References\n\n"
+        "Each reference is one rule. Open only the ones the current task needs.\n\n"
+        "- [python-dependency-injection](references/python-dependency-injection.md) — "
+        f"Dependency injection: {DI_DESCRIPTION}\n"
+        f"- [python-typing](references/python-typing.md) — Typing: {TYPING_DESCRIPTION}\n"
+    )
+
+
+def test_references_index_line_links_rule_id_with_name_and_description() -> None:
+    index = references_index(MEMBERS[1:])
+    assert index.splitlines()[-1] == (
+        "- [python-typing](references/python-typing.md) — Typing: Prefer a concrete type or a "
+        "Protocol to Any, write X | None, and take abstract read-only types as inputs."
+    )
+    assert references_index(()) == ""
+
+
+def test_render_member_reference_with_and_without_globs() -> None:
+    body = "\n# Python typing conventions\n\nType hints.\n"
+    assert render_member_reference("python-typing", ["**/*.py"], body) == (
+        "*Rule `python-typing`; applies to `**/*.py`.*\n\n"
+        "# Python typing conventions\n\nType hints.\n"
+    )
+    assert render_member_reference("pytest", ["tests/**", "**/conftest.py"], "# T\n") == (
+        "*Rule `pytest`; applies to `tests/**`, `**/conftest.py`.*\n\n# T\n"
+    )
+    assert render_member_reference("python-idioms", [], "# Idioms") == (
+        "*Rule `python-idioms`.*\n\n# Idioms\n"
+    )
+
+
+def test_where_guidance_section_sorted_by_skill_id_with_lint_line() -> None:
+    entries = [
+        WhereEntry("python-tooling", TOOLING_FILES),
+        WhereEntry("python-coding", "Any Python file"),
+        WhereEntry("ml-data", "Code that loads or saves models, checkpoints or caches"),
+        WhereEntry("python-testing", "Test files and conftest.py"),
+    ]
+    assert where_guidance_section(entries) == (
+        "## Where guidance lives\n\n"
+        "Detailed conventions live in skills. Before you edit one of these files, load its "
+        "skill and open the references its index lists.\n\n"
+        "- Code that loads or saves models, checkpoints or caches: skill `ml-data`\n"
+        "- Any Python file: skill `python-coding`\n"
+        "- Test files and conftest.py: skill `python-testing`\n"
+        f"- {TOOLING_FILES}: skill `python-tooling`\n\n"
+        "Lint feedback names a rule id; that rule's reference in the skill has the fix.\n\n"
+        "---\n"
+    )
+
+
+def test_where_guidance_section_is_empty_without_entries() -> None:
+    assert where_guidance_section([]) == ""
+
+
+def test_where_entry_is_none_without_members_or_files() -> None:
+    assert where_entry(_python_coding(*MEMBERS)) == WhereEntry("python-coding", "Any Python file")
+    assert where_entry(_python_coding()) is None
+    assert where_entry(_python_coding(*MEMBERS, use_when="editing Python code")) is None
+
+
+@pytest.mark.parametrize(
+    ("playbook", "expected"),
+    [
+        ({"use_when": " editing code ", "files": "Any file"}, ("editing code", "Any file")),
+        ({"use_when": 42, "files": "   "}, (None, None)),
+        ("yes", (None, None)),
+        (None, (None, None)),
+    ],
+)
+def test_skill_catalog_block_reads_absent_or_malformed_keys_as_none(
+    playbook: object, expected: tuple[str | None, str | None]
+) -> None:
+    frontmatter = {"id": "x"} if playbook is None else {"id": "x", "playbook": playbook}
+    block = skill_catalog_block(Skill(frontmatter, "", None, None, "pkg"))
+    assert (block.use_when, block.files) == expected

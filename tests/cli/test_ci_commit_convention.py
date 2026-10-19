@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.cli.parser import build_parser
-from coding_agent_playbook.commands import ci
+from coding_agent_playbook.commands.twins import ci
 from tests.conftest import _DEFAULT_CONFIG
 from tests.fakes import FakeCiStepRunner
 from tests.hook_runtime.fakes import FakeGit

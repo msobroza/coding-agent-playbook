@@ -498,8 +498,12 @@ def test_metrics_gate_imports_no_jinja_yaml_cli_or_argparse() -> None:
     cli = engine_module("coding_agent_playbook.cli")
     forbidden = ("jinja2", "markupsafe", "yaml", "argparse", cli)
     assert [m for m in loaded if m.split(".")[0] in forbidden or m in forbidden] == []
-    commands = engine_module("coding_agent_playbook.commands")
-    assert [m for m in loaded if m.startswith(commands)] == []
+    # The packages above metrics_gate in engine-layers; each move PR that creates
+    # one adds its prefix (specs/prT-package-layout.md 5.3.3).
+    above = tuple(
+        engine_module(f"coding_agent_playbook.{name}") for name in ("commands", "precommit")
+    )
+    assert [m for m in loaded if m.startswith(above)] == []
 
 
 def test_default_deps_measure_with_the_static_metrics() -> None:

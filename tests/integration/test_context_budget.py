@@ -16,12 +16,12 @@ from typing import Final
 
 import pytest
 
-from coding_agent_playbook.adapters._claude_hooks import CLAUDE_HEARTBEAT_LINE
-from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_MD_PATH, CLAUDE_RULES_PATH
+from coding_agent_playbook.adapters.claude_code.hooks import CLAUDE_HEARTBEAT_LINE
+from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_MD_PATH, CLAUDE_RULES_PATH
 from coding_agent_playbook.commands._sync_render import render_artifacts
 from coding_agent_playbook.orchestrator import SyncContext
 from coding_agent_playbook.renderer import render_for
-from coding_agent_playbook.skill_document import where_entry, where_guidance_section
+from coding_agent_playbook.skills.document import where_entry, where_guidance_section
 from coding_agent_playbook.types import split_frontmatter
 from tests._catalog import core_rules, core_skill_ids
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS

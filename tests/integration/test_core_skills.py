@@ -20,8 +20,8 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from coding_agent_playbook.adapters._skill_writer import agent_skill_issues, render_skill_md
-from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_RULES_PATH
+from coding_agent_playbook.adapters._skill_writer import render_skill_md
+from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_RULES_PATH
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.files import FileSystemStateSource
@@ -30,8 +30,9 @@ from coding_agent_playbook.hook_policy.guardrails_skill import (
     compose_guardrails_skill,
 )
 from coding_agent_playbook.links import extract_markdown_links
-from coding_agent_playbook.skill_document import DESCRIPTION_MAX_CHARS
-from coding_agent_playbook.skill_membership import compose_skills
+from coding_agent_playbook.skills.document import DESCRIPTION_MAX_CHARS
+from coding_agent_playbook.skills.membership import compose_skills
+from coding_agent_playbook.skills.naming import agent_skill_issues
 from coding_agent_playbook.types import split_frontmatter
 from tests._budget_probe import reference_probe_facts, render_core_rule
 from tests._catalog import CORE_ROOT, core_rules
