@@ -64,14 +64,11 @@ def _command(tool: ToolCall, shell: ShellConfig) -> ShellCommand | None:
 
 
 def _rows(cfg: GuardConfig) -> list[tuple[str, list[str]]]:
-    table = cfg.tables.get("stop_gate")
-    rows = table.get("verify_commands") if isinstance(table, dict) else None
     found: list[tuple[str, list[str]]] = []
-    for row in rows if isinstance(rows, list) else ():
-        if isinstance(row, dict) and isinstance(row.get("id"), str):
-            core = _core([str(word) for word in row.get("argv") or ()], cfg.shell)
-            if core:
-                found.append((row["id"], core))
+    for command in cfg.tables.stop_gate().verify_commands:
+        core = _core(command.argv, cfg.shell)
+        if core:
+            found.append((command.id, core))
     return found
 
 

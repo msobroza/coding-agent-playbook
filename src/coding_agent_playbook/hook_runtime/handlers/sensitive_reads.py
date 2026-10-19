@@ -102,7 +102,7 @@ class _DataPolicy:
             deny=PathPolicy(deny=deny, allow=allow, glob_exempt=exempt, mode="ask"),
             allow=PathPolicy(deny=allow, allow=(), glob_exempt=exempt, mode="ask"),
             csv_cap=_positive(ctx.config.get("csv_max_sample_bytes"), DEFAULT_CSV_MAX_SAMPLE_BYTES),
-            notebook_cap=_notebook_cap(ctx),
+            notebook_cap=ctx.cfg.tables.notebook_max_bytes(NOTEBOOK_MAX_BYTES),
             home=ctx.home or user_home(),
             platform=ctx.platform,
         )
@@ -237,14 +237,6 @@ def _reason(hit: _Hit, *, enforce: bool) -> str:
 
 def _raw_line(shown: str) -> str:
     return f"{quote_data(shown)} is raw data under this repository's data policy."
-
-
-def _notebook_cap(ctx: HandlerContext) -> int:
-    """``guard_config.notebooks.max_bytes``, shared with notebook-output-hygiene."""
-    table = ctx.cfg.tables.get("notebooks")
-    return _positive(
-        table.get("max_bytes") if isinstance(table, dict) else None, NOTEBOOK_MAX_BYTES
-    )
 
 
 def _positive(value: object, default: int) -> int:

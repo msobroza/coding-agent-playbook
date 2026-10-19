@@ -103,7 +103,7 @@ def dependency_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult |
     tool = ev.tool
     if tool is None or ev.repo is None:
         return None
-    policy = dependency_policy(ctx.cfg.tables.get("facts"), ctx.config)
+    policy = dependency_policy(ctx.cfg.tables.facts(), ctx.config)
     if tool.tool_class is ToolClass.SHELL:
         found = _shell_findings(ev, ctx, policy)
     else:
