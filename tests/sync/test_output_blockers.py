@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook._output_io import NotRegularFileError
+from coding_agent_playbook.generated_output.output_io import NotRegularFileError
 from coding_agent_playbook.sync._output_blockers import (
     OutputBlocker,
     blocker_in,

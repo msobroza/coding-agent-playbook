@@ -23,9 +23,9 @@ from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.harness.manifest import read_manifest
 from coding_agent_playbook.prompt_rule_delivery import SkillReference
-from coding_agent_playbook.renderer import SENTINEL
 
 if TYPE_CHECKING:
     from pathlib import Path

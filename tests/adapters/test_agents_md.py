@@ -22,7 +22,7 @@ from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
-from coding_agent_playbook.renderer import SENTINEL
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from tests.hook_samples import GUARDRAILS_SECTION_HEAD, resolved_hook
 
 if TYPE_CHECKING:

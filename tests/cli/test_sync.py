@@ -22,8 +22,8 @@ from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, Provenance, compute_hash
-from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.sync import _dispatch as _sync_lockfile
 from coding_agent_playbook.sync import pipeline as _sync
 from coding_agent_playbook.validation.context import SyncContext

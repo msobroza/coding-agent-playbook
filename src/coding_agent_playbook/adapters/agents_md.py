@@ -21,10 +21,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from coding_agent_playbook._output_io import write_output_text
-from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._where_guidance import WhereGuidanceBuffer
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.generated_output.output_io import write_output_text
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hooks.enforcement import guardrail_line, guardrails_section
 from coding_agent_playbook.renderer import render_for
 from coding_agent_playbook.skills.membership import is_skill_member

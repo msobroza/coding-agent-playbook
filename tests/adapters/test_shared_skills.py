@@ -24,7 +24,7 @@ from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.config.model import Config, ProjectMeta
-from coding_agent_playbook.renderer import SENTINEL
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.sync._hook_outputs import _generated_locations
 
 if TYPE_CHECKING:

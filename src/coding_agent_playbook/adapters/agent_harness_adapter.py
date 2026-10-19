@@ -23,7 +23,7 @@ never emits an ``evals/`` directory — consistent with the five built-in adapte
 
 The playbook sentinel is written as the **first body line** of every generated
 text file (frontmatter must stay on line 1 for the harness parser), one of the
-two anchored positions ``_sentinel.has_sentinel`` accepts; a sentinel quoted
+two anchored positions ``generated_output.sentinel.has_sentinel`` accepts; a sentinel quoted
 anywhere else is user prose. ``cleanup_stale`` never deletes inside a skill
 directory (``skills/<id>/``): stale skill output — the ``SKILL.md``, copied
 scripts and references — is settled only by ``playbook sync``'s lockfile
@@ -35,8 +35,6 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, ClassVar
 
-from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook._output_io import write_output_bytes, write_output_text
 from coding_agent_playbook.adapters._harness_hooks import (
     copy_scripts,
     emit_hook_sidecars,
@@ -45,6 +43,8 @@ from coding_agent_playbook.adapters._harness_hooks import (
 )
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.generated_output.file_identity import FileSet
+from coding_agent_playbook.generated_output.output_io import write_output_bytes, write_output_text
 from coding_agent_playbook.harness import emitter, manifest
 from coding_agent_playbook.renderer import render_inline_prompt_markdown
 

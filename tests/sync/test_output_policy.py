@@ -11,7 +11,7 @@ import pytest
 
 from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
-from coding_agent_playbook.gitignore import BLOCK_START, ignore_entries
+from coding_agent_playbook.generated_output.gitignore import BLOCK_START, ignore_entries
 from coding_agent_playbook.sync._output_policy import (
     file_drift,
     gitignore_drift,

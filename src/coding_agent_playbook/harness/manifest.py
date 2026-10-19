@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from coding_agent_playbook import toml_writer as _toml
-from coding_agent_playbook._output_io import write_output_text
+from coding_agent_playbook.generated_output.output_io import write_output_text
 
 if TYPE_CHECKING:
     from pathlib import Path

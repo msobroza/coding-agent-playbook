@@ -47,12 +47,12 @@ import dataclasses
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook._output_io import write_output_text
-from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters._owned_files import write_engine_owned
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.skill_dirs.writer import SkillWriter
+from coding_agent_playbook.generated_output.file_identity import FileSet
+from coding_agent_playbook.generated_output.output_io import write_output_text
+from coding_agent_playbook.generated_output.symlinks import real_path
 from coding_agent_playbook.hook_registrations import (
     OPENCODE_SHIM_PATH,
     plan_opencode_reg,
@@ -243,7 +243,7 @@ class OpenCodeAdapter(Adapter):
         Commands carry the sentinel as the first body line, after the
         ``description`` frontmatter (OpenCode's gray-matter only reads
         frontmatter at offset 0) — the second anchored position
-        ``_sentinel.has_sentinel`` accepts; commands older engines wrote with
+        ``generated_output.sentinel.has_sentinel`` accepts; commands older engines wrote with
         the sentinel on line 1 are still recognised.
 
         ``.opencode/skills/`` is never scanned: stale skill output is settled by

@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook import renderer
 from coding_agent_playbook._guard_config_protect import COMPOSITE_SINGLETONS
 from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
@@ -31,6 +30,7 @@ from coding_agent_playbook.config.tables.hooks import (
     HooksConfig,
     SecretsGuardrails,
 )
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.guard_config import (
     GUARD_CONFIG_PATH,
     HOOK_ARTIFACTS,
@@ -418,10 +418,10 @@ def test_bundled_layers_resolve_to_their_catalog_dirs_never_importing() -> None:
     }
 
 
-def test_sentinel_key_is_renderer_sentinel() -> None:
+def test_sentinel_key_is_the_generated_output_sentinel() -> None:
     cfg = render_guard_config(_inputs([]))
 
-    assert cfg["sentinel"] == renderer.SENTINEL
+    assert cfg["sentinel"] == SENTINEL
 
 
 def test_runtime_reads_the_protect_tables_back(tmp_path: Path) -> None:
@@ -431,7 +431,7 @@ def test_runtime_reads_the_protect_tables_back(tmp_path: Path) -> None:
     parsed = parse_guard_config(serialize_guard_config(render_guard_config(_inputs([], protect))))
 
     assert isinstance(parsed, GuardConfig), parsed
-    assert parsed.tables["sentinel"] == renderer.SENTINEL
+    assert parsed.tables["sentinel"] == SENTINEL
     paths = [row["path"] for row in parsed.tables["protected"]["entries"]]
     assert paths == sorted(paths)
 

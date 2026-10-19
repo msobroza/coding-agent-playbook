@@ -24,7 +24,7 @@ from coding_agent_playbook.adapters.skill_dirs.writer import (
 )
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.artifacts.skill import Skill
-from coding_agent_playbook.renderer import SENTINEL
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.skills.document import references_index
 from tests.member_skill_samples import (
     sample_member_reference,

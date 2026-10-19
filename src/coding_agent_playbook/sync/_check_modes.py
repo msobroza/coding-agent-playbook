@@ -19,10 +19,10 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.skill_dirs.writer import deciding_ownership_against
-from coding_agent_playbook.gitignore import ignore_entries
+from coding_agent_playbook.generated_output.gitignore import ignore_entries
+from coding_agent_playbook.generated_output.symlinks import real_path
 from coding_agent_playbook.sync import _leftovers as _sync_orphans
 from coding_agent_playbook.sync import _output_policy as _sync_output
 from coding_agent_playbook.sync.pipeline import (

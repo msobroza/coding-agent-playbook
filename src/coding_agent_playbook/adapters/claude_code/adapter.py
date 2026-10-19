@@ -49,8 +49,6 @@ import dataclasses
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Final
 
-from coding_agent_playbook._output_io import write_output_bytes, write_output_text
-from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._owned_files import (
     check_engine_owned,
     check_unlinked,
@@ -71,6 +69,8 @@ from coding_agent_playbook.adapters.claude_code.paths import (
 )
 from coding_agent_playbook.adapters.claude_code.settings.managed_merge import CLAUDE_SETTINGS_PATH
 from coding_agent_playbook.adapters.skill_dirs.writer import SkillWriter
+from coding_agent_playbook.generated_output.output_io import write_output_bytes, write_output_text
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hook_registrations import LAUNCHER_PATH
 from coding_agent_playbook.hooks.enforcement import guardrail_line, guardrails_section
 from coding_agent_playbook.hooks.guardrails_skill import has_guardrail_text
@@ -397,7 +397,7 @@ class ClaudeCodeAdapter(Adapter):
           user-authored or linked file at either path is preserved. No other
           ``.claude/rules/`` file is ever reported.
 
-        "Sentinel-tagged" is the shared anchored rule (``_sentinel.has_sentinel``
+        "Sentinel-tagged" is the shared anchored rule (``generated_output.sentinel.has_sentinel``
         via :meth:`Adapter._carries_sentinel`). ``.claude/skills/`` is
         deliberately left out: a skill dir mixes engine output with files a user
         may have edited or added, so only the lockfile leftover policy
