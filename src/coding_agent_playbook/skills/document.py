@@ -19,8 +19,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
+from coding_agent_playbook.skills.naming import skill_id_of
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

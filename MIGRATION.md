@@ -40,8 +40,15 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook._pep503` | `coding_agent_playbook.detector.pep503` | N4 |
 | `coding_agent_playbook._pyproject_deps` | `coding_agent_playbook.detector.pyproject_deps` | N4 |
 | `coding_agent_playbook._toml` | `coding_agent_playbook.toml_writer` | N1 |
+| `coding_agent_playbook.adapters._agent_skill_rules` | `coding_agent_playbook.skills.naming` | A3 |
 | `coding_agent_playbook.adapters._claude_hooks` | `coding_agent_playbook.adapters.claude_code.hooks` | A8 |
 | `coding_agent_playbook.adapters._settings_drift` | `coding_agent_playbook.adapters.claude_code.settings.drift` | N13 |
+| `coding_agent_playbook.adapters._skill_writer.AGENT_SKILL_DESCRIPTION_MAX_CHARS` | `coding_agent_playbook.skills.naming.AGENT_SKILL_DESCRIPTION_MAX_CHARS` | A3 |
+| `coding_agent_playbook.adapters._skill_writer.AGENT_SKILL_NAME_MAX_CHARS` | `coding_agent_playbook.skills.naming.AGENT_SKILL_NAME_MAX_CHARS` | A3 |
+| `coding_agent_playbook.adapters._skill_writer.AGENT_SKILL_NAME_PATTERN` | `coding_agent_playbook.skills.naming.AGENT_SKILL_NAME_PATTERN` | A3 |
+| `coding_agent_playbook.adapters._skill_writer.agent_skill_issues` | `coding_agent_playbook.skills.naming.agent_skill_issues` | A3 |
+| `coding_agent_playbook.adapters._skill_writer.has_declared_id` | `coding_agent_playbook.skills.naming.has_declared_id` | A3 |
+| `coding_agent_playbook.adapters._skill_writer.skill_id_of` | `coding_agent_playbook.skills.naming.skill_id_of` | A3 |
 | `coding_agent_playbook.adapters.claude_code_adapter` | `coding_agent_playbook.adapters.claude_code.adapter` | A8 |
 | `coding_agent_playbook.adapters.claude_rule_paths` | `coding_agent_playbook.adapters.claude_code.paths` | N13 |
 | `coding_agent_playbook.adapters.claude_settings` | `coding_agent_playbook.adapters.claude_code.settings.managed_merge` | N13 |
@@ -97,6 +104,8 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.lockfile.parse_json_document` | `coding_agent_playbook.lockfile.drift.parse_json_document` | N5 |
 | `coding_agent_playbook.metrics_config` | `coding_agent_playbook.metrics_gate.config` | N22 |
 | `coding_agent_playbook.orchestrator.filter_applies_if` | `coding_agent_playbook.detector.predicate.filter_applies_if` | N4 |
+| `coding_agent_playbook.skill_document` | `coding_agent_playbook.skills.document` | A3 |
+| `coding_agent_playbook.skill_membership` | `coding_agent_playbook.skills.membership` | A3 |
 | `coding_agent_playbook.sources.base` | `coding_agent_playbook.catalog.source` | N3 |
 | `coding_agent_playbook.sources.base.StateSource` | `coding_agent_playbook.config.files.StateSource` | N2 |
 | `coding_agent_playbook.sources.filesystem` | `coding_agent_playbook.catalog.source` | N3 |

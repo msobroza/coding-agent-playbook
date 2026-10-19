@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.skill_document import render_member_reference
+from coding_agent_playbook.skills.document import render_member_reference
 from tests.unit.test_docs_lifecycle_hooks_spec import _spec_section
 
 #: ``(start heading, end heading, phrase)``: the phrase the section between them must carry.

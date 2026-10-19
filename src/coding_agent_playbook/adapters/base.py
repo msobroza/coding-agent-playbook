@@ -53,7 +53,7 @@ class Adapter(ABC):
     #: files (continue, agent_harness) or through skill references (claude_code,
     #: opencode, shared_skills). Only ``agents_md`` sets False: it carries always
     #: rules only. ``playbook sync`` warns when every enabled adapter sets False
-    #: (``skill_membership.undelivered_member_warning``). True by default, because
+    #: (``skills.membership.undelivered_member_warning``). True by default, because
     #: an out-of-tree adapter still receives every rule through ``write_rule``.
     delivers_member_rules: ClassVar[bool] = True
 
