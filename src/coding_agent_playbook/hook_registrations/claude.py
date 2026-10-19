@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.adapters.claude_code.settings.managed_merge import LAUNCHER_TOKEN
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
-from coding_agent_playbook.hook_policy import TOOL_CLASS_NAMES
 from coding_agent_playbook.hook_registrations._templates import (
     SENTINEL_PLACEHOLDER,
     fill_placeholder,
@@ -27,6 +26,7 @@ from coding_agent_playbook.hook_registrations.plan import (
 from coding_agent_playbook.hook_runtime.cli import ASYNC_FLAG
 from coding_agent_playbook.hook_runtime.event import Harness
 from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
+from coding_agent_playbook.hooks.resolution.tables import TOOL_CLASS_NAMES
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

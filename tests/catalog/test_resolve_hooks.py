@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
 from coding_agent_playbook.catalog.resolve import Collision, OverlayResolver
-from coding_agent_playbook.hook_policy import (
+from coding_agent_playbook.hooks.resolution.merge import (
     NO_HANDLER_SCHEMAS,
     ConfigKeySpec,
     ConfigSchemaLookup,

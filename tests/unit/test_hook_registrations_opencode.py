@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.artifacts.hook_schema import HookMatcher
-from coding_agent_playbook.hook_policy import HOOK_EVENTS, HOOK_SUPPORT, TOOL_CLASS_NAMES
 from coding_agent_playbook.hook_registrations import (
     OPENCODE_REG_EVENTS,
     OPENCODE_V1_TOOLS,
@@ -31,12 +30,17 @@ from coding_agent_playbook.hook_registrations import (
     to_opencode_reg,
 )
 from coding_agent_playbook.hook_runtime.harness.opencode import NATIVE_TOOL_NAMES
+from coding_agent_playbook.hooks.resolution.tables import (
+    HOOK_EVENTS,
+    HOOK_SUPPORT,
+    TOOL_CLASS_NAMES,
+)
 from tests.hook_samples import resolved_hook
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 _OPENCODE = ("opencode",)
 _BOTH = ("claude_code", "opencode")

@@ -12,13 +12,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.adapters.registry import discover_adapters
-from coding_agent_playbook.hook_policy import adapter_label, resolve_effective_hooks
+from coding_agent_playbook.hooks.enforcement import adapter_label
+from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from coding_agent_playbook.validation.context import SyncContext
 
 __all__ = ["format_hooks_section"]

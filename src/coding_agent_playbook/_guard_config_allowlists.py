@@ -27,7 +27,7 @@ from coding_agent_playbook.detector.pep503 import canonical_name
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 __all__ = ["DEPENDENCY_HOOK", "EGRESS_HOOK", "NETWORK_HOOK", "allowlists_table", "network_table"]
 

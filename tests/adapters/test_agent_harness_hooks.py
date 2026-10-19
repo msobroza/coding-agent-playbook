@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 _SIDECAR = ".playbook/hooks/guard-x"
 _GUARDRAIL = "rules/30-guardrail-guard-x.md"

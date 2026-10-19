@@ -16,9 +16,10 @@ import pytest
 
 from coding_agent_playbook.config.tables.hooks import HooksConfig, parse_guardrails_config
 from coding_agent_playbook.guard_config import DetectInputs
-from coding_agent_playbook.hook_policy import RegistryCatalog, merged_handler_config
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.judges.dependency_tiers import dependency_policy
+from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
+from coding_agent_playbook.hooks.resolution.effective import merged_handler_config
 from tests.engine_modules import engine_module
 from tests.hook_runtime.fakes import FakeGit
 from tests.hook_runtime.handlers.pack_repo import engine_hook

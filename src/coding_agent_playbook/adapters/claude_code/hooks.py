@@ -46,8 +46,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.config.tables.hooks import HooksConfig
-    from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hook_registrations import HookRegistration
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 
 __all__ = [

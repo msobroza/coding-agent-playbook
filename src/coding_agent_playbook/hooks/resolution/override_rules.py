@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.hook_policy.tables import (
+from coding_agent_playbook.hooks.resolution.tables import (
     HOOK_EVENTS,
     ON_ERROR_STRENGTH,
     TOOL_CLASS_NAMES,

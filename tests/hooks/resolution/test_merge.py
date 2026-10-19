@@ -6,7 +6,7 @@ mandatory one (H15), and an id defined twice in one layer is H2. Violations are
 returned, never raised. Builtin ``handler.config`` keys merge per the handler's
 key policies, injected through :class:`FakeHandlerSchemas` because the real
 ``CONFIG_SCHEMA`` registry is K2's. What an overlay may not change (H14) is
-tested in ``test_hook_policy_override_rules.py``.
+tested in ``test_override_rules.py``.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import pytest
 from coding_agent_playbook.artifacts.hook import Hook
 from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
 from coding_agent_playbook.artifacts.hook_schema import HookHandler
-from coding_agent_playbook.hook_policy import (
+from coding_agent_playbook.hooks.resolution.merge import (
     NO_HANDLER_SCHEMAS,
     ConfigKeySpec,
     HookViolation,

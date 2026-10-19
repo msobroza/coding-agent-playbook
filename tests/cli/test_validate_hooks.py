@@ -5,7 +5,7 @@ malformed ``HOOK.md`` is a ``FAIL`` line rather than a traceback, next to the
 per-hook rules (``classify_hook``), the refused layer overrides (H2, H14, H15),
 the body checks (H19) and the rules across hooks and config
 (``classify_hook_set``). Warnings (degraded cells, clamps) print to stderr and
-pass. The pure rules are unit-tested in ``tests/unit/test_hook_policy_contract*.py``.
+pass. The pure rules are unit-tested in ``tests/hooks/contract/test_contract*.py``.
 """
 
 from __future__ import annotations
