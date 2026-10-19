@@ -1168,6 +1168,7 @@ class MemberReference:  # one member rule, rendered as its skill's references/<r
 
 
 # --- Hook: the fourth emitted kind (Section 6.6.7) ---
+# coding_agent_playbook/artifacts/hook_schema.py (HookSchemaError, HookMatcher, HookHandler)
 class HookSchemaError(ValueError):
     """Field-precise HOOK.md error: carries where / field (dotted path) / value / expected."""
 
@@ -1192,6 +1193,7 @@ class HookHandler:  # exactly one form: builtin, or external command + script
     config: dict[str, Any] = field(default_factory=dict)
 
 
+# coding_agent_playbook/artifacts/hook_frontmatter.py
 @dataclass
 class HookFrontmatter:
     id: str
@@ -1220,6 +1222,7 @@ class HookFrontmatter:
     def to_mapping(self) -> dict: ...  # empty values (an empty summary too) dropped at every level
 
 
+# coding_agent_playbook/types.py
 @dataclass
 class Hook:
     frontmatter: HookFrontmatter
