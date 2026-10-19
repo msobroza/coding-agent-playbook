@@ -23,7 +23,7 @@ from coding_agent_playbook.hook_runtime.handlers.subagent_verify import (
     TRANSCRIPT_NOTE,
     ExecLocked,
 )
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME, StateStore
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME, StateStore
 from coding_agent_playbook.hook_runtime.stop.stages import StageResult
 from tests.hook_payloads import load_hook_payload
 from tests.hook_runtime.fakes import FakeClock, FakeStageRunner, FakeTrustStore

@@ -24,8 +24,8 @@ import sys
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime.paths import fold_key
-from coding_agent_playbook.hook_runtime.state import StateUnavailable, iso_utc, session_key
-from coding_agent_playbook.security.audit import encode_jsonl_line
+from coding_agent_playbook.hook_runtime.state.audit_log import encode_jsonl_line
+from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, iso_utc, session_key
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import EventName, ToolClass
     from coding_agent_playbook.hook_runtime.globs import GlobSet
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = ["LEDGER_MAX_LINES", "OUTSIDE", "SECRET_PATH", "Ledger", "mask_path", "path_categories"]
 

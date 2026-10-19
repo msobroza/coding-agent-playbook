@@ -2,7 +2,7 @@
 
 Opt-in. Each event appends one line to ``<state>/audit-YYYY-MM.jsonl``
 (outside the working tree, 0600, rotated at 5 MiB like the decision log)
-through ``security.audit.append_activity``; :mod:`._activity_record` decides
+through ``state.audit_log.append_activity``; :mod:`._activity_record` decides
 what a line may hold (command structure, masked paths, prompt digests).
 
 ``ASYNC_SAFE = True``: the handler writes no output and decides nothing, so on
@@ -17,7 +17,7 @@ event carries.
 ``config``: ``chain`` adds the ``prev`` hash chain (corruption detection, not
 tamper evidence, unless the org's shipper anchors the head), ``full_commands``
 the redacted command text, ``retain_days`` (also ``[guardrails.audit]``) the
-retention :func:`~coding_agent_playbook.security.audit.prune_audit` applies at
+retention :func:`~coding_agent_playbook.hook_runtime.state.audit_log.prune_audit` applies at
 session start, and ``pii`` (empty in the engine; an overlay lists detectors)
 the PII category counts of a prompt. A write failure is an internal error:
 ``on_error: open``.
@@ -35,7 +35,7 @@ from coding_agent_playbook.hook_runtime.handlers._pii_settings import (
     pii_settings,
 )
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.security.audit import append_activity, prune_audit
+from coding_agent_playbook.hook_runtime.state.audit_log import append_activity, prune_audit
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

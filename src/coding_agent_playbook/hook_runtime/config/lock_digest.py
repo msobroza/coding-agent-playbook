@@ -19,13 +19,13 @@ import os
 from typing import TYPE_CHECKING, Any, Final, Protocol
 
 from coding_agent_playbook.hook_runtime.config.reader import read_small_file
-from coding_agent_playbook.hook_runtime.state import StateUnavailable
+from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [
     "CFG_DIGEST_DOC",

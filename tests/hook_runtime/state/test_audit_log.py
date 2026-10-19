@@ -26,9 +26,8 @@ from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.simulate import SimulateArgs
 from coding_agent_playbook.hook_runtime.simulate import run as simulate_run
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
-from coding_agent_playbook.security import audit
-from coding_agent_playbook.security.audit import (
+from coding_agent_playbook.hook_runtime.state import audit_log as audit
+from coding_agent_playbook.hook_runtime.state.audit_log import (
     DECISION_RECORD_KEYS,
     MAX_LINE_BYTES,
     GuardDecisionRecord,
@@ -43,11 +42,12 @@ from coding_agent_playbook.security.audit import (
     rotation_lock_path,
     verify_chain,
 )
-from coding_agent_playbook.security.decision_summary import (
+from coding_agent_playbook.hook_runtime.state.decision_summary import (
     GuardSummary,
     read_decisions,
     summarize_decisions,
 )
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 from tests.engine_modules import engine_module
 from tests.hook_runtime.dispatch_kit import verdict
 from tests.hook_runtime.fakes import FakeClock, FakeHandlerResolver, FakeProc
@@ -331,7 +331,7 @@ def test_append_jsonl_reports_a_short_write_naming_the_sizes(
 _WRITER = textwrap.dedent(
     """\
     import pathlib, sys, time
-    from coding_agent_playbook.security.audit import append_jsonl
+    from coding_agent_playbook.hook_runtime.state.audit_log import append_jsonl
 
     log, go, writer = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3]
     deadline = time.monotonic() + 30
@@ -367,15 +367,16 @@ def test_two_concurrent_writer_processes_produce_valid_jsonl(tmp_path: Path) -> 
 
 
 def test_audit_module_imports_only_the_stdlib() -> None:
-    loaded = new_modules_after("import coding_agent_playbook.security.audit")
+    loaded = new_modules_after("import coding_agent_playbook.hook_runtime.state.audit_log")
     foreign = [
         name
         for name in loaded
-        if not name.startswith(engine_module("coding_agent_playbook.security"))
+        if name != engine_module("coding_agent_playbook.hook_runtime")
+        and not name.startswith(engine_module("coding_agent_playbook.hook_runtime.state"))
         and name.split(".")[0] not in sys.stdlib_module_names
     ]
     assert foreign == []
-    assert "coding_agent_playbook.security.audit" in loaded
+    assert "coding_agent_playbook.hook_runtime.state.audit_log" in loaded
 
 
 # --------------------------------------------------------------------------- #

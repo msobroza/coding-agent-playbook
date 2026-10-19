@@ -22,7 +22,7 @@ from coding_agent_playbook.hook_runtime.git.parse import AddedLine
 from coding_agent_playbook.hook_runtime.handlers.docstring_nonregression import DocstringsStage
 from coding_agent_playbook.hook_runtime.handlers.quality_metrics import QualityMetricsStage
 from coding_agent_playbook.hook_runtime.registry import HandlerContext, load_builtin
-from coding_agent_playbook.hook_runtime.session import SessionState
+from coding_agent_playbook.hook_runtime.state.session import SessionState
 from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
 from tests.hook_runtime.fakes import FakeClock, FakeProc, FakeRuff, ruff_row
 from tests.hook_runtime.guard_repo import SESSION_ID

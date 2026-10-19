@@ -23,7 +23,7 @@ from coding_agent_playbook.hook_runtime.cli import main as cli_main
 from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS, Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.simulate import SimulateArgs, main, run
-from coding_agent_playbook.hook_runtime.state import session_key
+from coding_agent_playbook.hook_runtime.state.store import session_key
 from tests.hook_payloads import load_hook_payload
 from tests.hook_runtime.fakes import FakeHandlerResolver
 from tests.hook_runtime.guard_repo import GuardRepo, canonical, hook_record

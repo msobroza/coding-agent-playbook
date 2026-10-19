@@ -18,7 +18,7 @@ from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch import dispatch_event, read_stdin, run_event
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.harness import DENY_EXIT, STDIN_CAP_BYTES
-from coding_agent_playbook.hook_runtime.session import SessionState
+from coding_agent_playbook.hook_runtime.state.session import SessionState
 from tests.hook_runtime.dispatch_kit import POST, PRE, body, boom, dispatch, verdict
 from tests.hook_runtime.guard_repo import SESSION_ID, hook_record
 

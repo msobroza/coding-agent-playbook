@@ -45,8 +45,8 @@ from coding_agent_playbook.hook_runtime.harness import (
     WireOutput,
 )
 from coding_agent_playbook.hook_runtime.paths import find_repo
-from coding_agent_playbook.hook_runtime.session import SessionState
-from coding_agent_playbook.hook_runtime.state import StateStore
+from coding_agent_playbook.hook_runtime.state.session import SessionState
+from coding_agent_playbook.hook_runtime.state.store import StateStore
 from coding_agent_playbook.hook_runtime.watchdog import OutputGate
 
 if TYPE_CHECKING:
