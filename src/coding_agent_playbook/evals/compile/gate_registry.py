@@ -1,7 +1,7 @@
 """The gate registry — named, composed boolean :class:`Check` gates by name.
 
 A *gate* is a code-defined, composed boolean
-:class:`~coding_agent_playbook.evaluators.check.Check` (typically an
+:class:`~coding_agent_playbook.grading.check.Check` (typically an
 ``AllOf``/``AnyOf``/``Not`` tree over file/threshold/judge checks) that an
 out-of-tree package ships and a task references by name: the handle builder
 (:mod:`coding_agent_playbook.evals.compile._handles`) resolves a gate-layer
@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from importlib import metadata
 
-from coding_agent_playbook.evaluators.check import Check
+from coding_agent_playbook.grading.check import Check
 
 #: Entry-point group for out-of-tree composed gates.
 ENTRY_POINT_GROUP = "coding_agent_playbook.gates"
@@ -39,7 +39,7 @@ _GateDecorator = Callable[[_GateFactory], _GateFactory]
 def register_gate(name: str) -> _GateDecorator:
     """Decorator factory registering a gate factory under ``name``.
 
-    Unlike :func:`~coding_agent_playbook.evaluators.metric.register_metric` (which
+    Unlike :func:`~coding_agent_playbook.grading.metric.register_metric` (which
     keys on the metric's intrinsic ``cls.name``), a gate has no such field, so the
     registry key is the explicit string argument::
 

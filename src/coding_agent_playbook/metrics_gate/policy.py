@@ -3,9 +3,9 @@
 The single home for the per-metric default grading policy and the
 :func:`metric_check` factory that turns a metric name + a
 :class:`~coding_agent_playbook.metrics_gate.config.MetricConfig` into the
-metric-backed :class:`~coding_agent_playbook.evaluators.check.Check`
-(:class:`~coding_agent_playbook.evaluators.check.ThresholdCheck` /
-:class:`~coding_agent_playbook.evaluators.check.NonRegressionCheck`).
+metric-backed :class:`~coding_agent_playbook.grading.check.Check`
+(:class:`~coding_agent_playbook.grading.check.ThresholdCheck` /
+:class:`~coding_agent_playbook.grading.check.NonRegressionCheck`).
 :mod:`coding_agent_playbook.commands.metrics` (the standalone static gate) builds
 its checks through here from its ``[metrics]`` engine config, so the metric-policy
 defaults live in exactly one place.
@@ -27,8 +27,8 @@ from typing import TYPE_CHECKING, Final
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
-    from coding_agent_playbook.evaluators.check import Check
-    from coding_agent_playbook.evaluators.metric import Metric
+    from coding_agent_playbook.grading.check import Check
+    from coding_agent_playbook.grading.metric import Metric
     from coding_agent_playbook.metrics_gate.config import MetricConfig
 
 #: Per-metric default grading policy. The ``Check`` layer carries the policy on
@@ -68,23 +68,23 @@ def metric_check(name: str, config: MetricConfig) -> Check | None:
     """Build the metric-backed :class:`Check` for ``name`` under ``config``.
 
     Resolves the metric via
-    :func:`~coding_agent_playbook.evaluators.metric.get_metric` (``None`` when the
+    :func:`~coding_agent_playbook.grading.metric.get_metric` (``None`` when the
     name is unknown, so the caller skips it the way the eval-task compiler does).
     The absolute warn/fail bounds and regression tolerance come from ``config``'s
     per-metric override when present, else the metric's ported default
     (:data:`METRIC_DEFAULTS`) so the resulting check grades exactly as the retired
     ``grade()``'s ``resolve_policy`` did. ``config.mode`` picks the check family:
-    ``"regression"`` → :class:`~coding_agent_playbook.evaluators.check.NonRegressionCheck`,
+    ``"regression"`` → :class:`~coding_agent_playbook.grading.check.NonRegressionCheck`,
     ``"absolute"``/``"both"`` →
-    :class:`~coding_agent_playbook.evaluators.check.ThresholdCheck` (``mode="both"``
+    :class:`~coding_agent_playbook.grading.check.ThresholdCheck` (``mode="both"``
     lets a regression fail before the absolute bound, matching ``grade()``'s
     ``_decide``).
     """
-    from coding_agent_playbook.evaluators.check import (
+    from coding_agent_playbook.grading.check import (
         NonRegressionCheck,
         ThresholdCheck,
     )
-    from coding_agent_playbook.evaluators.metric import get_metric
+    from coding_agent_playbook.grading.metric import get_metric
 
     try:
         metric = get_metric(name)

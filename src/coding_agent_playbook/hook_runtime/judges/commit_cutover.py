@@ -22,7 +22,7 @@ does not exclude what the merge brought in, so a branch that merged main
 would have ``cz`` check main's own commits, which ``<base>..<head>`` excludes
 (PR #32: main's non-conventional squash subjects failed the CI step).
 
-Pure and stdlib-only, so the hook (hot path: no ``tomllib``, no evaluators)
+Pure and stdlib-only, so the hook (hot path: no ``tomllib``, no ``grading``)
 and the CI step share it.
 """
 

@@ -5,7 +5,7 @@ expressions over *handle names* - ``[gate].expr``, ``[rubric].expr``,
 ``[aggregate].expr``, and ``[verdict].trial`` are strings like
 ``"build and (fast or sec)"`` or ``"gate and rubric"``. This module compiles such
 a string into a
-:mod:`coding_agent_playbook.evaluators.checks.compose` check tree over a
+:mod:`coding_agent_playbook.grading.compose` check tree over a
 caller-provided ``name -> Check`` map.
 
 The pipeline is the classic three stages:
@@ -22,10 +22,10 @@ The pipeline is the classic three stages:
 * :func:`compile_expr` - validates every referenced :class:`Name` against the
   ``handles`` map, then folds the AST into the ``compose.py`` tree: a
   :class:`Name` becomes ``handles[name]`` itself, an :class:`And`/:class:`Or`
-  becomes a single :class:`~coding_agent_playbook.evaluators.checks.compose.AllOf`
-  / :class:`~coding_agent_playbook.evaluators.checks.compose.AnyOf`, and a
+  becomes a single :class:`~coding_agent_playbook.grading.compose.AllOf`
+  / :class:`~coding_agent_playbook.grading.compose.AnyOf`, and a
   :class:`Not` becomes
-  :class:`~coding_agent_playbook.evaluators.checks.compose.Not`. A bare single
+  :class:`~coding_agent_playbook.grading.compose.Not`. A bare single
   name compiles to the handle check itself (no wrapper).
 
 :func:`names` is a parse-only helper returning the set of referenced
@@ -45,13 +45,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evaluators.checks.compose import AllOf, AnyOf
-from coding_agent_playbook.evaluators.checks.compose import Not as NotCheck
+from coding_agent_playbook.grading.compose import AllOf, AnyOf
+from coding_agent_playbook.grading.compose import Not as NotCheck
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.evaluators.check import Check
+    from coding_agent_playbook.grading.check import Check
 
 
 class ExprError(ValueError):
@@ -304,10 +304,10 @@ def _build(node: Node, handles: Mapping[str, Check], *, id: str) -> Check:
 
     A :class:`Name` resolves to ``handles[name]`` itself (no wrapper); an
     :class:`And`/:class:`Or` becomes one flat
-    :class:`~coding_agent_playbook.evaluators.checks.compose.AllOf` /
-    :class:`~coding_agent_playbook.evaluators.checks.compose.AnyOf` over its
+    :class:`~coding_agent_playbook.grading.compose.AllOf` /
+    :class:`~coding_agent_playbook.grading.compose.AnyOf` over its
     compiled children; a :class:`Not` becomes
-    :class:`~coding_agent_playbook.evaluators.checks.compose.Not`. Every composer
+    :class:`~coding_agent_playbook.grading.compose.Not`. Every composer
     node is labeled with ``id``.
     """
     if isinstance(node, Name):

@@ -17,13 +17,13 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.evals.checks.answer import AnswerMatchesCheck
-from coding_agent_playbook.evaluators.check import MeasurementSet
-from coding_agent_playbook.evaluators.checks.registry import get_check
-from coding_agent_playbook.evaluators.scope import CostTier, Determinism
-from coding_agent_playbook.evaluators.types import CheckResult, EvalContext, ScopeDetail
+from coding_agent_playbook.grading.check import MeasurementSet
+from coding_agent_playbook.grading.check_registry import get_check
+from coding_agent_playbook.grading.scope import CostTier, Determinism
+from coding_agent_playbook.grading.types import CheckResult, EvalContext, ScopeDetail
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.evaluators.types import Measurement
+    from coding_agent_playbook.grading.types import Measurement
 
 
 def _ms() -> MeasurementSet:

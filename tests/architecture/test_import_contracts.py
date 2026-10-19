@@ -143,7 +143,7 @@ def test_import_contracts_hold() -> None:
 
 @pytest.mark.parametrize(
     ("contract_id", "stack"),
-    [("hook-runtime-stack", "hook_runtime"), ("grading-kernel", "evaluators")],
+    [("hook-runtime-stack", "hook_runtime"), ("grading-kernel", "grading")],
 )
 def test_stack_contract_forbids_every_non_leaf_module(contract_id: str, stack: str) -> None:
     contract = _contract(contract_id)

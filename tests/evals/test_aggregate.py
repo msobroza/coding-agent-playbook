@@ -24,11 +24,11 @@ from coding_agent_playbook.evals.checks.aggregate import (
 )
 from coding_agent_playbook.evals.compile._handles import build_handles
 from coding_agent_playbook.evals.compile.compiler import compile_task
-from coding_agent_playbook.evaluators.check import MeasurementSet
-from coding_agent_playbook.evaluators.checks.compose import AllOf
-from coding_agent_playbook.evaluators.checks.registry import get_check
-from coding_agent_playbook.evaluators.scope import CostTier, Determinism
-from coding_agent_playbook.evaluators.types import (
+from coding_agent_playbook.grading.check import MeasurementSet
+from coding_agent_playbook.grading.check_registry import get_check
+from coding_agent_playbook.grading.compose import AllOf
+from coding_agent_playbook.grading.scope import CostTier, Determinism
+from coding_agent_playbook.grading.types import (
     CheckResult,
     EvalContext,
     EvaluationReport,

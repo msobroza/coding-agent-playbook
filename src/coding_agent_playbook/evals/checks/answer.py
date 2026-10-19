@@ -10,7 +10,7 @@ its hand — never that it reached the right conclusion.
 Its purpose is a cheap, token-free *class* gate in front of the LLM judge: a task
 whose answer must land in a known category (a CWE class, a required verdict word)
 declares one regex, and the cost-tiered scheduler's short-circuit
-(:mod:`coding_agent_playbook.evaluators.scheduler`, ``fail_fast=True`` — the
+(:mod:`coding_agent_playbook.grading.scheduler`, ``fail_fast=True`` — the
 runner default) skips the JUDGED tier entirely when it fails. A plainly wrong
 answer therefore costs zero judge tokens.
 
@@ -31,14 +31,14 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evaluators.check import Check
-from coding_agent_playbook.evaluators.checks.registry import register_check
-from coding_agent_playbook.evaluators.scope import CostTier, Determinism
-from coding_agent_playbook.evaluators.types import CheckResult, ScopeDetail
+from coding_agent_playbook.grading.check import Check
+from coding_agent_playbook.grading.check_registry import register_check
+from coding_agent_playbook.grading.scope import CostTier, Determinism
+from coding_agent_playbook.grading.types import CheckResult, ScopeDetail
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.evaluators.check import MeasurementSet
-    from coding_agent_playbook.evaluators.types import EvalContext
+    from coding_agent_playbook.grading.check import MeasurementSet
+    from coding_agent_playbook.grading.types import EvalContext
 
 #: The single scope key the check reports under (it grades one artifact, not a tree).
 _SCOPE_KEY = "answer"

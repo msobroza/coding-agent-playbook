@@ -38,7 +38,7 @@ from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResul
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from coding_agent_playbook.evaluators.types import ScopeDetail
+    from coding_agent_playbook.grading.types import ScopeDetail
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.handlers._metrics_pass import MetricsPass
@@ -136,7 +136,7 @@ def _file_of(finding: ScopeDetail) -> str:
 
 def _in_docstrings(finding: ScopeDetail) -> bool:
     """A ``docstrings``-family finding: ruff's ``ruff:docstrings`` count or strict mode."""
-    from coding_agent_playbook.evaluators.builtins.ruff_violations import ruff_family
+    from coding_agent_playbook.grading.static_metrics.ruff_violations import ruff_family
 
     if finding.evaluator == "ruff_violations":
         return ruff_family(finding.scope_key) == FAMILY

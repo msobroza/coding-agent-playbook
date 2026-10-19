@@ -28,7 +28,7 @@ from coding_agent_playbook.cli.parser import _SUBCOMMANDS
 from coding_agent_playbook.commands.twins._ci_commit_convention import PR_TITLE_ENV
 from coding_agent_playbook.commands.twins.ci import CI_STEPS
 from coding_agent_playbook.config.tables.hooks import parse_guardrails_config, parse_hooks_config
-from coding_agent_playbook.evaluators.metric import all_metrics
+from coding_agent_playbook.grading.metric import all_metrics
 from coding_agent_playbook.guard_config import GUARD_CONFIG_PATH
 from coding_agent_playbook.hook_registrations import LAUNCHER_PATH, OPENCODE_SHIM_PATH
 from coding_agent_playbook.hook_runtime._doctor_opencode import OPENCODE_MIN_VERSION

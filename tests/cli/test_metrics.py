@@ -7,9 +7,9 @@ absolute vs regression mode, ``--strict``, JSON output, and the usage-error
 exit codes.
 
 T5b cut the gate over from the retired ``grade()`` to the
-:class:`~coding_agent_playbook.evaluators.rubric.Rubric` stack (one metric-backed
-:class:`~coding_agent_playbook.evaluators.check.Check` per gated metric, folded
-into one :class:`~coding_agent_playbook.evaluators.types.EvaluationReport`). The
+:class:`~coding_agent_playbook.grading.rubric.Rubric` stack (one metric-backed
+:class:`~coding_agent_playbook.grading.check.Check` per gated metric, folded
+into one :class:`~coding_agent_playbook.grading.types.EvaluationReport`). The
 verdicts asserted here — gate pass/fail, which metric breaches, the ``0/1/2``
 exit codes, and the JSON ``findings`` contract — are *identical* to the
 pre-cutover output (the only sanctioned diff is the multi-scope composite value,
@@ -295,10 +295,10 @@ def test_report_has_per_check_subresults_shape(tmp_path):
     failing ``threshold:cyclomatic_complexity`` check whose subresult flags the
     function scope as ``fail``.
     """
-    from coding_agent_playbook.evaluators import parse_module
-    from coding_agent_playbook.evaluators.check import MeasurementSet
-    from coding_agent_playbook.evaluators.metric import static_metrics
-    from coding_agent_playbook.evaluators.types import EvalContext, ScopeDetail
+    from coding_agent_playbook.grading.check import MeasurementSet
+    from coding_agent_playbook.grading.metric import static_metrics
+    from coding_agent_playbook.grading.parse import parse_module
+    from coding_agent_playbook.grading.types import EvalContext, ScopeDetail
     from coding_agent_playbook.metrics_gate.config import MetricConfig
 
     static = static_metrics()

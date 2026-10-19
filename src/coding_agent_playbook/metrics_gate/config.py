@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Final
 # The eval-fixture globs are defined once, for the hooks' ``eval_fixture`` path
 # class, in the stdlib leaf ``artifacts.path_classes`` (it imports only ``re``).
 from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS
-from coding_agent_playbook.evaluators.types import (
+from coding_agent_playbook.grading.types import (
     DEFAULT_GIT_TIMEOUT_S,
     DEFAULT_RUFF_FAMILIES,
     AbsoluteThreshold,
@@ -28,7 +28,7 @@ from coding_agent_playbook.evaluators.types import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.evaluators.types import Mode
+    from coding_agent_playbook.grading.types import Mode
 
 _VALID_METRIC_MODES = ("regression", "absolute", "both")
 #: A ruff rule code: a linter prefix, then digits (``C901``, ``PLR0911``, ``D100``).

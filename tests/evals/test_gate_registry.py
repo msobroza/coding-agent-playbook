@@ -1,6 +1,6 @@
 """Tests for the Gate registry — ``evals/compile/gate_registry.py``.
 
-A *gate* is a named, composed boolean :class:`~coding_agent_playbook.evaluators.check.Check`
+A *gate* is a named, composed boolean :class:`~coding_agent_playbook.grading.check.Check`
 (typically built from the boolean composers ``AllOf``/``AnyOf``/``Not``) that an
 out-of-tree package ships and a task references by name. The registry is a verbatim
 mirror of the rubric registry: :func:`register_gate` is a decorator factory keyed on
@@ -22,10 +22,10 @@ from coding_agent_playbook.evals.compile.gate_registry import (
     get_gate,
     register_gate,
 )
-from coding_agent_playbook.evaluators.checks.compose import AllOf
+from coding_agent_playbook.grading.compose import AllOf
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.evaluators.check import Check
+    from coding_agent_playbook.grading.check import Check
 
 
 def _stub_gate() -> Check:

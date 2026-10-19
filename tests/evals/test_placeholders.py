@@ -8,7 +8,7 @@ Option A): :meth:`Judge.score_criterion` is the single abstract primitive and
 B): ``run_task`` is a concrete template method, the abstract hook is
 ``_invoke_agent``, and the result model is
 :class:`~coding_agent_playbook.evals.run.harness_runner.TaskResult` carrying an
-:class:`~coding_agent_playbook.evaluators.types.EvaluationReport` (``CheckResult``
+:class:`~coding_agent_playbook.grading.types.EvaluationReport` (``CheckResult``
 and ``programmatic_checks``/``rubric_scores`` are retired).
 """
 
@@ -25,7 +25,7 @@ from coding_agent_playbook.evals.run.harness_runner import (
     HarnessRunner,
     TaskResult,
 )
-from coding_agent_playbook.evaluators import EvaluationReport
+from coding_agent_playbook.grading.types import EvaluationReport
 
 if TYPE_CHECKING:
     from pathlib import Path

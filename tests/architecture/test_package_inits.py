@@ -28,10 +28,6 @@ _CLI_INIT: Final = "coding_agent_playbook/cli/__init__.py"
 _PERMANENT_INITS: Final = frozenset({_ROOT_INIT, _CLI_INIT})
 _INITS_WITH_CODE: Final = frozenset(
     {
-        "coding_agent_playbook/evaluators/__init__.py",
-        "coding_agent_playbook/evaluators/builtins/__init__.py",
-        "coding_agent_playbook/evaluators/checks/__init__.py",
-        "coding_agent_playbook/evaluators/execution/__init__.py",
         "coding_agent_playbook/hook_registrations/__init__.py",
         "coding_agent_playbook/hook_runtime/harness/__init__.py",
     }

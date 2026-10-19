@@ -3,7 +3,7 @@
 These exercise the N-trial loop in
 :meth:`~coding_agent_playbook.evals.run.harness_runner.HarnessRunner.run_task`: a task with an
 ``[aggregate]`` block runs ``N = max(k)`` trials, collects one
-:class:`~coding_agent_playbook.evaluators.types.TrialResult` per trial, and grades
+:class:`~coding_agent_playbook.grading.types.TrialResult` per trial, and grades
 the compiled aggregate layer over them. The two headline guarantees:
 
 * **degeneracy** — a task with *no* ``[aggregate]`` block runs **exactly one**
