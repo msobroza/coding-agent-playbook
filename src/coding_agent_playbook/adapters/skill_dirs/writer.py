@@ -68,7 +68,7 @@ from coding_agent_playbook.generated_output.symlinks import (
     link_leaving,
     real_path,
 )
-from coding_agent_playbook.renderer import with_sentinel_body
+from coding_agent_playbook.rendering.formats import with_sentinel_body
 from coding_agent_playbook.skills.document import emitted_body, emitted_frontmatter
 from coding_agent_playbook.skills.naming import skill_id_of
 

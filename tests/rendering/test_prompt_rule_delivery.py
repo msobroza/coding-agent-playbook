@@ -7,10 +7,11 @@
 - :func:`includes_rules_appendix` — the ``## Reference rules`` appendix of
   Continue prompts, the agent_harness leaf and the eval runner.
 - The module boundary: stdlib-only, with ``RuleRegistry`` imported for type
-  checking only, so ``renderer`` can import it without a cycle.
+  checking only, so ``rendering.rule_registry`` (which defines it) can import
+  this module without a cycle.
 
-Which format gets which is decided by ``renderer.render_for``;
-``test_renderer.py`` covers that.
+Which format gets which is decided by ``rendering.formats.render_for``;
+``test_formats.py`` covers that.
 """
 
 from __future__ import annotations
@@ -20,13 +21,13 @@ from typing import Any
 import pytest
 
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
-from coding_agent_playbook.prompt_rule_delivery import (
+from coding_agent_playbook.rendering.prompt_rule_delivery import (
     SkillReference,
     includes_rules_appendix,
     insert_pointer_block,
     skill_pointer_block,
 )
-from coding_agent_playbook.rule_registry import build_prompt_environment
+from coding_agent_playbook.rendering.rule_registry import build_prompt_environment
 from tests.import_probe import new_modules_after
 
 
@@ -277,12 +278,15 @@ def test_insert_pointer_block_with_empty_block_returns_the_body_unchanged() -> N
 
 
 def test_prompt_rule_delivery_imports_nothing_from_the_engine_at_runtime() -> None:
-    """Stdlib only: ``renderer`` imports it, so any runtime import back would be a cycle.
+    """Stdlib only: ``rendering.rule_registry`` imports it, so a runtime import back is a cycle.
 
     Only engine modules count: ``SkillReference`` is a dataclass, and
     ``dataclasses`` loads stdlib modules of its own.
     """
-    loaded = new_modules_after("import coding_agent_playbook.prompt_rule_delivery")
+    loaded = new_modules_after("import coding_agent_playbook.rendering.prompt_rule_delivery")
 
     engine = [name for name in loaded if name.split(".")[0] == "coding_agent_playbook"]
-    assert engine == ["coding_agent_playbook.prompt_rule_delivery"]
+    assert engine == [
+        "coding_agent_playbook.rendering",
+        "coding_agent_playbook.rendering.prompt_rule_delivery",
+    ]

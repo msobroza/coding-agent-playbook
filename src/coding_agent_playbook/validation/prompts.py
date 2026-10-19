@@ -21,7 +21,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Final, TypeGuard
 
 from coding_agent_playbook.hooks.contract.findings import did_you_mean
-from coding_agent_playbook.validation.findings import RULE_CALL_RE, ValidationError
+from coding_agent_playbook.rendering.jinja import RULE_CALL_RE
+from coding_agent_playbook.validation.findings import ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Sequence

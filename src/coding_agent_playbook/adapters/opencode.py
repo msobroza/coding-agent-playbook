@@ -60,7 +60,7 @@ from coding_agent_playbook.hooks.registrations.opencode import (
     render_opencode_shim,
 )
 from coding_agent_playbook.hooks.resolution.tables import HOOK_SUPPORT
-from coding_agent_playbook.renderer import render_for
+from coding_agent_playbook.rendering.formats import render_for
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -69,7 +69,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
-    from coding_agent_playbook.prompt_rule_delivery import SkillReferenceIndex
+    from coding_agent_playbook.rendering.prompt_rule_delivery import SkillReferenceIndex
 
 
 class OpenCodeAdapter(Adapter):

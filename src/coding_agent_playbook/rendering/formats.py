@@ -1,43 +1,36 @@
-"""Renderer subsystem: Jinja2 environment + format post-processing.
+"""Per-format post-processing of a Jinja-rendered artifact body (SPEC §9.7).
 
-See SPEC.md §9. Frontmatter is parsed by the engine before this module runs
-and is always treated as static YAML — only the body is rendered through Jinja.
-File-extension dispatch: ``.md`` body is returned verbatim; ``.md.j2`` body is
-rendered through a sandboxed Jinja2 environment with ``StrictUndefined`` so
-typos fail loudly and attribute escapes to Python internals raise.
+:func:`render_for` turns a body rendered in the sandbox of ``rendering.jinja``
+into the text one harness reads: a Continue rule or prompt, a Claude Code or
+AGENTS.md section, a Claude Code or OpenCode command, or a hook projection.
+Frontmatter is parsed by the engine before this module runs and is always
+treated as static YAML — only the body was rendered through Jinja.
 """
 
 from __future__ import annotations
 
 import json
-import re
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 import yaml
-from jinja2 import FileSystemLoader, StrictUndefined
-from jinja2.exceptions import SecurityError
-from jinja2.sandbox import SandboxedEnvironment
 
 from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hooks.enforcement import advisory_block, advisory_text
 from coding_agent_playbook.hooks.registrations.claude import claude_settings_projection
 from coding_agent_playbook.hooks.registrations.plan import DeclaredMember, declared_stop_budget_s
-from coding_agent_playbook.prompt_rule_delivery import (
+from coding_agent_playbook.rendering.prompt_rule_delivery import (
     includes_rules_appendix,
     insert_pointer_block,
     skill_pointer_block,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping
     from pathlib import Path
 
-    # Annotations only: every runtime construction is a ``SandboxedEnvironment``
-    # (tests/unit/test_no_unsandboxed_jinja.py allows no other jinja2 import).
-    from jinja2 import Environment
-
-    from coding_agent_playbook.prompt_rule_delivery import SkillReferenceIndex
+    from coding_agent_playbook.rendering.prompt_rule_delivery import SkillReferenceIndex
+    from coding_agent_playbook.rendering.rule_registry import RuleRegistry
 
 # Aliases the CLI accepts as a short-form for --format. Resolved to the full
 # internal name before render_for() dispatches.
@@ -68,12 +61,6 @@ BUILTIN_FORMATS: frozenset[str] = frozenset(
     }
 )
 
-# A ``{{ rule("id") }}`` call in a template; group 1 is the rule id.
-# Whitespace- and trim-marker-tolerant (``{{rule("x")}}``, ``{{- rule('x') -}}``).
-# The helper is gone (D15), so a call only renders as ``UndefinedError``;
-# ``playbook validate`` uses this to name the call in prompts, rules and hook bodies.
-RULE_CALL_RE = re.compile(r"\{\{-?\s*rule\s*\(\s*['\"]([^'\"]+)['\"]\s*\)\s*-?\}\}")
-
 
 def with_sentinel_body(frontmatter: str, body: str) -> str:
     """Compose a generated file whose frontmatter must stay on line 1.
@@ -90,132 +77,6 @@ def with_sentinel_body(frontmatter: str, body: str) -> str:
         with_sentinel_body("---\ndescription: d\n---", "Body\n")
     """
     return f"{frontmatter.rstrip('\n')}\n{sentinel_line('html')}\n\n{body}"
-
-
-class RuleRegistry(Protocol):
-    """How the ``## Reference rules`` appendix renders an included rule's text.
-
-    ``rule_registry.RuleRegistryImpl`` implements it; this protocol is the
-    contract the renderer depends on. Tests can pass an in-memory
-    implementation; production passes the merged-overlay registry.
-    """
-
-    def render_for_inclusion(self, rule_id: str, context: dict[str, Any]) -> str:
-        """Return the rendered body of ``rule_id`` for inline placement in a
-        prompt, with a ``### {rule.name}`` header prepended. Returns ``""``
-        if the rule's ``applies_if`` evaluates to false for the current facts.
-        """
-        ...
-
-
-def build_environment(template_search_paths: Sequence[Path]) -> Environment:
-    """Build a sandboxed Jinja environment configured per SPEC §9.3.
-
-    The environment is a ``SandboxedEnvironment`` (a subclass of the annotated
-    ``Environment``): templates are author-controlled *and* agent-writable
-    (``playbook/**/*.md.j2``, overlay ``resources/``), so a body such as
-    ``{{ lipsum.__globals__["os"] }}`` must raise ``SecurityError`` instead
-    of reaching ``os`` (prK §P1). It is deliberately not the immutable
-    variant, which would also reject in-template list/dict mutation.
-
-    Rules, prompts and hook bodies all render in this one shape. There is no
-    ``rule()`` helper (D15): a template calling it raises ``UndefinedError``,
-    and prompts declare their rules in ``includes_rules`` instead.
-
-    Example::
-
-        env = build_environment([])
-        render_string("{{ project_name }}", {"project_name": "demo"}, env=env)
-    """
-    env = SandboxedEnvironment(
-        loader=FileSystemLoader([str(p) for p in template_search_paths]),
-        autoescape=False,
-        keep_trailing_newline=True,
-        trim_blocks=True,
-        lstrip_blocks=True,
-        undefined=StrictUndefined,
-    )
-
-    # SPEC §9.4: helpers read facts from ``env.globals["_facts"]``. Callers stash
-    # facts there before each render so helpers don't need to be re-bound.
-    def _facts() -> dict[str, Any]:
-        value = env.globals.get("_facts", {})
-        return value if isinstance(value, dict) else {}
-
-    def _has_framework(name: str) -> bool:
-        frameworks = _facts().get("frameworks", {})
-        return name in frameworks
-
-    env.globals["has_framework"] = _has_framework
-
-    def _has_ml_dep(name: str) -> bool:
-        ml_stack = _facts().get("ml_stack", {})
-        return name in ml_stack
-
-    env.globals["has_ml_dep"] = _has_ml_dep
-    return env
-
-
-def render_artifact_body(
-    template_path: Path,
-    context: dict[str, Any],
-    *,
-    env: Environment,
-) -> str:
-    """Dispatch on extension. ``.md`` returns the file verbatim; ``.md.j2``
-    is rendered through ``env``. The body is the only part rendered;
-    frontmatter must be split off by the caller first.
-    """
-    if template_path.suffix == ".j2":
-        template = env.get_template(template_path.name)
-        return template.render(**context)
-    return template_path.read_text(encoding="utf-8")
-
-
-def render_string(body: str, context: dict[str, Any], *, env: Environment) -> str:
-    """Render a literal template string through ``env``. Used by the
-    rule-inclusion path and by tests that don't need the loader.
-    """
-    template = env.from_string(body)
-    return template.render(**context)
-
-
-class TemplateSecurityError(Exception):
-    """An artifact template reached for Python internals the Jinja sandbox blocks.
-
-    Raised in place of jinja2's bare ``SecurityError`` so ``playbook sync`` and
-    ``playbook render`` name the offending file instead of printing a traceback
-    (specs/prK-lifecycle-hooks.md §P1). ``source`` is the artifact's source path
-    (its id when it has none); ``detail`` is jinja2's reason.
-
-    Example::
-
-        TemplateSecurityError("playbook/rules/x.md.j2", "access to attribute "
-                              "'__globals__' of 'function' object is unsafe.")
-    """
-
-    def __init__(self, source: str, detail: str) -> None:
-        super().__init__(f"{source}: template rejected by the Jinja sandbox: {detail}")
-        self.source = source
-        self.detail = detail
-
-
-def render_sandboxed(body: str, context: dict[str, Any], *, env: Environment, source: str) -> str:
-    """Render ``body`` like :func:`render_string`, naming ``source`` on a sandbox violation.
-
-    jinja2's ``SecurityError`` becomes :class:`TemplateSecurityError` carrying
-    ``source`` (the artifact's file, or its id). A ``TemplateSecurityError``
-    raised by a nested render propagates unchanged, so the error always names
-    the template that actually escaped.
-
-    Example::
-
-        body = render_sandboxed(rule.template_body, ctx, env=env, source="playbook/rules/x.md.j2")
-    """
-    try:
-        return render_string(body, context, env=env)
-    except SecurityError as exc:
-        raise TemplateSecurityError(source, str(exc)) from exc
 
 
 def render_for(

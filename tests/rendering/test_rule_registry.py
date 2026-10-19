@@ -1,13 +1,14 @@
 """Tests for the rule registry (specs/prS-skills-context.md §7.4.4).
 
-Covers the three seams of ``coding_agent_playbook.rule_registry``:
+Covers the two seams of ``coding_agent_playbook.rendering.rule_registry``:
 - :class:`RuleRegistryImpl` — the inline-inclusion contract from SPEC §6.2.5.
 - :func:`build_prompt_environment` — the registry plus the prompt Jinja
   environment that renders through it, built the same way by ``sync``,
   ``render`` and the eval runner.
-- The module boundary: ``rule_registry`` imports ``template_source`` from
-  ``artifacts.identity``, so that module may neither import it back (a cycle) nor
-  re-export its names (a shim).
+
+The module boundary (``rule_registry`` takes ``template_source`` from the stdlib
+leaf ``artifacts.identity``, never from the sync context) is
+``tests/rendering/test_jinja.py::test_rendering_never_imports_the_sync_context``.
 """
 
 from __future__ import annotations
@@ -18,13 +19,14 @@ from typing import TYPE_CHECKING
 import pytest
 from jinja2 import UndefinedError
 
-from coding_agent_playbook.artifacts import identity
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
-from coding_agent_playbook.prompt_rule_delivery import SkillReference
-from coding_agent_playbook.renderer import TemplateSecurityError, build_environment, render_string
-from coding_agent_playbook.rule_registry import RuleRegistryImpl, build_prompt_environment
-from tests.engine_modules import engine_module
-from tests.import_probe import new_modules_after
+from coding_agent_playbook.rendering.jinja import (
+    TemplateSecurityError,
+    build_environment,
+    render_string,
+)
+from coding_agent_playbook.rendering.prompt_rule_delivery import SkillReference
+from coding_agent_playbook.rendering.rule_registry import RuleRegistryImpl, build_prompt_environment
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -236,18 +238,3 @@ def test_build_prompt_environment_keeps_rules_from_including_rules() -> None:
 
     with pytest.raises(UndefinedError):
         registry.render_for_inclusion("outer", {})
-
-
-# --- module boundary --------------------------------------------------------
-
-
-def test_identity_neither_imports_the_registry_back_nor_re_exports_it() -> None:
-    """``rule_registry`` imports ``template_source`` from ``artifacts.identity``.
-
-    No import cycle back to the registry, and no re-export shim.
-    """
-    loaded = new_modules_after("import coding_agent_playbook.artifacts.identity")
-
-    assert engine_module("coding_agent_playbook.rule_registry") not in loaded
-    assert not hasattr(identity, "RuleRegistryImpl")
-    assert not hasattr(identity, "build_prompt_environment")

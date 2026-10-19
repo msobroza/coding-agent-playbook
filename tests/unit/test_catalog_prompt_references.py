@@ -13,7 +13,7 @@ import pytest
 
 from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
-from coding_agent_playbook.renderer import RULE_CALL_RE
+from coding_agent_playbook.rendering.jinja import RULE_CALL_RE
 from tests._catalog import CORE_ROOT, bundled_plugin_dirs, core_rules
 
 if TYPE_CHECKING:
