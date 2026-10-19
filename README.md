@@ -442,6 +442,12 @@ its topic (`skill:` in its frontmatter):
 | `python-tooling` | static checks (ruff and mypy), pytest configuration (with pytest), uv workflow (uv projects), `fastapi-app-wiring` and `fastapi-error-boundaries` (FastAPI), Pydantic boundaries (Pydantic declared) | always (static checks are ungated) |
 | `ml-data` | `ml-serialization-security` | the ML stack includes torch, TensorFlow, JAX, transformers, scikit-learn, XGBoost or LightGBM |
 
+Core also ships `playbook-guardrails`, which takes no rules. With hooks on, sync
+fills it with the full text of every enabled hook's guardrail, one section per
+hook, and writes it to `.opencode/skills/` and `.agents/skills/`. Claude Code
+runs the hooks itself, so `.claude/skills/` gets it only for a hook Claude Code
+cannot run; Continue keeps its `30-guardrail-<id>.md` rule files.
+
 Sync renders each rule that applies as `<skills root>/<skill>/references/<rule-id>.md`
 and appends a `## References` index to the skill's `SKILL.md`, one line per
 rule with its description. The skill's description gains a generated "Covers

@@ -125,16 +125,19 @@ class HookDispatch:
 
     ``source_root`` is the real repo even when output goes to a scratch dir
     (``sync --check``); ``None`` means the output root. ``config`` is ``[hooks]``.
+    ``guardrails_skill`` is the composed ``playbook-guardrails`` skill (``None``
+    without one); only an adapter whose ``writes_guardrails_skill`` says so gets it.
 
     Example::
 
-        HookDispatch(hooks, ctx.repo_root, previous_lockfile, hooks_cfg)
+        HookDispatch(hooks, ctx.repo_root, previous_lockfile, hooks_cfg, guardrails_skill)
     """
 
     hooks: Sequence[ResolvedHook] = ()
     source_root: Path | None = None
     prior_lock: Lockfile | None = None
     config: HooksConfig | None = None
+    guardrails_skill: Skill | None = None
 
 
 def dispatch_to_adapters(
@@ -152,7 +155,9 @@ def dispatch_to_adapters(
     ``adapters`` maps the entry-point name to the instance, e.g.
     ``{"continue": ContinueAdapter()}``. Each adapter first hears the native
     skill roots of the whole set (``note_native_skill_roots``), so ``agents_md``
-    can drop its skills map when nothing writes skills. Each adapter's scoped
+    can drop its skills map when nothing writes skills. An adapter whose
+    ``writes_guardrails_skill`` holds for the on hooks also gets
+    ``hooks.guardrails_skill`` after the other skills. Each adapter's scoped
     lock entries are collected on ``recorder.managed`` after its ``finalize``.
 
     Example::
@@ -168,12 +173,25 @@ def dispatch_to_adapters(
         adapter.begin_sync(
             plan.source_root or output_root, plan.prior_lock, hooks_config=plan.config
         )
-        _write_artifacts(recorder, name, adapter, (rules, prompts, skills), output_root)
+        own_skills = _skills_for(adapter, skills, plan)
+        _write_artifacts(recorder, name, adapter, (rules, prompts, own_skills), output_root)
         for hook in plan.hooks:
             recorder.record(adapter.write_hook(hook, output_root), _hook_provenance(hook, name))
         _record_finalize(recorder, name, adapter, output_root)
         recorder.managed.extend(adapter.managed_lock_entries())
     return recorder
+
+
+def _skills_for(adapter: Adapter, skills: Sequence[Skill], plan: HookDispatch) -> Sequence[Skill]:
+    """``skills``, plus the guardrails skill when this adapter writes it (D6).
+
+    The skill goes through the adapter's normal ``write_skill``, so its files get
+    skill provenance and the skill leftover policy like any other.
+    """
+    extra = plan.guardrails_skill
+    if extra is None or not adapter.writes_guardrails_skill(plan.hooks):
+        return skills
+    return (*skills, extra)
 
 
 def _record_finalize(

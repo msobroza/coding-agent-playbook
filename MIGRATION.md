@@ -43,7 +43,8 @@ its frontmatter), and the engine writes it as a reference inside that skill
 (design `specs/prS-skills-context.md`; decision record
 `docs/adr/0001-scoped-rules-are-delivered-as-skill-references.md`). Core now
 ships four skills: `python-coding`, `python-testing`, `python-tooling` and
-`ml-data`. Each change of the release has a row in the table below, and a
+`ml-data`, plus `playbook-guardrails`, which holds the hooks' guardrail text
+when hooks are on. Each change of the release has a row in the table below, and a
 subsection after it when a row is not enough. The terms always rule, scoped
 rule, member rule, skill and reference mean what `CONTEXT.md` says. The SPEC
 changelog entry is v0.21.
@@ -65,6 +66,7 @@ changelog entry is v0.21.
 | Keeping your own scoped rules in `playbook/rules/` or an overlay | Add `skill: <skill-id>` to each before upgrading ("Add skill: to your own scoped rules"). Until then `playbook validate` fails and `playbook sync` refuses to run. |
 | Tooling or prompts that match lint-feedback lines (`rule <id>: …`) | Accept the new `rule <id> (skill <skill>): …` prefix and the ` (rule <id>, skill <skill>)` suffix; the next `playbook sync` turns them on. See "Guardrails and lint feedback point at skills". |
 | A repo with hooks on (the new `skill-nudge` hook) | Nothing: the next `playbook sync` turns it on. To keep it off, add `disable = ["skill-nudge"]` to `[hooks]`. See "Guardrails and lint feedback point at skills". |
+| A repo with hooks on (the new `playbook-guardrails` skill) | Nothing: the next `playbook sync` writes it to `.opencode/skills/` and `.agents/skills/`, and settles it as a leftover once hooks are off. See "Guardrails and lint feedback point at skills". |
 | Any repo with Python code (distilled python-best-practices content) | Nothing but `playbook sync`: `python-coding` gains three references and six change text; with pytest, `python-testing` gains two and `pytest` changes text; and `python-tooling` is now written in every Python repo, with up to four new references and a new (or, with FastAPI, reworded) "Where guidance lives" line. An overlay or repo-local rule with one of the nine new ids now replaces the core rule. See "Distilled python-best-practices content". |
 
 ### `package_manager` and per-key validation
@@ -348,6 +350,24 @@ and Continue get no text for it. To turn it off, add
 nor the `rule <id> (skill <skill>)` lint feedback: its plugin is the inert stub
 above, so there only always-loaded context and the skill listing point at
 skills until the shim is ported (SPEC OQ-11).
+
+Core ships a fifth skill, `playbook-guardrails`, that holds the full text of
+every guardrail the repository enables. It takes no member rules: with hooks
+on, sync composes it from the on hooks, one section per hook with guardrail
+text, sorted by hook id, each the hook's body and its "Enforced by lifecycle
+hooks on: …" line under a ``## <name> (`<id>`)`` heading. The next
+`playbook sync` writes `.opencode/skills/playbook-guardrails/SKILL.md` and
+`.agents/skills/playbook-guardrails/SKILL.md` (byte-identical), with one
+lockfile entry each (`kind = "skill"`, artifact id `playbook-guardrails`) and,
+with `[output] commit = false`, one managed `.gitignore` line each. Claude Code
+runs the core hooks itself, so `.claude/skills/` gets the skill only for a hook
+it cannot run (an overlay hook without `claude_code` in `supports`); Continue,
+`agent_harness` and `AGENTS.md` keep their guardrail text as before, and
+Continue gets no prompt for the skill. With `[hooks] enabled = false`, or
+`advisory = false`, no copy is written, and the copies an earlier sync wrote are
+settled by the leftover policy like any removed skill. A skill of yours with the
+id `playbook-guardrails` in `playbook/skills/` or an overlay replaces the
+authored description and intro; the hook sections are still added.
 
 ### Distilled python-best-practices content
 

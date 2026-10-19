@@ -25,7 +25,9 @@ adapter writes OpenCode's own native outputs:
   other file there stays the user's, and ``opencode.json`` is never touched.
   A user file already at that path (no sentinel line) or a symlink on the way
   is refused, never overwritten (``_owned_files``).
-  Hook advisories reach OpenCode through ``AGENTS.md``, like rules.
+  Hook advisories reach OpenCode through ``AGENTS.md``, like rules, and as the
+  sections of the ``playbook-guardrails`` skill written here
+  (:meth:`OpenCodeAdapter.writes_guardrails_skill`, D6).
 
 OpenCode *also* scans ``.agents/skills/`` and ``.claude/skills/`` (compatibility
 roots), so with ``shared_skills`` and ``claude_code`` enabled the same skill is
@@ -52,6 +54,7 @@ from coding_agent_playbook.adapters._owned_files import write_engine_owned
 from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT
+from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
 from coding_agent_playbook.hook_registrations import (
     OPENCODE_SHIM_PATH,
     plan_opencode_reg,
@@ -173,6 +176,13 @@ class OpenCodeAdapter(Adapter):
         del repo_root
         self._hooks.append(hook)
         return []
+
+    def writes_guardrails_skill(self, hooks: Sequence[ResolvedHook]) -> bool:
+        """``True`` when any on hook has guardrail text: OpenCode reads the ``AGENTS.md`` lines.
+
+        Example: ``adapter.writes_guardrails_skill([])`` -> ``False``.
+        """
+        return has_guardrail_text(hooks)
 
     def planned_runtime_outputs(self, hooks: Sequence[ResolvedHook]) -> tuple[str, ...]:
         """``(OPENCODE_SHIM_PATH,)`` exactly when :meth:`finalize` writes the shim for ``hooks``.
