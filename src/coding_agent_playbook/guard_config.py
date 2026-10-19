@@ -147,7 +147,7 @@ __all__ = [
 
 #: The one repo-relative path, shared with the runtime that reads it.
 GUARD_CONFIG_PATH: Final = GUARD_CONFIG_REL
-#: ``hook_runtime.config.SUPPORTED_SCHEMA_VERSIONS`` must include it.
+#: ``hook_runtime.config.guard_config.SUPPORTED_SCHEMA_VERSIONS`` must include it.
 GUARD_CONFIG_SCHEMA: Final = 1
 #: guard_config.json plus the copied scripts; protected as a whole tree (§E.1).
 HOOKS_OUTPUT_DIR: Final = ".coding-agent-playbook/hooks/"
