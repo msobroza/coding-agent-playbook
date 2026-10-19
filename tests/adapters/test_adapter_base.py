@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
-from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
+from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
-from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
-from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
-from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
+from coding_agent_playbook.adapters.continue_ import ContinueAdapter
+from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
+from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
 from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.config.tables.hooks import HooksConfig

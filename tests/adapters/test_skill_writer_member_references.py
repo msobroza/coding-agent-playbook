@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.adapters._skill_writer import (
+from coding_agent_playbook.adapters.skill_dirs.writer import (
     SKILL_FILENAME,
     SkillWriter,
     render_skill_md,
