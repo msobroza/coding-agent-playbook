@@ -53,22 +53,37 @@ EXPECTED_MEMBERSHIP: Final[Mapping[str, str]] = {
     "pytest": "python-testing",
     "pytest-test-doubles": "python-testing",
     "pytest-fixtures": "python-testing",
+    "python-static-checks": "python-tooling",
+    "pytest-configuration": "python-tooling",
+    "python-uv-workflow": "python-tooling",
     "fastapi-app-wiring": "python-tooling",
     "fastapi-error-boundaries": "python-tooling",
+    "pydantic-boundaries": "python-tooling",
     "ml-serialization-security": "ml-data",
 }
 #: Core skill with member rules -> its ``playbook.files`` phrase in "Where guidance lives".
 EXPECTED_WHERE: Final[Mapping[str, str]] = {
     "python-coding": "Any Python file",
     "python-testing": "Test files and conftest.py",
-    "python-tooling": "FastAPI apps, routers, dependency providers and error handlers",
+    "python-tooling": "Tool configuration and framework wiring",
     "ml-data": "Code that loads or saves models, checkpoints or caches",
 }
 CORE_SKILLS: Final = sorted(EXPECTED_WHERE)
+#: Core members whose gate the reference probe fails: it has no uv.lock (spec 9.6.2).
+PROBE_INACTIVE_MEMBERS: Final = frozenset({"python-uv-workflow"})
 #: python-coding's member count after the python-best-practices distillation (spec 9.6.2, H13).
 PYTHON_CODING_MEMBER_COUNT: Final = 12
 #: python-testing's members after the pytest distillation (spec 9.6.2): pytest plus two.
 PYTHON_TESTING_MEMBERS: Final = ("pytest", "pytest-fixtures", "pytest-test-doubles")
+#: python-tooling's members (spec 9.6.2): the two FastAPI rules plus four distilled ones.
+PYTHON_TOOLING_MEMBERS: Final = (
+    "fastapi-app-wiring",
+    "fastapi-error-boundaries",
+    "pydantic-boundaries",
+    "pytest-configuration",
+    "python-static-checks",
+    "python-uv-workflow",
+)
 
 
 @dataclass(frozen=True)
@@ -134,6 +149,42 @@ DISTILLED_RULES: Final[Mapping[str, DistilledRuleRow]] = {
         63,
         ("python", "testing", "pytest", "fixtures"),
     ),
+    "python-static-checks": DistilledRuleRow(
+        "languages/python/static-checks.md",
+        "python-tooling",
+        "Static checks",
+        ("**/*.py", "pyproject.toml", "ruff.toml", ".ruff.toml", "mypy.ini", ".mypy.ini"),
+        {},
+        21,
+        ("python", "tooling", "ruff", "mypy"),
+    ),
+    "pytest-configuration": DistilledRuleRow(
+        "frameworks/pytest-configuration.md",
+        "python-tooling",
+        "pytest configuration",
+        ("pyproject.toml", "pytest.ini", "tox.ini", "setup.cfg", "**/conftest.py"),
+        _PYTEST_GATE,
+        23,
+        ("python", "tooling", "pytest"),
+    ),
+    "python-uv-workflow": DistilledRuleRow(
+        "languages/python/uv-workflow.md",
+        "python-tooling",
+        "uv workflow",
+        ("pyproject.toml",),
+        {"package_manager": "uv"},
+        28,
+        ("python", "tooling", "uv"),
+    ),
+    "pydantic-boundaries": DistilledRuleRow(
+        "frameworks/pydantic-boundaries.md",
+        "python-tooling",
+        "Pydantic boundaries",
+        _PY_FILES,
+        {"has_framework": ["pydantic"]},
+        63,
+        ("python", "pydantic", "validation"),
+    ),
 }
 SKILLS_ROOT: Final = CORE_ROOT / "skills"
 #: The python_design plugin's third-person regex, extended with "use" (a "Use when" opener).
@@ -162,6 +213,11 @@ def _loaded_skill(skill_id: str, tmp_path: Path) -> Skill:
 def _members(skill_id: str) -> list[Rule]:
     """Every rule in core naming ``skill_id``, merged and before ``applies_if``."""
     return [rule for rule in core_rules().values() if rule.frontmatter.skill == skill_id]
+
+
+def _probe_members(skill_id: str) -> list[Rule]:
+    """The members of ``skill_id`` the reference probe activates."""
+    return [r for r in _members(skill_id) if r.frontmatter.id not in PROBE_INACTIVE_MEMBERS]
 
 
 def _is_core_member_reference(path: str) -> bool:
@@ -314,6 +370,14 @@ def test_python_testing_members() -> None:
     )
 
 
+def test_python_tooling_members() -> None:
+    """Spec 9.6.2: the two FastAPI rules plus the four distilled tooling members."""
+    members = sorted(i for i, r in core_rules().items() if r.frontmatter.skill == "python-tooling")
+    assert tuple(members) == PYTHON_TOOLING_MEMBERS, (
+        f"python-tooling members are {members}; expected {list(PYTHON_TOOLING_MEMBERS)}"
+    )
+
+
 @pytest.mark.parametrize("rule_id", sorted(DISTILLED_RULES))
 def test_distilled_rule_frontmatter(rule_id: str) -> None:
     """Spec 9.4.1 / 9.6.1: the row's file and frontmatter, version 1 and no ``lint_codes`` (D23)."""
@@ -356,12 +420,12 @@ def test_reference_probe_emits_each_core_skill_within_budget(
     assert description.endswith(f"Use when {block['use_when']}.")
     assert description.count(" Use when ") == 1
     assert not _TRUNCATION_TAIL.search(description), f"{skill_id} truncates: {description!r}"
-    for rule in _members(skill_id):
+    for rule in _probe_members(skill_id):
         assert rule.frontmatter.name in description, f"{skill_id} omits {rule.frontmatter.name!r}"
     assert sorted(frontmatter) == ["description", "id", "name"]
     index = body.partition("## References\n")[2]
     lines = [line for line in index.splitlines() if line.startswith("- [")]
-    assert len(lines) == len(_members(skill_id)), f"{skill_id} index: {lines}"
+    assert len(lines) == len(_probe_members(skill_id)), f"{skill_id} index: {lines}"
 
 
 def test_reference_probe_where_section_lists_every_core_skill(reference_probe_repo: Path) -> None:
@@ -398,6 +462,7 @@ def test_reference_probe_lockfile_records_member_references_as_rules(
         f"{root}/{skill_id}/references/{rule_id}.md": ("rule", rule_id)
         for root in NATIVE_SKILL_ROOTS
         for rule_id, skill_id in EXPECTED_MEMBERSHIP.items()
+        if rule_id not in PROBE_INACTIVE_MEMBERS
     }
     assert rows == expected
 

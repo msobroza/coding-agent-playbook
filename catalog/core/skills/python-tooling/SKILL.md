@@ -1,16 +1,22 @@
 ---
 id: python-tooling
 name: python-tooling
-description: "Framework and tool wiring conventions for this repo."
+description: "Conventions tied to a named tool or framework."
 playbook:
-  use_when: "wiring or reviewing FastAPI apps, routers, dependency providers or error handlers"
-  files: "FastAPI apps, routers, dependency providers and error handlers"
+  use_when: "editing tool configuration or code wired to a framework"
+  files: "Tool configuration and framework wiring"
 ---
 
 # Python tooling
 
-Conventions tied to one named framework or developer tool. A reference applies only when the repo uses its framework or tool, so the references index in this file lists just the ones detected here, each with the one line it requires.
+Conventions tied to one named developer tool or framework: the linter and type checker, the test runner's settings, the package manager, input validation models and web framework wiring. Library-agnostic conventions stay in the python-coding skill, and test code in the python-testing skill; a reference here adds only what its tool or framework changes.
 
 ## Picking references
 
-Open the reference for each framework or tool the change touches and read it in full before writing code. Library-agnostic conventions stay in the python-coding skill; a reference here adds only what its framework or tool changes.
+The references index in this file lists only the references that apply to this repo, most important first, each with the one line it requires. Open every reference whose line matches the change and read it in full before writing code or editing configuration.
+
+- A lint or type-check finding, a suppression comment, or ruff or mypy settings: static checks.
+- Test-runner settings, markers, warning filters or coverage thresholds: the test runner's configuration.
+- Adding, removing or upgrading a dependency, the lockfile, or running project commands: uv workflow.
+- Parsing untrusted input or loading settings into models: Pydantic boundaries.
+- Web apps, routers, dependency providers or error handlers: FastAPI app wiring and FastAPI error boundaries.
