@@ -9,13 +9,13 @@ has guardrail text (``compose_guardrails_skill``); only the adapters whose
 
 from __future__ import annotations
 
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.hook_policy.guardrails_skill import (
     GUARDRAILS_SKILL_ID,
     compose_guardrails_skill,
     has_guardrail_text,
     split_guardrails_skill,
 )
-from coding_agent_playbook.types import Skill
 from tests.hook_samples import resolved_hook
 
 _INTRO = "\n# Playbook guardrails\n\nEach section is one guardrail.\n"

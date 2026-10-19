@@ -300,7 +300,6 @@ exhaustive_ignores = [
     "prompt_rule_delivery",
     "renderer",
     "rule_registry",
-    "types",
 ]
 ignore_imports = [
     # CF-2 deletes _typing.py (after #62)
@@ -378,7 +377,6 @@ forbidden_modules = [
     "coding_agent_playbook.rule_registry",
     "coding_agent_playbook.skills",
     "coding_agent_playbook.toml_writer",
-    "coding_agent_playbook.types",
     "coding_agent_playbook.validation",
     "jinja2",
     "packaging",
@@ -441,7 +439,6 @@ forbidden_modules = [
     "coding_agent_playbook.rule_registry",
     "coding_agent_playbook.skills",
     "coding_agent_playbook.toml_writer",
-    "coding_agent_playbook.types",
     "coding_agent_playbook.validation",
     "jinja2",
     "packaging",
@@ -460,7 +457,7 @@ ignore_imports = [
     "coding_agent_playbook.hook_runtime.handlers.docstring_nonregression -> coding_agent_playbook.evaluators.**",
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.evals.**",
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.catalog.source",
-    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.types",
+    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.artifacts.**",
     # N15 moves the judge into hook_runtime/judges/ and deletes these two lines
     "coding_agent_playbook.hook_runtime.handlers.gate_weakening -> coding_agent_playbook.gate_scan",
     "coding_agent_playbook.hook_runtime.handlers.gate_weakening_edit -> coding_agent_playbook.gate_scan",
@@ -529,7 +526,6 @@ forbidden_modules = [
     "coding_agent_playbook.rule_registry",
     "coding_agent_playbook.skills",
     "coding_agent_playbook.toml_writer",
-    "coding_agent_playbook.types",
     "coding_agent_playbook.validation",
     "jinja2",
     "packaging",

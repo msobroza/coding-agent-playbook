@@ -1,11 +1,12 @@
 """``HookFrontmatter``: the static YAML frontmatter of ``HOOK.md`` (§A.2).
 
 Split out of ``types.py`` for the file-size budget (specs/prS-skills-context.md
-§6.4.1), which leaves ``types`` room to grow; this module is its public home
-(specs/prT-package-layout.md A1 removed the ``types`` re-export).
+§6.4.1); this module is its public home (specs/prT-package-layout.md A1 removed
+the ``types`` re-export, and A2 deleted ``types.py``).
 
 A leaf module: it depends only on ``artifacts.hook_schema``, ``dataclasses`` and
-``typing``, never on ``types``, so ``types`` can import it without a cycle.
+``typing``, never on ``artifacts.hook``, so ``artifacts.hook`` can import it
+without a cycle.
 """
 
 from __future__ import annotations
