@@ -57,7 +57,11 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.commands._ci_policy` | `coding_agent_playbook.commands.twins.policy` | N8 |
 | `coding_agent_playbook.commands._committed_config` | `coding_agent_playbook.config.committed` | N10 |
 | `coding_agent_playbook.commands._precommit_merge` | `coding_agent_playbook.precommit` | N9 |
+| `coding_agent_playbook.commands._sync_preflight` | `coding_agent_playbook.validation.preflight` | A4 |
 | `coding_agent_playbook.commands._twin_policy` | `coding_agent_playbook.commands.twins.policy` | N8 |
+| `coding_agent_playbook.commands._validate_context` | `coding_agent_playbook.validation.context` | A4 |
+| `coding_agent_playbook.commands._validate_prompts` | `coding_agent_playbook.validation.prompts` | A4 |
+| `coding_agent_playbook.commands._validation` | `coding_agent_playbook.validation.findings` | A4 |
 | `coding_agent_playbook.commands.check_commit_trailers` | `coding_agent_playbook.commands.twins.check_commit_trailers` | N8 |
 | `coding_agent_playbook.commands.check_deps` | `coding_agent_playbook.commands.twins.check_deps` | N8 |
 | `coding_agent_playbook.commands.check_notebooks` | `coding_agent_playbook.commands.twins.check_notebooks` | N8 |
@@ -69,6 +73,9 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.commands.init.precommit_template_dir` | `coding_agent_playbook.precommit.precommit_template_dir` | N9 |
 | `coding_agent_playbook.commands.scan_secrets` | `coding_agent_playbook.commands.twins.scan_secrets` | N8 |
 | `coding_agent_playbook.commands.scan_sinks` | `coding_agent_playbook.commands.twins.scan_sinks` | N8 |
+| `coding_agent_playbook.commands.validate.collect_validation_errors` | `coding_agent_playbook.validation.checks.collect_validation_errors` | A4 |
+| `coding_agent_playbook.commands.validate.collect_validation_findings` | `coding_agent_playbook.validation.checks.collect_validation_findings` | A4 |
+| `coding_agent_playbook.commands.validate.sync_gate_errors` | `coding_agent_playbook.validation.checks.sync_gate_errors` | A4 |
 | `coding_agent_playbook.config` | `coding_agent_playbook.config.model` | N2 |
 | `coding_agent_playbook.config.ConfigError` | `coding_agent_playbook.config.schema.ConfigError` | N2 |
 | `coding_agent_playbook.config.GuardrailsConfig` | `coding_agent_playbook.config.tables.hooks.GuardrailsConfig` | N2 |
@@ -92,6 +99,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.evaluators.policy` | `coding_agent_playbook.metrics_gate.policy` | N22 |
 | `coding_agent_playbook.evaluators.types.MetricConfig` | `coding_agent_playbook.metrics_gate.config.MetricConfig` | N22 |
 | `coding_agent_playbook.hooks_config` | `coding_agent_playbook.config.tables.hooks` | N2 |
+| `coding_agent_playbook.links` | `coding_agent_playbook.validation.link_check` | A4 |
 | `coding_agent_playbook.links.LinksConfig` | `coding_agent_playbook.config.tables.links.LinksConfig` | N2 |
 | `coding_agent_playbook.lockfile` | `coding_agent_playbook.lockfile.model` | N5 |
 | `coding_agent_playbook.lockfile.DriftItem` | `coding_agent_playbook.lockfile.drift.DriftItem` | N5 |
@@ -112,6 +120,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.sources.filesystem.ENGINE_PACKAGE` | `coding_agent_playbook.catalog.layers.ENGINE_PACKAGE` | N3 |
 | `coding_agent_playbook.sources.filesystem.FileSystemStateSource` | `coding_agent_playbook.config.files.FileSystemStateSource` | N2 |
 | `coding_agent_playbook.sources.filesystem.REPO_LOCAL_SOURCE` | `coding_agent_playbook.catalog.layers.REPO_LOCAL_SOURCE` | N3 |
+| `coding_agent_playbook.types.Hook` | `coding_agent_playbook.artifacts.hook.Hook` | A2 |
 | `coding_agent_playbook.types.HookDecision` | `coding_agent_playbook.artifacts.hook_schema.HookDecision` | A1 |
 | `coding_agent_playbook.types.HookEvent` | `coding_agent_playbook.artifacts.hook_schema.HookEvent` | A1 |
 | `coding_agent_playbook.types.HookFrontmatter` | `coding_agent_playbook.artifacts.hook_frontmatter.HookFrontmatter` | A1 |
@@ -121,7 +130,14 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.types.HookOnError` | `coding_agent_playbook.artifacts.hook_schema.HookOnError` | A1 |
 | `coding_agent_playbook.types.HookSchemaError` | `coding_agent_playbook.artifacts.hook_schema.HookSchemaError` | A1 |
 | `coding_agent_playbook.types.HookTier` | `coding_agent_playbook.artifacts.hook_schema.HookTier` | A1 |
+| `coding_agent_playbook.types.Prompt` | `coding_agent_playbook.artifacts.prompt.Prompt` | A2 |
+| `coding_agent_playbook.types.PromptFrontmatter` | `coding_agent_playbook.artifacts.prompt.PromptFrontmatter` | A2 |
+| `coding_agent_playbook.types.Rule` | `coding_agent_playbook.artifacts.rule.Rule` | A2 |
+| `coding_agent_playbook.types.RuleFrontmatter` | `coding_agent_playbook.artifacts.rule.RuleFrontmatter` | A2 |
+| `coding_agent_playbook.types.Skill` | `coding_agent_playbook.artifacts.skill.Skill` | A2 |
 | `coding_agent_playbook.types.ToolClass` | `coding_agent_playbook.artifacts.hook_schema.ToolClass` | A1 |
+| `coding_agent_playbook.types.format_frontmatter` | `coding_agent_playbook.artifacts.frontmatter.format_frontmatter` | A2 |
+| `coding_agent_playbook.types.split_frontmatter` | `coding_agent_playbook.artifacts.frontmatter.split_frontmatter` | A2 |
 <!-- module-moves:end -->
 
 ## v0.21 — Skills-first context

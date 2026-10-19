@@ -246,7 +246,7 @@ layers = [
     "cli",
     "commands",
     "(sync)",
-    "(validation)",
+    "validation",
     "(agent_harness) | evals | precommit",
     "adapters",
     "(rendering)",
@@ -292,12 +292,10 @@ exhaustive_ignores = [
     "hook_policy",
     "hook_registrations",
     "hook_runtime",
-    "links",
     "orchestrator",
     "prompt_rule_delivery",
     "renderer",
     "rule_registry",
-    "types",
 ]
 ignore_imports = [
     # CF-2 deletes _typing.py (after #62)
@@ -365,7 +363,6 @@ forbidden_modules = [
     "coding_agent_playbook.hook_policy",
     "coding_agent_playbook.hook_registrations",
     "coding_agent_playbook.hook_runtime",
-    "coding_agent_playbook.links",
     "coding_agent_playbook.metrics_gate",
     "coding_agent_playbook.orchestrator",
     "coding_agent_playbook.precommit",
@@ -374,7 +371,7 @@ forbidden_modules = [
     "coding_agent_playbook.rule_registry",
     "coding_agent_playbook.skills",
     "coding_agent_playbook.toml_writer",
-    "coding_agent_playbook.types",
+    "coding_agent_playbook.validation",
     "jinja2",
     "packaging",
     "yaml",
@@ -428,7 +425,6 @@ forbidden_modules = [
     "coding_agent_playbook.harness",
     "coding_agent_playbook.hook_policy",
     "coding_agent_playbook.hook_registrations",
-    "coding_agent_playbook.links",
     "coding_agent_playbook.metrics_gate",
     "coding_agent_playbook.orchestrator",
     "coding_agent_playbook.precommit",
@@ -437,7 +433,7 @@ forbidden_modules = [
     "coding_agent_playbook.rule_registry",
     "coding_agent_playbook.skills",
     "coding_agent_playbook.toml_writer",
-    "coding_agent_playbook.types",
+    "coding_agent_playbook.validation",
     "jinja2",
     "packaging",
     "yaml",
@@ -455,7 +451,7 @@ ignore_imports = [
     "coding_agent_playbook.hook_runtime.handlers.docstring_nonregression -> coding_agent_playbook.evaluators.**",
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.evals.**",
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.catalog.source",
-    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.types",
+    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.artifacts.**",
     # N15 moves the judge into hook_runtime/judges/ and deletes these two lines
     "coding_agent_playbook.hook_runtime.handlers.gate_weakening -> coding_agent_playbook.gate_scan",
     "coding_agent_playbook.hook_runtime.handlers.gate_weakening_edit -> coding_agent_playbook.gate_scan",
@@ -516,7 +512,6 @@ forbidden_modules = [
     "coding_agent_playbook.hook_policy",
     "coding_agent_playbook.hook_registrations",
     "coding_agent_playbook.hook_runtime",
-    "coding_agent_playbook.links",
     "coding_agent_playbook.metrics_gate",
     "coding_agent_playbook.orchestrator",
     "coding_agent_playbook.precommit",
@@ -525,7 +520,7 @@ forbidden_modules = [
     "coding_agent_playbook.rule_registry",
     "coding_agent_playbook.skills",
     "coding_agent_playbook.toml_writer",
-    "coding_agent_playbook.types",
+    "coding_agent_playbook.validation",
     "jinja2",
     "packaging",
     "yaml",
@@ -568,8 +563,6 @@ modules = [
 ignore_imports = [
     # A6: init calls sync.pipeline.execute, not the sync command (after #62)
     "coding_agent_playbook.commands.init -> coding_agent_playbook.commands.sync",
-    # A4: the sync command imports validation/, not the validate command (after #62)
-    "coding_agent_playbook.commands.sync -> coding_agent_playbook.commands.validate",
 ]
 broken_contract_guidance = """
 Shared code goes below commands (a domain package) or into a commands/_helper module that
@@ -625,10 +618,10 @@ ignore_imports = [
     "coding_agent_playbook.commands._sync_output -> coding_agent_playbook.adapters._skill_writer",
     "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._skill_writer",
     # A7: becomes generated_output/source_files.py (after #62)
-    "coding_agent_playbook.commands.validate -> coding_agent_playbook.adapters._skill_sources",
+    "coding_agent_playbook.validation.checks -> coding_agent_playbook.adapters._skill_sources",
     "coding_agent_playbook.guard_config -> coding_agent_playbook.adapters._skill_sources",
     # A17: becomes hooks/contract/findings.py (after #62)
-    "coding_agent_playbook.commands._validate_hooks -> coding_agent_playbook.hook_policy._findings",
+    "coding_agent_playbook.validation._hooks -> coding_agent_playbook.hook_policy._findings",
 ]
 broken_contract_guidance = """
 Import a public module of the owning package, or move the importer inside that package.

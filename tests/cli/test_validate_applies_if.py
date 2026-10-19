@@ -11,6 +11,7 @@ import argparse
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.commands import validate as _validate
+from coding_agent_playbook.validation.checks import _applies_if_errors
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -104,7 +105,7 @@ def test_validate_accepts_a_known_package_manager_list(
 def test_applies_if_errors_reports_one_error_per_bad_key(tmp_path: Path) -> None:
     predicate = {"orm_version": ">=2", "has_framework": ["x"], "package_manager": "pipenv"}
 
-    errors = _validate._applies_if_errors("r.md", predicate, {}, tmp_path)
+    errors = _applies_if_errors("r.md", predicate, {}, tmp_path)
 
     assert [(error.path, error.message) for error in errors] == [
         ("r.md", "applies_if: unknown predicate key: 'orm_version'"),

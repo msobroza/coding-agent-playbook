@@ -3,7 +3,7 @@
 Third-party sources register via the ``coding_agent_playbook.artifact_sources``
 entry point declared in ``pyproject.toml``. The filesystem source is the v1
 implementation. It depends only on stdlib (pathlib, importlib.resources,
-importlib.metadata) plus pyyaml for the frontmatter helpers already in types.py.
+importlib.metadata) plus pyyaml for the helpers in ``artifacts/frontmatter.py``.
 The StateSource ABC and FileSystemStateSource live in ``config/files.py``.
 """
 
@@ -14,8 +14,13 @@ from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
+
 # A stdlib-only package module, so this stays a light import.
 from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
+from coding_agent_playbook.artifacts.prompt import Prompt
+from coding_agent_playbook.artifacts.rule import Rule
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.catalog._hook_walk import walk_hook_layer
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
 from coding_agent_playbook.catalog.roots import catalog_layer_root, is_bundled_layer
@@ -23,14 +28,13 @@ from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
 )
-from coding_agent_playbook.types import Prompt, Rule, Skill, split_frontmatter
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
     from typing import TypeVar
 
+    from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.types import Hook
 
     _T = TypeVar("_T")
 
@@ -107,7 +111,7 @@ def _resource_subdir(package: str, subdir: str) -> Path | None:
         # ``files()`` imports the package, and an overlay's import may raise
         # anything (its own code, a missing dependency, an empty name). Skip it
         # like a missing one: sync/validate/check/init run the shared
-        # ``_sync_preflight.unusable_overlays`` check, which names it and the
+        # ``validation.preflight.unusable_overlays`` check, which names it and the
         # error, so discovery must not crash before that check can report it.
         return None
     # We need a ``Path`` for ``rglob``-based walking, not just a

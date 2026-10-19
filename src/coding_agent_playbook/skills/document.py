@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from coding_agent_playbook.artifacts.member_reference import MemberReference
-    from coding_agent_playbook.types import Skill
+    from coding_agent_playbook.artifacts.skill import Skill
 
 #: The composed description's ceiling (D4), held by construction (D21).
 DESCRIPTION_MAX_CHARS: Final = 300

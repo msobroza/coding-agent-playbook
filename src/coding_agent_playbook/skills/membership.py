@@ -21,7 +21,8 @@ from coding_agent_playbook.skills.naming import skill_id_of
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
-    from coding_agent_playbook.types import Rule, Skill
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
 
 #: The built-in adapters that write skill references, named by the undelivered warning.
 _SKILL_REFERENCE_ADAPTERS: Final = "claude_code, opencode or shared_skills"

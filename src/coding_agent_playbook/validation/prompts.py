@@ -12,21 +12,21 @@ A typo there would silently drop guidance, so three checks guard it (P3-7):
 - every id names a rule of the merged set, with a did-you-mean.
 
 ``check_prompt_rule_calls`` is the first check alone, for ``playbook sync
---check-staged``, which is not validate-gated. A module of its own beside
-``validate`` (which is over 400 lines), like the other ``_validate_*`` check modules.
+--check-staged``, which is not validate-gated; sync imports it from outside the
+package, so it is public, unlike the other check modules beside ``checks``.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final, TypeGuard
 
-from coding_agent_playbook.commands._validation import RULE_CALL_RE, ValidationError
 from coding_agent_playbook.hook_policy import did_you_mean
+from coding_agent_playbook.validation.findings import RULE_CALL_RE, ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Sequence
 
-    from coding_agent_playbook.types import Prompt
+    from coding_agent_playbook.artifacts.prompt import Prompt
 
 #: How a well-formed ``includes_rules`` looks, quoted in the shape error.
 _INCLUDES_RULES_SHAPE: Final = "expected a list of rule ids, e.g. ['python-typing', 'pytest']"

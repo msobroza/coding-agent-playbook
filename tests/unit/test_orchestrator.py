@@ -14,6 +14,9 @@ import dataclasses
 
 import pytest
 
+from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.model import Config, ProjectMeta, StorageConfig
 from coding_agent_playbook.orchestrator import (
@@ -22,13 +25,6 @@ from coding_agent_playbook.orchestrator import (
     artifact_id_of,
     discover_adapters,
     template_source,
-)
-from coding_agent_playbook.types import (
-    Prompt,
-    PromptFrontmatter,
-    Rule,
-    RuleFrontmatter,
-    Skill,
 )
 
 

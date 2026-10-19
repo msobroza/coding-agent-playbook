@@ -19,6 +19,7 @@ from typing import Any
 
 import pytest
 
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.prompt_rule_delivery import (
     SkillReference,
     includes_rules_appendix,
@@ -26,7 +27,6 @@ from coding_agent_playbook.prompt_rule_delivery import (
     skill_pointer_block,
 )
 from coding_agent_playbook.rule_registry import build_prompt_environment
-from coding_agent_playbook.types import Rule, RuleFrontmatter
 from tests.import_probe import new_modules_after
 
 
