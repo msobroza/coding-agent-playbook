@@ -1,0 +1,47 @@
+# N11 (#93, specs/prT-package-layout.md 4.3, 7.4, B.12.6): commands/eval.py is split
+# verbatim. Only the names that keep their spelling are listed: the script rewrites
+# module paths, never names, so the six lookups and serialisers that lose their
+# underscore (load_runner_class, available_runner_names, load_judge_class,
+# available_judge_names -> evals.registry; task_result_to_dict, format_task_result_text
+# -> evals.report_format) are renamed at their call sites by hand.
+
+[[names]]
+pr = "N11"
+old = "coding_agent_playbook.commands.eval"
+new = "coding_agent_playbook.evals.registry"
+names = ["_RUNNERS_GROUP", "_JUDGES_GROUP"]
+
+[[names]]
+pr = "N11"
+old = "coding_agent_playbook.commands.eval"
+new = "coding_agent_playbook.evals.report_format"
+names = [
+    "_UNCALIBRATED_NOTE",
+    "_check_to_dict",
+    "_finding_to_dict",
+    "_aggregate_line",
+    "_any_trial_judge_scored",
+    "_judge_scored",
+    "_judge_scored_leaf",
+    "_scope_detail",
+]
+
+[[names]]
+pr = "N11"
+old = "coding_agent_playbook.commands.eval"
+new = "coding_agent_playbook.commands._eval_enumerate"
+names = [
+    "_DEFAULT_RUNNER",
+    "_RUN_HINT_TEMPLATE",
+    "_print_list",
+    "_plural",
+    "_print_show",
+    "_print_run_hint",
+    "_short_source",
+    "_display_source_path",
+    "_count_gate_checks",
+    "_count_rubric_criteria",
+    "_gate_check_descriptions",
+    "_describe_binding",
+    "_rubric_criteria_with_weights",
+]

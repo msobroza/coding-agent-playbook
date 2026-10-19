@@ -353,7 +353,9 @@ coding-agent-playbook/
 │   │   ├── loader.py                       # v1: walks each layer's eval_tasks/ (active)
 │   │   ├── validator.py                    # v1: cross-reference checks (active)
 │   │   ├── runner.py                       # v2: HarnessRunner ABC (placeholder)
-│   │   └── judge.py                        # v2: Judge ABC (placeholder)
+│   │   ├── judge.py                        # v2: Judge ABC (placeholder)
+│   │   ├── registry.py                     # runner and judge lookups (entry-point groups)
+│   │   └── report_format.py                # text and JSON views of a task result
 │   └── templates/
 │       ├── hook_shims/                     # launcher + OpenCode shim templates (str.replace, never Jinja)
 │       └── precommit/
@@ -2707,7 +2709,7 @@ Rubric (manual / LLM-judge, 4 criteria):
   - 0.2: No mocking is used (the function is pure)
 Verdict: gate and rubric
 ```
-The `Source:` label (`commands/eval.py:_display_source_path`) is built from the task's layer, never by searching its path for a `resources` segment, and never shows the absolute filesystem path. `<dir>` is always the task directory's name (`task.source_path.parent.name`), never `task.id`, which nothing ties to the directory:
+The `Source:` label (`commands/_eval_enumerate.py:_display_source_path`) is built from the task's layer, never by searching its path for a `resources` segment, and never shows the absolute filesystem path. `<dir>` is always the task directory's name (`task.source_path.parent.name`), never `task.id`, which nothing ties to the directory:
 - **Bundled layers** (the engine and bundled plugins): `<source_package>/eval_tasks/<dir>/`, e.g. `coding_agent_playbook/eval_tasks/generate-tests-happy-path/` or `coding_agent_playbook.plugins.<name>/eval_tasks/<dir>/`. Before v0.19 the engine's label read `coding_agent_playbook/resources/eval_tasks/<dir>/`.
 - **Third-party overlays:** `<source_package>/resources/eval_tasks/<dir>/`, still a real package-relative path, so it is unchanged.
 - **Repo-local:** `playbook/eval_tasks/<dir>/`.
