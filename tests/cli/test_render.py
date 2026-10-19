@@ -94,7 +94,8 @@ def test_render_show_source_omits_overrides_when_no_collision(
     assert "Overrides:" not in out
 
 
-def test_render_show_rules_lists_inclusion_graph(tmp_path, make_synthetic_repo, capsys):
+def test_render_show_rules_names_the_owning_skill(tmp_path, make_synthetic_repo, capsys):
+    """Each included rule shows its delivery: a skill reference, always loaded, or unknown."""
     repo = make_synthetic_repo(
         tmp_path,
         rules=[("included-rule", "Inner body\n")],
@@ -103,7 +104,7 @@ def test_render_show_rules_lists_inclusion_graph(tmp_path, make_synthetic_repo, 
                 "with-includes",
                 {
                     "slash": "with-includes",
-                    "includes_rules": ["included-rule", "missing-rule"],
+                    "includes_rules": ["python-typing", "included-rule", "missing-rule"],
                     "body": "Prompt body\n",
                 },
             )
@@ -111,12 +112,57 @@ def test_render_show_rules_lists_inclusion_graph(tmp_path, make_synthetic_repo, 
     )
     rc = _render.run(_ns(repo, "with-includes", show_rules=True))
     assert rc == 0
+    assert capsys.readouterr().out == (
+        "Prompt:    with-includes\n"
+        "includes_rules:\n"
+        "  - python-typing  (coding_agent_playbook, applies_if=True -> skill python-coding, "
+        "references/python-typing.md)\n"
+        "  - included-rule  (<repo-local>, applies_if=True -> always loaded)\n"
+        "  - missing-rule  (UNKNOWN)\n"
+    )
+
+
+def test_render_prompt_claude_command_shows_the_pointer_block(
+    tmp_path, make_synthetic_repo, capsys
+):
+    repo = make_synthetic_repo(tmp_path)
+
+    assert _render.run(_ns(repo, "review", fmt="prompt_claude_command")) == 0
     out = capsys.readouterr().out
-    assert "included-rule" in out
-    assert "missing-rule" in out
-    # The known rule should be INLINED; the unknown one UNKNOWN.
-    assert "INLINED" in out
-    assert "UNKNOWN" in out
+    assert "## Before you start" in out
+    assert "1. Load skill `python-coding` and read its references" in out
+    assert not [line for line in out.splitlines() if line.startswith("### ")]
+
+
+def test_render_prompt_continue_keeps_the_reference_appendix(tmp_path, make_synthetic_repo, capsys):
+    repo = make_synthetic_repo(tmp_path)
+
+    assert _render.run(_ns(repo, "review", fmt="prompt_continue")) == 0
+    out = capsys.readouterr().out
+    assert out.count("## Reference rules") == 1
+    assert out.count("### Typing") == 1
+    assert out.index("## Output format") < out.index("## Reference rules")
+    assert "## Before you start" not in out
+
+
+def test_render_prompt_calling_rule_reports_the_file(tmp_path, make_synthetic_repo, capsys):
+    """Regression (D15): the removed ``rule()`` helper names the prompt, not a traceback."""
+    repo = make_synthetic_repo(tmp_path)
+    prompt = repo / "playbook" / "prompts" / "inliner.md.j2"
+    prompt.parent.mkdir(parents=True)
+    prompt.write_text(
+        "---\nid: inliner\nname: Inliner\ndescription: d\nslash: inliner\n---\n"
+        'Review.\n{{ rule("python-typing") }}\n',
+        encoding="utf-8",
+    )
+
+    rc = _render.run(_ns(repo, "inliner", fmt="prompt_claude_command"))
+
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "error: playbook/prompts/inliner.md.j2: 'rule' is undefined" in captured.err
+    assert "playbook render aborted." in captured.err
 
 
 def test_render_unknown_id_exits_one(tmp_path, make_synthetic_repo, capsys):
@@ -258,12 +304,12 @@ def _tidy_repo(
     return make_synthetic_repo(tmp_path, prompts=[("tidy", prompt)], **extras)
 
 
-def _inlined_ids(show_rules_out: str) -> set[str]:
-    """Rule ids that ``--show-rules`` marks ``INLINED`` (lines ``  - <id>  (... -> INLINED)``)."""
+def _delivered_ids(show_rules_out: str) -> set[str]:
+    """Rule ids ``--show-rules`` delivers: every ``  - <id>`` line not ``OMITTED`` or ``UNKNOWN``."""
     return {
         line.split()[1]
         for line in show_rules_out.splitlines()
-        if line.startswith("  - ") and line.endswith("-> INLINED)")
+        if line.startswith("  - ") and not line.endswith(("-> OMITTED)", "(UNKNOWN)"))
     }
 
 
@@ -300,12 +346,12 @@ def test_render_prompt_agrees_with_show_rules(tmp_path, make_synthetic_repo, cap
     bodies = {"gated": "GATED-BODY", "plain": "PLAIN-BODY"}
 
     assert _render.run(_ns(repo, "tidy", show_rules=True)) == 0
-    inlined = _inlined_ids(capsys.readouterr().out)
+    delivered = _delivered_ids(capsys.readouterr().out)
     assert _render.run(_ns(repo, "tidy", fmt="prompt_continue")) == 0
     rendered = capsys.readouterr().out
 
-    assert inlined == {rule_id for rule_id, body in bodies.items() if body in rendered}
-    assert inlined == {"plain"}
+    assert delivered == {rule_id for rule_id, body in bodies.items() if body in rendered}
+    assert delivered == {"plain"}
 
 
 def test_render_prompt_omits_an_included_rule_with_a_malformed_predicate(

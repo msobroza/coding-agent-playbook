@@ -121,6 +121,48 @@ def test_sync_check_staged_is_not_validate_gated(
     assert spy.calls == []
 
 
+_RULE_CALLING_PROMPT = (
+    "---\nid: inliner\nname: Inliner\ndescription: d\nslash: inliner\n"
+    'includes_rules:\n  - python-typing\n---\nReview.\n{{ rule("python-typing") }}\n'
+)
+
+
+def test_sync_check_staged_names_a_prompt_that_still_calls_rule(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression (D15, prS §7.5): the ungated pre-commit path refuses a ``rule()`` call
+    with the migration message, never a jinja2 ``UndefinedError`` traceback."""
+    repo = make_synthetic_repo(tmp_path)
+    prompt = repo / "playbook" / "prompts" / "inliner.md.j2"
+    prompt.parent.mkdir(parents=True, exist_ok=True)
+    prompt.write_text(_RULE_CALLING_PROMPT, encoding="utf-8")
+    spy = _SpyValidate([ValidationError("x.md", "boom")])
+
+    rc = _sync.execute(repo, check_staged=True, git=FakeGitClient(staged=["app.py"]), validate=spy)
+
+    assert rc == 1
+    assert spy.calls == []  # still not the full validate gate
+    assert capsys.readouterr().err.splitlines() == [
+        f'FAIL {prompt}: body calls {{{{ rule("python-typing") }}}}; prompts no longer inline '
+        "rules. Remove the call and keep 'python-typing' in includes_rules: Claude Code and "
+        "OpenCode commands then point at its skill, Continue appends its text",
+        "validation failed with 1 error(s)",
+        _ABORT_LINE,
+    ]
+
+
+def test_sync_check_staged_skips_the_rule_call_check_with_nothing_staged(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory
+) -> None:
+    """The nothing-staged fast path still exits 0 before reading any prompt."""
+    repo = make_synthetic_repo(tmp_path)
+    prompt = repo / "playbook" / "prompts" / "inliner.md.j2"
+    prompt.parent.mkdir(parents=True, exist_ok=True)
+    prompt.write_text(_RULE_CALLING_PROMPT, encoding="utf-8")
+
+    assert _sync.execute(repo, check_staged=True, git=FakeGitClient(staged=[])) == 0
+
+
 def test_sync_validate_errors_go_to_stderr_with_abort_line(
     tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
 ) -> None:
