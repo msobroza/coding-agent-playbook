@@ -26,7 +26,7 @@ from tests.hook_runtime.guard_repo import hook_record
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from tests.hook_runtime.guard_repo import GuardRepo
 
 

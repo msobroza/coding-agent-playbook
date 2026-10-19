@@ -249,7 +249,7 @@ layers = [
     "validation",
     "agent_harness | evals | precommit",
     "adapters",
-    "(rendering)",
+    "rendering",
     "hooks",
     "skills",
     "metrics_gate",
@@ -277,9 +277,6 @@ exhaustive_ignores = [
     "_guard_config_verify",
     "guard_config",
     "hook_runtime",
-    "prompt_rule_delivery",
-    "renderer",
-    "rule_registry",
 ]
 ignore_imports = [
     # kept: catalog-layers (the artifact source parses eval tasks) is not scheduled (L12)
@@ -305,6 +302,7 @@ type = "forbidden"
 # tests/engine_modules.py STDLIB_LEAVES: the only engine modules the two stacks import.
 source_modules = [
     "coding_agent_playbook.artifacts.path_classes",
+    "coding_agent_playbook.artifacts.path_globs",
     "coding_agent_playbook.catalog.roots",
     "coding_agent_playbook.detector.pep503",
     "coding_agent_playbook.detector.pyproject_deps",
@@ -360,9 +358,7 @@ forbidden_modules = [
     "coding_agent_playbook.hooks",
     "coding_agent_playbook.metrics_gate",
     "coding_agent_playbook.precommit",
-    "coding_agent_playbook.prompt_rule_delivery",
-    "coding_agent_playbook.renderer",
-    "coding_agent_playbook.rule_registry",
+    "coding_agent_playbook.rendering",
     "coding_agent_playbook.skills",
     "coding_agent_playbook.sync",
     "coding_agent_playbook.toml_writer",
@@ -427,9 +423,7 @@ forbidden_modules = [
     "coding_agent_playbook.hooks",
     "coding_agent_playbook.metrics_gate",
     "coding_agent_playbook.precommit",
-    "coding_agent_playbook.prompt_rule_delivery",
-    "coding_agent_playbook.renderer",
-    "coding_agent_playbook.rule_registry",
+    "coding_agent_playbook.rendering",
     "coding_agent_playbook.skills",
     "coding_agent_playbook.sync",
     "coding_agent_playbook.toml_writer",
@@ -441,7 +435,7 @@ forbidden_modules = [
 # The deferred branches (specs/prK-lifecycle-hooks.md §D.1): modules the dispatcher
 # loads only on their branch, pinned per branch by tests/hook_runtime/test_import_budget*.py.
 ignore_imports = [
-    "coding_agent_playbook.hook_runtime.deps -> coding_agent_playbook.grading.**",
+    "coding_agent_playbook.hook_runtime.dispatch.deps -> coding_agent_playbook.grading.**",
     "coding_agent_playbook.hook_runtime.handlers._coverage_report -> coding_agent_playbook.grading.**",
     "coding_agent_playbook.hook_runtime.handlers._coverage_report -> coding_agent_playbook.metrics_gate.**",
     "coding_agent_playbook.hook_runtime.handlers._metrics_pass -> coding_agent_playbook.grading.**",
@@ -516,9 +510,7 @@ forbidden_modules = [
     "coding_agent_playbook.hooks",
     "coding_agent_playbook.metrics_gate",
     "coding_agent_playbook.precommit",
-    "coding_agent_playbook.prompt_rule_delivery",
-    "coding_agent_playbook.renderer",
-    "coding_agent_playbook.rule_registry",
+    "coding_agent_playbook.rendering",
     "coding_agent_playbook.skills",
     "coding_agent_playbook.sync",
     "coding_agent_playbook.toml_writer",
@@ -526,10 +518,6 @@ forbidden_modules = [
     "jinja2",
     "packaging",
     "yaml",
-]
-ignore_imports = [
-    # A12: the glob grammar moves to artifacts/path_globs.py (after #62)
-    "coding_agent_playbook.grading.paths -> coding_agent_playbook.hook_runtime.**",
 ]
 broken_contract_guidance = """
 The grading kernel is shared by eval tasks and the metrics gate, so it imports neither, nor

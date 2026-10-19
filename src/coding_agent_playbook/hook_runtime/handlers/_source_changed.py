@@ -30,8 +30,8 @@ from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, Handl
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from coding_agent_playbook.hook_runtime.proc import ProcResult
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.proc import ProcResult
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
 
 __all__ = [
     "CHILD_TIMEOUT_S",

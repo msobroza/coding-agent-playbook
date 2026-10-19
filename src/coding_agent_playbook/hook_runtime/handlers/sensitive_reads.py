@@ -32,6 +32,7 @@ from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._data_reads import is_pattern, read_candidates
 from coding_agent_playbook.hook_runtime.handlers._secret_policy import spelled
 from coding_agent_playbook.hook_runtime.handlers._targets import shell_target
@@ -42,7 +43,6 @@ from coding_agent_playbook.hook_runtime.judges.notebook_check import (
     check_cells,
     read_notebook,
 )
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.security.files import user_home
 from coding_agent_playbook.security.paths import PathPolicy
 
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
 
 __all__ = ["CONFIG_SCHEMA", "DEFAULT_CSV_MAX_SAMPLE_BYTES", "MODES", "sensitive_read_guard"]
 

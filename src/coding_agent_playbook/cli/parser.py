@@ -5,7 +5,7 @@ and exposes a ``run(args) -> int`` that returns the process exit code. A module
 on the Command protocol (:mod:`._command`) also declares its ``NAME``, ``HELP``
 and flags (``configure``), and :func:`build_parser` walks ``_SUBCOMMANDS`` by
 name: a name in ``_COMMANDS`` gets the module's flags, a name in ``_LEGACY``
-still has them declared here, until its command migrates (CP-3, B10).
+still has them declared here, until its command migrates (CP-3).
 
 The dispatch pattern is the standard ``subparser.set_defaults(func=...)``
 idiom: ``coding_agent_playbook.cli.main()`` parses argv with :func:`build_parser`,
@@ -72,6 +72,7 @@ _COMMANDS: Final[tuple[Command, ...]] = (
     check_cmd,
     validate_cmd,
     render_cmd,
+    eval_cmd,
     metrics_cmd,
     import_harness_cmd,
     validate_harness_cmd,
@@ -142,68 +143,8 @@ def _add_init_parser(subcommands: _SubParsers) -> None:
     init_p.set_defaults(func=init_cmd.run)
 
 
-def _add_eval_parser(subcommands: _SubParsers) -> None:
-    """``playbook eval``'s flags (PR 11 enumeration; PR R1d adds --run); B10 moves them."""
-    eval_p = subcommands.add_parser(
-        "eval", help="eval enumeration + `--run` a task (SPEC §12.8, §15)"
-    )
-    # Every other subcommand exposes ``--repo-root <path>`` for testability
-    # and so users can run against a non-cwd checkout; eval gets the same
-    # surface for parity. The command runner in ``commands/eval.py`` already
-    # falls back to ``Path.cwd()`` when this is absent.
-    eval_p.add_argument(
-        "--repo-root", help="repo to enumerate eval tasks against (defaults to cwd)"
-    )
-    eval_group = eval_p.add_mutually_exclusive_group()
-    eval_group.add_argument("--list", action="store_true")
-    eval_group.add_argument("--show", help="show one task by id")
-    eval_p.add_argument("id", nargs="?", help="task id (enumerate, or run with --run)")
-    # PR R1d — execute one task end-to-end and grade it through the unified
-    # EvaluationReport. Whether execution evaluators run is the task's own
-    # [metrics] decision, so there is intentionally no --run-tests flag here.
-    eval_p.add_argument(
-        "--run",
-        action="store_true",
-        help="execute the task <id> through a runner and grade it (SPEC §15)",
-    )
-    eval_p.add_argument(
-        "--runner",
-        help="runner name from the coding_agent_playbook.runners group "
-        "(default: claude_code; use 'fake' for a hermetic no-op run)",
-    )
-    # PR R2 — judged [rubric] scoring. --judge selects a Tier-2 judge from the
-    # coding_agent_playbook.judges group (e.g. 'llm', opt-in/CLI-gated); omitted
-    # means deterministic-only. --samples is the per-criterion average count.
-    eval_p.add_argument(
-        "--judge",
-        help="judge name from the coding_agent_playbook.judges group to score "
-        "[rubric] criteria (e.g. 'llm'); omit for a deterministic-only run",
-    )
-    eval_p.add_argument(
-        "--samples",
-        type=int,
-        help="per-criterion judge samples to average (default: 1)",
-    )
-    # By default --run is fail-fast: a lost deterministic gate skips the costlier
-    # judge tier (saving an LLM call). --full-scoring grades every check.
-    eval_p.add_argument(
-        "--full-scoring",
-        action="store_true",
-        help="grade every check even after the gate is lost (disables fail-fast; "
-        "scores the judge tier regardless of a failing deterministic check)",
-    )
-    eval_p.add_argument(
-        "--format",
-        choices=("text", "json"),
-        help="--run output format (default: text)",
-    )
-    eval_p.set_defaults(func=eval_cmd.run)
-
-
-#: The subcommands whose flags are still declared here, by name; each moves into
-#: its command module and onto ``_COMMANDS`` (B10: eval; CP-3: init), and the
-#: mapping goes with the last of them.
+#: The subcommands whose flags are still declared here, by name; ``init`` moves into
+#: its command module and onto ``_COMMANDS`` in CP-3, and the mapping goes with it.
 _LEGACY: Final[Mapping[str, Callable[[_SubParsers], None]]] = {
     "init": _add_init_parser,
-    "eval": _add_eval_parser,
 }

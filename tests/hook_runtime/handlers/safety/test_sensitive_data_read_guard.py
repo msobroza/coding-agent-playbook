@@ -18,7 +18,7 @@ import pytest
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import Harness
-from coding_agent_playbook.hook_runtime.registry import load_builtin
+from coding_agent_playbook.hook_runtime.dispatch.registry import load_builtin
 from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
 from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
 from tests.hook_payloads import load_hook_payload
@@ -29,8 +29,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.detector.facts import Facts
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 
     type Deps = Callable[..., RuntimeDeps]

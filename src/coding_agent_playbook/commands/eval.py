@@ -42,7 +42,7 @@ import json
 import sys
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands._eval_enumerate import (
     _DEFAULT_RUNNER,
@@ -64,7 +64,73 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evals.task import EvalTask
 
 
+NAME: Final = "eval"
+HELP: Final = "eval enumeration + `--run` a task (SPEC §12.8, §15)"
+
 _VALID_FORMATS = ("text", "json")
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook eval``'s flags (PR 11 enumeration; PR R1d adds ``--run``).
+
+    Example::
+
+        >>> configure(argparse.ArgumentParser(prog="playbook eval"))  # doctest: +SKIP
+    """
+    # Every other subcommand exposes ``--repo-root <path>`` for testability
+    # and so users can run against a non-cwd checkout; eval gets the same
+    # surface for parity. ``run`` falls back to ``Path.cwd()`` when this is absent.
+    parser.add_argument(
+        "--repo-root", help="repo to enumerate eval tasks against (defaults to cwd)"
+    )
+    eval_group = parser.add_mutually_exclusive_group()
+    eval_group.add_argument("--list", action="store_true")
+    eval_group.add_argument("--show", help="show one task by id")
+    parser.add_argument("id", nargs="?", help="task id (enumerate, or run with --run)")
+    # PR R1d — execute one task end-to-end and grade it through the unified
+    # EvaluationReport. Whether execution evaluators run is the task's own
+    # [metrics] decision, so there is intentionally no --run-tests flag here.
+    parser.add_argument(
+        "--run",
+        action="store_true",
+        help="execute the task <id> through a runner and grade it (SPEC §15)",
+    )
+    parser.add_argument(
+        "--runner",
+        help="runner name from the coding_agent_playbook.runners group "
+        "(default: claude_code; use 'fake' for a hermetic no-op run)",
+    )
+    _configure_scoring(parser)
+
+
+def _configure_scoring(parser: argparse.ArgumentParser) -> None:
+    """Declare the ``--run`` grading flags: judge, samples, fail-fast and output format."""
+    # PR R2 — judged [rubric] scoring. --judge selects a Tier-2 judge from the
+    # coding_agent_playbook.judges group (e.g. 'llm', opt-in/CLI-gated); omitted
+    # means deterministic-only. --samples is the per-criterion average count.
+    parser.add_argument(
+        "--judge",
+        help="judge name from the coding_agent_playbook.judges group to score "
+        "[rubric] criteria (e.g. 'llm'); omit for a deterministic-only run",
+    )
+    parser.add_argument(
+        "--samples",
+        type=int,
+        help="per-criterion judge samples to average (default: 1)",
+    )
+    # By default --run is fail-fast: a lost deterministic gate skips the costlier
+    # judge tier (saving an LLM call). --full-scoring grades every check.
+    parser.add_argument(
+        "--full-scoring",
+        action="store_true",
+        help="grade every check even after the gate is lost (disables fail-fast; "
+        "scores the judge tier regardless of a failing deterministic check)",
+    )
+    parser.add_argument(
+        "--format",
+        choices=_VALID_FORMATS,
+        help="--run output format (default: text)",
+    )
 
 
 def run(args: argparse.Namespace) -> int:

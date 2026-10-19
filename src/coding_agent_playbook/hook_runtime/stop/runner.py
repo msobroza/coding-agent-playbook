@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
-from coding_agent_playbook.hook_runtime.proc import ProcTimeout
+from coding_agent_playbook.hook_runtime.dispatch.proc import ProcTimeout
 from coding_agent_playbook.hook_runtime.stop.output import NO_PINS_ADVICE, toolchain_advice
 from coding_agent_playbook.hook_runtime.stop.stages import StageResult
 
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.config.pin import MachinePins, ToolPin
-    from coding_agent_playbook.hook_runtime.deps import ProcPort
+    from coding_agent_playbook.hook_runtime.dispatch.deps import ProcPort
     from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
     from coding_agent_playbook.hook_runtime.stop.stages import SkipCategory
 

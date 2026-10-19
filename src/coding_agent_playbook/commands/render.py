@@ -24,14 +24,12 @@ from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.detector.predicate import evaluate_predicate
-from coding_agent_playbook.renderer import (
-    BUILTIN_FORMATS,
-    FORMAT_ALIASES,
-    TemplateSecurityError,
-    build_environment,
-    render_for,
+from coding_agent_playbook.rendering.formats import BUILTIN_FORMATS, FORMAT_ALIASES, render_for
+from coding_agent_playbook.rendering.jinja import TemplateSecurityError, build_environment
+from coding_agent_playbook.rendering.rule_registry import (
+    build_prompt_environment,
+    skill_reference_of,
 )
-from coding_agent_playbook.rule_registry import build_prompt_environment, skill_reference_of
 from coding_agent_playbook.sync.render import (
     build_jinja_context,
     render_hook_body,

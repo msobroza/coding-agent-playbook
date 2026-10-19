@@ -2,8 +2,9 @@
 
 A module of its own so the check modules (``validation._links``, ``validation._hooks``),
 ``checks`` and the validate-gated ``sync`` can all share it, its report format
-and the two body checks rules, prompts and hooks have in common (a template
-calling ``rule()``, a Jinja syntax error), without importing each other.
+and the Jinja syntax check rules, prompts and hooks have in common, without
+importing each other. The other shared body check, a template calling ``rule()``,
+matches ``RULE_CALL_RE``, which its importers take from ``rendering.jinja``.
 """
 
 from __future__ import annotations
@@ -14,10 +15,6 @@ from typing import TYPE_CHECKING
 from jinja2 import StrictUndefined, TemplateSyntaxError
 from jinja2.sandbox import SandboxedEnvironment
 
-# The one ``{{ rule("<id>") }}`` pattern (group 1 is the rule id). The helper is
-# gone (D15): no rule, prompt or hook body may make such a call, and validate
-# names the call it finds.
-from coding_agent_playbook.renderer import RULE_CALL_RE as RULE_CALL_RE
 from coding_agent_playbook.skills.naming import has_declared_id, skill_id_of
 
 if TYPE_CHECKING:

@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from coding_agent_playbook.hook_runtime.cli import async_problem
 from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
-from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.dispatch.policy import UNATTENDED_ENV_VAR
 from coding_agent_playbook.hook_runtime.dispatch.run import dispatch_event
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
     from typing import BinaryIO, TextIO
 
-    from coding_agent_playbook.hook_runtime._tail import DispatchTrace
+    from coding_agent_playbook.hook_runtime.dispatch.tail import DispatchTrace
 
 __all__ = ["SimulateArgs", "SimulateReport", "SimulateUsageError", "main", "run"]
 

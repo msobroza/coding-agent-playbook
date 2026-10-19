@@ -7,7 +7,7 @@ Stop-stage hook bound to the event (``config.stage``), ordered by
 then hands them to ``stop.coordinator.StopCoordinator``, which owns the
 policy: fingerprint skip, block budget, one combined reason per tree, the
 ``NOT verified`` rule. The selection never fans the stage hooks out while
-this handler is selected (``_selection``).
+this handler is selected (``dispatch.selection``).
 
 A stage factory is ``(ev, ctx) -> Stage | None``, imported only when its
 stage is planned, and gets a context whose ``hook``/``config`` are the stage
@@ -24,11 +24,11 @@ import importlib
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime._ports import open_trust_store
-from coding_agent_playbook.hook_runtime._selection import select_stage_hooks, stage_of
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
+from coding_agent_playbook.hook_runtime.dispatch.ports import open_trust_store
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
+from coding_agent_playbook.hook_runtime.dispatch.selection import select_stage_hooks, stage_of
 from coding_agent_playbook.hook_runtime.stop.coordinator import (
     CoordinatorDeps,
     GatePolicy,
@@ -40,9 +40,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
-    from coding_agent_playbook.hook_runtime.deps import TrustPort
+    from coding_agent_playbook.hook_runtime.dispatch.deps import TrustPort
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.coordinator import StopOutcome
     from coding_agent_playbook.hook_runtime.stop.stages import Stage
 

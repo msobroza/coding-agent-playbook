@@ -18,7 +18,7 @@ from coding_agent_playbook.hook_runtime.stop.stages import StageResult, StopPlan
 
 if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import Stage
 
 __all__ = ["run_alone"]

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 import pytest
 from jinja2.exceptions import UndefinedError
 
-from coding_agent_playbook.renderer import TemplateSecurityError, build_environment
+from coding_agent_playbook.rendering.jinja import TemplateSecurityError, build_environment
 from coding_agent_playbook.sync.render import render_hook_body
 from tests.hook_samples import sample_hook
 

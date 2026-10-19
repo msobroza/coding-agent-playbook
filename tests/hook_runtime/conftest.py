@@ -24,8 +24,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-from coding_agent_playbook.hook_runtime.proc import SubprocessProc
+from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
+from coding_agent_playbook.hook_runtime.dispatch.proc import SubprocessProc
 from tests.hook_runtime.fakes import (
     FakeClock,
     FakeHandlerResolver,

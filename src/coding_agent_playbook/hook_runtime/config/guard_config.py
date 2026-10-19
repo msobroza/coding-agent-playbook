@@ -27,6 +27,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, Literal
 
+from coding_agent_playbook.artifacts.path_globs import GlobSet, compile_globs
 from coding_agent_playbook.hook_runtime.config.guard_tables import GuardTables
 from coding_agent_playbook.hook_runtime.config.hook_records import HookRecord, parse_hook_record
 from coding_agent_playbook.hook_runtime.config.lock_digest import expected_digest, load_toml
@@ -42,7 +43,6 @@ from coding_agent_playbook.hook_runtime.config.schema import (
 )
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.dispatch.policy import ENGINE_DEADLINE_CAP_MS
-from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs
 from coding_agent_playbook.hook_runtime.shell.wrappers import DEFAULT_RUNNER_WRAPPERS, ShellConfig
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 

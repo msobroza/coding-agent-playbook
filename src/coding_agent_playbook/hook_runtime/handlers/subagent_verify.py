@@ -37,6 +37,7 @@ from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import OutputCaps, quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.paths import normalize_path
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.git.head_snapshot import head_moved_note
 from coding_agent_playbook.hook_runtime.handlers._lint_stage import LintStage
 from coding_agent_playbook.hook_runtime.handlers._verify_claim import completion_claim
@@ -45,7 +46,6 @@ from coding_agent_playbook.hook_runtime.handlers.stop_ci_parity_gate import (
     build_stage,
     trust_opener,
 )
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
 from coding_agent_playbook.hook_runtime.stop.coordinator import (
     CoordinatorDeps,
@@ -59,9 +59,9 @@ from coding_agent_playbook.hook_runtime.stop.tools import seconds_left
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.hook_runtime.deps import Clock
+    from coding_agent_playbook.hook_runtime.dispatch.deps import Clock
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.state.store import StateStore
     from coding_agent_playbook.hook_runtime.stop.coordinator import StopOutcome
     from coding_agent_playbook.hook_runtime.stop.stages import Stage, StopPlan

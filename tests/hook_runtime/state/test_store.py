@@ -19,9 +19,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.artifacts.path_globs import compile_globs
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, RepoInfo, ToolClass
 from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo, normalize_path
-from coding_agent_playbook.hook_runtime.globs import compile_globs
 from coding_agent_playbook.hook_runtime.state.ledger import (
     LEDGER_MAX_LINES,
     Ledger,
@@ -46,7 +46,7 @@ from tests.import_probe import probe_env
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.proc import SubprocessProc
+    from coding_agent_playbook.hook_runtime.dispatch.proc import SubprocessProc
 
 DAY = 86_400.0
 

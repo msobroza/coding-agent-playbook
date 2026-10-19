@@ -47,7 +47,7 @@ _WHERE_LEAD: Final = (
 _WHERE_LINT_LINE: Final = (
     "Lint feedback names a rule id; that rule's reference in the skill has the fix."
 )
-#: The separator that ends every section of the composite files (renderer.py rule sections).
+#: The separator that ends every section of the composite files (rendering/formats.py rule sections).
 _SECTION_END: Final = "---"
 
 

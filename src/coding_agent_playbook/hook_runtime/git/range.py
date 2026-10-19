@@ -41,7 +41,7 @@ from coding_agent_playbook.hook_runtime.git.parse import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
 
-    from coding_agent_playbook.hook_runtime.proc import ProcResult
+    from coding_agent_playbook.hook_runtime.dispatch.proc import ProcResult
 
 __all__ = [
     "DEFAULT_BRANCH_REFS",

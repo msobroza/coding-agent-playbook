@@ -25,7 +25,7 @@ from tests.import_probe import PROBE_TIMEOUT_S, probe_env
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.proc import SubprocessProc
+    from coding_agent_playbook.hook_runtime.dispatch.proc import SubprocessProc
 
 GATED: Final = os.environ.get("PLAYBOOK_LATENCY_TESTS") == "1"
 #: path -> (event, tool, absolute budget in s, gated excess over the interpreter floor in s)
