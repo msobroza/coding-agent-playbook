@@ -28,16 +28,22 @@ from coding_agent_playbook.hook_registrations import (
     claude_settings_projection,
     declared_stop_budget_s,
 )
-from coding_agent_playbook.prompt_rule_delivery import includes_rules_appendix
+from coding_agent_playbook.prompt_rule_delivery import (
+    includes_rules_appendix,
+    insert_pointer_block,
+    skill_pointer_block,
+)
 from coding_agent_playbook.types import HookFrontmatter
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
     # Annotations only: every runtime construction is a ``SandboxedEnvironment``
     # (tests/unit/test_no_unsandboxed_jinja.py allows no other jinja2 import).
     from jinja2 import Environment
+
+    from coding_agent_playbook.prompt_rule_delivery import SkillReferenceIndex
 
 # Aliases the CLI accepts as a short-form for --format. Resolved to the full
 # internal name before render_for() dispatches.
@@ -68,10 +74,10 @@ BUILTIN_FORMATS: frozenset[str] = frozenset(
     }
 )
 
-# A ``{{ rule("id") }}`` call in a prompt template; group 1 is the rule id.
+# A ``{{ rule("id") }}`` call in a template; group 1 is the rule id.
 # Whitespace- and trim-marker-tolerant (``{{rule("x")}}``, ``{{- rule('x') -}}``).
-# The single definition the appendix decision, ``playbook validate`` and
-# ``playbook sync``'s appendix pre-render all use.
+# The helper is gone (D15), so a call only renders as ``UndefinedError``;
+# ``playbook validate`` uses this to name the call in prompts, rules and hook bodies.
 RULE_CALL_RE = re.compile(r"\{\{-?\s*rule\s*\(\s*['\"]([^'\"]+)['\"]\s*\)\s*-?\}\}")
 
 
@@ -93,11 +99,11 @@ def with_sentinel_body(frontmatter: str, body: str) -> str:
 
 
 class RuleRegistry(Protocol):
-    """Minimal interface used by the ``rule()`` Jinja helper.
+    """How the ``## Reference rules`` appendix renders an included rule's text.
 
-    The full registry lives in PR 10 (the CLI / sync orchestrator); this
-    protocol is the contract the renderer depends on. Tests can pass an
-    in-memory implementation; production passes the merged-overlay registry.
+    ``rule_registry.RuleRegistryImpl`` implements it; this protocol is the
+    contract the renderer depends on. Tests can pass an in-memory
+    implementation; production passes the merged-overlay registry.
     """
 
     def render_for_inclusion(self, rule_id: str, context: dict[str, Any]) -> str:
@@ -108,12 +114,7 @@ class RuleRegistry(Protocol):
         ...
 
 
-def build_environment(
-    template_search_paths: Sequence[Path],
-    *,
-    is_prompt_context: bool = False,
-    rule_registry: RuleRegistry | None = None,
-) -> Environment:
+def build_environment(template_search_paths: Sequence[Path]) -> Environment:
     """Build a sandboxed Jinja environment configured per SPEC §9.3.
 
     The environment is a ``SandboxedEnvironment`` (a subclass of the annotated
@@ -123,19 +124,15 @@ def build_environment(
     of reaching ``os`` (prK §P1). It is deliberately not the immutable
     variant, which would also reject in-template list/dict mutation.
 
-    ``is_prompt_context=True`` registers the ``rule()`` helper (and requires
-    ``rule_registry`` to be passed). For rules, ``rule()`` is not registered
-    so calling it raises ``UndefinedError`` — that enforces the "rules cannot
-    include other rules" invariant at the renderer level.
+    Rules, prompts and hook bodies all render in this one shape. There is no
+    ``rule()`` helper (D15): a template calling it raises ``UndefinedError``,
+    and prompts declare their rules in ``includes_rules`` instead.
 
     Example::
 
         env = build_environment([])
         render_string("{{ project_name }}", {"project_name": "demo"}, env=env)
     """
-    if is_prompt_context and rule_registry is None:
-        raise ValueError("rule_registry required when is_prompt_context=True")
-
     env = SandboxedEnvironment(
         loader=FileSystemLoader([str(p) for p in template_search_paths]),
         autoescape=False,
@@ -162,17 +159,6 @@ def build_environment(
         return name in ml_stack
 
     env.globals["has_ml_dep"] = _has_ml_dep
-
-    if is_prompt_context:
-        # ``rule_registry`` is guaranteed non-None above; assert for the type checker.
-        assert rule_registry is not None
-        registry = rule_registry
-
-        def _rule(rule_id: str) -> str:
-            return registry.render_for_inclusion(rule_id, _facts())
-
-        env.globals["rule"] = _rule
-
     return env
 
 
@@ -225,8 +211,8 @@ def render_sandboxed(body: str, context: dict[str, Any], *, env: Environment, so
 
     jinja2's ``SecurityError`` becomes :class:`TemplateSecurityError` carrying
     ``source`` (the artifact's file, or its id). A ``TemplateSecurityError``
-    raised by a nested render (a ``rule()`` inclusion) propagates unchanged, so
-    the error always names the template that actually escaped.
+    raised by a nested render propagates unchanged, so the error always names
+    the template that actually escaped.
 
     Example::
 
@@ -245,22 +231,24 @@ def render_for(
     *,
     frontmatter: dict[str, Any],
     rule_registry: RuleRegistry | None = None,
-    template_body: str | None = None,
+    skill_references: SkillReferenceIndex | None = None,
 ) -> str:
-    """Apply per-format post-processing to a Jinja-rendered body.
+    """Apply per-format post-processing to a Jinja-rendered body (SPEC §9.7).
 
     ``fmt`` is one of the formats in ``BUILTIN_FORMATS`` (or a short alias in
-    ``FORMAT_ALIASES``). Behaviour per format is documented in SPEC §9.7.
-
-    For prompt formats, pass the prompt's un-rendered ``template_body``: whether
-    the ``includes_rules:`` appendix (``prompt_rule_delivery.includes_rules_appendix``)
-    is generated depends on the template, since a rendered ``body`` no longer
-    shows the ``rule()`` calls Jinja expanded. It defaults to ``body`` for
-    callers that pass an un-rendered body.
+    ``FORMAT_ALIASES``). ``prompt_continue`` appends the ``## Reference rules``
+    appendix built through ``rule_registry``; ``prompt_claude_command`` and
+    ``prompt_opencode_command`` insert the ``## Before you start`` block built
+    through ``skill_references`` (D15). Without the matching argument the
+    prompt renders with neither, so ``includes_rules`` is declarative only.
 
     ``_template_path`` is reserved for future format-specific dispatch
     (SPEC §9.7); current transforms key off ``fmt`` and ``frontmatter`` only,
     and ``hook_claude_settings`` names it when the frontmatter is malformed.
+
+    Example::
+
+        render_for(path, body, "prompt_claude_command", frontmatter=fm, skill_references=registry)
     """
     resolved = FORMAT_ALIASES.get(fmt, fmt)
     if resolved not in BUILTIN_FORMATS:
@@ -275,15 +263,15 @@ def render_for(
         return _render_hook_advisory(body, frontmatter)
     if resolved == "hook_claude_settings":
         return _render_hook_claude_settings(_template_path, frontmatter)
-    appendix = _prompt_appendix(
-        body if template_body is None else template_body, frontmatter, rule_registry
-    )
+    includes_rules = frontmatter.get("includes_rules") or []
     if resolved == "prompt_continue":
+        appendix = includes_rules_appendix(includes_rules, rule_registry)
         return _render_prompt_continue(body, frontmatter, appendix)
+    block = skill_pointer_block(includes_rules, skill_references)
     if resolved == "prompt_claude_command":
-        return _render_prompt_claude_command(body, frontmatter, appendix)
+        return _render_prompt_claude_command(body, frontmatter, block)
     if resolved == "prompt_opencode_command":
-        return _render_prompt_opencode_command(body, frontmatter, appendix)
+        return _render_prompt_opencode_command(body, frontmatter, block)
 
     # All BUILTIN_FORMATS are handled above; reaching here means a new format
     # was added to the set but its branch was forgotten.
@@ -366,36 +354,6 @@ def _render_hook_claude_settings(source: Path, frontmatter: dict[str, Any]) -> s
     return json.dumps(projection, indent=2, ensure_ascii=False) + "\n"
 
 
-def _prompt_appendix(
-    template_body: str, frontmatter: dict[str, Any], rule_registry: RuleRegistry | None
-) -> str:
-    """The ``## Reference rules`` appendix a prompt gets, or ``""`` (SPEC §6.2.5).
-
-    Only for prompts whose template never calls ``{{ rule() }}``: one that places
-    its rules itself owns the inclusion layout. Decided on the *template* body:
-    the rendered body no longer shows a call Jinja expanded, and checking it
-    emitted every inlined rule twice (once in place, once in the appendix).
-    """
-    if RULE_CALL_RE.search(template_body):
-        return ""
-    return includes_rules_appendix(frontmatter.get("includes_rules") or [], rule_registry)
-
-
-def appendix_rule_ids(includes_rules: Sequence[str], template_body: str) -> list[str]:
-    """The rule ids the ``## Reference rules`` appendix renders for one prompt.
-
-    ``includes_rules`` in order, or none when the prompt's un-rendered
-    ``template_body`` calls ``rule()`` itself (the author owns the layout, SPEC
-    §6.2.5) — the same :data:`RULE_CALL_RE` decision :func:`render_for` makes.
-    ``playbook sync`` pre-renders exactly these before any adapter writes, so a
-    template error in an included rule aborts the sync before the first file
-    lands.
-
-    Example: ``appendix_rule_ids(["style"], "Refactor.\\n")`` -> ``["style"]``.
-    """
-    return [] if RULE_CALL_RE.search(template_body) else list(includes_rules)
-
-
 def _render_prompt_continue(
     body: str,
     frontmatter: dict[str, Any],
@@ -428,18 +386,43 @@ def is_read_only_prompt(frontmatter: dict[str, Any]) -> bool:
     return isinstance(scope, dict) and scope.get("read_only") is True
 
 
+def _titled(body: str, name: str) -> str:
+    """``body``, opened by ``# {name}`` unless it already starts with a level-1 heading."""
+    return body if body.lstrip().startswith("# ") else f"# {name}\n\n{body}"
+
+
+def render_inline_prompt_markdown(
+    body: str, frontmatter: Mapping[str, Any], rule_registry: RuleRegistry | None
+) -> str:
+    """A prompt as plain markdown with its rules inline: title, body, appendix (agent_harness).
+
+    The agent_harness prompt leaf: its scoped rules are top-level
+    ``references/<id>.md`` files, not skill references, so there is no skill
+    to point at (P3-6). Byte-identical to the Claude command text the leaf used
+    before D15 for a prompt that never called ``rule()``: ``# <name>`` when the
+    body has no title, then the body, then ``includes_rules_appendix``. No
+    sentinel and no frontmatter: the leaf's own ``SKILL.md`` envelope has both.
+
+    Example::
+
+        render_inline_prompt_markdown(prompt.body, asdict(prompt.frontmatter), registry)
+    """
+    appendix = includes_rules_appendix(frontmatter.get("includes_rules") or [], rule_registry)
+    return f"{_titled(body, frontmatter['name'])}{appendix}"
+
+
 def _render_prompt_claude_command(
     body: str,
     frontmatter: dict[str, Any],
-    appendix: str,
+    block: str,
 ) -> str:
     """Emit a Claude Code slash-command file (SPEC §9.7).
 
     Claude Code commands are pure markdown. The output starts with the
     autogenerated-sentinel HTML comment so adapter cleanup can recognise
     the file as engine-owned; we then prepend ``# {name}`` if the body
-    does not already start with a level-1 heading, then optionally append
-    the ``includes_rules`` appendix.
+    does not already start with a level-1 heading, and insert the
+    ``## Before you start`` block (``""`` leaves the body as it is, D15).
 
     A read-only prompt instead opens with a ``disallowed-tools`` frontmatter
     block (Claude removes those tools while the command runs) and carries the
@@ -447,9 +430,8 @@ def _render_prompt_claude_command(
     ``_sentinel.has_sentinel`` accepts (specs/prK-lifecycle-hooks.md §C.4.3).
     Every other prompt renders exactly as before.
     """
-    name = frontmatter["name"]
-    output = body if body.lstrip().startswith("# ") else f"# {name}\n\n{body}"
-    marked = f"{sentinel_line('html')}\n{output}{appendix}"
+    output = insert_pointer_block(_titled(body, frontmatter["name"]), block)
+    marked = f"{sentinel_line('html')}\n{output}"
     if is_read_only_prompt(frontmatter):
         return f"---\ndisallowed-tools: {CLAUDE_READ_ONLY_DISALLOWED}\n---\n{marked}"
     return marked
@@ -458,7 +440,7 @@ def _render_prompt_claude_command(
 def _render_prompt_opencode_command(
     body: str,
     frontmatter: dict[str, Any],
-    appendix: str,
+    block: str,
 ) -> str:
     """Emit an OpenCode slash-command file (SPEC §9.7).
 
@@ -475,6 +457,9 @@ def _render_prompt_opencode_command(
         this transform will be a silent no-op. The orchestrator (PR 10)
         ensures input-variable names are reserved for the format-time
         substitution.
+
+    The ``## Before you start`` block (D15) is inserted after the
+    substitution: it holds no placeholder, so its text is never rewritten.
     """
     description = frontmatter["description"]
     input_variables = frontmatter.get("input_variables") or []
@@ -496,4 +481,4 @@ def _render_prompt_opencode_command(
     # no edit tools (specs/prK-hook-pack.md §E.3; SPEC §10.6.1 lists ``agent``).
     agent_line = "\nagent: plan" if is_read_only_prompt(frontmatter) else ""
     envelope = f"---\n{description_line}{agent_line}\n---"
-    return with_sentinel_body(envelope, f"{rendered_body}{appendix}")
+    return with_sentinel_body(envelope, insert_pointer_block(rendered_body, block))

@@ -137,7 +137,7 @@ def test_compose_skills_uses_the_rendered_body_of_a_templated_member(tmp_path: P
         encoding="utf-8",
     )
     template = Rule.from_markdown(source, "<repo-local>")
-    env = build_environment([], is_prompt_context=False)
+    env = build_environment([])
     rendered = render_rule_body(template, {"project_name": "acme-api"}, env)
     [composed] = compose_skills([_skill("python-coding")], [template], [rendered])
     assert composed.member_references[0].text == "*Rule `project-notes`.*\n\n# Notes for acme-api\n"

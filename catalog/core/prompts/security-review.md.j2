@@ -42,10 +42,3 @@ Read the code under review first, then walk the priorities below top-to-bottom. 
 ## Output format
 
 A list of findings grouped by priority bucket, each with file, line, the exploit in one sentence, and the safe refactor. End with a one-line verdict: *approve*, *approve with comments*, or *request changes*. If there is nothing to fix, say so plainly rather than manufacturing concerns. Do not modify the code; show each refactor in your findings instead of applying it.
-
-## Reference rules
-
-These project rules define the bar the code under review must clear. Use them as the standard against which you flag deserialization and error-handling issues.
-
-{{ rule("ml-serialization-security") }}
-{{ rule("python-error-handling") }}
