@@ -79,7 +79,7 @@ from coding_agent_playbook.hook_policy import (
     resolve_effective_hooks,
 )
 from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH, stop_stage_records
-from coding_agent_playbook.lockfile import Provenance
+from coding_agent_playbook.lockfile.model import Provenance
 from coding_agent_playbook.orchestrator import engine_package_of
 
 if TYPE_CHECKING:
@@ -92,7 +92,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.commands._sync_hook_local import SyncHookDeps
     from coding_agent_playbook.commands._sync_lockfile import ProvenanceRecorder
     from coding_agent_playbook.hook_policy import ResolvedHook, SkippedHook
-    from coding_agent_playbook.lockfile import Lockfile
+    from coding_agent_playbook.lockfile.model import Lockfile
     from coding_agent_playbook.orchestrator import SyncContext
     from coding_agent_playbook.types import Prompt, Rule, Skill
 

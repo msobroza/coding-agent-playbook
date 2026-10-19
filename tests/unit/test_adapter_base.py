@@ -16,7 +16,7 @@ from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
 from coding_agent_playbook.config.tables.hooks import HooksConfig
-from coding_agent_playbook.lockfile import Lockfile
+from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.types import Prompt, Rule, Skill
 from tests.hook_samples import resolved_hook

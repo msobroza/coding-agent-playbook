@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook._typing import Prompt, Rule, Skill
     from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hook_policy import ResolvedHook
-    from coding_agent_playbook.lockfile import LockEntry, Lockfile
+    from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 
 
 class Adapter(ABC):

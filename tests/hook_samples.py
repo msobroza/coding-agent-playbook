@@ -19,7 +19,7 @@ from coding_agent_playbook.types import Hook, HookFrontmatter, HookMatcher, form
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
 
 #: The ``where`` label the builders parse under.
 HOOK_WHERE = "playbook/hooks/guard-x/HOOK.md"

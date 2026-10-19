@@ -3,7 +3,7 @@
 Validates:
 
 - ``applies_if`` predicates use only known fact keys and well-formed values
-  (delegates to :func:`coding_agent_playbook.detector.evaluate_predicate` one key
+  (delegates to :func:`coding_agent_playbook.detector.predicate.evaluate_predicate` one key
   at a time, as hooks do, and treats each ``ValueError`` as an error).
 - Prompts that call ``{{ rule("X") }}`` declare ``X`` in ``includes_rules:``.
 - Every prompt ``output_contract`` entry compiles as a Python regex (fail-closed,
@@ -81,7 +81,7 @@ from coding_agent_playbook.commands._validation import (
     skill_label,
 )
 from coding_agent_playbook.config.tables.links import LinksConfig
-from coding_agent_playbook.detector import evaluate_predicate
+from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
@@ -94,7 +94,7 @@ if TYPE_CHECKING:
     import argparse
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.types import Prompt, Rule, Skill
 

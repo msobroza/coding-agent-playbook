@@ -22,7 +22,7 @@ from coding_agent_playbook.commands._sync_lockfile import (
     dispatch_to_adapters,
 )
 from coding_agent_playbook.config.tables.hooks import HooksConfig
-from coding_agent_playbook.lockfile import LockEntry, Lockfile, Provenance, compute_hash
+from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, Provenance, compute_hash
 from tests.hook_samples import resolved_hook
 from tests.member_skill_samples import sample_member_reference, sample_member_skill
 

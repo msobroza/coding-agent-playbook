@@ -15,11 +15,11 @@ pack guard (guard-generated-outputs, Track K5) denies a protected edit from the
 rendered tables alone: no TOML, no render, no subprocess. control-plane-guard
 loads its JSON/TOML/text verdict modules only on their branch, and ``tomllib``
 only for an edit of a ``.toml`` policy file (§D.1's branch-local row). On the
-source-changed branch, ``detector`` (and ``packaging``) loads only after the
-dependency comparison found a change, and ``evals.*`` / ``sources.filesystem``
-(yaml) only on an ``eval_tasks/*/task.toml`` edit; jinja2 never loads. The
-session-start briefing and the ``drift`` Stop stage read the lockfile with
-``tomllib`` through ``lockfile`` (the new §D.1 rows): the briefing on every
+source-changed branch, ``detector.facts`` and ``detector.predicate`` (and
+``packaging``) load only after the dependency comparison found a change, and
+``evals.*`` / ``sources.filesystem`` (yaml) only on an ``eval_tasks/*/task.toml``
+edit; jinja2 never loads. The session-start briefing and the ``drift`` Stop stage
+read the lockfile with ``tomllib`` through ``lockfile`` (the new §D.1 rows): the briefing on every
 start, the stage only once the ledger shows a write it cares about. The
 ``--async`` ``post_tool_use`` dispatch (local-audit-log, OQ-19) writes its
 structure-only line from the stdlib alone: no git, no process (Track K9), and
@@ -461,9 +461,17 @@ def test_detector_loads_only_after_the_dependency_comparison_found_a_change(
 
     assert "tomllib" in unchanged
     assert _forbidden(unchanged, allowed=("tomllib",)) == []
-    assert "coding_agent_playbook.detector" in changed
+    assert "coding_agent_playbook.detector.facts" in changed
     assert (
-        _forbidden(changed, allowed=("tomllib", "packaging", "coding_agent_playbook.detector"))
+        _forbidden(
+            changed,
+            allowed=(
+                "tomllib",
+                "packaging",
+                "coding_agent_playbook.detector.facts",
+                "coding_agent_playbook.detector.predicate",
+            ),
+        )
         == []
     )
 
@@ -508,7 +516,7 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
 
 # --- K5 step 4: the briefing and the drift stage (§D.1 rows: lockfile + tomllib) ------
 
-_LOCKFILE_MODULE: Final = engine_module("coding_agent_playbook.lockfile")
+_LOCKFILE_MODULE: Final = engine_module("coding_agent_playbook.lockfile.model")
 _BRIEFING: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._briefing_probes")
 _DRIFT_FAST_PATH: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._drift")
 

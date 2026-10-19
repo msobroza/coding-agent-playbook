@@ -35,7 +35,7 @@ import pytest
 
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.config.files import FileSystemStateSource
-from coding_agent_playbook.lockfile import LockEntry
+from coding_agent_playbook.lockfile.model import LockEntry
 from tests.cli.hook_repo import SETTINGS, hook_deps, make_hook_repo
 from tests.fakes import FakeGitClient
 

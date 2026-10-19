@@ -22,7 +22,7 @@ from coding_agent_playbook.renderer import build_environment, render_sandboxed
 if TYPE_CHECKING:
     from jinja2 import Environment
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.types import Rule
 
 

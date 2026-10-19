@@ -99,7 +99,7 @@ _ENGINE_PATHS = (
     "guard_config.py",
     "config/tables/hooks.py",
     "_sentinel.py",
-    "_pep503.py",
+    "detector/pep503.py",
     "gate_scan.py",
     "templates/hook_shims/",
 )

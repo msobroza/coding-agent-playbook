@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from coding_agent_playbook.lockfile import LockEntry
+    from coding_agent_playbook.lockfile.model import LockEntry
 
 _SKILL = "risk-models"
 _UNGATED, _GATED = "risk-naming", "risk-click"

@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_policy import ResolvedHook, SkippedHook
     from coding_agent_playbook.types import Hook, Prompt, Rule
 
@@ -178,7 +178,8 @@ def _artifact_row(
 
 
 def _holds(predicates: Collection[Mapping[str, Any]], facts: Mapping[str, Any], root: Path) -> bool:
-    from coding_agent_playbook.detector import evaluate_predicate  # sync-time: imports packaging
+    # sync-time: imports packaging
+    from coding_agent_playbook.detector.predicate import evaluate_predicate
 
     detected = cast("Facts", facts)
     try:

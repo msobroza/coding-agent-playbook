@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.lockfile import LockEntry
+    from coding_agent_playbook.lockfile.model import LockEntry
 
 #: Decides whether files an earlier sync wrote may be deleted (all or nothing).
 LeftoverJudge = Callable[[Sequence[Path]], bool]

@@ -9,7 +9,7 @@ import tomllib
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.config.files import FileSystemStateSource
-from coding_agent_playbook.lockfile import LockEntry, Lockfile
+from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 
 if TYPE_CHECKING:
     from pathlib import Path

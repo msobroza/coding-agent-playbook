@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_policy.handler_catalog import HandlerCatalog
     from coding_agent_playbook.hook_policy.merge import ConfigKeySpec, ConfigSchemaLookup
     from coding_agent_playbook.types import Hook, HookHandler, Rule
@@ -268,7 +268,7 @@ def _predicate_holds(predicate: Mapping[str, Any], inputs: _Inputs) -> bool:
     if not predicate:
         return True
     # Imported here: detector imports packaging, and importing hook_policy stays stdlib-only.
-    from coding_agent_playbook.detector import evaluate_predicate
+    from coding_agent_playbook.detector.predicate import evaluate_predicate
 
     return evaluate_predicate(dict(predicate), inputs.facts, repo_root=inputs.repo_root)
 

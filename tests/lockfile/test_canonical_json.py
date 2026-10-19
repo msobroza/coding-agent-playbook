@@ -3,23 +3,24 @@
 Sync records a managed ``settings.json`` element as ``sha256(canonical_json(element))``
 and control-plane-guard recognizes the element at run time by the same hash,
 so both must use one function. It lives in the import-light
-``_canonical_json`` (the runtime may not import ``adapters``), and K3's
-``_settings_plan`` re-exports it.
+``lockfile.canonical_json`` (the runtime may not import ``adapters``), and K3's
+``_settings_plan`` imports it from there (no re-export, L2).
 """
 
 from __future__ import annotations
 
-from coding_agent_playbook import _canonical_json
-from coding_agent_playbook._canonical_json import canonical_json, element_sha256
 from coding_agent_playbook.adapters import _settings_plan
 from coding_agent_playbook.adapters._settings_plan import scoped_lock_entry
+from coding_agent_playbook.lockfile import canonical_json as _canonical_json
+from coding_agent_playbook.lockfile.canonical_json import canonical_json, element_sha256
 from tests.import_probe import run_python_probe
 
 _GROUP = {"matcher": "Bash", "hooks": [{"type": "command", "command": "launch.sh pre", "é": 1}]}
 
 
-def test_settings_plan_reexports_the_one_function() -> None:
-    assert _settings_plan.canonical_json is _canonical_json.canonical_json
+def test_settings_plan_reexports_no_hash_helper() -> None:
+    # N5 (L2): importers name lockfile.canonical_json, the defining module.
+    assert {"canonical_json", "pointer_keys"}.isdisjoint(_settings_plan.__all__)
 
 
 def test_element_sha256_is_the_scoped_lock_entry_hash() -> None:
@@ -43,15 +44,16 @@ def test_key_order_and_formatting_never_change_the_hash() -> None:
 def test_module_imports_only_json_and_hashlib() -> None:
     out = run_python_probe(
         "import sys, coding_agent_playbook; before = set(sys.modules); "
-        "import coding_agent_playbook._canonical_json; "
+        "import coding_agent_playbook.lockfile.canonical_json; "
         "print(sorted(m for m in set(sys.modules) - before if m.startswith('coding_agent')))"
     )
 
-    assert out == "['coding_agent_playbook._canonical_json']"
+    assert (
+        out == "['coding_agent_playbook.lockfile', 'coding_agent_playbook.lockfile.canonical_json']"
+    )
 
 
-def test_settings_plan_reexports_the_one_pointer_decoder() -> None:
-    assert _settings_plan.pointer_keys is _canonical_json.pointer_keys
+def test_pointer_keys_decodes_the_rfc6901_escapes() -> None:
     assert _canonical_json.pointer_keys("/a~1b/c~0d") == ("a/b", "c~d")
 
 

@@ -14,9 +14,9 @@ import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from coding_agent_playbook._canonical_json import canonical_json, pointer_keys
 from coding_agent_playbook.adapters._json_edits import ArrayEdit
-from coding_agent_playbook.lockfile import LockEntry, compute_hash
+from coding_agent_playbook.lockfile.canonical_json import canonical_json, pointer_keys
+from coding_agent_playbook.lockfile.model import LockEntry, compute_hash
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -30,11 +30,9 @@ __all__ = [
     "DesiredGroup",
     "SettingsPlan",
     "SettingsShapeError",
-    "canonical_json",
     "json_pointer",
     "launcher_kind",
     "plan_settings",
-    "pointer_keys",
     "scoped_lock_entry",
 ]
 

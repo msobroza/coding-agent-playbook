@@ -25,8 +25,8 @@ import json
 import re
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook._canonical_json import element_hashes
 from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.lockfile.canonical_json import element_hashes
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping

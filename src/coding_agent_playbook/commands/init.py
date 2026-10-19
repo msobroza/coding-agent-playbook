@@ -39,7 +39,7 @@ from coding_agent_playbook.commands._init_adapters import (
 from coding_agent_playbook.commands._precommit_merge import merge_pre_commit
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.config.model import Config, OutputConfig, ProjectMeta, StorageConfig
-from coding_agent_playbook.detector import detect
+from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.renderer import build_environment, render_artifact_body
 
 if TYPE_CHECKING:

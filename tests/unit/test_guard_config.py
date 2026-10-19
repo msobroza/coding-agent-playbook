@@ -61,7 +61,7 @@ from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import CON
 from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
     playbook_precommit_ids,
 )
-from coding_agent_playbook.lockfile import LockEntry, Provenance
+from coding_agent_playbook.lockfile.model import LockEntry, Provenance
 from coding_agent_playbook.security.patterns import (
     SECRET_CONTENT_RULES,
     SECRET_GLOB_EXEMPT,
@@ -78,7 +78,7 @@ from tests.hooks.pack_repo import resolve_engine_hooks
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_policy import ResolvedHook
 
 

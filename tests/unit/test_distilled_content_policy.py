@@ -48,6 +48,10 @@ PBP_DISTILLED_RULES: Final = frozenset(
         "pytest-configuration",
         "python-uv-workflow",
         "pydantic-boundaries",
+        "ml-vectorization",
+        "ml-data-transforms",
+        "ml-dtypes-and-typing",
+        "ml-reproducibility-and-testing",
     }
 )
 #: A topic that changed owner (spec 9.4.7) -> the one core rule whose body holds it.
