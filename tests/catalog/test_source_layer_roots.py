@@ -13,11 +13,8 @@ import importlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.sources.filesystem import (
-    ENGINE_PACKAGE,
-    FileSystemArtifactSource,
-    _resource_subdir,
-)
+from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _resource_subdir
 
 if TYPE_CHECKING:
     from collections.abc import Callable

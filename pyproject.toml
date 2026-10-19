@@ -71,7 +71,7 @@ shared_skills = "coding_agent_playbook.adapters.shared_skills_adapter:SharedSkil
 # Populated by overlay packages (e.g. playbook-rules-bnp). Engine ships none.
 
 [project.entry-points."coding_agent_playbook.artifact_sources"]
-filesystem = "coding_agent_playbook.sources.filesystem:FileSystemArtifactSource"
+filesystem = "coding_agent_playbook.catalog.source:FileSystemArtifactSource"
 
 [project.entry-points."coding_agent_playbook.state_sources"]
 filesystem = "coding_agent_playbook.config.files:FileSystemStateSource"
@@ -280,7 +280,6 @@ exhaustive_ignores = [
     "_guard_config_verify",
     "_hook_frontmatter",
     "_hook_schema",
-    "_layers",
     "_member_reference",
     "_output_io",
     "_sentinel",
@@ -304,14 +303,13 @@ exhaustive_ignores = [
     "rule_registry",
     "skill_document",
     "skill_membership",
-    "sources",
     "types",
 ]
 ignore_imports = [
     # CF-2 deletes _typing.py (after #62)
     "coding_agent_playbook._typing -> coding_agent_playbook.evals.task",
-    # kept: catalog-layers (the artifact source parses eval tasks) is not scheduled (L12); N3 renames it
-    "coding_agent_playbook.sources.filesystem -> coding_agent_playbook.evals.**",
+    # kept: catalog-layers (the artifact source parses eval tasks) is not scheduled (L12)
+    "coding_agent_playbook.catalog.source -> coding_agent_playbook.evals.**",
 ]
 broken_contract_guidance = """
 A lower layer may not import a higher one, directly or through modules outside the layers.
@@ -327,7 +325,7 @@ type = "forbidden"
 source_modules = [
     "coding_agent_playbook._atomic_io",
     "coding_agent_playbook._sentinel",
-    "coding_agent_playbook.catalog",
+    "coding_agent_playbook.catalog.roots",
     "coding_agent_playbook.detector.pep503",
     "coding_agent_playbook.detector.pyproject_deps",
     "coding_agent_playbook.lockfile",
@@ -351,12 +349,14 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_verify",
     "coding_agent_playbook._hook_frontmatter",
     "coding_agent_playbook._hook_schema",
-    "coding_agent_playbook._layers",
     "coding_agent_playbook._member_reference",
     "coding_agent_playbook._output_io",
     "coding_agent_playbook._symlinks",
     "coding_agent_playbook._typing",
     "coding_agent_playbook.adapters",
+    "coding_agent_playbook.catalog._hook_walk",
+    "coding_agent_playbook.catalog.layers",
+    "coding_agent_playbook.catalog.source",
     "coding_agent_playbook.cli",
     "coding_agent_playbook.commands",
     "coding_agent_playbook.config",
@@ -381,7 +381,6 @@ forbidden_modules = [
     "coding_agent_playbook.rule_registry",
     "coding_agent_playbook.skill_document",
     "coding_agent_playbook.skill_membership",
-    "coding_agent_playbook.sources",
     "coding_agent_playbook.toml_writer",
     "coding_agent_playbook.types",
     "jinja2",
@@ -416,12 +415,14 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_verify",
     "coding_agent_playbook._hook_frontmatter",
     "coding_agent_playbook._hook_schema",
-    "coding_agent_playbook._layers",
     "coding_agent_playbook._member_reference",
     "coding_agent_playbook._output_io",
     "coding_agent_playbook._symlinks",
     "coding_agent_playbook._typing",
     "coding_agent_playbook.adapters",
+    "coding_agent_playbook.catalog._hook_walk",
+    "coding_agent_playbook.catalog.layers",
+    "coding_agent_playbook.catalog.source",
     "coding_agent_playbook.cli",
     "coding_agent_playbook.commands",
     "coding_agent_playbook.config",
@@ -445,7 +446,6 @@ forbidden_modules = [
     "coding_agent_playbook.rule_registry",
     "coding_agent_playbook.skill_document",
     "coding_agent_playbook.skill_membership",
-    "coding_agent_playbook.sources",
     "coding_agent_playbook.toml_writer",
     "coding_agent_playbook.types",
     "jinja2",
@@ -461,7 +461,10 @@ ignore_imports = [
     "coding_agent_playbook.hook_runtime.handlers.coverage_diff_gate -> coding_agent_playbook.evaluators.**",
     "coding_agent_playbook.hook_runtime.handlers.docstring_nonregression -> coding_agent_playbook.evaluators.**",
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.evals.**",
-    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.sources.**",
+    # N3 (R1): the sources.filesystem re-export is gone, so the layer labels are a direct
+    # import of the same eval-task branch; kept, like the artifact-source line below it
+    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.catalog.layers",
+    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.catalog.source",
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.types",
     # N15 moves the judge into hook_runtime/judges/ and deletes these two lines
     "coding_agent_playbook.hook_runtime.handlers.gate_weakening -> coding_agent_playbook.gate_scan",
@@ -501,12 +504,14 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_verify",
     "coding_agent_playbook._hook_frontmatter",
     "coding_agent_playbook._hook_schema",
-    "coding_agent_playbook._layers",
     "coding_agent_playbook._member_reference",
     "coding_agent_playbook._output_io",
     "coding_agent_playbook._symlinks",
     "coding_agent_playbook._typing",
     "coding_agent_playbook.adapters",
+    "coding_agent_playbook.catalog._hook_walk",
+    "coding_agent_playbook.catalog.layers",
+    "coding_agent_playbook.catalog.source",
     "coding_agent_playbook.cli",
     "coding_agent_playbook.commands",
     "coding_agent_playbook.config",
@@ -530,7 +535,6 @@ forbidden_modules = [
     "coding_agent_playbook.rule_registry",
     "coding_agent_playbook.skill_document",
     "coding_agent_playbook.skill_membership",
-    "coding_agent_playbook.sources",
     "coding_agent_playbook.toml_writer",
     "coding_agent_playbook.types",
     "jinja2",

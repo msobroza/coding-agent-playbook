@@ -3,7 +3,7 @@
 A hook is a directory holding ``HOOK.md`` or ``HOOK.md.j2``, at any depth under
 a layer's ``hooks/`` root; the folders above it are categories with no
 meaning. Only those two exact names mark a hook, so a ``scripts/README.md`` is
-never parsed as one. Split out of ``sources/filesystem.py`` for the file-size
+never parsed as one. Split out of ``catalog/source.py`` for the file-size
 budget.
 
 The walk uses ``os.walk`` rather than ``Path.rglob``: it never follows a

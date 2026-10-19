@@ -39,7 +39,9 @@ CHECKOUT_CATALOG_DIRNAME = "catalog"  # at the repository root
 
 # The one module-level seam end-to-end tests may monkeypatch. Functions read it
 # at call time (never as a default argument value), so a patch takes effect.
-_PACKAGE_DIR: Path = Path(__file__).resolve().parent
+# N3: the module moved one level down into catalog/; the package directory is its
+# parent's parent (specs/prT-package-layout.md 7.1.2 rule 11).
+_PACKAGE_DIR: Path = Path(__file__).resolve().parents[1]
 
 _CORE_DIRNAME = "core"
 _PLUGINS_DIRNAME = "plugins"

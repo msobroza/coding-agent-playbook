@@ -312,7 +312,11 @@ coding-agent-playbook/
 │   │       ├── hooks.py                    # [hooks] / [guardrails] tables (Section 7.1.1)
 │   │       └── links.py                    # [links] table (Section 12.6)
 │   ├── metrics_config.py                   # [metrics] table (Section 7.1.1)
-│   ├── catalog.py                          # the only code that knows where catalog/ is (Section 20.3)
+│   ├── catalog/                            # the Catalog: its roots, layers and artifact source (Section 20)
+│   │   ├── roots.py                        # the only code that knows where catalog/ is (Section 20.3)
+│   │   ├── layers.py                       # the layer labels ENGINE_PACKAGE and REPO_LOCAL_SOURCE (Section 11)
+│   │   ├── source.py                       # ArtifactSource ABC + the filesystem artifact source (Section 20)
+│   │   └── _hook_walk.py                   # one layer's hook directories (Section 6.6.7)
 │   ├── detector/                           # the Detector (Section 8)
 │   │   ├── facts.py                        # facts dictionary (Facts, detect)
 │   │   ├── predicate.py                    # applies_if evaluator and filter (Section 6.4)
@@ -349,10 +353,6 @@ coding-agent-playbook/
 │   │   ├── opencode_adapter.py
 │   │   ├── shared_skills_adapter.py        # the shared skill root .agents/skills/
 │   │   └── agents_md_adapter.py
-│   ├── sources/                            # storage abstraction (see Section 20)
-│   │   ├── __init__.py
-│   │   ├── base.py                         # ArtifactSource ABC (StateSource: config/files.py)
-│   │   └── filesystem.py                   # v1: the filesystem artifact source (active)
 │   ├── evals/                              # v1: task schema active; v2: runner placeholder
 │   │   ├── __init__.py
 │   │   ├── task.py                         # v1: EvalTask + dataclasses (active)
@@ -366,12 +366,12 @@ coding-agent-playbook/
 │           └── config.yaml.j2              # starter .pre-commit-config.yaml (engine wiring, not content; Section 13.2)
 ├── tests/
 │   ├── plugins/                            # bundled-plugin gates (Sections 11.5.1, 11.5.2)
+│   ├── catalog/                            # test_roots.py, test_source.py, ...
 │   ├── detector/                           # test_facts.py, test_predicate.py, ...
 │   ├── unit/
 │   │   ├── test_renderer.py
 │   │   ├── test_overlays.py
 │   │   ├── test_eval_tasks.py
-│   │   ├── test_sources.py
 │   │   └── test_types.py
 │   ├── lockfile/
 │   │   └── test_model.py
@@ -3423,7 +3423,7 @@ That is correct for v1, but it makes two things hard:
 The fix is a small abstraction: route "where do artifacts come from" and "where does state live" through two interfaces, with one concrete implementation each in v1.
 ### 20.2 The two interfaces
 ```python
-# coding_agent_playbook/sources/base.py (ArtifactSource) and config/files.py (StateSource)
+# coding_agent_playbook/catalog/source.py (ArtifactSource) and config/files.py (StateSource)
 from abc import ABC, abstractmethod
 from coding_agent_playbook.types import Rule, Prompt, Skill, Hook, HookSchemaError, EvalTask
 from coding_agent_playbook.config.model import Config
@@ -3470,11 +3470,11 @@ The methods added since v1 are **concrete defaults**, never `@abstractmethod`, s
 ### 20.3 What v1 ships
 Two concrete implementations, both already implied by the rest of the spec:
 ```python
-# coding_agent_playbook/sources/filesystem.py (FileSystemArtifactSource) and
+# coding_agent_playbook/catalog/source.py (FileSystemArtifactSource) and
 # coding_agent_playbook/config/files.py (FileSystemStateSource)
 class FileSystemArtifactSource(ArtifactSource):
     """Walks the engine's catalog (catalog/core/ and the enabled
-    catalog/plugins/<name>/, located by the catalog module), importlib.resources
+    catalog/plugins/<name>/, located by catalog.roots), importlib.resources
     for overlay packages, plus <repo>/playbook/ for repo-local artifacts."""
 
     name = "filesystem"
@@ -3491,7 +3491,7 @@ class FileSystemStateSource(StateSource):
 ```
 These are the **only** sources v1 ships. They depend on nothing beyond the existing dependency budget (jinja2, packaging) — both use stdlib `tomllib`, `pathlib`, and `importlib.metadata` only.
 
-**Where the engine's own content comes from (`catalog.py`; v0.19 named it `bundled_content.py`).** One leaf module, importing nothing from the engine (so `config/model.py` and `config/schema.py` can import it), is the only code that knows where `catalog/` is. Its constants are `ENGINE_PACKAGE = "coding_agent_playbook"`, `PLUGIN_NAMESPACE = "coding_agent_playbook.plugins"`, `DEPRECATED_PACK_NAMESPACE = "coding_agent_playbook.packs"`, `PACKAGED_CATALOG_DIRNAME = "_catalog"` and `CHECKOUT_CATALOG_DIRNAME = "catalog"`, plus `_PACKAGE_DIR`, the package directory, which is read at call time and is the one seam end-to-end tests may monkeypatch. Names follow one rule: a function that returns a directory of the catalog says `catalog` (`catalog_root`, `catalog_layer_root`), and a predicate or listing of what ships says `bundled` (`is_bundled_layer`, `bundled_plugins`), the user-facing term.
+**Where the engine's own content comes from (`catalog/roots.py`; v0.19 named it `bundled_content.py`, N3 moved `catalog.py` into the `catalog/` package).** One leaf module, importing nothing from the engine (so `config/model.py` and `config/schema.py` can import it), is the only code that knows where `catalog/` is. Its constants are `ENGINE_PACKAGE = "coding_agent_playbook"`, `PLUGIN_NAMESPACE = "coding_agent_playbook.plugins"`, `DEPRECATED_PACK_NAMESPACE = "coding_agent_playbook.packs"`, `PACKAGED_CATALOG_DIRNAME = "_catalog"` and `CHECKOUT_CATALOG_DIRNAME = "catalog"`, plus `_PACKAGE_DIR`, the package directory, which is read at call time and is the one seam end-to-end tests may monkeypatch. Names follow one rule: a function that returns a directory of the catalog says `catalog` (`catalog_root`, `catalog_layer_root`), and a predicate or listing of what ships says `bundled` (`is_bundled_layer`, `bundled_plugins`), the user-facing term.
 - `catalog_root(package_dir=None)` returns `<package_dir>/_catalog` when `<package_dir>/_catalog/core` is a directory (an installed wheel); otherwise `<package_dir>/../../catalog` when `package_dir.parent.name == "src"` and `<repo>/catalog/core` is a directory (a source checkout); otherwise it raises `CatalogMissingError` naming both paths (§12). Requiring `core/` in the wheel case means a mis-scoped force-include fails loudly instead of loading zero engine artifacts.
 - `bundled_plugins(catalog_dir=None)` lists the sorted dotted names `coding_agent_playbook.plugins.<dir>` from `iterdir()` on `<root>/plugins`, keeping only directories whose name `isidentifier()` and does not start with `.` or `_`; `iterdir()` returns the on-disk spelling, so later comparisons stay exact on case-insensitive volumes.
 - `canonical_overlay_name(name)` and `canonical_overlay_list(names)` implement the `packs` alias (§11.5); `is_plugin_namespace(name)` is true only for the two bare namespaces, and `is_bundled_layer(name)` for the engine and any name under either namespace.
@@ -3513,7 +3513,7 @@ When v1 reads a config without a `[storage]` section, both default to `"filesyst
 Sources are registered the same way as adapters and overlays — through Python entry points. The engine ships:
 ```toml
 [project.entry-points."coding_agent_playbook.artifact_sources"]
-filesystem = "coding_agent_playbook.sources.filesystem:FileSystemArtifactSource"
+filesystem = "coding_agent_playbook.catalog.source:FileSystemArtifactSource"
 [project.entry-points."coding_agent_playbook.state_sources"]
 filesystem = "coding_agent_playbook.config.files:FileSystemStateSource"
 ```
@@ -3976,7 +3976,7 @@ Cross-referencing the prior conversation's track plan:
 | 14 | — | SPEC.md, README, internal wiki page | this file |
 Total: ~3900 lines of Python + ~800 lines of markdown/TOML content. 5-7 weeks at half-time, 2.5-3.5 weeks full-time.
 Notes on sequencing:
-- **Track 1 (PR 1)** adds the source ABCs (interfaces only, in `sources/base.py`) alongside the adapter ABC. The interfaces are public API from v1, so they ship in the scaffolding PR.
+- **Track 1 (PR 1)** adds the source ABCs (interfaces only, in `catalog/source.py`) alongside the adapter ABC. The interfaces are public API from v1, so they ship in the scaffolding PR.
 - **Track 1b (PR 2)** adds the canonical types (`Rule`, `Prompt`, `Skill` dataclasses) with markdown round-trip. Lands second because almost every subsequent module imports from `types.py`. Includes the round-trip property tests (Section 6.6.3).
 - **Track 2c (PR 5)** adds the filesystem implementations after the detector and renderer because those modules' types (`Config`, `Facts`, `Lockfile`) are needed by `StateSource`.
 - **Track 5b (Eval Tier 0)** lands after the main CLI because it adds CLI subcommands and one new validator pass. It is independent of the adapters — eval tasks are authoring-side artifacts and don't flow through any adapter.

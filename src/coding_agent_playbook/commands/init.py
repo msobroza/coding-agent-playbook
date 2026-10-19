@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from coding_agent_playbook import __version__ as _engine_version
-from coding_agent_playbook.catalog import (
+from coding_agent_playbook.catalog.roots import (
     ENGINE_PACKAGE,
     canonical_overlay_list,
     canonical_overlay_name,

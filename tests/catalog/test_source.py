@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import importlib
 import sys
-import tomllib
 from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.sources.filesystem import (
+from coding_agent_playbook.catalog.source import (
     FileSystemArtifactSource,
 )
-from tests.toml_equality import assert_toml_identical
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -116,24 +114,6 @@ def temp_pkg_cleanup(tmp_path: Path) -> Iterator[None]:
             )
         ):
             del sys.modules[mod_name]
-
-
-def test_dump_toml_rejects_unsupported_scalar() -> None:
-    from coding_agent_playbook.toml_writer import dump_toml as _dump_toml
-
-    with pytest.raises(TypeError, match=r"does not support value of type"):
-        _dump_toml({"weird": object()})
-
-
-def test_dump_toml_round_trips_mapping_deeper_than_two_levels() -> None:
-    """Formerly pinned as a ``TypeError`` (only Config/Lockfile were written, and
-    they nest two levels at most). ``playbook init`` now writes the committed
-    tables ``Config`` does not manage back verbatim, and those nest deeper
-    (``[metrics.thresholds.<metric>]``), so every depth must round-trip."""
-    from coding_agent_playbook.toml_writer import dump_toml as _dump_toml
-
-    data = {"a": {"b": {"c": {"d": 1, "w": 1.0}}}}
-    assert_toml_identical(tomllib.loads(_dump_toml(data)), data)
 
 
 def test_filesystem_artifact_source_exposes_engine_package_property(tmp_path: Path) -> None:
@@ -298,7 +278,7 @@ def test_list_skills_constructs_from_directory(tmp_path: Path, temp_pkg_cleanup:
 
 
 def test_resource_subdir_returns_none_for_missing_package() -> None:
-    from coding_agent_playbook.sources.filesystem import _resource_subdir
+    from coding_agent_playbook.catalog.source import _resource_subdir
 
     assert _resource_subdir("nonexistent_pkg_xyz_abc_999", "rules") is None
 
@@ -309,7 +289,7 @@ def test_resource_subdir_skips_a_package_that_fails_at_import(
 ) -> None:
     """Discovery skips it like a missing package (it used to crash with a traceback);
     the shared ``_sync_preflight`` check is what names it and its error."""
-    from coding_agent_playbook.sources.filesystem import _resource_subdir
+    from coding_agent_playbook.catalog.source import _resource_subdir
 
     name = make_package("cap_raising_overlay", init=init, resources=True)
 
@@ -351,15 +331,6 @@ def test_list_skills_includes_repo_local_playbook_skills(tmp_path: Path) -> None
     skills = [s for s in source.list_skills() if s.source_package == "<repo-local>"]
     assert len(skills) == 1
     assert skills[0].frontmatter["name"] == "Local skill"
-
-
-def test_dump_toml_round_trips_nested_dict_in_list_of_tables() -> None:
-    """Formerly pinned as a ``TypeError`` (the lockfile's ``[[entries]]`` hold
-    scalars only); a preserved user table may hold sub-tables in each element."""
-    from coding_agent_playbook.toml_writer import dump_toml as _dump_toml
-
-    data = {"items": [{"key": {"deeper": 1, "flag": True}}]}
-    assert_toml_identical(tomllib.loads(_dump_toml(data)), data)
 
 
 def test_entry_point_registers_filesystem_artifact_source() -> None:

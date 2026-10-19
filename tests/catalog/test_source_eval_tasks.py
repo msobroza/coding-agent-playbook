@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.evals.task import EvalTask
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

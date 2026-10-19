@@ -204,7 +204,8 @@ def test_hook_policy_imports_only_the_stdlib() -> None:
     # evaluate_predicate when it runs, and the config types only for typing.
     assert ours == [
         "coding_agent_playbook._hook_schema",
-        "coding_agent_playbook._layers",
+        "coding_agent_playbook.catalog",
+        "coding_agent_playbook.catalog.layers",
         "coding_agent_playbook.hook_policy",
         "coding_agent_playbook.hook_policy._contract_handlers",
         "coding_agent_playbook.hook_policy._findings",

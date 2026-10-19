@@ -21,7 +21,7 @@ After an Edit or Write of ``**/eval_tasks/<id>/task.toml`` or its
    at 25 lines, so the model sees how the engine read gate, rubric and verdict.
 
 It never runs ``playbook eval --run`` (real runners, the LLM judge). The
-``evals.*`` and ``sources.filesystem`` (yaml) imports are a §D.1 branch-local
+``evals.*`` and ``catalog.source`` (yaml) imports are a §D.1 branch-local
 row: only an eval-task edit loads them. Fails open.
 """
 
@@ -164,7 +164,8 @@ def _label(task_dir: Path, root: str) -> str:
 
 def _prompts(task_dir: Path, root: str, cfg: GuardConfig) -> list[Prompt] | None:
     """Every layer's prompts (later layers win by id in the validator), or ``None`` on failure."""
-    from coding_agent_playbook.sources.filesystem import ENGINE_PACKAGE, FileSystemArtifactSource
+    from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
+    from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 
     packages = _layer_packages(cfg) or [ENGINE_PACKAGE]
     layer = task_dir.parent.parent

@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.catalog import canonical_overlay_list
+from coding_agent_playbook.catalog.roots import canonical_overlay_list
 from coding_agent_playbook.config.entries import (
     copy_toml_value,
     unmanaged_config_entries,
