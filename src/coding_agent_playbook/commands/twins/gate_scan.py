@@ -21,7 +21,12 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.commands.twins._git_scope import ScanRange, open_git, resolve_range
+from coding_agent_playbook.commands.twins._git_scope import (
+    RANGE_FLAG_HELP,
+    ScanRange,
+    open_git,
+    resolve_range,
+)
 from coding_agent_playbook.commands.twins._runner import TwinOutcome, run_twin
 from coding_agent_playbook.config.files import CONFIG_FILENAME, CommittedDocument
 from coding_agent_playbook.gate_scan import (
@@ -39,10 +44,28 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.git import GitPort
 
-__all__ = ["load_policy", "run", "scan_range"]
+__all__ = ["HELP", "NAME", "configure", "load_policy", "run", "scan_range"]
 
+NAME: Final = "gate-scan"
+HELP: Final = "flag gate-weakening changes in a commit range (prK §E.2)"
 HOOK_ID: Final = "gate-weakening-guard"
 _FIX_HINT: Final = "Fix the root cause, or justify each line inline with a trailing `# <reason>`."
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook gate-scan [--range A..B] [--format F]`` (SPEC §12.14, prK §E.2).
+
+    Example::
+
+        >>> configure(argparse.ArgumentParser(prog="playbook gate-scan"))  # doctest: +SKIP
+    """
+    parser.add_argument(
+        "--range",
+        dest="rev_range",
+        help=RANGE_FLAG_HELP,
+    )
+    parser.add_argument("--format", choices=("text", "json"), default="text")
+    parser.add_argument("--repo-root", help="repo to scan (defaults to cwd)")
 
 
 def run(args: argparse.Namespace, *, git: GitPort | None = None) -> int:

@@ -24,7 +24,11 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook.commands.twins._git_scope import open_git, resolve_range
+from coding_agent_playbook.commands.twins._git_scope import (
+    RANGE_FLAG_HELP,
+    open_git,
+    resolve_range,
+)
 from coding_agent_playbook.commands.twins._runner import TwinOutcome, run_twin
 from coding_agent_playbook.hook_runtime.judges.notebook_cells import notebook_code
 from coding_agent_playbook.hook_runtime.judges.sink_scan import (
@@ -40,8 +44,20 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.git import GitPort, SafeGit
     from coding_agent_playbook.hook_runtime.judges.sink_scan import SinkHit
 
-__all__ = ["SinkChange", "SinkFinding", "range_changes", "run", "scan_changes", "shipped_table"]
+__all__ = [
+    "HELP",
+    "NAME",
+    "SinkChange",
+    "SinkFinding",
+    "configure",
+    "range_changes",
+    "run",
+    "scan_changes",
+    "shipped_table",
+]
 
+NAME: Final = "scan-sinks"
+HELP: Final = "flag new unsafe deserialization sinks in a change (prK §E.3)"
 HOOK_ID: Final = "ml-unsafe-deserialization-guard"
 _HOOK_MD: Final = ("hooks", "feedback", HOOK_ID, "HOOK.md")
 _SUFFIXES: Final = (".py", ".ipynb")
@@ -82,6 +98,24 @@ class SinkFinding:
             "status": self.status,
             "advice": self.advice,
         }
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook scan-sinks [--staged | --range A..B] [--format F]`` (SPEC §12.16).
+
+    Example::
+
+        >>> configure(argparse.ArgumentParser(prog="playbook scan-sinks"))  # doctest: +SKIP
+    """
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument("--staged", action="store_true", help="scan the index against HEAD")
+    scope.add_argument(
+        "--range",
+        dest="rev_range",
+        help=RANGE_FLAG_HELP,
+    )
+    parser.add_argument("--format", choices=("text", "json"), default="text")
+    parser.add_argument("--repo-root", help="repo to scan (defaults to cwd)")
 
 
 def run(args: argparse.Namespace, *, git: SafeGit | None = None) -> int:

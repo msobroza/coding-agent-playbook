@@ -27,8 +27,10 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.git import GitPort
 
 __all__ = [
+    "BASE_FLAG_HELP",
     "CLI_GIT_TIMEOUT_S",
     "FETCH_DEPTH_HINT",
+    "RANGE_FLAG_HELP",
     "GitBaseError",
     "MergeBase",
     "ScanRange",
@@ -40,6 +42,10 @@ __all__ = [
 #: Per git call; a range diff of a large PR can outlive the hooks' 2-5 s bounds.
 CLI_GIT_TIMEOUT_S: Final = 30.0
 FETCH_DEPTH_HINT: Final = "in CI, check out the full history (actions/checkout with fetch-depth: 0)"
+#: The ``--base`` help of the twins that compare against a base (:func:`resolve_merge_base`).
+BASE_FLAG_HELP: Final = "base ref (default: the default branch, origin/HEAD first)"
+#: The ``--range`` help of the twins that scan a range (:func:`resolve_range`).
+RANGE_FLAG_HELP: Final = "A..B, or A...B from their merge base (default: <merge-base>..HEAD)"
 
 
 class GitBaseError(ValueError):

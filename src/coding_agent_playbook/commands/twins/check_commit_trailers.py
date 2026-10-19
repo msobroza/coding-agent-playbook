@@ -31,9 +31,26 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.git import SafeGit
     from coding_agent_playbook.security.commit_trailers import GitPolicy
 
-__all__ = ["range_messages", "run", "violation_lines"]
+__all__ = ["HELP", "NAME", "configure", "range_messages", "run", "violation_lines"]
+
+NAME: Final = "check-commit-trailers"
+HELP: Final = "check commit-message trailer rows, CP4xx (prK §E.4)"
 
 _SHORT_SHA: Final = 12
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook check-commit-trailers <msgfile> | --range A..B`` (SPEC §12.18).
+
+    Example::
+
+        >>> configure(argparse.ArgumentParser())  # doctest: +SKIP
+    """
+    parser.add_argument(
+        "msgfile", nargs="?", help="the commit message file (the commit-msg stage passes it)"
+    )
+    parser.add_argument("--range", dest="rev_range", help="check every commit of A..B, or A...B")
+    parser.add_argument("--repo-root", help="repo whose policy applies (defaults to cwd)")
 
 
 def run(args: argparse.Namespace, *, git: SafeGit | None = None) -> int:

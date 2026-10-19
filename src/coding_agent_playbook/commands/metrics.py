@@ -76,11 +76,12 @@ human audience.
 
 from __future__ import annotations
 
+import argparse
 import json
 import shlex
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final, cast
 
 from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, clean_head_tree
 from coding_agent_playbook.evaluators.types import ScopeDetail
@@ -94,7 +95,6 @@ from coding_agent_playbook.metrics_gate.run import (
 )
 
 if TYPE_CHECKING:
-    import argparse
     from collections.abc import Sequence
 
     from coding_agent_playbook.evaluators import EvaluationReport
@@ -102,6 +102,8 @@ if TYPE_CHECKING:
     from coding_agent_playbook.metrics_gate.config import MetricConfig
     from coding_agent_playbook.metrics_gate.run import MetricsGateResult
 
+NAME: Final = "metrics"
+HELP: Final = "static code-quality gate (cyclomatic complexity, MI, ...) (PR-M)"
 
 _VALID_MODES = ("regression", "absolute", "both")
 _VALID_FORMATS = ("text", "json")
@@ -298,6 +300,103 @@ def _render(result: MetricsGateResult, fmt: str) -> str:
         note=result.note,
         measured_count=result.measured_count,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Flags
+# --------------------------------------------------------------------------- #
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook metrics [PATHS] [--baseline B] [--changed] ...`` (SPEC §12.12).
+
+    Example::
+
+        >>> configure(argparse.ArgumentParser(prog="playbook metrics"))  # doctest: +SKIP
+    """
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        help="Python files or directories to measure (default: the repo's src/ dir)",
+    )
+    parser.add_argument(
+        "--baseline",
+        help="non-regression baseline: 'git:<ref>', 'json:<path>' (an --emit-measurements "
+        "snapshot) or a directory path",
+    )
+    parser.add_argument(
+        "--changed",
+        action="store_true",
+        help="only the *.py files changed against the git: baseline, plus untracked ones",
+    )
+    _add_selection_flags(parser)
+    _add_mode_and_output_flags(parser)
+
+
+def _add_selection_flags(parser: argparse.ArgumentParser) -> None:
+    """``--select``, ``--extend-select``, ``--ignore`` and ``--emit-measurements``."""
+    # Ruff-shaped selection (prK §F.0.3 item 2): each flag replaces its [metrics] key.
+    parser.add_argument(
+        "--select",
+        metavar="NAMES",
+        help="comma-separated metrics or families (quality, docstrings, testing) to "
+        "measure instead of the default set",
+    )
+    parser.add_argument(
+        "--extend-select",
+        dest="extend_select",
+        metavar="NAMES",
+        help="comma-separated metrics or families to add; opt-in metrics only by name",
+    )
+    parser.add_argument(
+        "--ignore",
+        metavar="NAMES",
+        help="comma-separated metrics or families to leave out",
+    )
+    parser.add_argument(
+        "--emit-measurements",
+        dest="emit_measurements",
+        metavar="PATH",
+        help="write the raw candidate measurements as a JSON snapshot (for --baseline json:PATH)",
+    )
+
+
+def _add_mode_and_output_flags(parser: argparse.ArgumentParser) -> None:
+    """``--mode``, ``--strict``, ``--run-tests``, ``--test-cmd``, ``--format``, ``--repo-root``."""
+    parser.add_argument(
+        "--mode",
+        choices=("regression", "absolute", "both"),
+        help="comparison mode (default: from [metrics] config, else 'regression')",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="promote warnings to gate failures (non-zero exit)",
+    )
+    # Tri-state: None defers to [metrics] run_tests; --no-run-tests keeps the
+    # pre-commit twins static even when the config enables tests (§F.0.3 item 6).
+    parser.add_argument(
+        "--run-tests",
+        dest="run_tests",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="also run the execution evaluators (test_pass_rate, coverage): "
+        "shells out to the target's pytest (opt-in, has side effects); "
+        "--no-run-tests overrides [metrics] run_tests = true",
+    )
+    parser.add_argument(
+        "--test-cmd",
+        dest="test_cmd",
+        help="override the test command used by --run-tests (a shell-style "
+        "string, split with shlex; default: python -m pytest with junit+cov XML)",
+    )
+    parser.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    parser.add_argument("--repo-root", help="repo to measure against (defaults to cwd)")
 
 
 # --------------------------------------------------------------------------- #

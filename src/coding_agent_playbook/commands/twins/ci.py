@@ -61,7 +61,11 @@ from coding_agent_playbook.commands.twins._ci_commit_convention import (
     run_cz_commands,
 )
 from coding_agent_playbook.commands.twins._ci_report import json_report, log_step, summary_text
-from coding_agent_playbook.commands.twins._git_scope import open_git, resolve_merge_base
+from coding_agent_playbook.commands.twins._git_scope import (
+    BASE_FLAG_HELP,
+    open_git,
+    resolve_merge_base,
+)
 from coding_agent_playbook.commands.twins.policy import (
     commit_convention_configured,
     dependency_policy_set,
@@ -82,6 +86,8 @@ if TYPE_CHECKING:
 __all__ = [
     "CI_STEPS",
     "DEFAULT_STEP_TIMEOUT_S",
+    "HELP",
+    "NAME",
     "CiContext",
     "CiStep",
     "CiStepRunner",
@@ -89,10 +95,14 @@ __all__ = [
     "StepRun",
     "SubprocessCiStepRunner",
     "aggregate_exit",
+    "configure",
     "run",
     "run_ci",
     "select_steps",
 ]
+
+NAME: Final = "ci"
+HELP: Final = "run the CI twins as child processes (prK §F.5)"
 
 #: Per child step: generous, since a CI runner is slow and K10's coverage row runs a suite.
 DEFAULT_STEP_TIMEOUT_S: Final = 600.0
@@ -332,6 +342,19 @@ class SubprocessCiStepRunner:
         except OSError as exc:
             return StepRun(127, f"cannot start {argv[0]}: {exc.strerror}\n")
         return StepRun(done.returncode, _decoded(done.stdout))
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook ci [--base REF] [--steps NAMES] [--format F]`` (SPEC §12.11).
+
+    Example::
+
+        >>> configure(argparse.ArgumentParser(prog="playbook ci"))  # doctest: +SKIP
+    """
+    parser.add_argument("--base", help=BASE_FLAG_HELP)
+    parser.add_argument("--steps", help="comma-separated CI_STEPS names (default: every row)")
+    parser.add_argument("--format", choices=("text", "json"), default="text")
+    parser.add_argument("--repo-root", help="repo to check (defaults to cwd)")
 
 
 def run(

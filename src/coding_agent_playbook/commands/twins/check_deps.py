@@ -22,7 +22,11 @@ from __future__ import annotations
 import posixpath
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.commands.twins._git_scope import open_git, resolve_merge_base
+from coding_agent_playbook.commands.twins._git_scope import (
+    BASE_FLAG_HELP,
+    open_git,
+    resolve_merge_base,
+)
 from coding_agent_playbook.commands.twins._runner import TWIN_ERRORS, TwinOutcome, run_twin
 from coding_agent_playbook.commands.twins.policy import dependency_twin_config
 from coding_agent_playbook.hook_runtime.decision import Decision
@@ -47,9 +51,23 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.git import GitPort
     from coding_agent_playbook.hook_runtime.judges.manifest_diff import ManifestKind
 
-__all__ = ["finding_lines", "manifest_findings", "run"]
+__all__ = ["HELP", "NAME", "configure", "finding_lines", "manifest_findings", "run"]
+
+NAME: Final = "check-deps"
+HELP: Final = "flag new dependencies and package indexes since a base (prK §E.4)"
 
 _MANIFEST_LIMIT: Final = 1024 * 1024
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook check-deps [--base REF]`` (SPEC §12.17, prK §E.4).
+
+    Example::
+
+        >>> configure(argparse.ArgumentParser(prog="playbook check-deps"))  # doctest: +SKIP
+    """
+    parser.add_argument("--base", help=BASE_FLAG_HELP)
+    parser.add_argument("--repo-root", help="repo to check (defaults to cwd)")
 
 
 def run(args: argparse.Namespace, *, git: GitPort | None = None) -> int:

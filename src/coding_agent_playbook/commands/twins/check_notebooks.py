@@ -31,11 +31,35 @@ from coding_agent_playbook.hook_runtime.judges.notebook_check import (
 if TYPE_CHECKING:
     import argparse
 
-__all__ = ["CLI_MAX_BYTES", "check_notebook_file", "run", "tracked_notebooks"]
+__all__ = [
+    "CLI_MAX_BYTES",
+    "HELP",
+    "NAME",
+    "check_notebook_file",
+    "configure",
+    "run",
+    "tracked_notebooks",
+]
+
+NAME: Final = "check-notebooks"
+HELP: Final = "fail when notebooks keep cell outputs (prK §E.3)"
 
 #: A notebook larger than this is reported unparsed even here.
 CLI_MAX_BYTES: Final = 256 * 1024 * 1024
 _LIMITS: Final = NotebookLimits(max_bytes=CLI_MAX_BYTES)
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook check-notebooks [PATHS]`` (SPEC §12.19, prK §E.3).
+
+    Example::
+
+        >>> configure(argparse.ArgumentParser(prog="playbook check-notebooks"))  # doctest: +SKIP
+    """
+    parser.add_argument(
+        "paths", nargs="*", help="notebooks to check (default: every tracked .ipynb file)"
+    )
+    parser.add_argument("--repo-root", help="repo the paths are relative to (defaults to cwd)")
 
 
 def run(args: argparse.Namespace) -> int:

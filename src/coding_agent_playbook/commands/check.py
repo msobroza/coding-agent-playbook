@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import platform
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.adapters.claude_code.settings.drift import (
@@ -41,6 +41,9 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.lockfile.model import Lockfile
     from coding_agent_playbook.validation.preflight import UnusableOverlay
+
+NAME: Final = "check"
+HELP: Final = "diagnostic dump (SPEC §12.4)"
 
 _SYNC_REFUSES = "'playbook sync' refuses to run until every overlay in overlays_enabled is usable"
 
@@ -238,6 +241,21 @@ def _refresh(repo_root: Path) -> None:
     files = ConfigFiles(repo_root)
     cache = detector_cache_table(detect(repo_root))
     plan_detector_cache_refresh(files, cache).save(files)
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook check [--repo-root R] [--refresh]`` (SPEC §12.4, §12.5).
+
+    Example::
+
+        >>> configure(argparse.ArgumentParser(prog="playbook check"))  # doctest: +SKIP
+    """
+    parser.add_argument("--repo-root", help="repo to check (defaults to cwd)")
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="re-run detector and persist facts to detector_cache (SPEC §12.5)",
+    )
 
 
 def run(args: argparse.Namespace) -> int:
