@@ -251,7 +251,7 @@ layers = [
     "commands",
     "sync",
     "validation",
-    "(agent_harness) | evals | precommit",
+    "agent_harness | evals | precommit",
     "adapters",
     "(rendering)",
     "hooks",
@@ -281,7 +281,6 @@ exhaustive_ignores = [
     "_guard_config_verify",
     "evaluators",
     "guard_config",
-    "harness",
     "hook_registrations",
     "hook_runtime",
     "prompt_rule_delivery",
@@ -295,6 +294,9 @@ ignore_imports = [
     # (L12): OverlayResolver defaults to the layer merge's merge_hook_layers and
     # NO_HANDLER_SCHEMAS (A5 made the edge visible; A17 pointed it at the hooks package)
     "coding_agent_playbook.catalog.resolve -> coding_agent_playbook.hooks.**",
+    # AH-1 moves both into agent_harness/
+    "coding_agent_playbook.adapters.agent_harness_adapter -> coding_agent_playbook.agent_harness.**",
+    "coding_agent_playbook.adapters._harness_hooks -> coding_agent_playbook.agent_harness.**",
 ]
 broken_contract_guidance = """
 A lower layer may not import a higher one, directly or through modules outside the layers.
@@ -332,6 +334,7 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_toolchain",
     "coding_agent_playbook._guard_config_verify",
     "coding_agent_playbook.adapters",
+    "coding_agent_playbook.agent_harness",
     "coding_agent_playbook.artifacts.frontmatter",
     "coding_agent_playbook.artifacts.hook",
     "coding_agent_playbook.artifacts.hook_frontmatter",
@@ -359,7 +362,6 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.symlinks",
     "coding_agent_playbook.generated_output.write_guard",
     "coding_agent_playbook.guard_config",
-    "coding_agent_playbook.harness",
     "coding_agent_playbook.hook_registrations",
     "coding_agent_playbook.hook_runtime",
     "coding_agent_playbook.hooks",
@@ -401,6 +403,7 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_toolchain",
     "coding_agent_playbook._guard_config_verify",
     "coding_agent_playbook.adapters",
+    "coding_agent_playbook.agent_harness",
     "coding_agent_playbook.artifacts.frontmatter",
     "coding_agent_playbook.artifacts.hook",
     "coding_agent_playbook.artifacts.hook_frontmatter",
@@ -428,7 +431,6 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.symlinks",
     "coding_agent_playbook.generated_output.write_guard",
     "coding_agent_playbook.guard_config",
-    "coding_agent_playbook.harness",
     "coding_agent_playbook.hook_registrations",
     "coding_agent_playbook.hooks",
     "coding_agent_playbook.metrics_gate",
@@ -491,6 +493,7 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_toolchain",
     "coding_agent_playbook._guard_config_verify",
     "coding_agent_playbook.adapters",
+    "coding_agent_playbook.agent_harness",
     "coding_agent_playbook.artifacts.frontmatter",
     "coding_agent_playbook.artifacts.hook",
     "coding_agent_playbook.artifacts.hook_frontmatter",
@@ -517,7 +520,6 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.symlinks",
     "coding_agent_playbook.generated_output.write_guard",
     "coding_agent_playbook.guard_config",
-    "coding_agent_playbook.harness",
     "coding_agent_playbook.hook_registrations",
     "coding_agent_playbook.hook_runtime",
     "coding_agent_playbook.hooks",

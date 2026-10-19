@@ -1,10 +1,10 @@
-"""Tests for harness.leaf_detectors (Track H1)."""
+"""Tests for agent_harness.leaf_detectors (Track H1)."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.harness.leaf_detectors import (
+from coding_agent_playbook.agent_harness.leaf_detectors import (
     is_harness_leaf,
     leaf_type,
     parse_leaf_detectors,

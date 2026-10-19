@@ -19,14 +19,13 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
-from coding_agent_playbook.harness.leaf_detectors import (
+from coding_agent_playbook.agent_harness.leaf_detectors import (
     LEAF_TYPE_OPAQUE,
     leaf_type,
     parse_leaf_detectors,
     routing_file_name,
 )
-from coding_agent_playbook.harness.models import (
+from coding_agent_playbook.agent_harness.models import (
     ContentFile,
     Harness,
     HarnessDirectory,
@@ -36,6 +35,7 @@ from coding_agent_playbook.harness.models import (
     ScriptFile,
     SkillLeaf,
 )
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 
 if TYPE_CHECKING:
     from pathlib import Path
