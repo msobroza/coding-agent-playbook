@@ -12,7 +12,7 @@ diff base, timeout, ``--cov`` sources) would run without running a suite; its
 ``FakeGitRunner`` stands in for its working-tree reads (``SubprocessGitRunner``).
 ``FakeHandlerSchemas`` stands in for the hook-handler ``CONFIG_SCHEMA`` registry
 (K2) behind :class:`coding_agent_playbook.hook_policy.ConfigSchemaLookup`.
-``FakePinWriter`` stands in for the ``hook_runtime.pin`` writers ``playbook sync``
+``FakePinWriter`` stands in for the ``hook_runtime.config.pin`` writers ``playbook sync``
 calls (the interpreter pin and ``machine.json`` under the git dir).
 ``FakeCiStepRunner`` stands in for :class:`coding_agent_playbook.commands.ci.SubprocessCiStepRunner`
 so ``playbook ci`` tests see each step's argv without spawning a child.
