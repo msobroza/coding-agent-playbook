@@ -26,8 +26,8 @@ import pytest
 
 from coding_agent_playbook.evaluators.check import MeasurementSet, ThresholdCheck
 from coding_agent_playbook.evaluators.metric import Metric, get_metric
-from coding_agent_playbook.evaluators.policy import METRIC_DEFAULTS
 from coding_agent_playbook.evaluators.types import EvalContext, Measurement, ScopeDetail
+from coding_agent_playbook.metrics_gate.policy import METRIC_DEFAULTS
 
 
 def _ctx() -> EvalContext:

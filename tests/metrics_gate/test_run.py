@@ -16,7 +16,10 @@ import pytest
 
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle
 from coding_agent_playbook.evaluators.metric import Metric, static_metrics
-from coding_agent_playbook.evaluators.metrics_gate import (
+from coding_agent_playbook.evaluators.normalizer import Identity
+from coding_agent_playbook.evaluators.scope import Scope
+from coding_agent_playbook.metrics_gate.config import MetricConfig
+from coding_agent_playbook.metrics_gate.run import (
     CONFIG_FILENAME,
     MAX_FILE_BYTES,
     MetricsGateDeps,
@@ -25,9 +28,6 @@ from coding_agent_playbook.evaluators.metrics_gate import (
     load_metrics_config,
     run_metrics_gate,
 )
-from coding_agent_playbook.evaluators.normalizer import Identity
-from coding_agent_playbook.evaluators.scope import Scope
-from coding_agent_playbook.evaluators.types import EvalContext, Measurement, MetricConfig
 from tests.cli.test_metrics import _BASELINE_SOURCE, _WORSE_SOURCE
 from tests.engine_modules import engine_module
 from tests.fakes import FakeBaselineGit, FakeGitRunner, FakeProjectFactory
@@ -35,6 +35,8 @@ from tests.import_probe import new_modules_after
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
+
+    from coding_agent_playbook.evaluators.types import EvalContext, Measurement
 
 _HIGH_CC_SOURCE = (
     "def tangled(x):\n"
@@ -521,7 +523,7 @@ def test_default_file_cap_is_one_megabyte() -> None:
 
 
 def test_metrics_gate_imports_no_jinja_yaml_cli_or_argparse() -> None:
-    loaded = new_modules_after("import coding_agent_playbook.evaluators.metrics_gate")
+    loaded = new_modules_after("import coding_agent_playbook.metrics_gate.run")
 
     cli = engine_module("coding_agent_playbook.cli")
     forbidden = ("jinja2", "markupsafe", "yaml", "argparse", cli)

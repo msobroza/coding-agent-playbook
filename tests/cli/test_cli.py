@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook import __version__, catalog
+from coding_agent_playbook import __version__
+from coding_agent_playbook.catalog import roots as catalog
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.cli.parser import _SUBCOMMANDS, build_parser
 

@@ -25,10 +25,11 @@ from pathlib import Path
 from typing import Final
 
 from coding_agent_playbook import __version__
+from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.config.model import Config, ProjectMeta
 from coding_agent_playbook.orchestrator import SyncContext
-from coding_agent_playbook.sources.filesystem import ENGINE_PACKAGE, FileSystemArtifactSource
 
 #: The checks config-less validate skips, one note line each. The hook policy
 #: rules need the consumer's [hooks] table, which a config-less context has none of.
@@ -97,7 +98,7 @@ def _resolved_resources_dir(package: str) -> Path | None:
     try:
         return Path(str(resources.files(package).joinpath("resources"))).resolve()
     except Exception:
-        # Like sources.filesystem._resource_subdir: an import may raise anything.
+        # Like catalog.source._resource_subdir: an import may raise anything.
         return None
 
 

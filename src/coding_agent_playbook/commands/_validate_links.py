@@ -12,15 +12,15 @@ from __future__ import annotations
 import tomllib
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _iter_md_files
 from coding_agent_playbook.commands._validation import ValidationError
 from coding_agent_playbook.config.tables.links import LinksConfig, parse_links_config
 from coding_agent_playbook.links import classify_link, extract_markdown_links
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, _iter_md_files
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.sources.base import ArtifactSource
+    from coding_agent_playbook.catalog.source import ArtifactSource
 
 # Artifact kinds whose markdown bodies (and, for skills, references/) are
 # link-checked; a hook body degrades into advisory text, so it is too (H19,

@@ -28,7 +28,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.catalog import (
+from coding_agent_playbook.catalog.roots import (
     ENGINE_PACKAGE,
     catalog_layer_root,
     is_bundled_layer,
@@ -36,7 +36,7 @@ from coding_agent_playbook.catalog import (
 )
 
 # Re-exported: the preflight's callers and tests list the bundled plugins from here.
-from coding_agent_playbook.catalog import bundled_plugins as bundled_plugins
+from coding_agent_playbook.catalog.roots import bundled_plugins as bundled_plugins
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -234,7 +234,7 @@ def _names_itself_or_a_parent(missing: str | None, name: str) -> bool:
 def _ships_resources(module: ModuleType) -> bool:
     """True when the package has a ``resources/`` dir, where overlays keep artifacts.
 
-    Mirrors ``sources.filesystem._resource_subdir``: a plain module (no
+    Mirrors ``catalog.source._resource_subdir``: a plain module (no
     ``__path__``) or a package without that directory contributes nothing.
     """
     locations: Iterable[str] = getattr(module, "__path__", None) or []

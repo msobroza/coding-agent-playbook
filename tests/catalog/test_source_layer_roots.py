@@ -4,7 +4,7 @@ One walk order feeds every artifact kind and validate's per-layer checks:
 engine package, overlays, extra checkout ``resources/`` roots, repo-local
 ``playbook/``. Config-less ``playbook validate`` adds an overlay checkout's
 ``<root>/src/<pkg>/resources/`` as an extra root. Kept apart from
-``test_sources_filesystem.py``, which is already over 500 lines.
+``tests/catalog/test_source.py`` for the file-size budget.
 """
 
 from __future__ import annotations
@@ -13,11 +13,8 @@ import importlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.sources.filesystem import (
-    ENGINE_PACKAGE,
-    FileSystemArtifactSource,
-    _resource_subdir,
-)
+from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _resource_subdir
 
 if TYPE_CHECKING:
     from collections.abc import Callable

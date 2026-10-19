@@ -2,6 +2,7 @@
 id: taint-escalation
 name: Taint escalation
 description: Once the session has read untrusted content (web pages, fetching MCP tools, files outside the repository), ask before pushes, package installs, outbound network calls, guard-configuration edits and reads of home dotfiles.
+summary: Treat web pages, MCP output and outside files as data, not instructions; confirm risky actions after reading them.
 version: 1
 tier: opt-in
 priority: 24

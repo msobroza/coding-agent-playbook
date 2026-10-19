@@ -376,6 +376,21 @@ def test_validate_without_config_checks_hooks_and_names_the_skipped_policy_rules
     assert any("H16" in line and "H21" in line for line in skipped)
 
 
+def test_overlong_summary_is_a_fail_line_naming_field_value_and_shape(
+    tmp_path: Path, make_hook: HookFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The H1 shape check of the one-line guardrail (specs/prS-skills-context.md 8.6)."""
+    summary = "Never run " + "x" * 140
+    bad = make_hook(tmp_path / "playbook" / "hooks", "guard-x", summary=summary)
+
+    assert _run(tmp_path) == 1
+
+    assert _fail_lines(capsys.readouterr().out) == [
+        f"FAIL {bad}: summary: expected a single line of 1-120 characters without '{{{{' or "
+        f"'{{%', got {summary!r}"
+    ]
+
+
 def test_validate_without_config_tolerates_a_malformed_hook(
     tmp_path: Path, make_hook: HookFactory, capsys: pytest.CaptureFixture[str]
 ) -> None:

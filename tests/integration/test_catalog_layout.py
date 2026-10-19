@@ -28,7 +28,7 @@ from urllib.parse import unquote, urlsplit
 
 import pytest
 
-from coding_agent_playbook.catalog import _PACKAGE_DIR, catalog_root
+from coding_agent_playbook.catalog.roots import _PACKAGE_DIR, catalog_root
 from coding_agent_playbook.links import extract_markdown_links
 from tests._catalog import CATALOG_ROOT, CORE_ROOT, PLUGINS_ROOT, REPO_ROOT, bundled_plugin_dirs
 

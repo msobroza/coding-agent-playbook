@@ -16,7 +16,7 @@ import pytest
 
 from coding_agent_playbook.cli.parser import build_parser
 from coding_agent_playbook.commands import metrics as _metrics
-from coding_agent_playbook.evaluators.metrics_gate import CONFIG_FILENAME, MetricsGateDeps
+from coding_agent_playbook.metrics_gate.run import CONFIG_FILENAME, MetricsGateDeps
 from tests.cli.test_metrics import _BASELINE_SOURCE, _CLEAN_SOURCE, _HIGH_CC_SOURCE, _WORSE_SOURCE
 from tests.fakes import FakeProjectFactory, FakeRuffRunner, ruff_row
 

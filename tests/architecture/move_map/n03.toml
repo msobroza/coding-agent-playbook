@@ -1,0 +1,66 @@
+# N3 (#82, specs/prT-package-layout.md 4.14, 7.4): catalog.py becomes catalog/roots.py
+# (a same-name conversion), _layers.py catalog/layers.py, and the artifact half of
+# sources/ (ArtifactSource, FileSystemArtifactSource, _hook_walk) joins catalog/;
+# sources/ is gone. The ENGINE_PACKAGE/REPO_LOCAL_SOURCE re-export is removed (L2).
+
+[[module]]
+pr = "N3"
+old = "coding_agent_playbook.catalog"
+new = "coding_agent_playbook.catalog.roots"
+
+[[module]]
+pr = "N3"
+old = "coding_agent_playbook._layers"
+new = "coding_agent_playbook.catalog.layers"
+
+[[module]]
+pr = "N3"
+old = "coding_agent_playbook.sources._hook_walk"
+new = "coding_agent_playbook.catalog._hook_walk"
+
+[[module]]
+pr = "N3"
+old = "coding_agent_playbook.sources.base"
+new = "coding_agent_playbook.catalog.source"
+
+[[module]]
+pr = "N3"
+old = "coding_agent_playbook.sources.filesystem"
+new = "coding_agent_playbook.catalog.source"
+
+# The sources/filesystem.py:16-17 re-export, removed: importers name catalog.layers.
+[[names]]
+pr = "N3"
+old = "coding_agent_playbook.sources.filesystem"
+new = "coding_agent_playbook.catalog.layers"
+names = ["ENGINE_PACKAGE", "REPO_LOCAL_SOURCE"]
+
+[[path]]
+pr = "N3"
+old = "tests/unit/test_catalog.py"
+new = "tests/catalog/test_roots.py"
+
+[[path]]
+pr = "N3"
+old = "tests/unit/test_sources_filesystem.py"
+new = "tests/catalog/test_source.py"
+
+[[path]]
+pr = "N3"
+old = "tests/unit/test_sources_base.py"
+new = "tests/catalog/test_source_abc.py"
+
+[[path]]
+pr = "N3"
+old = "tests/unit/test_sources_filesystem_hooks.py"
+new = "tests/catalog/test_source_hooks.py"
+
+[[path]]
+pr = "N3"
+old = "tests/unit/test_sources_layer_roots.py"
+new = "tests/catalog/test_source_layer_roots.py"
+
+[[path]]
+pr = "N3"
+old = "tests/unit/test_filesystem_list_eval_tasks.py"
+new = "tests/catalog/test_source_eval_tasks.py"

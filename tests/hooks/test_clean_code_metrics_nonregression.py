@@ -1,7 +1,7 @@
 """clean-code-metrics-nonregression: the ``quality-metrics`` Stop stage (specs/prK-hook-pack.md §E.2).
 
 Through ``playbook-hook simulate stop`` with the coordinator and this stage
-hook on. The real ``evaluators.metrics_gate`` measures the worktree file; its
+hook on. The real ``metrics_gate.run`` measures the worktree file; its
 ``git:HEAD`` baseline blob comes from ``FakeGit.head_blobs`` through the
 hook's ``GitPort`` (no git binary), and a touched file is one ``FakeGit``
 reports as changed. The ``run_tests`` spy drives the stage directly.
@@ -124,7 +124,7 @@ def test_run_tests_true_config_never_runs_suite(repo: PackRepo) -> None:
 
     def spy(request: Any, gate_deps: Any) -> Any:
         requests.append(request)
-        from coding_agent_playbook.evaluators.metrics_gate import run_metrics_gate
+        from coding_agent_playbook.metrics_gate.run import run_metrics_gate
 
         return run_metrics_gate(request, deps=gate_deps)
 
@@ -251,7 +251,7 @@ def test_quality_and_docstrings_share_one_gate_pass_per_fingerprint(repo: PackRe
 
     def spy(request: Any, gate_deps: Any) -> Any:
         calls.append(request)
-        from coding_agent_playbook.evaluators.metrics_gate import run_metrics_gate
+        from coding_agent_playbook.metrics_gate.run import run_metrics_gate
 
         return run_metrics_gate(request, deps=gate_deps)
 

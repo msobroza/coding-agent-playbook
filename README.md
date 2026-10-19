@@ -41,7 +41,8 @@ Multi-harness playbook engine
   natively for Claude Code and OpenCode, stop an assistant from hand-editing
   generated files, persisting a secret, skipping your pre-commit hooks or
   ending a turn on a red tree. Every other assistant gets the same guidance as
-  text in `AGENTS.md`. Nothing changes until a repo opts in.
+  text: one line per guardrail in `AGENTS.md`, the full text in a skill.
+  Nothing changes until a repo opts in.
 - **Self-contained artifacts.** Every markdown link in every artifact must
   resolve inside the shipped bundle; external links pass only through the
   `[links] allowed_domains` allowlist (default: none). Deterministic — no
@@ -105,7 +106,7 @@ hooks on, one dispatcher answers every harness event at run time:
                            + .claude/hooks/playbook/launch.sh
    opencode       .opencode/ + .opencode/plugins/playbook-hooks.js
    agents_md      AGENTS.md (always; always rules + "Where guidance lives";
-                           a ## Guardrails section when hooks are on)
+                           one ## Guardrails line per hook when hooks are on)
    shared_skills  .agents/skills/ (the shared skill root: Codex, OpenCode)
    agent_harness  HARNESS.md tree + .playbook/ sidecar (opt-in)
  sync-level       .coding-agent-playbook.lock
@@ -165,8 +166,8 @@ flowchart LR
         plugins["plugins/: one directory per bundled plugin (opt-in)"]
     end
     subgraph src["src/coding_agent_playbook/ (engine logic)"]
-        resolver["catalog.py: the only code that locates the catalog"]
-        engine["sources, renderer, adapters, CLI"]
+        resolver["catalog/roots.py: the only code that locates the catalog"]
+        engine["catalog source, renderer, adapters, CLI"]
         template["templates/: the starter pre-commit config, the hook shims"]
     end
     wheel["installed wheel: coding_agent_playbook/_catalog/"]
@@ -446,7 +447,8 @@ Core also ships `playbook-guardrails`, which takes no rules. With hooks on, sync
 fills it with the full text of every enabled hook's guardrail, one section per
 hook, and writes it to `.opencode/skills/` and `.agents/skills/`. Claude Code
 runs the hooks itself, so `.claude/skills/` gets it only for a hook Claude Code
-cannot run; Continue keeps its `30-guardrail-<id>.md` rule files.
+cannot run; Continue keeps its `30-guardrail-<id>.md` rule files. `AGENTS.md`
+keeps one line per guardrail, the hook's `summary`, and names the skill.
 
 Sync renders each rule that applies as `<skills root>/<skill>/references/<rule-id>.md`
 and appends a `## References` index to the skill's `SKILL.md`, one line per
@@ -860,7 +862,7 @@ reason, at most `max_blocks` times per stop chain.
 | --- | --- |
 | Claude Code | Natively, on every event: one managed matcher group per event in `.claude/settings.json`, each running `.claude/hooks/playbook/launch.sh`. Your keys, your hook groups and `.claude/settings.local.json` are never touched, and a hand-edited managed group is restored with a warning. |
 | OpenCode ≥ 1.18.29 | Natively, through the one generated plugin `.opencode/plugins/playbook-hooks.js` (OpenCode's V1 plugin API): tool calls before and after, plus session start (an experimental API) and Stop (evidence only: it reports, it cannot block). Restart OpenCode after sync reports that the plugin changed. |
-| Codex, Cursor, GitHub Copilot, Gemini and other `AGENTS.md` readers | Advice only: the `## Guardrails` section at the end of `AGENTS.md`, each entry saying where it is enforced. |
+| Codex, Cursor, GitHub Copilot, Gemini and other `AGENTS.md` readers | Advice only: the `## Guardrails` section at the end of `AGENTS.md`, one line per guardrail; skill `playbook-guardrails` holds the full text of each and where it is enforced. |
 | Continue | Advice only: `.continue/rules/30-guardrail-<id>.md`. |
 | Agent Harness (opt-in) | Advice only: `rules/30-guardrail-<id>.md`, plus the `.playbook/hooks/<id>/` sidecar that keeps `import-harness` lossless. |
 

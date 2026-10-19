@@ -30,7 +30,9 @@ from dataclasses import dataclass, field
 from importlib import metadata
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.catalog import canonical_overlay_name
+from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
+from coding_agent_playbook.catalog.roots import canonical_overlay_name
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.config.tables.hooks import PolicyTables
 from coding_agent_playbook.detector.facts import detect
@@ -40,12 +42,12 @@ from coding_agent_playbook.hook_policy import (
     merge_hook_layers,
     split_hook_layers,
 )
-from coding_agent_playbook.sources.filesystem import ENGINE_PACKAGE, FileSystemArtifactSource
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.adapters.base import Adapter
+    from coding_agent_playbook.catalog.source import ArtifactSource
     from coding_agent_playbook.config.files import StateSource
     from coding_agent_playbook.config.model import Config
     from coding_agent_playbook.detector.facts import Facts
@@ -55,7 +57,6 @@ if TYPE_CHECKING:
         HookViolation,
     )
     from coding_agent_playbook.renderer import RuleRegistry
-    from coding_agent_playbook.sources.base import ArtifactSource
     from coding_agent_playbook.types import Hook, HookSchemaError, Prompt, Rule, Skill
 
 

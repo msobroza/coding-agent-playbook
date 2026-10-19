@@ -29,7 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook._layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
+from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
 from coding_agent_playbook.hook_policy._contract_handlers import handler_slots
 from coding_agent_playbook.hook_policy._findings import (
     HookIssue,

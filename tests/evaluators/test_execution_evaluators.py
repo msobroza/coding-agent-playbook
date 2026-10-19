@@ -8,7 +8,7 @@ read the same handle.
 The gate-level cases grade the execution measurements through the
 :class:`~coding_agent_playbook.evaluators.rubric.Rubric` stack, assembling the two
 execution checks via the shared
-:func:`~coding_agent_playbook.evaluators.policy.metric_check` factory — the same
+:func:`~coding_agent_playbook.metrics_gate.policy.metric_check` factory — the same
 per-metric default policy the standalone ``playbook metrics --run-tests`` gate
 applies.
 """
@@ -18,18 +18,14 @@ from __future__ import annotations
 import textwrap
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.evaluators import (
-    EvalContext,
-    EvaluationReport,
-    Measurement,
-    MetricConfig,
-)
+from coding_agent_playbook.evaluators import EvalContext, EvaluationReport, Measurement
 from coding_agent_playbook.evaluators.check import MeasurementSet
 from coding_agent_playbook.evaluators.execution.coverage import CoverageMetric
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle
 from coding_agent_playbook.evaluators.execution.test_pass import TestPassRateMetric
-from coding_agent_playbook.evaluators.policy import metric_check
 from coding_agent_playbook.evaluators.rubric import Rubric
+from coding_agent_playbook.metrics_gate.config import MetricConfig
+from coding_agent_playbook.metrics_gate.policy import metric_check
 
 if TYPE_CHECKING:
     from pathlib import Path
