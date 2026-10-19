@@ -28,19 +28,6 @@ _ENGINE_NAME: Final = re.compile(r"^coding_agent_playbook(\.[A-Za-z_][A-Za-z0-9_
 #: (exact names only, read from pyproject.toml) the entry-point group names, one of
 #: which is also a package (``coding_agent_playbook.adapters``).
 _OVERLAY_NAMESPACES: Final = ("coding_agent_playbook.plugins", "coding_agent_playbook.packs")
-#: Raw pins in test files the #49-#62 ticket chain edits. They are wrapped in the
-#: PR after the chain merges; an entry that no longer matches fails
-#: test_deferred_raw_pins_still_exist, so the list only shrinks.
-_DEFERRED_UNTIL_CHAIN_MERGES: Final = frozenset(
-    {
-        (
-            "adapters/test_claude_code_rules.py",
-            "coding_agent_playbook.adapters.claude_code_adapter",
-        ),
-        ("adapters/test_claude_code_rules.py", "coding_agent_playbook.renderer"),
-        ("unit/test_rule_registry.py", "coding_agent_playbook.rule_registry"),
-    }
-)
 
 
 @dataclass(frozen=True, order=True)
@@ -127,16 +114,7 @@ def _scan_tests() -> list[RawPin]:
 
 
 def test_tests_pin_engine_modules_through_engine_module() -> None:
-    deferred = _DEFERRED_UNTIL_CHAIN_MERGES
-    raw = [pin for pin in _scan_tests() if (pin.path, pin.name) not in deferred]
-
-    assert raw == [], "wrap each name in tests.engine_modules.engine_module(...)"
-
-
-def test_deferred_raw_pins_still_exist() -> None:
-    found = {(pin.path, pin.name) for pin in _scan_tests()}
-
-    assert sorted(_DEFERRED_UNTIL_CHAIN_MERGES - found) == []
+    assert _scan_tests() == [], "wrap each name in tests.engine_modules.engine_module(...)"
 
 
 @pytest.mark.parametrize(

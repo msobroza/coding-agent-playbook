@@ -23,7 +23,7 @@ from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_MD_PATH, CLA
 from coding_agent_playbook.config.tables.hooks import HooksConfig
 from coding_agent_playbook.skill_document import WhereEntry, where_guidance_section
 from coding_agent_playbook.types import Rule, RuleFrontmatter, Skill
-from tests.hook_samples import resolved_hook
+from tests.hook_samples import GUARDRAILS_SECTION_HEAD, resolved_hook
 from tests.member_skill_samples import sample_member_reference, sample_member_skill
 
 if TYPE_CHECKING:
@@ -37,11 +37,7 @@ _RULES_HEAD = f"{sentinel_line('html')}\n# Project rules (coding-agent-playbook)
 _STUB = f"{sentinel_line('html')}\n# CLAUDE.md\n\n{_GENERATED}"
 _ALWAYS_SECTION = "## Project context\n\nAsk before coding.\n\n---\n"
 _WHERE = where_guidance_section([WhereEntry("python-coding", "Any Python file")])
-_GUARDRAILS = (
-    "## Guardrails\n\n"
-    "These practices are enforced automatically by lifecycle hooks on assistants that "
-    "support them; on every other assistant, follow them yourself.\n\n"
-)
+_GUARDRAILS = GUARDRAILS_SECTION_HEAD
 _BRIEFING = "session-start-playbook-briefing"
 
 
@@ -219,17 +215,40 @@ def test_agents_md_keeps_the_where_map_when_an_enabled_adapter_writes_skills(
 # --------------------------------------------------------------------------- #
 
 
-def test_rules_file_skips_member_rules_but_keeps_unenforced_hook_advisories(
+def test_rules_file_skips_member_rules_and_gives_an_unrunnable_hook_one_line(
     tmp_path: Path,
 ) -> None:
-    """H16: an advisory rule has ``skill=None``, so it keeps its full section until PR 4."""
+    """D26: a hook Claude Code cannot run is one guardrail line, no longer a full section."""
     elsewhere = resolved_hook("guard-b", name="Guard B", supports=("opencode",))
 
     content = _claude_rules_file(tmp_path, [_member_rule()], [], [elsewhere])
 
     assert "Use type hints." not in content
-    assert "## Guardrail: Guard B\n\nAdvice.\n\n*Enforced by lifecycle hooks on: OpenCode." in (
-        content
+    assert content == _RULES_HEAD + _GUARDRAILS + "- `guard-b`: Advice.\n"
+
+
+def test_rules_file_guardrails_sit_between_the_where_section_and_the_heartbeat(
+    tmp_path: Path,
+) -> None:
+    """The order AGENTS.md uses, with the heartbeat line still closing the file."""
+    briefing = resolved_hook(_BRIEFING, events=("session_start",))
+    elsewhere = resolved_hook("guard-b", supports=("opencode",), summary="Ask first.")
+
+    content = _claude_rules_file(
+        tmp_path, [_always_rule()], [_member_skill()], [briefing, elsewhere]
+    )
+
+    assert content == (
+        _RULES_HEAD
+        + _ALWAYS_SECTION
+        + "\n"
+        + _WHERE
+        + "\n"
+        + _GUARDRAILS
+        + "- `guard-b`: Ask first.\n"
+        + "\n"
+        + CLAUDE_HEARTBEAT_LINE
+        + "\n"
     )
 
 

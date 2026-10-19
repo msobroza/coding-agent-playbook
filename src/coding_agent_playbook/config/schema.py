@@ -15,7 +15,7 @@ import difflib
 from typing import TYPE_CHECKING, Any, TypeGuard
 
 from coding_agent_playbook import toml_writer as _toml
-from coding_agent_playbook.catalog import canonical_overlay_name
+from coding_agent_playbook.catalog.roots import canonical_overlay_name
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping

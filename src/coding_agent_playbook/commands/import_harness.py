@@ -3,7 +3,7 @@
 Parses an Agent Harness tree back into canonical ``Rule`` / ``Prompt`` / ``Skill``
 (and, from the sidecar, ``Hook``: :mod:`._import_hooks`) artifacts and writes
 them into an overlay directory (default ``playbook/``) in the
-:class:`~coding_agent_playbook.sources.filesystem.FileSystemArtifactSource` layout,
+:class:`~coding_agent_playbook.catalog.source.FileSystemArtifactSource` layout,
 so a later ``playbook sync`` can re-read them.
 
 Two fidelity tiers (``specs/prH-agent-harness.md`` §C):

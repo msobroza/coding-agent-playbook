@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 #: key is parsed from the raw TOML by its own command; ``Config`` only carries it,
 #: verbatim, in ``extra_tables`` (:func:`unmanaged_config_entries`), so a rewrite
 #: of the committed file keeps it (``playbook init`` and ``playbook check
-#: --refresh``, through ``commands/_committed_config``).
+#: --refresh``, through ``config/committed``).
 CONFIG_MANAGED_KEYS: frozenset[str] = frozenset(
     {
         "schema_version",

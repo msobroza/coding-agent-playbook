@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.sources.base import ArtifactSource
+from coding_agent_playbook.catalog.source import ArtifactSource
 from coding_agent_playbook.types import Hook, HookSchemaError
 from tests.hook_samples import hook_frontmatter
 

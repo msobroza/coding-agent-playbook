@@ -34,6 +34,7 @@ import yaml
 from jinja2 import TemplateError
 
 from coding_agent_playbook import __version__ as _engine_version
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.orchestrator import OverlayResolver
@@ -44,7 +45,6 @@ from coding_agent_playbook.renderer import (
     render_string,
 )
 from coding_agent_playbook.rule_registry import RuleRegistryImpl
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import Prompt
 
 if TYPE_CHECKING:

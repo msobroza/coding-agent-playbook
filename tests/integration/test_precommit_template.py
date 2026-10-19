@@ -15,12 +15,12 @@ from typing import TYPE_CHECKING, Any
 import pytest
 import yaml
 
+from coding_agent_playbook.catalog.source import _resource_subdir
 from coding_agent_playbook.commands.init import (
     PrecommitTemplateMissingError,
     _render_fresh_pre_commit,
     precommit_template_dir,
 )
-from coding_agent_playbook.sources.filesystem import _resource_subdir
 
 if TYPE_CHECKING:
     from pathlib import Path

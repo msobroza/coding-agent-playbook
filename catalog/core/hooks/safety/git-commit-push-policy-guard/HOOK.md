@@ -2,6 +2,7 @@
 id: git-commit-push-policy-guard
 name: Git commit and push policy guard
 description: Deny changes to git identity, authorship or signing (--author, -S, git config user.*, -c and GIT_* overrides) and commits under a placeholder identity; ask before committing in another worktree or on the default branch.
+summary: Commit as the user's git identity on a feature branch; never pass `--author` or `-S`, or write `git config user.*`.
 version: 1
 tier: default
 priority: 22

@@ -144,11 +144,18 @@ reads this tree.
 2. Give it frontmatter with `id`, `name`, `description`, `version`, `tier`,
    `events`, `handler`, `decisions` (only `deny`, `ask`, `context` or `none`),
    `timeout`, `on_error` and `supports`, plus `matcher`, `priority` and `tags`
-   as needed. Engine hooks name a builtin handler (`handler: {builtin: <name>}`)
-   and ship no `scripts/`. SPEC §6.6.7 has the full schema, and
-   `playbook validate` checks the hook trust contract H1-H21.
-3. Write the body as guidance an assistant can act on: an assistant without
-   native hooks receives it as advisory text.
+   as needed. A hook with a body also declares `summary`, its guardrail line:
+   one line of at most 120 characters, without `{{` or `{%`, that keeps the
+   point of the body (for `stop-ci-parity-gate`, the checks to run). Engine
+   hooks name a builtin handler (`handler: {builtin: <name>}`) and ship no
+   `scripts/`. SPEC §6.6.7 has the full schema, and `playbook validate` checks
+   the hook trust contract H1-H21.
+3. Write the body as guidance an assistant can act on. It is the hook's
+   section in the `playbook-guardrails` skill and Continue's
+   `30-guardrail-<id>.md`, while the `summary` is its one line in `AGENTS.md`
+   (and in the Claude Code rules file when Claude Code cannot run the hook).
+   `tests/hooks/test_hook_summaries.py` fails when a core hook with a body has
+   no `summary`.
 4. The gates under `tests/hooks/` pin the shipped hooks: one test module per
    hook, plus the `test_pack_*_manifest.py` rows. Update them in the same change.
 

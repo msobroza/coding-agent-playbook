@@ -2,6 +2,7 @@
 id: eval-task-authoring-lint
 name: Eval task authoring lint
 description: Parse and trial-compile an edited eval task and show how the engine reads it; never runs it.
+summary: After editing an eval task, run `playbook validate` and `playbook eval --show <id>`; never `playbook eval --run`.
 version: 1
 tier: default
 priority: 50
