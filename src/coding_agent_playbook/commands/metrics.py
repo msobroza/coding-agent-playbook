@@ -364,7 +364,7 @@ def _add_mode_and_output_flags(parser: argparse.ArgumentParser) -> None:
     """``--mode``, ``--strict``, ``--run-tests``, ``--test-cmd``, ``--format``, ``--repo-root``."""
     parser.add_argument(
         "--mode",
-        choices=("regression", "absolute", "both"),
+        choices=_VALID_MODES,
         help="comparison mode (default: from [metrics] config, else 'regression')",
     )
     parser.add_argument(
@@ -391,7 +391,7 @@ def _add_mode_and_output_flags(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--format",
-        choices=("text", "json"),
+        choices=_VALID_FORMATS,
         default="text",
         help="output format (default: text)",
     )

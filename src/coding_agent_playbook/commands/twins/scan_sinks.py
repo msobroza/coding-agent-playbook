@@ -109,11 +109,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
     """
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--staged", action="store_true", help="scan the index against HEAD")
-    scope.add_argument(
-        "--range",
-        dest="rev_range",
-        help=RANGE_FLAG_HELP,
-    )
+    scope.add_argument("--range", dest="rev_range", help=RANGE_FLAG_HELP)
     parser.add_argument("--format", choices=("text", "json"), default="text")
     parser.add_argument("--repo-root", help="repo to scan (defaults to cwd)")
 

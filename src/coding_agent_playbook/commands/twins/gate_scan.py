@@ -59,11 +59,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
 
         >>> configure(argparse.ArgumentParser(prog="playbook gate-scan"))  # doctest: +SKIP
     """
-    parser.add_argument(
-        "--range",
-        dest="rev_range",
-        help=RANGE_FLAG_HELP,
-    )
+    parser.add_argument("--range", dest="rev_range", help=RANGE_FLAG_HELP)
     parser.add_argument("--format", choices=("text", "json"), default="text")
     parser.add_argument("--repo-root", help="repo to scan (defaults to cwd)")
 

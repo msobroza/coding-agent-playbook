@@ -157,11 +157,7 @@ def _add_scope_flags(parser: argparse.ArgumentParser) -> None:
     """``--staged``, ``--range`` and ``--worktree``: at most one (PATHS is checked by ``run``)."""
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--staged", action="store_true", help="scan the index against HEAD")
-    scope.add_argument(
-        "--range",
-        dest="rev_range",
-        help=RANGE_FLAG_HELP,
-    )
+    scope.add_argument("--range", dest="rev_range", help=RANGE_FLAG_HELP)
     scope.add_argument(
         "--worktree",
         action="store_true",
