@@ -13,7 +13,7 @@ from typing import get_args
 
 import pytest
 
-from coding_agent_playbook import types
+from coding_agent_playbook.artifacts import hook_schema
 from coding_agent_playbook.hook_policy import HOOK_CAPABLE_ADAPTERS, HOOK_EVENTS, TOOL_CLASS_NAMES
 from coding_agent_playbook.hook_runtime.event import (
     SESSION_ID_MAX_CHARS,
@@ -67,7 +67,7 @@ def _event(**overrides: object) -> CanonicalEvent:
 def test_event_name_values_are_the_nine_canonical_names() -> None:
     assert [member.value for member in EventName] == _NINE_EVENTS
     assert list(HOOK_EVENTS) == _NINE_EVENTS
-    assert list(get_args(types.HookEvent)) == _NINE_EVENTS
+    assert list(get_args(hook_schema.HookEvent)) == _NINE_EVENTS
 
 
 def test_event_name_is_a_str_enum() -> None:
@@ -88,7 +88,7 @@ def test_harness_values_equal_adapter_entry_point_names() -> None:
 def test_tool_class_matches_types_tool_class() -> None:
     runtime = {member.value for member in ToolClass}
 
-    assert set(get_args(types.ToolClass)) == runtime - {"other"}
+    assert set(get_args(hook_schema.ToolClass)) == runtime - {"other"}
     assert set(TOOL_CLASS_NAMES) == runtime - {"other"}
 
 

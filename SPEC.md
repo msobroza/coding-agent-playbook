@@ -303,6 +303,7 @@ coding-agent-playbook/
 │   ├── __init__.py
 │   ├── cli/                                # `playbook` entrypoint: __init__ (main), parser, __main__
 │   ├── types.py                            # Rule, Prompt, Skill, Hook dataclasses (Section 6.6)
+│   ├── artifacts/                          # their stdlib leaves: hook_schema, hook_frontmatter, member_reference
 │   ├── config/                             # the consumer config (Section 7)
 │   │   ├── model.py                        # Config dataclass and the [output] parser
 │   │   ├── schema.py                       # per-file checks, ConfigError
@@ -333,6 +334,7 @@ coding-agent-playbook/
 │   ├── _symlinks.py                        # dangling-link predicates that never raise (§12.2)
 │   ├── _output_io.py                       # generated-file writers that refuse a FIFO/socket/device (§12.2)
 │   ├── toml_writer.py                      # the TOML writer: dump_toml and the shared scalar/key primitives
+│   ├── precommit.py                        # the pre-commit starter template and the text merge (§13.2, §13.3)
 │   ├── hook_policy/                        # sync-time: hook layer merge, effective view, validate H1-H21
 │   ├── hook_registrations/                 # per-harness registrations: Claude groups, OpenCode REG + shim
 │   ├── guard_config.py                     # the sync-level guard_config.json (§4.2 step 7)
@@ -349,8 +351,13 @@ coding-agent-playbook/
 │   │   ├── _prior_output.py                # previous lockfile as proof of engine-written files
 │   │   ├── continue_adapter.py
 │   │   ├── claude_code_adapter.py
-│   │   ├── claude_rule_paths.py            # stdlib-only: the rules file and CLAUDE.md stub paths (§10.3.1)
-│   │   ├── claude_settings.py              # managed merge into .claude/settings.json `hooks`
+│   │   ├── claude_code/
+│   │   │   ├── __init__.py
+│   │   │   ├── paths.py                    # stdlib-only: the rules file and CLAUDE.md stub paths (§10.3.1)
+│   │   │   └── settings/
+│   │   │       ├── __init__.py
+│   │   │       ├── managed_merge.py        # managed merge into .claude/settings.json `hooks`
+│   │   │       └── drift.py                # how `playbook check` judges the managed elements
 │   │   ├── opencode_adapter.py
 │   │   ├── shared_skills_adapter.py        # the shared skill root .agents/skills/
 │   │   └── agents_md_adapter.py
@@ -368,6 +375,7 @@ coding-agent-playbook/
 │           └── config.yaml.j2              # starter .pre-commit-config.yaml (engine wiring, not content; Section 13.2)
 ├── tests/
 │   ├── plugins/                            # bundled-plugin gates (Sections 11.5.1, 11.5.2)
+│   ├── artifacts/                          # test_hook_frontmatter.py
 │   ├── catalog/                            # test_roots.py, test_source.py, ...
 │   ├── detector/                           # test_facts.py, test_predicate.py, ...
 │   ├── unit/
@@ -397,7 +405,7 @@ coding-agent-playbook/
     ├── authoring-overlays.md
     └── adapter-contract.md
 ```
-`catalog/` is a source folder only: there is one wheel, and hatch copies `catalog/` into it at build time as `coding_agent_playbook/_catalog/` (`[tool.hatch.build.targets.wheel.force-include]` `"catalog" = "coding_agent_playbook/_catalog"`), so an installed engine holds `coding_agent_playbook/_catalog/{README.md,core/…,plugins/<name>/…}` next to `coding_agent_playbook/templates/precommit/config.yaml.j2` and `coding_agent_playbook/templates/hook_shims/`. That installed layout is internal, not a user-facing contract. `catalog.roots.catalog_root()` finds the content in either place (Section 20.3). The pre-commit template stays in `src/`: it is engine wiring, not playbook content, and its hook ids are duplicated in `commands/_precommit_merge.py`. So do the hook shim templates (the Claude Code launcher and the OpenCode plugin, with `opencode_wire_port.py`, the Python port of the plugin's wire parser): they are filled by `str.replace` (`hook_registrations/_templates.py`), never walked as artifacts, and no layer can override them; the hooks themselves are content (`catalog/core/hooks/`). `README.md`, `LICENSE` and `ATTRIBUTIONS.md` sit at a layer root, outside every kind directory, so no artifact walk picks them up and sync never copies them into a consumer repo. The top-level name `catalog/` avoids every name the path logic or the adapters treat specially: `resources/` and `playbook/` (matched by path logic), a root-level `skills/`, `prompts/`, `rules/` or `references/` (adapter output), a gitignored harness directory, and unanchored ignored names such as `build/` or `lib/`.
+`catalog/` is a source folder only: there is one wheel, and hatch copies `catalog/` into it at build time as `coding_agent_playbook/_catalog/` (`[tool.hatch.build.targets.wheel.force-include]` `"catalog" = "coding_agent_playbook/_catalog"`), so an installed engine holds `coding_agent_playbook/_catalog/{README.md,core/…,plugins/<name>/…}` next to `coding_agent_playbook/templates/precommit/config.yaml.j2` and `coding_agent_playbook/templates/hook_shims/`. That installed layout is internal, not a user-facing contract. `catalog.roots.catalog_root()` finds the content in either place (Section 20.3). The pre-commit template stays in `src/`: it is engine wiring, not playbook content, and its hook ids are duplicated in `precommit.py`. So do the hook shim templates (the Claude Code launcher and the OpenCode plugin, with `opencode_wire_port.py`, the Python port of the plugin's wire parser): they are filled by `str.replace` (`hook_registrations/_templates.py`), never walked as artifacts, and no layer can override them; the hooks themselves are content (`catalog/core/hooks/`). `README.md`, `LICENSE` and `ATTRIBUTIONS.md` sit at a layer root, outside every kind directory, so no artifact walk picks them up and sync never copies them into a consumer repo. The top-level name `catalog/` avoids every name the path logic or the adapters treat specially: `resources/` and `playbook/` (matched by path logic), a root-level `skills/`, `prompts/`, `rules/` or `references/` (adapter output), a gitignored harness directory, and unanchored ignored names such as `build/` or `lib/`.
 ### 5.2 An overlay repo (`playbook-rules-bnp`)
 Overlays are minimal — they ship only their additional content. They depend on the engine for the renderer, adapters, and CLI.
 ```
@@ -1150,7 +1158,7 @@ class Skill:
     ...
 
 
-# coding_agent_playbook/_member_reference.py (a stdlib-only leaf types.py imports)
+# coding_agent_playbook/artifacts/member_reference.py (a stdlib-only leaf types.py imports)
 def member_reference_path(rule_id: str) -> str: ...  # "references/<rule_id>.md"
 
 
@@ -1167,6 +1175,7 @@ class MemberReference:  # one member rule, rendered as its skill's references/<r
 
 
 # --- Hook: the fourth emitted kind (Section 6.6.7) ---
+# coding_agent_playbook/artifacts/hook_schema.py (HookSchemaError, HookMatcher, HookHandler)
 class HookSchemaError(ValueError):
     """Field-precise HOOK.md error: carries where / field (dotted path) / value / expected."""
 
@@ -1191,6 +1200,7 @@ class HookHandler:  # exactly one form: builtin, or external command + script
     config: dict[str, Any] = field(default_factory=dict)
 
 
+# coding_agent_playbook/artifacts/hook_frontmatter.py
 @dataclass
 class HookFrontmatter:
     id: str
@@ -1219,6 +1229,7 @@ class HookFrontmatter:
     def to_mapping(self) -> dict: ...  # empty values (an empty summary too) dropped at every level
 
 
+# coding_agent_playbook/types.py
 @dataclass
 class Hook:
     frontmatter: HookFrontmatter
@@ -1969,7 +1980,7 @@ Each section is a `claude_md_section` rendering (§9.7): the rules, each byte-id
 
 **Why two files.** OpenCode v1 (anomalyco/opencode v1.19.3, `session/instruction.ts:171-218` via `tool/read.ts:300`) attaches the first `AGENTS.md`/`CLAUDE.md` of each directory between a file its read tool opens and the working directory (§10.6), so with the rules in `.claude/CLAUDE.md`, an OpenCode run at or above the repo root added a second full copy of them when its read tool opened a file under `.claude/` (once per uncompacted session, §10.6), and leaked the Claude-only heartbeat line to OpenCode. Neither OpenCode v1 (1.19.3) nor v2 (dev `24c7f7a`) discovers `.claude/rules/` on its own (v1 looks up files named `AGENTS.md`, `CLAUDE.md` or `CONTEXT.md`; v2 only `AGENTS.md`, and its `.claude/` compatibility reads only `skills/`). Only an `opencode.json` `instructions` entry the user adds, such as `.claude/rules/*.md`, would load it, next to `AGENTS.md`. Claude Code loads `.claude/rules/*.md` files without `paths:` frontmatter "at launch with the same priority as `.claude/CLAUDE.md`" (code.claude.com/docs/en/memory). `.claude/CLAUDE.md` must still exist, rule-free: in Claude Code's default `claude-md-or-agents-md` mode (v2.1.277+) a `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` in the working directory or above it stops Claude from also reading the root `AGENTS.md` natively, while a `.claude/rules/` file does not count and keeps loading alongside `AGENTS.md`, so without the stub Claude would load the rules twice. The stub names no rules file on purpose: OpenCode v1 still attaches it, and a pointer would invite its model to read the rules again. Live-verified on Claude Code 2.1.292 (2026-10-16, `claude -p` witness tokens): with `AGENTS.md`, a header-only `.claude/CLAUDE.md` and a `.claude/rules/` file, Claude loads only the rules file, both at the repo root and when launched from a subdirectory.
 #### 10.3.2 Hooks: the managed `settings.json` merge, the launcher and the pin (v0.20)
-With `[hooks] enabled = true` and `claude_code` among the `[hooks] adapters` (§7.1.1), the adapter enforces hooks natively (`adapters/_claude_hooks.py`, `adapters/claude_settings.py`, `hook_registrations/claude.py`; design `specs/prK-lifecycle-hooks.md` §C.2). Its `finalize` merges the registrations into the co-owned `.claude/settings.json` **first**, so a file it cannot merge stops the sync before this adapter writes anything.
+With `[hooks] enabled = true` and `claude_code` among the `[hooks] adapters` (§7.1.1), the adapter enforces hooks natively (`adapters/_claude_hooks.py`, `adapters/claude_code/settings/managed_merge.py`, `hook_registrations/claude.py`; design `specs/prK-lifecycle-hooks.md` §C.2). Its `finalize` merges the registrations into the co-owned `.claude/settings.json` **first**, so a file it cannot merge stops the sync before this adapter writes anything.
 
 **Registrations.** There is one managed matcher group per Claude event that has an on hook, each holding exactly one `command` handler; the dispatcher fans out to the hooks in-process. `SessionStart` is registered whenever any registration exists (the session bootstrap, the heartbeat briefing, and the launcher's one visible failure channel), and at most one extra `async: true`, non-deciding `PostToolUse` group carries the async-safe handlers (local-audit-log). Handler keys are closed: `type`, `command` and `timeout`, plus `statusMessage` on `Stop` / `SubagentStop`, `onFailure: "block"` only in overlay strict mode, and `async: true` only on that one group — never `if`, `args`, or a handler type other than `command`. The command is the same string on every machine (here for `pre_tool_use`):
 ```text
@@ -3010,7 +3021,7 @@ repos:
 ```
 **These hooks run in pre-commit's own venv.** `language: python` means pre-commit builds an isolated environment holding only the engine at `rev:` — not the project's environment. An overlay package or out-of-tree adapter must therefore be listed under `additional_dependencies` (and `rev` kept on the engine version the project pins, or hook runs and manual runs render with different engines). Without it the sync refuses to run (missing overlay, §4.2 step 1) or skips the adapter with a warning — it never silently re-renders without the org rules. Overlay users (and anyone pinning the engine in their project environment) should prefer the `repo: local` + `language: system` hooks `playbook init` writes (§13.2), which run the project's own `playbook`.
 ### 13.2 Template `.pre-commit-config.yaml` (written by `playbook init`)
-`playbook init` renders this starter from the packaged template `src/coding_agent_playbook/templates/precommit/config.yaml.j2`. The template is engine wiring, not playbook content (its hook ids are duplicated in `commands/_precommit_merge.py`), so it stays in the package rather than in `catalog/`. `commands/init.py:precommit_template_dir()` returns its directory (`resources.files(ENGINE_PACKAGE) / "templates" / "precommit"`) and raises `PrecommitTemplateMissingError` (`the engine's pre-commit template was not found at <path>; reinstall coding-agent-playbook`) when the directory or `config.yaml.j2` is missing, instead of an `assert` that `python -O` strips; `cli.main` reports it as `error: <message>` with exit 2, like a missing catalog (§12). It is **air-gapped-friendly**: every hook is `repo: local` + `language: system`, so pre-commit never clones a remote hook repo (it would otherwise fetch each `repo:` URL into `~/.cache/pre-commit` on first run — impossible offline, which also satisfies the engine's "air-gapped-friendly" invariant). The tradeoff is that the consumer must have `ruff` and `mypy` installed in their environment; `language: system` runs the tools on PATH, it does not install them. The template is rendered with one variable, `output_commit` (the `[output] commit` policy), which selects the playbook hooks — the default `commit = false` variant is shown:
+`playbook init` renders this starter from the packaged template `src/coding_agent_playbook/templates/precommit/config.yaml.j2`. The template is engine wiring, not playbook content (its hook ids are duplicated in `precommit.py`), so it stays in the package rather than in `catalog/`. `precommit.py:precommit_template_dir()` returns its directory (`resources.files(ENGINE_PACKAGE) / "templates" / "precommit"`) and raises `PrecommitTemplateMissingError` (`the engine's pre-commit template was not found at <path>; reinstall coding-agent-playbook`) when the directory or `config.yaml.j2` is missing, instead of an `assert` that `python -O` strips; `cli.main` reports it as `error: <message>` with exit 2, like a missing catalog (§12). It is **air-gapped-friendly**: every hook is `repo: local` + `language: system`, so pre-commit never clones a remote hook repo (it would otherwise fetch each `repo:` URL into `~/.cache/pre-commit` on first run — impossible offline, which also satisfies the engine's "air-gapped-friendly" invariant). The tradeoff is that the consumer must have `ruff` and `mypy` installed in their environment; `language: system` runs the tools on PATH, it does not install them. The template is rendered with one variable, `output_commit` (the `[output] commit` policy), which selects the playbook hooks — the default `commit = false` variant is shown:
 ```yaml
 # AUTOGENERATED starter by coding-agent-playbook `playbook init`.
 # Air-gapped-friendly: all hooks are `repo: local` + `language: system`.
@@ -3456,7 +3467,8 @@ The fix is a small abstraction: route "where do artifacts come from" and "where 
 ```python
 # coding_agent_playbook/catalog/source.py (ArtifactSource) and config/files.py (StateSource)
 from abc import ABC, abstractmethod
-from coding_agent_playbook.types import Rule, Prompt, Skill, Hook, HookSchemaError, EvalTask
+from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
+from coding_agent_playbook.types import Rule, Prompt, Skill, Hook, EvalTask
 from coding_agent_playbook.config.model import Config
 from coding_agent_playbook.config.tables.hooks import PolicyTables
 from coding_agent_playbook.lockfile import Lockfile
