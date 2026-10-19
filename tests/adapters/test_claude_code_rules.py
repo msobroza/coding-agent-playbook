@@ -25,12 +25,12 @@ import pytest
 from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
+from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.claude_code.paths import (
     CLAUDE_CODE_COMPOSITES,
     CLAUDE_MD_PATH,
     CLAUDE_RULES_PATH,
 )
-from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.types import Rule, RuleFrontmatter
 from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
@@ -95,7 +95,7 @@ def test_paths_module_is_a_stdlib_leaf() -> None:
     assert "coding_agent_playbook.adapters.claude_code.paths" in loaded
     renderer = engine_module("coding_agent_playbook.renderer")
     assert not {"jinja2", "yaml", renderer} & set(loaded)
-    assert engine_module("coding_agent_playbook.adapters.claude_code_adapter") not in loaded
+    assert engine_module("coding_agent_playbook.adapters.claude_code.adapter") not in loaded
 
 
 # --------------------------------------------------------------------------- #
