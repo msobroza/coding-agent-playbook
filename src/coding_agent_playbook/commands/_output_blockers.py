@@ -33,8 +33,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from coding_agent_playbook._output_io import special_file_kind
-from coding_agent_playbook._symlinks import is_dangling_symlink, unresolvable_link_errno
+from coding_agent_playbook.generated_output.output_io import special_file_kind
+from coding_agent_playbook.generated_output.symlinks import (
+    is_dangling_symlink,
+    unresolvable_link_errno,
+)
 
 #: The errnos a blocker causes; anything else (EACCES, ENOSPC, EROFS, ...) keeps its traceback.
 _BLOCKER_ERRNOS: Final = frozenset(

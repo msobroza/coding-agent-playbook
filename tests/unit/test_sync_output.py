@@ -24,7 +24,7 @@ from coding_agent_playbook.commands._sync_output import (
     warn_tracked_output,
     without_shared,
 )
-from coding_agent_playbook.gitignore import BLOCK_START, ignore_entries
+from coding_agent_playbook.generated_output.gitignore import BLOCK_START, ignore_entries
 from tests.fakes import FakeGitClient
 
 

@@ -13,10 +13,10 @@ import tomllib
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook._atomic_io import atomic_write_bytes
 from coding_agent_playbook.config.model import Config, check_config_file
 from coding_agent_playbook.config.schema import ConfigError
 from coding_agent_playbook.config.tables.hooks import PolicyTables, policy_tables
+from coding_agent_playbook.generated_output.atomic_io import atomic_write_bytes
 from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.toml_writer import dump_toml
 

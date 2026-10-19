@@ -15,8 +15,8 @@ from abc import ABC, abstractmethod
 from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar
 
-from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook._sentinel import file_has_sentinel
+from coding_agent_playbook.generated_output.file_identity import FileSet
+from coding_agent_playbook.generated_output.sentinel import file_has_sentinel
 from coding_agent_playbook.security.files import is_secret_file, user_home
 
 if TYPE_CHECKING:

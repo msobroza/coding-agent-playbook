@@ -36,8 +36,6 @@ import dataclasses
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook._output_io import write_output_bytes, write_output_text
 from coding_agent_playbook.adapters._harness_hooks import (
     copy_scripts,
     emit_hook_sidecars,
@@ -46,6 +44,8 @@ from coding_agent_playbook.adapters._harness_hooks import (
 )
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.generated_output.file_identity import FileSet
+from coding_agent_playbook.generated_output.output_io import write_output_bytes, write_output_text
 from coding_agent_playbook.harness import emitter, manifest
 from coding_agent_playbook.renderer import render_for
 

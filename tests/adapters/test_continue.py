@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
-from coding_agent_playbook.renderer import SENTINEL, render_for, with_sentinel_body
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
+from coding_agent_playbook.renderer import render_for, with_sentinel_body
 from coding_agent_playbook.types import (
     Prompt,
     PromptFrontmatter,

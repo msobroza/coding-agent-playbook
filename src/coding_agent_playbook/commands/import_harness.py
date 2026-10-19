@@ -32,7 +32,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.commands._import_files import (
     copy_tree,
     harness_root_for,
@@ -43,6 +42,7 @@ from coding_agent_playbook.commands._import_hooks import (
     hook_from_entry,
     write_hook,
 )
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.harness.manifest import Manifest, ManifestEntry, read_manifest
 from coding_agent_playbook.harness.models import (
     ContentFile,

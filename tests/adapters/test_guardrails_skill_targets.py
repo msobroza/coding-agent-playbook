@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
@@ -23,6 +22,7 @@ from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
 from coding_agent_playbook.commands._sync_lockfile import HookDispatch, dispatch_to_adapters
 from coding_agent_playbook.config.tables.hooks import HooksConfig
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hook_policy.guardrails_skill import (
     GUARDRAILS_SKILL_ID,
     compose_guardrails_skill,

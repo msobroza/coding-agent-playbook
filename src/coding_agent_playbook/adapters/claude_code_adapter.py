@@ -49,8 +49,6 @@ import dataclasses
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Final
 
-from coding_agent_playbook._output_io import write_output_bytes, write_output_text
-from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._claude_hooks import (
     ClaudeHookEmitter,
     plans_launcher,
@@ -71,6 +69,8 @@ from coding_agent_playbook.adapters.claude_rule_paths import (
     CLAUDE_RULES_PATH,
 )
 from coding_agent_playbook.adapters.claude_settings import CLAUDE_SETTINGS_PATH
+from coding_agent_playbook.generated_output.output_io import write_output_bytes, write_output_text
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT
 from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
 from coding_agent_playbook.hook_registrations import LAUNCHER_PATH

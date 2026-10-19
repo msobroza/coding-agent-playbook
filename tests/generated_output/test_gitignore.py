@@ -1,4 +1,4 @@
-"""Unit tests for the managed ``.gitignore`` block (``coding_agent_playbook.gitignore``)."""
+"""Unit tests for the managed ``.gitignore`` block (``coding_agent_playbook.generated_output.gitignore``)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 from coding_agent_playbook.config.files import FileSystemStateSource
-from coding_agent_playbook.gitignore import (
+from coding_agent_playbook.generated_output.gitignore import (
     BLOCK_END,
     BLOCK_START,
     LOCKFILE_ENTRY,

@@ -22,7 +22,7 @@ members (a bundled plugin's) is written exactly as authored.
 ``SKILL.md`` follows the Agent Skills standard read by Claude Code and OpenCode:
 frontmatter ``name`` is forced to the skill id (= the directory name) and must
 match :data:`AGENT_SKILL_NAME_PATTERN`; ``description`` must be non-empty. The
-playbook :data:`~coding_agent_playbook._sentinel.SENTINEL` cannot sit on line 1
+playbook :data:`~coding_agent_playbook.generated_output.sentinel.SENTINEL` cannot sit on line 1
 (agent parsers require ``^---`` there), so it is the first body line after the
 closing fence — the same placement as the ``agent_harness`` adapter (§10.7.3).
 
@@ -58,8 +58,6 @@ from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook._member_reference import member_reference_path
-from coding_agent_playbook._sentinel import has_sentinel
-from coding_agent_playbook._symlinks import is_dangling_symlink, link_leaving, real_path
 
 # The Agent Skills naming rules live in _agent_skill_rules (file-size budget); this
 # module stays the home callers import them from (commands/validate.py, the tests).
@@ -79,6 +77,12 @@ from coding_agent_playbook.adapters._agent_skill_rules import has_declared_id as
 from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of as skill_id_of
 from coding_agent_playbook.adapters._prior_output import PriorOutput
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
+from coding_agent_playbook.generated_output.sentinel import has_sentinel
+from coding_agent_playbook.generated_output.symlinks import (
+    is_dangling_symlink,
+    link_leaving,
+    real_path,
+)
 from coding_agent_playbook.harness.emitter import with_sentinel_body
 from coding_agent_playbook.skill_document import emitted_body, emitted_frontmatter
 from coding_agent_playbook.types import format_frontmatter

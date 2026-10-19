@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook._sentinel import SENTINEL, sentinel_line
+from coding_agent_playbook.generated_output.sentinel import SENTINEL, sentinel_line
 
 _SPEC = Path(__file__).resolve().parents[2] / "SPEC.md"
 

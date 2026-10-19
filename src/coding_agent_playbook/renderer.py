@@ -18,10 +18,7 @@ from jinja2 import FileSystemLoader, StrictUndefined
 from jinja2.exceptions import SecurityError
 from jinja2.sandbox import SandboxedEnvironment
 
-# Re-exported (``as SENTINEL``) so existing ``renderer.SENTINEL`` imports keep
-# working; the import-light ``_sentinel`` module is the single home (prK §P3).
-from coding_agent_playbook._sentinel import SENTINEL as SENTINEL
-from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hook_policy import advisory_block, advisory_text
 from coding_agent_playbook.hook_registrations import (
     DeclaredMember,
@@ -80,7 +77,7 @@ def with_sentinel_body(frontmatter: str, body: str) -> str:
 
     Parsers such as OpenCode's (gray-matter) and the Agent Skills loaders only
     see frontmatter when the file *starts* with ``---``, so the sentinel cannot
-    be line 1 there: :func:`~coding_agent_playbook._sentinel.sentinel_line` is
+    be line 1 there: :func:`~coding_agent_playbook.generated_output.sentinel.sentinel_line` is
     the **first body line** (the second position ``_sentinel.has_sentinel``
     accepts), followed by a blank line and ``body``. ``frontmatter`` must start
     with ``---``.

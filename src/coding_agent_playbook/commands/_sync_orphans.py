@@ -32,9 +32,9 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook._symlinks import real_path
-from coding_agent_playbook.gitignore import GITIGNORE_FILENAME, LOCKFILE_NAME
+from coding_agent_playbook.generated_output.file_identity import FileSet
+from coding_agent_playbook.generated_output.gitignore import GITIGNORE_FILENAME, LOCKFILE_NAME
+from coding_agent_playbook.generated_output.symlinks import real_path
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence

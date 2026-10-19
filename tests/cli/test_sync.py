@@ -540,7 +540,7 @@ def test_sync_migrates_legacy_opencode_commands_to_frontmatter_first(tmp_path, m
     commands = repo / ".opencode" / "command"
     commands.mkdir(parents=True)
     legacy = "<!-- {s} -->\n---\ndescription: old\n---\nold body\n"
-    from coding_agent_playbook.renderer import SENTINEL
+    from coding_agent_playbook.generated_output.sentinel import SENTINEL
 
     (commands / "tidy-up.md").write_text(legacy.format(s=SENTINEL), encoding="utf-8")
     (commands / "gone.md").write_text(legacy.format(s=SENTINEL), encoding="utf-8")

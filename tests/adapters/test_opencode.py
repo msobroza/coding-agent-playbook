@@ -9,7 +9,7 @@ import yaml
 
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
-from coding_agent_playbook.renderer import SENTINEL
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.types import (
     Prompt,
     PromptFrontmatter,

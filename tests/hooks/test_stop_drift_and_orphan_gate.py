@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
-from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hook_runtime.config import (
     GUARD_CONFIG_REL,
     LOCKFILE_REL,

@@ -22,8 +22,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from coding_agent_playbook._output_io import write_output_text
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.generated_output.output_io import write_output_text
 from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:

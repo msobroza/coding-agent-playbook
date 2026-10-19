@@ -89,9 +89,9 @@ from coding_agent_playbook._guard_config_verify import (
     prompts_table,
     repo_layout,
 )
-from coding_agent_playbook._output_io import copy_output, write_output_bytes
-from coding_agent_playbook._sentinel import SENTINEL
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
+from coding_agent_playbook.generated_output.output_io import copy_output, write_output_bytes
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.hook_policy import HOOK_SCRIPTS_DIR
 from coding_agent_playbook.hook_registrations import (
     LAUNCHER_PATH,

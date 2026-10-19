@@ -47,12 +47,12 @@ import dataclasses
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook._output_io import write_output_text
-from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters._owned_files import write_engine_owned
 from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.generated_output.file_identity import FileSet
+from coding_agent_playbook.generated_output.output_io import write_output_text
+from coding_agent_playbook.generated_output.symlinks import real_path
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT
 from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
 from coding_agent_playbook.hook_registrations import (

@@ -532,13 +532,15 @@ def test_claude_settings_imports_only_the_stdlib() -> None:
     ]
     assert foreign == []
     assert ours == [
-        "coding_agent_playbook._atomic_io",
-        "coding_agent_playbook._output_io",  # refuse_special_file before the read: stdlib-only
         "coding_agent_playbook.adapters",
         "coding_agent_playbook.adapters._json_edits",
         "coding_agent_playbook.adapters._json_spans",
         "coding_agent_playbook.adapters._settings_plan",
         "coding_agent_playbook.adapters.claude_settings",
+        "coding_agent_playbook.generated_output",
+        "coding_agent_playbook.generated_output.atomic_io",
+        # refuse_special_file before the read: stdlib-only
+        "coding_agent_playbook.generated_output.output_io",
         "coding_agent_playbook.lockfile",
         "coding_agent_playbook.lockfile.canonical_json",
         "coding_agent_playbook.lockfile.model",

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook._sentinel import SENTINEL, sentinel_line
+from coding_agent_playbook.generated_output.sentinel import SENTINEL, sentinel_line
 from coding_agent_playbook.hook_runtime.canary import DEFAULT_CANARIES, run_canaries
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import Harness

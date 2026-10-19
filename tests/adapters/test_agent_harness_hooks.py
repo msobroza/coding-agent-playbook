@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.harness.manifest import ScriptEntry, read_manifest
 from coding_agent_playbook.types import HookFrontmatter, Rule, RuleFrontmatter, split_frontmatter
 from tests.hook_samples import resolved_from_disk

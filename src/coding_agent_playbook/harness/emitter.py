@@ -21,8 +21,8 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from coding_agent_playbook._output_io import copy_output
-from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.generated_output.output_io import copy_output
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.harness.leaf_detectors import HARNESS_LEAF_MARKER
 
 # ``with_sentinel_body`` lives in the renderer (it also shapes OpenCode commands);

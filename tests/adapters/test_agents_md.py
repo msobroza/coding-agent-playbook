@@ -19,7 +19,8 @@ from pathlib import Path
 from typing import Any
 
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
-from coding_agent_playbook.renderer import SENTINEL, render_for
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
+from coding_agent_playbook.renderer import render_for
 from coding_agent_playbook.types import (
     Prompt,
     PromptFrontmatter,

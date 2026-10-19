@@ -61,7 +61,6 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
 from coding_agent_playbook.adapters._skill_writer import deciding_ownership_against
@@ -90,8 +89,9 @@ from coding_agent_playbook.commands._sync_render import (
 )
 from coding_agent_playbook.commands._validation import report_validation_errors
 from coding_agent_playbook.commands.validate import sync_gate_errors
+from coding_agent_playbook.generated_output.gitignore import LOCKFILE_NAME, ignore_entries
+from coding_agent_playbook.generated_output.symlinks import real_path
 from coding_agent_playbook.git_client import SubprocessGitClient
-from coding_agent_playbook.gitignore import LOCKFILE_NAME, ignore_entries
 from coding_agent_playbook.guard_config import SYNC_OUTPUT_LOCATIONS
 from coding_agent_playbook.orchestrator import (
     SyncContext,

@@ -41,7 +41,6 @@ from coding_agent_playbook._guard_config_ruff import (
 )
 from coding_agent_playbook._guard_config_skills import skill_glob_rows
 from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
-from coding_agent_playbook._output_io import refuse_special_file
 from coding_agent_playbook.adapters._owned_files import check_engine_owned
 from coding_agent_playbook.adapters.claude_code_adapter import (
     ClaudeCodeAdapter,
@@ -56,6 +55,7 @@ from coding_agent_playbook.commands import _sync_hook_local
 from coding_agent_playbook.commands._sync_lockfile import HookDispatch
 from coding_agent_playbook.commands._sync_output import shared_outputs
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
+from coding_agent_playbook.generated_output.output_io import refuse_special_file
 from coding_agent_playbook.guard_config import (
     SYNC_OUTPUT_LOCATIONS,
     DetectInputs,

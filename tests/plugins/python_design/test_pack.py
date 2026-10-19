@@ -32,8 +32,8 @@ from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.commands._sync_preflight import bundled_plugins, unusable_overlays
 from coding_agent_playbook.commands._validate_links import check_markdown_links
 from coding_agent_playbook.config.tables.links import LinksConfig
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.links import extract_markdown_links
-from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, _resource_subdir
 from coding_agent_playbook.types import split_frontmatter
 from tests._catalog import plugin_root

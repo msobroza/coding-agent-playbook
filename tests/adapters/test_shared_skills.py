@@ -21,8 +21,8 @@ from coding_agent_playbook.adapters.shared_skills_adapter import (
 )
 from coding_agent_playbook.commands._sync_hooks import _generated_locations
 from coding_agent_playbook.config.model import Config, ProjectMeta
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.orchestrator import discover_adapters, installed_output_locations
-from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.types import (
     Prompt,
     PromptFrontmatter,

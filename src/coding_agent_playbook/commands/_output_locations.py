@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._symlinks import real_path
+from coding_agent_playbook.generated_output.symlinks import real_path
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence

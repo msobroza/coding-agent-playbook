@@ -14,9 +14,8 @@ from jinja2.sandbox import ImmutableSandboxedEnvironment, SandboxedEnvironment
 from packaging.requirements import Requirement
 from packaging.version import Version
 
-from coding_agent_playbook._sentinel import has_sentinel
+from coding_agent_playbook.generated_output.sentinel import SENTINEL, has_sentinel
 from coding_agent_playbook.renderer import (
-    SENTINEL,
     TemplateSecurityError,
     appendix_rule_ids,
     build_environment,

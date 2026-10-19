@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._claude_hooks import (
     CLAUDE_HEARTBEAT_LINE,
     REMEDIATION_ALLOW,
@@ -43,6 +42,7 @@ from coding_agent_playbook.adapters._secret_native import (
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.claude_settings import CLAUDE_SETTINGS_PATH, SettingsMergeError
 from coding_agent_playbook.config.tables.hooks import HooksConfig
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT
 from coding_agent_playbook.hook_registrations import (
     LAUNCHER_PATH,

@@ -15,12 +15,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._claude_hooks import CLAUDE_HEARTBEAT_LINE
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_MD_PATH, CLAUDE_RULES_PATH
 from coding_agent_playbook.config.tables.hooks import HooksConfig
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.skill_document import WhereEntry, where_guidance_section
 from coding_agent_playbook.types import Rule, RuleFrontmatter, Skill
 from tests.hook_samples import resolved_hook

@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._sentinel import file_has_sentinel
+from coding_agent_playbook.generated_output.sentinel import file_has_sentinel
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

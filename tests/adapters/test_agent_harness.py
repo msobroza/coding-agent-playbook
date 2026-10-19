@@ -20,8 +20,8 @@ import pytest
 
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.harness.manifest import read_manifest
-from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.types import (
     Prompt,
     PromptFrontmatter,

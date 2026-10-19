@@ -22,7 +22,7 @@ from coding_agent_playbook.adapters._skill_writer import (
     SkillWriter,
     render_skill_md,
 )
-from coding_agent_playbook.renderer import SENTINEL
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.skill_document import references_index
 from coding_agent_playbook.types import Skill, split_frontmatter
 from tests.member_skill_samples import (

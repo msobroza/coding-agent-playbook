@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook._sentinel import SENTINEL, file_has_sentinel
+from coding_agent_playbook.generated_output.sentinel import SENTINEL, file_has_sentinel
 from coding_agent_playbook.hook_runtime._config_reader import Malformed, TableReader
 from coding_agent_playbook.hook_runtime.config import LOCKFILE_REL
 from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs

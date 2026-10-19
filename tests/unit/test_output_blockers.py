@@ -16,13 +16,13 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook._output_io import NotRegularFileError
 from coding_agent_playbook.commands._output_blockers import (
     OutputBlocker,
     blocker_in,
     report_blocker,
     write_blocker,
 )
+from coding_agent_playbook.generated_output.output_io import NotRegularFileError
 
 needs_symlinks = pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
 
