@@ -20,7 +20,7 @@ reads the compiled ``guard_config.json`` instead (§D.8).
 
 from __future__ import annotations
 
-from coding_agent_playbook.hook_policy._findings import HookIssue, Severity
+from coding_agent_playbook.hook_policy._findings import HookIssue, Severity, did_you_mean
 from coding_agent_playbook.hook_policy.advisory import (
     ADAPTER_LABELS,
     GUARDRAIL_SUMMARY_MAX_CHARS,
@@ -129,6 +129,7 @@ __all__ = [
     "classify_hook",
     "classify_hook_set",
     "config_findings",
+    "did_you_mean",
     "effective_applies_if",
     "enforcement_line",
     "enforcement_targets",

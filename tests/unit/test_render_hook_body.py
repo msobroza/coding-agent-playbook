@@ -1,8 +1,8 @@
 """``render_hook_body``: only a hook's advisory body passes through Jinja (prK §A.8, §C.1.3, H19).
 
 A ``HOOK.md`` body is returned verbatim; a ``HOOK.md.j2`` body renders in the
-sandboxed base environment (``is_prompt_context=False``), so ``rule()`` is
-undefined and an attribute escape names the hook's file. Frontmatter, handler
+sandboxed base environment, which has no ``rule()`` helper (D15), so a call is
+undefined, and an attribute escape names the hook's file. Frontmatter, handler
 commands and scripts are never rendered.
 """
 

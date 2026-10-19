@@ -1,11 +1,12 @@
 """Tests for eval prompt rendering (``evals/prompting.py``).
 
-An eval task's prompt must render exactly as ``playbook sync`` renders it for a
-consumer: the ``rule()`` helper resolves through a rule registry, and the Jinja
-context carries the detector facts + project metadata. Before this module the
-runner rendered with a bare environment, so 7 of the 20 shipped tasks crashed
-with ``UndefinedError`` (``rule`` for review/security-review, ``project_name``
-for generate-tests) — even under the hermetic ``FakeRunner``.
+An eval task's prompt must render as ``playbook sync`` renders it for a
+consumer: the Jinja context carries the detector facts + project metadata, and
+the prompt's ``includes_rules`` arrive as the ``## Reference rules`` appendix
+Continue also gets (D15, D22), resolved through a rule registry. Before this
+module the runner rendered with a bare environment, so 7 of the 20 shipped
+tasks crashed with ``UndefinedError`` (``rule`` for review/security-review,
+``project_name`` for generate-tests) — even under the hermetic ``FakeRunner``.
 """
 
 from __future__ import annotations
@@ -33,6 +34,8 @@ pytestmark = pytest.mark.catalog
 
 _ENGINE = "coding_agent_playbook"
 _SHIPPED_TASKS = CORE_ROOT / "eval_tasks"
+#: A shipped task of the plain-`.md` `refactor` prompt (no Jinja, four included rules).
+_REFACTOR_TASK = "refactor-extract-helper"
 
 
 def _shipped_task_dirs() -> list[Path]:
@@ -59,10 +62,18 @@ def test_every_shipped_task_prompt_renders_strictly(task_dir: Path) -> None:
         assert prompt.rstrip().endswith(task.invocation.prompt_args)
 
 
-def test_rule_helper_inlines_the_referenced_rule() -> None:
-    """``{{ rule("python-error-handling") }}`` inlines that rule's header + body."""
+def test_reference_appendix_inlines_the_included_rule() -> None:
+    """``includes_rules: [.., python-error-handling]`` appends that rule's header + body once."""
     prompt = render_prompt(_shipped("review-spot-the-bug"), strict=True)
-    assert "### Error handling" in prompt
+    assert prompt.count("### Error handling") == 1
+    assert prompt.index("## Output format") < prompt.index("## Reference rules")
+
+
+def test_plain_md_prompt_gets_the_reference_appendix() -> None:
+    """The shipped ``refactor`` prompt is plain ``.md``: no Jinja, but its rules still arrive."""
+    prompt = render_prompt(_shipped(_REFACTOR_TASK), strict=True)
+    assert prompt.count("## Reference rules") == 1
+    assert "### Typing" in prompt
 
 
 def test_mocked_ml_stack_list_satisfies_any_ml_stack() -> None:
@@ -166,8 +177,12 @@ def _synthetic_task(
     templated: bool = True,
     pyproject: str | None = None,
     setup: TaskSetup | None = None,
+    includes_rules: tuple[str, ...] = (),
 ) -> EvalTask:
-    """Lay down ``<tmp>/pkg/resources/{prompts,eval_tasks}`` with one prompt + task."""
+    """Lay down ``<tmp>/pkg/resources/{prompts,eval_tasks}`` with one prompt + task.
+
+    ``includes_rules`` lands in the prompt's frontmatter.
+    """
     resources = tmp_path / "pkg" / "resources"
     prompts = resources / "prompts"
     prompts.mkdir(parents=True)
@@ -181,9 +196,10 @@ def _synthetic_task(
             description: A synthetic prompt for tests.
             slash: synthetic
             version: 1
-            ---
             """
         )
+        + _includes_rules_yaml(includes_rules)
+        + "---\n"
         + prompt_body,
         encoding="utf-8",
     )
@@ -200,6 +216,13 @@ def _synthetic_task(
         setup=setup or TaskSetup(),
         invocation=TaskInvocation(prompt_args="go"),
     )
+
+
+def _includes_rules_yaml(rule_ids: tuple[str, ...]) -> str:
+    """The ``includes_rules:`` frontmatter lines for ``rule_ids`` (``""`` for none)."""
+    if not rule_ids:
+        return ""
+    return "includes_rules:\n" + "".join(f"  - {rule_id}\n" for rule_id in rule_ids)
 
 
 def test_render_error_raises_prompt_resolution_error_even_when_not_strict(
@@ -239,10 +262,10 @@ def test_input_variables_and_facts_reach_the_template(tmp_path: Path) -> None:
     [(["torch"], True), (None, False)],
     ids=["ml-project", "non-ml-project"],
 )
-def test_rule_helper_honours_the_rule_applies_if(
+def test_reference_appendix_honours_the_rule_applies_if(
     tmp_path: Path, ml_stack: list[str] | None, inlined: bool
 ) -> None:
-    """``rule()`` inlines a gated rule only when its ``applies_if`` holds.
+    """The appendix carries a gated rule only when its ``applies_if`` holds.
 
     A filtered-out rule renders as ``""`` — the silent-omission contract of
     SPEC §6.2.5, identical to ``playbook sync``.
@@ -250,11 +273,19 @@ def test_rule_helper_honours_the_rule_applies_if(
     extra = {"ml_stack": ml_stack} if ml_stack is not None else {}
     task = _synthetic_task(
         tmp_path,
-        'Review.\n{{ rule("ml-serialization-security") }}\n',
+        "Review.\n",
         setup=TaskSetup(extra_facts=extra),
+        includes_rules=("ml-serialization-security",),
     )
     prompt = render_prompt(task, strict=True)
     assert ("### ML serialization & deserialization security" in prompt) is inlined
+
+
+def test_rule_call_in_a_prompt_raises_prompt_resolution_error(tmp_path: Path) -> None:
+    """Regression (D15): the removed ``rule()`` helper is an authoring error (exit 2)."""
+    task = _synthetic_task(tmp_path, 'Review.\n{{ rule("python-error-handling") }}\n')
+    with pytest.raises(PromptResolutionError, match=r"synthetic-task.*'rule' is undefined"):
+        render_prompt(task, strict=False)
 
 
 def test_project_name_falls_back_to_the_task_id_without_a_pyproject(tmp_path: Path) -> None:
@@ -291,15 +322,16 @@ def test_mis_shaped_mock_facts_raise_prompt_resolution_error(
 ) -> None:
     """A bad mock fact reaching a rule predicate is an authoring error, not a crash.
 
-    Predicates run when the prompt inlines a rule. ``playbook eval --run`` maps
+    Predicates run when the prompt includes a rule. ``playbook eval --run`` maps
     :class:`PromptResolutionError` to exit 2; a raw ``AttributeError`` /
     ``TypeError`` would surface as a traceback and exit 1 — the code for a
     *failing* report.
     """
     task = _synthetic_task(
         tmp_path,
-        '{{ rule("python-error-handling") }}\n',
+        "Review.\n",
         setup=TaskSetup(extra_facts=extra_facts),
+        includes_rules=("python-error-handling",),
     )
     with pytest.raises(PromptResolutionError, match="failed to render"):
         render_prompt(task, strict=True)
@@ -349,11 +381,11 @@ def _overlay_rule(resources: Path, rule_id: str, *, name: str, applies_if: str =
     )
 
 
-def _overlay_task(resources: Path, prompt_body: str) -> EvalTask:
+def _overlay_task(resources: Path, prompt_body: str, *, includes_rule: str) -> EvalTask:
     (resources / "prompts").mkdir()
     (resources / "prompts" / "overlay-prompt.md.j2").write_text(
-        "---\nid: overlay-prompt\nname: O\ndescription: d\nslash: o\nversion: 1\n---\n"
-        + prompt_body,
+        "---\nid: overlay-prompt\nname: O\ndescription: d\nslash: o\nversion: 1\n"
+        f"includes_rules:\n  - {includes_rule}\n---\n" + prompt_body,
         encoding="utf-8",
     )
     task_dir = resources / "eval_tasks" / "overlay-task"
@@ -367,9 +399,9 @@ def _overlay_task(resources: Path, prompt_body: str) -> EvalTask:
     )
 
 
-def test_overlay_task_can_inline_an_overlay_only_rule(overlay_package: Path) -> None:
+def test_overlay_task_can_include_an_overlay_only_rule(overlay_package: Path) -> None:
     _overlay_rule(overlay_package, "bank-house-rule", name="Bank house rule")
-    task = _overlay_task(overlay_package, '{{ rule("bank-house-rule") }}\n')
+    task = _overlay_task(overlay_package, "Review.\n", includes_rule="bank-house-rule")
     assert "### Bank house rule" in render_prompt(task, strict=True)
 
 
@@ -385,7 +417,7 @@ def test_overlay_override_with_false_applies_if_drops_the_rule(overlay_package: 
         name="Overlay error handling",
         applies_if="applies_if:\n  any_ml_stack: [torch]\n",
     )
-    task = _overlay_task(overlay_package, 'Start.\n{{ rule("python-error-handling") }}\nEnd.\n')
+    task = _overlay_task(overlay_package, "Start.\nEnd.\n", includes_rule="python-error-handling")
     prompt = render_prompt(task, strict=True)
     assert "### Error handling" not in prompt  # the engine body did not leak back
     assert "Overlay body" not in prompt
@@ -415,12 +447,12 @@ def _broken_rule(task: EvalTask, *, as_directory: bool = False) -> None:
 
 
 @pytest.mark.parametrize("as_directory", [False, True], ids=["bad-yaml", "directory"])
-def test_a_broken_rule_file_fails_only_prompts_that_inline_rules(
+def test_a_broken_rule_file_fails_only_prompts_that_include_rules(
     tmp_path: Path, as_directory: bool
 ) -> None:
-    """Rules load lazily, on the first ``rule()`` call.
+    """Rules load lazily, on the first rule the appendix renders.
 
-    A prompt that inlines no rule must not be broken by an unrelated bad file;
+    A prompt that includes no rule must not be broken by an unrelated bad file;
     one that does gets a :class:`PromptResolutionError` (exit 2), never a raw
     ``yaml`` / ``OSError`` traceback (exit 1, a "failing report").
     """
@@ -428,7 +460,9 @@ def test_a_broken_rule_file_fails_only_prompts_that_inline_rules(
     _broken_rule(plain, as_directory=as_directory)
     assert "No rules here" in render_prompt(plain, strict=True)
 
-    inlining = _synthetic_task(tmp_path / "inlining", '{{ rule("python-error-handling") }}\n')
+    inlining = _synthetic_task(
+        tmp_path / "inlining", "Review.\n", includes_rules=("python-error-handling",)
+    )
     _broken_rule(inlining, as_directory=as_directory)
     with pytest.raises(PromptResolutionError, match="failed to render"):
         render_prompt(inlining, strict=True)
@@ -449,17 +483,17 @@ def _sandbox_escaping_rule(task: EvalTask) -> Path:
 
 
 @pytest.mark.parametrize("strict", [False, True], ids=["fake-runner", "real-runner"])
-def test_sandbox_violation_in_inlined_rule_raises_prompt_resolution_error(
+def test_sandbox_violation_in_included_rule_raises_prompt_resolution_error(
     tmp_path: Path, strict: bool
 ) -> None:
-    """Regression: a ``rule()``-inlined rule tripping the sandbox is a render error.
+    """Regression: an included rule tripping the sandbox is a render error.
 
     ``RuleRegistryImpl`` raises ``renderer.TemplateSecurityError`` (a plain
     ``Exception``, not a jinja ``TemplateError``), which escaped ``render_prompt``
     as a raw traceback: ``playbook eval --run`` then exited 1 ("task failed")
     instead of 2. The same escape written in the prompt body was already handled.
     """
-    task = _synthetic_task(tmp_path, 'Review.\n{{ rule("evil") }}\n')
+    task = _synthetic_task(tmp_path, "Review.\n", includes_rules=("evil",))
     _sandbox_escaping_rule(task)
     with pytest.raises(PromptResolutionError, match=r"synthetic-task") as excinfo:
         render_prompt(task, strict=strict)
@@ -482,7 +516,7 @@ def test_has_file_rule_gate_resolves_against_the_setup_tree(
 ) -> None:
     """``has_file`` paths are checked inside ``setup/`` (the project the agent works in),
     never against the eval process's working directory."""
-    task = _synthetic_task(tmp_path, '{{ rule("needs-dockerfile") }}\n')
+    task = _synthetic_task(tmp_path, "Review.\n", includes_rules=("needs-dockerfile",))
     setup = task.source_path.parent / "setup"
     rules = setup / "playbook" / "rules"
     rules.mkdir(parents=True)

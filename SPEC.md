@@ -184,7 +184,7 @@ The end-to-end flow of `playbook sync` in a consumer repo:
 2. **Run detector.** Inspect `pyproject.toml`, lockfiles, filesystem. Produce a facts dictionary.
 3. **Resolve overlays.** Query the configured `ArtifactSource` (filesystem in v1; see Section 20) for rules, prompts, skills, hooks, and eval tasks across the engine's catalog, each declared overlay package or bundled plugin, and the consumer's `playbook/` directory. Build a unified artifact list, with later layers overriding earlier ones by ID — except hooks, whose layers merge additively (`OverlayResolver.resolve_hooks` + `hook_policy.merge_hook_layers`, §11.6).
 4. **Filter.** For each artifact, evaluate its `applies_if` predicate against the facts dictionary. Drop non-matching artifacts. Hooks are gated in one place only, `hook_policy.resolve_effective_hooks`: the `[hooks]` on-formula (`enabled`, `tiers`, `enable`, `disable`, `mandatory`), `applies_if` ANDed with a `linked_rule`'s, the `[guardrails]` domain merge, and `supports ∩ [hooks] adapters`. It returns the on hooks as `ResolvedHook`s and the off ones as `SkippedHook`s (reported by `playbook check`); with `[hooks]` off both lists are empty.
-5. **Render.** Apply Jinja2 to each surviving artifact's template with `facts | config` as context. Then compose skills (`skill_membership.compose_skills`): a skill with a `playbook:` block gets its surviving member rules, rendered, and is dropped when none survived step 4; every other skill passes through (§6.3.3). The adapters receive the composed skills. A `HOOK.md.j2` body renders the same way (without `rule()`); hook frontmatter, handler commands and scripts never pass through Jinja.
+5. **Render.** Apply Jinja2 to each surviving artifact's template with `facts | config` as context. Then compose skills (`skill_membership.compose_skills`): a skill with a `playbook:` block gets its surviving member rules, rendered, and is dropped when none survived step 4; every other skill passes through (§6.3.3). The adapters receive the composed skills. A `HOOK.md.j2` body renders the same way (no template has a `rule()` helper since v0.21); hook frontmatter, handler commands and scripts never pass through Jinja.
 6. **Dispatch to adapters.** For each enabled adapter (`continue`, `claude_code`, `opencode`, `shared_skills`, `agents_md`), call `begin_sync(repo_root, prior_lock)` (the real repo and the previous lockfile, even under `--check`), pass the rendered artifacts, then every `ResolvedHook` through `write_hook`, then `finalize`; the adapter writes to its harness-specific locations. Claude Code merges its managed entries into `.claude/settings.json` and writes the launcher `.claude/hooks/playbook/launch.sh`, OpenCode writes the one shim `.opencode/plugins/playbook-hooks.js`, and every other adapter degrades a hook to its advisory text (§10). `managed_lock_entries()` then reports the sub-file elements the adapter owns. Before the first adapter writes, sync checks on the real repo every runtime output an adapter is about to write whole (`planned_runtime_outputs`, §10.1): a same-named file without the line-1 sentinel, a hard link (even a sentinel-tagged one: writing it whole would truncate the other name too), or a symlink at that path or at a directory between it and the repo root, stops every mode with exit 1 naming the file, and nothing is written.
 7. **`AGENTS.md` is always among the outputs.** The `agents_md` adapter is force-enabled, so step 6 writes `AGENTS.md` (in its `finalize()`) whichever other adapters are enabled, as long as at least one always rule survived step 4, a skill contributes a Where line or a hook advisory exists (§10.4). With hooks on it gains a Guardrails section holding the on hooks' advisory text. **Sync-level hook output:** whenever `[hooks] enabled` and a hook-capable adapter is on, sync itself (not an adapter) writes `.coding-agent-playbook/hooks/guard_config.json` — the machine-independent record the dispatcher reads (`guard_config.render_guard_config`) — and byte-copies external handlers' scripts beside it.
 8. **Stamp.** Write a `.coding-agent-playbook.lock` file containing the rendered file hashes via the configured `StateSource`; used by `playbook sync --check` to detect drift. Paths are recorded resolved through the repo's own symlinks, and a written file that resolves outside the repo (an output dir linked to a folder elsewhere, `.claude/skills -> /shared/skills`) gets no entry: the lockfile never owns output there (step 9 releases such an entry, so the leftover policy never deletes it; the adapters' sentinel-based `cleanup_stale` still removes a stale tagged file through the link), so the lockfile never holds an absolute, machine-specific path. The lockfile is schema 2: every entry records its provenance (`kind`, `artifact_id`, `source`, `adapter`), and each managed element of a co-owned file (`.claude/settings.json`) is a scoped entry hashed on its canonical JSON (§14.4).
@@ -534,7 +534,7 @@ def render_artifact_body(template_path: Path, context: dict) -> str:
 | --- | --- |
 | No variables, no conditionals | You substitute project facts (`{{ project_name }}`, `{{ python_version }}`) |
 | The rule is generic across all projects | You branch on detected state (`{% if has_framework("fastapi") %}`) |
-| You want the source to be readable as-is in a GitHub preview | You include other rules via `{{ rule("python-typing") }}` |
+| You want the source to be readable as-is in a GitHub preview | You render a section only for some projects (`{% if has_ml_dep("torch") %}`) |
 | Authors prefer not to learn Jinja | You loop over a list (`{% for dep in dependencies %}`) |
 A realistic split from the engine's content (`catalog/core/`):
 - `rules/frameworks/fastapi.md` — plain markdown. FastAPI conventions don't depend on project facts.
@@ -696,7 +696,7 @@ Each reference is one rule. Open only the ones the current task needs.
 ```
 ### 6.2 Prompts
 A prompt is a named, invokable instruction. In Continue it becomes a slash command; in Claude Code it lives under `.claude/commands/`.
-Prompts can pull rules into their body — this is important enough to warrant a dedicated subsection (6.2.5). The mechanism lets a prompt declare "always include the Python typing rule and the pytest rule in my context when I'm invoked", so the assistant sees those rules even if its globs wouldn't have triggered them.
+A prompt declares the rules its task needs in `includes_rules` — important enough to warrant a dedicated subsection (6.2.5). Since v0.21 (D15) that list is the only declaration: a Claude Code or OpenCode command opens with a generated `## Before you start` block naming the skills and references to load, while Continue, the `agent_harness` leaf and the eval runner append the rules' text.
 #### 6.2.1 Frontmatter schema
 ```yaml
 id: generate-tests                   # required
@@ -710,7 +710,7 @@ input_variables:                     # optional, declared variables filled at in
   - name: target
     description: file or function to test
     required: true
-includes_rules:                      # optional, rule IDs to inline into the prompt body
+includes_rules:                      # optional, the rule IDs the task needs (§6.2.5)
   - python-typing
   - pytest
   - python-error-handling
@@ -769,15 +769,8 @@ You are writing tests for {{ project_name }}, a {{ project_kind }} project.
 5. Report coverage of the public surface.
 ## Output format
 Produce one or more test files in the correct location. After writing, run `pytest -q tests/<path>` and report the result.
-## Reference rules
-The following project rules apply to anything you write. Follow them strictly.
-{{ rule("python-typing") }}
-{{ rule("pytest") }}
 ```
-Two mechanisms are at play here:
-1. The `includes_rules:` frontmatter declares the prompt's rule dependencies *for tooling purposes* — `playbook check` can show them, `playbook validate` errors if a referenced rule doesn't exist, and adapters use the list to decide what to render where.
-2. The `{{ rule("python-typing") }}` Jinja call inlines the rule's body at a specific point in the prompt. The author controls exactly where the rule content appears.
-The two are complementary — `includes_rules:` is the declaration, `{{ rule() }}` is the placement. They are validated against each other: every rule referenced by `{{ rule() }}` must also be listed in `includes_rules:`, and vice versa, or `playbook validate` fails. This is a deliberate guardrail — implicit imports cause invisible coupling.
+`includes_rules:` is the only declaration of the rules a prompt needs (D15): nothing in a body places rule text. `playbook check` shows the list, `playbook validate` errors when an id names no rule, and each adapter turns the list into its own delivery (§6.2.5). The body ends with its own last section; no `## Reference rules` heading is written by hand.
 #### 6.2.3 Rendered output for Continue: `.continue/prompts/generate-tests.md`
 ```markdown
 <!-- AUTOGENERATED by coding-agent-playbook — edit in source, run 'playbook sync' -->
@@ -789,65 +782,91 @@ invokable: true
 # Task: generate tests
 You are writing tests for risk-models, a python-application project.
 [rest of body, fully rendered]
+
 ## Reference rules
-The following project rules apply to anything you write. Follow them strictly.
+
 ### Typing
-Target Python version: 3.12.
+
 [full body of python-typing rule, inlined verbatim]
+
 ### pytest conventions
+
 [full body of pytest rule, inlined verbatim]
 ```
-The user types `/generate-tests` in the Continue panel and the rendered prompt — including the inlined rule bodies — becomes the system instruction for the turn.
+The user types `/generate-tests` in the Continue panel and the rendered prompt — including the appended rule bodies — becomes the system instruction for the turn. Continue reads no skills, so its prompts keep the text inline.
 #### 6.2.4 Rendered output for Claude Code: `.claude/commands/generate-tests.md`
-Same body, no top-level frontmatter — Claude Code commands are pure markdown. Invoked via `/generate-tests`. The inlined rules appear in the command body just like in Continue.
+Same body, no top-level frontmatter — Claude Code commands are pure markdown. Invoked via `/generate-tests`. Instead of rule bodies the command carries the `## Before you start` block, before the body's first `##` section:
+```markdown
+<!-- AUTOGENERATED by coding-agent-playbook — edit in source, run 'playbook sync' -->
+# Task: generate tests
+You are writing tests for risk-models, a python-application project.
+
+## Before you start
+
+1. Load skill `python-coding` and read its reference `references/python-typing.md`.
+2. Load skill `python-testing` and read its reference `references/pytest.md`.
+3. For each file in scope, also load any other listed skill whose description matches it.
+
+## Conventions
+[rest of body, fully rendered; no rule text]
+```
+The OpenCode command `.opencode/command/generate-tests.md` carries the same block, after its `description:` envelope and the sentinel line.
 #### 6.2.5 Rule inclusion in prompts — full design
-Why this exists. Continue's `alwaysApply: false` rules rely on the agent reading rule descriptions and *deciding* to pull them in. That works for some rules, but for an authoritative slash command like `/generate-tests`, the team usually wants stronger guarantees: *"every time this is invoked, the typing rule and the pytest rule are in context, no matter what."* `includes_rules:` provides that guarantee.
-Three APIs are available to the prompt author:
-**1. Frontmatter declaration: `includes_rules:`**
-Lists rule IDs the prompt depends on. Required if `{{ rule() }}` is used in the body. Validated against the rule registry — references to missing or filtered-out rules error at `playbook validate` time.
+Why this exists. An authoritative slash command like `/generate-tests` must not depend on the agent stumbling onto the right guidance: *"every time this is invoked, the typing rule and the pytest rule are part of the task."* `includes_rules:` is that declaration. Since v0.21 a scoped rule is a reference inside the skill it names (§6.1.6, §6.3.3), and `includes_rules` is how a prompt carries a scoped rule into its own turn: on Claude Code and OpenCode as a pointer to that reference, loaded on demand, and inline for the harnesses without skills (D15, D22).
+
+**The declaration: `includes_rules:`.** A list of rule ids, in the order the task needs them. It is the only mechanism: the `{{ rule() }}` Jinja helper was removed in v0.21, and a prompt (or rule, or hook body) that calls it fails `playbook validate` with a migration message (§12.6).
 ```yaml
 includes_rules:
   - python-typing
   - pytest
 ```
-**2. Inline reference: `{{ rule("rule-id") }}`**
-A Jinja helper that expands to the body of the named rule, with the rule's own frontmatter stripped and a `### {rule.name}` header prepended. Used to place rule content at a specific point in the prompt body. Only available in `.md.j2` files (since it requires Jinja).
+
+**Delivery by consumer.**
+
+| Consumer | What `includes_rules` becomes |
+| --- | --- |
+| Claude Code `.claude/commands/<slash>.md` | a `## Before you start` block; no rule body |
+| OpenCode `.opencode/command/<slash>.md` | the same block as Claude Code |
+| Continue `.continue/prompts/<slash>.md` | a `## Reference rules` appendix at the end: one `### <rule name>` section per rule, inline |
+| agent_harness `prompts/<slash>/SKILL.md` | the same appendix (its scoped rules are top-level `references/<id>.md` files, not skill references, §10.7.2) |
+| Eval runner (`evals/prompting.py`) | the body plus the same appendix, the text Continue gets (§15.3) |
+| `playbook render <prompt> --format …` | per format, through the unfiltered registry of applicable rules (§12.7) |
+
+**The block.** Inserted before the body's first level-2 heading outside a code fence (without one, after the leading `# ` title, or at the top). One numbered step per owning skill, in the order its first rule appears in `includes_rules`, listing only the references of rules that are active here; then a closing step:
 ```markdown
-## Reference rules
-{{ rule("python-typing") }}
-{{ rule("pytest") }}
+## Before you start
+
+1. Load skill `python-coding` and read its references `references/python-typing.md`, `references/python-error-handling.md`.
+2. For each file in scope, also load any other listed skill whose description matches it.
 ```
-**3. Implicit appendix (when `{{ rule() }}` is not used)**
-If a prompt declares `includes_rules:` but the body never calls `{{ rule() }}`, the adapter automatically appends a "Reference rules" section to the rendered output, listing each rule. This is the path for `.md` (plain markdown) prompts that want to declare dependencies without learning Jinja:
-```markdown
----
-id: refactor
-includes_rules:
-  - python-typing
----
-# Task: refactor
-[plain markdown body, no Jinja]
-```
-Rendered output gets a generated appendix:
-```markdown
-# Task: refactor
-[body]
-## Reference rules
-### Typing
-[full body]
-```
-This means plain `.md` prompts can still benefit from rule inclusion without templating — the appendix is generated by the adapter, not by Jinja. Authors who want fine-grained control over rule placement use `.md.j2` with `{{ rule() }}`.
-**Scoped rules and prompts (v0.21).** Since v0.21 a scoped rule's text is not in always-loaded context on Claude Code, OpenCode or Codex: it is a reference inside the skill it names (§6.1.6, §6.3.3), loaded only when the assistant opens that skill. So `includes_rules` is how a prompt carries a scoped rule's text into its own turn. The mechanism itself is unchanged: `includes_rules` and `{{ rule() }}` still inline the rule body, under the rule's `name` (`### Typing`).
+A prompt whose included rules resolve to no active reference gets no block, so it renders byte-identically to a prompt without `includes_rules`. Always rules get no line: they are already in always-loaded context.
+
+**The appendix.** `## Reference rules`, then each included rule's text under `### {rule.name}`, each id once, in `includes_rules` order; a plain `.md` prompt gets it as well as a `.md.j2` one, since the adapter writes it, not Jinja.
+
 **Resolution semantics.**
-Rule inclusion happens after overlay resolution. If `python-typing` is overridden by the BNP overlay, the prompt gets the *overridden* version. This is intentional — prompts depend on rule IDs, not on the original engine content. An overlay author who improves a rule automatically improves every prompt that includes it.
-**Filtered rules.**
-If a referenced rule has an `applies_if` that evaluates to false for the current repo (e.g., `pydantic` rule, but no pydantic installed), the rule is silently omitted from the prompt's appendix. The prompt itself can still be applicable — only the referenced rule drops out. `playbook validate` does NOT error here, because the omission is a feature, not a misconfiguration.
+Rule inclusion happens after overlay resolution. If `python-typing` is overridden by the BNP overlay, the prompt gets the *overridden* version (its text in the appendix, its reference in its owning skill). This is intentional — prompts depend on rule IDs, not on the original engine content. An overlay author who improves a rule automatically improves every prompt that includes it.
+
+**Filtered rules and inactive skills.**
+
+| Situation | Claude Code / OpenCode | Continue / agent_harness / eval runner |
+| --- | --- | --- |
+| an included rule fails its `applies_if` | no reference listed (the registry holds only applicable rules) | rule omitted from the appendix |
+| every member of a skill is filtered out | the skill is not written (§6.3.2), so no step names it | no change |
+| every included rule filtered out | no block at all; the command is the body alone | no appendix |
+| an included rule is `scope: always` | no line: it is already in always-loaded context | inlined |
+| an included id names no rule | `playbook validate` error; if validate is bypassed (`playbook render`), no line | omitted |
+| the same id listed twice | listed once | inlined once |
+
+`playbook validate` does NOT error on a filtered rule, because the omission is a feature, not a misconfiguration: a rule filtered out in this repo is still a valid id.
+
+**Validation (§12.6).** Three checks guard the declaration, since a typo would silently drop guidance: no prompt body calls `rule()` (any spelling, with or without trim markers); `includes_rules` is a list of non-empty strings (a bare string used to be iterated character by character); and every id names a rule in core, an enabled overlay or `playbook/rules/`, with a did-you-mean.
+
 **Recursive inclusion is forbidden.**
 A rule cannot itself reference other rules via `includes_rules:`. Only prompts have `includes_rules:`. This keeps the dependency graph one level deep and trivially analyzable. If a rule needs to reference content from another rule, the author should either (a) duplicate the relevant fragment, or (b) refactor both rules to share a common third rule, kept in `rules/shared/`. The validator enforces this.
 **Tooling support.**
 - `playbook check` shows, for each prompt, which rules it includes.
-- `playbook render <prompt-id> --show-rules` prints the resolved rule list.
-- `playbook validate` errors if `{{ rule("X") }}` references a rule not in `includes_rules:`, or if `includes_rules:` lists a rule never referenced via `{{ rule() }}` (only in `.md.j2` files — plain `.md` prompts don't need to call `{{ rule() }}`).
+- `playbook render <prompt-id> --show-rules` prints each included rule with its `applies_if` outcome and its delivery: the owning skill and reference, or `always loaded` (§12.7).
+- `playbook validate` runs the three checks above.
 **Why not let rules be included by globs too?**
 A natural follow-on idea: a prompt declares `includes_rules_matching: { tags: ["python", "testing"] }` and the engine picks up all matching rules. Rejected for v1 because it makes the rendered prompt non-deterministic from a glance at the source — you need to mentally execute the matcher against the current rule registry. Explicit lists are uglier but trivially readable. Revisit in v2 if the explicit lists become unwieldy.
 ### 6.3 Skills
@@ -1026,7 +1045,7 @@ Recommended (not enforced, since this is conventions over rules):
 #### 6.5.5 `eval_tasks:` validation in `playbook validate`
 Two new validation rules ship in v1:
 1. **Every `eval_tasks:` reference resolves to a real task.** If a prompt declares `eval_tasks: [foo, bar]` but `eval_tasks/bar/` doesn't exist, error.
-2. **Every task's `prompt_id` points back to a prompt that lists it.** Bi-directional check, same shape as `includes_rules` / `{{ rule() }}` symmetry. Catches orphan tasks where someone deleted the prompt but left the task behind, or where a task was renamed and a prompt's frontmatter wasn't updated.
+2. **Every task's `prompt_id` points back to a prompt that lists it.** Bi-directional check, like `includes_rules`, whose every id must name a rule (§12.6). Catches orphan tasks where someone deleted the prompt but left the task behind, or where a task was renamed and a prompt's frontmatter wasn't updated.
 `playbook validate` does **not** run the agent — it only trial-compiles the layer blocks and checks cross-references, so a malformed `[gate]`/`[rubric]` handle or an `expr` referencing an unknown handle is caught at commit time, but whether the gate checks *hold* against real agent output requires `playbook eval --run`.
 #### 6.5.6 What runs at validate-time vs run-time
 | Capability | `playbook validate` | `playbook eval --run` |
@@ -1607,7 +1626,7 @@ env = SandboxedEnvironment(
 ```
 `StrictUndefined` is important: a typo'd `{{ python_versoin }}` should raise, not silently render as empty. Renders are cheap; failure modes should be loud.
 
-The environment is sandboxed because templates are author-controlled *and* agent-writable (`playbook/**/*.md.j2`, overlay `resources/`), and rendering runs inside `playbook sync`, `render`, `init` and the eval runner. Under a plain `Environment`, `{{ lipsum.__globals__["os"] }}` reaches the `os` module; under `SandboxedEnvironment` every such attribute escape raises `SecurityError`. `playbook sync` (every mode) and `playbook render` report it as `error: <file>: template rejected by the Jinja sandbox: <reason>`, naming the source file relative to the repo, and exit 1. `sync` writes nothing: every template — rule and prompt bodies, and each rule a prompt inlines through `includes_rules` (pre-rendered, since adapters repeat that render inside `write_prompt`) — runs before the first adapter write. It is the mutable sandbox, not `ImmutableSandboxedEnvironment`: blocking the escape does not require rejecting in-template list/dict mutation, which authored templates may use. Every engine construction site is sandboxed, including `playbook validate`'s parse-only syntax check. The sandbox does not bound CPU beyond Jinja's `MAX_RANGE`. Every shipped `.md.j2` renders byte-identically under it. The runtime floor is `jinja2>=3.1.6`: older releases have published sandbox escapes for anyone who controls a template (CVE-2024-56326, an indirect `str.format` call, fixed in 3.1.5; CVE-2025-27516, the `|attr` filter returning the raw `format` method, fixed in 3.1.6), and `tests/unit/test_renderer.py` pins the floor.
+The environment is sandboxed because templates are author-controlled *and* agent-writable (`playbook/**/*.md.j2`, overlay `resources/`), and rendering runs inside `playbook sync`, `render`, `init` and the eval runner. Under a plain `Environment`, `{{ lipsum.__globals__["os"] }}` reaches the `os` module; under `SandboxedEnvironment` every such attribute escape raises `SecurityError`. `playbook sync` (every mode) and `playbook render` report it as `error: <file>: template rejected by the Jinja sandbox: <reason>`, naming the source file relative to the repo, and exit 1. `sync` writes nothing: every template — rule and prompt bodies, and each rule a prompt lists in `includes_rules` (pre-rendered, since the Continue and `agent_harness` adapters repeat that render for their appendix inside `write_prompt`) — runs before the first adapter write. It is the mutable sandbox, not `ImmutableSandboxedEnvironment`: blocking the escape does not require rejecting in-template list/dict mutation, which authored templates may use. Every engine construction site is sandboxed, including `playbook validate`'s parse-only syntax check. The sandbox does not bound CPU beyond Jinja's `MAX_RANGE`. Every shipped `.md.j2` renders byte-identically under it. The runtime floor is `jinja2>=3.1.6`: older releases have published sandbox escapes for anyone who controls a template (CVE-2024-56326, an indirect `str.format` call, fixed in 3.1.5; CVE-2025-27516, the `|attr` filter returning the raw `format` method, fixed in 3.1.6), and `tests/unit/test_renderer.py` pins the floor.
 ### 9.4 Rendering context
 The context passed to every template render:
 ```python
@@ -1625,17 +1644,11 @@ context = {
     # Convenience predicates
     "has_framework": lambda name: name in facts["frameworks"],
     "has_ml_dep": lambda name: name in facts["ml_stack"],
-    # Rule inclusion helper (see Section 6.2.5)
-    "rule": lambda rule_id: rule_registry.render_for_inclusion(rule_id),
 }
 ```
-### 9.5 The `rule()` Jinja helper
-`{{ rule("python-typing") }}` resolves to:
-1. Look up `python-typing` in the post-overlay-resolution rule registry.
-2. If the rule's `applies_if` evaluates to false against current facts, return an empty string (silent omission — see Section 6.2.5).
-3. Otherwise, render the rule's body (recursively dispatched on extension), strip its frontmatter, and prepend an `### {rule.name}` markdown header.
-4. Return the rendered fragment for inline placement.
-The helper is only registered when rendering prompts, not when rendering rules. This enforces the "rules cannot include other rules" constraint at the renderer level — `{{ rule() }}` raises `UndefinedError` inside a rule template.
+Rules, prompts and hook bodies all render in this one environment shape (`build_environment(template_search_paths)`).
+### 9.5 The removed `rule()` helper
+Removed in v0.21 (D15). A prompt declares the rules it needs in `includes_rules` (§6.2.5), and the adapters turn that list into a `## Before you start` block or a `## Reference rules` appendix; no template places rule text itself. `{{ rule(...) }}` therefore raises `UndefinedError` in every template, and `playbook validate` names any such call in a prompt, rule or hook body (§12.6).
 ### 9.6 Example: render call
 ```python
 rendered = renderer.render_artifact(
@@ -1657,9 +1670,9 @@ The renderer exposes per-format transforms applied after Jinja substitution:
 | `claude_md_section` | Drop frontmatter; emit a `## {name}` heading, then `` *Applies to: `g1`, `g2`* `` (each glob in backticks, comma-separated) when the rule is `scope: scoped` with non-empty `globs` (advisory only — nothing gates on it), then the body verbatim (its own headings are not demoted) and a `---` separator. Emitted into the Claude Code rules file `.claude/rules/coding-agent-playbook.md` (§10.3.1); the name predates the rules' move out of `.claude/CLAUDE.md` and stays, since `--format claude_md_section` is CLI surface. The composite adapters render it only for rules that name no skill (§10.3.1, §10.4); a member rule is a skill reference instead. |
 | `agents_md_section` | Same as `claude_md_section`. |
 | `skill_reference` | A member rule's reference, `<skill root>/<skill>/references/<rule-id>.md` (§6.1.6): one italic line, ``*Rule `<id>`; applies to `g1`, `g2`.*`` (``*Rule `<id>`.*`` without globs; advisory only), a blank line, then the body after Jinja, unchanged. No frontmatter and no sentinel: the file is owned through its `kind = "rule"` lockfile entry (§14.4). Rendered by `skill_document.render_member_reference` when skills are composed, not by `render_for`, so it is no `--format` value of `playbook render`. |
-| `prompt_continue` | Emit the sentinel on line 1, then a new frontmatter `name`, `description`, `invokable: true`, then the body. If `includes_rules:` is set and the prompt's *template* body has no `{{ rule() }}` calls, append the auto-generated "Reference rules" section. Callers pass `template_body=` to `render_for`, because the rendered body no longer shows the calls Jinja expanded; deciding on it re-appended every inlined rule. |
-| `prompt_claude_command` | Strip frontmatter; prepend a title line if not present. Same `includes_rules:` appendix logic. A read-only prompt (`write_scope: {read_only: true}`, §6.2.1) instead opens with the frontmatter block `---` / `disallowed-tools: Edit Write NotebookEdit` / `---`, so Claude Code removes those tools while the command runs, and carries the sentinel on the first body line (§4.3). Every other prompt renders as before. |
-| `prompt_opencode_command` | Strip canonical frontmatter; emit a new minimal frontmatter with `description:` only (OpenCode's required field), plus `agent: plan` for a read-only prompt (§10.6.1), on line 1, the sentinel as the first body line. Map `input_variables` to `$ARGUMENTS` / `$1` / `$2`. Same `includes_rules:` appendix logic. |
+| `prompt_continue` | Emit the sentinel on line 1, then a new frontmatter `name`, `description`, `invokable: true`, then the body. When `includes_rules:` is set, append the `## Reference rules` appendix built through `rule_registry`: each included rule once, in order, under `### {rule.name}`; a rule filtered out by `applies_if` is skipped (§6.2.5). |
+| `prompt_claude_command` | Strip frontmatter; prepend a title line if not present. Insert the `## Before you start` block built through `skill_references` before the body's first `##` heading outside a code fence (§6.2.5); no rule text. A prompt with no active skill reference gets no block and renders byte-identically. A read-only prompt (`write_scope: {read_only: true}`, §6.2.1) instead opens with the frontmatter block `---` / `disallowed-tools: Edit Write NotebookEdit` / `---`, so Claude Code removes those tools while the command runs, and carries the sentinel on the first body line (§4.3). Every other prompt renders as before. |
+| `prompt_opencode_command` | Strip canonical frontmatter; emit a new minimal frontmatter with `description:` only (OpenCode's required field), plus `agent: plan` for a read-only prompt (§10.6.1), on line 1, the sentinel as the first body line. Map `input_variables` to `$ARGUMENTS` / `$1` / `$2`, then insert the same `## Before you start` block as `prompt_claude_command` (it holds no placeholder). |
 | `hook_advisory` | A hook's advisory text (§6.6.7): a `### <name>` heading, the rendered hook body, and one italic line saying where the hook is enforced, derived from its declared `events` and `supports` (e.g. `*Enforced by lifecycle hooks on: Claude Code, OpenCode. …*`, or `*Not enforced automatically; apply it yourself.*`). Its text (the body plus that line) is shared by every full-text guardrail target: Continue's `30-guardrail-<id>.md`, `agent_harness`'s `rules/30-guardrail-<id>.md` and each section of the `playbook-guardrails` skill (§6.3.4); since v0.21 `AGENTS.md` and the Claude Code rules file carry one guardrail line per hook instead (§6.6.7). The default format of `playbook render <hook-id>`. |
 | `hook_claude_settings` | Debug only: the hook's Claude Code registrations as `settings.json` JSON, built from its declared frontmatter alone (no `[hooks]` gating, no consumer config). Never written by sync; a malformed frontmatter is a `HookSchemaError` naming the file. |
 The CLI accepts both the full internal name and a short alias (e.g., `--format continue` is shorthand for `continue_rule`; `--format claude` for `claude_md_section`; `--format opencode` for `prompt_opencode_command`). The full names appear in `playbook render --show-source` output for precision; the short aliases are the daily UX.
@@ -1670,10 +1683,11 @@ def render_for(
     fmt: str,
     *,
     frontmatter: dict[str, Any],
-    rule_registry: RuleRegistry | None = None,
-    template_body: str | None = None,
+    rule_registry: RuleRegistry | None = None,  # prompt_continue: the appendix text
+    skill_references: SkillReferenceIndex | None = None,  # commands: the block
 ) -> str: ...
 ```
+Without the matching argument a prompt renders with neither block nor appendix, so `includes_rules` is declarative only. The `agent_harness` prompt leaf is not a `render_for` format: `render_inline_prompt_markdown(body, frontmatter, rule_registry)` returns the titled body plus the same appendix as `prompt_continue`, with no sentinel and no frontmatter (§10.7.2).
 ## 10. Adapter subsystem
 ### 10.1 Adapter ABC
 ```python
@@ -2053,9 +2067,15 @@ description: Generate pytest tests for the provided code, following the project'
 
 # Task: generate tests
 You are writing tests for risk-models, a python-application project.
-[body, fully rendered]
-## Reference rules
-[inlined rule bodies from includes_rules, same appendix logic as other adapters]
+
+## Before you start
+
+1. Load skill `python-coding` and read its reference `references/python-typing.md`.
+2. Load skill `python-testing` and read its reference `references/pytest.md`.
+3. For each file in scope, also load any other listed skill whose description matches it.
+
+## Conventions
+[rest of body, fully rendered; no rule text]
 ```
 The frontmatter must be the first line: OpenCode parses commands with gray-matter, which only recognises frontmatter at offset 0, so the sentinel is the first body line. (Engines before this release wrote it on line 1, which dropped the `description` and leaked the envelope into the prompt; the sentinel comment line itself remains the first template line, as it does for skills.) The OpenCode adapter's cleanup uses the shared anchored detector (`_sentinel.has_sentinel`, §4.3): the exact sentinel line on line 1 or as the first line after a leading frontmatter block, ignoring a UTF-8 BOM, so a re-sync rewrites old-layout commands in place and still removes stale ones, while a hand-written command that merely quotes the sentinel is kept.
 Mapping from canonical to OpenCode:
@@ -2064,11 +2084,11 @@ Mapping from canonical to OpenCode:
 | `description` | Frontmatter `description` (required) |
 | `slash` | Filename: `.opencode/command/<slash>.md` |
 | `input_variables` | Mapped to `$ARGUMENTS` and positional `$1`, `$2`, … |
-| `includes_rules` | Inlined into body via same appendix logic as other adapters |
+| `includes_rules` | The `## Before you start` block naming each active rule's skill and reference, the same block as the Claude Code command (§6.2.5); no rule text |
 | `name` | Not used in frontmatter; OpenCode uses filename as the command name |
 | `applies_if` | Evaluated upstream by the engine; non-matching prompts produce no file |
 | `write_scope` | `{read_only: true}` adds `agent: plan` to the frontmatter; any other scope adds nothing |
-OpenCode commands have no native concept of named input variables beyond positional `$N`. If a prompt declares an input variable `target`, the adapter substitutes `$ARGUMENTS` for it in the body and inlines a brief HTML comment noting the variable's purpose for the human reader. Of OpenCode's optional `agent` / `model` / `subtask` frontmatter fields the adapter models one case: a read-only prompt (`write_scope: {read_only: true}`, §6.2.1) adds `agent: plan`, so the command runs as OpenCode's built-in `plan` agent, which has no edit tools (§9.7). Every other command runs in OpenCode's default agent with the user's default model.
+OpenCode commands have no native concept of named input variables beyond positional `$N`. If a prompt declares an input variable `target`, the adapter substitutes `$ARGUMENTS` for it in the body and inlines a brief HTML comment noting the variable's purpose for the human reader. Of OpenCode's optional `agent` / `model` / `subtask` frontmatter fields the adapter models one case: a read-only prompt (`write_scope: {read_only: true}`, §6.2.1) adds `agent: plan`, so the command runs as OpenCode's built-in `plan` agent, which has no edit tools (§9.7). Every other command runs in OpenCode's default agent with the user's default model. `/review` and `/security-review` are read-only, so their `## Before you start` block assumes the `plan` agent may call OpenCode's `skill` tool; that is not yet verified on OpenCode v1.19.3 and v2.0.32 (specs/prS-skills-context.md R3-3, Q2). Until a manual smoke test (specs/prS-skills-context.md §7.9 item 8) checks it, the engine ships D15 as written. Should the test fail, D25 adopts one fallback, to be recorded here when implemented: those two commands, on OpenCode only, get the inline `## Reference rules` appendix instead of the block.
 #### 10.6.2 Hooks: the one generated plugin (v0.20)
 With `[hooks] enabled = true` and `opencode` among the `[hooks] adapters` (§7.1.1), `write_hook` buffers every on hook and `finalize` renders **exactly one file**, `.opencode/plugins/playbook-hooks.js`, an OpenCode V1 plugin (`hook_registrations/opencode.py`; design `specs/prK-lifecycle-hooks.md` §C.3). With no hook OpenCode can enforce, nothing is written. It is the one exception to §10.6.4's "never touch `.opencode/plugin(s)/`": V1's non-recursive `{plugin,plugins}/*.{ts,js}` scan finds it, so `opencode.json` is never touched, and every other file in those directories stays the user's.
 - **Shape.** Plain `.js` importing only `node:` built-ins (the desktop sidecar runs plugins under Node, not Bun), with one default export and no helper file beside it. Line 1 is the sentinel as `// …`. It is rendered from a packaged template whose one placeholder is replaced (`str.replace`, never Jinja) by `REG`, a JSON table `{event: {timeout_ms, tools}}` whose strings all come from closed vocabularies (canonical event names, OpenCode's V1 tool names, `*`), never from a hook author.
@@ -2094,7 +2114,8 @@ class AgentHarnessAdapter(Adapter):
     name = "agent_harness"
     # Buffers write_rule/write_prompt/write_skill, then composes the whole
     # tree in finalize() so HARNESS.md can index everything that was emitted.
-    # Accepts an optional rule_registry to inline a prompt's includes_rules.
+    # Accepts an optional rule_registry to append a prompt's includes_rules
+    # as a ## Reference rules appendix (render_inline_prompt_markdown).
 ```
 #### 10.7.1 Emitted tree
 The adapter emits a harness tree under the repo root (`specs/prH-agent-harness.md` §B):
@@ -2112,7 +2133,7 @@ The adapter emits a harness tree under the repo root (`specs/prH-agent-harness.m
 │                               #   (both minus bytecode caches, §10.8)
 ├── prompts/
 │   ├── PROMPTS.md
-│   └── <slash>/SKILL.md        #   skill-shaped leaf; includes_rules inlined via rule()
+│   └── <slash>/SKILL.md        #   skill-shaped leaf; includes_rules as an inline appendix
 ├── rules/
 │   ├── RULES.md
 │   └── <priority:02d>-<id>.md  #   scope=always rules; frontmatter = description only
@@ -2128,7 +2149,7 @@ The adapter emits a harness tree under the repo root (`specs/prH-agent-harness.m
 | Canonical type | Harness destination | Native fields on the leaf |
 | --- | --- | --- |
 | `Skill` | `skills/<id>/SKILL.md` (+ `scripts/`, `references/`) | `name`, `description`, body, copied script/reference bytes |
-| `Prompt` | `prompts/<slash>/SKILL.md` (skill-shaped leaf) | `name`, `description`, body with `includes_rules` inlined via `rule()` + an input-variables note |
+| `Prompt` | `prompts/<slash>/SKILL.md` (skill-shaped leaf) | `name`, `description`, the titled body, its `includes_rules` as a `## Reference rules` appendix (`render_inline_prompt_markdown`, §9.7) + an input-variables note; no `## Before you start` block, since the tree's scoped rules are top-level `references/<id>.md` files, not skill references |
 | `Rule` (scope=always) | `rules/<priority:02d>-<id>.md` | `description`, body |
 | `Rule` (scope=scoped) | `references/<id>.md` (one file per scoped rule, member rules included: the harness tree has its own `references/` and composes no skills from rules) | `description`, body; the owning `skill` is recorded in `manifest.toml` (§20.10) |
 | `Hook` (v0.20) | `.playbook/hooks/<id>/HOOK.md` (+ `scripts/`), and `rules/30-guardrail-<id>.md` when its body is not blank | none: the harness spec has no lifecycle-event concept, so the sidecar is opaque and the rule file is advisory text (`description` + the `hook_advisory` body) |
@@ -2550,8 +2571,8 @@ $ playbook validate
 ✓ 18 artifacts loaded from 2 sources
 ✓ All frontmatter valid against schema
 ✓ All Jinja templates compile
-✓ All `includes_rules:` references resolve
-✓ All `{{ rule() }}` calls match `includes_rules:` declarations
+✓ All `includes_rules:` lists are rule ids that resolve
+✓ No prompt calls the removed `{{ rule() }}` helper
 ✓ All `eval_tasks:` references resolve to existing tasks
 ✓ All task `prompt_id` back-references match a prompt's `eval_tasks:` list
 ✓ All markdown links self-contained (relative targets resolve; externals allowlisted)
@@ -2560,7 +2581,9 @@ $ playbook validate
 ✓ All hooks honour the hook trust contract (H1–H21)
 ✗ overlays_enabled: coding_agent_playbook.plugins.superpower: no such bundled plugin (bundled plugins: coding_agent_playbook.plugins.python_design, coding_agent_playbook.plugins.superpowers)
 ✗ rules/frameworks/sqlalchemy-v2.md.j2: applies_if references unknown fact 'orm_version'
-✗ prompts/refactor.md.j2: body calls `{{ rule("python-style") }}` but rule not in includes_rules
+✗ prompts/refactor.md.j2: body calls {{ rule("python-typing") }}; prompts no longer inline rules. Remove the call and keep 'python-typing' in includes_rules: Claude Code and OpenCode commands then point at its skill, Continue appends its text
+✗ prompts/review.md.j2: includes_rules names 'python-typng', which is no rule in core, an enabled overlay or playbook/rules/; did you mean 'python-typing'?
+✗ prompts/tidy.md: includes_rules 'python-typing': expected a list of rule ids, e.g. ['python-typing', 'pytest']
 ✗ rules/languages/python/typing.md.j2: body calls `{{ rule(...) }}` — rules cannot include other rules
 ✗ eval_tasks/orphan-task/task.toml: prompt_id 'deleted-prompt' does not exist
 ✗ prompts/generate-tests.md.j2: declares eval_task 'foo-bar' but eval_tasks/foo-bar/ not found
@@ -2573,6 +2596,8 @@ $ playbook validate
 exit code: 1
 ```
 The sample is stylized: the command prints `OK <N> artifacts validated` (rules, prompts and hooks) when it passes, and otherwise one `FAIL <path>: <message>` line per error followed by `validation failed with <N> error(s)`.
+
+**Prompt rule references (v0.21).** `includes_rules` is the only declaration of the rules a prompt needs (§6.2.5, D15), so `commands/_validate_prompts.py` checks it three ways, each finding naming the prompt's source path (its id without one): a body that calls `rule()` in any spelling (`RULE_CALL_RE`, with or without trim markers, in a `.md` or `.md.j2` prompt) fails with the migration message above, since the helper is gone; an `includes_rules` that is not a list of non-empty strings fails once with the expected shape (a bare string used to be iterated character by character); and an id that names no rule of the merged set fails with a did-you-mean. The merged set is taken before `applies_if`: a rule filtered out in this repo is still a valid id and simply gets no pointer line. A rule body that calls `rule()` keeps its own message (rules cannot include other rules), and so does a hook body (H19). Being validate errors, all three stop `playbook sync` before any write. `--check-staged`, which is not validate-gated, still runs the first check alone (`check_prompt_rule_calls`) once something is staged, so a leftover call fails the commit with the same message instead of a jinja2 `UndefinedError` traceback.
 
 The self-contained-links rule (PR L, design in `specs/prL-markdown-links.md`) covers rule bodies, prompt bodies, and skills (`SKILL.md` + every markdown file under `references/`) across all three source layers. Extraction masks frontmatter, fenced code blocks, and inline code spans (code examples like `def first[T](items: list[T])` are not links); Jinja-bearing targets are skipped as not statically checkable. Relative targets must resolve — `other.md` is satisfied by a canonical `other.md.j2` since rendering drops the suffix — and must stay inside the artifact's source layer (`catalog/core/` for the engine, `catalog/plugins/<name>/` for a bundled plugin, an overlay package's `resources/`, or the consumer's `playbook/`); a bundled artifact must also not link to a file at its layer root (`README.md`, `LICENSE`, `ATTRIBUTIONS.md`), which ships in the wheel but is never synced, so `tests/integration/test_catalog_layout.py` refuses such a link; `http(s)` targets pass only via `[links] allowed_domains` (§7.1); every other scheme and absolute paths are violations. Deterministic by construction: stdlib only, no network. The engine's own shipped artifacts are enforced on CI by a pytest integration test (`tests/cli/test_validate_links.py`); consumer repos and overlays inherit the rule through `playbook validate`.
 
@@ -2655,15 +2680,17 @@ applies_if evaluated: True
 $ playbook render generate-tests --show-rules
 Prompt:    generate-tests
 includes_rules:
-  - python-typing       (overlay bnp, applies_if=True → INLINED)
-  - pytest              (engine, applies_if=True → INLINED)
-  - python-style        (engine, applies_if=False → OMITTED)
-Inclusion mode: explicit ({{ rule() }} calls in body)
+  - python-typing  (playbook_rules_bnp, applies_if=True -> skill python-coding, references/python-typing.md)
+  - pytest  (coding_agent_playbook, applies_if=True -> skill python-testing, references/pytest.md)
+  - project-context  (coding_agent_playbook, applies_if=True -> always loaded)
+  - python-style  (coding_agent_playbook, applies_if=False -> OMITTED)
+  - python-typng  (UNKNOWN)
 $ playbook render destructive-command-guard
 [the hook's advisory: ### heading, rendered body, the italic enforcement line]
 $ playbook render destructive-command-guard --format hook_claude_settings
 [{"hooks": {"PreToolUse": [...]}}: its Claude Code registrations, from its own frontmatter]
 ```
+`--show-rules` names each included rule's delivery in a Claude Code or OpenCode command (v0.21, D15): its owning skill and reference, `always loaded` for an always rule, `OMITTED` when its `applies_if` is false here, `UNKNOWN` when no rule has the id. Rendering a prompt with `--format prompt_claude_command` or `prompt_opencode_command` shows the `## Before you start` block, and `--format prompt_continue` the `## Reference rules` appendix, both through the registry of the rules that apply here, unfiltered by validate. A prompt whose body still calls the removed `rule()` prints `error: <file>: 'rule' is undefined` and `error: playbook render aborted.` and exits 1, instead of a traceback.
 The `--show-source` sample is stylized: `Template:` prints the template's absolute path, `Overrides:` names the package of each layer whose artifact this one replaces (`coding_agent_playbook` for the engine), and `Adapters:` lists the enabled adapters in sorted order.
 **Hooks (v0.20).** A hook id renders `hook_advisory` by default — the full text Continue and `agent_harness` receive and the `playbook-guardrails` skill holds (`AGENTS.md` gets one line, §10.4) — and `--format hook_claude_settings` shows the hook's Claude Code registrations as `settings.json` JSON, built from its declared frontmatter alone (no `[hooks]` gating, no deadlines from other hooks), for debugging; sync never writes that projection (§9.7). Only these two formats apply to a hook, and rule or prompt formats are refused for it. Ids are looked up across rules, prompts, skills and hooks, which is why validate reports a hook id that equals a rule or prompt id (H20, §12.6). A hook body that calls `rule()` fails naming the file (H19).
 ### 12.8 `playbook eval` (Tier 0 enumeration + the v1.1 `--run` runner)
@@ -3288,7 +3315,7 @@ Concrete runners (discovered via the `coding_agent_playbook.runners` entry-point
 
 `ContinueCLIRunner` remains future work (not yet implemented).
 
-**`render_prompt` strictness.** `render_prompt(task, strict=…)` (`evals/prompting.py`, re-exported from the runner) resolves `task.prompt_id` to its `Prompt` (scanning the `prompts/` directory of the layer that holds the task: `evals/prompting.py:_infer_prompts_dir` maps `<layer>/eval_tasks/<dir>/task.toml` to `<layer>/prompts`, whatever the layer — `catalog/core/`, an overlay's `resources/`, or `playbook/` — and returns `None` when the task directory's parent is not `eval_tasks`; it searches for no `resources` path segment and does not resolve symlinks. Since v0.19 a repo-local task under `playbook/eval_tasks/` therefore finds `playbook/prompts/`; before, it never found a prompt) and renders it like `playbook sync` would for the task's `setup/` tree. The Jinja context is the detector facts for `setup/` overlaid with the `[setup]` mock facts (`project_kind` unless left at its `python-unknown` default; extra keys win, and list-shaped name maps such as `ml_stack = ["torch"]` are normalized to the detector's `{name: spec}` shape), plus `project_name`/`project_description` from `setup/pyproject.toml` (falling back to the task id and `""`), `engine_version`, and the task's `input_variables` (which win). `rule()` resolves the engine rules plus the task's overlay package's and `setup/playbook/rules/`, filtered by `applies_if` with `has_file` anchored at `setup/` (§6.2.5 silent omission). Plain `.md` prompts pass through verbatim, and the `includes_rules:` appendix is not appended (it is adapter output). A prompt that resolves but fails to render raises `PromptResolutionError` in either mode. When the prompt cannot be resolved: a *real* runner (`requires_resolved_prompt=True`) raises `PromptResolutionError` — a live agent must never be driven with a placeholder; the hermetic `FakeRunner` (`strict=False`) tolerates a stable placeholder because the deterministic scoring layers never read the rendered text.
+**`render_prompt` strictness.** `render_prompt(task, strict=…)` (`evals/prompting.py`, re-exported from the runner) resolves `task.prompt_id` to its `Prompt` (scanning the `prompts/` directory of the layer that holds the task: `evals/prompting.py:_infer_prompts_dir` maps `<layer>/eval_tasks/<dir>/task.toml` to `<layer>/prompts`, whatever the layer — `catalog/core/`, an overlay's `resources/`, or `playbook/` — and returns `None` when the task directory's parent is not `eval_tasks`; it searches for no `resources` path segment and does not resolve symlinks. Since v0.19 a repo-local task under `playbook/eval_tasks/` therefore finds `playbook/prompts/`; before, it never found a prompt) and renders it like `playbook sync` would for the task's `setup/` tree. The Jinja context is the detector facts for `setup/` overlaid with the `[setup]` mock facts (`project_kind` unless left at its `python-unknown` default; extra keys win, and list-shaped name maps such as `ml_stack = ["torch"]` are normalized to the detector's `{name: spec}` shape), plus `project_name`/`project_description` from `setup/pyproject.toml` (falling back to the task id and `""`), `engine_version`, and the task's `input_variables` (which win). The body is followed by the `## Reference rules` appendix of its `includes_rules` (v0.21, D15, D22): the text Continue gets, since the eval scratch repo has no synced skills a `## Before you start` pointer could name. Its rules resolve from the engine rules plus the task's overlay package's and `setup/playbook/rules/`, filtered by `applies_if` with `has_file` anchored at `setup/` (§6.2.5 silent omission), and load only for a prompt that lists `includes_rules`. Plain `.md` prompts pass through Jinja-free but still get the appendix; the `rule()` helper no longer exists, so a prompt still calling it fails to render. A prompt that resolves but fails to render raises `PromptResolutionError` in either mode. When the prompt cannot be resolved: a *real* runner (`requires_resolved_prompt=True`) raises `PromptResolutionError` — a live agent must never be driven with a placeholder; the hermetic `FakeRunner` (`strict=False`) tolerates a stable placeholder because the deterministic scoring layers never read the rendered text.
 
 #### 15.3.1 Scoring bridge (`evals/scoring.py`)
 `score(task, baseline, candidate, *, judge=None, samples=1, fail_fast=False) -> EvaluationReport` produces one report covering both layers. It compiles the task's layer blocks into the per-trial `Rubric` (`task.compiled().per_trial`; §6.5.3), **walks the compiled check tree** to discover which metrics the gate/rubric checks reference, pre-measures them into a `MeasurementSet`, and runs `Rubric.evaluate`. The two named layer checks (`id="gate"` / `id="rubric"`) draw on the checks compiled from the handle tables:
@@ -3302,7 +3329,7 @@ Concrete runners (discovered via the `coding_agent_playbook.runners` entry-point
 Both layer checks flow through one `Rubric.evaluate(ctx, measurements, *, strict, fail_fast)` into a single `EvaluationReport` whose `report.checks` carry the gate/rubric `CheckResult`s. The bridge then **derives** the per-trial verdict from those results (`evals._compile.verdict_passed` over `[verdict].trial`, skipped-neutral) and writes it onto `report.passed` — the layers ran once; the verdict is a boolean fold, not a third check. `fail_fast` (the runner's default; `--full-scoring` flips it off) lets the cost-tiered scheduler short-circuit once a required gate check fails, so a failing deterministic gate spares the execution/judged tiers (the LLM judge is never invoked) — for a task whose result the skip cannot change, i.e. a pure-conjunction verdict over every layer (the default `gate and rubric`) and no aggregate over a skippable layer; any other task is scored in full (see `CompiledTask.short_circuit_safe`).
 
 ### 15.4 Why the eval abstractions live in one tree
-The `coding_agent_playbook/evals/` package ships `task.py`, `loader.py`, `validator.py` (active since v1), the task-config compiler trio `_expr.py` (the boolean-expression DSL) + `_handles.py` (the handle Factory/Composite builder) + `_compile.py` (the layer compiler + derived verdict), `runner.py` + `fake_runner.py` + `claude_code_runner.py` + `opencode_runner.py` + `scoring.py` (live since v1.1 R1), and `judge.py` (**live since v1.1 R2**). `judge.py` defines the concrete-able `Judge` ABC — **Option A**: the per-criterion primitive `score_criterion(criterion, artifact, n=1) -> float` (0–1, n-sample average) is canonical, and the batch `score(rubric, transcript, scratch_dir_state) -> list[float]` is a thin wrapper that maps it over the rubric — plus the opt-in `LLMJudge` (`name="llm"`, shells out to the `claude` CLI, `available()`-gated, never in CI) and the test-only `StubJudge`. A configured judge that cannot score — `LLMJudge`'s CLI exits non-zero, times out, or answers anything but exactly one number in `[0, 1]` — retries a bounded number of times (default 2, no backoff) and then raises `JudgeError`; it never degrades to a number (an `"API Error: 529"` used to clamp to a perfect `1.0`). `prompting.py` renders a task's prompt the way `playbook sync` does — the `rule()` helper over the `applies_if`-filtered engine (+ the task's overlay) rules, and a Jinja context of detector facts over `setup/` overlaid with the task's mock facts, plus `project_name` from `setup/pyproject.toml`. This means:
+The `coding_agent_playbook/evals/` package ships `task.py`, `loader.py`, `validator.py` (active since v1), the task-config compiler trio `_expr.py` (the boolean-expression DSL) + `_handles.py` (the handle Factory/Composite builder) + `_compile.py` (the layer compiler + derived verdict), `runner.py` + `fake_runner.py` + `claude_code_runner.py` + `opencode_runner.py` + `scoring.py` (live since v1.1 R1), and `judge.py` (**live since v1.1 R2**). `judge.py` defines the concrete-able `Judge` ABC — **Option A**: the per-criterion primitive `score_criterion(criterion, artifact, n=1) -> float` (0–1, n-sample average) is canonical, and the batch `score(rubric, transcript, scratch_dir_state) -> list[float]` is a thin wrapper that maps it over the rubric — plus the opt-in `LLMJudge` (`name="llm"`, shells out to the `claude` CLI, `available()`-gated, never in CI) and the test-only `StubJudge`. A configured judge that cannot score — `LLMJudge`'s CLI exits non-zero, times out, or answers anything but exactly one number in `[0, 1]` — retries a bounded number of times (default 2, no backoff) and then raises `JudgeError`; it never degrades to a number (an `"API Error: 529"` used to clamp to a perfect `1.0`). `prompting.py` renders a task's prompt the way `playbook sync` renders it for Continue — the `## Reference rules` appendix of its `includes_rules`, built from the `applies_if`-filtered engine (+ the task's overlay) rules (§15.3, D22), and a Jinja context of detector facts over `setup/` overlaid with the task's mock facts, plus `project_name` from `setup/pyproject.toml`. This means:
 - Overlay authors writing tasks can import `EvalTask`, `TaskSetup`, etc. for type hints in their own tooling.
 - The module layout is stable across the v1 → v1.1 progression; only the placeholder bodies get filled in.
 - The `[project.entry-points."coding_agent_playbook.runners"]` group is populated (`fake`, `claude_code`, `opencode`); the `coding_agent_playbook.judges` group is populated with `llm`; the engine ships no builtin `coding_agent_playbook.gates` / `coding_agent_playbook.rubrics` / `coding_agent_playbook.checks` entries — those are the third-party extension points a task references by `ref`/`check` name.
@@ -3900,7 +3927,7 @@ User types: "/generate-tests for the score_counterparty endpoint"
   → All three are guaranteed in context, regardless of which files are open
 → Assistant generates tests/api/test_routes.py extension following the mirror layout
 ```
-The `includes_rules:` mechanism is what gives `/generate-tests` its reliability. Even if the user invokes it from a markdown file or an unrelated module, the typing and pytest rules are still in scope because the prompt declared them as dependencies. Without `includes_rules:`, the agent would only see whichever scoped rules happened to match the currently-open file's globs — which on a markdown file would be none of them.
+The `includes_rules:` mechanism is what gives `/generate-tests` its reliability. Even if the user invokes it from a markdown file or an unrelated module, the typing and pytest rules are still in scope because the prompt declared them as dependencies. Without `includes_rules:`, the agent would only see whichever scoped rules happened to match the currently-open file's globs — which on a markdown file would be none of them. In Claude Code and OpenCode the same declaration becomes the command's `## Before you start` block: load `python-coding` and read `references/python-typing.md`, load `python-testing` and read `references/pytest.md` (§6.2.4, §6.2.5), so the rules arrive on demand instead of in the command text.
 ### A.6 Step 5: update
 Two weeks later, the engine releases v0.4.1 with improved test-generation prompt wording.
 ```bash
@@ -4034,6 +4061,8 @@ Skills-first context (design `specs/prS-skills-context.md`; decision record `doc
 - **Guardrails skill (§6.3, §6.3.4, §10.1)**: core ships `catalog/core/skills/playbook-guardrails/SKILL.md`, a plain skill (no `playbook:` block, a 281-character description with its own `Use when`). `commands/_sync_render.render_artifacts` splits it off the composed skills and composes it with one ``## <name> (`<id>`)`` section per on hook with an advisory, sorted by id (`hook_policy/guardrails_skill.py`); `HookDispatch.guardrails_skill` carries it, and `dispatch_to_adapters` appends it to the skills of each adapter whose new concrete `Adapter.writes_guardrails_skill(hooks)` is true: `opencode` and `shared_skills` when any hook has an advisory, `claude_code` only for a hook it does not run natively (`adapters._claude_hooks.runs_natively`, now shared with `ClaudeHookEmitter.add`). With hooks off, or no hook with an advisory, it is not written. Continue's and agent_harness's guardrail rule files and `AGENTS.md` are unchanged.
 - **CI (guardrails skill)**: `tests/unit/test_hook_policy_guardrails_skill.py` pins the split and the composed body; `tests/adapters/test_guardrails_skill_targets.py` the adapters that write it and Continue's unchanged bytes; `test_claude_code_hooks.py` that `runs_natively` agrees with `ClaudeHookEmitter.add`; `tests/cli/test_sync_guardrails_skill.py` the two roots, the `kind = "skill"` lock rows, the hooks-off case and a repo-local override that keeps the sections; `tests/integration/test_core_skills.py` runs the D13 checks over it as `EXPECTED_PLAIN_CORE_SKILLS`, its 500 lines with every core hook, and its two byte-identical probe copies; `test_sources_filesystem_bundled.py` expects five engine skills.
 - **Distilled ML data content (§5.1, §6.1.4, §6.4, §12.2)**: four new `ml-data` members for array and data-frame code, all `.md.j2` with globs `**/*.py` and `**/*.ipynb` and the one gate `any_ml_stack: ["numpy", "pandas", "polars"]`: `ml-vectorization` (priority 71: whole-array operations first, a ladder before any per-value Python, and arrays and frames built once instead of grown in a loop), `ml-data-transforms` (71: inputs treated as values, NumPy views, one pandas indexer per write, no `inplace=True`, chained pipelines and named aggregation), `ml-dtypes-and-typing` (73: dtypes declared where data enters, shared categorical constants, NumPy widths, a column and dtype check after loading, pandera only where the repo already uses it, `numpy.typing` annotations) and `ml-reproducibility-and-testing` (73: one seeded generator built at the entry point and passed down, every library seeded explicitly, the seed recorded, tolerance-aware assertions on small inline data). Each renders a NumPy, a pandas and a polars section only when `ml_stack` declares that library, so a NumPy-only repo gets no data-frame guidance; torch alone activates none of them, so the resync hook's message for adding torch is unchanged. `ml-data`'s authored texts become generic (`description` "Conventions for ML models and for array and data-frame code.", `playbook.use_when` "loading or saving models, or transforming arrays and data frames" and `playbook.files`, the Where phrase, "Model, array and data-frame code"), and its composed description is 273 characters on the reference probe with every member named. `skill-nudge`'s matcher gains `notebook_edit`, so a Claude Code notebook edit nudges `ml-data` and the managed `PostToolUse` matcher in `.claude/settings.json` gains `NotebookEdit`; `playbook check` labels the hook `degraded` on OpenCode, which has no notebook tool (OpenCode writes of `.py` and `.ipynb` files still nudge), and `playbook validate` stays clean because an engine hook's degraded cells do not warn. `catalog/core/ATTRIBUTIONS.md` lists the four ids. CI: `tests/unit/test_ml_data_rules.py` pins the gate, the per-library sections and the bound with every library rendered; `test_core_skills.py` pins the five `ml-data` members and four `DISTILLED_RULES` rows; `test_skill_nudge.py` adds `test_notebook_edit_names_ml_data`; the engine rule count is 28.
+- **Prompts point at skills (§5 step 5, §6, §6.2, §6.2.1-§6.2.5, §6.5, §9.3-§9.7, §10.6.1, §10.7, §10.7.2, §12.6, §12.7, §15.3, Appendix A.5; D15, D22)**: `includes_rules` is the only declaration of a prompt's rules. Claude Code and OpenCode commands carry no rule body: each opens with a generated `## Before you start` block, before the body's first `##` heading outside a code fence, with one numbered step per owning skill in `includes_rules` order listing only the references of active scoped rules (`RuleRegistryImpl.reference_for`, `_member_reference.member_reference_path`), then a closing step; a prompt with no active reference renders byte-identically. Continue prompts, the `agent_harness` prompt leaf (`render_inline_prompt_markdown`) and the eval runner get the `## Reference rules` appendix built from `includes_rules`, each id once. The `rule()` Jinja helper is removed from every template, so `build_environment` takes only the search paths and `render_for` takes `skill_references` instead of `template_body`; `generate-tests`, `review` and `security-review` drop their hand-written `## Reference rules` blocks. `playbook validate` replaces the `rule()` ⊆ `includes_rules` check with three (`commands/_validate_prompts.py`): no `rule()` call, `includes_rules` a list of non-empty strings, every id naming a rule (with a did-you-mean); `playbook render --show-rules` names each rule's delivery (skill and reference, `always loaded`, `OMITTED`, `UNKNOWN`) and a prompt still calling `rule()` is reported naming its file. §10.6.1 records the unverified OpenCode `plan` agent case and its D25 fallback.
+- **CI (prompts point at skills)**: `tests/unit/test_prompt_rule_delivery.py` pins the block (grouping, wording, filtered ids, dedupe, placement around code fences and titles, byte identity without a block) and the appendix; `tests/unit/test_rule_registry.py` pins `reference_for`; `tests/unit/test_catalog_prompt_references.py` pins that no shipped prompt calls `rule()` and that every included id names a core rule with a skill when scoped; `tests/unit/test_validate_prompts.py` and `tests/cli/test_validate.py` pin the three messages, and `tests/cli/test_sync_validate_gate.py` that `sync --check-staged` refuses a leftover `rule()` call with the first one; `tests/cli/test_sync.py` and `tests/cli/test_render.py` pin the four deliveries end to end; `tests/adapters/test_agent_harness.py` pins a prompt leaf's bytes from before the change.
 - **One-line guardrails (§6.3.4, §6.6.2, §6.6.7, §9.7, §10.3, §10.3.1, §10.4, §12)**: `HookFrontmatter` gains `summary: str = ""` (after `tags`; `_hook_schema.TOP_KEYS` lists it after `description`), read by `FieldReader.guardrail_summary`: a missing, blank or empty value is `""`, anything but one line of 1-120 characters without `{{` or `{%` is a `HookSchemaError` naming `summary`, the value and that shape, and `to_mapping` drops an empty one, so a hook without it round-trips byte-identically. `hook_policy.advisory` adds `GUARDRAIL_SUMMARY_MAX_CHARS` (defined in `_hook_schema`, which the parser needs and which imports nothing from the package), `guardrail_summary` (the summary, else the first sentence of the body outside code spans, cut at a word boundary with `…`, never inside an open code span), `guardrail_line` and `guardrails_section`; `ResolvedHook.guardrail_text` applies it to the rendered body. `AgentsMdAdapter.write_hook` buffers one line per hook with guardrail text (an `advisory`), and `ClaudeCodeAdapter.write_hook` does the same for a hook it does not run natively, its `finalize` writing the section after the Where section and before the heartbeat line. Every core hook with a body declares a `summary`. Continue's and `agent_harness`'s guardrail rule files are unchanged; the `agent_harness` sidecar `HOOK.md` and manifest copy the new key.
 - **CI (one-line guardrails)**: `tests/unit/test_types_hook.py` and `test_types_hook_roundtrip.py` pin the `summary` shape errors and the round trip; `tests/unit/test_hook_policy_advisory.py` the summary, its fallback and cut, the line and the sorted section; `test_hook_policy_resolved.py` `guardrail_text`; `tests/hooks/test_hook_summaries.py` that every core hook with a body declares a summary and that `stop-ci-parity-gate`'s names `ruff check .`, `ruff format --check .`, the type checker and the tests; `tests/adapters/test_agents_md.py`, `test_always_only_composites.py` and `test_guardrails_skill_targets.py::test_claude_code_writes_skill_and_line_for_a_hook_it_cannot_run` the two sections; `tests/cli/test_validate_hooks.py` the `FAIL` line; `tests/integration/test_context_budget.py::test_agents_md_within_1500_words` loses its strict xfail (the probe's `AGENTS.md` is about 780 words) and a new test checks one line per advised hook.
 ### v0.20 (2026-10-16)
