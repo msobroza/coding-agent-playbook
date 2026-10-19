@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.adapters._skill_sources import (
+from coding_agent_playbook.artifacts.skill import Skill
+from coding_agent_playbook.generated_output.source_files import (
     copyable_skill_files,
     refused_skill_files,
 )
-from coding_agent_playbook.artifacts.skill import Skill
 
 if TYPE_CHECKING:
     from pathlib import Path
