@@ -3,7 +3,7 @@
 Default, ``pre_tool_use`` on Edit/Write/NotebookEdit of ``.py`` and ``.ipynb``
 files, rendered only in ML repositories (linked rule
 ``ml-serialization-security``). The edit's post-image is built in memory
-(``_sink_writes``) and ``_sink_scan.new_sink_calls`` counts only the sink
+(``_sink_writes``) and ``judges.sink_scan.new_sink_calls`` counts only the sink
 calls it adds, from the hook's ``config.block`` / ``config.warn`` rows:
 
 - a new **block** sink (``pickle.loads``, ``torch.load(weights_only=False)``,
@@ -16,24 +16,24 @@ calls it adds, from the hook's ``config.block`` / ``config.warn`` rows:
 
 Frozen eval fixtures, secret paths and files outside the worktree are never
 judged. Bash-written sinks are K8's Stop rescan, through
-:func:`new_sink_calls` (re-exported here). ``on_error: ask``.
+:func:`new_sink_calls` (``judges.sink_scan``). ``on_error: ask``.
 """
 
 from __future__ import annotations
 
 import os
-import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.handlers._sink_scan import (
+from coding_agent_playbook.hook_runtime.handlers._sink_writes import SinkWrite, sink_writes
+from coding_agent_playbook.hook_runtime.judges.sink_scan import (
     SinkHit,
     SinkTable,
     new_sink_calls,
+    trusted_artifact_line,
 )
-from coding_agent_playbook.hook_runtime.handlers._sink_writes import SinkWrite, sink_writes
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 
 if TYPE_CHECKING:
@@ -42,23 +42,13 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
-__all__ = [
-    "CONFIG_SCHEMA",
-    "PRAGMA",
-    "SinkHit",
-    "SinkTable",
-    "deser_sink_guard",
-    "new_sink_calls",
-    "trusted_artifact_line",
-]
+__all__ = ["CONFIG_SCHEMA", "deser_sink_guard"]
 
 #: ``[hooks.ml-unsafe-deserialization-guard]`` may add rows, never remove the engine's.
 CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
     "block": ConfigKey("list", "extend"),
     "warn": ConfigKey("list", "extend"),
 }
-#: The escape: a provenance must follow the marker.
-PRAGMA: Final = re.compile(r"#\s*playbook:\s*trusted-artifact\s+\S")
 _ESCAPE: Final = (
     "For an artifact you trust, ask the user to confirm a "
     "`# playbook: trusted-artifact <provenance>` comment above the call."
@@ -114,23 +104,6 @@ def deser_sink_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult |
     return _result(judged, ctx)
 
 
-def trusted_artifact_line(text: str, line: int) -> str | None:
-    """The stripped line holding a trusted-artifact pragma for a call on ``line``, else ``None``.
-
-    The pragma counts on the call line itself or on the line above.
-
-    Example::
-
-        >>> trusted_artifact_line("# playbook: trusted-artifact s3://m/v3\\nm = load(p)\\n", 2)
-        '# playbook: trusted-artifact s3://m/v3'
-    """
-    lines = text.splitlines()
-    for number in (line, line - 1):
-        if 0 < number <= len(lines) and PRAGMA.search(lines[number - 1]):
-            return lines[number - 1].strip()
-    return None
-
-
 def _verdict(write: SinkWrite, hit: SinkHit, ctx: HandlerContext) -> Verdict:
     pragma = trusted_artifact_line(write.post, hit.line)
     if pragma is not None and _committed(write, pragma, ctx):
@@ -146,7 +119,7 @@ def _committed(write: SinkWrite, pragma: str, ctx: HandlerContext) -> bool:
         from coding_agent_playbook.hook_runtime.escape import pragma_at_head
 
         return pragma_at_head(ctx.git, write.rel, pragma)
-    from coding_agent_playbook.hook_runtime.handlers._notebook_cells import notebook_code
+    from coding_agent_playbook.hook_runtime.judges.notebook_cells import notebook_code
 
     blob = ctx.git.cat_head(write.rel)
     code = None if blob is None else notebook_code(blob.decode("utf-8", errors="replace"))

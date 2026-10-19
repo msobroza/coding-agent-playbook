@@ -45,11 +45,12 @@ _REQUIREMENT_NAME: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 #: that module and the docstring-only packages above it, never its siblings.
 STDLIB_LEAVES: Final = frozenset(
     {
-        "_atomic_io",
-        "_sentinel",
+        "artifacts.path_classes",
         "catalog.roots",
         "detector.pep503",
         "detector.pyproject_deps",
+        "generated_output.atomic_io",
+        "generated_output.sentinel",
         "lockfile",
         "security",
     }

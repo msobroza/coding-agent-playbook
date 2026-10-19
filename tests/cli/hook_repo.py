@@ -16,8 +16,8 @@ from __future__ import annotations
 import stat
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.commands._sync_hook_local import SyncHookDeps
 from coding_agent_playbook.security.trust import TrustStore
+from coding_agent_playbook.sync._machine_local import SyncHookDeps
 from tests.fakes import FakePinWriter
 from tests.hook_samples import write_hook
 

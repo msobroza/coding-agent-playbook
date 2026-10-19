@@ -35,8 +35,8 @@ from coding_agent_playbook.hook_runtime.routing import ASYNC_AUDIT_MODE, handler
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from coding_agent_playbook.hook_runtime._hook_records import MatcherSpec
-    from coding_agent_playbook.hook_runtime.config import GuardConfig, HookRecord
+    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, HookRecord
+    from coding_agent_playbook.hook_runtime.config.hook_records import MatcherSpec
     from coding_agent_playbook.hook_runtime.escape import EscapeHatches
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.policy import FailureClass, OnError

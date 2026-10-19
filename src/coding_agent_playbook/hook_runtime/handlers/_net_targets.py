@@ -2,7 +2,7 @@
 
 network-egress-guard judges every outbound command, where exfil-channel-guard
 (``_egress``) reads only the ways data is *sent*. Hosts are strings only, from
-``_hosts`` (no DNS: a lookup is itself egress):
+``judges.hosts`` (no DNS: a lookup is itself egress):
 
 - clients (``curl``, ``wget``, ``http``, ``nc``, ``ssh``, ``scp``, ``sftp``,
   ``rsync``, ``ftp``, ``telnet``): ``_egress.network_hosts``; a client whose
@@ -12,7 +12,7 @@ network-egress-guard judges every outbound command, where exfil-channel-guard
   then), else ``origin``; a local repository reaches nothing.
   ``git submodule add <url>`` reads the URL; ``git submodule update`` fetches
   from ``.gitmodules``, which is not read here (``unknown``);
-- installs (``_install_cmds.install_requests``): the hosts of the index and
+- installs (``judges.install_commands.install_requests``): the hosts of the index and
   direct-URL words; an install naming none uses the configured index, which a
   hook cannot see (``unknown``). Lockfile installs (``uv sync``, ``npm ci``)
   request nothing: the lockfile pins their sources;
@@ -30,11 +30,11 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook.hook_runtime._hosts import extract_hosts, url_host
 from coding_agent_playbook.hook_runtime.gitargv import parse_git
-from coding_agent_playbook.hook_runtime.handlers._cli_words import split_words, value_options
 from coding_agent_playbook.hook_runtime.handlers._egress import network_hosts
-from coding_agent_playbook.hook_runtime.handlers._install_cmds import install_requests
+from coding_agent_playbook.hook_runtime.judges.cli_words import split_words, value_options
+from coding_agent_playbook.hook_runtime.judges.hosts import extract_hosts, url_host
+from coding_agent_playbook.hook_runtime.judges.install_commands import install_requests
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence

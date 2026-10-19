@@ -87,8 +87,8 @@ def raw_pins(source: str, path: str, *, not_modules: Set[str] = frozenset()) -> 
 
     Example::
 
-        >>> raw_pins('assert "coding_agent_playbook.gate_scan" not in loaded', "t.py")
-        [RawPin(path='t.py', line=1, name='coding_agent_playbook.gate_scan')]
+        >>> raw_pins('assert "coding_agent_playbook.hook_runtime.judges.gate_weakening" not in loaded', "t.py")
+        [RawPin(path='t.py', line=1, name='coding_agent_playbook.hook_runtime.judges.gate_weakening')]
     """
     strings = [
         (node.lineno, node.value)
@@ -120,28 +120,28 @@ def test_tests_pin_engine_modules_through_engine_module() -> None:
 @pytest.mark.parametrize(
     "source",
     [
-        'assert "coding_agent_playbook.gate_scan" not in loaded',
-        '_GATE_SCAN = "coding_agent_playbook.gate_scan"',
-        'assert not {"yaml", "coding_agent_playbook.gate_scan"} & loaded',
-        'assert not [m for m in loaded if m.startswith("coding_agent_playbook.gate_scan")]',
-        '_H = "coding_agent_playbook.gate_scan."',
+        'assert "coding_agent_playbook.hook_runtime.judges.gate_weakening" not in loaded',
+        '_GATE_SCAN = "coding_agent_playbook.hook_runtime.judges.gate_weakening"',
+        'assert not {"yaml", "coding_agent_playbook.hook_runtime.judges.gate_weakening"} & loaded',
+        'assert not [m for m in loaded if m.startswith("coding_agent_playbook.hook_runtime.judges.gate_weakening")]',
+        '_H = "coding_agent_playbook.hook_runtime.judges.gate_weakening."',
     ],
     ids=["not-in", "module-constant", "set-display", "startswith", "startswith-dotted-prefix"],
 )
 def test_raw_pins_flags_each_vacuous_spelling(source: str) -> None:
     names = [pin.name.removesuffix(".") for pin in raw_pins(source, "t.py")]
 
-    assert names == ["coding_agent_playbook.gate_scan"]
+    assert names == ["coding_agent_playbook.hook_runtime.judges.gate_weakening"]
 
 
 @pytest.mark.parametrize(
     "source",
     [
-        '_GATE_SCAN = engine_module("coding_agent_playbook.gate_scan")',
+        '_GATE_SCAN = engine_module("coding_agent_playbook.hook_runtime.judges.gate_weakening")',
         'assert loaded == ["coding_agent_playbook.security", "coding_agent_playbook.security.pii"]',
         'assert engine == {"coding_agent_playbook.hook_runtime"}',
-        'assert "coding_agent_playbook.gate_scan" in loaded',
-        'run_python_probe("import coding_agent_playbook.gate_scan")',
+        'assert "coding_agent_playbook.hook_runtime.judges.gate_weakening" in loaded',
+        'run_python_probe("import coding_agent_playbook.hook_runtime.judges.gate_weakening")',
     ],
     ids=["wrapped", "equality-list", "equality-set", "positive-in", "probe-code"],
 )

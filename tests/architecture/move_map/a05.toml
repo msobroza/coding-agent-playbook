@@ -1,0 +1,59 @@
+# A5 (#118, specs/prT-package-layout.md 4.5, 4.9, 4.14, 4.19, 7.6): orchestrator.py is
+# split verbatim and deleted. The overlay merge goes to catalog/resolve.py,
+# engine_package_of beside FileSystemArtifactSource in catalog/source.py, the artifact
+# identity helpers to the stdlib leaf artifacts/identity.py (H11), adapter discovery to
+# adapters/registry.py, and SyncContext to validation/context.py (H4). A split has no
+# single [[module]] destination, so one [[names]] row per destination. Private names
+# no importer used (_hook_collision, _warn_deprecated_overlays, _resolve_hooks) are not
+# listed. _source_package became source_package_of by hand: catalog.resolve imports it
+# across packages (the script rewrites module paths, never names).
+
+[[names]]
+pr = "A5"
+old = "coding_agent_playbook.orchestrator"
+new = "coding_agent_playbook.catalog.resolve"
+names = ["Collision", "OverlayResolver"]
+
+[[names]]
+pr = "A5"
+old = "coding_agent_playbook.orchestrator"
+new = "coding_agent_playbook.catalog.source"
+names = ["engine_package_of"]
+
+[[names]]
+pr = "A5"
+old = "coding_agent_playbook.orchestrator"
+new = "coding_agent_playbook.artifacts.identity"
+names = ["artifact_id_of", "template_source"]
+
+[[names]]
+pr = "A5"
+old = "coding_agent_playbook.orchestrator"
+new = "coding_agent_playbook.adapters.registry"
+names = ["discover_adapters", "installed_output_locations"]
+
+# Not listed: detect, which orchestrator only bound by import (its home is
+# detector.facts). The monkeypatch target 'coding_agent_playbook.orchestrator.detect'
+# (5.3.6) was edited by hand to 'coding_agent_playbook.validation.context.detect', the
+# module whose SyncContext calls it.
+[[names]]
+pr = "A5"
+old = "coding_agent_playbook.orchestrator"
+new = "coding_agent_playbook.validation.context"
+names = ["SyncContext"]
+
+# The primary destination for docs that name the whole file.
+[[path]]
+pr = "A5"
+old = "orchestrator.py"
+new = "validation/context.py"
+
+[[path]]
+pr = "A5"
+old = "tests/unit/test_orchestrator.py"
+new = "tests/catalog/test_resolve.py"
+
+[[path]]
+pr = "A5"
+old = "tests/unit/test_orchestrator_hooks.py"
+new = "tests/catalog/test_resolve_hooks.py"

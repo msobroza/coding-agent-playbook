@@ -45,6 +45,7 @@ _CONTRACT_IDS: Final = (
     "grading-kernel",
     "command-independence",
     "private-modules",
+    "twins-use-judges",
 )
 #: The top-level packages of ADR 0002's target layout that sit in engine-layers.
 #: hook_runtime is a separate stack (hook-runtime-stack), never a layer.
@@ -211,3 +212,13 @@ def test_layer_names_reads_optional_and_sibling_layers(
     layers: list[str], expected: list[tuple[str, bool]]
 ) -> None:
     assert _layer_names(layers) == expected
+
+
+def test_twins_use_judges_forbids_only_direct_handler_imports() -> None:
+    contract = _contract("twins-use-judges")
+
+    assert contract["type"] == "forbidden"
+    assert contract["source_modules"] == [_TWINS]
+    assert contract["forbidden_modules"] == [f"{ENGINE}.hook_runtime.handlers"]
+    assert contract["allow_indirect_imports"] == "true"
+    assert "ignore_imports" not in contract

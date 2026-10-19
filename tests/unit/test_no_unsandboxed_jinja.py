@@ -31,9 +31,9 @@ import jinja2.exceptions
 import pytest
 from jinja2.sandbox import SandboxedEnvironment
 
-from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.evals.loader import load_eval_task_from_dir
 from coding_agent_playbook.evals.prompting import render_prompt
+from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import CORE_ROOT
 from tests.fakes import FakeGitClient
 

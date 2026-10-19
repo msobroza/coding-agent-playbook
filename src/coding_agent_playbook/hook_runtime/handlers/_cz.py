@@ -31,11 +31,11 @@ from coding_agent_playbook.hook_runtime.proc import ProcTimeout
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.hook_runtime.cutover import CzPlan
     from coding_agent_playbook.hook_runtime.deps import Clock, ProcPort
     from coding_agent_playbook.hook_runtime.event import RepoInfo
     from coding_agent_playbook.hook_runtime.git import GitPort
     from coding_agent_playbook.hook_runtime.gitargv import GitInvocation
+    from coding_agent_playbook.hook_runtime.judges.commit_cutover import CzPlan
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
 __all__ = [
@@ -69,7 +69,7 @@ def cz_runner(ctx: HandlerContext, repo: RepoInfo) -> CzRunner | PinProblem:
 
     Example: ``cz_runner(ctx, ev.repo)`` is ``"missing"`` before a sync pinned cz.
     """
-    from coding_agent_playbook.hook_runtime.pin import read_machine_pins
+    from coding_agent_playbook.hook_runtime.config.pin import read_machine_pins
 
     pins = read_machine_pins(git_dir=repo.git_dir)
     pin = None if pins is None else pins.tool("cz")

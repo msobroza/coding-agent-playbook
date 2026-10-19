@@ -1,6 +1,6 @@
 """Eval-task validator. Enforces the SPEC §15.2 structural rules.
 
-Run by :mod:`coding_agent_playbook.commands.validate` to catch authoring mistakes
+Run by :mod:`coding_agent_playbook.validation.checks` to catch authoring mistakes
 at commit time. Each violation is aggregated; callers print them in order and exit
 non-zero if the list is non-empty.
 
@@ -25,8 +25,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.types import Prompt
 
 #: The aggregate handle ``metric`` axis the multi-trial layer recognizes.
 _AGGREGATE_METRICS = frozenset({"pass_at_k", "pass_pow_k"})

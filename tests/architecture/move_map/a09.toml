@@ -1,0 +1,44 @@
+# A9 (#122, specs/prT-package-layout.md 4.9, 7.6): the harness adapters drop their
+# _adapter suffix (continue_ because continue is a keyword), and the skill-directory
+# writer and its prior-output ownership read move into the public adapters/skill_dirs/
+# package, because sync and validation import both.
+
+[[module]]
+pr = "A9"
+old = "coding_agent_playbook.adapters.agents_md_adapter"
+new = "coding_agent_playbook.adapters.agents_md"
+
+[[module]]
+pr = "A9"
+old = "coding_agent_playbook.adapters.continue_adapter"
+new = "coding_agent_playbook.adapters.continue_"
+
+[[module]]
+pr = "A9"
+old = "coding_agent_playbook.adapters.opencode_adapter"
+new = "coding_agent_playbook.adapters.opencode"
+
+[[module]]
+pr = "A9"
+old = "coding_agent_playbook.adapters.shared_skills_adapter"
+new = "coding_agent_playbook.adapters.shared_skills"
+
+[[module]]
+pr = "A9"
+old = "coding_agent_playbook.adapters._skill_writer"
+new = "coding_agent_playbook.adapters.skill_dirs.writer"
+
+[[module]]
+pr = "A9"
+old = "coding_agent_playbook.adapters._prior_output"
+new = "coding_agent_playbook.adapters.skill_dirs.ownership"
+
+[[path]]
+pr = "A9"
+old = "tests/unit/test_adapter_base.py"
+new = "tests/adapters/test_adapter_base.py"
+
+[[path]]
+pr = "A9"
+old = "tests/unit/test_where_guidance_buffer.py"
+new = "tests/adapters/test_where_guidance_buffer.py"

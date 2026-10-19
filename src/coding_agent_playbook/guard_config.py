@@ -15,7 +15,7 @@ hook-capable adapter is on:
 Both are committed and byte-compared by ``sync --check`` on every machine, so
 nothing here may read the machine: no absolute path, no ``sys.prefix``, no
 ``$HOME`` (§D.8.3). Absolute tool and interpreter paths are pins under the git
-dir instead (``hook_runtime.pin``). The §E.0.5 pack tables land with K5: the
+dir instead (``hook_runtime.config.pin``). The §E.0.5 pack tables land with K5: the
 ``sentinel`` and ``protected`` tables are built by ``_guard_config_protect``;
 ``control_plane`` is the runtime's own engine constant and ``precommit`` the
 playbook hook ids of the repo's ``.pre-commit-config.yaml``, scanned with the
@@ -89,9 +89,10 @@ from coding_agent_playbook._guard_config_verify import (
     prompts_table,
     repo_layout,
 )
-from coding_agent_playbook._output_io import copy_output, write_output_bytes
-from coding_agent_playbook._sentinel import SENTINEL
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
+from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS
+from coding_agent_playbook.generated_output.output_io import copy_output, write_output_bytes
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.hook_policy import HOOK_SCRIPTS_DIR
 from coding_agent_playbook.hook_registrations import (
     LAUNCHER_PATH,
@@ -100,13 +101,12 @@ from coding_agent_playbook.hook_registrations import (
     stop_gate_table,
 )
 from coding_agent_playbook.hook_runtime._shell_wrappers import DEFAULT_RUNNER_WRAPPERS
-from coding_agent_playbook.hook_runtime.config import GUARD_CONFIG_REL
+from coding_agent_playbook.hook_runtime.config.guard_config import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import CONTROL_PLANE
 from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
     playbook_precommit_ids,
 )
-from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
-from coding_agent_playbook.hook_runtime.handlers._notebook_check import NOTEBOOK_MAX_BYTES
+from coding_agent_playbook.hook_runtime.judges.notebook_check import NOTEBOOK_MAX_BYTES
 from coding_agent_playbook.hook_runtime.routing import ASYNC_AUDIT_MODE, ASYNC_EVENT, handler_route
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 
@@ -115,9 +115,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook._guard_config_skills import SkillGlobRow
+    from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
     from coding_agent_playbook.hook_policy import ResolvedHook
-    from coding_agent_playbook.types import Prompt
 
 __all__ = [
     "GUARD_CONFIG_PATH",
@@ -147,7 +147,7 @@ __all__ = [
 
 #: The one repo-relative path, shared with the runtime that reads it.
 GUARD_CONFIG_PATH: Final = GUARD_CONFIG_REL
-#: ``hook_runtime.config.SUPPORTED_SCHEMA_VERSIONS`` must include it.
+#: ``hook_runtime.config.guard_config.SUPPORTED_SCHEMA_VERSIONS`` must include it.
 GUARD_CONFIG_SCHEMA: Final = 1
 #: guard_config.json plus the copied scripts; protected as a whole tree (§E.1).
 HOOKS_OUTPUT_DIR: Final = ".coding-agent-playbook/hooks/"
@@ -252,7 +252,7 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
     """The ``guard_config.json`` document (§D.8.2): envelope, hooks, deadlines, K3/K5 tables.
 
     ``allow_code_from`` and ``state_ttl_days`` are the runtime keys beyond the
-    §D.8.2 table that ``hook_runtime.config`` reads (it cannot read ``[hooks]``);
+    §D.8.2 table that ``hook_runtime.config.guard_config`` reads (it cannot read ``[hooks]``);
     ``sentinel``, ``protected``, ``control_plane``, ``precommit``, ``facts``,
     ``applicability``, ``eval``, ``auto_sync``, ``stop_gate``, ``prompts``,
     ``ruff``, ``notebooks``, the §E.4 secret tables, ``allowlists`` and ``network`` are

@@ -19,6 +19,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.commands import eval as _eval
+from coding_agent_playbook.evals import registry as _registry
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -258,7 +259,7 @@ def test_run_judge_available_is_passed_to_runner(
         captured["fail_fast"] = fail_fast
         return real_run_task(self, task, scratch, judge=judge, samples=samples, fail_fast=fail_fast)
 
-    monkeypatch.setattr(_eval, "_load_judge_class", lambda name: _AvailableStub)
+    monkeypatch.setattr(_registry, "load_judge_class", lambda name: _AvailableStub)
     monkeypatch.setattr(HarnessRunner, "run_task", _spy)
 
     args = _ns(tmp_path, id_=_SHIPPED_TASK, run=True, runner="fake", judge="llm", samples=4)
@@ -349,7 +350,7 @@ def test_run_failing_gate_exits_1(
             super().__init__(write_files({"mod.py": worse}))
 
     # Patch runner discovery so ``--runner fake`` yields our worsening runner.
-    monkeypatch.setattr(_eval, "_load_runner_class", lambda name: _WorseRunner)
+    monkeypatch.setattr(_registry, "load_runner_class", lambda name: _WorseRunner)
 
     # Point loading at the synthetic task dir.
     args = _ns(tmp_path, id_="synthetic", run=True, runner="fake")
@@ -461,7 +462,7 @@ def test_run_judge_error_exits_2_not_a_verdict(
 ) -> None:
     """A judge that cannot score makes the task unscorable: exit 2, no report."""
     _seed(tmp_path, make_synthetic_repo)
-    monkeypatch.setattr(_eval, "_load_judge_class", lambda name: _available_judge(None))
+    monkeypatch.setattr(_registry, "load_judge_class", lambda name: _available_judge(None))
     rc = _eval.run(_ns(tmp_path, id_=_REVIEW_TASK, run=True, runner="fake", judge="llm"))
     captured = capsys.readouterr()
     assert rc == 2
@@ -492,7 +493,7 @@ def test_run_with_a_judge_labels_scores_uncalibrated(
 ) -> None:
     """Judged scores carry an "uncalibrated" note until SPEC §19 Q12 lands."""
     _seed(tmp_path, make_synthetic_repo)
-    monkeypatch.setattr(_eval, "_load_judge_class", lambda name: _available_judge(0.9))
+    monkeypatch.setattr(_registry, "load_judge_class", lambda name: _available_judge(0.9))
     rc = _eval.run(_ns(tmp_path, id_=_REVIEW_TASK, run=True, runner="fake", judge="llm"))
     out = capsys.readouterr().out
     assert rc == 0
@@ -507,6 +508,6 @@ def test_run_json_reports_whether_judged_scores_are_uncalibrated(
     _eval.run(_ns(tmp_path, id_=_REVIEW_TASK, run=True, runner="fake", fmt="json"))
     assert json.loads(capsys.readouterr().out)["uncalibrated_judge"] is False
 
-    monkeypatch.setattr(_eval, "_load_judge_class", lambda name: _available_judge(0.9))
+    monkeypatch.setattr(_registry, "load_judge_class", lambda name: _available_judge(0.9))
     _eval.run(_ns(tmp_path, id_=_REVIEW_TASK, run=True, runner="fake", fmt="json", judge="llm"))
     assert json.loads(capsys.readouterr().out)["uncalibrated_judge"] is True

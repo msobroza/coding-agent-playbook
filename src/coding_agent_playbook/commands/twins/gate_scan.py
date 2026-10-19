@@ -1,6 +1,6 @@
 """``playbook gate-scan`` — gate-weakening-guard's off-workstation twin (specs/prK-hook-pack.md §E.2).
 
-Scans a commit range with the same :func:`coding_agent_playbook.gate_scan.scan`
+Scans a commit range with the same :func:`coding_agent_playbook.hook_runtime.judges.gate_weakening.scan`
 the ``gate-integrity`` Stop stage uses, so CI and the hook share one policy:
 
 - ``--range A..B`` diffs ``A`` to ``B``; ``A...B`` diffs their merge base to
@@ -19,12 +19,12 @@ error, an unresolvable base, a malformed policy table, or a git failure.
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands.twins._git_scope import ScanRange, open_git, resolve_range
-from coding_agent_playbook.gate_scan import (
+from coding_agent_playbook.commands.twins._runner import TwinOutcome, run_twin
+from coding_agent_playbook.config.files import CONFIG_FILENAME, CommittedDocument
+from coding_agent_playbook.hook_runtime.judges.gate_weakening import (
     ConfigPair,
     ScanPolicy,
     ScanReport,
@@ -32,16 +32,15 @@ from coding_agent_playbook.gate_scan import (
     policy_from_table,
     scan,
 )
-from coding_agent_playbook.hook_runtime.git import GitError
 
 if TYPE_CHECKING:
     import argparse
+    from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.git import GitPort
 
 __all__ = ["load_policy", "run", "scan_range"]
 
-CONFIG_FILE: Final = ".coding-agent-playbook.toml"
 HOOK_ID: Final = "gate-weakening-guard"
 _FIX_HINT: Final = "Fix the root cause, or justify each line inline with a trailing `# <reason>`."
 
@@ -54,16 +53,15 @@ def run(args: argparse.Namespace, *, git: GitPort | None = None) -> int:
         >>> run(build_parser().parse_args(["gate-scan", "--range", "HEAD~1..HEAD"]))  # doctest: +SKIP
         1
     """
-    repo_root = Path(args.repo_root or ".").resolve()
-    try:
-        port = git if git is not None else open_git(repo_root)
-        span = resolve_range(port, args.rev_range)
-        report = scan_range(port, span, load_policy(port, span.base, repo_root))
-    except (GitError, ValueError) as exc:  # GitBaseError and policy errors are ValueErrors
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-    print(_json(report, span) if args.format == "json" else _text(report, span))
-    return report.exit_code
+    return run_twin(args.repo_root, lambda root: _outcome(args, root, git))
+
+
+def _outcome(args: argparse.Namespace, repo_root: Path, git: GitPort | None) -> TwinOutcome:
+    port = git if git is not None else open_git(repo_root)
+    span = resolve_range(port, args.rev_range)
+    report = scan_range(port, span, load_policy(port, span.base, repo_root))
+    text = _json(report, span) if args.format == "json" else _text(report, span)
+    return TwinOutcome(report.exit_code, text)
 
 
 def load_policy(git: GitPort, base: str, repo_root: Path) -> ScanPolicy:
@@ -75,8 +73,9 @@ def load_policy(git: GitPort, base: str, repo_root: Path) -> ScanPolicy:
         ('src',)
     """
     roots = ("src",) if (repo_root / "src").is_dir() else ("",)
-    table = _hook_table(git.show(base, CONFIG_FILE))
-    return policy_from_table(table, ScanPolicy(source_roots=roots))
+    raw = git.show(base, CONFIG_FILENAME)
+    committed = CommittedDocument.decode(raw, where=f"{CONFIG_FILENAME} at {base}")
+    return policy_from_table(committed.table("hooks", HOOK_ID), ScanPolicy(source_roots=roots))
 
 
 def scan_range(git: GitPort, span: ScanRange, policy: ScanPolicy) -> ScanReport:
@@ -94,23 +93,6 @@ def scan_range(git: GitPort, span: ScanRange, policy: ScanPolicy) -> ScanReport:
         if is_config_path(path)
     ]
     return scan(diff.added, diff.removed, pairs, policy)
-
-
-def _hook_table(raw: bytes | None) -> dict[str, object]:
-    """The ``[hooks.gate-weakening-guard]`` table of a committed config, ``{}`` when absent."""
-    import tomllib
-
-    if raw is None:
-        return {}
-    try:
-        doc = tomllib.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
-        raise ValueError(f"{CONFIG_FILE} at the range base is not valid TOML: {exc}") from None
-    hooks = doc.get("hooks", {})
-    table = hooks.get(HOOK_ID, {}) if isinstance(hooks, dict) else {}
-    if not isinstance(table, dict):
-        raise ValueError(f"[hooks.{HOOK_ID}] = {table!r} in {CONFIG_FILE}: expected a table")
-    return table
 
 
 def _decoded(raw: bytes | None) -> str | None:

@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters.claude_code.settings.managed_merge import LAUNCHER_TOKEN
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hook_registrations import (
     LAUNCHER_PATH,
     claude_command,

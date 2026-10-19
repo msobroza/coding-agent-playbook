@@ -2,7 +2,7 @@
 
 The authoritative twin of commit-message-convention. It reads ``git log
 <merge base>..HEAD`` with parents and committer dates, keeps the commits on or
-after ``[hooks.commit_convention] cutover_date`` (``hook_runtime.cutover``, the
+after ``[hooks.commit_convention] cutover_date`` (``hook_runtime.judges.commit_cutover``, the
 plan the hook's push scan uses) and runs ``cz`` directly (D-Q2: no
 ``playbook`` wrapper). One ``--rev-range`` covers exactly the kept commits or
 is not used:
@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands.twins.policy import cutover_date_value
-from coding_agent_playbook.hook_runtime.cutover import parse_cutover, plan_cz_checks
+from coding_agent_playbook.hook_runtime.judges.commit_cutover import parse_cutover, plan_cz_checks
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping

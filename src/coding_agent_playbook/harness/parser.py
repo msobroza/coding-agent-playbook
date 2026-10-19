@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.harness.leaf_detectors import (
     LEAF_TYPE_OPAQUE,
     leaf_type,
@@ -35,7 +36,6 @@ from coding_agent_playbook.harness.models import (
     ScriptFile,
     SkillLeaf,
 )
-from coding_agent_playbook.types import split_frontmatter
 
 if TYPE_CHECKING:
     from pathlib import Path

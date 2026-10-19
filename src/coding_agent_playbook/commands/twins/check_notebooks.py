@@ -5,7 +5,7 @@ stdlib check is what the ``playbook-notebooks`` pre-commit entry
 (``types: [jupyter]``) runs: every cell of each notebook named (pre-commit
 passes the staged ones), or of every tracked ``.ipynb`` file without PATHS,
 must keep no outputs. The check is the hook's own
-(``_notebook_check.check_cells``), with a larger parse cap: a CLI may take
+(``judges.notebook_check.check_cells``), with a larger parse cap: a CLI may take
 the time a hook may not.
 
 Exit codes: 0 clean, 1 a notebook keeps outputs or is not valid notebook
@@ -14,14 +14,13 @@ JSON, 2 a path that does not exist or no git repository to list.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands.twins._git_scope import open_git
+from coding_agent_playbook.commands.twins._runner import TwinOutcome, run_twin
 from coding_agent_playbook.hook_runtime.caps import quote_data
-from coding_agent_playbook.hook_runtime.git import GitError
-from coding_agent_playbook.hook_runtime.handlers._notebook_check import (
+from coding_agent_playbook.hook_runtime.judges.notebook_check import (
     NotebookLimits,
     Oversized,
     check_cells,
@@ -47,19 +46,16 @@ def run(args: argparse.Namespace) -> int:
         >>> run(build_parser().parse_args(["check-notebooks", "nb/a.ipynb"]))  # doctest: +SKIP
         1
     """
-    root = Path(args.repo_root or ".").resolve()
-    try:
-        paths = [Path(p) for p in args.paths] if args.paths else tracked_notebooks(root)
-    except (GitError, ValueError) as exc:  # GitBaseError is a ValueError
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
+    return run_twin(args.repo_root, lambda root: _outcome(args.paths, root))
+
+
+def _outcome(named: list[str], root: Path) -> TwinOutcome:
+    paths = [Path(p) for p in named] if named else tracked_notebooks(root)
     missing = [str(path) for path in paths if not _resolved(path, root).is_file()]
     if missing:
-        print(f"error: no such notebook: {', '.join(missing)}", file=sys.stderr)
-        return 2
+        raise ValueError(f"no such notebook: {', '.join(missing)}")
     lines = [line for path in paths if (line := check_notebook_file(path, root)) is not None]
-    print("\n".join([*lines, _summary(len(lines), len(paths))]))
-    return 1 if lines else 0
+    return TwinOutcome(1 if lines else 0, "\n".join([*lines, _summary(len(lines), len(paths))]))
 
 
 def tracked_notebooks(root: Path) -> list[Path]:

@@ -7,7 +7,7 @@ location) — the only record for files without a sentinel, such as copied skill
 scripts. Either makes ``--check`` exit 1 with the hint "run 'playbook sync' to
 remove", and that hint is always true: the next sync deletes it and the check
 passes. Leftovers the policy keeps (edited, tracked) are owned by design and
-are not drift (``test_sync_orphans.py``).
+are not drift (``tests/sync/test_leftovers.py``).
 
 The check renders into an *empty* scratch directory and reads every input in
 place, so nothing from the working tree — VCS, environments, secrets, links
@@ -27,14 +27,14 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook._sentinel import sentinel_line
-from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
-from coding_agent_playbook.commands import _sync_output
-from coding_agent_playbook.commands import sync as _sync
+from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.detector.facts import detect
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.lockfile.model import LockEntry, compute_hash
 from coding_agent_playbook.security.files import is_secret_file
+from coding_agent_playbook.sync import _output_policy as _sync_output
+from coding_agent_playbook.sync import pipeline as _sync
 from tests.conftest import _DEFAULT_CONFIG
 from tests.fakes import FakeGitClient
 
@@ -455,7 +455,7 @@ def test_check_facts_come_from_the_real_repo(
         detected.append(root)
         return detect(root)
 
-    monkeypatch.setattr("coding_agent_playbook.orchestrator.detect", spy_detect)
+    monkeypatch.setattr("coding_agent_playbook.validation.context.detect", spy_detect)
     rc, out = _check(repo, capsys)
     assert rc == 0, out
     assert detected == [repo]

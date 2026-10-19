@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.catalog.roots import bundled_plugins
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
-from coding_agent_playbook.types import split_frontmatter
 from tests.plugins.superpowers_expectations import (
     EXPECTED_LICENSE_COPIES,
     EXPECTED_REFERENCE_FILES,
@@ -30,7 +30,7 @@ from tests.plugins.superpowers_expectations import (
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.types import Skill
+    from coding_agent_playbook.artifacts.skill import Skill
 
 pytestmark = pytest.mark.catalog
 

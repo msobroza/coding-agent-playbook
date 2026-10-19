@@ -7,17 +7,13 @@ from typing import TYPE_CHECKING, Any
 import pytest
 import yaml
 
-from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
-from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
+from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
+from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
+from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from coding_agent_playbook.artifacts.skill import Skill
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.prompt_rule_delivery import SkillReference
-from coding_agent_playbook.renderer import SENTINEL
-from coding_agent_playbook.types import (
-    Prompt,
-    PromptFrontmatter,
-    Rule,
-    RuleFrontmatter,
-    Skill,
-)
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -31,7 +31,7 @@ from coding_agent_playbook.security.patterns import SECRET_GLOB_EXEMPT, SECRET_P
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from coding_agent_playbook.hook_runtime.config import GuardConfig
+    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.security.paths import PathVerdict
     from coding_agent_playbook.security.secrets import SecretFinding, SecretRule

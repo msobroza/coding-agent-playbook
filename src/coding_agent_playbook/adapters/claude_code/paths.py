@@ -9,7 +9,7 @@ opens a file under ``.claude/`` (once per uncompacted session, SPEC §10.6), so
 the rule sections, hook advisories and heartbeat line moved to
 :data:`CLAUDE_RULES_PATH`, which neither OpenCode v1.19.3 nor v2 (dev 24c7f7a)
 discovers by default, and :data:`CLAUDE_MD_PATH` became a rule-free stub (the
-full rationale is in :mod:`.claude_code_adapter`).
+full rationale is in :mod:`.adapter`).
 
 Example::
 

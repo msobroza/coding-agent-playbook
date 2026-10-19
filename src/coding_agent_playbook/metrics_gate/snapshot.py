@@ -18,8 +18,8 @@ import json
 import math
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook._atomic_io import atomic_write_bytes
 from coding_agent_playbook.evaluators.types import Measurement
+from coding_agent_playbook.generated_output.atomic_io import atomic_write_bytes
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

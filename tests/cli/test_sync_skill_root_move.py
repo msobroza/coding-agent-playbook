@@ -24,9 +24,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.config.files import FileSystemStateSource
-from coding_agent_playbook.gitignore import BLOCK_END, BLOCK_START, apply_managed_block
+from coding_agent_playbook.generated_output.gitignore import (
+    BLOCK_END,
+    BLOCK_START,
+    apply_managed_block,
+)
+from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import core_skill_ids
 from tests.cli.test_sync_skills import _lock_paths, _skill_tree, _write_repo_local_skill
 from tests.fakes import FakeGitClient

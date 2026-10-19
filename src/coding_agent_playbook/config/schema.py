@@ -25,7 +25,7 @@ class ConfigError(ValueError):
     """A config file the engine refuses to load (SPEC §7.1).
 
     Raised for a file ``tomllib`` cannot read (bad syntax, not UTF-8, nested too
-    deeply; ``FileSystemStateSource``) and for content that parses as TOML in a
+    deeply; ``config.files``) and for content that parses as TOML in a
     shape the engine is known to misread: the enabled-list mistakes
     :func:`check_enabled_keys` catches, a table ``Config`` reads that is not one
     (:func:`check_config_tables`), a malformed ``[output]``
@@ -253,7 +253,7 @@ def check_config_tables(data: Mapping[str, object], *, source: str) -> None:
     as a ``TypeError``/``AttributeError``/``ValueError`` traceback (exit 1), or to
     pass unseen while the other file's table replaced it in the §7.2 merge, until
     ``init``/``check --refresh`` read the committed file alone and crashed.
-    ``FileSystemStateSource`` runs it on each file before the merge (through
+    ``ConfigFiles`` runs it on each file before the merge (through
     ``config.model.check_config_file``, which also checks ``[output] commit``), so the
     error names the file at fault. Every non-table is listed in one error.
 

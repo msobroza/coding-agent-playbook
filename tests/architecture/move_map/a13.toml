@@ -1,0 +1,283 @@
+# A13 (#126, specs/prT-package-layout.md 5.2.2, 7.6): the hook-pack tests leave
+# tests/hooks/ for the pack directories under tests/hook_runtime/handlers/, so that
+# tests/hooks/ belongs to the sync-time hooks/ package (H19). Module entries, not
+# [[path]] ones: other test trees import pack_repo, stop_kit and ruff_kit, and each
+# module entry also derives the file's path entry for the docs.
+
+# The directory itself, for the docs that name tests/hooks/. A [[path]] entry, not a
+# package [[module]] one: GC-2 and A17 put the sync-time hooks/ tests back under the
+# tests.hooks package, and those module names must never resolve to handlers/.
+[[path]]
+pr = "A13"
+old = "tests/hooks/"
+new = "tests/hook_runtime/handlers/"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.conftest"
+new = "tests.hook_runtime.handlers.conftest"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.pack_repo"
+new = "tests.hook_runtime.handlers.pack_repo"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.ruff_kit"
+new = "tests.hook_runtime.handlers.ruff_kit"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.stop_kit"
+new = "tests.hook_runtime.handlers.stop_kit"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_overlay_activation"
+new = "tests.hook_runtime.handlers.test_overlay_activation"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_hook_summaries"
+new = "tests.hook_runtime.handlers.test_hook_summaries"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_command_convention_guard"
+new = "tests.hook_runtime.handlers.safety.test_command_convention_guard"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_commit_message_convention"
+new = "tests.hook_runtime.handlers.safety.test_commit_message_convention"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_dependency_allowlist_guard"
+new = "tests.hook_runtime.handlers.safety.test_dependency_allowlist_guard"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_destructive_command_guard"
+new = "tests.hook_runtime.handlers.safety.test_destructive_command_guard"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_exfil_channel_guard"
+new = "tests.hook_runtime.handlers.safety.test_exfil_channel_guard"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_git_commit_push_policy_guard"
+new = "tests.hook_runtime.handlers.safety.test_git_commit_push_policy_guard"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_network_egress_guard"
+new = "tests.hook_runtime.handlers.safety.test_network_egress_guard"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_pii_prompt_guard"
+new = "tests.hook_runtime.handlers.safety.test_pii_prompt_guard"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_secret_content_guard"
+new = "tests.hook_runtime.handlers.safety.test_secret_content_guard"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_secrets_path_guard"
+new = "tests.hook_runtime.handlers.safety.test_secrets_path_guard"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_sensitive_data_read_guard"
+new = "tests.hook_runtime.handlers.safety.test_sensitive_data_read_guard"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_stop_diff_sweep"
+new = "tests.hook_runtime.handlers.safety.test_stop_diff_sweep"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_taint_escalation"
+new = "tests.hook_runtime.handlers.safety.test_taint_escalation"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_wrapper_prefixes_env"
+new = "tests.hook_runtime.handlers.safety.test_wrapper_prefixes_env"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_pack_safety_manifest"
+new = "tests.hook_runtime.handlers.safety.test_manifest"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_block_precommit_bypass"
+new = "tests.hook_runtime.handlers.verify.test_block_precommit_bypass"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_clean_code_metrics_nonregression"
+new = "tests.hook_runtime.handlers.verify.test_clean_code_metrics_nonregression"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_coverage_diff_gate"
+new = "tests.hook_runtime.handlers.verify.test_coverage_diff_gate"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_docstring_nonregression"
+new = "tests.hook_runtime.handlers.verify.test_docstring_nonregression"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_gate_weakening_guard"
+new = "tests.hook_runtime.handlers.verify.test_gate_weakening_guard"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_prompt_output_contract_on_stop"
+new = "tests.hook_runtime.handlers.verify.test_prompt_output_contract_on_stop"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_stop_ci_parity_gate"
+new = "tests.hook_runtime.handlers.verify.test_stop_ci_parity_gate"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_stop_ci_parity_gate_exec"
+new = "tests.hook_runtime.handlers.verify.test_stop_ci_parity_gate_exec"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_subagent_stop_verify"
+new = "tests.hook_runtime.handlers.verify.test_subagent_stop_verify"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_tests_with_source_nudge"
+new = "tests.hook_runtime.handlers.verify.test_tests_with_source_nudge"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_pack_verify_manifest"
+new = "tests.hook_runtime.handlers.verify.test_manifest"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_local_audit_log"
+new = "tests.hook_runtime.handlers.audit.test_local_audit_log"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_precompact_checkpoint"
+new = "tests.hook_runtime.handlers.audit.test_precompact_checkpoint"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_pack_audit_manifest"
+new = "tests.hook_runtime.handlers.audit.test_manifest"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_control_plane_guard"
+new = "tests.hook_runtime.handlers.protect.test_control_plane_guard"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_control_plane_verdicts"
+new = "tests.hook_runtime.handlers.protect.test_control_plane_verdicts"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_eval_task_authoring_lint"
+new = "tests.hook_runtime.handlers.protect.test_eval_task_authoring_lint"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_guard_eval_fixtures"
+new = "tests.hook_runtime.handlers.protect.test_guard_eval_fixtures"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_guard_generated_outputs"
+new = "tests.hook_runtime.handlers.protect.test_guard_generated_outputs"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_resync_on_detector_input_change"
+new = "tests.hook_runtime.handlers.protect.test_resync_on_detector_input_change"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_session_start_playbook_briefing"
+new = "tests.hook_runtime.handlers.protect.test_session_start_playbook_briefing"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_stop_drift_and_orphan_gate"
+new = "tests.hook_runtime.handlers.protect.test_stop_drift_and_orphan_gate"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_validate_then_sync_on_canonical_edit"
+new = "tests.hook_runtime.handlers.protect.test_validate_then_sync_on_canonical_edit"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_pack_protect_manifest"
+new = "tests.hook_runtime.handlers.protect.test_manifest"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_error_handling_lint_feedback"
+new = "tests.hook_runtime.handlers.feedback.test_error_handling_lint_feedback"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_ml_unsafe_deserialization_guard"
+new = "tests.hook_runtime.handlers.feedback.test_ml_unsafe_deserialization_guard"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_notebook_output_hygiene"
+new = "tests.hook_runtime.handlers.feedback.test_notebook_output_hygiene"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_prompt_write_scope_guard"
+new = "tests.hook_runtime.handlers.feedback.test_prompt_write_scope_guard"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_pytest_conventions_feedback"
+new = "tests.hook_runtime.handlers.feedback.test_pytest_conventions_feedback"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_toolchain_missing_hint"
+new = "tests.hook_runtime.handlers.feedback.test_toolchain_missing_hint"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_typing_lint_feedback"
+new = "tests.hook_runtime.handlers.feedback.test_typing_lint_feedback"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_ruff_feedback"
+new = "tests.hook_runtime.handlers.feedback.test_ruff_feedback"
+
+[[module]]
+pr = "A13"
+old = "tests.hooks.test_skill_nudge"
+new = "tests.hook_runtime.handlers.feedback.test_skill_nudge"

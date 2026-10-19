@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.config.tables.hooks import (
     GuardrailsConfig,
     HooksConfig,
@@ -34,13 +35,13 @@ from coding_agent_playbook.hook_policy import (
     effective_applies_if,
     resolve_effective_hooks,
 )
-from coding_agent_playbook.types import Hook, Rule, RuleFrontmatter
 from tests.fakes import FakeHandlerSchemas
 from tests.hook_samples import sample_hook
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.detector.facts import Facts
 
 OVERLAY = "acme_rules"

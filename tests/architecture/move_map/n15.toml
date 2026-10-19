@@ -1,0 +1,29 @@
+# N15 (#96, specs/prT-package-layout.md 7.4): the gate-weakening judge moves into
+# hook_runtime/judges/; the eval path classes and gate_scan.TEST_PATH_GLOBS move to the
+# stdlib leaf artifacts/path_classes.py.
+
+[[module]]
+pr = "N15"
+old = "coding_agent_playbook.gate_scan"
+new = "coding_agent_playbook.hook_runtime.judges.gate_weakening"
+
+[[module]]
+pr = "N15"
+old = "coding_agent_playbook._gate_scan_files"
+new = "coding_agent_playbook.hook_runtime.judges._gate_weakening_files"
+
+[[module]]
+pr = "N15"
+old = "coding_agent_playbook.hook_runtime.handlers._eval_paths"
+new = "coding_agent_playbook.artifacts.path_classes"
+
+[[names]]
+pr = "N15"
+old = "coding_agent_playbook.gate_scan"
+new = "coding_agent_playbook.artifacts.path_classes"
+names = ["TEST_PATH_GLOBS"]
+
+[[path]]
+pr = "N15"
+old = "tests/unit/test_gate_scan.py"
+new = "tests/hook_runtime/judges/test_gate_weakening.py"

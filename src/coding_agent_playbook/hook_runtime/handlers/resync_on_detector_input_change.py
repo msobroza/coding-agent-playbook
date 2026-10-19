@@ -16,7 +16,7 @@ row), re-run ``detect()`` and evaluate every ``applicability`` row:
 
 With ``[hooks] auto_sync`` an add-only change runs ``playbook sync`` as a child
 process; a change that would turn anything off never syncs. It builds no
-``SyncContext`` (``orchestrator`` imports jinja2). No debounce: a debounced
+``SyncContext`` (``validation.context`` imports yaml). No debounce: a debounced
 detector check would miss a dependency added within 2 s for good (a hook has
 no trailing edge), and the comparison alone costs about 5 ms.
 
@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from coding_agent_playbook.detector.facts import Facts
-    from coding_agent_playbook.hook_runtime.config import GuardConfig
+    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.registry import HandlerContext

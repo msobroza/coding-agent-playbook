@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.evals.judge import StubJudge
 from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
@@ -43,7 +44,6 @@ from coding_agent_playbook.evals.run.harness_runner import capture, materialize
 from coding_agent_playbook.evals.run.scoring import score
 from coding_agent_playbook.evals.task import Verdict
 from coding_agent_playbook.evals.validator import validate_tasks
-from coding_agent_playbook.types import Prompt
 from tests._catalog import CORE_ROOT
 from tests.integration.ccv_answers import ALL_CLASSES_ANSWER
 

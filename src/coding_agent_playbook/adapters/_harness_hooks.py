@@ -17,17 +17,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook._output_io import write_output_text
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
+from coding_agent_playbook.artifacts.frontmatter import format_frontmatter
+from coding_agent_playbook.generated_output.output_io import write_output_text
 from coding_agent_playbook.harness import emitter, manifest
-from coding_agent_playbook.types import format_frontmatter
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.hook import Hook
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.hook_policy import ResolvedHook
-    from coding_agent_playbook.types import Hook, Rule
 
 __all__ = [
     "HOOKS_SIDECAR",

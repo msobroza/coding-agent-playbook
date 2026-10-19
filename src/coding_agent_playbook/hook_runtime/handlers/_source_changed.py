@@ -6,8 +6,8 @@ eval-task-authoring-lint share:
 - the 2 s per-session debounce (``SessionState.debounce``, :data:`DEBOUNCE_S`);
 - :func:`run_playbook`: ``playbook <args>`` as a **child process** on the
   dispatcher's own interpreter (the pinned one the launcher started), never an
-  in-process import: ``commands.validate``, ``commands.eval`` and the
-  orchestrator import jinja2, which L3 keeps out of the dispatcher (OQ-27).
+  in-process import: ``commands.validate`` and ``commands.eval`` import
+  jinja2, which L3 keeps out of the dispatcher (OQ-27).
   The child gets at most 8 s, below the hooks' ``timeout: 10``, and never
   more than the event deadline leaves;
 - :func:`fail_lines`: the ``FAIL <path>: <msg>`` lines of ``playbook
@@ -30,7 +30,7 @@ from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from coding_agent_playbook.hook_runtime.config import GuardConfig
+    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.proc import ProcResult
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
