@@ -505,7 +505,7 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
                 "config",
                 "evals",
                 "evaluators",
-                "metrics_config",
+                "metrics_gate",
                 "toml_writer",
                 "types",
             )

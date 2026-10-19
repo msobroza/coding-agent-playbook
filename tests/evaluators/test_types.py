@@ -11,9 +11,7 @@ from coding_agent_playbook.evaluators.types import (
     CheckResult,
     EvalContext,
     EvaluationReport,
-    GradePolicy,
     Measurement,
-    MetricConfig,
     RegressionPolicy,
     ResolvedPolicy,
     ScopeDetail,
@@ -67,22 +65,6 @@ def test_evaluation_report_defaults_and_mutable() -> None:
     # EvaluationReport is mutable (not frozen) per §E.
     report.passed = False
     assert report.passed is False
-
-
-def test_metric_config_defaults() -> None:
-    cfg = MetricConfig()
-    assert cfg.mode == "regression"
-    assert cfg.fail_on_breach is True
-    assert cfg.strict is False
-    assert cfg.thresholds == {}
-    assert cfg.regression == {}
-    assert cfg.weights == {}
-
-
-def test_metric_config_satisfies_grade_policy_protocol() -> None:
-    cfg = MetricConfig()
-    policy: GradePolicy = cfg  # structural check at type+runtime level
-    assert policy.mode == "regression"
 
 
 def test_resolved_policy_carries_effective_values() -> None:

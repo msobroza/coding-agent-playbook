@@ -2,6 +2,7 @@
 id: pii-prompt-guard
 name: PII prompt guard
 description: Block a prompt carrying checksum-validated personal data (IBANs, card numbers, national or customer ids) before it reaches the model; the user sees each hit's category, offset and masked form, never the value. Inert in the engine; a regulated overlay activates it.
+summary: Do not paste personal data (IBANs, card numbers, national ids) into prompts; use a placeholder instead.
 version: 1
 tier: overlay
 enabled: true

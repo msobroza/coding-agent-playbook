@@ -574,7 +574,7 @@ def test_reference_probe_writes_the_guardrails_skill_to_opencode_and_agents_root
     frontmatter, body = split_frontmatter(copies[0].read_text(encoding="utf-8"))
     assert frontmatter == _authored(GUARDRAILS_SKILL_ID)[0]
     # Counted against Continue's rule files, which D6 keeps as they are, not against
-    # AGENTS.md's Guardrails blocks, which ticket 17 turns into one line per hook.
+    # AGENTS.md's Guardrails section, which holds one line per hook (D6).
     advised = _continue_guardrail_hook_ids(reference_probe_repo)
     assert advised, "the probe enables continue, so each on hook with an advisory has a file"
     assert _GUARDRAIL_SECTION.findall(body) == advised, "one skill section per advised hook"
