@@ -154,9 +154,9 @@ reads this tree.
    section in the `playbook-guardrails` skill and Continue's
    `30-guardrail-<id>.md`, while the `summary` is its one line in `AGENTS.md`
    (and in the Claude Code rules file when Claude Code cannot run the hook).
-   `tests/hooks/test_hook_summaries.py` fails when a core hook with a body has
+   `tests/hook_runtime/handlers/test_hook_summaries.py` fails when a core hook with a body has
    no `summary`.
-4. The gates under `tests/hooks/` pin the shipped hooks: one test module per
+4. The gates under `tests/hook_runtime/handlers/` pin the shipped hooks: one test module per
    hook, plus the `test_pack_*_manifest.py` rows. Update them in the same change.
 
 The Claude Code launcher and the OpenCode plugin that run the hooks are engine

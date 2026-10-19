@@ -31,7 +31,7 @@ from coding_agent_playbook.security.trust import TrustStore
 from coding_agent_playbook.validation.context import SyncContext
 from tests.cli.hook_repo import GUARD_CONFIG, SCRIPT, hook_deps, make_hook_repo, never_ask
 from tests.fakes import FakeGitClient, FakePinWriter
-from tests.hooks.pack_repo import resolve_engine_hooks
+from tests.hook_runtime.handlers.pack_repo import resolve_engine_hooks
 
 if TYPE_CHECKING:
     from collections.abc import Callable
