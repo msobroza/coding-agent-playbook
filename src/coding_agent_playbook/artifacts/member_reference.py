@@ -1,13 +1,14 @@
 """A member rule as its skill delivers it: one ``references/<rule-id>.md`` file.
 
 A scoped rule that names a skill in ``skill:`` is a member rule of that skill
-(ADR 0001). At sync, ``skill_membership.compose_skills`` renders each active
+(ADR 0001). At sync, ``skills.membership.compose_skills`` renders each active
 member into a :class:`MemberReference` and attaches them to
 ``Skill.member_references``; the skill writer then writes ``text`` under every
 skill root, so the copies are byte-identical.
 
-A stdlib-only leaf: ``types`` imports it at run time for ``Skill.from_dict``,
-so it cannot import ``types`` back (specs/prS-skills-context.md section 6.4.1).
+A stdlib-only leaf: ``artifacts.skill`` imports it at run time for
+``Skill.from_dict``, so it cannot import ``artifacts.skill`` back
+(specs/prS-skills-context.md section 6.4.1).
 """
 
 from __future__ import annotations

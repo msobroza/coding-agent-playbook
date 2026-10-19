@@ -29,9 +29,9 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
     from coding_agent_playbook.artifacts.hook_schema import HookHandler
-    from coding_agent_playbook.types import Hook
 
 #: The launchers an external handler may name (§A.2); never a shell string.
 LAUNCHERS: Final[tuple[str, ...]] = get_args(HookLauncher)

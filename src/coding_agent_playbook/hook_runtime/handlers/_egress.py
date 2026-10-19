@@ -3,7 +3,7 @@
 exfil-channel-guard judges :func:`segment_egress` (its rows) and
 taint-escalation also asks on :func:`network_hosts` (any outbound client)
 once the session is tainted. Both read words, never the network: hosts come
-from ``_hosts`` and a ``git push`` target from the configured remotes the
+from ``judges.hosts`` and a ``git push`` target from the configured remotes the
 caller supplies (``remotes``, called only for a push).
 
 - ``git remote add|set-url <name> <url>`` -> ``remote``;
@@ -23,13 +23,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.hook_runtime._git_options import git_args
-from coding_agent_playbook.hook_runtime._hosts import extract_hosts, scp_host, url_host
 from coding_agent_playbook.hook_runtime.gitargv import parse_git
-from coding_agent_playbook.hook_runtime.handlers._cli_words import (
+from coding_agent_playbook.hook_runtime.judges.cli_words import (
     CliWords,
     split_words,
     value_options,
 )
+from coding_agent_playbook.hook_runtime.judges.hosts import extract_hosts, scp_host, url_host
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence

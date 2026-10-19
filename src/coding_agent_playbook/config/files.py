@@ -1,17 +1,21 @@
-"""The consumer config files on disk: the StateSource ABC and its filesystem implementation.
+"""The consumer config files on disk: ``ConfigFiles``, the StateSource ABC and its filesystem source.
 
-``StateSource`` (SPEC §20.2) is where config and lockfile are read from and written
-to; third-party sources register through the ``coding_agent_playbook.state_sources``
-entry point declared in ``pyproject.toml``. ``FileSystemStateSource`` (SPEC §20.3)
-reads and writes the three TOML files of a consumer repo. Split out of the
-artifact source modules; the artifact side is ``catalog/source.py``.
+:class:`ConfigFiles` is the one interface to the committed config and the local
+overrides (SPEC §7.1, §7.2): the per-file reads and checks, the merge, the atomic
+write and the one spelling of the two filenames. :class:`CommittedDocument` also
+decodes a git blob, so the guard twins read policy as committed at their base.
+``StateSource`` (SPEC §20.2) is where config and lockfile live; third-party sources
+register through the ``coding_agent_playbook.state_sources`` entry point, and
+``FileSystemStateSource`` (SPEC §20.3) is the engine's: its config half delegates to
+``ConfigFiles``. The artifact side is ``catalog/source.py``.
 """
 
 from __future__ import annotations
 
 import tomllib
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.config.model import Config, check_config_file
 from coding_agent_playbook.config.schema import ConfigError
@@ -23,6 +27,11 @@ from coding_agent_playbook.toml_writer import dump_toml
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
+
+#: The committed consumer config: team policy, read by every command (SPEC §7.1).
+CONFIG_FILENAME: Final = ".coding-agent-playbook.toml"
+#: The gitignored personal overrides, merged on top and never written back (SPEC §7.2).
+CONFIG_LOCAL_FILENAME: Final = ".coding-agent-playbook.local.toml"
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -65,44 +74,277 @@ def _read_config_file(path: Path) -> dict[str, Any]:
     Each file is checked on its own, before the SPEC §7.2 deep merge, so a
     :class:`~coding_agent_playbook.config.schema.ConfigError` names the file that holds
     the mistake (``.coding-agent-playbook.local.toml: [project] must be a table …``):
-    a file ``tomllib`` cannot read (:func:`_decode_config_file`), an enabled-list
+    a file ``tomllib`` cannot read (:func:`_decode_toml`), an enabled-list
     shape, a table ``Config`` reads that is not one, or a malformed ``[output]``
     (``config.model.check_config_file``). Checked merged instead, a local
     ``project = "x"`` was reported against the committed file.
     """
-    data = _decode_config_file(path)
+    data = _decode_toml(path.read_bytes(), where=path.name)
     check_config_file(data, source=path.name)
     return data
 
 
-def _decode_config_file(path: Path) -> dict[str, Any]:
-    """``tomllib.load`` of ``path``, a file it cannot read raised as a ``ConfigError`` naming it.
+def _decode_toml(raw: bytes, *, where: str) -> dict[str, Any]:
+    """``raw`` decoded as TOML; bytes ``tomllib`` cannot read raise a ``ConfigError`` naming ``where``.
 
     Bad syntax, a non-UTF-8 byte and values nested past Python's recursion limit
     (``tomllib`` recurses into inline arrays/tables) each ended every command
-    with a traceback (exit 1); the CLI now prints ``error: <file>: …`` (exit 2).
+    with a traceback (exit 1); the CLI now prints ``error: <where>: …`` (exit 2).
+    One decoder for the worktree file and a git blob, so both say the same.
 
     Example::
 
-        >>> _decode_config_file(Path("broken.toml"))  # doctest: +SKIP
+        >>> _decode_toml(b"broken = [", where="c.toml")
         Traceback (most recent call last):
         ...
-        coding_agent_playbook.config.schema.ConfigError: broken.toml: invalid TOML: Invalid value (at end of document)
+        coding_agent_playbook.config.schema.ConfigError: c.toml: invalid TOML: Invalid value (at end of document)
     """
     try:
-        with path.open("rb") as f:
-            return tomllib.load(f)
+        return tomllib.loads(raw.decode("utf-8"))
     except tomllib.TOMLDecodeError as exc:
-        raise ConfigError(f"{path.name}: invalid TOML: {exc}") from exc
+        raise ConfigError(f"{where}: invalid TOML: {exc}") from exc
     except UnicodeDecodeError as exc:
         raise ConfigError(
-            f"{path.name}: not UTF-8 text ({exc.reason} at byte {exc.start}); save it as UTF-8"
+            f"{where}: not UTF-8 text ({exc.reason} at byte {exc.start}); save it as UTF-8"
         ) from exc
     except RecursionError as exc:
         raise ConfigError(
-            f"{path.name}: inline arrays/tables nested too deeply for Python's TOML reader "
+            f"{where}: inline arrays/tables nested too deeply for Python's TOML reader "
             "(it hit the recursion limit); flatten them"
         ) from exc
+
+
+@dataclass(frozen=True, slots=True)
+class CommittedDocument:
+    """The decoded committed config, read from the worktree or from a git blob at a revision.
+
+    Decode only: no whole-file check runs, so a policy reader never fails on a
+    table it does not read. The guard twins decode the blob at the base
+    revision (``git show <base>:<file>``), so a change cannot loosen the policy
+    it is judged by.
+
+    Example::
+
+        >>> doc = CommittedDocument.decode(b"[hooks.x]\\nk = 1\\n", where="c.toml at abc123")
+        >>> doc.table("hooks", "x")
+        {'k': 1}
+    """
+
+    where: str
+    data: Mapping[str, object]
+
+    @classmethod
+    def decode(cls, raw: bytes | None, *, where: str) -> CommittedDocument:
+        """``raw`` decoded; ``None`` (no such file at that revision) is the empty document.
+
+        Raises ``ConfigError`` naming ``where`` for bad TOML syntax, non-UTF-8 bytes
+        or values nested past Python's recursion limit (``<where>: invalid TOML: …``,
+        ``<where>: not UTF-8 text (…)``).
+
+        Example::
+
+            >>> CommittedDocument.decode(None, where="c.toml at abc123").data
+            {}
+        """
+        return cls(where, {} if raw is None else _decode_toml(raw, where=where))
+
+    def table(self, *path: str) -> Mapping[str, object]:
+        """The table at ``path`` (``{}`` when a segment is absent).
+
+        Raises ``ConfigError`` naming ``where`` and the path when a segment is
+        present but not a table.
+
+        Example::
+
+            >>> CommittedDocument.decode(b"hooks = 'on'", where="c.toml").table("hooks", "x")
+            Traceback (most recent call last):
+            ...
+            coding_agent_playbook.config.schema.ConfigError: c.toml: [hooks] must be a table, got 'on'
+        """
+        found: Mapping[str, object] = self.data
+        for depth, key in enumerate(path, start=1):
+            value = found.get(key, {})
+            if not isinstance(value, dict):
+                label = ".".join(path[:depth])
+                raise ConfigError(f"{self.where}: [{label}] must be a table, got {value!r}")
+            found = value
+        return found
+
+
+class ConfigFiles:
+    """The committed config and the personal local overrides of one consumer repo (SPEC §7.2).
+
+    The two files' one reader and the committed file's one writer: each file is
+    checked on its own before the deep merge, so an error names the file at
+    fault, and the local file is read, never written back.
+
+    Example::
+
+        >>> ConfigFiles(Path("/no/such/repo")).committed_table("metrics")
+        {}
+    """
+
+    def __init__(self, repo_root: Path) -> None:
+        self._repo_root = repo_root
+
+    @property
+    def committed_path(self) -> Path:
+        """``<repo_root>/.coding-agent-playbook.toml``, whether or not it exists.
+
+        Example::
+
+            >>> ConfigFiles(Path("/repo")).committed_path.name
+            '.coding-agent-playbook.toml'
+        """
+        return self._repo_root / CONFIG_FILENAME
+
+    @property
+    def local_path(self) -> Path:
+        """``<repo_root>/.coding-agent-playbook.local.toml``, whether or not it exists.
+
+        Example::
+
+            >>> ConfigFiles(Path("/repo")).local_path.name
+            '.coding-agent-playbook.local.toml'
+        """
+        return self._repo_root / CONFIG_LOCAL_FILENAME
+
+    def has_committed(self) -> bool:
+        """Whether the committed file exists (a first ``init`` has none).
+
+        Example::
+
+            >>> ConfigFiles(Path("/no/such/repo")).has_committed()
+            False
+        """
+        return self.committed_path.is_file()
+
+    def committed(self) -> CommittedDocument:
+        """The checked, decoded committed file alone: every key, the local file never read.
+
+        Runs every per-file check (``config.model.check_config_file``), because its
+        callers build a ``Config`` from it, and holds the keys ``Config`` does not
+        manage (``[links]``, ``[metrics]``, ``[hooks]``…), so a rewrite carries
+        them over. Raises ``FileNotFoundError`` without the file and ``ConfigError``
+        naming it for one ``Config`` would misread.
+
+        Example::
+
+            >>> ConfigFiles(Path("/no/such/repo")).committed()
+            Traceback (most recent call last):
+            ...
+            FileNotFoundError: missing .coding-agent-playbook.toml; run `playbook init`
+        """
+        if not self.has_committed():
+            raise FileNotFoundError(f"missing {CONFIG_FILENAME}; run `playbook init`")
+        document = self._decoded_committed()
+        check_config_file(document.data, source=CONFIG_FILENAME)
+        return document
+
+    def committed_table(self, *path: str) -> Mapping[str, object]:
+        """The committed table at ``path``, decoded only; ``{}`` without the file (the defaults).
+
+        A policy reader must not fail on a table it does not read, so the
+        whole-file checks of :meth:`committed` do not run: a broken ``[output]``
+        never stops a ``[metrics]`` read. Raises ``ConfigError`` naming the file
+        when it does not decode, or when a segment of ``path`` is not a table.
+
+        Example::
+
+            >>> ConfigFiles(Path("/no/such/repo")).committed_table("hooks", "commit_convention")
+            {}
+        """
+        if not self.has_committed():
+            return {}
+        return self._decoded_committed().table(*path)
+
+    def local_overrides(self) -> dict[str, Any]:
+        """The checked local file, ``{}`` when it is absent.
+
+        ``playbook init`` reads it up front, before writing anything: to check the
+        local file on its own and to read the overlays its final sync will use.
+
+        Example::
+
+            >>> ConfigFiles(Path("/no/such/repo")).local_overrides()
+            {}
+        """
+        return _read_config_file(self.local_path) if self.local_path.is_file() else {}
+
+    def load(self) -> Config:
+        """The effective config: the committed file with the local file merged on top (SPEC §7.2).
+
+        What every command runs with, and never saved: writing it back would
+        commit one engineer's personal overrides for the whole team. Each file is
+        checked on its own first, so an error names the file at fault; what only
+        the merged table can lack (a required key missing from both) names the
+        committed file, where it belongs. Raises ``FileNotFoundError`` without the
+        committed file.
+
+        Example::
+
+            >>> ConfigFiles(Path("/no/such/repo")).load()
+            Traceback (most recent call last):
+            ...
+            FileNotFoundError: missing .coding-agent-playbook.toml; run `playbook init`
+        """
+        return self._merged(dict(self.committed().data), source=CONFIG_FILENAME)
+
+    def load_committed(self) -> Config:
+        """The committed file alone as a ``Config``, never merged with the local file (P6).
+
+        Its ``extra_tables`` hold the committed ``[hooks]``/``[guardrails]`` the
+        hook policy reads, so committed output never depends on a gitignored
+        file. Raises like :meth:`load` for a missing or misread committed file.
+
+        Example::
+
+            >>> ConfigFiles(Path("/no/such/repo")).load_committed()
+            Traceback (most recent call last):
+            ...
+            FileNotFoundError: missing .coding-agent-playbook.toml; run `playbook init`
+        """
+        return Config.from_dict(dict(self.committed().data), source=CONFIG_FILENAME)
+
+    def preview(self, document: Mapping[str, Any]) -> Config:
+        """What :meth:`load` will return once ``write_committed(document)`` ran; nothing written.
+
+        ``document`` with the checked local file merged on top, through
+        ``Config.from_dict``. ``init`` and ``check --refresh`` call it before
+        writing, so their final guard is the config the next command will load.
+        ``document`` is checked by the caller, so a ``ConfigError`` raised by the
+        merge itself names the local file.
+
+        Example::
+
+            >>> ConfigFiles(repo).preview(rewrite.table).commit_output  # doctest: +SKIP
+            False
+        """
+        return self._merged(dict(document), source=CONFIG_LOCAL_FILENAME)
+
+    def write_committed(self, document: Mapping[str, Any]) -> None:
+        """Atomically write ``document`` to the committed file, every entry as is.
+
+        The committed file's only writer. Production code calls it only from
+        ``config/committed.ConfigRewrite.save``, whose document is built from the
+        committed file alone (pinned by ``tests/config/test_committed.py``): the
+        merged :meth:`load` is never written back (SPEC §7.2). Values survive;
+        comments and layout do not.
+
+        Example::
+
+            >>> files.write_committed({**files.committed().data, "detector_cache": {}})  # doctest: +SKIP
+        """
+        _atomic_write_text(self.committed_path, dump_toml(document))
+
+    def _merged(self, committed: dict[str, Any], *, source: str) -> Config:
+        """``Config`` of ``committed`` with the checked local file merged on top (SPEC §7.2)."""
+        return Config.from_dict(_deep_merge(committed, self.local_overrides()), source=source)
+
+    def _decoded_committed(self) -> CommittedDocument:
+        """The committed file decoded, naming it as every command does (``CONFIG_FILENAME``)."""
+        raw = self.committed_path.read_bytes()
+        return CommittedDocument.decode(raw, where=CONFIG_FILENAME)
 
 
 class StateSource(ABC):
@@ -120,8 +362,7 @@ class StateSource(ABC):
         (its ``extra_tables``), so committed output never depends on a gitignored
         file. Concrete, defaulting to :meth:`load_config`, so a third-party source
         that predates it still instantiates. Rewrites of the committed file go
-        through ``config/committed``, which starts from
-        ``FileSystemStateSource.read_committed_config_table``.
+        through ``config/committed``, which starts from ``ConfigFiles.committed``.
 
         Example::
 
@@ -167,152 +408,88 @@ class StateSource(ABC):
 
 
 class FileSystemStateSource(StateSource):
-    """Reads + writes the three TOML files in the consumer repo:
-    .coding-agent-playbook.toml, .coding-agent-playbook.local.toml,
-    .coding-agent-playbook.lock (SPEC §7, §14.4, §20.3)."""
+    """Reads + writes the three TOML files in the consumer repo (SPEC §7, §14.4, §20.3).
+
+    The ``state_sources`` entry point (L2). Every config method delegates to the
+    :class:`ConfigFiles` it builds, the two config files' one reader and writer,
+    so code calling them keeps working (spec B.5.3). The lockfile half
+    (``.coding-agent-playbook.lock``) is its own.
+    """
 
     name = "filesystem"
 
-    _CONFIG_FILENAME = ".coding-agent-playbook.toml"
-    _CONFIG_LOCAL_FILENAME = ".coding-agent-playbook.local.toml"
+    # orchestrator.py reads the two config names off the state source (spec B.5.3);
+    # the one spelling stays the module constants.
+    _CONFIG_FILENAME = CONFIG_FILENAME
+    _CONFIG_LOCAL_FILENAME = CONFIG_LOCAL_FILENAME
     _LOCKFILE_FILENAME = ".coding-agent-playbook.lock"
 
     def __init__(self, *, repo_root: Path) -> None:
         self._repo_root = repo_root
+        self._files = ConfigFiles(repo_root)
 
     def load_config(self) -> Config:
-        """Read the committed config with the local overrides merged on top (SPEC §7.2).
+        """The effective config, local file merged on top, never saved (:meth:`ConfigFiles.load`).
 
-        This is the *effective* config every command runs with, and it is never
-        saved: writing it back would commit one engineer's personal overrides for
-        the whole team (what ``init`` and ``check --refresh`` did before v0.18).
-        Rewrites of the committed file go through ``config/committed``,
-        which starts from the committed table alone (SPEC §7.2).
-
-        Raises :class:`FileNotFoundError` without the committed file and
-        :class:`~coding_agent_playbook.config.schema.ConfigError` for a shape ``Config``
-        would misread — before anything else runs. Each file is checked on its
-        own first, so the error names the file at fault; what only the merged
-        table can lack (a required key missing from both files) names the
-        committed file, where it belongs.
+        Example: ``FileSystemStateSource(repo_root=repo).load_config().adapters_enabled``.
         """
-        return self._merged_config(self.read_committed_config_table(), source=self._CONFIG_FILENAME)
-
-    def preview_config(self, table: Mapping[str, Any]) -> Config:
-        """What :meth:`load_config` will return once ``save_config_table(table)`` ran.
-
-        ``table`` with the checked local file merged on top (SPEC §7.2), through
-        ``Config.from_dict`` — and nothing written. ``init`` and ``check
-        --refresh`` call it before writing, so their final guard is the config the
-        next command will load. The local file's own shape is refused when it is
-        read, naming it (``.coding-agent-playbook.local.toml: [project] must be a
-        table …``); ``table`` is checked by the caller, so a ``ConfigError`` raised
-        by the merge itself names the local file too.
-
-        Example::
-
-            >>> state.preview_config(rewrite.table).commit_output  # doctest: +SKIP
-            False
-        """
-        return self._merged_config(dict(table), source=self._CONFIG_LOCAL_FILENAME)
-
-    def _merged_config(self, committed: dict[str, Any], *, source: str) -> Config:
-        """``Config`` of ``committed`` with the checked local file merged on top (SPEC §7.2)."""
-        return Config.from_dict(_deep_merge(committed, self.load_local_overrides()), source=source)
-
-    def read_committed_config_table(self) -> dict[str, Any]:
-        """The checked, decoded ``.coding-agent-playbook.toml`` alone — no local overrides.
-
-        Holds every top-level key, including those ``Config`` does not manage
-        (``[links]``, ``[metrics]``, ``[hooks]``, …), so a rewrite of the committed
-        file can carry them over (``config.entries.unmanaged_config_entries``).
-        Raises :class:`FileNotFoundError` without the file and
-        :class:`~coding_agent_playbook.config.schema.ConfigError` naming it for a shape
-        ``Config`` would misread, like :meth:`load_config`.
-
-        Example::
-
-            >>> source = FileSystemStateSource(repo_root=Path("/no/such/repo"))
-            >>> source.read_committed_config_table()  # doctest: +ELLIPSIS
-            Traceback (most recent call last):
-            ...
-            FileNotFoundError: missing .coding-agent-playbook.toml; run `playbook init`
-        """
-        primary = self._repo_root / self._CONFIG_FILENAME
-        if not primary.is_file():
-            raise FileNotFoundError(f"missing {primary.name}; run `playbook init`")
-        return _read_config_file(primary)
+        return self._files.load()
 
     def load_primary_config(self) -> Config:
-        """The committed config alone, as a ``Config``: never merging ``.local.toml`` (P6).
+        """The committed file alone as a ``Config`` (P6; :meth:`ConfigFiles.load_committed`).
 
-        :meth:`read_committed_config_table` through ``Config.from_dict``, so its
-        ``extra_tables`` hold the committed ``[hooks]``/``[guardrails]`` the hook
-        policy reads (:meth:`StateSource.load_policy_tables`). Raises like
-        :meth:`load_config` for a missing or misread committed file. Rewrites of
-        the committed file go through ``config/committed``.
-
-        Example::
-
-            >>> FileSystemStateSource(repo_root=Path("/no/such/repo")).load_primary_config()
-            Traceback (most recent call last):
-            ...
-            FileNotFoundError: missing .coding-agent-playbook.toml; run `playbook init`
+        Example: ``FileSystemStateSource(repo_root=repo).load_primary_config().extra_tables``.
         """
-        return Config.from_dict(self.read_committed_config_table(), source=self._CONFIG_FILENAME)
-
-    def has_committed_config(self) -> bool:
-        """Whether ``.coding-agent-playbook.toml`` exists (a first ``init`` has none).
-
-        Example::
-
-            >>> FileSystemStateSource(repo_root=Path("/no/such/repo")).has_committed_config()
-            False
-        """
-        return (self._repo_root / self._CONFIG_FILENAME).is_file()
+        return self._files.load_committed()
 
     def load_local_overrides(self) -> dict[str, Any]:
-        """The checked ``.coding-agent-playbook.local.toml`` table, ``{}`` when absent.
+        """The checked local file, ``{}`` when absent (:meth:`ConfigFiles.local_overrides`).
 
-        ``playbook init`` calls it up front, before writing anything: to check the
-        local file on its own and to read the overlays its final sync will use.
-
-        Example::
-
-            >>> FileSystemStateSource(repo_root=Path("/no/such/repo")).load_local_overrides()
-            {}
+        Example: ``FileSystemStateSource(repo_root=Path("/no/repo")).load_local_overrides()`` is ``{}``.
         """
-        local = self._repo_root / self._CONFIG_LOCAL_FILENAME
-        return _read_config_file(local) if local.is_file() else {}
+        return self._files.local_overrides()
+
+    def has_committed_config(self) -> bool:
+        """Whether the committed file exists (:meth:`ConfigFiles.has_committed`).
+
+        Example: ``FileSystemStateSource(repo_root=Path("/no/repo")).has_committed_config()`` is False.
+        """
+        return self._files.has_committed()
+
+    def read_committed_config_table(self) -> dict[str, Any]:
+        """The checked committed file alone, every key, in a new dict (:meth:`ConfigFiles.committed`).
+
+        Example: ``FileSystemStateSource(repo_root=repo).read_committed_config_table().get("links")``.
+        """
+        return dict(self._files.committed().data)
+
+    def preview_config(self, table: Mapping[str, Any]) -> Config:
+        """:meth:`load_config` once ``table`` is saved, nothing written (:meth:`ConfigFiles.preview`).
+
+        Example: ``state.preview_config(rewrite.table).commit_output``.
+        """
+        return self._files.preview(table)
 
     def save_config(self, config: Config) -> None:
-        """Atomically write ``config.to_dict()`` (``extra_tables`` included) to the committed file.
+        """The :class:`StateSource` contract: ``config.to_dict()`` through ``write_committed``.
 
-        The :class:`StateSource` contract. A ``Config`` from :meth:`load_config`
-        has the local file merged in, so saving it would commit personal
-        overrides: no command calls this. ``init`` and ``check --refresh`` write
-        through :meth:`save_config_table`, from ``config/committed``.
+        A ``Config`` from :meth:`load_config` has the local file merged in, so
+        saving it would commit personal overrides: no command calls this.
+        ``init`` and ``check --refresh`` rewrite the committed file through
+        ``config/committed`` (SPEC §7.2).
 
-        Example::
-
-            >>> state.save_config(config)  # doctest: +SKIP
+        Example: ``state.save_config(config)``.
         """
-        self.save_config_table(config.to_dict())
+        self._files.write_committed(config.to_dict())
 
     def save_config_table(self, table: Mapping[str, Any]) -> None:
-        """Atomically write the decoded ``table`` to the committed file, every entry as is.
+        """Atomically write ``table`` to the committed file as is (:meth:`ConfigFiles.write_committed`).
 
-        The committed file's only writer. Production code calls it only from
-        ``config/committed.ConfigRewrite.save``, whose table is built
-        from the committed file alone (pinned by
-        ``tests/config/test_committed.py``): never write :meth:`load_config`'s
-        merged config back (SPEC §7.2). Values survive; comments and layout do not.
+        Never hand it :meth:`load_config`'s merged config (SPEC §7.2); no command calls it.
 
-        Example::
-
-            >>> state.save_config_table({**state.read_committed_config_table(), "detector_cache": {}})  # doctest: +SKIP
+        Example: ``state.save_config_table({**state.read_committed_config_table(), "x": {}})``.
         """
-        _atomic_write_text(self._repo_root / self._CONFIG_FILENAME, dump_toml(table))
+        self._files.write_committed(table)
 
     def load_lockfile(self) -> Lockfile | None:
         """Read the lockfile. Returns ``None`` if no lockfile exists (= first

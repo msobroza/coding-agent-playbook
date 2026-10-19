@@ -30,7 +30,7 @@ from coding_agent_playbook.security.files import is_secret_file, user_home
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.types import Skill
+    from coding_agent_playbook.artifacts.skill import Skill
 
 
 @dataclass(frozen=True)

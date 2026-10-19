@@ -1,7 +1,7 @@
 """import-linter contract type: an underscore module is imported only from inside its own package.
 
 ADR 0002 rule 2. A module is private to the package above its first underscore
-segment: ``coding_agent_playbook.adapters._skill_writer`` is private to
+segment: ``coding_agent_playbook.adapters._where_guidance`` is private to
 ``coding_agent_playbook.adapters``, and ``coding_agent_playbook.hook_runtime.handlers._shared.paths``
 to ``coding_agent_playbook.hook_runtime.handlers``. Any module inside that package,
 at any depth, may import it; nothing else may. Dunder names (``__init__``,

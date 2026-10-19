@@ -504,7 +504,8 @@ def test_claude_settings_projection_empty_when_claude_code_not_supported() -> No
 
 
 def test_hook_registrations_imports_only_the_stdlib() -> None:
-    # Sync-time but stdlib-only: no yaml/jinja2, and not types.py (yaml at module top).
+    # Sync-time but stdlib-only: no yaml/jinja2, and not the artifacts modules types.py
+    # split into (artifacts/frontmatter.py imports yaml at module top).
     loaded = new_modules_after("import coding_agent_playbook.hook_registrations")
 
     foreign = [
@@ -514,7 +515,8 @@ def test_hook_registrations_imports_only_the_stdlib() -> None:
         and name.split(".")[0] not in sys.stdlib_module_names
     ]
     assert foreign == []
-    assert engine_module("coding_agent_playbook.types") not in loaded
+    for artifact in ("frontmatter", "rule", "prompt", "skill", "hook"):
+        assert engine_module(f"coding_agent_playbook.artifacts.{artifact}") not in loaded
     assert engine_module("coding_agent_playbook.renderer") not in loaded
 
 

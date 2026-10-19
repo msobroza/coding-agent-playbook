@@ -1,6 +1,6 @@
 """Config dataclass mirroring .coding-agent-playbook.toml (SPEC §7.1).
 
-The FileSystemStateSource (config/files.py) is responsible for loading
+``ConfigFiles`` (config/files.py) is responsible for loading
 and writing TOML files; this module defines the in-memory shape and the parsers
 of its tables. The checks that turn a config the engine would misread into a
 :class:`ConfigError` live in ``config.schema`` (:func:`check_config_file` here
@@ -38,7 +38,7 @@ def check_config_file(data: Mapping[str, object], *, source: str) -> None:
     """Every check one config file must pass on its own, before the SPEC §7.2 merge.
 
     The enabled lists, the tables ``Config`` reads, and ``[output] commit``; each
-    error names ``source``. ``FileSystemStateSource`` runs it on the committed and
+    error names ``source``. ``ConfigFiles`` runs it on the committed and
     the local file separately, so a local ``project = "x"`` or ``[output] commit
     = 1`` names ``.coding-agent-playbook.local.toml``, not the committed file.
 
@@ -152,7 +152,7 @@ class Config:
         """Build a :class:`Config` from decoded TOML, refusing misread shapes.
 
         ``source`` names where ``data`` came from in a :class:`ConfigError`: a
-        shape :func:`check_config_file` refuses (``FileSystemStateSource`` checks
+        shape :func:`check_config_file` refuses (``ConfigFiles`` checks
         each file before merging them, so this re-check matters for other callers)
         or a missing required key (``schema_version``, ``[project] name``/``kind``,
         ``[engine] version``), which used to be a ``KeyError``. What ``Config``

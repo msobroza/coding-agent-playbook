@@ -27,8 +27,8 @@ from coding_agent_playbook.hook_registrations import stop_gate_table
 from coding_agent_playbook.hook_runtime._external import approval_of
 from coding_agent_playbook.hook_runtime.config import GuardConfig, parse_guard_config
 from coding_agent_playbook.hook_runtime.stop.coordinator import GatePolicy
-from coding_agent_playbook.orchestrator import SyncContext
 from coding_agent_playbook.security.trust import TrustStore
+from coding_agent_playbook.validation.context import SyncContext
 from tests.cli.hook_repo import GUARD_CONFIG, SCRIPT, hook_deps, make_hook_repo, never_ask
 from tests.fakes import FakeGitClient, FakePinWriter
 from tests.hooks.pack_repo import resolve_engine_hooks

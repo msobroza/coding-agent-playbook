@@ -27,8 +27,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.commands import metrics as _metrics
+from coding_agent_playbook.config.files import CONFIG_FILENAME
 from coding_agent_playbook.metrics_gate.run import (
-    CONFIG_FILENAME,
     MetricsGateDeps,
     build_rubric,
 )

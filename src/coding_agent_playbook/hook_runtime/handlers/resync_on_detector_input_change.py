@@ -16,7 +16,7 @@ row), re-run ``detect()`` and evaluate every ``applicability`` row:
 
 With ``[hooks] auto_sync`` an add-only change runs ``playbook sync`` as a child
 process; a change that would turn anything off never syncs. It builds no
-``SyncContext`` (``orchestrator`` imports jinja2). No debounce: a debounced
+``SyncContext`` (``validation.context`` imports yaml). No debounce: a debounced
 detector check would miss a dependency added within 2 s for good (a hook has
 no trailing edge), and the comparison alone costs about 5 ms.
 

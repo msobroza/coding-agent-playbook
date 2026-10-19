@@ -11,8 +11,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.artifacts.member_reference import MemberReference
-from coding_agent_playbook.skill_document import render_member_reference
-from coding_agent_playbook.types import Skill
+from coding_agent_playbook.artifacts.skill import Skill
+from coding_agent_playbook.skills.document import render_member_reference
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

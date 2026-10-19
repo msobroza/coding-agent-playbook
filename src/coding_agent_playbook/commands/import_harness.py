@@ -32,7 +32,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
+from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.commands._import_files import (
     copy_tree,
     harness_root_for,
@@ -55,18 +59,11 @@ from coding_agent_playbook.harness.models import (
     SkillLeaf,
 )
 from coding_agent_playbook.harness.parser import parse_harness
-from coding_agent_playbook.types import (
-    Hook,
-    Prompt,
-    PromptFrontmatter,
-    Rule,
-    RuleFrontmatter,
-    Skill,
-    split_frontmatter,
-)
 
 if TYPE_CHECKING:
     import argparse
+
+    from coding_agent_playbook.artifacts.hook import Hook
 
 #: Source-package marker recorded on every imported artifact.
 IMPORTED_SOURCE_PACKAGE = "<imported>"
@@ -483,7 +480,7 @@ def _write_skill(skill: Skill, into: Path) -> None:
 
 def _write_skill_md(skill: Skill, target: Path) -> None:
     """Write SKILL.md with the skill's full (reconstructed) frontmatter + body."""
-    from coding_agent_playbook.types import format_frontmatter
+    from coding_agent_playbook.artifacts.frontmatter import format_frontmatter
 
     target.write_text(format_frontmatter(dict(skill.frontmatter), skill.body), encoding="utf-8")
 

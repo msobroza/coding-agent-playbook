@@ -28,7 +28,7 @@ import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of
+from coding_agent_playbook.artifacts.identity import artifact_id_of
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.commands._sync_output import native_skill_roots
 from coding_agent_playbook.lockfile.model import (
@@ -38,7 +38,7 @@ from coding_agent_playbook.lockfile.model import (
     compute_hash,
     merge_provenance,
 )
-from coding_agent_playbook.orchestrator import artifact_id_of
+from coding_agent_playbook.skills.naming import skill_id_of
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, Sequence
@@ -46,11 +46,13 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.artifacts.member_reference import MemberReference
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.commands._sync_hooks import SyncHooks
     from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.lockfile.model import ProvenanceKind
-    from coding_agent_playbook.types import Prompt, Rule, Skill
 
 #: 2 = provenance on every entry (specs/prK-lifecycle-hooks.md §P P4, §B.6).
 LOCKFILE_SCHEMA = 2

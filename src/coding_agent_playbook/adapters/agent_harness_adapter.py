@@ -52,10 +52,12 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.harness.manifest import ManifestEntry
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.renderer import RuleRegistry
-    from coding_agent_playbook.types import Prompt, Rule, Skill
 
 #: The single leaf type this adapter emits (skill-shaped leaves for both skills
 #: and prompts). Declared in the root ``.leaf-detectors`` file.
@@ -73,8 +75,8 @@ class AgentHarnessAdapter(Adapter):
 
     Registers under ``coding_agent_playbook.adapters`` as ``agent_harness``.
     **Opt-in** — it is not force-enabled like ``agents_md`` and is not in the
-    default-adapter set; enable it via ``adapters_enabled`` in the config. The
-    orchestrator discovers and instantiates it through the entry point — never
+    default-adapter set; enable it via ``adapters_enabled`` in the config.
+    ``adapters.registry`` discovers and instantiates it through the entry point — never
     construct it directly outside of tests.
 
     The optional ``rule_registry`` is used to inline a prompt's

@@ -1,0 +1,82 @@
+# N14 (#95): the judges a hook shares with its guard twin get public modules in
+# hook_runtime/judges/; trusted_artifact_line (and the PRAGMA it reads) leaves
+# handlers/deser.py for judges/sink_scan.py, and deser's re-export of the scan
+# names goes (L2).
+
+[[module]]
+pr = "N14"
+old = "coding_agent_playbook.hook_runtime._hosts"
+new = "coding_agent_playbook.hook_runtime.judges.hosts"
+
+[[module]]
+pr = "N14"
+old = "coding_agent_playbook.hook_runtime.cutover"
+new = "coding_agent_playbook.hook_runtime.judges.commit_cutover"
+
+[[module]]
+pr = "N14"
+old = "coding_agent_playbook.hook_runtime.handlers._cli_words"
+new = "coding_agent_playbook.hook_runtime.judges.cli_words"
+
+[[module]]
+pr = "N14"
+old = "coding_agent_playbook.hook_runtime.handlers._install_cmds"
+new = "coding_agent_playbook.hook_runtime.judges.install_commands"
+
+[[module]]
+pr = "N14"
+old = "coding_agent_playbook.hook_runtime.handlers._dependency_tiers"
+new = "coding_agent_playbook.hook_runtime.judges.dependency_tiers"
+
+[[module]]
+pr = "N14"
+old = "coding_agent_playbook.hook_runtime.handlers._manifest_diff"
+new = "coding_agent_playbook.hook_runtime.judges.manifest_diff"
+
+[[module]]
+pr = "N14"
+old = "coding_agent_playbook.hook_runtime.handlers._notebook_cells"
+new = "coding_agent_playbook.hook_runtime.judges.notebook_cells"
+
+[[module]]
+pr = "N14"
+old = "coding_agent_playbook.hook_runtime.handlers._notebook_check"
+new = "coding_agent_playbook.hook_runtime.judges.notebook_check"
+
+[[module]]
+pr = "N14"
+old = "coding_agent_playbook.hook_runtime.handlers._sink_scan"
+new = "coding_agent_playbook.hook_runtime.judges.sink_scan"
+
+# The deser.py split (trusted_artifact_line, :117-131, with its PRAGMA) and the
+# removed re-export of the scan names (:31-35): importers name judges.sink_scan.
+[[names]]
+pr = "N14"
+old = "coding_agent_playbook.hook_runtime.handlers.deser"
+new = "coding_agent_playbook.hook_runtime.judges.sink_scan"
+names = ["PRAGMA", "SinkHit", "SinkTable", "new_sink_calls", "trusted_artifact_line"]
+
+[[path]]
+pr = "N14"
+old = "tests/hook_runtime/test_hosts.py"
+new = "tests/hook_runtime/judges/test_hosts.py"
+
+[[path]]
+pr = "N14"
+old = "tests/hook_runtime/test_install_cmds.py"
+new = "tests/hook_runtime/judges/test_install_commands.py"
+
+[[path]]
+pr = "N14"
+old = "tests/hook_runtime/test_manifest_diff.py"
+new = "tests/hook_runtime/judges/test_manifest_diff.py"
+
+[[path]]
+pr = "N14"
+old = "tests/hook_runtime/test_sink_scan.py"
+new = "tests/hook_runtime/judges/test_sink_scan.py"
+
+[[path]]
+pr = "N14"
+old = "tests/hook_runtime/test_cutover.py"
+new = "tests/hook_runtime/judges/test_commit_cutover.py"

@@ -25,8 +25,9 @@ import sys
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.adapters._skill_writer import swap_blocker
+from coding_agent_playbook.adapters.skill_dirs.writer import swap_blocker
 from coding_agent_playbook.commands._output_blockers import write_blocker
+from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FILENAME
 from coding_agent_playbook.generated_output.file_identity import FileSet
 from coding_agent_playbook.generated_output.gitignore import (
     GITIGNORE_FILENAME,
@@ -56,11 +57,10 @@ ORPHAN_HINT = "    Orphaned generated file; run 'playbook sync' to remove."
 
 # Filenames that are state-source-managed and must be excluded from the
 # drift diff (otherwise the lockfile written by sync would itself look
-# like drift). Keep this in sync with the constants in
-# ``config.files.FileSystemStateSource``.
+# like drift): the two config files and the lockfile.
 _STATE_FILES_TO_SKIP: tuple[str, ...] = (
-    ".coding-agent-playbook.toml",
-    ".coding-agent-playbook.local.toml",
+    CONFIG_FILENAME,
+    CONFIG_LOCAL_FILENAME,
     LOCKFILE_NAME,
 )
 

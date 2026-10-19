@@ -45,9 +45,9 @@ if TYPE_CHECKING:
 
     import pytest
 
-    from coding_agent_playbook.commands._validation import ValidationError
     from coding_agent_playbook.hook_policy import ConfigKeySpec
-    from coding_agent_playbook.orchestrator import SyncContext
+    from coding_agent_playbook.validation.context import SyncContext
+    from coding_agent_playbook.validation.findings import ValidationError
 
 
 @dataclass

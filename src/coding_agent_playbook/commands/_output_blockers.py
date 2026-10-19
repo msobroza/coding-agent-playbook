@@ -21,7 +21,7 @@ when a write fails, not as a preflight over every declared output directory: a
 link the render never writes through (a dangling ``.claude/skills`` with no
 skills enabled) must not stop the sync. Inside a native skill directory the
 skill writer settles blockers itself (SPEC §10.8), and a dangling skills root it
-skips with a warning (``adapters/_skill_writer.py``).
+skips with a warning (``adapters/skill_dirs/writer.py``).
 """
 
 from __future__ import annotations

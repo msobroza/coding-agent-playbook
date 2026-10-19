@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.types import Prompt
+from coding_agent_playbook.artifacts.prompt import Prompt
 from tests._catalog import CORE_ROOT
 
 pytestmark = pytest.mark.catalog

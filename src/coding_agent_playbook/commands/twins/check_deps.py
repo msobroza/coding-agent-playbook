@@ -5,10 +5,10 @@ itself, the human's included, in CI (SPEC §17.2 assigns enforcement to "a
 separate package-check step"). Each manifest that changed since the base
 (``--base REF``, default the default branch, through its merge base with
 ``HEAD``) or is untracked is read at the base (``git show``) and in the working
-tree, and only NEWLY declared names and indexes count (``_manifest_diff``,
+tree, and only NEWLY declared names and indexes count (``judges.manifest_diff``,
 PEP 503 names), so existing dependencies are grandfathered.
 
-The rules are the hook's own (``_dependency_tiers``), from its merged config
+The rules are the hook's own (``judges.dependency_tiers``), from its merged config
 whatever ``[hooks]`` says (``policy``): a name outside the overlay
 ``allowlist`` and an index other than ``required_index`` are deny-class; index
 mixing follows ``index_mode``; without an allowlist the new names are listed.
@@ -28,14 +28,14 @@ from coding_agent_playbook.commands.twins._git_scope import open_git, resolve_me
 from coding_agent_playbook.commands.twins.policy import dependency_twin_config
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.git import GitError
-from coding_agent_playbook.hook_runtime.handlers._dependency_tiers import (
+from coding_agent_playbook.hook_runtime.judges.dependency_tiers import (
     DependencyPolicy,
     Finding,
     dependency_policy,
     index_finding,
     name_findings,
 )
-from coding_agent_playbook.hook_runtime.handlers._manifest_diff import (
+from coding_agent_playbook.hook_runtime.judges.manifest_diff import (
     added_indexes,
     added_names,
     manifest_kind,
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from coding_agent_playbook.hook_runtime.git import GitPort
-    from coding_agent_playbook.hook_runtime.handlers._manifest_diff import ManifestKind
+    from coding_agent_playbook.hook_runtime.judges.manifest_diff import ManifestKind
 
 __all__ = ["finding_lines", "manifest_findings", "run"]
 

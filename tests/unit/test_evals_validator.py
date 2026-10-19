@@ -10,12 +10,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.evals.task import EvalTask, Layer, TaskSetup, Verdict
 from coding_agent_playbook.evals.validator import (
     EvalValidationError,
     validate_tasks,
 )
-from coding_agent_playbook.types import Prompt, PromptFrontmatter
 
 
 def _make_prompt(prompt_id: str, eval_tasks: list[str] | None = None) -> Prompt:
