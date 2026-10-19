@@ -17,8 +17,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.adapters._settings_plan import launcher_kind
-from coding_agent_playbook.adapters.claude_settings import (
+from coding_agent_playbook.adapters.claude_code.settings._plan import launcher_kind
+from coding_agent_playbook.adapters.claude_code.settings.managed_merge import (
     SettingsMergeError,
     decode_settings,
     parse_settings,

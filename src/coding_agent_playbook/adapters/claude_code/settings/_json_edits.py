@@ -24,12 +24,16 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.adapters._json_spans import Splice, line_indent
+from coding_agent_playbook.adapters.claude_code.settings._json_spans import Splice, line_indent
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from coding_agent_playbook.adapters._json_spans import JsonNode, JsonSpanIndex, JsonStyle
+    from coding_agent_playbook.adapters.claude_code.settings._json_spans import (
+        JsonNode,
+        JsonSpanIndex,
+        JsonStyle,
+    )
 
 __all__ = ["ArrayEdit", "apply_edits", "edit_splices", "render_fragment"]
 

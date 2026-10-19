@@ -595,8 +595,6 @@ containers = ["coding_agent_playbook"]
 ignore_imports = [
     # A7: adapters/_skill_files.py becomes generated_output/source_files.py (after #62)
     "coding_agent_playbook.commands._import_files -> coding_agent_playbook.adapters._skill_files",
-    # N13: becomes adapters/claude_code/settings/drift.py
-    "coding_agent_playbook.commands.check -> coding_agent_playbook.adapters._settings_drift",
     # CP-3: init's configure() owns --adapters (after #62)
     "coding_agent_playbook.cli.parser -> coding_agent_playbook.commands._init_adapters",
     # N15: FIXTURE_GLOBS moves to the stdlib leaf artifacts/path_classes.py
