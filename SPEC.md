@@ -409,7 +409,7 @@ coding-agent-playbook/
 │   ├── sync/                               # test_dispatch.py, test_leftovers.py, test_output_policy.py, ...
 │   ├── validation/                         # test_skills.py, test_preflight.py, test_link_check.py, ...
 │   ├── hook_runtime/                       # dispatcher, normalization, decisions, Stop coordinator
-│   ├── hooks/                              # one module per shipped hook, golden payloads
+│   ├── hooks/                              # the sync-time hooks/ package: resolution/, contract/, enforcement, guardrails skill
 │   ├── security/
 │   ├── adapters/
 │   │   ├── test_continue.py

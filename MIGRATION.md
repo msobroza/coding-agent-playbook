@@ -125,7 +125,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_policy.ENGINE_DEADLINE_CAP_MS` | `coding_agent_playbook.hooks.resolution.tables.ENGINE_DEADLINE_CAP_MS` | A17 |
 | `coding_agent_playbook.hook_policy.EffectiveHooks` | `coding_agent_playbook.hooks.resolution.resolved.EffectiveHooks` | A17 |
 | `coding_agent_playbook.hook_policy.EventSpec` | `coding_agent_playbook.hooks.resolution.tables.EventSpec` | A17 |
-| `coding_agent_playbook.hook_policy.GUARDRAIL_SUMMARY_MAX_CHARS` | `coding_agent_playbook.artifacts.hook_schema.GUARDRAIL_SUMMARY_MAX_CHARS` | A17 |
+| `coding_agent_playbook.hook_policy.GUARDRAIL_SUMMARY_MAX_CHARS` | `coding_agent_playbook.hooks.enforcement.GUARDRAIL_SUMMARY_MAX_CHARS` | A17 |
 | `coding_agent_playbook.hook_policy.HOOK_CAPABLE_ADAPTERS` | `coding_agent_playbook.hooks.resolution.tables.HOOK_CAPABLE_ADAPTERS` | A17 |
 | `coding_agent_playbook.hook_policy.HOOK_EVENTS` | `coding_agent_playbook.hooks.resolution.tables.HOOK_EVENTS` | A17 |
 | `coding_agent_playbook.hook_policy.HOOK_LABELS` | `coding_agent_playbook.hooks.enforcement.HOOK_LABELS` | A17 |

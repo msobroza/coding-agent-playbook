@@ -192,12 +192,12 @@ names = [
     "EventSpec",
 ]
 
-# Defined in artifacts.hook_schema (from_mapping checks it); hooks.enforcement only
-# imports it, so the facade's importers name the defining module.
+# Public home is hooks.enforcement (it lists the name in __all__, as #57's advisory
+# did); the value is defined in artifacts.hook_schema because from_mapping checks it.
 [[names]]
 pr = "A17"
 old = "coding_agent_playbook.hook_policy"
-new = "coding_agent_playbook.artifacts.hook_schema"
+new = "coding_agent_playbook.hooks.enforcement"
 names = ["GUARDRAIL_SUMMARY_MAX_CHARS"]
 
 # The unit tests follow the package into the sync-time tests/hooks/ tree (5.2.2).
