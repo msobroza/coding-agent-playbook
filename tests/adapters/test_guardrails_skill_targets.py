@@ -23,11 +23,11 @@ from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
 from coding_agent_playbook.commands._sync_lockfile import HookDispatch, dispatch_to_adapters
+from coding_agent_playbook.config.tables.hooks import HooksConfig
 from coding_agent_playbook.hook_policy.guardrails_skill import (
     GUARDRAILS_SKILL_ID,
     compose_guardrails_skill,
 )
-from coding_agent_playbook.hooks_config import HooksConfig
 from coding_agent_playbook.types import Skill
 from tests.hook_samples import GUARDRAILS_SECTION_HEAD, resolved_hook
 

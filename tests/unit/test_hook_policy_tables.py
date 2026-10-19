@@ -200,7 +200,7 @@ def test_hook_policy_imports_only_the_stdlib() -> None:
         for name in loaded
         if name not in ours and name.split(".")[0] not in sys.stdlib_module_names
     ]
-    # Not detector (packaging) nor hooks_config: the effective view imports
+    # Not detector (packaging) nor config.tables.hooks: the effective view imports
     # evaluate_predicate when it runs, and the config types only for typing.
     assert ours == [
         "coding_agent_playbook._hook_schema",

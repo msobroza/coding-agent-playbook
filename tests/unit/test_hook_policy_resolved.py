@@ -20,13 +20,13 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook._hook_schema import MATCHER_KEYS
+from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.hook_policy import (
     HOOK_SCRIPTS_DIR,
     ResolvedHook,
     advisory_text,
     resolve_effective_hooks,
 )
-from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.types import Hook, Rule, RuleFrontmatter
 from tests.hook_samples import sample_hook, write_hook
 

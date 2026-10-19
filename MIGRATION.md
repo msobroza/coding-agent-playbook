@@ -37,8 +37,23 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook._pyproject_deps` | `coding_agent_playbook.detector.pyproject_deps` | N4 |
 | `coding_agent_playbook._toml` | `coding_agent_playbook.toml_writer` | N1 |
 | `coding_agent_playbook.cli.build_parser` | `coding_agent_playbook.cli.parser.build_parser` | N7 |
+| `coding_agent_playbook.config` | `coding_agent_playbook.config.model` | N2 |
+| `coding_agent_playbook.config.ConfigError` | `coding_agent_playbook.config.schema.ConfigError` | N2 |
+| `coding_agent_playbook.config.GuardrailsConfig` | `coding_agent_playbook.config.tables.hooks.GuardrailsConfig` | N2 |
+| `coding_agent_playbook.config.HooksConfig` | `coding_agent_playbook.config.tables.hooks.HooksConfig` | N2 |
+| `coding_agent_playbook.config.check_config_tables` | `coding_agent_playbook.config.schema.check_config_tables` | N2 |
+| `coding_agent_playbook.config.check_enabled_keys` | `coding_agent_playbook.config.schema.check_enabled_keys` | N2 |
+| `coding_agent_playbook.config.parse_guardrails_config` | `coding_agent_playbook.config.tables.hooks.parse_guardrails_config` | N2 |
+| `coding_agent_playbook.config.parse_hooks_config` | `coding_agent_playbook.config.tables.hooks.parse_hooks_config` | N2 |
+| `coding_agent_playbook.config.parse_links_config` | `coding_agent_playbook.config.tables.links.parse_links_config` | N2 |
+| `coding_agent_playbook.config.parse_metrics_config` | `coding_agent_playbook.metrics_config.parse_metrics_config` | N2 |
+| `coding_agent_playbook.config.required_value` | `coding_agent_playbook.config.schema.required_value` | N2 |
+| `coding_agent_playbook.config_entries` | `coding_agent_playbook.config.entries` | N2 |
+| `coding_agent_playbook.config_schema` | `coding_agent_playbook.config.schema` | N2 |
 | `coding_agent_playbook.detector` | `coding_agent_playbook.detector.facts` | N4 |
 | `coding_agent_playbook.detector.evaluate_predicate` | `coding_agent_playbook.detector.predicate.evaluate_predicate` | N4 |
+| `coding_agent_playbook.hooks_config` | `coding_agent_playbook.config.tables.hooks` | N2 |
+| `coding_agent_playbook.links.LinksConfig` | `coding_agent_playbook.config.tables.links.LinksConfig` | N2 |
 | `coding_agent_playbook.lockfile` | `coding_agent_playbook.lockfile.model` | N5 |
 | `coding_agent_playbook.lockfile.DriftItem` | `coding_agent_playbook.lockfile.drift.DriftItem` | N5 |
 | `coding_agent_playbook.lockfile.DriftKind` | `coding_agent_playbook.lockfile.drift.DriftKind` | N5 |
@@ -49,6 +64,8 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.lockfile.managed_drift` | `coding_agent_playbook.lockfile.drift.managed_drift` | N5 |
 | `coding_agent_playbook.lockfile.parse_json_document` | `coding_agent_playbook.lockfile.drift.parse_json_document` | N5 |
 | `coding_agent_playbook.orchestrator.filter_applies_if` | `coding_agent_playbook.detector.predicate.filter_applies_if` | N4 |
+| `coding_agent_playbook.sources.base.StateSource` | `coding_agent_playbook.config.files.StateSource` | N2 |
+| `coding_agent_playbook.sources.filesystem.FileSystemStateSource` | `coding_agent_playbook.config.files.FileSystemStateSource` | N2 |
 <!-- module-moves:end -->
 
 ## v0.21 — Skills-first context

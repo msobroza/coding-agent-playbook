@@ -14,7 +14,7 @@ import dataclasses
 
 import pytest
 
-from coding_agent_playbook.config import Config, ProjectMeta, StorageConfig
+from coding_agent_playbook.config.model import Config, ProjectMeta, StorageConfig
 from coding_agent_playbook.orchestrator import (
     OverlayResolver,
     SyncContext,

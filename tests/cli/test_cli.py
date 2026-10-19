@@ -410,7 +410,7 @@ def test_main_translates_config_error_to_exit_2(monkeypatch, capsys):
     """A ConfigError (a config the engine would misread) is reported like a
     missing config: ``error: <message>`` on stderr, exit 2, no traceback."""
     from coding_agent_playbook.commands import sync as sync_cmd
-    from coding_agent_playbook.config import ConfigError
+    from coding_agent_playbook.config.schema import ConfigError
 
     def raising_run(args):
         raise ConfigError("x.toml: the [overlays] table is not read")

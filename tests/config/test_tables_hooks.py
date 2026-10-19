@@ -15,20 +15,18 @@ from typing import Any
 
 import pytest
 
-from coding_agent_playbook.config import (
-    Config,
-    GuardrailsConfig,
-    HooksConfig,
-    check_enabled_keys,
-    parse_guardrails_config,
-    parse_hooks_config,
-)
-from coding_agent_playbook.hooks_config import (
+from coding_agent_playbook.config.model import Config
+from coding_agent_playbook.config.schema import check_enabled_keys
+from coding_agent_playbook.config.tables.hooks import (
     CommitConventionConfig,
     GitGuardrails,
+    GuardrailsConfig,
+    HooksConfig,
     NetworkGuardrails,
     PolicyTables,
     SecretsGuardrails,
+    parse_guardrails_config,
+    parse_hooks_config,
     policy_tables,
 )
 from tests.import_probe import new_modules_after
@@ -373,8 +371,8 @@ def test_policy_tables_parse_lazily() -> None:
 
 
 def test_hooks_config_imports_only_the_stdlib() -> None:
-    """``sources.base`` imports it at module top and promises a light import."""
-    loaded = new_modules_after("import coding_agent_playbook.hooks_config")
+    """``config.files`` imports it at module top, and the hook policy relies on a light import."""
+    loaded = new_modules_after("import coding_agent_playbook.config.tables.hooks")
 
     ours = [name for name in loaded if name.startswith("coding_agent_playbook")]
     foreign = [
@@ -382,5 +380,10 @@ def test_hooks_config_imports_only_the_stdlib() -> None:
         for name in loaded
         if name not in ours and name.split(".")[0] not in sys.stdlib_module_names
     ]
-    assert ours == ["coding_agent_playbook._table_shapes", "coding_agent_playbook.hooks_config"]
+    assert ours == [
+        "coding_agent_playbook.config",
+        "coding_agent_playbook.config.tables",
+        "coding_agent_playbook.config.tables._table_shapes",
+        "coding_agent_playbook.config.tables.hooks",
+    ]
     assert foreign == []

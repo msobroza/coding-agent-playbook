@@ -1,0 +1,94 @@
+# N2 (#81): the config modules move into the config package; config.py becomes
+# config/model.py (a same-name conversion), its re-exports go (L2), and the state
+# half of sources/ joins config/files.py.
+
+[[module]]
+pr = "N2"
+old = "coding_agent_playbook.config"
+new = "coding_agent_playbook.config.model"
+
+[[module]]
+pr = "N2"
+old = "coding_agent_playbook.config_entries"
+new = "coding_agent_playbook.config.entries"
+
+[[module]]
+pr = "N2"
+old = "coding_agent_playbook.config_schema"
+new = "coding_agent_playbook.config.schema"
+
+[[module]]
+pr = "N2"
+old = "coding_agent_playbook.hooks_config"
+new = "coding_agent_playbook.config.tables.hooks"
+
+[[module]]
+pr = "N2"
+old = "coding_agent_playbook._table_shapes"
+new = "coding_agent_playbook.config.tables._table_shapes"
+
+# The config.py:26-34 re-exports, removed: importers name the defining module.
+[[names]]
+pr = "N2"
+old = "coding_agent_playbook.config"
+new = "coding_agent_playbook.config.schema"
+names = ["ConfigError", "check_config_tables", "check_enabled_keys", "required_value"]
+
+[[names]]
+pr = "N2"
+old = "coding_agent_playbook.config"
+new = "coding_agent_playbook.config.tables.hooks"
+names = ["GuardrailsConfig", "HooksConfig", "parse_guardrails_config", "parse_hooks_config"]
+
+[[names]]
+pr = "N2"
+old = "coding_agent_playbook.config"
+new = "coding_agent_playbook.metrics_config"
+names = ["parse_metrics_config"]
+
+# The [links] table: LinksConfig leaves the link checker, its parser leaves config.py.
+[[names]]
+pr = "N2"
+old = "coding_agent_playbook.config"
+new = "coding_agent_playbook.config.tables.links"
+names = ["parse_links_config"]
+
+[[names]]
+pr = "N2"
+old = "coding_agent_playbook.links"
+new = "coding_agent_playbook.config.tables.links"
+names = ["LinksConfig"]
+
+# The state half of sources/ (N3 moves the artifact half to catalog/source.py).
+[[names]]
+pr = "N2"
+old = "coding_agent_playbook.sources.base"
+new = "coding_agent_playbook.config.files"
+names = ["StateSource"]
+
+[[names]]
+pr = "N2"
+old = "coding_agent_playbook.sources.filesystem"
+new = "coding_agent_playbook.config.files"
+names = [
+    "FileSystemStateSource",
+    "_atomic_write_text",
+    "_decode_config_file",
+    "_deep_merge",
+    "_read_config_file",
+]
+
+[[path]]
+pr = "N2"
+old = "tests/unit/test_config.py"
+new = "tests/config/test_model.py"
+
+[[path]]
+pr = "N2"
+old = "tests/unit/test_config_enabled_keys.py"
+new = "tests/config/test_schema_enabled_keys.py"
+
+[[path]]
+pr = "N2"
+old = "tests/unit/test_hooks_config.py"
+new = "tests/config/test_tables_hooks.py"

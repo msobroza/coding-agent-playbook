@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
+from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.gitignore import (
     BLOCK_END,
     BLOCK_START,
@@ -24,7 +25,6 @@ from coding_agent_playbook.gitignore import (
     remove_managed_block,
     render_block,
 )
-from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 
 ENTRIES = ["/AGENTS.md", "/.claude/CLAUDE.md"]
 BLOCK = f"{BLOCK_START}\n/.claude/CLAUDE.md\n/AGENTS.md\n{BLOCK_END}\n"

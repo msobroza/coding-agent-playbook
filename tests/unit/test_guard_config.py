@@ -25,6 +25,11 @@ from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
 from coding_agent_playbook.commands._sync_lockfile import build_lockfile
+from coding_agent_playbook.config.tables.hooks import (
+    GuardrailsConfig,
+    HooksConfig,
+    SecretsGuardrails,
+)
 from coding_agent_playbook.guard_config import (
     GUARD_CONFIG_PATH,
     HOOK_ARTIFACTS,
@@ -55,11 +60,6 @@ from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import CONTROL_PLANE
 from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
     playbook_precommit_ids,
-)
-from coding_agent_playbook.hooks_config import (
-    GuardrailsConfig,
-    HooksConfig,
-    SecretsGuardrails,
 )
 from coding_agent_playbook.lockfile.model import LockEntry, Provenance
 from coding_agent_playbook.security.patterns import (

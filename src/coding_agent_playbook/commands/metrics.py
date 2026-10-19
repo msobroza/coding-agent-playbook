@@ -58,7 +58,7 @@ Usage::
 * **Snapshot** — ``--emit-measurements PATH`` writes the raw candidate
   measurements as JSON, tagged with ``HEAD^{tree}`` when the worktree is clean.
 * **Config** — a ``[metrics]`` table in ``.coding-agent-playbook.toml`` (parsed by
-  :func:`coding_agent_playbook.config.parse_metrics_config`) seeds the
+  :func:`coding_agent_playbook.metrics_config.parse_metrics_config`) seeds the
   :class:`~coding_agent_playbook.evaluators.types.MetricConfig`; CLI flags
   override it. ``[metrics] run_tests`` and ``test_cmd`` are resolved here, in
   the CLI, never by the gate.
