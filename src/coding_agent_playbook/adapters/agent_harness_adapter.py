@@ -52,10 +52,12 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.harness.manifest import ManifestEntry
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.renderer import RuleRegistry
-    from coding_agent_playbook.types import Prompt, Rule, Skill
 
 #: The single leaf type this adapter emits (skill-shaped leaves for both skills
 #: and prompts). Declared in the root ``.leaf-detectors`` file.

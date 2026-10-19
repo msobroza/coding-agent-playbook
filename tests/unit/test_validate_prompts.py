@@ -12,12 +12,12 @@ from typing import Any
 
 import pytest
 
+from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.commands._validate_prompts import (
     check_prompt_rule_calls,
     check_prompt_rule_references,
 )
 from coding_agent_playbook.commands._validation import ValidationError
-from coding_agent_playbook.types import Prompt, PromptFrontmatter
 
 _RULE_IDS = frozenset({"python-typing", "pytest", "python-error-handling"})
 

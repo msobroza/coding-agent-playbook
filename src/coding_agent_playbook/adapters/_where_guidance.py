@@ -17,8 +17,8 @@ from coding_agent_playbook.skill_document import where_entry, where_guidance_sec
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.skill_document import WhereEntry
-    from coding_agent_playbook.types import Skill
 
 
 class WhereGuidanceBuffer:

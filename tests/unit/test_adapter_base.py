@@ -15,15 +15,18 @@ from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
+from coding_agent_playbook.artifacts.prompt import Prompt
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.config.tables.hooks import HooksConfig
 from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.renderer import SENTINEL
-from coding_agent_playbook.types import Prompt, Rule, Skill
 from tests.hook_samples import resolved_hook
 from tests.member_skill_samples import sample_member_reference, sample_member_skill
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+
+    from coding_agent_playbook.artifacts.rule import Rule
 
 
 class _DummyAdapter(Adapter):

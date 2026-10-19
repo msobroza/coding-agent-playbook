@@ -31,7 +31,7 @@ from coding_agent_playbook.adapters.claude_code.paths import (
     CLAUDE_RULES_PATH,
 )
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
-from coding_agent_playbook.types import Rule, RuleFrontmatter
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
 

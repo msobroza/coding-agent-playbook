@@ -26,7 +26,7 @@ from coding_agent_playbook.hook_policy import did_you_mean
 if TYPE_CHECKING:
     from collections.abc import Collection, Sequence
 
-    from coding_agent_playbook.types import Prompt
+    from coding_agent_playbook.artifacts.prompt import Prompt
 
 #: How a well-formed ``includes_rules`` looks, quoted in the shape error.
 _INCLUDES_RULES_SHAPE: Final = "expected a list of rule ids, e.g. ['python-typing', 'pytest']"

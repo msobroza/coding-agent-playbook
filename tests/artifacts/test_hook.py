@@ -11,9 +11,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.artifacts.hook import Hook
 from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
 from coding_agent_playbook.artifacts.hook_schema import HookHandler, HookMatcher, HookSchemaError
-from coding_agent_playbook.types import Hook
 from tests.hook_samples import HOOK_WHERE, hook_frontmatter, hook_mapping, write_hook_md
 
 if TYPE_CHECKING:

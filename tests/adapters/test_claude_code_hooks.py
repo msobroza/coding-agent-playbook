@@ -45,6 +45,7 @@ from coding_agent_playbook.adapters.claude_code.settings.managed_merge import (
     SettingsMergeError,
 )
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.config.tables.hooks import HooksConfig
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT
 from coding_agent_playbook.hook_registrations import (
@@ -55,7 +56,6 @@ from coding_agent_playbook.hook_registrations import (
 )
 from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.security.patterns import DESTRUCTIVE_NATIVE_PREFIXES
-from coding_agent_playbook.types import Rule, RuleFrontmatter
 from tests.hook_samples import resolved_hook
 from tests.hooks.pack_repo import install_fixture_overlay, resolve_engine_hooks
 

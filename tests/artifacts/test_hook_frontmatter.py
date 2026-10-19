@@ -37,7 +37,7 @@ def test_hook_frontmatter_annotations_still_resolve_at_run_time() -> None:
 def test_hook_frontmatter_leaf_loads_nothing_but_the_hook_schema() -> None:
     loaded = new_modules_after("import coding_agent_playbook.artifacts.hook_frontmatter")
 
-    # Not types (that would be a cycle) and not yaml (types.py is what pays for it).
+    # Not artifacts.hook (a cycle) and not yaml (artifacts/frontmatter.py pays for it).
     non_stdlib = [name for name in loaded if name.split(".")[0] not in sys.stdlib_module_names]
     assert non_stdlib == [
         "coding_agent_playbook.artifacts",

@@ -58,7 +58,8 @@ from coding_agent_playbook.skill_membership import is_rule_skill, member_rules_o
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.types import Rule, Skill
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
 
 _NAME_SHAPE: Final = f"{AGENT_SKILL_NAME_PATTERN.pattern} (1-{AGENT_SKILL_NAME_MAX_CHARS} chars)"
 _BLOCK_KEYS: Final = ("files", "use_when")

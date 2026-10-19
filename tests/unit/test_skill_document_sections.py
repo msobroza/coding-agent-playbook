@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 from coding_agent_playbook.artifacts.member_reference import MemberReference
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.skill_document import (
     WhereEntry,
     emitted_body,
@@ -22,7 +23,6 @@ from coding_agent_playbook.skill_document import (
     where_entry,
     where_guidance_section,
 )
-from coding_agent_playbook.types import Skill
 
 TYPING_DESCRIPTION = (
     "Prefer a concrete type or a Protocol to Any, write X | None, and take abstract "

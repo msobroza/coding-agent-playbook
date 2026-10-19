@@ -13,20 +13,21 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.catalog.roots import bundled_plugins
 from coding_agent_playbook.catalog.source import ArtifactSource, FileSystemArtifactSource
 from coding_agent_playbook.commands import _validate_links
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.config.tables.links import LinksConfig
-from coding_agent_playbook.types import Prompt, PromptFrontmatter
 from tests._catalog import PLUGINS_ROOT, bundled_plugin_dirs
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.commands._validation import ValidationError
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.types import Rule, Skill
 
 pytestmark = pytest.mark.catalog
 

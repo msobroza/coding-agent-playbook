@@ -302,8 +302,10 @@ coding-agent-playbook/
 ├── src/coding_agent_playbook/              # logic only: no rule, prompt, eval task, skill or hook file
 │   ├── __init__.py
 │   ├── cli/                                # `playbook` entrypoint: __init__ (main), parser, __main__
-│   ├── types.py                            # Rule, Prompt, Skill, Hook dataclasses (Section 6.6)
-│   ├── artifacts/                          # their stdlib leaves: hook_schema, hook_frontmatter, member_reference
+│   ├── artifacts/                          # Rule, Prompt, Skill, Hook dataclasses (Section 6.6)
+│   │   ├── rule.py, prompt.py, skill.py, hook.py   # one module per artifact
+│   │   ├── frontmatter.py                  # the markdown + YAML frontmatter format they share
+│   │   └── hook_schema.py, hook_frontmatter.py, member_reference.py   # stdlib leaves
 │   ├── config/                             # the consumer config (Section 7)
 │   │   ├── model.py                        # Config dataclass and the [output] parser
 │   │   ├── schema.py                       # per-file checks, ConfigError
@@ -373,14 +375,13 @@ coding-agent-playbook/
 │           └── config.yaml.j2              # starter .pre-commit-config.yaml (engine wiring, not content; Section 13.2)
 ├── tests/
 │   ├── plugins/                            # bundled-plugin gates (Sections 11.5.1, 11.5.2)
-│   ├── artifacts/                          # test_hook_frontmatter.py
+│   ├── artifacts/                          # test_artifacts.py, test_hook.py, test_hook_frontmatter.py, ...
 │   ├── catalog/                            # test_roots.py, test_source.py, ...
 │   ├── detector/                           # test_facts.py, test_predicate.py, ...
 │   ├── unit/
 │   │   ├── test_renderer.py
 │   │   ├── test_overlays.py
-│   │   ├── test_eval_tasks.py
-│   │   └── test_types.py
+│   │   └── test_eval_tasks.py
 │   ├── lockfile/
 │   │   └── test_model.py
 │   ├── metrics_gate/                       # test_run.py, test_config.py, test_policy.py, ...
@@ -1079,7 +1080,7 @@ Three reasons to make the canonical types a first-class concern, even though v1'
 **3. Alternative deployments get a stable interchange format.** A future hosted product can store rules as JSON in a database or transmit them over HTTP as JSON payloads — operating on the *same* canonical type the OSS engine uses internally. The markdown authoring format is the lossless serialization for humans; the JSON serialization is the lossless serialization for machines. Both produce identical `Rule` objects when parsed.
 #### 6.6.2 The canonical types
 ```python
-# coding_agent_playbook/types.py
+# coding_agent_playbook/artifacts/rule.py (and prompt.py, skill.py below)
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -1117,6 +1118,7 @@ class Rule:
     def from_dict(cls, data: dict) -> "Rule": ...
 
 
+# coding_agent_playbook/artifacts/prompt.py
 @dataclass
 class PromptFrontmatter:
     id: str
@@ -1144,6 +1146,7 @@ class Prompt:
     ...
 
 
+# coding_agent_playbook/artifacts/skill.py
 @dataclass
 class Skill:
     # Agent Skills directory, see Section 6.3
@@ -1156,7 +1159,7 @@ class Skill:
     ...
 
 
-# coding_agent_playbook/artifacts/member_reference.py (a stdlib-only leaf types.py imports)
+# coding_agent_playbook/artifacts/member_reference.py (a stdlib-only leaf skill.py imports)
 def member_reference_path(rule_id: str) -> str: ...  # "references/<rule_id>.md"
 
 
@@ -1227,7 +1230,7 @@ class HookFrontmatter:
     def to_mapping(self) -> dict: ...  # empty values (an empty summary too) dropped at every level
 
 
-# coding_agent_playbook/types.py
+# coding_agent_playbook/artifacts/hook.py
 @dataclass
 class Hook:
     frontmatter: HookFrontmatter
@@ -1273,7 +1276,7 @@ Equally important is what's deliberately absent:
 - **No source-specific data** beyond `source_package` and the optional `source_path`. A `Rule` from a database row should be indistinguishable in behavior from a `Rule` from a markdown file.
 - **No render context** (the Jinja variables). The render context is supplied at parse-time and consumed; the resulting `Rule` carries only the rendered `body` and (for templated rules) the `template_body`. Two different contexts produce two different `Rule` objects.
 #### 6.6.5 What v1 ships
-The dataclasses themselves: `coding_agent_playbook/types.py` with the full type definitions and the `from_markdown` / `to_markdown` / `to_dict` / `from_dict` methods. The existing loader becomes a thin wrapper that calls `Rule.from_markdown` per file. Adapters' signatures explicitly typed as taking `Rule`, `Prompt`, `Skill`, and the resolved form of a `Hook` (`ResolvedHook`, §6.6.7). The renderer produces these typed objects.
+The dataclasses themselves: `coding_agent_playbook/artifacts/` (`rule.py`, `prompt.py`, `skill.py`, `hook.py`, with the frontmatter helpers in `frontmatter.py`) with the full type definitions and the `from_markdown` / `to_markdown` / `to_dict` / `from_dict` methods. The existing loader becomes a thin wrapper that calls `Rule.from_markdown` per file. Adapters' signatures explicitly typed as taking `Rule`, `Prompt`, `Skill`, and the resolved form of a `Hook` (`ResolvedHook`, §6.6.7). The renderer produces these typed objects.
 v1 does **not** ship:
 - Any non-markdown source of canonical types (no `from_database`, no `from_http`).
 - Any non-markdown serialization (the JSON `to_dict` is available, but the OSS engine never writes it to disk — that's a commercial-version concern). The one JSON file sync writes for hooks, `guard_config.json`, holds derived `ResolvedHook.to_json()` records, not canonical artifacts (§6.6.7).
@@ -1706,7 +1709,9 @@ Without the matching argument a prompt renders with neither block nor appendix, 
 # coding_agent_playbook/adapters/base.py
 from abc import ABC, abstractmethod
 from pathlib import Path
-from coding_agent_playbook.types import Rule, Prompt, Skill
+from coding_agent_playbook.artifacts.prompt import Prompt
+from coding_agent_playbook.artifacts.rule import Rule
+from coding_agent_playbook.artifacts.skill import Skill
 
 
 class Adapter(ABC):
@@ -3466,7 +3471,11 @@ The fix is a small abstraction: route "where do artifacts come from" and "where 
 # coding_agent_playbook/catalog/source.py (ArtifactSource) and config/files.py (StateSource)
 from abc import ABC, abstractmethod
 from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
-from coding_agent_playbook.types import Rule, Prompt, Skill, Hook, EvalTask
+from coding_agent_playbook.artifacts.hook import Hook
+from coding_agent_playbook.artifacts.prompt import Prompt
+from coding_agent_playbook.artifacts.rule import Rule
+from coding_agent_playbook.artifacts.skill import Skill
+from coding_agent_playbook.evals.task import EvalTask
 from coding_agent_playbook.config.model import Config
 from coding_agent_playbook.config.tables.hooks import PolicyTables
 from coding_agent_playbook.lockfile import Lockfile
