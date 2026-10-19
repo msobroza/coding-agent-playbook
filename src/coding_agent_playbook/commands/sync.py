@@ -112,7 +112,7 @@ if TYPE_CHECKING:
     ValidateFn = Callable[[SyncContext], Sequence[ValidationError]]
 
 # What "the lockfile cannot be read" looks like: tomllib.TOMLDecodeError and
-# lockfile.LockfileFormatError are ValueErrors; the rest guard third-party sources.
+# lockfile.model.LockfileFormatError are ValueErrors; the rest guard third-party sources.
 _UNREADABLE_LOCKFILE: tuple[type[Exception], ...] = (OSError, ValueError, KeyError, TypeError)
 
 # Printed last when the sandbox or the validate gate stops a sync before any write.
