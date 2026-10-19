@@ -23,7 +23,9 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from pathlib import Path
 
-    from coding_agent_playbook._typing import Prompt, Rule, Skill
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
@@ -72,7 +74,7 @@ class Adapter(ABC):
     shared_outputs: ClassVar[tuple[str, ...]] = ()
 
     #: The repo-relative root this adapter's native Agent-Skills writer
-    #: (``adapters._skill_writer.SkillWriter``) writes ``<root>/<id>/`` under,
+    #: (``adapters.skill_dirs.writer.SkillWriter``) writes ``<root>/<id>/`` under,
     #: such as ``".claude/skills"``; ``None`` (the default) when it writes none.
     #: Inside ``<root>/<id>/`` that writer settles what is in the way itself
     #: (§10.8), so ``sync --check`` explains a missing file there its way (§12.3).

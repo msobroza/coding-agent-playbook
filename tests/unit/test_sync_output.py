@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
+from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.commands._sync_output import (
     file_drift,
@@ -332,9 +332,9 @@ def test_file_drift_names_a_link_leaving_a_native_skill_dir(tmp_path: Path) -> N
 def test_native_skill_roots_are_the_skill_writer_roots_of_the_given_adapters() -> None:
     from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
     from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
-    from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
-    from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
-    from coding_agent_playbook.adapters.shared_skills_adapter import (
+    from coding_agent_playbook.adapters.continue_ import ContinueAdapter
+    from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
+    from coding_agent_playbook.adapters.shared_skills import (
         SHARED_SKILLS_ROOT,
         SharedSkillsAdapter,
     )
@@ -356,7 +356,7 @@ def test_native_skill_roots_are_the_skill_writer_roots_of_the_given_adapters() -
 
 def test_native_skill_roots_read_the_public_class_attribute() -> None:
     """An out-of-tree adapter opts in by declaring ``native_skills_root``."""
-    from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
+    from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 
     class _ThirdPartySkills(ContinueAdapter):
         native_skills_root = ".acme/skills"

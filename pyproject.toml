@@ -61,11 +61,11 @@ playbook-hook = "coding_agent_playbook.hook_runtime.cli:main"
 [project.entry-points."coding_agent_playbook.adapters"]
 # Populated by PRs 6–9: continue, claude_code, opencode, agents_md.
 agent_harness = "coding_agent_playbook.adapters.agent_harness_adapter:AgentHarnessAdapter"
-agents_md = "coding_agent_playbook.adapters.agents_md_adapter:AgentsMdAdapter"
+agents_md = "coding_agent_playbook.adapters.agents_md:AgentsMdAdapter"
 claude_code = "coding_agent_playbook.adapters.claude_code.adapter:ClaudeCodeAdapter"
-continue = "coding_agent_playbook.adapters.continue_adapter:ContinueAdapter"
-opencode = "coding_agent_playbook.adapters.opencode_adapter:OpenCodeAdapter"
-shared_skills = "coding_agent_playbook.adapters.shared_skills_adapter:SharedSkillsAdapter"
+continue = "coding_agent_playbook.adapters.continue_:ContinueAdapter"
+opencode = "coding_agent_playbook.adapters.opencode:OpenCodeAdapter"
+shared_skills = "coding_agent_playbook.adapters.shared_skills:SharedSkillsAdapter"
 
 [project.entry-points."coding_agent_playbook.overlays"]
 # Populated by overlay packages (e.g. playbook-rules-bnp). Engine ships none.
@@ -281,7 +281,6 @@ exhaustive_ignores = [
     "_output_io",
     "_sentinel",
     "_symlinks",
-    "_typing",
     "evaluators",
     "gate_scan",
     "git_client",
@@ -298,8 +297,6 @@ exhaustive_ignores = [
     "rule_registry",
 ]
 ignore_imports = [
-    # CF-2 deletes _typing.py (after #62)
-    "coding_agent_playbook._typing -> coding_agent_playbook.evals.task",
     # kept: catalog-layers (the artifact source parses eval tasks) is not scheduled (L12)
     "coding_agent_playbook.catalog.source -> coding_agent_playbook.evals.**",
 ]
@@ -341,7 +338,6 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_verify",
     "coding_agent_playbook._output_io",
     "coding_agent_playbook._symlinks",
-    "coding_agent_playbook._typing",
     "coding_agent_playbook.adapters",
     "coding_agent_playbook.artifacts",
     "coding_agent_playbook.catalog._hook_walk",
@@ -404,7 +400,6 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_verify",
     "coding_agent_playbook._output_io",
     "coding_agent_playbook._symlinks",
-    "coding_agent_playbook._typing",
     "coding_agent_playbook.adapters",
     "coding_agent_playbook.artifacts",
     "coding_agent_playbook.catalog._hook_walk",
@@ -491,7 +486,6 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_verify",
     "coding_agent_playbook._output_io",
     "coding_agent_playbook._symlinks",
-    "coding_agent_playbook._typing",
     "coding_agent_playbook.adapters",
     "coding_agent_playbook.artifacts",
     "coding_agent_playbook.catalog._hook_walk",
@@ -609,14 +603,9 @@ ignore_imports = [
     "coding_agent_playbook.gate_scan -> coding_agent_playbook.hook_runtime._git_parse",
     # N21: becomes hook_runtime/harness/payload.py
     "coding_agent_playbook.hook_runtime.dispatch -> coding_agent_playbook.hook_runtime.harness._payload",
-    # A9: becomes adapters/skill_dirs/ownership.py (after #62)
-    "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._prior_output",
     # A7: becomes generated_output/write_guard.py (after #62)
     "coding_agent_playbook.commands._sync_hooks -> coding_agent_playbook.adapters._owned_files",
     "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._owned_files",
-    # A9: becomes adapters/skill_dirs/writer.py (after #62)
-    "coding_agent_playbook.commands._sync_output -> coding_agent_playbook.adapters._skill_writer",
-    "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._skill_writer",
     # A7: becomes generated_output/source_files.py (after #62)
     "coding_agent_playbook.validation.checks -> coding_agent_playbook.adapters._skill_sources",
     "coding_agent_playbook.guard_config -> coding_agent_playbook.adapters._skill_sources",
@@ -628,9 +617,6 @@ Import a public module of the owning package, or move the importer inside that p
 """
 
 # --- coverage ---
-
-[tool.coverage.run]
-omit = ["*/_typing.py"]  # runtime-inert type shim; imported only under TYPE_CHECKING
 
 [tool.coverage.report]
 exclude_lines = [

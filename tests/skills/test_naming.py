@@ -22,7 +22,7 @@ def test_naming_leaf_loads_no_other_playbook_module() -> None:
     loaded = new_modules_after("import coding_agent_playbook.skills.naming")
 
     # Only the docstring-only skills package beside the module itself: no types, no
-    # _skill_writer (it imports this module, so that would be a cycle), no yaml.
+    # skill_dirs.writer (it imports this module, so that would be a cycle), no yaml.
     non_stdlib = [name for name in loaded if name.split(".")[0] not in sys.stdlib_module_names]
     assert non_stdlib == [
         "coding_agent_playbook.skills",
