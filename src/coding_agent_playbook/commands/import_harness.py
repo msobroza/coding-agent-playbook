@@ -30,7 +30,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.agent_harness.manifest import Manifest, ManifestEntry, read_manifest
 from coding_agent_playbook.agent_harness.models import (
@@ -64,6 +64,9 @@ if TYPE_CHECKING:
     import argparse
 
     from coding_agent_playbook.artifacts.hook import Hook
+
+NAME: Final = "import-harness"
+HELP: Final = "import an Agent Harness tree into canonical artifacts"
 
 #: Source-package marker recorded on every imported artifact.
 IMPORTED_SOURCE_PACKAGE = "<imported>"
@@ -507,6 +510,20 @@ def _write_result(result: ImportResult, into: Path) -> None:
 
 
 # --- CLI entry -------------------------------------------------------------
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook import-harness [PATH] [--into DIR]`` (SPEC §12.9).
+
+    Example::
+
+        >>> configure(argparse.ArgumentParser(prog="playbook import-harness"))  # doctest: +SKIP
+    """
+    parser.add_argument("path", nargs="?", help="path to the harness root (contains HARNESS.md)")
+    parser.add_argument(
+        "--into",
+        help="overlay directory to write canonical artifacts into (defaults to ./playbook)",
+    )
 
 
 def run(args: argparse.Namespace) -> int:
