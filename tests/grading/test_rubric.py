@@ -40,9 +40,6 @@ class _CC(Metric):
     """A CC-like metric (``RampNormalizer(good=5, bad=20)``): thresholds live on the Check.
 
     ``score(raw) = clamp01((20 - raw) / 15)`` (raw 5 -> 1.0, raw 12.5 -> 0.5).
-    ``available`` is forced ``True`` so the Rubric never skips this check on a
-    bare ``ctx`` (no ``module``); these tests exercise the *aggregation* logic,
-    not the metric's ctx-slot gating (covered in ``test_metric.py``).
     """
 
     name = "cyclomatic_complexity"
@@ -50,29 +47,28 @@ class _CC(Metric):
     normalizer = RampNormalizer(good=5, bad=20)
     requires = None
 
-    def available(self, ctx: EvalContext) -> bool:
-        return True
-
     def measure(self, ctx: EvalContext) -> list[Measurement]:
         return []
 
 
 class _Cov(Metric):
-    """A coverage-like percentage metric (``PercentNormalizer``; always available)."""
+    """A coverage-like percentage metric (``PercentNormalizer``)."""
 
     name = "coverage"
     scope = Scope.FILE
     normalizer = PercentNormalizer()
     requires = None
 
-    def available(self, ctx: EvalContext) -> bool:
-        return True
-
     def measure(self, ctx: EvalContext) -> list[Measurement]:
         return []
 
 
 def _ctx(judge: StubJudge | None = None, *, samples: int = 1) -> EvalContext:
+    """A grading ctx that names both metrics as measured, so the Rubric never skips their checks.
+
+    These tests exercise the *aggregation* logic, not availability (covered in
+    ``test_measuring.py``).
+    """
     return EvalContext(
         module=None,
         source="",
@@ -80,6 +76,7 @@ def _ctx(judge: StubJudge | None = None, *, samples: int = 1) -> EvalContext:
         judge=judge,
         artifact="ART",
         samples=samples,
+        measured_metrics=frozenset({"cyclomatic_complexity", "coverage"}),
     )
 
 

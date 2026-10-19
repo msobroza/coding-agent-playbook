@@ -45,14 +45,17 @@ from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResul
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle, RunArtifacts
+    from coding_agent_playbook.grading.execution_metrics.project import (
+        ProjectFactory,
+        ProjectHandle,
+        RunArtifacts,
+    )
     from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import SkipCategory, StopPlan
     from coding_agent_playbook.hook_runtime.stop.suite import SuiteOutcome
     from coding_agent_playbook.metrics_gate.run import MetricsGateResult
-    from coding_agent_playbook.metrics_gate.suite import ProjectFactory
 
 __all__ = [
     "CONFIG_SCHEMA",
@@ -63,7 +66,7 @@ __all__ = [
 ]
 
 STAGE_NAME: Final = "coverage"
-#: The MODULE label the gate keys the suite total on (``metrics_gate.suite``).
+#: The MODULE label the gate keys the suite total on (``grading.measuring.SUITE_LABEL``).
 _SUITE_LABEL: Final = "suite"
 _SELECT: Final = ("diff_coverage", "coverage")
 CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {

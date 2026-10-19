@@ -174,20 +174,16 @@ def _measure(handle: ProjectHandle, label: str = "suite") -> list[Measurement]:
 
 
 def _grade(
-    candidate: list[Measurement],
-    baseline: list[Measurement] | None,
-    config: MetricConfig,
-    *,
-    project: ProjectHandle,
+    candidate: list[Measurement], baseline: list[Measurement] | None, config: MetricConfig
 ) -> EvaluationReport:
     """Grade execution measurements through the ``Rubric`` of the two execution checks.
 
     Mirrors what ``playbook metrics --run-tests`` does: assemble one metric-backed
     check per execution metric via the shared :func:`metric_check` factory (so the
     ported default policy — ``coverage`` warn=80, ``test_pass_rate`` fail=1.0 —
-    applies), then fold them into one report. ``project`` is passed on the ctx so
-    the execution checks report ``available`` (the suite is already run/cached, so
-    nothing re-executes); ``fail_fast=False`` keeps the report complete.
+    applies), then fold them into one report. The ctx names both metrics as
+    measured, so the execution checks report ``available`` (the suite already ran,
+    so nothing re-executes); ``fail_fast=False`` keeps the report complete.
     """
     checks = []
     for name in ("test_pass_rate", "coverage"):
@@ -199,16 +195,16 @@ def _grade(
         module=None,
         source="",
         label="suite",
-        project=project,
         candidate_measurements=candidate,
         baseline_measurements=baseline,
+        measured_metrics=frozenset({"test_pass_rate", "coverage"}),
     )
     return rubric.evaluate(ctx, MeasurementSet(candidate, baseline), fail_fast=False)
 
 
 def test_failing_suite_fails_absolute_gate(tmp_path: Path) -> None:
     handle = _project(tmp_path / "proj", tmp_path / "rep", _TEST_FAIL)
-    report = _grade(_measure(handle), None, MetricConfig(mode="absolute"), project=handle)
+    report = _grade(_measure(handle), None, MetricConfig(mode="absolute"))
     assert report.passed is False
     failing = [f for f in report.findings if f.evaluator == "test_pass_rate"]
     assert failing and failing[0].level == "fail"
@@ -226,7 +222,7 @@ def test_low_coverage_warns(tmp_path: Path) -> None:
         """
     )
     handle = _project(tmp_path / "proj", tmp_path / "rep", partial)
-    report = _grade(_measure(handle), None, MetricConfig(mode="absolute"), project=handle)
+    report = _grade(_measure(handle), None, MetricConfig(mode="absolute"))
     cov_file = [
         f for f in report.findings if f.evaluator == "coverage" and f.scope_key.endswith("mod.py")
     ]
@@ -253,7 +249,7 @@ def test_coverage_regression_drop_fails(tmp_path: Path) -> None:
     cand = _project(tmp_path / "cand", tmp_path / "cand_rep", partial)
     cand_ms = _measure(cand, label="suite")
 
-    report = _grade(cand_ms, baseline_ms, MetricConfig(mode="regression"), project=cand)
+    report = _grade(cand_ms, baseline_ms, MetricConfig(mode="regression"))
     assert report.passed is False
     cov_reg = [
         f
@@ -268,7 +264,7 @@ def test_coverage_unchanged_passes_regression(tmp_path: Path) -> None:
     baseline_ms = _measure(base, label="suite")
     cand = _project(tmp_path / "cand", tmp_path / "cand_rep", _TEST_PASS)
     cand_ms = _measure(cand, label="suite")
-    report = _grade(cand_ms, baseline_ms, MetricConfig(mode="regression"), project=cand)
+    report = _grade(cand_ms, baseline_ms, MetricConfig(mode="regression"))
     assert report.passed is True
 
 
@@ -277,7 +273,7 @@ def test_new_failing_test_fails_regression(tmp_path: Path) -> None:
     baseline_ms = _measure(base, label="suite")
     cand = _project(tmp_path / "cand", tmp_path / "cand_rep", _TEST_FAIL)
     cand_ms = _measure(cand, label="suite")
-    report = _grade(cand_ms, baseline_ms, MetricConfig(mode="regression"), project=cand)
+    report = _grade(cand_ms, baseline_ms, MetricConfig(mode="regression"))
     assert report.passed is False
     tpr = [f for f in report.findings if f.evaluator == "test_pass_rate"]
     assert tpr and tpr[0].level == "fail"
