@@ -12,7 +12,7 @@ The rules no single ``HOOK.md`` can decide:
 - H21: ``enable``/``disable`` name existing hooks and are disjoint;
   ``allow_code_from`` ⊆ ``overlays_enabled`` + ``<repo-local>``; no
   ``wrapper_prefixes`` entry hides a guarded command
-  (``hook_runtime.wrapper_policy``, the rule the dispatcher applies to
+  (``hook_runtime.shell.wrapper_policy``, the rule the dispatcher applies to
   ``PLAYBOOK_HOOK_WRAPPER_PREFIXES``); every ``[hooks.<x>]`` names a hook;
   ``[hooks.stop-ci-parity-gate] stages`` ⊆ {``typecheck``, ``tests``}; and
   neither policy table sits in ``.local.toml`` (an error for validate, a
@@ -39,7 +39,7 @@ from coding_agent_playbook.hook_policy._findings import (
 )
 from coding_agent_playbook.hook_policy.handler_catalog import config_findings
 from coding_agent_playbook.hook_policy.tables import ADVISORY_RULE_PREFIX
-from coding_agent_playbook.hook_runtime.wrapper_policy import hidden_program
+from coding_agent_playbook.hook_runtime.shell.wrapper_policy import hidden_program
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.shell import (
+from coding_agent_playbook.hook_runtime.shell.parse import (
     LIMIT,
     MAX_SEGMENTS,
     MAX_TEXT_BYTES,
@@ -590,9 +590,9 @@ def test_dynamic_redirect_targets_are_flagged() -> None:
 _FORBIDDEN = {"jinja2", "yaml", "importlib.metadata", "tomllib", "packaging", "argparse", "json"}
 
 
-def test_shell_and_gitargv_import_only_the_stdlib_and_the_runtime() -> None:
+def test_shell_parse_and_git_command_import_only_the_stdlib_and_the_runtime() -> None:
     loaded = new_modules_after(
-        "import coding_agent_playbook.hook_runtime.shell, coding_agent_playbook.hook_runtime.gitargv"
+        "import coding_agent_playbook.hook_runtime.shell.parse, coding_agent_playbook.hook_runtime.shell.git_command"
     )
 
     engine = {name for name in loaded if name.startswith("coding_agent_playbook")}
@@ -600,5 +600,5 @@ def test_shell_and_gitargv_import_only_the_stdlib_and_the_runtime() -> None:
     assert {
         name for name in engine if name != runtime and not name.startswith(f"{runtime}.")
     } == set()
-    assert "coding_agent_playbook.hook_runtime.shell" in engine
+    assert "coding_agent_playbook.hook_runtime.shell.parse" in engine
     assert not _FORBIDDEN & set(loaded)

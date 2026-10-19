@@ -24,8 +24,8 @@ from coding_agent_playbook.hook_runtime.registry import (
     builtin_handler_modules,
     registered_handlers,
 )
-from coding_agent_playbook.hook_runtime.shell import ShellConfig, parse_shell
-from coding_agent_playbook.hook_runtime.wrapper_policy import (
+from coding_agent_playbook.hook_runtime.shell.parse import ShellConfig, parse_shell
+from coding_agent_playbook.hook_runtime.shell.wrapper_policy import (
     WrapperDeclaration,
     declare_wrappers,
     hidden_program,

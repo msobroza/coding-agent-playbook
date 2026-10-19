@@ -445,7 +445,7 @@ def test_an_edit_event_parse_never_loads_the_shell_parser() -> None:
 
     runtime = engine_module("coding_agent_playbook.hook_runtime")
     assert all(m.startswith(runtime) for m in engine), engine
-    assert engine_module("coding_agent_playbook.hook_runtime.shell") not in loaded
+    assert engine_module("coding_agent_playbook.hook_runtime.shell.parse") not in loaded
     assert not {"tomllib", "argparse", "importlib.metadata", "jinja2", "yaml", "shlex"} & set(
         loaded
     )

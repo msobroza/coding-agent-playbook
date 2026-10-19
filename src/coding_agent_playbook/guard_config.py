@@ -99,7 +99,6 @@ from coding_agent_playbook.hook_registrations import (
     resolved_deadlines_ms,
     stop_gate_table,
 )
-from coding_agent_playbook.hook_runtime._shell_wrappers import DEFAULT_RUNNER_WRAPPERS
 from coding_agent_playbook.hook_runtime.config.guard_config import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import CONTROL_PLANE
 from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
@@ -108,6 +107,7 @@ from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
 from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
 from coding_agent_playbook.hook_runtime.judges.notebook_check import NOTEBOOK_MAX_BYTES
 from coding_agent_playbook.hook_runtime.routing import ASYNC_AUDIT_MODE, ASYNC_EVENT, handler_route
+from coding_agent_playbook.hook_runtime.shell.wrappers import DEFAULT_RUNNER_WRAPPERS
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 
 if TYPE_CHECKING:

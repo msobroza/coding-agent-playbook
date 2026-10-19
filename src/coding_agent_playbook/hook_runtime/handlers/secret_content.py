@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.git import AddedLine
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import ShellCommand
+    from coding_agent_playbook.hook_runtime.shell.parse import ShellCommand
     from coding_agent_playbook.security.secrets import SecretFinding, SecretRule
 
 __all__ = ["CONFIG_SCHEMA", "PRAGMA_ADVICE", "secret_content_guard"]
@@ -226,7 +226,7 @@ def _pushes(command: ShellCommand) -> bool:
     """Whether a segment runs ``git push`` (any ``git`` token text, when the parse failed)."""
     if command.parse_error is not None:
         return _UNPARSED_PUSH.search(command.text) is not None
-    from coding_agent_playbook.hook_runtime.gitargv import parse_git
+    from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
 
     for segment in command.segments:
         invocation = parse_git(segment) if segment.argv[:1] in (("git",), ("git.exe",)) else None

@@ -30,7 +30,7 @@ from coding_agent_playbook.hook_runtime.handlers._control_plane_toml import (
     metrics_loosened,
     toml_verdict,
 )
-from coding_agent_playbook.hook_runtime.shell import parse_shell
+from coding_agent_playbook.hook_runtime.shell.parse import parse_shell
 from coding_agent_playbook.lockfile.canonical_json import element_sha256
 
 DENY, ASK, NONE = Decision.DENY, Decision.ASK, Decision.NONE
