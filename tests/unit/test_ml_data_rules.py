@@ -10,6 +10,7 @@ for adding torch stays byte-identical.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Final, cast
 
 import pytest
@@ -28,6 +29,8 @@ pytestmark = pytest.mark.catalog
 
 #: Every library one of the four rules branches on: their longest rendered form.
 _EVERY_BRANCH_LIBRARY: Final = ("numpy", "pandas", "polars", "scikit-learn", "torch")
+#: The line that says where the run's ``rng`` comes from (ml-reproducibility-and-testing).
+_RNG_DEFINITION: Final = "rng = np.random.default_rng(seed)"
 
 
 def _ml_facts(*libraries: str) -> Facts:
@@ -93,6 +96,8 @@ def _section_rows() -> list[tuple[str, tuple[str, ...], str, str]]:
             "random_state=",
         ),
         ("ml-reproducibility-and-testing", ("numpy", "scikit-learn"), "random_state=", "torch."),
+        # polars installs no NumPy, so a polars-only repo gets no NumPy generator.
+        ("ml-reproducibility-and-testing", ("polars",), "seed=sample_seed", "np.random"),
     ]
 
 
@@ -112,3 +117,36 @@ def test_ml_array_rule_fits_one_reference_read_with_every_library(rule_id: str) 
     body = render_core_rule(rule_id, _ml_facts(*_EVERY_BRANCH_LIBRARY))
 
     assert_fits_one_reference_read(rule_id, body, f"ml_stack {list(_EVERY_BRANCH_LIBRARY)}")
+
+
+@pytest.mark.parametrize(
+    "ml_stack",
+    [
+        ("numpy",),
+        ("pandas",),
+        ("pandas", "scikit-learn"),
+        ("polars", "scikit-learn"),
+        _EVERY_BRANCH_LIBRARY,
+    ],
+)
+def test_rng_is_defined_before_its_first_use(ml_stack: tuple[str, ...]) -> None:
+    """Review fix: the pandas and scikit-learn lines once used ``rng`` that only NumPy defined."""
+    body = render_core_rule("ml-reproducibility-and-testing", _ml_facts(*ml_stack))
+
+    first_use = re.search(r"\brng\b", body)
+    assert first_use is not None, f"{list(ml_stack)} renders no `rng` at all"
+    assert body.find(_RNG_DEFINITION) == first_use.start(), (
+        f"with {list(ml_stack)} `rng` is used before {_RNG_DEFINITION!r}: "
+        f"{body[first_use.start() - 60 : first_use.end() + 60]!r}"
+    )
+
+
+def test_seed_sequence_children_are_passed_to_default_rng() -> None:
+    """Review fix: ``SeedSequence.spawn`` returns seeds, not generators, so the line wraps them."""
+    body = render_core_rule("ml-reproducibility-and-testing", _ml_facts("numpy"))
+
+    spawn_lines = [line for line in body.splitlines() if "SeedSequence(seed).spawn" in line]
+    assert spawn_lines, "the NumPy section no longer names SeedSequence(seed).spawn"
+    assert all("np.random.default_rng" in line for line in spawn_lines), (
+        f"SeedSequence children are not passed to np.random.default_rng: {spawn_lines}"
+    )

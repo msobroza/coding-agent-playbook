@@ -21,6 +21,10 @@ A result nobody can rerun cannot be debugged or trusted, and a test that compare
 ## One seed per run
 
 - The seed is configuration: the entry point reads it and builds the run's random source from it. Production passes `None`, so each run draws fresh entropy, unless a run has to be replayed.
+{# polars installs no NumPy: only the libraries whose lines below use `rng` get the generator. #}
+{% if has_ml_dep("numpy") or has_ml_dep("pandas") or has_ml_dep("scikit-learn") %}
+- Build that source as one NumPy generator, `rng = np.random.default_rng(seed)`, and pass it to every function that draws numbers. Never call `np.random.seed` or the legacy global draws such as `np.random.shuffle` and `np.random.rand`: they share one hidden global state that any imported module can disturb.
+{% endif %}
 - Randomness reaches a function as a parameter, never as hidden global state (`python-pure-core`).
 - Record the seed with the results, in the run's metadata or its first log line, so any run can be repeated.
 - Every library that keeps its own random state is seeded explicitly from that one value. The standard library's `random` gets its own `random.Random(seed)` instance, passed down like any other dependency.
@@ -43,8 +47,7 @@ Build expected arrays and frames inline, from small cases computed by hand (thre
 
 ## NumPy
 
-- Build one generator at the entry point, `rng = np.random.default_rng(seed)`, and pass it to every function that draws numbers. Never call `np.random.seed` or the module-level functions (`np.random.rand`, `np.random.shuffle`): they share one hidden global state that any imported module can disturb.
-- Give each worker or parallel task its own child generator, from `rng.spawn(n_workers)` or `np.random.SeedSequence(seed).spawn(n_workers)`; never hand every worker the same seed.
+- Give each worker or parallel task its own child generator: `rng.spawn(n_workers)`, or the child seeds of `np.random.SeedSequence(seed).spawn(n_workers)`, each passed to `np.random.default_rng`. Never hand every worker the same seed.
 - With a `None` seed, record the entropy the generator drew (`rng.bit_generator.seed_seq.entropy`), so the run can still be replayed.
 - Compare floats with `np.testing.assert_allclose(actual, expected, rtol=..., atol=...)`. Set `atol` whenever the expected values include zeros: a relative tolerance alone allows no difference at all at zero. Use `np.testing.assert_array_equal` for integers, booleans and strings.
 

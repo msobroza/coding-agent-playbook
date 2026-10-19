@@ -51,6 +51,7 @@ LONG_BRANCH_MARKERS: Final = (
     *((rule_id, heading) for rule_id in ML_ARRAY_RULE_IDS for heading in ("## NumPy", "## pandas")),
     ("ml-reproducibility-and-testing", "torch.manual_seed"),
     ("ml-reproducibility-and-testing", "random_state=int("),
+    ("ml-reproducibility-and-testing", "rng = np.random.default_rng(seed)"),
 )
 
 
