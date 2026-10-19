@@ -75,7 +75,7 @@ def _trial_boolean(over: str, trial: TrialResult) -> bool | None:
     the trial's report, or ``None`` when that layer was **skipped** (e.g. the
     rubric layer with no judge) — a skipped layer is neutral, it does not vote.
     This is the structural twin of
-    :func:`coding_agent_playbook.evals._compile.over_boolean`, inlined here so the
+    :func:`coding_agent_playbook.evals.compile.compiler.over_boolean`, inlined here so the
     ``evaluators`` package never imports ``evals`` (which would create a cycle).
     Raises :exc:`ValueError` on an unknown axis, or a layer the report lacks.
     """

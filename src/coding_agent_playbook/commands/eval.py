@@ -2,7 +2,7 @@
 
 ``playbook eval`` is both a read-only enumeration of the prompt-to-task graph and
 — with ``--run`` (PR R1d) — the entry point that *executes* one task end-to-end
-through a :class:`~coding_agent_playbook.evals.runner.HarnessRunner` and grades it
+through a :class:`~coding_agent_playbook.evals.run.harness_runner.HarnessRunner` and grades it
 via the unified PR-M :class:`EvaluationReport`.
 
 Sub-modes:
@@ -60,7 +60,7 @@ if TYPE_CHECKING:
     import argparse
 
     from coding_agent_playbook.evals.judge import Judge
-    from coding_agent_playbook.evals.runner import HarnessRunner
+    from coding_agent_playbook.evals.run.harness_runner import HarnessRunner
     from coding_agent_playbook.evals.task import EvalTask
 
 

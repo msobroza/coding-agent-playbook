@@ -9,8 +9,8 @@ import pytest
 
 from coding_agent_playbook.evals.judge import StubJudge
 from coding_agent_playbook.evals.loader import load_eval_task_from_dir
-from coding_agent_playbook.evals.runner import capture, materialize
-from coding_agent_playbook.evals.scoring import score
+from coding_agent_playbook.evals.run.harness_runner import capture, materialize
+from coding_agent_playbook.evals.run.scoring import score
 from coding_agent_playbook.evals.task import Verdict
 from tests._catalog import CORE_ROOT
 from tests.integration.ccv_answers import CORRECT_ANSWER
@@ -33,8 +33,10 @@ def stub_uv_sync(monkeypatch: pytest.MonkeyPatch) -> None:
             return subprocess.CompletedProcess(args, 0, "", "")
         return real_run(args, **kwargs)
 
-    monkeypatch.setattr("coding_agent_playbook.evals.runner.subprocess.run", _stub_run)
-    monkeypatch.setattr("coding_agent_playbook.evals.runner.shutil.which", lambda _b: "/fake/uv")
+    monkeypatch.setattr("coding_agent_playbook.evals.run.harness_runner.subprocess.run", _stub_run)
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.run.harness_runner.shutil.which", lambda _b: "/fake/uv"
+    )
 
 
 def _task() -> Any:

@@ -63,7 +63,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.judges.manifest_diff import ManifestKind
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["CONFIG_SCHEMA", "dependency_guard"]
 

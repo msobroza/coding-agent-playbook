@@ -137,7 +137,7 @@ def _verify_runs(tool: ToolCall, cfg: GuardConfig) -> list[str]:
     """The verify command ids a shell call ran (none for any other tool)."""
     if tool.tool_class is not ToolClass.SHELL or tool.command is None:
         return []
-    from coding_agent_playbook.hook_runtime._verify_tag import verify_ids
+    from coding_agent_playbook.hook_runtime.stop.verify_tag import verify_ids
 
     return verify_ids(tool, cfg)
 
@@ -146,7 +146,7 @@ def _shell_writes(ev: CanonicalEvent, tool: ToolCall, deps: RuntimeDeps) -> list
     """The files a shell command wrote, normalized; dynamic targets (``$X``) are unknowable."""
     if tool.tool_class is not ToolClass.SHELL or tool.command is None:
         return []
-    from coding_agent_playbook.hook_runtime.shell import write_targets
+    from coding_agent_playbook.hook_runtime.shell.parse import write_targets
 
     found: list[NormalizedPath] = []
     for segment in tool.command.segments:

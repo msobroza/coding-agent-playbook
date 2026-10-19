@@ -20,13 +20,13 @@ import posixpath
 import re
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._git_options import config_words, git_args
+from coding_agent_playbook.hook_runtime.shell.git_options import config_words, git_args
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from coding_agent_playbook.hook_runtime.gitargv import GitInvocation
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.git_command import GitInvocation
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["COMMIT_WRITERS", "IDENTITY_KEYS", "IDENTITY_REASON", "identity_rule"]
 
@@ -68,8 +68,8 @@ def identity_rule(segment: Segment, git: GitInvocation | None) -> str | None:
 
     Example::
 
-        >>> from coding_agent_playbook.hook_runtime.gitargv import parse_git
-        >>> from coding_agent_playbook.hook_runtime.shell import parse_shell
+        >>> from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
+        >>> from coding_agent_playbook.hook_runtime.shell.parse import parse_shell
         >>> seg = parse_shell("git commit --author=x -m m", "posix", "/r").segments[0]
         >>> identity_rule(seg, parse_git(seg))
         'author'

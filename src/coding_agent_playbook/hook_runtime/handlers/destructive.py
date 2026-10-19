@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment, ShellCommand
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment, ShellCommand
 
 __all__ = ["ARGV0S", "CONFIG_SCHEMA", "destructive_command_guard", "extra_row_hits"]
 
@@ -168,7 +168,7 @@ def _command_hit(command: ShellCommand, repo: RepoInfo, ctx: HandlerContext) -> 
 def _segment_hits(
     segments: Sequence[Segment], where: Where, facts: GitFacts, protected: tuple[str, ...]
 ) -> Iterable[Hit]:
-    from coding_agent_playbook.hook_runtime.gitargv import parse_git
+    from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
 
     for segment in segments:
         found = path_hit(segment, where)

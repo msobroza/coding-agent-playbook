@@ -4,11 +4,11 @@ These are the canonical Python representations of ``eval_tasks/<id>/task.toml``.
 The loader (:mod:`coding_agent_playbook.evals.loader`) parses the TOML; the
 validator (:mod:`coding_agent_playbook.evals.validator`) enforces structural
 correctness by trial-compiling the blocks; the runner
-(:mod:`coding_agent_playbook.evals.runner`) materializes + scores the task.
+(:mod:`coding_agent_playbook.evals.run.harness_runner`) materializes + scores the task.
 
 There is **no** ``[expected]``/``[metrics]``/``[rubric]`` triple — a task declares
 its evaluation as up to four raw blocks the compiler
-(:mod:`coding_agent_playbook.evals._compile`) turns into a per-trial structure:
+(:mod:`coding_agent_playbook.evals.compile.compiler`) turns into a per-trial structure:
 
 * ``[gate]`` — ``{"bind": <handle table>, "expr": <bool expr | None>}``. The
   deterministic layer (file predicates, metric thresholds, composed gates). Every
@@ -33,10 +33,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.evals._compile import CompiledTask
+    from coding_agent_playbook.evals.compile.compiler import CompiledTask
 
 #: Tolerance for the weighted-verdict ``weights`` sum check (parity with the
-#: rubric-group sum rule in :mod:`coding_agent_playbook.evals._handles`).
+#: rubric-group sum rule in :mod:`coding_agent_playbook.evals.compile._handles`).
 _WEIGHT_SUM_TOLERANCE = 1e-3
 
 
@@ -77,7 +77,7 @@ class Layer:
     """One ``[gate]`` / ``[rubric]`` / ``[aggregate]`` block: a bind table + an expr.
 
     ``bind`` is the raw ``[<layer>.bind]`` handle table (one entry per handle, the
-    value a binding the :func:`~coding_agent_playbook.evals._handles.build_handles`
+    value a binding the :func:`~coding_agent_playbook.evals.compile._handles.build_handles`
     factory turns into a :class:`~coding_agent_playbook.evaluators.check.Check`).
     ``expr`` is the optional boolean/aggregate expression over those handle names
     (``None`` defaults to the sole handle's name for a single-handle layer).
@@ -211,25 +211,25 @@ class EvalTask:
 def compile_eval_task(task: EvalTask) -> CompiledTask:
     """Compile ``task``'s ``[gate]``/``[rubric]``/``[verdict]`` into a :class:`CompiledTask`.
 
-    Delegates to :func:`coding_agent_playbook.evals._compile.compile_task` with the
+    Delegates to :func:`coding_agent_playbook.evals.compile.compiler.compile_task` with the
     task's gate/rubric/aggregate bind tables + exprs and the verdict trial
     expression. The returned
-    :class:`~coding_agent_playbook.evals._compile.CompiledTask` carries the
+    :class:`~coding_agent_playbook.evals.compile.compiler.CompiledTask` carries the
     per-trial :class:`~coding_agent_playbook.evaluators.rubric.Rubric` (the gate +
     rubric layer checks), the parsed verdict AST, and the compiled ``[aggregate]``
     layer + ``trials_needed`` (``None``/``1`` when no ``[aggregate]`` block).
 
-    Raises :exc:`ValueError` (incl. :exc:`~coding_agent_playbook.evals._expr.ExprError`)
+    Raises :exc:`ValueError` (incl. :exc:`~coding_agent_playbook.evals.compile._expr.ExprError`)
     /:exc:`KeyError` on any structural fault the compiler catches: no layer present,
     unknown check id/metric/gate-ref/rubric-ref, malformed binding, an expression
     identifier ⊄ its bind keys, a rubric weight-sum ≠ 1.0, or a verdict identifier
     naming an absent layer. The validator turns these into validation errors.
 
     The compiler is imported lazily so the ``task`` module stays import-light; the
-    ``_compile`` module imports only from ``evaluators`` (never back from ``task``),
+    ``compile.compiler`` module imports only from ``evaluators`` (never back from ``task``),
     so this is acyclic regardless.
     """
-    from coding_agent_playbook.evals._compile import compile_task
+    from coding_agent_playbook.evals.compile.compiler import compile_task
 
     return compile_task(
         gate_bind=task.gate.bind if task.gate is not None else None,

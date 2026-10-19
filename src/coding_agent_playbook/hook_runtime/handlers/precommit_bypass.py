@@ -5,7 +5,7 @@ is non-empty (the repo's ``.pre-commit-config.yaml`` declares a ``playbook-*``
 or ``coding-agent-playbook-*`` hook). It is the single owner of
 ``.git/hooks/**`` and ``core.hooksPath``:
 
-- **Bash.** One ``shell.parse_shell`` per event; each segment through
+- **Bash.** One ``shell.parse.parse_shell`` per event; each segment through
   :func:`._bypass_rules.segment_verdict` (``--no-verify``, commit ``-n``,
   ``SKIP=``, ``pre-commit uninstall``, injected ``core.hooksPath`` /
   ``alias.*``; plumbing asks), plus every write, ``rm``, ``mv`` or ``chmod``
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo, ToolCall
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
     type Verdict = tuple[Decision, str]
 
@@ -135,7 +135,7 @@ def _shell_verdict(
 
 def _touched(segment: Segment) -> list[str]:
     """Every path ``segment`` writes, plus each operand of ``rm``/``mv``/``chmod``/..."""
-    from coding_agent_playbook.hook_runtime._shell_writes import operands, write_targets
+    from coding_agent_playbook.hook_runtime.shell.writes import operands, write_targets
 
     targets = write_targets(segment)
     program = posixpath.basename(segment.argv[0]) if segment.argv else ""
