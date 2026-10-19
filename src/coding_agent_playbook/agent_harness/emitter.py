@@ -1,9 +1,11 @@
 """Pure emit helpers for the ``agent_harness`` output adapter (Track H1).
 
-These functions build harness file *contents* (strings) and perform the single
-filesystem side effect the adapter delegates here — copying a script verbatim
-with :func:`shutil.copy2` while reporting its executable bit. Keeping the string
-builders pure makes the adapter's ``finalize`` easy to unit-test.
+These functions build harness file *contents* and names (strings) and perform
+the single filesystem side effect the adapter delegates here — copying a script
+verbatim with :func:`shutil.copy2` while reporting its executable bit. Keeping the
+string builders pure makes the adapter's ``finalize`` easy to unit-test; AH-2
+(#143) moved the adapter's stateless builders (``HARNESS.md``, the always-rule
+file name, the skill-directory test) here.
 
 Invariants honoured (``specs/prH-agent-harness.md`` §B + CLAUDE.md):
 
@@ -29,7 +31,13 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.rule import Rule
+
 _FENCE = "---"
+_HARNESS_MD_INTRO = (
+    "This harness provides the coding rules, prompts and skills for this "
+    "project. Consult the routing files in each directory for details."
+)
 
 
 def frontmatter_block(fields: Mapping[str, str]) -> str:
@@ -94,3 +102,53 @@ def copy_script(src: Path, dst: Path) -> bool:
     dst.parent.mkdir(parents=True, exist_ok=True)
     copy_output(src, dst)
     return executable
+
+
+def always_rule_filename(rule: Rule) -> str:
+    """The ``rules/`` file name of an always-rule: its two-digit priority, then its id.
+
+    Example: ``always_rule_filename(rule) == "10-python-house-style.md"`` (priority 10).
+    """
+    return f"{rule.frontmatter.priority:02d}-{rule.frontmatter.id}.md"
+
+
+def harness_md_text(name: str, emitted_dirs: Sequence[str], always_rules: Sequence[Rule]) -> str:
+    """The whole ``HARNESS.md``: frontmatter, sentinel, the contents index and the always-rules.
+
+    ``emitted_dirs`` are the top-level directories this render writes, in index
+    order: never what happens to be on disk, or a leftover ``skills/`` would make
+    ``sync --check`` (rendering into an empty scratch) drift. The always-rules are
+    listed by (priority, id).
+
+    Example: ``harness_md_text("repo", ["skills", "rules"], always_rules)``.
+    """
+    description = f"Coding-agent harness for {name}."
+    frontmatter = frontmatter_block({"name": name, "description": description})
+    sections = [f"# {name}", "", _HARNESS_MD_INTRO, "", "## Contents", ""]
+    sections.extend(f"- `{d}/` — see `{d}/{d.upper()}.md`" for d in emitted_dirs)
+    sections.append("")
+    if always_rules:
+        sections.extend(_always_consult_lines(always_rules))
+    return with_sentinel_body(frontmatter, "\n".join(sections))
+
+
+def _always_consult_lines(always_rules: Sequence[Rule]) -> list[str]:
+    """The ``## Always consult these`` section: one pointer per always-rule file."""
+    ordered = sorted(always_rules, key=lambda r: (r.frontmatter.priority, r.frontmatter.id))
+    intro = ["## Always consult these", "", "Read these rules at the start of every session:", ""]
+    pointers = [
+        f"- `rules/{always_rule_filename(rule)}` — {rule.frontmatter.description}"
+        for rule in ordered
+    ]
+    return [*intro, *pointers, ""]
+
+
+def inside_skill_dir(path: Path, skills_dir: Path) -> bool:
+    """True for ``skills/<id>/...`` (a skill's own files), False for ``skills/SKILLS.md``.
+
+    Example: ``inside_skill_dir(repo / "skills" / "db" / "SKILL.md", repo / "skills") is True``.
+    """
+    try:
+        return len(path.relative_to(skills_dir).parts) > 1
+    except ValueError:
+        return False
