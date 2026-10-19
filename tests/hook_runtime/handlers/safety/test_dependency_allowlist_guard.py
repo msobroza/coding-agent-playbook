@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.config.tables.hooks import HooksConfig, parse_guardrails_config
-from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.judges.dependency_tiers import dependency_policy
 from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
+from coding_agent_playbook.hooks.guard_config.inputs import DetectInputs
 from coding_agent_playbook.hooks.resolution.effective import merged_handler_config
 from tests.engine_modules import engine_module
 from tests.hook_runtime.fakes import FakeGit
@@ -28,8 +28,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 
     type Deps = Callable[..., RuntimeDeps]

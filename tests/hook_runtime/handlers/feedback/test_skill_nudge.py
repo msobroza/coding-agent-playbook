@@ -1,7 +1,7 @@
 """skill-nudge: name the skill that covers a file the first time a session edits it (specs/prS-skills-context.md 8.5).
 
 Sync derives the per-skill glob table from the rendered member rules
-(``_guard_config_skills``); the builtin matches each written path's key against
+(``hooks.guard_config._tables_skills``); the builtin matches each written path's key against
 it, and combine's per-session dedupe shows each skill's line once. Every case
 runs the shipped ``HOOK.md`` through ``playbook-hook simulate post_tool_use``;
 nothing spawns.
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from tests.hook_payloads import HookPayloadCase
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 

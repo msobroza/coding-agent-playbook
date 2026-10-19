@@ -31,15 +31,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal
 
+from coding_agent_playbook.artifacts.path_globs import GlobSet, compile_globs, fold_key
 from coding_agent_playbook.hook_runtime.config.protected import protected_paths
 from coding_agent_playbook.hook_runtime.config.reader import TableReader
 from coding_agent_playbook.hook_runtime.config.schema import (
     CONTROL_PLANE,
     PolicyKeys,
 )
-from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
-from coding_agent_playbook.hook_runtime.escape import settings_files
-from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs
+from coding_agent_playbook.hook_runtime.dispatch.escape import settings_files
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 
 if TYPE_CHECKING:

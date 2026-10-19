@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
 
 __all__ = ["STAGE_NAME", "VerifyClaimStage", "completion_claim", "verify_claim_stage"]

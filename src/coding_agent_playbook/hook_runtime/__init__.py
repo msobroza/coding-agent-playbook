@@ -6,6 +6,6 @@ and renders that decision back into the harness's wire format.
 
 This module is a docstring only and imports nothing: every harness event pays
 for whatever the package root loads, within a 100 ms budget (§D.1). The hot
-path imports only the standard library, ``hook_runtime.*``, ``security.*`` and
-``artifacts.path_classes``.
+path imports only the standard library, ``hook_runtime.*``, ``security.*``,
+``artifacts.path_classes`` and ``artifacts.path_globs``.
 """

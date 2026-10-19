@@ -20,14 +20,14 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
-from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.registry import load_builtin
 from coding_agent_playbook.hook_runtime.git.safe_git import Fingerprint
 from coding_agent_playbook.hook_runtime.handlers.stop_drift_and_orphan_gate import DriftStage
-from coding_agent_playbook.hook_runtime.registry import load_builtin
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME, session_key
+from coding_agent_playbook.hooks.guard_config.inputs import DetectInputs
 from tests.hook_payloads import load_hook_payload
 from tests.hook_runtime.fakes import FakeGit, FakeProc, FakeStageRunner, StageCall
 from tests.hook_runtime.handlers.pack_repo import PackRepo, engine_hook
@@ -48,8 +48,8 @@ from tests.hook_runtime.handlers.stop_kit import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
 
 pytestmark = pytest.mark.catalog
 

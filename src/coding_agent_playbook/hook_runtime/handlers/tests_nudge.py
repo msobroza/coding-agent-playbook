@@ -13,7 +13,7 @@ match under the test roots (``git grep -w``) gets one line:
 - It is context by default; ``[hooks.tests-with-source-nudge] block = true``
   makes the lines a deny, inside the coordinator's budget.
 - The coordinator runs it only when no stage up to ``verify-claim`` is red.
-- The roots are baked into its config at sync (``_guard_config_verify``),
+- The roots are baked into its config at sync (``hooks.guard_config._tables_verify``),
   never read at run time. It fails open: an unparseable file is skipped.
 """
 
@@ -23,11 +23,11 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.artifacts.path_globs import fold_key
 from coding_agent_playbook.hook_runtime._public_api import new_public_symbols
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
-from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.stop.alone import run_alone
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult
 
@@ -36,8 +36,8 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
 
 __all__ = [

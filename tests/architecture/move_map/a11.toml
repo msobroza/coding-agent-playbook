@@ -1,0 +1,135 @@
+# A11 (#124, specs/prT-package-layout.md 7.6): the rest of the dispatcher joins
+# hook_runtime/dispatch/. The pipeline helpers stay private; the six underscore
+# modules imported from outside dispatch/ (selection, prefilter, tail, ports,
+# external, event_memo) become public package members; combine, watchdog,
+# routing, registry, escape, deps and proc keep their names.
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime._pipeline"
+new = "coding_agent_playbook.hook_runtime.dispatch._pipeline"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime._execute"
+new = "coding_agent_playbook.hook_runtime.dispatch._execute"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime._faults"
+new = "coding_agent_playbook.hook_runtime.dispatch._faults"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime._post_write"
+new = "coding_agent_playbook.hook_runtime.dispatch._post_write"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime._decision_log"
+new = "coding_agent_playbook.hook_runtime.dispatch._decision_log"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime._selection"
+new = "coding_agent_playbook.hook_runtime.dispatch.selection"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime._prefilter"
+new = "coding_agent_playbook.hook_runtime.dispatch.prefilter"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime._tail"
+new = "coding_agent_playbook.hook_runtime.dispatch.tail"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime._ports"
+new = "coding_agent_playbook.hook_runtime.dispatch.ports"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime._external"
+new = "coding_agent_playbook.hook_runtime.dispatch.external"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime._event_memo"
+new = "coding_agent_playbook.hook_runtime.dispatch.event_memo"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime.combine"
+new = "coding_agent_playbook.hook_runtime.dispatch.combine"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime.watchdog"
+new = "coding_agent_playbook.hook_runtime.dispatch.watchdog"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime.routing"
+new = "coding_agent_playbook.hook_runtime.dispatch.routing"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime.registry"
+new = "coding_agent_playbook.hook_runtime.dispatch.registry"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime.escape"
+new = "coding_agent_playbook.hook_runtime.dispatch.escape"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime.deps"
+new = "coding_agent_playbook.hook_runtime.dispatch.deps"
+
+[[module]]
+pr = "A11"
+old = "coding_agent_playbook.hook_runtime.proc"
+new = "coding_agent_playbook.hook_runtime.dispatch.proc"
+
+[[path]]
+pr = "A11"
+old = "tests/hook_runtime/test_combine.py"
+new = "tests/hook_runtime/dispatch/test_combine.py"
+
+[[path]]
+pr = "A11"
+old = "tests/hook_runtime/test_deps.py"
+new = "tests/hook_runtime/dispatch/test_deps.py"
+
+[[path]]
+pr = "A11"
+old = "tests/hook_runtime/test_dispatch_records.py"
+new = "tests/hook_runtime/dispatch/test_dispatch_records.py"
+
+[[path]]
+pr = "A11"
+old = "tests/hook_runtime/test_escape.py"
+new = "tests/hook_runtime/dispatch/test_escape.py"
+
+[[path]]
+pr = "A11"
+old = "tests/hook_runtime/test_failure_policy.py"
+new = "tests/hook_runtime/dispatch/test_failure_policy.py"
+
+[[path]]
+pr = "A11"
+old = "tests/hook_runtime/test_prefilter.py"
+new = "tests/hook_runtime/dispatch/test_prefilter.py"
+
+[[path]]
+pr = "A11"
+old = "tests/hook_runtime/test_registry.py"
+new = "tests/hook_runtime/dispatch/test_registry.py"
+
+[[path]]
+pr = "A11"
+old = "tests/hook_runtime/test_watchdog.py"
+new = "tests/hook_runtime/dispatch/test_watchdog.py"

@@ -16,11 +16,11 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
-from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.git.safe_git import AddedLine, Fingerprint
 from coding_agent_playbook.hook_runtime.handlers.notebooks import NotebooksStage
+from coding_agent_playbook.hooks.guard_config.inputs import DetectInputs
 from tests.hook_runtime.fakes import FakeGit
 from tests.hook_runtime.handlers.pack_repo import engine_hook, resolve_engine_hooks
 
@@ -28,8 +28,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 
 pytestmark = pytest.mark.catalog

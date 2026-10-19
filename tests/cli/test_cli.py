@@ -72,7 +72,7 @@ def test_every_subcommand_is_a_command_or_legacy() -> None:
 
     assert sorted([*command_names, *_LEGACY]) == sorted(_SUBCOMMANDS)
     assert len(set(_SUBCOMMANDS)) == len(_SUBCOMMANDS)
-    assert set(_LEGACY) == {"init", "sync", "validate", "render"}  # CP-1, CP-3
+    assert set(_LEGACY) == {"init"}  # CP-3
 
 
 def test_command_names_are_unique_and_match_their_place() -> None:

@@ -26,8 +26,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 
     type Deps = Callable[..., RuntimeDeps]
@@ -347,7 +347,10 @@ def test_cutover_date_rendered_from_the_commit_convention_table(pack_repo: PackR
         GuardrailsConfig,
         HooksConfig,
     )
-    from coding_agent_playbook.guard_config import GuardConfigInputs, render_guard_config
+    from coding_agent_playbook.hooks.guard_config.compile import (
+        GuardConfigInputs,
+        render_guard_config,
+    )
     from tests.hook_runtime.handlers.pack_repo import resolve_engine_hooks
 
     hooks = resolve_engine_hooks([HOOK_ID], pack_repo.root)

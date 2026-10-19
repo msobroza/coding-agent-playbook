@@ -35,6 +35,7 @@ from coding_agent_playbook.hook_runtime.dispatch.caps import (
     quote_data,
 )
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._pii_settings import (
     PII_CONFIG_KEY,
     PII_KEY,
@@ -47,14 +48,13 @@ from coding_agent_playbook.hook_runtime.handlers._transcript_prompts import (
     select_human_prompts,
     tail_lines,
 )
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, iso_utc, session_key
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.security.pii import PiiConfig
 
 __all__ = [

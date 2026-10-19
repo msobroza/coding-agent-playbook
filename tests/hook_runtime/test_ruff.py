@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.hook_runtime._event_memo import EventMemo
 from coding_agent_playbook.hook_runtime._ruff import (
     NEVER_FIX,
     RUFF_TIMEOUT_S,
@@ -33,7 +32,8 @@ from coding_agent_playbook.hook_runtime._ruff import (
     selector_matches,
 )
 from coding_agent_playbook.hook_runtime.config.pin import MachinePins, ToolPin, tool_signature
-from coding_agent_playbook.hook_runtime.proc import ProcResult, SubprocessProc
+from coding_agent_playbook.hook_runtime.dispatch.event_memo import EventMemo
+from coding_agent_playbook.hook_runtime.dispatch.proc import ProcResult, SubprocessProc
 from tests.hook_runtime.dispatch_kit import POST, dispatch
 from tests.hook_runtime.fakes import FakeRuff, ruff_row
 from tests.hook_runtime.guard_repo import hook_record
@@ -42,9 +42,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from tests.hook_runtime.fakes import FakeHandlerResolver
     from tests.hook_runtime.guard_repo import GuardRepo
 

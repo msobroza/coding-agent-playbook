@@ -1,0 +1,52 @@
+# AH-1 (#134, specs/prT-package-layout.md 4.6, 7.6, section 9 AC.4.5): the Agent
+# Harness adapter, its hook sidecar writer and the importer join the agent_harness/
+# package, which now holds both directions of the format round trip. The importer
+# is split out of its command: everything but configure and run moves, and
+# commands/import_harness.py keeps the command half. A split has no single
+# [[module]] destination, so the moved public names get a [[names]] row.
+# _write_result becomes write_import because it now crosses a package; the script
+# rewrites module paths, never names, so its call sites were edited by hand. The
+# best-effort walk went to agent_harness/_best_effort.py because the moved body
+# was over the 500-line budget (the spec's fallback); nothing outside the
+# importer named it, so it needs no row.
+
+[[module]]
+pr = "AH-1"
+old = "coding_agent_playbook.adapters.agent_harness_adapter"
+new = "coding_agent_playbook.agent_harness.adapter"
+
+[[module]]
+pr = "AH-1"
+old = "coding_agent_playbook.adapters._harness_hooks"
+new = "coding_agent_playbook.agent_harness.hook_sidecars"
+
+[[module]]
+pr = "AH-1"
+old = "coding_agent_playbook.commands._import_files"
+new = "coding_agent_playbook.agent_harness._import_files"
+
+[[module]]
+pr = "AH-1"
+old = "coding_agent_playbook.commands._import_hooks"
+new = "coding_agent_playbook.agent_harness._import_hooks"
+
+[[names]]
+pr = "AH-1"
+old = "coding_agent_playbook.commands.import_harness"
+new = "coding_agent_playbook.agent_harness.importer"
+names = ["IMPORTED_SOURCE_PACKAGE", "ImportResult", "import_harness"]
+
+[[path]]
+pr = "AH-1"
+old = "tests/adapters/test_agent_harness.py"
+new = "tests/agent_harness/test_adapter.py"
+
+[[path]]
+pr = "AH-1"
+old = "tests/adapters/test_agent_harness_hooks.py"
+new = "tests/agent_harness/test_adapter_hooks.py"
+
+[[path]]
+pr = "AH-1"
+old = "tests/adapters/test_agent_harness_member_rules.py"
+new = "tests/agent_harness/test_adapter_member_rules.py"

@@ -25,9 +25,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
-    from coding_agent_playbook.hook_runtime.proc import SubprocessProc
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.proc import SubprocessProc
     from tests.hook_payloads import HookPayloadCase
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
@@ -250,10 +250,10 @@ def test_child_timeout_fails_open_one_note(
 
 _DISPATCH_SCRIPT: Final = """
 import io, json, sys
-from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
 from coding_agent_playbook.hook_runtime.dispatch.run import run_event
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
-from coding_agent_playbook.hook_runtime.proc import ProcResult
+from coding_agent_playbook.hook_runtime.dispatch.proc import ProcResult
 
 class StubProc:
     def __init__(self):

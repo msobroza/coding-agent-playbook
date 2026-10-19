@@ -27,9 +27,9 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook.artifacts.path_globs import fold_key
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
-from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.stop.alone import run_alone
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult
 
@@ -38,13 +38,13 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.judges.gate_weakening import (
         AddedLine,
         Finding,
         ScanPolicy,
         ScanReport,
     )
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
 
 __all__ = [

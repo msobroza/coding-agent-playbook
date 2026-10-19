@@ -15,14 +15,14 @@ under the file-size budget:
 - :mod:`.opencode`: :func:`to_opencode_reg`, the OpenCode V1 shim's ``REG``
   over the closed V1 tool vocabulary, :func:`plan_opencode_reg` (§C.3.2), and
   :func:`render_opencode_shim`, the one generated plugin file (§C.3.1);
-- :mod:`.stop_gate`: the Stop coordinator's ``guard_config.stop_gate`` table
-  (:func:`stop_gate_table`) and the execution-stage timeouts the stop
-  deadline adds (prK-hook-pack.md §E.0.5).
+- :mod:`.stop_gate`: the Stop coordinator's stage records (which
+  ``guard_config.json``'s ``stop_gate`` table lists) and the execution-stage
+  timeouts the stop deadline adds (prK-hook-pack.md §E.0.5).
 
 The shim templates they fill are package data under ``templates/`` here. The
 event, tool-class and support tables live in ``hooks.resolution.tables`` (§A.11);
 this package only reads them. Stdlib-only. Handler routes
-(``hook_runtime.routing``, :func:`member_route`) keep the decision sink out of
+(``hook_runtime.dispatch.routing``, :func:`member_route`) keep the decision sink out of
 every registration and put local-audit-log's ``post_tool_use`` on the one async
 registration (OQ-19): Claude's ``async: true`` group and the shim ``REG``'s
 ``async`` pre-filter.
