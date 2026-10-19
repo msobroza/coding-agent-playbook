@@ -20,12 +20,10 @@ from coding_agent_playbook.evaluators.normalizer import Identity
 from coding_agent_playbook.evaluators.scope import Scope
 from coding_agent_playbook.metrics_gate.config import MetricConfig
 from coding_agent_playbook.metrics_gate.run import (
-    CONFIG_FILENAME,
     MAX_FILE_BYTES,
     MetricsGateDeps,
     MetricsGateRequest,
     MetricsGateUsageError,
-    load_metrics_config,
     run_metrics_gate,
 )
 from tests.cli.test_metrics import _BASELINE_SOURCE, _WORSE_SOURCE
@@ -229,35 +227,7 @@ def test_usage_errors_keep_cli_messages(
     assert str(excinfo.value) == message
 
 
-@pytest.mark.parametrize(
-    ("toml", "prefix"),
-    [
-        ("[metrics]\nmode = \n", f"malformed {CONFIG_FILENAME}: "),
-        ('[metrics]\nmode = "sideways"\n', f"invalid [metrics] config in {CONFIG_FILENAME}: "),
-    ],
-    ids=["malformed", "invalid"],
-)
-def test_load_metrics_config_usage_errors_keep_cli_messages(
-    tmp_path: Path, toml: str, prefix: str
-) -> None:
-    (tmp_path / CONFIG_FILENAME).write_text(toml, encoding="utf-8")
-
-    with pytest.raises(MetricsGateUsageError) as excinfo:
-        load_metrics_config(tmp_path)
-
-    assert str(excinfo.value).startswith(prefix)
-
-
-def test_load_metrics_config_defaults_without_a_config_file(tmp_path: Path) -> None:
-    assert load_metrics_config(tmp_path) == MetricConfig()
-
-
-def test_load_metrics_config_reads_the_metrics_table(tmp_path: Path) -> None:
-    (tmp_path / CONFIG_FILENAME).write_text(
-        '[metrics]\nmode = "both"\nrun_tests = true\n', encoding="utf-8"
-    )
-
-    assert load_metrics_config(tmp_path) == MetricConfig(mode="both", run_tests=True)
+# The load_metrics_config cases are in test_run_config.py (the [metrics] read).
 
 
 # --------------------------------------------------------------------------- #
@@ -528,8 +498,13 @@ def test_metrics_gate_imports_no_jinja_yaml_cli_or_argparse() -> None:
     cli = engine_module("coding_agent_playbook.cli")
     forbidden = ("jinja2", "markupsafe", "yaml", "argparse", cli)
     assert [m for m in loaded if m.split(".")[0] in forbidden or m in forbidden] == []
-    commands = engine_module("coding_agent_playbook.commands")
-    assert [m for m in loaded if m.startswith(commands)] == []
+    # The packages above metrics_gate in engine-layers; each move PR that creates
+    # one adds its prefix (specs/prT-package-layout.md 5.3.3).
+    above = tuple(
+        engine_module(f"coding_agent_playbook.{name}")
+        for name in ("commands", "precommit", "validation")
+    )
+    assert [m for m in loaded if m.startswith(above)] == []
 
 
 def test_default_deps_measure_with_the_static_metrics() -> None:

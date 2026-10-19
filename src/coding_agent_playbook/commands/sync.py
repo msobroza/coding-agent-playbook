@@ -18,16 +18,16 @@ Three modes:
 Both check modes decide skill-dir ownership against the real tree, so they skip
 exactly the skill dirs write mode skips. Write mode installs the leftover policy
 around its render, so a file/folder swap inside a skill dir displaces only what
-that policy would delete (``_prior_output.judging_leftovers_with``).
+that policy would delete (``skill_dirs.ownership.judging_leftovers_with``).
 
 Every mode first refuses to run when a configured overlay package fails to
 import or ships no ``resources/`` directory, or a bundled-plugin name matches no
-``catalog/plugins/<leaf>/`` (``_sync_preflight``) — rendering without it would
+``catalog/plugins/<leaf>/`` (``validation.preflight``) — rendering without it would
 silently drop the org rules and un-ignore their output. A config the engine
 would misread fails even earlier, while loading
 (:class:`~coding_agent_playbook.config.schema.ConfigError`). Write mode and
 ``--check`` then run the full ``playbook validate`` rule set, the hook trust
-contract H1-H21 included (:func:`~coding_agent_playbook.commands.validate.sync_gate_errors`),
+contract H1-H21 included (:func:`~coding_agent_playbook.validation.checks.sync_gate_errors`),
 and exit 1 on any finding, printing its ``FAIL`` lines to stderr and writing
 nothing (§P P8, §B.5). Validate's warnings print as ``warning:`` lines, and a
 ``[hooks]`` / ``[guardrails]`` table in ``.local.toml`` is only one of them
@@ -65,16 +65,16 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
-from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
-from coding_agent_playbook.adapters._skill_writer import deciding_ownership_against
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_code.settings.managed_merge import SettingsMergeError
+from coding_agent_playbook.adapters.registry import discover_adapters, installed_output_locations
+from coding_agent_playbook.adapters.skill_dirs.ownership import judging_leftovers_with
+from coding_agent_playbook.adapters.skill_dirs.writer import deciding_ownership_against
 from coding_agent_playbook.commands import (
     _output_blockers,
     _sync_hooks,
     _sync_orphans,
     _sync_output,
-    _sync_preflight,
 )
 from coding_agent_playbook.commands._output_locations import OutputLocations
 from coding_agent_playbook.commands._sync_hook_local import SyncHookDeps
@@ -90,26 +90,23 @@ from coding_agent_playbook.commands._sync_render import (
     report_description_overflow,
     report_sandbox_violation,
 )
-from coding_agent_playbook.commands._validate_prompts import check_prompt_rule_calls
-from coding_agent_playbook.commands._validation import report_validation_errors
-from coding_agent_playbook.commands.validate import sync_gate_errors
 from coding_agent_playbook.git_client import SubprocessGitClient
 from coding_agent_playbook.gitignore import LOCKFILE_NAME, ignore_entries
 from coding_agent_playbook.guard_config import SYNC_OUTPUT_LOCATIONS
-from coding_agent_playbook.orchestrator import (
-    SyncContext,
-    discover_adapters,
-    installed_output_locations,
-)
 from coding_agent_playbook.renderer import TemplateSecurityError
+from coding_agent_playbook.validation import preflight as _sync_preflight
+from coding_agent_playbook.validation.checks import sync_gate_errors
+from coding_agent_playbook.validation.context import SyncContext
+from coding_agent_playbook.validation.findings import report_validation_errors
+from coding_agent_playbook.validation.prompts import check_prompt_rule_calls
 
 if TYPE_CHECKING:
     import argparse
     from collections.abc import Callable, Iterator, Sequence
 
-    from coding_agent_playbook.commands._validation import ValidationError
     from coding_agent_playbook.git_client import GitClient
     from coding_agent_playbook.lockfile.model import Lockfile
+    from coding_agent_playbook.validation.findings import ValidationError
 
     #: The validate gate's signature: every finding for ``ctx`` (none = go on).
     ValidateFn = Callable[[SyncContext], Sequence[ValidationError]]

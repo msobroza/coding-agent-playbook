@@ -32,12 +32,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.harness.manifest import read_manifest
 from coding_agent_playbook.renderer import SENTINEL
-from coding_agent_playbook.types import split_frontmatter
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import (
     EXPECTED_LICENSE_COPIES,

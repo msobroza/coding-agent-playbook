@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook._file_identity import FileSet
 from coding_agent_playbook._symlinks import real_path
+from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FILENAME
 from coding_agent_playbook.gitignore import GITIGNORE_FILENAME, LOCKFILE_NAME
 
 if TYPE_CHECKING:
@@ -49,8 +50,8 @@ _NEVER_ORPHANED = frozenset(
     {
         GITIGNORE_FILENAME,
         LOCKFILE_NAME,
-        ".coding-agent-playbook.toml",
-        ".coding-agent-playbook.local.toml",
+        CONFIG_FILENAME,
+        CONFIG_LOCAL_FILENAME,
     }
 )
 _GIT_DIR = ".git"
@@ -176,7 +177,7 @@ class LeftoverPolicy:
 
     ``plan`` settles orphans; ``may_delete`` judges the files a file/folder swap
     must displace (installed into the ``SkillWriter`` via
-    ``_prior_output.judging_leftovers_with``) by the very same ``plan_orphans``,
+    ``skill_dirs.ownership.judging_leftovers_with``) by the very same ``plan_orphans``,
     recording approved files in ``displaced``.
 
     Example::

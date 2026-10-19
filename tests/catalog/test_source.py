@@ -120,7 +120,7 @@ def test_filesystem_artifact_source_exposes_engine_package_property(tmp_path: Pa
     """``FileSystemArtifactSource.engine_package`` / ``overlay_packages`` are the
     canonical public read-only accessors.
 
-    Reviewers flagged that ``commands/validate.py`` reaching into the private
+    Reviewers flagged that ``validation/checks.py`` reaching into the private
     ``_engine_package`` / ``_overlay_packages`` attributes via ``getattr(...,
     default)`` would silently degrade if those names ever changed (overlay
     validation would just drop, with no test catching it). The fix exposes
@@ -288,7 +288,7 @@ def test_resource_subdir_skips_a_package_that_fails_at_import(
     init: str, make_package: Callable[..., str]
 ) -> None:
     """Discovery skips it like a missing package (it used to crash with a traceback);
-    the shared ``_sync_preflight`` check is what names it and its error."""
+    the shared ``validation.preflight`` check is what names it and its error."""
     from coding_agent_playbook.catalog.source import _resource_subdir
 
     name = make_package("cap_raising_overlay", init=init, resources=True)

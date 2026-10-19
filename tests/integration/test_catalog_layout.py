@@ -29,7 +29,7 @@ from urllib.parse import unquote, urlsplit
 import pytest
 
 from coding_agent_playbook.catalog.roots import _PACKAGE_DIR, catalog_root
-from coding_agent_playbook.links import extract_markdown_links
+from coding_agent_playbook.validation.link_check import extract_markdown_links
 from tests._catalog import CATALOG_ROOT, CORE_ROOT, PLUGINS_ROOT, REPO_ROOT, bundled_plugin_dirs
 
 if TYPE_CHECKING:
@@ -43,7 +43,7 @@ _KIND_DIRS = ("rules", "prompts", "skills", "eval_tasks", "hooks")
 #: The kinds whose files are synced into consumer repos, where their links must resolve
 #: (a hook's body renders as advisory text, SPEC §6.6.7).
 _SYNCED_KIND_DIRS = ("rules", "prompts", "skills", "hooks")
-#: What the link gate reads (``links.py``): rendering drops the ``.j2``.
+#: What the link gate reads (``validation/link_check.py``): rendering drops the ``.j2``.
 _MARKDOWN_SUFFIXES = (".md", ".md.j2")
 _SRC_PACKAGE = REPO_ROOT / "src" / "coding_agent_playbook"
 _CONTENT_FILE_PATTERNS = ("*.md", "*.md.j2", "task.toml", "SKILL.md*")

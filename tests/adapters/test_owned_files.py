@@ -32,7 +32,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from coding_agent_playbook._typing import Prompt, Rule
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
 
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks and FIFOs")
 
