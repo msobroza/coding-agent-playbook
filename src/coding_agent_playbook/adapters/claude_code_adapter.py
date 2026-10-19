@@ -21,7 +21,8 @@ Code's native layout:
 - Hooks it enforces become managed groups in the co-owned
   ``.claude/settings.json`` plus the committed ``.claude/hooks/playbook/launch.sh``
   (:mod:`._claude_hooks`, specs/prK-lifecycle-hooks.md §C.2); the rest degrade
-  to rules-file sections through :meth:`write_rule` (§C.4.2), and the
+  to rules-file sections through :meth:`write_rule` (§C.4.2) and get their full
+  text in ``.claude/skills/playbook-guardrails/`` (D6, D26), and the
   session-start heartbeat line closes the rules file.
 
 Why the rules (and, since PR K, the hook advisories and the heartbeat line)
@@ -50,7 +51,11 @@ from typing import TYPE_CHECKING, ClassVar, Final
 
 from coding_agent_playbook._output_io import write_output_bytes, write_output_text
 from coding_agent_playbook._sentinel import sentinel_line
-from coding_agent_playbook.adapters._claude_hooks import ClaudeHookEmitter, plans_launcher
+from coding_agent_playbook.adapters._claude_hooks import (
+    ClaudeHookEmitter,
+    plans_launcher,
+    runs_natively,
+)
 from coding_agent_playbook.adapters._owned_files import (
     check_engine_owned,
     check_unlinked,
@@ -67,6 +72,7 @@ from coding_agent_playbook.adapters.claude_rule_paths import (
 )
 from coding_agent_playbook.adapters.claude_settings import CLAUDE_SETTINGS_PATH
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT
+from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
 from coding_agent_playbook.hook_registrations import LAUNCHER_PATH
 from coding_agent_playbook.renderer import render_for
 from coding_agent_playbook.skill_membership import is_skill_member
@@ -196,6 +202,20 @@ class ClaudeCodeAdapter(Adapter):
         if self._hooks.add(hook):
             return []
         return super().write_hook(hook, repo_root)
+
+    def writes_guardrails_skill(self, hooks: Sequence[ResolvedHook]) -> bool:
+        """``True`` only for a hook with guardrail text that Claude Code cannot run (D6, D26).
+
+        Claude Code runs the core pack natively, so its skill listing pays for
+        no guardrails skill; an overlay hook without ``claude_code`` in
+        ``supports``, or one whose events Claude cannot reach, degrades and gets
+        its full text there. :func:`~._claude_hooks.runs_natively` is the test
+        :meth:`write_hook` uses too, so the two never disagree.
+
+        Example: ``adapter.writes_guardrails_skill([native_hook])`` -> ``False``.
+        """
+        degraded = (h for h in hooks if not runs_natively(h, self.name, self.hook_support))
+        return has_guardrail_text(degraded)
 
     def planned_runtime_outputs(self, hooks: Sequence[ResolvedHook]) -> tuple[str, ...]:
         """``(LAUNCHER_PATH,)`` exactly when :meth:`finalize` writes the launcher for ``hooks``.

@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.commands._sync_render import render_rule_body
-from coding_agent_playbook.detector import detect
+from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.renderer import build_environment
 from tests._catalog import core_rules
 
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
 
 REFERENCE_PROBE_PYPROJECT: Final = """\
 [project]

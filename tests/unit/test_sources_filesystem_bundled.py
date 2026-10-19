@@ -38,10 +38,10 @@ _SHIPPED_PROMPT_FILE = "explain.md"
 #: The id the shipped prompt declares, and the plugin task's id (distinctive, for output scans).
 _SHIPPED_PROMPT_ID = "explain"
 _DEMO_TASK_ID = "demo-plugin-eval-task"
-#: Two always rules and 22 scoped rules, each scoped one a member of a core skill.
-_ENGINE_RULE_COUNT = 24
-#: python-coding, python-testing, python-tooling and ml-data (spec D4).
-_ENGINE_SKILL_COUNT = 4
+#: Two always rules and 26 scoped rules, each scoped one a member of a core skill.
+_ENGINE_RULE_COUNT = 28
+#: python-coding, python-testing, python-tooling, ml-data and playbook-guardrails (spec D4).
+_ENGINE_SKILL_COUNT = 5
 _SUPERPOWERS_SKILL_COUNT = 15
 
 

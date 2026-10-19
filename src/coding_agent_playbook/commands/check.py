@@ -22,7 +22,8 @@ from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.adapters._settings_drift import settings_document, stray_launcher_edited
 from coding_agent_playbook.commands import _committed_config, _sync_preflight
 from coding_agent_playbook.commands._check_hooks import format_hooks_section
-from coding_agent_playbook.detector import detect, evaluate_predicate
+from coding_agent_playbook.detector.facts import detect
+from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.lockfile import drift_entries
 from coding_agent_playbook.orchestrator import SyncContext
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource

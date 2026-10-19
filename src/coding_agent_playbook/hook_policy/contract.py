@@ -57,7 +57,7 @@ from coding_agent_playbook.hook_policy.tables import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_policy.handler_catalog import HandlerCatalog
     from coding_agent_playbook.types import Hook, HookFrontmatter, HookMatcher
 
@@ -393,7 +393,7 @@ def _applies_if_check(hook: Hook, ctx: HookCheckContext) -> Iterator[Finding]:
     if not applies_if:
         return
     # Imported here: detector imports packaging, and hook_policy stays stdlib-only at import.
-    from coding_agent_playbook.detector import evaluate_predicate
+    from coding_agent_playbook.detector.predicate import evaluate_predicate
 
     facts = cast("Facts", dict(ctx.facts))
     # One key at a time: evaluate_predicate stops at the first false key, so an

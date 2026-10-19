@@ -26,7 +26,7 @@ from coding_agent_playbook.commands._sync_render import (
     report_sandbox_violation,
     report_template_error,
 )
-from coding_agent_playbook.detector import evaluate_predicate
+from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.orchestrator import SyncContext, artifact_id_of, template_source
 from coding_agent_playbook.renderer import (
     BUILTIN_FORMATS,
@@ -173,7 +173,7 @@ def _rule_applies(rule: Rule, ctx: SyncContext) -> bool:
 
     The one predicate rule of ``playbook render``: an empty predicate holds, and
     ``evaluate_predicate``'s ``ValueError`` (a predicate validate would reject) reads as
-    false, as ``--show-rules`` has always printed it. ``orchestrator.filter_applies_if``
+    false, as ``--show-rules`` has always printed it. ``detector.predicate.filter_applies_if``
     is not reused because it raises there, and render has no validate gate to run first.
 
     Example: ``_rule_applies(rule, SyncContext.from_repo(repo))`` -> ``False`` without fastapi.

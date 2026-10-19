@@ -3,7 +3,7 @@
 ``RuleFrontmatter.lint_codes`` is the one source of the codes a rule-linked
 lint hook reports: ``{warn: [...], when: [{applies_if: {...}, warn: [...]}]}``.
 Sync resolves it against the detector facts the rule body itself reads (each
-``when`` predicate through ``detector.evaluate_predicate``) and merges the flat
+``when`` predicate through ``detector.predicate.evaluate_predicate``) and merges the flat
 result into the builtin handler's ``config["lint_codes"]``, so the rule text
 and the enforcing hook never disagree, and the hook never evaluates a
 predicate at run time (it cannot import ``detector``).

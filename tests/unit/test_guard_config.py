@@ -78,7 +78,7 @@ from tests.hooks.pack_repo import resolve_engine_hooks
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_policy import ResolvedHook
 
 

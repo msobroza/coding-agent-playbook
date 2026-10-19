@@ -94,7 +94,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_policy import ResolvedHook, SkippedHook
     from coding_agent_playbook.lockfile import Lockfile
     from coding_agent_playbook.orchestrator import SyncContext
-    from coding_agent_playbook.types import Prompt, Rule
+    from coding_agent_playbook.types import Prompt, Rule, Skill
 
 __all__ = [
     "HOOKS_NOTICE",
@@ -140,9 +140,18 @@ class SyncHooks:
     skipped: tuple[SkippedHook, ...] = ()
     warnings: tuple[str, ...] = ()
 
-    def dispatch(self, source_root: Path, prior_lock: Lockfile | None) -> HookDispatch:
-        """What every adapter's ``begin_sync`` / ``write_hook`` receives."""
-        return HookDispatch(self.resolved, source_root, prior_lock, self.config)
+    def dispatch(
+        self,
+        source_root: Path,
+        prior_lock: Lockfile | None,
+        *,
+        guardrails_skill: Skill | None = None,
+    ) -> HookDispatch:
+        """What every adapter's ``begin_sync`` / ``write_hook`` receives, plus the guardrails skill.
+
+        Example: ``rendered.hooks.dispatch(repo, lock, guardrails_skill=rendered.guardrails_skill)``.
+        """
+        return HookDispatch(self.resolved, source_root, prior_lock, self.config, guardrails_skill)
 
 
 def resolve_sync_hooks(

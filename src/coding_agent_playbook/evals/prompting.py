@@ -34,7 +34,8 @@ import yaml
 from jinja2 import TemplateError
 
 from coding_agent_playbook import __version__ as _engine_version
-from coding_agent_playbook.detector import detect, evaluate_predicate
+from coding_agent_playbook.detector.facts import detect
+from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.orchestrator import OverlayResolver
 from coding_agent_playbook.prompt_rule_delivery import includes_rules_appendix
 from coding_agent_playbook.renderer import (
@@ -51,7 +52,7 @@ if TYPE_CHECKING:
 
     from jinja2 import Environment
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.types import Rule
 

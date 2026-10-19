@@ -1,0 +1,64 @@
+# N4 (specs/prT-package-layout.md 4.16, 7.4): detector.py splits into the detector
+# package; _pep503 and _pyproject_deps join it; orchestrator.filter_applies_if moves
+# beside evaluate_predicate.
+
+[[module]]
+pr = "N4"
+old = "coding_agent_playbook.detector"
+new = "coding_agent_playbook.detector.facts"
+
+[[module]]
+pr = "N4"
+old = "coding_agent_playbook._pep503"
+new = "coding_agent_playbook.detector.pep503"
+
+[[module]]
+pr = "N4"
+old = "coding_agent_playbook._pyproject_deps"
+new = "coding_agent_playbook.detector.pyproject_deps"
+
+[[names]]
+pr = "N4"
+old = "coding_agent_playbook.detector"
+new = "coding_agent_playbook.detector.predicate"
+names = [
+    "evaluate_predicate",
+    "_SUPPORTED_OPERATORS",
+    "_KNOWN_BOOL_FACT_KEYS",
+    "_coerce_string_list",
+    "_check_python_version",
+    "_has_dev_dependencies",
+    "_package_manager_names",
+    "_package_manager_matches",
+]
+
+[[names]]
+pr = "N4"
+old = "coding_agent_playbook.orchestrator"
+new = "coding_agent_playbook.detector.predicate"
+names = ["filter_applies_if"]
+
+[[path]]
+pr = "N4"
+old = "tests/unit/test_detector.py"
+new = "tests/detector/test_facts.py"
+
+[[path]]
+pr = "N4"
+old = "tests/unit/test_detector_package_manager.py"
+new = "tests/detector/test_package_manager.py"
+
+[[path]]
+pr = "N4"
+old = "tests/unit/test_pep503.py"
+new = "tests/detector/test_pep503.py"
+
+[[path]]
+pr = "N4"
+old = "tests/unit/test_pyproject_deps.py"
+new = "tests/detector/test_pyproject_deps.py"
+
+[[path]]
+pr = "N4"
+old = "tests/unit/test_check_skip_reason.py"
+new = "tests/cli/test_check_skip_reason.py"
