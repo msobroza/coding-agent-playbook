@@ -573,6 +573,14 @@ the keyword names the package recorded on the rebuilt `Hook` (the importer passe
 writes do not change.
 <!-- module-moves: end-keep -->
 
+<!-- module-moves: keep -->
+Code that catches `coding_agent_playbook.precommit.PrecommitTemplateMissingError`
+programmatically: it now subclasses the CLI's shared exit-2 error type,
+`coding_agent_playbook.exit_two.ExitTwoError`, instead of `RuntimeError`, so an
+`except RuntimeError` no longer catches it. `playbook init` still prints the same
+`error:` line and exits 2.
+<!-- module-moves: end-keep -->
+
 Out-of-tree `Metric` authors: at grade time, a threshold or non-regression check
 over a static or execution metric no longer calls the metric's `available(ctx)`.
 The grading kernel's one measuring pass (`coding_agent_playbook.grading.measuring`)

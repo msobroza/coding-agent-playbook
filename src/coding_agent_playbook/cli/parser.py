@@ -1,11 +1,10 @@
-"""The ``playbook`` argument parser: one subparser per subcommand, built by name.
+"""The ``playbook`` argument parser: one subparser per Command module, in ``--help`` order.
 
 Each subcommand lives in its own module under ``coding_agent_playbook.commands``
-and exposes a ``run(args) -> int`` that returns the process exit code. A module
-on the Command protocol (:mod:`._command`) also declares its ``NAME``, ``HELP``
-and flags (``configure``), and :func:`build_parser` walks ``_SUBCOMMANDS`` by
-name: a name in ``_COMMANDS`` gets the module's flags, a name in ``_LEGACY``
-still has them declared here, until its command migrates (CP-3).
+and is a Command (:mod:`._command`): it declares its ``NAME``, ``HELP`` and
+flags (``configure``) next to the ``run(args) -> int`` that returns the process
+exit code. :func:`build_parser` walks ``_COMMANDS``, so this module declares no
+subcommand flag (CP-3 moved the last ones, ``init``'s, into their command).
 
 The dispatch pattern is the standard ``subparser.set_defaults(func=...)``
 idiom: ``coding_agent_playbook.cli.main()`` parses argv with :func:`build_parser`,
@@ -29,7 +28,6 @@ from coding_agent_playbook.commands import render as render_cmd
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as validate_cmd
 from coding_agent_playbook.commands import validate_harness as validate_harness_cmd
-from coding_agent_playbook.commands._init_adapters import ADAPTERS_FLAG_HELP
 from coding_agent_playbook.commands.twins import check_commit_trailers as check_commit_trailers_cmd
 from coding_agent_playbook.commands.twins import check_deps as check_deps_cmd
 from coding_agent_playbook.commands.twins import check_notebooks as check_notebooks_cmd
@@ -39,35 +37,11 @@ from coding_agent_playbook.commands.twins import scan_secrets as scan_secrets_cm
 from coding_agent_playbook.commands.twins import scan_sinks as scan_sinks_cmd
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
-
     from coding_agent_playbook.cli._command import Command
 
-type _SubParsers = argparse._SubParsersAction[argparse.ArgumentParser]
-
-#: The order ``playbook --help`` lists, and the public surface tests pin. Every
-#: name is a Command of ``_COMMANDS`` or a ``_LEGACY`` key, never both.
-_SUBCOMMANDS: tuple[str, ...] = (
-    "init",
-    "sync",
-    "check",
-    "validate",
-    "render",
-    "eval",
-    "metrics",
-    "import-harness",
-    "validate-harness",
-    "gate-scan",
-    "ci",
-    "scan-sinks",
-    "check-notebooks",
-    "scan-secrets",
-    "check-commit-trailers",
-    "check-deps",
-)
-
-#: The subcommand modules that declare their own flags, in ``_SUBCOMMANDS`` order.
+#: Every subcommand module, in the order ``playbook --help`` lists them.
 _COMMANDS: Final[tuple[Command, ...]] = (
+    init_cmd,
     sync_cmd,
     check_cmd,
     validate_cmd,
@@ -85,9 +59,12 @@ _COMMANDS: Final[tuple[Command, ...]] = (
     check_deps_cmd,
 )
 
+#: The subcommand names in ``--help`` order; the public surface tests pin them.
+_SUBCOMMANDS: Final[tuple[str, ...]] = tuple(command.NAME for command in _COMMANDS)
+
 
 def build_parser() -> argparse.ArgumentParser:
-    """The ``playbook`` parser: one subparser per name of ``_SUBCOMMANDS``, looked up by name.
+    """The ``playbook`` parser: one subparser per module of ``_COMMANDS``, in that order.
 
     Example::
 
@@ -104,47 +81,8 @@ def build_parser() -> argparse.ArgumentParser:
         version=f"coding-agent-playbook {__version__}",
     )
     subcommands = parser.add_subparsers(dest="command")
-    commands = {command.NAME: command for command in _COMMANDS}
-    for name in _SUBCOMMANDS:
-        _add_subcommand(subcommands, name, commands)
-    return parser
-
-
-def _add_subcommand(subcommands: _SubParsers, name: str, commands: Mapping[str, Command]) -> None:
-    """Register ``name``: from its Command module when it has one, else its ``_LEGACY`` block."""
-    command = commands.get(name)
-    if command is not None:
+    for command in _COMMANDS:
         sub = subcommands.add_parser(command.NAME, help=command.HELP)
         command.configure(sub)
         sub.set_defaults(func=command.run)  # read now, so a patched run is the one dispatched
-        return
-    add_legacy = _LEGACY.get(name)
-    if add_legacy is None:
-        raise LookupError(f"subcommand {name!r} is neither in _COMMANDS nor in _LEGACY")
-    add_legacy(subcommands)
-
-
-def _add_init_parser(subcommands: _SubParsers) -> None:
-    """``playbook init``'s flags (SPEC §12.1); CP-3 moves them into ``commands/init.py``."""
-    init_p = subcommands.add_parser("init", help="bootstrap a fresh repo (SPEC §12.1)")
-    init_p.add_argument("--repo-root", help="repo to initialise (defaults to cwd)")
-    init_p.add_argument("--non-interactive", action="store_true")
-    init_p.add_argument("--name", help="project name (required in non-interactive mode)")
-    init_p.add_argument("--kind", help="project kind (required in non-interactive mode)")
-    init_p.add_argument("--description", default="")
-    init_p.add_argument("--adapters", help=ADAPTERS_FLAG_HELP)
-    init_p.add_argument("--overlays", help="comma-separated overlay package names")
-    init_p.add_argument(
-        "--no-hooks",
-        dest="no_hooks",
-        action="store_true",
-        help="do not enable assistant lifecycle hooks (writes [hooks] enabled = false)",
-    )
-    init_p.set_defaults(func=init_cmd.run)
-
-
-#: The subcommands whose flags are still declared here, by name; ``init`` moves into
-#: its command module and onto ``_COMMANDS`` in CP-3, and the mapping goes with it.
-_LEGACY: Final[Mapping[str, Callable[[_SubParsers], None]]] = {
-    "init": _add_init_parser,
-}
+    return parser
