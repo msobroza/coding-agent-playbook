@@ -125,7 +125,11 @@ class Metric(ABC):
         ``ctx``'s tools must run it (:meth:`runnable`), and the needed context
         slot must be present - execution metrics (``needs_project``) need
         ``ctx.project``; static metrics need ``ctx.module``. Families that gate on
-        a different slot override this.
+        a different slot override this. An environment condition (a tool, an
+        environment variable, an import beyond ``requires``) belongs in
+        :meth:`runnable`, not here: at grade time a threshold or non-regression
+        check over a non-judge metric reads ``ctx.measured_metrics``, which the
+        measuring pass fills from :meth:`runnable`, and never calls this method.
         """
         if not self.runnable(ctx.measure_setup):
             return False

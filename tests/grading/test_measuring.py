@@ -31,9 +31,11 @@ from coding_agent_playbook.grading.measuring import (
     python_files,
     referenced_metrics,
 )
-from coding_agent_playbook.grading.metric import execution_metrics, get_metric
+from coding_agent_playbook.grading.metric import Metric, execution_metrics, get_metric
+from coding_agent_playbook.grading.normalizer import Identity
 from coding_agent_playbook.grading.rubric import Rubric
-from coding_agent_playbook.grading.types import EvalContext, MeasureSetup
+from coding_agent_playbook.grading.scope import Scope
+from coding_agent_playbook.grading.types import EvalContext, Measurement, MeasureSetup
 from tests.fakes import NO_OP_SUITE_CMD, FakeProjectHandle
 
 if TYPE_CHECKING:
@@ -63,6 +65,20 @@ def _handle(root: Path, run: RunArtifacts) -> FakeProjectHandle:
     return FakeProjectHandle(
         root=root, test_cmd=list(NO_OP_SUITE_CMD), report_dir=root / "reports", artifacts=run
     )
+
+
+class _OwnToolMetric(Metric):
+    """A stand-in out-of-tree metric that needs a tool of its own and says so in ``runnable``."""
+
+    name = "own_tool_metric"
+    scope = Scope.FILE
+    normalizer = Identity()
+
+    def runnable(self, setup: MeasureSetup) -> bool:
+        return "own-tool" in setup.tool_paths
+
+    def measure(self, ctx: EvalContext) -> list[Measurement]:
+        return [Measurement(evaluator=self.name, scope_key=ctx.label, value=1.0)]
 
 
 def _grading_ctx(measured: set[str] | frozenset[str]) -> EvalContext:
@@ -202,6 +218,27 @@ def test_a_metric_check_over_zero_files_grades_vacuously(tmp_path: Path) -> None
 
     [check] = report.checks
     assert (check.status, check.passed, check.score, check.subresults) == ("run", True, None, ())
+
+
+@pytest.mark.parametrize(
+    ("tool_paths", "expected"),
+    [({}, ("skipped", 0, [])), ({"own-tool": "/opt/own-tool"}, ("run", 1, ["a.py"]))],
+    ids=["tool-missing", "tool-present"],
+)
+def test_a_metric_check_is_skipped_when_its_metric_refuses_the_setup_in_runnable(
+    tmp_path: Path, tool_paths: dict[str, str], expected: tuple[str, int, list[str]]
+) -> None:
+    _write(tmp_path, "a.py")
+    metric, setup = _OwnToolMetric(), MeasureSetup(tool_paths=tool_paths)
+    tree = measure_tree(tmp_path, SourceMeter([metric], setup))
+    ctx = _grading_ctx(measured_metrics([metric], setup))
+
+    rubric = Rubric([ThresholdCheck(metric, fail=0.5)])
+    report = rubric.evaluate(ctx, MeasurementSet(list(tree.measurements)))
+
+    [check] = report.checks
+    measured = [row.scope_key for row in tree.measurements]
+    assert (check.status, len(check.subresults), measured) == expected
 
 
 def test_measure_suite_runs_the_suite_once_for_every_execution_metric(tmp_path: Path) -> None:

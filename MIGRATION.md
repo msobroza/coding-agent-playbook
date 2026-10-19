@@ -392,6 +392,19 @@ rubric and gate registries are
 entry-point groups do not change.
 <!-- module-moves: end-keep -->
 
+Out-of-tree `Metric` authors: at grade time, a threshold or non-regression check
+over a static or execution metric no longer calls the metric's `available(ctx)`.
+The grading kernel's one measuring pass (`coding_agent_playbook.grading.measuring`)
+promises each metric it measures whose `runnable(setup)` holds, and the check
+runs when its metric is in that promise (`EvalContext.measured_metrics`), even if
+no file produced a row. The default `Metric.runnable` checks only `requires`, so
+a metric that needs anything else from its environment (a tool, an environment
+variable, another import) must override `runnable(setup)` with that condition
+(`setup` is a `coding_agent_playbook.grading.types.MeasureSetup`). A condition
+left only in `available(ctx)` still stops the metric from measuring, but its
+check then runs over no rows and passes instead of reporting `skipped`. A check
+over a judge-backed metric still asks the metric's `available(ctx)`.
+
 ## v0.21 — Skills-first context
 
 v0.21 is the skills-first release. It keeps only always rules in always-loaded
