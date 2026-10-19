@@ -17,22 +17,22 @@ import argparse
 
 from coding_agent_playbook import __version__
 from coding_agent_playbook.commands import check as check_cmd
-from coding_agent_playbook.commands import check_commit_trailers as check_commit_trailers_cmd
-from coding_agent_playbook.commands import check_deps as check_deps_cmd
-from coding_agent_playbook.commands import check_notebooks as check_notebooks_cmd
-from coding_agent_playbook.commands import ci as ci_cmd
 from coding_agent_playbook.commands import eval as eval_cmd
-from coding_agent_playbook.commands import gate_scan as gate_scan_cmd
 from coding_agent_playbook.commands import import_harness as import_harness_cmd
 from coding_agent_playbook.commands import init as init_cmd
 from coding_agent_playbook.commands import metrics as metrics_cmd
 from coding_agent_playbook.commands import render as render_cmd
-from coding_agent_playbook.commands import scan_secrets as scan_secrets_cmd
-from coding_agent_playbook.commands import scan_sinks as scan_sinks_cmd
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as validate_cmd
 from coding_agent_playbook.commands import validate_harness as validate_harness_cmd
 from coding_agent_playbook.commands._init_adapters import ADAPTERS_FLAG_HELP
+from coding_agent_playbook.commands.twins import check_commit_trailers as check_commit_trailers_cmd
+from coding_agent_playbook.commands.twins import check_deps as check_deps_cmd
+from coding_agent_playbook.commands.twins import check_notebooks as check_notebooks_cmd
+from coding_agent_playbook.commands.twins import ci as ci_cmd
+from coding_agent_playbook.commands.twins import gate_scan as gate_scan_cmd
+from coding_agent_playbook.commands.twins import scan_secrets as scan_secrets_cmd
+from coding_agent_playbook.commands.twins import scan_sinks as scan_sinks_cmd
 
 # Canonical list of subcommand names. The argparse subparser
 # declarations below must match this tuple — keeping it as a module-level
