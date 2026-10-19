@@ -23,10 +23,14 @@ from __future__ import annotations
 from coding_agent_playbook.hook_policy._findings import HookIssue, Severity, did_you_mean
 from coding_agent_playbook.hook_policy.advisory import (
     ADAPTER_LABELS,
+    GUARDRAIL_SUMMARY_MAX_CHARS,
     advisory_block,
     advisory_text,
     enforcement_line,
     enforcement_targets,
+    guardrail_line,
+    guardrail_summary,
+    guardrails_section,
 )
 from coding_agent_playbook.hook_policy.contract import HookCheckContext, classify_hook
 from coding_agent_playbook.hook_policy.contract_set import HookSetInputs, classify_hook_set
@@ -89,6 +93,7 @@ __all__ = [
     "APPLICABILITY_GATES",
     "DEGRADED_EVENTS",
     "ENGINE_DEADLINE_CAP_MS",
+    "GUARDRAIL_SUMMARY_MAX_CHARS",
     "HOOK_CAPABLE_ADAPTERS",
     "HOOK_EVENTS",
     "HOOK_LABELS",
@@ -128,6 +133,9 @@ __all__ = [
     "effective_applies_if",
     "enforcement_line",
     "enforcement_targets",
+    "guardrail_line",
+    "guardrail_summary",
+    "guardrails_section",
     "linked_lint_config",
     "merge_config",
     "merge_hook_layers",

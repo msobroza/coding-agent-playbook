@@ -4,8 +4,7 @@ One :class:`SuiteRun` runs the project's suite once per root and measures
 ``test_pass_rate`` / ``coverage`` / ``diff_coverage`` from it;
 :func:`suite_baseline` runs it again on a ``git:`` ref (through a temporary
 worktree) or a baseline directory. Only the candidate run gets a diff base, so a
-diff-based metric measures nothing on the baseline. Import the public names
-from ``metrics_gate``.
+diff-based metric measures nothing on the baseline.
 """
 
 from __future__ import annotations
@@ -15,17 +14,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
-from coding_agent_playbook.evaluators._metrics_inputs import (
+from coding_agent_playbook.evaluators.baseline_git import BaselineGitError
+from coding_agent_playbook.evaluators.execution.diff_coverage import DIFF_COVERAGE
+from coding_agent_playbook.evaluators.execution.project import import_roots
+from coding_agent_playbook.evaluators.types import EvalContext, ToolSetup
+from coding_agent_playbook.metrics_gate.inputs import (
     GIT_PREFIX,
     JSON_PREFIX,
     MetricsGateUsageError,
     git_usage_error,
     verify_git_ref,
 )
-from coding_agent_playbook.evaluators.baseline_git import BaselineGitError
-from coding_agent_playbook.evaluators.execution.diff_coverage import DIFF_COVERAGE
-from coding_agent_playbook.evaluators.execution.project import import_roots
-from coding_agent_playbook.evaluators.types import EvalContext, ToolSetup
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -33,8 +32,8 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.baseline_git import BaselineGit
     from coding_agent_playbook.evaluators.execution.project import ProjectHandle
     from coding_agent_playbook.evaluators.metric import Metric
-    from coding_agent_playbook.evaluators.metrics_gate import MetricsGateRequest
     from coding_agent_playbook.evaluators.types import Measurement
+    from coding_agent_playbook.metrics_gate.run import MetricsGateRequest
 
 #: MODULE label the execution metrics key their suite-wide measurements on.
 SUITE_LABEL = "suite"

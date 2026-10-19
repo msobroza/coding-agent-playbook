@@ -27,7 +27,6 @@ from coding_agent_playbook.config.tables.hooks import (
     GuardrailsConfig,
     HooksConfig,
 )
-from coding_agent_playbook.evaluators.types import MetricConfig
 from coding_agent_playbook.harness.manifest import ArtifactKind, ManifestEntry
 from coding_agent_playbook.hook_policy import (
     DEGRADED_EVENTS,
@@ -36,6 +35,7 @@ from coding_agent_playbook.hook_policy import (
     TOOL_CLASS_NAMES,
     KeyPolicy,
 )
+from coding_agent_playbook.metrics_gate.config import MetricConfig
 from coding_agent_playbook.renderer import BUILTIN_FORMATS
 from coding_agent_playbook.types import (
     Hook,

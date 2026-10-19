@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, cast
 
 from coding_agent_playbook._hook_schema import MATCHER_KEYS
-from coding_agent_playbook._layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
+from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
 from coding_agent_playbook.hook_policy._contract_handlers import handler_findings
 from coding_agent_playbook.hook_policy._findings import (
     Finding,

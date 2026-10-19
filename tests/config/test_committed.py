@@ -1,4 +1,4 @@
-"""``commands/_committed_config``: rewrite the committed config from itself alone (SPEC §7.2).
+"""``config/committed``: rewrite the committed config from itself alone (SPEC §7.2).
 
 ``playbook init`` and ``playbook check --refresh`` share it; their CLI tests pin
 the end-to-end behaviour, these pin each helper.
@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 import coding_agent_playbook
-from coding_agent_playbook.commands._committed_config import (
+from coding_agent_playbook.config.committed import (
     detector_cache_table,
     plan_committed_update,
     plan_detector_cache_refresh,
@@ -25,6 +25,7 @@ from coding_agent_playbook.commands._committed_config import (
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.config.model import Config
 from coding_agent_playbook.config.schema import ConfigError
+from tests.engine_modules import engine_module
 from tests.toml_equality import assert_toml_identical
 
 if TYPE_CHECKING:
@@ -228,7 +229,9 @@ def test_detector_cache_table_writes_sets_as_sorted_lists() -> None:
 #: builders that may call them: production code names them in one module only.
 _WRITERS = frozenset({"save_config", "save_config_table"})
 _BUILDERS = frozenset({"ConfigRewrite", "_checked_rewrite"})
-_HOME = "commands/_committed_config.py"
+_HOME = "config/committed.py"
+#: ``_HOME`` as a dotted module: what ``check`` and ``init`` import the builders from.
+_HOME_MODULE = engine_module(f"coding_agent_playbook.{_HOME.removesuffix('.py').replace('/', '.')}")
 #: Where the writers are defined (``save_config`` delegates to ``save_config_table``).
 _WRITERS_HOME = "config/files.py"
 
@@ -266,23 +269,27 @@ def _called_names(tree: ast.Module) -> Iterator[tuple[int, str]]:
 
 
 def _imports_committed_config(tree: ast.Module) -> bool:
-    """Whether ``tree`` imports ``_committed_config`` or a name from it."""
+    """Whether ``tree`` imports ``config.committed`` or a name from it.
+
+    Both spellings count: ``from …config.committed import plan_first_config`` and
+    ``from …config import committed``.
+    """
     imported = (
-        [node.module or "", *(alias.name for alias in node.names)]
+        [node.module or "", *(f"{node.module}.{alias.name}" for alias in node.names)]
         for node in ast.walk(tree)
         if isinstance(node, ast.ImportFrom)
     )
-    return any(name.endswith("_committed_config") for names in imported for name in names)
+    return any(name == _HOME_MODULE for names in imported for name in names)
 
 
 def test_only_committed_config_writes_the_committed_file() -> None:
     """SPEC §7.2 invariant: local overrides are never written back to the committed file.
 
     Pins, by walking the engine's AST: (1) the writers ``save_config`` and
-    ``save_config_table`` are referenced only in ``_committed_config`` (and where
+    ``save_config_table`` are referenced only in ``config/committed`` (and where
     they are defined), (2) a ``ConfigRewrite`` — whose ``save`` is the one caller —
     is built only there too, by ``plan_*`` builders that each read the committed
-    file itself or require none; and (3) no module importing ``_committed_config``
+    file itself or require none; and (3) no module importing ``config.committed``
     references ``load_config``, the merged config, which ``init`` and ``check
     --refresh`` each saved before v0.18. It cannot see a merged config reaching a
     plan another way (``SyncContext.config`` returned from an ``update``

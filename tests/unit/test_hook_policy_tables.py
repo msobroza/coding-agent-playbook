@@ -204,7 +204,8 @@ def test_hook_policy_imports_only_the_stdlib() -> None:
     # evaluate_predicate when it runs, and the config types only for typing.
     assert ours == [
         "coding_agent_playbook._hook_schema",
-        "coding_agent_playbook._layers",
+        "coding_agent_playbook.catalog",
+        "coding_agent_playbook.catalog.layers",
         "coding_agent_playbook.hook_policy",
         "coding_agent_playbook.hook_policy._contract_handlers",
         "coding_agent_playbook.hook_policy._findings",
@@ -212,6 +213,8 @@ def test_hook_policy_imports_only_the_stdlib() -> None:
         "coding_agent_playbook.hook_policy.contract",
         "coding_agent_playbook.hook_policy.contract_set",
         "coding_agent_playbook.hook_policy.effective",
+        # GUARDRAILS_SKILL_ID, named by the AGENTS.md Guardrails preface (D6)
+        "coding_agent_playbook.hook_policy.guardrails_skill",
         "coding_agent_playbook.hook_policy.handler_catalog",
         "coding_agent_playbook.hook_policy.labels",
         "coding_agent_playbook.hook_policy.lint_codes",  # a linked rule's lint_codes (K7)

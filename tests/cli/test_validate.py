@@ -13,9 +13,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 import coding_agent_playbook
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.commands import _validate_context
 from coding_agent_playbook.commands import validate as _validate
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from tests._catalog import CORE_ROOT
 
 if TYPE_CHECKING:

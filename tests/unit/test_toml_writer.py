@@ -325,3 +325,33 @@ def test_format_scalar_type_error_prefix_is_configurable() -> None:
         _toml.format_scalar(object(), type_error_prefix="_dump_toml")
     with pytest.raises(TypeError, match=r"^manifest TOML does not support value of type"):
         _toml.format_scalar(object(), type_error_prefix="manifest TOML")
+
+
+# --- dump_toml: the Config/Lockfile writer (moved from the artifact source tests, N3) ---
+
+
+def test_dump_toml_rejects_unsupported_scalar() -> None:
+    from coding_agent_playbook.toml_writer import dump_toml as _dump_toml
+
+    with pytest.raises(TypeError, match=r"does not support value of type"):
+        _dump_toml({"weird": object()})
+
+
+def test_dump_toml_round_trips_mapping_deeper_than_two_levels() -> None:
+    """Formerly pinned as a ``TypeError`` (only Config/Lockfile were written, and
+    they nest two levels at most). ``playbook init`` now writes the committed
+    tables ``Config`` does not manage back verbatim, and those nest deeper
+    (``[metrics.thresholds.<metric>]``), so every depth must round-trip."""
+    from coding_agent_playbook.toml_writer import dump_toml as _dump_toml
+
+    data = {"a": {"b": {"c": {"d": 1, "w": 1.0}}}}
+    assert_toml_identical(tomllib.loads(_dump_toml(data)), data)
+
+
+def test_dump_toml_round_trips_nested_dict_in_list_of_tables() -> None:
+    """Formerly pinned as a ``TypeError`` (the lockfile's ``[[entries]]`` hold
+    scalars only); a preserved user table may hold sub-tables in each element."""
+    from coding_agent_playbook.toml_writer import dump_toml as _dump_toml
+
+    data = {"items": [{"key": {"deeper": 1, "flag": True}}]}
+    assert_toml_identical(tomllib.loads(_dump_toml(data)), data)

@@ -2,6 +2,7 @@
 id: network-egress-guard
 name: Network egress guard
 description: Restrict agent network egress (shell clients, git remotes, package installs, WebFetch and WebSearch) to the organization's approved hosts. Inert in the engine (mode off); an air-gapped overlay activates it.
+summary: 'Reach only the organization''s approved hosts: install from the internal index, call no public API, search no web.'
 version: 1
 tier: overlay
 enabled: true
