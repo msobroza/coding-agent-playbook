@@ -38,7 +38,7 @@ from coding_agent_playbook.hook_runtime.escape import (
     settings_files,
 )
 from coding_agent_playbook.hook_runtime.shell.wrapper_policy import hidden_program
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 
 if TYPE_CHECKING:
     from collections.abc import Callable

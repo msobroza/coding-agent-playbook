@@ -13,11 +13,8 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.config.guard_config import (
-    GUARD_CONFIG_REL,
-    GuardConfig,
-    parse_guard_config,
-)
+from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
+from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.escape import EscapeHatches
 from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, Harness
@@ -25,7 +22,7 @@ from coding_agent_playbook.hook_runtime.git.parse import AddedLine
 from coding_agent_playbook.hook_runtime.handlers.docstring_nonregression import DocstringsStage
 from coding_agent_playbook.hook_runtime.handlers.quality_metrics import QualityMetricsStage
 from coding_agent_playbook.hook_runtime.registry import HandlerContext, load_builtin
-from coding_agent_playbook.hook_runtime.session import SessionState
+from coding_agent_playbook.hook_runtime.state.session import SessionState
 from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
 from tests.hook_runtime.fakes import FakeClock, FakeProc, FakeRuff, ruff_row
 from tests.hook_runtime.guard_repo import SESSION_ID

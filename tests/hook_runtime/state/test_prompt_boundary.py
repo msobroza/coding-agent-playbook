@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.hook_runtime._prompt_boundary import (
+from coding_agent_playbook.hook_runtime.state._prompt_boundary import (
     PromptBoundary,
     last_prompt_boundary,
     slash_of_prompt,

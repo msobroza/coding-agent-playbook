@@ -33,7 +33,7 @@ from coding_agent_playbook.hook_runtime.handlers.compaction import (
     SAID,
     select_human_prompts,
 )
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 from tests.hook_runtime.fakes import FakeClock
 from tests.hook_runtime.handlers.pack_repo import engine_hook, resolve_engine_hooks
 

@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any, Final
 # of the renderer (jinja2, yaml), and no adapter import can cycle back here.
 from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_CODE_COMPOSITES
 from coding_agent_playbook.generated_output.symlinks import real_path
+from coding_agent_playbook.hook_runtime.config.schema import RESOURCE_ROOT_ID_FORMAT
 from coding_agent_playbook.lockfile.model import merge_provenance
 
 if TYPE_CHECKING:
@@ -63,7 +64,6 @@ COMPOSITE_SINGLETONS: Final[Mapping[str, tuple[str, ...]]] = {
     "claude_code": CLAUDE_CODE_COMPOSITES,
     "agents_md": ("AGENTS.md",),
 }
-_RESOURCE_ID: Final = "pkg:{package}/resources"
 
 
 @dataclass(frozen=True)
@@ -191,7 +191,7 @@ def resource_root_ids(packages: Iterable[str]) -> list[str]:
         >>> resource_root_ids(["coding_agent_playbook"])
         ['pkg:coding_agent_playbook/resources']
     """
-    return list(dict.fromkeys(_RESOURCE_ID.format(package=p) for p in packages))
+    return list(dict.fromkeys(RESOURCE_ROOT_ID_FORMAT.format(package=p) for p in packages))
 
 
 def resolve_resource_roots(packages: Iterable[str]) -> dict[str, str]:
@@ -213,7 +213,7 @@ def resolve_resource_roots(packages: Iterable[str]) -> dict[str, str]:
     for package in dict.fromkeys(packages):
         root = _layer_dir(package)
         if root is not None:
-            found[_RESOURCE_ID.format(package=package)] = root
+            found[RESOURCE_ROOT_ID_FORMAT.format(package=package)] = root
     return found
 
 

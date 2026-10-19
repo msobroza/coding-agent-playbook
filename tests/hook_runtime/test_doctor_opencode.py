@@ -22,7 +22,7 @@ from coding_agent_playbook.hook_runtime._doctor_opencode import (
     parse_opencode_version,
     read_shim_reg,
 )
-from coding_agent_playbook.hook_runtime.config.guard_config import LOCKFILE_REL
+from coding_agent_playbook.hook_runtime.config.schema import LOCKFILE_REL
 from coding_agent_playbook.hook_runtime.doctor import Check, exit_code, run_doctor
 from coding_agent_playbook.hook_runtime.harness.opencode import OPENCODE_SHIM_REL
 from tests.hook_runtime.fakes import FakeProc

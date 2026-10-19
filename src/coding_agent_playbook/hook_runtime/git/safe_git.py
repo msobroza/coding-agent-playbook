@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import RepoInfo
     from coding_agent_playbook.hook_runtime.globs import GlobSet
     from coding_agent_playbook.hook_runtime.proc import ProcResult
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [
     "FINGERPRINT_MAX_FILE_BYTES",

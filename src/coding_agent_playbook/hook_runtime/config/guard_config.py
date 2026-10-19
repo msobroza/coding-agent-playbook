@@ -35,6 +35,11 @@ from coding_agent_playbook.hook_runtime.config.reader import (
     TableReader,
     read_small_file,
 )
+from coding_agent_playbook.hook_runtime.config.schema import (
+    GUARD_CONFIG_REL,
+    LOCKFILE_REL,
+    SUPPORTED_SCHEMA_VERSIONS,
+)
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs
 from coding_agent_playbook.hook_runtime.policy import ENGINE_DEADLINE_CAP_MS
@@ -46,13 +51,10 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.config.lock_digest import TomlLoader
     from coding_agent_playbook.hook_runtime.event import RepoInfo
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [
     "CONFIG_FAULT_REASON",
-    "GUARD_CONFIG_REL",
-    "LOCKFILE_REL",
-    "SUPPORTED_SCHEMA_VERSIONS",
     "ConfigFault",
     "GuardConfig",
     "HookRecord",
@@ -61,10 +63,6 @@ __all__ = [
     "parse_guard_config",
 ]
 
-GUARD_CONFIG_REL: Final = ".coding-agent-playbook/hooks/guard_config.json"
-LOCKFILE_REL: Final = ".coding-agent-playbook.lock"
-#: The ``schema_version`` range this runtime reads; additive keys need no bump.
-SUPPORTED_SCHEMA_VERSIONS: Final = (1, 1)
 #: Validate caps the file at 256 KiB; anything past this is not read at all.
 MAX_CONFIG_BYTES: Final = 1024 * 1024
 DEFAULT_STATE_TTL_DAYS: Final = 7

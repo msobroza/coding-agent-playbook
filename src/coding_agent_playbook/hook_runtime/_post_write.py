@@ -26,9 +26,9 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.hook_runtime._decision_log import DISPATCHER_ID, LogLine, lines_for
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName, Harness, ToolClass
-from coding_agent_playbook.hook_runtime.ledger import Ledger
 from coding_agent_playbook.hook_runtime.paths import normalize_path
-from coding_agent_playbook.hook_runtime.state import StateUnavailable
+from coding_agent_playbook.hook_runtime.state.ledger import Ledger
+from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -40,8 +40,8 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
-    from coding_agent_playbook.hook_runtime.session import SessionState
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.session import SessionState
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = ["PostWrite", "record_after_write"]
 

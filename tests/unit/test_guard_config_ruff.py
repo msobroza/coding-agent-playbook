@@ -29,7 +29,7 @@ from coding_agent_playbook.guard_config import (
     serialize_guard_config,
 )
 from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
-from coding_agent_playbook.hook_runtime.state import StateStore
+from coding_agent_playbook.hook_runtime.state.store import StateStore
 from coding_agent_playbook.hooks.resolution.resolved import ResolvedHandler
 from coding_agent_playbook.sync._machine_local import SyncHookDeps, write_pins
 from tests.fakes import FakePinWriter

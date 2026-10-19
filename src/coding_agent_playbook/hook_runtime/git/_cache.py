@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime.git.parse import parse_version
 from coding_agent_playbook.hook_runtime.git.safe_git import GitError
-from coding_agent_playbook.hook_runtime.state import StateUnavailable
+from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
 
 if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.git.safe_git import SafeGit

@@ -13,7 +13,7 @@ The store is defensive because the agent runs as the same user:
   agent chose;
 - JSON documents are read-modify-written under a ``locks/<name>.lock`` flock
   whose wait is bounded to 200 ms, and written through a temp file plus
-  ``os.replace``; JSONL lines are single ``O_APPEND`` writes (``security.audit``);
+  ``os.replace``; JSONL lines are single ``O_APPEND`` writes (``audit_log``);
 - nothing here may fail a tool call: an unusable root makes the store
   *stateless* and a busy lock makes that one operation stateless. Both raise
   :class:`StateUnavailable`, which every caller turns into its stateless
@@ -29,7 +29,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime._state_files import (
+from coding_agent_playbook.hook_runtime.deps import SystemClock
+from coding_agent_playbook.hook_runtime.state._files import (
     DIR_MODE,
     FILE_MODE,
     MAX_DOCUMENT_BYTES,
@@ -42,8 +43,7 @@ from coding_agent_playbook.hook_runtime._state_files import (
     root_problem,
     write_new,
 )
-from coding_agent_playbook.hook_runtime.deps import SystemClock
-from coding_agent_playbook.security.audit import (
+from coding_agent_playbook.hook_runtime.state.audit_log import (
     ROTATE_BYTES,
     acquire_lock,
     append_jsonl,
@@ -53,9 +53,9 @@ from coding_agent_playbook.security.audit import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
-    from coding_agent_playbook.hook_runtime._state_sweep import SweepReport
     from coding_agent_playbook.hook_runtime.deps import Clock
     from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.state._sweep import SweepReport
 
 __all__ = [
     "DIR_MODE",
@@ -239,7 +239,7 @@ class StateStore:
     def append_jsonl(
         self, rel: str, record: Mapping[str, object], *, rotate_bytes: int = ROTATE_BYTES
     ) -> None:
-        """Append ``record`` to ``rel`` as one atomic ``O_APPEND`` line (``security.audit``)."""
+        """Append ``record`` to ``rel`` as one atomic ``O_APPEND`` line (``audit_log``)."""
         target = self.path(rel)
         self._parent_dir(rel)
         try:
@@ -277,8 +277,8 @@ class StateStore:
     def sweep(
         self, *, ttl_days: int, retain_months: int = 6, head_tree: str | None = None
     ) -> SweepReport:
-        """Run one bounded TTL sweep (see ``_state_sweep``); ``StateUnavailable`` when stateless."""
-        from coding_agent_playbook.hook_runtime._state_sweep import sweep_state
+        """Run one bounded TTL sweep (see ``_sweep``); ``StateUnavailable`` when stateless."""
+        from coding_agent_playbook.hook_runtime.state._sweep import sweep_state
 
         return sweep_state(
             self, ttl_days=ttl_days, retain_months=retain_months, head_tree=head_tree
@@ -286,7 +286,7 @@ class StateStore:
 
     def sweep_due(self) -> bool:
         """Whether the last sweep ran more than 24 h ago (Stop sweeps lazily, §D.6.1)."""
-        from coding_agent_playbook.hook_runtime._state_sweep import sweep_due
+        from coding_agent_playbook.hook_runtime.state._sweep import sweep_due
 
         return sweep_due(self)
 
