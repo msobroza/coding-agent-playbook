@@ -1,8 +1,10 @@
-"""Hooks in the agent_harness tree (specs/prK-lifecycle-hooks.md §C.6).
+"""Hooks in the agent_harness tree, both directions (specs/prK-lifecycle-hooks.md §C.6).
 
 The Agent Harness spec has no lifecycle-event concept, so ``agent_harness`` is
 advisory-only. It still keeps the ``playbook/hooks/`` -> harness ->
-``import-harness`` round trip lossless:
+``import-harness`` round trip lossless: :func:`emit_hook_sidecars` writes the
+sidecar, and :func:`read_hook_sidecar` turns its manifest entry back into the
+canonical ``Hook`` (its read half joined this module in AH-2, #143):
 
 - **sidecar (always):** ``.playbook/hooks/<id>/HOOK.md`` with the canonical
   frontmatter, the sentinel as first body line and the un-rendered body, plus
@@ -18,7 +20,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.agent_harness import emitter, manifest
+from coding_agent_playbook.agent_harness._import_writes import restore_recorded_exec_bits
 from coding_agent_playbook.artifacts.frontmatter import format_frontmatter
+from coding_agent_playbook.artifacts.hook import Hook
 from coding_agent_playbook.generated_output.output_io import write_output_text
 from coding_agent_playbook.generated_output.source_files import copyable_skill_files
 from coding_agent_playbook.rendering.formats import with_sentinel_body
@@ -27,7 +31,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
@@ -36,6 +39,7 @@ __all__ = [
     "copy_scripts",
     "emit_hook_sidecars",
     "guardrail_rules",
+    "read_hook_sidecar",
     "stale_sidecar_candidates",
 ]
 
@@ -84,6 +88,35 @@ def _emit_sidecar(hook: Hook, repo_root: Path, entries: list[manifest.ManifestEn
         )
     )
     return [target, *copied]
+
+
+def read_hook_sidecar(path: Path, entry: manifest.ManifestEntry, *, source_package: str) -> Hook:
+    """Rebuild the ``Hook`` that ``entry`` records; ``path`` is its sidecar ``HOOK.md``.
+
+    The frontmatter, the un-rendered body and ``is_templated`` come from the
+    manifest entry, never from the rendered advisory, and the scripts whose
+    exec bit the entry records get it back (a transport may have dropped it).
+    Raises ``HookSchemaError`` (naming the field and value) when the recorded
+    frontmatter no longer parses; the importer reports it and skips the entry.
+
+    Example::
+
+        hook = read_hook_sidecar(root / entry.path, entry, source_package="<imported>")
+    """
+    restore_recorded_exec_bits(path, entry)
+    body = entry.body if entry.body is not None else ""
+    scripts = path.parent / "scripts"
+    return Hook.from_dict(
+        {
+            "frontmatter": dict(entry.hook_frontmatter),
+            "body": body,
+            "template_body": body,
+            "is_templated": bool(entry.is_templated),
+            "source_path": str(path),
+            "source_package": source_package,
+            "scripts_dir": str(scripts) if scripts.is_dir() else None,
+        }
+    )
 
 
 def copy_scripts(

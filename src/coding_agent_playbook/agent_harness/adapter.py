@@ -9,7 +9,8 @@ in :meth:`finalize`, so ``HARNESS.md`` can index everything that was emitted.
 Layout (§B):
 
 - ``skills/<id>/SKILL.md`` (+ ``scripts/`` + ``references/``) and ``skills/SKILLS.md``.
-- ``prompts/<slash>/SKILL.md`` (skill-shaped leaf) and ``prompts/PROMPTS.md``.
+- ``prompts/<slash>/SKILL.md`` (skill-shaped leaf) and ``prompts/PROMPTS.md``;
+  both kinds of leaf are written by :mod:`._emit_skills` (AH-2, #143).
 - ``rules/<priority:02d>-<id>.md`` for ``scope=always`` rules and ``rules/RULES.md``.
 - ``references/<id>.md`` for ``scope=scoped`` rules and ``references/REFERENCES.md``.
 - ``HARNESS.md`` (root role summary + dir index + "Always consult these" pointer).
@@ -37,15 +38,14 @@ from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.agent_harness import emitter, manifest
+from coding_agent_playbook.agent_harness._emit_skills import emit_prompt_leaves, emit_skill_leaves
 from coding_agent_playbook.agent_harness.hook_sidecars import (
-    copy_scripts,
     emit_hook_sidecars,
     guardrail_rules,
     stale_sidecar_candidates,
 )
 from coding_agent_playbook.generated_output.file_identity import FileSet
-from coding_agent_playbook.generated_output.output_io import write_output_bytes, write_output_text
-from coding_agent_playbook.generated_output.source_files import copyable_skill_files
+from coding_agent_playbook.generated_output.output_io import write_output_text
 from coding_agent_playbook.rendering.formats import (
     render_inline_prompt_markdown,
     with_sentinel_body,
@@ -167,110 +167,20 @@ class AgentHarnessAdapter(Adapter):
         written.extend(self._emit_sidecar(repo_root, entries))
         return written
 
-    # --- skills ------------------------------------------------------------
+    # --- skills and prompts (skill-shaped leaves, :mod:`._emit_skills`) ----
 
     def _emit_skills(self, repo_root: Path, entries: list[ManifestEntry]) -> list[Path]:
         if not self._skills:
             return []
-        written: list[Path] = []
-        for skill in self._skills:
-            skill_id = str(skill.frontmatter.get("id", "skill"))
-            skill_dir = repo_root / "skills" / skill_id
-            skill_dir.mkdir(parents=True, exist_ok=True)
-
-            name = str(skill.frontmatter.get("name", skill_id))
-            description = str(skill.frontmatter.get("description", ""))
-            frontmatter = emitter.frontmatter_block({"name": name, "description": description})
-            skill_md = skill_dir / "SKILL.md"
-            write_output_text(skill_md, with_sentinel_body(frontmatter, skill.body))
-            written.append(skill_md)
-
-            scripts, script_paths = copy_scripts(
-                skill.scripts_dir, skill_dir / "scripts", repo_root
-            )
-            written.extend(script_paths)
-            written.extend(self._copy_references(skill, skill_dir))
-
-            entries.append(
-                manifest.ManifestEntry(
-                    kind="skill",
-                    path=self._rel(skill_md, repo_root),
-                    id=skill_id,
-                    # Record name + the source body in the sidecar so lossless
-                    # reconstruction is uniform with rules/prompts (independent
-                    # of the on-disk leaf), even though a skill's SKILL.md is a
-                    # near-verbatim copy of the source body today.
-                    name=name,
-                    body=skill.body,
-                    extra_frontmatter=self._skill_extra_frontmatter(skill),
-                    scripts=scripts,
-                )
-            )
+        written = emit_skill_leaves(self._skills, repo_root, entries)
         written.append(self._emit_routing(repo_root, "skills", "Skills available in this harness."))
         return written
-
-    @staticmethod
-    def _copy_references(skill: Skill, skill_dir: Path) -> list[Path]:
-        """Byte-copy the skill's publishable references, filtered like ``scripts/``."""
-        if skill.references_dir is None:
-            return []
-        dst_root = skill_dir / "references"
-        paths: list[Path] = []
-        for src in copyable_skill_files(skill.references_dir, dst_root):
-            dst = dst_root / src.relative_to(skill.references_dir)
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            write_output_bytes(dst, src.read_bytes())
-            paths.append(dst)
-        return paths
-
-    @staticmethod
-    def _skill_extra_frontmatter(skill: Skill) -> dict[str, object]:
-        """Frontmatter keys beyond ``id``/``name``/``description`` go to the sidecar."""
-        reserved = {"id", "name", "description"}
-        return {k: v for k, v in skill.frontmatter.items() if k not in reserved}
-
-    # --- prompts -----------------------------------------------------------
 
     def _emit_prompts(self, repo_root: Path, entries: list[ManifestEntry]) -> list[Path]:
         if not self._prompts:
             return []
-        written: list[Path] = []
-        for prompt in self._prompts:
-            fm = prompt.frontmatter
-            slash = fm.slash
-            prompt_dir = repo_root / "prompts" / slash
-            prompt_dir.mkdir(parents=True, exist_ok=True)
-
-            frontmatter = emitter.frontmatter_block(
-                {"name": fm.name, "description": fm.description}
-            )
-            body = self._prompt_body(prompt)
-            skill_md = prompt_dir / "SKILL.md"
-            write_output_text(skill_md, with_sentinel_body(frontmatter, body))
-            written.append(skill_md)
-
-            entries.append(
-                manifest.ManifestEntry(
-                    kind="prompt",
-                    path=self._rel(skill_md, repo_root),
-                    id=fm.id,
-                    # The leaf body inlines ``includes_rules`` (rendered
-                    # presentation); the sidecar stores the ORIGINAL un-rendered
-                    # source body + ``is_templated`` so the lossless importer
-                    # reconstructs the prompt from here, not the rendered leaf.
-                    name=fm.name,
-                    body=prompt.template_body,
-                    is_templated=prompt.is_templated,
-                    slash=slash,
-                    version=fm.version,
-                    applies_if=dict(fm.applies_if),
-                    input_variables=[dict(v) for v in fm.input_variables],
-                    includes_rules=list(fm.includes_rules),
-                    eval_tasks=list(fm.eval_tasks),
-                    output_contract=list(fm.output_contract),
-                    write_scope=dict(fm.write_scope),
-                )
-            )
+        leaves = [(prompt, self._prompt_body(prompt)) for prompt in self._prompts]
+        written = emit_prompt_leaves(leaves, repo_root, entries)
         written.append(
             self._emit_routing(repo_root, "prompts", "Prompts available in this harness.")
         )
@@ -317,7 +227,7 @@ class AgentHarnessAdapter(Adapter):
             return []
         written: list[Path] = []
         for rule, record in [*((r, True) for r in rules), *((r, False) for r in advisories)]:
-            target = repo_root / "rules" / self._always_rule_filename(rule)
+            target = repo_root / "rules" / emitter.always_rule_filename(rule)
             written.append(
                 self._write_rule_content(target, rule, repo_root, entries, record_manifest=record)
             )
@@ -376,10 +286,6 @@ class AgentHarnessAdapter(Adapter):
         )
         return target
 
-    @staticmethod
-    def _always_rule_filename(rule: Rule) -> str:
-        return f"{rule.frontmatter.priority:02d}-{rule.frontmatter.id}.md"
-
     # --- routing files -----------------------------------------------------
 
     def _emit_routing(self, repo_root: Path, dir_name: str, description: str) -> Path:
@@ -392,47 +298,17 @@ class AgentHarnessAdapter(Adapter):
     # --- HARNESS.md --------------------------------------------------------
 
     def _emit_harness_md(self, repo_root: Path, always_rules: list[Rule]) -> Path:
-        name = repo_root.name or "harness"
-        description = f"Coding-agent harness for {name}."
         emitted = {
             "skills": bool(self._skills),
             "prompts": bool(self._prompts),
             "rules": bool(always_rules),
             "references": any(r.frontmatter.scope != "always" for r in self._rules),
         }
-        frontmatter = emitter.frontmatter_block({"name": name, "description": description})
-
-        sections: list[str] = [
-            f"# {name}",
-            "",
-            "This harness provides the coding rules, prompts and skills for this "
-            "project. Consult the routing files in each directory for details.",
-            "",
-            "## Contents",
-            "",
-        ]
-        # Index what this render emits, never what happens to be on disk: an
-        # empty leftover dir (or the user's own ``skills/``) must not change the
-        # bytes, or ``sync --check`` (rendering into an empty scratch) drifts.
-        for dir_name in (d for d in _TOP_LEVEL_DIRS if emitted[d]):
-            sections.append(f"- `{dir_name}/` — see `{dir_name}/{dir_name.upper()}.md`")
-        sections.append("")
-
-        if always_rules:
-            sections.append("## Always consult these")
-            sections.append("")
-            sections.append("Read these rules at the start of every session:")
-            sections.append("")
-            for rule in sorted(
-                always_rules, key=lambda r: (r.frontmatter.priority, r.frontmatter.id)
-            ):
-                rel = f"rules/{self._always_rule_filename(rule)}"
-                sections.append(f"- `{rel}` — {rule.frontmatter.description}")
-            sections.append("")
-
-        body = "\n".join(sections)
+        dirs = [d for d in _TOP_LEVEL_DIRS if emitted[d]]
         target = repo_root / "HARNESS.md"
-        write_output_text(target, with_sentinel_body(frontmatter, body))
+        write_output_text(
+            target, emitter.harness_md_text(repo_root.name or "harness", dirs, always_rules)
+        )
         return target
 
     # --- .leaf-detectors ---------------------------------------------------
@@ -491,18 +367,12 @@ class AgentHarnessAdapter(Adapter):
             if not output_dir.is_dir():
                 continue
             candidates.extend(
-                path for path in output_dir.rglob("*") if not _inside_skill_dir(path, skills_dir)
+                path
+                for path in output_dir.rglob("*")
+                if not emitter.inside_skill_dir(path, skills_dir)
             )
         return candidates
 
     @staticmethod
     def _rel(path: Path, repo_root: Path) -> str:
         return path.relative_to(repo_root).as_posix()
-
-
-def _inside_skill_dir(path: Path, skills_dir: Path) -> bool:
-    """True for ``skills/<id>/...`` (a skill's own files), False for ``skills/SKILLS.md``."""
-    try:
-        return len(path.relative_to(skills_dir).parts) > 1
-    except ValueError:
-        return False

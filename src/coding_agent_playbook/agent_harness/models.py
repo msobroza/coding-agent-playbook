@@ -4,7 +4,8 @@ These frozen dataclasses are the in-memory representation produced by
 :func:`coding_agent_playbook.agent_harness.parser.parse_harness`. They mirror the
 artifact catalog in ``specs/prH-agent-harness.md`` §A:
 
-- :class:`Harness` — the root (``HARNESS.md`` + every top-level branch).
+- :class:`HarnessTree` — the root (``HARNESS.md`` + every top-level branch). Not
+  CONTEXT's Harness, which is a coding-agent runtime (AH-2, #143).
 - :class:`HarnessDirectory` — a grouping directory (routing file + children).
 - :class:`SkillLeaf` — a ``SKILL.md``-typed leaf with ``scripts/`` + ``references/``.
 - :class:`ScriptFile` — one file under a skill's ``scripts/`` (with its exec bit).
@@ -95,9 +96,22 @@ class HarnessDirectory:
     leaves: tuple[SkillLeaf | LeafMarker, ...] = field(default_factory=tuple)
     content: tuple[ContentFile | RawAsset, ...] = field(default_factory=tuple)
 
+    @property
+    def is_opaque(self) -> bool:
+        """Whether this directory carries a ``.harnessleaf`` marker for itself.
+
+        The parser records a :class:`LeafMarker` at the directory's own ``path``
+        for such a directory (e.g. a top-level ``evals/``). It is an opaque unit
+        (spec §A/§B): clients stop there, so neither the ``validate-harness`` lint
+        nor the best-effort import inspects anything inside it.
+
+        Example: ``directory.is_opaque`` is True for ``evals/`` holding ``.harnessleaf``.
+        """
+        return any(isinstance(leaf, LeafMarker) and leaf.path == self.path for leaf in self.leaves)
+
 
 @dataclass(frozen=True)
-class Harness:
+class HarnessTree:
     """The parsed harness root: ``HARNESS.md`` metadata plus every branch."""
 
     name: str

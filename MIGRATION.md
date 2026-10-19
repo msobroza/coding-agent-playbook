@@ -546,6 +546,17 @@ dispatcher: import `register_hook_handler` and `HandlerContext` from
 `hook_handlers` entry-point group do not change.
 <!-- module-moves: end-keep -->
 
+<!-- module-moves: keep -->
+Out-of-tree code that reads an Agent Harness tree: the parsed tree
+`coding_agent_playbook.agent_harness.models.Harness` is now `HarnessTree`, with no
+alias (Harness names a coding-agent runtime), and `parse_harness` returns it. The
+`playbook validate-harness` checks are `coding_agent_playbook.agent_harness.lint.lint_harness`,
+which returns `HarnessFindings`; `HarnessFindings.failed(strict=...)` is the
+`--strict` choice. A hook sidecar entry reads back through
+`coding_agent_playbook.agent_harness.hook_sidecars.read_hook_sidecar`. The command
+output, the exit codes and every byte the adapter writes do not change.
+<!-- module-moves: end-keep -->
+
 Out-of-tree `Metric` authors: at grade time, a threshold or non-regression check
 over a static or execution metric no longer calls the metric's `available(ctx)`.
 The grading kernel's one measuring pass (`coding_agent_playbook.grading.measuring`)
