@@ -1,0 +1,226 @@
+"""A builtin's handler config read against its ``CONFIG_SCHEMA`` (specs/prT-package-layout.md §8 B.7).
+
+``HookConfig`` is the one reader of a builtin's merged ``handler.config``: a
+value of the wrong kind reads as the caller's default, and the emptiness and
+range rules are the caller's, named at each read. Reading an undeclared key, or
+reading a key with a method that does not match its declared kind, raises.
+"""
+
+from __future__ import annotations
+
+import re
+from typing import TYPE_CHECKING, Any, Final
+
+import pytest
+
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
+from coding_agent_playbook.hook_runtime.config.keys import ConfigKey
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    type Read = Callable[[HookConfig], object]
+
+_SCHEMA: Final = {
+    "enabled": ConfigKey("boolean"),
+    "mode": ConfigKey("string", "strictest", ("off", "ask", "enforce")),
+    "label": ConfigKey("string"),
+    "cap": ConfigKey("integer"),
+    "budget": ConfigKey("number"),
+    "hosts": ConfigKey("list", "relax"),
+    "extra_rows": ConfigKey("regex", "extend"),
+    "trailers": ConfigKey("table"),
+}
+#: A list value as a TOML author may spell it, with the item kinds validate lets through.
+_HOSTS: Final = ["pypi.org", "", "  ", 3, None, "mirror.internal"]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        pytest.param({"enabled": False}, False, id="false"),
+        pytest.param({"enabled": True}, True, id="true"),
+        pytest.param({"enabled": 0}, True, id="zero-is-not-false"),
+        pytest.param({"enabled": "false"}, True, id="a-string-is-not-a-bool"),
+        pytest.param({}, True, id="absent"),
+    ],
+)
+def test_flag_reads_only_a_bool(raw: dict[str, object], expected: bool) -> None:
+    assert HookConfig(raw, _SCHEMA).flag("enabled", True) is expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        pytest.param({"mode": "enforce"}, "enforce", id="declared"),
+        pytest.param({"mode": "block"}, "off", id="outside-the-order"),
+        pytest.param({"mode": ""}, "off", id="empty"),
+        pytest.param({"mode": ["ask"]}, "off", id="not-a-string"),
+        pytest.param({}, "off", id="absent"),
+    ],
+)
+def test_choice_outside_the_declared_order_is_the_default(
+    raw: dict[str, object], expected: str
+) -> None:
+    assert HookConfig(raw, _SCHEMA).choice("mode", "off") == expected
+
+
+@pytest.mark.parametrize(("value", "expected"), [("nightly", "nightly"), (3, "x"), (True, "x")])
+def test_choice_of_a_key_without_an_order_reads_any_string(value: object, expected: str) -> None:
+    assert HookConfig({"label": value}, _SCHEMA).choice("label", "x") == expected
+
+
+@pytest.mark.parametrize("value", [True, False, "8", 2.5, None])
+def test_integer_never_counts_a_bool(value: object) -> None:
+    assert HookConfig({"cap": value}, _SCHEMA).integer("cap", 64) == 64
+
+
+@pytest.mark.parametrize(("value", "expected"), [(0, 64), (-3, 64), (1, 1), (4096, 4096)])
+def test_integer_below_the_minimum_is_the_default(value: int, expected: int) -> None:
+    assert HookConfig({"cap": value}, _SCHEMA).integer("cap", 64, minimum=1) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "bounds", "expected"),
+    [
+        pytest.param(0, {"below": "clamp"}, 1, id="below-clamped"),
+        pytest.param(0, {"below": "default"}, 2, id="below-default"),
+        pytest.param(99, {"above": "clamp"}, 8, id="above-clamped"),
+        pytest.param(99, {"above": "default"}, 2, id="above-default"),
+        pytest.param(5, {"below": "clamp", "above": "clamp"}, 5, id="inside"),
+    ],
+)
+def test_integer_clamps_when_asked(value: int, bounds: dict[str, Any], expected: int) -> None:
+    config = HookConfig({"budget": value}, _SCHEMA)
+
+    assert config.integer("budget", 2, minimum=1, maximum=8, **bounds) == expected
+
+
+def test_strings_drop_empty_by_default() -> None:
+    assert HookConfig({"hosts": _HOSTS}, _SCHEMA).strings("hosts") == (
+        "pypi.org",
+        "  ",
+        "mirror.internal",
+    )
+
+
+def test_strings_keep_blanks_when_asked() -> None:
+    """git_policy's rule: an empty glob stays (and never matches a non-empty identity)."""
+    config = HookConfig({"hosts": _HOSTS}, _SCHEMA)
+
+    assert config.strings("hosts", blanks="keep") == ("pypi.org", "", "  ", "mirror.internal")
+
+
+def test_strings_drop_blank_strings_when_asked() -> None:
+    config = HookConfig({"hosts": _HOSTS}, _SCHEMA)
+
+    assert config.strings("hosts", blanks="drop_blank") == ("pypi.org", "mirror.internal")
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param({"hosts": "pypi.org"}, id="a-string-is-not-iterated"),
+        pytest.param({"hosts": {"pypi.org": True}}, id="a-table"),
+        pytest.param({"hosts": None}, id="null"),
+        pytest.param({}, id="absent"),
+    ],
+)
+def test_strings_of_a_non_list_is_the_default(raw: dict[str, object]) -> None:
+    assert HookConfig(raw, _SCHEMA).strings("hosts", ("main",)) == ("main",)
+
+
+def test_strings_of_an_empty_list_is_empty_not_the_default() -> None:
+    config = HookConfig({"hosts": ["", 3]}, _SCHEMA)
+
+    assert (config.strings("hosts", ("main",)), config.strings("hosts", blanks="keep")) == (
+        (),
+        ("",),
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(3, id="an-int"),
+        pytest.param("a.html", id="a-string"),
+        pytest.param(None, id="null"),
+        pytest.param(["a.html", 3], id="a-non-string-item"),
+    ],
+)
+def test_strict_strings_raise_naming_the_key(value: object) -> None:
+    config = HookConfig({"hosts": value}, _SCHEMA)
+
+    with pytest.raises(
+        ValueError, match=r"^handler config 'hosts' must be a list of strings, got "
+    ):
+        config.strings("hosts", blanks="keep", strict=True)
+
+
+def test_strict_strings_read_an_absent_key_or_a_list_of_str() -> None:
+    absent = HookConfig({}, _SCHEMA).strings("hosts", ("x",), blanks="keep", strict=True)
+    listed = HookConfig({"hosts": ["a", ""]}, _SCHEMA).strings("hosts", blanks="keep", strict=True)
+
+    assert (absent, listed) == (("x",), ("a", ""))
+
+
+def test_value_returns_regex_rows_verbatim() -> None:
+    rows = [r"\bdrop\b", {"argv0": "kubectl", "regex": r"\bdelete\b", "decision": "deny"}, 3]
+    config = HookConfig({"extra_rows": rows, "trailers": {"Refs": "#1"}}, _SCHEMA)
+
+    assert config.value("extra_rows") is rows
+    assert (config.value("trailers"), HookConfig({}, _SCHEMA).value("extra_rows")) == (
+        {"Refs": "#1"},
+        None,
+    )
+
+
+@pytest.mark.parametrize(
+    "read",
+    [
+        pytest.param(lambda c: c.flag("enabeld", True), id="flag"),
+        pytest.param(lambda c: c.choice("enabeld", "off"), id="choice"),
+        pytest.param(lambda c: c.integer("enabeld", 1), id="integer"),
+        pytest.param(lambda c: c.strings("enabeld"), id="strings"),
+        pytest.param(lambda c: c.value("enabeld"), id="value"),
+    ],
+)
+def test_an_undeclared_key_raises_naming_the_declared_keys(read: Read) -> None:
+    config = HookConfig({"enabeld": True}, {"enabled": ConfigKey("boolean"), "cap": _SCHEMA["cap"]})
+
+    with pytest.raises(KeyError, match=r"'enabeld' is not a config key .*declared: cap, enabled"):
+        read(config)
+
+
+@pytest.mark.parametrize(
+    ("read", "message"),
+    [
+        pytest.param(lambda c: c.flag("cap", True), "flag('cap') reads a boolean key", id="flag"),
+        pytest.param(
+            lambda c: c.choice("hosts", "x"), "choice('hosts') reads a string", id="choice"
+        ),
+        pytest.param(lambda c: c.integer("mode", 1), "integer('mode') reads an integer", id="int"),
+        pytest.param(
+            lambda c: c.strings("extra_rows"), "strings('extra_rows') reads a list", id="list"
+        ),
+        pytest.param(
+            lambda c: c.value("hosts"), "value('hosts') reads a regex or table", id="value"
+        ),
+    ],
+)
+def test_a_read_that_does_not_match_the_declared_kind_raises(read: Read, message: str) -> None:
+    with pytest.raises(TypeError, match=re.escape(message)):
+        read(HookConfig({}, _SCHEMA))
+
+
+@pytest.mark.parametrize(
+    ("read", "expected"),
+    [
+        pytest.param(lambda c: c.integer("budget", 1), 3, id="integer-of-a-number-key"),
+        pytest.param(lambda c: c.value("trailers"), {"Refs": "#1"}, id="value-of-a-table-key"),
+    ],
+)
+def test_a_read_of_a_compatible_kind_is_allowed(read: Read, expected: object) -> None:
+    config = HookConfig({"budget": 3, "trailers": {"Refs": "#1"}}, _SCHEMA)
+
+    assert read(config) == expected

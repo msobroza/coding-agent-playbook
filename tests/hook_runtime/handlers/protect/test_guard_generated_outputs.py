@@ -390,6 +390,22 @@ def test_internal_error_asks_and_denies_headless(
     assert _decision(headless) is Decision.DENY
 
 
+def test_a_non_string_extra_protected_entry_fails_the_hook(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps]
+) -> None:
+    """The handler raises on a list holding a non-string, so the failure policy decides."""
+    config = {HOOK_ID: {"extra_protected": ["docs/owned.md", 3]}}
+    repo = _synced(pack_repo, handler_config=config)
+    tool_input = {"file_path": str(repo.root / "src/app.py"), "content": "x = 1\n"}
+    payload = repo.tool_payload("Write", tool_input)
+
+    attended = repo.simulate(payload, deps())
+    headless = repo.simulate(payload, deps(), env={UNATTENDED_ENV_VAR: "1"})
+
+    assert (_decision(attended), _decision(headless)) == (Decision.ASK, Decision.DENY)
+    assert f"Playbook guard {HOOK_ID} failed internally" in attended.trace.combined.reason
+
+
 @pytest.mark.parametrize(
     ("command", "expected"),
     [

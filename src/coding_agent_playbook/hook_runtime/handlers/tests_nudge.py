@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime._public_api import new_public_symbols
 from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.paths import fold_key
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.stop.alone import run_alone
@@ -133,6 +134,10 @@ def tests_nudge_stage(ev: CanonicalEvent, ctx: HandlerContext) -> NudgeStage | N
         return None
     message = ev.stop.last_assistant_message if ev.stop is not None else ""
     platform, cfg = ctx.platform, ctx.cfg
+    config = HookConfig(ctx.config, CONFIG_SCHEMA)
+    # Each root is a repo-relative prefix; "." (or a bare "/") is the repository root.
+    sources = config.strings("source_roots", blanks="drop_empty")
+    tests = config.strings("test_roots", blanks="drop_empty")
     classes = [cfg.path_classes[name] for name in _NOT_SOURCE if name in cfg.path_classes]
 
     def excluded(rel: str) -> bool:
@@ -142,11 +147,11 @@ def tests_nudge_stage(ev: CanonicalEvent, ctx: HandlerContext) -> NudgeStage | N
     return NudgeStage(
         git=ctx.git,
         root=ev.repo.worktree_root,
-        source_roots=_roots(ctx.config.get("source_roots"), "."),
-        test_roots=_roots(ctx.config.get("test_roots"), "tests"),
+        source_roots=tuple(root.strip("/") or "." for root in sources) or (".",),
+        test_roots=tuple(root.strip("/") or "." for root in tests) or ("tests",),
         is_excluded=excluded,
         question=message.rstrip().endswith("?"),
-        block=ctx.config.get("block") is True,
+        block=config.flag("block", False),
     )
 
 
@@ -163,14 +168,6 @@ def tests_with_source_nudge(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerR
     """
     stage = tests_nudge_stage(ev, ctx)
     return None if stage is None else run_alone(stage, ev, ctx)
-
-
-def _roots(value: object, default: str) -> tuple[str, ...]:
-    """The configured roots as repo-relative prefixes; ``.`` is the repository root."""
-    if not isinstance(value, list):
-        return (default,)
-    roots = tuple(root.strip("/") or "." for root in value if isinstance(root, str) and root)
-    return roots or (default,)
 
 
 def _under(rel: str, roots: Sequence[str]) -> bool:
