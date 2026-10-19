@@ -29,9 +29,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime._agent_transcript import TranscriptError, edited_files
-from coding_agent_playbook.hook_runtime._head_snapshot import head_moved_note
 from coding_agent_playbook.hook_runtime.caps import OutputCaps, quote_data
+from coding_agent_playbook.hook_runtime.config.guard_tables import (
+    DEFAULT_MAX_BLOCKS,
+    MAX_BLOCKS_RANGE,
+)
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.git.head_snapshot import head_moved_note
 from coding_agent_playbook.hook_runtime.handlers._lint_stage import LintStage
 from coding_agent_playbook.hook_runtime.handlers._verify_claim import completion_claim
 from coding_agent_playbook.hook_runtime.handlers.stop_ci_parity_gate import (
@@ -43,7 +47,6 @@ from coding_agent_playbook.hook_runtime.paths import normalize_path
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.state import StateUnavailable
 from coding_agent_playbook.hook_runtime.stop.coordinator import (
-    DEFAULT_MAX_BLOCKS,
     CoordinatorDeps,
     GatePolicy,
     StopCoordinator,
@@ -88,7 +91,6 @@ NO_STAGES_NOTE: Final = (
     "subagent-stop-verify: no Stop stage records in this worktree (is stop-ci-parity-gate off?); "
     "the subagent's work is NOT verified."
 )
-_MAX_BLOCKS_RANGE: Final = (1, 8)
 _CLAIM_CHARS: Final = 60
 
 
@@ -180,9 +182,9 @@ def _allowed(agent_type: str | None, config: Mapping[str, Any]) -> bool:
 
 def _policy(ctx: HandlerContext) -> GatePolicy:
     """The parent gate's table (same stage records, same trust digest) with this hook's budget."""
-    base = GatePolicy.from_table(ctx.cfg.tables.get("stop_gate"))
+    base = GatePolicy.from_gate(ctx.cfg.tables.stop_gate())
     blocks = ctx.config.get("max_blocks")
-    low, high = _MAX_BLOCKS_RANGE
+    low, high = MAX_BLOCKS_RANGE
     budget = min(high, max(low, blocks)) if type(blocks) is int else DEFAULT_MAX_BLOCKS
     return dataclasses.replace(base, max_blocks=budget)
 
@@ -233,16 +235,11 @@ def _deps(
 
 
 def _timeouts(ctx: HandlerContext) -> dict[str, float]:
-    """Each rendered stage record's ``timeout_s``, by stage name."""
-    table = ctx.cfg.tables.get("stop_gate")
-    records = table.get("stages") if isinstance(table, dict) else None
+    """Each rendered stage record's ``timeout_s``, by stage name (the first record wins)."""
     timeouts: dict[str, float] = {}
-    for record in records if isinstance(records, list) else ():
-        if not isinstance(record, dict):
-            continue
-        name, timeout_s = record.get("name"), record.get("timeout_s")
-        if isinstance(name, str) and isinstance(timeout_s, int | float) and timeout_s > 0:
-            timeouts.setdefault(name, float(timeout_s))
+    for record in ctx.cfg.tables.stop_gate().stages:
+        if record.timeout_s is not None:
+            timeouts.setdefault(record.name, record.timeout_s)
     return timeouts
 
 

@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from coding_agent_playbook.hook_runtime.active_prompt import ActivePrompt
-    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
@@ -47,7 +46,6 @@ __all__ = [
     "STAGE_NAME",
     "TAIL_CHARS",
     "OutputContractStage",
-    "contract_of",
     "output_contract_stage",
     "prompt_output_contract_on_stop",
 ]
@@ -118,24 +116,11 @@ def output_contract_stage(ev: CanonicalEvent, ctx: HandlerContext) -> OutputCont
     message = ev.stop.last_assistant_message if ev.stop is not None else ""
     return OutputContractStage(
         prompt=prompt,
-        contract=() if prompt is None else contract_of(ctx.cfg, prompt.slash),
+        contract=() if prompt is None else ctx.cfg.tables.prompt_output_contract(prompt.slash),
         message=message,
         session=ctx.session,
         block_once=ctx.config.get("block_once") is True,
     )
-
-
-def contract_of(cfg: GuardConfig, slash: str) -> tuple[str, ...]:
-    """The ``output_contract`` sync rendered for prompt ``slash`` (``()`` without one).
-
-    Example: ``contract_of(cfg, "review")[0].startswith("(?im)")``.
-    """
-    table = cfg.tables.get("prompts")
-    row = table.get(slash) if isinstance(table, dict) else None
-    patterns = row.get("output_contract") if isinstance(row, dict) else None
-    if not isinstance(patterns, list):
-        return ()
-    return tuple(pattern for pattern in patterns if isinstance(pattern, str) and pattern)
 
 
 @register_hook_handler(

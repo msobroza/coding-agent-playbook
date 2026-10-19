@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.deps import Clock, ProcPort, RuntimeDeps, TrustPort
     from coding_agent_playbook.hook_runtime.escape import EscapeHatches
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
-    from coding_agent_playbook.hook_runtime.git import GitPort
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.ledger import Ledger
     from coding_agent_playbook.hook_runtime.session import SessionState
 

@@ -152,6 +152,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.git_client` | `coding_agent_playbook.sync.git_client` | A6 |
 | `coding_agent_playbook.git_env` | `coding_agent_playbook.evals.run.git_env` | N23 |
 | `coding_agent_playbook.gitignore` | `coding_agent_playbook.generated_output.gitignore` | N6 |
+| `coding_agent_playbook.harness` | `coding_agent_playbook.agent_harness` | N12 |
 | `coding_agent_playbook.hook_policy` | `coding_agent_playbook.hooks` | A17 |
 | `coding_agent_playbook.hook_policy.ADAPTER_LABELS` | `coding_agent_playbook.hooks.enforcement.ADAPTER_LABELS` | A17 |
 | `coding_agent_playbook.hook_policy.ADVISORY_RULE_PREFIX` | `coding_agent_playbook.hooks.resolution.tables.ADVISORY_RULE_PREFIX` | A17 |
@@ -225,7 +226,10 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_policy.tables` | `coding_agent_playbook.hooks.resolution.tables` | A17 |
 | `coding_agent_playbook.hook_runtime._config_keys` | `coding_agent_playbook.hook_runtime.config.keys` | N16 |
 | `coding_agent_playbook.hook_runtime._config_reader` | `coding_agent_playbook.hook_runtime.config.reader` | N16 |
+| `coding_agent_playbook.hook_runtime._git_memo` | `coding_agent_playbook.hook_runtime.git.memo` | N18 |
 | `coding_agent_playbook.hook_runtime._git_options` | `coding_agent_playbook.hook_runtime.shell.git_options` | N17 |
+| `coding_agent_playbook.hook_runtime._git_parse` | `coding_agent_playbook.hook_runtime.git.parse` | N18 |
+| `coding_agent_playbook.hook_runtime._head_snapshot` | `coding_agent_playbook.hook_runtime.git.head_snapshot` | N18 |
 | `coding_agent_playbook.hook_runtime._hook_records` | `coding_agent_playbook.hook_runtime.config.hook_records` | N16 |
 | `coding_agent_playbook.hook_runtime._hosts` | `coding_agent_playbook.hook_runtime.judges.hosts` | N14 |
 | `coding_agent_playbook.hook_runtime._lock_digest` | `coding_agent_playbook.hook_runtime.config.lock_digest` | N16 |
@@ -236,6 +240,9 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime._verify_tag` | `coding_agent_playbook.hook_runtime.stop.verify_tag` | N17 |
 | `coding_agent_playbook.hook_runtime.config` | `coding_agent_playbook.hook_runtime.config.guard_config` | N16 |
 | `coding_agent_playbook.hook_runtime.cutover` | `coding_agent_playbook.hook_runtime.judges.commit_cutover` | N14 |
+| `coding_agent_playbook.hook_runtime.git` | `coding_agent_playbook.hook_runtime.git.safe_git` | N18 |
+| `coding_agent_playbook.hook_runtime.git_log` | `coding_agent_playbook.hook_runtime.git.log` | N18 |
+| `coding_agent_playbook.hook_runtime.git_range` | `coding_agent_playbook.hook_runtime.git.range` | N18 |
 | `coding_agent_playbook.hook_runtime.gitargv` | `coding_agent_playbook.hook_runtime.shell.git_command` | N17 |
 | `coding_agent_playbook.hook_runtime.handlers._cli_words` | `coding_agent_playbook.hook_runtime.judges.cli_words` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers._dependency_tiers` | `coding_agent_playbook.hook_runtime.judges.dependency_tiers` | N14 |
@@ -253,6 +260,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime.pin` | `coding_agent_playbook.hook_runtime.config.pin` | N16 |
 | `coding_agent_playbook.hook_runtime.protected` | `coding_agent_playbook.hook_runtime.config.protected` | N16 |
 | `coding_agent_playbook.hook_runtime.shell` | `coding_agent_playbook.hook_runtime.shell.parse` | N17 |
+| `coding_agent_playbook.hook_runtime.stop.coordinator.DEFAULT_MAX_BLOCKS` | `coding_agent_playbook.hook_runtime.config.guard_tables.DEFAULT_MAX_BLOCKS` | B3 |
 | `coding_agent_playbook.hook_runtime.wrapper_policy` | `coding_agent_playbook.hook_runtime.shell.wrapper_policy` | N17 |
 | `coding_agent_playbook.hooks_config` | `coding_agent_playbook.config.tables.hooks` | N2 |
 | `coding_agent_playbook.links` | `coding_agent_playbook.validation.link_check` | A4 |

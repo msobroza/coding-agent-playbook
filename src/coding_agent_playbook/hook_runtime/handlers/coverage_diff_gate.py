@@ -195,7 +195,7 @@ class CoverageStage:
     def _scored(self) -> list[str]:
         """The changed paths the gate scores (memoized per Stop); none on a git error."""
         from coding_agent_playbook.evaluators.execution.diff_coverage import scored_changes
-        from coding_agent_playbook.hook_runtime.git import GitError
+        from coding_agent_playbook.hook_runtime.git.safe_git import GitError
 
         if self._changes is None:
             root = Path(self.repo.worktree_root)
@@ -278,5 +278,5 @@ def _trusted(repo: RepoInfo, ctx: HandlerContext) -> bool:
     from coding_agent_playbook.hook_runtime.stop.coordinator import GatePolicy
 
     trust = None if ctx.deps is None else open_trust_store(repo, ctx.deps)
-    policy = GatePolicy.from_table(ctx.cfg.tables.get("stop_gate"))
+    policy = GatePolicy.from_gate(ctx.cfg.tables.stop_gate())
     return trust is not None and trust.allows_execution(policy.stages_sha256())

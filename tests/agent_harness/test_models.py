@@ -1,4 +1,4 @@
-"""Tests for harness.models — frozen dataclasses (Track H1)."""
+"""Tests for agent_harness.models — frozen dataclasses (Track H1)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.harness.models import (
+from coding_agent_playbook.agent_harness.models import (
     ContentFile,
     Harness,
     HarnessDirectory,

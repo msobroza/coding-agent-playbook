@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime._head_snapshot import HeadSnapshot, head_snapshot_doc
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.git.head_snapshot import HeadSnapshot, head_snapshot_doc
 from coding_agent_playbook.hook_runtime.handlers.subagent_verify import (
     EXEC_LOCK,
     NO_STAGES_NOTE,

@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime._git_parse import DiffLines
 from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.git.parse import DiffLines
 from coding_agent_playbook.hook_runtime.handlers.tests_nudge import MAX_FILES
 from tests.hook_runtime.handlers.stop_kit import changed_git, reason_lines, stop, stop_payload
 

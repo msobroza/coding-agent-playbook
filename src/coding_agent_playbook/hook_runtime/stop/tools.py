@@ -45,13 +45,9 @@ def stage_command(cfg: GuardConfig, name: str) -> tuple[str, tuple[str, ...]] | 
         >>> stage_command(cfg, "lint")  # doctest: +SKIP
         ('ruff', ('check', '--output-format=json', '.'))
     """
-    table = cfg.tables.get("stop_gate")
-    records = table.get("stages") if isinstance(table, dict) else None
-    for record in records if isinstance(records, list) else ():
-        if isinstance(record, dict) and record.get("name") == name:
-            tool, args = record.get("tool"), record.get("args")
-            if isinstance(tool, str) and tool and isinstance(args, list):
-                return tool, tuple(str(arg) for arg in args)
+    for record in cfg.tables.stop_gate().stages:
+        if record.name == name and record.tool is not None and record.args is not None:
+            return record.tool, record.args
     return None
 
 

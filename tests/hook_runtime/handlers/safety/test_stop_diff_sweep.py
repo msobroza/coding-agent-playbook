@@ -15,9 +15,9 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.guard_config import DetectInputs
-from coding_agent_playbook.hook_runtime._git_parse import AddedLine
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.git.parse import AddedLine
 from coding_agent_playbook.hook_runtime.handlers._secret_sweep import FIX, PII_FIX
 from coding_agent_playbook.hook_runtime.handlers.stop_sweep import PARTIAL_NOTE
 from coding_agent_playbook.hook_runtime.stop.output import red_note

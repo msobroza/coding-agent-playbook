@@ -1,6 +1,6 @@
 """Pure parsers for the git output ``SafeGit`` reads (specs/prK-lifecycle-hooks.md §D.5.3).
 
-Split from ``git.py`` to keep both under §D.1's 300-line module rule. Every
+Split from ``safe_git.py`` to keep both under §D.1's 300-line module rule. Every
 function is pure over bytes, so the formats are pinned by ``FakeProc`` tests
 without a repository.
 """
