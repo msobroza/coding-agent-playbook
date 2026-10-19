@@ -99,6 +99,10 @@ def read_hook_sidecar(path: Path, entry: manifest.ManifestEntry, *, source_packa
     Raises ``HookSchemaError`` (naming the field and value) when the recorded
     frontmatter no longer parses; the importer reports it and skips the entry.
 
+    ``source_package`` is required, unlike the spec's two-argument signature
+    (prT AC.4.4): the marker is ``importer.IMPORTED_SOURCE_PACKAGE``, and this
+    module cannot import it, since ``importer`` -> ``_lossless`` -> here is a cycle.
+
     Example::
 
         hook = read_hook_sidecar(root / entry.path, entry, source_package="<imported>")

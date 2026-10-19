@@ -48,6 +48,9 @@ def read_best_effort(root: Path, result: ImportResult, *, source_package: str) -
 def guardrail_warning(rule_id: str) -> str | None:
     """The lossiness warning for a best-effort rule that is really a hook advisory, else None.
 
+    It lives beside its only caller, not in ``_import_writes`` as prT AC.4.5 has
+    it: it builds a read-side warning and writes nothing.
+
     Example::
 
         >>> guardrail_warning("guardrail-x") is not None, guardrail_warning("typing")

@@ -553,8 +553,10 @@ alias (Harness names a coding-agent runtime), and `parse_harness` returns it. Th
 `playbook validate-harness` checks are `coding_agent_playbook.agent_harness.lint.lint_harness`,
 which returns `HarnessFindings`; `HarnessFindings.failed(strict=...)` is the
 `--strict` choice. A hook sidecar entry reads back through
-`coding_agent_playbook.agent_harness.hook_sidecars.read_hook_sidecar`. The command
-output, the exit codes and every byte the adapter writes do not change.
+`coding_agent_playbook.agent_harness.hook_sidecars.read_hook_sidecar(path, entry, source_package=...)`;
+the keyword names the package recorded on the rebuilt `Hook` (the importer passes
+`"<imported>"`). The command output, the exit codes and every byte the adapter
+writes do not change.
 <!-- module-moves: end-keep -->
 
 Out-of-tree `Metric` authors: at grade time, a threshold or non-regression check
