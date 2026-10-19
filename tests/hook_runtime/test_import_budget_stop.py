@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING, Any
 from coding_agent_playbook.hook_runtime.event import EventName
 from tests.engine_modules import engine_module
 from tests.hook_runtime.guard_repo import GuardRepo, hook_record
+from tests.hook_runtime.handlers.stop_kit import TREE
 from tests.hook_runtime.test_import_budget import _DRIFT_FAST_PATH, _forbidden, _imports
-from tests.hooks.stop_kit import TREE
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -330,7 +330,7 @@ def smoke_guard_config_bytes() -> bytes:
         render_guard_config,
         serialize_guard_config,
     )
-    from tests.hooks.pack_repo import ENGINE_VERSION, resolve_engine_hooks
+    from tests.hook_runtime.handlers.pack_repo import ENGINE_VERSION, resolve_engine_hooks
 
     hooks = resolve_engine_hooks(["destructive-command-guard"], Path("/playbook-fixture/proj"))
     inputs = GuardConfigInputs(hooks, HooksConfig(enabled=True), GuardrailsConfig(), ENGINE_VERSION)
