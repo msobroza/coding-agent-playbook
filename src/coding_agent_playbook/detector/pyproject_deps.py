@@ -3,9 +3,9 @@
 ``detector.detect()`` builds its ``dependencies`` / ``dev_dependencies`` facts
 from these functions, and resync-on-detector-input-change compares an edited
 ``pyproject.toml`` against the names sync baked from those facts. The hook
-runtime may not import ``detector`` on its cheap path (it imports
-``packaging``), so the parser lives here, stdlib-only, and both sides share
-it: the comparison can never disagree with the detector.
+runtime may not import the detector's facts or predicate on its cheap path, so
+the parser lives here, stdlib-only, and both sides share it: the comparison
+can never disagree with the detector.
 
 Names are PEP 503-normalized through ``detector.pep503`` (``pytest_asyncio`` is
 ``pytest-asyncio``), the one normalization the §E.4 dependency guard and its

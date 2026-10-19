@@ -139,7 +139,7 @@ def _changes(cfg: GuardConfig, root: str) -> tuple[list[_Row], list[_Row]]:
 
 
 def _holds(row: _Row, facts: Facts, root: str) -> bool:
-    # N4: evaluate_predicate left the facts module for detector/predicate.py.
+    # branch-local like the facts import in _changes: it loads packaging
     from coding_agent_playbook.detector.predicate import evaluate_predicate
 
     try:
