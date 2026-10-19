@@ -680,6 +680,7 @@ changelog entry is v0.21.
 | A repo, overlay or bundled plugin whose scoped rules name a skill (`skill:`) | Nothing: the next `playbook sync` drops those rules from `AGENTS.md` and the Claude Code rules file and adds a generated `## Where guidance lives` section that names their skills. With only `agents_md` on (`adapters_enabled = []`), sync warns that they reach no assistant: add `claude_code`, `opencode` or `shared_skills`. See "AGENTS.md and the Claude Code rules file hold only always rules". |
 | Only using engine content (core, bundled plugins) | Nothing. The next `playbook sync` (the post-checkout hook runs it) rewrites `AGENTS.md` and the Claude Code rules file and adds the core skill directories. See "Scoped rules arrive as skill references". |
 | Overriding `project-context` or `python-house-style` by id | Nothing: your text keeps winning. Consider trimming it, since the engine's own text is now much shorter. See "The always text is shorter". |
+| A repo that wants Matt Pocock's skills (the new `mattpocock_skills` bundled plugin) | Opt in: add `coding_agent_playbook.plugins.mattpocock_skills` to `overlays_enabled`, run `playbook sync`, then `/setup-matt-pocock-skills`, gitignore `.scratch/` and disable the upstream Claude Code plugin. Nothing changes for a repo that does not enable it. See "New opt-in bundled plugin: mattpocock_skills". |
 | Keeping your own scoped rules in `playbook/rules/` or an overlay | Add `skill: <skill-id>` to each before upgrading ("Add skill: to your own scoped rules"). Until then `playbook validate` fails and `playbook sync` refuses to run. |
 | Tooling or prompts that match lint-feedback lines (`rule <id>: …`) | Accept the new `rule <id> (skill <skill>): …` prefix and the ` (rule <id>, skill <skill>)` suffix; the next `playbook sync` turns them on. See "Guardrails and lint feedback point at skills". |
 | A repo with hooks on (the new `skill-nudge` hook) | Nothing: the next `playbook sync` turns it on. To keep it off, add `disable = ["skill-nudge"]` to `[hooks]`. See "Guardrails and lint feedback point at skills". |
@@ -703,6 +704,48 @@ changelog entry is v0.21.
   and `lint_codes.when` already were, so an overlay or repo-local artifact with such a
   hidden typo now fails `playbook validate`, and therefore the validate-gated
   `playbook sync`. Fix the key it names; nothing else changes.
+
+### New opt-in bundled plugin: mattpocock_skills
+
+The engine wheel gains a third bundled plugin,
+`coding_agent_playbook.plugins.mattpocock_skills`: vendored content of Matt
+Pocock's engineering and productivity skills, pinned to upstream v1.3.1, with 26
+skills and one plugin always rule (SPEC §11.5.3). It is off by default, so a repo
+that does not list it gets no new file, rule or skill and needs no action. The
+only visible change elsewhere is the hint for a mistyped bundled-plugin name,
+which now lists three plugins:
+`(bundled plugins: coding_agent_playbook.plugins.mattpocock_skills, coding_agent_playbook.plugins.python_design, coding_agent_playbook.plugins.superpowers)`.
+
+To opt in:
+
+1. Add the plugin to the top-level `overlays_enabled` key, above the first
+   `[table]` header, and run `playbook sync`:
+
+   ```toml
+   overlays_enabled = ["coding_agent_playbook.plugins.mattpocock_skills"]
+   ```
+
+   Sync writes the 26 skills to every enabled skills root and adds the plugin
+   always rule `mattpocock-skills-tracker` to `AGENTS.md` and
+   `.claude/rules/coding-agent-playbook.md`.
+2. Run `/setup-matt-pocock-skills` once. It writes `docs/agents/issue-tracker.md`,
+   `docs/agents/triage-labels.md` and `docs/agents/domain.md` (local markdown is
+   the default tracker) and never edits `CLAUDE.md` or `AGENTS.md`. If an older
+   setup wrote an "## Agent skills" block there, the plugin always rule replaces
+   it, and you may delete the block.
+3. Add `.scratch/` to `.gitignore`: the local tracker keeps its maps and tickets
+   there, and they are never committed.
+4. Disable the upstream Claude Code plugin of these skills in that repo, or each
+   skill appears twice. Three ids differ from upstream: `code-review` is
+   `two-axis-review`, `pr` is `pr-body` and `prototype` is
+   `throwaway-prototype`. `triage` is not shipped; add it back at
+   `playbook/skills/triage/` if you need it.
+
+Do not enable it together with `superpowers`: several skills overlap, and core
+plus both listings exceed the 6,000-character skill-listing budget, which now
+reads core plus **each** bundled plugin. To opt out, remove it from
+`overlays_enabled` and run `playbook sync`; its skills are settled as leftovers
+like any bundled plugin's (SPEC §11.5).
 
 ### The shared_skills adapter writes .agents/skills/
 
