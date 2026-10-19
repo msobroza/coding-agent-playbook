@@ -70,7 +70,7 @@ from coding_agent_playbook.hook_runtime.state import StateUnavailable
 
 if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime._ruff import RuffRunner
-    from coding_agent_playbook.hook_runtime.config import HookRecord
+    from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import (
         EditedFile,

@@ -218,8 +218,9 @@ def test_hooks_package_imports_only_the_stdlib() -> None:
         "coding_agent_playbook.catalog",
         "coding_agent_playbook.catalog.layers",
         "coding_agent_playbook.hook_runtime",
-        "coding_agent_playbook.hook_runtime._config_keys",
         "coding_agent_playbook.hook_runtime._event_memo",  # HandlerContext.memo (K7)
+        "coding_agent_playbook.hook_runtime.config",
+        "coding_agent_playbook.hook_runtime.config.keys",
         "coding_agent_playbook.hook_runtime.decision",
         "coding_agent_playbook.hook_runtime.event",
         "coding_agent_playbook.hook_runtime.harness",

@@ -184,7 +184,12 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_policy.resolved` | `coding_agent_playbook.hooks.resolution.resolved` | A17 |
 | `coding_agent_playbook.hook_policy.split_hook_layers` | `coding_agent_playbook.hooks.resolution.merge.split_hook_layers` | A17 |
 | `coding_agent_playbook.hook_policy.tables` | `coding_agent_playbook.hooks.resolution.tables` | A17 |
+| `coding_agent_playbook.hook_runtime._config_keys` | `coding_agent_playbook.hook_runtime.config.keys` | N16 |
+| `coding_agent_playbook.hook_runtime._config_reader` | `coding_agent_playbook.hook_runtime.config.reader` | N16 |
+| `coding_agent_playbook.hook_runtime._hook_records` | `coding_agent_playbook.hook_runtime.config.hook_records` | N16 |
 | `coding_agent_playbook.hook_runtime._hosts` | `coding_agent_playbook.hook_runtime.judges.hosts` | N14 |
+| `coding_agent_playbook.hook_runtime._lock_digest` | `coding_agent_playbook.hook_runtime.config.lock_digest` | N16 |
+| `coding_agent_playbook.hook_runtime.config` | `coding_agent_playbook.hook_runtime.config.guard_config` | N16 |
 | `coding_agent_playbook.hook_runtime.cutover` | `coding_agent_playbook.hook_runtime.judges.commit_cutover` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers._cli_words` | `coding_agent_playbook.hook_runtime.judges.cli_words` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers._dependency_tiers` | `coding_agent_playbook.hook_runtime.judges.dependency_tiers` | N14 |
@@ -198,6 +203,8 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime.handlers.deser.SinkTable` | `coding_agent_playbook.hook_runtime.judges.sink_scan.SinkTable` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers.deser.new_sink_calls` | `coding_agent_playbook.hook_runtime.judges.sink_scan.new_sink_calls` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers.deser.trusted_artifact_line` | `coding_agent_playbook.hook_runtime.judges.sink_scan.trusted_artifact_line` | N14 |
+| `coding_agent_playbook.hook_runtime.pin` | `coding_agent_playbook.hook_runtime.config.pin` | N16 |
+| `coding_agent_playbook.hook_runtime.protected` | `coding_agent_playbook.hook_runtime.config.protected` | N16 |
 | `coding_agent_playbook.hooks_config` | `coding_agent_playbook.config.tables.hooks` | N2 |
 | `coding_agent_playbook.links` | `coding_agent_playbook.validation.link_check` | A4 |
 | `coding_agent_playbook.links.LinksConfig` | `coding_agent_playbook.config.tables.links.LinksConfig` | N2 |

@@ -201,7 +201,7 @@ def _changes_hooks_path(tool: ToolCall, path: NormalizedPath) -> bool:
 
 
 def _read(path: NormalizedPath) -> str | None:
-    from coding_agent_playbook.hook_runtime._config_reader import read_small_file
+    from coding_agent_playbook.hook_runtime.config.reader import read_small_file
 
     if not path.exists:
         return None

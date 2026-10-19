@@ -15,8 +15,8 @@ from coding_agent_playbook._guard_config_ruff import (
     ruff_candidate_codes,
     ruff_drop_codes,
 )
+from coding_agent_playbook.hook_runtime.config.pin import write_machine_pins
 from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.pin import write_machine_pins
 from tests.hook_runtime.fakes import FakeGit, FakeRuff
 
 if TYPE_CHECKING:

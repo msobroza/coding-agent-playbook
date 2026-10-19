@@ -42,7 +42,7 @@ from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResul
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from coding_agent_playbook.hook_runtime.config import GuardConfig
+    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.handlers._drift import DriftFinding
     from coding_agent_playbook.hook_runtime.registry import HandlerContext

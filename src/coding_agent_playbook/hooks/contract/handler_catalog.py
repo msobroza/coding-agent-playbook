@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final, Literal, Protocol
 
-from coding_agent_playbook.hook_runtime._config_keys import regex_of
+from coding_agent_playbook.hook_runtime.config.keys import regex_of
 from coding_agent_playbook.hook_runtime.registry import (
     HandlerResolutionError,
     builtin_handler_modules,

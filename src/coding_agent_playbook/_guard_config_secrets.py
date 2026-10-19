@@ -19,7 +19,7 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime._config_keys import regex_of
+from coding_agent_playbook.hook_runtime.config.keys import regex_of
 from coding_agent_playbook.security.patterns import (
     SECRET_CONTENT_RULES,
     SECRET_GLOB_EXEMPT,

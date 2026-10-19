@@ -47,7 +47,7 @@ from coding_agent_playbook.guard_config import (
     repo_layout,
     serialize_guard_config,
 )
-from coding_agent_playbook.hook_runtime.config import GUARD_CONFIG_REL
+from coding_agent_playbook.hook_runtime.config.guard_config import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.simulate import SimulateArgs, run
 from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog

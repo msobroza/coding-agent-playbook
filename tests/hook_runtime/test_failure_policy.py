@@ -350,7 +350,7 @@ def test_hatch_with_a_wrong_value_has_no_effect(
 
 
 def _matcher(**dims: Any) -> Any:
-    from coding_agent_playbook.hook_runtime._hook_records import MatcherSpec
+    from coding_agent_playbook.hook_runtime.config.hook_records import MatcherSpec
     from coding_agent_playbook.hook_runtime.globs import compile_globs
 
     return MatcherSpec(paths=compile_globs(dims.pop("paths", ()), platform="linux"), **dims)

@@ -24,15 +24,15 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime._config_keys import ConfigKey, ConfigKind, KeyPolicy
 from coding_agent_playbook.hook_runtime._event_memo import EventMemo
+from coding_agent_playbook.hook_runtime.config.keys import ConfigKey, ConfigKind, KeyPolicy
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
 
-    from coding_agent_playbook.hook_runtime.config import GuardConfig, HookRecord
+    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, HookRecord
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.deps import Clock, ProcPort, RuntimeDeps, TrustPort
     from coding_agent_playbook.hook_runtime.escape import EscapeHatches

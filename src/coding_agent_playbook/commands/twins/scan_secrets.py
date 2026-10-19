@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands.twins._git_scope import open_git
+from coding_agent_playbook.commands.twins._runner import TwinOutcome, run_twin
 from coding_agent_playbook.commands.twins._secret_scope import (
     SecretScope,
     paths_scope,
@@ -45,7 +46,6 @@ from coding_agent_playbook.commands.twins._secret_scope import (
 )
 from coding_agent_playbook.config.files import CONFIG_FILENAME, CommittedDocument
 from coding_agent_playbook.config.tables.hooks import parse_guardrails_config
-from coding_agent_playbook.hook_runtime.git import GitError
 from coding_agent_playbook.security.files import user_home
 from coding_agent_playbook.security.paths import DEFAULT_PATH_POLICY, PathPolicy
 from coding_agent_playbook.security.pii_findings import (
@@ -121,24 +121,20 @@ def run(args: argparse.Namespace, *, git: SafeGit | None = None) -> int:
         >>> run(build_parser().parse_args(["scan-secrets", "--staged"]))  # doctest: +SKIP
         1
     """
-    repo_root = Path(args.repo_root or ".").resolve()
+    return run_twin(args.repo_root, lambda root: _outcome(args, root, git))
+
+
+def _outcome(args: argparse.Namespace, repo_root: Path, git: SafeGit | None) -> TwinOutcome:
     if args.paths and (args.staged or args.worktree or args.rev_range is not None):
-        print(
-            "error: pass PATHS or one of --staged, --range, --worktree, not both", file=sys.stderr
-        )
-        return 2
-    try:
-        pii = pii_option(args.pii, args.pii_detectors)
-        port = git if git is not None else open_git(repo_root)
-        scope = _scope(port, args, repo_root)
-        policy = load_path_policy(port, scope.base)
-        root = Path(port.repo.worktree_root)
-        report = scan_scope(port, scope, policy, root=root, home=user_home(), pii=pii)
-    except (GitError, ValueError) as exc:  # GitBaseError and policy errors are ValueErrors
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-    print(_json(report, scope.label) if args.format == "json" else _text(report, scope.label))
-    return report.exit_code
+        raise ValueError("pass PATHS or one of --staged, --range, --worktree, not both")
+    pii = pii_option(args.pii, args.pii_detectors)
+    port = git if git is not None else open_git(repo_root)
+    scope = _scope(port, args, repo_root)
+    policy = load_path_policy(port, scope.base)
+    root = Path(port.repo.worktree_root)
+    report = scan_scope(port, scope, policy, root=root, home=user_home(), pii=pii)
+    text = _json(report, scope.label) if args.format == "json" else _text(report, scope.label)
+    return TwinOutcome(report.exit_code, text)
 
 
 def pii_option(enabled: bool, detectors: str | None) -> PiiConfig | None:

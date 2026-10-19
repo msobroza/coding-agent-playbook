@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from typing import TextIO
 
     from coding_agent_playbook.evaluators.execution.project import ProjectHandle
-    from coding_agent_playbook.hook_runtime.config import GuardConfig
+    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.git import GitPort
     from coding_agent_playbook.hook_runtime.proc import ProcResult
     from coding_agent_playbook.hook_runtime.registry import HandlerResolver

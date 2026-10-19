@@ -7,7 +7,7 @@ lockfile is saved, in write mode only, when hooks are live:
   (first writer wins) and ``machine.json`` with the logical tools' absolute
   argv and the layers' absolute ``resources/`` dirs (the guards resolve
   ``guard_config.json``'s ``pkg:`` ids through them), both under the git dir
-  (``hook_runtime.pin``). Outside git there is no pin, so the hooks stay
+  (``hook_runtime.config.pin``). Outside git there is no pin, so the hooks stay
   inactive and sync says so. ``ruff`` and ``cz`` are the project venv's own
   first (``.venv/bin/ruff``: version parity with the project's pin; commitizen
   in the dev extras, specs/prK-hook-pack.md §F.4.1), else the one on
@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Final, Protocol
 
 from coding_agent_playbook._guard_config_ruff import RuleCache, probe_ruff_rules, ruff_drop_codes
 from coding_agent_playbook.hook_registrations import stop_stage_records
-from coding_agent_playbook.hook_runtime import pin
+from coding_agent_playbook.hook_runtime.config import pin
 from coding_agent_playbook.hook_runtime.proc import SubprocessProc
 from coding_agent_playbook.security.trust import (
     HandlerApproval,
@@ -51,8 +51,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
     from pathlib import Path
 
+    from coding_agent_playbook.hook_runtime.config.pin import PinResult
     from coding_agent_playbook.hook_runtime.deps import ProcPort
-    from coding_agent_playbook.hook_runtime.pin import PinResult
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 __all__ = [
@@ -80,7 +80,7 @@ _YES: Final = frozenset({"y", "yes"})
 
 
 class PinWriter(Protocol):
-    """The two pin writers sync calls (``hook_runtime.pin`` in production)."""
+    """The two pin writers sync calls (``hook_runtime.config.pin`` in production)."""
 
     def ensure_interpreter_pin(self, repo_root: Path) -> PinResult | None:
         """Pin this interpreter unless a usable pin exists; ``None`` outside git."""
@@ -101,13 +101,13 @@ class PinWriter(Protocol):
 
 @dataclass(frozen=True)
 class RuntimePinWriter:
-    """:class:`PinWriter` over ``hook_runtime.pin``, discovering the git dir from ``repo_root``.
+    """:class:`PinWriter` over ``hook_runtime.config.pin``, discovering the git dir from ``repo_root``.
 
     Example: ``RuntimePinWriter().ensure_interpreter_pin(repo_root)``.
     """
 
     def ensure_interpreter_pin(self, repo_root: Path) -> PinResult | None:
-        """See :func:`hook_runtime.pin.ensure_interpreter_pin` (``sys.executable``, unresolved)."""
+        """See :func:`hook_runtime.config.pin.ensure_interpreter_pin` (``sys.executable``, unresolved)."""
         return pin.ensure_interpreter_pin(start=str(repo_root))
 
     def write_machine_pins(
@@ -118,7 +118,7 @@ class RuntimePinWriter:
         resource_roots: Mapping[str, str] | None = None,
         drops: Mapping[str, Sequence[str]] | None = None,
     ) -> Path | None:
-        """See :func:`hook_runtime.pin.write_machine_pins`."""
+        """See :func:`hook_runtime.config.pin.write_machine_pins`."""
         return pin.write_machine_pins(
             tools=tools,
             engine_version=engine_version,

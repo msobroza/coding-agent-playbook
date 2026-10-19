@@ -17,12 +17,11 @@ The rows come from ``policy`` (the guard's merged config, whatever
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.commands.twins._runner import TWIN_ERRORS, TwinOutcome, run_twin
 from coding_agent_playbook.commands.twins.policy import commit_trailer_policy
-from coding_agent_playbook.hook_runtime.git import GitError
 from coding_agent_playbook.hook_runtime.gitargv import MESSAGE_MAX_BYTES
 from coding_agent_playbook.security.commit_trailers import commit_msg_violations
 
@@ -46,22 +45,19 @@ def run(args: argparse.Namespace, *, git: SafeGit | None = None) -> int:
         ... # doctest: +SKIP
         0
     """
-    repo_root = Path(args.repo_root or ".").resolve()
+    return run_twin(
+        args.repo_root, lambda root: _outcome(args, root, git), errors=(*TWIN_ERRORS, OSError)
+    )
+
+
+def _outcome(args: argparse.Namespace, repo_root: Path, git: SafeGit | None) -> TwinOutcome:
     if (args.msgfile is None) == (args.rev_range is None):
-        print("error: pass a message file or --range A..B, not both", file=sys.stderr)
-        return 2
-    try:
-        policy = commit_trailer_policy(repo_root)
-        if not policy.has_rows:
-            return 0
-        messages = _messages(args, repo_root, git)
-    except (GitError, ValueError, OSError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-    lines = violation_lines(messages, policy)
-    for line in lines:
-        print(line)
-    return 1 if lines else 0
+        raise ValueError("pass a message file or --range A..B, not both")
+    policy = commit_trailer_policy(repo_root)
+    if not policy.has_rows:
+        return TwinOutcome(0, "")
+    lines = violation_lines(_messages(args, repo_root, git), policy)
+    return TwinOutcome(1 if lines else 0, "\n".join(lines))
 
 
 def violation_lines(messages: list[tuple[str, str]], policy: GitPolicy) -> list[str]:
