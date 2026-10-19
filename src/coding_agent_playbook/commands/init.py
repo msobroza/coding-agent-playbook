@@ -337,7 +337,7 @@ def _has_trailer_rows(repo_root: Path) -> bool:
     The final sync reports a config it cannot read; the starter simply leaves the
     commit-msg entry out (an existing ``.pre-commit-config.yaml`` is never touched).
     """
-    from coding_agent_playbook.commands._twin_policy import commit_trailer_policy
+    from coding_agent_playbook.commands.twins.policy import commit_trailer_policy
 
     try:
         return commit_trailer_policy(repo_root).has_rows
@@ -350,7 +350,7 @@ def _uses_commitizen(repo_root: Path) -> bool:
 
     An unreadable ``pyproject.toml`` or config counts as opted in, as for CI.
     """
-    from coding_agent_playbook.commands._ci_policy import commit_convention_configured
+    from coding_agent_playbook.commands.twins.policy import commit_convention_configured
 
     return commit_convention_configured(repo_root)
 

@@ -1,0 +1,48 @@
+# N13 (#94, specs/prT-package-layout.md 4.9, 7.4): the Claude Code settings merge and
+# the Claude rule paths move into adapters/claude_code/. _settings_drift becomes the
+# public settings/drift.py, because commands/check.py imports it.
+
+[[module]]
+pr = "N13"
+old = "coding_agent_playbook.adapters.claude_settings"
+new = "coding_agent_playbook.adapters.claude_code.settings.managed_merge"
+
+[[module]]
+pr = "N13"
+old = "coding_agent_playbook.adapters._settings_plan"
+new = "coding_agent_playbook.adapters.claude_code.settings._plan"
+
+[[module]]
+pr = "N13"
+old = "coding_agent_playbook.adapters._settings_drift"
+new = "coding_agent_playbook.adapters.claude_code.settings.drift"
+
+[[module]]
+pr = "N13"
+old = "coding_agent_playbook.adapters._json_spans"
+new = "coding_agent_playbook.adapters.claude_code.settings._json_spans"
+
+[[module]]
+pr = "N13"
+old = "coding_agent_playbook.adapters._json_edits"
+new = "coding_agent_playbook.adapters.claude_code.settings._json_edits"
+
+[[module]]
+pr = "N13"
+old = "coding_agent_playbook.adapters.claude_rule_paths"
+new = "coding_agent_playbook.adapters.claude_code.paths"
+
+[[path]]
+pr = "N13"
+old = "tests/unit/test_claude_settings.py"
+new = "tests/adapters/test_claude_settings.py"
+
+[[path]]
+pr = "N13"
+old = "tests/unit/test_json_spans.py"
+new = "tests/adapters/test_json_spans.py"
+
+[[path]]
+pr = "N13"
+old = "tests/unit/test_settings_drift.py"
+new = "tests/adapters/test_settings_drift.py"

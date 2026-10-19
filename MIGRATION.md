@@ -32,17 +32,34 @@ out-of-tree code can import (public old or new path):
 | Old module path | New module path | Moved by |
 | --- | --- | --- |
 | `coding_agent_playbook._canonical_json` | `coding_agent_playbook.lockfile.canonical_json` | N5 |
+| `coding_agent_playbook._hook_frontmatter` | `coding_agent_playbook.artifacts.hook_frontmatter` | A1 |
+| `coding_agent_playbook._hook_schema` | `coding_agent_playbook.artifacts.hook_schema` | A1 |
 | `coding_agent_playbook._layers` | `coding_agent_playbook.catalog.layers` | N3 |
 | `coding_agent_playbook._lock_drift` | `coding_agent_playbook.lockfile.drift` | N5 |
+| `coding_agent_playbook._member_reference` | `coding_agent_playbook.artifacts.member_reference` | A1 |
 | `coding_agent_playbook._pep503` | `coding_agent_playbook.detector.pep503` | N4 |
 | `coding_agent_playbook._pyproject_deps` | `coding_agent_playbook.detector.pyproject_deps` | N4 |
 | `coding_agent_playbook._toml` | `coding_agent_playbook.toml_writer` | N1 |
+| `coding_agent_playbook.adapters._settings_drift` | `coding_agent_playbook.adapters.claude_code.settings.drift` | N13 |
+| `coding_agent_playbook.adapters.claude_rule_paths` | `coding_agent_playbook.adapters.claude_code.paths` | N13 |
+| `coding_agent_playbook.adapters.claude_settings` | `coding_agent_playbook.adapters.claude_code.settings.managed_merge` | N13 |
 | `coding_agent_playbook.catalog` | `coding_agent_playbook.catalog.roots` | N3 |
 | `coding_agent_playbook.cli.build_parser` | `coding_agent_playbook.cli.parser.build_parser` | N7 |
+| `coding_agent_playbook.commands._ci_policy` | `coding_agent_playbook.commands.twins.policy` | N8 |
 | `coding_agent_playbook.commands._committed_config` | `coding_agent_playbook.config.committed` | N10 |
 | `coding_agent_playbook.commands._precommit_merge` | `coding_agent_playbook.precommit` | N9 |
+| `coding_agent_playbook.commands._twin_policy` | `coding_agent_playbook.commands.twins.policy` | N8 |
+| `coding_agent_playbook.commands.check_commit_trailers` | `coding_agent_playbook.commands.twins.check_commit_trailers` | N8 |
+| `coding_agent_playbook.commands.check_deps` | `coding_agent_playbook.commands.twins.check_deps` | N8 |
+| `coding_agent_playbook.commands.check_notebooks` | `coding_agent_playbook.commands.twins.check_notebooks` | N8 |
+| `coding_agent_playbook.commands.ci` | `coding_agent_playbook.commands.twins.ci` | N8 |
+| `coding_agent_playbook.commands.gate_scan` | `coding_agent_playbook.commands.twins.gate_scan` | N8 |
+| `coding_agent_playbook.commands.gate_scan.ScanRange` | `coding_agent_playbook.commands.twins._git_scope.ScanRange` | N8 |
+| `coding_agent_playbook.commands.gate_scan.resolve_range` | `coding_agent_playbook.commands.twins._git_scope.resolve_range` | N8 |
 | `coding_agent_playbook.commands.init.PrecommitTemplateMissingError` | `coding_agent_playbook.precommit.PrecommitTemplateMissingError` | N9 |
 | `coding_agent_playbook.commands.init.precommit_template_dir` | `coding_agent_playbook.precommit.precommit_template_dir` | N9 |
+| `coding_agent_playbook.commands.scan_secrets` | `coding_agent_playbook.commands.twins.scan_secrets` | N8 |
+| `coding_agent_playbook.commands.scan_sinks` | `coding_agent_playbook.commands.twins.scan_sinks` | N8 |
 | `coding_agent_playbook.config` | `coding_agent_playbook.config.model` | N2 |
 | `coding_agent_playbook.config.ConfigError` | `coding_agent_playbook.config.schema.ConfigError` | N2 |
 | `coding_agent_playbook.config.GuardrailsConfig` | `coding_agent_playbook.config.tables.hooks.GuardrailsConfig` | N2 |
@@ -84,6 +101,16 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.sources.filesystem.ENGINE_PACKAGE` | `coding_agent_playbook.catalog.layers.ENGINE_PACKAGE` | N3 |
 | `coding_agent_playbook.sources.filesystem.FileSystemStateSource` | `coding_agent_playbook.config.files.FileSystemStateSource` | N2 |
 | `coding_agent_playbook.sources.filesystem.REPO_LOCAL_SOURCE` | `coding_agent_playbook.catalog.layers.REPO_LOCAL_SOURCE` | N3 |
+| `coding_agent_playbook.types.HookDecision` | `coding_agent_playbook.artifacts.hook_schema.HookDecision` | A1 |
+| `coding_agent_playbook.types.HookEvent` | `coding_agent_playbook.artifacts.hook_schema.HookEvent` | A1 |
+| `coding_agent_playbook.types.HookFrontmatter` | `coding_agent_playbook.artifacts.hook_frontmatter.HookFrontmatter` | A1 |
+| `coding_agent_playbook.types.HookHandler` | `coding_agent_playbook.artifacts.hook_schema.HookHandler` | A1 |
+| `coding_agent_playbook.types.HookLauncher` | `coding_agent_playbook.artifacts.hook_schema.HookLauncher` | A1 |
+| `coding_agent_playbook.types.HookMatcher` | `coding_agent_playbook.artifacts.hook_schema.HookMatcher` | A1 |
+| `coding_agent_playbook.types.HookOnError` | `coding_agent_playbook.artifacts.hook_schema.HookOnError` | A1 |
+| `coding_agent_playbook.types.HookSchemaError` | `coding_agent_playbook.artifacts.hook_schema.HookSchemaError` | A1 |
+| `coding_agent_playbook.types.HookTier` | `coding_agent_playbook.artifacts.hook_schema.HookTier` | A1 |
+| `coding_agent_playbook.types.ToolClass` | `coding_agent_playbook.artifacts.hook_schema.ToolClass` | A1 |
 <!-- module-moves:end -->
 
 ## v0.21 — Skills-first context

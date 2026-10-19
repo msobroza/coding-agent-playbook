@@ -28,8 +28,8 @@ import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._member_reference import member_reference_path
 from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of
+from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.commands._sync_output import native_skill_roots
 from coding_agent_playbook.lockfile.model import (
     LockEntry,
@@ -44,8 +44,8 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, Sequence
     from pathlib import Path
 
-    from coding_agent_playbook._member_reference import MemberReference
     from coding_agent_playbook.adapters.base import Adapter
+    from coding_agent_playbook.artifacts.member_reference import MemberReference
     from coding_agent_playbook.commands._sync_hooks import SyncHooks
     from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hook_policy import ResolvedHook

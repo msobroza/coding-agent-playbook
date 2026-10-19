@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
 from coding_agent_playbook.commands._import_files import (
     copy_tree,
     harness_root_for,
@@ -56,7 +57,6 @@ from coding_agent_playbook.harness.models import (
 from coding_agent_playbook.harness.parser import parse_harness
 from coding_agent_playbook.types import (
     Hook,
-    HookSchemaError,
     Prompt,
     PromptFrontmatter,
     Rule,
