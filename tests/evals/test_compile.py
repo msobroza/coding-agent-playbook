@@ -2,7 +2,7 @@
 
 The task compiler turns the parsed ``[gate]``/``[rubric]``/``[verdict]`` blocks
 into a per-trial evaluation structure: a
-:class:`~coding_agent_playbook.evaluators.rubric.Rubric` carrying the two named
+:class:`~coding_agent_playbook.grading.rubric.Rubric` carrying the two named
 layer checks (``id="gate"`` / ``id="rubric"``) plus a *derived* verdict AST. The
 verdict is computed as a boolean function over the two layers' ``passed`` results
 - gate and rubric each run **once** (as the rubric's two checks); the verdict
@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.evals._compile import (
+from coding_agent_playbook.evals.compile.compiler import (
     CompiledTask,
     VerdictSpec,
     compile_task,
@@ -29,10 +29,10 @@ from coding_agent_playbook.evals._compile import (
     verdict_passed,
 )
 from coding_agent_playbook.evals.judge import StubJudge
-from coding_agent_playbook.evaluators.check import MeasurementSet
-from coding_agent_playbook.evaluators.rubric import Rubric
-from coding_agent_playbook.evaluators.scope import CostTier, Determinism
-from coding_agent_playbook.evaluators.types import (
+from coding_agent_playbook.grading.check import MeasurementSet
+from coding_agent_playbook.grading.rubric import Rubric
+from coding_agent_playbook.grading.scope import CostTier, Determinism
+from coding_agent_playbook.grading.types import (
     CheckResult,
     EvalContext,
     EvaluationReport,
@@ -325,7 +325,7 @@ _E2E_RUBRIC_BIND = {"quality": {"rubric": [{"judge": "a", "weight": 1.0}], "fail
 
 def _measured_ctx(tmp_path: Path, judge: StubJudge) -> tuple[EvalContext, MeasurementSet]:
     """A candidate tree + a ctx/MeasurementSet with the rubric composite pre-measured."""
-    from coding_agent_playbook.evals._handles import build_handles
+    from coding_agent_playbook.evals.compile._handles import build_handles
 
     (tmp_path / "x.py").write_text("print('hi')\n", encoding="utf-8")
 

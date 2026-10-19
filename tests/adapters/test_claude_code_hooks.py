@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters.claude_code._destructive_native import (
     DESTRUCTIVE_COMMAND_GUARD,
     destructive_native_rows,
@@ -47,6 +46,7 @@ from coding_agent_playbook.adapters.claude_code.settings.managed_merge import (
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.config.tables.hooks import HooksConfig
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
+from coding_agent_playbook.generated_output.write_guard import UserOwnedFileError
 from coding_agent_playbook.hooks.registrations.claude import claude_command, render_claude_launcher
 from coding_agent_playbook.hooks.registrations.launcher import LAUNCHER_PATH
 from coding_agent_playbook.hooks.registrations.plan import registration_timeout_s

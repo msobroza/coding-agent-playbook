@@ -28,7 +28,7 @@ from coding_agent_playbook.hook_runtime.decision import Decision
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = [
     "DEFAULT_SAFE_RM_DIRS",
@@ -98,7 +98,7 @@ def path_hit(segment: Segment, where: Where) -> Hit | None:
 
     Example::
 
-        >>> from coding_agent_playbook.hook_runtime.shell import parse_shell
+        >>> from coding_agent_playbook.hook_runtime.shell.parse import parse_shell
         >>> seg = parse_shell("rm -rf /", "posix", "/r").segments[0]
         >>> path_hit(seg, Where("/r", ("/r/.git",), None, frozenset())).rule
         'rm_root'

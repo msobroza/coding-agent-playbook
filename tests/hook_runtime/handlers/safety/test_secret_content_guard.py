@@ -13,10 +13,10 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime._git_parse import AddedLine, DiffLines
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import Harness
-from coding_agent_playbook.hook_runtime.git import SafeGit
+from coding_agent_playbook.hook_runtime.git.parse import AddedLine, DiffLines
+from coding_agent_playbook.hook_runtime.git.safe_git import SafeGit
 from coding_agent_playbook.hook_runtime.handlers.secret_content import PRAGMA_ADVICE
 from coding_agent_playbook.hook_runtime.paths import find_repo
 from coding_agent_playbook.security.secrets import SECRET_ADVICE
@@ -26,8 +26,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
     from coding_agent_playbook.hook_runtime.proc import SubprocessProc
-    from coding_agent_playbook.hook_runtime.simulate import SimulateReport
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 
     type Deps = Callable[..., RuntimeDeps]

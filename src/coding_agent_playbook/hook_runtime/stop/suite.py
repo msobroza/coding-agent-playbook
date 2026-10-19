@@ -29,12 +29,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.evaluators.execution.project import (
+from coding_agent_playbook.grading.execution_metrics.project import (
     ProjectHandle,
     RunArtifacts,
     import_roots,
 )
-from coding_agent_playbook.hook_runtime.state import StateUnavailable
+from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
 from coding_agent_playbook.hook_runtime.stop.tools import runner_of, seconds_left, stage_command
 
 if TYPE_CHECKING:
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.deps import Clock
     from coding_agent_playbook.hook_runtime.event import RepoInfo
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
     from coding_agent_playbook.hook_runtime.stop.runner import StageRunner
     from coding_agent_playbook.hook_runtime.stop.stages import SkipCategory, StopPlan
 

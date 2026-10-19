@@ -1,6 +1,6 @@
 """A line-for-line Python port of the OpenCode shim's ``parse()`` (specs/prK-lifecycle-hooks.md §C.7, §D.3.5).
 
-A test oracle, never imported by the engine. ``tests/hook_runtime/test_wire_contract.py``
+A test oracle, never imported by the engine. ``tests/hook_runtime/harness/test_wire_contract.py``
 feeds ``render_opencode`` output through it (always) and through the
 template's own marker-delimited slice under node (when present), and requires
 identical results. :data:`PARSE_JS_SHA256` pins the slice this port was

@@ -21,16 +21,16 @@ import re
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.ledger import mask_path
-from coding_agent_playbook.hook_runtime.state import iso_utc
-from coding_agent_playbook.security.audit import encode_jsonl_line
+from coding_agent_playbook.hook_runtime.state.audit_log import encode_jsonl_line
+from coding_agent_playbook.hook_runtime.state.ledger import mask_path
+from coding_agent_playbook.hook_runtime.state.store import iso_utc
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from coding_agent_playbook.hook_runtime._shell_segments import Segment
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.globs import GlobSet
+    from coding_agent_playbook.hook_runtime.shell.segments import Segment
     from coding_agent_playbook.security.pii import PiiConfig
 
 __all__ = [
@@ -101,7 +101,7 @@ def activity_record(
     full_commands: bool = False,
     pii: PiiConfig | None = None,
 ) -> dict[str, Any]:
-    """The local-audit-log line for ``ev`` (``security.audit.ACTIVITY_RECORD_KEYS`` only).
+    """The local-audit-log line for ``ev`` (``state.audit_log.ACTIVITY_RECORD_KEYS`` only).
 
     ``pii`` (the overlay-enabled detectors, else ``None``) adds a prompt's PII
     category counts.

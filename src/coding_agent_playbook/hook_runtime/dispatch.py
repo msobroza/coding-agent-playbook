@@ -37,7 +37,7 @@ from coding_agent_playbook.hook_runtime._pipeline import Shared, run_configured
 from coding_agent_playbook.hook_runtime._tail import DispatchTrace, Responder
 from coding_agent_playbook.hook_runtime.escape import HOOKS_VAR, read_escape_hatches, settings_files
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
-from coding_agent_playbook.hook_runtime.harness import (
+from coding_agent_playbook.hook_runtime.harness.wire import (
     STDIN_CAP_BYTES,
     ContractFault,
     ForeignPayload,
@@ -45,8 +45,8 @@ from coding_agent_playbook.hook_runtime.harness import (
     WireOutput,
 )
 from coding_agent_playbook.hook_runtime.paths import find_repo
-from coding_agent_playbook.hook_runtime.session import SessionState
-from coding_agent_playbook.hook_runtime.state import StateStore
+from coding_agent_playbook.hook_runtime.state.session import SessionState
+from coding_agent_playbook.hook_runtime.state.store import StateStore
 from coding_agent_playbook.hook_runtime.watchdog import OutputGate
 
 if TYPE_CHECKING:
@@ -55,7 +55,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.harness import ParseOutcome
+    from coding_agent_playbook.hook_runtime.harness.wire import ParseOutcome
 
 __all__ = ["DispatchTrace", "dispatch_event", "read_stdin", "run_event"]
 
@@ -243,7 +243,7 @@ class _Dispatch:
 
     def _log_hooks_off(self, payload: bytes) -> None:
         """``PLAYBOOK_HOOKS=off``: no output at all; one ``escape`` line per session."""
-        from coding_agent_playbook.hook_runtime.harness._payload import decode_object, opt_str
+        from coding_agent_playbook.hook_runtime.harness.payload import decode_object, opt_str
 
         decoded = decode_object(payload, truncated=False)
         session_id = opt_str(decoded, "session_id") if isinstance(decoded, dict) else None

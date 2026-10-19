@@ -22,15 +22,15 @@ import posixpath
 import re
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._git_options import config_words, git_args
 from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.gitargv import parse_git
+from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
+from coding_agent_playbook.hook_runtime.shell.git_options import config_words, git_args
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from coding_agent_playbook.hook_runtime.gitargv import GitInvocation
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.git_command import GitInvocation
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
     type Verdict = tuple[Decision, str]
 
@@ -51,7 +51,7 @@ def segment_verdict(
 
     Example::
 
-        >>> from coding_agent_playbook.hook_runtime.shell import parse_shell
+        >>> from coding_agent_playbook.hook_runtime.shell.parse import parse_shell
         >>> seg = parse_shell("git commit -nm x", "posix", "/r").segments[0]
         >>> segment_verdict(seg, ids=frozenset({"playbook-validate"}), strict_skip=False,
         ...                 in_rebase=False)

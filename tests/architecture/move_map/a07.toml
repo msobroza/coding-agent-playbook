@@ -1,0 +1,35 @@
+# A7 (#120, specs/prT-package-layout.md 4.20, 7.6, H8): the write guard every engine
+# write passes and the copyable-source-file rule join the generated_output/ leaf
+# package. Sync, validation, hooks and the harness importer all import them, so they
+# become public modules. The two skill-file modules are concatenated verbatim into
+# source_files.py, so both old names map to it.
+
+[[module]]
+pr = "A7"
+old = "coding_agent_playbook.adapters._owned_files"
+new = "coding_agent_playbook.generated_output.write_guard"
+
+[[module]]
+pr = "A7"
+old = "coding_agent_playbook.adapters._skill_sources"
+new = "coding_agent_playbook.generated_output.source_files"
+
+[[module]]
+pr = "A7"
+old = "coding_agent_playbook.adapters._skill_files"
+new = "coding_agent_playbook.generated_output.source_files"
+
+[[path]]
+pr = "A7"
+old = "tests/adapters/test_owned_files.py"
+new = "tests/generated_output/test_write_guard.py"
+
+[[path]]
+pr = "A7"
+old = "tests/adapters/test_skill_sources.py"
+new = "tests/generated_output/test_skill_sources.py"
+
+[[path]]
+pr = "A7"
+old = "tests/adapters/test_skill_files.py"
+new = "tests/generated_output/test_skill_files.py"

@@ -19,8 +19,8 @@ import pytest
 
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName
-from coding_agent_playbook.hook_runtime.harness import DENY_EXIT, ParseContext, WireOutput
 from coding_agent_playbook.hook_runtime.harness.opencode import parse_opencode
+from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT, ParseContext, WireOutput
 from coding_agent_playbook.hooks.registrations.templates.opencode_wire_port import DEFAULT_REASON
 from tests.adapters.opencode_shim_kit import (
     RUNTIME_ARGV,

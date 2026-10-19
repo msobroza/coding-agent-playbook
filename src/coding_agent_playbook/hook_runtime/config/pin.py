@@ -30,7 +30,11 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime.paths import find_repo
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME, StateStore, StateUnavailable
+from coding_agent_playbook.hook_runtime.state.store import (
+    STATE_DIR_NAME,
+    StateStore,
+    StateUnavailable,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence

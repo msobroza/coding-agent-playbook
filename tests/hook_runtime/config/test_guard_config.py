@@ -20,18 +20,17 @@ import pytest
 
 from coding_agent_playbook.artifacts.hook_schema import HookMatcher
 from coding_agent_playbook.hook_runtime.config.guard_config import (
-    GUARD_CONFIG_REL,
-    LOCKFILE_REL,
     ConfigFault,
     GuardConfig,
     load_guard_config,
 )
+from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL, LOCKFILE_REL
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName, RepoInfo
 from coding_agent_playbook.hook_runtime.paths import fold_key
 from coding_agent_playbook.hook_runtime.policy import ENGINE_DEADLINE_CAP_MS
-from coding_agent_playbook.hook_runtime.shell import ShellConfig
-from coding_agent_playbook.hook_runtime.state import StateStore
+from coding_agent_playbook.hook_runtime.shell.parse import ShellConfig
+from coding_agent_playbook.hook_runtime.state.store import StateStore
 from coding_agent_playbook.hooks.resolution.resolved import ResolvedHandler, ResolvedHook
 from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS

@@ -22,8 +22,8 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime._execute import Ran
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.harness import WireOutput
-    from coding_agent_playbook.hook_runtime.session import SessionState
+    from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
+    from coding_agent_playbook.hook_runtime.state.session import SessionState
     from coding_agent_playbook.hook_runtime.watchdog import OutputGate
 
 __all__ = ["DispatchTrace", "Responder"]

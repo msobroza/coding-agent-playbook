@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.evaluators.metric import (
+from coding_agent_playbook.grading.metric import (
     all_metrics,
     execution_metrics,
     static_metrics,
@@ -26,7 +26,7 @@ from coding_agent_playbook.metrics_gate.policy import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.evaluators.metric import Metric
+    from coding_agent_playbook.grading.metric import Metric
 
 
 def _available() -> list[Metric]:

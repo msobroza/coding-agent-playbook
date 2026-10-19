@@ -5,7 +5,7 @@ is non-empty (the repo's ``.pre-commit-config.yaml`` declares a ``playbook-*``
 or ``coding-agent-playbook-*`` hook). It is the single owner of
 ``.git/hooks/**`` and ``core.hooksPath``:
 
-- **Bash.** One ``shell.parse_shell`` per event; each segment through
+- **Bash.** One ``shell.parse.parse_shell`` per event; each segment through
   :func:`._bypass_rules.segment_verdict` (``--no-verify``, commit ``-n``,
   ``SKIP=``, ``pre-commit uninstall``, injected ``core.hooksPath`` /
   ``alias.*``; plumbing asks), plus every write, ``rm``, ``mv`` or ``chmod``
@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import clean_text, clip
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.handlers._bypass_rules import segment_verdict
 from coding_agent_playbook.hook_runtime.handlers._targets import (
@@ -43,7 +44,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo, ToolCall
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
     type Verdict = tuple[Decision, str]
 
@@ -79,7 +80,7 @@ def block_precommit_bypass(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerRe
         ... # doctest: +SKIP
         <Decision.DENY: 'deny'>
     """
-    ids = playbook_ids(ctx)
+    ids = ctx.cfg.tables.precommit_hook_ids()
     if not ids or ev.tool is None or ev.repo is None:
         return None
     found = _shell_verdict(ev, ctx, ids, ev.repo) or _file_verdict(ev.tool, ctx, ev.repo)
@@ -89,16 +90,6 @@ def block_precommit_bypass(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerRe
     return HandlerResult(
         decision=decision, hook_id=ctx.hook.id, rule_id=rule, reason=reason_for(decision, ids)
     )
-
-
-def playbook_ids(ctx: HandlerContext) -> tuple[str, ...]:
-    """``guard_config.precommit.playbook_hook_ids``; empty when absent or malformed.
-
-    Example: ``playbook_ids(ctx) == ("playbook-metrics", "playbook-validate")``.
-    """
-    table = ctx.cfg.tables.get("precommit")
-    ids = table.get("playbook_hook_ids") if isinstance(table, dict) else None
-    return tuple(i for i in ids if isinstance(i, str) and i) if isinstance(ids, list) else ()
 
 
 def reason_for(decision: Decision, ids: tuple[str, ...]) -> str:
@@ -130,7 +121,7 @@ def _shell_verdict(
         return None
     if command.parse_error is not None:  # unknown: ask only when the text names a bypass
         return (Decision.ASK, "unparsed") if _UNPARSED_BYPASS.search(command.text) else None
-    strict = ctx.config.get("strict_skip") is True
+    strict = HookConfig(ctx.config, CONFIG_SCHEMA).flag("strict_skip", False)
     in_rebase = _rebase_in_progress(repo)
     if any(_hooks_dir(path, repo, ctx.platform) for path in shell_write_targets(ev, ctx, _touched)):
         return Decision.DENY, "hooks_dir"
@@ -145,7 +136,7 @@ def _shell_verdict(
 
 def _touched(segment: Segment) -> list[str]:
     """Every path ``segment`` writes, plus each operand of ``rm``/``mv``/``chmod``/..."""
-    from coding_agent_playbook.hook_runtime._shell_writes import operands, write_targets
+    from coding_agent_playbook.hook_runtime.shell.writes import operands, write_targets
 
     targets = write_targets(segment)
     program = posixpath.basename(segment.argv[0]) if segment.argv else ""

@@ -40,11 +40,11 @@ from coding_agent_playbook.hook_runtime.stop.tools import edited_py
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
-    from coding_agent_playbook.evaluators.builtins.ruff_violations import RuffHit
-    from coding_agent_playbook.evaluators.tool_runner import ToolRunner
-    from coding_agent_playbook.evaluators.types import ScopeDetail, ToolSetup
+    from coding_agent_playbook.grading.static_metrics.ruff_violations import RuffHit
+    from coding_agent_playbook.grading.tool_runner import ToolRunner
+    from coding_agent_playbook.grading.types import ScopeDetail, ToolSetup
     from coding_agent_playbook.hook_runtime.deps import Clock, ProcPort
-    from coding_agent_playbook.hook_runtime.git import GitPort
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
 
@@ -181,7 +181,7 @@ def _run_pass(
     git_dir: str | None,
     gate: Gate | None,
 ) -> MetricsPass:
-    from coding_agent_playbook.evaluators.metric import static_metrics
+    from coding_agent_playbook.grading.metric import static_metrics
     from coding_agent_playbook.metrics_gate import run as gates  # the stage runs
     from coding_agent_playbook.metrics_gate.policy import stop_stage_selection
 
@@ -251,7 +251,7 @@ class ProcToolRunner:
     def __call__(
         self, argv: Sequence[str], stdin: bytes, cwd: Path | None, timeout_s: float
     ) -> tuple[int, bytes]:
-        from coding_agent_playbook.evaluators.tool_runner import ToolRunError
+        from coding_agent_playbook.grading.tool_runner import ToolRunError
 
         left = self.deadline - self.clock.monotonic()
         if left <= 0:
@@ -273,7 +273,7 @@ def _ruff_tools(
     ctx: HandlerContext, git_dir: str | None, deadline: float
 ) -> tuple[dict[str, str], ToolRunner | None, str]:
     """``(tool_paths, memoized runner, problem)`` from the worktree's ruff pin."""
-    from coding_agent_playbook.evaluators.tool_runner import MemoToolRunner
+    from coding_agent_playbook.grading.tool_runner import MemoToolRunner
     from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import event_ruff_pin
 
     pin = "missing" if git_dir is None else event_ruff_pin(ctx, git_dir)
@@ -284,7 +284,7 @@ def _ruff_tools(
 
 
 class PortBaselineGit:
-    """``evaluators.baseline_git.BaselineGit`` over the hook's hardened ``GitPort``.
+    """``grading.baseline_git.BaselineGit`` over the hook's hardened ``GitPort``.
 
     Only ``HEAD`` blobs are read (the stages never run a suite, so no worktree).
     Example: ``PortBaselineGit(ctx.git).read_sources(root, "HEAD", ["src/a.py"])``.
@@ -318,15 +318,13 @@ def metrics_gated(ctx: HandlerContext, root: str) -> bool:
 
     Example: ``metrics_gated(ctx, root)`` is ``True`` with ``playbook-metrics`` configured.
     """
-    table = ctx.cfg.tables.get("precommit")
-    rendered = table.get("playbook_hook_ids") if isinstance(table, dict) else None
-    if isinstance(rendered, list) and METRICS_HOOK_IDS.intersection(rendered):
+    if METRICS_HOOK_IDS.intersection(ctx.cfg.tables.precommit_hook_ids()):
         return True
     return bool(METRICS_HOOK_IDS.intersection(_live_precommit_ids(root)))
 
 
 def _live_precommit_ids(root: str) -> Iterable[str]:
-    from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
+    from coding_agent_playbook.hook_runtime.config.schema import (
         playbook_precommit_ids,
     )
 
@@ -413,8 +411,8 @@ def _family_hits(
 
 
 def _hits(found: MetricsPass, rel: str, text: str) -> tuple[RuffHit, ...]:
-    from coding_agent_playbook.evaluators.builtins.ruff_violations import ruff_hits
-    from coding_agent_playbook.evaluators.types import EvalContext
+    from coding_agent_playbook.grading.static_metrics.ruff_violations import ruff_hits
+    from coding_agent_playbook.grading.types import EvalContext
 
     assert found.setup is not None
     ctx = EvalContext(
@@ -437,7 +435,7 @@ def _read_text(root: str, rel: str) -> str | None:
 
 
 def _head_text(ctx: HandlerContext, rel: str) -> str | None:
-    from coding_agent_playbook.metrics_gate.inputs import decode_source_blob
+    from coding_agent_playbook.grading.measuring import decode_source_blob
 
     blob = ctx.git.cat_head(rel)
     return None if blob is None else decode_source_blob(blob)

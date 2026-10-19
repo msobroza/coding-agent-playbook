@@ -47,9 +47,9 @@ from coding_agent_playbook.guard_config import (
     repo_layout,
     serialize_guard_config,
 )
-from coding_agent_playbook.hook_runtime.config.guard_config import GUARD_CONFIG_REL
+from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
+from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateArgs, run
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
-from coding_agent_playbook.hook_runtime.simulate import SimulateArgs, run
 from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
 from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
 from coding_agent_playbook.hooks.resolution.merge import merge_hook_layers
@@ -63,7 +63,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from tests.hook_runtime.fakes import FakeProc
 

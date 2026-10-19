@@ -25,9 +25,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Final, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook.hook_runtime._shell_wrappers import DEFAULT_RUNNER_WRAPPERS, ShellConfig
+from coding_agent_playbook.hook_runtime.config.guard_tables import GuardTables
 from coding_agent_playbook.hook_runtime.config.hook_records import HookRecord, parse_hook_record
 from coding_agent_playbook.hook_runtime.config.lock_digest import expected_digest, load_toml
 from coding_agent_playbook.hook_runtime.config.reader import (
@@ -35,9 +35,15 @@ from coding_agent_playbook.hook_runtime.config.reader import (
     TableReader,
     read_small_file,
 )
+from coding_agent_playbook.hook_runtime.config.schema import (
+    GUARD_CONFIG_REL,
+    LOCKFILE_REL,
+    SUPPORTED_SCHEMA_VERSIONS,
+)
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs
 from coding_agent_playbook.hook_runtime.policy import ENGINE_DEADLINE_CAP_MS
+from coding_agent_playbook.hook_runtime.shell.wrappers import DEFAULT_RUNNER_WRAPPERS, ShellConfig
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 
 if TYPE_CHECKING:
@@ -45,13 +51,10 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.config.lock_digest import TomlLoader
     from coding_agent_playbook.hook_runtime.event import RepoInfo
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [
     "CONFIG_FAULT_REASON",
-    "GUARD_CONFIG_REL",
-    "LOCKFILE_REL",
-    "SUPPORTED_SCHEMA_VERSIONS",
     "ConfigFault",
     "GuardConfig",
     "HookRecord",
@@ -60,10 +63,6 @@ __all__ = [
     "parse_guard_config",
 ]
 
-GUARD_CONFIG_REL: Final = ".coding-agent-playbook/hooks/guard_config.json"
-LOCKFILE_REL: Final = ".coding-agent-playbook.lock"
-#: The ``schema_version`` range this runtime reads; additive keys need no bump.
-SUPPORTED_SCHEMA_VERSIONS: Final = (1, 1)
 #: Validate caps the file at 256 KiB; anything past this is not read at all.
 MAX_CONFIG_BYTES: Final = 1024 * 1024
 DEFAULT_STATE_TTL_DAYS: Final = 7
@@ -105,7 +104,7 @@ class GuardConfig:
     ``hooks`` are the enabled hooks; ``deadlines_ms`` has every event (the
     engine cap where the file is silent); globs are compiled and folded for
     the platform; ``tables`` holds every other top-level key (the §E.0.5 pack
-    tables) read-only.
+    tables) read-only, behind its typed accessors (``cfg.tables.stop_gate()``).
 
     Example::
 
@@ -126,7 +125,7 @@ class GuardConfig:
     secret_paths: GlobSet
     allow_code_from: frozenset[str]
     state_ttl_days: int
-    tables: Mapping[str, Any]
+    tables: GuardTables
 
 
 _RUNTIME_KEYS: Final = frozenset(
@@ -244,7 +243,7 @@ def _config(
         ),
         allow_code_from=frozenset(reader.strings("allow_code_from", ())),
         state_ttl_days=reader.integer("state_ttl_days", DEFAULT_STATE_TTL_DAYS, minimum=1),
-        tables=MappingProxyType({k: v for k, v in reader.table.items() if k not in _RUNTIME_KEYS}),
+        tables=GuardTables({k: v for k, v in reader.table.items() if k not in _RUNTIME_KEYS}),
     )
 
 

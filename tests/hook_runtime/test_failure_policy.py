@@ -14,7 +14,7 @@ import pytest
 
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
-from coding_agent_playbook.hook_runtime.harness import DENY_EXIT
+from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT
 from coding_agent_playbook.hook_runtime.registry import (
     HANDLER_ATTR,
     HandlerDeclaration,

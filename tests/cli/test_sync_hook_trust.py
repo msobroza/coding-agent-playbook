@@ -15,6 +15,7 @@ import pytest
 
 from coding_agent_playbook.hook_runtime._external import approval_of
 from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
+from coding_agent_playbook.hook_runtime.config.guard_tables import GuardTables
 from coding_agent_playbook.hook_runtime.stop.coordinator import GatePolicy
 from coding_agent_playbook.hooks.registrations.stop_gate import stop_gate_table
 from coding_agent_playbook.security.trust import TrustStore
@@ -236,7 +237,8 @@ _GATE = "stop-ci-parity-gate"
 @pytest.mark.catalog
 def test_execution_digest_is_the_one_the_runtime_checks(tmp_path: Path) -> None:
     hooks = resolve_engine_hooks([_GATE], tmp_path, per_hook={_GATE: {"stages": ["tests"]}})
-    runtime = GatePolicy.from_table(stop_gate_table(hooks, {})).stages_sha256()
+    gate = GuardTables({"stop_gate": stop_gate_table(hooks, {})}).stop_gate()
+    runtime = GatePolicy.from_gate(gate).stages_sha256()
 
     assert execution_digest(hooks) == runtime
     assert execution_digest(resolve_engine_hooks([_GATE], tmp_path)) is None  # nothing to run

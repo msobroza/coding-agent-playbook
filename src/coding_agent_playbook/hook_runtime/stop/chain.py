@@ -19,11 +19,11 @@ from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.state import StateUnavailable, session_key
+from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, session_key
 
 if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [
     "LAST_GREEN",

@@ -23,14 +23,14 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.state import StateUnavailable, session_key
+from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, session_key
 from coding_agent_playbook.security.patterns import WALK_SKIP_DIRS
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
     from coding_agent_playbook.hook_runtime.deps import Clock
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
     from coding_agent_playbook.security.paths import PathPolicy
 
 __all__ = [

@@ -1,0 +1,58 @@
+# N20 (#101, specs/prT-package-layout.md 7.4): doctor, canary, heartbeat and
+# simulate, the human-run and self-check entries of the hook runtime, become
+# the hook_runtime/diagnostics/ package. Every module keeps its name.
+
+[[module]]
+pr = "N20"
+old = "coding_agent_playbook.hook_runtime.doctor"
+new = "coding_agent_playbook.hook_runtime.diagnostics.doctor"
+
+[[module]]
+pr = "N20"
+old = "coding_agent_playbook.hook_runtime._doctor_checks"
+new = "coding_agent_playbook.hook_runtime.diagnostics._doctor_checks"
+
+[[module]]
+pr = "N20"
+old = "coding_agent_playbook.hook_runtime._doctor_opencode"
+new = "coding_agent_playbook.hook_runtime.diagnostics._doctor_opencode"
+
+[[module]]
+pr = "N20"
+old = "coding_agent_playbook.hook_runtime._doctor_decisions"
+new = "coding_agent_playbook.hook_runtime.diagnostics._doctor_decisions"
+
+[[module]]
+pr = "N20"
+old = "coding_agent_playbook.hook_runtime.canary"
+new = "coding_agent_playbook.hook_runtime.diagnostics.canary"
+
+[[module]]
+pr = "N20"
+old = "coding_agent_playbook.hook_runtime.heartbeat"
+new = "coding_agent_playbook.hook_runtime.diagnostics.heartbeat"
+
+[[module]]
+pr = "N20"
+old = "coding_agent_playbook.hook_runtime.simulate"
+new = "coding_agent_playbook.hook_runtime.diagnostics.simulate"
+
+[[path]]
+pr = "N20"
+old = "tests/hook_runtime/test_doctor.py"
+new = "tests/hook_runtime/diagnostics/test_doctor.py"
+
+[[path]]
+pr = "N20"
+old = "tests/hook_runtime/test_doctor_opencode.py"
+new = "tests/hook_runtime/diagnostics/test_doctor_opencode.py"
+
+[[path]]
+pr = "N20"
+old = "tests/hook_runtime/test_heartbeat.py"
+new = "tests/hook_runtime/diagnostics/test_heartbeat.py"
+
+[[path]]
+pr = "N20"
+old = "tests/hook_runtime/test_simulate.py"
+new = "tests/hook_runtime/diagnostics/test_simulate.py"

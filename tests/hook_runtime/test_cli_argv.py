@@ -18,7 +18,7 @@ import pytest
 
 from coding_agent_playbook.hook_runtime.cli import DispatchArgs, main, parse_dispatch_argv
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
-from coding_agent_playbook.hook_runtime.harness import DENY_EXIT
+from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT
 from coding_agent_playbook.hooks.registrations._templates import shim_template
 from coding_agent_playbook.hooks.registrations.claude import claude_command
 from coding_agent_playbook.hooks.registrations.opencode import OPENCODE_REG_EVENTS

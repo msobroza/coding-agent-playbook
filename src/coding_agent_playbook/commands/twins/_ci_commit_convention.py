@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.commands.twins.ci import CiStepRunner, StepRun
-    from coding_agent_playbook.hook_runtime.git import GitPort
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
 
 __all__ = ["COMMIT_STEP", "PR_TITLE_ENV", "CzCommands", "cz_commands", "run_cz_commands"]
 

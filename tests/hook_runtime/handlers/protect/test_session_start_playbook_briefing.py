@@ -21,14 +21,14 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
-from coding_agent_playbook.hook_runtime.config.guard_config import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.config.pin import write_machine_pins
+from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.handlers._briefing_probes import (
     installed_engine_version,
 )
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 from tests.hook_runtime.fakes import FakeGit
 from tests.hook_runtime.guard_repo import canonical, hook_record
 from tests.hook_runtime.handlers.pack_repo import ENGINE_VERSION, RENDERED_AT, PackRepo
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
     from tests.hook_payloads import HookPayloadCase
 
     type Payload = Callable[[str, str, str], HookPayloadCase]

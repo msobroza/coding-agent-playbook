@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.hook_runtime.decision import CombinedResult, Decision
 from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, RepoInfo
-from coding_agent_playbook.hook_runtime.harness import (
+from coding_agent_playbook.hook_runtime.harness.wire import (
     ContractFault,
     ForeignPayload,
     ParseContext,

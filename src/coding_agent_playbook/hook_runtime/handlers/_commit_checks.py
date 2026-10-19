@@ -1,6 +1,6 @@
 """What a ``git commit`` will record, for git-commit-push-policy-guard's data rows (specs/prK-hook-pack.md §E.4).
 
-- :func:`message_verdict` judges the message (``gitargv.commit_message_sources``)
+- :func:`message_verdict` judges the message (``git_command.commit_message_sources``)
   with the trailer rows of ``security.commit_trailers``, the same judge the
   ``playbook check-commit-trailers`` commit-msg twin runs; a message that
   cannot be read asks, but only while a trailer row is configured.
@@ -16,18 +16,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime._git_options import git_args
 from coding_agent_playbook.hook_runtime.caps import clean_text, clip
 from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.gitargv import Uninspectable, commit_message_sources
+from coding_agent_playbook.hook_runtime.shell.git_command import (
+    Uninspectable,
+    commit_message_sources,
+)
+from coding_agent_playbook.hook_runtime.shell.git_options import git_args
 from coding_agent_playbook.security.commit_trailers import GitPolicy, commit_msg_violations
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from coding_agent_playbook.hook_runtime.event import RepoInfo
-    from coding_agent_playbook.hook_runtime.git import GitPort
-    from coding_agent_playbook.hook_runtime.gitargv import GitInvocation
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
+    from coding_agent_playbook.hook_runtime.shell.git_command import GitInvocation
 
     type Verdict = tuple[Decision, str, str]
 

@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import clean_text, clip
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.handlers._coverage_report import (
     CoverageGrade,
     coverage_lines,
@@ -44,14 +45,17 @@ from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResul
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.evaluators.execution.project import ProjectHandle, RunArtifacts
+    from coding_agent_playbook.grading.execution_metrics.project import (
+        ProjectFactory,
+        ProjectHandle,
+        RunArtifacts,
+    )
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import SkipCategory, StopPlan
     from coding_agent_playbook.hook_runtime.stop.suite import SuiteOutcome
     from coding_agent_playbook.metrics_gate.run import MetricsGateResult
-    from coding_agent_playbook.metrics_gate.suite import ProjectFactory
 
 __all__ = [
     "CONFIG_SCHEMA",
@@ -62,7 +66,7 @@ __all__ = [
 ]
 
 STAGE_NAME: Final = "coverage"
-#: The MODULE label the gate keys the suite total on (``metrics_gate.suite``).
+#: The MODULE label the gate keys the suite total on (``grading.measuring.SUITE_LABEL``).
 _SUITE_LABEL: Final = "suite"
 _SELECT: Final = ("diff_coverage", "coverage")
 CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
@@ -136,7 +140,7 @@ class CoverageStage:
     def _grade(
         self, plan: StopPlan, handle: ProjectHandle, artifacts: RunArtifacts
     ) -> CoverageGrade:
-        from coding_agent_playbook.evaluators.execution.diff_coverage import (
+        from coding_agent_playbook.grading.execution_metrics.diff_coverage import (
             changed_line_coverage,
         )
 
@@ -186,7 +190,8 @@ class CoverageStage:
         """``HEAD``, or the merge base with the default branch (``HEAD`` when there is none)."""
         if self._base is None:
             self._base = "HEAD"
-            if self.ctx.config.get("diff_base") == "merge-base":
+            base = HookConfig(self.ctx.config, CONFIG_SCHEMA).choice("diff_base", "HEAD")
+            if base == "merge-base":
                 branch = self.ctx.git.default_branch()
                 merged = None if branch is None else self.ctx.git.merge_base(branch, "HEAD")
                 self._base = merged or "HEAD"
@@ -194,8 +199,8 @@ class CoverageStage:
 
     def _scored(self) -> list[str]:
         """The changed paths the gate scores (memoized per Stop); none on a git error."""
-        from coding_agent_playbook.evaluators.execution.diff_coverage import scored_changes
-        from coding_agent_playbook.hook_runtime.git import GitError
+        from coding_agent_playbook.grading.execution_metrics.diff_coverage import scored_changes
+        from coding_agent_playbook.hook_runtime.git.safe_git import GitError
 
         if self._changes is None:
             root = Path(self.repo.worktree_root)
@@ -251,7 +256,8 @@ def coverage_stage(ev: CanonicalEvent, ctx: HandlerContext) -> CoverageStage | N
     """
     if ev.repo is None:
         return None
-    mode = "warn" if ctx.config.get("decision") == "context" else "block"
+    decision = HookConfig(ctx.config, CONFIG_SCHEMA).choice("decision", "deny")
+    mode = "warn" if decision == "context" else "block"
     return CoverageStage(ctx=ctx, repo=ev.repo, mode=mode)
 
 
@@ -278,5 +284,5 @@ def _trusted(repo: RepoInfo, ctx: HandlerContext) -> bool:
     from coding_agent_playbook.hook_runtime.stop.coordinator import GatePolicy
 
     trust = None if ctx.deps is None else open_trust_store(repo, ctx.deps)
-    policy = GatePolicy.from_table(ctx.cfg.tables.get("stop_gate"))
+    policy = GatePolicy.from_gate(ctx.cfg.tables.stop_gate())
     return trust is not None and trust.allows_execution(policy.stages_sha256())

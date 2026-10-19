@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime._git_parse import AddedLine
 from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.git.parse import AddedLine
 from coding_agent_playbook.hook_runtime.registry import load_builtin
 from tests.hook_runtime.fakes import FakeRuff, ruff_row
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_rules
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
     from tests.hook_runtime.fakes import FakeGit
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 

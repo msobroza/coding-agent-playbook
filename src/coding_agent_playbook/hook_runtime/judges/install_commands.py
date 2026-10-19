@@ -37,7 +37,7 @@ from coding_agent_playbook.hook_runtime.judges.cli_words import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["DEFAULT_INDEXES", "Index", "InstallRequest", "install_requests"]
 

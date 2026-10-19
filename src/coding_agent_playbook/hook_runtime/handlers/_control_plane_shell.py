@@ -24,12 +24,12 @@ import re
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["command_verdict", "names_state_dir"]
 
@@ -47,7 +47,7 @@ def command_verdict(segment: Segment, *, piped: bool) -> tuple[Decision, str] | 
 
     Example::
 
-        >>> from coding_agent_playbook.hook_runtime.shell import parse_shell
+        >>> from coding_agent_playbook.hook_runtime.shell.parse import parse_shell
         >>> command_verdict(parse_shell("unbuffer playbook sync", "posix", "/r").segments[0],
         ...                 piped=False)
         (<Decision.DENY: 'deny'>, 'sync_wrapper')

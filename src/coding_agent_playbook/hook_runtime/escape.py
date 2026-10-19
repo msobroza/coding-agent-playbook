@@ -32,13 +32,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.config.reader import FileTooLarge, read_small_file
-from coding_agent_playbook.hook_runtime.wrapper_policy import WrapperDeclaration, declare_wrappers
+from coding_agent_playbook.hook_runtime.shell.wrapper_policy import (
+    WrapperDeclaration,
+    declare_wrappers,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.event import RepoInfo
-    from coding_agent_playbook.hook_runtime.git import GitPort
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
 
 __all__ = [
     "ALLOW_GENERATED_EDIT_VAR",

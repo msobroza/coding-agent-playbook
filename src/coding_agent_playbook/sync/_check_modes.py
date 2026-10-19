@@ -54,7 +54,7 @@ def _rendered_scratch(
     secret file or a large ``.venv`` can neither crash, slow nor leak into the
     pre-commit guard, and the real tree is never written. The only source bytes
     the render copies are skills' ``scripts/``/``references/``, which refuse
-    secret paths and links leaving the skill (``_skill_sources``). The scratch root
+    secret paths and links leaving the skill (``generated_output.source_files``). The scratch root
     carries the repo's directory name so name-derived content (``HARNESS.md``)
     renders identically, and skill-dir ownership is decided against the real
     tree (write-mode parity).

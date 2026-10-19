@@ -13,7 +13,8 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.config.guard_config import GUARD_CONFIG_REL
+from coding_agent_playbook.hook_runtime.config.guard_tables import GuardTables
+from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.handlers._exec_stages import PLUGINS_CHANGED
 from coding_agent_playbook.hook_runtime.stop.coordinator import GatePolicy
@@ -50,7 +51,8 @@ def _install(repo: PackRepo, **config: Any) -> FakeTrustStore:
     """The coordinator with ``config``; a trust store approving its rendered stage list."""
     repo.install_pack([HOOK_ID], per_hook={HOOK_ID: config})
     table = json.loads((repo.root / GUARD_CONFIG_REL).read_bytes())["stop_gate"]
-    return FakeTrustStore(executions={GatePolicy.from_table(table).stages_sha256()})
+    gate = GuardTables({"stop_gate": table}).stop_gate()
+    return FakeTrustStore(executions={GatePolicy.from_gate(gate).stages_sha256()})
 
 
 def _runner(**python: Any) -> FakeStageRunner:

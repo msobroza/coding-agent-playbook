@@ -31,21 +31,21 @@ from coding_agent_playbook.hook_runtime._ports import LazyGit, open_trust_store
 from coding_agent_playbook.hook_runtime._post_write import PostWrite, record_after_write
 from coding_agent_playbook.hook_runtime._selection import select_hooks
 from coding_agent_playbook.hook_runtime._tail import DispatchTrace
-from coding_agent_playbook.hook_runtime.active_prompt import observe as observe_active_prompt
 from coding_agent_playbook.hook_runtime.config.guard_config import ConfigFault, load_guard_config
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.harness import WireOutput
-from coding_agent_playbook.hook_runtime.ledger import Ledger
+from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
 from coding_agent_playbook.hook_runtime.registry import (
     HandlerContext,
     ResolveContext,
     resolve_handler,
 )
-from coding_agent_playbook.hook_runtime.session import SessionState
-from coding_agent_playbook.hook_runtime.state import StateStore
+from coding_agent_playbook.hook_runtime.shell.wrapper_policy import with_wrapper_prefixes
+from coding_agent_playbook.hook_runtime.state.active_prompt import observe as observe_active_prompt
+from coding_agent_playbook.hook_runtime.state.ledger import Ledger
+from coding_agent_playbook.hook_runtime.state.session import SessionState
+from coding_agent_playbook.hook_runtime.state.store import StateStore
 from coding_agent_playbook.hook_runtime.watchdog import Watchdog
-from coding_agent_playbook.hook_runtime.wrapper_policy import with_wrapper_prefixes
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence

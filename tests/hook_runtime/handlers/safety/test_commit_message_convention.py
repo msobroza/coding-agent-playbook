@@ -17,7 +17,7 @@ import pytest
 from coding_agent_playbook.hook_runtime.config.pin import write_machine_pins
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import Harness
-from coding_agent_playbook.hook_runtime.git import LoggedCommit
+from coding_agent_playbook.hook_runtime.git.safe_git import LoggedCommit
 from coding_agent_playbook.hook_runtime.handlers._cz import REWRITE_HINT
 from tests.hook_runtime.fakes import FakeGit
 from tests.hook_runtime.tool_fakes import FakeCz
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 
     type Deps = Callable[..., RuntimeDeps]

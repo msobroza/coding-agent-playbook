@@ -30,7 +30,7 @@ from tests.node_kit import run_node
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.hook_runtime.harness import WireOutput
+    from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
     from coding_agent_playbook.hooks.registrations.opencode import OpenCodeRegEntry
 
 type Step = dict[str, Any]
