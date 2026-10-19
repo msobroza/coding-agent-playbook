@@ -36,6 +36,13 @@ def test_spec_section_documents_skill_reference_delivery(start: str, end: str, p
     assert phrase in _spec_section(start, end), f"SPEC {start.strip('# ')} must say {phrase!r}"
 
 
+def test_spec_claude_rule_sections_describe_only_always_rules() -> None:
+    """Scoped-rule glob lines belong to references, outside the always-loaded rules file."""
+    section = _spec_section("#### 6.1.4", "#### 6.1.5")
+    assert "Each always-rule section gets a" in section
+    assert "for scoped rules, their globs" not in section
+
+
 def test_spec_skill_reference_row_matches_the_rendered_rule_line() -> None:
     # The §9.7 row quotes the reference's first line; take its shape from the renderer, so
     # a change to the rule line fails here instead of leaving the row stale.
