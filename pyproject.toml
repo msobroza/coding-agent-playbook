@@ -270,7 +270,6 @@ exhaustive = true
 # names. hook_runtime stays here for good.
 exhaustive_ignores = [
     "_atomic_io",
-    "_canonical_json",
     "_file_identity",
     "_gate_scan_files",
     "_guard_config_allowlists",
@@ -286,7 +285,6 @@ exhaustive_ignores = [
     "_hook_frontmatter",
     "_hook_schema",
     "_layers",
-    "_lock_drift",
     "_member_reference",
     "_output_io",
     "_sentinel",
@@ -336,8 +334,6 @@ type = "forbidden"
 # tests/engine_modules.py STDLIB_LEAVES: the only engine modules the two stacks import.
 source_modules = [
     "coding_agent_playbook._atomic_io",
-    "coding_agent_playbook._canonical_json",
-    "coding_agent_playbook._lock_drift",
     "coding_agent_playbook._sentinel",
     "coding_agent_playbook.catalog",
     "coding_agent_playbook.detector.pep503",

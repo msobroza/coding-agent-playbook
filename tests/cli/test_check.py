@@ -13,7 +13,7 @@ from coding_agent_playbook.adapters._settings_drift import settings_document, st
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands import check as _check
 from coding_agent_playbook.commands import sync as _sync
-from coding_agent_playbook.lockfile import drift_entries
+from coding_agent_playbook.lockfile.drift import drift_entries
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from tests.plugins.superpowers_expectations import PLUGIN_NAME
 from tests.toml_equality import assert_toml_identical
@@ -119,7 +119,7 @@ def test_check_drift_section_reports_drift(tmp_path, make_synthetic_repo, capsys
 
 
 def test_check_drift_section_unchanged_after_extraction(tmp_path, make_synthetic_repo, capsys):
-    """The Drift section is exactly ``lockfile.drift_entries``, the drift stage's definition."""
+    """The Drift section is exactly ``lockfile.drift.drift_entries``, the drift stage's definition."""
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
     _sync.run(argparse.Namespace(repo_root=str(repo), check=False))
     (repo / "AGENTS.md").write_text("MUTATED\n", encoding="utf-8")

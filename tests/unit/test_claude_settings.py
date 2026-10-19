@@ -23,12 +23,12 @@ from coding_agent_playbook.adapters.claude_settings import (
     DesiredGroup,
     MergeResult,
     SettingsMergeError,
-    canonical_json,
     merge_managed_entries,
     scoped_lock_entry,
     write_settings,
 )
-from coding_agent_playbook.lockfile import LockEntry, compute_hash
+from coding_agent_playbook.lockfile.canonical_json import canonical_json
+from coding_agent_playbook.lockfile.model import LockEntry, compute_hash
 from tests.import_probe import new_modules_after
 
 if TYPE_CHECKING:
@@ -533,8 +533,6 @@ def test_claude_settings_imports_only_the_stdlib() -> None:
     assert foreign == []
     assert ours == [
         "coding_agent_playbook._atomic_io",
-        "coding_agent_playbook._canonical_json",
-        "coding_agent_playbook._lock_drift",  # lockfile.drift_entries: stdlib-only too
         "coding_agent_playbook._output_io",  # refuse_special_file before the read: stdlib-only
         "coding_agent_playbook.adapters",
         "coding_agent_playbook.adapters._json_edits",
@@ -542,6 +540,8 @@ def test_claude_settings_imports_only_the_stdlib() -> None:
         "coding_agent_playbook.adapters._settings_plan",
         "coding_agent_playbook.adapters.claude_settings",
         "coding_agent_playbook.lockfile",
+        "coding_agent_playbook.lockfile.canonical_json",
+        "coding_agent_playbook.lockfile.model",
     ]
 
 

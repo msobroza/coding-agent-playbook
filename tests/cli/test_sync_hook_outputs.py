@@ -23,7 +23,7 @@ from coding_agent_playbook.adapters._destructive_native import (
 )
 from coding_agent_playbook.adapters._secret_native import SECRETS_PATH_GUARD, secret_native_rows
 from coding_agent_playbook.commands import sync as _sync
-from coding_agent_playbook.lockfile import Lockfile, compute_hash
+from coding_agent_playbook.lockfile.model import Lockfile, compute_hash
 from tests.cli.hook_repo import (
     CONFIG,
     GUARD_CONFIG,

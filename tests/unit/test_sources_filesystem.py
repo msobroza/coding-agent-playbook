@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.config import Config, ConfigError, ProjectMeta
-from coding_agent_playbook.lockfile import LockEntry, Lockfile
+from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 from coding_agent_playbook.sources.filesystem import (
     FileSystemArtifactSource,
     FileSystemStateSource,

@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.commands._output_locations import OutputLocations
     from coding_agent_playbook.git_client import GitClient
-    from coding_agent_playbook.lockfile import LockEntry, Lockfile
+    from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 
 # User/state files an orphan entry must never resolve to, whatever an old (or
 # hand-edited) lockfile claims.

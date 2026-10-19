@@ -20,7 +20,7 @@ import pytest
 from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH
-from coding_agent_playbook.lockfile import Lockfile, compute_hash
+from coding_agent_playbook.lockfile.model import Lockfile, compute_hash
 from tests.cli.hook_repo import (
     CONFIG,
     GUARD_CONFIG,

@@ -17,7 +17,7 @@ from coding_agent_playbook.commands._sync_orphans import (
     find_orphans,
     plan_orphans,
 )
-from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
+from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
 from tests.fakes import FakeGitClient
 
 
