@@ -1,6 +1,6 @@
 """Eval-task validator. Enforces the SPEC §15.2 structural rules.
 
-Run by :mod:`coding_agent_playbook.commands.validate` to catch authoring mistakes
+Run by :mod:`coding_agent_playbook.validation.checks` to catch authoring mistakes
 at commit time. Each violation is aggregated; callers print them in order and exit
 non-zero if the list is non-empty.
 

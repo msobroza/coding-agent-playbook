@@ -501,7 +501,8 @@ def test_metrics_gate_imports_no_jinja_yaml_cli_or_argparse() -> None:
     # The packages above metrics_gate in engine-layers; each move PR that creates
     # one adds its prefix (specs/prT-package-layout.md 5.3.3).
     above = tuple(
-        engine_module(f"coding_agent_playbook.{name}") for name in ("commands", "precommit")
+        engine_module(f"coding_agent_playbook.{name}")
+        for name in ("commands", "precommit", "validation")
     )
     assert [m for m in loaded if m.startswith(above)] == []
 

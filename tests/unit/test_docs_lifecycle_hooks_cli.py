@@ -34,7 +34,6 @@ from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
 from coding_agent_playbook.cli.parser import _SUBCOMMANDS, build_parser
 from coding_agent_playbook.commands._sync_hooks import HOOKS_NOTICE
-from coding_agent_playbook.commands._validate_context import config_less_notes
 from coding_agent_playbook.commands.twins._ci_commit_convention import PR_TITLE_ENV
 from coding_agent_playbook.commands.twins.ci import CI_STEPS
 from coding_agent_playbook.hook_registrations import (
@@ -49,6 +48,7 @@ from coding_agent_playbook.hook_runtime.stop.stages import STOP_STAGE_ORDER
 from coding_agent_playbook.lockfile.model import ProvenanceKind
 from coding_agent_playbook.metrics_gate.policy import METRIC_FAMILIES, OPT_IN_METRICS
 from coding_agent_playbook.precommit import render_fresh_pre_commit
+from coding_agent_playbook.validation.context import config_less_notes
 from tests.unit.test_docs_lifecycle_hooks_spec import _spec_section, _spec_text
 
 _ROOT = Path(__file__).resolve().parents[2]

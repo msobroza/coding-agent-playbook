@@ -1,7 +1,7 @@
 """``playbook validate``'s hook trust contract, H1-H21 (specs/prK-lifecycle-hooks.md §B.5, lock L6).
 
 :func:`check_hooks` gathers every hook finding of a context into
-:class:`~coding_agent_playbook.commands._validation.ValidationError` lines:
+:class:`~coding_agent_playbook.validation.findings.ValidationError` lines:
 
 - H1 (and H2's layout half): each ``HOOK.md`` that did not load, which a
   context built with ``tolerate_hook_errors=True`` records (P8c);
@@ -9,24 +9,19 @@
 - per hook, every layer's definition: ``hook_policy.classify_hook`` (with the
   handler registry, so H6 checks each builtin's declaration) and the
   H19 body checks (a Jinja syntax error, a ``rule()`` call); H19's links are
-  ``_validate_links``'s, with ``hooks`` among the link-checked kinds; and a
+  ``validation._links``'s, with ``hooks`` among the link-checked kinds; and a
   warning for an advisory body over :data:`ADVISORY_BODY_LIMIT` (§C.4.2);
 - across hooks, artifacts and the committed config: the ``[hooks]`` /
   ``[guardrails]`` parse (H21) and ``hook_policy.classify_hook_set``.
 
-Split out of ``commands/validate.py`` for its size budget; it imports only the
-leaf ``_validation``, never ``validate``.
+Split out of ``validation/checks.py`` for its size budget; it imports only the
+leaf ``validation.findings``, never ``checks``.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.commands._validation import (
-    RULE_CALL_RE,
-    ValidationError,
-    jinja_syntax_error,
-)
 from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FILENAME
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig
 from coding_agent_playbook.hook_policy import (
@@ -40,6 +35,11 @@ from coding_agent_playbook.hook_policy import (
 )
 from coding_agent_playbook.hook_policy._findings import hook_location
 from coding_agent_playbook.orchestrator import engine_package_of
+from coding_agent_playbook.validation.findings import (
+    RULE_CALL_RE,
+    ValidationError,
+    jinja_syntax_error,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator

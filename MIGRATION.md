@@ -57,7 +57,11 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.commands._ci_policy` | `coding_agent_playbook.commands.twins.policy` | N8 |
 | `coding_agent_playbook.commands._committed_config` | `coding_agent_playbook.config.committed` | N10 |
 | `coding_agent_playbook.commands._precommit_merge` | `coding_agent_playbook.precommit` | N9 |
+| `coding_agent_playbook.commands._sync_preflight` | `coding_agent_playbook.validation.preflight` | A4 |
 | `coding_agent_playbook.commands._twin_policy` | `coding_agent_playbook.commands.twins.policy` | N8 |
+| `coding_agent_playbook.commands._validate_context` | `coding_agent_playbook.validation.context` | A4 |
+| `coding_agent_playbook.commands._validate_prompts` | `coding_agent_playbook.validation.prompts` | A4 |
+| `coding_agent_playbook.commands._validation` | `coding_agent_playbook.validation.findings` | A4 |
 | `coding_agent_playbook.commands.check_commit_trailers` | `coding_agent_playbook.commands.twins.check_commit_trailers` | N8 |
 | `coding_agent_playbook.commands.check_deps` | `coding_agent_playbook.commands.twins.check_deps` | N8 |
 | `coding_agent_playbook.commands.check_notebooks` | `coding_agent_playbook.commands.twins.check_notebooks` | N8 |
@@ -69,6 +73,9 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.commands.init.precommit_template_dir` | `coding_agent_playbook.precommit.precommit_template_dir` | N9 |
 | `coding_agent_playbook.commands.scan_secrets` | `coding_agent_playbook.commands.twins.scan_secrets` | N8 |
 | `coding_agent_playbook.commands.scan_sinks` | `coding_agent_playbook.commands.twins.scan_sinks` | N8 |
+| `coding_agent_playbook.commands.validate.collect_validation_errors` | `coding_agent_playbook.validation.checks.collect_validation_errors` | A4 |
+| `coding_agent_playbook.commands.validate.collect_validation_findings` | `coding_agent_playbook.validation.checks.collect_validation_findings` | A4 |
+| `coding_agent_playbook.commands.validate.sync_gate_errors` | `coding_agent_playbook.validation.checks.sync_gate_errors` | A4 |
 | `coding_agent_playbook.config` | `coding_agent_playbook.config.model` | N2 |
 | `coding_agent_playbook.config.ConfigError` | `coding_agent_playbook.config.schema.ConfigError` | N2 |
 | `coding_agent_playbook.config.GuardrailsConfig` | `coding_agent_playbook.config.tables.hooks.GuardrailsConfig` | N2 |
@@ -92,6 +99,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.evaluators.policy` | `coding_agent_playbook.metrics_gate.policy` | N22 |
 | `coding_agent_playbook.evaluators.types.MetricConfig` | `coding_agent_playbook.metrics_gate.config.MetricConfig` | N22 |
 | `coding_agent_playbook.hooks_config` | `coding_agent_playbook.config.tables.hooks` | N2 |
+| `coding_agent_playbook.links` | `coding_agent_playbook.validation.link_check` | A4 |
 | `coding_agent_playbook.links.LinksConfig` | `coding_agent_playbook.config.tables.links.LinksConfig` | N2 |
 | `coding_agent_playbook.lockfile` | `coding_agent_playbook.lockfile.model` | N5 |
 | `coding_agent_playbook.lockfile.DriftItem` | `coding_agent_playbook.lockfile.drift.DriftItem` | N5 |

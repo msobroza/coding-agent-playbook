@@ -19,7 +19,6 @@ from coding_agent_playbook.catalog.roots import (
     canonical_overlay_name,
     catalog_root,
 )
-from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands._init_adapters import (
     ADAPTER_CHOICES,
@@ -38,6 +37,7 @@ from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FIL
 from coding_agent_playbook.config.model import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.precommit import write_pre_commit
+from coding_agent_playbook.validation import preflight as _sync_preflight
 
 if TYPE_CHECKING:
     import argparse

@@ -3,7 +3,7 @@
 Every markdown link in every rule, prompt, skill (``references/`` included) and
 hook must be self-contained: a relative target resolves inside the artifact's own
 source layer, and an external link passes only through the consumer's
-``[links] allowed_domains`` allowlist. Split out of ``commands/validate.py`` to
+``[links] allowed_domains`` allowlist. Split out of ``validation/checks.py`` to
 keep that module under the 500-line budget.
 """
 
@@ -13,10 +13,10 @@ import tomllib
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _iter_md_files
-from coding_agent_playbook.commands._validation import ValidationError
 from coding_agent_playbook.config.files import CONFIG_FILENAME
 from coding_agent_playbook.config.tables.links import LinksConfig, parse_links_config
-from coding_agent_playbook.links import classify_link, extract_markdown_links
+from coding_agent_playbook.validation.findings import ValidationError
+from coding_agent_playbook.validation.link_check import classify_link, extract_markdown_links
 
 if TYPE_CHECKING:
     from pathlib import Path
