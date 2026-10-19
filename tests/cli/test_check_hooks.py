@@ -140,8 +140,9 @@ def test_hooks_block_labels_per_adapter(
         "  [hooks]: on",
         "  Hooks (30 on / 45 total):",
         # The engine pack (Track K5): OpenCode has no notebook tool, so guard-generated-outputs
-        # is degraded there; control-plane-guard matches no notebook edit. OpenCode's Stop is
-        # evidence-only (§C.3.6), so every Stop-stage hook is degraded there (K6).
+        # and skill-nudge are degraded there; control-plane-guard matches no notebook edit.
+        # OpenCode's Stop is evidence-only (§C.3.6), so every Stop-stage hook is degraded there
+        # (K6).
         "    [✓] block-precommit-bypass (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
         "    [✓] clean-code-metrics-nonregression (agents_md: advisory, claude_code: enforced, "
@@ -213,8 +214,9 @@ def test_hooks_block_labels_per_adapter(
         # rides an experimental API and its Stop is evidence-only (§C.3.6): degraded.
         "    [✓] session-start-playbook-briefing (agents_md: —, claude_code: enforced, "
         "continue: —, opencode: degraded)",
-        # spec 8.5: no body, so no advisory; edit and write are reachable on both harnesses.
-        "    [✓] skill-nudge (agents_md: —, claude_code: enforced, continue: —, opencode: enforced)",
+        # spec 8.5, 12.2: no body, so no advisory; OpenCode has no notebook tool for its
+        # notebook_edit class, so it is degraded there (notebook writes through write still nudge).
+        "    [✓] skill-nudge (agents_md: —, claude_code: enforced, continue: —, opencode: degraded)",
         "    [✓] stop-ci-parity-gate (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: degraded)",
         "    [✓] stop-diff-sweep (agents_md: advisory, claude_code: enforced, "
