@@ -1,11 +1,14 @@
-"""The answers ``playbook init`` collects: from flags (non-interactive) or prompts.
+"""The answers ``playbook init`` collects: from flags (non-interactive) or questions.
 
-Split out of ``commands/init.py`` (CP-2, specs/prT-package-layout.md AC.5.5), verbatim;
-CP-3 gives the prompts an injected ``Ask`` seam.
+Split out of ``commands/init.py`` (CP-2, specs/prT-package-layout.md AC.5.5). Every
+question goes through an injected :data:`Ask` (CP-3): ``playbook`` passes
+:func:`console_ask`, and a test passes a scripted fake instead of patching
+``builtins.input``.
 """
 
 from __future__ import annotations
 
+import builtins
 import sys
 from typing import TYPE_CHECKING, TypedDict
 
@@ -17,7 +20,12 @@ from coding_agent_playbook.commands._init_adapters import (
 )
 
 if TYPE_CHECKING:
-    import argparse
+    from collections.abc import Callable
+
+    from coding_agent_playbook.commands.init import InitArgs
+
+#: Asks one question (the full prompt text, suffix included) and returns the raw reply.
+type Ask = Callable[[str], str]
 
 
 class Answers(TypedDict):
@@ -50,22 +58,38 @@ _YES = frozenset({"y", "yes"})
 _NO = frozenset({"n", "no"})
 
 
-def _prompt(question: str, default: str | None = None) -> str:
-    """Wrap ``input()`` with an optional default. Returns the user's reply
+def console_ask(question: str) -> str:
+    """``input(question)``, with ``builtins.input`` looked up at call time.
+
+    The lookup happens on each call, not at import, so a test that patches
+    ``builtins.input`` after this module was imported still feeds the replies.
+
+    Example::
+
+        >>> console_ask("Project name: ")  # doctest: +SKIP
+        'my-repo'
+    """
+    return builtins.input(question)
+
+
+def _prompt(question: str, default: str | None = None, *, ask: Ask = console_ask) -> str:
+    """Ask ``question`` with an optional default. Returns the user's reply
     (stripped) or ``default`` when the reply is empty."""
     suffix = f" [{default}]" if default else ""
-    answer = input(f"{question}{suffix}: ").strip()
+    answer = ask(f"{question}{suffix}: ").strip()
     return answer or (default or "")
 
 
-def _prompt_multi_select(question: str, choices: list[str], defaults: list[str]) -> list[str]:
+def _prompt_multi_select(
+    question: str, choices: list[str], defaults: list[str], *, ask: Ask = console_ask
+) -> list[str]:
     """Ask a multi-select question. The user enters comma-separated indices
     (1-based); an empty reply accepts ``defaults``."""
     print(f"{question} (comma-separated indices, blank=defaults={', '.join(defaults)})")
     for index, choice in enumerate(choices, start=1):
         marker = "*" if choice in defaults else " "
         print(f"  {marker} {index}. {choice}")
-    answer = input("> ").strip()
+    answer = ask("> ").strip()
     if not answer:
         return list(defaults)
     selected: list[str] = []
@@ -82,78 +106,87 @@ def _prompt_multi_select(question: str, choices: list[str], defaults: list[str])
     return selected or list(defaults)
 
 
-def _prompt_yes_no(question: str, *, default: bool = True) -> bool:
+def _prompt_yes_no(question: str, *, default: bool = True, ask: Ask = console_ask) -> bool:
     """Ask a yes/no question until the reply is clear; an empty reply takes ``default``.
 
     Example: ``_prompt_yes_no("Enable assistant lifecycle hooks?")`` asks ``... [Y/n]: ``.
     """
     suffix = "[Y/n]" if default else "[y/N]"
     while True:
-        answer = input(f"{question} {suffix}: ").strip().lower()
+        answer = ask(f"{question} {suffix}: ").strip().lower()
         if not answer:
             return default
         if answer in _YES or answer in _NO:
             return answer in _YES
 
 
-def _hooks_answer(args: argparse.Namespace, *, interactive: bool) -> bool | None:
-    """``False`` for ``--no-hooks``; the user's answer when interactive; else no choice (None)."""
-    if getattr(args, "no_hooks", False):
+def _hooks_answer(args: InitArgs, ask: Ask | None) -> bool | None:
+    """``False`` for ``--no-hooks``; the reply when interactive (``ask``); else no choice (None)."""
+    if args.no_hooks:
         return False
-    return _prompt_yes_no(_HOOKS_QUESTION) if interactive else None
+    return None if ask is None else _prompt_yes_no(_HOOKS_QUESTION, ask=ask)
 
 
-def collect_answers(args: argparse.Namespace) -> Answers:
-    """Resolve the project parameters from flags (non-interactive) or prompts
-    (interactive). Returns a typed mapping the writer functions consume."""
-    if getattr(args, "non_interactive", False):
-        name = getattr(args, "name", None)
-        kind = getattr(args, "kind", None)
-        if not name or not kind:
-            print(
-                "error: --name and --kind are required in non-interactive mode",
-                file=sys.stderr,
-            )
-            raise SystemExit(2)
-        if kind not in _VALID_KINDS:
-            print(
-                f"error: --kind must be one of: {', '.join(_VALID_KINDS)}",
-                file=sys.stderr,
-            )
-            raise SystemExit(2)
-        adapters = adapters_from_flag(getattr(args, "adapters", None))
-        overlays_raw = getattr(args, "overlays", "") or ""
-        overlays = [o.strip() for o in str(overlays_raw).split(",") if o.strip()]
-        return Answers(
-            name=str(name),
-            kind=str(kind),
-            description=str(getattr(args, "description", "") or ""),
-            adapters=adapters,
-            overlays=overlays,
-            hooks=_hooks_answer(args, interactive=False),
+def collect_answers(args: InitArgs, ask: Ask) -> Answers:
+    """Resolve the project parameters from the flags (non-interactive) or through ``ask``.
+
+    Returns a typed mapping the writer functions consume. A non-interactive run
+    without ``--name`` or ``--kind``, or with an unknown kind, prints ``error:``
+    and exits 2.
+
+    Example::
+
+        >>> collect_answers(InitArgs.from_namespace(namespace), console_ask)  # doctest: +SKIP
+    """
+    if args.non_interactive:
+        return _answers_from_flags(args)
+    return _answers_from_questions(args, ask)
+
+
+def _answers_from_flags(args: InitArgs) -> Answers:
+    """The non-interactive answers; ``--name`` and a known ``--kind`` are required."""
+    name, kind = args.name, args.kind
+    if not name or not kind:
+        print(
+            "error: --name and --kind are required in non-interactive mode",
+            file=sys.stderr,
         )
-    # Interactive path.
-    name = _prompt("Project name")
+        raise SystemExit(2)
+    if kind not in _VALID_KINDS:
+        print(
+            f"error: --kind must be one of: {', '.join(_VALID_KINDS)}",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    return Answers(
+        name=name,
+        kind=kind,
+        description=args.description,
+        adapters=adapters_from_flag(args.adapters),
+        overlays=[o.strip() for o in args.overlays.split(",") if o.strip()],
+        hooks=_hooks_answer(args, None),
+    )
+
+
+def _answers_from_questions(args: InitArgs, ask: Ask) -> Answers:
+    """The interactive answers, asked in today's order; the hooks question comes last."""
+    name = _prompt("Project name", ask=ask)
     while not name:
-        name = _prompt("Project name (required)")
-    description = _prompt("Project description", default="")
-    kind = _prompt("Project kind", default="python-application")
+        name = _prompt("Project name (required)", ask=ask)
+    description = _prompt("Project description", default="", ask=ask)
+    kind = _prompt("Project kind", default="python-application", ask=ask)
     while kind not in _VALID_KINDS:
         print(f"  valid kinds: {', '.join(_VALID_KINDS)}")
-        kind = _prompt("Project kind", default="python-application")
+        kind = _prompt("Project kind", default="python-application", ask=ask)
     adapters = _prompt_multi_select(
-        ADAPTERS_QUESTION, list(ADAPTER_CHOICES), list(DEFAULT_ADAPTERS)
+        ADAPTERS_QUESTION, list(ADAPTER_CHOICES), list(DEFAULT_ADAPTERS), ask=ask
     )
-    overlays = _prompt_multi_select(
-        "Enable overlay packages?",
-        [],
-        [],
-    )
+    overlays = _prompt_multi_select("Enable overlay packages?", [], [], ask=ask)
     return Answers(
         name=name,
         kind=kind,
         description=description,
         adapters=adapters,
         overlays=overlays,
-        hooks=_hooks_answer(args, interactive=True),
+        hooks=_hooks_answer(args, ask),
     )

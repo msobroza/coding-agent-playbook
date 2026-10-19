@@ -11,6 +11,7 @@ import pytest
 from coding_agent_playbook.agent_harness.models import (
     ContentFile,
     HarnessDirectory,
+    HarnessTree,
     LeafMarker,
     NotAHarnessError,
     RawAsset,
@@ -50,6 +51,8 @@ def test_missing_harness_md_raises(tmp_path: Path) -> None:
 
 def test_minimal_harness_parses_name_description_body() -> None:
     harness = parse_harness(FIXTURES / "minimal")
+    # AH-2 (#143): the parsed tree is a HarnessTree, never CONTEXT's Harness (a runtime).
+    assert isinstance(harness, HarnessTree)
     assert harness.name == "Minimal Harness"
     assert harness.description == "A bare harness with only a root file"
     assert "minimal harness" in harness.body.lower()

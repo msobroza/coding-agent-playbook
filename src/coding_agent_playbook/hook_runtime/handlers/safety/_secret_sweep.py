@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.escape import pragma_at_head
-from coding_agent_playbook.hook_runtime.handlers._secret_policy import (
+from coding_agent_playbook.hook_runtime.handlers.safety._secret_policy import (
     content_rules,
     finding_line,
     path_policy,

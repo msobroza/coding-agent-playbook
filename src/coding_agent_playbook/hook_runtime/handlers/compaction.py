@@ -36,7 +36,7 @@ from coding_agent_playbook.hook_runtime.dispatch.caps import (
 )
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._pii_settings import (
+from coding_agent_playbook.hook_runtime.handlers._shared.pii_settings import (
     PII_CONFIG_KEY,
     PII_KEY,
     pii_settings,

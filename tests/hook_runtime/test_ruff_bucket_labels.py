@@ -27,7 +27,7 @@ from coding_agent_playbook.hook_runtime.handlers._ruff_buckets import (
     rule_label,
     rule_suffix,
 )
-from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import (
+from coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline import (
     POST_EDIT_HOOK_ID,
     EditedFile,
     FileReport,

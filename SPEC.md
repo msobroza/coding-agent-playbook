@@ -350,6 +350,7 @@ coding-agent-playbook/
 │   ├── lockfile/                           # .coding-agent-playbook.lock: model, drift, canonical_json
 │   ├── toml_writer.py                      # the TOML writer: dump_toml and the shared scalar/key primitives
 │   ├── precommit.py                        # the pre-commit starter template and the text merge (§13.2, §13.3)
+│   ├── exit_two.py                         # ExitTwoError: the shared base of errors the CLI reports with exit 2 (§12)
 │   ├── hooks/                              # the sync-time half of a Hook
 │   │   ├── resolution/                     # hook tables, layer merge, effective view, guard_config.json records
 │   │   ├── contract/                       # the trust contract validate enforces (H1-H21)
@@ -363,13 +364,15 @@ coding-agent-playbook/
 │   │   ├── diagnostics/                    # playbook-hook doctor and simulate, the canaries, the heartbeat
 │   │   ├── dispatch/                       # the dispatch pipeline, handler registry and selection, event and decision model
 │   │   ├── handlers/                       # builtin hook handlers (@register_hook_handler)
+│   │   │   ├── safety/                     # the safety pack: one module per hook id, plus its private helpers
+│   │   │   └── _shared/                    # helpers more than one pack imports (targets, edit_preview, ...)
 │   │   ├── harness/                        # per-harness payload parsers and wire renderers
 │   │   ├── judges/                         # the checks a guard hook shares with its guard twin
 │   │   │   └── gate_weakening.py           # added-line suppression/loosening scan (`playbook gate-scan`)
 │   │   ├── state/                          # runtime state root, session, ledger, active prompt, audit log
 │   │   └── stop/                           # the Stop stage contract and coordinator
 │   ├── security/                           # secret paths/patterns, PII, trust store (stdlib)
-│   ├── agent_harness/                      # the Agent Harness format round trip: models, leaf_detectors, parser, emitter, manifest, adapter (AgentHarnessAdapter), hook_sidecars, importer
+│   ├── agent_harness/                      # the Agent Harness format round trip: models (HarnessTree), leaf_detectors, parser, emitter, manifest, adapter (AgentHarnessAdapter), hook_sidecars, importer, lint
 │   ├── adapters/
 │   │   ├── __init__.py
 │   │   ├── base.py                         # Adapter ABC
@@ -2424,7 +2427,7 @@ coding-agent-playbook = "coding_agent_playbook.cli:main"
 playbook = "coding_agent_playbook.cli:main"
 playbook-hook = "coding_agent_playbook.hook_runtime.cli:main"   # the hook runtime, §12.13 (v0.20)
 ```
-Each subcommand's module declares its flags (`NAME`, `HELP`, `configure`, `run`); `cli` lists them in `_SUBCOMMANDS` order (`cli/parser.py`), and `cli/_command.py` holds the `Command` protocol the modules satisfy structurally, so no command imports `cli`. `init` still has its flags declared in `cli/parser.py` until it moves onto the protocol.
+Each subcommand's module declares its flags (`NAME`, `HELP`, `configure`, `run`); `cli` lists them in `_SUBCOMMANDS` order (`cli/parser.py`), and `cli/_command.py` holds the `Command` protocol the modules satisfy structurally, so no command imports `cli`. `cli/parser.py` declares no subcommand flag (its `_SUBCOMMANDS` is derived from `_COMMANDS`). `init` asks its interactive questions through an injected `ask` (`commands/_init_answers.py`: `Ask`, `console_ask`), so tests script the replies. A command reports a failure the user must fix as an `ExitTwoError` (`exit_two.py`): `cli.main` prints `error: <message>` and exits 2 without naming the command's error type.
 
 **Missing catalog.** Every command that loads the engine's catalog (`init`, `sync` in every mode, `check`, `validate`, `render`, `eval`) locates it through `catalog_root()`, which raises `CatalogMissingError` when it cannot be found. The error carries every path it tried: the wheel's `<package>/_catalog` (which must hold `core/`) and a source checkout's `<repo>/catalog` (used only when the package directory sits under `src/` and `catalog/core` exists). `cli.main` catches it and exits 2, printing this line to stderr, with the two tried paths as `<a>` and `<b>`:
 
@@ -2839,7 +2842,7 @@ warning: no .playbook/manifest.toml sidecar found; reconstructing best-effort. .
 warning: rule 'pep8': scope inferred as 'always' from rules/ placement; globs/applies_if/priority/tags/version not recoverable without sidecar
 imported 2 artifact(s) into /repo/playbook (2 rules, 0 prompts, 0 skills, 0 hooks)
 ```
-All reconstructed rules — `scope=always` *and* `scope=scoped` — are written under `<into>/rules/<id>.md` (the only directory `FileSystemArtifactSource.list_rules()` reads); `scope` is preserved in the rule's emitted frontmatter, so a scoped rule stays scoped without needing a separate directory. A lossless import also rebuilds every hook from its manifest entry (kind `"hook"`, v0.20) through `Hook.from_dict`, never from the rendered files, and writes it as `<into>/hooks/<id>/HOOK.md` (`HOOK.md.j2` when templated) with its `scripts/`, exec bits restored; a best-effort import reads a `rules/NN-guardrail-*.md` advisory as a rule and warns that the hook cannot be reconstructed without the sidecar (§10.7.2). Exit code is 2 on a usage error (missing/non-directory path, or no `HARNESS.md`), else 0.
+All reconstructed rules — `scope=always` *and* `scope=scoped` — are written under `<into>/rules/<id>.md` (the only directory `FileSystemArtifactSource.list_rules()` reads); `scope` is preserved in the rule's emitted frontmatter, so a scoped rule stays scoped without needing a separate directory. A lossless import also rebuilds every hook from its manifest entry (kind `"hook"`, v0.20) through `Hook.from_dict`, never from the rendered files, and writes it as `<into>/hooks/<id>/HOOK.md` (`HOOK.md.j2` when templated) with its `scripts/`, exec bits restored; a best-effort import reads a `rules/NN-guardrail-*.md` advisory as a rule and warns that the hook cannot be reconstructed without the sidecar (§10.7.2). The hook sidecar has one module for both directions, `agent_harness.hook_sidecars`: `emit_hook_sidecars` writes it and `read_hook_sidecar` reads an entry back. Exit code is 2 on a usage error (missing/non-directory path, or no `HARNESS.md`), else 0.
 ### 12.10 `playbook validate-harness`
 Run `harnesses-ref`-equivalent structural checks on an Agent Harness tree (emitted or foreign). This is the lint half of the client-runtime decision (§10.7 / decision #3): the playbook validates harness *structure*, it does not implement a harness client runtime.
 ```
@@ -2856,7 +2859,7 @@ warning: /build/harness/skills: grouping directory lacks its routing file 'SKILL
 validation failed with 0 error(s), 1 warning(s) (warnings promoted by --strict)
 exit code: 1
 ```
-A missing or malformed `HARNESS.md` is reported as a validation **error** (exit 1) — not a usage error (exit 2) — because for a validator a malformed harness is precisely the failure it exists to report. Directories marked opaque by a `.harnessleaf` marker are terminal leaves: the validator never expects a routing file for them and does not inspect their internal content.
+A missing or malformed `HARNESS.md` is reported as a validation **error** (exit 1) — not a usage error (exit 2) — because for a validator a malformed harness is precisely the failure it exists to report. Directories marked opaque by a `.harnessleaf` marker are terminal leaves: the validator never expects a routing file for them and does not inspect their internal content. The checks are `agent_harness.lint.lint_harness`, which returns `HarnessFindings` (errors and warnings); `--strict` is a reporting choice, `HarnessFindings.failed(strict=True)`, not an input to the lint.
 ### 12.11 `playbook ci`
 ```
 playbook ci [--base REF] [--steps STEP[,STEP…]] [--format text|json] [--repo-root DIR]
@@ -3064,7 +3067,7 @@ repos:
 ```
 **These hooks run in pre-commit's own venv.** `language: python` means pre-commit builds an isolated environment holding only the engine at `rev:` — not the project's environment. An overlay package or out-of-tree adapter must therefore be listed under `additional_dependencies` (and `rev` kept on the engine version the project pins, or hook runs and manual runs render with different engines). Without it the sync refuses to run (missing overlay, §4.2 step 1) or skips the adapter with a warning — it never silently re-renders without the org rules. Overlay users (and anyone pinning the engine in their project environment) should prefer the `repo: local` + `language: system` hooks `playbook init` writes (§13.2), which run the project's own `playbook`.
 ### 13.2 Template `.pre-commit-config.yaml` (written by `playbook init`)
-`playbook init` renders this starter from the packaged template `src/coding_agent_playbook/templates/precommit/config.yaml.j2`. The template is engine wiring, not playbook content (its hook ids are duplicated in `precommit.py`), so it stays in the package rather than in `catalog/`. `precommit.py:precommit_template_dir()` returns its directory (`resources.files(ENGINE_PACKAGE) / "templates" / "precommit"`) and raises `PrecommitTemplateMissingError` (`the engine's pre-commit template was not found at <path>; reinstall coding-agent-playbook`) when the directory or `config.yaml.j2` is missing, instead of an `assert` that `python -O` strips; `cli.main` reports it as `error: <message>` with exit 2, like a missing catalog (§12). It is **air-gapped-friendly**: every hook is `repo: local` + `language: system`, so pre-commit never clones a remote hook repo (it would otherwise fetch each `repo:` URL into `~/.cache/pre-commit` on first run — impossible offline, which also satisfies the engine's "air-gapped-friendly" invariant). The tradeoff is that the consumer must have `ruff` and `mypy` installed in their environment; `language: system` runs the tools on PATH, it does not install them. The template is rendered with one variable, `output_commit` (the `[output] commit` policy), which selects the playbook hooks — the default `commit = false` variant is shown:
+`playbook init` renders this starter from the packaged template `src/coding_agent_playbook/templates/precommit/config.yaml.j2`. The template is engine wiring, not playbook content (its hook ids are duplicated in `precommit.py`), so it stays in the package rather than in `catalog/`. `precommit.py:precommit_template_dir()` returns its directory (`resources.files(ENGINE_PACKAGE) / "templates" / "precommit"`) and raises `PrecommitTemplateMissingError` (`the engine's pre-commit template was not found at <path>; reinstall coding-agent-playbook`) when the directory or `config.yaml.j2` is missing, instead of an `assert` that `python -O` strips; it subclasses the shared `ExitTwoError` (`exit_two.py`), which `cli.main` reports as `error: <message>` with exit 2, like a missing catalog (§12). It is **air-gapped-friendly**: every hook is `repo: local` + `language: system`, so pre-commit never clones a remote hook repo (it would otherwise fetch each `repo:` URL into `~/.cache/pre-commit` on first run — impossible offline, which also satisfies the engine's "air-gapped-friendly" invariant). The tradeoff is that the consumer must have `ruff` and `mypy` installed in their environment; `language: system` runs the tools on PATH, it does not install them. The template is rendered with one variable, `output_commit` (the `[output] commit` policy), which selects the playbook hooks — the default `commit = false` variant is shown:
 ```yaml
 # AUTOGENERATED starter by coding-agent-playbook `playbook init`.
 # Air-gapped-friendly: all hooks are `repo: local` + `language: system`.

@@ -24,6 +24,7 @@ from importlib import resources
 from pathlib import Path
 
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
+from coding_agent_playbook.exit_two import ExitTwoError
 from coding_agent_playbook.rendering.jinja import build_environment, render_artifact_body
 
 LEGACY_HOOK_ID = "coding-agent-playbook-sync"
@@ -141,12 +142,13 @@ def _local_messages(merged: str) -> tuple[str, ...]:
 _PRECOMMIT_TEMPLATE_NAME = "config.yaml.j2"
 
 
-class PrecommitTemplateMissingError(RuntimeError):
+class PrecommitTemplateMissingError(ExitTwoError):
     """The engine's packaged pre-commit template is not where the install put it.
 
     ``path`` is the template file that was expected. An explicit error, not an
     ``assert``: ``python -O`` strips asserts, which would turn a broken install
-    into a confusing failure deep inside the renderer.
+    into a confusing failure deep inside the renderer. ``cli.main`` reports it
+    through the shared exit-2 base (``error: <message>``, exit 2).
     """
 
     def __init__(self, path: Path) -> None:
