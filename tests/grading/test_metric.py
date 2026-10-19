@@ -27,7 +27,7 @@ from coding_agent_playbook.grading.metric import (
 from coding_agent_playbook.grading.normalizer import Identity
 from coding_agent_playbook.grading.parse import parse_module
 from coding_agent_playbook.grading.scope import Scope
-from coding_agent_playbook.grading.types import EvalContext, Measurement
+from coding_agent_playbook.grading.types import EvalContext, Measurement, MeasureSetup
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -229,6 +229,27 @@ def test_static_metric_available_requires_module() -> None:
     m = get_metric("cyclomatic_complexity")
     assert m.available(_static_ctx("def f():\n    return 1\n")) is True
     assert m.available(EvalContext(module=None, source="", label="t.py")) is False
+
+
+class _NeedsMissingModule(Metric):
+    """A static metric whose declared dependency never imports."""
+
+    name = "needs_missing_module"
+    scope = Scope.MODULE
+    normalizer = Identity()
+    requires = "coding_agent_playbook_b8_no_such_module"
+
+    def measure(self, ctx: EvalContext) -> list[Measurement]:
+        return []
+
+
+def test_runnable_needs_the_declared_dependency() -> None:
+    assert get_metric("cyclomatic_complexity").runnable(MeasureSetup()) is True
+    assert _NeedsMissingModule().runnable(MeasureSetup()) is False
+
+
+def test_available_is_false_when_the_metric_is_not_runnable() -> None:
+    assert _NeedsMissingModule().available(_static_ctx("x = 1\n")) is False
 
 
 # --------------------------------------------------------------------------- #

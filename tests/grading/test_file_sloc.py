@@ -17,6 +17,7 @@ from coding_agent_playbook.grading.types import (
     AbsoluteThreshold,
     EvalContext,
     Measurement,
+    MeasureSetup,
     ScopeDetail,
 )
 from coding_agent_playbook.metrics_gate.config import MetricConfig
@@ -43,6 +44,21 @@ def test_unavailable_when_find_spec_radon_is_none(monkeypatch: pytest.MonkeyPatc
     )
 
     assert not FileSlocMetric().available(_ctx("x = 1\n"))
+
+
+def test_runnable_only_with_radon(monkeypatch: pytest.MonkeyPatch) -> None:
+    real = importlib.util.find_spec
+    monkeypatch.setattr(
+        importlib.util,
+        "find_spec",
+        lambda name, *a: object() if name == "radon" else real(name, *a),
+    )
+    assert FileSlocMetric().runnable(MeasureSetup())
+
+    monkeypatch.setattr(
+        importlib.util, "find_spec", lambda name, *a: None if name == "radon" else real(name, *a)
+    )
+    assert not FileSlocMetric().runnable(MeasureSetup())
 
 
 def _grade(

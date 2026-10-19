@@ -21,7 +21,7 @@ from coding_agent_playbook.grading.metric import all_metrics, get_metric
 from coding_agent_playbook.grading.parse import parse_module
 from coding_agent_playbook.grading.scope import Scope
 from coding_agent_playbook.grading.static_metrics.maintainability import MaintainabilityIndexMetric
-from coding_agent_playbook.grading.types import EvalContext, Measurement
+from coding_agent_playbook.grading.types import EvalContext, Measurement, MeasureSetup
 
 _TRIVIAL = "def f():\n    return 1\n"
 
@@ -124,6 +124,23 @@ def test_maintainability_measure_without_module_is_empty() -> None:
 
 
 # --- absent path (radon not importable) -------------------------------------
+
+
+def test_maintainability_is_runnable_only_with_radon(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_find_spec = importlib.util.find_spec
+    monkeypatch.setattr(
+        importlib.util,
+        "find_spec",
+        lambda name, *args: object() if name == "radon" else real_find_spec(name, *args),
+    )
+    assert MaintainabilityIndexMetric().runnable(MeasureSetup()) is True
+
+    monkeypatch.setattr(
+        importlib.util,
+        "find_spec",
+        lambda name, *args: None if name == "radon" else real_find_spec(name, *args),
+    )
+    assert MaintainabilityIndexMetric().runnable(MeasureSetup()) is False
 
 
 def test_maintainability_available_false_without_radon(

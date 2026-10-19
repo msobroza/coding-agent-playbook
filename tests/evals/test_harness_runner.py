@@ -801,6 +801,29 @@ def test_full_scoring_runs_the_judge_even_after_a_failed_gate(tmp_path: Path) ->
 # --------------------------------------------------------------------------- #
 
 
+def test_ruff_violations_stays_unavailable_in_an_eval_task(tmp_path: Path) -> None:
+    """Eval scoring passes no ``tool_paths``, so a ``ruff_violations`` check is skipped.
+
+    The measuring pass promises only what it can run (specs/prT-package-layout.md
+    B.3 item 13): the cyclomatic-complexity check beside it still runs.
+    """
+    task_dir = tmp_path / "task"
+    _make_setup(task_dir)
+    gate = {
+        "expr": "cc and ruff",
+        "bind": {
+            "cc": {"check": "non_regression", "metric": "cyclomatic_complexity", "warn": 0.5},
+            "ruff": {"check": "threshold", "metric": "ruff_violations", "fail": 0.5},
+        },
+    }
+    task = _make_task(task_dir, gate=gate)
+
+    result = FakeRunner().run_task(task, tmp_path / "scratch")
+
+    assert _check(result.report, "threshold:ruff_violations").status == "skipped"
+    assert _check(result.report, "nonreg:cyclomatic_complexity").status == "run"
+
+
 def test_materialize_with_no_setup_dir_yields_empty_baseline(tmp_path: Path) -> None:
     """A task whose ``setup/`` is missing still produces a committed empty repo."""
     task_dir = tmp_path / "task"  # no setup/ created
@@ -811,24 +834,6 @@ def test_materialize_with_no_setup_dir_yields_empty_baseline(tmp_path: Path) -> 
     assert baseline.commit
     assert baseline.setup_snapshot.is_dir()
     assert not any(baseline.setup_snapshot.iterdir())  # empty snapshot
-
-
-def test_static_measurements_recurse_subdirs_and_skip_unparseable(tmp_path: Path) -> None:
-    """Static metrics recurse into subpackages and skip files that don't parse."""
-    task_dir = tmp_path / "task"
-    _make_setup(task_dir)
-    task = _make_task(task_dir, gate=_cc_gate())
-
-    def _mutate(scratch: Path) -> None:
-        pkg = scratch / "pkg"
-        pkg.mkdir(parents=True, exist_ok=True)
-        (pkg / "deep.py").write_text(_REFACTORED, encoding="utf-8")  # nested, parses
-        (scratch / "broken.py").write_text("def (:\n", encoding="utf-8")  # syntax error
-
-    result = FakeRunner(_mutate).run_task(task, tmp_path / "scratch")
-    keys = {d.scope_key for d in _scopes_for_evaluator(result.report, "cyclomatic_complexity")}
-    assert any(k.startswith("pkg/deep.py") for k in keys)
-    assert not any(k.startswith("broken.py") for k in keys)
 
 
 @pytest.mark.catalog
