@@ -24,7 +24,7 @@ adapter writes OpenCode's own native outputs:
   touch ``.opencode/plugin(s)/``": the adapter owns that single path, every
   other file there stays the user's, and ``opencode.json`` is never touched.
   A user file already at that path (no sentinel line) or a symlink on the way
-  is refused, never overwritten (``_owned_files``).
+  is refused, never overwritten (``generated_output.write_guard``).
   Hook advisories reach OpenCode through ``AGENTS.md``, like rules, and as the
   sections of the ``playbook-guardrails`` skill written here
   (:meth:`OpenCodeAdapter.writes_guardrails_skill`, D6).
@@ -47,12 +47,12 @@ import dataclasses
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from coding_agent_playbook.adapters._owned_files import write_engine_owned
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.skill_dirs.writer import SkillWriter
 from coding_agent_playbook.generated_output.file_identity import FileSet
 from coding_agent_playbook.generated_output.output_io import write_output_text
 from coding_agent_playbook.generated_output.symlinks import real_path
+from coding_agent_playbook.generated_output.write_guard import write_engine_owned
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT
 from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
 from coding_agent_playbook.hook_registrations import (
@@ -203,7 +203,7 @@ class OpenCodeAdapter(Adapter):
         Windows) and depend only on the hooks, never on their order. An empty
         ``REG`` writes nothing, and a stale shim is left to :meth:`stale_outputs`.
         A same-named user plugin (no sentinel line) or a symlink on the way raises
-        :class:`~._owned_files.UserOwnedFileError` and is never overwritten;
+        :class:`~.write_guard.UserOwnedFileError` and is never overwritten;
         ``playbook sync`` reports it before any adapter writes.
 
         Example: ``adapter.finalize(repo_root)`` -> ``[repo_root / OPENCODE_SHIM_PATH]``.

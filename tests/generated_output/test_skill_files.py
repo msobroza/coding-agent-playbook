@@ -11,7 +11,10 @@ from pathlib import Path, PurePath
 
 import pytest
 
-from coding_agent_playbook.adapters._skill_files import is_bytecode_cache, skill_subtree_files
+from coding_agent_playbook.generated_output.source_files import (
+    is_bytecode_cache,
+    skill_subtree_files,
+)
 
 
 @pytest.mark.parametrize(

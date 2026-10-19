@@ -10,7 +10,7 @@ that ships skills natively delegates here, differing only in the root:
 Because the bytes never depend on the root, the same skill is byte-identical in
 every root. Each directory holds ``SKILL.md`` plus byte-copies (copies, not
 symlinks) of the canonical ``scripts/`` and ``references/`` subtrees, minus
-Python bytecode caches (:mod:`coding_agent_playbook.adapters._skill_files`).
+Python bytecode caches (:mod:`coding_agent_playbook.generated_output.source_files`).
 
 A skill with member rules (ADR 0001) also gets one ``references/<rule-id>.md``
 per active member, written from ``MemberReference.text`` after the copies and
@@ -58,11 +58,11 @@ from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.adapters.skill_dirs.ownership import PriorOutput
 from coding_agent_playbook.artifacts.frontmatter import format_frontmatter
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.generated_output.sentinel import has_sentinel
+from coding_agent_playbook.generated_output.source_files import copyable_skill_files
 from coding_agent_playbook.generated_output.symlinks import (
     is_dangling_symlink,
     link_leaving,
@@ -483,7 +483,7 @@ def _copy_subtree(
     symlinks); bytecode caches (``__pycache__/``, ``*.pyc``/``*.pyo``) are
     skipped, so they never reach a skills root or the lockfile; a secret path or
     a link leaving the skill's source dir is never copied
-    (:func:`_skill_sources.copyable_skill_files` warns instead). Each recorded
+    (:func:`~.source_files.copyable_skill_files` warns instead). Each recorded
     path is the file ``copy2`` actually wrote, never a directory; a destination
     blocked by user files is skipped (see :func:`_prepare_destination`).
     """

@@ -85,7 +85,7 @@ class Adapter(ABC):
     #: lock entries get ``kind = "runtime"`` and no artifact id (§B.6), which tells
     #: guard-generated-outputs there is no source artifact to point an editor at.
     #: Each is written whole at a fixed path, so sync refuses one the user holds
-    #: (:meth:`planned_runtime_outputs`, ``_owned_files``) instead of overwriting it.
+    #: (:meth:`planned_runtime_outputs`, ``write_guard``) instead of overwriting it.
     runtime_outputs: ClassVar[tuple[str, ...]] = ()
 
     @abstractmethod
@@ -188,7 +188,7 @@ class Adapter(ABC):
         """The :attr:`runtime_outputs` :meth:`finalize` will write for ``hooks`` (repo-relative).
 
         ``playbook sync`` checks each one on the real repo before any adapter
-        writes and exits 1 when it is the user's (``_owned_files``: a same-named
+        writes and exits 1 when it is the user's (``generated_output.write_guard``: a same-named
         file without the sentinel line, a hard link, or a symlink on the way).
         The default is
         conservative, so declaring a runtime output is enough to guard it: every

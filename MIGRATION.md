@@ -47,8 +47,11 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook._toml` | `coding_agent_playbook.toml_writer` | N1 |
 | `coding_agent_playbook.adapters._agent_skill_rules` | `coding_agent_playbook.skills.naming` | A3 |
 | `coding_agent_playbook.adapters._claude_hooks` | `coding_agent_playbook.adapters.claude_code.hooks` | A8 |
+| `coding_agent_playbook.adapters._owned_files` | `coding_agent_playbook.generated_output.write_guard` | A7 |
 | `coding_agent_playbook.adapters._prior_output` | `coding_agent_playbook.adapters.skill_dirs.ownership` | A9 |
 | `coding_agent_playbook.adapters._settings_drift` | `coding_agent_playbook.adapters.claude_code.settings.drift` | N13 |
+| `coding_agent_playbook.adapters._skill_files` | `coding_agent_playbook.generated_output.source_files` | A7 |
+| `coding_agent_playbook.adapters._skill_sources` | `coding_agent_playbook.generated_output.source_files` | A7 |
 | `coding_agent_playbook.adapters._skill_writer` | `coding_agent_playbook.adapters.skill_dirs.writer` | A9 |
 | `coding_agent_playbook.adapters._skill_writer.AGENT_SKILL_DESCRIPTION_MAX_CHARS` | `coding_agent_playbook.skills.naming.AGENT_SKILL_DESCRIPTION_MAX_CHARS` | A3 |
 | `coding_agent_playbook.adapters._skill_writer.AGENT_SKILL_NAME_MAX_CHARS` | `coding_agent_playbook.skills.naming.AGENT_SKILL_NAME_MAX_CHARS` | A3 |

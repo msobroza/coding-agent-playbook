@@ -348,7 +348,9 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
+    "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
+    "coding_agent_playbook.generated_output.write_guard",
     "coding_agent_playbook.git_env",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
@@ -410,7 +412,9 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
+    "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
+    "coding_agent_playbook.generated_output.write_guard",
     "coding_agent_playbook.git_env",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
@@ -495,7 +499,9 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
+    "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
+    "coding_agent_playbook.generated_output.write_guard",
     "coding_agent_playbook.git_env",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
@@ -561,8 +567,6 @@ name = "An underscore module is imported only from inside its own package"
 type = "private_modules"
 containers = ["coding_agent_playbook"]
 ignore_imports = [
-    # A7: adapters/_skill_files.py becomes generated_output/source_files.py (after #62)
-    "coding_agent_playbook.commands._import_files -> coding_agent_playbook.adapters._skill_files",
     # CP-3: init's configure() owns --adapters (after #62)
     "coding_agent_playbook.cli.parser -> coding_agent_playbook.commands._init_adapters",
     # N15: FIXTURE_GLOBS moves to the stdlib leaf artifacts/path_classes.py
@@ -593,12 +597,6 @@ ignore_imports = [
     "coding_agent_playbook.gate_scan -> coding_agent_playbook.hook_runtime._git_parse",
     # N21: becomes hook_runtime/harness/payload.py
     "coding_agent_playbook.hook_runtime.dispatch -> coding_agent_playbook.hook_runtime.harness._payload",
-    # A7: becomes generated_output/write_guard.py (after #62)
-    "coding_agent_playbook.sync._hook_outputs -> coding_agent_playbook.adapters._owned_files",
-    "coding_agent_playbook.sync.pipeline -> coding_agent_playbook.adapters._owned_files",
-    # A7: becomes generated_output/source_files.py (after #62)
-    "coding_agent_playbook.validation.checks -> coding_agent_playbook.adapters._skill_sources",
-    "coding_agent_playbook.guard_config -> coding_agent_playbook.adapters._skill_sources",
     # A17: becomes hooks/contract/findings.py (after #62)
     "coding_agent_playbook.validation._hooks -> coding_agent_playbook.hook_policy._findings",
 ]

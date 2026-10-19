@@ -56,7 +56,6 @@ import re
 import sys
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.adapters._skill_sources import refused_skill_files
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.tables.links import LinksConfig
 from coding_agent_playbook.detector.predicate import evaluate_predicate
@@ -65,6 +64,7 @@ from coding_agent_playbook.evals.loader import (
     load_eval_task_from_dir,
 )
 from coding_agent_playbook.evals.validator import validate_tasks
+from coding_agent_playbook.generated_output.source_files import refused_skill_files
 from coding_agent_playbook.skills.naming import agent_skill_issues, has_declared_id
 from coding_agent_playbook.validation import preflight as _sync_preflight
 from coding_agent_playbook.validation._frontmatter import (

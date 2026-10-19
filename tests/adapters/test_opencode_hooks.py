@@ -20,9 +20,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
 from coding_agent_playbook.generated_output.sentinel import has_sentinel, sentinel_line
+from coding_agent_playbook.generated_output.write_guard import UserOwnedFileError
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT
 from coding_agent_playbook.hook_registrations import (
     OPENCODE_SHIM_PATH,
