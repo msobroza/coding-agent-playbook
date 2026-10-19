@@ -15,12 +15,10 @@ import re
 import sys
 from dataclasses import dataclass
 
+from coding_agent_playbook.artifacts.path_globs import fold_key
 from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
 
-__all__ = ["FOLDING_PLATFORMS", "NormalizedPath", "find_repo", "fold_key", "normalize_path"]
-
-#: Platforms whose default filesystems compare names case-insensitively (§D.2.4 step 6).
-FOLDING_PLATFORMS = frozenset({"darwin", "win32"})
+__all__ = ["NormalizedPath", "find_repo", "normalize_path"]
 
 _DRIVE_PATH = re.compile(r"^[A-Za-z]:[\\/]")
 _GITDIR_PREFIX = "gitdir:"
@@ -189,25 +187,6 @@ def normalize_path(
         exists=exists,
         nlink=nlink,
     )
-
-
-def fold_key(text: str, platform: str) -> str:
-    """``text`` as a match key: NFC + case-folded on darwin and win32, else unchanged.
-
-    ``fnmatch`` does not fold case on darwin and ``realpath`` does not fold it
-    either, while both platforms' default filesystems do; over-matching on a
-    case-sensitive volume is the safe direction for guards.
-
-    Example::
-
-        >>> fold_key(".ENV", "darwin")
-        '.env'
-    """
-    if platform not in FOLDING_PLATFORMS:
-        return text
-    import unicodedata  # only the folding platforms pay for it (§D.1)
-
-    return unicodedata.normalize("NFC", text).casefold()
 
 
 def _forward_slashes(text: str, platform: str) -> str:

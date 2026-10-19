@@ -38,7 +38,7 @@ _HOME = engine_module_file("coding_agent_playbook.config.files")
 _ALLOWED = frozenset(
     {
         # GC-3 (spec B.13): the writer side, from the runtime's schema module
-        engine_module_file("coding_agent_playbook.guard_config"),
+        engine_module_file("coding_agent_playbook.hooks.guard_config.compile"),
     }
 )
 #: The hook runtime keeps its own spellings: it must not import the sync-side config/
