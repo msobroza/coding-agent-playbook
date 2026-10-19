@@ -40,18 +40,18 @@ from coding_agent_playbook.adapters._settings_plan import (
     DesiredGroup,
     SettingsPlan,
     SettingsShapeError,
-    canonical_json,
     json_pointer,
     plan_settings,
     scoped_lock_entry,
 )
+from coding_agent_playbook.lockfile.canonical_json import canonical_json
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
     from pathlib import Path
 
     from coding_agent_playbook.adapters._json_spans import Splice
-    from coding_agent_playbook.lockfile import LockEntry
+    from coding_agent_playbook.lockfile.model import LockEntry
 
 __all__ = [
     "CLAUDE_SETTINGS_PATH",
@@ -64,7 +64,6 @@ __all__ = [
     "SettingsIO",
     "SettingsMergeError",
     "Splicer",
-    "canonical_json",
     "decode_settings",
     "json_pointer",
     "merge_managed_entries",

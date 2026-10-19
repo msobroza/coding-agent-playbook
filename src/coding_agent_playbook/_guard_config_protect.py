@@ -34,14 +34,14 @@ from typing import TYPE_CHECKING, Any, Final
 # of the renderer (jinja2, yaml), and no adapter import can cycle back here.
 from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_CODE_COMPOSITES
-from coding_agent_playbook.lockfile import merge_provenance
+from coding_agent_playbook.lockfile.model import merge_provenance
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, Sequence
     from pathlib import Path
 
     from coding_agent_playbook.adapters.base import Adapter
-    from coding_agent_playbook.lockfile import LockEntry, Provenance
+    from coding_agent_playbook.lockfile.model import LockEntry, Provenance
 
 __all__ = [
     "COMPOSITE_SINGLETONS",

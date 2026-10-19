@@ -304,7 +304,7 @@ coding-agent-playbook/
 │   ├── _sentinel.py                        # SENTINEL, import-light (Section 4.3)
 │   ├── _pep503.py                          # PEP 503 package-name normalization
 │   ├── overlays.py                         # overlay resolution
-│   ├── lockfile.py                         # .coding-agent-playbook.lock
+│   ├── lockfile/                           # .coding-agent-playbook.lock: model, drift, canonical_json
 │   ├── gitignore.py                        # managed .gitignore block ([output] commit = false)
 │   ├── git_client.py                       # GitClient protocol: read-only tracked/staged queries
 │   ├── _file_identity.py                   # FileSet: stale-vs-written by file identity (§4.2 step 9)
@@ -355,8 +355,9 @@ coding-agent-playbook/
 │   │   ├── test_overlays.py
 │   │   ├── test_eval_tasks.py
 │   │   ├── test_sources.py
-│   │   ├── test_types.py
-│   │   └── test_lockfile.py
+│   │   └── test_types.py
+│   ├── lockfile/
+│   │   └── test_model.py
 │   ├── hook_runtime/                       # dispatcher, normalization, decisions, Stop coordinator
 │   ├── hooks/                              # one module per shipped hook, golden payloads
 │   ├── security/
@@ -3036,7 +3037,7 @@ SemVer applied to the **rendered output format**, not the Python API:
 ### 14.3 Pinning policy
 Consumers pin to a minor range: `coding-agent-playbook>=0.4.0,<0.5.0`. Overlays pin to the engine's minor range. Under `[output] commit = true`, Dependabot / Renovate bumps trigger a `playbook sync` and the regenerated diff lands in the PR for review. Under the default `commit = false` the PR only carries the dependency bump (rendered output is gitignored): reviewers read the engine/overlay release notes, or render locally before and after the bump.
 ### 14.4 Lockfile
-`.coding-agent-playbook.lock` is a TOML file written by `playbook sync` (write mode) through the configured `StateSource` — local state under the default `[output] commit = false`, committed with the output under `commit = true`. Schema 2 (`commands/_sync_lockfile.py` `LOCKFILE_SCHEMA`; `lockfile.py` `Lockfile` / `LockEntry` / `Provenance`) records three top-level keys and one `[[entries]]` table per generated file, sorted by path, each carrying the file's **provenance** — which artifact produced it and which adapter wrote it:
+`.coding-agent-playbook.lock` is a TOML file written by `playbook sync` (write mode) through the configured `StateSource` — local state under the default `[output] commit = false`, committed with the output under `commit = true`. Schema 2 (`commands/_sync_lockfile.py` `LOCKFILE_SCHEMA`; `lockfile/model.py` `Lockfile` / `LockEntry` / `Provenance`) records three top-level keys and one `[[entries]]` table per generated file, sorted by path, each carrying the file's **provenance** — which artifact produced it and which adapter wrote it:
 ```toml
 schema_version = 2
 engine_version = "0.1.0a0"            # [engine] version from the consumer config
@@ -3272,7 +3273,7 @@ The `coding_agent_playbook/evals/` package ships `task.py`, `loader.py`, `valida
 - `test_detector.py` — synthetic `pyproject.toml` files in `tests/fixtures/repos/`; assert facts dict matches expected.
 - `test_renderer.py` — render templates with hand-crafted context; assert exact output.
 - `test_overlays.py` — registration, ordering, override resolution.
-- `test_lockfile.py` — hash compute, drift detection.
+- `lockfile/test_model.py` — hash compute, drift detection.
 - `test_skill_membership.py`, `test_skill_document.py` — skill composition (§6.3.3): membership and gating, the composed description and its `and N more` truncation, the references index, the reference text and the Where section. `tests/cli/test_validate_skills.py` pins the V1–V14 and W1–W3 lines of `playbook validate` (§12.6), and `tests/cli/test_sync_skill_references.py` runs a sync end to end.
 - The docs-consistency tests (`tests/unit/test_docs_*.py`) read SPEC, README, MIGRATION, `catalog/README.md` and `CONTEXT.md`, never engine behaviour: `test_docs_glossary.py` pins the glossary pointer, every `CONTEXT.md` term, the `skill` field of §6.1 and the core skills of §6.3, and `test_docs_migration_skills.py` the v0.21 MIGRATION section, quoting `SCOPED_RULE_NEEDS_SKILL_MESSAGE` verbatim.
 - `test_gitignore.py` — managed-block entries (skill-dir collapse under any root, escaping verified against real git), append/replace/idempotence, CRLF and missing-final-newline preservation, malformed markers, removal.

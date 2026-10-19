@@ -32,7 +32,7 @@ from coding_agent_playbook.hook_runtime.paths import fold_key
 from coding_agent_playbook.hook_runtime.policy import ENGINE_DEADLINE_CAP_MS
 from coding_agent_playbook.hook_runtime.shell import ShellConfig
 from coding_agent_playbook.hook_runtime.state import StateStore
-from coding_agent_playbook.lockfile import Lockfile
+from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 from coding_agent_playbook.types import HookMatcher
 from tests.engine_modules import engine_module

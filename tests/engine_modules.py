@@ -46,8 +46,6 @@ _REQUIREMENT_NAME: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 STDLIB_LEAVES: Final = frozenset(
     {
         "_atomic_io",
-        "_canonical_json",
-        "_lock_drift",
         "_pep503",
         "_pyproject_deps",
         "_sentinel",

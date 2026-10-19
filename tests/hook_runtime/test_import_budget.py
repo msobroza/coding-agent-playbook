@@ -512,7 +512,7 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
 
 # --- K5 step 4: the briefing and the drift stage (§D.1 rows: lockfile + tomllib) ------
 
-_LOCKFILE_MODULE: Final = engine_module("coding_agent_playbook.lockfile")
+_LOCKFILE_MODULE: Final = engine_module("coding_agent_playbook.lockfile.model")
 _BRIEFING: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._briefing_probes")
 _DRIFT_FAST_PATH: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._drift")
 

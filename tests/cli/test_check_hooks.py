@@ -19,7 +19,7 @@ from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.claude_settings import CLAUDE_SETTINGS_PATH
 from coding_agent_playbook.commands import check as _check
 from coding_agent_playbook.hooks_config import HooksConfig
-from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
+from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from tests.hook_samples import resolved_hook, write_hook
 

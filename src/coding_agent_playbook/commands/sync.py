@@ -106,7 +106,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.commands._validation import ValidationError
     from coding_agent_playbook.git_client import GitClient
-    from coding_agent_playbook.lockfile import Lockfile
+    from coding_agent_playbook.lockfile.model import Lockfile
 
     #: The validate gate's signature: every finding for ``ctx`` (none = go on).
     ValidateFn = Callable[[SyncContext], Sequence[ValidationError]]

@@ -77,7 +77,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.adapters.claude_settings import MergeResult
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hooks_config import HooksConfig
-    from coding_agent_playbook.lockfile import LockEntry, Lockfile
+    from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
     from coding_agent_playbook.renderer import RuleRegistry
     from coding_agent_playbook.types import Prompt, Rule, Skill
 

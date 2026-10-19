@@ -61,7 +61,7 @@ from coding_agent_playbook.hooks_config import (
     HooksConfig,
     SecretsGuardrails,
 )
-from coding_agent_playbook.lockfile import LockEntry, Provenance
+from coding_agent_playbook.lockfile.model import LockEntry, Provenance
 from coding_agent_playbook.security.patterns import (
     SECRET_CONTENT_RULES,
     SECRET_GLOB_EXEMPT,
