@@ -1,14 +1,21 @@
-"""Unit tests for the ``.pre-commit-config.yaml`` merge (``commands/_precommit_merge.py``)."""
+"""Unit tests for the ``.pre-commit-config.yaml`` writer and merge (``precommit.py``)."""
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+import pytest
 import yaml
 
-from coding_agent_playbook.commands._precommit_merge import (
+from coding_agent_playbook.precommit import (
     DEFAULT_STAGES_NOTE,
     LEGACY_HOOK_WARNING,
     merge_pre_commit,
+    write_pre_commit,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # The pre-v0.16 ``playbook init`` starter (abridged to the playbook + mypy hooks).
 LEGACY_STARTER = """\
@@ -133,3 +140,34 @@ def test_commit_true_appends_legacy_hook_once_without_messages() -> None:
     assert merged.messages == ()
     again = merge_pre_commit(merged.content, output_commit=True)
     assert again.content == merged.content
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_write_pre_commit_starter_follows_the_booleans_it_is_given(
+    tmp_path: Path, enabled: bool
+) -> None:
+    """init passes the template switches; precommit.py reads no config itself (CP-D4)."""
+    path, messages = write_pre_commit(tmp_path, commit_trailers=enabled, commitizen=enabled)
+
+    assert path == tmp_path / ".pre-commit-config.yaml"
+    assert messages == ()
+    hooks = _hooks(path.read_text(encoding="utf-8"))
+    assert ("coding-agent-playbook-commit-trailers" in hooks) is enabled
+    assert ("coding-agent-playbook-commit-msg" in hooks) is enabled
+
+
+def test_write_pre_commit_merges_an_existing_config_and_returns_its_messages(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / ".pre-commit-config.yaml"
+    target.write_text(LEGACY_APPENDED, encoding="utf-8")
+
+    path, messages = write_pre_commit(tmp_path, commit_trailers=True, commitizen=True)
+
+    hooks = _hooks(path.read_text(encoding="utf-8"))
+    assert set(hooks) == {
+        "mine",
+        "coding-agent-playbook-autosync",
+        "coding-agent-playbook-no-generated-output",
+    }
+    assert messages == (DEFAULT_STAGES_NOTE,)
