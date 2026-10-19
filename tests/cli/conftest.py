@@ -40,9 +40,9 @@ def _stub_uv_sync_for_cli(monkeypatch: pytest.MonkeyPatch) -> None:
             return subprocess.CompletedProcess(args, 0, "", "")
         return real_run(args, **kwargs)
 
-    monkeypatch.setattr("coding_agent_playbook.evals.runner.subprocess.run", _stub_run)
+    monkeypatch.setattr("coding_agent_playbook.evals.run.harness_runner.subprocess.run", _stub_run)
 
     def _stub_which(binary: str, *args: Any, **kwargs: Any) -> str | None:
         return "/fake/uv" if binary == "uv" else real_which(binary, *args, **kwargs)
 
-    monkeypatch.setattr("coding_agent_playbook.evals.runner.shutil.which", _stub_which)
+    monkeypatch.setattr("coding_agent_playbook.evals.run.harness_runner.shutil.which", _stub_which)

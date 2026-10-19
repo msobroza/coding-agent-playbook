@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.git_env import REPO_LOCATION_GIT_VARS
+from coding_agent_playbook.evals.run.git_env import REPO_LOCATION_GIT_VARS
 from tests.attendance_env import ATTENDANCE_ENV_VARS
 from tests.hook_samples import write_hook
 

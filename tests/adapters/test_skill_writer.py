@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.adapters import _skill_files
 from coding_agent_playbook.adapters.registry import installed_output_locations
 from coding_agent_playbook.adapters.skill_dirs import writer as _skill_writer
 from coding_agent_playbook.adapters.skill_dirs.ownership import judging_leftovers_with
@@ -27,6 +26,7 @@ from coding_agent_playbook.agent_harness.manifest import read_manifest
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.generated_output import source_files
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
 from coding_agent_playbook.skills.naming import agent_skill_issues, has_declared_id, skill_id_of
@@ -947,7 +947,7 @@ def test_sync_removes_bytecode_an_earlier_engine_copied(
     repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_EVERY_SKILL_ROOT)
     _seed_skill_with_bytecode(repo)
     with monkeypatch.context() as patch:  # the pre-fix engine: copy every file
-        patch.setattr(_skill_files, "is_bytecode_cache", lambda _relative: False)
+        patch.setattr(source_files, "is_bytecode_cache", lambda _relative: False)
         assert _sync.execute(repo, git=FakeGitClient()) == 0
     assert _bytecode_paths_anywhere(repo) != []
 

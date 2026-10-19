@@ -11,7 +11,7 @@ import os
 import shutil
 from pathlib import Path
 
-from coding_agent_playbook.adapters._skill_files import skill_subtree_files
+from coding_agent_playbook.generated_output.source_files import skill_subtree_files
 
 
 def harness_root_for(absolute: Path, relative: str) -> Path:

@@ -43,9 +43,9 @@ from coding_agent_playbook.hook_runtime.registry import (
     resolve_handler,
 )
 from coding_agent_playbook.hook_runtime.session import SessionState
+from coding_agent_playbook.hook_runtime.shell.wrapper_policy import with_wrapper_prefixes
 from coding_agent_playbook.hook_runtime.state import StateStore
 from coding_agent_playbook.hook_runtime.watchdog import Watchdog
-from coding_agent_playbook.hook_runtime.wrapper_policy import with_wrapper_prefixes
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence

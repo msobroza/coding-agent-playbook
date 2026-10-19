@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.git_env import REPO_LOCATION_GIT_VARS
+from coding_agent_playbook.evals.run.git_env import REPO_LOCATION_GIT_VARS
 from tests._catalog import REPO_ROOT
 from tests.conftest import apply_hermetic_git_env
 

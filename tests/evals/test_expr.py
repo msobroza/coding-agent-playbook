@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.evals._expr import (
+from coding_agent_playbook.evals.compile._expr import (
     And,
     ExprError,
     Name,

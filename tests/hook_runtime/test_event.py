@@ -31,7 +31,7 @@ from coding_agent_playbook.hook_runtime.event import (
     ToolResponse,
     sanitize_session_id,
 )
-from coding_agent_playbook.hook_runtime.shell import ShellConfig
+from coding_agent_playbook.hook_runtime.shell.parse import ShellConfig
 from coding_agent_playbook.hooks.resolution.tables import (
     HOOK_CAPABLE_ADAPTERS,
     HOOK_EVENTS,
@@ -255,7 +255,7 @@ def test_building_a_shell_call_imports_no_shell_parser() -> None:
         "shell=ShellSource(text='rm -rf x'))"
     )
 
-    assert engine_module("coding_agent_playbook.hook_runtime.shell") not in loaded
+    assert engine_module("coding_agent_playbook.hook_runtime.shell.parse") not in loaded
     assert "shlex" not in loaded
 
 
