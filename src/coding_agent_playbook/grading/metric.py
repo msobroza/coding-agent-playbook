@@ -35,7 +35,7 @@ from coding_agent_playbook.grading.scope import Scope
 
 if TYPE_CHECKING:
     from coding_agent_playbook.grading.normalizer import Normalizer
-    from coding_agent_playbook.grading.types import EvalContext, Measurement
+    from coding_agent_playbook.grading.types import EvalContext, Measurement, MeasureSetup
 
 #: Entry-point group for out-of-tree metrics.
 ENTRY_POINT_GROUP = "coding_agent_playbook.metrics"
@@ -103,15 +103,31 @@ class Metric(ABC):
     #: diff base, so the candidate grades as ``kind="new"`` (absolute).
     diff_based: bool = False
 
+    def runnable(self, setup: MeasureSetup) -> bool:
+        """True when ``setup`` can run this metric: the environment half of :meth:`available`.
+
+        The declared dependency (if any) must be importable. A family whose tool
+        or dependency comes from elsewhere overrides it (``ruff_violations``
+        needs ``setup.tool_paths["ruff"]``). A measuring pass promises exactly
+        the metrics that are runnable
+        (:func:`~coding_agent_playbook.grading.measuring.measured_metrics`).
+
+        Example::
+
+            >>> get_metric("cyclomatic_complexity").runnable(MeasureSetup())
+            True
+        """
+        return self.requires is None or find_spec(self.requires) is not None
+
     def available(self, ctx: EvalContext) -> bool:
         """True when this metric can run in ``ctx``.
 
-        The declared dependency (if any) must be importable, and the needed
-        context slot must be present - execution metrics (``needs_project``) need
+        ``ctx``'s tools must run it (:meth:`runnable`), and the needed context
+        slot must be present - execution metrics (``needs_project``) need
         ``ctx.project``; static metrics need ``ctx.module``. Families that gate on
-        a different slot (e.g. radon for MI) override this.
+        a different slot override this.
         """
-        if self.requires is not None and find_spec(self.requires) is None:
+        if not self.runnable(ctx.measure_setup):
             return False
         if self.needs_project:
             return ctx.project is not None

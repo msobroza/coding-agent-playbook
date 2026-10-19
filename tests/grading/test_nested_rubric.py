@@ -11,9 +11,11 @@ rubric's ``name``. That single measurement can then be graded by a
 rubric - rubrics nest.
 
 These assert the child's ``measure`` shape, the parent's higher-is-better gate
-(strict-below: a child composite ``< 0.8`` fails, ``>= 0.8`` passes), and that a
+(strict-below: a child composite ``< 0.8`` fails, ``>= 0.8`` passes), that a
 self-referential rubric (a rubric measuring itself) raises ``ValueError`` rather
-than recursing forever.
+than recursing forever, and that the measuring pass's promise
+(``EvalContext.measured_metrics``) names a nested rubric's leaves, without which
+a check inside the nested rubric would be skipped.
 """
 
 from __future__ import annotations
@@ -21,11 +23,12 @@ from __future__ import annotations
 import pytest
 
 from coding_agent_playbook.grading.check import Check, MeasurementSet, ThresholdCheck
+from coding_agent_playbook.grading.measuring import measured_metrics, referenced_metrics
 from coding_agent_playbook.grading.metric import Metric
 from coding_agent_playbook.grading.normalizer import Identity, PercentNormalizer, RampNormalizer
 from coding_agent_playbook.grading.rubric import Rubric
 from coding_agent_playbook.grading.scope import CostTier, Determinism, Scope
-from coding_agent_playbook.grading.types import CheckResult, EvalContext, Measurement
+from coding_agent_playbook.grading.types import CheckResult, EvalContext, Measurement, MeasureSetup
 
 
 class _CC(Metric):
@@ -33,9 +36,6 @@ class _CC(Metric):
     scope = Scope.FUNCTION
     normalizer = RampNormalizer(good=5, bad=20)
     requires = None
-
-    def available(self, ctx: EvalContext) -> bool:
-        return True
 
     def measure(self, ctx: EvalContext) -> list[Measurement]:
         return []
@@ -47,18 +47,27 @@ class _Cov(Metric):
     normalizer = PercentNormalizer()
     requires = None
 
-    def available(self, ctx: EvalContext) -> bool:
-        # Forced True so the child Rubric's ThresholdCheck runs on a bare ctx
-        # (no module/project) - these tests exercise nesting, not ctx-slot gating.
-        return self.needs_project is False or ctx.project is not None
-
     def measure(self, ctx: EvalContext) -> list[Measurement]:
         return []
+
+
+def _child() -> Rubric:
+    return Rubric(
+        [ThresholdCheck(_Cov(), warn=0.8, fail=0.4, weight=1.0, required=False)],
+        name="child",
+    )
+
+
+def _promised(*checks: Check) -> frozenset[str]:
+    """What the measuring pass promises for a tree of ``checks``, nested rubrics' leaves included."""
+    return measured_metrics(referenced_metrics(list(checks), nested=True), MeasureSetup())
 
 
 def _ctx(
     candidate: list[Measurement] | None = None,
     baseline: list[Measurement] | None = None,
+    *,
+    measured: frozenset[str] = frozenset(),
 ) -> EvalContext:
     return EvalContext(
         module=None,
@@ -66,6 +75,7 @@ def _ctx(
         label="nested",
         candidate_measurements=candidate,
         baseline_measurements=baseline,
+        measured_metrics=measured,
     )
 
 
@@ -104,13 +114,25 @@ def test_needs_project_when_a_child_check_is_execution_tier() -> None:
     assert rubric.needs_project is True
 
 
+def test_the_pass_promises_a_nested_rubric_and_its_leaves() -> None:
+    child = _child()
+
+    assert _promised(ThresholdCheck(child, fail=0.8)) == {"child", "coverage"}
+
+
+def test_a_nested_leaf_left_out_of_the_promise_is_skipped() -> None:
+    child = _child()
+    # Without "coverage" the child's only check is skipped: no composite, so the
+    # child's value falls back to float(passed), a vacuous 1.0 instead of 0.6.
+    leafless = _ctx(candidate=[_cov("a.py", 60.0)], measured=frozenset({"child"}))
+
+    assert [m.value for m in child.measure(leafless)] == [1.0]
+
+
 def test_child_measure_returns_one_composite_measurement() -> None:
-    child = Rubric(
-        [ThresholdCheck(_Cov(), warn=0.8, fail=0.4, weight=1.0, required=False)],
-        name="child",
-    )
+    child = _child()
     # coverage=60 -> PercentNormalizer score 0.6; that is the child composite.
-    ctx = _ctx(candidate=[_cov("a.py", 60.0)])
+    ctx = _ctx(candidate=[_cov("a.py", 60.0)], measured=_promised(ThresholdCheck(child)))
     out = child.measure(ctx)
     assert len(out) == 1
     (m,) = out
@@ -120,43 +142,41 @@ def test_child_measure_returns_one_composite_measurement() -> None:
 
 
 def test_parent_gate_fails_when_child_composite_below_bound() -> None:
-    child = Rubric(
-        [ThresholdCheck(_Cov(), warn=0.8, fail=0.4, weight=1.0, required=False)],
-        name="child",
-    )
+    child = _child()
+    parent = Rubric([ThresholdCheck(child, fail=0.8, required=True)])
+    promised = _promised(*parent.checks)
     # Child composite = 0.6 (< 0.8).
-    child_measurement = child.measure(_ctx(candidate=[_cov("a.py", 60.0)]))
+    child_measurement = child.measure(_ctx(candidate=[_cov("a.py", 60.0)], measured=promised))
     ms = MeasurementSet(child_measurement, None)
 
     # Parent grades the child composite (Identity-normalized) with fail=0.8.
-    parent = Rubric([ThresholdCheck(child, fail=0.8, required=True)])
-    report = parent.evaluate(_ctx(), ms)
+    report = parent.evaluate(_ctx(measured=promised), ms)
     assert report.passed is False
     assert report.fail_count == 1
 
 
 def test_parent_gate_passes_when_child_composite_at_or_above_bound() -> None:
-    child = Rubric(
-        [ThresholdCheck(_Cov(), warn=0.8, fail=0.4, weight=1.0, required=False)],
-        name="child",
-    )
+    child = _child()
+    parent = Rubric([ThresholdCheck(child, fail=0.8, required=True)])
+    promised = _promised(*parent.checks)
     # coverage=100 -> score 1.0 (>= 0.8).
-    child_measurement = child.measure(_ctx(candidate=[_cov("a.py", 100.0)]))
+    child_measurement = child.measure(_ctx(candidate=[_cov("a.py", 100.0)], measured=promised))
     ms = MeasurementSet(child_measurement, None)
 
-    parent = Rubric([ThresholdCheck(child, fail=0.8, required=True)])
-    report = parent.evaluate(_ctx(), ms)
+    report = parent.evaluate(_ctx(measured=promised), ms)
     assert report.passed is True
     assert report.fail_count == 0
+    assert [check.status for check in report.checks] == ["run"]
 
 
 def test_measure_uses_baseline_measurements_from_ctx() -> None:
     # A non-regression-style child reads ctx.baseline_measurements too.
-    child = Rubric(
-        [ThresholdCheck(_Cov(), warn=0.8, fail=0.4, weight=1.0, required=False)],
-        name="child",
+    child = _child()
+    ctx = _ctx(
+        candidate=[_cov("a.py", 100.0)],
+        baseline=[_cov("a.py", 50.0)],
+        measured=_promised(ThresholdCheck(child)),
     )
-    ctx = _ctx(candidate=[_cov("a.py", 100.0)], baseline=[_cov("a.py", 50.0)])
     (m,) = child.measure(ctx)
     # ThresholdCheck is absolute ⇒ baseline is ignored, score is 1.0.
     assert m.value == 1.0
@@ -204,7 +224,7 @@ def test_measure_memoizes_per_ctx() -> None:
     # back to float(passed). The point is that two measure() calls on the SAME
     # ctx do not rebuild the report twice.
     child = Rubric([ThresholdCheck(_Counting(), warn=1.0, required=False)], name="memo")
-    ctx = _ctx(candidate=[])
+    ctx = _ctx(candidate=[], measured=_promised(ThresholdCheck(child)))
     first = child.measure(ctx)
     second = child.measure(ctx)
     assert first == second

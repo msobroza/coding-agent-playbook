@@ -263,8 +263,10 @@ class _MetricCheck(Check):
             self.cost = CostTier.DETERMINISTIC
 
     def available(self, ctx: EvalContext) -> bool:
-        """Delegate to the underlying metric (dependency + ctx-slot gating)."""
-        return self.metric.available(ctx)
+        """A judged metric needs its judge; any other was measured by this run's pass, or not."""
+        if self.metric.needs_judge:
+            return self.metric.available(ctx)
+        return self.metric.name in ctx.measured_metrics
 
     def grade(self, ctx: EvalContext, measurements: MeasurementSet) -> CheckResult:
         """Grade every candidate scope of ``self.metric`` into one result.

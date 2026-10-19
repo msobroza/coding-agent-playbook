@@ -328,7 +328,14 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.lockfile.managed_drift` | `coding_agent_playbook.lockfile.drift.managed_drift` | N5 |
 | `coding_agent_playbook.lockfile.parse_json_document` | `coding_agent_playbook.lockfile.drift.parse_json_document` | N5 |
 | `coding_agent_playbook.metrics_config` | `coding_agent_playbook.metrics_gate.config` | N22 |
+| `coding_agent_playbook.metrics_gate.inputs.IGNORED_DIRS` | `coding_agent_playbook.grading.measuring.IGNORED_DIRS` | B8 |
+| `coding_agent_playbook.metrics_gate.inputs.MAX_FILE_BYTES` | `coding_agent_playbook.grading.types.MAX_FILE_BYTES` | B8 |
+| `coding_agent_playbook.metrics_gate.inputs.SourceMeter` | `coding_agent_playbook.grading.measuring.SourceMeter` | B8 |
+| `coding_agent_playbook.metrics_gate.inputs.decode_source_blob` | `coding_agent_playbook.grading.measuring.decode_source_blob` | B8 |
 | `coding_agent_playbook.metrics_gate.run.CONFIG_FILENAME` | `coding_agent_playbook.config.files.CONFIG_FILENAME` | B2 |
+| `coding_agent_playbook.metrics_gate.run.MAX_FILE_BYTES` | `coding_agent_playbook.grading.types.MAX_FILE_BYTES` | B8 |
+| `coding_agent_playbook.metrics_gate.suite.ProjectFactory` | `coding_agent_playbook.grading.execution_metrics.project.ProjectFactory` | B8 |
+| `coding_agent_playbook.metrics_gate.suite.SUITE_LABEL` | `coding_agent_playbook.grading.measuring.SUITE_LABEL` | B8 |
 | `coding_agent_playbook.orchestrator.Collision` | `coding_agent_playbook.catalog.resolve.Collision` | A5 |
 | `coding_agent_playbook.orchestrator.OverlayResolver` | `coding_agent_playbook.catalog.resolve.OverlayResolver` | A5 |
 | `coding_agent_playbook.orchestrator.SyncContext` | `coding_agent_playbook.validation.context.SyncContext` | A5 |

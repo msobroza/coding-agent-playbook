@@ -1,0 +1,36 @@
+# B8 (#111, specs/prT-package-layout.md §8 B.11): the grading kernel's one measuring
+# pass, grading/measuring.py, takes the tree walk, the per-file meter and the suite
+# label that the metrics gate held; the per-file byte cap joins MeasureSetup in
+# grading/types.py, the gate drops it from its __all__, and ProjectFactory moves beside
+# ProjectHandle. Not a module move: these entries keep MIGRATION.md's table and a stale
+# import of an old name in step with that.
+
+[[names]]
+pr = "B8"
+old = "coding_agent_playbook.metrics_gate.inputs"
+new = "coding_agent_playbook.grading.measuring"
+names = ["IGNORED_DIRS", "SourceMeter", "decode_source_blob"]
+
+[[names]]
+pr = "B8"
+old = "coding_agent_playbook.metrics_gate.inputs"
+new = "coding_agent_playbook.grading.types"
+names = ["MAX_FILE_BYTES"]
+
+[[names]]
+pr = "B8"
+old = "coding_agent_playbook.metrics_gate.run"
+new = "coding_agent_playbook.grading.types"
+names = ["MAX_FILE_BYTES"]
+
+[[names]]
+pr = "B8"
+old = "coding_agent_playbook.metrics_gate.suite"
+new = "coding_agent_playbook.grading.measuring"
+names = ["SUITE_LABEL"]
+
+[[names]]
+pr = "B8"
+old = "coding_agent_playbook.metrics_gate.suite"
+new = "coding_agent_playbook.grading.execution_metrics.project"
+names = ["ProjectFactory"]

@@ -24,7 +24,7 @@ from coding_agent_playbook.grading.scope import Scope
 from coding_agent_playbook.grading.types import Measurement
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.grading.types import EvalContext
+    from coding_agent_playbook.grading.types import EvalContext, MeasureSetup
 
 __all__ = ["FileSlocMetric"]
 
@@ -49,9 +49,19 @@ class FileSlocMetric(Metric):
     normalizer = RampNormalizer(good=300, bad=800)
     requires = "radon"
 
+    def runnable(self, setup: MeasureSetup) -> bool:
+        """Only with radon importable (looked up at call time).
+
+        Example::
+
+            >>> FileSlocMetric().runnable(MeasureSetup())  # radon is an extra
+            False
+        """
+        return importlib.util.find_spec("radon") is not None
+
     def available(self, ctx: EvalContext) -> bool:
         """Only with radon importable and a parsed module."""
-        return importlib.util.find_spec("radon") is not None and ctx.module is not None
+        return self.runnable(ctx.measure_setup) and ctx.module is not None
 
     def measure(self, ctx: EvalContext) -> list[Measurement]:
         return _measure(ctx)

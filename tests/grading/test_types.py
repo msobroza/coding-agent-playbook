@@ -12,9 +12,11 @@ from coding_agent_playbook.grading.types import (
     EvalContext,
     EvaluationReport,
     Measurement,
+    MeasureSetup,
     RegressionPolicy,
     ResolvedPolicy,
     ScopeDetail,
+    ToolSetup,
 )
 
 
@@ -86,6 +88,25 @@ def test_eval_context_static_fields_and_reserved() -> None:
     assert ctx.judge is None
     assert ctx.artifact is None
     assert ctx.samples == 1
+
+
+def test_measure_setup_defaults_to_no_tools_and_a_one_megabyte_cap() -> None:
+    setup = MeasureSetup()
+    assert (dict(setup.tool_paths), setup.tool_setup, setup.max_file_bytes) == (
+        {},
+        ToolSetup(),
+        1_000_000,
+    )
+    assert _is_frozen(MeasureSetup)
+
+
+def test_eval_context_measure_setup_carries_its_tools() -> None:
+    tools = ToolSetup(timeout_s=3.0)
+    ctx = EvalContext(
+        module=None, source="", label="a.py", tool_paths={"ruff": "/r"}, tool_setup=tools
+    )
+    assert ctx.measure_setup == MeasureSetup(tool_paths={"ruff": "/r"}, tool_setup=tools)
+    assert ctx.measured_metrics == frozenset()
 
 
 def test_cost_tier_ordering() -> None:
