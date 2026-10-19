@@ -55,6 +55,7 @@ from coding_agent_playbook.adapters.claude_settings import (
 from coding_agent_playbook.commands import _sync_hook_local
 from coding_agent_playbook.commands._sync_lockfile import HookDispatch
 from coding_agent_playbook.commands._sync_output import shared_outputs
+from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.guard_config import (
     SYNC_OUTPUT_LOCATIONS,
     DetectInputs,
@@ -78,7 +79,6 @@ from coding_agent_playbook.hook_policy import (
     resolve_effective_hooks,
 )
 from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH, stop_stage_records
-from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.lockfile.model import Provenance
 from coding_agent_playbook.orchestrator import engine_package_of
 

@@ -41,7 +41,6 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.config import parse_metrics_config
 from coding_agent_playbook.evaluators._metrics_inputs import (
     GIT_PREFIX,
     JSON_PREFIX,
@@ -80,6 +79,7 @@ from coding_agent_playbook.evaluators.policy import metric_check, resolve_metric
 from coding_agent_playbook.evaluators.rubric import Rubric
 from coding_agent_playbook.evaluators.tool_runner import MemoToolRunner, subprocess_tool_runner
 from coding_agent_playbook.evaluators.types import EvalContext, MetricConfig, ToolSetup
+from coding_agent_playbook.metrics_config import parse_metrics_config
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence

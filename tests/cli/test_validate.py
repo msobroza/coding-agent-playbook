@@ -62,27 +62,61 @@ def test_validate_flags_applies_if_unknown_fact(tmp_path, make_synthetic_repo, c
     assert "orm_version" in out
 
 
-def test_validate_flags_prompt_rule_call_not_in_includes_rules(
-    tmp_path, make_synthetic_repo, capsys
-):
-    repo = make_synthetic_repo(tmp_path)
+def _write_repo_prompt(repo: Path, filename: str, frontmatter: str, body: str) -> None:
+    """Write ``playbook/prompts/<filename>`` with prompt ``bad-prompt``'s frontmatter + ``body``."""
     prompts_dir = repo / "playbook" / "prompts"
     prompts_dir.mkdir(parents=True, exist_ok=True)
-    (prompts_dir / "bad-prompt.md").write_text(
-        "---\n"
-        "id: bad-prompt\n"
-        "name: Bad\n"
-        "description: Bad\n"
-        "slash: bad\n"
-        "---\n"
-        'Some text {{ rule("python-style") }} more text.\n',
+    (prompts_dir / filename).write_text(
+        f"---\nid: bad-prompt\nname: Bad\ndescription: Bad\nslash: bad\n{frontmatter}---\n{body}",
         encoding="utf-8",
+    )
+
+
+def test_validate_rejects_any_rule_call_in_a_prompt(tmp_path, make_synthetic_repo, capsys):
+    """D15: even a call to a rule ``includes_rules`` lists fails, with the migration message."""
+    repo = make_synthetic_repo(tmp_path)
+    _write_repo_prompt(
+        repo,
+        "bad-prompt.md.j2",
+        "includes_rules:\n  - python-typing\n",
+        'Some text {{ rule("python-typing") }} more text.\n',
     )
     rc = _validate.run(_ns(repo))
     assert rc == 1
     out = capsys.readouterr().out
-    assert "python-style" in out
-    assert "includes_rules" in out
+    assert (
+        "FAIL " + str(repo / "playbook" / "prompts" / "bad-prompt.md.j2") + ": body calls "
+        '{{ rule("python-typing") }}; prompts no longer inline rules. Remove the call and keep '
+        "'python-typing' in includes_rules: Claude Code and OpenCode commands then point at "
+        "its skill, Continue appends its text\n"
+    ) in out
+    assert "validation failed with 1 error(s)" in out
+
+
+def test_validate_flags_includes_rules_naming_no_rule(tmp_path, make_synthetic_repo, capsys):
+    repo = make_synthetic_repo(tmp_path)
+    _write_repo_prompt(repo, "bad-prompt.md", "includes_rules:\n  - python-typng\n", "Body.\n")
+
+    assert _validate.run(_ns(repo)) == 1
+    assert (
+        "includes_rules names 'python-typng', which is no rule in core, an enabled overlay "
+        "or playbook/rules/; did you mean 'python-typing'?"
+    ) in capsys.readouterr().out
+
+
+def test_validate_flags_includes_rules_that_is_not_a_list(tmp_path, make_synthetic_repo, capsys):
+    """Regression: a bare string was iterated character by character."""
+    repo = make_synthetic_repo(tmp_path)
+    _write_repo_prompt(repo, "bad-prompt.md", "includes_rules: python-typing\n", "Body.\n")
+
+    assert _validate.run(_ns(repo)) == 1
+    out = capsys.readouterr().out
+    assert (
+        "includes_rules 'python-typing': expected a list of rule ids, "
+        "e.g. ['python-typing', 'pytest']"
+    ) in out
+    assert "includes_rules names" not in out
+    assert "validation failed with 1 error(s)" in out
 
 
 @pytest.mark.parametrize(
@@ -180,22 +214,19 @@ def test_lint_codes_shape_errors_are_field_precise(
     assert "linted.md" in out
 
 
-def test_validate_flags_undeclared_rule_call_with_trim_markers(
-    tmp_path, make_synthetic_repo, capsys
-):
-    """``validate`` shares the renderer's rule-call pattern, so a trim-marker
-    spelling the appendix logic recognises is checked against includes_rules too."""
+def test_validate_rejects_rule_call_with_trim_markers(tmp_path, make_synthetic_repo, capsys):
+    """``validate`` shares the renderer's rule-call pattern, so a trim-marker spelling fails too."""
     repo = make_synthetic_repo(tmp_path)
-    prompts_dir = repo / "playbook" / "prompts"
-    prompts_dir.mkdir(parents=True, exist_ok=True)
-    (prompts_dir / "bad-prompt.md.j2").write_text(
-        "---\nid: bad-prompt\nname: Bad\ndescription: Bad\nslash: bad\n---\n"
-        "Some text {{- rule('python-style') -}} more text.\n",
-        encoding="utf-8",
+    _write_repo_prompt(
+        repo,
+        "bad-prompt.md.j2",
+        "includes_rules:\n  - python-typing\n",
+        "Some text {{- rule('python-typing') -}} more text.\n",
     )
     rc = _validate.run(_ns(repo))
     assert rc == 1
-    assert "python-style" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Remove the call and keep 'python-typing' in includes_rules" in out
 
 
 def test_validate_flags_rule_calling_rule_helper(tmp_path, make_synthetic_repo, capsys):

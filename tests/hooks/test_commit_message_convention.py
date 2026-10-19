@@ -342,12 +342,12 @@ def test_missing_tracking_ref_fails_open(repo: PackRepo, deps: Deps) -> None:
 
 def test_cutover_date_rendered_from_the_commit_convention_table(pack_repo: PackRepo) -> None:
     """One source for the push scan and the CI step: ``[hooks.commit_convention]`` (D-Q3)."""
-    from coding_agent_playbook.guard_config import GuardConfigInputs, render_guard_config
-    from coding_agent_playbook.hooks_config import (
+    from coding_agent_playbook.config.tables.hooks import (
         CommitConventionConfig,
         GuardrailsConfig,
         HooksConfig,
     )
+    from coding_agent_playbook.guard_config import GuardConfigInputs, render_guard_config
     from tests.hooks.pack_repo import resolve_engine_hooks
 
     hooks = resolve_engine_hooks([HOOK_ID], pack_repo.root)

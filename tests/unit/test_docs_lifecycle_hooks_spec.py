@@ -22,6 +22,11 @@ from pathlib import Path
 import pytest
 
 from coding_agent_playbook._member_reference import MemberReference
+from coding_agent_playbook.config.tables.hooks import (
+    COMMIT_CONVENTION_TABLE,
+    GuardrailsConfig,
+    HooksConfig,
+)
 from coding_agent_playbook.evaluators.types import MetricConfig
 from coding_agent_playbook.harness.manifest import ArtifactKind, ManifestEntry
 from coding_agent_playbook.hook_policy import (
@@ -30,11 +35,6 @@ from coding_agent_playbook.hook_policy import (
     HOOK_SUPPORT,
     TOOL_CLASS_NAMES,
     KeyPolicy,
-)
-from coding_agent_playbook.hooks_config import (
-    COMMIT_CONVENTION_TABLE,
-    GuardrailsConfig,
-    HooksConfig,
 )
 from coding_agent_playbook.renderer import BUILTIN_FORMATS
 from coding_agent_playbook.types import (
@@ -97,7 +97,7 @@ _ENGINE_PATHS = (
     "hook_registrations/",
     "security/",
     "guard_config.py",
-    "hooks_config.py",
+    "config/tables/hooks.py",
     "_sentinel.py",
     "detector/pep503.py",
     "gate_scan.py",

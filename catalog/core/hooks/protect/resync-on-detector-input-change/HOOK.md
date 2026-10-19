@@ -2,6 +2,7 @@
 id: resync-on-detector-input-change
 name: Resync on detector input change
 description: Name the rules and prompts a dependency, Dockerfile, CI or notebook change newly activates; never auto-removes guidance.
+summary: After changing dependencies or adding a Dockerfile, CI workflow or notebook, ask the user to run `playbook sync`.
 version: 1
 tier: default
 priority: 45

@@ -13,8 +13,8 @@ from coding_agent_playbook.adapters._settings_drift import settings_document, st
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands import check as _check
 from coding_agent_playbook.commands import sync as _sync
+from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.lockfile.drift import drift_entries
-from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 from tests.plugins.superpowers_expectations import PLUGIN_NAME
 from tests.toml_equality import assert_toml_identical
 

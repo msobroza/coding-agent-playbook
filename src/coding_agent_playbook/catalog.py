@@ -6,8 +6,8 @@ and bundled plugins, in one root with two homes:
 - installed wheel: ``<package>/_catalog`` (hatch force-includes ``catalog/``);
 - source checkout: ``<repo>/catalog`` (an editable install finds it next to ``src/``).
 
-This module is the only code that knows those homes. ``config.py`` and
-``config_schema.py`` import it, which is why it must stay a leaf.
+This module is the only code that knows those homes. ``config/model.py`` and
+``config/schema.py`` import it, which is why it must stay a leaf.
 
 Naming: a function that returns a directory of the catalog says ``catalog``
 (:func:`catalog_root`, :func:`catalog_layer_root`); a predicate or listing of

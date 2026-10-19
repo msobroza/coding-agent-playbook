@@ -21,8 +21,8 @@ Code's native layout:
 - Hooks it enforces become managed groups in the co-owned
   ``.claude/settings.json`` plus the committed ``.claude/hooks/playbook/launch.sh``
   (:mod:`._claude_hooks`, specs/prK-lifecycle-hooks.md §C.2); the rest degrade
-  to rules-file sections through :meth:`write_rule` (§C.4.2) and get their full
-  text in ``.claude/skills/playbook-guardrails/`` (D6, D26), and the
+  to one line each in the rules file's ``## Guardrails`` section, with their
+  full text in ``.claude/skills/playbook-guardrails/`` (D6, D26), and the
   session-start heartbeat line closes the rules file.
 
 Why the rules (and, since PR K, the hook advisories and the heartbeat line)
@@ -71,7 +71,7 @@ from coding_agent_playbook.adapters.claude_rule_paths import (
     CLAUDE_RULES_PATH,
 )
 from coding_agent_playbook.adapters.claude_settings import CLAUDE_SETTINGS_PATH
-from coding_agent_playbook.hook_policy import HOOK_SUPPORT
+from coding_agent_playbook.hook_policy import HOOK_SUPPORT, guardrail_line, guardrails_section
 from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
 from coding_agent_playbook.hook_registrations import LAUNCHER_PATH
 from coding_agent_playbook.renderer import render_for
@@ -81,10 +81,10 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
     from coding_agent_playbook.adapters.claude_settings import MergeResult
+    from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hook_policy import ResolvedHook
-    from coding_agent_playbook.hooks_config import HooksConfig
     from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
-    from coding_agent_playbook.renderer import RuleRegistry
+    from coding_agent_playbook.prompt_rule_delivery import SkillReferenceIndex
     from coding_agent_playbook.types import Prompt, Rule, Skill
 
 #: The committed launcher's directory: sentinel-scanned, and a declared output location.
@@ -138,12 +138,12 @@ def _write_output(path: Path, text: str) -> Path:
 class ClaudeCodeAdapter(Adapter):
     """Adapter for Anthropic's Claude Code (``.claude/`` layout).
 
-    The optional ``rule_registry`` is plumbed into :func:`render_for` so the
-    ``includes_rules:`` appendix in prompts can be rendered. When the
-    orchestrator (PR 10) builds the merged-overlay registry, it passes it in;
-    when callers (or tests) omit it, prompts render with no auto-appendix —
-    ``includes_rules:`` becomes purely declarative. Mirrors the
-    ``ContinueAdapter`` plumbing pattern.
+    The optional ``rule_registry`` (the sync's ``RuleRegistryImpl``) is used
+    only as a ``SkillReferenceIndex``: :func:`render_for` builds each command's
+    ``## Before you start`` block from it, naming the skill references of the
+    prompt's ``includes_rules``; a command never carries rule text (D15). When
+    callers (or tests) omit it, prompts render with no block —
+    ``includes_rules:`` becomes purely declarative.
     """
 
     name = "claude_code"
@@ -169,10 +169,12 @@ class ClaudeCodeAdapter(Adapter):
     #: The launcher carries no artifact of its own: a ``kind = "runtime"`` lock entry (§B.6).
     runtime_outputs: ClassVar[tuple[str, ...]] = (LAUNCHER_PATH,)
 
-    def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
+    def __init__(self, *, rule_registry: SkillReferenceIndex | None = None) -> None:
         # Buffer of (priority, rule_id, rendered_section) tuples populated by
         # ``write_rule``. ``finalize`` sorts by (priority, rule_id) and joins.
         self._buffered_rules: list[tuple[int, str, str]] = []
+        # (hook_id, guardrail line) of each hook this adapter cannot run (D26).
+        self._guardrail_lines: list[tuple[str, str]] = []
         self._where = WhereGuidanceBuffer()
         self._rule_registry = rule_registry
         self._hooks = ClaudeHookEmitter(self.name, self.hook_support)
@@ -191,17 +193,20 @@ class ClaudeCodeAdapter(Adapter):
         self._hooks.begin(repo_root, prior_lock, hooks_config)
 
     def write_hook(self, hook: ResolvedHook, repo_root: Path) -> list[Path]:
-        """Buffer a hook Claude Code enforces; degrade any other to a rules-file section.
+        """Buffer a hook Claude Code enforces; degrade any other to one guardrail line.
 
-        A natively enforced hook adds no advisory here: its deny reasons and
-        the session-start briefing carry the context (§C.4.2). Writes nothing;
-        :meth:`finalize` does.
+        A natively enforced hook adds no guardrail here: its deny reasons and
+        the session-start briefing carry the context (§C.4.2). Any other hook
+        with guardrail text gets one line in the rules file's ``## Guardrails``
+        section, its full text being in ``.claude/skills/playbook-guardrails/``
+        (D26, open question Q3). Writes nothing; :meth:`finalize` does.
 
         Example: ``adapter.write_hook(hook, repo_root)`` -> ``[]``.
         """
-        if self._hooks.add(hook):
+        if self._hooks.add(hook) or hook.advisory is None:
             return []
-        return super().write_hook(hook, repo_root)
+        self._guardrail_lines.append((hook.id, guardrail_line(hook.id, hook.guardrail_text)))
+        return []
 
     def writes_guardrails_skill(self, hooks: Sequence[ResolvedHook]) -> bool:
         """``True`` only for a hook with guardrail text that Claude Code cannot run (D6, D26).
@@ -243,9 +248,9 @@ class ClaudeCodeAdapter(Adapter):
         per-rule files, so this method writes nothing immediately. The
         buffered tuple records (priority, rule_id, rendered_section) so
         ``finalize`` can sort by ``(priority, rule_id)`` for stable output. A
-        member rule is skipped (E3): its skill's reference delivers it. The
-        advisory rule of a hook this adapter cannot enforce has ``skill=None``,
-        so it keeps its full section (H16).
+        member rule is skipped (E3): its skill's reference delivers it. A hook
+        this adapter cannot run reaches the file as a guardrail line, through
+        :meth:`write_hook`, not as a rule.
 
         Example: ``adapter.write_rule(member_rule, repo_root)`` -> ``[]``, nothing buffered.
         """
@@ -267,15 +272,16 @@ class ClaudeCodeAdapter(Adapter):
 
         Claude Code commands are pure markdown (no top-level frontmatter
         fence); the ``prompt_claude_command`` renderer handles that shape
-        plus optional ``includes_rules`` appendix.
+        plus the ``## Before you start`` block pointing at skills (D15).
+
+        Example: ``adapter.write_prompt(prompt, repo_root)`` -> ``[.claude/commands/review.md]``.
         """
         rendered = render_for(
             prompt.source_path or Path("inline"),
             prompt.body,
             "prompt_claude_command",
             frontmatter=dataclasses.asdict(prompt.frontmatter),
-            rule_registry=self._rule_registry,
-            template_body=prompt.template_body,
+            skill_references=self._rule_registry,
         )
         output_path = repo_root / ".claude" / "commands" / f"{prompt.frontmatter.slash}.md"
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -339,18 +345,20 @@ class ClaudeCodeAdapter(Adapter):
         ]
 
     def _rules_body(self) -> str | None:
-        """The rules file's body, or ``None`` when no section, Where entry or heartbeat exists.
+        """The rules file's body, or ``None`` with no section, Where entry, guardrail or heartbeat.
 
-        Sections (always rules, and advisories of hooks this adapter cannot
-        enforce) are sorted by ``(priority, rule_id)`` and joined by the blank
-        lines ``claude_md_section`` already emits, so they stay byte-identical
-        to the ``AGENTS.md`` sections; the ``## Where guidance lives`` section
-        follows them. The fixed heartbeat line closes the body when the
-        session-start briefing runs here.
+        Always-rule sections are sorted by ``(priority, rule_id)`` and joined by
+        the blank lines ``claude_md_section`` already emits, so they stay
+        byte-identical to the ``AGENTS.md`` sections; the ``## Where guidance
+        lives`` section follows them, then the ``## Guardrails`` lines of the
+        hooks this adapter cannot run, as ``AGENTS.md`` orders them. The fixed
+        heartbeat line closes the body when the session-start briefing runs here.
         """
         heartbeat = self._hooks.heartbeat()
         ordered = sorted(self._buffered_rules, key=lambda item: (item[0], item[1]))
         sections = self._where.after([section for _, _, section in ordered])
+        if self._guardrail_lines:
+            sections.append(guardrails_section(self._guardrail_lines))
         if not (sections or heartbeat):
             return None
         body = "\n".join(sections)

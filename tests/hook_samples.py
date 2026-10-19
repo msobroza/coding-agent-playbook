@@ -10,10 +10,10 @@ import stat
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.hook_policy import ResolvedHandler, ResolvedHook, resolve_effective_hooks
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.policy import effective_on_error
-from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.types import Hook, HookFrontmatter, HookMatcher, format_frontmatter
 
 if TYPE_CHECKING:
@@ -23,6 +23,15 @@ if TYPE_CHECKING:
 
 #: The ``where`` label the builders parse under.
 HOOK_WHERE = "playbook/hooks/guard-x/HOOK.md"
+
+#: The heading and preface that open the ``## Guardrails`` section of AGENTS.md and
+#: the Claude Code rules file (D6), spelled out once as the tests' own source.
+GUARDRAILS_SECTION_HEAD = (
+    "## Guardrails\n\n"
+    "Lifecycle hooks enforce these on assistants that run them; on every other assistant, "
+    "follow them yourself. Skill `playbook-guardrails` has the full text of each one and "
+    "where it is enforced.\n\n"
+)
 
 #: The §A.9 worked example (the body shortened).
 GUARD_GENERATED_OUTPUTS_MD = """\
@@ -102,13 +111,15 @@ def resolved_hook(
     config: Mapping[str, Any] | None = None,
     body: str = "Advice.\n",
     source_package: str = "<repo-local>",
+    summary: str = "",
 ) -> ResolvedHook:
     """A hand-built :class:`ResolvedHook`, with no gating, for the K3 renderers and planners.
 
     ``supports`` is the narrowed (effective) list, ``declared_supports`` the
     frontmatter's (default: the same); ``on_error`` is clamped per event as the
     effective view does; ``matcher`` gives authored entries per event (the rest
-    match everything). The advisory carries ``body`` through ``with_rendered_body``.
+    match everything). The advisory carries ``body`` through ``with_rendered_body``;
+    ``summary`` is the frontmatter's one-line guardrail (``""``: none).
     Example: ``resolved_hook("guard-y", events=("stop",), supports=("claude_code", "opencode"))``.
     """
     authored = {event: dict(entry) for event, entry in (matcher or {}).items()}
@@ -124,6 +135,7 @@ def resolved_hook(
             on_error=on_error,
             supports=list(supports if declared_supports is None else declared_supports),
             handler=handler,
+            summary=summary,
         ),
         body,
         body,

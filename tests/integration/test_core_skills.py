@@ -23,6 +23,7 @@ import pytest
 from coding_agent_playbook.adapters._skill_writer import agent_skill_issues, render_skill_md
 from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_RULES_PATH
 from coding_agent_playbook.catalog import ENGINE_PACKAGE
+from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.hook_policy.guardrails_skill import (
     GUARDRAILS_SKILL_ID,
     compose_guardrails_skill,
@@ -30,7 +31,7 @@ from coding_agent_playbook.hook_policy.guardrails_skill import (
 from coding_agent_playbook.links import extract_markdown_links
 from coding_agent_playbook.skill_document import DESCRIPTION_MAX_CHARS
 from coding_agent_playbook.skill_membership import compose_skills
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, FileSystemStateSource
+from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import split_frontmatter
 from tests._budget_probe import reference_probe_facts, render_core_rule
 from tests._catalog import CORE_ROOT, core_rules
@@ -573,7 +574,7 @@ def test_reference_probe_writes_the_guardrails_skill_to_opencode_and_agents_root
     frontmatter, body = split_frontmatter(copies[0].read_text(encoding="utf-8"))
     assert frontmatter == _authored(GUARDRAILS_SKILL_ID)[0]
     # Counted against Continue's rule files, which D6 keeps as they are, not against
-    # AGENTS.md's Guardrails blocks, which ticket 17 turns into one line per hook.
+    # AGENTS.md's Guardrails section, which holds one line per hook (D6).
     advised = _continue_guardrail_hook_ids(reference_probe_repo)
     assert advised, "the probe enables continue, so each on hook with an advisory has a file"
     assert _GUARDRAIL_SECTION.findall(body) == advised, "one skill section per advised hook"

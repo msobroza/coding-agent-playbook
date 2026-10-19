@@ -112,6 +112,9 @@ A named OpenCode mode with its own model, permissions and system prompt; it is n
 **Consumer repo**:
 A repository the playbook is installed into.
 
+**Consumer config**:
+The committed config file and the machine-local overrides file in a consumer repo that steer sync and the hooks.
+
 **Generated output**:
 A file the engine writes and owns in a consumer repo, marked by the sentinel and recorded in the lockfile.
 _Avoid_: owned file, managed file

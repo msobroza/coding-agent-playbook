@@ -67,7 +67,8 @@ Two rules keep the content self-contained:
 
 Rule, prompt and skill sources use `.md` when the body is plain text, and
 `.md.j2` only when the body needs Jinja (detector facts such as
-`{{ project_name }}`, or `{{ rule("<id>") }}` in a prompt). The overlay merge
+`{{ project_name }}`, or a `{% if has_framework("fastapi") %}` branch). No
+template can call `{{ rule() }}`: the helper is gone. The overlay merge
 key is the frontmatter `id`, not the file name. A later layer (an overlay, then
 the consumer's `playbook/`) replaces an artifact with the same `id`.
 
@@ -90,17 +91,24 @@ the consumer's `playbook/`) replaces an artifact with the same `id`.
    and keep `name` a short topic label (`Typing`, `Error handling`): it is the
    rule's label in the skill's "Covers ..." clause. Add the rule to
    `EXPECTED_MEMBERSHIP` in `tests/integration/test_core_skills.py`.
-4. Keep the body to guidance an assistant can act on. A rule cannot call
-   `{{ rule(...) }}`.
+4. Keep the body to guidance an assistant can act on. A rule cannot include
+   another rule.
 
 ## Add a prompt
 
 1. Create `core/prompts/<id>.md`.
 2. Give it frontmatter with `id`, `name`, `description`, `version` and `slash`
    (the slash-command name). Optional keys: `applies_if`, `input_variables`,
-   `includes_rules` (rule ids to inline) and `eval_tasks` (the ids of the tasks
-   that test it). SPEC §6.2 has the full schema.
-3. Every `{{ rule("<id>") }}` in the body must be listed in `includes_rules`.
+   `includes_rules` (the ids of the rules the task needs) and `eval_tasks` (the
+   ids of the tasks that test it). SPEC §6.2 has the full schema.
+3. List the rules the prompt needs in `includes_rules`; never place rule text
+   in the body. Claude Code and OpenCode commands then open with a generated
+   `## Before you start` block naming each scoped rule's skill and reference,
+   while Continue prompts get the rules' text as a `## Reference rules`
+   appendix (SPEC §6.2.5). `playbook validate` fails on a `{{ rule(...) }}`
+   call and on an id that names no rule, and
+   `tests/unit/test_catalog_prompt_references.py` requires every included
+   scoped rule to name its skill.
 
 ## Add an eval task
 
@@ -136,11 +144,18 @@ reads this tree.
 2. Give it frontmatter with `id`, `name`, `description`, `version`, `tier`,
    `events`, `handler`, `decisions` (only `deny`, `ask`, `context` or `none`),
    `timeout`, `on_error` and `supports`, plus `matcher`, `priority` and `tags`
-   as needed. Engine hooks name a builtin handler (`handler: {builtin: <name>}`)
-   and ship no `scripts/`. SPEC §6.6.7 has the full schema, and
-   `playbook validate` checks the hook trust contract H1-H21.
-3. Write the body as guidance an assistant can act on: an assistant without
-   native hooks receives it as advisory text.
+   as needed. A hook with a body also declares `summary`, its guardrail line:
+   one line of at most 120 characters, without `{{` or `{%`, that keeps the
+   point of the body (for `stop-ci-parity-gate`, the checks to run). Engine
+   hooks name a builtin handler (`handler: {builtin: <name>}`) and ship no
+   `scripts/`. SPEC §6.6.7 has the full schema, and `playbook validate` checks
+   the hook trust contract H1-H21.
+3. Write the body as guidance an assistant can act on. It is the hook's
+   section in the `playbook-guardrails` skill and Continue's
+   `30-guardrail-<id>.md`, while the `summary` is its one line in `AGENTS.md`
+   (and in the Claude Code rules file when Claude Code cannot run the hook).
+   `tests/hooks/test_hook_summaries.py` fails when a core hook with a body has
+   no `summary`.
 4. The gates under `tests/hooks/` pin the shipped hooks: one test module per
    hook, plus the `test_pack_*_manifest.py` rows. Update them in the same change.
 

@@ -42,7 +42,8 @@ class ContinueAdapter(Adapter):
     of tests.
 
     The optional ``rule_registry`` is plumbed into :func:`render_for` so that
-    the ``includes_rules:`` appendix in prompts can be rendered. When the
+    the ``includes_rules:`` appendix in prompts can be rendered: Continue reads
+    no skills, so its prompts keep the rule text inline (D15). When the
     orchestrator builds the merged-overlay registry, it passes it here; when
     callers (or tests) omit it, prompts render with no auto-appendix —
     ``includes_rules:`` becomes purely declarative.
@@ -81,7 +82,6 @@ class ContinueAdapter(Adapter):
             "prompt_continue",
             frontmatter=prompt.frontmatter.__dict__,
             rule_registry=self._rule_registry,
-            template_body=prompt.template_body,
         )
         write_output_text(target, rendered)
         return [target]
