@@ -6,7 +6,7 @@ covers an edited file without importing the catalog. Pure functions of the
 rules: no repository needed.
 
 Spec 8.8 puts ``test_skill_nudge_config_is_derived_and_replaces_a_layer_value``
-in ``test_guard_config.py``; it lives here, next to the table it renders,
+in ``test_compile.py``; it lives here, next to the table it renders,
 because that file is already far past the 500-line cap.
 """
 
@@ -14,10 +14,13 @@ from __future__ import annotations
 
 from typing import Literal
 
-from coding_agent_playbook._guard_config_skills import SKILL_NUDGE_HOOK_ID, skill_glob_rows
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
-from coding_agent_playbook.guard_config import GuardConfigInputs, render_guard_config
+from coding_agent_playbook.hooks.guard_config._tables_skills import (
+    SKILL_NUDGE_HOOK_ID,
+    skill_glob_rows,
+)
+from coding_agent_playbook.hooks.guard_config.compile import GuardConfigInputs, render_guard_config
 from tests.hook_samples import resolved_hook
 
 

@@ -13,7 +13,7 @@ match under the test roots (``git grep -w``) gets one line:
 - It is context by default; ``[hooks.tests-with-source-nudge] block = true``
   makes the lines a deny, inside the coordinator's budget.
 - The coordinator runs it only when no stage up to ``verify-claim`` is red.
-- The roots are baked into its config at sync (``_guard_config_verify``),
+- The roots are baked into its config at sync (``hooks.guard_config._tables_verify``),
   never read at run time. It fails open: an unparseable file is skipped.
 """
 

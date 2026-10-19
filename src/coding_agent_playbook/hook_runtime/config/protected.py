@@ -66,7 +66,7 @@ __all__ = [
 
 #: The engine's own layer (its bundled ``catalog/core/``); resolvable without
 #: ``machine.json``, from this package. The id keeps its ``resources`` spelling
-#: (``_guard_config_protect.resource_root_ids`` formats the same way).
+#: (``hooks.guard_config.resource_roots.resource_root_ids`` formats the same way).
 ENGINE_RESOURCES_ID: Final = RESOURCE_ROOT_ID_FORMAT.format(package="coding_agent_playbook")
 #: Used when ``guard_config.json`` predates the table (``guard_config.HOOK_ARTIFACTS``);
 #: kept apart from the writer's copy until a schema decision retires it (GC-D7, F-G1).

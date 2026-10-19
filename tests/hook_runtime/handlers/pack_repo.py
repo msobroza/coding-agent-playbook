@@ -24,10 +24,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from coding_agent_playbook._guard_config_quality import read_quality_lint
-from coding_agent_playbook._guard_config_ruff import read_project_ruff_selection
-from coding_agent_playbook._guard_config_skills import skill_glob_rows
-from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
 from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_ import ContinueAdapter
@@ -37,23 +33,29 @@ from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
-from coding_agent_playbook.guard_config import (
-    DetectInputs,
-    GuardConfigInputs,
-    ProtectedRow,
-    ProtectInputs,
-    adapter_output_dirs,
-    render_guard_config,
-    repo_layout,
-    serialize_guard_config,
-)
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateArgs, run
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
+from coding_agent_playbook.hooks.guard_config._tables_quality import read_quality_lint
+from coding_agent_playbook.hooks.guard_config._tables_ruff import read_project_ruff_selection
+from coding_agent_playbook.hooks.guard_config._tables_skills import skill_glob_rows
+from coding_agent_playbook.hooks.guard_config._tables_toolchain import read_toolchain_inputs
+from coding_agent_playbook.hooks.guard_config._tables_verify import repo_layout
+from coding_agent_playbook.hooks.guard_config.compile import (
+    GuardConfigInputs,
+    render_guard_config,
+    serialize_guard_config,
+)
+from coding_agent_playbook.hooks.guard_config.inputs import (
+    DetectInputs,
+    ProtectedRow,
+    ProtectInputs,
+)
 from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
 from coding_agent_playbook.hooks.resolution.merge import merge_hook_layers
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
+from coding_agent_playbook.sync._protect import adapter_output_dirs
 from tests._catalog import CORE_ROOT
 from tests.hook_payloads import PROJECT_DIR, HookPayloadCase
 from tests.hook_runtime.guard_repo import GuardRepo

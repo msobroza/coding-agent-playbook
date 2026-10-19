@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.commands import validate as _validate
-from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hooks.guard_config.inputs import DetectInputs
 from tests.hook_runtime.fakes import FakeRuff, ruff_row
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_rules
 from tests.hook_runtime.handlers.ruff_kit import context, edit, head_git, pin_ruff

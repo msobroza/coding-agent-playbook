@@ -1,35 +1,31 @@
-"""Sync-time ruff tables of the §E.3 post-edit pipeline (specs/prK-hook-pack.md §E.3, OQ-37).
+"""The pinned ruff's rule set, probed at sync (specs/prK-hook-pack.md §E.3, OQ-37).
 
-``guard_config.json`` gets only the repo's own ruff selection (machine-
-independent); the pinned ruff's rule set is probed at sync, through the
-injected ``ProcPort`` (``FakeRuff``), into ``machine.json`` ``tools.ruff.drop``.
-No test spawns ruff.
+The probe asks the pinned ruff through the injected ``ProcPort`` (``FakeRuff``)
+and lands in ``machine.json`` ``tools.ruff.drop``; ``guard_config.json`` never
+depends on it. No test spawns ruff.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pytest
-
-from coding_agent_playbook._guard_config_ruff import (
-    RuffSelection,
-    RuleCache,
-    RuleProbe,
-    probe_ruff_rules,
-    read_project_ruff_selection,
-    ruff_candidate_codes,
-    ruff_drop_codes,
-    ruff_table,
-)
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
-from coding_agent_playbook.guard_config import (
+from coding_agent_playbook.hook_runtime.state.store import StateStore
+from coding_agent_playbook.hooks.guard_config._tables_ruff import (
+    read_project_ruff_selection,
+)
+from coding_agent_playbook.hooks.guard_config.compile import (
     GuardConfigInputs,
     render_guard_config,
     serialize_guard_config,
 )
-from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
-from coding_agent_playbook.hook_runtime.state.store import StateStore
+from coding_agent_playbook.hooks.guard_config.ruff_probe import (
+    RuleCache,
+    RuleProbe,
+    probe_ruff_rules,
+    ruff_candidate_codes,
+    ruff_drop_codes,
+)
 from coding_agent_playbook.hooks.resolution.resolved import ResolvedHandler
 from coding_agent_playbook.sync._machine_local import SyncHookDeps, write_pins
 from tests.fakes import FakePinWriter
@@ -38,6 +34,7 @@ from tests.hook_samples import resolved_hook
 
 if TYPE_CHECKING:
     from pathlib import Path
+
 
 #: ``ruff rule --all --output-format json`` rows (the parts read), ruff 0.17 shape.
 RULES_017: list[dict[str, Any]] = [
@@ -57,92 +54,6 @@ def _program(tmp_path: Path, name: str = "ruff", body: bytes = b"#!/bin/sh\n") -
     path.write_bytes(body)
     path.chmod(0o755)
     return str(path)
-
-
-# --- the project's selection -------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("name", "text", "expected"),
-    [
-        (
-            "pyproject.toml",
-            '[tool.ruff.lint]\nselect = ["E", "I", "UP"]\nextend-select = ["B"]\n'
-            'ignore = ["E501"]\nextend-ignore = ["UP007"]\n',
-            RuffSelection(("B", "E", "I", "UP"), ("E501", "UP007"), default_select=False),
-        ),
-        (
-            "pyproject.toml",
-            '[tool.ruff]\nselect = ["F", "I"]\n',  # the deprecated top-level keys
-            RuffSelection(("F", "I"), (), default_select=False),
-        ),
-        (
-            "ruff.toml",
-            '[lint]\nselect = ["ALL"]\nignore = ["D"]\n',
-            RuffSelection(("ALL",), ("D",), False),
-        ),
-        ("pyproject.toml", '[project]\nname = "x"\n', RuffSelection()),  # not a ruff config
-        ("ruff.toml", 'line-length = 100\n[lint]\nextend-select = ["I"]\n', RuffSelection(("I",))),
-        ("pyproject.toml", "[tool.ruff\n", RuffSelection()),  # malformed: ruff's defaults
-    ],
-    ids=[
-        "pyproject-lint",
-        "pyproject-legacy",
-        "ruff-toml",
-        "no-tool-ruff",
-        "defaults+extend",
-        "bad",
-    ],
-)
-def test_project_select_from_pyproject_ruff_toml_and_defaults(
-    tmp_path: Path, name: str, text: str, expected: RuffSelection
-) -> None:
-    (tmp_path / name).write_text(text, encoding="utf-8")
-
-    assert read_project_ruff_selection(tmp_path) == expected
-
-
-def test_dot_ruff_toml_wins_over_ruff_toml_over_pyproject(tmp_path: Path) -> None:
-    (tmp_path / "pyproject.toml").write_text('[tool.ruff.lint]\nselect = ["E"]\n', "utf-8")
-    (tmp_path / "ruff.toml").write_text('[lint]\nselect = ["F"]\n', "utf-8")
-    assert read_project_ruff_selection(tmp_path).select == ("F",)
-
-    (tmp_path / ".ruff.toml").write_text('[lint]\nselect = ["I"]\n', "utf-8")
-    assert read_project_ruff_selection(tmp_path).select == ("I",)
-
-
-@pytest.mark.parametrize(
-    ("select", "ignore", "safe", "safe_ignore"),
-    [
-        (("B", "E", "F", "I", "UP", "W"), ("E501",), ["I", "UP"], []),
-        (("E", "F"), (), [], []),
-        (("ALL",), ("I",), ["UP"], []),
-        (("I", "UP006", "UP007"), (), ["I", "UP006", "UP007"], []),
-        (("I", "UP"), ("UP007",), ["I", "UP"], ["UP007"]),
-        (("INP", "F"), (), [], []),  # INP is flake8-no-pep420, not isort
-    ],
-)
-def test_safe_fix_select_is_I_UP_intersect_project(
-    select: tuple[str, ...], ignore: tuple[str, ...], safe: list[str], safe_ignore: list[str]
-) -> None:
-    table = ruff_table(RuffSelection(select, ignore, default_select=False))
-
-    assert table["safe_fix_select"] == safe
-    assert table["safe_fix_ignore"] == safe_ignore
-    assert table["project_select"] == list(select)
-
-
-def test_default_selection_fixes_nothing() -> None:
-    """Ruff's default selection changed in 0.17; the committed table cannot name it."""
-    table = ruff_table(RuffSelection())
-
-    assert table == {
-        "default_select": True,
-        "project_select": [],
-        "project_ignore": [],
-        "safe_fix_select": [],
-        "safe_fix_ignore": [],
-    }
 
 
 # --- the pinned ruff's rule set ----------------------------------------------------------
@@ -263,22 +174,6 @@ def test_guard_config_ruff_tables_machine_independent(tmp_path: Path) -> None:
     assert configs[0] == configs[1]
     assert b'"safe_fix_select":["I","UP"]' in configs[0]
     assert drops == [{}, {"ruff": ["UP045"]}]
-
-
-def test_runtime_reads_the_ruff_table_back() -> None:
-    inputs = GuardConfigInputs(
-        hooks=[],
-        hooks_config=HooksConfig(enabled=True),
-        guardrails=GuardrailsConfig(),
-        engine_version="0.2.0",
-        ruff=RuffSelection(("E", "I", "UP"), ("UP007",), default_select=False),
-    )
-
-    parsed = parse_guard_config(serialize_guard_config(render_guard_config(inputs)))
-
-    assert isinstance(parsed, GuardConfig)
-    assert parsed.tables["ruff"]["safe_fix_select"] == ["I", "UP"]
-    assert parsed.tables["ruff"]["safe_fix_ignore"] == ["UP007"]
 
 
 def test_write_pins_prefers_the_project_venv_ruff(tmp_path: Path) -> None:

@@ -35,9 +35,13 @@ import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, Protocol
 
-from coding_agent_playbook._guard_config_ruff import RuleCache, probe_ruff_rules, ruff_drop_codes
 from coding_agent_playbook.hook_runtime.config import pin
 from coding_agent_playbook.hook_runtime.proc import SubprocessProc
+from coding_agent_playbook.hooks.guard_config.ruff_probe import (
+    RuleCache,
+    probe_ruff_rules,
+    ruff_drop_codes,
+)
 from coding_agent_playbook.hooks.registrations.stop_gate import stop_stage_records
 from coding_agent_playbook.security.trust import (
     HandlerApproval,

@@ -18,7 +18,6 @@ import pytest
 from coding_agent_playbook.grading.execution_metrics.coverage_xml import CoverageReport
 from coding_agent_playbook.grading.execution_metrics.junit import JunitSummary
 from coding_agent_playbook.grading.execution_metrics.project import RunArtifacts
-from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_runtime.config.guard_tables import GuardTables
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
@@ -31,6 +30,7 @@ from coding_agent_playbook.hook_runtime.handlers._coverage_report import (
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 from coding_agent_playbook.hook_runtime.stop.coordinator import GatePolicy
 from coding_agent_playbook.hook_runtime.stop.suite import SuiteUnavailable
+from coding_agent_playbook.hooks.guard_config.inputs import DetectInputs
 from tests.hook_runtime.fakes import FakeStageRunner, FakeTrustStore
 from tests.hook_runtime.handlers.stop_kit import (
     HEAD_TREE,

@@ -331,7 +331,7 @@ SMOKE_CONFIG: Final = (
 def smoke_guard_config_bytes() -> bytes:
     """``render_guard_config`` for the shipped destructive-command-guard, canonical bytes."""
     from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
-    from coding_agent_playbook.guard_config import (
+    from coding_agent_playbook.hooks.guard_config.compile import (
         GuardConfigInputs,
         render_guard_config,
         serialize_guard_config,

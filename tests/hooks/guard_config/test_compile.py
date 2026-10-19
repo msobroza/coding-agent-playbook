@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook._guard_config_protect import COMPOSITE_SINGLETONS
 from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_ import ContinueAdapter
@@ -31,25 +30,6 @@ from coding_agent_playbook.config.tables.hooks import (
     SecretsGuardrails,
 )
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
-from coding_agent_playbook.guard_config import (
-    GUARD_CONFIG_PATH,
-    HOOK_ARTIFACTS,
-    SYNC_OUTPUT_LOCATIONS,
-    DetectInputs,
-    GuardConfigInputs,
-    ProtectInputs,
-    RepoLayout,
-    adapter_output_dirs,
-    applicability_rows,
-    copy_hook_scripts,
-    precommit_hook_ids,
-    protected_rows,
-    render_guard_config,
-    repo_layout,
-    resource_root_ids,
-    serialize_guard_config,
-    write_guard_config,
-)
 from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
 from coding_agent_playbook.hook_runtime.config.schema import (
     CONTROL_PLANE,
@@ -57,6 +37,23 @@ from coding_agent_playbook.hook_runtime.config.schema import (
     playbook_precommit_ids,
 )
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
+from coding_agent_playbook.hooks.guard_config._tables_precommit import precommit_hook_ids
+from coding_agent_playbook.hooks.guard_config._tables_verify import RepoLayout, repo_layout
+from coding_agent_playbook.hooks.guard_config.compile import (
+    GUARD_CONFIG_PATH,
+    HOOK_ARTIFACTS,
+    SYNC_OUTPUT_LOCATIONS,
+    GuardConfigInputs,
+    render_guard_config,
+    serialize_guard_config,
+    write_guard_config,
+)
+from coding_agent_playbook.hooks.guard_config.inputs import (
+    DetectInputs,
+    ProtectInputs,
+    applicability_rows,
+)
+from coding_agent_playbook.hooks.guard_config.resource_roots import resource_root_ids
 from coding_agent_playbook.hooks.registrations.plan import resolved_deadlines_ms
 from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
 from coding_agent_playbook.lockfile.model import LockEntry, Provenance
@@ -69,6 +66,12 @@ from coding_agent_playbook.security.patterns import (
     SECRET_RULESET_VERSION,
 )
 from coding_agent_playbook.sync._dispatch import build_lockfile
+from coding_agent_playbook.sync._hook_scripts import copy_hook_scripts
+from coding_agent_playbook.sync._protect import (
+    COMPOSITE_SINGLETONS,
+    adapter_output_dirs,
+    protected_rows,
+)
 from tests._catalog import CORE_ROOT, plugin_root
 from tests.hook_runtime.handlers.pack_repo import resolve_engine_hooks
 from tests.hook_samples import resolved_from_disk, resolved_hook, sample_hook
@@ -398,7 +401,7 @@ def test_bundled_layers_resolve_to_their_catalog_dirs_never_importing() -> None:
     """The engine and a bundled plugin resolve through ``catalog`` (SPEC v0.19):
     the ids keep their ``resources`` spelling, the paths are the layers' content dirs,
     and an unknown plugin leaf is left out like an unimportable overlay."""
-    from coding_agent_playbook._guard_config_protect import resolve_resource_roots
+    from coding_agent_playbook.hooks.guard_config.resource_roots import resolve_resource_roots
 
     roots = resolve_resource_roots(
         [

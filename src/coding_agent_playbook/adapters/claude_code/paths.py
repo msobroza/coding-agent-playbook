@@ -1,7 +1,7 @@
 """Where the ``claude_code`` adapter composes its rules (SPEC §10.3.1). Stdlib-only leaf.
 
 The two repo-relative paths live here, apart from the adapter, so the sync-level
-guard tables (``_guard_config_protect.COMPOSITE_SINGLETONS``) can name them
+guard tables (``sync._protect.COMPOSITE_SINGLETONS``) can name them
 without importing the adapter and its renderer (jinja2, yaml).
 
 Why two files: OpenCode v1 attaches ``.claude/CLAUDE.md`` when its read tool
