@@ -3,7 +3,7 @@
 Third-party sources register via the ``coding_agent_playbook.artifact_sources``
 entry point declared in ``pyproject.toml``. The filesystem source is the v1
 implementation. It depends only on stdlib (pathlib, importlib.resources,
-importlib.metadata) plus pyyaml for the frontmatter helpers already in types.py.
+importlib.metadata) plus pyyaml for the helpers in ``artifacts/frontmatter.py``.
 The StateSource ABC and FileSystemStateSource live in ``config/files.py``.
 """
 
@@ -14,8 +14,13 @@ from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
+
 # A stdlib-only package module, so this stays a light import.
 from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
+from coding_agent_playbook.artifacts.prompt import Prompt
+from coding_agent_playbook.artifacts.rule import Rule
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.catalog._hook_walk import walk_hook_layer
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
 from coding_agent_playbook.catalog.roots import catalog_layer_root, is_bundled_layer
@@ -23,14 +28,13 @@ from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
 )
-from coding_agent_playbook.types import Prompt, Rule, Skill, split_frontmatter
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
     from typing import TypeVar
 
+    from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.types import Hook
 
     _T = TypeVar("_T")
 
@@ -107,7 +111,7 @@ def _resource_subdir(package: str, subdir: str) -> Path | None:
         # ``files()`` imports the package, and an overlay's import may raise
         # anything (its own code, a missing dependency, an empty name). Skip it
         # like a missing one: sync/validate/check/init run the shared
-        # ``_sync_preflight.unusable_overlays`` check, which names it and the
+        # ``validation.preflight.unusable_overlays`` check, which names it and the
         # error, so discovery must not crash before that check can report it.
         return None
     # We need a ``Path`` for ``rglob``-based walking, not just a
@@ -334,7 +338,7 @@ class FileSystemArtifactSource(ArtifactSource):
         engine, ``catalog/plugins/<name>/eval_tasks/`` for a bundled plugin,
         ``<pkg>/resources/eval_tasks/`` for an overlay package, then
         ``<repo>/playbook/eval_tasks/``). Later layers do NOT override earlier
-        ones here — the orchestrator's :class:`OverlayResolver` handles ID-based
+        ones here — ``catalog.resolve``'s :class:`OverlayResolver` handles ID-based
         collision semantics for rules/prompts/skills, but eval tasks are
         aggregated as-is in v1 (no per-layer override pass yet; the
         collision-by-id pattern is identical and lands when first overlay ships
@@ -347,3 +351,19 @@ class FileSystemArtifactSource(ArtifactSource):
             for label, root in self.layer_roots("eval_tasks")
             for task_dir in discover_eval_task_dirs(root)
         ]
+
+
+def engine_package_of(source: ArtifactSource) -> str:
+    """The ``source_package`` of ``source``'s engine layer; hooks from it are engine-sourced.
+
+    A filesystem source can be pointed at another engine package (tests do);
+    any other source is assumed to serve the real one.
+
+    Example::
+
+        >>> engine_package_of(FileSystemArtifactSource(repo_root=Path(".")))  # doctest: +SKIP
+        'coding_agent_playbook'
+    """
+    if isinstance(source, FileSystemArtifactSource):
+        return source.engine_package
+    return ENGINE_PACKAGE

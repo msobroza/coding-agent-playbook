@@ -12,7 +12,7 @@ bounds: H2-H13) are left to ``hook_policy.classify_hook``, so
 stopping at the first (specs/prK-lifecycle-hooks.md §A.2, §B.5).
 
 Split out of ``types.py`` for the file-size budget. It imports nothing from the
-package, so ``types.py``, ``artifacts/hook_frontmatter.py`` and the stdlib-only
+package, so ``artifacts/hook.py``, ``artifacts/hook_frontmatter.py`` and the stdlib-only
 ``hook_policy`` can all import it without a cycle.
 """
 
@@ -102,7 +102,7 @@ CONTRACT_MESSAGE: Final = (
 )
 
 #: The advisory-rule envelope (§A.8). Defined here, not in hook_policy.tables,
-#: because types.py needs them and hook_policy will import types.py (cycle).
+#: because artifacts/hook.py needs them and hook_policy imports it (cycle).
 ADVISORY_RULE_PREFIX: Final = "guardrail-"
 ADVISORY_RULE_PRIORITY: Final = 30
 

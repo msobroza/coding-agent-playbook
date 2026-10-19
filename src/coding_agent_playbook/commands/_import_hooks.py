@@ -12,9 +12,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.artifacts.hook import Hook
 from coding_agent_playbook.artifacts.hook_schema import ADVISORY_RULE_PREFIX
 from coding_agent_playbook.commands._import_files import copy_tree, restore_exec_bit
-from coding_agent_playbook.types import Hook
 
 if TYPE_CHECKING:
     from pathlib import Path

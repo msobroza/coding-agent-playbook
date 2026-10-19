@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from coding_agent_playbook.hook_runtime._ruff import RuffDiagnostic
-    from coding_agent_playbook.hook_runtime.config import HookRecord
+    from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
     from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import FileReport
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
@@ -184,7 +184,7 @@ def _error_handling(finding: Finding, judge: Judge) -> bool:
     return judge.owns(ERROR_HANDLING_HOOK_ID, finding)
 
 
-def _typing(finding: Finding, judge: Judge) -> bool:
+def _type_hints(finding: Finding, judge: Judge) -> bool:
     code, rel = finding.diagnostic.code or "", finding.rel
     if not judge.owns(TYPING_HOOK_ID, finding) or _in_tests(rel) or rel.endswith(".pyi"):
         return False
@@ -211,7 +211,7 @@ def _docstrings(finding: Finding, judge: Judge) -> bool:
 BUCKETS: Final[tuple[BucketRow, ...]] = (
     BucketRow(POST_EDIT_HOOK_ID, "", _ci_fails),
     BucketRow(ERROR_HANDLING_HOOK_ID, "python-error-handling", _error_handling),
-    BucketRow(TYPING_HOOK_ID, "python-typing", _typing),
+    BucketRow(TYPING_HOOK_ID, "python-typing", _type_hints),
     BucketRow(PYTEST_HOOK_ID, "pytest", _pytest),
     BucketRow(QUALITY_HOOK_ID, "quality", _quality, label="quality"),
     BucketRow(DOCSTRINGS_HOOK_ID, "python-docstrings", _docstrings),

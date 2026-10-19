@@ -15,15 +15,17 @@ from abc import ABC, abstractmethod
 from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar
 
-from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook._sentinel import file_has_sentinel
+from coding_agent_playbook.generated_output.file_identity import FileSet
+from coding_agent_playbook.generated_output.sentinel import file_has_sentinel
 from coding_agent_playbook.security.files import is_secret_file, user_home
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from pathlib import Path
 
-    from coding_agent_playbook._typing import Prompt, Rule, Skill
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
@@ -53,7 +55,7 @@ class Adapter(ABC):
     #: files (continue, agent_harness) or through skill references (claude_code,
     #: opencode, shared_skills). Only ``agents_md`` sets False: it carries always
     #: rules only. ``playbook sync`` warns when every enabled adapter sets False
-    #: (``skill_membership.undelivered_member_warning``). True by default, because
+    #: (``skills.membership.undelivered_member_warning``). True by default, because
     #: an out-of-tree adapter still receives every rule through ``write_rule``.
     delivers_member_rules: ClassVar[bool] = True
 
@@ -66,13 +68,13 @@ class Adapter(ABC):
     #: (Claude Code's ``.claude/settings.json``): it edits managed elements in
     #: place, so ``playbook sync`` never gives one a whole-file lock entry,
     #: gitignores it, flags it as staged output, or deletes it. Each must be
-    #: written by atomic replace (``_atomic_io.atomic_write_bytes``): ``sync
+    #: written by atomic replace (``generated_output.atomic_io.atomic_write_bytes``): ``sync
     #: --check`` relies on it to call a dangling link at one no blocker, since
     #: the rename replaces the link (``_output_blockers.write_blocker``).
     shared_outputs: ClassVar[tuple[str, ...]] = ()
 
     #: The repo-relative root this adapter's native Agent-Skills writer
-    #: (``adapters._skill_writer.SkillWriter``) writes ``<root>/<id>/`` under,
+    #: (``adapters.skill_dirs.writer.SkillWriter``) writes ``<root>/<id>/`` under,
     #: such as ``".claude/skills"``; ``None`` (the default) when it writes none.
     #: Inside ``<root>/<id>/`` that writer settles what is in the way itself
     #: (§10.8), so ``sync --check`` explains a missing file there its way (§12.3).
@@ -321,7 +323,7 @@ class Adapter(ABC):
 
     @staticmethod
     def _carries_sentinel(path: Path) -> bool:
-        """Whether ``path`` is engine-generated per :func:`_sentinel.file_has_sentinel`.
+        """Whether ``path`` is engine-generated per :func:`~coding_agent_playbook.generated_output.sentinel.file_has_sentinel`.
 
         The sentinel line must be line 1, or the first body line after a
         leading YAML frontmatter block; anywhere else it is user prose. Binary,

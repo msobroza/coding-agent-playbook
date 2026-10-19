@@ -1,6 +1,6 @@
 """The regex fallback of the unsafe-sink visitor (specs/prK-hook-pack.md §E.3).
 
-Used by ``_sink_scan.new_sink_calls`` when a pre- or post-image does not
+Used by ``judges.sink_scan.new_sink_calls`` when a pre- or post-image does not
 parse: a call head (``callee(``) is found anywhere, its top-level keyword
 arguments read up to the matching parenthesis, and ``import`` lines give the
 aliases. It also matches inside strings and comments, which is the price of
@@ -13,7 +13,7 @@ import ast
 import re
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.handlers._sink_scan import (
+from coding_agent_playbook.hook_runtime.judges.sink_scan import (
     CONVENTIONAL_ALIASES,
     EXPR,
     SPLAT,
@@ -24,7 +24,7 @@ from coding_agent_playbook.hook_runtime.handlers._sink_scan import (
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
-    from coding_agent_playbook.hook_runtime.handlers._sink_scan import Keyword, SinkTable
+    from coding_agent_playbook.hook_runtime.judges.sink_scan import Keyword, SinkTable
 
 __all__ = ["regex_sink_calls"]
 

@@ -1,7 +1,7 @@
 """``playbook scan-sinks`` — ml-unsafe-deserialization-guard's off-workstation twin (specs/prK-hook-pack.md §E.3).
 
 Counts the unsafe sink calls a change adds with the guard's own visitor
-(``deser.new_sink_calls``) and the sink table the engine ships in the guard's
+(``judges.sink_scan.new_sink_calls``) and the sink table the engine ships in the guard's
 ``HOOK.md``, so the hook and its twin never disagree on a row:
 
 - ``--staged``: the index against ``HEAD`` (the ``playbook-scan-sinks``
@@ -21,15 +21,13 @@ Exit codes: 0 clean (notes only), 1 a new block sink, 2 a usage or git error.
 from __future__ import annotations
 
 import json
-import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.commands.twins._git_scope import open_git, resolve_range
-from coding_agent_playbook.hook_runtime.git import GitError
-from coding_agent_playbook.hook_runtime.handlers._notebook_cells import notebook_code
-from coding_agent_playbook.hook_runtime.handlers.deser import (
+from coding_agent_playbook.commands.twins._runner import TwinOutcome, run_twin
+from coding_agent_playbook.hook_runtime.judges.notebook_cells import notebook_code
+from coding_agent_playbook.hook_runtime.judges.sink_scan import (
     SinkTable,
     new_sink_calls,
     trusted_artifact_line,
@@ -37,9 +35,10 @@ from coding_agent_playbook.hook_runtime.handlers.deser import (
 
 if TYPE_CHECKING:
     import argparse
+    from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.git import GitPort, SafeGit
-    from coding_agent_playbook.hook_runtime.handlers.deser import SinkHit
+    from coding_agent_playbook.hook_runtime.judges.sink_scan import SinkHit
 
 __all__ = ["SinkChange", "SinkFinding", "range_changes", "run", "scan_changes", "shipped_table"]
 
@@ -93,17 +92,15 @@ def run(args: argparse.Namespace, *, git: SafeGit | None = None) -> int:
         >>> run(build_parser().parse_args(["scan-sinks", "--staged"]))  # doctest: +SKIP
         1
     """
-    repo_root = Path(args.repo_root or ".").resolve()
-    try:
-        port = git if git is not None else open_git(repo_root)
-        label, changes = _changes(port, args)
-        findings = scan_changes(changes, shipped_table())
-    except (GitError, ValueError) as exc:  # GitBaseError and a bad --range are ValueErrors
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
+    return run_twin(args.repo_root, lambda root: _outcome(args, root, git))
+
+
+def _outcome(args: argparse.Namespace, repo_root: Path, git: SafeGit | None) -> TwinOutcome:
+    label, changes = _changes(git if git is not None else open_git(repo_root), args)
+    findings = scan_changes(changes, shipped_table())
     code = 1 if any(f.status == "blocking" for f in findings) else 0
-    print(_json(findings, label, code) if args.format == "json" else _text(findings, label))
-    return code
+    text = _json(findings, label, code) if args.format == "json" else _text(findings, label)
+    return TwinOutcome(code, text)
 
 
 def shipped_table() -> SinkTable:
@@ -112,8 +109,8 @@ def shipped_table() -> SinkTable:
     The ``HOOK.md`` is in the engine's catalog (``catalog/core/hooks/``), found
     through the ``catalog.roots`` module; a broken install raises ``CatalogMissingError``.
     """
+    from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE, engine_layer_root
-    from coding_agent_playbook.types import Hook
 
     path = engine_layer_root().joinpath(*_HOOK_MD)
     handler = Hook.from_markdown(path, ENGINE_PACKAGE).frontmatter.handler

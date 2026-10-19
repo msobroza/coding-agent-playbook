@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.commands import sync as _sync
+from coding_agent_playbook.sync import pipeline as _sync
 from tests.cli.hook_repo import GUARD_CONFIG, hook_deps, make_hook_repo
 from tests.fakes import FakeGitClient
 

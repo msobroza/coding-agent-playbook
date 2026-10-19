@@ -21,9 +21,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._config_reader import read_small_file
-from coding_agent_playbook.hook_runtime._lock_digest import load_toml
 from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.config.lock_digest import load_toml
+from coding_agent_playbook.hook_runtime.config.reader import read_small_file
 from coding_agent_playbook.hook_runtime.handlers._control_plane_toml import (
     local_policy_overrides,
 )
@@ -251,7 +251,7 @@ def pending_trust_probe(inputs: BriefingInputs) -> str | None:
 
 def machine_pins_probe(inputs: BriefingInputs) -> str | None:
     """10b. This worktree's ``machine.json`` is missing or older than the outputs."""
-    from coding_agent_playbook.hook_runtime.pin import read_machine_pins
+    from coding_agent_playbook.hook_runtime.config.pin import read_machine_pins
 
     pins = read_machine_pins(git_dir=inputs.repo.git_dir)
     locked = inputs.lockfile.engine_version if inputs.lockfile is not None else None

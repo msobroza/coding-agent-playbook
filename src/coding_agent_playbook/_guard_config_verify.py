@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
     from pathlib import Path
 
-    from coding_agent_playbook.types import Prompt
+    from coding_agent_playbook.artifacts.prompt import Prompt
 
 __all__ = [
     "NUDGE_HANDLER",

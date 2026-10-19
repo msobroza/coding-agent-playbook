@@ -23,9 +23,9 @@ from coding_agent_playbook.hook_policy.tables import (
 )
 
 if TYPE_CHECKING:
+    from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
     from coding_agent_playbook.artifacts.hook_schema import HookHandler
-    from coding_agent_playbook.types import Hook
 
 #: The decisions an overlay may never drop: they are what makes a hook a guard.
 _GUARD_DECISIONS = ("deny", "ask")

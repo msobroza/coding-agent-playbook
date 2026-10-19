@@ -28,21 +28,21 @@ import posixpath
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import clean_text, quote_data
+from coding_agent_playbook.hook_runtime.config.protected import classify, protected_paths
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.handlers._targets import (
     file_write_paths,
     shell_write_targets,
 )
-from coding_agent_playbook.hook_runtime.protected import classify, protected_paths
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
+    from coding_agent_playbook.hook_runtime.config.pin import MachinePins
+    from coding_agent_playbook.hook_runtime.config.protected import ProtectedEntry, ProtectedHit
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
-    from coding_agent_playbook.hook_runtime.pin import MachinePins
-    from coding_agent_playbook.hook_runtime.protected import ProtectedEntry, ProtectedHit
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell import Segment
 
@@ -217,7 +217,7 @@ def _machine(ev: CanonicalEvent, targets: Iterable[NormalizedPath]) -> MachinePi
     """``machine.json``, read only when a target lies outside the repository."""
     if ev.repo is None or all(target.same_repo for target in targets):
         return None
-    from coding_agent_playbook.hook_runtime.pin import read_machine_pins
+    from coding_agent_playbook.hook_runtime.config.pin import read_machine_pins
 
     return read_machine_pins(git_dir=ev.repo.git_dir)
 

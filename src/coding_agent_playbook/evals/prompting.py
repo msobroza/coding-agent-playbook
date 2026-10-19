@@ -17,7 +17,7 @@ The facts come from running the detector over the task's ``setup/`` tree (the
 same bytes the runner materializes into the scratch repo), overlaid with the
 task's authored mock facts (``[setup] project_kind`` + extra keys).
 
-Mirrors the prompt half of ``commands/_sync_render.py::render_artifacts``
+Mirrors the prompt half of ``sync/render.py::render_artifacts``
 without touching it; the two should converge on one shared helper.
 
 Usage::
@@ -34,10 +34,11 @@ import yaml
 from jinja2 import TemplateError
 
 from coding_agent_playbook import __version__ as _engine_version
+from coding_agent_playbook.artifacts.prompt import Prompt
+from coding_agent_playbook.catalog.resolve import OverlayResolver
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.detector.predicate import evaluate_predicate
-from coding_agent_playbook.orchestrator import OverlayResolver
 from coding_agent_playbook.prompt_rule_delivery import includes_rules_appendix
 from coding_agent_playbook.renderer import (
     TemplateSecurityError,
@@ -45,16 +46,15 @@ from coding_agent_playbook.renderer import (
     render_string,
 )
 from coding_agent_playbook.rule_registry import RuleRegistryImpl
-from coding_agent_playbook.types import Prompt
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from jinja2 import Environment
 
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.types import Rule
 
 #: The engine package: its rules are always in scope, like for a consumer.
 _ENGINE_PACKAGE = "coding_agent_playbook"
@@ -201,7 +201,7 @@ def _task_facts(task: EvalTask) -> Facts:
 def _render_context(task: EvalTask, facts: Facts) -> dict[str, Any]:
     """Facts + project metadata + ``input_variables`` (the invocation wins).
 
-    Mirrors ``commands/_sync_render.py::build_jinja_context``. The project name and
+    Mirrors ``sync/render.py::build_jinja_context``. The project name and
     description come from ``setup/pyproject.toml`` — which the agent can read in
     its working tree anyway — never from the task ``description``, which
     narrates the scenario and would leak it into the prompt.

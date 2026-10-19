@@ -194,8 +194,8 @@ def test_package_facade_exports_every_table() -> None:
 
 
 def test_hook_policy_imports_only_the_stdlib() -> None:
-    # Sync-time but stdlib-only (§A.6): no yaml/jinja2, and not types.py, which
-    # imports yaml at module top. Since K2 it also reads the import-light runtime
+    # Sync-time but stdlib-only (§A.6): no yaml/jinja2, and not artifacts/frontmatter.py,
+    # which imports yaml at module top. Since K2 it also reads the import-light runtime
     # tables and handler registry it shares with the dispatcher (one source each).
     loaded = new_modules_after("import coding_agent_playbook.hook_policy")
 
@@ -229,8 +229,9 @@ def test_hook_policy_imports_only_the_stdlib() -> None:
         "coding_agent_playbook.hook_policy.resolved",
         "coding_agent_playbook.hook_policy.tables",
         "coding_agent_playbook.hook_runtime",
-        "coding_agent_playbook.hook_runtime._config_keys",
         "coding_agent_playbook.hook_runtime._event_memo",  # HandlerContext.memo (K7)
+        "coding_agent_playbook.hook_runtime.config",
+        "coding_agent_playbook.hook_runtime.config.keys",
         "coding_agent_playbook.hook_runtime.decision",
         "coding_agent_playbook.hook_runtime.event",
         "coding_agent_playbook.hook_runtime.harness",

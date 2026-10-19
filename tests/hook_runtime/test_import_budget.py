@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from coding_agent_playbook._sentinel import SENTINEL, sentinel_line
+from coding_agent_playbook.generated_output.sentinel import SENTINEL, sentinel_line
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.harness import DENY_EXIT
 from tests.engine_modules import (
@@ -233,8 +233,8 @@ def test_the_import_probe_reads_the_importtime_report(
     assert {"json", engine_module("coding_agent_playbook.hook_runtime.cli")} <= imported
 
 
-_PROTECTED_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.protected")
-_PIN_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.pin")
+_PROTECTED_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.config.protected")
+_PIN_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.config.pin")
 
 
 @pytest.fixture
@@ -496,9 +496,14 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
         *(
             engine_module(f"{ENGINE}.{name}")
             for name in (
+                "artifacts.frontmatter",
+                "artifacts.hook",
                 "artifacts.hook_frontmatter",
                 "artifacts.hook_schema",
                 "artifacts.member_reference",
+                "artifacts.prompt",
+                "artifacts.rule",
+                "artifacts.skill",
                 "catalog._hook_walk",
                 "catalog.layers",
                 "catalog.source",
@@ -507,7 +512,6 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
                 "evaluators",
                 "metrics_gate",
                 "toml_writer",
-                "types",
             )
         ),
     )
@@ -751,7 +755,7 @@ def test_bash_guards_need_no_git_and_no_process_off_git_segments(
 
 
 #: The helpers each guard imports at module load: their presence shows the guard ran.
-_INSTALL_CMDS: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._install_cmds")
+_INSTALL_CMDS: Final = engine_module("coding_agent_playbook.hook_runtime.judges.install_commands")
 _EGRESS: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._egress")
 _BRANCH_LOCAL: Final = ("tomllib", "difflib", "ipaddress")
 

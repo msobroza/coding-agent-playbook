@@ -2,9 +2,9 @@
 
 specs/prS-skills-context.md §6.4.1 split it out of ``types``; specs/prT-package-layout.md
 A1 moved it to ``artifacts/`` and removed the ``types`` re-export, so importers name
-the defining module. The leaf must not import ``types`` back (``types`` imports it),
-or the pair would be an import cycle. The class's own behaviour stays covered,
-unmodified, by test_types_hook.py and test_types_hook_roundtrip.py.
+the defining module. The leaf must not import ``artifacts.hook`` back
+(``artifacts.hook`` imports it), or the pair would be an import cycle. The class's
+own behaviour stays covered, unmodified, by test_hook.py and test_hook_roundtrip.py.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def test_hook_frontmatter_annotations_still_resolve_at_run_time() -> None:
 def test_hook_frontmatter_leaf_loads_nothing_but_the_hook_schema() -> None:
     loaded = new_modules_after("import coding_agent_playbook.artifacts.hook_frontmatter")
 
-    # Not types (that would be a cycle) and not yaml (types.py is what pays for it).
+    # Not artifacts.hook (a cycle) and not yaml (artifacts/frontmatter.py pays for it).
     non_stdlib = [name for name in loaded if name.split(".")[0] not in sys.stdlib_module_names]
     assert non_stdlib == [
         "coding_agent_playbook.artifacts",

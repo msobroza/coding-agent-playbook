@@ -11,6 +11,8 @@ import pytest
 
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.commands.import_harness import import_harness
 from coding_agent_playbook.harness.manifest import (
     ManifestEntry,
@@ -19,7 +21,6 @@ from coding_agent_playbook.harness.manifest import (
     read_manifest,
     write_manifest,
 )
-from coding_agent_playbook.types import Rule, RuleFrontmatter, Skill
 from tests.hook_samples import hook_frontmatter
 from tests.toml_equality import assert_toml_identical
 

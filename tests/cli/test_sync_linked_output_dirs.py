@@ -33,9 +33,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.lockfile.model import LockEntry
+from coding_agent_playbook.sync import pipeline as _sync
 from tests.cli.hook_repo import SETTINGS, hook_deps, make_hook_repo
 from tests.fakes import FakeGitClient
 
@@ -142,7 +142,7 @@ def test_an_unreadable_link_target_keeps_its_own_error(repo: Path, tmp_path: Pat
         locked.chmod(0o755)
 
     frames = [str(entry.path) for entry in raised.traceback]
-    assert not [frame for frame in frames if "_output_blockers" in frame or "_symlinks" in frame]
+    assert not [frame for frame in frames if "_output_blockers" in frame or "symlinks.py" in frame]
 
 
 @pytest.mark.parametrize("dangling", [False, True], ids=["live", "dangling"])

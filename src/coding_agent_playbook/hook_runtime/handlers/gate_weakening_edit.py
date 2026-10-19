@@ -142,7 +142,7 @@ def _added_texts(tool: ToolCall, path: NormalizedPath) -> list[str]:
 
 
 def _read(path: NormalizedPath) -> str | None:
-    from coding_agent_playbook.hook_runtime._config_reader import read_small_file
+    from coding_agent_playbook.hook_runtime.config.reader import read_small_file
 
     if not path.exists:
         return None

@@ -1,6 +1,6 @@
 """An unusable overlay is reported by every command, not only ``sync`` (SPEC §11.5).
 
-"Unusable" is the one shared preflight check (``_sync_preflight``): importing an
+"Unusable" is the one shared preflight check (``validation.preflight``): importing an
 overlay package fails (it is missing, or its own code raises), or it imports but
 ships no ``resources/`` directory (``json``, say). A bundled-plugin name is never
 imported: it is unusable when no ``catalog/plugins/<leaf>/`` matches it ("no
@@ -25,9 +25,9 @@ import pytest
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands import check as _check
 from coding_agent_playbook.commands import init as _init
-from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands import validate as _validate
-from coding_agent_playbook.commands._sync_preflight import bundled_plugins
+from coding_agent_playbook.sync import pipeline as _sync
+from coding_agent_playbook.validation.preflight import bundled_plugins
 from tests.conftest import _DEFAULT_CONFIG
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import PLUGIN_NAME

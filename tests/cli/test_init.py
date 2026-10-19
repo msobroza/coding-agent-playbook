@@ -14,12 +14,12 @@ from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.commands._init_adapters import DEFAULT_ADAPTERS
 from coding_agent_playbook.config.model import Config, OutputConfig, ProjectMeta, StorageConfig
-from coding_agent_playbook.gitignore import BLOCK_START
+from coding_agent_playbook.generated_output.gitignore import BLOCK_START
 from coding_agent_playbook.toml_writer import dump_toml
 from tests.cli.test_cli import break_catalog
 from tests.hook_samples import write_hook
 from tests.toml_equality import assert_toml_identical
-from tests.unit.test_precommit_merge import LEGACY_APPENDED, LEGACY_STARTER
+from tests.unit.test_precommit import LEGACY_APPENDED, LEGACY_STARTER
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -507,22 +507,53 @@ def test_init_output_policy_comes_from_committed_config(tmp_path):
     assert "entry: playbook sync --check\n" not in text
 
 
+def _starter_hooks(tmp_path: Path) -> tuple[set[str], list[str]]:
+    """The hook ids and ``default_install_hook_types`` of init's ``.pre-commit-config.yaml``."""
+    parsed = yaml.safe_load((tmp_path / ".pre-commit-config.yaml").read_text())
+    hooks = {hook["id"] for repo in parsed["repos"] for hook in repo["hooks"]}
+    return hooks, parsed["default_install_hook_types"]
+
+
 @pytest.mark.parametrize("commitizen", [False, True])
 def test_fresh_starter_adds_the_cz_twin_only_for_a_commitizen_repo(
     tmp_path: Path, commitizen: bool
 ) -> None:
-    """prK §F.4.3: the commit-msg ``cz check`` twin follows the CI step's predicate."""
+    """prK §F.4.3: the commit-msg ``cz check`` twin follows the CI step's predicate.
+
+    Runs ``init`` itself: it computes the predicate and hands it to
+    ``write_pre_commit``, so this pins that wiring (N9 review).
+    """
     pyproject = '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n'
     if commitizen:
         pyproject += "\n[tool.commitizen]\nname = 'cz_conventional_commits'\n"
     (tmp_path / "pyproject.toml").write_text(pyproject)
 
-    path, _ = _init._write_pre_commit(tmp_path)
+    assert _init.run(_ns(tmp_path, name="x", kind="python-library")) == 0
 
-    parsed = yaml.safe_load(path.read_text())
-    hooks = {hook["id"] for repo in parsed["repos"] for hook in repo["hooks"]}
+    hooks, install_types = _starter_hooks(tmp_path)
     assert ("coding-agent-playbook-commit-msg" in hooks) is commitizen
-    assert ("commit-msg" in parsed["default_install_hook_types"]) is commitizen
+    assert ("commit-msg" in install_types) is commitizen
+    assert "coding-agent-playbook-commit-trailers" not in hooks
+
+
+_TRAILER_ROWS = '\n[hooks.git-commit-push-policy-guard]\nforbid_trailers = ["Co-Authored-By"]\n'
+
+
+def test_fresh_starter_adds_the_trailer_twin_for_committed_trailer_rows(tmp_path: Path) -> None:
+    """prK §E.4: a committed trailer row gives the starter its commit-msg trailer twin.
+
+    Runs ``init`` itself, so the ``commit_trailers`` wiring into
+    ``write_pre_commit`` is pinned too (N9 review).
+    """
+    _pyproject(tmp_path)
+    (tmp_path / ".coding-agent-playbook.toml").write_text(_PLAIN_CONFIG + _TRAILER_ROWS)
+
+    assert _init.run(_ns(tmp_path, name="x", kind="python-library")) == 0
+
+    hooks, install_types = _starter_hooks(tmp_path)
+    assert "coding-agent-playbook-commit-trailers" in hooks
+    assert "coding-agent-playbook-commit-msg" not in hooks
+    assert "commit-msg" in install_types
 
 
 # --- re-runs: the committed config is rewritten from itself alone (SPEC §7.2/§12.1)

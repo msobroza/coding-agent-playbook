@@ -23,7 +23,7 @@ never emits an ``evals/`` directory — consistent with the five built-in adapte
 
 The playbook sentinel is written as the **first body line** of every generated
 text file (frontmatter must stay on line 1 for the harness parser), one of the
-two anchored positions ``_sentinel.has_sentinel`` accepts; a sentinel quoted
+two anchored positions ``generated_output.sentinel.has_sentinel`` accepts; a sentinel quoted
 anywhere else is user prose. ``cleanup_stale`` never deletes inside a skill
 directory (``skills/<id>/``): stale skill output — the ``SKILL.md``, copied
 scripts and references — is settled only by ``playbook sync``'s lockfile
@@ -35,8 +35,6 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, ClassVar
 
-from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook._output_io import write_output_bytes, write_output_text
 from coding_agent_playbook.adapters._harness_hooks import (
     copy_scripts,
     emit_hook_sidecars,
@@ -45,6 +43,8 @@ from coding_agent_playbook.adapters._harness_hooks import (
 )
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.generated_output.file_identity import FileSet
+from coding_agent_playbook.generated_output.output_io import write_output_bytes, write_output_text
 from coding_agent_playbook.harness import emitter, manifest
 from coding_agent_playbook.renderer import render_inline_prompt_markdown
 
@@ -52,10 +52,12 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.harness.manifest import ManifestEntry
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.renderer import RuleRegistry
-    from coding_agent_playbook.types import Prompt, Rule, Skill
 
 #: The single leaf type this adapter emits (skill-shaped leaves for both skills
 #: and prompts). Declared in the root ``.leaf-detectors`` file.
@@ -73,8 +75,8 @@ class AgentHarnessAdapter(Adapter):
 
     Registers under ``coding_agent_playbook.adapters`` as ``agent_harness``.
     **Opt-in** — it is not force-enabled like ``agents_md`` and is not in the
-    default-adapter set; enable it via ``adapters_enabled`` in the config. The
-    orchestrator discovers and instantiates it through the entry point — never
+    default-adapter set; enable it via ``adapters_enabled`` in the config.
+    ``adapters.registry`` discovers and instantiates it through the entry point — never
     construct it directly outside of tests.
 
     The optional ``rule_registry`` is used to inline a prompt's

@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.handlers.deser import SinkTable
+    from coding_agent_playbook.hook_runtime.judges.sink_scan import SinkTable
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
 
@@ -184,7 +184,7 @@ def _deser_lines(ctx: HandlerContext, root: str, changed: list[str]) -> list[str
     if spec is None or not files:
         return []
     # Imported only now: the sink visitor (``ast``) is needed only for a changed .py file.
-    from coding_agent_playbook.hook_runtime.handlers.deser import SinkTable
+    from coding_agent_playbook.hook_runtime.judges.sink_scan import SinkTable
 
     table = SinkTable.from_config(spec.config)
     return [line for rel in files for line in _file_sinks(ctx, root, rel, table)]
@@ -192,7 +192,7 @@ def _deser_lines(ctx: HandlerContext, root: str, changed: list[str]) -> list[str
 
 def _file_sinks(ctx: HandlerContext, root: str, rel: str, table: SinkTable) -> list[str]:
     from coding_agent_playbook.hook_runtime.escape import pragma_at_head
-    from coding_agent_playbook.hook_runtime.handlers.deser import (
+    from coding_agent_playbook.hook_runtime.judges.sink_scan import (
         new_sink_calls,
         trusted_artifact_line,
     )

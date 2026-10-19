@@ -32,12 +32,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.commands import sync as _sync
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
+from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.harness.manifest import read_manifest
-from coding_agent_playbook.renderer import SENTINEL
-from coding_agent_playbook.types import split_frontmatter
+from coding_agent_playbook.sync import pipeline as _sync
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import (
     EXPECTED_LICENSE_COPIES,
@@ -106,7 +107,7 @@ def _init_git_pack_repo(repo: Path, *, adapters: tuple[str, ...]) -> Path:
     """Write, ``git init``, sync and commit the sources of an opted-in consumer repo."""
     write_consumer_repo(repo, overlays=[PLUGIN_NAME], adapters=adapters)
     _git(repo, "init", "-q")
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "--no-verify", "-m", "sources")
     return repo
@@ -257,10 +258,10 @@ def test_opting_out_removes_the_pack_skills_from_every_root(
     capsys.readouterr()
 
     # Before the next sync, --check sees the managed block go stale.
-    assert _sync.run(_ns(repo, check=True)) == 1
+    assert sync_cmd.run(_ns(repo, check=True)) == 1
     assert "  .gitignore\n    Managed block is missing or stale" in capsys.readouterr().out
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     for root in NATIVE_SKILL_ROOTS:
         assert not _pack_skill_dirs_left(repo, root), root
     prompts_dir = repo / ".continue" / "prompts"
@@ -269,7 +270,7 @@ def test_opting_out_removes_the_pack_skills_from_every_root(
     assert not any(f"/{sid}/" in gitignore for sid in EXPECTED_SKILL_IDS)
     assert not any(sid in path for path in _lock_paths(repo) for sid in EXPECTED_SKILL_IDS)
     capsys.readouterr()
-    assert _sync.run(_ns(repo, check=True)) == 0, capsys.readouterr().out
+    assert sync_cmd.run(_ns(repo, check=True)) == 0, capsys.readouterr().out
 
 
 @needs_git
@@ -282,7 +283,7 @@ def test_opting_out_keeps_a_consumer_added_and_a_consumer_edited_file(
     notes.write_text("How our team brainstorms.\n", encoding="utf-8")
     # A sync while still opted in rewrites the copied references/ dir; the
     # consumer's file next to the pack's must not become engine output.
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     assert not any("our-team-notes" in path for path in _lock_paths(repo))
     assert "our-team-notes" not in (repo / ".gitignore").read_text(encoding="utf-8")
     # Written by sync but edited since: no longer pristine, so it is kept.
@@ -293,7 +294,7 @@ def test_opting_out_keeps_a_consumer_added_and_a_consumer_edited_file(
     _opt_out(repo)
     capsys.readouterr()
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     assert "warning:" not in capsys.readouterr().err
     assert notes.read_text(encoding="utf-8") == "How our team brainstorms.\n"
@@ -335,14 +336,14 @@ def test_a_skill_md_only_override_removes_the_pack_scripts_and_references(
     assert (synced / "references" / "root-cause-tracing.md").is_file()
     _write_override(repo, "systematic-debugging", references={})
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     for root in NATIVE_SKILL_ROOTS:
         override_out = repo / root / "systematic-debugging"
         assert _relative_files(override_out) == ["SKILL.md"], root
         assert override_out.joinpath("SKILL.md").read_text("utf-8").endswith("Do it our way.\n")
     capsys.readouterr()
-    assert _sync.run(_ns(repo, check=True)) == 0, capsys.readouterr().out
+    assert sync_cmd.run(_ns(repo, check=True)) == 0, capsys.readouterr().out
 
 
 @needs_git
@@ -352,7 +353,7 @@ def test_an_override_shipping_fewer_references_removes_the_pack_only_files(
     repo = git_pack_repo
     _write_override(repo, "systematic-debugging", references={"root-cause-tracing.md": "Ours.\n"})
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     for root in NATIVE_SKILL_ROOTS:
         override_out = repo / root / "systematic-debugging"
@@ -361,7 +362,7 @@ def test_an_override_shipping_fewer_references_removes_the_pack_only_files(
         ours = override_out / "references" / "root-cause-tracing.md"
         assert ours.read_text(encoding="utf-8") == "Ours.\n", root
     capsys.readouterr()
-    assert _sync.run(_ns(repo, check=True)) == 0, capsys.readouterr().out
+    assert sync_cmd.run(_ns(repo, check=True)) == 0, capsys.readouterr().out
 
 
 # --- opt-in agent_harness adapter (SPEC §11.5.1) ---------------------------------
@@ -396,7 +397,7 @@ def test_agent_harness_renders_the_pack_and_opting_out_removes_it(
         assert f"skills/{script}" in flagged, script
 
     _opt_out(repo, adapters=adapters)
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     for root in ("skills", *NATIVE_SKILL_ROOTS):
         assert not _pack_skill_dirs_left(repo, root), root

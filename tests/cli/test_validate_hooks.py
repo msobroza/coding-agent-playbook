@@ -17,9 +17,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.commands import _validate_context
 from coding_agent_playbook.commands import validate as _validate
-from tests.hooks.pack_repo import engine_hook_paths
+from coding_agent_playbook.validation import context as _validate_context
+from tests.hook_runtime.handlers.pack_repo import engine_hook_paths
 
 if TYPE_CHECKING:
     from collections.abc import Callable

@@ -9,31 +9,31 @@
 - :func:`build_prompt_environment` — the registry plus the Jinja environment
   every prompt render (``sync``, ``render``, the eval runner) builds the same way.
 
-Moved out of ``orchestrator`` (specs/prS-skills-context.md §7.4.4), then given
-``reference_for`` for D15.
-This module imports ``template_source`` from the orchestrator, so the
-orchestrator must never import this module back (a cycle), nor re-export its
-names (a shim): importers take them from here.
+Moved out of the sync context module (specs/prS-skills-context.md §7.4.4), then
+given ``reference_for`` for D15.
+This module imports ``template_source`` from the stdlib leaf ``artifacts.identity``
+(H11), which must never import this module back (a cycle), nor re-export its names
+(a shim): importers take them from here.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.artifacts.identity import template_source
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
-from coding_agent_playbook.orchestrator import template_source
 from coding_agent_playbook.prompt_rule_delivery import SkillReference
 from coding_agent_playbook.renderer import build_environment, render_sandboxed
 
 if TYPE_CHECKING:
     from jinja2 import Environment
 
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.detector.facts import Facts
-    from coding_agent_playbook.types import Rule
 
 
 class RuleRegistryImpl:
-    """Concrete :class:`RuleRegistry` used by the orchestrator.
+    """Concrete :class:`RuleRegistry` used by sync, render and the eval runner.
 
     Built once per sync from the merged + applies_if-filtered rule list. The
     ``render_for_inclusion`` method returns the inline body for a rule (with

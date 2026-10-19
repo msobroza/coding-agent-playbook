@@ -31,7 +31,7 @@ from coding_agent_playbook.hook_runtime.registry import HandlerResolutionError, 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.hook_runtime.config import HookRecord
+    from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, ToolCall
     from coding_agent_playbook.hook_runtime.registry import HandlerContext, ResolveContext
     from coding_agent_playbook.security.trust import HandlerApproval
@@ -112,7 +112,10 @@ def approval_of(record: HookRecord, argv: Sequence[str] | None = None) -> Handle
 
 def _launcher_argv(launcher: str, ctx: ResolveContext) -> tuple[str, ...]:
     """The launcher as pinned for this worktree (``machine.json``, the interpreter pin), else PATH."""
-    from coding_agent_playbook.hook_runtime.pin import read_interpreter_pin, read_machine_pins
+    from coding_agent_playbook.hook_runtime.config.pin import (
+        read_interpreter_pin,
+        read_machine_pins,
+    )
 
     git_dir = ctx.repo.git_dir
     pins = read_machine_pins(git_dir=git_dir)

@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.detector.facts import Facts, detect
 from coding_agent_playbook.detector.predicate import evaluate_predicate, filter_applies_if
-from coding_agent_playbook.types import Rule, RuleFrontmatter
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from coding_agent_playbook.types import split_frontmatter
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from tests._catalog import CORE_ROOT, core_rules
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
