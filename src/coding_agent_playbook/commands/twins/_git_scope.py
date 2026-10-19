@@ -6,6 +6,9 @@ with a CLI-sized per-call timeout. The base is ``--base`` or the default branch
 (``SafeGit.default_branch``: ``origin/HEAD``, then ``main``, then ``master``),
 and the compared range starts at its merge base with ``HEAD``. A shallow CI
 checkout has neither, hence :data:`FETCH_DEPTH_HINT` in every such error.
+
+A twin's ``--range A..B`` / ``A...B`` resolves to a :class:`ScanRange` here
+(:func:`resolve_range`), so no twin imports the gate-scan command for it.
 """
 
 from __future__ import annotations
