@@ -1,4 +1,4 @@
-"""Unit tests for the pre-render environment checks (``commands/_sync_preflight.py``)."""
+"""Unit tests for the pre-render environment checks (``validation/preflight.py``)."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ import pytest
 
 from coding_agent_playbook.catalog import roots as catalog
 from coding_agent_playbook.catalog.roots import DEPRECATED_PACK_NAMESPACE, PLUGIN_NAMESPACE
-from coding_agent_playbook.commands import _sync_preflight
-from coding_agent_playbook.commands._sync_preflight import (
+from coding_agent_playbook.validation import preflight as _sync_preflight
+from coding_agent_playbook.validation.preflight import (
     UnusableOverlay,
     bundled_plugins,
     missing_adapters,

@@ -19,10 +19,10 @@ from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAda
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
-from coding_agent_playbook.commands._validate_frontmatter import lint_codes_problems
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.hook_policy import resolve_lint_codes
 from coding_agent_playbook.types import Rule
+from coding_agent_playbook.validation._frontmatter import lint_codes_problems
 from tests._catalog import CORE_ROOT
 
 if TYPE_CHECKING:
