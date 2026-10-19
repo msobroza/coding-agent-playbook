@@ -40,6 +40,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.catalog` | `coding_agent_playbook.catalog.roots` | N3 |
 | `coding_agent_playbook.cli.build_parser` | `coding_agent_playbook.cli.parser.build_parser` | N7 |
 | `coding_agent_playbook.commands._ci_policy` | `coding_agent_playbook.commands.twins.policy` | N8 |
+| `coding_agent_playbook.commands._committed_config` | `coding_agent_playbook.config.committed` | N10 |
 | `coding_agent_playbook.commands._twin_policy` | `coding_agent_playbook.commands.twins.policy` | N8 |
 | `coding_agent_playbook.commands.check_commit_trailers` | `coding_agent_playbook.commands.twins.check_commit_trailers` | N8 |
 | `coding_agent_playbook.commands.check_deps` | `coding_agent_playbook.commands.twins.check_deps` | N8 |

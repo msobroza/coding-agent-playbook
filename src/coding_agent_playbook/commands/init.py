@@ -23,12 +23,6 @@ from coding_agent_playbook.catalog.roots import (
 )
 from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands import sync as _sync
-from coding_agent_playbook.commands._committed_config import (
-    ConfigRewrite,
-    detector_cache_table,
-    plan_committed_update,
-    plan_first_config,
-)
 from coding_agent_playbook.commands._init_adapters import (
     ADAPTER_CHOICES,
     ADAPTERS_QUESTION,
@@ -37,6 +31,12 @@ from coding_agent_playbook.commands._init_adapters import (
     adapters_union,
 )
 from coding_agent_playbook.commands._precommit_merge import merge_pre_commit
+from coding_agent_playbook.config.committed import (
+    ConfigRewrite,
+    detector_cache_table,
+    plan_committed_update,
+    plan_first_config,
+)
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.config.model import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.detector.facts import detect
@@ -226,7 +226,7 @@ def _plan_config(state: FileSystemStateSource, repo_root: Path, answers: _Answer
     committed file nor guesses a team-wide one. Last, the planned config with
     the local file merged on top must load (``FileSystemStateSource.preview_config``):
     only init's final sync would otherwise load it, after the committed files
-    were rewritten. Both paths are ``_committed_config``'s, which ``check
+    were rewritten. Both paths are ``config.committed``'s, which ``check
     --refresh`` shares.
     """
     detector_cache = detector_cache_table(detect(repo_root))
