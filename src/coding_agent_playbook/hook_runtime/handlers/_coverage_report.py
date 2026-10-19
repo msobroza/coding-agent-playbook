@@ -161,7 +161,7 @@ def head_snapshot(store: StateStore, head_tree: str | None) -> Path | None:
 
     Example: ``head_snapshot(ctx.session.store, plan.head_tree)`` after a green run of that tree.
     """
-    from coding_agent_playbook.evaluators.measurement_snapshot import SnapshotError, read_snapshot
+    from coding_agent_playbook.metrics_gate.snapshot import SnapshotError, read_snapshot
 
     if head_tree is None:
         return None
@@ -178,9 +178,9 @@ def write_snapshot_rows(store: StateStore, tree: str, rows: Sequence[ScopeDetail
 
     Example: ``write_snapshot_rows(ctx.session.store, fingerprint.tree_id, grade.rows)``.
     """
-    from coding_agent_playbook.evaluators.measurement_snapshot import snapshot_document
     from coding_agent_playbook.evaluators.types import Measurement
     from coding_agent_playbook.hook_runtime.state import StateUnavailable
+    from coding_agent_playbook.metrics_gate.snapshot import snapshot_document
 
     if not rows:
         return

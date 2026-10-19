@@ -75,7 +75,7 @@ def metrics_run_tests(repo_root: Path) -> bool:
 
     Example: ``metrics_run_tests(repo_root)`` after ``[metrics] run_tests = true``.
     """
-    from coding_agent_playbook.evaluators.metrics_gate import (
+    from coding_agent_playbook.metrics_gate.run import (
         MetricsGateUsageError,
         load_metrics_config,
     )

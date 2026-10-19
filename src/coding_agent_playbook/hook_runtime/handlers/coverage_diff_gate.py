@@ -44,14 +44,14 @@ from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResul
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.evaluators._metrics_suite import ProjectFactory
     from coding_agent_playbook.evaluators.execution.project import ProjectHandle, RunArtifacts
-    from coding_agent_playbook.evaluators.metrics_gate import MetricsGateResult
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import SkipCategory, StopPlan
     from coding_agent_playbook.hook_runtime.stop.suite import SuiteOutcome
+    from coding_agent_playbook.metrics_gate.run import MetricsGateResult
+    from coding_agent_playbook.metrics_gate.suite import ProjectFactory
 
 __all__ = [
     "CONFIG_SCHEMA",
@@ -62,7 +62,7 @@ __all__ = [
 ]
 
 STAGE_NAME: Final = "coverage"
-#: The MODULE label the gate keys the suite total on (``evaluators._metrics_suite``).
+#: The MODULE label the gate keys the suite total on (``metrics_gate.suite``).
 _SUITE_LABEL: Final = "suite"
 _SELECT: Final = ("diff_coverage", "coverage")
 CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
@@ -157,8 +157,8 @@ class CoverageStage:
 
     def _gate(self, root: Path, handle: ProjectHandle, snapshot: Path | None) -> MetricsGateResult:
         """``run_metrics_gate`` over the shared run: no new suite run, ``[metrics]`` read live."""
-        from coding_agent_playbook.evaluators import metrics_gate as gates
         from coding_agent_playbook.hook_runtime.handlers._metrics_pass import PortBaselineGit
+        from coding_agent_playbook.metrics_gate import run as gates
 
         config = gates.load_metrics_config(root)
         changes = self._changes or {}
@@ -227,8 +227,8 @@ def _replay(handle: ProjectHandle) -> ProjectFactory:
 
 def _exclude(ctx: HandlerContext, repo: RepoInfo) -> tuple[str, ...]:
     """``[metrics] exclude`` (read live, memoized per event); the engine default on a bad table."""
-    from coding_agent_playbook.evaluators import metrics_gate as gates
-    from coding_agent_playbook.evaluators.types import MetricConfig
+    from coding_agent_playbook.metrics_gate import run as gates
+    from coding_agent_playbook.metrics_gate.config import MetricConfig
 
     def read() -> tuple[str, ...]:
         try:

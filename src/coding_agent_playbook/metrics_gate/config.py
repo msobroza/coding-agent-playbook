@@ -1,25 +1,35 @@
-"""Parse the ``[metrics]`` table into a ``MetricConfig`` (PR-M §E; prK §F.0.3).
+"""The ``[metrics]`` table: ``MetricConfig`` and its parser (PR-M §E; prK §F.0.3).
 
 Split out of ``config.py`` (now ``config/model.py``), so the table can grow its
-keys without pushing that module past its size budget. The ``evaluators``
-imports stay inside the functions: every command imports ``config.model``, and
-importing ``coding_agent_playbook.evaluators`` loads the whole metric registry.
+keys without pushing that module past its size budget. ``MetricConfig`` joined it
+from the grading kernel's ``types.py`` (N22): only the gate side reads it, so the
+kernel no longer imports this module back. Importing it loads the kernel's
+``types`` (and so the metric registry); ``config.model`` does not import it.
 """
 
 from __future__ import annotations
 
 import math
 import re
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
+
+from coding_agent_playbook.evaluators.types import (
+    DEFAULT_GIT_TIMEOUT_S,
+    DEFAULT_RUFF_FAMILIES,
+    AbsoluteThreshold,
+    RegressionPolicy,
+    RuffSettings,
+)
+
+# The eval-fixture globs are defined once, for the hooks' ``eval_fixture`` path
+# class; ``_eval_paths`` imports only ``re``, so the evaluators stay light.
+from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.evaluators.types import (
-        AbsoluteThreshold,
-        MetricConfig,
-        RegressionPolicy,
-    )
+    from coding_agent_playbook.evaluators.types import Mode
 
 _VALID_METRIC_MODES = ("regression", "absolute", "both")
 #: A ruff rule code: a linter prefix, then digits (``C901``, ``PLR0911``, ``D100``).
@@ -30,9 +40,59 @@ _FAMILY_NAME: Final = re.compile(r"[a-z][a-z0-9_]*")
 _RUFF_SETTING: Final = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*")
 
 
+@dataclass
+class MetricConfig:
+    """Parsed ``[metrics]`` config for the standalone gate; a ``GradePolicy``.
+
+    ``mode`` selects the comparison strategy; ``fail_on_breach`` controls the
+    process exit code; ``strict`` promotes warnings to gate failures. The three
+    dicts are per-evaluator overrides keyed by evaluator ``name``.
+    ``git_timeout_s`` bounds every git call a ``git:`` baseline makes (prK
+    §F.0.3 item 7).
+
+    ``select`` / ``extend_select`` / ``ignore`` are the ruff-shaped metric
+    selection (metric or family names; ``select=None`` is the default set, see
+    :func:`~coding_agent_playbook.metrics_gate.policy.resolve_metric_selection`).
+    ``exclude`` lists repo-relative globs never measured; it defaults to the
+    frozen eval fixtures. ``test_timeout_s`` bounds a suite run (``None``: no
+    bound). ``ruff_families`` / ``ruff_config`` / ``ruff_preview`` are
+    ``[metrics.ruff_violations]`` (``ruff_config`` keeps the TOML values;
+    :attr:`ruff_settings` renders them as flags).
+    """
+
+    mode: Mode = "regression"
+    fail_on_breach: bool = True
+    strict: bool = False
+    run_tests: bool = False
+    test_cmd: list[str] | None = None
+    thresholds: dict[str, AbsoluteThreshold] = field(default_factory=dict)
+    regression: dict[str, RegressionPolicy] = field(default_factory=dict)
+    weights: dict[str, float] = field(default_factory=dict)
+    git_timeout_s: float = DEFAULT_GIT_TIMEOUT_S
+    select: tuple[str, ...] | None = None
+    extend_select: tuple[str, ...] = ()
+    ignore: tuple[str, ...] = ()
+    exclude: tuple[str, ...] = FIXTURE_GLOBS
+    test_timeout_s: float | None = None
+    ruff_families: Mapping[str, tuple[str, ...]] = field(
+        default_factory=lambda: dict(DEFAULT_RUFF_FAMILIES)
+    )
+    ruff_config: Mapping[str, Any] = field(default_factory=dict)
+    ruff_preview: bool = False
+
+    @property
+    def ruff_settings(self) -> RuffSettings:
+        """The ``ruff_violations`` settings: families, rendered ``--config`` flags, preview."""
+        return RuffSettings(
+            families=dict(self.ruff_families),
+            config=tuple(ruff_config_flags(self.ruff_config)),
+            preview=self.ruff_preview,
+        )
+
+
 def parse_metrics_config(data: dict[str, Any]) -> MetricConfig:
     """Parse a ``[metrics]`` table (already decoded from TOML) into a
-    :class:`~coding_agent_playbook.evaluators.types.MetricConfig` (PR-M §E).
+    :class:`~coding_agent_playbook.metrics_gate.config.MetricConfig` (PR-M §E).
 
     The table shape mirrors the dataclass::
 
@@ -74,8 +134,6 @@ def parse_metrics_config(data: dict[str, Any]) -> MetricConfig:
         >>> parse_metrics_config({"mode": "absolute"}).mode
         'absolute'
     """
-    from coding_agent_playbook.evaluators.types import DEFAULT_GIT_TIMEOUT_S, MetricConfig
-
     mode = data.get("mode", "regression")
     if mode not in _VALID_METRIC_MODES:
         raise ValueError(f"[metrics] mode must be one of {_VALID_METRIC_MODES!r}, got {mode!r}")
@@ -124,8 +182,6 @@ def ruff_config_flags(config: Mapping[str, Any]) -> list[str]:
 
 
 def _parse_thresholds(table: dict[str, Any]) -> dict[str, AbsoluteThreshold]:
-    from coding_agent_playbook.evaluators.types import AbsoluteThreshold
-
     return {
         name: AbsoluteThreshold(
             warn=_as_optional_float(raw.get("warn")), fail=_as_optional_float(raw.get("fail"))
@@ -135,8 +191,6 @@ def _parse_thresholds(table: dict[str, Any]) -> dict[str, AbsoluteThreshold]:
 
 
 def _parse_regression(table: dict[str, Any]) -> dict[str, RegressionPolicy]:
-    from coding_agent_playbook.evaluators.types import RegressionPolicy
-
     return {
         name: RegressionPolicy(max_worsening=float(raw.get("max_worsening", 0.0)))
         for name, raw in table.items()
@@ -190,8 +244,6 @@ def _ruff_families(raw: object) -> dict[str, tuple[str, ...]]:
     Names and codes are checked: a family name becomes a scope key and a code
     reaches ruff's ``--select``.
     """
-    from coding_agent_playbook.evaluators.types import DEFAULT_RUFF_FAMILIES
-
     families = dict(DEFAULT_RUFF_FAMILIES)
     if raw is None:
         return families

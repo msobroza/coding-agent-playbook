@@ -24,12 +24,13 @@ from coding_agent_playbook.evaluators.execution.diff_coverage import (
 )
 from coding_agent_playbook.evaluators.execution.project import RunArtifacts
 from coding_agent_playbook.evaluators.metric import get_metric
-from coding_agent_playbook.evaluators.metrics_gate import (
+from coding_agent_playbook.evaluators.types import EvalContext, Measurement, ToolSetup
+from coding_agent_playbook.metrics_gate.config import MetricConfig
+from coding_agent_playbook.metrics_gate.run import (
     MetricsGateDeps,
     MetricsGateRequest,
     run_metrics_gate,
 )
-from coding_agent_playbook.evaluators.types import EvalContext, Measurement, MetricConfig, ToolSetup
 from tests.fakes import (
     FakeBaselineGit,
     FakeGitRunner,

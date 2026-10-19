@@ -3,8 +3,8 @@
 Small, mostly-frozen records that describe a *threshold* (``AbsoluteThreshold``),
 a *non-regression tolerance* (``RegressionPolicy``), a raw *measurement*, a graded
 per-scope detail (``ScopeDetail``), a check outcome (``CheckResult``), and the
-aggregate *report* (``EvaluationReport``). ``MetricConfig`` is the parsed
-``[metrics]`` config for the standalone gate; it satisfies the ``GradePolicy``
+aggregate *report* (``EvaluationReport``). The metrics gate's ``MetricConfig``
+(:mod:`coding_agent_playbook.metrics_gate.config`) satisfies the ``GradePolicy``
 ``Protocol`` the ``Check`` policy resolution reads.
 """
 
@@ -13,10 +13,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final, Literal, Protocol, runtime_checkable
-
-# The eval-fixture globs are defined once, for the hooks' ``eval_fixture`` path
-# class; ``_eval_paths`` imports only ``re``, so the evaluators stay light.
-from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -257,10 +253,12 @@ class JudgeLike(Protocol):
 class GradePolicy(Protocol):
     """The slice of config :func:`grade` reads.
 
-    Both the standalone :class:`MetricConfig` and (in a later track) the eval
-    block-compiler expose this shape, so ``grade()`` never depends on either
-    concretely. ``mode`` picks the comparison strategy; ``strict`` promotes
-    warnings to gate failures; the three dicts are per-evaluator overrides.
+    Both the standalone
+    :class:`~coding_agent_playbook.metrics_gate.config.MetricConfig` and (in a
+    later track) the eval block-compiler expose this shape, so ``grade()`` never
+    depends on either concretely. ``mode`` picks the comparison strategy;
+    ``strict`` promotes warnings to gate failures; the three dicts are
+    per-evaluator overrides.
     """
 
     mode: Mode
@@ -274,58 +272,6 @@ class GradePolicy(Protocol):
 
     @property
     def weights(self) -> dict[str, float]: ...
-
-
-@dataclass
-class MetricConfig:
-    """Parsed ``[metrics]`` config for the standalone gate; a ``GradePolicy``.
-
-    ``mode`` selects the comparison strategy; ``fail_on_breach`` controls the
-    process exit code; ``strict`` promotes warnings to gate failures. The three
-    dicts are per-evaluator overrides keyed by evaluator ``name``.
-    ``git_timeout_s`` bounds every git call a ``git:`` baseline makes (prK
-    §F.0.3 item 7).
-
-    ``select`` / ``extend_select`` / ``ignore`` are the ruff-shaped metric
-    selection (metric or family names; ``select=None`` is the default set, see
-    :func:`~coding_agent_playbook.evaluators.policy.resolve_metric_selection`).
-    ``exclude`` lists repo-relative globs never measured; it defaults to the
-    frozen eval fixtures. ``test_timeout_s`` bounds a suite run (``None``: no
-    bound). ``ruff_families`` / ``ruff_config`` / ``ruff_preview`` are
-    ``[metrics.ruff_violations]`` (``ruff_config`` keeps the TOML values;
-    :attr:`ruff_settings` renders them as flags).
-    """
-
-    mode: Mode = "regression"
-    fail_on_breach: bool = True
-    strict: bool = False
-    run_tests: bool = False
-    test_cmd: list[str] | None = None
-    thresholds: dict[str, AbsoluteThreshold] = field(default_factory=dict)
-    regression: dict[str, RegressionPolicy] = field(default_factory=dict)
-    weights: dict[str, float] = field(default_factory=dict)
-    git_timeout_s: float = DEFAULT_GIT_TIMEOUT_S
-    select: tuple[str, ...] | None = None
-    extend_select: tuple[str, ...] = ()
-    ignore: tuple[str, ...] = ()
-    exclude: tuple[str, ...] = FIXTURE_GLOBS
-    test_timeout_s: float | None = None
-    ruff_families: Mapping[str, tuple[str, ...]] = field(
-        default_factory=lambda: dict(DEFAULT_RUFF_FAMILIES)
-    )
-    ruff_config: Mapping[str, Any] = field(default_factory=dict)
-    ruff_preview: bool = False
-
-    @property
-    def ruff_settings(self) -> RuffSettings:
-        """The ``ruff_violations`` settings: families, rendered ``--config`` flags, preview."""
-        from coding_agent_playbook.metrics_config import ruff_config_flags
-
-        return RuffSettings(
-            families=dict(self.ruff_families),
-            config=tuple(ruff_config_flags(self.ruff_config)),
-            preview=self.ruff_preview,
-        )
 
 
 @dataclass

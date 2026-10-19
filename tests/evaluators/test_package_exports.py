@@ -19,7 +19,6 @@ def test_public_exports_present() -> None:
         "RegressionPolicy",
         "Measurement",
         "EvaluationReport",
-        "MetricConfig",
         "EvalContext",
         "ResolvedPolicy",
         "GradePolicy",

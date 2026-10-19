@@ -7,13 +7,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.evaluators.measurement_snapshot import (
+from coding_agent_playbook.evaluators.types import Measurement
+from coding_agent_playbook.metrics_gate.snapshot import (
     SNAPSHOT_SCHEMA,
     SnapshotError,
     read_snapshot,
     write_snapshot,
 )
-from coding_agent_playbook.evaluators.types import Measurement
 
 if TYPE_CHECKING:
     from pathlib import Path
