@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
-from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
+from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
