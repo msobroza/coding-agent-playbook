@@ -1,7 +1,7 @@
 """The task compiler: parsed ``[gate]``/``[rubric]``/``[verdict]``/``[aggregate]`` -> a per-trial structure.
 
 This module turns the three new task blocks into one
-:class:`CompiledTask`: a :class:`~coding_agent_playbook.evaluators.rubric.Rubric`
+:class:`CompiledTask`: a :class:`~coding_agent_playbook.grading.rubric.Rubric`
 carrying the two **named layer checks** (``id="gate"`` / ``id="rubric"``) plus a
 *derived* verdict AST.
 
@@ -18,7 +18,7 @@ re-composed gate/rubric, the judge (rubric) and the test suite / file predicates
 Each layer is compiled from its ``[<layer>.bind]`` table (via
 :func:`~coding_agent_playbook.evals.compile._handles.build_handles`) and its ``expr``
 (via :func:`~coding_agent_playbook.evals.compile._expr.compile_expr`), then wrapped in a
-single-child :class:`~coding_agent_playbook.evaluators.checks.compose.AllOf`
+single-child :class:`~coding_agent_playbook.grading.compose.AllOf`
 labeled with the layer id so the layer check's ``id`` is **always** ``"gate"`` /
 ``"rubric"`` (a bare single-name ``expr`` compiles to the handle check itself,
 which carries the handle's id - the wrapper re-labels it without changing the
@@ -50,15 +50,15 @@ from coding_agent_playbook.evals.compile._expr import (
     parse,
 )
 from coding_agent_playbook.evals.compile._handles import build_handles
-from coding_agent_playbook.evaluators.checks.compose import AllOf
-from coding_agent_playbook.evaluators.rubric import Rubric
+from coding_agent_playbook.grading.compose import AllOf
+from coding_agent_playbook.grading.rubric import Rubric
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from coding_agent_playbook.evals.checks.aggregate import AggregateCheck
-    from coding_agent_playbook.evaluators.check import Check
-    from coding_agent_playbook.evaluators.types import CheckResult, EvaluationReport
+    from coding_agent_playbook.grading.check import Check
+    from coding_agent_playbook.grading.types import CheckResult, EvaluationReport
 
 #: The default ``[verdict].trial`` expression: both layers must pass.
 _DEFAULT_VERDICT = "gate and rubric"
@@ -79,7 +79,7 @@ class VerdictSpec:
 
     * ``mode == "boolean"`` — :attr:`ast` is the parsed ``[verdict].trial``
       expression and is folded by :func:`verdict_passed` over the layer
-      :class:`~coding_agent_playbook.evaluators.types.CheckResult` results
+      :class:`~coding_agent_playbook.grading.types.CheckResult` results
       (skipped-neutral); :attr:`weights` / :attr:`fail` / :attr:`warn` are
       ``None``.
     * ``mode == "weighted"`` — :attr:`weights` is the validated layer-name to
@@ -99,7 +99,7 @@ class VerdictSpec:
 class CompiledTask:
     """The per-trial evaluation structure for one task (+ the aggregate layer).
 
-    :attr:`per_trial` is the :class:`~coding_agent_playbook.evaluators.rubric.Rubric`
+    :attr:`per_trial` is the :class:`~coding_agent_playbook.grading.rubric.Rubric`
     carrying the present layer checks (``id="gate"`` and/or ``id="rubric"``, in
     that order); a single ``Rubric.evaluate`` runs each layer once.
     :attr:`verdict_spec` is the compiled :class:`VerdictSpec` - either the
@@ -111,7 +111,7 @@ class CompiledTask:
     ``{"gate", "rubric"}``).
 
     :attr:`aggregate` is the compiled ``[aggregate]`` layer - one composed
-    :class:`~coding_agent_playbook.evaluators.check.Check` over the
+    :class:`~coding_agent_playbook.grading.check.Check` over the
     :class:`~coding_agent_playbook.evals.checks.aggregate.AggregateCheck`
     handles - or ``None`` when the task authored no ``[aggregate]`` block.
     :attr:`trials_needed` is the number of runner trials the aggregate layer needs
@@ -189,7 +189,7 @@ def _compile_layer(
     :exc:`ValueError` (the author must compose them).
 
     The compiled expression is wrapped in a single-child
-    :class:`~coding_agent_playbook.evaluators.checks.compose.AllOf` labeled with
+    :class:`~coding_agent_playbook.grading.compose.AllOf` labeled with
     ``layer`` so the returned check's ``id`` is **always** the layer name
     (``"gate"``/``"rubric"``) - a bare single-name ``expr`` would otherwise
     compile to the handle check itself, carrying the handle's id. ``AllOf`` over
@@ -231,7 +231,7 @@ def compile_task(
     Builds the ``gate`` and ``rubric`` layer checks (each :func:`_compile_layer`,
     ``None`` when its block is absent), assembles the present ones - in
     ``gate, rubric`` order - into the per-trial
-    :class:`~coding_agent_playbook.evaluators.rubric.Rubric` named ``name``, and
+    :class:`~coding_agent_playbook.grading.rubric.Rubric` named ``name``, and
     compiles the verdict spec (boolean ``verdict_trial`` OR weighted
     ``verdict_weights`` / ``verdict_fail`` / ``verdict_warn`` - mutually
     exclusive). Raises :exc:`ValueError` when **no** layer is present, when the
@@ -392,7 +392,7 @@ def _aggregate_leaves(checks: Iterable[Check]) -> list[AggregateCheck]:
     yields both leaves.
     """
     from coding_agent_playbook.evals.checks.aggregate import AggregateCheck
-    from coding_agent_playbook.evaluators.checks.compose import AllOf, AnyOf, Not
+    from coding_agent_playbook.grading.compose import AllOf, AnyOf, Not
 
     out: list[AggregateCheck] = []
 
@@ -416,8 +416,8 @@ def verdict_passed(report: EvaluationReport, verdict_ast: Node) -> bool:
     ``False`` for a layer that **ran**, ``None`` for a layer that was **skipped** —
     e.g. the rubric layer with no judge configured) and folds ``verdict_ast`` over
     it with **skipped-neutral** semantics: a skipped layer is neutral, exactly like
-    an unavailable child in :class:`~coding_agent_playbook.evaluators.checks.compose.AllOf`
-    / :class:`~coding_agent_playbook.evaluators.checks.compose.AnyOf` (only *run*
+    an unavailable child in :class:`~coding_agent_playbook.grading.compose.AllOf`
+    / :class:`~coding_agent_playbook.grading.compose.AnyOf` (only *run*
     layers vote). So ``gate and rubric`` with ``{gate=True, rubric=skipped}`` is
     ``True`` (the gate-only deterministic path), ``gate or rubric`` with
     ``{gate=False, rubric=skipped}`` is ``False``, and an all-skipped expression is
@@ -520,7 +520,7 @@ def _layer_score(layer_result: CheckResult) -> float | None:
        the mean-of-leaves path below.
     2. Mean of leaf-:class:`CheckResult` scores under ``layer_result.subresults``,
        recursing through nested composing checks. A "leaf" is a CheckResult whose
-       ``subresults`` are all :class:`~coding_agent_playbook.evaluators.types.ScopeDetail`
+       ``subresults`` are all :class:`~coding_agent_playbook.grading.types.ScopeDetail`
        rows (or empty). Skipped leaves contribute nothing.
 
     Returns ``None`` when no leaf contributed a score - the layer ran (as a
@@ -546,7 +546,7 @@ def _is_boolean_score(result: CheckResult) -> bool:
     so we also peek at the structure: a composer has nested
     :class:`CheckResult` subresults, a leaf has :class:`ScopeDetail` (or empty).
     """
-    from coding_agent_playbook.evaluators.types import CheckResult as _CR
+    from coding_agent_playbook.grading.types import CheckResult as _CR
 
     if not result.subresults:
         return False
@@ -563,7 +563,7 @@ def _mean_leaf_scores(layer_result: CheckResult) -> float | None:
     ``None`` when no leaf contributed - the caller (:func:`_layer_score` /
     :func:`weighted_verdict`) treats that as effectively-skipped.
     """
-    from coding_agent_playbook.evaluators.types import CheckResult as _CR
+    from coding_agent_playbook.grading.types import CheckResult as _CR
 
     scores: list[float] = []
 

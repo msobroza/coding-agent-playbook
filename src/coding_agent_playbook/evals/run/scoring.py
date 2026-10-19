@@ -2,11 +2,11 @@
 
 :func:`score` turns a materialized :class:`~coding_agent_playbook.evals.run.harness_runner.Baseline`
 and the captured :class:`~coding_agent_playbook.evals.run.harness_runner.Candidate` into one
-:class:`~coding_agent_playbook.evaluators.types.EvaluationReport`. It sources the
+:class:`~coding_agent_playbook.grading.types.EvaluationReport`. It sources the
 checks from the task compiler (:mod:`coding_agent_playbook.evals.compile.compiler`):
 the task's ``[gate]``/``[rubric]`` blocks compile (via
 :func:`~coding_agent_playbook.evals.task.compile_eval_task`) into one per-trial
-:class:`~coding_agent_playbook.evaluators.rubric.Rubric` carrying the two named
+:class:`~coding_agent_playbook.grading.rubric.Rubric` carrying the two named
 layer checks (``id="gate"`` / ``id="rubric"``), and a single
 :meth:`Rubric.evaluate` folds them into the report. The per-trial **verdict** is
 then *derived* from the layer results with skipped-neutral semantics
@@ -21,19 +21,19 @@ rather than from a flat ``[metrics]`` block:
 * **static** metrics (``not needs_project``) are measured per candidate ``*.py``
   file (and over the pristine ``setup/`` snapshot for the baseline);
 * **execution** metrics (``needs_project``) run a
-  :class:`~coding_agent_playbook.evaluators.execution.project.ProjectHandle` over
+  :class:`~coding_agent_playbook.grading.execution_metrics.project.ProjectHandle` over
   the candidate tree (and the snapshot for the baseline) — but **only when** an
   execution metric is actually referenced (``run_tests`` is *inferred*, not
   authored);
 * **judge-backed** metrics (a
-  :class:`~coding_agent_playbook.evaluators.checks.judge_metric.JudgeMetric`, or a
-  rubric-group :class:`~coding_agent_playbook.evaluators.rubric.Rubric` containing
+  :class:`~coding_agent_playbook.grading.judge_metric.JudgeMetric`, or a
+  rubric-group :class:`~coding_agent_playbook.grading.rubric.Rubric` containing
   ``JudgeCheck``\\ s) are measured only when a ``judge`` is configured; with no
   judge they are left unmeasured and their wrapping check / rubric layer reports
   ``available() is False`` and skips (the deterministic-only path).
 
 The file checks (``[gate]`` predicates) ignore the
-:class:`~coding_agent_playbook.evaluators.check.MeasurementSet` and read
+:class:`~coding_agent_playbook.grading.check.MeasurementSet` and read
 ``ctx.tree`` / ``ctx.baseline_tree`` directly.
 """
 
@@ -44,22 +44,19 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evaluators import (
-    EvalContext,
-    EvaluationReport,
-    Measurement,
-    parse_module,
-)
-from coding_agent_playbook.evaluators.check import MeasurementSet, _MetricCheck
-from coding_agent_playbook.evaluators.checks.compose import AllOf, AnyOf, Not
-from coding_agent_playbook.evaluators.execution.project import ProjectHandle
+from coding_agent_playbook.grading.check import MeasurementSet, _MetricCheck
+from coding_agent_playbook.grading.compose import AllOf, AnyOf, Not
+from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle
+from coding_agent_playbook.grading.parse import parse_module
+from coding_agent_playbook.grading.types import EvalContext, EvaluationReport, Measurement
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.run.harness_runner import Baseline, Candidate
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.evaluators import JudgeLike, ModuleModel
-    from coding_agent_playbook.evaluators.check import Check
-    from coding_agent_playbook.evaluators.metric import Metric
+    from coding_agent_playbook.grading.check import Check
+    from coding_agent_playbook.grading.metric import Metric
+    from coding_agent_playbook.grading.parse import ModuleModel
+    from coding_agent_playbook.grading.types import JudgeLike
 
 #: Directory names skipped when discovering candidate ``*.py`` source files.
 _IGNORED_DIRS = frozenset(
@@ -86,7 +83,7 @@ def score(
     """Grade ``candidate`` for ``task`` into one report + derive the trial verdict.
 
     Compiles the task's ``[gate]``/``[rubric]`` blocks into one per-trial
-    :class:`~coding_agent_playbook.evaluators.rubric.Rubric`
+    :class:`~coding_agent_playbook.grading.rubric.Rubric`
     (:func:`~coding_agent_playbook.evals.task.compile_eval_task`), pre-computes the
     metrics that rubric's checks reference over the candidate (and, for
     regression/execution, the pristine ``setup/`` baseline snapshot), runs
@@ -204,10 +201,10 @@ def _referenced_metrics(checks: list[Check]) -> list[Metric]:
     Walks ``checks`` (the per-trial rubric's layer checks), descending the boolean
     composers (:class:`AllOf`/:class:`AnyOf`/:class:`Not` via their ``children``)
     and pulling the underlying
-    :class:`~coding_agent_playbook.evaluators.metric.Metric` off every
-    :class:`~coding_agent_playbook.evaluators.check._MetricCheck` leaf
+    :class:`~coding_agent_playbook.grading.metric.Metric` off every
+    :class:`~coding_agent_playbook.grading.check._MetricCheck` leaf
     (``ThresholdCheck`` / ``NonRegressionCheck``). A metric that is itself a
-    :class:`~coding_agent_playbook.evaluators.rubric.Rubric` (a rubric-group wrapped
+    :class:`~coding_agent_playbook.grading.rubric.Rubric` (a rubric-group wrapped
     in a ``ThresholdCheck``) is collected as one judge-backed metric — its own
     ``JudgeCheck``\\ s are measured by its :meth:`Rubric.measure`, so we do not
     descend into them here. File / judge-only checks carry no metric and contribute
@@ -277,7 +274,7 @@ def _static_measurements(tree: Path, metrics: list[Metric]) -> list[Measurement]
 
     The label is the tree-relative POSIX path so a candidate file matches its
     ``setup/`` baseline counterpart in the
-    :class:`~coding_agent_playbook.evaluators.check.MeasurementSet` (same scope
+    :class:`~coding_agent_playbook.grading.check.MeasurementSet` (same scope
     keys). Unparseable files are skipped.
     """
     measurements: list[Measurement] = []

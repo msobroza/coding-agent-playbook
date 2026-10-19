@@ -1,9 +1,9 @@
 """The named-rubric registry — code-defined :class:`Rubric` subclasses by name.
 
-This module is to :class:`~coding_agent_playbook.evaluators.rubric.Rubric` what
-:mod:`coding_agent_playbook.evaluators.metric` is to ``Metric``: a registry that
+This module is to :class:`~coding_agent_playbook.grading.rubric.Rubric` what
+:mod:`coding_agent_playbook.grading.metric` is to ``Metric``: a registry that
 lets an out-of-tree package ship a code-defined rubric (a :class:`Rubric`
-subclass declaring its :attr:`~coding_agent_playbook.evaluators.rubric.Rubric.CRITERIA`)
+subclass declaring its :attr:`~coding_agent_playbook.grading.rubric.Rubric.CRITERIA`)
 and reference it from an eval ``task.toml`` via ``[rubric] ref = "<name>"``. It is
 the bridge between a Python-defined rubric and the TOML authoring surface.
 
@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from importlib import metadata
 
-from coding_agent_playbook.evaluators.rubric import Rubric
+from coding_agent_playbook.grading.rubric import Rubric
 
 #: Entry-point group for out-of-tree named rubrics.
 ENTRY_POINT_GROUP = "coding_agent_playbook.rubrics"
@@ -36,7 +36,7 @@ _RubricDecorator = Callable[[type[Rubric]], type[Rubric]]
 def register_rubric(name: str) -> _RubricDecorator:
     """Decorator factory registering a :class:`Rubric` subclass under ``name``.
 
-    Unlike :func:`~coding_agent_playbook.evaluators.metric.register_metric` (which
+    Unlike :func:`~coding_agent_playbook.grading.metric.register_metric` (which
     keys on the metric's intrinsic ``cls.name``), a rubric has no such field, so
     the registry key is the explicit string argument::
 
@@ -59,7 +59,7 @@ def _load_rubric_entry_points() -> dict[str, type[Rubric]]:
 
     In-tree registrations take precedence: an entry point reusing a registered
     name is ignored (mirrors
-    :func:`~coding_agent_playbook.evaluators.metric._load_metric_entry_points`).
+    :func:`~coding_agent_playbook.grading.metric._load_metric_entry_points`).
     """
     discovered: dict[str, type[Rubric]] = {}
     for ep in metadata.entry_points(group=ENTRY_POINT_GROUP):
@@ -74,9 +74,9 @@ def get_rubric(name: str) -> Rubric:
 
     Resolves the registered class (in-tree registrations first, then entry
     points) and returns ``cls.define()`` - a built
-    :class:`~coding_agent_playbook.evaluators.rubric.Rubric` instance whose checks
-    are the subclass's :attr:`~coding_agent_playbook.evaluators.rubric.Rubric.CRITERIA`
-    as :class:`~coding_agent_playbook.evaluators.checks.judged.JudgeCheck`\\ s.
+    :class:`~coding_agent_playbook.grading.rubric.Rubric` instance whose checks
+    are the subclass's :attr:`~coding_agent_playbook.grading.rubric.Rubric.CRITERIA`
+    as :class:`~coding_agent_playbook.grading.judged.JudgeCheck`\\ s.
 
     Raises :exc:`KeyError` when no registration or entry point provides ``name``.
     """

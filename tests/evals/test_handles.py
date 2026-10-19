@@ -6,8 +6,8 @@ five mutually exclusive shapes:
 
 * a **boolean group** - ``all_of`` / ``any_of`` / ``not``;
 * a **rubric group** - ``rubric`` (a list of ``{judge, weight}`` pairs) wrapped in
-  a :class:`~coding_agent_playbook.evaluators.check.ThresholdCheck` over the built
-  :class:`~coding_agent_playbook.evaluators.rubric.Rubric`;
+  a :class:`~coding_agent_playbook.grading.check.ThresholdCheck` over the built
+  :class:`~coding_agent_playbook.grading.rubric.Rubric`;
 * a **standalone check** - ``check`` plus that factory's kwargs;
 * a **ref** - ``ref`` resolving via the gate registry (``layer="gate"``) or the
   rubric registry (otherwise).
@@ -31,12 +31,12 @@ from coding_agent_playbook.evals.compile import rubric_registry as rubrics_mod
 from coding_agent_playbook.evals.compile._handles import build_handles
 from coding_agent_playbook.evals.compile.gate_registry import register_gate
 from coding_agent_playbook.evals.compile.rubric_registry import register_rubric
-from coding_agent_playbook.evaluators.check import Check, ThresholdCheck
-from coding_agent_playbook.evaluators.checks.compose import AllOf, AnyOf
-from coding_agent_playbook.evaluators.checks.compose import Not as NotCheck
-from coding_agent_playbook.evaluators.checks.judged import JudgeCheck
-from coding_agent_playbook.evaluators.checks.registry import all_check_ids, get_check
-from coding_agent_playbook.evaluators.rubric import Rubric
+from coding_agent_playbook.grading.check import Check, ThresholdCheck
+from coding_agent_playbook.grading.check_registry import all_check_ids, get_check
+from coding_agent_playbook.grading.compose import AllOf, AnyOf
+from coding_agent_playbook.grading.compose import Not as NotCheck
+from coding_agent_playbook.grading.judged import JudgeCheck
+from coding_agent_playbook.grading.rubric import Rubric
 from tests.import_probe import run_python_probe
 
 # --------------------------------------------------------------------------- #
@@ -362,7 +362,7 @@ def test_in_tree_registration_wins_over_entry_point(monkeypatch: pytest.MonkeyPa
         return [_FakeEntryPoint()]
 
     monkeypatch.setattr(
-        "coding_agent_playbook.evaluators.checks.registry.metadata.entry_points",
+        "coding_agent_playbook.grading.check_registry.metadata.entry_points",
         _fake_entry_points,
     )
     check = get_check("file_exists", path="y.py")

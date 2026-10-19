@@ -62,8 +62,9 @@ DEFAULT_BUDGET_S: Final = 3.0
 class StageCost(IntEnum):
     """How expensive a stage is, cheapest first.
 
-    Mirrors ``evaluators.scope.CostTier`` (``DETERMINISTIC < EXECUTION``) without
-    importing it: ``evaluators/__init__`` is heavy, and a test keeps the values equal.
+    Mirrors ``grading.scope.CostTier`` (``DETERMINISTIC < EXECUTION``) without
+    importing it: the hook-runtime-stack import contract keeps ``grading`` off the
+    dispatch path, and a test keeps the values equal.
     """
 
     DETERMINISTIC = 0

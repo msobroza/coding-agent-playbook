@@ -3,7 +3,7 @@
 - :func:`port_changed_lines`: the Python lines changed since a diff base,
   listed through the hook's hardened ``GitPort`` (``git diff <base>`` added
   lines plus every line of an untracked file), the shape
-  ``evaluators.execution.git_diff.changed_lines`` gives the CLI;
+  ``grading.execution_metrics.git_diff.changed_lines`` gives the CLI;
 - :func:`coverage_lines`: the at most four lines of a failing grade, e.g.::
 
       coverage: 62.5% of 24 changed lines executed (min 80%)
@@ -25,16 +25,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.evaluators.execution.diff_coverage import format_ranges
-from coding_agent_playbook.evaluators.execution.git_diff import every_line
+from coding_agent_playbook.grading.execution_metrics.diff_coverage import format_ranges
+from coding_agent_playbook.grading.execution_metrics.git_diff import every_line
 from coding_agent_playbook.hook_runtime.caps import quote_data
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.evaluators.execution.diff_coverage import DiffCoverage
-    from coding_agent_playbook.evaluators.types import ScopeDetail
+    from coding_agent_playbook.grading.execution_metrics.diff_coverage import DiffCoverage
+    from coding_agent_playbook.grading.types import ScopeDetail
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.state.store import StateStore
 
@@ -178,7 +178,7 @@ def write_snapshot_rows(store: StateStore, tree: str, rows: Sequence[ScopeDetail
 
     Example: ``write_snapshot_rows(ctx.session.store, fingerprint.tree_id, grade.rows)``.
     """
-    from coding_agent_playbook.evaluators.types import Measurement
+    from coding_agent_playbook.grading.types import Measurement
     from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
     from coding_agent_playbook.metrics_gate.snapshot import snapshot_document
 

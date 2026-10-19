@@ -8,7 +8,7 @@ so without a stub these tests would either shell out to the real ``uv`` binary
 required" error. Air-gapped/banking CI must not depend on ``uv`` being on PATH
 inside pytest, so this autouse fixture short-circuits ``uv`` invocations to a
 success result for every CLI test. Runner-internal tests live under
-``tests/evaluators/`` and supply their own fine-grained stubs (so they can
+``tests/grading/`` and supply their own fine-grained stubs (so they can
 exercise the real ``_uv_sync_scratch`` paths) — that scope is not affected.
 """
 

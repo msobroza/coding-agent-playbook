@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from coding_agent_playbook.evals.report_format import format_task_result_text, task_result_to_dict
 from coding_agent_playbook.evals.run.harness_runner import TaskResult
-from coding_agent_playbook.evaluators.scope import CostTier, Determinism
-from coding_agent_playbook.evaluators.types import (
+from coding_agent_playbook.grading.scope import CostTier, Determinism
+from coding_agent_playbook.grading.types import (
     CheckResult,
     EvaluationReport,
     ScopeDetail,

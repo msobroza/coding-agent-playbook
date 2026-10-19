@@ -14,10 +14,10 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.evaluators.execution.project import ProjectHandle
-from coding_agent_playbook.evaluators.metric import Metric, static_metrics
-from coding_agent_playbook.evaluators.normalizer import Identity
-from coding_agent_playbook.evaluators.scope import Scope
+from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle
+from coding_agent_playbook.grading.metric import Metric, static_metrics
+from coding_agent_playbook.grading.normalizer import Identity
+from coding_agent_playbook.grading.scope import Scope
 from coding_agent_playbook.metrics_gate.config import MetricConfig
 from coding_agent_playbook.metrics_gate.run import (
     MAX_FILE_BYTES,
@@ -34,7 +34,7 @@ from tests.import_probe import new_modules_after
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from coding_agent_playbook.evaluators.types import EvalContext, Measurement
+    from coding_agent_playbook.grading.types import EvalContext, Measurement
 
 _HIGH_CC_SOURCE = (
     "def tangled(x):\n"

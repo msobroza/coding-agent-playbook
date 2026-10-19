@@ -7,7 +7,7 @@ edits and we assert the resulting :class:`EvaluationReport`.
 
 C7 sources the checks from the **C6 compiler**: a task's ``[gate]``/``[rubric]``
 blocks compile into one per-trial
-:class:`~coding_agent_playbook.evaluators.rubric.Rubric` carrying the two named
+:class:`~coding_agent_playbook.grading.rubric.Rubric` carrying the two named
 layer checks (``id="gate"`` / ``id="rubric"``); the per-trial **verdict** is then
 derived from the layer results (skipped-neutral) onto ``report.passed``. Metric
 gates (CC, coverage, test_pass_rate) enter via ``threshold``/``non_regression``
@@ -39,8 +39,7 @@ from coding_agent_playbook.evals.run.harness_runner import (
 )
 from coding_agent_playbook.evals.run.scoring import score
 from coding_agent_playbook.evals.task import EvalTask, TaskInvocation
-from coding_agent_playbook.evaluators import EvaluationReport
-from coding_agent_playbook.evaluators.types import CheckResult, ScopeDetail
+from coding_agent_playbook.grading.types import CheckResult, EvaluationReport, ScopeDetail
 from tests._catalog import CORE_ROOT
 
 # A long, high-complexity function: lots of branches => high cyclomatic complexity.
