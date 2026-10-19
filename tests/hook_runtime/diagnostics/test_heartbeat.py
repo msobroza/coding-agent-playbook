@@ -12,15 +12,15 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.hook_runtime.canary import DEFAULT_CANARIES, enabled_canaries
 from coding_agent_playbook.hook_runtime.config.hook_records import parse_hook_record
-from coding_agent_playbook.hook_runtime.dispatch import run_event
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
-from coding_agent_playbook.hook_runtime.heartbeat import (
+from coding_agent_playbook.hook_runtime.diagnostics.canary import DEFAULT_CANARIES, enabled_canaries
+from coding_agent_playbook.hook_runtime.diagnostics.heartbeat import (
     HEARTBEAT_MAX_CHARS,
     degraded_line,
     ok_line,
 )
+from coding_agent_playbook.hook_runtime.dispatch import run_event
+from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from tests.hook_runtime.guard_repo import hook_record
 
 if TYPE_CHECKING:

@@ -25,18 +25,18 @@ import os
 import sys
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.hook_runtime._doctor_checks import (
+from coding_agent_playbook.hook_runtime.config.pin import ensure_interpreter_pin
+from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+from coding_agent_playbook.hook_runtime.diagnostics._doctor_checks import (
     SEVERITY,
     Check,
     environment_checks,
 )
-from coding_agent_playbook.hook_runtime._doctor_decisions import (
+from coding_agent_playbook.hook_runtime.diagnostics._doctor_decisions import (
     DEFAULT_SINCE_DAYS,
     decision_log_checks,
 )
-from coding_agent_playbook.hook_runtime._doctor_opencode import opencode_checks
-from coding_agent_playbook.hook_runtime.config.pin import ensure_interpreter_pin
-from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+from coding_agent_playbook.hook_runtime.diagnostics._doctor_opencode import opencode_checks
 from coding_agent_playbook.hook_runtime.paths import find_repo
 
 if TYPE_CHECKING:
