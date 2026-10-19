@@ -119,7 +119,7 @@ def ruff_config_flags(config: Mapping[str, Any]) -> list[str]:
         >>> ruff_config_flags({"lint.pylint.max-args": 5, "lint.mccabe.max-complexity": 10})
         ['lint.mccabe.max-complexity=10', 'lint.pylint.max-args=5']
     """
-    from coding_agent_playbook._toml import format_scalar
+    from coding_agent_playbook.toml_writer import format_scalar
 
     return [f"{key}={format_scalar(config[key])}" for key in sorted(config)]
 

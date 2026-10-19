@@ -1,4 +1,4 @@
-"""Tests for the shared TOML writer primitives (``coding_agent_playbook._toml``).
+"""Tests for the shared TOML writer primitives (``coding_agent_playbook.toml_writer``).
 
 These pin the behaviour the two call sites (the ``sources/filesystem.py``
 Config/Lockfile writer and ``harness/manifest.py``) share, so a future change to
@@ -15,7 +15,7 @@ import tomllib
 
 import pytest
 
-from coding_agent_playbook import _toml
+from coding_agent_playbook import toml_writer as _toml
 from tests.toml_equality import assert_toml_identical
 
 # --- scalars ---------------------------------------------------------------
