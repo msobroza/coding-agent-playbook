@@ -33,7 +33,7 @@ from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, Handl
 from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._bypass_rules import segment_verdict
-from coding_agent_playbook.hook_runtime.handlers._targets import (
+from coding_agent_playbook.hook_runtime.handlers._shared.targets import (
     file_write_paths,
     shell_write_targets,
 )
@@ -181,7 +181,7 @@ def _git_config(path: NormalizedPath, repo: RepoInfo, platform: str) -> bool:
 
 def _changes_hooks_path(tool: ToolCall, path: NormalizedPath) -> bool:
     """Whether the edit adds, changes or removes a ``hooksPath =`` line of the config file."""
-    from coding_agent_playbook.hook_runtime.edit_preview import preview_after
+    from coding_agent_playbook.hook_runtime.handlers._shared.edit_preview import preview_after
 
     before = _read(path)
     after = preview_after(tool, before)

@@ -32,7 +32,7 @@ from coding_agent_playbook.hook_runtime.config.protected import classify, protec
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._targets import (
+from coding_agent_playbook.hook_runtime.handlers._shared.targets import (
     file_write_paths,
     shell_write_targets,
 )

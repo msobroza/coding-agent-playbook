@@ -288,6 +288,10 @@ def test_protected_edit_denied_without_toml_render_or_subprocess(
 _CPG_PREFIX: Final = (
     f"{engine_module('coding_agent_playbook.hook_runtime.handlers')}._control_plane_"
 )
+_SHARED_CPG_PREFIX: Final = (
+    f"{engine_module('coding_agent_playbook.hook_runtime.handlers._shared')}.control_plane_"
+)
+_CPG_PREFIXES: Final = (_CPG_PREFIX, _SHARED_CPG_PREFIX)
 
 
 @pytest.fixture
@@ -330,11 +334,11 @@ def test_control_plane_guard_loads_nothing_new_off_its_files(
 
     imported = _imports(real_proc, control_planed, EventName.PRE_TOOL_USE, payload)
 
-    assert f"{_CPG_PREFIX}paths" in imported  # the guard ran (its routing table loaded)
+    assert f"{_SHARED_CPG_PREFIX}paths" in imported  # the guard ran (its routing table loaded)
     assert _forbidden(imported) == []
-    assert sorted(m for m in imported if m.startswith(_CPG_PREFIX)) == [
-        f"{_CPG_PREFIX}paths",
+    assert sorted(m for m in imported if m.startswith(_CPG_PREFIXES)) == [
         f"{_CPG_PREFIX}shell",
+        f"{_SHARED_CPG_PREFIX}paths",
     ]
     assert "subprocess" not in imported
 
@@ -588,7 +592,9 @@ def test_stop_drift_stage_loads_the_lockfile_only_when_active(
 
 # --- K7 step 2: the post-edit ruff branch (specs/prK-hook-pack.md §E.3) ------------------
 
-_RUFF_PIPELINE: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._ruff_pipeline")
+_RUFF_PIPELINE: Final = engine_module(
+    "coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline"
+)
 _GUARD_CONFIG_RUFF: Final = engine_module("coding_agent_playbook._guard_config_ruff")
 
 
@@ -660,7 +666,9 @@ def test_skill_nudge_loads_nothing_forbidden_on_a_python_edit(
     assert "subprocess" not in imported
 
 
-_SECRET_POLICY: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._secret_policy")
+_SECRET_POLICY: Final = engine_module(
+    "coding_agent_playbook.hook_runtime.handlers.safety._secret_policy"
+)
 
 
 @pytest.fixture
@@ -755,7 +763,7 @@ def test_bash_guards_need_no_git_and_no_process_off_git_segments(
 
 #: The helpers each guard imports at module load: their presence shows the guard ran.
 _INSTALL_CMDS: Final = engine_module("coding_agent_playbook.hook_runtime.judges.install_commands")
-_EGRESS: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._egress")
+_EGRESS: Final = engine_module("coding_agent_playbook.hook_runtime.handlers.safety._egress")
 _BRANCH_LOCAL: Final = ("tomllib", "difflib", "ipaddress")
 
 
@@ -864,7 +872,9 @@ def test_async_audit_branch_imports_nothing_forbidden(
 
 
 #: network-egress-guard's destination parser: its presence shows the guard ran (K9 step 4).
-_NET_TARGETS: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._net_targets")
+_NET_TARGETS: Final = engine_module(
+    "coding_agent_playbook.hook_runtime.handlers.safety._net_targets"
+)
 
 
 @pytest.fixture

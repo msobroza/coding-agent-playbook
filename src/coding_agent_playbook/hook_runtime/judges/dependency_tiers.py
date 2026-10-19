@@ -1,6 +1,6 @@
 """dependency-allowlist-guard's tiers over one request (specs/prK-hook-pack.md §E.4).
 
-The handler (``dependencies``) finds the requests; this module judges them,
+The handler (``safety.dependency_allowlist_guard``) finds the requests; this module judges them,
 and ``playbook check-deps`` reuses the allowlist and index rules, so the hook
 and its twin never disagree:
 

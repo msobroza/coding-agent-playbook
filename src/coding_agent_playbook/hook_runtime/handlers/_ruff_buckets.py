@@ -45,7 +45,7 @@ from typing import TYPE_CHECKING, Any, Final
 from coding_agent_playbook.hook_runtime._ruff import selector_matches
 from coding_agent_playbook.hook_runtime.dispatch.caps import OutputCaps, quote_data
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
-from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import (
+from coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline import (
     POST_EDIT_HOOK_ID,
     accepts_file,
     file_codes,
@@ -59,7 +59,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime._ruff import RuffDiagnostic
     from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
     from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import FileReport
+    from coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline import FileReport
 
 __all__ = [
     "BUCKETS",
