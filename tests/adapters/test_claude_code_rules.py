@@ -32,6 +32,7 @@ from coding_agent_playbook.adapters.claude_rule_paths import (
     CLAUDE_RULES_PATH,
 )
 from coding_agent_playbook.types import Rule, RuleFrontmatter
+from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
 
 _CLAUDE_MD = Path(".claude") / "CLAUDE.md"
@@ -92,8 +93,9 @@ def test_paths_module_is_a_stdlib_leaf() -> None:
     loaded = new_modules_after("import coding_agent_playbook._guard_config_protect")
 
     assert "coding_agent_playbook.adapters.claude_rule_paths" in loaded
-    assert not {"jinja2", "yaml", "coding_agent_playbook.renderer"} & set(loaded)
-    assert "coding_agent_playbook.adapters.claude_code_adapter" not in loaded
+    renderer = engine_module("coding_agent_playbook.renderer")
+    assert not {"jinja2", "yaml", renderer} & set(loaded)
+    assert engine_module("coding_agent_playbook.adapters.claude_code_adapter") not in loaded
 
 
 # --------------------------------------------------------------------------- #
