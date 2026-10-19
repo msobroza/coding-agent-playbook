@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.git.safe_git import Fingerprint
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME, session_key
 from coding_agent_playbook.hook_runtime.stop.runner import ToolRun

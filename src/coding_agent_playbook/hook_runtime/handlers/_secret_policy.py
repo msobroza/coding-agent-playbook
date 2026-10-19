@@ -23,7 +23,7 @@ import re
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.security.paths import PathPolicy
 from coding_agent_playbook.security.patterns import SECRET_GLOB_EXEMPT, SECRET_PATH_EXEMPT
 
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.config.guard_tables import SecretPattern
-    from coding_agent_playbook.hook_runtime.paths import NormalizedPath
+    from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
     from coding_agent_playbook.security.paths import PathVerdict
     from coding_agent_playbook.security.secrets import SecretFinding, SecretRule
 

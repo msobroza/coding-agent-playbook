@@ -14,9 +14,13 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.caps import OutputCaps
-from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS, CombinedResult, Decision
-from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, ToolClass
+from coding_agent_playbook.hook_runtime.dispatch.caps import OutputCaps
+from coding_agent_playbook.hook_runtime.dispatch.decision import (
+    EVENT_DECISIONS,
+    CombinedResult,
+    Decision,
+)
+from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, EventName, ToolClass
 from coding_agent_playbook.hook_runtime.harness.claude import parse_claude, render_claude
 from coding_agent_playbook.hook_runtime.harness.wire import (
     CLAUDE_EVENT_NAMES,
@@ -437,7 +441,7 @@ def test_an_edit_event_parse_never_loads_the_shell_parser() -> None:
     loaded = new_modules_after(
         "from coding_agent_playbook.hook_runtime.harness.claude import parse_claude, render_claude; "
         "from coding_agent_playbook.hook_runtime.harness.wire import ParseContext; "
-        "from coding_agent_playbook.hook_runtime.event import EventName; "
+        "from coding_agent_playbook.hook_runtime.dispatch.event import EventName; "
         f"parse_claude({payload!r}.encode(), ParseContext(argv_event=EventName.PRE_TOOL_USE, "
         f"env={ENV!r}))"
     )

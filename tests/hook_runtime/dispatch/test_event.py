@@ -1,7 +1,7 @@
 """The canonical event model (specs/prK-lifecycle-hooks.md §D.2.1).
 
 The runtime may not import ``types`` or ``hooks`` (§D.1), so its
-enumerations are re-declared in ``hook_runtime.event``; these tests pin them to
+enumerations are re-declared in ``hook_runtime.dispatch.event``; these tests pin them to
 the sync-side single sources so the two can never drift apart.
 """
 
@@ -14,7 +14,7 @@ from typing import get_args
 import pytest
 
 from coding_agent_playbook.artifacts import hook_schema
-from coding_agent_playbook.hook_runtime.event import (
+from coding_agent_playbook.hook_runtime.dispatch.event import (
     SESSION_ID_MAX_CHARS,
     STOP_MESSAGE_MAX_CHARS,
     TOOL_ERROR_MAX_CHARS,
@@ -250,7 +250,8 @@ def test_tool_call_shell_parse_is_lazy_and_memoized() -> None:
 
 def test_building_a_shell_call_imports_no_shell_parser() -> None:
     loaded = new_modules_after(
-        "from coding_agent_playbook.hook_runtime.event import ShellSource, ToolCall, ToolClass; "
+        "from coding_agent_playbook.hook_runtime.dispatch.event import "
+        "ShellSource, ToolCall, ToolClass; "
         "ToolCall(name='Bash', native_name='Bash', tool_class=ToolClass.SHELL, "
         "shell=ShellSource(text='rm -rf x'))"
     )

@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
-    from coding_agent_playbook.hook_runtime.event import EventName
+    from coding_agent_playbook.hook_runtime.dispatch.event import EventName
     from coding_agent_playbook.hook_runtime.git.safe_git import AddedLine, Fingerprint, LoggedCommit
     from coding_agent_playbook.hook_runtime.registry import HandlerFn, ResolveContext
     from coding_agent_playbook.security.trust import HandlerApproval

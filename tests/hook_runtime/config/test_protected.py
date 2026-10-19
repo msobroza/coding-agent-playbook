@@ -29,8 +29,8 @@ from coding_agent_playbook.hook_runtime.config.protected import (
     protected_paths,
 )
 from coding_agent_playbook.hook_runtime.config.reader import Malformed
-from coding_agent_playbook.hook_runtime.event import RepoInfo
-from coding_agent_playbook.hook_runtime.paths import normalize_path
+from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
+from coding_agent_playbook.hook_runtime.dispatch.paths import normalize_path
 from tests.hook_runtime.guard_repo import canonical
 
 if TYPE_CHECKING:

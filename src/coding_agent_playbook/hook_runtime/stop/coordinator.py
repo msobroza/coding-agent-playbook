@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.config.guard_tables import StopGate
     from coding_agent_playbook.hook_runtime.deps import Clock, TrustPort
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.git.safe_git import Fingerprint, GitPort
     from coding_agent_playbook.hook_runtime.state.session import SessionState
     from coding_agent_playbook.hook_runtime.state.store import StateStore

@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.commands.twins._git_scope import open_git, resolve_merge_base
 from coding_agent_playbook.commands.twins._runner import TWIN_ERRORS, TwinOutcome, run_twin
 from coding_agent_playbook.commands.twins.policy import dependency_twin_config
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.judges.dependency_tiers import (
     DependencyPolicy,
     Finding,

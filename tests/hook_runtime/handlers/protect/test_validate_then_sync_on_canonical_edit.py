@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from tests.hook_runtime.fakes import FakeClock, FakeProc
 from tests.hook_runtime.handlers.pack_repo import PackRepo, playbook_calls, playbook_child
 from tests.import_probe import PROBE_TIMEOUT_S, probe_env
@@ -251,8 +251,8 @@ def test_child_timeout_fails_open_one_note(
 _DISPATCH_SCRIPT: Final = """
 import io, json, sys
 from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-from coding_agent_playbook.hook_runtime.dispatch import run_event
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.run import run_event
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.proc import ProcResult
 
 class StubProc:

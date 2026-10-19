@@ -19,9 +19,9 @@ import pytest
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.cli.parser import build_parser
 from coding_agent_playbook.commands.twins import gate_scan, scan_secrets, scan_sinks
-from coding_agent_playbook.hook_runtime.event import RepoInfo
+from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
+from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
 from coding_agent_playbook.hook_runtime.git.parse import AddedLine, DiffLines
-from coding_agent_playbook.hook_runtime.paths import find_repo
 from tests.hook_runtime.fakes import FakeGit
 
 if TYPE_CHECKING:

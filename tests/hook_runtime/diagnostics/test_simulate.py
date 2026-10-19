@@ -15,14 +15,18 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.hook_runtime.cli import main as cli_main
-from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS, Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.diagnostics.canary import (
     Canary,
     canary_session_id,
     run_canaries,
 )
 from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateArgs, main, run
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.decision import (
+    EVENT_DECISIONS,
+    Decision,
+    HandlerResult,
+)
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.state.store import session_key
 from tests.hook_payloads import load_hook_payload
 from tests.hook_runtime.fakes import FakeHandlerResolver
@@ -32,7 +36,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
 _TOOL_EVENTS = {EventName.PRE_TOOL_USE, EventName.POST_TOOL_USE, EventName.POST_TOOL_USE_FAILURE}

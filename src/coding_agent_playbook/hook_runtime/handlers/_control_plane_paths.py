@@ -37,9 +37,9 @@ from coding_agent_playbook.hook_runtime.config.schema import (
     CONTROL_PLANE,
     PolicyKeys,
 )
+from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
 from coding_agent_playbook.hook_runtime.escape import settings_files
 from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs
-from coding_agent_playbook.hook_runtime.paths import fold_key
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 
 if TYPE_CHECKING:
@@ -47,8 +47,8 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.config.protected import ProtectedSet
-    from coding_agent_playbook.hook_runtime.event import RepoInfo
-    from coding_agent_playbook.hook_runtime.paths import NormalizedPath
+    from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
 
 __all__ = ["ControlPlane", "RouteKind", "load_plane", "route_of"]
 

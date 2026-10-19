@@ -25,14 +25,18 @@ import stat
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.registry import HandlerResolutionError, Untrusted
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, ToolCall
+    from coding_agent_playbook.hook_runtime.dispatch.event import (
+        CanonicalEvent,
+        EventName,
+        ToolCall,
+    )
     from coding_agent_playbook.hook_runtime.registry import HandlerContext, ResolveContext
     from coding_agent_playbook.security.trust import HandlerApproval
 

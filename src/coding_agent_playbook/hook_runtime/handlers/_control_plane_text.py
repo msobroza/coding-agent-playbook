@@ -19,7 +19,7 @@ import re
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.config.schema import playbook_precommit_ids
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

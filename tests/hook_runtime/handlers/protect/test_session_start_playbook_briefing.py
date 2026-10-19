@@ -23,8 +23,8 @@ import pytest
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hook_runtime.config.pin import write_machine_pins
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.handlers._briefing_probes import (
     installed_engine_version,
 )
