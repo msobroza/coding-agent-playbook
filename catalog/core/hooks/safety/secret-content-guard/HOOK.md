@@ -2,6 +2,7 @@
 id: secret-content-guard
 name: Secret content guard
 description: Deny a write that would persist a secret token (cloud, VCS, chat, payment and LLM API keys, private keys, JWTs, URL passwords) and a git push whose unpushed commits add one.
+summary: Never write a secret value into a file or a commit; read it from the environment or the secret manager.
 version: 1
 tier: default
 priority: 16

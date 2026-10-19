@@ -15,12 +15,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook import catalog
-from coding_agent_playbook.catalog import ENGINE_PACKAGE, CatalogMissingError
+from coding_agent_playbook.catalog import roots as catalog
+from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE, CatalogMissingError
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _resource_subdir
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands._sync_preflight import unusable_overlays
 from coding_agent_playbook.evals.prompting import _infer_prompts_dir, _resolve_prompt
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, _resource_subdir
 from tests._catalog import CORE_ROOT, plugin_root
 
 if TYPE_CHECKING:

@@ -143,7 +143,7 @@ class QualityMetricsStage:
 def _in_quality(finding: ScopeDetail) -> bool:
     """A ``quality``-family finding: a quality metric, or ruff's ``ruff:quality`` count."""
     from coding_agent_playbook.evaluators.builtins.ruff_violations import ruff_family
-    from coding_agent_playbook.evaluators.policy import METRIC_FAMILIES
+    from coding_agent_playbook.metrics_gate.policy import METRIC_FAMILIES
 
     if finding.evaluator == "ruff_violations":
         return ruff_family(finding.scope_key) == FAMILY

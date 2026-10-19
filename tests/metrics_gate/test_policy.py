@@ -17,7 +17,7 @@ from coding_agent_playbook.evaluators.metric import (
     execution_metrics,
     static_metrics,
 )
-from coding_agent_playbook.evaluators.policy import (
+from coding_agent_playbook.metrics_gate.policy import (
     METRIC_FAMILIES,
     OPT_IN_METRICS,
     resolve_metric_selection,
@@ -138,8 +138,8 @@ def test_selection_keeps_the_available_order() -> None:
 
 def test_stop_stage_selection_keeps_families_plus_ruff_by_name() -> None:
     """prK §F.2.2: the Stop pass is ``[metrics]`` within quality/docstrings, plus ruff by name."""
-    from coding_agent_playbook.evaluators.policy import stop_stage_selection
-    from coding_agent_playbook.evaluators.types import MetricConfig
+    from coding_agent_playbook.metrics_gate.config import MetricConfig
+    from coding_agent_playbook.metrics_gate.policy import stop_stage_selection
 
     config = MetricConfig(select=("wmc", "testing"), extend_select=("docstring_example",))
 

@@ -2,7 +2,7 @@
 
 The single home for the per-metric default grading policy and the
 :func:`metric_check` factory that turns a metric name + a
-:class:`~coding_agent_playbook.evaluators.types.MetricConfig` into the
+:class:`~coding_agent_playbook.metrics_gate.config.MetricConfig` into the
 metric-backed :class:`~coding_agent_playbook.evaluators.check.Check`
 (:class:`~coding_agent_playbook.evaluators.check.ThresholdCheck` /
 :class:`~coding_agent_playbook.evaluators.check.NonRegressionCheck`).
@@ -10,8 +10,8 @@ metric-backed :class:`~coding_agent_playbook.evaluators.check.Check`
 its checks through here from its ``[metrics]`` engine config, so the metric-policy
 defaults live in exactly one place.
 
-Living in the ``evaluators`` layer keeps ``commands`` from importing ``evals``
-just for the shared default thresholds.
+Living in ``metrics_gate`` rather than ``evals`` keeps ``commands`` from
+importing ``evals`` just for the shared default thresholds.
 
 Which metrics a gate run measures is policy too (prK §F.0.3 item 2), so the
 ruff-shaped selection (:data:`METRIC_FAMILIES`, :data:`OPT_IN_METRICS`,
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.evaluators.check import Check
     from coding_agent_playbook.evaluators.metric import Metric
-    from coding_agent_playbook.evaluators.types import MetricConfig
+    from coding_agent_playbook.metrics_gate.config import MetricConfig
 
 #: Per-metric default grading policy. The ``Check`` layer carries the policy on
 #: the *check*, not the metric, so :func:`metric_check` falls back to these when

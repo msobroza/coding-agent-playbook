@@ -221,7 +221,7 @@ def _layer_dir(package: str) -> str | None:
     """The directory holding ``package``'s kind dirs, or ``None`` when it has none."""
     from importlib import resources
 
-    from coding_agent_playbook.catalog import catalog_layer_root, is_bundled_layer
+    from coding_agent_playbook.catalog.roots import catalog_layer_root, is_bundled_layer
 
     if is_bundled_layer(package):
         bundled = catalog_layer_root(package)

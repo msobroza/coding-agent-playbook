@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.evals.task import EvalTask
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -65,7 +65,7 @@ def overlay_cleanup(tmp_path: Path) -> Iterator[None]:
 
 def test_list_eval_tasks_walks_engine_resources(tmp_path: Path) -> None:
     """The engine ships eval tasks under ``catalog/core/eval_tasks/``
-    (resolved through ``catalog``). Confirm
+    (resolved through ``catalog.roots``). Confirm
     the walker picks them up and tags them with
     ``source_package="coding_agent_playbook"``."""
     source = FileSystemArtifactSource(repo_root=tmp_path)

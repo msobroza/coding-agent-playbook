@@ -51,6 +51,7 @@ TOP_KEYS: Final = (
     "id",
     "name",
     "description",
+    "summary",
     "version",
     "tier",
     "enabled",
@@ -104,6 +105,17 @@ CONTRACT_MESSAGE: Final = (
 #: because types.py needs them and hook_policy will import types.py (cycle).
 ADVISORY_RULE_PREFIX: Final = "guardrail-"
 ADVISORY_RULE_PRIORITY: Final = 30
+
+#: The longest one-line guardrail (``summary``, or its fallback), in characters
+#: (specs/prS-skills-context.md 8.4.1). Public home ``hook_policy.advisory``;
+#: defined here because ``from_mapping`` checks it and this module imports nothing
+#: from the package (the ADVISORY_RULE_* cycle above).
+GUARDRAIL_SUMMARY_MAX_CHARS: Final = 120
+GUARDRAIL_SUMMARY_SHAPE: Final = (
+    f"a single line of 1-{GUARDRAIL_SUMMARY_MAX_CHARS} characters without '{{{{' or '{{%'"
+)
+#: Frontmatter is never rendered, so Jinja delimiters would reach AGENTS.md verbatim.
+_JINJA_OPENERS: Final = ("{{", "{%")
 
 
 class HookSchemaError(ValueError):
@@ -201,6 +213,22 @@ class FieldReader:
         """A string, or ``None`` when missing or blank."""
         return None if self.data.get(key) is None else self.text(key)
 
+    def guardrail_summary(self, key: str) -> str:
+        """The optional one-line guardrail, :data:`GUARDRAIL_SUMMARY_SHAPE`; ``""`` when absent.
+
+        Missing, YAML-blank and ``""`` all read as ``""``: that is the field's
+        default, which ``Hook.to_dict`` writes for a hook without one, so it
+        must read back. Whitespace alone is an error.
+
+        Example: ``FieldReader({"summary": "Ask."}, where="HOOK.md").guardrail_summary("summary")``.
+        """
+        value = self.data.get(key)
+        if value is None or value == "":
+            return ""
+        if not _is_summary_shaped(value):
+            raise self._fail(key, GUARDRAIL_SUMMARY_SHAPE)
+        return cast("str", value)
+
     def integer(self, key: str, default: int) -> int:
         """An int (``bool`` is rejected: YAML ``true`` is not a priority)."""
         value = self.data.get(key)
@@ -265,6 +293,15 @@ class FieldReader:
                 raise HookSchemaError(self.where, entry_path, entry, "a mapping")
             readers[event] = FieldReader(entry or {}, self.where, entry_path)
         return readers
+
+
+def _is_summary_shaped(value: object) -> bool:
+    """A non-blank string of one line, at most the cap long, with no Jinja opener."""
+    if not isinstance(value, str) or not value.strip():
+        return False
+    if "\n" in value or "\r" in value or len(value) > GUARDRAIL_SUMMARY_MAX_CHARS:
+        return False
+    return not any(opener in value for opener in _JINJA_OPENERS)
 
 
 def restore_defaults(instance: DataclassInstance) -> None:

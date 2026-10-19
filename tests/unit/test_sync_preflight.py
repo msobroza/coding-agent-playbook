@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook import catalog
-from coding_agent_playbook.catalog import DEPRECATED_PACK_NAMESPACE, PLUGIN_NAMESPACE
+from coding_agent_playbook.catalog import roots as catalog
+from coding_agent_playbook.catalog.roots import DEPRECATED_PACK_NAMESPACE, PLUGIN_NAMESPACE
 from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands._sync_preflight import (
     UnusableOverlay,

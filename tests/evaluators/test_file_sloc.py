@@ -13,14 +13,14 @@ import pytest
 from coding_agent_playbook.evaluators.builtins.file_sloc import FileSlocMetric
 from coding_agent_playbook.evaluators.check import MeasurementSet
 from coding_agent_playbook.evaluators.parse import parse_module
-from coding_agent_playbook.evaluators.policy import metric_check
 from coding_agent_playbook.evaluators.types import (
     AbsoluteThreshold,
     EvalContext,
     Measurement,
-    MetricConfig,
     ScopeDetail,
 )
+from coding_agent_playbook.metrics_gate.config import MetricConfig
+from coding_agent_playbook.metrics_gate.policy import metric_check
 
 
 def _ctx(source: str) -> EvalContext:

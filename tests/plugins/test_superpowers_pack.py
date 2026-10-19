@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.catalog import bundled_plugins
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
+from coding_agent_playbook.catalog.roots import bundled_plugins
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.types import split_frontmatter
 from tests.plugins.superpowers_expectations import (
     EXPECTED_LICENSE_COPIES,
