@@ -62,7 +62,7 @@ from coding_agent_playbook._sentinel import has_sentinel
 from coding_agent_playbook._symlinks import is_dangling_symlink, link_leaving, real_path
 
 # The Agent Skills naming rules live in _agent_skill_rules (file-size budget); this
-# module stays the home callers import them from (commands/validate.py, the tests).
+# module stays the home callers import them from (validation/checks.py, the tests).
 from coding_agent_playbook.adapters._agent_skill_rules import (
     AGENT_SKILL_DESCRIPTION_MAX_CHARS as AGENT_SKILL_DESCRIPTION_MAX_CHARS,
 )

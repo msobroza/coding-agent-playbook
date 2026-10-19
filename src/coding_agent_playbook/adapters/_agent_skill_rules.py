@@ -8,7 +8,7 @@ validate`` reports them up front, because OpenCode drops a skill that breaks the
 without a word.
 
 Split out of ``_skill_writer`` for the file-size budget (specs/prS-skills-context.md
-§6.4.5). ``_skill_writer`` re-exports every public name here, so ``commands/validate.py``
+§6.4.5). ``_skill_writer`` re-exports every public name here, so ``validation/checks.py``
 and the tests keep importing them from there. A leaf module: ``Skill`` is imported for
 type checking only, so the writer can import this module without a cycle.
 """

@@ -33,7 +33,7 @@ def parse_links_config(data: dict[str, Any]) -> LinksConfig:
         allowed_domains = ["agentharnesses.io"]   # default: [] (fully strict)
 
     Domains are lowercased; subdomain matching happens at check time
-    (:func:`coding_agent_playbook.links.classify_link`).
+    (:func:`coding_agent_playbook.validation.link_check.classify_link`).
     """
     raw = data.get("allowed_domains", [])
     if not isinstance(raw, list) or not all(isinstance(entry, str) for entry in raw):

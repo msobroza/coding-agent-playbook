@@ -1,10 +1,10 @@
 """Bundled layers (the engine and the bundled plugins) resolve through ``catalog``.
 
-``sources.filesystem._resource_subdir`` reads the engine's ``catalog/core/`` and
+``catalog.source._resource_subdir`` reads the engine's ``catalog/core/`` and
 each ``catalog/plugins/<leaf>/`` straight from the catalog root, never through
 ``importlib.resources``. Third-party overlays keep the ``<pkg>/resources/<kind>``
 contract, including a namespace overlay whose ``resources/`` spans two portions.
-The preflight (``_sync_preflight.unusable_overlays``) accepts a bundled plugin
+The preflight (``validation.preflight.unusable_overlays``) accepts a bundled plugin
 under either namespace by checking the catalog tree, without importing it.
 """
 
@@ -19,8 +19,8 @@ from coding_agent_playbook.catalog import roots as catalog
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE, CatalogMissingError
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _resource_subdir
 from coding_agent_playbook.cli import main
-from coding_agent_playbook.commands._sync_preflight import unusable_overlays
 from coding_agent_playbook.evals.prompting import _infer_prompts_dir, _resolve_prompt
+from coding_agent_playbook.validation.preflight import unusable_overlays
 from tests._catalog import CORE_ROOT, plugin_root
 
 if TYPE_CHECKING:

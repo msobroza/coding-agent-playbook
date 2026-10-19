@@ -1,7 +1,7 @@
 """The Agent Skills naming rules live in ``_agent_skill_rules``; ``_skill_writer`` re-exports them.
 
 specs/prS-skills-context.md §6.4.5 item 1: the move is a pure refactor, so
-``commands/validate.py`` and test_skill_writer.py keep importing the rules from
+``validation/checks.py`` and test_skill_writer.py keep importing the rules from
 ``_skill_writer``. The rules' behaviour stays covered, unmodified, by
 test_skill_writer.py, which reaches the moved code through that re-export.
 """

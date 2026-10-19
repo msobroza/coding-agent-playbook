@@ -40,11 +40,6 @@ from coding_agent_playbook.adapters._agent_skill_rules import (
     AGENT_SKILL_NAME_PATTERN,
     skill_id_of,
 )
-from coding_agent_playbook.commands._validation import (
-    ValidationError,
-    ValidationFindings,
-    skill_label,
-)
 from coding_agent_playbook.skill_document import (
     DESCRIPTION_MAX_CHARS,
     PLAYBOOK_BLOCK_KEY,
@@ -54,6 +49,11 @@ from coding_agent_playbook.skill_document import (
     worst_case_description,
 )
 from coding_agent_playbook.skill_membership import is_rule_skill, member_rules_of
+from coding_agent_playbook.validation.findings import (
+    ValidationError,
+    ValidationFindings,
+    skill_label,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

@@ -1,0 +1,90 @@
+# A4 (#117, specs/prT-package-layout.md 4.5, 7.6): the validation rule set and the
+# preflight leave commands/ for the validation/ package. commands/validate.py keeps
+# only run; the rule set it ran becomes validation/checks.py. The link checker
+# (links.py, whose LinksConfig half N2 already moved) becomes validation/link_check.py.
+
+[[module]]
+pr = "A4"
+old = "coding_agent_playbook.commands._validation"
+new = "coding_agent_playbook.validation.findings"
+
+[[module]]
+pr = "A4"
+old = "coding_agent_playbook.commands._validate_context"
+new = "coding_agent_playbook.validation.context"
+
+[[module]]
+pr = "A4"
+old = "coding_agent_playbook.commands._validate_frontmatter"
+new = "coding_agent_playbook.validation._frontmatter"
+
+[[module]]
+pr = "A4"
+old = "coding_agent_playbook.commands._validate_hooks"
+new = "coding_agent_playbook.validation._hooks"
+
+[[module]]
+pr = "A4"
+old = "coding_agent_playbook.commands._validate_links"
+new = "coding_agent_playbook.validation._links"
+
+# Public, unlike the other check modules: commands/sync.py imports it (--check-staged).
+[[module]]
+pr = "A4"
+old = "coding_agent_playbook.commands._validate_prompts"
+new = "coding_agent_playbook.validation.prompts"
+
+[[module]]
+pr = "A4"
+old = "coding_agent_playbook.commands._validate_skills"
+new = "coding_agent_playbook.validation._skills"
+
+[[module]]
+pr = "A4"
+old = "coding_agent_playbook.commands._sync_preflight"
+new = "coding_agent_playbook.validation.preflight"
+
+[[module]]
+pr = "A4"
+old = "coding_agent_playbook.links"
+new = "coding_agent_playbook.validation.link_check"
+
+# The split of commands/validate.py: run stays, the rule set leaves. The script
+# rewrites module paths, never names, so warn_refused_skill_files (it lost its
+# underscore because run now calls it across packages) is renamed by hand.
+[[names]]
+pr = "A4"
+old = "coding_agent_playbook.commands.validate"
+new = "coding_agent_playbook.validation.checks"
+names = [
+    "collect_validation_findings",
+    "collect_validation_errors",
+    "sync_gate_errors",
+    "_applies_if_errors",
+    "_check_output_contracts",
+]
+
+[[path]]
+pr = "A4"
+old = "tests/unit/test_validate_skills_checks.py"
+new = "tests/validation/test_skills.py"
+
+[[path]]
+pr = "A4"
+old = "tests/unit/test_validate_prompts.py"
+new = "tests/validation/test_prompts.py"
+
+[[path]]
+pr = "A4"
+old = "tests/unit/test_sync_preflight.py"
+new = "tests/validation/test_preflight.py"
+
+[[path]]
+pr = "A4"
+old = "tests/unit/test_links.py"
+new = "tests/validation/test_link_check.py"
+
+[[path]]
+pr = "A4"
+old = "tests/unit/test_sources_filesystem_bundled.py"
+new = "tests/catalog/test_source_bundled.py"
