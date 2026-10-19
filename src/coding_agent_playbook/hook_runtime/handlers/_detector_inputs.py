@@ -7,7 +7,7 @@ The cheap half of resync-on-detector-input-change, about 5 ms:
   (``has_ci``), a notebook (``has_notebooks``), or a successful ``uv
   add|remove``, ``poetry add|remove`` or ``pip install`` segment;
 - whether they changed: one ``tomllib`` read of ``pyproject.toml`` whose
-  dependency names (``_pyproject_deps``, the detector's own parser) are
+  dependency names (``detector.pyproject_deps``, the detector's own parser) are
   compared with the names sync baked, and the presence of a file whose flag
   was false at sync. An ordinary ``[tool.*]`` edit stays silent.
 
@@ -146,7 +146,7 @@ def _dependencies_changed(facts: Mapping[str, Any], repo_root: str) -> bool:
 def _current_names(repo_root: str) -> tuple[frozenset[str], frozenset[str]] | None:
     import tomllib  # branch-local (§D.1): only after a dependency input was touched
 
-    from coding_agent_playbook._pyproject_deps import dependency_names
+    from coding_agent_playbook.detector.pyproject_deps import dependency_names
 
     try:
         with open(os.path.join(repo_root, "pyproject.toml"), "rb") as handle:

@@ -440,7 +440,13 @@ its topic (`skill:` in its frontmatter):
 | `python-coding` | dependency injection, pure core, data shapes, typing, performance idioms, asyncio (Python 3.11+), classes and protocols, error handling, context managers, docstrings, timeouts and retries, idioms | always (most of its rules are ungated) |
 | `python-testing` | `pytest` conventions, test doubles, fixtures | pytest is detected |
 | `python-tooling` | static checks (ruff and mypy), pytest configuration (with pytest), uv workflow (uv projects), `fastapi-app-wiring` and `fastapi-error-boundaries` (FastAPI), Pydantic boundaries (Pydantic declared) | always (static checks are ungated) |
-| `ml-data` | `ml-serialization-security` | the ML stack includes torch, TensorFlow, JAX, transformers, scikit-learn, XGBoost or LightGBM |
+| `ml-data` | `ml-serialization-security` (torch, TensorFlow, JAX, transformers, scikit-learn, XGBoost or LightGBM); vectorization, data transforms, dtypes and typing, reproducibility and numeric tests (NumPy, pandas or polars, with a section per library) | the ML stack includes one of those libraries |
+
+Core also ships `playbook-guardrails`, which takes no rules. With hooks on, sync
+fills it with the full text of every enabled hook's guardrail, one section per
+hook, and writes it to `.opencode/skills/` and `.agents/skills/`. Claude Code
+runs the hooks itself, so `.claude/skills/` gets it only for a hook Claude Code
+cannot run; Continue keeps its `30-guardrail-<id>.md` rule files.
 
 Sync renders each rule that applies as `<skills root>/<skill>/references/<rule-id>.md`
 and appends a `## References` index to the skill's `SKILL.md`, one line per
@@ -819,7 +825,7 @@ reason, at most `max_blocks` times per stop chain.
 | `pytest-conventions-feedback` | `default` | Claude Code, OpenCode | Report unittest-style asserts, broad `pytest.raises`, composite asserts (warn only). |
 | `prompt-write-scope-guard` | `default` | Claude Code | Keep read-only playbook prompts from editing code, and test-writing prompts inside their test globs. |
 | `toolchain-missing-hint` | `default` | Claude Code, OpenCode | When ruff, mypy, pytest or commitizen is missing, name the project's install command once. |
-| `skill-nudge` | `default` | Claude Code, OpenCode | Name the skill that covers a file the first time a session edits it. |
+| `skill-nudge` | `default` | Claude Code, OpenCode | Name the skill that covers a file the first time a session edits it, notebooks included; `playbook check` shows it degraded on OpenCode, which has no notebook tool. |
 | `notebook-output-hygiene` | `opt-in` | Claude Code, OpenCode | Warn when an edited notebook keeps cell outputs, embedded images or base64 payloads. |
 
 #### Secrets and risky actions

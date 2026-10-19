@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.cli import build_parser
+from coding_agent_playbook.cli.parser import build_parser
 from coding_agent_playbook.commands import init as _init
 
 if TYPE_CHECKING:

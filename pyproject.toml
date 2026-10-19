@@ -283,8 +283,6 @@ exhaustive_ignores = [
     "_layers",
     "_member_reference",
     "_output_io",
-    "_pep503",
-    "_pyproject_deps",
     "_sentinel",
     "_symlinks",
     "_table_shapes",
@@ -332,10 +330,10 @@ type = "forbidden"
 # tests/engine_modules.py STDLIB_LEAVES: the only engine modules the two stacks import.
 source_modules = [
     "coding_agent_playbook._atomic_io",
-    "coding_agent_playbook._pep503",
-    "coding_agent_playbook._pyproject_deps",
     "coding_agent_playbook._sentinel",
     "coding_agent_playbook.catalog",
+    "coding_agent_playbook.detector.pep503",
+    "coding_agent_playbook.detector.pyproject_deps",
     "coding_agent_playbook.lockfile",
     "coding_agent_playbook.security",
 ]
@@ -369,7 +367,8 @@ forbidden_modules = [
     "coding_agent_playbook.config",
     "coding_agent_playbook.config_entries",
     "coding_agent_playbook.config_schema",
-    "coding_agent_playbook.detector",
+    "coding_agent_playbook.detector.facts",
+    "coding_agent_playbook.detector.predicate",
     "coding_agent_playbook.evals",
     "coding_agent_playbook.evaluators",
     "coding_agent_playbook.gate_scan",
@@ -437,7 +436,8 @@ forbidden_modules = [
     "coding_agent_playbook.config",
     "coding_agent_playbook.config_entries",
     "coding_agent_playbook.config_schema",
-    "coding_agent_playbook.detector",
+    "coding_agent_playbook.detector.facts",
+    "coding_agent_playbook.detector.predicate",
     "coding_agent_playbook.evals",
     "coding_agent_playbook.evaluators",
     "coding_agent_playbook.gate_scan",
@@ -479,7 +479,9 @@ ignore_imports = [
     "coding_agent_playbook.hook_runtime.handlers.gate_weakening -> coding_agent_playbook.gate_scan",
     "coding_agent_playbook.hook_runtime.handlers.gate_weakening_edit -> coding_agent_playbook.gate_scan",
     "coding_agent_playbook.hook_runtime.handlers.quality_metrics -> coding_agent_playbook.evaluators.**",
-    "coding_agent_playbook.hook_runtime.handlers.resync_on_detector_input_change -> coding_agent_playbook.detector",
+    # N4: detect() (detector.facts) and evaluate_predicate (detector.predicate) both load on
+    # the resync branch only, so one "-> <package>.**" line covers the detector package
+    "coding_agent_playbook.hook_runtime.handlers.resync_on_detector_input_change -> coding_agent_playbook.detector.**",
     "coding_agent_playbook.hook_runtime.stop.suite -> coding_agent_playbook.evaluators.**",
 ]
 broken_contract_guidance = """
@@ -523,7 +525,8 @@ forbidden_modules = [
     "coding_agent_playbook.config",
     "coding_agent_playbook.config_entries",
     "coding_agent_playbook.config_schema",
-    "coding_agent_playbook.detector",
+    "coding_agent_playbook.detector.facts",
+    "coding_agent_playbook.detector.predicate",
     "coding_agent_playbook.evals",
     "coding_agent_playbook.gate_scan",
     "coding_agent_playbook.git_client",
@@ -615,7 +618,7 @@ ignore_imports = [
     # N13: becomes adapters/claude_code/settings/drift.py
     "coding_agent_playbook.commands.check -> coding_agent_playbook.adapters._settings_drift",
     # CP-3: init's configure() owns --adapters (after #62)
-    "coding_agent_playbook.cli -> coding_agent_playbook.commands._init_adapters",
+    "coding_agent_playbook.cli.parser -> coding_agent_playbook.commands._init_adapters",
     # N22: becomes metrics_gate/inputs.py
     "coding_agent_playbook.hook_runtime.handlers._metrics_pass -> coding_agent_playbook.evaluators._metrics_inputs",
     # N22: becomes metrics_gate/suite.py

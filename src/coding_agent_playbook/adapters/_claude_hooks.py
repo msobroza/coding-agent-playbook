@@ -10,7 +10,8 @@ the same pointer are concatenated) and of the §E.5 overlay guards an overlay
 activated (``_overlay_native``), and the committed launcher — written whole, so a
 user file at its path or a symlink on the way is refused (``_owned_files``).
 Hooks Claude Code cannot enforce go back to the adapter's rules-file path
-(``.claude/rules/coding-agent-playbook.md``, SPEC §10.3.1).
+(``.claude/rules/coding-agent-playbook.md``, SPEC §10.3.1) and make the adapter
+write the ``playbook-guardrails`` skill; :func:`runs_natively` decides both.
 """
 
 from __future__ import annotations
@@ -55,6 +56,7 @@ __all__ = [
     "REMEDIATION_ALLOW",
     "ClaudeHookEmitter",
     "plans_launcher",
+    "runs_natively",
 ]
 
 #: The hook whose session-start output the heartbeat line checks for (§E.1).
@@ -116,7 +118,7 @@ class ClaudeHookEmitter:
         ``guard_config.json`` deadline serves every harness (§D.4).
         """
         self.every_hook.append(hook)
-        native = self.adapter in hook.supports and any(e in self.support for e in hook.events)
+        native = runs_natively(hook, self.adapter, self.support)
         if native:
             self.enforced.append(hook)
         return native
@@ -192,6 +194,19 @@ class ClaudeHookEmitter:
         if cfg is None or not (cfg.enabled and cfg.render_remediation_allow):
             return {}
         return {_ALLOW_POINTER: REMEDIATION_ALLOW}
+
+
+def runs_natively(hook: ResolvedHook, adapter: str, support: Mapping[str, frozenset[str]]) -> bool:
+    """Whether ``adapter`` (declaring ``support``) runs ``hook`` itself instead of as text.
+
+    It does when ``hook.supports`` names it and at least one of the hook's
+    events is in ``support``. The one test behind both :meth:`ClaudeHookEmitter.add`
+    and ``ClaudeCodeAdapter.writes_guardrails_skill``, so the settings groups
+    and the guardrails skill never disagree about a hook (D6).
+
+    Example: ``runs_natively(hook, "claude_code", HOOK_SUPPORT["claude_code"])`` -> ``True``.
+    """
+    return adapter in hook.supports and any(event in support for event in hook.events)
 
 
 def _joined(*parts: Mapping[str, tuple[str, ...]]) -> dict[str, tuple[str, ...]]:

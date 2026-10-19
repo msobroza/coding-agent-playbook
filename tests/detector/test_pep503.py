@@ -1,16 +1,16 @@
-"""PEP 503 names and dependency-name extraction (``_pep503``, specs/prK-hook-pack.md §E.4).
+"""PEP 503 names and dependency-name extraction (``detector.pep503``, specs/prK-hook-pack.md §E.4).
 
 The detector, dependency-allowlist-guard and ``playbook check-deps`` compare
 package names; one normalization makes ``Foo_Bar``, ``foo.bar`` and
 ``FOO-bar`` the same project everywhere. The pyproject tables themselves are
-``_pyproject_deps``'s (``tests/unit/test_pyproject_deps.py``).
+``detector.pyproject_deps``'s (``tests/detector/test_pyproject_deps.py``).
 """
 
 from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook._pep503 import (
+from coding_agent_playbook.detector.pep503 import (
     canonical_name,
     requirement_name,
     requirement_names,

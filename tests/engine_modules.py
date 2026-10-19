@@ -46,10 +46,10 @@ _REQUIREMENT_NAME: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 STDLIB_LEAVES: Final = frozenset(
     {
         "_atomic_io",
-        "_pep503",
-        "_pyproject_deps",
         "_sentinel",
         "catalog",
+        "detector.pep503",
+        "detector.pyproject_deps",
         "lockfile",
         "security",
     }

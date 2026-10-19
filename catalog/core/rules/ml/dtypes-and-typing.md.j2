@@ -1,0 +1,73 @@
+---
+id: ml-dtypes-and-typing
+name: Dtypes and typing
+description: "Declare dtypes where data enters, keep labels categorical with one shared dtype, choose NumPy widths on purpose, check columns and dtypes right after loading, and annotate arrays with numpy.typing."
+version: 1
+scope: scoped
+skill: ml-data
+globs:
+  - "**/*.py"
+  - "**/*.ipynb"
+applies_if:
+  any_ml_stack: ["numpy", "pandas", "polars"]
+priority: 73
+tags: [ml, dtypes, typing]
+---
+
+# Dtypes and typing
+
+A dtype the library guessed is a bug waiting for the next input file: account numbers lose their leading zeros, a date column stays text, an integer column turns into floats because one value is missing. Decide the types where data enters the program, check them once there, and let everything downstream rely on them.
+
+## Declare types where data enters
+
+- Every read names the columns it needs and the type of each; no later step re-casts a column it was handed.
+- Dates go through a conversion that is given the exact format and raises on a value that does not match it, never one that guesses the format or turns bad values into missing ones.
+- Identifiers that can start with a zero (postcodes, account numbers, sensor serials) are strings, never integers.
+- A column that may have gaps uses a nullable type, so a single missing value does not change the column's type.
+
+## Labels
+
+- A label column with few distinct values (a region, a status, a device model) is categorical. Define its categories once, as one shared dtype constant, and apply that constant to every source, so concatenating and merging frames keep the categorical type instead of falling back to text.
+- Ordinal labels (parcel sizes, alert severities) use ordered categories, so sorting and comparisons follow the domain's order rather than the alphabet's.
+
+## Check after loading
+
+Right after a load, a small check asserts the expected columns and dtypes and raises an error naming the column, its actual dtype and the expected one. When the repo already uses pandera, express that check as one schema validated at the same boundary instead: validate lazily in pipelines, so a run reports every failing column at once, and let the schema coerce only casts that lose nothing. Never add pandera for this on your own; propose it to the user if the checks keep growing.
+{% if has_ml_dep("numpy") %}
+
+## NumPy
+
+- State the dtype when creating an array (`np.zeros(n_sensors, dtype=np.int64)`), and normalize every input at function entry with `np.asarray(values, dtype=np.float64)`.
+- Integer arrays wrap around silently on overflow. Pick a width with headroom for the largest value the data can reach, such as `int64` for counts and amounts in cents.
+- Use `float32` for model features where memory matters, and `float64` for sums, means and other statistics, where rounding error accumulates.
+- No `dtype=object` arrays: each element is a Python object, so every operation falls back to a Python loop.
+- Annotate arrays with `numpy.typing` (`import numpy.typing as npt`): `npt.NDArray[np.float64]` for a returned array, `npt.ArrayLike` for an input the function normalizes. Shapes cannot be annotated, so state them in the docstring (`(n_sensors, n_samples)`).
+- Return a Python `float` from a scalar reduction (`return float(readings.mean())`), not a NumPy scalar that leaks into callers.
+{% endif %}
+{% if has_ml_dep("pandas") %}
+
+## pandas
+
+- Pass `dtype=` and `usecols=` to `read_csv` and its siblings, and parse dates with `pd.to_datetime(column, format=TIMESTAMP_FORMAT, errors="raise")`.
+- Nullable dtypes: `"Int64"`, `"boolean"` and `"string"`.
+- One shared categorical constant per label, such as `SITE = pd.CategoricalDtype(["north", "south", "east"])`, applied with `.astype(SITE)` to every frame; pass `ordered=True` for ordinal labels.
+- Without pandas-stubs, mypy treats pandas objects as `Any` and checks nothing about them. If the repo lacks the stubs, propose adding them to the dev dependencies; never add them unasked.
+
+```python
+SENSOR_DTYPES = {"serial": "string", "site": SITE, "celsius": "float64"}
+
+
+def load_readings(path: Path) -> pd.DataFrame:
+    readings = pd.read_csv(path, usecols=[*SENSOR_DTYPES, "taken_at"], dtype=SENSOR_DTYPES)
+    return readings.assign(
+        taken_at=pd.to_datetime(readings["taken_at"], format=TIMESTAMP_FORMAT, errors="raise")
+    )
+```
+{% endif %}
+{% if has_ml_dep("polars") %}
+
+## polars
+
+- Pass `schema_overrides=` (and `columns=`) when reading, and parse dates with `pl.col("taken_at").str.to_datetime(TIMESTAMP_FORMAT)`, keeping `strict=True`, the default, so a malformed value raises.
+- Use `pl.Enum([...])` for a label column with a fixed set of values, defined once as a shared constant like any other categorical dtype.
+{% endif %}
