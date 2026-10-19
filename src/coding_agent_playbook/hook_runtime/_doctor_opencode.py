@@ -30,8 +30,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime._doctor_checks import Check, read_regular_file
-from coding_agent_playbook.hook_runtime._lock_digest import expected_digest
-from coding_agent_playbook.hook_runtime.config import LOCKFILE_REL
+from coding_agent_playbook.hook_runtime.config.guard_config import LOCKFILE_REL
+from coding_agent_playbook.hook_runtime.config.lock_digest import expected_digest
 from coding_agent_playbook.hook_runtime.harness.opencode import OPENCODE_SHIM_REL
 from coding_agent_playbook.hook_runtime.proc import ProcTimeout
 

@@ -39,7 +39,7 @@ from coding_agent_playbook.hook_runtime.stop.coordinator import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from coding_agent_playbook.hook_runtime.config import HookRecord
+    from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
     from coding_agent_playbook.hook_runtime.deps import TrustPort
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.registry import HandlerContext

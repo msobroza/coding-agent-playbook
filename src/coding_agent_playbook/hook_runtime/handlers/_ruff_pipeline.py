@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
     from coding_agent_playbook.hook_runtime._ruff import PinProblem, RuffDiagnostic
-    from coding_agent_playbook.hook_runtime.config import GuardConfig, HookRecord
+    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, HookRecord
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
@@ -167,7 +167,7 @@ def event_ruff_pin(ctx: HandlerContext, git_dir: str | None) -> RuffPin | PinPro
     """
 
     def load() -> RuffPin | PinProblem:
-        from coding_agent_playbook.hook_runtime.pin import read_machine_pins
+        from coding_agent_playbook.hook_runtime.config.pin import read_machine_pins
 
         return ruff_pin(read_machine_pins(git_dir=git_dir))
 

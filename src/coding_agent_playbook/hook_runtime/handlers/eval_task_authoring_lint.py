@@ -45,7 +45,7 @@ from coding_agent_playbook.hook_runtime.registry import register_hook_handler
 if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.hook_runtime.config import GuardConfig
+    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext

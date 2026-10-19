@@ -30,7 +30,7 @@ from coding_agent_playbook.hook_policy._contract_handlers import handler_slots
 from coding_agent_playbook.hook_policy._findings import error
 from coding_agent_playbook.hook_policy.merge import ConfigKeySpec
 from coding_agent_playbook.hook_policy.tables import HOOK_EVENTS
-from coding_agent_playbook.hook_runtime._config_keys import regex_of
+from coding_agent_playbook.hook_runtime.config.keys import regex_of
 from coding_agent_playbook.hook_runtime.registry import (
     HandlerResolutionError,
     builtin_handler_modules,
