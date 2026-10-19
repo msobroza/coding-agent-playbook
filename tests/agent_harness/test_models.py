@@ -8,8 +8,8 @@ import pytest
 
 from coding_agent_playbook.agent_harness.models import (
     ContentFile,
-    Harness,
     HarnessDirectory,
+    HarnessTree,
     LeafMarker,
     NotAHarnessError,
     RawAsset,
@@ -72,8 +72,19 @@ def test_harness_directory_construction() -> None:
     assert d.routing_file_name == "SKILLS.md"
 
 
+def test_directory_is_opaque_only_with_a_marker_for_itself() -> None:
+    # The lint and the best-effort import share this predicate (AH-2, #143): a marker
+    # at the directory's own path makes it opaque; one on a child leaf does not.
+    def directory(*leaves: LeafMarker) -> HarnessDirectory:
+        return HarnessDirectory("evals", "EVALS.md", None, Path("evals"), leaves=leaves)
+
+    assert directory(LeafMarker(path=Path("evals"))).is_opaque is True
+    assert directory(LeafMarker(path=Path("evals/inner"))).is_opaque is False
+    assert directory().is_opaque is False
+
+
 def test_harness_top_level() -> None:
-    h = Harness(
+    h = HarnessTree(
         name="My Harness",
         description="desc",
         body="body",

@@ -561,6 +561,19 @@ dispatcher: import `register_hook_handler` and `HandlerContext` from
 <!-- module-moves: end-keep -->
 
 <!-- module-moves: keep -->
+Out-of-tree code that reads an Agent Harness tree: the parsed tree
+`coding_agent_playbook.agent_harness.models.Harness` is now `HarnessTree`, with no
+alias (Harness names a coding-agent runtime), and `parse_harness` returns it. The
+`playbook validate-harness` checks are `coding_agent_playbook.agent_harness.lint.lint_harness`,
+which returns `HarnessFindings`; `HarnessFindings.failed(strict=...)` is the
+`--strict` choice. A hook sidecar entry reads back through
+`coding_agent_playbook.agent_harness.hook_sidecars.read_hook_sidecar(path, entry, source_package=...)`;
+the keyword names the package recorded on the rebuilt `Hook` (the importer passes
+`"<imported>"`). The command output, the exit codes and every byte the adapter
+writes do not change.
+<!-- module-moves: end-keep -->
+
+<!-- module-moves: keep -->
 Code that catches `coding_agent_playbook.precommit.PrecommitTemplateMissingError`
 programmatically: it now subclasses the CLI's shared exit-2 error type,
 `coding_agent_playbook.exit_two.ExitTwoError`, instead of `RuntimeError`, so an

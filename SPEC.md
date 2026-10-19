@@ -372,7 +372,7 @@ coding-agent-playbook/
 │   │   ├── state/                          # runtime state root, session, ledger, active prompt, audit log
 │   │   └── stop/                           # the Stop stage contract and coordinator
 │   ├── security/                           # secret paths/patterns, PII, trust store (stdlib)
-│   ├── agent_harness/                      # the Agent Harness format round trip: models, leaf_detectors, parser, emitter, manifest, adapter (AgentHarnessAdapter), hook_sidecars, importer
+│   ├── agent_harness/                      # the Agent Harness format round trip: models (HarnessTree), leaf_detectors, parser, emitter, manifest, adapter (AgentHarnessAdapter), hook_sidecars, importer, lint
 │   ├── adapters/
 │   │   ├── __init__.py
 │   │   ├── base.py                         # Adapter ABC
@@ -2842,7 +2842,7 @@ warning: no .playbook/manifest.toml sidecar found; reconstructing best-effort. .
 warning: rule 'pep8': scope inferred as 'always' from rules/ placement; globs/applies_if/priority/tags/version not recoverable without sidecar
 imported 2 artifact(s) into /repo/playbook (2 rules, 0 prompts, 0 skills, 0 hooks)
 ```
-All reconstructed rules — `scope=always` *and* `scope=scoped` — are written under `<into>/rules/<id>.md` (the only directory `FileSystemArtifactSource.list_rules()` reads); `scope` is preserved in the rule's emitted frontmatter, so a scoped rule stays scoped without needing a separate directory. A lossless import also rebuilds every hook from its manifest entry (kind `"hook"`, v0.20) through `Hook.from_dict`, never from the rendered files, and writes it as `<into>/hooks/<id>/HOOK.md` (`HOOK.md.j2` when templated) with its `scripts/`, exec bits restored; a best-effort import reads a `rules/NN-guardrail-*.md` advisory as a rule and warns that the hook cannot be reconstructed without the sidecar (§10.7.2). Exit code is 2 on a usage error (missing/non-directory path, or no `HARNESS.md`), else 0.
+All reconstructed rules — `scope=always` *and* `scope=scoped` — are written under `<into>/rules/<id>.md` (the only directory `FileSystemArtifactSource.list_rules()` reads); `scope` is preserved in the rule's emitted frontmatter, so a scoped rule stays scoped without needing a separate directory. A lossless import also rebuilds every hook from its manifest entry (kind `"hook"`, v0.20) through `Hook.from_dict`, never from the rendered files, and writes it as `<into>/hooks/<id>/HOOK.md` (`HOOK.md.j2` when templated) with its `scripts/`, exec bits restored; a best-effort import reads a `rules/NN-guardrail-*.md` advisory as a rule and warns that the hook cannot be reconstructed without the sidecar (§10.7.2). The hook sidecar has one module for both directions, `agent_harness.hook_sidecars`: `emit_hook_sidecars` writes it and `read_hook_sidecar` reads an entry back. Exit code is 2 on a usage error (missing/non-directory path, or no `HARNESS.md`), else 0.
 ### 12.10 `playbook validate-harness`
 Run `harnesses-ref`-equivalent structural checks on an Agent Harness tree (emitted or foreign). This is the lint half of the client-runtime decision (§10.7 / decision #3): the playbook validates harness *structure*, it does not implement a harness client runtime.
 ```
@@ -2859,7 +2859,7 @@ warning: /build/harness/skills: grouping directory lacks its routing file 'SKILL
 validation failed with 0 error(s), 1 warning(s) (warnings promoted by --strict)
 exit code: 1
 ```
-A missing or malformed `HARNESS.md` is reported as a validation **error** (exit 1) — not a usage error (exit 2) — because for a validator a malformed harness is precisely the failure it exists to report. Directories marked opaque by a `.harnessleaf` marker are terminal leaves: the validator never expects a routing file for them and does not inspect their internal content.
+A missing or malformed `HARNESS.md` is reported as a validation **error** (exit 1) — not a usage error (exit 2) — because for a validator a malformed harness is precisely the failure it exists to report. Directories marked opaque by a `.harnessleaf` marker are terminal leaves: the validator never expects a routing file for them and does not inspect their internal content. The checks are `agent_harness.lint.lint_harness`, which returns `HarnessFindings` (errors and warnings); `--strict` is a reporting choice, `HarnessFindings.failed(strict=True)`, not an input to the lint.
 ### 12.11 `playbook ci`
 ```
 playbook ci [--base REF] [--steps STEP[,STEP…]] [--format text|json] [--repo-root DIR]

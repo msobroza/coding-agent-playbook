@@ -123,6 +123,10 @@ def test_import_writes_canonical_layout_and_exits_zero(tmp_path, capsys):
     into = tmp_path / "out"
     rc = _import.run(_ns(harness, into))
     assert rc == 0
+    # The summary line is unchanged by the importer split (AH-2, #143).
+    assert capsys.readouterr().out == (
+        f"imported 4 artifact(s) into {into} (2 rules, 1 prompts, 1 skills, 0 hooks)\n"
+    )
 
     # FileSystemArtifactSource layout: ALL rules (always + scoped) live under
     # rules/<id>.md — that is the ONLY directory list_rules() reads, so a scoped
