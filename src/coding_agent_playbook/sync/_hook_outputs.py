@@ -69,9 +69,10 @@ from coding_agent_playbook.guard_config import (
     resolve_resource_roots,
     write_guard_config,
 )
-from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH, stop_stage_records
 from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
 from coding_agent_playbook.hooks.enforcement import HOOK_LABELS, adapter_label
+from coding_agent_playbook.hooks.registrations.opencode import OPENCODE_SHIM_PATH
+from coding_agent_playbook.hooks.registrations.stop_gate import stop_stage_records
 from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
 from coding_agent_playbook.hooks.resolution.tables import HOOK_CAPABLE_ADAPTERS
 from coding_agent_playbook.lockfile.model import Provenance

@@ -35,15 +35,12 @@ from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
 from coding_agent_playbook.cli.parser import _SUBCOMMANDS, build_parser
 from coding_agent_playbook.commands.twins._ci_commit_convention import PR_TITLE_ENV
 from coding_agent_playbook.commands.twins.ci import CI_STEPS
-from coding_agent_playbook.hook_registrations import (
-    LAUNCHER_PATH,
-    OPENCODE_SHIM_PATH,
-    STRICT_LAUNCH_FLAG,
-    claude_command,
-)
 from coding_agent_playbook.hook_runtime.cli import ASYNC_FLAG, USAGE
 from coding_agent_playbook.hook_runtime.diagnostics._doctor_opencode import OPENCODE_MIN_VERSION
 from coding_agent_playbook.hook_runtime.stop.stages import STOP_STAGE_ORDER
+from coding_agent_playbook.hooks.registrations.claude import STRICT_LAUNCH_FLAG, claude_command
+from coding_agent_playbook.hooks.registrations.launcher import LAUNCHER_PATH
+from coding_agent_playbook.hooks.registrations.opencode import OPENCODE_SHIM_PATH
 from coding_agent_playbook.lockfile.model import ProvenanceKind
 from coding_agent_playbook.metrics_gate.policy import METRIC_FAMILIES, OPT_IN_METRICS
 from coding_agent_playbook.precommit import render_fresh_pre_commit

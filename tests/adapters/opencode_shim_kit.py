@@ -18,17 +18,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH, render_opencode_shim
 from coding_agent_playbook.hook_runtime.dispatch.decision import CombinedResult, Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.harness.opencode import render_opencode
+from coding_agent_playbook.hooks.registrations.opencode import (
+    OPENCODE_SHIM_PATH,
+    render_opencode_shim,
+)
 from tests.node_kit import run_node
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.hook_registrations import OpenCodeRegEntry
     from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
+    from coding_agent_playbook.hooks.registrations.opencode import OpenCodeRegEntry
 
 type Step = dict[str, Any]
 
