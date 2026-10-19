@@ -352,7 +352,9 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
+    "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
+    "coding_agent_playbook.generated_output.write_guard",
     "coding_agent_playbook.git_env",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
@@ -420,7 +422,9 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
+    "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
+    "coding_agent_playbook.generated_output.write_guard",
     "coding_agent_playbook.git_env",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
@@ -508,7 +512,9 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
+    "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
+    "coding_agent_playbook.generated_output.write_guard",
     "coding_agent_playbook.git_env",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
@@ -572,8 +578,6 @@ name = "An underscore module is imported only from inside its own package"
 type = "private_modules"
 containers = ["coding_agent_playbook"]
 ignore_imports = [
-    # A7: adapters/_skill_files.py becomes generated_output/source_files.py (after #62)
-    "coding_agent_playbook.commands._import_files -> coding_agent_playbook.adapters._skill_files",
     # CP-3: init's configure() owns --adapters (after #62)
     "coding_agent_playbook.cli.parser -> coding_agent_playbook.commands._init_adapters",
     # A16: hook_runtime/_ruff.py becomes the public hook_runtime/ruff.py (after #62)
@@ -594,12 +598,6 @@ ignore_imports = [
     "coding_agent_playbook.commands.twins.scan_sinks -> coding_agent_playbook.hook_runtime._git_parse",
     # N21: becomes hook_runtime/harness/payload.py
     "coding_agent_playbook.hook_runtime.dispatch -> coding_agent_playbook.hook_runtime.harness._payload",
-    # A7: becomes generated_output/write_guard.py (after #62)
-    "coding_agent_playbook.sync._hook_outputs -> coding_agent_playbook.adapters._owned_files",
-    "coding_agent_playbook.sync.pipeline -> coding_agent_playbook.adapters._owned_files",
-    # A7: becomes generated_output/source_files.py (after #62)
-    "coding_agent_playbook.validation.checks -> coding_agent_playbook.adapters._skill_sources",
-    "coding_agent_playbook.guard_config -> coding_agent_playbook.adapters._skill_sources",
 ]
 broken_contract_guidance = """
 Import a public module of the owning package, or move the importer inside that package.

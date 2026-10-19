@@ -89,10 +89,10 @@ from coding_agent_playbook._guard_config_verify import (
     prompts_table,
     repo_layout,
 )
-from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS
 from coding_agent_playbook.generated_output.output_io import copy_output, write_output_bytes
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
+from coding_agent_playbook.generated_output.source_files import copyable_skill_files
 from coding_agent_playbook.hook_registrations import (
     LAUNCHER_PATH,
     OPENCODE_SHIM_PATH,
