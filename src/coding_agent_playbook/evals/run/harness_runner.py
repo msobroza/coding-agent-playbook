@@ -385,7 +385,7 @@ class HarnessRunner(ABC):
         trial runs.
 
         With an ``[aggregate]`` layer the task verdict is that layer's pass/fail —
-        the :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`\\ s
+        the :class:`~coding_agent_playbook.evals.checks.aggregate.AggregateCheck`\\ s
         reduce the trials' selected ``over`` axis (``gate`` / ``rubric`` /
         ``verdict``) into a ``pass@k`` / ``pass^k`` reliability score; if that layer
         is skipped, the task verdict falls back to every trial passing, scored by

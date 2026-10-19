@@ -16,13 +16,13 @@ from typing import Any
 
 import pytest
 
-from coding_agent_playbook.evals.task import EvalTask, compile_eval_task
-from coding_agent_playbook.evaluators.check import ThresholdCheck
-from coding_agent_playbook.evaluators.checks.compose import AllOf
-from coding_agent_playbook.evaluators.checks.files import (
+from coding_agent_playbook.evals.checks.files import (
     FileExistsCheck,
     FileUnchangedCheck,
 )
+from coding_agent_playbook.evals.task import EvalTask, compile_eval_task
+from coding_agent_playbook.evaluators.check import ThresholdCheck
+from coding_agent_playbook.evaluators.checks.compose import AllOf
 from coding_agent_playbook.evaluators.rubric import Rubric
 from coding_agent_playbook.evaluators.types import EvalContext
 
