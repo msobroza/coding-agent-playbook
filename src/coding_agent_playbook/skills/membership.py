@@ -14,9 +14,9 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of
 from coding_agent_playbook.artifacts.member_reference import MemberReference
-from coding_agent_playbook.skill_document import PLAYBOOK_BLOCK_KEY, render_member_reference
+from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY, render_member_reference
+from coding_agent_playbook.skills.naming import skill_id_of
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence

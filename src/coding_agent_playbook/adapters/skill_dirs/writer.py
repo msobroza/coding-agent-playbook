@@ -15,13 +15,14 @@ Python bytecode caches (:mod:`coding_agent_playbook.adapters._skill_files`).
 A skill with member rules (ADR 0001) also gets one ``references/<rule-id>.md``
 per active member, written from ``MemberReference.text`` after the copies and
 guarded like them; its ``SKILL.md`` carries the composed description and the
-generated ``## References`` index (:mod:`coding_agent_playbook.skill_document`).
+generated ``## References`` index (:mod:`coding_agent_playbook.skills.document`).
 The catalog-only ``playbook:`` block is never emitted, so a skill without
 members (a bundled plugin's) is written exactly as authored.
 
 ``SKILL.md`` follows the Agent Skills standard read by Claude Code and OpenCode:
 frontmatter ``name`` is forced to the skill id (= the directory name) and must
-match :data:`AGENT_SKILL_NAME_PATTERN`; ``description`` must be non-empty. The
+match :data:`~coding_agent_playbook.skills.naming.AGENT_SKILL_NAME_PATTERN`;
+``description`` must be non-empty. The
 playbook :data:`~coding_agent_playbook._sentinel.SENTINEL` cannot sit on line 1
 (agent parsers require ``^---`` there), so it is the first body line after the
 closing fence — the same placement as the ``agent_harness`` adapter (§10.7.3).
@@ -59,28 +60,12 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook._sentinel import has_sentinel
 from coding_agent_playbook._symlinks import is_dangling_symlink, link_leaving, real_path
-
-# The Agent Skills naming rules live in _agent_skill_rules (file-size budget); this
-# module stays the home callers import them from (commands/validate.py, the tests).
-from coding_agent_playbook.adapters._agent_skill_rules import (
-    AGENT_SKILL_DESCRIPTION_MAX_CHARS as AGENT_SKILL_DESCRIPTION_MAX_CHARS,
-)
-from coding_agent_playbook.adapters._agent_skill_rules import (
-    AGENT_SKILL_NAME_MAX_CHARS as AGENT_SKILL_NAME_MAX_CHARS,
-)
-from coding_agent_playbook.adapters._agent_skill_rules import (
-    AGENT_SKILL_NAME_PATTERN as AGENT_SKILL_NAME_PATTERN,
-)
-from coding_agent_playbook.adapters._agent_skill_rules import (
-    agent_skill_issues as agent_skill_issues,
-)
-from coding_agent_playbook.adapters._agent_skill_rules import has_declared_id as has_declared_id
-from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of as skill_id_of
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.adapters.skill_dirs.ownership import PriorOutput
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.harness.emitter import with_sentinel_body
-from coding_agent_playbook.skill_document import emitted_body, emitted_frontmatter
+from coding_agent_playbook.skills.document import emitted_body, emitted_frontmatter
+from coding_agent_playbook.skills.naming import skill_id_of
 from coding_agent_playbook.types import format_frontmatter
 
 if TYPE_CHECKING:
@@ -149,7 +134,7 @@ def render_skill_md(skill: Skill) -> str:
     Frontmatter stays on line 1 with ``name`` forced to the skill id (every
     other key, including ``id``, is kept in authored order after it); the
     sentinel HTML comment is the first body line. Frontmatter and body come
-    from :mod:`~coding_agent_playbook.skill_document`: the catalog-only
+    from :mod:`~coding_agent_playbook.skills.document`: the catalog-only
     ``playbook`` block is never emitted, and a skill with member rules gets its
     composed description and the ``## References`` index. A plain skill (a
     bundled plugin's) is rendered exactly as authored.

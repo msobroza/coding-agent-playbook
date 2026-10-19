@@ -17,7 +17,7 @@ import pytest
 
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
-from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
+from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.commands._validate_frontmatter import lint_codes_problems
 from coding_agent_playbook.detector.predicate import evaluate_predicate

@@ -23,7 +23,7 @@ import pytest
 from coding_agent_playbook._sentinel import SENTINEL_HEAD_BYTES, has_sentinel, sentinel_line
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
-from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
+from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
 from tests.fakes import record_opens

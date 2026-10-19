@@ -17,8 +17,8 @@ import pytest
 from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
+from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_RULES_PATH
-from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter

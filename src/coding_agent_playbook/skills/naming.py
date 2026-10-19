@@ -7,10 +7,10 @@ characters. :func:`agent_skill_issues` lists the violations of one skill; ``play
 validate`` reports them up front, because OpenCode drops a skill that breaks them
 without a word.
 
-Split out of ``skill_dirs.writer`` for the file-size budget (specs/prS-skills-context.md
-§6.4.5). ``skill_dirs.writer`` re-exports every public name here, so ``commands/validate.py``
-and the tests keep importing them from there. A leaf module: ``Skill`` is imported for
-type checking only, so the writer can import this module without a cycle.
+Split out of ``_skill_writer`` for the file-size budget (specs/prS-skills-context.md
+§6.4.5), then moved from ``adapters/`` to ``skills/`` (A3), so callers import the
+rules from here. A leaf module: ``Skill`` is imported for type checking only, so the
+writer can import this module without a cycle.
 """
 
 from __future__ import annotations
