@@ -22,7 +22,7 @@ from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
-from coding_agent_playbook.rendering.jinja import build_environment
+from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
 from coding_agent_playbook.skills.membership import (
     MemberRuleDeliverer,
     compose_skills,
@@ -32,7 +32,6 @@ from coding_agent_playbook.skills.membership import (
     member_rules_of,
     undelivered_member_warning,
 )
-from coding_agent_playbook.sync.render import render_rule_body
 from tests.hook_samples import sample_hook
 
 if TYPE_CHECKING:
@@ -159,8 +158,8 @@ def test_compose_skills_uses_the_rendered_body_of_a_templated_member(tmp_path: P
         encoding="utf-8",
     )
     template = Rule.from_markdown(source, "<repo-local>")
-    env = build_environment([])
-    rendered = render_rule_body(template, {"project_name": "acme-api"}, env)
+    context = TemplateContext(facts={}, project_name="acme-api", engine_version="1.0")
+    rendered = RenderSession.open((), context, repo_root=tmp_path).render_rule(template)
     [composed] = compose_skills([_skill("python-coding")], [template], [rendered])
     assert composed.member_references[0].text == "*Rule `project-notes`.*\n\n# Notes for acme-api\n"
 

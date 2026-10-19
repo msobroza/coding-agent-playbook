@@ -1,19 +1,16 @@
 """The finding types every ``playbook validate`` check returns, and their report (SPEC §12.6).
 
 A module of its own so the check modules (``validation._links``, ``validation._hooks``),
-``checks`` and the validate-gated ``sync`` can all share it, its report format
-and the Jinja syntax check rules, prompts and hooks have in common, without
-importing each other. The other shared body check, a template calling ``rule()``,
-matches ``RULE_CALL_RE``, which its importers take from ``rendering.jinja``.
+``checks`` and the validate-gated ``sync`` can all share it and its report format
+without importing each other. The body checks rules, prompts and hooks have in
+common live with the sandbox in ``rendering.jinja``: the Jinja syntax check
+(``jinja_syntax_error``) and a template calling ``rule()`` (``RULE_CALL_RE``).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
-
-from jinja2 import StrictUndefined, TemplateSyntaxError
-from jinja2.sandbox import SandboxedEnvironment
 
 from coding_agent_playbook.skills.naming import has_declared_id, skill_id_of
 
@@ -67,24 +64,6 @@ def skill_label(skill: Skill) -> str:
     where = f", at {source_dir.parent}" if source_dir is not None else ""
     name = skill.frontmatter.get("name", "?")
     return f"skills/<no id; name {name!r}{where}> ({skill.source_package})"
-
-
-def jinja_syntax_error(template: str) -> str | None:
-    """The Jinja syntax error of ``template``, or None when it parses.
-
-    Syntax only: no rule registry, no facts. Sandboxed like the renderer's
-    environment, so no Jinja construction site is unsandboxed (prK §P1).
-
-    Example::
-
-        >>> jinja_syntax_error("{% if x %}").startswith("Unexpected end of template.")
-        True
-    """
-    try:
-        SandboxedEnvironment(autoescape=False, undefined=StrictUndefined).parse(template)
-    except TemplateSyntaxError as exc:
-        return exc.message or str(exc)
-    return None
 
 
 def report_validation_warnings(warnings: Sequence[ValidationError], stream: TextIO) -> None:
