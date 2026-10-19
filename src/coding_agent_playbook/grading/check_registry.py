@@ -170,6 +170,12 @@ def _load_check_builtins() -> None:
         import_module(module)
 
 
+# Importing the registry registers the execution checks right after ``threshold`` and
+# ``non_regression``, as the package ``__init__`` did, so an eval family imported
+# first never lists ahead of them in :func:`all_check_ids`.
+_load_check_builtins()
+
+
 def _load_check_entry_points() -> dict[str, Callable[..., Check]]:
     """Load out-of-tree check factories from the entry-point group, deduped by id.
 

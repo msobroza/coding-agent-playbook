@@ -43,9 +43,10 @@ ENTRY_POINT_GROUP = "coding_agent_playbook.metrics"
 #: name -> Metric subclass, populated by the decorator on import.
 _METRIC_REGISTRY: dict[str, type[Metric]] = {}
 
-#: The 12 in-tree metric modules, static first: importing one fires its
-#: ``@register_metric``, so this order is the registry's. A package ``__init__``
-#: holds only a docstring (ADR 0002), so the list names every module.
+#: The 12 in-tree metric modules, static first, each family in the order its
+#: package ``__init__`` imported it: importing one fires its ``@register_metric``.
+#: A package ``__init__`` holds only a docstring (ADR 0002), so the list names
+#: every module.
 _BUILTIN_METRIC_MODULES: Final = (
     "coding_agent_playbook.grading.static_metrics.cbo",
     "coding_agent_playbook.grading.static_metrics.cyclomatic",
@@ -157,28 +158,48 @@ def _load_metric_entry_points() -> dict[str, type[Metric]]:
     return discovered
 
 
-def _builtin_rank(cls: type[Metric]) -> int:
-    """Where ``cls`` sorts among the registered metrics: its module's place in the builtin list.
+def _builtin_family(cls: type[Metric]) -> str | None:
+    """The builtin package ``cls`` is defined in, or ``None`` for a metric registered elsewhere.
 
-    A metric registered from any other module sorts after every builtin. Example:
-    ``_builtin_rank(get_metric("dit").__class__)`` is ``2``.
+    Example: ``_builtin_family(type(get_metric("dit")))`` is
+    ``"coding_agent_playbook.grading.static_metrics"``.
     """
     module = cls.__module__
-    if module in _BUILTIN_METRIC_MODULES:
-        return _BUILTIN_METRIC_MODULES.index(module)
-    return len(_BUILTIN_METRIC_MODULES)
+    if module not in _BUILTIN_METRIC_MODULES:
+        return None
+    return module.rpartition(".")[0]
+
+
+def _family_block(family: str) -> dict[str, type[Metric]]:
+    """The registered metrics of the builtin ``family``, in :data:`_BUILTIN_METRIC_MODULES` order."""
+    members = [item for item in _METRIC_REGISTRY.items() if _builtin_family(item[1]) == family]
+    members.sort(key=lambda item: _BUILTIN_METRIC_MODULES.index(item[1].__module__))
+    return dict(members)
+
+
+def _registry_in_family_blocks() -> dict[str, type[Metric]]:
+    """The metric registry in the order the families' package ``__init__`` files gave it.
+
+    Importing any module of a family used to register the whole family as one block,
+    in package order. So a family lists, in :data:`_BUILTIN_METRIC_MODULES` order, where
+    its first-registered module stands, and any other metric keeps its own place.
+    Example: when ``diff_coverage`` registered first, ``coverage``, ``diff_coverage``
+    and ``test_pass_rate`` lead, then the static metrics.
+    """
+    ordered: dict[str, type[Metric]] = {}
+    for name, cls in _METRIC_REGISTRY.items():
+        family = _builtin_family(cls)
+        if family is None:
+            ordered[name] = cls
+        elif name not in ordered:
+            ordered.update(_family_block(family))
+    return ordered
 
 
 def all_metrics() -> list[Metric]:
-    """Every metric: builtins (decorator) + entry points, deduped by name.
-
-    The builtins come in :data:`_BUILTIN_METRIC_MODULES` order whichever module an
-    earlier import registered first, then other registered metrics in registration
-    order.
-    """
+    """Every metric: builtins (decorator) + entry points, deduped by name."""
     _load_metric_builtins()
-    ordered = sorted(_METRIC_REGISTRY.items(), key=lambda item: _builtin_rank(item[1]))
-    classes: dict[str, type[Metric]] = dict(ordered)
+    classes: dict[str, type[Metric]] = _registry_in_family_blocks()
     for name, cls in _load_metric_entry_points().items():
         classes.setdefault(name, cls)
     return [cls() for cls in classes.values()]
