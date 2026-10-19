@@ -169,11 +169,11 @@ def main(
         print(f"playbook-hook {__version__}")
         return 0
     if command == "simulate":
-        from coding_agent_playbook.hook_runtime.simulate import main as simulate_main
+        from coding_agent_playbook.hook_runtime.diagnostics.simulate import main as simulate_main
 
         return simulate_main(rest, deps=deps, stdin=stdin)
     if command == "doctor":
-        from coding_agent_playbook.hook_runtime.doctor import main as doctor_main
+        from coding_agent_playbook.hook_runtime.diagnostics.doctor import main as doctor_main
 
         return doctor_main(rest, deps=deps)
     print(USAGE, file=sys.stderr)

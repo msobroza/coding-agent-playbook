@@ -14,7 +14,8 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH, render_opencode_shim
-from coding_agent_playbook.hook_runtime._doctor_opencode import (
+from coding_agent_playbook.hook_runtime.config.schema import LOCKFILE_REL
+from coding_agent_playbook.hook_runtime.diagnostics._doctor_opencode import (
     DISABLE_PROJECT_CONFIG,
     OPENCODE_MIN_VERSION,
     VERSION_PROBE_TIMEOUT_S,
@@ -22,8 +23,7 @@ from coding_agent_playbook.hook_runtime._doctor_opencode import (
     parse_opencode_version,
     read_shim_reg,
 )
-from coding_agent_playbook.hook_runtime.config.schema import LOCKFILE_REL
-from coding_agent_playbook.hook_runtime.doctor import Check, exit_code, run_doctor
+from coding_agent_playbook.hook_runtime.diagnostics.doctor import Check, exit_code, run_doctor
 from coding_agent_playbook.hook_runtime.harness.opencode import OPENCODE_SHIM_REL
 from tests.hook_runtime.fakes import FakeProc
 from tests.hook_runtime.guard_repo import GuardRepo, hook_record
