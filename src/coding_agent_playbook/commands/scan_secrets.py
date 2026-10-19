@@ -43,8 +43,8 @@ from coding_agent_playbook.commands._secret_scope import (
     staged_scope,
     worktree_scope,
 )
+from coding_agent_playbook.config.tables.hooks import parse_guardrails_config
 from coding_agent_playbook.hook_runtime.git import GitError
-from coding_agent_playbook.hooks_config import parse_guardrails_config
 from coding_agent_playbook.security.files import user_home
 from coding_agent_playbook.security.paths import DEFAULT_PATH_POLICY, PathPolicy
 from coding_agent_playbook.security.pii_findings import (

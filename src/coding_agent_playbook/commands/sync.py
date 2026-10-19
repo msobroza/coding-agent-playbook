@@ -25,7 +25,7 @@ import or ships no ``resources/`` directory, or a bundled-plugin name matches no
 ``catalog/plugins/<leaf>/`` (``_sync_preflight``) — rendering without it would
 silently drop the org rules and un-ignore their output. A config the engine
 would misread fails even earlier, while loading
-(:class:`~coding_agent_playbook.config.ConfigError`). Write mode and
+(:class:`~coding_agent_playbook.config.schema.ConfigError`). Write mode and
 ``--check`` then run the full ``playbook validate`` rule set, the hook trust
 contract H1-H21 included (:func:`~coding_agent_playbook.commands.validate.sync_gate_errors`),
 and exit 1 on any finding, printing its ``FAIL`` lines to stderr and writing

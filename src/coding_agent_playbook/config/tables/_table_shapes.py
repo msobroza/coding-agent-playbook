@@ -3,7 +3,7 @@
 A :class:`TableShape` says what one TOML key must hold and how to store it;
 :func:`read_table` checks every key of a decoded table against its shape and
 records one problem line per offending key, so the parser can report them all
-in one ``ValueError``. Stdlib-only, like ``hooks_config``, which uses it.
+in one ``ValueError``. Stdlib-only, like ``config.tables.hooks``, which uses it.
 """
 
 from __future__ import annotations

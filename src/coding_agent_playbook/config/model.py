@@ -1,15 +1,15 @@
 """Config dataclass mirroring .coding-agent-playbook.toml (SPEC §7.1).
 
-The FileSystemStateSource (sources/filesystem.py) is responsible for loading
+The FileSystemStateSource (config/files.py) is responsible for loading
 and writing TOML files; this module defines the in-memory shape and the parsers
 of its tables. The checks that turn a config the engine would misread into a
-:class:`ConfigError` live in ``config_schema`` (re-exported here, with
-:func:`check_config_file` running every per-file one); which entries ``Config``
-owns, and carrying the others over when the committed file is rewritten, is
-``config_entries``: those entries (``[hooks]``, ``[guardrails]``, ``[links]``,
-``[metrics]``…) ride along verbatim in ``Config.extra_tables``.
-:func:`parse_metrics_config` lives in ``metrics_config`` and the ``[hooks]`` /
-``[guardrails]`` parsers in ``hooks_config``; both are re-exported here.
+:class:`ConfigError` live in ``config.schema`` (:func:`check_config_file` here
+runs every per-file one); which entries ``Config`` owns, and carrying the others
+over when the committed file is rewritten, is ``config.entries``: those entries
+(``[hooks]``, ``[guardrails]``, ``[links]``, ``[metrics]``…) ride along verbatim
+in ``Config.extra_tables``. :func:`parse_metrics_config` lives in
+``metrics_config``, the ``[hooks]`` / ``[guardrails]`` parsers in
+``config.tables.hooks`` and the ``[links]`` parser in ``config.tables.links``.
 """
 
 from __future__ import annotations
@@ -18,25 +18,20 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.catalog import canonical_overlay_list
-from coding_agent_playbook.config_entries import (
+from coding_agent_playbook.config.entries import (
     copy_toml_value,
     unmanaged_config_entries,
     with_unmanaged_entries,
 )
-from coding_agent_playbook.config_schema import ConfigError as ConfigError
-from coding_agent_playbook.config_schema import check_config_tables as check_config_tables
-from coding_agent_playbook.config_schema import check_enabled_keys as check_enabled_keys
-from coding_agent_playbook.config_schema import required_value
-from coding_agent_playbook.hooks_config import GuardrailsConfig as GuardrailsConfig
-from coding_agent_playbook.hooks_config import HooksConfig as HooksConfig
-from coding_agent_playbook.hooks_config import parse_guardrails_config as parse_guardrails_config
-from coding_agent_playbook.hooks_config import parse_hooks_config as parse_hooks_config
-from coding_agent_playbook.metrics_config import parse_metrics_config as parse_metrics_config
+from coding_agent_playbook.config.schema import (
+    ConfigError,
+    check_config_tables,
+    check_enabled_keys,
+    required_value,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-    from coding_agent_playbook.links import LinksConfig
 
 
 def check_config_file(data: Mapping[str, object], *, source: str) -> None:
@@ -52,7 +47,7 @@ def check_config_file(data: Mapping[str, object], *, source: str) -> None:
         >>> check_config_file({"output": {"commit": 1}}, source="c.toml")  # doctest: +ELLIPSIS
         Traceback (most recent call last):
         ...
-        coding_agent_playbook.config_schema.ConfigError: c.toml: [output] commit must be ...
+        coding_agent_playbook.config.schema.ConfigError: c.toml: [output] commit must be ...
     """
     check_enabled_keys(data, source=source)
     check_config_tables(data, source=source)
@@ -96,7 +91,7 @@ class Config:
     """``.coding-agent-playbook.toml`` in memory (SPEC §7.1).
 
     ``extra_tables`` holds, deep copied, everything the file has that ``Config``
-    does not own (``config_entries.unmanaged_config_entries``): every other
+    does not own (``config.entries.unmanaged_config_entries``): every other
     top-level key — ``[hooks]``, ``[guardrails]``, ``[links]``, ``[metrics]``… —
     and, under the table's name, the unknown keys of ``[project]``/``[engine]``/
     ``[storage]``/``[output]``. ``to_dict`` writes them back, so a rewrite of the
@@ -193,7 +188,7 @@ class Config:
 
     def to_dict(self) -> dict[str, Any]:
         """The TOML table to save: the owned keys (empty optional ones omitted),
-        then ``extra_tables`` (``config_entries.with_unmanaged_entries``).
+        then ``extra_tables`` (``config.entries.with_unmanaged_entries``).
 
         An owned field always wins over an extra of the same name: only what
         ``unmanaged_config_entries`` keeps of ``extra_tables`` is written back, so
@@ -232,27 +227,6 @@ class Config:
             result["user_choices"] = dict(self.user_choices)
         extras = unmanaged_config_entries(self.extra_tables)
         return with_unmanaged_entries(result, copy_toml_value(extras))
-
-
-def parse_links_config(data: dict[str, Any]) -> LinksConfig:
-    """Parse a ``[links]`` table (already decoded from TOML) into a
-    :class:`~coding_agent_playbook.links.LinksConfig` (SPEC §7.1, PR L).
-
-    The table shape::
-
-        [links]
-        allowed_domains = ["agentharnesses.io"]   # default: [] (fully strict)
-
-    Domains are lowercased; subdomain matching happens at check time
-    (:func:`coding_agent_playbook.links.classify_link`). The import is local to
-    mirror :func:`parse_metrics_config` — this module stays a pure data shape.
-    """
-    from coding_agent_playbook.links import LinksConfig
-
-    raw = data.get("allowed_domains", [])
-    if not isinstance(raw, list) or not all(isinstance(entry, str) for entry in raw):
-        raise ValueError(f"[links] allowed_domains must be a list of strings, got {raw!r}")
-    return LinksConfig(allowed_domains=tuple(entry.lower() for entry in raw))
 
 
 def parse_output_config(data: object, *, source: str | None = None) -> OutputConfig:

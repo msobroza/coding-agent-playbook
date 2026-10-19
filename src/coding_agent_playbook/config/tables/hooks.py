@@ -10,8 +10,8 @@ Both tables are read from the committed ``.coding-agent-playbook.toml`` only:
 records what it dropped, because committed output must not depend on a
 gitignored file CI never sees (§B.1). Read hooks policy through
 :class:`PolicyTables`, never through ``Config.extra_tables``, which holds the
-deep-merged view. Split out of ``config.py`` (which re-exports the parsers) for
-its size budget; stdlib-only.
+deep-merged view. Split out of ``config.py`` (now ``config/model.py``) for its
+size budget; stdlib-only.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ import copy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from coding_agent_playbook._table_shapes import (
+from coding_agent_playbook.config.tables._table_shapes import (
     BOOL,
     ISO_DATE_TEXT,
     POSITIVE_INT,

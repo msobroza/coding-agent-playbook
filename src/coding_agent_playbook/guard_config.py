@@ -115,8 +115,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook._guard_config_skills import SkillGlobRow
+    from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
     from coding_agent_playbook.hook_policy import ResolvedHook
-    from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
     from coding_agent_playbook.types import Prompt
 
 __all__ = [

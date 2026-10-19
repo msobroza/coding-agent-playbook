@@ -16,7 +16,7 @@ from coding_agent_playbook.catalog import CatalogMissingError
 # Aliased private so build_parser has one spelling (cli.parser), not a second one here.
 from coding_agent_playbook.cli.parser import build_parser as _build_parser
 from coding_agent_playbook.commands import init as init_cmd
-from coding_agent_playbook.config import ConfigError
+from coding_agent_playbook.config.schema import ConfigError
 from coding_agent_playbook.types import HookSchemaError
 
 if TYPE_CHECKING:

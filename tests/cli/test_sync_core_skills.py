@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Final
 import pytest
 
 from coding_agent_playbook.commands import sync as _sync
-from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from coding_agent_playbook.config.files import FileSystemStateSource
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 if TYPE_CHECKING:

@@ -1,10 +1,9 @@
 """Parse the ``[metrics]`` table into a ``MetricConfig`` (PR-M §E; prK §F.0.3).
 
-Split out of ``config.py``, which re-exports :func:`parse_metrics_config`, so the
-table can grow its keys without pushing ``config.py`` past its size budget. The
-``evaluators`` imports stay inside the functions: every command imports
-``config``, and importing ``coding_agent_playbook.evaluators`` loads the whole
-metric registry.
+Split out of ``config.py`` (now ``config/model.py``), so the table can grow its
+keys without pushing that module past its size budget. The ``evaluators``
+imports stay inside the functions: every command imports ``config.model``, and
+importing ``coding_agent_playbook.evaluators`` loads the whole metric registry.
 """
 
 from __future__ import annotations
