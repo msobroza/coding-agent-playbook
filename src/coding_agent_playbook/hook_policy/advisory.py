@@ -51,6 +51,10 @@ _NOT_ENFORCED: Final = "*Not enforced automatically; apply it yourself.*"
 
 #: A code span, skipped so ``ruff check .`` ends no sentence, or a sentence end.
 _SENTENCE_END: Final = re.compile(r"`[^`]*`|[.!?](?=\s|$)")
+#: A Markdown (ATX) heading's opening ``#`` run: up to three spaces of indent, 1-6 ``#``.
+_HEADING_PREFIX: Final = re.compile(r" {0,3}#{1,6}(?:\s+|$)")
+#: The block quote and list item markers that open a line, nested ones included.
+_BLOCK_MARKERS: Final = re.compile(r"^\s*(?:>\s*|[-*+]\s+|\d{1,9}[.)]\s+)+")
 _ELLIPSIS: Final = "…"
 _GUARDRAILS_PREFACE: Final = (
     "Lifecycle hooks enforce these on assistants that run them; on every other assistant, "
@@ -141,16 +145,30 @@ def guardrail_summary(summary: str, body: str) -> str:
     The fallback keeps a hook without an authored ``summary`` (an overlay or
     repo-local one) working unedited: its body's first sentence, its wrapped
     lines joined, cut at the last word boundary with ``…`` appended when it is
-    longer than :data:`GUARDRAIL_SUMMARY_MAX_CHARS` (D6, P4-3).
+    longer than :data:`GUARDRAIL_SUMMARY_MAX_CHARS` (D6, P4-3). Headings are
+    skipped and list or quote markers dropped, since the sentence becomes one
+    list item of its own (:func:`_prose_line`).
 
     Example::
 
-        >>> guardrail_summary("", "Ask first. Then act.")
+        >>> guardrail_summary("", "## Why\\n\\n- Ask first. Then act.")
         'Ask first.'
     """
     if summary:
         return summary
-    return _cut_to_cap(_first_sentence(" ".join(body.split())))
+    return _cut_to_cap(_first_sentence(_prose_line(body)))
+
+
+def _prose_line(body: str) -> str:
+    """``body`` on one line, without heading lines and line-opening list or quote markers.
+
+    Joined raw, ``## Why`` or ``- Do X.`` would lead the guardrail line with a
+    marker. A body that is only headings keeps their text, so the line is never empty.
+    """
+    lines = [line for line in body.splitlines() if line.strip()]
+    prose = [line for line in lines if not _HEADING_PREFIX.match(line)]
+    kept = prose or [_HEADING_PREFIX.sub("", line, count=1) for line in lines]
+    return " ".join(" ".join(_BLOCK_MARKERS.sub("", line, count=1) for line in kept).split())
 
 
 def _first_sentence(text: str) -> str:
@@ -162,14 +180,19 @@ def _first_sentence(text: str) -> str:
 
 
 def _cut_to_cap(sentence: str) -> str:
-    """``sentence``, or its longest word-boundary prefix plus ``…`` within the cap."""
+    """``sentence``, or its longest word-boundary prefix plus ``…`` within the cap.
+
+    The prefix stops before an open code span; when that leaves no text (the
+    sentence opens with an unclosed backtick), the cut is hard at the cap instead.
+    """
     if len(sentence) <= GUARDRAIL_SUMMARY_MAX_CHARS:
         return sentence
     head = sentence[:GUARDRAIL_SUMMARY_MAX_CHARS]
     kept = head.rsplit(" ", 1)[0] if " " in head else head[:-1]
     if kept.count("`") % 2:  # an open code span would swallow the rest of the line
         kept = kept[: kept.rindex("`")]
-    return kept.rstrip(" ,;:") + _ELLIPSIS
+    trimmed = kept.rstrip(" ,;:") or head[:-1].rstrip(" ,;:")
+    return trimmed + _ELLIPSIS
 
 
 def guardrail_line(hook_id: str, summary: str) -> str:

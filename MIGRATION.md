@@ -241,7 +241,10 @@ scoped rule in core names a skill, so every repo sees the change: in a typical
 FastAPI + ML repo with hooks on, `AGENTS.md` shrinks from about 6,800 words to
 about 1,850, of which about 330 come before the Guardrails section, and the
 Claude Code rules file from about 5,300 words to about 350 (with the shorter
-always text below). A later change of this release shortens the guardrails.
+always text below). A later change of this release shortens the guardrails to
+one line per hook, so with every v0.21 change `AGENTS.md` ends at about 800
+words, about 470 of them in the Guardrails section (see "Guardrails and lint
+feedback point at skills").
 
 The map names only skills that a sync writes. When no enabled adapter writes a
 skills root (`adapters_enabled = []`, or only `continue`), `AGENTS.md` has no
@@ -421,11 +424,12 @@ guardrail text, sorted by hook id, under a new preface that names the skill:
 The `### <name>` block and the italic "Enforced by lifecycle hooks on: …" line
 of each hook move to the skill. In a FastAPI + ML repo with the default hooks
 the section drops from about 1,500 words to about 470, and the whole file to
-about 780. Each line is the hook's new optional `summary` in `HOOK.md`: one line
+about 800. Each line is the hook's new optional `summary` in `HOOK.md`: one line
 of 1-120 characters without `{{` or `{%` (frontmatter is never rendered), which
 every core hook with a body now declares. An overlay or repo-local hook needs no
-edit: without `summary` its line is the first sentence of its rendered body, cut
-at a word boundary with `…` once it passes 120 characters. A malformed one is a
+edit: without `summary` its line is the first sentence of its rendered body
+(headings skipped, list and quote markers dropped), cut at a word boundary with
+`…` once it passes 120 characters. A malformed one is a
 `FAIL` line of `playbook validate`, and so stops `playbook sync`:
 
     FAIL playbook/hooks/x/HOOK.md: summary: expected a single line of 1-120 characters without '{{' or '{%', got '…'
