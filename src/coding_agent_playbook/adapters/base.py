@@ -15,8 +15,8 @@ from abc import ABC, abstractmethod
 from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar
 
-from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook._sentinel import file_has_sentinel
+from coding_agent_playbook.generated_output.file_identity import FileSet
+from coding_agent_playbook.generated_output.sentinel import file_has_sentinel
 from coding_agent_playbook.security.files import is_secret_file, user_home
 
 if TYPE_CHECKING:
@@ -68,7 +68,7 @@ class Adapter(ABC):
     #: (Claude Code's ``.claude/settings.json``): it edits managed elements in
     #: place, so ``playbook sync`` never gives one a whole-file lock entry,
     #: gitignores it, flags it as staged output, or deletes it. Each must be
-    #: written by atomic replace (``_atomic_io.atomic_write_bytes``): ``sync
+    #: written by atomic replace (``generated_output.atomic_io.atomic_write_bytes``): ``sync
     #: --check`` relies on it to call a dangling link at one no blocker, since
     #: the rename replaces the link (``_output_blockers.write_blocker``).
     shared_outputs: ClassVar[tuple[str, ...]] = ()
@@ -323,7 +323,7 @@ class Adapter(ABC):
 
     @staticmethod
     def _carries_sentinel(path: Path) -> bool:
-        """Whether ``path`` is engine-generated per :func:`_sentinel.file_has_sentinel`.
+        """Whether ``path`` is engine-generated per :func:`~coding_agent_playbook.generated_output.sentinel.file_has_sentinel`.
 
         The sentinel line must be line 1, or the first body line after a
         leading YAML frontmatter block; anywhere else it is user prose. Binary,

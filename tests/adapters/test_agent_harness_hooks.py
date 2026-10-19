@@ -15,11 +15,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.harness.manifest import ScriptEntry, read_manifest
 from tests.hook_samples import resolved_from_disk
 

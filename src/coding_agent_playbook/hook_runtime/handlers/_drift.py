@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook._sentinel import file_has_sentinel
+from coding_agent_playbook.generated_output.sentinel import file_has_sentinel
 from coding_agent_playbook.hook_runtime._config_reader import read_small_file
 from coding_agent_playbook.hook_runtime._lock_digest import MAX_LOCK_BYTES, load_toml
 from coding_agent_playbook.hook_runtime.caps import quote_data

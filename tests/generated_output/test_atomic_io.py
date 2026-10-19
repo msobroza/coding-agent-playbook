@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook._atomic_io import atomic_write_bytes
 from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.generated_output.atomic_io import atomic_write_bytes
 from coding_agent_playbook.lockfile.model import Lockfile
 
 if TYPE_CHECKING:

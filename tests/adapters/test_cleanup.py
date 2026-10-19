@@ -3,7 +3,7 @@
 Every built-in sentinel scanner (the ABC's directory scan used by Continue and
 OpenCode, Claude Code's ``.claude/commands`` scan + ``CLAUDE.md`` and rules-file
 checks, AGENTS.md's single-file check and the agent_harness tree scan)
-recognises an engine-generated file by ``_sentinel.has_sentinel``: a sentinel line on line 1,
+recognises an engine-generated file by ``generated_output.sentinel.has_sentinel``: a sentinel line on line 1,
 or on the first body line after a leading YAML frontmatter block. A sentinel
 anywhere else is user prose and never makes a file deletable. ``stale_outputs``
 is the read-only twin ``sync --check`` uses: it reports exactly what
@@ -20,12 +20,16 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook._sentinel import SENTINEL_HEAD_BYTES, has_sentinel, sentinel_line
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
+from coding_agent_playbook.generated_output.sentinel import (
+    SENTINEL_HEAD_BYTES,
+    has_sentinel,
+    sentinel_line,
+)
 from tests.fakes import record_opens
 
 if TYPE_CHECKING:
@@ -261,7 +265,7 @@ def test_sentinel_head_verdict_matches_a_whole_file_read(tmp_path: Path, text: s
 def test_sentinel_head_read_is_bounded(tmp_path: Path) -> None:
     """Only line 1 (or a frontmatter block + one line) is read, never the whole file.
 
-    The bounded read itself lives in ``_sentinel.file_has_sentinel`` (shared
+    The bounded read itself lives in ``generated_output.sentinel.file_has_sentinel`` (shared
     with the hook guards); this pins that adapters still go through it.
     """
     big_body = "x" * (2 * SENTINEL_HEAD_BYTES) + "\n"

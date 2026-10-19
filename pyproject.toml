@@ -261,7 +261,7 @@ layers = [
     "catalog",
     "detector | lockfile",
     "(grading)",
-    "(generated_output)",
+    "generated_output",
     "artifacts",
     "security | toml_writer | (_plugin_registry)",
 ]
@@ -269,8 +269,6 @@ exhaustive = true
 # Top-level modules not yet in their target package: each move PR deletes its
 # names. hook_runtime stays here for good.
 exhaustive_ignores = [
-    "_atomic_io",
-    "_file_identity",
     "_gate_scan_files",
     "_guard_config_allowlists",
     "_guard_config_detect",
@@ -282,13 +280,9 @@ exhaustive_ignores = [
     "_guard_config_skills",
     "_guard_config_toolchain",
     "_guard_config_verify",
-    "_output_io",
-    "_sentinel",
-    "_symlinks",
     "evaluators",
     "gate_scan",
     "git_env",
-    "gitignore",
     "guard_config",
     "harness",
     "hook_policy",
@@ -318,11 +312,11 @@ name = "A stdlib leaf imports only the stdlib and other leaves"
 type = "forbidden"
 # tests/engine_modules.py STDLIB_LEAVES: the only engine modules the two stacks import.
 source_modules = [
-    "coding_agent_playbook._atomic_io",
-    "coding_agent_playbook._sentinel",
     "coding_agent_playbook.catalog.roots",
     "coding_agent_playbook.detector.pep503",
     "coding_agent_playbook.detector.pyproject_deps",
+    "coding_agent_playbook.generated_output.atomic_io",
+    "coding_agent_playbook.generated_output.sentinel",
     "coding_agent_playbook.lockfile",
     "coding_agent_playbook.security",
 ]
@@ -330,7 +324,6 @@ source_modules = [
 # (tests/engine_modules.py; test_leaf_contract_covers_every_stdlib_leaf prints the
 # expected list).
 forbidden_modules = [
-    "coding_agent_playbook._file_identity",
     "coding_agent_playbook._gate_scan_files",
     "coding_agent_playbook._guard_config_allowlists",
     "coding_agent_playbook._guard_config_detect",
@@ -342,8 +335,6 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_skills",
     "coding_agent_playbook._guard_config_toolchain",
     "coding_agent_playbook._guard_config_verify",
-    "coding_agent_playbook._output_io",
-    "coding_agent_playbook._symlinks",
     "coding_agent_playbook.adapters",
     "coding_agent_playbook.artifacts",
     "coding_agent_playbook.catalog._hook_walk",
@@ -358,8 +349,11 @@ forbidden_modules = [
     "coding_agent_playbook.evals",
     "coding_agent_playbook.evaluators",
     "coding_agent_playbook.gate_scan",
+    "coding_agent_playbook.generated_output.file_identity",
+    "coding_agent_playbook.generated_output.gitignore",
+    "coding_agent_playbook.generated_output.output_io",
+    "coding_agent_playbook.generated_output.symlinks",
     "coding_agent_playbook.git_env",
-    "coding_agent_playbook.gitignore",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
     "coding_agent_playbook.hook_policy",
@@ -392,7 +386,6 @@ source_modules = ["coding_agent_playbook.hook_runtime"]
 # dependencies (tests/engine_modules.py; test_stack_contract_forbids_every_non_leaf_module
 # prints the expected list).
 forbidden_modules = [
-    "coding_agent_playbook._file_identity",
     "coding_agent_playbook._gate_scan_files",
     "coding_agent_playbook._guard_config_allowlists",
     "coding_agent_playbook._guard_config_detect",
@@ -404,8 +397,6 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_skills",
     "coding_agent_playbook._guard_config_toolchain",
     "coding_agent_playbook._guard_config_verify",
-    "coding_agent_playbook._output_io",
-    "coding_agent_playbook._symlinks",
     "coding_agent_playbook.adapters",
     "coding_agent_playbook.artifacts",
     "coding_agent_playbook.catalog._hook_walk",
@@ -420,8 +411,11 @@ forbidden_modules = [
     "coding_agent_playbook.evals",
     "coding_agent_playbook.evaluators",
     "coding_agent_playbook.gate_scan",
+    "coding_agent_playbook.generated_output.file_identity",
+    "coding_agent_playbook.generated_output.gitignore",
+    "coding_agent_playbook.generated_output.output_io",
+    "coding_agent_playbook.generated_output.symlinks",
     "coding_agent_playbook.git_env",
-    "coding_agent_playbook.gitignore",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
     "coding_agent_playbook.hook_policy",
@@ -478,7 +472,6 @@ source_modules = ["coding_agent_playbook.evaluators"]
 # dependencies (tests/engine_modules.py; test_stack_contract_forbids_every_non_leaf_module
 # prints the expected list).
 forbidden_modules = [
-    "coding_agent_playbook._file_identity",
     "coding_agent_playbook._gate_scan_files",
     "coding_agent_playbook._guard_config_allowlists",
     "coding_agent_playbook._guard_config_detect",
@@ -490,8 +483,6 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_skills",
     "coding_agent_playbook._guard_config_toolchain",
     "coding_agent_playbook._guard_config_verify",
-    "coding_agent_playbook._output_io",
-    "coding_agent_playbook._symlinks",
     "coding_agent_playbook.adapters",
     "coding_agent_playbook.artifacts",
     "coding_agent_playbook.catalog._hook_walk",
@@ -505,8 +496,11 @@ forbidden_modules = [
     "coding_agent_playbook.detector.predicate",
     "coding_agent_playbook.evals",
     "coding_agent_playbook.gate_scan",
+    "coding_agent_playbook.generated_output.file_identity",
+    "coding_agent_playbook.generated_output.gitignore",
+    "coding_agent_playbook.generated_output.output_io",
+    "coding_agent_playbook.generated_output.symlinks",
     "coding_agent_playbook.git_env",
-    "coding_agent_playbook.gitignore",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
     "coding_agent_playbook.hook_policy",
