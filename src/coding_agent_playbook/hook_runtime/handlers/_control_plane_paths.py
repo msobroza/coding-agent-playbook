@@ -1,10 +1,11 @@
 """Which control-plane row a written path falls under (specs/prK-hook-pack.md §E.1, §E.0.5).
 
 The ``control_plane`` table of ``guard_config.json`` holds the engine
-constants :data:`CONTROL_PLANE` (sync renders them; an overlay may only add
-rows, through the guard's ``extra_paths`` config key, L2). :func:`load_plane`
-reads it with the ``protected`` and ``precommit`` tables; :func:`route_of`
-names the row one ``NormalizedPath`` belongs to, first match wins:
+constants :data:`CONTROL_PLANE` (``config.schema``; sync renders them; an
+overlay may only add rows, through the guard's ``extra_paths`` config key, L2).
+:func:`load_plane` reads it with the ``protected`` and ``precommit`` tables;
+:func:`route_of` names the row one ``NormalizedPath`` belongs to, first match
+wins:
 
 1. ``state``: anything under ``<git dir>/playbook-hooks`` (the interpreter
    pin, ``machine.json``, the Stop and session state), any worktree's;

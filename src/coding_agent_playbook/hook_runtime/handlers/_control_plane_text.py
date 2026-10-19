@@ -4,9 +4,9 @@ Both files are YAML, and the hot path never loads ``yaml`` (§D.1), so each
 verdict reads only the lines it needs:
 
 - ``.pre-commit-config.yaml``: removing a hook whose id starts ``playbook-``
-  or ``coding-agent-playbook-`` denies. :data:`PRECOMMIT_ID_RE` finds the
-  ``id:`` lines; sync renders the ``precommit`` table with the same regex
-  (:func:`playbook_precommit_ids`), so the two never disagree. Commenting a
+  or ``coding-agent-playbook-`` denies. ``PRECOMMIT_ID_RE`` (``config.schema``)
+  finds the ``id:`` lines; sync renders the ``precommit`` table with the same
+  regex (:func:`playbook_precommit_ids`), so the two never disagree. Commenting a
   hook out removes its line, so it counts as a removal.
 - a ``hooks:`` key in the leading frontmatter of a skill, command or agent
   file registers hooks when that artifact runs, which the agent can trigger:
