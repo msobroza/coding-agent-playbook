@@ -1,19 +1,23 @@
-"""The ``playbook`` argument parser: every subcommand and its flags.
+"""The ``playbook`` argument parser: one subparser per subcommand, built by name.
 
-PR 10 wires every subcommand documented in SPEC §12 into the argparse
-dispatcher. Each subcommand lives in its own module under
-``coding_agent_playbook.commands`` and exposes a ``run(args) -> int`` that
-returns the process exit code.
+Each subcommand lives in its own module under ``coding_agent_playbook.commands``
+and exposes a ``run(args) -> int`` that returns the process exit code. A module
+on the Command protocol (:mod:`._command`) also declares its ``NAME``, ``HELP``
+and flags (``configure``), and :func:`build_parser` walks ``_SUBCOMMANDS`` by
+name: a name in ``_COMMANDS`` gets the module's flags, a name in ``_LEGACY``
+still has them declared here, until its command migrates (CP-1, CP-3, B10).
 
 The dispatch pattern is the standard ``subparser.set_defaults(func=...)``
 idiom: ``coding_agent_playbook.cli.main()`` parses argv with :func:`build_parser`,
 then calls ``args.func(args)`` if a subcommand was selected, else falls back to
-printing help.
+printing help. ``build_parser`` reads each ``run`` when it is called, so a test
+that patches a command module's ``run`` before calling ``main`` still reaches it.
 """
 
 from __future__ import annotations
 
 import argparse
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook import __version__
 from coding_agent_playbook.commands import check as check_cmd
@@ -34,9 +38,15 @@ from coding_agent_playbook.commands.twins import gate_scan as gate_scan_cmd
 from coding_agent_playbook.commands.twins import scan_secrets as scan_secrets_cmd
 from coding_agent_playbook.commands.twins import scan_sinks as scan_sinks_cmd
 
-# Canonical list of subcommand names. The argparse subparser
-# declarations below must match this tuple — keeping it as a module-level
-# constant lets tests assert the full surface in one place.
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+
+    from coding_agent_playbook.cli._command import Command
+
+type _SubParsers = argparse._SubParsersAction[argparse.ArgumentParser]
+
+#: The order ``playbook --help`` lists, and the public surface tests pin. Every
+#: name is a Command of ``_COMMANDS`` or a ``_LEGACY`` key, never both.
 _SUBCOMMANDS: tuple[str, ...] = (
     "init",
     "sync",
@@ -56,8 +66,30 @@ _SUBCOMMANDS: tuple[str, ...] = (
     "check-deps",
 )
 
+#: The subcommand modules that declare their own flags, in ``_SUBCOMMANDS`` order.
+_COMMANDS: Final[tuple[Command, ...]] = (
+    check_cmd,
+    metrics_cmd,
+    import_harness_cmd,
+    validate_harness_cmd,
+    gate_scan_cmd,
+    ci_cmd,
+    scan_sinks_cmd,
+    check_notebooks_cmd,
+    scan_secrets_cmd,
+    check_commit_trailers_cmd,
+    check_deps_cmd,
+)
+
 
 def build_parser() -> argparse.ArgumentParser:
+    """The ``playbook`` parser: one subparser per name of ``_SUBCOMMANDS``, looked up by name.
+
+    Example::
+
+        >>> build_parser().parse_args(["check", "--refresh"]).refresh
+        True
+    """
     parser = argparse.ArgumentParser(
         prog="playbook",
         description="coding-agent-playbook — multi-harness playbook engine.",
@@ -68,9 +100,29 @@ def build_parser() -> argparse.ArgumentParser:
         version=f"coding-agent-playbook {__version__}",
     )
     subcommands = parser.add_subparsers(dest="command")
+    commands = {command.NAME: command for command in _COMMANDS}
+    for name in _SUBCOMMANDS:
+        _add_subcommand(subcommands, name, commands)
+    return parser
 
-    # playbook init
-    init_p = subcommands.add_parser(_SUBCOMMANDS[0], help="bootstrap a fresh repo (SPEC §12.1)")
+
+def _add_subcommand(subcommands: _SubParsers, name: str, commands: Mapping[str, Command]) -> None:
+    """Register ``name``: from its Command module when it has one, else its ``_LEGACY`` block."""
+    command = commands.get(name)
+    if command is not None:
+        sub = subcommands.add_parser(command.NAME, help=command.HELP)
+        command.configure(sub)
+        sub.set_defaults(func=command.run)  # read now, so a patched run is the one dispatched
+        return
+    add_legacy = _LEGACY.get(name)
+    if add_legacy is None:
+        raise LookupError(f"subcommand {name!r} is neither in _COMMANDS nor in _LEGACY")
+    add_legacy(subcommands)
+
+
+def _add_init_parser(subcommands: _SubParsers) -> None:
+    """``playbook init``'s flags (SPEC §12.1); CP-3 moves them into ``commands/init.py``."""
+    init_p = subcommands.add_parser("init", help="bootstrap a fresh repo (SPEC §12.1)")
     init_p.add_argument("--repo-root", help="repo to initialise (defaults to cwd)")
     init_p.add_argument("--non-interactive", action="store_true")
     init_p.add_argument("--name", help="project name (required in non-interactive mode)")
@@ -86,8 +138,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     init_p.set_defaults(func=init_cmd.run)
 
-    # playbook sync
-    sync_p = subcommands.add_parser(_SUBCOMMANDS[1], help="regenerate all artifacts (SPEC §12.2)")
+
+def _add_sync_parser(subcommands: _SubParsers) -> None:
+    """``playbook sync``'s flags (SPEC §12.2, §12.3); CP-1 moves them into its module."""
+    sync_p = subcommands.add_parser("sync", help="regenerate all artifacts (SPEC §12.2)")
     sync_p.add_argument("--repo-root", help="repo to sync (defaults to cwd)")
     sync_mode = sync_p.add_mutually_exclusive_group()
     sync_mode.add_argument(
@@ -105,23 +159,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sync_p.set_defaults(func=sync_cmd.run)
 
-    # playbook check
-    check_p = subcommands.add_parser(_SUBCOMMANDS[2], help="diagnostic dump (SPEC §12.4)")
-    check_p.add_argument("--repo-root", help="repo to check (defaults to cwd)")
-    check_p.add_argument(
-        "--refresh",
-        action="store_true",
-        help="re-run detector and persist facts to detector_cache (SPEC §12.5)",
-    )
-    check_p.set_defaults(func=check_cmd.run)
 
-    # playbook validate
-    validate_p = subcommands.add_parser(_SUBCOMMANDS[3], help="cross-reference checks (SPEC §12.6)")
+def _add_validate_parser(subcommands: _SubParsers) -> None:
+    """``playbook validate``'s flags (SPEC §12.6); CP-1 moves them into its module."""
+    validate_p = subcommands.add_parser("validate", help="cross-reference checks (SPEC §12.6)")
     validate_p.add_argument("--repo-root", help="repo to validate (defaults to cwd)")
     validate_p.set_defaults(func=validate_cmd.run)
 
-    # playbook render
-    render_p = subcommands.add_parser(_SUBCOMMANDS[4], help="render one artifact (SPEC §12.7)")
+
+def _add_render_parser(subcommands: _SubParsers) -> None:
+    """``playbook render``'s flags (SPEC §12.7); CP-1 moves them into its module."""
+    render_p = subcommands.add_parser("render", help="render one artifact (SPEC §12.7)")
     render_p.add_argument("id", help="artifact id to render")
     render_p.add_argument("--repo-root", help="repo to render against (defaults to cwd)")
     render_p.add_argument("--format", help="format alias or full name")
@@ -129,9 +177,11 @@ def build_parser() -> argparse.ArgumentParser:
     render_p.add_argument("--show-rules", action="store_true")
     render_p.set_defaults(func=render_cmd.run)
 
-    # playbook eval (PR 11 enumeration; PR R1d adds --run)
+
+def _add_eval_parser(subcommands: _SubParsers) -> None:
+    """``playbook eval``'s flags (PR 11 enumeration; PR R1d adds --run); B10 moves them."""
     eval_p = subcommands.add_parser(
-        _SUBCOMMANDS[5], help="eval enumeration + `--run` a task (SPEC §12.8, §15)"
+        "eval", help="eval enumeration + `--run` a task (SPEC §12.8, §15)"
     )
     # Every other subcommand exposes ``--repo-root <path>`` for testability
     # and so users can run against a non-cwd checkout; eval gets the same
@@ -185,229 +235,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     eval_p.set_defaults(func=eval_cmd.run)
 
-    # playbook metrics (PR-M Track M3 — standalone static code-quality gate)
-    metrics_p = subcommands.add_parser(
-        _SUBCOMMANDS[6],
-        help="static code-quality gate (cyclomatic complexity, MI, ...) (PR-M)",
-    )
-    metrics_p.add_argument(
-        "paths",
-        nargs="*",
-        help="Python files or directories to measure (default: the repo's src/ dir)",
-    )
-    metrics_p.add_argument(
-        "--baseline",
-        help="non-regression baseline: 'git:<ref>', 'json:<path>' (an --emit-measurements "
-        "snapshot) or a directory path",
-    )
-    metrics_p.add_argument(
-        "--changed",
-        action="store_true",
-        help="only the *.py files changed against the git: baseline, plus untracked ones",
-    )
-    # Ruff-shaped selection (prK §F.0.3 item 2): each flag replaces its [metrics] key.
-    metrics_p.add_argument(
-        "--select",
-        metavar="NAMES",
-        help="comma-separated metrics or families (quality, docstrings, testing) to "
-        "measure instead of the default set",
-    )
-    metrics_p.add_argument(
-        "--extend-select",
-        dest="extend_select",
-        metavar="NAMES",
-        help="comma-separated metrics or families to add; opt-in metrics only by name",
-    )
-    metrics_p.add_argument(
-        "--ignore",
-        metavar="NAMES",
-        help="comma-separated metrics or families to leave out",
-    )
-    metrics_p.add_argument(
-        "--emit-measurements",
-        dest="emit_measurements",
-        metavar="PATH",
-        help="write the raw candidate measurements as a JSON snapshot (for --baseline json:PATH)",
-    )
-    metrics_p.add_argument(
-        "--mode",
-        choices=("regression", "absolute", "both"),
-        help="comparison mode (default: from [metrics] config, else 'regression')",
-    )
-    metrics_p.add_argument(
-        "--strict",
-        action="store_true",
-        help="promote warnings to gate failures (non-zero exit)",
-    )
-    # Tri-state: None defers to [metrics] run_tests; --no-run-tests keeps the
-    # pre-commit twins static even when the config enables tests (§F.0.3 item 6).
-    metrics_p.add_argument(
-        "--run-tests",
-        dest="run_tests",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="also run the execution evaluators (test_pass_rate, coverage): "
-        "shells out to the target's pytest (opt-in, has side effects); "
-        "--no-run-tests overrides [metrics] run_tests = true",
-    )
-    metrics_p.add_argument(
-        "--test-cmd",
-        dest="test_cmd",
-        help="override the test command used by --run-tests (a shell-style "
-        "string, split with shlex; default: python -m pytest with junit+cov XML)",
-    )
-    metrics_p.add_argument(
-        "--format",
-        choices=("text", "json"),
-        default="text",
-        help="output format (default: text)",
-    )
-    metrics_p.add_argument("--repo-root", help="repo to measure against (defaults to cwd)")
-    metrics_p.set_defaults(func=metrics_cmd.run)
 
-    # playbook import-harness (PR H Track H3)
-    import_p = subcommands.add_parser(
-        _SUBCOMMANDS[7], help="import an Agent Harness tree into canonical artifacts"
-    )
-    import_p.add_argument("path", nargs="?", help="path to the harness root (contains HARNESS.md)")
-    import_p.add_argument(
-        "--into",
-        help="overlay directory to write canonical artifacts into (defaults to ./playbook)",
-    )
-    import_p.set_defaults(func=import_harness_cmd.run)
-
-    # playbook validate-harness (PR H Track H4)
-    validate_harness_p = subcommands.add_parser(
-        _SUBCOMMANDS[8],
-        help="lint an Agent Harness tree (structural checks, harnesses-ref-equivalent)",
-    )
-    validate_harness_p.add_argument(
-        "path", nargs="?", help="path to the harness root (contains HARNESS.md)"
-    )
-    validate_harness_p.add_argument(
-        "--strict",
-        action="store_true",
-        help="promote warnings (missing routing file / content description) to errors",
-    )
-    validate_harness_p.set_defaults(func=validate_harness_cmd.run)
-
-    _add_twin_parsers(subcommands)
-    return parser
-
-
-def _add_twin_parsers(subcommands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """The hooks' off-workstation twins: ``gate-scan``, ``ci`` (prK §E.2, §F.5), ``scan-sinks``,
-    ``check-notebooks`` (§E.3), ``scan-secrets``, ``check-commit-trailers`` and ``check-deps``
-    (§E.4)."""
-    gate_p = subcommands.add_parser(
-        _SUBCOMMANDS[9], help="flag gate-weakening changes in a commit range (prK §E.2)"
-    )
-    gate_p.add_argument(
-        "--range",
-        dest="rev_range",
-        help="A..B, or A...B from their merge base (default: <merge-base>..HEAD)",
-    )
-    gate_p.add_argument("--format", choices=("text", "json"), default="text")
-    gate_p.add_argument("--repo-root", help="repo to scan (defaults to cwd)")
-    gate_p.set_defaults(func=gate_scan_cmd.run)
-
-    ci_p = subcommands.add_parser(
-        _SUBCOMMANDS[10], help="run the CI twins as child processes (prK §F.5)"
-    )
-    ci_p.add_argument("--base", help="base ref (default: the default branch, origin/HEAD first)")
-    ci_p.add_argument("--steps", help="comma-separated CI_STEPS names (default: every row)")
-    ci_p.add_argument("--format", choices=("text", "json"), default="text")
-    ci_p.add_argument("--repo-root", help="repo to check (defaults to cwd)")
-    ci_p.set_defaults(func=ci_cmd.run)
-
-    sinks_p = subcommands.add_parser(
-        _SUBCOMMANDS[11], help="flag new unsafe deserialization sinks in a change (prK §E.3)"
-    )
-    sinks_scope = sinks_p.add_mutually_exclusive_group()
-    sinks_scope.add_argument("--staged", action="store_true", help="scan the index against HEAD")
-    sinks_scope.add_argument(
-        "--range",
-        dest="rev_range",
-        help="A..B, or A...B from their merge base (default: <merge-base>..HEAD)",
-    )
-    sinks_p.add_argument("--format", choices=("text", "json"), default="text")
-    sinks_p.add_argument("--repo-root", help="repo to scan (defaults to cwd)")
-    sinks_p.set_defaults(func=scan_sinks_cmd.run)
-
-    notebooks_p = subcommands.add_parser(
-        _SUBCOMMANDS[12], help="fail when notebooks keep cell outputs (prK §E.3)"
-    )
-    notebooks_p.add_argument(
-        "paths", nargs="*", help="notebooks to check (default: every tracked .ipynb file)"
-    )
-    notebooks_p.add_argument("--repo-root", help="repo the paths are relative to (defaults to cwd)")
-    notebooks_p.set_defaults(func=check_notebooks_cmd.run)
-    _add_scan_secrets_parser(subcommands)
-
-
-def _add_scan_secrets_parser(
-    subcommands: argparse._SubParsersAction[argparse.ArgumentParser],
-) -> None:
-    """``scan-secrets [--staged | --range A..B | --worktree | PATHS] [--pii]`` (prK §E.4, §E.5)."""
-    secrets_p = subcommands.add_parser(
-        _SUBCOMMANDS[13], help="flag secret tokens and credential files, masked (prK §E.4)"
-    )
-    secrets_p.add_argument(
-        "paths", nargs="*", help="files to scan whole, relative to --repo-root (exclusive of modes)"
-    )
-    scope = secrets_p.add_mutually_exclusive_group()
-    scope.add_argument("--staged", action="store_true", help="scan the index against HEAD")
-    scope.add_argument(
-        "--range",
-        dest="rev_range",
-        help="A..B, or A...B from their merge base (default: <merge-base>..HEAD)",
-    )
-    scope.add_argument(
-        "--worktree",
-        action="store_true",
-        help="scan tracked changes against HEAD and untracked, non-ignored files",
-    )
-    secrets_p.add_argument(
-        "--pii",
-        action="store_true",
-        help="also flag checksum-validated PII (IBAN, card numbers), masked (prK §E.5)",
-    )
-    secrets_p.add_argument(
-        "--pii-detectors",
-        metavar="NAMES",
-        help="comma-separated PII detectors (iban, card_pan, fr_nir, us_ssn); implies --pii",
-    )
-    secrets_p.add_argument("--format", choices=("text", "json"), default="text")
-    secrets_p.add_argument("--repo-root", help="repo to scan (defaults to cwd)")
-    secrets_p.set_defaults(func=scan_secrets_cmd.run)
-    _add_check_commit_trailers_parser(subcommands)
-
-
-def _add_check_commit_trailers_parser(
-    subcommands: argparse._SubParsersAction[argparse.ArgumentParser],
-) -> None:
-    """``check-commit-trailers <msgfile> | --range A..B`` (prK §E.4)."""
-    trailers_p = subcommands.add_parser(
-        _SUBCOMMANDS[14], help="check commit-message trailer rows, CP4xx (prK §E.4)"
-    )
-    trailers_p.add_argument(
-        "msgfile", nargs="?", help="the commit message file (the commit-msg stage passes it)"
-    )
-    trailers_p.add_argument(
-        "--range", dest="rev_range", help="check every commit of A..B, or A...B"
-    )
-    trailers_p.add_argument("--repo-root", help="repo whose policy applies (defaults to cwd)")
-    trailers_p.set_defaults(func=check_commit_trailers_cmd.run)
-    _add_check_deps_parser(subcommands)
-
-
-def _add_check_deps_parser(
-    subcommands: argparse._SubParsersAction[argparse.ArgumentParser],
-) -> None:
-    """``check-deps [--base REF]`` (prK §E.4)."""
-    deps_p = subcommands.add_parser(
-        _SUBCOMMANDS[15], help="flag new dependencies and package indexes since a base (prK §E.4)"
-    )
-    deps_p.add_argument("--base", help="base ref (default: the default branch, origin/HEAD first)")
-    deps_p.add_argument("--repo-root", help="repo to check (defaults to cwd)")
-    deps_p.set_defaults(func=check_deps_cmd.run)
+#: The subcommands whose flags are still declared here, by name; each moves into
+#: its command module and onto ``_COMMANDS`` (B10: eval; CP-1: sync, validate,
+#: render; CP-3: init), and the mapping goes with the last of them.
+_LEGACY: Final[Mapping[str, Callable[[_SubParsers], None]]] = {
+    "init": _add_init_parser,
+    "sync": _add_sync_parser,
+    "validate": _add_validate_parser,
+    "render": _add_render_parser,
+    "eval": _add_eval_parser,
+}

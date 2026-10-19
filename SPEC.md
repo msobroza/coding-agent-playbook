@@ -302,7 +302,7 @@ coding-agent-playbook/
 │           └── skills/<id>/                # 15 skills: SKILL.md + scripts/ + references/
 ├── src/coding_agent_playbook/              # logic only: no rule, prompt, eval task, skill or hook file
 │   ├── __init__.py
-│   ├── cli/                                # `playbook` entrypoint: __init__ (main), parser, __main__
+│   ├── cli/                                # `playbook` entrypoint: __init__ (main), parser, __main__, _command (the Command protocol)
 │   ├── artifacts/                          # Rule, Prompt, Skill, Hook dataclasses (Section 6.6)
 │   │   ├── rule.py, prompt.py, skill.py, hook.py   # one module per artifact
 │   │   ├── frontmatter.py                  # the markdown + YAML frontmatter format they share
@@ -2420,6 +2420,8 @@ coding-agent-playbook = "coding_agent_playbook.cli:main"
 playbook = "coding_agent_playbook.cli:main"
 playbook-hook = "coding_agent_playbook.hook_runtime.cli:main"   # the hook runtime, §12.13 (v0.20)
 ```
+Each subcommand's module declares its flags (`NAME`, `HELP`, `configure`, `run`); `cli` lists them in `_SUBCOMMANDS` order (`cli/parser.py`), and `cli/_command.py` holds the `Command` protocol the modules satisfy structurally, so no command imports `cli`. `init`, `sync`, `validate`, `render` and `eval` still have their flags declared in `cli/parser.py` until they move onto the protocol.
+
 **Missing catalog.** Every command that loads the engine's catalog (`init`, `sync` in every mode, `check`, `validate`, `render`, `eval`) locates it through `catalog_root()`, which raises `CatalogMissingError` when it cannot be found. The error carries every path it tried: the wheel's `<package>/_catalog` (which must hold `core/`) and a source checkout's `<repo>/catalog` (used only when the package directory sits under `src/` and `catalog/core` exists). `cli.main` catches it and exits 2, printing this line to stderr, with the two tried paths as `<a>` and `<b>`:
 
 `error: the engine's catalog was not found (looked in <a>, <b>); reinstall coding-agent-playbook`
