@@ -56,8 +56,8 @@ from coding_agent_playbook.hook_registrations import (
 )
 from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.security.patterns import DESTRUCTIVE_NATIVE_PREFIXES
+from tests.hook_runtime.handlers.pack_repo import install_fixture_overlay, resolve_engine_hooks
 from tests.hook_samples import resolved_hook
-from tests.hooks.pack_repo import install_fixture_overlay, resolve_engine_hooks
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence

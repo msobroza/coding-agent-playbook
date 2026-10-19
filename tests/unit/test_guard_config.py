@@ -73,8 +73,8 @@ from coding_agent_playbook.security.patterns import (
 )
 from coding_agent_playbook.sync._dispatch import build_lockfile
 from tests._catalog import CORE_ROOT, plugin_root
+from tests.hook_runtime.handlers.pack_repo import resolve_engine_hooks
 from tests.hook_samples import resolved_from_disk, resolved_hook, sample_hook
-from tests.hooks.pack_repo import resolve_engine_hooks
 
 if TYPE_CHECKING:
     from pathlib import Path

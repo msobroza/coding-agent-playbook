@@ -350,7 +350,7 @@ def hook_payload() -> Callable[[str, str, str], HookPayloadCase]:
 
     ``hook_payload("claude_code", "pre_tool_use", "bash_rm_root")`` reads
     ``tests/fixtures/hook_payloads/claude_code/pre_tool_use/bash_rm_root.json``
-    and its ``.expected.json``; shared by ``tests/hook_runtime``, ``tests/hooks``
+    and its ``.expected.json``; shared by ``tests/hook_runtime`` (the pack tests too)
     and ``tests/security``. See :mod:`tests.hook_payloads` for the file format.
     """
     # Imported here so that only the suites using payloads load the hook runtime.
