@@ -1,0 +1,19 @@
+# N7 (specs/prT-package-layout.md 7.4): cli.py becomes the cli/ package. The module
+# path coding_agent_playbook.cli is frozen (L2), so only the parser names move.
+
+[[names]]
+pr = "N7"
+old = "coding_agent_playbook.cli"
+new = "coding_agent_playbook.cli.parser"
+names = ["build_parser", "_SUBCOMMANDS"]
+
+[[path]]
+pr = "N7"
+old = "cli.py"
+new = "cli/parser.py"
+
+# A module entry, not a [[path]] one: tests/cli/test_init.py imports its helpers.
+[[module]]
+pr = "N7"
+old = "tests.unit.test_cli"
+new = "tests.cli.test_cli"

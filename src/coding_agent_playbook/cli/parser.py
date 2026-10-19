@@ -1,4 +1,4 @@
-"""``playbook`` / ``coding-agent-playbook`` entry point.
+"""The ``playbook`` argument parser: every subcommand and its flags.
 
 PR 10 wires every subcommand documented in SPEC §12 into the argparse
 dispatcher. Each subcommand lives in its own module under
@@ -6,18 +6,16 @@ dispatcher. Each subcommand lives in its own module under
 returns the process exit code.
 
 The dispatch pattern is the standard ``subparser.set_defaults(func=...)``
-idiom: ``main()`` parses argv, then calls ``args.func(args)`` if a subcommand
-was selected, else falls back to printing help.
+idiom: ``coding_agent_playbook.cli.main()`` parses argv with :func:`build_parser`,
+then calls ``args.func(args)`` if a subcommand was selected, else falls back to
+printing help.
 """
 
 from __future__ import annotations
 
 import argparse
-import sys
-from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__
-from coding_agent_playbook.catalog import CatalogMissingError
 from coding_agent_playbook.commands import check as check_cmd
 from coding_agent_playbook.commands import check_commit_trailers as check_commit_trailers_cmd
 from coding_agent_playbook.commands import check_deps as check_deps_cmd
@@ -35,12 +33,6 @@ from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as validate_cmd
 from coding_agent_playbook.commands import validate_harness as validate_harness_cmd
 from coding_agent_playbook.commands._init_adapters import ADAPTERS_FLAG_HELP
-from coding_agent_playbook.config import ConfigError
-from coding_agent_playbook.types import HookSchemaError
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
-
 
 # Canonical list of subcommand names. The argparse subparser
 # declarations below must match this tuple — keeping it as a module-level
@@ -419,62 +411,3 @@ def _add_check_deps_parser(
     deps_p.add_argument("--base", help="base ref (default: the default branch, origin/HEAD first)")
     deps_p.add_argument("--repo-root", help="repo to check (defaults to cwd)")
     deps_p.set_defaults(func=check_deps_cmd.run)
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    """Parse ``argv``, run the subcommand, and return its exit code.
-
-    A missing config (:class:`FileNotFoundError`), a config the engine would
-    misread (:class:`ConfigError`) and a malformed ``HOOK.md``
-    (:class:`HookSchemaError`, prK §A.5) all print ``error: <message>`` and exit
-    2. Commands load the config and the artifacts first, so each one stops them
-    before they write.
-
-    A broken install also exits 2, without a traceback. An engine catalog found in
-    neither home (:class:`CatalogMissingError`) prints
-    ``error: the engine's catalog was not found (looked in <a>, <b>);
-    reinstall coding-agent-playbook`` on one line, where ``<a>`` and ``<b>`` are
-    the wheel's ``<package>/_catalog`` and the checkout's ``<repo>/catalog``, in
-    that order; it used to render zero engine artifacts silently. Only commands
-    that load the catalog raise it (``init``, ``sync``, ``check``, ``validate``,
-    ``render``, ``eval``). A missing pre-commit template
-    (:class:`~coding_agent_playbook.commands.init.PrecommitTemplateMissingError`)
-    prints ``error: <message>``.
-
-    Example::
-
-        >>> main(["--repo-root", "."])  # doctest: +SKIP
-    """
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    if getattr(args, "func", None) is None:
-        parser.print_help()
-        return 0
-    try:
-        return int(args.func(args))
-    except SystemExit:
-        raise
-    except (
-        FileNotFoundError,
-        ConfigError,
-        HookSchemaError,
-        init_cmd.PrecommitTemplateMissingError,
-    ) as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-    except CatalogMissingError as exc:
-        print(_missing_catalog_line(exc), file=sys.stderr)
-        return 2
-
-
-def _missing_catalog_line(exc: CatalogMissingError) -> str:
-    """The missing-catalog error line, naming every catalog home tried, in order."""
-    looked_in = ", ".join(str(path) for path in exc.tried)
-    return (
-        f"error: the engine's catalog was not found (looked in {looked_in}); "
-        "reinstall coding-agent-playbook"
-    )
-
-
-if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(main())
