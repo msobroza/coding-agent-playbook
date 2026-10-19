@@ -9,9 +9,7 @@ for the failure policy, never an exception.
 
 from __future__ import annotations
 
-import dataclasses
 import hashlib
-import json
 import os
 import tomllib
 from pathlib import Path
@@ -19,115 +17,36 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.artifacts.hook_schema import HookMatcher
 from coding_agent_playbook.hook_runtime.config.guard_config import (
     ConfigFault,
     GuardConfig,
     load_guard_config,
 )
-from coding_agent_playbook.hook_runtime.config.schema import (
-    GUARD_CONFIG_REL,
-    HOOK_RECORD_KEYS,
-    LOCKFILE_REL,
-)
+from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL, LOCKFILE_REL
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
-from coding_agent_playbook.hook_runtime.dispatch.event import EventName, RepoInfo
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
 from coding_agent_playbook.hook_runtime.dispatch.policy import ENGINE_DEADLINE_CAP_MS
 from coding_agent_playbook.hook_runtime.shell.parse import ShellConfig
 from coding_agent_playbook.hook_runtime.state.store import StateStore
-from coding_agent_playbook.hooks.resolution.resolved import ResolvedHandler, ResolvedHook
 from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 from tests.engine_modules import engine_module
+from tests.hook_runtime.config.guard_config_kit import (
+    canonical_bytes,
+    guard_document,
+    install_guard_config,
+    load_config,
+    lockfile_text,
+    repo_at,
+    resolved_hook,
+)
 from tests.import_probe import new_modules_after
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from coding_agent_playbook.hook_runtime.config.lock_digest import TomlLoader
-
-
-def _resolved_hook() -> ResolvedHook:
-    return ResolvedHook(
-        id="guard-generated-outputs",
-        source_package="coding_agent_playbook",
-        events=("pre_tool_use",),
-        priority=10,
-        matcher={"pre_tool_use": HookMatcher(tools=["edit", "write"], paths=["AGENTS.md", "*.MD"])},
-        handlers={
-            "pre_tool_use": ResolvedHandler(
-                "builtin", name="guard_generated_outputs", config={"a": 1}
-            )
-        },
-        decisions=("deny", "ask"),
-        timeout=2.0,
-        on_error={"pre_tool_use": "ask"},
-        supports=("claude_code", "opencode"),
-        mandatory=False,
-        script_sha256=None,
-    )
-
-
-def _document(**overrides: Any) -> dict[str, Any]:
-    document: dict[str, Any] = {
-        "schema_version": 1,
-        "engine_version": "0.1.0a0",
-        "hooks": {"guard-generated-outputs": _resolved_hook().to_json()},
-        "deadlines_ms": {"pre_tool_use": 2000},
-        "unattended_ask": "warn",
-        "logging": {"decisions": True, "audit": False, "audit_mode": ""},
-        "shell": {"wrapper_prefixes": ["proxy"], "runner_wrappers": ["uv run"]},
-        "path_classes": {"py": ["*.py"], "generated": ["AGENTS.md"]},
-        "secret_path_globs": [".env*", "*.pem"],
-        "allow_code_from": ["acme_rules"],
-        "state_ttl_days": 3,
-        "protected": {"output_dirs": [".claude/"]},
-    }
-    document.update(overrides)
-    return document
-
-
-def _canonical(document: Mapping[str, Any]) -> bytes:
-    text = json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-    return (text + "\n").encode("ascii")
-
-
-def _lockfile_text(sha256: str | None, *, extra: str = "") -> str:
-    entry = (
-        f'\n[[entries]]\npath = "{GUARD_CONFIG_REL}"\nsha256 = "{sha256}"\nbytes = 10\n'
-        'kind = "runtime"\n'
-        if sha256 is not None
-        else ""
-    )
-    return (
-        'schema_version = 2\nengine_version = "0.1.0a0"\nrendered_at = "2026-10-14T00:00:00Z"\n'
-        f'{extra}\n[[entries]]\npath = "AGENTS.md"\nsha256 = "ab"\nbytes = 2\n{entry}'
-    )
-
-
-def _repo(tmp_path: Path) -> RepoInfo:
-    root = Path(os.path.realpath(tmp_path))
-    (root / ".git").mkdir(exist_ok=True)
-    return RepoInfo(
-        worktree_root=str(root),
-        git_dir=str(root / ".git"),
-        common_dir=str(root / ".git"),
-        is_linked_worktree=False,
-    )
-
-
-def _install(
-    repo: RepoInfo, document: Mapping[str, Any] | bytes, *, lock_sha: str | None = None
-) -> bytes:
-    """Write ``guard_config.json`` and a lockfile whose entry matches it (or ``lock_sha``)."""
-    data = document if isinstance(document, bytes) else _canonical(document)
-    path = Path(repo.worktree_root) / GUARD_CONFIG_REL
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(data)
-    sha = hashlib.sha256(data).hexdigest() if lock_sha is None else lock_sha
-    (Path(repo.worktree_root) / LOCKFILE_REL).write_text(_lockfile_text(sha), encoding="utf-8")
-    return data
 
 
 class SpyToml:
@@ -141,19 +60,13 @@ class SpyToml:
         return tomllib.loads(data.decode("utf-8"))
 
 
-def _load(repo: RepoInfo, **kwargs: Any) -> GuardConfig | ConfigFault:
-    kwargs.setdefault("platform", "linux")
-    kwargs.setdefault("home", "/home/dev")
-    return load_guard_config(repo, StateStore.for_repo(repo), **kwargs)
-
-
 # --- faults ----------------------------------------------------------------------------------
 
 
 def test_missing_guard_config_is_config_fault(tmp_path: Path) -> None:
-    repo = _repo(tmp_path)
+    repo = repo_at(tmp_path)
 
-    fault = _load(repo)
+    fault = load_config(repo)
 
     assert isinstance(fault, ConfigFault)
     assert fault.kind == "missing"
@@ -161,10 +74,10 @@ def test_missing_guard_config_is_config_fault(tmp_path: Path) -> None:
 
 
 def test_sha_mismatch_with_lock_entry_is_config_fault(tmp_path: Path) -> None:
-    repo = _repo(tmp_path)
-    _install(repo, _document(), lock_sha="0" * 64)
+    repo = repo_at(tmp_path)
+    install_guard_config(repo, guard_document(), lock_sha="0" * 64)
 
-    fault = _load(repo)
+    fault = load_config(repo)
 
     assert isinstance(fault, ConfigFault)
     assert fault.kind == "digest_mismatch"
@@ -172,25 +85,25 @@ def test_sha_mismatch_with_lock_entry_is_config_fault(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("lockfile", [None, "no-entry", "not-toml"])
 def test_missing_lock_entry_is_config_fault(tmp_path: Path, lockfile: str | None) -> None:
-    repo = _repo(tmp_path)
-    _install(repo, _document())
+    repo = repo_at(tmp_path)
+    install_guard_config(repo, guard_document())
     lock = Path(repo.worktree_root) / LOCKFILE_REL
     if lockfile is None:
         lock.unlink()
     else:
-        lock.write_text(_lockfile_text(None) if lockfile == "no-entry" else "[[[", encoding="utf-8")
+        lock.write_text(lockfile_text(None) if lockfile == "no-entry" else "[[[", encoding="utf-8")
 
-    fault = _load(repo)
+    fault = load_config(repo)
 
     assert isinstance(fault, ConfigFault)
     assert fault.kind == "no_lock_entry"
 
 
 def test_newer_schema_version_is_config_fault(tmp_path: Path) -> None:
-    repo = _repo(tmp_path)
-    _install(repo, _document(schema_version=2))
+    repo = repo_at(tmp_path)
+    install_guard_config(repo, guard_document(schema_version=2))
 
-    fault = _load(repo)
+    fault = load_config(repo)
 
     assert isinstance(fault, ConfigFault)
     assert fault.kind == "schema_newer"
@@ -215,10 +128,10 @@ def test_newer_schema_version_is_config_fault(tmp_path: Path) -> None:
 def test_malformed_config_is_a_fault_naming_the_value(
     tmp_path: Path, override: dict[str, Any], where: str
 ) -> None:
-    repo = _repo(tmp_path)
-    _install(repo, _document(**override))
+    repo = repo_at(tmp_path)
+    install_guard_config(repo, guard_document(**override))
 
-    fault = _load(repo)
+    fault = load_config(repo)
 
     assert isinstance(fault, ConfigFault)
     assert fault.kind == "malformed"
@@ -228,36 +141,36 @@ def test_malformed_config_is_a_fault_naming_the_value(
 @pytest.mark.parametrize(
     "data",
     [
-        _canonical(_document(secret_path_globs=["[z-a].key"])),
+        canonical_bytes(guard_document(secret_path_globs=["[z-a].key"])),
         b"[" * 100_000 + b"]" * 100_000 + b"\n",
     ],
 )
 def test_invalid_glob_or_deep_nesting_is_a_fault_not_a_crash(tmp_path: Path, data: bytes) -> None:
-    repo = _repo(tmp_path)
-    _install(repo, data)
+    repo = repo_at(tmp_path)
+    install_guard_config(repo, data)
 
-    fault = _load(repo)
+    fault = load_config(repo)
 
     assert isinstance(fault, ConfigFault) and fault.kind == "malformed"
 
 
 def test_non_json_or_oversized_config_is_a_fault(tmp_path: Path) -> None:
-    repo = _repo(tmp_path)
-    _install(repo, b"{not json\n")
-    assert isinstance(fault := _load(repo), ConfigFault) and fault.kind == "malformed"
+    repo = repo_at(tmp_path)
+    install_guard_config(repo, b"{not json\n")
+    assert isinstance(fault := load_config(repo), ConfigFault) and fault.kind == "malformed"
 
-    _install(repo, b" " * (1024 * 1024 + 1))
-    assert isinstance(fault := _load(repo), ConfigFault) and fault.kind == "unreadable"
+    install_guard_config(repo, b" " * (1024 * 1024 + 1))
+    assert isinstance(fault := load_config(repo), ConfigFault) and fault.kind == "unreadable"
 
 
 # --- the parsed config ----------------------------------------------------------------------
 
 
 def test_hook_records_parse_the_resolved_hook_to_json_schema(tmp_path: Path) -> None:
-    repo = _repo(tmp_path)
-    data = _install(repo, _document())
+    repo = repo_at(tmp_path)
+    data = install_guard_config(repo, guard_document())
 
-    cfg = _load(repo)
+    cfg = load_config(repo)
 
     assert isinstance(cfg, GuardConfig)
     assert cfg.sha256 == hashlib.sha256(data).hexdigest()
@@ -278,29 +191,7 @@ def test_hook_records_parse_the_resolved_hook_to_json_schema(tmp_path: Path) -> 
     matcher = record.matcher[EventName.PRE_TOOL_USE]
     assert matcher.tools == ("edit", "write")
     assert matcher.paths.matches("AGENTS.md") and not matcher.paths.matches("x.md")
-    assert record.raw == _resolved_hook().to_json()
-
-
-_HANDLER_OF_EACH_KIND = {
-    "builtin": ResolvedHandler("builtin", name="guard_generated_outputs"),
-    "entry_point": ResolvedHandler("entry_point", target="acme.rules:check", dist="acme==1.0"),
-    "external": ResolvedHandler("external", argv=("python", "scripts/check.py")),
-}
-
-
-@pytest.mark.parametrize("kind", sorted(_HANDLER_OF_EACH_KIND))
-def test_resolved_hook_json_has_exactly_the_record_keys(tmp_path: Path, kind: str) -> None:
-    """The writer's record and the runtime's schema name the same twelve keys (GC-4)."""
-    handlers = {"pre_tool_use": _HANDLER_OF_EACH_KIND[kind]}
-    resolved = dataclasses.replace(_resolved_hook(), handlers=handlers)
-
-    record = resolved.to_json()
-
-    assert set(record) == HOOK_RECORD_KEYS
-    assert record["handlers"]["pre_tool_use"]["kind"] == kind
-    repo = _repo(tmp_path)
-    _install(repo, _document(hooks={resolved.id: record}))
-    assert isinstance(_load(repo), GuardConfig)
+    assert record.raw == resolved_hook().to_json()
 
 
 HOOK = "guard-generated-outputs"
@@ -308,9 +199,9 @@ HOOK = "guard-generated-outputs"
 
 def _with_record(change: Callable[[dict[str, Any]], object]) -> dict[str, Any]:
     # A plain dict, not the typed record: the changes write malformed values on purpose.
-    record: dict[str, Any] = dict(_resolved_hook().to_json())
+    record: dict[str, Any] = dict(resolved_hook().to_json())
     change(record)
-    return _document(hooks={HOOK: record})
+    return guard_document(hooks={HOOK: record})
 
 
 @pytest.mark.parametrize(
@@ -334,10 +225,12 @@ def _with_record(change: Callable[[dict[str, Any]], object]) -> dict[str, Any]:
 def test_entry_point_and_external_handlers_parse(
     tmp_path: Path, handler: dict[str, Any], expected: tuple[object, ...]
 ) -> None:
-    repo = _repo(tmp_path)
-    _install(repo, _with_record(lambda record: record["handlers"].update(pre_tool_use=handler)))
+    repo = repo_at(tmp_path)
+    install_guard_config(
+        repo, _with_record(lambda record: record["handlers"].update(pre_tool_use=handler))
+    )
 
-    cfg = _load(repo)
+    cfg = load_config(repo)
 
     assert isinstance(cfg, GuardConfig)
     spec = cfg.hooks[HOOK].handlers[EventName.PRE_TOOL_USE]
@@ -345,15 +238,15 @@ def test_entry_point_and_external_handlers_parse(
 
 
 def test_on_error_is_clamped_per_event_at_load(tmp_path: Path) -> None:
-    repo = _repo(tmp_path)
+    repo = repo_at(tmp_path)
 
     def bind_stop(record: dict[str, Any]) -> None:
         record["events"].append("stop")
         record["on_error"]["stop"] = "ask"  # stop honours only "open" (§A.2)
 
-    _install(repo, _with_record(bind_stop))
+    install_guard_config(repo, _with_record(bind_stop))
 
-    cfg = _load(repo)
+    cfg = load_config(repo)
 
     assert isinstance(cfg, GuardConfig)
     assert dict(cfg.hooks[HOOK].on_error) == {EventName.PRE_TOOL_USE: "ask", EventName.STOP: "open"}
@@ -376,20 +269,20 @@ def test_on_error_is_clamped_per_event_at_load(tmp_path: Path) -> None:
 def test_malformed_hook_records_are_faults(
     tmp_path: Path, change: Callable[[dict[str, Any]], object], where: str
 ) -> None:
-    repo = _repo(tmp_path)
-    _install(repo, _with_record(change))
+    repo = repo_at(tmp_path)
+    install_guard_config(repo, _with_record(change))
 
-    fault = _load(repo)
+    fault = load_config(repo)
 
     assert isinstance(fault, ConfigFault) and fault.kind == "malformed"
     assert fault.detail.startswith(where)
 
 
 def test_runtime_keys_and_pack_tables(tmp_path: Path) -> None:
-    repo = _repo(tmp_path)
-    _install(repo, _document())
+    repo = repo_at(tmp_path)
+    install_guard_config(repo, guard_document())
 
-    cfg = _load(repo)
+    cfg = load_config(repo)
 
     assert isinstance(cfg, GuardConfig)
     assert cfg.unattended_ask == "warn"
@@ -407,10 +300,10 @@ def test_runtime_keys_and_pack_tables(tmp_path: Path) -> None:
 
 
 def test_optional_keys_default_to_the_safe_engine_values(tmp_path: Path) -> None:
-    repo = _repo(tmp_path)
-    _install(repo, {"schema_version": 1, "hooks": {}})
+    repo = repo_at(tmp_path)
+    install_guard_config(repo, {"schema_version": 1, "hooks": {}})
 
-    cfg = _load(repo)
+    cfg = load_config(repo)
 
     assert isinstance(cfg, GuardConfig)
     assert cfg.unattended_ask == "deny"
@@ -423,11 +316,13 @@ def test_optional_keys_default_to_the_safe_engine_values(tmp_path: Path) -> None
 
 
 def test_pattern_keys_folded_at_load_on_darwin(tmp_path: Path) -> None:
-    repo = _repo(tmp_path)
-    _install(repo, _document(secret_path_globs=[".ENV*"], path_classes={"docs": ["Docs/**"]}))
+    repo = repo_at(tmp_path)
+    install_guard_config(
+        repo, guard_document(secret_path_globs=[".ENV*"], path_classes={"docs": ["Docs/**"]})
+    )
 
-    darwin = _load(repo, platform="darwin")
-    linux = _load(repo, platform="linux")
+    darwin = load_config(repo, platform="darwin")
+    linux = load_config(repo, platform="linux")
 
     assert isinstance(darwin, GuardConfig) and isinstance(linux, GuardConfig)
     assert darwin.secret_paths.matches(fold_key("x/.env.prod", "darwin"))
@@ -441,40 +336,40 @@ def test_pattern_keys_folded_at_load_on_darwin(tmp_path: Path) -> None:
 
 
 def test_lockfile_reparsed_only_when_stat_changes(tmp_path: Path) -> None:
-    repo = _repo(tmp_path)
-    _install(repo, _document())
+    repo = repo_at(tmp_path)
+    install_guard_config(repo, guard_document())
     spy = SpyToml()
 
-    assert isinstance(_load(repo, load_toml=spy), GuardConfig)
-    assert isinstance(_load(repo, load_toml=spy), GuardConfig)
+    assert isinstance(load_config(repo, load_toml=spy), GuardConfig)
+    assert isinstance(load_config(repo, load_toml=spy), GuardConfig)
     assert spy.calls == 1  # the second load used <state>/cfg-digest.json
     cache = StateStore.for_repo(repo).read_json("cfg-digest.json")
     assert set(cache) == {"lock_size", "lock_mtime_ns", "lock_ino", "guard_config_sha256"}
 
     lock = Path(repo.worktree_root) / LOCKFILE_REL
     lock.write_text(lock.read_text(encoding="utf-8") + "\n", encoding="utf-8")
-    assert isinstance(_load(repo, load_toml=spy), GuardConfig)
+    assert isinstance(load_config(repo, load_toml=spy), GuardConfig)
     assert spy.calls == 2
 
-    assert isinstance(_load(repo, load_toml=spy, refresh_digest=True), GuardConfig)
+    assert isinstance(load_config(repo, load_toml=spy, refresh_digest=True), GuardConfig)
     assert spy.calls == 3  # session_start refreshes whatever the stat says
 
 
 def test_a_poisoned_cache_entry_for_another_stat_is_ignored(tmp_path: Path) -> None:
-    repo = _repo(tmp_path)
-    _install(repo, _document())
+    repo = repo_at(tmp_path)
+    install_guard_config(repo, guard_document())
     store = StateStore.for_repo(repo)
     store.write_json(
         "cfg-digest.json",
         {"lock_size": 1, "lock_mtime_ns": 1, "lock_ino": 1, "guard_config_sha256": "0" * 64},
     )
 
-    assert isinstance(_load(repo), GuardConfig)
+    assert isinstance(load_config(repo), GuardConfig)
 
 
 def test_stateless_store_parses_the_lockfile_every_time(tmp_path: Path) -> None:
-    repo = _repo(tmp_path)
-    _install(repo, _document())
+    repo = repo_at(tmp_path)
+    install_guard_config(repo, guard_document())
     spy = SpyToml()
     stateless = StateStore(Path(repo.git_dir) / "playbook-hooks", uid=os.getuid() + 1)
 
@@ -538,7 +433,7 @@ def test_toml_loader_protocol_accepts_the_spy() -> None:
 
 
 def test_config_loads_without_a_state_store(tmp_path: Path) -> None:
-    repo = _repo(tmp_path)
-    _install(repo, _document())
+    repo = repo_at(tmp_path)
+    install_guard_config(repo, guard_document())
 
     assert isinstance(load_guard_config(repo, None, platform="linux", home=None), GuardConfig)
