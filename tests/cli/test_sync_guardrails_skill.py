@@ -3,10 +3,10 @@
 With hooks on, sync composes the skill from the on hooks' guardrail text and
 writes it through the normal ``write_skill`` path to ``.opencode/skills/`` and
 ``.agents/skills/``; Claude Code runs every hook of the sample repo natively, so
-``.claude/skills/`` gets none, and Continue keeps its rule files. With hooks off
-no copy is written, and the copies an earlier sync wrote are settled by the
-skill leftover policy. Kept out of ``test_sync_hook_outputs.py``, which is past
-the 500-line budget already.
+``.claude/skills/`` gets none, and Continue keeps its rule files. With hooks off,
+or with ``[hooks] advisory = false``, no copy is written, and the copies an
+earlier sync wrote are settled by the skill leftover policy. Kept out of
+``test_sync_hook_outputs.py``, which is past the 500-line budget already.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import pytest
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.lockfile import LockEntry, Lockfile
 from coding_agent_playbook.types import format_frontmatter, split_frontmatter
-from tests.cli.hook_repo import CONFIG, HOOKS_ON, hook_deps, make_hook_repo
+from tests.cli.hook_repo import CONFIG, HOOKS_ON, SETTINGS, hook_deps, make_hook_repo
 from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:
@@ -38,6 +38,8 @@ _SKILL_DIRS = tuple(
 )
 _WRITTEN_DIRS = _SKILL_DIRS[1:]
 _HOOKS_OFF = "[hooks]\nenabled = false\n"
+# HOOKS_ON keeps allow_code_from, so the sample external hook still resolves.
+_ADVISORY_OFF = f"{HOOKS_ON}advisory = false\n"
 
 
 def _sync_repo(repo: Path, tmp_path: Path, **kwargs: Any) -> int:
@@ -108,6 +110,20 @@ def test_sync_with_hooks_off_writes_no_guardrails_skill_and_no_section(
         assert _skill_dirs(repo) == [], repo.name
         assert "## Guardrails" not in (repo / "AGENTS.md").read_text(encoding="utf-8")
         assert _guardrail_rows(repo) == {}, repo.name
+
+
+def test_sync_with_advisory_off_writes_no_guardrails_skill(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory
+) -> None:
+    """Hooks stay on, but ``[hooks] advisory = false`` leaves every hook without text."""
+    repo = _hook_repo(tmp_path / "repo", make_synthetic_repo, _ADVISORY_OFF)
+
+    assert _sync_repo(repo, tmp_path) == 0
+
+    assert (repo / SETTINGS).is_file(), "hooks are on: Claude Code still gets its settings"
+    assert _skill_dirs(repo) == []
+    assert _guardrail_rows(repo) == {}
+    assert not list((repo / ".continue" / "rules").glob("30-guardrail-*.md"))
 
 
 def test_repo_local_guardrails_skill_replaces_the_intro_and_keeps_the_sections(

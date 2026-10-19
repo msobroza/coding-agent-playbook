@@ -4,10 +4,11 @@ Core ships one skill per topic, and every scoped rule in core names the one that
 owns it (ADR 0001). The two tables below are the contract later content PRs
 extend. Core also ships one plain skill, ``playbook-guardrails``, which takes no
 member rules: sync composes it from the on hooks' guardrail text (D6), so it has
-no ``playbook:`` block and its authored description carries its own "Use when". The D13 static checks (description shape, 500 lines, references one
-level deep, plain markdown) cover the core skills only: bundled plugin skills are
-exempt (D24) because their vendored or distilled descriptions and bodies fail them
-as written, and rewording vendored text would change upstream wording. The
+no ``playbook:`` block and its authored description carries its own "Use when".
+The D13 static checks (description shape, 500 lines, references one level deep,
+plain markdown) cover the core skills only: bundled plugin skills are exempt
+(D24) because their vendored or distilled descriptions and bodies fail them as
+written, and rewording vendored text would change upstream wording. The
 skill-listing budget in ``test_context_budget.py`` still counts every plugin.
 """
 
@@ -153,6 +154,10 @@ SKILLS_ROOT: Final = CORE_ROOT / "skills"
 _NOT_THIRD_PERSON: Final = re.compile(r"(?i)(i|you|we|use)\b")
 _URL: Final = re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://|\bwww\.")
 _TRUNCATION_TAIL: Final = re.compile(r"and \d+ more")
+#: A ``playbook-guardrails`` section heading, ``## <name> (`<id>`)``; group 1 is the hook id.
+_GUARDRAIL_SECTION: Final = re.compile(r"^## .+ \(`([^`]+)`\)$", re.MULTILINE)
+#: Continue's advisory rule file name, ``30-guardrail-<hook id>.md``, before the hook id.
+_CONTINUE_GUARDRAIL_PREFIX: Final = "30-guardrail-"
 
 
 def _skill_md_text(skill_id: str) -> str:
@@ -186,6 +191,12 @@ def _is_core_member_reference(path: str) -> bool:
 def _probe_skill_md(repo: Path, skill_id: str) -> str:
     """The probe's emitted ``.claude/skills/<skill_id>/SKILL.md``."""
     return (repo / ".claude" / "skills" / skill_id / "SKILL.md").read_text(encoding="utf-8")
+
+
+def _continue_guardrail_hook_ids(repo: Path) -> list[str]:
+    """The hook ids of ``repo``'s ``.continue/rules/30-guardrail-<id>.md`` files, sorted."""
+    rules = (repo / ".continue" / "rules").glob(f"{_CONTINUE_GUARDRAIL_PREFIX}*.md")
+    return sorted(p.stem.removeprefix(_CONTINUE_GUARDRAIL_PREFIX) for p in rules)
 
 
 def test_core_ships_exactly_the_d4_skills() -> None:
@@ -439,9 +450,12 @@ def test_reference_probe_writes_the_guardrails_skill_to_opencode_and_agents_root
     assert not prompt.exists(), "Continue keeps its 30-guardrail rule files instead"
     frontmatter, body = split_frontmatter(copies[0].read_text(encoding="utf-8"))
     assert frontmatter == _authored(GUARDRAILS_SKILL_ID)[0]
-    guardrails = (reference_probe_repo / "AGENTS.md").read_text(encoding="utf-8")
-    blocks = guardrails.partition("## Guardrails\n")[2].count("\n### ")
-    assert body.count("\n## ") == blocks, "one skill section per AGENTS.md guardrail"
+    # Counted against Continue's rule files, which D6 keeps as they are, not against
+    # AGENTS.md's Guardrails blocks, which ticket 17 turns into one line per hook.
+    advised = _continue_guardrail_hook_ids(reference_probe_repo)
+    assert advised, "the probe enables continue, so each on hook with an advisory has a file"
+    assert _GUARDRAIL_SECTION.findall(body) == advised, "one skill section per advised hook"
+    assert body.count("\n## ") == len(advised), "no section beyond the advised hooks"
 
 
 def test_reference_probe_member_reference_is_byte_identical_in_every_skill_root(
