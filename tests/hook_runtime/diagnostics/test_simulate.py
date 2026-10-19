@@ -329,18 +329,23 @@ SMOKE_CONFIG: Final = (
 
 
 def smoke_guard_config_bytes() -> bytes:
-    """``render_guard_config`` for the shipped destructive-command-guard, canonical bytes."""
+    """``compile_guard_config`` for the shipped destructive-command-guard, canonical bytes."""
     from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
     from coding_agent_playbook.hooks.guard_config.compile import (
-        GuardConfigInputs,
-        render_guard_config,
-        serialize_guard_config,
+        GuardConfigRequest,
+        compile_guard_config,
     )
     from tests.hook_runtime.handlers.pack_repo import ENGINE_VERSION, resolve_engine_hooks
 
-    hooks = resolve_engine_hooks(["destructive-command-guard"], Path("/playbook-fixture/proj"))
-    inputs = GuardConfigInputs(hooks, HooksConfig(enabled=True), GuardrailsConfig(), ENGINE_VERSION)
-    return serialize_guard_config(render_guard_config(inputs))
+    root = Path("/playbook-fixture/proj")  # absent: every repo input keeps its default
+    request = GuardConfigRequest(
+        repo_root=root,
+        hooks=resolve_engine_hooks(["destructive-command-guard"], root),
+        hooks_config=HooksConfig(enabled=True),
+        guardrails=GuardrailsConfig(),
+        engine_version=ENGINE_VERSION,
+    )
+    return compile_guard_config(request).data
 
 
 @pytest.mark.catalog

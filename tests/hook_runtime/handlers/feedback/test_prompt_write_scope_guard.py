@@ -1,7 +1,7 @@
 """prompt-write-scope-guard and the per-turn active prompt (specs/prK-hook-pack.md §E.3, OQ-45).
 
 The engine's five scoped prompts are rendered into the guard's ``scopes``
-through the real ``render_guard_config``. Each test drives the exact dispatch
+through the real ``compile_guard_config``. Each test drives the exact dispatch
 pipeline with no ``user_prompt_submit`` dispatch at all (review finding #6):
 the user's turn is written to a Claude transcript (``SessionTranscript``),
 or a model-invoked ``Skill`` call records the prompt, and a ``pre_tool_use``

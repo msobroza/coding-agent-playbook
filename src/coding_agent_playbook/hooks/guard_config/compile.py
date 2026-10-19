@@ -1,52 +1,20 @@
-"""The sync-level ``guard_config.json`` (specs/prK-lifecycle-hooks.md §C.0, §D.8).
+"""Compile ``guard_config.json``, the hook runtime's only configuration, from what sync owns.
 
-``playbook sync`` (not an adapter: an OpenCode-only repo needs it too, and the
-OpenCode adapter may not write under ``.claude/``) writes two kinds of runtime
-output under :data:`HOOKS_OUTPUT_DIR` whenever ``[hooks] enabled`` and a
-hook-capable adapter is on:
-
-- ``guard_config.json``, the dispatcher's only configuration: the envelope, every
-  on hook as ``ResolvedHook.to_json()``, the §D.4 deadlines and the K3 runtime
-  tables. Canonical bytes (sorted keys, compact, ASCII, one trailing newline),
-  so its digest is the sha256 of the file the lockfile records (§D.8.1);
-- byte copies (``shutil.copy2``, exec bits kept) of each external handler's
-  ``scripts/``, which the hook's argv names repo-relatively
-  (``sync._hook_scripts``: this package owns only the document, GC-D1).
-
-Both are committed and byte-compared by ``sync --check`` on every machine, so
-nothing here may read the machine: no absolute path, no ``sys.prefix``, no
-``$HOME`` (§D.8.3). Absolute tool and interpreter paths are pins under the git
-dir instead (``hook_runtime.config.pin``). The §E.0.5 pack tables land with K5: the
-``sentinel`` and ``protected`` tables are built by ``_tables_protect``;
-``control_plane`` is the runtime's own engine constant and ``precommit`` the
-playbook hook ids of the repo's ``.pre-commit-config.yaml``, scanned with the
-runtime's regex so control-plane-guard and sync never disagree
-(``_tables_precommit``); ``facts`` and ``applicability``
-(resync-on-detector-input-change) come from ``_tables_detect``, ``eval`` is the
-fixture-glob engine constant and ``auto_sync`` mirrors ``[hooks] auto_sync``.
-``stop_gate`` (K6) is the Stop coordinator's table from ``_tables_stop_gate``:
-its stage records, budget and verify commands, also machine-independent;
-``prompts`` and the tests-with-source-nudge layout come from ``_tables_verify``.
-``ruff`` (K7) is the repo's own ruff selection and the safe-fix rules the
-post-edit pipeline may apply (``_tables_ruff``); the pinned ruff's
-version-specific facts live in ``machine.json`` instead (``ruff_probe``).
-toolchain-missing-hint's install hint and pytest-conventions-feedback's asyncio
-flag are derived from the repo's pyproject into those hooks' config
-(``_tables_toolchain``), and the quality companion's codes and ``--config``
-thresholds from the committed ``[metrics.ruff_violations]`` into
-clean-code-metrics-nonregression's (``_tables_quality``, §F.2.2);
-``[hooks.commit_convention] cutover_date`` into commit-message-convention's
-(§F.4.2: one source for the push scan and the ``playbook ci`` step);
-skill-nudge's per-skill globs from the rendered member rules
-(``_tables_skills``, specs/prS-skills-context.md 8.5.2).
-``notebooks.max_bytes`` is the engine's parse cap for a notebook (a larger
-one is reported unparsed), shared by the notebook-reading hooks. The K8
-secret tables (``secret_path_exempt``, ``secret_glob_exempt``,
-``secret_rules``) come from ``_tables_secrets``: the exemptions beside
-``secret_path_globs`` and the content ruleset with its overlay patterns; the
-``allowlists`` table (dependency allowlist, required index, egress hosts) and
-the ``network`` table (network-egress-guard's mode, for the briefing) from
-``_tables_allowlists``.
+``playbook sync`` compiles it whenever ``[hooks] enabled`` and a hook-capable adapter is
+on (specs/prK-lifecycle-hooks.md §C.0, §D.8): sync, not an adapter, because an
+OpenCode-only repo needs it too and the OpenCode adapter may not write under ``.claude/``.
+Sync hands over a :class:`GuardConfigRequest` holding only what sync computes; each
+input kept in a repository file is read from ``repo_root`` (``_repo_inputs``,
+specs/prT-package-layout.md 9 AC.2.3), the real repo in every mode, so ``sync --check``
+writes the same bytes into its scratch dir. The document is the envelope the runtime
+parses itself, every on hook as ``ResolvedHook.to_json()`` with the config sync derives
+for it (the repo layout, the toolchain hints, the quality family, the commit cutover,
+skill-nudge's globs), the §D.4 deadlines and the §E.0.5 pack tables, one ``_tables_*``
+module each. Its bytes are canonical (sorted keys, compact, ASCII, one trailing newline),
+so their digest is the sha256 the lockfile records (§D.8.1). It is committed and
+byte-compared on every machine, so nothing here may read the machine: no absolute path,
+no ``sys.prefix``, no ``$HOME`` (§D.8.3); tool and interpreter paths are pins under the
+git dir (``hook_runtime.config.pin``). The script copies are sync's (``sync._hook_scripts``).
 """
 
 from __future__ import annotations
@@ -63,6 +31,7 @@ from coding_agent_playbook.hook_runtime.config.schema import (
     GUARD_CONFIG_REL,
     GUARD_CONFIG_SCHEMA_VERSION,
     HOOKS_OUTPUT_DIR,
+    LOCKFILE_REL,
 )
 from coding_agent_playbook.hook_runtime.dispatch.routing import (
     ASYNC_AUDIT_MODE,
@@ -71,14 +40,12 @@ from coding_agent_playbook.hook_runtime.dispatch.routing import (
 )
 from coding_agent_playbook.hook_runtime.judges.notebook_check import NOTEBOOK_MAX_BYTES
 from coding_agent_playbook.hook_runtime.shell.wrappers import DEFAULT_RUNNER_WRAPPERS
+from coding_agent_playbook.hooks.guard_config._repo_inputs import RepoInputs, read_repo_inputs
 from coding_agent_playbook.hooks.guard_config._tables_allowlists import (
     allowlists_table,
     network_table,
 )
-from coding_agent_playbook.hooks.guard_config._tables_detect import (
-    applicability_table,
-    facts_table,
-)
+from coding_agent_playbook.hooks.guard_config._tables_detect import applicability_table, facts_table
 from coding_agent_playbook.hooks.guard_config._tables_prompts import (
     prompt_scopes,
     with_prompt_scopes,
@@ -86,23 +53,20 @@ from coding_agent_playbook.hooks.guard_config._tables_prompts import (
 from coding_agent_playbook.hooks.guard_config._tables_protect import protected_table
 from coding_agent_playbook.hooks.guard_config._tables_quality import (
     QUALITY_HOOK_ID,
-    QualityLint,
     quality_hook_config,
 )
-from coding_agent_playbook.hooks.guard_config._tables_ruff import RuffSelection, ruff_table
+from coding_agent_playbook.hooks.guard_config._tables_ruff import ruff_table
 from coding_agent_playbook.hooks.guard_config._tables_secrets import secret_tables
-from coding_agent_playbook.hooks.guard_config._tables_skills import SKILL_NUDGE_HOOK_ID
+from coding_agent_playbook.hooks.guard_config._tables_skills import (
+    SKILL_NUDGE_HOOK_ID,
+    skill_glob_rows,
+)
 from coding_agent_playbook.hooks.guard_config._tables_stop_gate import stop_gate_table
 from coding_agent_playbook.hooks.guard_config._tables_toolchain import (
-    ToolchainInputs,
     derived_hook_config,
     with_derived_config,
 )
-from coding_agent_playbook.hooks.guard_config._tables_verify import (
-    RepoLayout,
-    bake_layout,
-    prompts_table,
-)
+from coding_agent_playbook.hooks.guard_config._tables_verify import bake_layout, prompts_table
 from coding_agent_playbook.hooks.guard_config.inputs import DetectInputs, ProtectInputs
 from coding_agent_playbook.hooks.registrations.launcher import LAUNCHER_PATH
 from coding_agent_playbook.hooks.registrations.opencode import OPENCODE_SHIM_PATH
@@ -114,24 +78,21 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
-    from coding_agent_playbook.hooks.guard_config._tables_skills import SkillGlobRow
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 __all__ = [
-    "GUARD_CONFIG_PATH",
     "HOOK_ARTIFACTS",
     "SYNC_OUTPUT_LOCATIONS",
-    "GuardConfigInputs",
-    "render_guard_config",
+    "CompiledGuardConfig",
+    "GuardConfigRequest",
+    "compile_guard_config",
     "serialize_guard_config",
-    "write_guard_config",
 ]
 
-#: The one repo-relative path, shared with the runtime that reads it.
-GUARD_CONFIG_PATH: Final = GUARD_CONFIG_REL
-#: Joins the adapters' ``output_locations`` in the leftover policy, so disabling
-#: hooks deletes the pristine sync-level outputs (no adapter declares them).
+#: guard_config.json plus the copied hook scripts; joins the adapters' ``output_locations``
+#: in the leftover policy, so disabling hooks deletes these pristine outputs too.
 SYNC_OUTPUT_LOCATIONS: Final[tuple[str, ...]] = (HOOKS_OUTPUT_DIR,)
 #: The guardrail files only the user may change (runtime glob grammar): the
 #: sync-level outputs, the Claude launcher dir and the OpenCode shim (§E.1).
@@ -148,14 +109,14 @@ _DECISION_LOG_HOOK: Final = "guard-decision-log"
 _AUDIT_LOG_HOOK: Final = "local-audit-log"
 
 #: Engine path classes (runtime glob grammar); ``generated`` comes from the adapters.
+#: The control-plane files are the runtime's own rows (it owns the contract, GC-D4).
 _PATH_CLASSES: Final[Mapping[str, tuple[str, ...]]] = {
     "canonical": ("playbook/",),
     "control_plane": (
-        ".claude/settings.json",
-        ".claude/settings.local.json",
-        ".coding-agent-playbook.toml",
-        ".coding-agent-playbook.local.toml",
-        ".coding-agent-playbook.lock",
+        *CONTROL_PLANE["settings"],
+        *CONTROL_PLANE["config"],
+        *CONTROL_PLANE["local_config"],
+        LOCKFILE_REL,
         HOOKS_OUTPUT_DIR,
     ),
     "detector_input": (
@@ -173,111 +134,69 @@ _PATH_CLASSES: Final[Mapping[str, tuple[str, ...]]] = {
 }
 
 
-@dataclass(frozen=True)
-class GuardConfigInputs:
-    """Everything ``guard_config.json`` is rendered from; all of it machine-independent.
+@dataclass(frozen=True, slots=True, kw_only=True)
+class GuardConfigRequest:
+    """What sync owns and hands the writer; every other input is read from ``repo_root``.
 
-    ``generated`` holds the enabled adapters' ``output_locations``;
-    ``protected`` the written set, scan dirs and layer packages;
-    ``precommit_ids`` the repo's playbook pre-commit hook ids, ``detect``
-    the detector facts and applicability rows (§E.0.5); ``prompts`` the
-    rendered prompts: the ``prompts`` table of output contracts (§E.2) and,
-    from their ``write_scope``, prompt-write-scope-guard's ``scopes`` (§E.3);
-    ``layout`` the source and test roots baked into tests-with-source-nudge's
-    config (§E.2); ``ruff`` the repo's ruff selection
-    (``read_project_ruff_selection``); ``toolchain`` the hook config derived
-    from its pyproject (``read_toolchain_inputs``: the install hint, pytest's
-    asyncio marks); ``quality`` the committed ``[metrics.ruff_violations]``
-    (``read_quality_lint``); ``skill_globs`` skill-nudge's table, one
-    ``{"id", "globs"}`` row per skill (``skill_glob_rows`` of the rendered rules).
+    ``repo_root`` is the real repository in every mode: ``sync --check`` writes into
+    a scratch directory but reads the repo's own pyproject, ruff config, pre-commit
+    config and committed config. ``generated`` holds the adapters' ``output_locations``,
+    ``protected`` the written set, scan dirs and layer packages, ``detect`` the facts
+    and applicability rows; ``rules`` and ``prompts`` are this sync's rendered,
+    ``applies_if``-filtered artifacts.
 
-    Example::
-
-        GuardConfigInputs(hooks, hooks_cfg, guardrails, "0.2.0", generated=("AGENTS.md",))
+    Example: ``GuardConfigRequest(repo_root=repo, hooks=hooks.resolved,
+    hooks_config=hooks.config, guardrails=hooks.guardrails, engine_version="0.2.0")``.
     """
 
+    repo_root: Path
     hooks: Sequence[ResolvedHook]
     hooks_config: HooksConfig
     guardrails: GuardrailsConfig
     engine_version: str
     generated: Sequence[str] = ()
     protected: ProtectInputs = field(default_factory=ProtectInputs)
-    precommit_ids: Sequence[str] = ()
     detect: DetectInputs = field(default_factory=DetectInputs)
     prompts: Sequence[Prompt] = ()
-    layout: RepoLayout = field(default_factory=RepoLayout)
-    ruff: RuffSelection = field(default_factory=RuffSelection)
-    toolchain: ToolchainInputs = field(default_factory=ToolchainInputs)
-    quality: QualityLint = field(default_factory=QualityLint)
-    # SkillGlobRow, not spec 8.5.2's Mapping[str, Any]: mypy then checks the
-    # {"id", "globs"} shape the skill-nudge runtime parses.
-    skill_globs: Sequence[SkillGlobRow] = ()
+    rules: Sequence[Rule] = ()
 
 
-def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
-    """The ``guard_config.json`` document (§D.8.2): envelope, hooks, deadlines, K3/K5 tables.
+@dataclass(frozen=True, slots=True)
+class CompiledGuardConfig:
+    """The guard_config.json document and its canonical bytes (``serialize_guard_config``)."""
 
-    ``allow_code_from`` and ``state_ttl_days`` are the runtime keys beyond the
-    §D.8.2 table that ``hook_runtime.config.guard_config`` reads (it cannot read ``[hooks]``);
-    ``sentinel``, ``protected``, ``control_plane``, ``precommit``, ``facts``,
-    ``applicability``, ``eval``, ``auto_sync``, ``stop_gate``, ``prompts``,
-    ``ruff``, ``notebooks``, the §E.4 secret tables, ``allowlists`` and ``network`` are
-    pack keys (``GuardConfig.tables``).
+    document: Mapping[str, Any]
+    data: bytes
 
-    Example::
+    def write(self, out_root: Path) -> Path:
+        """Write ``data`` to ``<out_root>/<GUARD_CONFIG_REL>`` (bytes, never CRLF); return the path.
 
-        >>> render_guard_config(GuardConfigInputs([], HooksConfig(enabled=True),
-        ...     GuardrailsConfig(), "0.2.0"))["hooks"]  # doctest: +SKIP
-        {}
+        Example: ``compile_guard_config(request).write(scratch_root)``.
+        """
+        path = out_root / GUARD_CONFIG_REL
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_output_bytes(path, self.data)
+        return path
+
+
+def compile_guard_config(request: GuardConfigRequest) -> CompiledGuardConfig:
+    """Read the repo inputs, build every table, serialize canonically. Writes nothing.
+
+    An unreadable repo input gives its reader's default (GC-D5); a template or
+    policy error was raised earlier, by sync's render and hook resolution.
+
+    Example: ``compile_guard_config(request).write(out_root)``.
     """
-    cfg = inputs.hooks_config
-    scopes = prompt_scopes(inputs.prompts)
-    derived = {
-        **derived_hook_config(inputs.toolchain),
-        QUALITY_HOOK_ID: quality_hook_config(inputs.quality, inputs.ruff),
-        COMMIT_CONVENTION_HOOK_ID: {"cutover_date": cfg.commit_convention.cutover_date or ""},
-        SKILL_NUDGE_HOOK_ID: {"skills": [dict(row) for row in inputs.skill_globs]},
+    repo = read_repo_inputs(request.repo_root, request.detect.facts)
+    document = {
+        **_envelope(request),
+        "hooks": _hook_records(request, repo),
+        **_pack_tables(request, repo),
     }
-    return {
-        "schema_version": GUARD_CONFIG_SCHEMA_VERSION,
-        "engine_version": inputs.engine_version,
-        "hooks": {
-            hook.id: bake_layout(
-                with_derived_config(with_prompt_scopes(hook.to_json(), scopes), derived),
-                inputs.layout,
-            )
-            for hook in inputs.hooks
-        },
-        "deadlines_ms": resolved_deadlines_ms(inputs.hooks),
-        "unattended_ask": cfg.unattended_ask,
-        "logging": _logging(inputs.hooks),
-        "shell": {
-            "wrapper_prefixes": list(cfg.wrapper_prefixes),
-            "runner_wrappers": list(DEFAULT_RUNNER_WRAPPERS),
-        },
-        "path_classes": _path_classes(inputs.generated),
-        "secret_path_globs": _unique([*SECRET_PATH_GLOBS, *inputs.guardrails.secrets.extra_globs]),
-        "allow_code_from": sorted(set(cfg.allow_code_from)),
-        "state_ttl_days": cfg.state_ttl_days,
-        "sentinel": SENTINEL,
-        "protected": protected_table(inputs.protected, HOOK_ARTIFACTS),
-        "control_plane": {key: list(rows) for key, rows in CONTROL_PLANE.items()},
-        "precommit": {"playbook_hook_ids": sorted(set(inputs.precommit_ids))},
-        "facts": facts_table(inputs.detect.facts),
-        "applicability": applicability_table(inputs.detect.applicability),
-        "eval": {"fixture_globs": list(FIXTURE_GLOBS)},
-        "auto_sync": cfg.auto_sync,
-        "stop_gate": stop_gate_table(inputs.hooks, inputs.detect.facts),
-        "prompts": prompts_table(inputs.prompts),
-        "ruff": ruff_table(inputs.ruff),
-        "notebooks": {"max_bytes": NOTEBOOK_MAX_BYTES},
-        **secret_tables(inputs.hooks, inputs.guardrails),
-        "allowlists": allowlists_table(inputs.hooks),
-        "network": network_table(inputs.hooks),
-    }
+    return CompiledGuardConfig(document, serialize_guard_config(document))
 
 
-def serialize_guard_config(cfg: Mapping[str, Any]) -> bytes:
+def serialize_guard_config(document: Mapping[str, Any]) -> bytes:
     """Canonical bytes: sorted keys, no whitespace, ASCII escapes, one trailing newline (§D.8.1).
 
     Example::
@@ -285,21 +204,69 @@ def serialize_guard_config(cfg: Mapping[str, Any]) -> bytes:
         >>> serialize_guard_config({"b": 1, "a": "é"})
         b'{"a":"\\\\u00e9","b":1}\\n'
     """
-    text = json.dumps(cfg, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    text = json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return f"{text}\n".encode("ascii")
 
 
-def write_guard_config(out_root: Path, cfg: Mapping[str, Any]) -> Path:
-    """Write ``cfg``'s canonical bytes to ``<out_root>/<GUARD_CONFIG_PATH>``; return the path.
+def _envelope(request: GuardConfigRequest) -> dict[str, Any]:
+    """The keys ``hook_runtime.config.guard_config`` parses itself (§D.8.2); the runtime
+    cannot read ``[hooks]``, so ``allow_code_from`` and ``state_ttl_days`` join them."""
+    cfg = request.hooks_config
+    return {
+        "schema_version": GUARD_CONFIG_SCHEMA_VERSION,
+        "engine_version": request.engine_version,
+        "deadlines_ms": resolved_deadlines_ms(request.hooks),
+        "unattended_ask": cfg.unattended_ask,
+        "logging": _logging(request.hooks),
+        "shell": {
+            "wrapper_prefixes": list(cfg.wrapper_prefixes),
+            "runner_wrappers": list(DEFAULT_RUNNER_WRAPPERS),
+        },
+        "path_classes": _path_classes(request.generated),
+        "secret_path_globs": _unique([*SECRET_PATH_GLOBS, *request.guardrails.secrets.extra_globs]),
+        "allow_code_from": sorted(set(cfg.allow_code_from)),
+        "state_ttl_days": cfg.state_ttl_days,
+    }
 
-    Bytes, not text, so Windows never turns the newline into CRLF.
 
-    Example: ``write_guard_config(repo_root, render_guard_config(inputs))``.
-    """
-    path = out_root / GUARD_CONFIG_PATH
-    path.parent.mkdir(parents=True, exist_ok=True)
-    write_output_bytes(path, serialize_guard_config(cfg))
-    return path
+def _hook_records(request: GuardConfigRequest, repo: RepoInputs) -> dict[str, Any]:
+    """Each on hook's record with the config sync derives for it merged into its handlers."""
+    cutover = request.hooks_config.commit_convention.cutover_date or ""
+    derived = {
+        **derived_hook_config(repo.toolchain),
+        QUALITY_HOOK_ID: quality_hook_config(repo.quality, repo.ruff),
+        COMMIT_CONVENTION_HOOK_ID: {"cutover_date": cutover},
+        SKILL_NUDGE_HOOK_ID: {"skills": [dict(row) for row in skill_glob_rows(request.rules)]},
+    }
+    scopes = prompt_scopes(request.prompts)
+    return {
+        hook.id: bake_layout(
+            with_derived_config(with_prompt_scopes(hook.to_json(), scopes), derived), repo.layout
+        )
+        for hook in request.hooks
+    }
+
+
+def _pack_tables(request: GuardConfigRequest, repo: RepoInputs) -> dict[str, Any]:
+    """The pack keys the runtime reads through ``GuardConfig.tables`` (§E.0.5)."""
+    hooks, facts = request.hooks, request.detect.facts
+    return {
+        "sentinel": SENTINEL,
+        "protected": protected_table(request.protected, HOOK_ARTIFACTS),
+        "control_plane": {key: list(rows) for key, rows in CONTROL_PLANE.items()},
+        "precommit": {"playbook_hook_ids": sorted(set(repo.precommit_ids))},
+        "facts": facts_table(facts),
+        "applicability": applicability_table(request.detect.applicability),
+        "eval": {"fixture_globs": list(FIXTURE_GLOBS)},
+        "auto_sync": request.hooks_config.auto_sync,
+        "stop_gate": stop_gate_table(hooks, facts),
+        "prompts": prompts_table(request.prompts),
+        "ruff": ruff_table(repo.ruff),
+        "notebooks": {"max_bytes": NOTEBOOK_MAX_BYTES},
+        **secret_tables(hooks, request.guardrails),
+        "allowlists": allowlists_table(hooks),
+        "network": network_table(hooks),
+    }
 
 
 def _logging(hooks: Sequence[ResolvedHook]) -> dict[str, Any]:

@@ -5,13 +5,13 @@
   (``filter_applies_if`` is never widened for hooks), with bodies rendered;
 - :func:`write_runtime_outputs`: the sync-level ``guard_config.json`` and the
   copied scripts, into the output root in every mode (so ``--check`` compares
-  them), whenever hooks are enabled and a hook-capable adapter is on. Its
-  ``protected`` table is this sync's written set as lock rows, the adapters'
-  scan dirs and the layer packages, its ``precommit`` table the playbook
-  hook ids of the repo's pre-commit config, its ``facts`` /
-  ``applicability`` tables the detector facts and every rule, prompt and
-  applicability-gated hook with its predicates (specs/prK-hook-pack.md §E.0.5),
-  and its ``ruff`` table the repo's own ruff selection (§E.3);
+  them), whenever hooks are enabled and a hook-capable adapter is on. Sync hands
+  the writer one request with what it owns: this sync's written set as lock rows,
+  the adapters' scan dirs and the layer packages (the ``protected`` table), the
+  detector facts and every rule, prompt and applicability-gated hook with its
+  predicates (``facts`` / ``applicability``, specs/prK-hook-pack.md §E.0.5) and
+  the rendered prompts and rules; ``compile_guard_config`` reads the repo's own
+  pre-commit, ruff, pyproject and committed config itself;
 - :func:`check_settings_readable`: refuses a ``settings.json`` the Claude Code
   merge would choke on *before* any adapter writes;
 - :func:`check_runtime_outputs_owned`: refuses, just as early, a user file (or
@@ -49,17 +49,10 @@ from coding_agent_playbook.generated_output.output_io import refuse_special_file
 from coding_agent_playbook.generated_output.write_guard import check_engine_owned
 from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
 from coding_agent_playbook.hooks.enforcement import HOOK_LABELS, adapter_label
-from coding_agent_playbook.hooks.guard_config._tables_precommit import precommit_hook_ids
-from coding_agent_playbook.hooks.guard_config._tables_quality import read_quality_lint
-from coding_agent_playbook.hooks.guard_config._tables_ruff import read_project_ruff_selection
-from coding_agent_playbook.hooks.guard_config._tables_skills import skill_glob_rows
-from coding_agent_playbook.hooks.guard_config._tables_toolchain import read_toolchain_inputs
-from coding_agent_playbook.hooks.guard_config._tables_verify import repo_layout
 from coding_agent_playbook.hooks.guard_config.compile import (
     SYNC_OUTPUT_LOCATIONS,
-    GuardConfigInputs,
-    render_guard_config,
-    write_guard_config,
+    GuardConfigRequest,
+    compile_guard_config,
 )
 from coding_agent_playbook.hooks.guard_config.inputs import (
     DetectInputs,
@@ -67,7 +60,7 @@ from coding_agent_playbook.hooks.guard_config.inputs import (
     applicability_rows,
 )
 from coding_agent_playbook.hooks.guard_config.resource_roots import resolve_resource_roots
-from coding_agent_playbook.hooks.guard_config.ruff_probe import ruff_candidate_codes
+from coding_agent_playbook.hooks.guard_config.ruff_probe import ruff_probe_codes
 from coding_agent_playbook.hooks.registrations.opencode import OPENCODE_SHIM_PATH
 from coding_agent_playbook.hooks.registrations.stop_gate import stop_stage_records
 from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
@@ -219,24 +212,21 @@ def write_runtime_outputs(
     """
     if not runtime_enabled(ctx, hooks):
         return
-    inputs = GuardConfigInputs(
+    request = GuardConfigRequest(
+        # The real repo in every mode: --check renders into an empty scratch dir, and
+        # the writer reads the repo's own pyproject, ruff, pre-commit and committed config.
+        repo_root=ctx.repo_root,
         hooks=hooks.resolved,
         hooks_config=hooks.config,
         guardrails=hooks.guardrails,
         engine_version=ctx.config.engine_version or _installed_version,
         generated=_generated_locations(ctx.adapters),
         protected=_protect_inputs(ctx, out_root, recorder),
-        # The real repo's config in every mode: --check renders into an empty scratch dir.
-        precommit_ids=precommit_hook_ids(ctx.repo_root),
         detect=_detect_inputs(ctx, hooks),
         prompts=prompts,
-        layout=repo_layout(ctx.repo_root),
-        ruff=read_project_ruff_selection(ctx.repo_root),
-        toolchain=read_toolchain_inputs(ctx.repo_root, ctx.facts),
-        quality=read_quality_lint(ctx.repo_root),
-        skill_globs=skill_glob_rows(rules),
+        rules=rules,
     )
-    path = write_guard_config(out_root, render_guard_config(inputs))
+    path = compile_guard_config(request).write(out_root)
     recorder.record([path], Provenance(kind="runtime"))
     for copy in copy_hook_scripts(hooks.resolved, out_root):
         origin = Provenance(kind="hook", artifact_id=copy.hook.id, source=copy.hook.source_package)
@@ -435,11 +425,7 @@ def finish_write(
             engine_version=version,
             resource_roots=roots,
             stage_tools=[r.tool for r in stop_stage_records(hooks.resolved) if r.tool],
-            # The quality companion's codes are derived from [metrics] at render
-            # time, so they are added here for the probe (§F.2.2).
-            ruff_codes=sorted(
-                {*ruff_candidate_codes(hooks.resolved), *read_quality_lint(ctx.repo_root).codes}
-            ),
+            ruff_codes=ruff_probe_codes(hooks.resolved, ctx.repo_root),
         )
     for line in summary_lines(hooks, ctx.adapters):
         print(line)

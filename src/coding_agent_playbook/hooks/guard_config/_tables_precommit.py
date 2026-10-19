@@ -3,8 +3,8 @@
 The playbook hook ids of the repo's ``.pre-commit-config.yaml``, scanned with the
 runtime's own regex so control-plane-guard and sync never disagree on which ids
 the user may not remove. Read from the real repo in every mode (``--check``
-renders into an empty scratch directory). Split out of ``compile`` (GC-2): it
-is one of the repo readers GC-3 moves behind ``compile_guard_config``.
+renders into an empty scratch directory): one of the repo readers
+``compile_guard_config`` calls itself (``_repo_inputs``).
 """
 
 from __future__ import annotations

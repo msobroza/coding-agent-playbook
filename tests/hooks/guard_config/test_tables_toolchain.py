@@ -1,13 +1,13 @@
 """The sync-derived hook config of toolchain-missing-hint and pytest-conventions-feedback (specs/prK-hook-pack.md §E.3).
 
 Pure functions of ``(package_manager, pyproject)`` and the detector facts, so
-these tests need no repository except where the file read itself is the
-point.
+these tests need no repository; ``compile_guard_config`` reads the pyproject
+(``test_compile`` pins the read and its default for a malformed file).
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pytest
 
@@ -16,12 +16,8 @@ from coding_agent_playbook.hooks.guard_config._tables_toolchain import (
     asyncio_marks_required,
     derived_hook_config,
     install_hint,
-    read_toolchain_inputs,
     with_derived_config,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 _EXTRA: dict[str, Any] = {"project": {"optional-dependencies": {"dev": ["ruff"]}}}
 _GROUP: dict[str, Any] = {"dependency-groups": {"dev": ["ruff"]}}
@@ -70,21 +66,6 @@ def test_asyncio_marks_follow_the_rule_body_fact_and_the_mode(
 ) -> None:
     """``has_framework("pytest-asyncio")``, as pytest.md.j2 reads it, and no auto mode."""
     assert asyncio_marks_required({"frameworks": frameworks}, pyproject) is required
-
-
-def test_read_toolchain_inputs_from_the_repository(tmp_path: Path) -> None:
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "x"\n[project.optional-dependencies]\ndev = ["commitizen>=3"]\n',
-        encoding="utf-8",
-    )
-
-    inputs = read_toolchain_inputs(tmp_path, {"package_manager": "uv"})
-    malformed = tmp_path / "bad"
-    malformed.mkdir()
-    (malformed / "pyproject.toml").write_text("[project\n", encoding="utf-8")
-
-    assert inputs == ToolchainInputs("uv sync --extra dev", "uv sync --extra dev", False)
-    assert read_toolchain_inputs(malformed, {"package_manager": "uv"}).install_hint == "uv sync"
 
 
 def test_derived_config_reaches_every_handler_of_its_hook_only() -> None:

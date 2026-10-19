@@ -1,8 +1,10 @@
 """The ``ruff`` table of ``guard_config.json`` (specs/prK-hook-pack.md §E.3).
 
 ``guard_config.json`` gets only the repo's own ruff selection (machine-
-independent); the pinned ruff's rule set is probed apart (``test_ruff_probe``),
-whose sample rule listings the machine-independence test reuses.
+independent), read by ``compile_guard_config`` (``test_compile`` pins every
+config shape and ruff's file precedence); the pinned ruff's rule set is probed
+apart (``test_ruff_probe``), whose sample rule listings the machine-independence
+test reuses.
 """
 
 from __future__ import annotations
@@ -11,77 +13,20 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
-from coding_agent_playbook.hooks.guard_config._tables_ruff import (
-    RuffSelection,
-    read_project_ruff_selection,
-    ruff_table,
-)
-from coding_agent_playbook.hooks.guard_config.compile import (
-    GuardConfigInputs,
-    render_guard_config,
-    serialize_guard_config,
-)
+from coding_agent_playbook.hooks.guard_config._tables_ruff import RuffSelection, ruff_table
+from coding_agent_playbook.hooks.guard_config.compile import compile_guard_config
 from coding_agent_playbook.sync._machine_local import SyncHookDeps, write_pins
 from tests.fakes import FakePinWriter
 from tests.hook_runtime.fakes import FakeRuff
+from tests.hooks.guard_config.compile_kit import request_for
 from tests.hooks.guard_config.test_ruff_probe import RULES_017, RULES_OLD
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 
-# --- the project's selection -------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("name", "text", "expected"),
-    [
-        (
-            "pyproject.toml",
-            '[tool.ruff.lint]\nselect = ["E", "I", "UP"]\nextend-select = ["B"]\n'
-            'ignore = ["E501"]\nextend-ignore = ["UP007"]\n',
-            RuffSelection(("B", "E", "I", "UP"), ("E501", "UP007"), default_select=False),
-        ),
-        (
-            "pyproject.toml",
-            '[tool.ruff]\nselect = ["F", "I"]\n',  # the deprecated top-level keys
-            RuffSelection(("F", "I"), (), default_select=False),
-        ),
-        (
-            "ruff.toml",
-            '[lint]\nselect = ["ALL"]\nignore = ["D"]\n',
-            RuffSelection(("ALL",), ("D",), False),
-        ),
-        ("pyproject.toml", '[project]\nname = "x"\n', RuffSelection()),  # not a ruff config
-        ("ruff.toml", 'line-length = 100\n[lint]\nextend-select = ["I"]\n', RuffSelection(("I",))),
-        ("pyproject.toml", "[tool.ruff\n", RuffSelection()),  # malformed: ruff's defaults
-    ],
-    ids=[
-        "pyproject-lint",
-        "pyproject-legacy",
-        "ruff-toml",
-        "no-tool-ruff",
-        "defaults+extend",
-        "bad",
-    ],
-)
-def test_project_select_from_pyproject_ruff_toml_and_defaults(
-    tmp_path: Path, name: str, text: str, expected: RuffSelection
-) -> None:
-    (tmp_path / name).write_text(text, encoding="utf-8")
-
-    assert read_project_ruff_selection(tmp_path) == expected
-
-
-def test_dot_ruff_toml_wins_over_ruff_toml_over_pyproject(tmp_path: Path) -> None:
-    (tmp_path / "pyproject.toml").write_text('[tool.ruff.lint]\nselect = ["E"]\n', "utf-8")
-    (tmp_path / "ruff.toml").write_text('[lint]\nselect = ["F"]\n', "utf-8")
-    assert read_project_ruff_selection(tmp_path).select == ("F",)
-
-    (tmp_path / ".ruff.toml").write_text('[lint]\nselect = ["I"]\n', "utf-8")
-    assert read_project_ruff_selection(tmp_path).select == ("I",)
+# --- the safe-fix subset -----------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -138,14 +83,7 @@ def test_guard_config_ruff_tables_machine_independent(tmp_path: Path) -> None:
             pins=pins, which=lambda _: None, proc=FakeRuff(rules=rules), rule_cache=lambda _: None
         )
         write_pins(tmp_path, deps, engine_version="0.2.0", ruff_codes=["B006", "UP045"])
-        inputs = GuardConfigInputs(
-            hooks=[],
-            hooks_config=HooksConfig(enabled=True),
-            guardrails=GuardrailsConfig(),
-            engine_version="0.2.0",
-            ruff=read_project_ruff_selection(tmp_path),
-        )
-        configs.append(serialize_guard_config(render_guard_config(inputs)))
+        configs.append(compile_guard_config(request_for(tmp_path)).data)
         drops.append(pins.drops)
 
     assert configs[0] == configs[1]
@@ -153,16 +91,12 @@ def test_guard_config_ruff_tables_machine_independent(tmp_path: Path) -> None:
     assert drops == [{}, {"ruff": ["UP045"]}]
 
 
-def test_runtime_reads_the_ruff_table_back() -> None:
-    inputs = GuardConfigInputs(
-        hooks=[],
-        hooks_config=HooksConfig(enabled=True),
-        guardrails=GuardrailsConfig(),
-        engine_version="0.2.0",
-        ruff=RuffSelection(("E", "I", "UP"), ("UP007",), default_select=False),
+def test_runtime_reads_the_ruff_table_back(repo: Path) -> None:
+    (repo / "pyproject.toml").write_text(
+        '[tool.ruff.lint]\nselect = ["E", "I", "UP"]\nignore = ["UP007"]\n', encoding="utf-8"
     )
 
-    parsed = parse_guard_config(serialize_guard_config(render_guard_config(inputs)))
+    parsed = parse_guard_config(compile_guard_config(request_for(repo)).data)
 
     assert isinstance(parsed, GuardConfig)
     assert parsed.tables["ruff"]["safe_fix_select"] == ["I", "UP"]

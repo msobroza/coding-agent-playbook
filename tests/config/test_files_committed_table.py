@@ -31,18 +31,11 @@ _COMMITTED = ".coding-agent-playbook.toml"
 _LOCAL = ".coding-agent-playbook.local.toml"
 
 #: The one module that spells the two names (as ``CONFIG_FILENAME``/``CONFIG_LOCAL_FILENAME``).
-#: Both pins name their modules dotted, so ``module_moves apply`` follows a move.
+#: The pin names it dotted, so ``module_moves apply`` follows a move.
 _HOME = engine_module_file("coding_agent_playbook.config.files")
-#: Engine modules that still spell a name, until the PR named beside each takes it
-#: away; the pin compares exact sets, so a fixed module must leave the list.
-_ALLOWED = frozenset(
-    {
-        # GC-3 (spec B.13): the writer side, from the runtime's schema module
-        engine_module_file("coding_agent_playbook.hooks.guard_config.compile"),
-    }
-)
 #: The hook runtime keeps its own spellings: it must not import the sync-side config/
-#: package (spec B.5.4); GC-1 gives them a home in its stdlib-only schema module.
+#: package (spec B.5.4); GC-1 gives them a home in its stdlib-only schema module, and
+#: the guard_config writer takes them from there (GC-3: its control-plane path class).
 _RUNTIME = "hook_runtime"
 
 
@@ -158,9 +151,9 @@ def test_the_config_filenames_have_one_definition_outside_the_hook_runtime() -> 
     """Spec B.5.6: every module takes ``CONFIG_FILENAME``/``CONFIG_LOCAL_FILENAME`` from
     ``config/files.py`` instead of spelling the names (16 modules did, B.3 item 14).
 
-    The sets are compared whole, so the allowlist only shrinks: a module that stops
-    spelling a name must leave it."""
-    assert _modules_spelling_a_name() == {_HOME, *_ALLOWED}
+    The sets are compared whole: GC-3 emptied the allowlist (the guard_config writer
+    was the last module on it), so a new spelling anywhere fails here."""
+    assert _modules_spelling_a_name() == {_HOME}
 
 
 def test_the_filename_walk_sees_f_string_parts_and_skips_docstrings() -> None:

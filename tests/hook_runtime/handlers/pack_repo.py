@@ -2,10 +2,11 @@
 
 :class:`PackRepo` writes what ``playbook sync`` would for the hooks under test:
 the engine's own ``HOOK.md`` resolved through the real effective view, a
-``guard_config.json`` from the real ``render_guard_config`` (so the §E.0.5
-tables are the rendered ones), and the lockfile entry vouching for it. Tests
-then drive the exact dispatch pipeline through ``simulate.run`` with golden
-payloads relocated into the repository.
+``guard_config.json`` from the real ``compile_guard_config`` (so the §E.0.5
+tables are the compiled ones, and the repo inputs are read from the
+repository itself), and the lockfile entry vouching for it. Tests then drive
+the exact dispatch pipeline through ``simulate.run`` with golden payloads
+relocated into the repository.
 
 An overlay layer is optional: :func:`install_fixture_overlay` turns the data
 under ``tests/fixtures/overlays/<name>/`` into an importable overlay package,
@@ -15,6 +16,7 @@ real §A.6 layer merge (specs/prK-hook-pack.md §E.5: overlay activation).
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import hashlib
 import importlib
@@ -37,14 +39,9 @@ from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateArgs, run
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
-from coding_agent_playbook.hooks.guard_config._tables_quality import read_quality_lint
-from coding_agent_playbook.hooks.guard_config._tables_ruff import read_project_ruff_selection
-from coding_agent_playbook.hooks.guard_config._tables_skills import skill_glob_rows
-from coding_agent_playbook.hooks.guard_config._tables_toolchain import read_toolchain_inputs
-from coding_agent_playbook.hooks.guard_config._tables_verify import repo_layout
 from coding_agent_playbook.hooks.guard_config.compile import (
-    GuardConfigInputs,
-    render_guard_config,
+    GuardConfigRequest,
+    compile_guard_config,
     serialize_guard_config,
 )
 from coding_agent_playbook.hooks.guard_config.inputs import (
@@ -173,6 +170,17 @@ def resolve_engine_hooks(
     return list(view.resolved)
 
 
+def precommit_config(*hook_ids: str) -> str:
+    """A ``.pre-commit-config.yaml`` whose one local repo declares ``hook_ids``.
+
+    Sync renders its playbook ids into ``precommit.playbook_hook_ids``, so a test writes
+    it before :meth:`PackRepo.install_pack`, as a consumer repo holds it before a sync.
+    Example: ``repo.write(".pre-commit-config.yaml", precommit_config("playbook-validate"))``.
+    """
+    hooks = "".join(f"      - id: {hook_id}\n" for hook_id in hook_ids)
+    return f"repos:\n  - repo: local\n    hooks:\n{hooks}"
+
+
 def fixture_output_dirs(root: Path) -> list[str]:
     """The scan dirs of the four fixture adapters, as sync renders them."""
     adapters = {
@@ -210,27 +218,26 @@ class PackRepo(GuardRepo):
         auto_sync: bool = False,
         detect: DetectInputs | None = None,
         prompts: Sequence[Prompt] = (),
-        precommit_ids: Sequence[str] = (),
         wrapper_prefixes: Sequence[str] = (),
         rules: Sequence[Rule] = (),
         extra_tables: Mapping[str, Any] | None = None,
         handler_config: Mapping[str, Mapping[str, Any]] | None = None,
         overlays: Sequence[str] = (),
     ) -> bytes:
-        """Render ``guard_config.json`` for the engine hooks ``hook_ids``; vouch for it in the lock.
+        """Compile ``guard_config.json`` for the engine hooks ``hook_ids``; vouch for it in the lock.
 
         The decision log is switched on (guard-decision-log would, K9), so a test
         can read what the dispatch recorded, e.g. that canary lines are tagged.
         ``auto_sync`` is ``[hooks] auto_sync``; ``detect`` the facts and rows
         (its facts also resolve ``applies_if`` and a linked rule's ``lint_codes``);
         ``prompts`` the rendered prompts (the ``prompts`` table and their
-        ``write_scope``, §E.2/§E.3); ``precommit_ids`` the repo's playbook
-        pre-commit ids; ``wrapper_prefixes`` ``[hooks] wrapper_prefixes``;
+        ``write_scope``, §E.2/§E.3); ``wrapper_prefixes`` ``[hooks] wrapper_prefixes``;
         ``rules`` the rules a ``linked_rule`` names, and the rendered rules whose
-        member globs become skill-nudge's ``skills`` table. The layout (source and test
-        roots), the ``ruff`` table, the toolchain inputs and the committed
-        ``[metrics.ruff_violations]`` are read from the repository, as sync does; ``extra_tables`` replace top-level tables
-        (e.g. a ``stop_gate`` with a typecheck stage). ``handler_config`` sets
+        member globs become skill-nudge's ``skills`` table. The writer reads the rest
+        from this repository, as sync does: write the file first (the pre-commit ids,
+        the source and test roots, the ``ruff`` table, the toolchain hints, the
+        committed ``[metrics.ruff_violations]``). ``extra_tables`` replace top-level
+        tables (e.g. a ``stop_gate`` with a typecheck stage). ``handler_config`` sets
         keys of a hook's rendered handler configs outright, as a repo-local
         override would (no strictest merge: e.g. stop-diff-sweep's ``mode = warn``).
         ``overlays`` are overlay packages layered over the engine definitions
@@ -245,25 +252,21 @@ class PackRepo(GuardRepo):
             facts=detect.facts,
             overlays=overlays,
         )
-        protect = ProtectInputs(rows, fixture_output_dirs(self.root), packages)
-        inputs = GuardConfigInputs(
+        request = GuardConfigRequest(
+            repo_root=self.root,
             hooks=hooks,
             hooks_config=HooksConfig(
                 enabled=True, auto_sync=auto_sync, wrapper_prefixes=tuple(wrapper_prefixes)
             ),
             guardrails=GuardrailsConfig(),
-            engine_version="0.1.0a0",
-            protected=protect,
+            engine_version=ENGINE_VERSION,
+            protected=ProtectInputs(rows, fixture_output_dirs(self.root), packages),
             detect=detect,
             prompts=prompts,
-            precommit_ids=precommit_ids,
-            layout=repo_layout(self.root),
-            ruff=read_project_ruff_selection(self.root),
-            toolchain=read_toolchain_inputs(self.root, detect.facts),
-            quality=read_quality_lint(self.root),
-            skill_globs=skill_glob_rows(rules),
+            rules=rules,
         )
-        document = render_guard_config(inputs)
+        # A copy: the compiled document stays in step with its own canonical bytes.
+        document = copy.deepcopy(dict(compile_guard_config(request).document))
         document.update(extra_tables or {})
         for hook_id, keys in (handler_config or {}).items():
             for handler in document["hooks"][hook_id]["handlers"].values():
