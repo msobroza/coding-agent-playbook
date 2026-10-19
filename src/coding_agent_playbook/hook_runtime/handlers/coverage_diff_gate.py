@@ -195,7 +195,7 @@ class CoverageStage:
     def _scored(self) -> list[str]:
         """The changed paths the gate scores (memoized per Stop); none on a git error."""
         from coding_agent_playbook.evaluators.execution.diff_coverage import scored_changes
-        from coding_agent_playbook.hook_runtime.git import GitError
+        from coding_agent_playbook.hook_runtime.git.safe_git import GitError
 
         if self._changes is None:
             root = Path(self.repo.worktree_root)

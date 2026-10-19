@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime._git_argv import subcommand
-from coding_agent_playbook.hook_runtime.git import SafeGit
+from coding_agent_playbook.hook_runtime.git._argv import subcommand
+from coding_agent_playbook.hook_runtime.git.safe_git import SafeGit
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

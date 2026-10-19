@@ -13,7 +13,7 @@ from typing import Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.git_log import LoggedCommit, parse_commit_log
+from coding_agent_playbook.hook_runtime.git.log import LoggedCommit, parse_commit_log
 from coding_agent_playbook.hook_runtime.judges.commit_cutover import (
     CzPlan,
     committed_since,

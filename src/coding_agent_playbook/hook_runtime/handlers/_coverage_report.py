@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.evaluators.execution.diff_coverage import DiffCoverage
     from coding_agent_playbook.evaluators.types import ScopeDetail
-    from coding_agent_playbook.hook_runtime.git import GitPort
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.state import StateStore
 
 __all__ = [

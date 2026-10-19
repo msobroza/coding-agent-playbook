@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
 
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
-    from coding_agent_playbook.hook_runtime.git import GitPort
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.handlers._drift import DriftFinding
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.lockfile.model import Lockfile
