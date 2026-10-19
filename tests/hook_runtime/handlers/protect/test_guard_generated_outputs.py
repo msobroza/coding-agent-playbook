@@ -2,7 +2,7 @@
 
 Every case runs the shipped ``HOOK.md`` through ``playbook-hook simulate
 pre_tool_use`` (the exact dispatch pipeline) against a synced fixture repo
-whose ``guard_config.json`` is rendered by the real ``render_guard_config``.
+whose ``guard_config.json`` is compiled by the real ``compile_guard_config``.
 The ``ggo_*`` golden payloads (both harnesses) pin the parse, the handler's
 reason and the rendered wire at once. ``FakeProc`` fails the test on any
 spawn: the deny path runs no subprocess.

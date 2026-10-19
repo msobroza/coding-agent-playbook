@@ -42,6 +42,7 @@ from tests.hook_runtime.handlers.pack_repo import (
     PackRepo,
     engine_prompts,
     install_fixture_overlay,
+    precommit_config,
     rows_of,
 )
 
@@ -109,6 +110,7 @@ def synced(tmp_path: Path, make_package: Callable[..., str]) -> tuple[GuardTable
     regulated = install_fixture_overlay(make_package, "regulated", "playbook_rules_regulated")
     repo = PackRepo.create(tmp_path)
     repo.write("pyproject.toml", _RUFF_SELECTION)
+    repo.write(".pre-commit-config.yaml", precommit_config("playbook-validate", "playbook-metrics"))
     data = repo.install_pack(
         _ROUND_TRIP_HOOKS,
         rows=rows_of(
@@ -119,7 +121,6 @@ def synced(tmp_path: Path, make_package: Callable[..., str]) -> tuple[GuardTable
         auto_sync=True,
         detect=_ROUND_TRIP_DETECT,
         prompts=engine_prompts(),
-        precommit_ids=("playbook-validate", "playbook-metrics"),
         overlays=(regulated,),
     )
     cfg = load_guard_config(repo.repo, None, platform="linux", home=None)
