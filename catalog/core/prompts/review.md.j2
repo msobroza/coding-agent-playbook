@@ -65,13 +65,6 @@ A review that misses a bug while complaining about a variable name is a bad revi
 - **Quote a line; don't summarise.** "Line 42's `or {}` shadows the caller's empty dict" is actionable; "this section has issues" is not.
 - **Praise sparingly but specifically.** "The choice to keep the retry budget on the request object is good — it survives reconfig" is useful; "great refactor!" is noise.
 
-## Reference rules
-
-The following project rules apply to anything the code under review must adhere to. Use them as the bar against which you compare what you see.
-
-{{ rule("python-typing") }}
-{{ rule("python-error-handling") }}
-
 ## Output format
 
 A bulleted list of comments, grouped by priority bucket in the order above; omit empty buckets. For each comment include the file and line. End with a one-line verdict: *approve*, *approve with comments*, or *request changes*. Do not modify the code; only review it.
