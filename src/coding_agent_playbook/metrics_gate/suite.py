@@ -14,10 +14,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
-from coding_agent_playbook.evaluators.baseline_git import BaselineGitError
-from coding_agent_playbook.evaluators.execution.diff_coverage import DIFF_COVERAGE
-from coding_agent_playbook.evaluators.execution.project import import_roots
-from coding_agent_playbook.evaluators.types import EvalContext, ToolSetup
+from coding_agent_playbook.grading.baseline_git import BaselineGitError
+from coding_agent_playbook.grading.execution_metrics.diff_coverage import DIFF_COVERAGE
+from coding_agent_playbook.grading.execution_metrics.project import import_roots
+from coding_agent_playbook.grading.types import EvalContext, ToolSetup
 from coding_agent_playbook.metrics_gate.inputs import (
     GIT_PREFIX,
     JSON_PREFIX,
@@ -29,10 +29,10 @@ from coding_agent_playbook.metrics_gate.inputs import (
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.evaluators.baseline_git import BaselineGit
-    from coding_agent_playbook.evaluators.execution.project import ProjectHandle
-    from coding_agent_playbook.evaluators.metric import Metric
-    from coding_agent_playbook.evaluators.types import Measurement
+    from coding_agent_playbook.grading.baseline_git import BaselineGit
+    from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle
+    from coding_agent_playbook.grading.metric import Metric
+    from coding_agent_playbook.grading.types import Measurement
     from coding_agent_playbook.metrics_gate.run import MetricsGateRequest
 
 #: MODULE label the execution metrics key their suite-wide measurements on.

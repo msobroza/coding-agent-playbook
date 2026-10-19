@@ -256,7 +256,7 @@ layers = [
     "config",
     "catalog",
     "detector | lockfile",
-    "(grading)",
+    "grading",
     "generated_output",
     "artifacts",
     "security | toml_writer | (_plugin_registry)",
@@ -275,7 +275,6 @@ exhaustive_ignores = [
     "_guard_config_skills",
     "_guard_config_toolchain",
     "_guard_config_verify",
-    "evaluators",
     "guard_config",
     "hook_registrations",
     "hook_runtime",
@@ -350,13 +349,13 @@ forbidden_modules = [
     "coding_agent_playbook.detector.facts",
     "coding_agent_playbook.detector.predicate",
     "coding_agent_playbook.evals",
-    "coding_agent_playbook.evaluators",
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
     "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
     "coding_agent_playbook.generated_output.write_guard",
+    "coding_agent_playbook.grading",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.hook_registrations",
     "coding_agent_playbook.hook_runtime",
@@ -419,13 +418,13 @@ forbidden_modules = [
     "coding_agent_playbook.detector.facts",
     "coding_agent_playbook.detector.predicate",
     "coding_agent_playbook.evals",
-    "coding_agent_playbook.evaluators",
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
     "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
     "coding_agent_playbook.generated_output.write_guard",
+    "coding_agent_playbook.grading",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.hook_registrations",
     "coding_agent_playbook.hooks",
@@ -445,23 +444,23 @@ forbidden_modules = [
 # The deferred branches (specs/prK-lifecycle-hooks.md §D.1): modules the dispatcher
 # loads only on their branch, pinned per branch by tests/hook_runtime/test_import_budget*.py.
 ignore_imports = [
-    "coding_agent_playbook.hook_runtime.deps -> coding_agent_playbook.evaluators.**",
-    "coding_agent_playbook.hook_runtime.handlers._coverage_report -> coding_agent_playbook.evaluators.**",
+    "coding_agent_playbook.hook_runtime.deps -> coding_agent_playbook.grading.**",
+    "coding_agent_playbook.hook_runtime.handlers._coverage_report -> coding_agent_playbook.grading.**",
     "coding_agent_playbook.hook_runtime.handlers._coverage_report -> coding_agent_playbook.metrics_gate.**",
-    "coding_agent_playbook.hook_runtime.handlers._metrics_pass -> coding_agent_playbook.evaluators.**",
+    "coding_agent_playbook.hook_runtime.handlers._metrics_pass -> coding_agent_playbook.grading.**",
     "coding_agent_playbook.hook_runtime.handlers._metrics_pass -> coding_agent_playbook.metrics_gate.**",
-    "coding_agent_playbook.hook_runtime.handlers.coverage_diff_gate -> coding_agent_playbook.evaluators.**",
+    "coding_agent_playbook.hook_runtime.handlers.coverage_diff_gate -> coding_agent_playbook.grading.**",
     "coding_agent_playbook.hook_runtime.handlers.coverage_diff_gate -> coding_agent_playbook.metrics_gate.**",
-    "coding_agent_playbook.hook_runtime.handlers.docstring_nonregression -> coding_agent_playbook.evaluators.**",
+    "coding_agent_playbook.hook_runtime.handlers.docstring_nonregression -> coding_agent_playbook.grading.**",
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.evals.**",
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.catalog.source",
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.artifacts.**",
-    "coding_agent_playbook.hook_runtime.handlers.quality_metrics -> coding_agent_playbook.evaluators.**",
+    "coding_agent_playbook.hook_runtime.handlers.quality_metrics -> coding_agent_playbook.grading.**",
     "coding_agent_playbook.hook_runtime.handlers.quality_metrics -> coding_agent_playbook.metrics_gate.**",
     # N4: detect() (detector.facts) and evaluate_predicate (detector.predicate) both load on
     # the resync branch only, so one "-> <package>.**" line covers the detector package
     "coding_agent_playbook.hook_runtime.handlers.resync_on_detector_input_change -> coding_agent_playbook.detector.**",
-    "coding_agent_playbook.hook_runtime.stop.suite -> coding_agent_playbook.evaluators.**",
+    "coding_agent_playbook.hook_runtime.stop.suite -> coding_agent_playbook.grading.**",
 ]
 broken_contract_guidance = """
 The hook runtime imports only the stdlib, itself and STDLIB_LEAVES (tests/engine_modules.py).
@@ -473,8 +472,8 @@ An import that runs only on one dispatch branch goes in ignore_imports as
 id = "grading-kernel"
 name = "The grading kernel imports only stdlib leaves"
 type = "forbidden"
-source_modules = ["coding_agent_playbook.evaluators"]
-# Every top-level module except evaluators and STDLIB_LEAVES, then the runtime
+source_modules = ["coding_agent_playbook.grading"]
+# Every top-level module except grading and STDLIB_LEAVES, then the runtime
 # dependencies (tests/engine_modules.py; test_stack_contract_forbids_every_non_leaf_module
 # prints the expected list).
 forbidden_modules = [
@@ -534,7 +533,7 @@ forbidden_modules = [
 ]
 ignore_imports = [
     # A12: the glob grammar moves to artifacts/path_globs.py (after #62)
-    "coding_agent_playbook.evaluators.paths -> coding_agent_playbook.hook_runtime.**",
+    "coding_agent_playbook.grading.paths -> coding_agent_playbook.hook_runtime.**",
 ]
 broken_contract_guidance = """
 The grading kernel is shared by eval tasks and the metrics gate, so it imports neither, nor

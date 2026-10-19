@@ -2,7 +2,7 @@
 
 :func:`run_metrics_gate` discovers the target files, measures them and their
 baseline, optionally runs the suite, and grades everything through one
-:class:`~coding_agent_playbook.evaluators.rubric.Rubric` of metric-backed checks
+:class:`~coding_agent_playbook.grading.rubric.Rubric` of metric-backed checks
 (one per gated metric, built by the shared
 :func:`~coding_agent_playbook.metrics_gate.policy.metric_check` factory). It never
 prints, never parses argv and never imports the ``cli`` package, argparse or jinja2, so
@@ -42,19 +42,19 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.config.files import CONFIG_FILENAME, ConfigFiles
 from coding_agent_playbook.config.schema import ConfigError
-from coding_agent_playbook.evaluators.baseline_git import (
+from coding_agent_playbook.grading.baseline_git import (
     BaselineGitError,
     SubprocessBaselineGit,
     SubprocessGitRunner,
     changed_paths,
 )
-from coding_agent_playbook.evaluators.check import MeasurementSet
-from coding_agent_playbook.evaluators.execution.project import ProjectHandle
-from coding_agent_playbook.evaluators.metric import execution_metrics, static_metrics
-from coding_agent_playbook.evaluators.parse import parse_module
-from coding_agent_playbook.evaluators.rubric import Rubric
-from coding_agent_playbook.evaluators.tool_runner import MemoToolRunner, subprocess_tool_runner
-from coding_agent_playbook.evaluators.types import EvalContext, ToolSetup
+from coding_agent_playbook.grading.check import MeasurementSet
+from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle
+from coding_agent_playbook.grading.metric import execution_metrics, static_metrics
+from coding_agent_playbook.grading.parse import parse_module
+from coding_agent_playbook.grading.rubric import Rubric
+from coding_agent_playbook.grading.tool_runner import MemoToolRunner, subprocess_tool_runner
+from coding_agent_playbook.grading.types import EvalContext, ToolSetup
 from coding_agent_playbook.metrics_gate.config import MetricConfig, parse_metrics_config
 from coding_agent_playbook.metrics_gate.inputs import (
     GIT_PREFIX,
@@ -85,11 +85,11 @@ from coding_agent_playbook.metrics_gate.suite import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from coding_agent_playbook.evaluators.baseline_git import BaselineGit, GitRunner
-    from coding_agent_playbook.evaluators.check import Check
-    from coding_agent_playbook.evaluators.metric import Metric
-    from coding_agent_playbook.evaluators.tool_runner import ToolRunner
-    from coding_agent_playbook.evaluators.types import EvaluationReport, Measurement, Mode
+    from coding_agent_playbook.grading.baseline_git import BaselineGit, GitRunner
+    from coding_agent_playbook.grading.check import Check
+    from coding_agent_playbook.grading.metric import Metric
+    from coding_agent_playbook.grading.tool_runner import ToolRunner
+    from coding_agent_playbook.grading.types import EvaluationReport, Measurement, Mode
 
 #: The name the Rubric carries (stable per run; the gate has one rubric).
 _RUBRIC_NAME = "metrics"

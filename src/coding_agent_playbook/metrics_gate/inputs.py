@@ -14,17 +14,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, GitTimeoutError
-from coding_agent_playbook.evaluators.parse import parse_module
-from coding_agent_playbook.evaluators.paths import matches_any_glob
-from coding_agent_playbook.evaluators.types import EvalContext, ToolSetup
+from coding_agent_playbook.grading.baseline_git import BaselineGitError, GitTimeoutError
+from coding_agent_playbook.grading.parse import parse_module
+from coding_agent_playbook.grading.paths import matches_any_glob
+from coding_agent_playbook.grading.types import EvalContext, ToolSetup
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.evaluators.baseline_git import BaselineGit
-    from coding_agent_playbook.evaluators.metric import Metric
-    from coding_agent_playbook.evaluators.types import Measurement
+    from coding_agent_playbook.grading.baseline_git import BaselineGit
+    from coding_agent_playbook.grading.metric import Metric
+    from coding_agent_playbook.grading.types import Measurement
 
 #: Directory names never recursed into during ``*.py`` discovery.
 IGNORED_DIRS = frozenset(

@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.evaluators.execution.project import (
+from coding_agent_playbook.grading.execution_metrics.project import (
     ProjectHandle,
     RunArtifacts,
     import_roots,

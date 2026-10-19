@@ -52,7 +52,7 @@ from coding_agent_playbook.evals.loader import (
 from coding_agent_playbook.evals.run.harness_runner import capture, materialize
 from coding_agent_playbook.evals.run.scoring import score
 from coding_agent_playbook.evals.validator import validate_tasks
-from coding_agent_playbook.evaluators.types import CheckResult
+from coding_agent_playbook.grading.types import CheckResult
 from tests._catalog import CORE_ROOT, bundled_eval_task_roots
 
 if TYPE_CHECKING:

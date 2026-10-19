@@ -8,14 +8,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evaluators.scope import Determinism
-from coding_agent_playbook.evaluators.types import CheckResult, ScopeDetail
+from coding_agent_playbook.grading.scope import Determinism
+from coding_agent_playbook.grading.types import CheckResult, ScopeDetail
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from coding_agent_playbook.evals.run.harness_runner import TaskResult
-    from coding_agent_playbook.evaluators.types import TrialResult
+    from coding_agent_playbook.grading.types import TrialResult
 
 #: Printed under a report whose scores include an LLM judge's (SPEC §19 Q12).
 _UNCALIBRATED_NOTE = (
@@ -28,7 +28,7 @@ def task_result_to_dict(result: TaskResult) -> dict[str, object]:
     """Stable JSON view of a :class:`TaskResult` (task envelope + the report).
 
     The report is rendered as the list of :class:`CheckResult` rows the
-    :class:`~coding_agent_playbook.evaluators.rubric.Rubric` produced, each with
+    :class:`~coding_agent_playbook.grading.rubric.Rubric` produced, each with
     its flattened per-scope :class:`ScopeDetail` ``subresults``. The flat
     ``findings`` list is kept too (transitional) so existing JSON consumers that
     read ``report.findings`` keep working.

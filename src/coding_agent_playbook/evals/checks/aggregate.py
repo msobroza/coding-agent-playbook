@@ -4,12 +4,12 @@ The first three layers of the eval model grade **one** agent run: ``[gate]``
 (deterministic), ``[rubric]`` (judged), and the derived ``[verdict]``. The
 ``[aggregate]`` layer adds a *fourth* dimension - **reliability across ``k``
 runner trials**. The runner runs ``N = max(k)`` trials, collects one
-:class:`~coding_agent_playbook.evaluators.types.TrialResult` per trial, and grades
+:class:`~coding_agent_playbook.grading.types.TrialResult` per trial, and grades
 the compiled aggregate layer over a context carrying them
-(:attr:`~coding_agent_playbook.evaluators.types.EvalContext.trials`).
+(:attr:`~coding_agent_playbook.grading.types.EvalContext.trials`).
 
 Each handle is an :class:`AggregateCheck` - itself a
-:class:`~coding_agent_playbook.evaluators.check.Check`, so the boolean composers
+:class:`~coding_agent_playbook.grading.check.Check`, so the boolean composers
 (``AllOf``/``AnyOf``/``Not``) and the expression interpreter compose aggregate
 handles exactly like gate/rubric handles. An aggregate check does **no agent
 work**: it reads the already-run trials, so it is ``DETERMINISTIC`` on both axes.
@@ -32,7 +32,7 @@ are the standard sampling probabilities:
 
 The ``0-1`` estimate is graded against an absolute ``warn``/``fail`` floor with
 the *same* higher-is-better strict-below rule the metric checks use
-(:func:`~coding_agent_playbook.evaluators.check._absolute_level`): a score
+(:func:`~coding_agent_playbook.grading.check._absolute_level`): a score
 *strictly below* ``fail`` fails, *strictly below* ``warn`` warns, exactly-on is
 ok. ``passed`` is ``score >= fail`` (no ``fail`` floor ⇒ a pure ``warn`` gate
 still passes - a warn never fails a check; strict promotion is a ``Rubric``-level
@@ -50,18 +50,18 @@ from __future__ import annotations
 from math import comb
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evaluators.check import Check
-from coding_agent_playbook.evaluators.checks.registry import register_check
-from coding_agent_playbook.evaluators.scope import CostTier, Determinism
-from coding_agent_playbook.evaluators.types import (
+from coding_agent_playbook.grading.check import Check
+from coding_agent_playbook.grading.check_registry import register_check
+from coding_agent_playbook.grading.scope import CostTier, Determinism
+from coding_agent_playbook.grading.types import (
     AbsoluteThreshold,
     CheckResult,
     ScopeDetail,
 )
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.evaluators.check import MeasurementSet
-    from coding_agent_playbook.evaluators.types import EvalContext, Level, TrialResult
+    from coding_agent_playbook.grading.check import MeasurementSet
+    from coding_agent_playbook.grading.types import EvalContext, Level, TrialResult
 
 #: The ``over`` axes an aggregate check may reduce (mirrors the validator set).
 _OVER_AXES = frozenset({"gate", "rubric", "verdict"})
@@ -76,7 +76,7 @@ def _trial_boolean(over: str, trial: TrialResult) -> bool | None:
     rubric layer with no judge) — a skipped layer is neutral, it does not vote.
     This is the structural twin of
     :func:`coding_agent_playbook.evals.compile.compiler.over_boolean`, inlined here so the
-    ``evaluators`` package never imports ``evals`` (which would create a cycle).
+    ``grading`` package never imports ``evals`` (which would create a cycle).
     Raises :exc:`ValueError` on an unknown axis, or a layer the report lacks.
     """
     if over == "verdict":
@@ -99,7 +99,7 @@ def _votes(over: str, trials: list[TrialResult]) -> list[bool]:
 class AggregateCheck(Check):
     """Grade a ``pass@k`` / ``pass^k`` estimate over the runner's trials.
 
-    Reads :attr:`~coding_agent_playbook.evaluators.types.EvalContext.trials` (the
+    Reads :attr:`~coding_agent_playbook.grading.types.EvalContext.trials` (the
     runner ran ``N = max(k)`` trials), reduces the selected ``over`` axis to the
     success count ``c`` over the ``n`` trials where that axis ran (a skipped axis
     does not vote), computes the ``0-1`` estimate via the subclass
@@ -239,7 +239,7 @@ def _absolute_level(
     """Absolute warn/fail level + the deciding ``0-1`` cutoff for an estimate.
 
     The same higher-is-better strict-below rule the metric checks use
-    (:func:`coding_agent_playbook.evaluators.check._absolute_level`): a score
+    (:func:`coding_agent_playbook.grading.check._absolute_level`): a score
     *strictly below* ``fail`` is ``fail``, *strictly below* ``warn`` is ``warn``,
     exactly-on the cutoff is ``ok``. A ``None`` bound skips that level. Returned
     cutoff is the ``0-1`` bound that decided (``None`` for ``ok``).

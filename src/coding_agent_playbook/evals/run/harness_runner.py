@@ -3,9 +3,9 @@
 This is the v1.1 activation of the former v2 placeholder (SPEC §15.3). A
 :class:`HarnessRunner` runs a single :class:`~coding_agent_playbook.evals.task.EvalTask`
 against an agent and grades the result through the
-:class:`~coding_agent_playbook.evaluators.metric.Metric` /
-:class:`~coding_agent_playbook.evaluators.check.Check` /
-:class:`~coding_agent_playbook.evaluators.rubric.Rubric` model, so the
+:class:`~coding_agent_playbook.grading.metric.Metric` /
+:class:`~coding_agent_playbook.grading.check.Check` /
+:class:`~coding_agent_playbook.grading.rubric.Rubric` model, so the
 *deterministic* scoring layers (``[expected]`` file checks + ``[metrics]``
 static/execution metrics, including non-regression vs the ``setup/`` baseline)
 are live. **Judged/rubric scoring is deferred to R2**: the runner sets no
@@ -25,7 +25,7 @@ The result model is **Option B** (SPEC §15.3, revised by the R1 brainstorm):
 :class:`TaskResult` carries one :class:`EvaluationReport` rather than the inert
 ``programmatic_checks``/``rubric_scores`` placeholder fields, which had no
 consumers. The old per-check placeholder is retired — a programmatic check is now
-a BOOL :class:`~coding_agent_playbook.evaluators.types.ScopeDetail` row.
+a BOOL :class:`~coding_agent_playbook.grading.types.ScopeDetail` row.
 """
 
 from __future__ import annotations
@@ -45,9 +45,13 @@ from coding_agent_playbook.evals.run.scoring import score
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.evaluators import EvaluationReport, JudgeLike
-    from coding_agent_playbook.evaluators.check import Check
-    from coding_agent_playbook.evaluators.types import CheckResult, TrialResult
+    from coding_agent_playbook.grading.check import Check
+    from coding_agent_playbook.grading.types import (
+        CheckResult,
+        EvaluationReport,
+        JudgeLike,
+        TrialResult,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -94,7 +98,7 @@ class TaskResult:
     pass rate when the aggregate is skipped.
 
     ``trials`` carries every per-trial
-    :class:`~coding_agent_playbook.evaluators.types.TrialResult` (one for ``N=1``);
+    :class:`~coding_agent_playbook.grading.types.TrialResult` (one for ``N=1``);
     ``aggregate`` is the graded ``[aggregate]`` :class:`CheckResult` (``None`` when
     the task has no ``[aggregate]`` block).
     """
@@ -318,9 +322,9 @@ def _grade_aggregate(
     is skipped — neutral — so the task falls back to the trials' own verdicts:
     it passes only if every trial passed, scored by the trial pass rate.
     """
-    from coding_agent_playbook.evaluators.check import MeasurementSet
-    from coding_agent_playbook.evaluators.scheduler import skipped_result
-    from coding_agent_playbook.evaluators.types import EvalContext
+    from coding_agent_playbook.grading.check import MeasurementSet
+    from coding_agent_playbook.grading.scheduler import skipped_result
+    from coding_agent_playbook.grading.types import EvalContext
 
     agg_ctx = EvalContext(module=None, source="", label="aggregate", trials=trials)
     if not aggregate.available(agg_ctx):
@@ -378,7 +382,7 @@ class HarnessRunner(ABC):
         trial's edits): :func:`materialize` → :meth:`_invoke_agent` (the only
         per-assistant step) → :func:`capture` →
         :func:`~coding_agent_playbook.evals.run.scoring.score`. Each yields a
-        :class:`~coding_agent_playbook.evaluators.types.TrialResult` (the per-trial
+        :class:`~coding_agent_playbook.grading.types.TrialResult` (the per-trial
         report + its derived verdict). The prompt is resolved **once** up front
         (identical across trials) via :func:`render_prompt` — so a real runner's
         strict resolution still raises :class:`PromptResolutionError` before any
@@ -440,11 +444,11 @@ class HarnessRunner(ABC):
 
         :func:`materialize` the ``setup/`` baseline → :meth:`_invoke_agent` (with
         the pre-resolved ``prompt``) → :func:`capture` → :func:`score`, then derive
-        the per-trial :class:`~coding_agent_playbook.evaluators.types.TrialResult`
+        the per-trial :class:`~coding_agent_playbook.grading.types.TrialResult`
         (``verdict = report.passed``, the skipped-neutral gate/rubric verdict the
         scorer already wrote).
         """
-        from coding_agent_playbook.evaluators.types import TrialResult
+        from coding_agent_playbook.grading.types import TrialResult
 
         baseline = materialize(task, trial_dir)
         run = self._invoke_agent(prompt, trial_dir)

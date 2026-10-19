@@ -15,9 +15,9 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
-from coding_agent_playbook.evaluators.execution.coverage_xml import CoverageReport
-from coding_agent_playbook.evaluators.execution.junit import JunitSummary
-from coding_agent_playbook.evaluators.execution.project import RunArtifacts
+from coding_agent_playbook.grading.execution_metrics.coverage_xml import CoverageReport
+from coding_agent_playbook.grading.execution_metrics.junit import JunitSummary
+from coding_agent_playbook.grading.execution_metrics.project import RunArtifacts
 from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_runtime.config.guard_config import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.config.guard_tables import GuardTables
