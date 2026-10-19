@@ -19,8 +19,8 @@ from jinja2.sandbox import SandboxedEnvironment
 from coding_agent_playbook import precommit, renderer
 from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.artifacts.rule import Rule
-from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import CORE_ROOT
 
 if TYPE_CHECKING:
@@ -60,7 +60,7 @@ def _rich_repo(root: Path, make_synthetic_repo: SyntheticRepoFactory) -> Path:
 
 def _synced_outputs(repo: Path) -> dict[str, bytes]:
     """Run ``playbook sync`` on ``repo``; return every file but the lockfile."""
-    assert sync_cmd.execute(repo) == 0
+    assert _sync.execute(repo) == 0
     return {
         p.relative_to(repo).as_posix(): p.read_bytes()
         for p in sorted(repo.rglob("*"))

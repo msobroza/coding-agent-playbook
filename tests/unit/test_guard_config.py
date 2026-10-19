@@ -25,7 +25,6 @@ from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
-from coding_agent_playbook.commands._sync_lockfile import build_lockfile
 from coding_agent_playbook.config.tables.hooks import (
     GuardrailsConfig,
     HooksConfig,
@@ -72,9 +71,10 @@ from coding_agent_playbook.security.patterns import (
     SECRET_RULESET_ID,
     SECRET_RULESET_VERSION,
 )
+from coding_agent_playbook.sync._dispatch import build_lockfile
 from tests._catalog import CORE_ROOT, plugin_root
+from tests.hook_runtime.handlers.pack_repo import resolve_engine_hooks
 from tests.hook_samples import resolved_from_disk, resolved_hook, sample_hook
-from tests.hooks.pack_repo import resolve_engine_hooks
 
 if TYPE_CHECKING:
     from pathlib import Path

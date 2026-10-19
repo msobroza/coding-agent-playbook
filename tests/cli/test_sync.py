@@ -20,11 +20,12 @@ import pytest
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
-from coding_agent_playbook.commands import _sync_lockfile
-from coding_agent_playbook.commands import sync as _sync
+from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, Provenance, compute_hash
+from coding_agent_playbook.sync import _dispatch as _sync_lockfile
+from coding_agent_playbook.sync import pipeline as _sync
 from coding_agent_playbook.validation.context import SyncContext
 from tests.fakes import FakeGitClient
 
@@ -49,7 +50,7 @@ def test_sync_writes_continue_rules_and_agents_md(tmp_path, make_synthetic_repo)
         # eval_tasks fails validate, so sync would refuse to write (prK §P P8).
         prompts=[("tidy-up", {"slash": "tidy-up", "body": "Tidy up the code.\n"})],
     )
-    rc = _sync.run(_ns(repo))
+    rc = sync_cmd.run(_ns(repo))
     assert rc == 0
     # Continue adapter must have written its rule file.
     continue_rule = repo / ".continue" / "rules" / "50-style-guide.md"
@@ -73,7 +74,7 @@ def test_sync_stamps_lockfile(tmp_path, make_synthetic_repo):
         tmp_path,
         rules=[("a-rule", "A rule body\n")],
     )
-    rc = _sync.run(_ns(repo))
+    rc = sync_cmd.run(_ns(repo))
     assert rc == 0
     state = FileSystemStateSource(repo_root=repo)
     lockfile = state.load_lockfile()
@@ -92,14 +93,14 @@ def test_sync_stamps_lockfile(tmp_path, make_synthetic_repo):
 def test_sync_uses_cwd_when_repo_root_not_set(tmp_path, make_synthetic_repo, monkeypatch):
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
     monkeypatch.chdir(repo)
-    rc = _sync.run(argparse.Namespace(repo_root=None, check=False))
+    rc = sync_cmd.run(argparse.Namespace(repo_root=None, check=False))
     assert rc == 0
     assert (repo / "AGENTS.md").is_file()
 
 
 def test_sync_prints_summary_line(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
-    rc = _sync.run(_ns(repo))
+    rc = sync_cmd.run(_ns(repo))
     assert rc == 0
     out = capsys.readouterr().out
     assert "Summary:" in out
@@ -110,7 +111,7 @@ def test_sync_no_artifacts_still_succeeds(tmp_path, make_synthetic_repo):
     """A repo with no rules/prompts is valid; sync should succeed and the
     lockfile should be created (possibly empty)."""
     repo = make_synthetic_repo(tmp_path)
-    rc = _sync.run(_ns(repo))
+    rc = sync_cmd.run(_ns(repo))
     assert rc == 0
     state = FileSystemStateSource(repo_root=repo)
     assert state.load_lockfile() is not None
@@ -122,9 +123,9 @@ def test_sync_no_artifacts_still_succeeds(tmp_path, make_synthetic_repo):
 def test_sync_check_clean_repo_returns_zero(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body of x\n")])
     # Build the on-disk artifacts first.
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     capsys.readouterr()  # clear
-    rc = _sync.run(_ns(repo, check=True))
+    rc = sync_cmd.run(_ns(repo, check=True))
     assert rc == 0
     out = capsys.readouterr().out
     assert "No drift" in out
@@ -132,12 +133,12 @@ def test_sync_check_clean_repo_returns_zero(tmp_path, make_synthetic_repo, capsy
 
 def test_sync_check_detects_modified_file(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Original body\n")])
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     # Mutate the rendered file so the next --check sees drift.
     agents_md = repo / "AGENTS.md"
     agents_md.write_text(agents_md.read_text() + "\nMUTATED LINE\n")
     capsys.readouterr()
-    rc = _sync.run(_ns(repo, check=True))
+    rc = sync_cmd.run(_ns(repo, check=True))
     assert rc == 1
     out = capsys.readouterr().out
     assert "Drift detected" in out
@@ -146,11 +147,11 @@ def test_sync_check_detects_modified_file(tmp_path, make_synthetic_repo, capsys)
 
 def test_sync_check_detects_missing_file(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("y", "Body y\n")])
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     # Delete a written file to simulate a drift-by-omission case.
     (repo / "AGENTS.md").unlink()
     capsys.readouterr()
-    rc = _sync.run(_ns(repo, check=True))
+    rc = sync_cmd.run(_ns(repo, check=True))
     assert rc == 1
     out = capsys.readouterr().out
     assert "Missing" in out or "AGENTS.md" in out
@@ -160,7 +161,7 @@ def test_sync_check_detects_missing_file(tmp_path, make_synthetic_repo, capsys):
 
 
 def _sync_and_load_lockfile(repo: Path) -> Lockfile:
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     lockfile = FileSystemStateSource(repo_root=repo).load_lockfile()
     assert lockfile is not None
     return lockfile
@@ -514,7 +515,7 @@ def test_sync_points_claude_and_opencode_commands_at_skills(tmp_path, make_synth
     repo = _member_repo(tmp_path, make_synthetic_repo, ["house-rule"])
     _write_member_rule(repo, "house-rule", "HOUSE RULE BODY\n")
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     files = _generated_prompt_files(repo, "plain")
     block = (
@@ -542,7 +543,7 @@ def test_sync_appends_each_rule_once_to_continue_prompts(tmp_path, make_syntheti
         prompts=[("plain", {"body": "Do it.\n", "includes_rules": ["house-rule", "house-rule"]})],
     )
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     files = _generated_prompt_files(repo, "plain")
     for harness in ("continue", "agent_harness"):
@@ -558,7 +559,7 @@ def test_sync_appends_each_rule_once_to_continue_prompts(tmp_path, make_syntheti
 def test_sync_shipped_review_command_carries_no_rule_body(tmp_path, make_synthetic_repo):
     repo = make_synthetic_repo(tmp_path)
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     review = (repo / ".claude" / "commands" / "review.md").read_text(encoding="utf-8")
     assert "### Typing" not in review
@@ -577,7 +578,7 @@ def test_sync_omits_the_pointer_line_of_a_filtered_rule(tmp_path, make_synthetic
     )
     _write_member_rule(repo, "house-rule", "HOUSE RULE BODY\n")
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     command = _generated_prompt_files(repo, "plain")["claude_code"].read_text(encoding="utf-8")
     assert "read its reference `references/house-rule.md`." in command
@@ -590,7 +591,7 @@ def test_sync_writes_no_block_when_every_included_rule_is_filtered(tmp_path, mak
         repo, "gated-rule", "GATED\n", applies_if="applies_if:\n  has_framework: [fastapi]\n"
     )
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     files = _generated_prompt_files(repo, "plain")
     command = files["claude_code"].read_text(encoding="utf-8")
@@ -613,7 +614,7 @@ def test_sync_refuses_a_prompt_calling_rule_and_writes_nothing(
     )
     before = sorted(p.relative_to(repo) for p in repo.rglob("*"))
 
-    assert _sync.run(_ns(repo)) == 1
+    assert sync_cmd.run(_ns(repo)) == 1
 
     err = capsys.readouterr().err
     assert (
@@ -638,7 +639,7 @@ def test_sync_migrates_legacy_opencode_commands_to_frontmatter_first(tmp_path, m
     (commands / "tidy-up.md").write_text(legacy.format(s=SENTINEL), encoding="utf-8")
     (commands / "gone.md").write_text(legacy.format(s=SENTINEL), encoding="utf-8")
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     tidy_up = (commands / "tidy-up.md").read_text(encoding="utf-8")
     assert tidy_up.startswith("---\ndescription:")

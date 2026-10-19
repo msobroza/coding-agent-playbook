@@ -7,7 +7,7 @@ through these helpers, which first refuse a FIFO, a socket or a block device at
 the path; a directory fails the write with ``IsADirectoryError`` (for
 :func:`copy_output` too, where ``shutil.copy2`` would copy *into* it). The
 refusal, :class:`NotRegularFileError`, is an ``OSError`` that ``playbook sync``
-reports like any other blocker (``commands/_output_blockers.py``, SPEC §12.2).
+reports like any other blocker (``sync/_output_blockers.py``, SPEC §12.2).
 :func:`refuse_special_file` guards the reads that come first, of ``.gitignore``
 and ``.claude/settings.json``: reading a FIFO blocks too, and with ``reading``
 a character device is refused there as well (``/dev/zero`` never ends). Like

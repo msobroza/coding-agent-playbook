@@ -245,7 +245,7 @@ containers = ["coding_agent_playbook"]
 layers = [
     "cli",
     "commands",
-    "(sync)",
+    "sync",
     "validation",
     "(agent_harness) | evals | precommit",
     "adapters",
@@ -278,7 +278,6 @@ exhaustive_ignores = [
     "_guard_config_verify",
     "evaluators",
     "gate_scan",
-    "git_client",
     "git_env",
     "guard_config",
     "harness",
@@ -350,7 +349,6 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
     "coding_agent_playbook.generated_output.symlinks",
-    "coding_agent_playbook.git_client",
     "coding_agent_playbook.git_env",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
@@ -363,6 +361,7 @@ forbidden_modules = [
     "coding_agent_playbook.renderer",
     "coding_agent_playbook.rule_registry",
     "coding_agent_playbook.skills",
+    "coding_agent_playbook.sync",
     "coding_agent_playbook.toml_writer",
     "coding_agent_playbook.validation",
     "jinja2",
@@ -412,7 +411,6 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
     "coding_agent_playbook.generated_output.symlinks",
-    "coding_agent_playbook.git_client",
     "coding_agent_playbook.git_env",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
@@ -424,6 +422,7 @@ forbidden_modules = [
     "coding_agent_playbook.renderer",
     "coding_agent_playbook.rule_registry",
     "coding_agent_playbook.skills",
+    "coding_agent_playbook.sync",
     "coding_agent_playbook.toml_writer",
     "coding_agent_playbook.validation",
     "jinja2",
@@ -497,7 +496,6 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
     "coding_agent_playbook.generated_output.symlinks",
-    "coding_agent_playbook.git_client",
     "coding_agent_playbook.git_env",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
@@ -510,6 +508,7 @@ forbidden_modules = [
     "coding_agent_playbook.renderer",
     "coding_agent_playbook.rule_registry",
     "coding_agent_playbook.skills",
+    "coding_agent_playbook.sync",
     "coding_agent_playbook.toml_writer",
     "coding_agent_playbook.validation",
     "jinja2",
@@ -550,10 +549,6 @@ modules = [
     "coding_agent_playbook.commands.twins.scan_sinks",
     "coding_agent_playbook.commands.validate",
     "coding_agent_playbook.commands.validate_harness",
-]
-ignore_imports = [
-    # A6: init calls sync.pipeline.execute, not the sync command (after #62)
-    "coding_agent_playbook.commands.init -> coding_agent_playbook.commands.sync",
 ]
 broken_contract_guidance = """
 Shared code goes below commands (a domain package) or into a commands/_helper module that
@@ -599,8 +594,8 @@ ignore_imports = [
     # N21: becomes hook_runtime/harness/payload.py
     "coding_agent_playbook.hook_runtime.dispatch -> coding_agent_playbook.hook_runtime.harness._payload",
     # A7: becomes generated_output/write_guard.py (after #62)
-    "coding_agent_playbook.commands._sync_hooks -> coding_agent_playbook.adapters._owned_files",
-    "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._owned_files",
+    "coding_agent_playbook.sync._hook_outputs -> coding_agent_playbook.adapters._owned_files",
+    "coding_agent_playbook.sync.pipeline -> coding_agent_playbook.adapters._owned_files",
     # A7: becomes generated_output/source_files.py (after #62)
     "coding_agent_playbook.validation.checks -> coding_agent_playbook.adapters._skill_sources",
     "coding_agent_playbook.guard_config -> coding_agent_playbook.adapters._skill_sources",

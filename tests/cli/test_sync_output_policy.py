@@ -16,9 +16,10 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.cli.parser import build_parser
-from coding_agent_playbook.commands import sync as _sync
+from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.generated_output.gitignore import BLOCK_END, BLOCK_START
+from coding_agent_playbook.sync import pipeline as _sync
 from tests.conftest import _DEFAULT_CONFIG
 from tests.fakes import FakeGitClient
 
@@ -302,7 +303,7 @@ def test_cli_parses_check_staged_and_rejects_both_modes() -> None:
 def test_run_check_staged_outside_a_repo_exits_zero(repo: Path) -> None:
     """``run()`` wires the real client; outside a git repo the guard is silent."""
     args = argparse.Namespace(repo_root=str(repo), check=False, check_staged=True)
-    assert _sync.run(args) == 0
+    assert sync_cmd.run(args) == 0
 
 
 # --------------------------------------------------------------------------- #

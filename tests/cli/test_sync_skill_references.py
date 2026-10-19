@@ -19,9 +19,10 @@ import pytest
 
 from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_MD_PATH, CLAUDE_RULES_PATH
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
-from coding_agent_playbook.commands import sync as _sync
+from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
+from coding_agent_playbook.sync import pipeline as _sync
 from tests.fakes import FakeGitClient, pre_gate_validate
 from tests.member_skill_samples import (
     skill_tree_bytes,
@@ -97,7 +98,7 @@ def test_sync_writes_member_references_to_every_skill_root_byte_identically(
 ) -> None:
     repo = _repo(tmp_path, make_synthetic_repo)
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     trees = [skill_tree_bytes(repo / root / _SKILL) for root in NATIVE_SKILL_ROOTS]
     assert all(tree == trees[0] for tree in trees[1:])
@@ -136,7 +137,7 @@ def test_agents_md_and_claude_rules_file_hold_only_always_rules_and_where_sectio
     """Neither composite file carries a member rule; both carry one identical Where section."""
     repo = _repo(tmp_path, make_synthetic_repo)
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     agents_md = (repo / "AGENTS.md").read_text(encoding="utf-8")
     rules_file = (repo / CLAUDE_RULES_PATH).read_text(encoding="utf-8")
@@ -162,7 +163,7 @@ def test_sync_warns_when_no_enabled_adapter_delivers_member_rules(
     )
     repo = _repo(tmp_path, make_synthetic_repo, config_text=config)
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     err_lines = capsys.readouterr().err.splitlines()
     # python-coding and python-tooling are core's: each has ungated members, so every
@@ -180,11 +181,11 @@ def test_sync_gates_the_skill_off_and_removes_pristine_output_when_no_member_is_
     tmp_path: Path, make_synthetic_repo: Callable[..., Path]
 ) -> None:
     repo = _repo(tmp_path, make_synthetic_repo, ungated=False)
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     assert all((repo / root / _SKILL / "SKILL.md").is_file() for root in NATIVE_SKILL_ROOTS)
 
     _drop_click(repo)
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     for root in NATIVE_SKILL_ROOTS:
         assert not (repo / root / _SKILL).exists(), root
@@ -195,10 +196,10 @@ def test_sync_removes_the_reference_of_a_deactivated_member(
     tmp_path: Path, make_synthetic_repo: Callable[..., Path]
 ) -> None:
     repo = _repo(tmp_path, make_synthetic_repo)
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     _drop_click(repo)
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     for root in NATIVE_SKILL_ROOTS:
         tree = skill_tree_bytes(repo / root / _SKILL)
@@ -212,7 +213,7 @@ def test_lockfile_records_member_references_with_rule_provenance(
 ) -> None:
     repo = _repo(tmp_path, make_synthetic_repo)
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     entries = _lock_entries(repo)
     # NATIVE_SKILL_ROOTS lists the roots of these three adapters, in this order.
@@ -230,15 +231,15 @@ def test_sync_check_is_clean_after_sync(
     tmp_path: Path, make_synthetic_repo: Callable[..., Path], capsys: pytest.CaptureFixture[str]
 ) -> None:
     repo = _repo(tmp_path, make_synthetic_repo)
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     capsys.readouterr()
 
-    assert _sync.run(_ns(repo, check=True)) == 0
+    assert sync_cmd.run(_ns(repo, check=True)) == 0
     assert "No drift" in capsys.readouterr().out
 
     reference = repo / NATIVE_SKILL_ROOTS[0] / _SKILL / "references" / f"{_UNGATED}.md"
     reference.write_text("edited by hand\n", encoding="utf-8")
-    assert _sync.run(_ns(repo, check=True)) == 1
+    assert sync_cmd.run(_ns(repo, check=True)) == 1
     assert f"{NATIVE_SKILL_ROOTS[0]}/{_SKILL}/references/{_UNGATED}.md" in capsys.readouterr().out
 
 
@@ -248,7 +249,7 @@ def test_gitignore_covers_member_references_through_their_skill_directory(
     """``[output] commit = false`` (the default): one managed line per skill directory (6.7)."""
     repo = _repo(tmp_path, make_synthetic_repo)
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     lines = (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
     for root in NATIVE_SKILL_ROOTS:

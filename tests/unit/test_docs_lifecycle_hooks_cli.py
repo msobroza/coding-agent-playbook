@@ -33,7 +33,6 @@ from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
 from coding_agent_playbook.cli.parser import _SUBCOMMANDS, build_parser
-from coding_agent_playbook.commands._sync_hooks import HOOKS_NOTICE
 from coding_agent_playbook.commands.twins._ci_commit_convention import PR_TITLE_ENV
 from coding_agent_playbook.commands.twins.ci import CI_STEPS
 from coding_agent_playbook.hook_registrations import (
@@ -48,6 +47,7 @@ from coding_agent_playbook.hook_runtime.stop.stages import STOP_STAGE_ORDER
 from coding_agent_playbook.lockfile.model import ProvenanceKind
 from coding_agent_playbook.metrics_gate.policy import METRIC_FAMILIES, OPT_IN_METRICS
 from coding_agent_playbook.precommit import render_fresh_pre_commit
+from coding_agent_playbook.sync._hook_outputs import HOOKS_NOTICE
 from coding_agent_playbook.validation.context import config_less_notes
 from tests.unit.test_docs_lifecycle_hooks_spec import _spec_section, _spec_text
 
@@ -246,7 +246,7 @@ def test_section_14_4_documents_scoped_entries() -> None:
     assert [k for k in typing.get_args(ProvenanceKind) if f"`{k}`" not in lock] == []
 
 
-@pytest.mark.parametrize("folder", ["hook_runtime", "hooks", "security"])
+@pytest.mark.parametrize("folder", ["hook_runtime", "hook_runtime/handlers", "security"])
 def test_section_16_documents_the_hook_test_layout(folder: str) -> None:
     assert (_ROOT / "tests" / folder).is_dir()
     assert f"tests/{folder}/" in _spec_section("## 16. Testing strategy", "## 17. Security")
