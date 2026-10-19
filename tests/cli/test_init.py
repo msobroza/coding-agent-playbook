@@ -11,6 +11,7 @@ import pytest
 import yaml
 
 from coding_agent_playbook.cli import main
+from coding_agent_playbook.commands import _init_answers, _init_config_plan
 from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.commands._init_adapters import DEFAULT_ADAPTERS
 from coding_agent_playbook.config.model import Config, OutputConfig, ProjectMeta, StorageConfig
@@ -213,7 +214,7 @@ def test_prompt_multi_select_parses_comma_separated_indices(monkeypatch, capsys)
     """``1,3`` selects choices at 1-based indices 1 and 3."""
     answers = iter(["1,3"])
     monkeypatch.setattr("builtins.input", lambda *_a, **_k: next(answers))
-    result = _init._prompt_multi_select(
+    result = _init_answers._prompt_multi_select(
         "pick", ["alpha", "beta", "gamma", "delta"], defaults=["alpha"]
     )
     assert result == ["alpha", "gamma"]
@@ -227,7 +228,7 @@ def test_prompt_multi_select_falls_back_to_defaults_on_non_integer(monkeypatch):
     function falls back to ``defaults`` rather than raising."""
     answers = iter(["nonsense,more-nonsense"])
     monkeypatch.setattr("builtins.input", lambda *_a, **_k: next(answers))
-    result = _init._prompt_multi_select(
+    result = _init_answers._prompt_multi_select(
         "pick", ["alpha", "beta", "gamma"], defaults=["alpha", "beta"]
     )
     assert result == ["alpha", "beta"]
@@ -238,7 +239,9 @@ def test_prompt_multi_select_falls_back_to_defaults_on_out_of_range(monkeypatch)
     all-out-of-range reply falls back to ``defaults``."""
     answers = iter(["99,0,-1"])
     monkeypatch.setattr("builtins.input", lambda *_a, **_k: next(answers))
-    result = _init._prompt_multi_select("pick", ["alpha", "beta", "gamma"], defaults=["gamma"])
+    result = _init_answers._prompt_multi_select(
+        "pick", ["alpha", "beta", "gamma"], defaults=["gamma"]
+    )
     assert result == ["gamma"]
 
 
@@ -247,7 +250,9 @@ def test_prompt_multi_select_mixed_valid_and_invalid_keeps_valid(monkeypatch):
     (defaults are NOT mixed in)."""
     answers = iter(["1,nope,99,2"])
     monkeypatch.setattr("builtins.input", lambda *_a, **_k: next(answers))
-    result = _init._prompt_multi_select("pick", ["alpha", "beta", "gamma"], defaults=["gamma"])
+    result = _init_answers._prompt_multi_select(
+        "pick", ["alpha", "beta", "gamma"], defaults=["gamma"]
+    )
     assert result == ["alpha", "beta"]
 
 
@@ -819,7 +824,7 @@ def test_apply_answers_replaces_answered_fields_and_keeps_the_rest(
         user_choices={"docstring_style": "numpy"},
         output=committed_output,
     )
-    answers = _init._Answers(
+    answers = _init_answers.Answers(
         name="new",
         kind="python-application",
         description="",
@@ -827,7 +832,7 @@ def test_apply_answers_replaces_answered_fields_and_keeps_the_rest(
         overlays=[],
         hooks=None,
     )
-    updated = _init._apply_answers(committed, answers, {"fresh": True})
+    updated = _init_config_plan._apply_answers(committed, answers, {"fresh": True})
     assert updated == Config(
         schema_version=1,
         project=ProjectMeta("new", "python-application"),
