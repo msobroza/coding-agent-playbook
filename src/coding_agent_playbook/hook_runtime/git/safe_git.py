@@ -48,9 +48,9 @@ from coding_agent_playbook.hook_runtime.proc import ProcTimeout
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from coding_agent_playbook.artifacts.path_globs import GlobSet
     from coding_agent_playbook.hook_runtime.deps import ProcPort
     from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
-    from coding_agent_playbook.hook_runtime.globs import GlobSet
     from coding_agent_playbook.hook_runtime.proc import ProcResult
     from coding_agent_playbook.hook_runtime.state.store import StateStore
 

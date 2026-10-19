@@ -28,8 +28,8 @@ from coding_agent_playbook.hook_runtime.state.store import iso_utc
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
+    from coding_agent_playbook.artifacts.path_globs import GlobSet
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
-    from coding_agent_playbook.hook_runtime.globs import GlobSet
     from coding_agent_playbook.hook_runtime.shell.segments import Segment
     from coding_agent_playbook.security.pii import PiiConfig
 

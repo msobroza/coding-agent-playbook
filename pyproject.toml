@@ -306,6 +306,7 @@ type = "forbidden"
 # tests/engine_modules.py STDLIB_LEAVES: the only engine modules the two stacks import.
 source_modules = [
     "coding_agent_playbook.artifacts.path_classes",
+    "coding_agent_playbook.artifacts.path_globs",
     "coding_agent_playbook.catalog.roots",
     "coding_agent_playbook.detector.pep503",
     "coding_agent_playbook.detector.pyproject_deps",
@@ -530,10 +531,6 @@ forbidden_modules = [
     "jinja2",
     "packaging",
     "yaml",
-]
-ignore_imports = [
-    # A12: the glob grammar moves to artifacts/path_globs.py (after #62)
-    "coding_agent_playbook.grading.paths -> coding_agent_playbook.hook_runtime.**",
 ]
 broken_contract_guidance = """
 The grading kernel is shared by eval tasks and the metrics gate, so it imports neither, nor

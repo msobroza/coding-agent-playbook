@@ -203,7 +203,7 @@ Eval tasks (Section 6.5) are intentionally **not** part of the sync flow. They l
   - **Engine upgrades never inject executable hooks.** An absent `[hooks]` table, or one without `enabled = true`, means no hook output: no settings entries, launcher, shim or advisory text; `playbook init` asks, and `playbook sync` prints one notice line.
   - **Hook outputs are only `deny | ask | context | none`.** Never `allow`, an input rewrite, or an HTTP, async, prompt or agent handler (validate rules H5 and H8, backed by the dispatcher's closed-key renderers). Only engine builtins may hold the `mutates_edited_file` capability (post-edit formatting).
   - **One registration per harness event**, fanned out in-process, plus at most one async, non-deciding, output-free `PostToolUse` registration for audit-only handlers.
-  - **The hot path is import-light.** The dispatcher imports nothing outside `hook_runtime.*`, `security.*`, `artifacts.path_classes` and the standard library, and starts no subprocess for a call that touches neither git nor a pragma.
+  - **The hot path is import-light.** The dispatcher imports nothing outside `hook_runtime.*`, `security.*`, the stdlib leaves `artifacts.path_classes` and `artifacts.path_globs`, and the standard library, and starts no subprocess for a call that touches neither git nor a pragma.
   - **Exit codes.** The launcher exits 0 or 2 (1 only under `--strict-launch`); `dispatch` exits 0 or 10 (`DENY_EXIT`); a raw 2 is never a deny; the OpenCode shim throws only on exit 10 or a `deny` decision.
   - **Rendered hook outputs are machine-independent.** No absolute path, stat signature or `$HOME` path in any file sync renders; the interpreter and tool pins live under the git dir.
   - **`.local.toml` never carries policy.** `[hooks]`, `[guardrails]`, `[metrics]` and `[hooks.commit_convention]` written there are ignored (§7.2).
@@ -307,7 +307,7 @@ coding-agent-playbook/
 │   │   ├── rule.py, prompt.py, skill.py, hook.py   # one module per artifact
 │   │   ├── frontmatter.py                  # the markdown + YAML frontmatter format they share
 │   │   ├── identity.py                     # artifact_id_of, template_source: the id and template name (stdlib)
-│   │   └── hook_schema.py, hook_frontmatter.py, member_reference.py, path_classes.py   # stdlib leaves
+│   │   └── hook_schema.py, hook_frontmatter.py, member_reference.py, path_classes.py, path_globs.py   # stdlib leaves
 │   ├── skills/                             # skill composition (§6.3.3): document, membership, naming
 │   ├── config/                             # the consumer config (Section 7)
 │   │   ├── model.py                        # Config dataclass and the [output] parser

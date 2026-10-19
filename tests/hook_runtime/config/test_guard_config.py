@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.artifacts.hook_schema import HookMatcher
+from coding_agent_playbook.artifacts.path_globs import fold_key
 from coding_agent_playbook.hook_runtime.config.guard_config import (
     ConfigFault,
     GuardConfig,
@@ -27,7 +28,6 @@ from coding_agent_playbook.hook_runtime.config.guard_config import (
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL, LOCKFILE_REL
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, RepoInfo
-from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
 from coding_agent_playbook.hook_runtime.dispatch.policy import ENGINE_DEADLINE_CAP_MS
 from coding_agent_playbook.hook_runtime.shell.parse import ShellConfig
 from coding_agent_playbook.hook_runtime.state.store import StateStore

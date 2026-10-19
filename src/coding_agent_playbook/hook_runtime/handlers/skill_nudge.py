@@ -26,15 +26,15 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Final, TypeGuard
 
+from coding_agent_playbook.artifacts.path_globs import compile_globs
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.globs import compile_globs
 from coding_agent_playbook.hook_runtime.registry import register_hook_handler
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from coding_agent_playbook.artifacts.path_globs import GlobSet
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.globs import GlobSet
     from coding_agent_playbook.hook_runtime.registry import ConfigKey, HandlerContext
 
 __all__ = [

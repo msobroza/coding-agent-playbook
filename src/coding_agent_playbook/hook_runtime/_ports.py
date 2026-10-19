@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
+    from coding_agent_playbook.artifacts.path_globs import GlobSet
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps, TrustPort
     from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
     from coding_agent_playbook.hook_runtime.git.parse import DiffLines
@@ -24,7 +25,6 @@ if TYPE_CHECKING:
         GitPort,
         LoggedCommit,
     )
-    from coding_agent_playbook.hook_runtime.globs import GlobSet
     from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = ["LazyGit", "open_trust_store"]

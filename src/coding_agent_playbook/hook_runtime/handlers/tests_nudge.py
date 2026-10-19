@@ -23,10 +23,10 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.artifacts.path_globs import fold_key
 from coding_agent_playbook.hook_runtime._public_api import new_public_symbols
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
-from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.stop.alone import run_alone
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult
