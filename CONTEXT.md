@@ -124,6 +124,9 @@ The engine's record, in a consumer repo, of every generated output it wrote, wit
 
 ### Checks and grading
 
+**Validation**:
+The checks `playbook validate` and the sync gate run over canonical artifacts before anything is written.
+
 **Guard twin**:
 A CLI command that runs the same judge as a guard hook, so the check also runs outside an agent session, in CI or pre-commit.
 
