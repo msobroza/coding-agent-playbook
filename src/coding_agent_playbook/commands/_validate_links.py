@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _iter_md_files
 from coding_agent_playbook.commands._validation import ValidationError
+from coding_agent_playbook.config.files import CONFIG_FILENAME
 from coding_agent_playbook.config.tables.links import LinksConfig, parse_links_config
 from coding_agent_playbook.links import classify_link, extract_markdown_links
 
@@ -28,8 +29,6 @@ if TYPE_CHECKING:
 # not rendered artifacts, so they stay out of scope (specs/prL-markdown-links.md).
 _LINK_CHECKED_SUBDIRS = ("rules", "prompts", "skills", "hooks")
 
-_CONFIG_FILENAME = ".coding-agent-playbook.toml"
-
 
 def load_links_config(repo_root: Path) -> tuple[LinksConfig, list[ValidationError]]:
     """Parse the ``[links]`` table of ``.coding-agent-playbook.toml``.
@@ -42,7 +41,7 @@ def load_links_config(repo_root: Path) -> tuple[LinksConfig, list[ValidationErro
         >>> load_links_config(Path("/no/such/repo"))
         (LinksConfig(allowed_domains=()), [])
     """
-    config_path = repo_root / _CONFIG_FILENAME
+    config_path = repo_root / CONFIG_FILENAME
     if not config_path.is_file():
         return LinksConfig(), []
     try:

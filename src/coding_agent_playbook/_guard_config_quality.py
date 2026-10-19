@@ -7,17 +7,19 @@ thresholds are ``[metrics.ruff_violations] config``, rendered as per-invocation
 the twins. An override is left out when the project's own ruff config selects
 the code it tunes, because it would also move the threshold of the project's
 CI-failing rule. ``[metrics]`` is team policy, so only the committed file is
-read (never ``.local.toml``); a bad table falls back to the defaults, which
-``playbook validate`` and ``playbook metrics`` report.
+read (``ConfigFiles.committed_table``, never ``.local.toml``); a bad table falls
+back to the defaults, which ``playbook metrics`` reports. Sync reads it after its
+adapters wrote, so it cannot refuse here (specs/prT-package-layout.md B.14
+question 2: a follow-up makes ``playbook validate`` refuse the value).
 """
 
 from __future__ import annotations
 
-import tomllib
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook.config.files import ConfigFiles
 from coding_agent_playbook.hook_runtime._ruff import selector_matches
 
 if TYPE_CHECKING:
@@ -35,7 +37,6 @@ __all__ = [
 ]
 
 QUALITY_HOOK_ID: Final = "clean-code-metrics-nonregression"
-_CONFIG_FILE: Final = ".coding-agent-playbook.toml"
 _DEFAULT_CODES: Final = ("C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915")
 #: ruff setting -> the rule whose threshold it sets (ruff 0.15 settings reference).
 THRESHOLD_CODES: Final[Mapping[str, str]] = MappingProxyType(
@@ -74,10 +75,10 @@ def read_quality_lint(repo_root: Path) -> QualityLint:
     from coding_agent_playbook.metrics_gate.config import parse_metrics_config
 
     try:
-        with (repo_root / _CONFIG_FILE).open("rb") as handle:
-            table = tomllib.load(handle).get("metrics", {})
-        config = parse_metrics_config(table if isinstance(table, dict) else {})
-    except (OSError, tomllib.TOMLDecodeError, ValueError):
+        config = parse_metrics_config(dict(ConfigFiles(repo_root).committed_table("metrics")))
+    except (OSError, ValueError):  # ConfigError is a ValueError
+        # Sync reads this after its adapters wrote, so it cannot refuse here: a bad
+        # [metrics] keeps the defaults (spec B.14 question 2; validate will refuse it).
         return QualityLint()
     return QualityLint(
         codes=tuple(config.ruff_families.get("quality", ())),

@@ -182,6 +182,43 @@ def test_commit_convention_skipped_without_commitizen(tmp_path: Path) -> None:
     assert (runner.calls, git.calls) == ([], [])
 
 
+def _convention_output(root: Path, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
+    """Run only the commit-convention row against a fake merge base; ``(exit, stdout)``."""
+    git = FakeGit(default_branch_name="origin/main", merge_bases={("origin/main", "HEAD"): "abc"})
+    args = build_parser().parse_args(
+        ["ci", "--steps", "commit-convention", "--repo-root", str(root)]
+    )
+    code = ci.run(args, runner=FakeCiStepRunner(), git=git, which={"cz": _CZ}.get, env={})
+    return code, capsys.readouterr().out
+
+
+def test_a_committed_hooks_that_is_not_a_table_fails_the_step_naming_the_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Fail closed (spec B.5.5): the row runs and reports the file, where a committed
+    ``hooks = "x"`` used to read as no convention and skip the step."""
+    (tmp_path / ".coding-agent-playbook.toml").write_text('hooks = "x"\n', encoding="utf-8")
+
+    code, out = _convention_output(tmp_path, capsys)
+
+    assert code == 1
+    expected = "[hooks.commit_convention]: .coding-agent-playbook.toml: [hooks] must be a table"
+    assert f"{expected}, got 'x'" in out
+
+
+def test_an_unreadable_committed_config_fails_the_step_naming_the_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The text every command prints for a file that does not decode (spec B.5.5)."""
+    (tmp_path / "pyproject.toml").write_text("[tool.commitizen]\nname = 'cz'\n", "utf-8")
+    (tmp_path / ".coding-agent-playbook.toml").write_text("not [toml\n", encoding="utf-8")
+
+    code, out = _convention_output(tmp_path, capsys)
+
+    assert code == 1
+    assert "[hooks.commit_convention]: .coding-agent-playbook.toml: invalid TOML: " in out
+
+
 def test_commit_convention_bad_cutover_fails_the_step(
     tmp_path: Path, real_git: Callable[..., str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

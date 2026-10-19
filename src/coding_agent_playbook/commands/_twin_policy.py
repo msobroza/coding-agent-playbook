@@ -13,13 +13,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook.config.files import ConfigFiles
 from coding_agent_playbook.security.commit_trailers import GitPolicy
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 __all__ = [
-    "CONFIG_FILE",
     "DEPENDENCY_HOOK",
     "GIT_POLICY_HOOK",
     "commit_trailer_policy",
@@ -28,7 +28,6 @@ __all__ = [
     "twin_hook_config",
 ]
 
-CONFIG_FILE: Final = ".coding-agent-playbook.toml"
 #: The hook whose trailer rows ``check-commit-trailers`` runs.
 GIT_POLICY_HOOK: Final = "git-commit-push-policy-guard"
 #: The hook whose allowlist and index rules ``check-deps`` applies.
@@ -77,7 +76,7 @@ def commit_trailer_policy(repo_root: Path) -> GitPolicy:
         >>> commit_trailer_policy(Path(".")).has_rows  # doctest: +SKIP
         False
     """
-    if not (repo_root / CONFIG_FILE).is_file():
+    if not ConfigFiles(repo_root).has_committed():
         return GitPolicy()
     return GitPolicy.from_config(twin_hook_config(repo_root, GIT_POLICY_HOOK) or {})
 
@@ -90,7 +89,7 @@ def dependency_twin_config(repo_root: Path) -> dict[str, Any]:
         >>> dependency_twin_config(Path("."))  # doctest: +SKIP
         {'index_mode': 'ask', 'allowlist': [], 'required_index': ''}
     """
-    if not (repo_root / CONFIG_FILE).is_file():
+    if not ConfigFiles(repo_root).has_committed():
         return {}
     return twin_hook_config(repo_root, DEPENDENCY_HOOK) or {}
 

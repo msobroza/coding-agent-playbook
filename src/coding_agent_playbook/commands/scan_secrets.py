@@ -43,6 +43,7 @@ from coding_agent_playbook.commands._secret_scope import (
     staged_scope,
     worktree_scope,
 )
+from coding_agent_playbook.config.files import CONFIG_FILENAME, CommittedDocument
 from coding_agent_playbook.config.tables.hooks import parse_guardrails_config
 from coding_agent_playbook.hook_runtime.git import GitError
 from coding_agent_playbook.security.files import user_home
@@ -68,7 +69,6 @@ if TYPE_CHECKING:
 
 __all__ = ["SecretHit", "SecretReport", "load_path_policy", "pii_option", "run", "scan_scope"]
 
-CONFIG_FILE: Final = ".coding-agent-playbook.toml"
 #: Larger working-tree files are noted, never read (a CLI may be slow, not unbounded).
 MAX_FILE_BYTES: Final = 32 * 1024 * 1024
 ADVICE: Final = SECRET_ADVICE
@@ -173,8 +173,11 @@ def load_path_policy(git: GitPort, base: str | None) -> PathPolicy:
         >>> load_path_policy(git, None) == DEFAULT_PATH_POLICY  # doctest: +SKIP
         True
     """
-    raw = None if base is None else git.show(base, CONFIG_FILE)
-    secrets = parse_guardrails_config(_guardrails_table(raw)).secrets
+    if base is None:  # before the first commit nothing is committed: the engine catalog alone
+        return DEFAULT_PATH_POLICY
+    raw = git.show(base, CONFIG_FILENAME)
+    committed = CommittedDocument.decode(raw, where=f"{CONFIG_FILENAME} at {base}")
+    secrets = parse_guardrails_config(committed.data.get("guardrails")).secrets
     return DEFAULT_PATH_POLICY.extended(deny=secrets.extra_globs, allow=secrets.allow_paths)
 
 
@@ -223,19 +226,6 @@ def _scope(git: SafeGit, args: argparse.Namespace, repo_root: Path) -> SecretSco
     if args.worktree:
         return worktree_scope(git)
     return range_scope(git, args.rev_range)
-
-
-def _guardrails_table(raw: bytes | None) -> object:
-    """The ``[guardrails]`` table of a committed config (``None``: absent)."""
-    import tomllib
-
-    if raw is None:
-        return None
-    try:
-        doc = tomllib.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
-        raise ValueError(f"{CONFIG_FILE} at the base revision is not valid TOML: {exc}") from None
-    return doc.get("guardrails")
 
 
 def _secret_paths(

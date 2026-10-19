@@ -237,6 +237,18 @@ def test_malformed_guardrails_at_base_exit_2(
     assert "extra_globs" in capsys.readouterr().err
 
 
+def test_a_base_config_that_is_not_toml_exits_2_naming_the_revision(
+    repo: Repo, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo.commit("bad", {".coding-agent-playbook.toml": "[guardrails.secrets\n"})
+
+    assert repo.scan("--worktree") == 2
+
+    captured = capsys.readouterr()
+    assert captured.err.startswith("error: .coding-agent-playbook.toml at HEAD: invalid TOML: ")
+    assert captured.out == ""
+
+
 #: Valid example-format values (checksums hold), assembled so this file holds none whole.
 IBAN: Final = "GB33" + "BUKB" + "2020" + "1555" + "5555" + "55"
 SSN: Final = "123" + "-45-" + "6789"

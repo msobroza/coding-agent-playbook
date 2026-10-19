@@ -61,7 +61,6 @@ from coding_agent_playbook.commands._ci_commit_convention import (
     run_cz_commands,
 )
 from coding_agent_playbook.commands._ci_policy import (
-    CONFIG_FILE,
     commit_convention_configured,
     dependency_policy_set,
     metrics_run_tests,
@@ -70,6 +69,7 @@ from coding_agent_playbook.commands._ci_policy import (
 )
 from coding_agent_playbook.commands._ci_report import json_report, log_step, summary_text
 from coding_agent_playbook.commands._git_base import open_git, resolve_merge_base
+from coding_agent_playbook.config.files import CONFIG_FILENAME
 from coding_agent_playbook.hook_runtime.git import GitError
 
 if TYPE_CHECKING:
@@ -197,7 +197,7 @@ class StepRecord:
 
 def _sync_check_skip(ctx: CiContext) -> str | None:
     if ctx.output_committed is None:
-        return f"no {CONFIG_FILE}"
+        return f"no {CONFIG_FILENAME}"
     if not ctx.output_committed:
         return "[output] commit = false: generated output is not committed, so CI has none"
     return None

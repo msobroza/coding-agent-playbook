@@ -194,3 +194,37 @@ def test_malformed_consumer_table_exits_2(repo: Repo, capsys: pytest.CaptureFixt
 
     assert repo.scan("--range", "HEAD~1..HEAD") == 2
     assert "added_line_patterns" in capsys.readouterr().err
+
+
+def test_a_base_config_that_is_not_toml_exits_2_naming_the_revision(
+    repo: Repo, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo.commit("policy", {".coding-agent-playbook.toml": "[hooks.gate-weakening-guard\n"})
+    repo.commit("more", {"src/pkg/a.py": "x = 3\n"})
+
+    assert repo.scan("--range", "HEAD~1..HEAD") == 2
+
+    captured = capsys.readouterr()
+    assert captured.err.startswith("error: .coding-agent-playbook.toml at HEAD~1: invalid TOML: ")
+    assert captured.out == ""
+
+
+@pytest.mark.parametrize(
+    ("config", "message"),
+    [
+        ('hooks = "x"\n', "[hooks] must be a table, got 'x'"),
+        ('[hooks]\ngate-weakening-guard = "x"\n', "[hooks.gate-weakening-guard] must be a table"),
+    ],
+    ids=["hooks", "hook-table"],
+)
+def test_a_base_hooks_value_that_is_not_a_table_exits_2_naming_it(
+    repo: Repo, capsys: pytest.CaptureFixture[str], config: str, message: str
+) -> None:
+    """Stricter on purpose (spec B.5.5): a base ``hooks = "x"`` read as no policy."""
+    repo.commit("policy", {".coding-agent-playbook.toml": config})
+    repo.commit("more", {"src/pkg/a.py": "x = 3\n"})
+
+    assert repo.scan("--range", "HEAD~1..HEAD") == 2
+    assert capsys.readouterr().err.startswith(
+        f"error: .coding-agent-playbook.toml at HEAD~1: {message}"
+    )

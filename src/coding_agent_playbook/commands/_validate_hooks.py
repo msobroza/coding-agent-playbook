@@ -27,7 +27,7 @@ from coding_agent_playbook.commands._validation import (
     ValidationError,
     jinja_syntax_error,
 )
-from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FILENAME
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig
 from coding_agent_playbook.hook_policy import (
     HookCheckContext,
@@ -146,7 +146,7 @@ def _parsed_policy(ctx: SyncContext) -> tuple[HooksConfig | None, list[Validatio
 
     ``[guardrails]`` is parsed only to report it; the set-level rules read ``[hooks]``.
     """
-    where = _config_where(ctx, FileSystemStateSource._CONFIG_FILENAME)
+    where = _config_where(ctx, CONFIG_FILENAME)
     errors: list[ValidationError] = []
     hooks_cfg = _parsed_or_reported(ctx.policy_tables.hooks_config, where, errors)
     _parsed_or_reported(ctx.policy_tables.guardrails_config, where, errors)
@@ -181,8 +181,8 @@ def _set_inputs(
         local_keys=tables.local_keys,
         overlays_enabled=tuple(ctx.config.overlays_enabled),
         engine_package=engine_package_of(ctx.artifact_source),
-        config_where=_config_where(ctx, FileSystemStateSource._CONFIG_FILENAME),
-        local_where=_config_where(ctx, FileSystemStateSource._CONFIG_LOCAL_FILENAME),
+        config_where=_config_where(ctx, CONFIG_FILENAME),
+        local_where=_config_where(ctx, CONFIG_LOCAL_FILENAME),
         local_policy_is_error=local_policy_is_error,
         handlers=handlers,
     )

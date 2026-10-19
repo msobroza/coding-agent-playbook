@@ -11,11 +11,12 @@ from __future__ import annotations
 import tomllib
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook.config.files import CONFIG_FILENAME, ConfigFiles
+
 if TYPE_CHECKING:
     from pathlib import Path
 
 __all__ = [
-    "CONFIG_FILE",
     "commit_convention_configured",
     "cutover_date_value",
     "dependency_policy_set",
@@ -24,7 +25,6 @@ __all__ = [
     "trailer_rows_configured",
 ]
 
-CONFIG_FILE: Final = ".coding-agent-playbook.toml"
 _PYPROJECT: Final = "pyproject.toml"
 _LOAD_ERRORS: Final = (ValueError, OSError, KeyError, TypeError)
 
@@ -34,12 +34,11 @@ def output_committed(repo_root: Path) -> bool | None:
 
     Example: ``output_committed(Path("/no/such/repo")) is None``.
     """
-    if not (repo_root / CONFIG_FILE).is_file():
+    files = ConfigFiles(repo_root)
+    if not files.has_committed():
         return None
-    from coding_agent_playbook.config.files import FileSystemStateSource
-
     try:
-        return FileSystemStateSource(repo_root=repo_root).load_config().commit_output
+        return files.load().commit_output
     except _LOAD_ERRORS:
         return True  # sync --check then reports the broken config itself
 
@@ -89,37 +88,32 @@ def metrics_run_tests(repo_root: Path) -> bool:
 def commit_convention_configured(repo_root: Path) -> bool:
     """``[tool.commitizen]`` in ``pyproject.toml`` or ``[hooks.commit_convention]`` is set (§F.5).
 
-    ``True`` when either file does not parse.
+    ``True`` when either file does not parse, or when the committed ``hooks`` is
+    not a table: the step then runs and reports the file.
 
     Example: ``commit_convention_configured(Path("/no/such/repo")) is False``.
     """
     try:
         pyproject = _toml(repo_root / _PYPROJECT)
-        config = _toml(repo_root / CONFIG_FILE)
-    except (OSError, ValueError):
+        hooks = ConfigFiles(repo_root).committed_table("hooks")
+    except (OSError, ValueError):  # ConfigError is a ValueError
         return True  # the step then reports the unreadable file itself
     commitizen = _table(_table(pyproject, "tool"), "commitizen")
-    convention = _table(config, "hooks").get("commit_convention")
-    return bool(commitizen) or isinstance(convention, dict)
+    return bool(commitizen) or isinstance(hooks.get("commit_convention"), dict)
 
 
 def cutover_date_value(repo_root: Path) -> object:
     """The raw ``[hooks.commit_convention] cutover_date`` (``None`` when unset).
 
     Raises ``ValueError`` naming the file when it does not parse or the table is
-    not a table.
+    not a table (``ConfigError``, from ``ConfigFiles.committed_table``).
 
     Example: ``cutover_date_value(repo_root) == "2026-10-15"``.
     """
     try:
-        config = _toml(repo_root / CONFIG_FILE)
+        convention = ConfigFiles(repo_root).committed_table("hooks", "commit_convention")
     except OSError as exc:
-        raise ValueError(f"cannot read {CONFIG_FILE}: {exc}") from exc
-    convention = _table(config, "hooks").get("commit_convention", {})
-    if not isinstance(convention, dict):
-        raise ValueError(
-            f"[hooks.commit_convention] in {CONFIG_FILE} must be a table, got {convention!r}"
-        )
+        raise ValueError(f"cannot read {CONFIG_FILENAME}: {exc}") from exc
     return convention.get("cutover_date")
 
 

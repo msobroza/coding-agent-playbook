@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands._git_base import open_git, resolve_merge_base
+from coding_agent_playbook.config.files import CONFIG_FILENAME, CommittedDocument
 from coding_agent_playbook.gate_scan import (
     ConfigPair,
     ScanPolicy,
@@ -42,7 +43,6 @@ if TYPE_CHECKING:
 
 __all__ = ["ScanRange", "load_policy", "resolve_range", "run", "scan_range"]
 
-CONFIG_FILE: Final = ".coding-agent-playbook.toml"
 HOOK_ID: Final = "gate-weakening-guard"
 _FIX_HINT: Final = "Fix the root cause, or justify each line inline with a trailing `# <reason>`."
 
@@ -111,8 +111,9 @@ def load_policy(git: GitPort, base: str, repo_root: Path) -> ScanPolicy:
         ('src',)
     """
     roots = ("src",) if (repo_root / "src").is_dir() else ("",)
-    table = _hook_table(git.show(base, CONFIG_FILE))
-    return policy_from_table(table, ScanPolicy(source_roots=roots))
+    raw = git.show(base, CONFIG_FILENAME)
+    committed = CommittedDocument.decode(raw, where=f"{CONFIG_FILENAME} at {base}")
+    return policy_from_table(committed.table("hooks", HOOK_ID), ScanPolicy(source_roots=roots))
 
 
 def scan_range(git: GitPort, span: ScanRange, policy: ScanPolicy) -> ScanReport:
@@ -137,23 +138,6 @@ def _symmetric_base(git: GitPort, left: str, right: str) -> str:
     if sha is None:
         raise ValueError(f"--range {left}...{right}: the two share no history")
     return sha
-
-
-def _hook_table(raw: bytes | None) -> dict[str, object]:
-    """The ``[hooks.gate-weakening-guard]`` table of a committed config, ``{}`` when absent."""
-    import tomllib
-
-    if raw is None:
-        return {}
-    try:
-        doc = tomllib.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
-        raise ValueError(f"{CONFIG_FILE} at the range base is not valid TOML: {exc}") from None
-    hooks = doc.get("hooks", {})
-    table = hooks.get(HOOK_ID, {}) if isinstance(hooks, dict) else {}
-    if not isinstance(table, dict):
-        raise ValueError(f"[hooks.{HOOK_ID}] = {table!r} in {CONFIG_FILE}: expected a table")
-    return table
 
 
 def _decoded(raw: bytes | None) -> str | None:

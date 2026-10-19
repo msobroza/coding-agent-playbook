@@ -37,7 +37,7 @@ from coding_agent_playbook.config.committed import (
     plan_committed_update,
     plan_first_config,
 )
-from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FILENAME, ConfigFiles
 from coding_agent_playbook.config.model import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.renderer import build_environment, render_artifact_body
@@ -77,7 +77,7 @@ _HOOK_INSTALL_COMMAND = (
     "pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge"
 )
 
-_GITIGNORE_LINE = ".coding-agent-playbook.local.toml"
+_GITIGNORE_LINE = CONFIG_LOCAL_FILENAME
 
 _HOOKS_QUESTION = "Enable assistant lifecycle hooks?"
 _YES = frozenset({"y", "yes"})
@@ -193,11 +193,11 @@ def _collect_answers(args: argparse.Namespace) -> _Answers:
     )
 
 
-def _plan_config(state: FileSystemStateSource, repo_root: Path, answers: _Answers) -> ConfigRewrite:
+def _plan_config(files: ConfigFiles, repo_root: Path, answers: _Answers) -> ConfigRewrite:
     """What ``init`` will write to ``.coding-agent-playbook.toml``, checked; nothing written.
 
     An existing file is rewritten from **itself alone**: never from
-    ``load_config``, whose merge with the gitignored
+    ``ConfigFiles.load``, whose merge with the gitignored
     ``.coding-agent-playbook.local.toml`` (SPEC §7.2) would commit one engineer's
     personal overrides — adapters, overlays, ``[user_choices]``, ``[output]`` —
     for the whole team. On a re-run:
@@ -224,18 +224,18 @@ def _plan_config(state: FileSystemStateSource, repo_root: Path, answers: _Answer
     — including one missing a required key (``[engine] version``…) that only the
     local file supplies: init neither copies that personal value into the
     committed file nor guesses a team-wide one. Last, the planned config with
-    the local file merged on top must load (``FileSystemStateSource.preview_config``):
+    the local file merged on top must load (``ConfigFiles.preview``):
     only init's final sync would otherwise load it, after the committed files
     were rewritten. Both paths are ``config.committed``'s, which ``check
     --refresh`` shares.
     """
     detector_cache = detector_cache_table(detect(repo_root))
     hooks = answers["hooks"]
-    if not state.has_committed_config():
+    if not files.has_committed():
         fresh = _fresh_config(answers, detector_cache)
-        return plan_first_config(state, _with_hooks_answer(fresh, hooks))
+        return plan_first_config(files, _with_hooks_answer(fresh, hooks))
     return plan_committed_update(
-        state,
+        files,
         lambda committed: _with_hooks_answer(
             _apply_answers(committed, answers, detector_cache), hooks
         ),
@@ -307,13 +307,13 @@ def _apply_answers(
     )
 
 
-def _write_local_config(repo_root: Path) -> Path:
+def _write_local_config(files: ConfigFiles) -> Path:
     """Create an empty ``.coding-agent-playbook.local.toml`` if missing.
 
     The file is gitignored so personal/local overrides don't pollute the
     repo. The empty file is enough for the load path to find it.
     """
-    target = repo_root / FileSystemStateSource._CONFIG_LOCAL_FILENAME
+    target = files.local_path
     if not target.is_file():
         target.write_text("[user_choices]\n", encoding="utf-8")
     return target
@@ -482,7 +482,7 @@ def _overlay_lists_to_check(
     """
     lists = [(list(answers["overlays"]), "--overlays")]
     if "overlays_enabled" in local:
-        origin = f"overlays_enabled in {FileSystemStateSource._CONFIG_LOCAL_FILENAME}"
+        origin = f"overlays_enabled in {CONFIG_LOCAL_FILENAME}"
         lists.append((list(local["overlays_enabled"]), origin))
     return lists
 
@@ -545,8 +545,8 @@ def run(args: argparse.Namespace) -> int:
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     answers = _collect_answers(args)
     answers["overlays"], deprecated_flags = canonical_overlay_list(answers["overlays"])
-    state = FileSystemStateSource(repo_root=repo_root)
-    local = state.load_local_overrides()
+    files = ConfigFiles(repo_root)
+    local = files.local_overrides()
     catalog_root()  # a broken install raises here: never a half-initialized repo
     refused = [
         _refuse_unusable_overlays(overlays, origin)
@@ -555,17 +555,17 @@ def run(args: argparse.Namespace) -> int:
     if any(refused):
         return 2
     _warn_deprecated_flag_overlays(deprecated_flags)
-    plan = _plan_config(state, repo_root, answers)
+    plan = _plan_config(files, repo_root, answers)
 
     # Nothing is written above this line.
-    config = plan.save(state)
-    local_path = _write_local_config(repo_root)
+    config = plan.save(files)
+    local_path = _write_local_config(files)
     gitignore_path = _append_to_gitignore(repo_root)
     pre_commit_path, pre_commit_messages = _write_pre_commit(
         repo_root, output_commit=config.commit_output
     )
 
-    print(f"Wrote {FileSystemStateSource._CONFIG_FILENAME}")
+    print(f"Wrote {CONFIG_FILENAME}")
     print(f"Wrote {local_path.name}")
     print(f"Updated {gitignore_path.name}")
     print(f"Updated {pre_commit_path.name}")
