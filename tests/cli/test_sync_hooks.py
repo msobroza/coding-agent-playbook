@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.cli import main
-from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.lockfile.model import Lockfile
+from coding_agent_playbook.sync import pipeline as _sync
 from tests.fakes import FakeGitClient, pre_gate_validate
 
 if TYPE_CHECKING:

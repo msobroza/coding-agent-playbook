@@ -5,7 +5,7 @@ bodies, prompt bodies, every rule a prompt lists in ``includes_rules``
 (pre-rendered — the Continue and agent_harness adapters repeat that render for
 their ``## Reference rules`` appendix inside ``write_prompt``, after earlier
 files are on disk), and the advisory body of every on hook (resolved
-by ``_sync_hooks``, specs/prK-lifecycle-hooks.md §C.1.3). So a template the Jinja
+by ``_hook_outputs``, specs/prK-lifecycle-hooks.md §C.1.3). So a template the Jinja
 sandbox rejects aborts the sync with nothing written and the offending file
 named (:class:`~coding_agent_playbook.renderer.TemplateSecurityError`,
 specs/prK-lifecycle-hooks.md §P1).
@@ -31,7 +31,6 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.artifacts.identity import template_source
-from coding_agent_playbook.commands._sync_hooks import SyncHooks, resolve_sync_hooks
 from coding_agent_playbook.detector.predicate import filter_applies_if
 from coding_agent_playbook.hook_policy.guardrails_skill import (
     compose_guardrails_skill,
@@ -46,6 +45,7 @@ from coding_agent_playbook.rule_registry import build_prompt_environment
 from coding_agent_playbook.skills.document import DescriptionOverflowError, emitted_frontmatter
 from coding_agent_playbook.skills.membership import compose_skills, undelivered_member_warning
 from coding_agent_playbook.skills.naming import skill_id_of
+from coding_agent_playbook.sync._hook_outputs import SyncHooks, resolve_sync_hooks
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -185,7 +185,7 @@ def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
 
     Inputs (``applies_if`` file checks included) are read from the real repo
     through ``ctx``. Raises :class:`TemplateSecurityError` (or, for a malformed
-    ``[hooks]`` table, ``_sync_hooks.HookPolicyError``, and for a composed
+    ``[hooks]`` table, ``_hook_outputs.HookPolicyError``, and for a composed
     description over 300 chars, :class:`SkillDescriptionOverflowError`) before
     any adapter has written a file. Skills come from
     ``skills.membership.compose_skills``; when member rules are active but no

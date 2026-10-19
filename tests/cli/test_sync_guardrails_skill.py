@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.artifacts.frontmatter import format_frontmatter, split_frontmatter
-from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
+from coding_agent_playbook.sync import pipeline as _sync
 from tests.cli.hook_repo import CONFIG, HOOKS_ON, SETTINGS, hook_deps, make_hook_repo
 from tests.fakes import FakeGitClient
 

@@ -1,4 +1,4 @@
-"""Unit tests for lockfile-based orphan ownership (``commands/_sync_orphans.py``)."""
+"""Unit tests for lockfile-based orphan ownership (``sync/_leftovers.py``)."""
 
 from __future__ import annotations
 
@@ -9,15 +9,15 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.commands._output_locations import OutputLocations
-from coding_agent_playbook.commands._sync_orphans import (
+from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
+from coding_agent_playbook.sync._leftovers import (
     OrphanPlan,
+    OutputLocations,
     delete_orphans,
     entry_paths,
     find_orphans,
     plan_orphans,
 )
-from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
 from tests.fakes import FakeGitClient
 
 

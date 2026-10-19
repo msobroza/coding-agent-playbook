@@ -1,4 +1,4 @@
-"""What stops a write of sync output (``commands/_output_blockers.py``, SPEC §12.2).
+"""What stops a write of sync output (``sync/_output_blockers.py``, SPEC §12.2).
 
 Regressions: a dangling ``.claude/commands -> ../tools/cc``, a file (or a link
 to one) at ``.claude/commands`` or ``.continue``, a directory at ``AGENTS.md``
@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from coding_agent_playbook._output_io import NotRegularFileError
-from coding_agent_playbook.commands._output_blockers import (
+from coding_agent_playbook.sync._output_blockers import (
     OutputBlocker,
     blocker_in,
     report_blocker,

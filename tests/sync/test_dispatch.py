@@ -1,4 +1,4 @@
-"""Hook dispatch and lockfile stamping in ``commands/_sync_lockfile.py`` (prK §C.1.3, §B.6).
+"""Hook dispatch and lockfile stamping in ``sync/_dispatch.py`` (prK §C.1.3, §B.6).
 
 Every adapter is told the real repo (the input root) and the prior lockfile
 before any write, receives hooks after skills and before ``finalize``, and
@@ -15,14 +15,14 @@ import pytest
 
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
-from coding_agent_playbook.commands._sync_lockfile import (
+from coding_agent_playbook.config.tables.hooks import HooksConfig
+from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, Provenance, compute_hash
+from coding_agent_playbook.sync._dispatch import (
     HookDispatch,
     _skill_write_provenance,
     build_lockfile,
     dispatch_to_adapters,
 )
-from coding_agent_playbook.config.tables.hooks import HooksConfig
-from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, Provenance, compute_hash
 from tests.hook_samples import resolved_hook
 from tests.member_skill_samples import sample_member_reference, sample_member_skill
 

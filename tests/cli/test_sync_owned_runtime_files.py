@@ -18,12 +18,12 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 import pytest
 
 from coding_agent_playbook._sentinel import sentinel_line
-from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.hook_registrations import (
     LAUNCHER_PATH,
     OPENCODE_SHIM_PATH,
     render_claude_launcher,
 )
+from coding_agent_playbook.sync import pipeline as _sync
 from tests.cli.hook_repo import CONFIG, hook_deps, make_hook_repo, tree
 from tests.fakes import FakeGitClient
 from tests.hook_samples import write_hook

@@ -1,4 +1,4 @@
-"""Tests for the read-only git interface (``coding_agent_playbook.git_client``).
+"""Tests for the read-only git interface (``coding_agent_playbook.sync.git_client``).
 
 The real-git tests build throwaway repos in ``tmp_path`` (cheap, local) under
 the ``hermetic_git_env`` fixture and are skipped when git is not on PATH.
@@ -15,7 +15,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.git_client import GIT_TIMEOUT_SECONDS, GitClient, SubprocessGitClient
+from coding_agent_playbook.sync.git_client import (
+    GIT_TIMEOUT_SECONDS,
+    GitClient,
+    SubprocessGitClient,
+)
 from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:

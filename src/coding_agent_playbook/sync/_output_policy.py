@@ -1,6 +1,6 @@
 """Output-policy glue for ``playbook sync`` (SPEC §12.2/§12.3, ``[output] commit``).
 
-``commands/sync.py`` owns the render pipeline; this module owns what happens to
+``sync/pipeline.py`` owns the render pipeline; this module owns what happens to
 its output under the commit policy:
 
 - write mode keeps the managed ``.gitignore`` block in step (or removes it for
@@ -29,7 +29,6 @@ from coding_agent_playbook._file_identity import FileSet
 from coding_agent_playbook._output_io import is_character_device, refuse_special_file
 from coding_agent_playbook._symlinks import link_leaving, real_path
 from coding_agent_playbook.adapters.skill_dirs.writer import swap_blocker
-from coding_agent_playbook.commands._output_blockers import write_blocker
 from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FILENAME
 from coding_agent_playbook.gitignore import (
     GITIGNORE_FILENAME,
@@ -41,13 +40,14 @@ from coding_agent_playbook.gitignore import (
     relative_posix_paths,
     remove_managed_block,
 )
+from coding_agent_playbook.sync._output_blockers import write_blocker
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, Sequence
     from typing import TextIO
 
     from coding_agent_playbook.adapters.base import Adapter
-    from coding_agent_playbook.git_client import GitClient
+    from coding_agent_playbook.sync.git_client import GitClient
 
 #: ``sync --check`` wording for an orphan (specs/prK-lifecycle-hooks.md §P P2).
 ORPHAN_HINT = "    Orphaned generated file; run 'playbook sync' to remove."

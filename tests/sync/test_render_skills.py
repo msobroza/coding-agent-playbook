@@ -13,12 +13,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.commands._sync_render import (
+from coding_agent_playbook.skills.document import DescriptionOverflowError
+from coding_agent_playbook.sync.render import (
     SkillDescriptionOverflowError,
     render_artifacts,
     report_description_overflow,
 )
-from coding_agent_playbook.skills.document import DescriptionOverflowError
 from coding_agent_playbook.validation.context import SyncContext
 from tests.member_skill_samples import write_repo_member_rule, write_repo_member_skill
 
