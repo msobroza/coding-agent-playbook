@@ -2,6 +2,7 @@
 id: prompt-output-contract-on-stop
 name: Honour the prompt's output format
 description: The output-contract Stop stage; while a playbook prompt with an output contract is active, its final answer must match it.
+summary: When a playbook prompt defines an output format (such as `/review`'s verdict line), end in exactly that format.
 version: 1
 tier: opt-in
 priority: 40

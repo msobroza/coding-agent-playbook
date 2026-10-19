@@ -2,6 +2,7 @@
 id: clean-code-metrics-nonregression
 name: No metrics regressions at Stop
 description: The quality-metrics Stop stage; measure touched Python files against HEAD with the repo's static metrics gate and ruff's complexity budgets, plus a post-edit companion on changed lines.
+summary: Do not make code you touched more complex than at `HEAD`; check with `playbook metrics --baseline git:HEAD`.
 version: 1
 tier: default
 priority: 60
