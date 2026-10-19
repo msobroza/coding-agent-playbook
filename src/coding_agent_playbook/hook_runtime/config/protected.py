@@ -37,7 +37,11 @@ from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.generated_output.sentinel import SENTINEL, file_has_sentinel
 from coding_agent_playbook.hook_runtime.config.reader import Malformed, TableReader
-from coding_agent_playbook.hook_runtime.config.schema import LOCKFILE_REL
+from coding_agent_playbook.hook_runtime.config.schema import (
+    HOOKS_OUTPUT_DIR,
+    LOCKFILE_REL,
+    RESOURCE_ROOT_ID_FORMAT,
+)
 from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
 from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs
 
@@ -62,11 +66,12 @@ __all__ = [
 
 #: The engine's own layer (its bundled ``catalog/core/``); resolvable without
 #: ``machine.json``, from this package. The id keeps its ``resources`` spelling
-#: (``_guard_config_protect.resource_root_ids``).
-ENGINE_RESOURCES_ID: Final = "pkg:coding_agent_playbook/resources"
-#: Used when ``guard_config.json`` predates the table (``guard_config.HOOK_ARTIFACTS``).
+#: (``_guard_config_protect.resource_root_ids`` formats the same way).
+ENGINE_RESOURCES_ID: Final = RESOURCE_ROOT_ID_FORMAT.format(package="coding_agent_playbook")
+#: Used when ``guard_config.json`` predates the table (``guard_config.HOOK_ARTIFACTS``);
+#: kept apart from the writer's copy until a schema decision retires it (GC-D7, F-G1).
 DEFAULT_HOOK_ARTIFACTS: Final = (
-    ".coding-agent-playbook/hooks/",
+    HOOKS_OUTPUT_DIR,
     ".claude/hooks/playbook/",
     ".opencode/plugins/playbook-hooks.js",
 )
