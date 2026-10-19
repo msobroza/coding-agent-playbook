@@ -338,6 +338,8 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime.decision` | `coding_agent_playbook.hook_runtime.dispatch.decision` | A10 |
 | `coding_agent_playbook.hook_runtime.deps` | `coding_agent_playbook.hook_runtime.dispatch.deps` | A11 |
 | `coding_agent_playbook.hook_runtime.dispatch` | `coding_agent_playbook.hook_runtime.dispatch.run` | A10 |
+| `coding_agent_playbook.hook_runtime.dispatch.paths.FOLDING_PLATFORMS` | `coding_agent_playbook.artifacts.path_globs.FOLDING_PLATFORMS` | A12 |
+| `coding_agent_playbook.hook_runtime.dispatch.paths.fold_key` | `coding_agent_playbook.artifacts.path_globs.fold_key` | A12 |
 | `coding_agent_playbook.hook_runtime.doctor` | `coding_agent_playbook.hook_runtime.diagnostics.doctor` | N20 |
 | `coding_agent_playbook.hook_runtime.escape` | `coding_agent_playbook.hook_runtime.dispatch.escape` | A11 |
 | `coding_agent_playbook.hook_runtime.event` | `coding_agent_playbook.hook_runtime.dispatch.event` | A10 |
@@ -345,6 +347,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime.git_log` | `coding_agent_playbook.hook_runtime.git.log` | N18 |
 | `coding_agent_playbook.hook_runtime.git_range` | `coding_agent_playbook.hook_runtime.git.range` | N18 |
 | `coding_agent_playbook.hook_runtime.gitargv` | `coding_agent_playbook.hook_runtime.shell.git_command` | N17 |
+| `coding_agent_playbook.hook_runtime.globs` | `coding_agent_playbook.artifacts.path_globs` | A12 |
 | `coding_agent_playbook.hook_runtime.handlers._cli_words` | `coding_agent_playbook.hook_runtime.judges.cli_words` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers._control_plane_paths.CONTROL_PLANE` | `coding_agent_playbook.hook_runtime.config.schema.CONTROL_PLANE` | GC-1 |
 | `coding_agent_playbook.hook_runtime.handlers._control_plane_text.PRECOMMIT_ID_RE` | `coding_agent_playbook.hook_runtime.config.schema.PRECOMMIT_ID_RE` | GC-1 |

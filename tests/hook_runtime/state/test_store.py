@@ -19,9 +19,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.artifacts.path_globs import compile_globs
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, RepoInfo, ToolClass
 from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo, normalize_path
-from coding_agent_playbook.hook_runtime.globs import compile_globs
 from coding_agent_playbook.hook_runtime.state.ledger import (
     LEDGER_MAX_LINES,
     Ledger,

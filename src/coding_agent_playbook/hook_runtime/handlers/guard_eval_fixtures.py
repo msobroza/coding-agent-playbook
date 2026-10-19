@@ -25,10 +25,10 @@ import posixpath
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS, task_path
+from coding_agent_playbook.artifacts.path_globs import compile_globs
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import register_hook_handler
-from coding_agent_playbook.hook_runtime.globs import compile_globs
 from coding_agent_playbook.hook_runtime.handlers._targets import (
     file_write_paths,
     shell_write_targets,
@@ -38,10 +38,10 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from coding_agent_playbook.artifacts.path_classes import TaskPath
+    from coding_agent_playbook.artifacts.path_globs import GlobSet
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.globs import GlobSet
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["FROZEN_REASON", "guard_eval_fixtures"]
