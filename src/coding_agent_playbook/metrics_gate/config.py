@@ -23,7 +23,7 @@ from coding_agent_playbook.evaluators.types import (
 )
 
 # The eval-fixture globs are defined once, for the hooks' ``eval_fixture`` path
-# class; ``_eval_paths`` imports only ``re``, so the evaluators stay light.
+# class (``_eval_paths`` imports only ``re``); N15 moves them to a stdlib leaf.
 from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
 
 if TYPE_CHECKING:
