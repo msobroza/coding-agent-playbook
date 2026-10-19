@@ -6,7 +6,7 @@ near-identical scalar/string/key escaping:
 
 * ``filesystem._dump_toml`` — the filesystem state source's Config/Lockfile
   document writer, which since v0.18 lives here as :func:`dump_toml`.
-* ``harness/manifest.py`` — the same scalars/strings *plus* inline tables for
+* ``agent_harness/manifest.py`` — the same scalars/strings *plus* inline tables for
   open-dict fields and quoting of non-identifier keys.
 
 This module is the single source of those primitives. The only axis of variation

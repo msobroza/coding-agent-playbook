@@ -1,4 +1,4 @@
-"""Tests for harness.parser — parse_harness (Track H1)."""
+"""Tests for agent_harness.parser — parse_harness (Track H1)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.harness.models import (
+from coding_agent_playbook.agent_harness.models import (
     ContentFile,
     HarnessDirectory,
     LeafMarker,
@@ -16,7 +16,7 @@ from coding_agent_playbook.harness.models import (
     RawAsset,
     SkillLeaf,
 )
-from coding_agent_playbook.harness.parser import parse_harness
+from coding_agent_playbook.agent_harness.parser import parse_harness
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

@@ -17,10 +17,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.agent_harness import emitter, manifest
 from coding_agent_playbook.artifacts.frontmatter import format_frontmatter
 from coding_agent_playbook.generated_output.output_io import write_output_text
 from coding_agent_playbook.generated_output.source_files import copyable_skill_files
-from coding_agent_playbook.harness import emitter, manifest
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

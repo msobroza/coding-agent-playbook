@@ -12,9 +12,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
+from coding_agent_playbook.agent_harness.manifest import read_manifest
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
-from coding_agent_playbook.harness.manifest import read_manifest
 from tests.member_skill_samples import (
     SAMPLE_PLAYBOOK_BLOCK,
     sample_member_reference,
