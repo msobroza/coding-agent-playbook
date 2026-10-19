@@ -64,7 +64,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.config.files import StateSource
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hooks.resolution.merge import HookViolation
-    from coding_agent_playbook.renderer import RuleRegistry
+    from coding_agent_playbook.rendering.rule_registry import RuleRegistry
 
 #: The checks config-less validate skips, one note line each. The hook policy
 #: rules need the consumer's [hooks] table, which a config-less context has none of.

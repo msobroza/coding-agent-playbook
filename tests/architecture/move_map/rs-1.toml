@@ -1,0 +1,94 @@
+# RS-1 (#133, specs/prT-package-layout.md 4.10, 7.6, section 9 AC.3.5): the Renderer
+# becomes the rendering/ package. renderer.py is split verbatim: the sandbox goes to
+# rendering/jinja.py, the per-format post-processing to rendering/formats.py, and the
+# RuleRegistry protocol joins its implementation in rendering/rule_registry.py. A
+# split has no single [[module]] destination, so one [[names]] row per destination.
+# rule_registry.py and prompt_rule_delivery.py move unchanged.
+
+[[module]]
+pr = "RS-1"
+old = "coding_agent_playbook.rule_registry"
+new = "coding_agent_playbook.rendering.rule_registry"
+
+[[module]]
+pr = "RS-1"
+old = "coding_agent_playbook.prompt_rule_delivery"
+new = "coding_agent_playbook.rendering.prompt_rule_delivery"
+
+[[names]]
+pr = "RS-1"
+old = "coding_agent_playbook.renderer"
+new = "coding_agent_playbook.rendering.jinja"
+names = [
+    "RULE_CALL_RE",
+    "build_environment",
+    "render_artifact_body",
+    "render_string",
+    "TemplateSecurityError",
+    "render_sandboxed",
+]
+
+[[names]]
+pr = "RS-1"
+old = "coding_agent_playbook.renderer"
+new = "coding_agent_playbook.rendering.formats"
+names = [
+    "FORMAT_ALIASES",
+    "BUILTIN_FORMATS",
+    "CLAUDE_READ_ONLY_DISALLOWED",
+    "with_sentinel_body",
+    "render_for",
+    "render_inline_prompt_markdown",
+    "is_read_only_prompt",
+]
+
+[[names]]
+pr = "RS-1"
+old = "coding_agent_playbook.renderer"
+new = "coding_agent_playbook.rendering.rule_registry"
+names = ["RuleRegistry"]
+
+# The removed re-export (L2): validate's check modules imported the pattern from
+# validation.findings, which only bound it.
+[[names]]
+pr = "RS-1"
+old = "coding_agent_playbook.validation.findings"
+new = "coding_agent_playbook.rendering.jinja"
+names = ["RULE_CALL_RE"]
+
+# Not listed: agent_harness.emitter's re-export of with_sentinel_body. The emitter
+# still calls it, so it still binds the name by a plain import and the script sees
+# it as current; its importers (the agent_harness adapter, the hook sidecar writer,
+# tests/agent_harness/test_emitter.py) were edited by hand.
+
+# The primary destination for docs that name the whole file (the sandbox mentions
+# of SPEC §9.3 were hand-edited to rendering/jinja.py).
+[[path]]
+pr = "RS-1"
+old = "renderer.py"
+new = "rendering/formats.py"
+
+[[path]]
+pr = "RS-1"
+old = "tests/unit/test_renderer.py"
+new = "tests/rendering/test_formats.py"
+
+[[path]]
+pr = "RS-1"
+old = "tests/unit/test_renderer_hooks.py"
+new = "tests/rendering/test_formats_hooks.py"
+
+[[path]]
+pr = "RS-1"
+old = "tests/unit/test_rule_registry.py"
+new = "tests/rendering/test_rule_registry.py"
+
+[[path]]
+pr = "RS-1"
+old = "tests/unit/test_prompt_rule_delivery.py"
+new = "tests/rendering/test_prompt_rule_delivery.py"
+
+[[path]]
+pr = "RS-1"
+old = "tests/unit/test_no_unsandboxed_jinja.py"
+new = "tests/rendering/test_no_unsandboxed_jinja.py"

@@ -39,13 +39,13 @@ from coding_agent_playbook.catalog.resolve import OverlayResolver
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.detector.predicate import evaluate_predicate
-from coding_agent_playbook.prompt_rule_delivery import includes_rules_appendix
-from coding_agent_playbook.renderer import (
+from coding_agent_playbook.rendering.jinja import (
     TemplateSecurityError,
     build_environment,
     render_string,
 )
-from coding_agent_playbook.rule_registry import RuleRegistryImpl
+from coding_agent_playbook.rendering.prompt_rule_delivery import includes_rules_appendix
+from coding_agent_playbook.rendering.rule_registry import RuleRegistryImpl
 
 if TYPE_CHECKING:
     from pathlib import Path

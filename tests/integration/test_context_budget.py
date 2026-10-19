@@ -19,7 +19,7 @@ import pytest
 from coding_agent_playbook.adapters.claude_code.hooks import CLAUDE_HEARTBEAT_LINE
 from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_MD_PATH, CLAUDE_RULES_PATH
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
-from coding_agent_playbook.renderer import render_for
+from coding_agent_playbook.rendering.formats import render_for
 from coding_agent_playbook.skills.document import where_entry, where_guidance_section
 from coding_agent_playbook.sync.render import render_artifacts
 from coding_agent_playbook.validation.context import SyncContext
