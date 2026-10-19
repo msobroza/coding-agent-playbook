@@ -3,7 +3,7 @@
 Every file ``playbook sync`` renders carries :data:`SENTINEL` so cleanup (and,
 later, hook guards) can tell engine output from user-authored files. This module
 is the single home of that marker and performs **zero runtime imports**: hook
-runtimes read it on the hot path, where ``renderer`` (which pulls in ``jinja2``
+runtimes read it on the hot path, where ``rendering`` (which pulls in ``jinja2``
 and ``yaml`` at import time) is off-limits.
 
 :func:`file_has_sentinel` is the one bounded head read both the adapters'

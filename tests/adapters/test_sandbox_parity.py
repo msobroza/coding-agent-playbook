@@ -16,10 +16,11 @@ import jinja2
 import pytest
 from jinja2.sandbox import SandboxedEnvironment
 
-from coding_agent_playbook import precommit, renderer
+from coding_agent_playbook import precommit
 from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.rendering import jinja as renderer
 from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import CORE_ROOT
 

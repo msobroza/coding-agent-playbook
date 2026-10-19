@@ -407,7 +407,23 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.orchestrator.filter_applies_if` | `coding_agent_playbook.detector.predicate.filter_applies_if` | N4 |
 | `coding_agent_playbook.orchestrator.installed_output_locations` | `coding_agent_playbook.adapters.registry.installed_output_locations` | A5 |
 | `coding_agent_playbook.orchestrator.template_source` | `coding_agent_playbook.artifacts.identity.template_source` | A5 |
+| `coding_agent_playbook.prompt_rule_delivery` | `coding_agent_playbook.rendering.prompt_rule_delivery` | RS-1 |
+| `coding_agent_playbook.renderer.BUILTIN_FORMATS` | `coding_agent_playbook.rendering.formats.BUILTIN_FORMATS` | RS-1 |
+| `coding_agent_playbook.renderer.CLAUDE_READ_ONLY_DISALLOWED` | `coding_agent_playbook.rendering.formats.CLAUDE_READ_ONLY_DISALLOWED` | RS-1 |
+| `coding_agent_playbook.renderer.FORMAT_ALIASES` | `coding_agent_playbook.rendering.formats.FORMAT_ALIASES` | RS-1 |
+| `coding_agent_playbook.renderer.RULE_CALL_RE` | `coding_agent_playbook.rendering.jinja.RULE_CALL_RE` | RS-1 |
+| `coding_agent_playbook.renderer.RuleRegistry` | `coding_agent_playbook.rendering.rule_registry.RuleRegistry` | RS-1 |
 | `coding_agent_playbook.renderer.SENTINEL` | `coding_agent_playbook.generated_output.sentinel.SENTINEL` | N6 |
+| `coding_agent_playbook.renderer.TemplateSecurityError` | `coding_agent_playbook.rendering.jinja.TemplateSecurityError` | RS-1 |
+| `coding_agent_playbook.renderer.build_environment` | `coding_agent_playbook.rendering.jinja.build_environment` | RS-1 |
+| `coding_agent_playbook.renderer.is_read_only_prompt` | `coding_agent_playbook.rendering.formats.is_read_only_prompt` | RS-1 |
+| `coding_agent_playbook.renderer.render_artifact_body` | `coding_agent_playbook.rendering.jinja.render_artifact_body` | RS-1 |
+| `coding_agent_playbook.renderer.render_for` | `coding_agent_playbook.rendering.formats.render_for` | RS-1 |
+| `coding_agent_playbook.renderer.render_inline_prompt_markdown` | `coding_agent_playbook.rendering.formats.render_inline_prompt_markdown` | RS-1 |
+| `coding_agent_playbook.renderer.render_sandboxed` | `coding_agent_playbook.rendering.jinja.render_sandboxed` | RS-1 |
+| `coding_agent_playbook.renderer.render_string` | `coding_agent_playbook.rendering.jinja.render_string` | RS-1 |
+| `coding_agent_playbook.renderer.with_sentinel_body` | `coding_agent_playbook.rendering.formats.with_sentinel_body` | RS-1 |
+| `coding_agent_playbook.rule_registry` | `coding_agent_playbook.rendering.rule_registry` | RS-1 |
 | `coding_agent_playbook.security.audit` | `coding_agent_playbook.hook_runtime.state.audit_log` | N19 |
 | `coding_agent_playbook.security.decision_summary` | `coding_agent_playbook.hook_runtime.state.decision_summary` | N19 |
 | `coding_agent_playbook.skill_document` | `coding_agent_playbook.skills.document` | A3 |
@@ -437,6 +453,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.types.ToolClass` | `coding_agent_playbook.artifacts.hook_schema.ToolClass` | A1 |
 | `coding_agent_playbook.types.format_frontmatter` | `coding_agent_playbook.artifacts.frontmatter.format_frontmatter` | A2 |
 | `coding_agent_playbook.types.split_frontmatter` | `coding_agent_playbook.artifacts.frontmatter.split_frontmatter` | A2 |
+| `coding_agent_playbook.validation.findings.RULE_CALL_RE` | `coding_agent_playbook.rendering.jinja.RULE_CALL_RE` | RS-1 |
 <!-- module-moves:end -->
 
 <!-- module-moves: keep -->

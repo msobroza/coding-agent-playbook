@@ -12,7 +12,7 @@ prompt body places rule text itself (D15). It reaches the model two ways:
   prompt leaf and the eval runner (D22), which have no skill to point at.
 
 Stdlib only, and ``RuleRegistry`` is imported for type checking only:
-``renderer`` imports this module, so a runtime import back would be a cycle.
+``rendering.formats`` imports this module, so a runtime import back would be a cycle.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Final, Protocol
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.renderer import RuleRegistry
+    from coding_agent_playbook.rendering.rule_registry import RuleRegistry
 
 
 @dataclass(frozen=True)

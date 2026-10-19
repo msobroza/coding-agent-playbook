@@ -488,7 +488,7 @@ def test_sandbox_violation_in_included_rule_raises_prompt_resolution_error(
 ) -> None:
     """Regression: an included rule tripping the sandbox is a render error.
 
-    ``RuleRegistryImpl`` raises ``renderer.TemplateSecurityError`` (a plain
+    ``RuleRegistryImpl`` raises ``rendering.jinja.TemplateSecurityError`` (a plain
     ``Exception``, not a jinja ``TemplateError``), which escaped ``render_prompt``
     as a raw traceback: ``playbook eval --run`` then exited 1 ("task failed")
     instead of 2. The same escape written in the prompt body was already handled.

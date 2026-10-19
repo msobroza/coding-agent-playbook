@@ -1,7 +1,9 @@
 """The rule registry: how a prompt reaches the rules it includes (SPEC §6.2.5).
 
-- :class:`RuleRegistryImpl` — concrete ``RuleRegistry`` from the renderer
-  Protocol and ``SkillReferenceIndex`` from ``prompt_rule_delivery``. Built
+- :class:`RuleRegistry` — the protocol ``rendering.formats`` renders the
+  ``## Reference rules`` appendix through.
+- :class:`RuleRegistryImpl` — concrete ``RuleRegistry`` and
+  ``SkillReferenceIndex`` from ``prompt_rule_delivery``. Built
   once per sync from the applies_if-filtered rule list: it renders an included
   rule's text for the ``## Reference rules`` appendix and names the skill
   reference a command's ``## Before you start`` block points at (D15).
@@ -18,18 +20,34 @@ This module imports ``template_source`` from the stdlib leaf ``artifacts.identit
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol
 
 from coding_agent_playbook.artifacts.identity import template_source
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
-from coding_agent_playbook.prompt_rule_delivery import SkillReference
-from coding_agent_playbook.renderer import build_environment, render_sandboxed
+from coding_agent_playbook.rendering.jinja import build_environment, render_sandboxed
+from coding_agent_playbook.rendering.prompt_rule_delivery import SkillReference
 
 if TYPE_CHECKING:
     from jinja2 import Environment
 
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.detector.facts import Facts
+
+
+class RuleRegistry(Protocol):
+    """How the ``## Reference rules`` appendix renders an included rule's text.
+
+    ``rule_registry.RuleRegistryImpl`` implements it; this protocol is the
+    contract the renderer depends on. Tests can pass an in-memory
+    implementation; production passes the merged-overlay registry.
+    """
+
+    def render_for_inclusion(self, rule_id: str, context: dict[str, Any]) -> str:
+        """Return the rendered body of ``rule_id`` for inline placement in a
+        prompt, with a ``### {rule.name}`` header prepended. Returns ``""``
+        if the rule's ``applies_if`` evaluates to false for the current facts.
+        """
+        ...
 
 
 class RuleRegistryImpl:

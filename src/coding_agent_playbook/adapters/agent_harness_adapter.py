@@ -46,7 +46,10 @@ from coding_agent_playbook.agent_harness import emitter, manifest
 from coding_agent_playbook.generated_output.file_identity import FileSet
 from coding_agent_playbook.generated_output.output_io import write_output_bytes, write_output_text
 from coding_agent_playbook.generated_output.source_files import copyable_skill_files
-from coding_agent_playbook.renderer import render_inline_prompt_markdown
+from coding_agent_playbook.rendering.formats import (
+    render_inline_prompt_markdown,
+    with_sentinel_body,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -57,7 +60,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
-    from coding_agent_playbook.renderer import RuleRegistry
+    from coding_agent_playbook.rendering.rule_registry import RuleRegistry
 
 #: The single leaf type this adapter emits (skill-shaped leaves for both skills
 #: and prompts). Declared in the root ``.leaf-detectors`` file.
@@ -179,7 +182,7 @@ class AgentHarnessAdapter(Adapter):
             description = str(skill.frontmatter.get("description", ""))
             frontmatter = emitter.frontmatter_block({"name": name, "description": description})
             skill_md = skill_dir / "SKILL.md"
-            write_output_text(skill_md, emitter.with_sentinel_body(frontmatter, skill.body))
+            write_output_text(skill_md, with_sentinel_body(frontmatter, skill.body))
             written.append(skill_md)
 
             scripts, script_paths = copy_scripts(
@@ -243,7 +246,7 @@ class AgentHarnessAdapter(Adapter):
             )
             body = self._prompt_body(prompt)
             skill_md = prompt_dir / "SKILL.md"
-            write_output_text(skill_md, emitter.with_sentinel_body(frontmatter, body))
+            write_output_text(skill_md, with_sentinel_body(frontmatter, body))
             written.append(skill_md)
 
             entries.append(
@@ -347,7 +350,7 @@ class AgentHarnessAdapter(Adapter):
         target.parent.mkdir(parents=True, exist_ok=True)
         fm = rule.frontmatter
         frontmatter = emitter.frontmatter_block({"description": fm.description})
-        write_output_text(target, emitter.with_sentinel_body(frontmatter, rule.body))
+        write_output_text(target, with_sentinel_body(frontmatter, rule.body))
         if not record_manifest:
             return target
         entries.append(
@@ -429,7 +432,7 @@ class AgentHarnessAdapter(Adapter):
 
         body = "\n".join(sections)
         target = repo_root / "HARNESS.md"
-        write_output_text(target, emitter.with_sentinel_body(frontmatter, body))
+        write_output_text(target, with_sentinel_body(frontmatter, body))
         return target
 
     # --- .leaf-detectors ---------------------------------------------------

@@ -4,7 +4,7 @@
 heading, the rendered body, and one **static** enforcement line computed from
 the declared ``supports`` and §C.5 event reachability, never from the adapters
 a repo enables. ``hook_claude_settings`` is the debug JSON projection of the
-hook's Claude registrations. Kept apart from ``test_renderer.py`` (file budget).
+hook's Claude registrations. Kept apart from ``test_formats.py`` (file budget).
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 from coding_agent_playbook.hooks.enforcement import advisory_text, enforcement_line
-from coding_agent_playbook.renderer import BUILTIN_FORMATS, render_for
+from coding_agent_playbook.rendering.formats import BUILTIN_FORMATS, render_for
 from tests.hook_samples import hook_frontmatter
 
 _SOURCE = Path("playbook/hooks/guard-x/HOOK.md")
