@@ -4,8 +4,7 @@ One :class:`SuiteRun` runs the project's suite once per root and measures
 ``test_pass_rate`` / ``coverage`` / ``diff_coverage`` from it;
 :func:`suite_baseline` runs it again on a ``git:`` ref (through a temporary
 worktree) or a baseline directory. Only the candidate run gets a diff base, so a
-diff-based metric measures nothing on the baseline. Import the public names
-from ``metrics_gate``.
+diff-based metric measures nothing on the baseline.
 """
 
 from __future__ import annotations

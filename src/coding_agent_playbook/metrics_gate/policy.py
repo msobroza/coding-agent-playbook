@@ -10,8 +10,8 @@ metric-backed :class:`~coding_agent_playbook.evaluators.check.Check`
 its checks through here from its ``[metrics]`` engine config, so the metric-policy
 defaults live in exactly one place.
 
-Living in the ``evaluators`` layer keeps ``commands`` from importing ``evals``
-just for the shared default thresholds.
+Living in ``metrics_gate`` rather than ``evals`` keeps ``commands`` from
+importing ``evals`` just for the shared default thresholds.
 
 Which metrics a gate run measures is policy too (prK §F.0.3 item 2), so the
 ruff-shaped selection (:data:`METRIC_FAMILIES`, :data:`OPT_IN_METRICS`,
