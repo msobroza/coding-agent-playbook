@@ -9,16 +9,16 @@ agent ran.
 
 The runner hands the agent the Continue-shaped text: the rendered body plus the
 ``## Reference rules`` appendix of its ``includes_rules`` (D15, D22), resolved
-through a rule registry filtered by each rule's ``applies_if``. A Claude Code
-command would point at skills instead, but the eval scratch repo has no synced
-skills a pointer could name.
+through a rule registry that holds only the rules whose ``applies_if`` passed.
+A Claude Code command would point at skills instead, but the eval scratch repo
+has no synced skills a pointer could name.
 
 The facts come from running the detector over the task's ``setup/`` tree (the
 same bytes the runner materializes into the scratch repo), overlaid with the
 task's authored mock facts (``[setup] project_kind`` + extra keys).
 
-Mirrors the prompt half of ``sync/render.py::render_artifacts``
-without touching it; the two should converge on one shared helper.
+The text comes from ``RenderSession.prompt_text`` (``rendering.session``), the
+render session sync and ``playbook render`` open too, so the three cannot diverge.
 
 Usage::
 
@@ -38,19 +38,11 @@ from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.catalog.resolve import OverlayResolver
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.detector.facts import detect
-from coding_agent_playbook.detector.predicate import evaluate_predicate
-from coding_agent_playbook.rendering.jinja import (
-    TemplateSecurityError,
-    build_environment,
-    render_string,
-)
-from coding_agent_playbook.rendering.prompt_rule_delivery import includes_rules_appendix
-from coding_agent_playbook.rendering.rule_registry import RuleRegistryImpl
+from coding_agent_playbook.rendering.jinja import TemplateSecurityError
+from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from jinja2 import Environment
 
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.detector.facts import Facts
@@ -73,11 +65,11 @@ _NAME_MAP_FACTS = ("dependencies", "dev_dependencies", "frameworks", "ml_stack")
 #: What rendering a prompt can raise on bad *inputs* rather than engine bugs: a
 #: Jinja error (typo'd variable), a mis-shaped mock fact reaching a predicate
 #: (``ml_stack = "torch"``, ``python_version = 3.12``), an unreadable or
-#: malformed rule file (bad YAML frontmatter, a directory named ``*.md``), or an
-#: included rule that the Jinja sandbox rejects. That last one is
-#: ``RuleRegistryImpl``'s :class:`TemplateSecurityError`, a plain ``Exception``
-#: (not a jinja ``TemplateError``), so it must be listed or ``playbook eval
-#: --run`` crashes with exit 1, the "task failed" code, instead of exit 2.
+#: malformed rule file (bad YAML frontmatter, a directory named ``*.md``), or a
+#: prompt or included rule that the Jinja sandbox rejects. That last one is the
+#: session's :class:`TemplateSecurityError`, a plain ``Exception`` (not a jinja
+#: ``TemplateError``), so it must be listed or ``playbook eval --run`` crashes
+#: with exit 1, the "task failed" code, instead of exit 2.
 _RENDER_ERRORS = (
     TemplateError,
     TemplateSecurityError,
@@ -148,27 +140,29 @@ def _render_with_references(task: EvalTask, prompt: Prompt) -> str:
 
         _render_with_references(task, prompt)  # "You are reviewing…\\n## Reference rules…"
     """
-    includes_rules = prompt.frontmatter.includes_rules
-    if not (prompt.is_templated or includes_rules):
+    if not (prompt.is_templated or prompt.frontmatter.includes_rules):
         return prompt.template_body
     try:
-        facts = _task_facts(task)
-        # The body first, so an error in the prompt's own template is the one
-        # reported even when an included rule file is broken too.
-        body = _render_body(task, prompt, facts)
-        return body + includes_rules_appendix(includes_rules, _LazyRuleRegistry(task, facts))
+        return _task_session(task, prompt).prompt_text(prompt)
     except _RENDER_ERRORS as exc:
         raise PromptResolutionError(
             f"prompt {task.prompt_id!r} for task {task.id!r} failed to render: {exc}"
         ) from exc
 
 
-def _render_body(task: EvalTask, prompt: Prompt, facts: Facts) -> str:
-    """Render a templated prompt body with ``facts``; a plain ``.md`` prompt passes through."""
-    if not prompt.is_templated:
-        return prompt.template_body
-    env = _prompt_environment(facts)
-    return render_string(prompt.template_body, _render_context(task, facts), env=env)
+def _task_session(task: EvalTask, prompt: Prompt) -> RenderSession:
+    """The task's render session; it loads the rules only for a prompt that includes some.
+
+    A prompt without ``includes_rules`` gets ``rules=()``, so it never parses a
+    rule file and a broken rule under ``setup/playbook/rules/`` cannot fail it
+    (RS-D7). ``has_file`` paths resolve inside ``setup/``, the agent's project.
+
+    Example: ``_task_session(task, prompt).prompt_text(prompt)``.
+    """
+    facts = _task_facts(task)
+    rules = _resolved_rules(task) if prompt.frontmatter.includes_rules else ()
+    context = _task_template_context(task, facts)
+    return RenderSession.open(rules, context, repo_root=_setup_dir(task))
 
 
 # --------------------------------------------------------------------------- #
@@ -198,21 +192,22 @@ def _task_facts(task: EvalTask) -> Facts:
     return cast("Facts", facts)
 
 
-def _render_context(task: EvalTask, facts: Facts) -> dict[str, Any]:
-    """Facts + project metadata + ``input_variables`` (the invocation wins).
+def _task_template_context(task: EvalTask, facts: Facts) -> TemplateContext:
+    """``facts``, the setup project, the installed version and the invocation's variables.
 
-    Mirrors ``sync/render.py::build_jinja_context``. The project name and
-    description come from ``setup/pyproject.toml`` — which the agent can read in
-    its working tree anyway — never from the task ``description``, which
-    narrates the scenario and would leak it into the prompt.
+    The project name and description come from ``setup/pyproject.toml`` — which
+    the agent can read in its working tree anyway — never from the task
+    ``description``, which narrates the scenario and would leak it into the
+    prompt. The invocation's ``input_variables`` win over everything (RS-D6).
     """
     project = _setup_project_table(task)
-    context: dict[str, Any] = dict(facts)
-    context["project_name"] = str(project.get("name") or task.id)
-    context["project_description"] = str(project.get("description") or "")
-    context["engine_version"] = _engine_version
-    context.update(task.invocation.input_variables)
-    return context
+    return TemplateContext(
+        facts=facts,
+        project_name=str(project.get("name") or task.id),
+        project_description=str(project.get("description") or ""),
+        engine_version=_engine_version,
+        overrides=task.invocation.input_variables,
+    )
 
 
 def _setup_project_table(task: EvalTask) -> dict[str, Any]:
@@ -227,56 +222,23 @@ def _setup_project_table(task: EvalTask) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Environment (rule registry)
+# Rules
 # --------------------------------------------------------------------------- #
 
 
-def _prompt_environment(facts: Facts) -> Environment:
-    """The base Jinja env with ``facts`` for ``has_framework``/``has_ml_dep``; no registry."""
-    env = build_environment([])
-    env.globals["_facts"] = dict(facts)
-    return env
+def _resolved_rules(task: EvalTask) -> list[Rule]:
+    """Engine rules, the task's overlay package's and ``setup/playbook/rules/``, ids resolved.
 
-
-class _LazyRuleRegistry:
-    """A ``RuleRegistry`` that loads the rules on the first included rule it renders.
-
-    The ``## Reference rules`` appendix is its only consumer, so a prompt
-    without ``includes_rules`` never parses a rule file, and a broken rule
-    under ``setup/playbook/rules/`` cannot fail it.
-    """
-
-    def __init__(self, task: EvalTask, facts: Facts) -> None:
-        self._task = task
-        self._facts = facts
-        self._registry: RuleRegistryImpl | None = None
-
-    def render_for_inclusion(self, rule_id: str, context: dict[str, Any]) -> str:
-        if self._registry is None:
-            base_env = build_environment([])
-            base_env.globals["_facts"] = dict(self._facts)
-            rules = _applicable_rules(self._task, self._facts)
-            self._registry = RuleRegistryImpl(rules, self._facts, base_env)
-        return self._registry.render_for_inclusion(rule_id, context)
-
-
-def _applicable_rules(task: EvalTask, facts: Facts) -> list[Rule]:
-    """Engine rules (+ the task's overlay package's) whose ``applies_if`` holds.
-
-    Ids are resolved *before* filtering, as sync does: an overlay rule replaces
-    the engine rule of the same id even when its own ``applies_if`` is false —
-    the rule is then dropped, never silently replaced by the engine body.
+    Ids are resolved *before* the session filters by ``applies_if``, as sync
+    does: an overlay rule replaces the engine rule of the same id even when its
+    own ``applies_if`` is false — the rule is then dropped, never silently
+    replaced by the engine body.
     """
     overlays = (
         [] if task.source_package in (_ENGINE_PACKAGE, _REPO_LOCAL) else [task.source_package]
     )
     source = FileSystemArtifactSource(repo_root=_setup_dir(task), overlay_packages=overlays)
-    kept: list[Rule] = []
-    for rule in OverlayResolver().resolve_rules(source.list_rules(), [], []):
-        predicate = rule.frontmatter.applies_if or {}
-        if not predicate or evaluate_predicate(predicate, facts, repo_root=_setup_dir(task)):
-            kept.append(rule)
-    return kept
+    return OverlayResolver().resolve_rules(source.list_rules(), [], [])
 
 
 # --------------------------------------------------------------------------- #

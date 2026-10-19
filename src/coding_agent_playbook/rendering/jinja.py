@@ -6,6 +6,10 @@ File-extension dispatch: ``.md`` body is returned verbatim; ``.md.j2`` body is
 rendered through a sandboxed Jinja2 environment with ``StrictUndefined`` so
 typos fail loudly and attribute escapes to Python internals raise. The
 per-format post-processing of a rendered body is ``rendering.formats``.
+
+This is the one module that constructs a Jinja environment: a render pass gets
+it through ``rendering.session``, and ``playbook validate``'s parse-only check is
+:func:`jinja_syntax_error` (tests/rendering/test_no_unsandboxed_jinja.py).
 """
 
 from __future__ import annotations
@@ -13,7 +17,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
-from jinja2 import FileSystemLoader, StrictUndefined
+from jinja2 import FileSystemLoader, StrictUndefined, TemplateSyntaxError
 from jinja2.exceptions import SecurityError
 from jinja2.sandbox import SandboxedEnvironment
 
@@ -122,6 +126,25 @@ class TemplateSecurityError(Exception):
         super().__init__(f"{source}: template rejected by the Jinja sandbox: {detail}")
         self.source = source
         self.detail = detail
+
+
+def jinja_syntax_error(template: str) -> str | None:
+    """The Jinja syntax error of ``template``, or None when it parses.
+
+    Syntax only: no loader, no facts. ``playbook validate`` runs it on rule,
+    prompt and hook bodies; sandboxed like :func:`build_environment`, so no Jinja
+    construction site is unsandboxed (prK §P1).
+
+    Example::
+
+        >>> jinja_syntax_error("{% if x %}").startswith("Unexpected end of template.")
+        True
+    """
+    try:
+        SandboxedEnvironment(autoescape=False, undefined=StrictUndefined).parse(template)
+    except TemplateSyntaxError as exc:
+        return exc.message or str(exc)
+    return None
 
 
 def render_sandboxed(body: str, context: dict[str, Any], *, env: Environment, source: str) -> str:

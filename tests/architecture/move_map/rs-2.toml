@@ -1,0 +1,20 @@
+# RS-2 (#141, specs/prT-package-layout.md section 9 AC.3.5): one RenderSession renders
+# for sync, playbook render and the eval runner. An interface PR, so no module moves;
+# the names it deletes (sync.render's context builder and body renderers,
+# rule_registry.build_prompt_environment) have no one-name replacement and are
+# described in MIGRATION.md instead. rendering/jinja.py becomes the one module that
+# constructs a Jinja environment (AC.3.6), so validate's parse-only syntax check
+# moves next to the sandbox.
+
+[[names]]
+pr = "RS-2"
+old = "coding_agent_playbook.validation.findings"
+new = "coding_agent_playbook.rendering.jinja"
+names = ["jinja_syntax_error"]
+
+# render_hook_body's tests joined the RenderSession tests (spec 5.2.2, A6's row:
+# "moves again to tests/rendering/ with render-session").
+[[path]]
+pr = "RS-2"
+old = "tests/sync/test_render_hook_body.py"
+new = "tests/rendering/test_session.py"

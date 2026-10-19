@@ -140,7 +140,7 @@ class ResolvedHook:
 
         Example::
 
-            hook = hook.with_rendered_body(render_hook_body(hook.definition, ctx, env))
+            hook = hook.with_rendered_body(session.render_hook_body(hook.definition))
         """
         definition = self.definition
         if definition is not None and definition.body != body:
