@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook._sentinel import sentinel_line
-from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
+from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.lockfile.model import LockEntry, compute_hash

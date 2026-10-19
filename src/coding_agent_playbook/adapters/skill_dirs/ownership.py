@@ -1,6 +1,6 @@
 """What the previous ``playbook sync`` provably wrote, per its lockfile (SPEC §10.8).
 
-The :class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter` only ever
+The :class:`~coding_agent_playbook.adapters.skill_dirs.writer.SkillWriter` only ever
 claims or removes something to make room for its own output when that is
 provably engine output it may replace:
 

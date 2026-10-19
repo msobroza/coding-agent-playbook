@@ -34,6 +34,7 @@ import yaml
 from jinja2 import TemplateError
 
 from coding_agent_playbook import __version__ as _engine_version
+from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.detector.predicate import evaluate_predicate
@@ -45,16 +46,15 @@ from coding_agent_playbook.renderer import (
     render_string,
 )
 from coding_agent_playbook.rule_registry import RuleRegistryImpl
-from coding_agent_playbook.types import Prompt
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from jinja2 import Environment
 
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.types import Rule
 
 #: The engine package: its rules are always in scope, like for a consumer.
 _ENGINE_PACKAGE = "coding_agent_playbook"

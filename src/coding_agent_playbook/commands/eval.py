@@ -56,11 +56,11 @@ if TYPE_CHECKING:
     import argparse
     from collections.abc import Iterable
 
+    from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.evals.judge import Judge
     from coding_agent_playbook.evals.runner import HarnessRunner, TaskResult
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.evaluators.types import TrialResult
-    from coding_agent_playbook.types import Prompt
 
 
 #: Entry-point group runners self-register under (mirrors adapters/sources).

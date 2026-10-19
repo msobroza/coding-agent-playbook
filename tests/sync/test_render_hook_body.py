@@ -20,7 +20,7 @@ from coding_agent_playbook.sync.render import render_hook_body
 from tests.hook_samples import sample_hook
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.types import Hook
+    from coding_agent_playbook.artifacts.hook import Hook
 
 _PATH = "playbook/hooks/protect/guard-x/HOOK.md.j2"
 

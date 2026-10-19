@@ -30,9 +30,11 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, Sequence
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.hook import Hook
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_policy import ResolvedHook, SkippedHook
-    from coding_agent_playbook.types import Hook, Prompt, Rule
 
 __all__ = [
     "ApplicabilityRow",

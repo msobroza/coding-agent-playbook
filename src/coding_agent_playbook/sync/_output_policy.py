@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook._file_identity import FileSet
 from coding_agent_playbook._output_io import is_character_device, refuse_special_file
 from coding_agent_playbook._symlinks import link_leaving, real_path
-from coding_agent_playbook.adapters._skill_writer import swap_blocker
+from coding_agent_playbook.adapters.skill_dirs.writer import swap_blocker
 from coding_agent_playbook.gitignore import (
     GITIGNORE_FILENAME,
     LOCKFILE_NAME,

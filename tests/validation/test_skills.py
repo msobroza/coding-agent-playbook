@@ -11,7 +11,8 @@ from typing import Any
 
 import pytest
 
-from coding_agent_playbook.types import Rule, RuleFrontmatter, Skill
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.validation._skills import (
     SCOPED_RULE_NEEDS_SKILL_MESSAGE,
     check_rule_skills,

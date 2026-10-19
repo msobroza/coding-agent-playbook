@@ -28,10 +28,13 @@ from coding_agent_playbook._guard_config_quality import read_quality_lint
 from coding_agent_playbook._guard_config_ruff import read_project_ruff_selection
 from coding_agent_playbook._guard_config_skills import skill_glob_rows
 from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
-from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
+from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
-from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
-from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
+from coding_agent_playbook.adapters.continue_ import ContinueAdapter
+from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
+from coding_agent_playbook.artifacts.hook import Hook
+from coding_agent_playbook.artifacts.prompt import Prompt
+from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.guard_config import (
@@ -50,7 +53,6 @@ from coding_agent_playbook.hook_runtime.config import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.simulate import SimulateArgs, run
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
-from coding_agent_playbook.types import Hook, Prompt, Rule
 from tests._catalog import CORE_ROOT
 from tests.hook_payloads import PROJECT_DIR, HookPayloadCase
 from tests.hook_runtime.guard_repo import GuardRepo

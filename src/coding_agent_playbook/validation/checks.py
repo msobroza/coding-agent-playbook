@@ -91,10 +91,12 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.orchestrator import SyncContext
-    from coding_agent_playbook.types import Prompt, Rule, Skill
 
 
 def _check_overlays_usable(overlays: Sequence[str]) -> list[ValidationError]:

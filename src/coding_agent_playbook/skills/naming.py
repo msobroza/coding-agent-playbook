@@ -19,7 +19,7 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.types import Skill
+    from coding_agent_playbook.artifacts.skill import Skill
 
 #: Agent Skills ``name`` rule (OpenCode + Claude Code): lowercase alphanumerics
 #: separated by single hyphens, 1-64 chars. OpenCode silently skips a skill whose

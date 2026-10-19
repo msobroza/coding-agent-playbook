@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Final, TypedDict
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from coding_agent_playbook.types import Rule
+    from coding_agent_playbook.artifacts.rule import Rule
 
 __all__ = ["SKILL_NUDGE_HOOK_ID", "SkillGlobRow", "skill_glob_rows"]
 

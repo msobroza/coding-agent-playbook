@@ -13,9 +13,9 @@ from typing import Any
 
 import pytest
 
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.config.tables.hooks import parse_hooks_config
 from coding_agent_playbook.hook_policy import HookIssue, HookSetInputs, Severity, classify_hook_set
-from coding_agent_playbook.types import Rule, RuleFrontmatter
 from tests.hook_samples import sample_hook
 
 OVERLAY = "acme_rules"

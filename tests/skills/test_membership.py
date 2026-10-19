@@ -8,15 +8,24 @@ written skill's active members, rendered, as ``member_references``.
 from __future__ import annotations
 
 import dataclasses
+from importlib import metadata
 from pathlib import Path
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
-from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
+from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
+from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.base import Adapter
-from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
+from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
+from coding_agent_playbook.adapters.continue_ import ContinueAdapter
+from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
+from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
+from coding_agent_playbook.artifacts.prompt import Prompt
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.renderer import build_environment
 from coding_agent_playbook.skills.membership import (
+    MemberRuleDeliverer,
     compose_skills,
     is_rule_skill,
     is_skill_member,
@@ -25,8 +34,22 @@ from coding_agent_playbook.skills.membership import (
     undelivered_member_warning,
 )
 from coding_agent_playbook.sync.render import render_rule_body
-from coding_agent_playbook.types import Prompt, Rule, RuleFrontmatter, Skill
 from tests.hook_samples import sample_hook
+
+if TYPE_CHECKING:
+    from coding_agent_playbook.artifacts.prompt import Prompt
+
+
+#: Every in-tree adapter class, typed so mypy checks each satisfies the protocol
+#: ``undelivered_member_warning`` reads (SK-1); the entry-point test keeps it complete.
+_IN_TREE_DELIVERERS: tuple[type[MemberRuleDeliverer], ...] = (
+    AgentHarnessAdapter,
+    AgentsMdAdapter,
+    ClaudeCodeAdapter,
+    ContinueAdapter,
+    OpenCodeAdapter,
+    SharedSkillsAdapter,
+)
 
 
 class _AlwaysRulesOnlyAdapter(Adapter):
@@ -200,3 +223,29 @@ def test_no_undelivered_member_warning_with_a_skill_adapter() -> None:
     assert undelivered_member_warning([AgentsMdAdapter(), SharedSkillsAdapter()], skills) is None
     plain = [_skill("brainstorming", playbook=False)]
     assert undelivered_member_warning([AgentsMdAdapter()], plain) is None
+
+
+class FakeMemberRuleDeliverer:
+    """A plain object, no ``Adapter`` subclass, with the two members the warning reads."""
+
+    delivers_member_rules: ClassVar[bool] = False
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+def test_undelivered_member_warning_accepts_any_deliverer() -> None:
+    """The warning depends on the protocol only, not on ``adapters.base.Adapter`` (SK-1)."""
+    enabled = [FakeMemberRuleDeliverer("rules_only")]
+    assert undelivered_member_warning(enabled, _composed("ml-data")) == (
+        "warning: no enabled adapter delivers scoped rules (only rules_only is on); "
+        "skill ml-data reaches no assistant: add claude_code, opencode or shared_skills to "
+        "adapters_enabled"
+    )
+
+
+def test_in_tree_deliverers_cover_every_registered_adapter() -> None:
+    """The typed tuple above names every built-in adapter, so mypy checks them all."""
+    entry_points = metadata.entry_points(group="coding_agent_playbook.adapters")
+    registered = {ep.load() for ep in entry_points if ep.value.startswith("coding_agent_playbook.")}
+    assert set(_IN_TREE_DELIVERERS) == registered

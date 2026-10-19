@@ -6,8 +6,9 @@ member into a :class:`MemberReference` and attaches them to
 ``Skill.member_references``; the skill writer then writes ``text`` under every
 skill root, so the copies are byte-identical.
 
-A stdlib-only leaf: ``types`` imports it at run time for ``Skill.from_dict``,
-so it cannot import ``types`` back (specs/prS-skills-context.md section 6.4.1).
+A stdlib-only leaf: ``artifacts.skill`` imports it at run time for
+``Skill.from_dict``, so it cannot import ``artifacts.skill`` back
+(specs/prS-skills-context.md section 6.4.1).
 """
 
 from __future__ import annotations

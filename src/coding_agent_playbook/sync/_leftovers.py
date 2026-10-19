@@ -197,7 +197,7 @@ class LeftoverPolicy:
 
     ``plan`` settles orphans; ``may_delete`` judges the files a file/folder swap
     must displace (installed into the ``SkillWriter`` via
-    ``_prior_output.judging_leftovers_with``) by the very same ``plan_orphans``,
+    ``skill_dirs.ownership.judging_leftovers_with``) by the very same ``plan_orphans``,
     recording approved files in ``displaced``.
 
     Example::

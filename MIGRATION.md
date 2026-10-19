@@ -42,16 +42,22 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook._toml` | `coding_agent_playbook.toml_writer` | N1 |
 | `coding_agent_playbook.adapters._agent_skill_rules` | `coding_agent_playbook.skills.naming` | A3 |
 | `coding_agent_playbook.adapters._claude_hooks` | `coding_agent_playbook.adapters.claude_code.hooks` | A8 |
+| `coding_agent_playbook.adapters._prior_output` | `coding_agent_playbook.adapters.skill_dirs.ownership` | A9 |
 | `coding_agent_playbook.adapters._settings_drift` | `coding_agent_playbook.adapters.claude_code.settings.drift` | N13 |
+| `coding_agent_playbook.adapters._skill_writer` | `coding_agent_playbook.adapters.skill_dirs.writer` | A9 |
 | `coding_agent_playbook.adapters._skill_writer.AGENT_SKILL_DESCRIPTION_MAX_CHARS` | `coding_agent_playbook.skills.naming.AGENT_SKILL_DESCRIPTION_MAX_CHARS` | A3 |
 | `coding_agent_playbook.adapters._skill_writer.AGENT_SKILL_NAME_MAX_CHARS` | `coding_agent_playbook.skills.naming.AGENT_SKILL_NAME_MAX_CHARS` | A3 |
 | `coding_agent_playbook.adapters._skill_writer.AGENT_SKILL_NAME_PATTERN` | `coding_agent_playbook.skills.naming.AGENT_SKILL_NAME_PATTERN` | A3 |
 | `coding_agent_playbook.adapters._skill_writer.agent_skill_issues` | `coding_agent_playbook.skills.naming.agent_skill_issues` | A3 |
 | `coding_agent_playbook.adapters._skill_writer.has_declared_id` | `coding_agent_playbook.skills.naming.has_declared_id` | A3 |
 | `coding_agent_playbook.adapters._skill_writer.skill_id_of` | `coding_agent_playbook.skills.naming.skill_id_of` | A3 |
+| `coding_agent_playbook.adapters.agents_md_adapter` | `coding_agent_playbook.adapters.agents_md` | A9 |
 | `coding_agent_playbook.adapters.claude_code_adapter` | `coding_agent_playbook.adapters.claude_code.adapter` | A8 |
 | `coding_agent_playbook.adapters.claude_rule_paths` | `coding_agent_playbook.adapters.claude_code.paths` | N13 |
 | `coding_agent_playbook.adapters.claude_settings` | `coding_agent_playbook.adapters.claude_code.settings.managed_merge` | N13 |
+| `coding_agent_playbook.adapters.continue_adapter` | `coding_agent_playbook.adapters.continue_` | A9 |
+| `coding_agent_playbook.adapters.opencode_adapter` | `coding_agent_playbook.adapters.opencode` | A9 |
+| `coding_agent_playbook.adapters.shared_skills_adapter` | `coding_agent_playbook.adapters.shared_skills` | A9 |
 | `coding_agent_playbook.catalog` | `coding_agent_playbook.catalog.roots` | N3 |
 | `coding_agent_playbook.cli.build_parser` | `coding_agent_playbook.cli.parser.build_parser` | N7 |
 | `coding_agent_playbook.commands._ci_policy` | `coding_agent_playbook.commands.twins.policy` | N8 |
@@ -123,6 +129,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.sources.filesystem.ENGINE_PACKAGE` | `coding_agent_playbook.catalog.layers.ENGINE_PACKAGE` | N3 |
 | `coding_agent_playbook.sources.filesystem.FileSystemStateSource` | `coding_agent_playbook.config.files.FileSystemStateSource` | N2 |
 | `coding_agent_playbook.sources.filesystem.REPO_LOCAL_SOURCE` | `coding_agent_playbook.catalog.layers.REPO_LOCAL_SOURCE` | N3 |
+| `coding_agent_playbook.types.Hook` | `coding_agent_playbook.artifacts.hook.Hook` | A2 |
 | `coding_agent_playbook.types.HookDecision` | `coding_agent_playbook.artifacts.hook_schema.HookDecision` | A1 |
 | `coding_agent_playbook.types.HookEvent` | `coding_agent_playbook.artifacts.hook_schema.HookEvent` | A1 |
 | `coding_agent_playbook.types.HookFrontmatter` | `coding_agent_playbook.artifacts.hook_frontmatter.HookFrontmatter` | A1 |
@@ -132,7 +139,14 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.types.HookOnError` | `coding_agent_playbook.artifacts.hook_schema.HookOnError` | A1 |
 | `coding_agent_playbook.types.HookSchemaError` | `coding_agent_playbook.artifacts.hook_schema.HookSchemaError` | A1 |
 | `coding_agent_playbook.types.HookTier` | `coding_agent_playbook.artifacts.hook_schema.HookTier` | A1 |
+| `coding_agent_playbook.types.Prompt` | `coding_agent_playbook.artifacts.prompt.Prompt` | A2 |
+| `coding_agent_playbook.types.PromptFrontmatter` | `coding_agent_playbook.artifacts.prompt.PromptFrontmatter` | A2 |
+| `coding_agent_playbook.types.Rule` | `coding_agent_playbook.artifacts.rule.Rule` | A2 |
+| `coding_agent_playbook.types.RuleFrontmatter` | `coding_agent_playbook.artifacts.rule.RuleFrontmatter` | A2 |
+| `coding_agent_playbook.types.Skill` | `coding_agent_playbook.artifacts.skill.Skill` | A2 |
 | `coding_agent_playbook.types.ToolClass` | `coding_agent_playbook.artifacts.hook_schema.ToolClass` | A1 |
+| `coding_agent_playbook.types.format_frontmatter` | `coding_agent_playbook.artifacts.frontmatter.format_frontmatter` | A2 |
+| `coding_agent_playbook.types.split_frontmatter` | `coding_agent_playbook.artifacts.frontmatter.split_frontmatter` | A2 |
 <!-- module-moves:end -->
 
 ## v0.21 — Skills-first context

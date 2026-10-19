@@ -21,9 +21,13 @@ from pathlib import Path
 
 import pytest
 
+from coding_agent_playbook.artifacts.hook import Hook
 from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
 from coding_agent_playbook.artifacts.hook_schema import HookHandler, HookMatcher
 from coding_agent_playbook.artifacts.member_reference import MemberReference
+from coding_agent_playbook.artifacts.prompt import PromptFrontmatter
+from coding_agent_playbook.artifacts.rule import RuleFrontmatter
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.config.tables.hooks import (
     COMMIT_CONVENTION_TABLE,
     GuardrailsConfig,
@@ -39,7 +43,6 @@ from coding_agent_playbook.hook_policy import (
 )
 from coding_agent_playbook.metrics_gate.config import MetricConfig
 from coding_agent_playbook.renderer import BUILTIN_FORMATS
-from coding_agent_playbook.types import Hook, PromptFrontmatter, RuleFrontmatter, Skill
 
 _ROOT = Path(__file__).resolve().parents[2]
 _SPEC = _ROOT / "SPEC.md"

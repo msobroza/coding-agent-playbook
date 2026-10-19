@@ -18,7 +18,7 @@ Three modes:
 Both check modes (``_check_modes``) decide skill-dir ownership against the real tree, so they skip
 exactly the skill dirs write mode skips. Write mode installs the leftover policy
 around its render, so a file/folder swap inside a skill dir displaces only what
-that policy would delete (``_prior_output.judging_leftovers_with``).
+that policy would delete (``skill_dirs.ownership.judging_leftovers_with``).
 
 Every mode first refuses to run when a configured overlay package fails to
 import or ships no ``resources/`` directory, or a bundled-plugin name matches no
@@ -60,8 +60,8 @@ import sys
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
-from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
 from coding_agent_playbook.adapters.claude_code.settings.managed_merge import SettingsMergeError
+from coding_agent_playbook.adapters.skill_dirs.ownership import judging_leftovers_with
 from coding_agent_playbook.gitignore import LOCKFILE_NAME
 from coding_agent_playbook.guard_config import SYNC_OUTPUT_LOCATIONS
 from coding_agent_playbook.orchestrator import (

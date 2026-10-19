@@ -318,7 +318,7 @@ def test_shipped_prompt_contracts_compile() -> None:
     """The engine's review, security-review and find-injected-vulnerability contracts compile."""
     import re
 
-    from coding_agent_playbook.types import Prompt
+    from coding_agent_playbook.artifacts.prompt import Prompt
 
     root = CORE_ROOT / "prompts"
     contracts = {

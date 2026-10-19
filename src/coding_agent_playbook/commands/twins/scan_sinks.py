@@ -112,8 +112,8 @@ def shipped_table() -> SinkTable:
     The ``HOOK.md`` is in the engine's catalog (``catalog/core/hooks/``), found
     through the ``catalog.roots`` module; a broken install raises ``CatalogMissingError``.
     """
+    from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE, engine_layer_root
-    from coding_agent_playbook.types import Hook
 
     path = engine_layer_root().joinpath(*_HOOK_MD)
     handler = Hook.from_markdown(path, ENGINE_PACKAGE).frontmatter.handler
