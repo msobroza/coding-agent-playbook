@@ -1,7 +1,7 @@
 """The secret policy the §E.4 secret hooks read from ``guard_config`` (specs/prK-hook-pack.md §E.4).
 
 secrets-path-guard, secret-content-guard and stop-diff-sweep never read their
-policy from an agent-editable file: sync rendered it (``_guard_config_secrets``).
+policy from an agent-editable file: sync rendered it (``hooks.guard_config._tables_secrets``).
 
 - :func:`path_policy`: ``security.paths.PathPolicy`` from ``secret_path_globs``
   and the two exemption tables, extended by a hook's own ``extra_globs`` /

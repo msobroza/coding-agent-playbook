@@ -1,0 +1,217 @@
+# GC-2 (#135, specs/prT-package-layout.md 9 AC.2.5, 7.6): the guard_config.json writer
+# leaves the root for the hooks/guard_config/ package: compile (the document), inputs
+# (the request's value types), resource_roots, ruff_probe (the machine-local probe) and
+# the private _tables_* builders. Its two adapter-dependent parts move up to the sync
+# side, because hooks sits below adapters (GC-D1): the hook-script copies to
+# sync/_hook_scripts.py, the protected-set assembly to sync/_protect.py. The writer's
+# facade re-exports are removed (L2): importers name the defining module.
+
+[[module]]
+pr = "GC-2"
+old = "coding_agent_playbook.guard_config"
+new = "coding_agent_playbook.hooks.guard_config.compile"
+
+[[module]]
+pr = "GC-2"
+old = "coding_agent_playbook._guard_config_allowlists"
+new = "coding_agent_playbook.hooks.guard_config._tables_allowlists"
+
+[[module]]
+pr = "GC-2"
+old = "coding_agent_playbook._guard_config_detect"
+new = "coding_agent_playbook.hooks.guard_config._tables_detect"
+
+[[module]]
+pr = "GC-2"
+old = "coding_agent_playbook._guard_config_prompts"
+new = "coding_agent_playbook.hooks.guard_config._tables_prompts"
+
+[[module]]
+pr = "GC-2"
+old = "coding_agent_playbook._guard_config_protect"
+new = "coding_agent_playbook.hooks.guard_config._tables_protect"
+
+[[module]]
+pr = "GC-2"
+old = "coding_agent_playbook._guard_config_quality"
+new = "coding_agent_playbook.hooks.guard_config._tables_quality"
+
+[[module]]
+pr = "GC-2"
+old = "coding_agent_playbook._guard_config_ruff"
+new = "coding_agent_playbook.hooks.guard_config._tables_ruff"
+
+[[module]]
+pr = "GC-2"
+old = "coding_agent_playbook._guard_config_secrets"
+new = "coding_agent_playbook.hooks.guard_config._tables_secrets"
+
+[[module]]
+pr = "GC-2"
+old = "coding_agent_playbook._guard_config_skills"
+new = "coding_agent_playbook.hooks.guard_config._tables_skills"
+
+[[module]]
+pr = "GC-2"
+old = "coding_agent_playbook._guard_config_toolchain"
+new = "coding_agent_playbook.hooks.guard_config._tables_toolchain"
+
+[[module]]
+pr = "GC-2"
+old = "coding_agent_playbook._guard_config_verify"
+new = "coding_agent_playbook.hooks.guard_config._tables_verify"
+
+# The splits: names that leave a module's primary destination.
+
+[[names]]
+pr = "GC-2"
+old = "coding_agent_playbook.guard_config"
+new = "coding_agent_playbook.hooks.guard_config._tables_precommit"
+names = ["_PRECOMMIT_MAX_BYTES", "precommit_hook_ids"]
+
+[[names]]
+pr = "GC-2"
+old = "coding_agent_playbook.guard_config"
+new = "coding_agent_playbook.sync._hook_scripts"
+names = ["CopiedScripts", "copy_hook_scripts", "_copy", "_runs_a_script"]
+
+# The value types the request carries. The row helpers move with their callers
+# (applicability_rows and ApplicabilityRow.to_json): in _tables_detect they would
+# import inputs while inputs imported them, a cycle.
+[[names]]
+pr = "GC-2"
+old = "coding_agent_playbook._guard_config_detect"
+new = "coding_agent_playbook.hooks.guard_config.inputs"
+names = [
+    "HookView",
+    "ApplicabilityRow",
+    "DetectInputs",
+    "applicability_rows",
+    "_artifact_row",
+    "_holds",
+    "_plain",
+]
+
+[[names]]
+pr = "GC-2"
+old = "coding_agent_playbook._guard_config_protect"
+new = "coding_agent_playbook.hooks.guard_config.inputs"
+names = ["ProtectedRow", "ProtectInputs"]
+
+[[names]]
+pr = "GC-2"
+old = "coding_agent_playbook._guard_config_protect"
+new = "coding_agent_playbook.hooks.guard_config.resource_roots"
+names = ["resource_root_ids", "resolve_resource_roots", "_layer_dir"]
+
+[[names]]
+pr = "GC-2"
+old = "coding_agent_playbook._guard_config_protect"
+new = "coding_agent_playbook.sync._protect"
+names = [
+    "COMPOSITE_SINGLETONS",
+    "protected_rows",
+    "adapter_output_dirs",
+    "_lock_path_via_repo_links",
+    "_relative",
+]
+
+[[names]]
+pr = "GC-2"
+old = "coding_agent_playbook._guard_config_ruff"
+new = "coding_agent_playbook.hooks.guard_config.ruff_probe"
+names = [
+    "PROBE_TIMEOUT_S",
+    "RULE_CACHE_DOCUMENT",
+    "RuleStatus",
+    "ruff_candidate_codes",
+    "_listed_codes",
+    "RuleProbe",
+    "RuleCache",
+    "probe_ruff_rules",
+    "ruff_drop_codes",
+    "_rule_all",
+    "_per_code",
+    "_rule_one",
+    "_json_of",
+    "_status_of",
+]
+
+# The stop_gate table builder joins the other table builders; the stage records it
+# reads stay in hooks/registrations/stop_gate.py, which the registrations use for
+# their deadlines.
+[[names]]
+pr = "GC-2"
+old = "coding_agent_playbook.hooks.registrations.stop_gate"
+new = "coding_agent_playbook.hooks.guard_config._tables_stop_gate"
+names = [
+    "DEFAULT_MAX_BLOCKS",
+    "_MAX_BLOCKS_RANGE",
+    "DEFAULT_CLAIM_PATTERNS",
+    "_DERIVED_VERIFY",
+    "stop_gate_table",
+    "_max_blocks",
+    "_verify_commands",
+    "_argv",
+    "_claim_patterns",
+]
+
+# The writer facade's re-exports, removed (L2).
+
+[[names]]
+pr = "GC-2"
+old = "coding_agent_playbook.guard_config"
+new = "coding_agent_playbook.hooks.guard_config.inputs"
+names = ["DetectInputs", "ProtectInputs", "ProtectedRow", "applicability_rows"]
+
+[[names]]
+pr = "GC-2"
+old = "coding_agent_playbook.guard_config"
+new = "coding_agent_playbook.hooks.guard_config.resource_roots"
+names = ["resolve_resource_roots", "resource_root_ids"]
+
+[[names]]
+pr = "GC-2"
+old = "coding_agent_playbook.guard_config"
+new = "coding_agent_playbook.hooks.guard_config._tables_verify"
+names = ["RepoLayout", "repo_layout"]
+
+[[names]]
+pr = "GC-2"
+old = "coding_agent_playbook.guard_config"
+new = "coding_agent_playbook.hooks.guard_config._tables_ruff"
+names = ["RuffSelection"]
+
+[[names]]
+pr = "GC-2"
+old = "coding_agent_playbook.guard_config"
+new = "coding_agent_playbook.sync._protect"
+names = ["adapter_output_dirs", "protected_rows"]
+
+# The unit tests follow the package into the sync-time tests/hooks/ tree (5.2.2). The
+# ruff tests split like the module: the probe half goes to test_ruff_probe.py.
+
+[[path]]
+pr = "GC-2"
+old = "tests/unit/test_guard_config.py"
+new = "tests/hooks/guard_config/test_compile.py"
+
+[[path]]
+pr = "GC-2"
+old = "tests/unit/test_guard_config_quality.py"
+new = "tests/hooks/guard_config/test_tables_quality.py"
+
+[[path]]
+pr = "GC-2"
+old = "tests/unit/test_guard_config_ruff.py"
+new = "tests/hooks/guard_config/test_tables_ruff.py"
+
+[[path]]
+pr = "GC-2"
+old = "tests/unit/test_guard_config_toolchain.py"
+new = "tests/hooks/guard_config/test_tables_toolchain.py"
+
+[[path]]
+pr = "GC-2"
+old = "tests/unit/test_guard_config_skills.py"
+new = "tests/hooks/guard_config/test_tables_skills.py"

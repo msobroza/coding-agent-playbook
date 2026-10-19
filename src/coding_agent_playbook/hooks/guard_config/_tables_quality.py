@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from coding_agent_playbook._guard_config_ruff import RuffSelection
+    from coding_agent_playbook.hooks.guard_config._tables_ruff import RuffSelection
 
 __all__ = [
     "QUALITY_HOOK_ID",
