@@ -19,14 +19,9 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 import coding_agent_playbook.hook_runtime.handlers as handlers_package
-from coding_agent_playbook.hook_runtime._external import (
-    EVENT_SCHEMA,
-    ExternalContractError,
-    parse_external_output,
-)
-from coding_agent_playbook.hook_runtime._selection import select_hooks
 from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.escape import EscapeHatches
 from coding_agent_playbook.hook_runtime.dispatch.event import (
     CanonicalEvent,
     EventName,
@@ -34,10 +29,12 @@ from coding_agent_playbook.hook_runtime.dispatch.event import (
     ToolCall,
     ToolClass,
 )
-from coding_agent_playbook.hook_runtime.dispatch.run import run_event
-from coding_agent_playbook.hook_runtime.escape import EscapeHatches
-from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT
-from coding_agent_playbook.hook_runtime.registry import (
+from coding_agent_playbook.hook_runtime.dispatch.external import (
+    EVENT_SCHEMA,
+    ExternalContractError,
+    parse_external_output,
+)
+from coding_agent_playbook.hook_runtime.dispatch.registry import (
     HANDLER_ATTR,
     ConfigKey,
     HandlerResolutionError,
@@ -50,12 +47,15 @@ from coding_agent_playbook.hook_runtime.registry import (
     registered_handlers,
     resolve_handler,
 )
-from coding_agent_playbook.hook_runtime.routing import (
+from coding_agent_playbook.hook_runtime.dispatch.routing import (
     ASYNC_EVENT,
     ASYNC_SAFE_HANDLERS,
     DECISION_SINK_HANDLERS,
     handler_route,
 )
+from coding_agent_playbook.hook_runtime.dispatch.run import run_event
+from coding_agent_playbook.hook_runtime.dispatch.selection import select_hooks
+from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT
 from coding_agent_playbook.security.trust import HandlerApproval, sha256_of_json
 from tests.hook_runtime.fakes import FakeProc, FakeTrustStore
 from tests.hook_runtime.guard_repo import GuardRepo, canonical, hook_record
@@ -64,8 +64,8 @@ from tests.import_probe import run_python_probe
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
 
 PRE = EventName.PRE_TOOL_USE
 type PackageFactory = Callable[..., str]
@@ -228,7 +228,8 @@ def test_one_name_from_two_modules_is_refused(make_package: PackageFactory) -> N
     make_package(
         "k2dup",
         init=(
-            "from coding_agent_playbook.hook_runtime.registry import register_hook_handler\n"
+            "from coding_agent_playbook.hook_runtime.dispatch.registry"
+            " import register_hook_handler\n"
             "@register_hook_handler('k2_sample_guard', events=['stop'], decisions=['none'])\n"
             "def other(ev, ctx): return None\n"
         ),
@@ -264,12 +265,12 @@ def test_config_key_accepts_its_kind(key: ConfigKey, value: object, accepted: bo
 
 _TWO_MODULES = {
     "k2pkg.alpha": (
-        "from coding_agent_playbook.hook_runtime.registry import register_hook_handler\n"
+        "from coding_agent_playbook.hook_runtime.dispatch.registry import register_hook_handler\n"
         "@register_hook_handler('k2_alpha', events=['pre_tool_use'], decisions=['deny'])\n"
         "def alpha(ev, ctx): return None\n"
     ),
     "k2pkg.beta": (
-        "from coding_agent_playbook.hook_runtime.registry import register_hook_handler\n"
+        "from coding_agent_playbook.hook_runtime.dispatch.registry import register_hook_handler\n"
         "@register_hook_handler('k2_beta', events=['stop'], decisions=['deny'])\n"
         "def beta(ev, ctx): return None\n"
     ),
@@ -317,7 +318,7 @@ def test_entry_point_record_imports_target_directly_without_importlib_metadata(
     assert fn is sys.modules["acme_k2ep"].guard
     code = (
         f"import sys; sys.path.insert(0, {root!r}); "
-        "from coding_agent_playbook.hook_runtime.registry import _entry_point; "
+        "from coding_agent_playbook.hook_runtime.dispatch.registry import _entry_point; "
         "_entry_point('acme_k2ep:guard', frozenset({'acme_k2ep'})); "
         "print('importlib.metadata' in sys.modules)"
     )
@@ -479,7 +480,7 @@ def test_broken_entry_point_targets_are_resolution_errors(
 
 
 _MUTATOR = """\
-from coding_agent_playbook.hook_runtime.registry import register_hook_handler
+from coding_agent_playbook.hook_runtime.dispatch.registry import register_hook_handler
 
 
 @register_hook_handler(
@@ -518,7 +519,7 @@ def test_event_without_a_bound_handler_is_a_resolution_error(tmp_path: Path) -> 
 def test_lazy_git_builds_safe_git_only_when_first_used(
     tmp_path: Path, runtime_deps: Callable[..., RuntimeDeps]
 ) -> None:
-    from coding_agent_playbook.hook_runtime._ports import LazyGit
+    from coding_agent_playbook.hook_runtime.dispatch.ports import LazyGit
     from coding_agent_playbook.hook_runtime.git.safe_git import SafeGit
     from tests.hook_runtime.fakes import FakeGit
 
@@ -549,7 +550,7 @@ def test_lazy_git_builds_safe_git_only_when_first_used(
 def test_open_trust_store_refuses_a_store_inside_the_repo(
     tmp_path: Path, runtime_deps: Callable[..., RuntimeDeps]
 ) -> None:
-    from coding_agent_playbook.hook_runtime._ports import open_trust_store
+    from coding_agent_playbook.hook_runtime.dispatch.ports import open_trust_store
     from coding_agent_playbook.security.trust import TrustStore
 
     repo = GuardRepo.create(tmp_path)

@@ -28,6 +28,7 @@ import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal, Protocol
 
+from coding_agent_playbook.hook_runtime.dispatch.proc import ProcTimeout
 from coding_agent_playbook.hook_runtime.git._argv import (
     FSMONITOR,
     child_env,
@@ -43,15 +44,14 @@ from coding_agent_playbook.hook_runtime.git.parse import (
     split_z,
 )
 from coding_agent_playbook.hook_runtime.git.range import PATCH_FLAGS, RangePort, RangeQueries
-from coding_agent_playbook.hook_runtime.proc import ProcTimeout
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.hook_runtime.deps import ProcPort
+    from coding_agent_playbook.hook_runtime.dispatch.deps import ProcPort
     from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.proc import ProcResult
     from coding_agent_playbook.hook_runtime.globs import GlobSet
-    from coding_agent_playbook.hook_runtime.proc import ProcResult
     from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [

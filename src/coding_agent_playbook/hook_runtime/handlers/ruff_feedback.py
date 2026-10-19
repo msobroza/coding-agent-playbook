@@ -53,6 +53,7 @@ from coding_agent_playbook.hook_runtime._ruff import (
     rewritten,
 )
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._ruff_buckets import event_lines
 from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import (
     edited_python_files,
@@ -65,19 +66,18 @@ from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import (
     ruff_runner,
     skip_note,
 )
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
 
 if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime._ruff import RuffRunner
     from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import (
         EditedFile,
         FileReport,
         HeadBlob,
     )
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [

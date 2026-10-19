@@ -23,7 +23,11 @@ from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._decision_log import DISPATCHER_ID, LogLine, lines_for
+from coding_agent_playbook.hook_runtime.dispatch._decision_log import (
+    DISPATCHER_ID,
+    LogLine,
+    lines_for,
+)
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness, ToolClass
 from coding_agent_playbook.hook_runtime.dispatch.paths import normalize_path
@@ -33,11 +37,11 @@ from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.hook_runtime._decision_log import DecisionLog
-    from coding_agent_playbook.hook_runtime._execute import Ran
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch._decision_log import DecisionLog
+    from coding_agent_playbook.hook_runtime.dispatch._execute import Ran
     from coding_agent_playbook.hook_runtime.dispatch.decision import CombinedResult
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.state.session import SessionState

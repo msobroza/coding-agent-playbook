@@ -30,16 +30,16 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, ToolClass
 from coding_agent_playbook.hook_runtime.dispatch.policy import CLASS_RANK, failure_class
-from coding_agent_playbook.hook_runtime.routing import ASYNC_AUDIT_MODE, handler_route
+from coding_agent_playbook.hook_runtime.dispatch.routing import ASYNC_AUDIT_MODE, handler_route
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, HookRecord
     from coding_agent_playbook.hook_runtime.config.hook_records import MatcherSpec
+    from coding_agent_playbook.hook_runtime.dispatch.escape import EscapeHatches
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.dispatch.policy import FailureClass, OnError
-    from coding_agent_playbook.hook_runtime.escape import EscapeHatches
 
 __all__ = [
     "STOP_COORDINATOR_HANDLER",

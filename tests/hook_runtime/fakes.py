@@ -29,9 +29,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
+from coding_agent_playbook.hook_runtime.dispatch.proc import ProcResult, ProcTimeout
+from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerResolutionError, Untrusted
 from coding_agent_playbook.hook_runtime.git.parse import DiffLines
-from coding_agent_playbook.hook_runtime.proc import ProcResult, ProcTimeout
-from coding_agent_playbook.hook_runtime.registry import HandlerResolutionError, Untrusted
 from coding_agent_playbook.hook_runtime.stop.runner import ToolRun
 
 if TYPE_CHECKING:
@@ -39,8 +39,8 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
     from coding_agent_playbook.hook_runtime.dispatch.event import EventName
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerFn, ResolveContext
     from coding_agent_playbook.hook_runtime.git.safe_git import AddedLine, Fingerprint, LoggedCommit
-    from coding_agent_playbook.hook_runtime.registry import HandlerFn, ResolveContext
     from coding_agent_playbook.security.trust import HandlerApproval
 
 type ArgvMatch = Sequence[str] | Callable[[tuple[str, ...]], bool]

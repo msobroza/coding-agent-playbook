@@ -40,9 +40,9 @@ from coding_agent_playbook.hook_runtime.stop.tools import runner_of, seconds_lef
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from coding_agent_playbook.hook_runtime.deps import Clock
+    from coding_agent_playbook.hook_runtime.dispatch.deps import Clock
     from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.state.store import StateStore
     from coding_agent_playbook.hook_runtime.stop.runner import StageRunner
     from coding_agent_playbook.hook_runtime.stop.stages import SkipCategory, StopPlan

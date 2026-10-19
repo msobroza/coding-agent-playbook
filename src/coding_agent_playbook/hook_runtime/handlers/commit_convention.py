@@ -35,14 +35,14 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.handlers._cz import CzRunner
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.git_command import GitInvocation
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 

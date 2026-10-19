@@ -13,17 +13,17 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
-from coding_agent_playbook.hook_runtime.escape import WRAPPER_PREFIXES_VAR
+from coding_agent_playbook.hook_runtime.dispatch.escape import WRAPPER_PREFIXES_VAR
 from coding_agent_playbook.hook_runtime.state.audit_log import GuardDecisionRecord, append_decision
 from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, iso_utc
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
 
-    from coding_agent_playbook.hook_runtime._execute import Ran
+    from coding_agent_playbook.hook_runtime.dispatch._execute import Ran
     from coding_agent_playbook.hook_runtime.dispatch.decision import Outcome
+    from coding_agent_playbook.hook_runtime.dispatch.escape import EscapeHatches
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.escape import EscapeHatches
     from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [

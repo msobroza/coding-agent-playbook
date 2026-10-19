@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._sink_writes import SinkWrite, sink_writes
 from coding_agent_playbook.hook_runtime.judges.sink_scan import (
     SinkHit,
@@ -34,13 +35,12 @@ from coding_agent_playbook.hook_runtime.judges.sink_scan import (
     new_sink_calls,
     trusted_artifact_line,
 )
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
 
 __all__ = ["CONFIG_SCHEMA", "deser_sink_guard"]
 
@@ -116,7 +116,7 @@ def _verdict(write: SinkWrite, hit: SinkHit, ctx: HandlerContext) -> Verdict:
 def _committed(write: SinkWrite, pragma: str, ctx: HandlerContext) -> bool:
     """Whether ``pragma`` is a line of the file at ``HEAD`` (a notebook: of its code cells)."""
     if not write.notebook:
-        from coding_agent_playbook.hook_runtime.escape import pragma_at_head
+        from coding_agent_playbook.hook_runtime.dispatch.escape import pragma_at_head
 
         return pragma_at_head(ctx.git, write.rel, pragma)
     from coding_agent_playbook.hook_runtime.judges.notebook_cells import notebook_code

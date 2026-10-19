@@ -12,52 +12,52 @@ import dataclasses
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._decision_log import (
+from coding_agent_playbook.hook_runtime.config.guard_config import ConfigFault, load_guard_config
+from coding_agent_playbook.hook_runtime.dispatch._decision_log import (
     DISPATCHER_ID,
     DecisionLog,
     LogLine,
     escape_lines,
     lines_for,
 )
-from coding_agent_playbook.hook_runtime._event_memo import EventMemo
-from coding_agent_playbook.hook_runtime._execute import (
+from coding_agent_playbook.hook_runtime.dispatch._execute import (
     Progress,
     failure_result,
     results_of,
     run_handlers,
 )
-from coding_agent_playbook.hook_runtime._faults import config_fault_results, degraded_lines
-from coding_agent_playbook.hook_runtime._ports import LazyGit, open_trust_store
-from coding_agent_playbook.hook_runtime._post_write import PostWrite, record_after_write
-from coding_agent_playbook.hook_runtime._selection import select_hooks
-from coding_agent_playbook.hook_runtime._tail import DispatchTrace
-from coding_agent_playbook.hook_runtime.config.guard_config import ConfigFault, load_guard_config
+from coding_agent_playbook.hook_runtime.dispatch._faults import config_fault_results, degraded_lines
+from coding_agent_playbook.hook_runtime.dispatch._post_write import PostWrite, record_after_write
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
-from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
-from coding_agent_playbook.hook_runtime.registry import (
+from coding_agent_playbook.hook_runtime.dispatch.event_memo import EventMemo
+from coding_agent_playbook.hook_runtime.dispatch.ports import LazyGit, open_trust_store
+from coding_agent_playbook.hook_runtime.dispatch.registry import (
     HandlerContext,
     ResolveContext,
     resolve_handler,
 )
+from coding_agent_playbook.hook_runtime.dispatch.selection import select_hooks
+from coding_agent_playbook.hook_runtime.dispatch.tail import DispatchTrace
+from coding_agent_playbook.hook_runtime.dispatch.watchdog import Watchdog
+from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
 from coding_agent_playbook.hook_runtime.shell.wrapper_policy import with_wrapper_prefixes
 from coding_agent_playbook.hook_runtime.state.active_prompt import observe as observe_active_prompt
 from coding_agent_playbook.hook_runtime.state.ledger import Ledger
 from coding_agent_playbook.hook_runtime.state.session import SessionState
 from coding_agent_playbook.hook_runtime.state.store import StateStore
-from coding_agent_playbook.hook_runtime.watchdog import Watchdog
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from coding_agent_playbook.hook_runtime._selection import Selected
-    from coding_agent_playbook.hook_runtime._tail import Responder
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps, TrustPort
     from coding_agent_playbook.hook_runtime.dispatch.decision import CombinedResult
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps, TrustPort
+    from coding_agent_playbook.hook_runtime.dispatch.escape import EscapeHatches
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
-    from coding_agent_playbook.hook_runtime.escape import EscapeHatches
-    from coding_agent_playbook.hook_runtime.registry import HandlerFn, Untrusted
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerFn, Untrusted
+    from coding_agent_playbook.hook_runtime.dispatch.selection import Selected
+    from coding_agent_playbook.hook_runtime.dispatch.tail import Responder
 
 __all__ = ["Shared", "run_configured"]
 
