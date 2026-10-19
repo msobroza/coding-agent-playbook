@@ -4,7 +4,7 @@ Driven through ``playbook-hook simulate stop`` with the golden Claude Stop
 payloads, against a repository synced with the coordinator and K5's
 ``drift`` stage hook. ``FakeGit`` answers the fingerprint, ``FakeProc``
 refuses every spawn: the drift fast path needs no tool, and the coordinator's
-own ``lint`` stage runs ruff through ``FakeStageRunner`` (``tests.hooks.stop_kit``).
+own ``lint`` stage runs ruff through ``FakeStageRunner`` (``tests.hook_runtime.handlers.stop_kit``).
 The drift hook is never fanned out on its own; its finding reaches the model
 only inside the coordinator's one combined reason, emitted as JSON on exit 0.
 The execution stages are ``test_stop_ci_parity_gate_exec``'s.

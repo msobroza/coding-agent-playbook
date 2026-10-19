@@ -246,7 +246,7 @@ def test_section_14_4_documents_scoped_entries() -> None:
     assert [k for k in typing.get_args(ProvenanceKind) if f"`{k}`" not in lock] == []
 
 
-@pytest.mark.parametrize("folder", ["hook_runtime", "hooks", "security"])
+@pytest.mark.parametrize("folder", ["hook_runtime", "hook_runtime/handlers", "security"])
 def test_section_16_documents_the_hook_test_layout(folder: str) -> None:
     assert (_ROOT / "tests" / folder).is_dir()
     assert f"tests/{folder}/" in _spec_section("## 16. Testing strategy", "## 17. Security")
