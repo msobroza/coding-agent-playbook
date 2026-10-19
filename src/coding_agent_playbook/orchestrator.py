@@ -33,6 +33,8 @@ from importlib import metadata
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.catalog import canonical_overlay_name
+from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.config.tables.hooks import PolicyTables
 from coding_agent_playbook.detector import detect, evaluate_predicate
 from coding_agent_playbook.hook_policy import (
     NO_HANDLER_SCHEMAS,
@@ -40,18 +42,14 @@ from coding_agent_playbook.hook_policy import (
     merge_hook_layers,
     split_hook_layers,
 )
-from coding_agent_playbook.hooks_config import PolicyTables
-from coding_agent_playbook.sources.filesystem import (
-    ENGINE_PACKAGE,
-    FileSystemArtifactSource,
-    FileSystemStateSource,
-)
+from coding_agent_playbook.sources.filesystem import ENGINE_PACKAGE, FileSystemArtifactSource
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.adapters.base import Adapter
-    from coding_agent_playbook.config import Config
+    from coding_agent_playbook.config.files import StateSource
+    from coding_agent_playbook.config.model import Config
     from coding_agent_playbook.detector import Facts
     from coding_agent_playbook.hook_policy import (
         ConfigSchemaLookup,
@@ -59,7 +57,7 @@ if TYPE_CHECKING:
         HookViolation,
     )
     from coding_agent_playbook.renderer import RuleRegistry
-    from coding_agent_playbook.sources.base import ArtifactSource, StateSource
+    from coding_agent_playbook.sources.base import ArtifactSource
     from coding_agent_playbook.types import Hook, HookSchemaError, Prompt, Rule, Skill
 
 

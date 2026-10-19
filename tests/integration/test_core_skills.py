@@ -20,9 +20,10 @@ import pytest
 from coding_agent_playbook.adapters._skill_writer import agent_skill_issues, render_skill_md
 from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_RULES_PATH
 from coding_agent_playbook.catalog import ENGINE_PACKAGE
+from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.links import extract_markdown_links
 from coding_agent_playbook.skill_membership import compose_skills
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, FileSystemStateSource
+from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import split_frontmatter
 from tests._budget_probe import reference_probe_facts, render_core_rule
 from tests._catalog import CORE_ROOT, core_rules

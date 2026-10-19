@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.config.tables.hooks import PolicyTables
 from coding_agent_playbook.hook_policy import (
     NO_HANDLER_SCHEMAS,
     ConfigKeySpec,
@@ -25,7 +26,6 @@ from coding_agent_playbook.hook_policy import (
     merge_hook_layers,
     split_hook_layers,
 )
-from coding_agent_playbook.hooks_config import PolicyTables
 from coding_agent_playbook.orchestrator import Collision, OverlayResolver, SyncContext
 from coding_agent_playbook.sources.filesystem import ENGINE_PACKAGE, FileSystemArtifactSource
 from coding_agent_playbook.types import Hook, HookSchemaError

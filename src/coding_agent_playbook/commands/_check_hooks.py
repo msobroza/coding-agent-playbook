@@ -17,8 +17,8 @@ from coding_agent_playbook.orchestrator import discover_adapters
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
     from coding_agent_playbook.hook_policy import ResolvedHook
-    from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
     from coding_agent_playbook.orchestrator import SyncContext
 
 __all__ = ["format_hooks_section"]

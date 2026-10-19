@@ -19,8 +19,8 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.config import Config
-from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.config.model import Config
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -98,7 +98,7 @@ def plan_committed_update(
     Reads the committed file alone (``read_committed_config_table``; the local
     file is never merged in), hands its ``Config`` to ``update`` and writes the
     result through ``Config.to_dict``. Everything ``Config`` does not own rides
-    along verbatim in ``Config.extra_tables`` (``config_entries``), so ``update``
+    along verbatim in ``Config.extra_tables`` (``config.entries``), so ``update``
     keeps it by building its result with ``dataclasses.replace`` — and may change
     it, as init's ``[hooks] enabled`` answer does. Nothing is written. ``init``
     re-runs use it: the answers replace what ``Config`` owns.

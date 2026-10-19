@@ -44,9 +44,9 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
+    from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hook_registrations import HookRegistration
-    from coding_agent_playbook.hooks_config import HooksConfig
     from coding_agent_playbook.lockfile import LockEntry, Lockfile
 
 __all__ = [

@@ -15,11 +15,11 @@ from typing import TYPE_CHECKING, Any, Final, cast
 
 import pytest
 
+from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.hook_policy import RegistryCatalog, resolve_effective_hooks
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import Harness
 from coding_agent_playbook.hook_runtime.registry import load_builtin
-from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
 from tests.hook_payloads import load_hook_payload
 from tests.hooks.pack_repo import engine_hook
 

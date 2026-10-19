@@ -22,8 +22,9 @@ from coding_agent_playbook.commands._committed_config import (
     plan_detector_cache_refresh,
     plan_first_config,
 )
-from coding_agent_playbook.config import Config, ConfigError
-from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.config.model import Config
+from coding_agent_playbook.config.schema import ConfigError
 from tests.toml_equality import assert_toml_identical
 
 if TYPE_CHECKING:
@@ -229,7 +230,7 @@ _WRITERS = frozenset({"save_config", "save_config_table"})
 _BUILDERS = frozenset({"ConfigRewrite", "_checked_rewrite"})
 _HOME = "commands/_committed_config.py"
 #: Where the writers are defined (``save_config`` delegates to ``save_config_table``).
-_WRITERS_HOME = "sources/filesystem.py"
+_WRITERS_HOME = "config/files.py"
 
 
 def _engine_modules() -> Iterator[tuple[str, ast.Module]]:

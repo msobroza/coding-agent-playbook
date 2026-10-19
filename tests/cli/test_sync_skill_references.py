@@ -20,7 +20,7 @@ import pytest
 from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_MD_PATH, CLAUDE_RULES_PATH
 from coding_agent_playbook.commands import sync as _sync
-from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.types import split_frontmatter
 from tests.fakes import FakeGitClient, pre_gate_validate
 from tests.member_skill_samples import (

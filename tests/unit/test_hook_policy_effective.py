@@ -18,6 +18,12 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.config.tables.hooks import (
+    GuardrailsConfig,
+    HooksConfig,
+    parse_guardrails_config,
+    parse_hooks_config,
+)
 from coding_agent_playbook.hook_policy import (
     APPLICABILITY_GATES,
     NO_HANDLER_SCHEMAS,
@@ -27,12 +33,6 @@ from coding_agent_playbook.hook_policy import (
     SkippedHook,
     effective_applies_if,
     resolve_effective_hooks,
-)
-from coding_agent_playbook.hooks_config import (
-    GuardrailsConfig,
-    HooksConfig,
-    parse_guardrails_config,
-    parse_hooks_config,
 )
 from coding_agent_playbook.types import Hook, Rule, RuleFrontmatter
 from tests.fakes import FakeHandlerSchemas

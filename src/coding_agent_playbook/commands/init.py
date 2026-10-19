@@ -37,10 +37,10 @@ from coding_agent_playbook.commands._init_adapters import (
     adapters_union,
 )
 from coding_agent_playbook.commands._precommit_merge import merge_pre_commit
-from coding_agent_playbook.config import Config, OutputConfig, ProjectMeta, StorageConfig
+from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.config.model import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.detector import detect
 from coding_agent_playbook.renderer import build_environment, render_artifact_body
-from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 
 if TYPE_CHECKING:
     import argparse
@@ -206,9 +206,9 @@ def _plan_config(state: FileSystemStateSource, repo_root: Path, answers: _Answer
       ``Config`` (:func:`_apply_answers`), so an emptied or omitted ``--overlays``
       (both mean no overlays), a dropped description or a stale
       ``[detector_cache]`` entry stays dropped. Owned: every top-level key in
-      ``config_entries.CONFIG_MANAGED_KEYS``, ``[detector_cache]`` and ``[user_choices]``
+      ``config.entries.CONFIG_MANAGED_KEYS``, ``[detector_cache]`` and ``[user_choices]``
       whole, and the keys ``Config`` reads inside ``[project]``/``[engine]``/
-      ``[storage]``/``[output]`` (``config_entries.CONFIG_MANAGED_TABLE_KEYS``);
+      ``[storage]``/``[output]`` (``config.entries.CONFIG_MANAGED_TABLE_KEYS``);
     * everything else is written back as parsed (it rides along in
       ``Config.extra_tables``, P6): other top-level keys (``[hooks]``,
       ``[guardrails]``, ``[links]``, ``[metrics]``, future tables, which their

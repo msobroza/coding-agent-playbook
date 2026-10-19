@@ -54,7 +54,7 @@ ORPHAN_HINT = "    Orphaned generated file; run 'playbook sync' to remove."
 # Filenames that are state-source-managed and must be excluded from the
 # drift diff (otherwise the lockfile written by sync would itself look
 # like drift). Keep this in sync with the constants in
-# ``sources.filesystem.FileSystemStateSource``.
+# ``config.files.FileSystemStateSource``.
 _STATE_FILES_TO_SKIP: tuple[str, ...] = (
     ".coding-agent-playbook.toml",
     ".coding-agent-playbook.local.toml",

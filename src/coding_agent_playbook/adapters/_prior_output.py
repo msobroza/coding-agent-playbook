@@ -107,7 +107,7 @@ class PriorOutput:
 def _load_lockfile_entries(repo_root: Path) -> dict[str, LockEntry]:
     # Lazy import: sources.filesystem pulls in the whole eval-loader stack at
     # import time, and only the rare paths above need the lockfile.
-    from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+    from coding_agent_playbook.config.files import FileSystemStateSource
 
     try:
         lockfile = FileSystemStateSource(repo_root=repo_root).load_lockfile()

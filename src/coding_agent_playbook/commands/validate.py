@@ -80,13 +80,13 @@ from coding_agent_playbook.commands._validation import (
     report_validation_warnings,
     skill_label,
 )
+from coding_agent_playbook.config.tables.links import LinksConfig
 from coding_agent_playbook.detector import evaluate_predicate
 from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
 )
 from coding_agent_playbook.evals.validator import validate_tasks
-from coding_agent_playbook.links import LinksConfig
 from coding_agent_playbook.orchestrator import SyncContext
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 

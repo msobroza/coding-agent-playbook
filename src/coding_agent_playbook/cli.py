@@ -35,7 +35,7 @@ from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as validate_cmd
 from coding_agent_playbook.commands import validate_harness as validate_harness_cmd
 from coding_agent_playbook.commands._init_adapters import ADAPTERS_FLAG_HELP
-from coding_agent_playbook.config import ConfigError
+from coding_agent_playbook.config.schema import ConfigError
 from coding_agent_playbook.types import HookSchemaError
 
 if TYPE_CHECKING:

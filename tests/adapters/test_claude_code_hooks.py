@@ -37,6 +37,7 @@ from coding_agent_playbook.adapters._secret_native import (
 )
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.claude_settings import CLAUDE_SETTINGS_PATH, SettingsMergeError
+from coding_agent_playbook.config.tables.hooks import HooksConfig
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT
 from coding_agent_playbook.hook_registrations import (
     LAUNCHER_PATH,
@@ -44,7 +45,6 @@ from coding_agent_playbook.hook_registrations import (
     registration_timeout_s,
     render_claude_launcher,
 )
-from coding_agent_playbook.hooks_config import HooksConfig
 from coding_agent_playbook.lockfile import Lockfile
 from coding_agent_playbook.security.patterns import DESTRUCTIVE_NATIVE_PREFIXES
 from coding_agent_playbook.types import Rule, RuleFrontmatter

@@ -13,7 +13,7 @@ import yaml
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.commands._init_adapters import DEFAULT_ADAPTERS
-from coding_agent_playbook.config import Config, OutputConfig, ProjectMeta, StorageConfig
+from coding_agent_playbook.config.model import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.gitignore import BLOCK_START
 from coding_agent_playbook.toml_writer import dump_toml
 from tests.hook_samples import write_hook
