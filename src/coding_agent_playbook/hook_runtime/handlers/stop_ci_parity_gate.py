@@ -67,23 +67,36 @@ CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
     "budget_s": ConfigKey("number"),
     "tests_scope": ConfigKey("string", "replace", ("all", "touched")),
 }
-_HANDLERS: Final = "coding_agent_playbook.hook_runtime.handlers"
 #: Stage name -> ``module:function`` building it; a pack track adds a row per stage.
 STAGE_FACTORIES: Final[Mapping[str, str]] = MappingProxyType(
     {
-        "drift": f"{_HANDLERS}.stop_drift_and_orphan_gate:drift_stage",
-        "lint": f"{_HANDLERS}._lint_stage:lint_stage",
-        "quality-metrics": f"{_HANDLERS}.quality_metrics:quality_metrics_stage",
-        "docstrings": f"{_HANDLERS}.docstring_nonregression:docstrings_stage",
-        "gate-integrity": f"{_HANDLERS}.gate_weakening:gate_integrity_stage",
-        "secrets": f"{_HANDLERS}.stop_sweep:secrets_stage",
-        "verify-claim": f"{_HANDLERS}._verify_claim:verify_claim_stage",
-        "output-contract": f"{_HANDLERS}.output_contract:output_contract_stage",
-        "tests-nudge": f"{_HANDLERS}.tests_nudge:tests_nudge_stage",
-        "typecheck": f"{_HANDLERS}._exec_stages:typecheck_stage",
-        "tests": f"{_HANDLERS}._exec_stages:tests_stage",
-        "notebooks": f"{_HANDLERS}.notebooks:notebooks_stage",
-        "coverage": f"{_HANDLERS}.coverage_diff_gate:coverage_stage",
+        "drift": (
+            "coding_agent_playbook.hook_runtime.handlers.stop_drift_and_orphan_gate:drift_stage"
+        ),
+        "lint": "coding_agent_playbook.hook_runtime.handlers._lint_stage:lint_stage",
+        "quality-metrics": (
+            "coding_agent_playbook.hook_runtime.handlers.quality_metrics:quality_metrics_stage"
+        ),
+        "docstrings": (
+            "coding_agent_playbook.hook_runtime.handlers.docstring_nonregression:docstrings_stage"
+        ),
+        "gate-integrity": (
+            "coding_agent_playbook.hook_runtime.handlers.gate_weakening:gate_integrity_stage"
+        ),
+        "secrets": (
+            "coding_agent_playbook.hook_runtime.handlers.safety.stop_diff_sweep:secrets_stage"
+        ),
+        "verify-claim": (
+            "coding_agent_playbook.hook_runtime.handlers._verify_claim:verify_claim_stage"
+        ),
+        "output-contract": (
+            "coding_agent_playbook.hook_runtime.handlers.output_contract:output_contract_stage"
+        ),
+        "tests-nudge": "coding_agent_playbook.hook_runtime.handlers.tests_nudge:tests_nudge_stage",
+        "typecheck": "coding_agent_playbook.hook_runtime.handlers._exec_stages:typecheck_stage",
+        "tests": "coding_agent_playbook.hook_runtime.handlers._exec_stages:tests_stage",
+        "notebooks": "coding_agent_playbook.hook_runtime.handlers.notebooks:notebooks_stage",
+        "coverage": "coding_agent_playbook.hook_runtime.handlers.coverage_diff_gate:coverage_stage",
     }
 )
 #: Leaves the dispatcher time to compose and write before the watchdog fires.

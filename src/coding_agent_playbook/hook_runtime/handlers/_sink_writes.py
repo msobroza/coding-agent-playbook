@@ -15,7 +15,7 @@ built in memory before anything reaches the disk:
   ``content``, a patch's ``-`` lines against its ``+`` lines.
 
 Only ``.py`` and ``.ipynb`` files inside the worktree count; secret paths and
-frozen eval fixtures never do (``_targets.repo_file``). A private module.
+frozen eval fixtures never do (``_shared.targets.repo_file``). A private module.
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
-from coding_agent_playbook.hook_runtime.edit_preview import preview_after
-from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths, repo_file
+from coding_agent_playbook.hook_runtime.handlers._shared.edit_preview import preview_after
+from coding_agent_playbook.hook_runtime.handlers._shared.targets import file_write_paths, repo_file
 from coding_agent_playbook.hook_runtime.judges.notebook_cells import (
     cell_index,
     cells_code,
