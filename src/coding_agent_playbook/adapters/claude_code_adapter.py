@@ -308,10 +308,11 @@ class ClaudeCodeAdapter(Adapter):
 
         ``settings.json`` is merged first: a file that cannot be merged safely
         raises :class:`~.claude_code.settings.managed_merge.SettingsMergeError`
-        before this adapter writes anything. A rules-file path the user holds, or a symlinked stub,
-        raises :class:`~._owned_files.UserOwnedFileError` (``playbook sync``
-        checks both on the real repo before any adapter runs). Returns the
-        paths written; ``settings.json`` only when the merge changed it.
+        before this adapter writes anything. A rules-file path the user holds,
+        or a symlinked stub, raises :class:`~._owned_files.UserOwnedFileError`
+        (``playbook sync`` checks both on the real repo before any adapter
+        runs). Returns the paths written; ``settings.json`` only when the
+        merge changed it.
 
         Example::
 
