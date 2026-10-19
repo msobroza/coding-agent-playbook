@@ -2,16 +2,18 @@
 
 Core ships ``python-coding``, ``python-testing``, ``python-tooling`` and
 ``ml-data``; each is written only while one of its member rules passes
-``applies_if`` (ADR 0001). ``python-tooling``'s members are the two FastAPI rules,
-so the skill follows the ``fastapi`` dependency in and out of the repo. The
-"Where guidance lives" map in ``AGENTS.md`` names only skills a sync writes, so
-it is absent when no enabled adapter has a native skill root.
+``applies_if`` (ADR 0001). ``python-testing``'s members all need pytest, so the
+skill follows the ``pytest`` dependency in and out of the repo. ``python-tooling``
+has an ungated member (``python-static-checks``), so it stays while its two
+FastAPI references follow ``fastapi``. The "Where guidance lives" map in
+``AGENTS.md`` names only skills a sync writes, so it is absent when no enabled
+adapter has a native skill root.
 """
 
 from __future__ import annotations
 
 import argparse
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -24,6 +26,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _TOOLING = "python-tooling"
+_TESTING: Final = "python-testing"
+#: python-tooling's ungated member, written in every synthetic repo, and the FastAPI pair.
+_STATIC_CHECKS: Final = ["python-static-checks.md"]
+_FASTAPI_REFERENCES: Final = ["fastapi-app-wiring.md", "fastapi-error-boundaries.md"]
 
 _CONFIG = """\
 schema_version = 1
@@ -57,36 +63,67 @@ def _set_dependencies(repo: Path, dependencies: str) -> None:
     )
 
 
-def _tooling_lock_paths(repo: Path) -> list[str]:
+def _skill_lock_paths(repo: Path, skill_id: str) -> list[str]:
+    """The sorted lockfile paths under any root's ``<skill_id>/`` directory."""
     lockfile = FileSystemStateSource(repo_root=repo).load_lockfile()
     assert lockfile is not None
-    return sorted(entry.path for entry in lockfile.entries if f"/{_TOOLING}/" in entry.path)
+    return sorted(entry.path for entry in lockfile.entries if f"/{skill_id}/" in entry.path)
 
 
-def test_python_tooling_follows_the_fastapi_dependency_in_and_out(
-    tmp_path: Path, make_synthetic_repo: Callable[..., Path]
-) -> None:
-    repo = make_synthetic_repo(
+def _references(repo: Path, root: str, skill_id: str) -> list[str]:
+    """The sorted file names in ``repo/<root>/<skill_id>/references/``."""
+    return sorted(p.name for p in (repo / root / skill_id / "references").iterdir())
+
+
+def _synthetic_skill_repo(tmp_path: Path, make_synthetic_repo: Callable[..., Path]) -> Path:
+    """A synthetic repo with every native skill root's adapter on and only ``click`` declared."""
+    return make_synthetic_repo(
         tmp_path,
         config_text=_CONFIG.format(adapters=_SKILL_ADAPTERS),
         pyproject_extras={"dependencies": ["click"]},
     )
+
+
+def test_python_testing_follows_the_pytest_dependency_in_and_out(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path]
+) -> None:
+    repo = _synthetic_skill_repo(tmp_path, make_synthetic_repo)
     assert _sync.run(_ns(repo)) == 0
-    assert [root for root in NATIVE_SKILL_ROOTS if (repo / root / _TOOLING).exists()] == []
-    assert (repo / NATIVE_SKILL_ROOTS[0] / "python-coding" / "SKILL.md").is_file()
+    assert [root for root in NATIVE_SKILL_ROOTS if (repo / root / _TESTING).exists()] == []
+
+    _set_dependencies(repo, '["click", "pytest"]')
+    assert _sync.run(_ns(repo)) == 0
+    for root in NATIVE_SKILL_ROOTS:
+        assert "pytest.md" in _references(repo, root, _TESTING), root
+    assert "skill `python-testing`" in (repo / "AGENTS.md").read_text(encoding="utf-8")
+
+    _set_dependencies(repo, '["click"]')
+    assert _sync.run(_ns(repo)) == 0
+    assert [root for root in NATIVE_SKILL_ROOTS if (repo / root / _TESTING).exists()] == []
+    assert _skill_lock_paths(repo, _TESTING) == []
+    assert "skill `python-testing`" not in (repo / "AGENTS.md").read_text(encoding="utf-8")
+
+
+def test_fastapi_references_follow_the_fastapi_dependency_in_and_out(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path]
+) -> None:
+    """python-tooling stays for its ungated static-checks member; the FastAPI pair comes and goes."""
+    repo = _synthetic_skill_repo(tmp_path, make_synthetic_repo)
+    assert _sync.run(_ns(repo)) == 0
+    for root in NATIVE_SKILL_ROOTS:
+        assert _references(repo, root, _TOOLING) == _STATIC_CHECKS, root
 
     _set_dependencies(repo, '["click", "fastapi"]')
     assert _sync.run(_ns(repo)) == 0
     for root in NATIVE_SKILL_ROOTS:
-        references = sorted(p.name for p in (repo / root / _TOOLING / "references").iterdir())
-        assert references == ["fastapi-app-wiring.md", "fastapi-error-boundaries.md"], root
-    assert "skill `python-tooling`" in (repo / "AGENTS.md").read_text(encoding="utf-8")
+        assert _references(repo, root, _TOOLING) == _FASTAPI_REFERENCES + _STATIC_CHECKS, root
 
     _set_dependencies(repo, '["click"]')
     assert _sync.run(_ns(repo)) == 0
-    assert [root for root in NATIVE_SKILL_ROOTS if (repo / root / _TOOLING).exists()] == []
-    assert _tooling_lock_paths(repo) == []
-    assert "skill `python-tooling`" not in (repo / "AGENTS.md").read_text(encoding="utf-8")
+    for root in NATIVE_SKILL_ROOTS:
+        assert _references(repo, root, _TOOLING) == _STATIC_CHECKS, root
+    assert [path for path in _skill_lock_paths(repo, _TOOLING) if "fastapi" in path] == []
+    assert "skill `python-tooling`" in (repo / "AGENTS.md").read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("adapters", ["[]", '["continue"]'], ids=["agents-md-only", "continue"])

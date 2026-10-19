@@ -1,0 +1,95 @@
+"""End-to-end ``playbook sync`` of the gated python-tooling references (specs/prS-skills-context.md 11.3).
+
+``python-tooling`` has one ungated member, ``python-static-checks``, so the skill is
+written in every Python repo. Its other distilled members follow their gates: the
+uv workflow reference needs a ``uv.lock`` (``package_manager: uv``), and the
+Pydantic boundaries reference a declared ``pydantic`` dependency
+(``has_framework: ["pydantic"]``). Each test syncs a synthetic repo with the
+``claude_code`` adapter only and reads the rule ids the skill holds as references.
+"""
+
+from __future__ import annotations
+
+import argparse
+from typing import TYPE_CHECKING, Final
+
+from coding_agent_playbook.commands import sync as _sync
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+_CONFIG: Final = """\
+schema_version = 1
+adapters_enabled = ["claude_code"]
+overlays_enabled = []
+
+[project]
+name = "synthetic"
+kind = "python-library"
+
+[engine]
+version = "0.1.0a0"
+
+[storage]
+artifact_source = "filesystem"
+state_source = "filesystem"
+"""
+_TOOLING_REFERENCES: Final = (".claude", "skills", "python-tooling", "references")
+_UV_WORKFLOW: Final = "python-uv-workflow"
+_PYDANTIC_BOUNDARIES: Final = "pydantic-boundaries"
+
+
+def _python_repo(root: Path, make_synthetic_repo: Callable[..., Path], **extras: object) -> Path:
+    """A fresh synthetic repo under ``root``; ``extras`` go to ``make_synthetic_repo``."""
+    root.mkdir()
+    return make_synthetic_repo(root, config_text=_CONFIG, **extras)
+
+
+def _synced_tooling_references(repo: Path) -> list[str]:
+    """Sync ``repo`` and return the sorted rule ids ``python-tooling`` holds as references."""
+    assert _sync.run(argparse.Namespace(repo_root=str(repo), check=False)) == 0
+    references = repo.joinpath(*_TOOLING_REFERENCES)
+    return sorted(path.name.removesuffix(".md") for path in references.iterdir())
+
+
+def test_python_tooling_exists_in_a_plain_python_repo(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path]
+) -> None:
+    """No framework and no uv.lock: the ungated static-checks member alone writes the skill."""
+    repo = _python_repo(tmp_path / "plain", make_synthetic_repo)
+
+    assert _synced_tooling_references(repo) == ["python-static-checks"]
+    skill_md = repo.joinpath(*_TOOLING_REFERENCES).parent / "SKILL.md"
+    assert "Covers Static checks." in skill_md.read_text(encoding="utf-8")
+    agents_md = (repo / "AGENTS.md").read_text(encoding="utf-8")
+    assert "- Tool configuration and framework wiring: skill `python-tooling`" in agents_md
+
+
+def test_uv_workflow_reference_only_in_uv_repos(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path]
+) -> None:
+    uv_repo = _python_repo(tmp_path / "uv", make_synthetic_repo)
+    (uv_repo / "uv.lock").write_text("version = 1\n", encoding="utf-8")
+    pip_repo = _python_repo(tmp_path / "pip", make_synthetic_repo)
+    (pip_repo / "requirements.txt").write_text("httpx>=0.27\n", encoding="utf-8")
+
+    assert _UV_WORKFLOW in _synced_tooling_references(uv_repo)
+    assert _UV_WORKFLOW not in _synced_tooling_references(pip_repo)
+
+
+def test_pydantic_boundaries_needs_declared_pydantic(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path]
+) -> None:
+    """R5-3: a FastAPI repo that gets Pydantic only transitively gets no Pydantic reference."""
+    declared = _python_repo(
+        tmp_path / "declared", make_synthetic_repo, pyproject_extras={"dependencies": ["pydantic"]}
+    )
+    transitive = _python_repo(
+        tmp_path / "transitive", make_synthetic_repo, pyproject_extras={"dependencies": ["fastapi"]}
+    )
+
+    assert _PYDANTIC_BOUNDARIES in _synced_tooling_references(declared)
+    fastapi_only = _synced_tooling_references(transitive)
+    assert "fastapi-app-wiring" in fastapi_only
+    assert _PYDANTIC_BOUNDARIES not in fastapi_only
