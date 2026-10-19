@@ -1,7 +1,7 @@
 """The paths a tool call writes, shared by the §E path guards (specs/prK-hook-pack.md §E.1).
 
 guard-generated-outputs and control-plane-guard judge the same targets: the
-file tool's write paths, and the Bash write targets ``shell.write_targets``
+file tool's write paths, and the Bash write targets ``shell.parse.write_targets``
 extracts from each segment, normalized against that segment's cwd exactly
 like a file-tool path (repo-relative, folded on darwin/win32). One helper,
 so the two guards can never disagree about where a redirect lands.
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = [
     "FILE_WRITE_CLASSES",

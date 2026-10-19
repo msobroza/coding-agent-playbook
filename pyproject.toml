@@ -579,8 +579,6 @@ ignore_imports = [
     # A16: hook_runtime/_ruff.py becomes the public hook_runtime/ruff.py (after #62)
     "coding_agent_playbook._guard_config_quality -> coding_agent_playbook.hook_runtime._ruff",
     "coding_agent_playbook._guard_config_ruff -> coding_agent_playbook.hook_runtime._ruff",
-    # N17: becomes hook_runtime/shell/wrappers.py
-    "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime._shell_wrappers",
     # GC-1: the constants move to hook_runtime/config/schema.py (after #62)
     "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._control_plane_paths",
     "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._control_plane_text",

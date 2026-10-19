@@ -1,6 +1,6 @@
-"""The POSIX shell lexer behind ``shell.parse_shell`` (specs/prK-lifecycle-hooks.md §D.2.5).
+"""The POSIX shell lexer behind ``parse.parse_shell`` (specs/prK-lifecycle-hooks.md §D.2.5).
 
-It turns command text into the tokens of ``_shell_tokens``: words, control
+It turns command text into the tokens of ``tokens``: words, control
 operators, and redirections carrying their heredoc bodies. The command lists
 inside substitutions are scanned recursively, because the shell runs them. The
 lexer executes and expands nothing: a construct it cannot follow raises
@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.hook_runtime._shell_tokens import (
+from coding_agent_playbook.hook_runtime.shell.tokens import (
     MAX_DEPTH,
     PLACEHOLDER_CLOSE,
     PLACEHOLDER_OPEN,
@@ -26,7 +26,7 @@ from coding_agent_playbook.hook_runtime._shell_tokens import (
 )
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.hook_runtime._shell_tokens import Token
+    from coding_agent_playbook.hook_runtime.shell.tokens import Token
 
 _OPERATORS = (";;&", ";;", ";&", "&&", "||", "|&", ";", "|", "&")
 _REDIRECT = re.compile(r"(\d*)(&>>|&>|>>|>&|>\||<<<|<<-|<<|<>|<&|>|<)")

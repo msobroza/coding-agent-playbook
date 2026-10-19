@@ -151,7 +151,7 @@ def _is_guarded(name: str) -> bool:
 @cache
 def _guarded_names() -> frozenset[str]:
     """``_GUARDED`` plus the parser's own launchers, runners and shells (loaded on first use)."""
-    from coding_agent_playbook.hook_runtime._shell_wrappers import (
+    from coding_agent_playbook.hook_runtime.shell.wrappers import (
         DEFAULT_RUNNER_WRAPPERS,
         LAUNCHER_NAMES,
         SHELL_NAMES,

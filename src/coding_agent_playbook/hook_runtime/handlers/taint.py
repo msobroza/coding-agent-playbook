@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = [
     "CONFIG_SCHEMA",
@@ -155,9 +155,9 @@ def _risky_action(
 
 
 def _segment_action(segment: Segment) -> tuple[str, str] | None:
-    from coding_agent_playbook.hook_runtime.gitargv import parse_git
     from coding_agent_playbook.hook_runtime.handlers._egress import network_hosts, segment_egress
     from coding_agent_playbook.hook_runtime.judges.install_commands import install_requests
+    from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
 
     git = parse_git(segment)
     if git is not None and git.subcommand == "push":
@@ -196,7 +196,7 @@ def _control_plane(
 
 def _shell_writes(ev: CanonicalEvent, ctx: HandlerContext) -> list[NormalizedPath]:
     from coding_agent_playbook.hook_runtime.handlers._targets import shell_write_targets
-    from coding_agent_playbook.hook_runtime.shell import write_targets
+    from coding_agent_playbook.hook_runtime.shell.parse import write_targets
 
     return shell_write_targets(ev, ctx, write_targets)
 

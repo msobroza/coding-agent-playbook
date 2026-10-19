@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     )
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import ShellCommand
+    from coding_agent_playbook.hook_runtime.shell.parse import ShellCommand
 
 __all__ = ["CONFIG_SCHEMA", "REASON", "control_plane_guard"]
 
@@ -152,7 +152,7 @@ def _shell_verdicts(
     command: ShellCommand, ev: CanonicalEvent, ctx: HandlerContext, plane: PlaneFn
 ) -> list[Verdict]:
     """The command rows of each segment, then its write targets routed like file paths."""
-    from coding_agent_playbook.hook_runtime.shell import write_targets  # Bash branch only
+    from coding_agent_playbook.hook_runtime.shell.parse import write_targets  # Bash branch only
 
     found: list[Verdict] = []
     pipes_in: dict[int, bool] = {}  # depth -> the previous segment there pipes into the next

@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Final
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["READER_ARGV0S", "is_pattern", "read_candidates"]
 

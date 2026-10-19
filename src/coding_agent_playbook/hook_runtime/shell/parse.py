@@ -14,10 +14,9 @@ handler then treats the command as unknown and takes its conservative branch.
 PowerShell is never shlex-parsed: its segments are empty and handlers apply
 their PowerShell regex rows.
 
-The work is split over private modules to keep each under §D.1's 300 lines:
-``_shell_tokens`` / ``_shell_scan`` (lexer), ``_shell_options`` and
-``_shell_wrappers`` (launchers), ``_shell_segments`` (assembly) and
-``_shell_writes`` (``write_targets``).
+The work is split over the package's modules to keep each under §D.1's 300
+lines: ``tokens`` / ``_scan`` (lexer), ``_options`` and ``wrappers``
+(launchers), ``segments`` (assembly) and ``writes`` (``write_targets``).
 """
 
 from __future__ import annotations
@@ -26,20 +25,20 @@ import re
 from dataclasses import dataclass, field
 from typing import Final, Literal
 
-from coding_agent_playbook.hook_runtime._shell_scan import scan
-from coding_agent_playbook.hook_runtime._shell_segments import (
+from coding_agent_playbook.hook_runtime.shell._scan import scan
+from coding_agent_playbook.hook_runtime.shell.segments import (
     MAX_SEGMENTS,
     Redirect,
     Segment,
     build_segments,
 )
-from coding_agent_playbook.hook_runtime._shell_tokens import MAX_DEPTH, ScanError, ScanLimit
-from coding_agent_playbook.hook_runtime._shell_wrappers import (
+from coding_agent_playbook.hook_runtime.shell.tokens import MAX_DEPTH, ScanError, ScanLimit
+from coding_agent_playbook.hook_runtime.shell.wrappers import (
     DEFAULT_SHELL_CONFIG,
     SegmentOrigin,
     ShellConfig,
 )
-from coding_agent_playbook.hook_runtime._shell_writes import write_targets
+from coding_agent_playbook.hook_runtime.shell.writes import write_targets
 
 __all__ = [
     "DEFAULT_SHELL_CONFIG",

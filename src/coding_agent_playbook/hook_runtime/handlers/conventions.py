@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["CONFIG_SCHEMA", "ConventionRow", "command_convention_guard", "convention_rows"]
 

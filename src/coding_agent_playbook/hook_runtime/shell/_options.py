@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.hook_runtime._shell_tokens import Word
+    from coding_agent_playbook.hook_runtime.shell.tokens import Word
 
 _ENV_ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 
@@ -72,7 +72,7 @@ def skip_options(
 
     Example::
 
-        >>> from coding_agent_playbook.hook_runtime._shell_tokens import Word
+        >>> from coding_agent_playbook.hook_runtime.shell.tokens import Word
         >>> words = [Word(v) for v in ("sudo", "-u", "root", "rm")]
         >>> skip_options(words, 1, OptionSpec("u"))
         (3, [])
@@ -99,7 +99,7 @@ def has_letter(tokens: list[Word], letters: str, longs: tuple[str, ...] = ()) ->
 
     Example::
 
-        >>> from coding_agent_playbook.hook_runtime._shell_tokens import Word
+        >>> from coding_agent_playbook.hook_runtime.shell.tokens import Word
         >>> has_letter([Word("-lc")], "c")
         True
     """

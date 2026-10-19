@@ -8,7 +8,7 @@ A segment matches a row when both reduce to the same core: the launchers are
 stripped with ``guard_config.shell``, the very unwrapping the guards judge a
 command by (the configured ``wrapper_prefixes``, the ``runner_wrappers`` such
 as ``uv run --frozen`` and the built-in ``env``/``sudo``/``timeout``/...
-table, ``_shell_wrappers``), then a leading ``python -m``. The program must be
+table, ``shell.wrappers``), then a leading ``python -m``. The program must be
 the same and every remaining word of the row must appear in the segment:
 ``proxy uv run pytest -q tests/x.py`` ran ``pytest`` once ``proxy`` is a
 configured wrapper; ``ruff check src`` ran ``ruff check``. The command is
@@ -22,16 +22,16 @@ import posixpath
 import re
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._shell_tokens import ScanError, Word
-from coding_agent_playbook.hook_runtime._shell_wrappers import DEFAULT_SHELL_CONFIG, unwrap
+from coding_agent_playbook.hook_runtime.shell.tokens import ScanError, Word
+from coding_agent_playbook.hook_runtime.shell.wrappers import DEFAULT_SHELL_CONFIG, unwrap
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.hook_runtime._shell_wrappers import ShellConfig
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.event import ToolCall
-    from coding_agent_playbook.hook_runtime.shell import ShellCommand
+    from coding_agent_playbook.hook_runtime.shell.parse import ShellCommand
+    from coding_agent_playbook.hook_runtime.shell.wrappers import ShellConfig
 
 __all__ = ["verify_ids"]
 

@@ -59,7 +59,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
     from coding_agent_playbook.security.paths import PathPolicy
 
 __all__ = ["ADVICE", "CONFIG_SCHEMA", "ENV_CONTEXT", "secret_path_guard"]
@@ -220,7 +220,7 @@ class _Judge:
 
 def _segment_paths(segment: Segment, *, degraded: bool) -> Iterator[tuple[str, bool]]:
     """``(raw path, written)`` for each argv token form and redirect target of ``segment``."""
-    from coding_agent_playbook.hook_runtime.shell import write_targets
+    from coding_agent_playbook.hook_runtime.shell.parse import write_targets
 
     written = set(write_targets(segment))
     # A plain argv0 is a command name; one with a "/" (or a degraded word) may be a path.

@@ -28,9 +28,9 @@ from coding_agent_playbook.security.audit import encode_jsonl_line
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from coding_agent_playbook.hook_runtime._shell_segments import Segment
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.globs import GlobSet
+    from coding_agent_playbook.hook_runtime.shell.segments import Segment
     from coding_agent_playbook.security.pii import PiiConfig
 
 __all__ = [
