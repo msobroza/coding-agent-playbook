@@ -1,17 +1,19 @@
-"""Unit tests for the catalog resolver (``catalog.py``).
+"""Unit tests for the catalog resolver (``catalog/roots.py``).
 
 Every test builds its own catalog tree under ``tmp_path``: the resolver must
-not depend on where (or whether) the repository's own ``catalog/`` exists.
+not depend on where (or whether) the repository's own ``catalog/`` exists. The
+one exception pins the unpatched default, which finds this checkout's catalog.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook import catalog
-from coding_agent_playbook.catalog import (
+from coding_agent_playbook.catalog import roots as catalog
+from coding_agent_playbook.catalog.roots import (
     DEPRECATED_PACK_NAMESPACE,
     ENGINE_PACKAGE,
     PLUGIN_NAMESPACE,
@@ -27,7 +29,6 @@ from coding_agent_playbook.catalog import (
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-    from pathlib import Path
 
 
 def _make_tree(root: Path, plugins: Iterable[str] = ("superpowers",)) -> Path:
@@ -99,6 +100,15 @@ def test_defaults_follow_the_monkeypatched_package_dir(
     assert catalog_layer_root(f"{PLUGIN_NAMESPACE}.superpowers") == (
         tmp_path / "catalog" / "plugins" / "superpowers"
     )
+
+
+def test_catalog_root_finds_the_checkout_catalog_unpatched() -> None:
+    """N3 regression: ``roots.py`` sits one level deeper than ``catalog.py`` did, so
+    ``_PACKAGE_DIR`` must still be the engine package directory, not ``catalog/``;
+    otherwise ``catalog_root()`` raises ``CatalogMissingError`` in every checkout."""
+    repo = Path(__file__).resolve().parents[2]
+
+    assert catalog_root() == repo / "catalog"
 
 
 # --- bundled_plugins ---------------------------------------------------------

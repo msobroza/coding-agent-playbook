@@ -26,6 +26,7 @@ from typing import Any
 
 import pytest
 
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _resource_subdir
 from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands import validate as _validate
@@ -34,7 +35,6 @@ from coding_agent_playbook.commands._validate_links import check_markdown_links
 from coding_agent_playbook.config.tables.links import LinksConfig
 from coding_agent_playbook.links import extract_markdown_links
 from coding_agent_playbook.renderer import SENTINEL
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource, _resource_subdir
 from coding_agent_playbook.types import split_frontmatter
 from tests._catalog import plugin_root
 from tests.conftest import apply_hermetic_git_env

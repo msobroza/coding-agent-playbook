@@ -45,7 +45,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.catalog import is_bundled_layer
+from coding_agent_playbook.catalog.roots import is_bundled_layer
 from coding_agent_playbook.evals.judge import JudgeError
 from coding_agent_playbook.evals.prompting import PromptResolutionError
 from coding_agent_playbook.evaluators.scope import Determinism
