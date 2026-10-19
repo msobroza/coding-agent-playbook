@@ -55,6 +55,8 @@ class HookFrontmatter:
     applies_if: dict[str, Any] = field(default_factory=dict)
     linked_rule: str | None = None
     tags: list[str] = field(default_factory=list)
+    #: The one-line guardrail (D6); ``""`` means "fall back to the body's first sentence".
+    summary: str = ""
 
     def __post_init__(self) -> None:
         schema.restore_defaults(self)
@@ -113,8 +115,16 @@ class HookFrontmatter:
             applies_if=fields.table("applies_if"),
             linked_rule=fields.optional_text("linked_rule"),
             tags=fields.strings("tags"),
+            summary=fields.guardrail_summary("summary"),
         )
 
     def to_mapping(self) -> dict[str, Any]:
-        """Inverse of from_mapping: ``asdict`` with empty values dropped at every schema level."""
-        return schema.compact_frontmatter(dataclasses.asdict(self))
+        """Inverse of from_mapping: ``asdict`` with empty values dropped at every schema level.
+
+        An empty ``summary`` is dropped too (``drop_empty`` keeps ``""``), so a hook
+        without one serializes byte-identically to the days before the field existed.
+        """
+        mapping = schema.compact_frontmatter(dataclasses.asdict(self))
+        if not mapping.get("summary"):
+            mapping.pop("summary", None)
+        return mapping

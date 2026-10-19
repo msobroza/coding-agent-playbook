@@ -2,6 +2,7 @@
 id: guard-eval-fixtures
 name: Guard eval fixtures
 description: Ask before editing or reformatting a committed eval task's frozen setup/ fixtures.
+summary: Do not edit, reformat or lint-fix an eval task's frozen `setup/` files unless you are authoring that task.
 version: 1
 tier: opt-in
 priority: 60
