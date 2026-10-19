@@ -259,7 +259,7 @@ layers = [
     "grading",
     "generated_output",
     "artifacts",
-    "security | toml_writer | (_plugin_registry)",
+    "security | toml_writer | exit_two | (_plugin_registry)",
 ]
 exhaustive = true
 # Top-level modules not yet in their target package: each move PR deletes its
@@ -325,6 +325,7 @@ forbidden_modules = [
     "coding_agent_playbook.detector.facts",
     "coding_agent_playbook.detector.predicate",
     "coding_agent_playbook.evals",
+    "coding_agent_playbook.exit_two",
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
@@ -380,6 +381,7 @@ forbidden_modules = [
     "coding_agent_playbook.detector.facts",
     "coding_agent_playbook.detector.predicate",
     "coding_agent_playbook.evals",
+    "coding_agent_playbook.exit_two",
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
@@ -456,6 +458,7 @@ forbidden_modules = [
     "coding_agent_playbook.detector.facts",
     "coding_agent_playbook.detector.predicate",
     "coding_agent_playbook.evals",
+    "coding_agent_playbook.exit_two",
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
@@ -515,8 +518,6 @@ name = "An underscore module is imported only from inside its own package"
 type = "private_modules"
 containers = ["coding_agent_playbook"]
 ignore_imports = [
-    # CP-3: init's configure() owns --adapters (after #62)
-    "coding_agent_playbook.cli.parser -> coding_agent_playbook.commands._init_adapters",
     # A16: hook_runtime/_ruff.py becomes the public hook_runtime/ruff.py (after #62)
     "coding_agent_playbook.hooks.guard_config._tables_quality -> coding_agent_playbook.hook_runtime._ruff",
     "coding_agent_playbook.hooks.guard_config._tables_ruff -> coding_agent_playbook.hook_runtime._ruff",

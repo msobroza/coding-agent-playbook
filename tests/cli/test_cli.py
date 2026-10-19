@@ -11,7 +11,7 @@ import pytest
 from coding_agent_playbook import __version__
 from coding_agent_playbook.catalog import roots as catalog
 from coding_agent_playbook.cli import main
-from coding_agent_playbook.cli.parser import _COMMANDS, _LEGACY, _SUBCOMMANDS, build_parser
+from coding_agent_playbook.cli.parser import _COMMANDS, _SUBCOMMANDS, build_parser
 
 if TYPE_CHECKING:
     import argparse
@@ -65,14 +65,37 @@ def test_every_subcommand_in_module_tuple_is_registered(name):
     assert callable(getattr(args, "func", None))
 
 
-def test_every_subcommand_is_a_command_or_legacy() -> None:
-    """Each name of ``_SUBCOMMANDS`` is built exactly one way: by its Command module or by
-    its ``_LEGACY`` block in ``cli/parser.py``; neither table names anything else."""
-    command_names = [command.NAME for command in _COMMANDS]
+def test_every_subcommand_is_a_command_in_help_order() -> None:
+    """Every subcommand is a Command module (CP-3 emptied the legacy table), and
+    ``_SUBCOMMANDS`` is their names in the order ``playbook --help`` has always listed."""
+    help_order = (
+        "init",
+        "sync",
+        "check",
+        "validate",
+        "render",
+        "eval",
+        "metrics",
+        "import-harness",
+        "validate-harness",
+        "gate-scan",
+        "ci",
+        "scan-sinks",
+        "check-notebooks",
+        "scan-secrets",
+        "check-commit-trailers",
+        "check-deps",
+    )
 
-    assert sorted([*command_names, *_LEGACY]) == sorted(_SUBCOMMANDS)
-    assert len(set(_SUBCOMMANDS)) == len(_SUBCOMMANDS)
-    assert set(_LEGACY) == {"init"}  # CP-3
+    assert tuple(command.NAME for command in _COMMANDS) == help_order
+    assert help_order == _SUBCOMMANDS
+
+
+def test_cli_parser_keeps_no_legacy_table() -> None:
+    """``init`` was the last subcommand whose flags ``cli/parser.py`` declared (CP-3)."""
+    from coding_agent_playbook.cli import parser as cli_parser
+
+    assert not hasattr(cli_parser, "_LEGACY")
 
 
 def test_command_names_are_unique_and_match_their_place() -> None:
@@ -102,16 +125,6 @@ def test_main_dispatches_to_a_command_run_patched_after_import(
     monkeypatch.setattr(check_cmd, "run", fake_run)
     assert main(["check", "--repo-root", "/r"]) == 5
     assert seen == ["/r"]
-
-
-def test_build_parser_names_a_subcommand_nothing_builds(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A name listed in ``_SUBCOMMANDS`` with no Command and no legacy block fails loudly."""
-    from coding_agent_playbook.cli import parser as cli_parser
-
-    monkeypatch.setattr(cli_parser, "_SUBCOMMANDS", (*_SUBCOMMANDS, "lint"))
-
-    with pytest.raises(LookupError, match="'lint' is neither in _COMMANDS nor in _LEGACY"):
-        build_parser()
 
 
 def test_sync_subparser_accepts_check_and_repo_root_flags():
@@ -472,7 +485,7 @@ def test_main_translates_config_error_to_exit_2(monkeypatch, capsys):
     assert capsys.readouterr().err == "error: x.toml: the [overlays] table is not read\n"
 
 
-def test_main_translates_missing_precommit_template_to_exit_2(
+def test_missing_precommit_template_exits_2(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A broken install missing the pre-commit template exits 2 with no traceback."""
@@ -490,6 +503,24 @@ def test_main_translates_missing_precommit_template_to_exit_2(
         f"error: the engine's pre-commit template was not found at {missing}; "
         "reinstall coding-agent-playbook\n"
     )
+
+
+def test_main_reports_any_exit_two_error_as_an_error_line(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``main`` maps the shared exit-2 base, so a command's error type needs no cli entry."""
+    from coding_agent_playbook.commands import validate as validate_cmd
+    from coding_agent_playbook.exit_two import ExitTwoError
+
+    class FakeCommandError(ExitTwoError):
+        """An error type ``cli`` has never heard of."""
+
+    def raising_run(args: object) -> int:
+        raise FakeCommandError("the widget is missing")
+
+    monkeypatch.setattr(validate_cmd, "run", raising_run)
+    assert main(["validate"]) == 2
+    assert capsys.readouterr().err == "error: the widget is missing\n"
 
 
 def test_sync_exits_2_when_catalog_missing(
