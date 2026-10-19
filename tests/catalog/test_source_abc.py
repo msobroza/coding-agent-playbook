@@ -6,7 +6,12 @@ import pytest
 
 from coding_agent_playbook.artifacts.hook import Hook
 from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
-from coding_agent_playbook.catalog.source import ArtifactSource
+from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
+from coding_agent_playbook.catalog.source import (
+    ArtifactSource,
+    FileSystemArtifactSource,
+    engine_package_of,
+)
 from tests.hook_samples import hook_frontmatter
 
 
@@ -62,3 +67,13 @@ def test_collect_hooks_default_records_a_raised_hook_schema_error():
             raise error
 
     assert _FailingSource().collect_hooks() == ([], [error])
+
+
+def test_engine_package_of_reads_a_filesystem_source_and_assumes_the_engine_otherwise(
+    tmp_path,
+):
+    """Hooks from the engine layer are engine-sourced: the package name says which layer."""
+    pointed = FileSystemArtifactSource(repo_root=tmp_path, engine_package="acme_engine")
+
+    assert engine_package_of(pointed) == "acme_engine"
+    assert engine_package_of(_DummyArtifactSource()) == ENGINE_PACKAGE

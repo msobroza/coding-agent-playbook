@@ -37,7 +37,7 @@ class ContinueAdapter(Adapter):
     """Adapter that writes the ``.continue/`` directory tree.
 
     Registers under the ``coding_agent_playbook.adapters`` entry-point group as
-    ``continue``. The orchestrator (PR 10) discovers and instantiates adapters
+    ``continue``. ``adapters.registry`` (PR 10) discovers and instantiates adapters
     through that group — never construct ``ContinueAdapter`` directly outside
     of tests.
 

@@ -11,12 +11,11 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.orchestrator import SyncContext
-
 # The rule set through its module, so this command binds none of its names: the
 # move map (tests/architecture/move_map/a04.toml) keeps seeing them as moved.
 from coding_agent_playbook.validation import checks
 from coding_agent_playbook.validation.context import (
+    SyncContext,
     config_less_context,
     config_less_notes,
     has_consumer_config,

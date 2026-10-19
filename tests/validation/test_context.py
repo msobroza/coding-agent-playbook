@@ -1,46 +1,36 @@
-"""Hooks in the orchestrator (specs/prK-lifecycle-hooks.md §A.5, §A.6, §P P8c).
+"""Tests for ``SyncContext`` (PR 10; specs/prK-lifecycle-hooks.md §A.5, §A.6, §P P8c).
 
-:meth:`OverlayResolver.resolve_hooks` hands every layer's definition of an id to
-the additive layer merge and records ``Collision(kind="hook")``, violations and
-definitions; :class:`SyncContext` splits a source's flat hook list into real
-layers and either fails loudly on a malformed hook or, with
-``tolerate_hook_errors``, records it. It also carries the committed
-``[hooks]`` / ``[guardrails]`` tables raw (§B.1). Kept apart from
-``test_orchestrator.py`` for the file-size budget.
+:meth:`SyncContext.from_repo` loads the config, detects facts and resolves the
+overlays; :meth:`SyncContext.from_config` is the same minus the config load. Its
+hook step splits a source's flat hook list into real layers and either fails
+loudly on a malformed hook or, with ``tolerate_hook_errors``, records it. It also
+carries the committed ``[hooks]`` / ``[guardrails]`` tables raw (§B.1). The
+config-less context of ``playbook validate`` is tested in ``tests/cli/test_validate.py``.
 """
 
 from __future__ import annotations
 
 import importlib
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 
 from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
+from coding_agent_playbook.artifacts.identity import artifact_id_of
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
+from coding_agent_playbook.catalog.resolve import Collision
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.tables.hooks import PolicyTables
-from coding_agent_playbook.hook_policy import (
-    NO_HANDLER_SCHEMAS,
-    ConfigKeySpec,
-    ConfigSchemaLookup,
-    HookViolation,
-    merge_hook_layers,
-    split_hook_layers,
-)
-from coding_agent_playbook.orchestrator import Collision, OverlayResolver, SyncContext
-from tests.fakes import FakeHandlerSchemas
-from tests.hook_samples import sample_hook
+from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from coding_agent_playbook.artifacts.hook import Hook
-
-
-def _make_hook(hook_id: str, source: str, **overrides: Any) -> Hook:
-    return sample_hook(source, id=hook_id, **overrides)
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
 
 
 def _local(hooks: Sequence[Hook]) -> list[Hook]:
@@ -48,92 +38,68 @@ def _local(hooks: Sequence[Hook]) -> list[Hook]:
     return [hook for hook in hooks if hook.source_package == "<repo-local>"]
 
 
-class _SpyMerge:
-    """Records every definition tuple handed to the layer merge, then merges for real."""
-
-    def __init__(self) -> None:
-        self.calls: list[tuple[Hook, ...]] = []
-
-    def __call__(
-        self, definitions: Sequence[Hook], *, schemas: ConfigSchemaLookup = NO_HANDLER_SCHEMAS
-    ) -> tuple[Hook, list[HookViolation]]:
-        self.calls.append(tuple(definitions))
-        return merge_hook_layers(definitions, schemas=schemas)
-
-
-def test_resolve_hooks_passes_every_layer_definition_to_merge():
-    spy = _SpyMerge()
-    engine_x, engine_y = _make_hook("guard-x", "engine"), _make_hook("guard-y", "engine")
-    overlay_x, overlay_y = _make_hook("guard-x", "overlay-a"), _make_hook("guard-y", "overlay-b")
-    repo_x = _make_hook("guard-x", "<repo-local>")
-    resolver = OverlayResolver(merge_hooks=spy)
-
-    result = resolver.resolve_hooks([engine_x, engine_y], [[overlay_x], [overlay_y]], [repo_x])
-
-    assert spy.calls == [(engine_x, overlay_x, repo_x), (engine_y, overlay_y)]
-    assert [hook.source_package for hook in result] == ["<repo-local>", "overlay-b"]
-    assert resolver.hook_definitions == {
-        "guard-x": (engine_x, overlay_x, repo_x),
-        "guard-y": (engine_y, overlay_y),
-    }
-
-
-def test_resolve_hooks_records_hook_collision():
-    resolver = OverlayResolver()
-
-    resolver.resolve_hooks(
-        [_make_hook("guard-x", "engine"), _make_hook("solo", "engine")],
-        [[_make_hook("guard-x", "overlay-a")]],
-        [],
+def test_sync_context_from_repo_loads_synthetic_repo(tmp_path, make_synthetic_repo):
+    repo = make_synthetic_repo(
+        tmp_path,
+        rules=[("repo-rule", "Body content\n")],
     )
-
-    assert resolver.collisions == [
-        Collision(kind="hook", artifact_id="guard-x", winner="overlay-a", losers=("engine",))
-    ]
-
-
-def test_resolve_hooks_records_violations_and_keeps_the_mandatory_definition():
-    resolver = OverlayResolver()
-    engine = _make_hook("guard-x", "engine", tier="overlay")
-    overlay = _make_hook("guard-x", "overlay-a", mandatory=True)
-
-    result = resolver.resolve_hooks([engine], [[overlay]], [_make_hook("guard-x", "<repo-local>")])
-
-    assert result[0].source_package == "overlay-a"
-    assert [violation.rule for violation in resolver.hook_violations] == ["H15"]
-    assert resolver.collisions == [
-        Collision("hook", "guard-x", winner="overlay-a", losers=("engine", "<repo-local>"))
-    ]
+    ctx = SyncContext.from_repo(repo)
+    assert ctx.repo_root == repo
+    assert ctx.config.project.name == "synthetic"
+    assert any(rule.frontmatter.id == "repo-rule" for rule in ctx.rules_resolved)
+    # adapters discovered + agents_md always present
+    assert "agents_md" in ctx.adapters
+    # facts include something — at minimum project_kind
+    assert "project_kind" in ctx.facts
 
 
-def test_resolve_hooks_hands_its_schemas_to_the_merge():
-    schemas = FakeHandlerSchemas({"guard_x": {"deny": ConfigKeySpec("extend")}})
-    resolver = OverlayResolver(hook_schemas=schemas)
-    engine = _make_hook(
-        "guard-x", "engine", handler={"builtin": "guard_x", "config": {"deny": ["a"]}}
+def test_sync_context_from_repo_missing_config_raises(tmp_path):
+    """Without ``.coding-agent-playbook.toml``, FileSystemStateSource raises
+    ``FileNotFoundError`` and ``SyncContext`` does not swallow it."""
+    with pytest.raises(FileNotFoundError):
+        SyncContext.from_repo(tmp_path)
+
+
+def _ids(artifacts: list[Rule] | list[Prompt] | list[Skill]) -> list[str]:
+    return [artifact_id_of(artifact) for artifact in artifacts]
+
+
+def test_from_config_resolves_like_from_repo(tmp_path, make_synthetic_repo):
+    """``from_repo`` is ``load_config`` + ``from_config``: the config-less validate
+    context (prK §P P8) reuses the same detect → walk → resolve step."""
+    repo = make_synthetic_repo(
+        tmp_path,
+        rules=[("repo-rule", "Body content\n")],
+        prompts=[("repo-prompt", {"slash": "repo-prompt"})],
     )
-    overlay = _make_hook(
-        "guard-x", "acme", handler={"builtin": "guard_x", "config": {"deny": ["b"]}}
+    by_repo = SyncContext.from_repo(repo)
+
+    by_config = SyncContext.from_config(repo, by_repo.config)
+
+    assert by_config.config is by_repo.config
+    assert by_config.facts == by_repo.facts
+    assert _ids(by_config.rules_resolved) == _ids(by_repo.rules_resolved)
+    assert _ids(by_config.prompts_resolved) == _ids(by_repo.prompts_resolved)
+    assert _ids(by_config.skills_resolved) == _ids(by_repo.skills_resolved)
+    assert by_config.adapters.keys() == by_repo.adapters.keys()
+    assert by_config.overlay_collisions == by_repo.overlay_collisions
+
+
+def test_from_config_walks_the_injected_artifact_source(tmp_path, make_synthetic_repo):
+    repo = make_synthetic_repo(tmp_path)
+    config = SyncContext.from_repo(repo).config
+    rules_dir = tmp_path / "src" / "acme_overlay" / "resources" / "rules"
+    rules_dir.mkdir(parents=True)
+    (rules_dir / "acme.md").write_text(
+        "---\nid: acme\nname: Acme\ndescription: d\nscope: always\n---\nBody\n",
+        encoding="utf-8",
     )
+    source = FileSystemArtifactSource(repo_root=repo, extra_resource_roots=[rules_dir.parent])
 
-    (merged,) = resolver.resolve_hooks([engine], [[overlay]], [])
+    ctx = SyncContext.from_config(repo, config, artifact_source=source)
 
-    assert merged.frontmatter.handler is not None
-    assert merged.frontmatter.handler.config == {"deny": ["a", "b"]}
-    assert schemas.calls == ["guard_x"]
-
-
-def test_bundled_pack_hook_is_an_overlay_layer():
-    """A bundled pack's package name starts with the engine's; it is still an overlay."""
-    engine = _make_hook("guard-x", ENGINE_PACKAGE)
-    pack = _make_hook("guard-x", "coding_agent_playbook.plugins.x")
-    other = _make_hook("guard-y", "acme")
-    pack_y = _make_hook("guard-y", "coding_agent_playbook.plugins.x")
-    repo = _make_hook("guard-x", "<repo-local>")
-
-    layers = split_hook_layers([engine, pack, pack_y, other, repo], engine_package=ENGINE_PACKAGE)
-
-    assert layers == ([engine], [[pack, pack_y], [other]], [repo])
+    assert ctx.artifact_source is source
+    assert "acme" in _ids(ctx.rules_resolved)
 
 
 def _package_hooks(name: str) -> Path:

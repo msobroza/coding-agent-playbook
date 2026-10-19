@@ -52,7 +52,7 @@ class SharedSkillsAdapter(Adapter):
 
     Registered under ``coding_agent_playbook.adapters`` as ``shared_skills``.
     Takes no ``rule_registry`` (it renders no prompts), so
-    :func:`~coding_agent_playbook.orchestrator.discover_adapters` constructs it
+    :func:`~coding_agent_playbook.adapters.registry.discover_adapters` constructs it
     with no arguments, exactly like ``agents_md``.
 
     Example::

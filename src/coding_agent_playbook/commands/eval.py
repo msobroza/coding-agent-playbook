@@ -50,7 +50,7 @@ from coding_agent_playbook.evals.judge import JudgeError
 from coding_agent_playbook.evals.prompting import PromptResolutionError
 from coding_agent_playbook.evaluators.scope import Determinism
 from coding_agent_playbook.evaluators.types import CheckResult, ScopeDetail
-from coding_agent_playbook.orchestrator import SyncContext
+from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
     import argparse

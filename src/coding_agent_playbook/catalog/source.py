@@ -338,7 +338,7 @@ class FileSystemArtifactSource(ArtifactSource):
         engine, ``catalog/plugins/<name>/eval_tasks/`` for a bundled plugin,
         ``<pkg>/resources/eval_tasks/`` for an overlay package, then
         ``<repo>/playbook/eval_tasks/``). Later layers do NOT override earlier
-        ones here — the orchestrator's :class:`OverlayResolver` handles ID-based
+        ones here — ``catalog.resolve``'s :class:`OverlayResolver` handles ID-based
         collision semantics for rules/prompts/skills, but eval tasks are
         aggregated as-is in v1 (no per-layer override pass yet; the
         collision-by-id pattern is identical and lands when first overlay ships
@@ -351,3 +351,19 @@ class FileSystemArtifactSource(ArtifactSource):
             for label, root in self.layer_roots("eval_tasks")
             for task_dir in discover_eval_task_dirs(root)
         ]
+
+
+def engine_package_of(source: ArtifactSource) -> str:
+    """The ``source_package`` of ``source``'s engine layer; hooks from it are engine-sourced.
+
+    A filesystem source can be pointed at another engine package (tests do);
+    any other source is assumed to serve the real one.
+
+    Example::
+
+        >>> engine_package_of(FileSystemArtifactSource(repo_root=Path(".")))  # doctest: +SKIP
+        'coding_agent_playbook'
+    """
+    if isinstance(source, FileSystemArtifactSource):
+        return source.engine_package
+    return ENGINE_PACKAGE

@@ -292,7 +292,6 @@ exhaustive_ignores = [
     "hook_policy",
     "hook_registrations",
     "hook_runtime",
-    "orchestrator",
     "prompt_rule_delivery",
     "renderer",
     "rule_registry",
@@ -302,6 +301,10 @@ ignore_imports = [
     "coding_agent_playbook._typing -> coding_agent_playbook.evals.task",
     # kept: catalog-layers (the artifact source parses eval tasks) is not scheduled (L12)
     "coding_agent_playbook.catalog.source -> coding_agent_playbook.evals.**",
+    # kept: catalog-layers (injecting the hook merger from the callers) is not scheduled
+    # (L12): OverlayResolver defaults to the hook_policy facade's merge_hook_layers and
+    # NO_HANDLER_SCHEMAS (A5 made the edge visible; A17 renames it to hooks)
+    "coding_agent_playbook.catalog.resolve -> coding_agent_playbook.hook_policy",
 ]
 broken_contract_guidance = """
 A lower layer may not import a higher one, directly or through modules outside the layers.
@@ -346,6 +349,7 @@ forbidden_modules = [
     "coding_agent_playbook.artifacts",
     "coding_agent_playbook.catalog._hook_walk",
     "coding_agent_playbook.catalog.layers",
+    "coding_agent_playbook.catalog.resolve",
     "coding_agent_playbook.catalog.source",
     "coding_agent_playbook.cli",
     "coding_agent_playbook.commands",
@@ -364,7 +368,6 @@ forbidden_modules = [
     "coding_agent_playbook.hook_registrations",
     "coding_agent_playbook.hook_runtime",
     "coding_agent_playbook.metrics_gate",
-    "coding_agent_playbook.orchestrator",
     "coding_agent_playbook.precommit",
     "coding_agent_playbook.prompt_rule_delivery",
     "coding_agent_playbook.renderer",
@@ -409,6 +412,7 @@ forbidden_modules = [
     "coding_agent_playbook.artifacts",
     "coding_agent_playbook.catalog._hook_walk",
     "coding_agent_playbook.catalog.layers",
+    "coding_agent_playbook.catalog.resolve",
     "coding_agent_playbook.catalog.source",
     "coding_agent_playbook.cli",
     "coding_agent_playbook.commands",
@@ -426,7 +430,6 @@ forbidden_modules = [
     "coding_agent_playbook.hook_policy",
     "coding_agent_playbook.hook_registrations",
     "coding_agent_playbook.metrics_gate",
-    "coding_agent_playbook.orchestrator",
     "coding_agent_playbook.precommit",
     "coding_agent_playbook.prompt_rule_delivery",
     "coding_agent_playbook.renderer",
@@ -496,6 +499,7 @@ forbidden_modules = [
     "coding_agent_playbook.artifacts",
     "coding_agent_playbook.catalog._hook_walk",
     "coding_agent_playbook.catalog.layers",
+    "coding_agent_playbook.catalog.resolve",
     "coding_agent_playbook.catalog.source",
     "coding_agent_playbook.cli",
     "coding_agent_playbook.commands",
@@ -513,7 +517,6 @@ forbidden_modules = [
     "coding_agent_playbook.hook_registrations",
     "coding_agent_playbook.hook_runtime",
     "coding_agent_playbook.metrics_gate",
-    "coding_agent_playbook.orchestrator",
     "coding_agent_playbook.precommit",
     "coding_agent_playbook.prompt_rule_delivery",
     "coding_agent_playbook.renderer",
