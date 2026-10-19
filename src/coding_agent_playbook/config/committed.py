@@ -11,7 +11,7 @@ also dropped the committed tables it does not manage (``[hooks]``, ``[links]``,
 Every :class:`ConfigRewrite` is built here, by a ``plan_*`` function that reads
 the committed file itself or requires that there is none, and
 :meth:`ConfigRewrite.save` is the committed file's only production writer
-(pinned by ``tests/unit/test_committed_config.py``).
+(pinned by ``tests/config/test_committed.py``).
 """
 
 from __future__ import annotations

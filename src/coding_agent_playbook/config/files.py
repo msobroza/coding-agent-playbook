@@ -120,7 +120,7 @@ class StateSource(ABC):
         (its ``extra_tables``), so committed output never depends on a gitignored
         file. Concrete, defaulting to :meth:`load_config`, so a third-party source
         that predates it still instantiates. Rewrites of the committed file go
-        through ``commands/_committed_config``, which starts from
+        through ``config/committed``, which starts from
         ``FileSystemStateSource.read_committed_config_table``.
 
         Example::
@@ -186,7 +186,7 @@ class FileSystemStateSource(StateSource):
         This is the *effective* config every command runs with, and it is never
         saved: writing it back would commit one engineer's personal overrides for
         the whole team (what ``init`` and ``check --refresh`` did before v0.18).
-        Rewrites of the committed file go through ``commands/_committed_config``,
+        Rewrites of the committed file go through ``config/committed``,
         which starts from the committed table alone (SPEC §7.2).
 
         Raises :class:`FileNotFoundError` without the committed file and
@@ -250,7 +250,7 @@ class FileSystemStateSource(StateSource):
         ``extra_tables`` hold the committed ``[hooks]``/``[guardrails]`` the hook
         policy reads (:meth:`StateSource.load_policy_tables`). Raises like
         :meth:`load_config` for a missing or misread committed file. Rewrites of
-        the committed file go through ``commands/_committed_config``.
+        the committed file go through ``config/committed``.
 
         Example::
 
@@ -291,7 +291,7 @@ class FileSystemStateSource(StateSource):
         The :class:`StateSource` contract. A ``Config`` from :meth:`load_config`
         has the local file merged in, so saving it would commit personal
         overrides: no command calls this. ``init`` and ``check --refresh`` write
-        through :meth:`save_config_table`, from ``commands/_committed_config``.
+        through :meth:`save_config_table`, from ``config/committed``.
 
         Example::
 
@@ -303,9 +303,9 @@ class FileSystemStateSource(StateSource):
         """Atomically write the decoded ``table`` to the committed file, every entry as is.
 
         The committed file's only writer. Production code calls it only from
-        ``commands/_committed_config.ConfigRewrite.save``, whose table is built
+        ``config/committed.ConfigRewrite.save``, whose table is built
         from the committed file alone (pinned by
-        ``tests/unit/test_committed_config.py``): never write :meth:`load_config`'s
+        ``tests/config/test_committed.py``): never write :meth:`load_config`'s
         merged config back (SPEC §7.2). Values survive; comments and layout do not.
 
         Example::

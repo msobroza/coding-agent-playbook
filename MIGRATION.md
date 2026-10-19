@@ -39,6 +39,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook._toml` | `coding_agent_playbook.toml_writer` | N1 |
 | `coding_agent_playbook.catalog` | `coding_agent_playbook.catalog.roots` | N3 |
 | `coding_agent_playbook.cli.build_parser` | `coding_agent_playbook.cli.parser.build_parser` | N7 |
+| `coding_agent_playbook.commands._committed_config` | `coding_agent_playbook.config.committed` | N10 |
 | `coding_agent_playbook.commands._precommit_merge` | `coding_agent_playbook.precommit` | N9 |
 | `coding_agent_playbook.commands.init.PrecommitTemplateMissingError` | `coding_agent_playbook.precommit.PrecommitTemplateMissingError` | N9 |
 | `coding_agent_playbook.commands.init.precommit_template_dir` | `coding_agent_playbook.precommit.precommit_template_dir` | N9 |
