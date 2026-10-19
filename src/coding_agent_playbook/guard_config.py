@@ -107,8 +107,12 @@ from coding_agent_playbook.hook_runtime.config.schema import (
     PRECOMMIT_CONFIG,
     playbook_precommit_ids,
 )
+from coding_agent_playbook.hook_runtime.dispatch.routing import (
+    ASYNC_AUDIT_MODE,
+    ASYNC_EVENT,
+    handler_route,
+)
 from coding_agent_playbook.hook_runtime.judges.notebook_check import NOTEBOOK_MAX_BYTES
-from coding_agent_playbook.hook_runtime.routing import ASYNC_AUDIT_MODE, ASYNC_EVENT, handler_route
 from coding_agent_playbook.hook_runtime.shell.wrappers import DEFAULT_RUNNER_WRAPPERS
 from coding_agent_playbook.hooks.resolution.tables import HOOK_SCRIPTS_DIR
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS

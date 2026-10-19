@@ -162,7 +162,8 @@ def test_to_opencode_reg_tool_names_select_from_closed_v1_table(
 
 
 def test_to_opencode_reg_tool_names_fullmatch_not_search() -> None:
-    # The dispatcher fullmatches tool_names (hook_runtime._selection), so "Edit" is not "edit*".
+    # The dispatcher fullmatches tool_names (hook_runtime.dispatch.selection),
+    # so "Edit" is not "edit*".
     assert _tools_for("pre_tool_use", tool_names=["Edi"]) == []
 
 

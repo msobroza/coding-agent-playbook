@@ -33,8 +33,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.hook_registrations import OpenCodeRegEntry
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.proc import ProcResult
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.proc import ProcResult
 
 _OPENCODE = "/opt/bin/opencode"
 _REG: dict[str, OpenCodeRegEntry] = {

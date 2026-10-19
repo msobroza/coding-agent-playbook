@@ -17,7 +17,7 @@ import pytest
 
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.hook_registrations import member_route
-from coding_agent_playbook.hook_runtime.registry import load_builtin
+from coding_agent_playbook.hook_runtime.dispatch.registry import load_builtin
 from tests.hook_runtime.handlers.pack_repo import (
     ENGINE_HOOKS,
     engine_hook,

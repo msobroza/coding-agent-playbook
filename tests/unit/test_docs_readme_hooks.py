@@ -32,8 +32,8 @@ from coding_agent_playbook.grading.metric import all_metrics
 from coding_agent_playbook.guard_config import GUARD_CONFIG_PATH
 from coding_agent_playbook.hook_registrations import LAUNCHER_PATH, OPENCODE_SHIM_PATH
 from coding_agent_playbook.hook_runtime.diagnostics._doctor_opencode import OPENCODE_MIN_VERSION
+from coding_agent_playbook.hook_runtime.dispatch.escape import HATCH_VARS
 from coding_agent_playbook.hook_runtime.dispatch.policy import UNATTENDED_ENV_VAR
-from coding_agent_playbook.hook_runtime.escape import HATCH_VARS
 from coding_agent_playbook.hooks.enforcement import ADAPTER_LABELS, enforcement_targets
 from coding_agent_playbook.metrics_gate.config import parse_metrics_config
 from coding_agent_playbook.metrics_gate.policy import (

@@ -16,10 +16,10 @@ import pytest
 
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.registry import HANDLER_ATTR, HandlerDeclaration
 from coding_agent_playbook.hook_runtime.dispatch.run import run_event
+from coding_agent_playbook.hook_runtime.dispatch.watchdog import OutputGate, Watchdog
 from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT, WireOutput
-from coding_agent_playbook.hook_runtime.registry import HANDLER_ATTR, HandlerDeclaration
-from coding_agent_playbook.hook_runtime.watchdog import OutputGate, Watchdog
 from tests.hook_runtime.fakes import FakeExit, FakeHandlerResolver, FakeTimers, fake_exit
 from tests.hook_runtime.guard_repo import GuardRepo, hook_record, streams
 from tests.import_probe import probe_env
@@ -28,10 +28,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.proc import SubprocessProc
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext, HandlerFn
+    from coding_agent_playbook.hook_runtime.dispatch.proc import SubprocessProc
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext, HandlerFn
 
 PRE = EventName.PRE_TOOL_USE
 
@@ -196,9 +196,9 @@ def test_no_timer_when_no_hook_is_selected(
 
 _SMOKE = """
 import sys, time
-from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
 from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
-from coding_agent_playbook.hook_runtime.watchdog import OutputGate, Watchdog
+from coding_agent_playbook.hook_runtime.dispatch.watchdog import OutputGate, Watchdog
 
 deps = RuntimeDeps.default()
 gate = OutputGate(sys.stdout, sys.stderr)

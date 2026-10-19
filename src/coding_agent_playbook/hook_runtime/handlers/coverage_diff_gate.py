@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._coverage_report import (
     CoverageGrade,
     coverage_lines,
@@ -38,7 +39,6 @@ from coding_agent_playbook.hook_runtime.handlers._coverage_report import (
     write_snapshot_rows,
 )
 from coding_agent_playbook.hook_runtime.handlers._verify_claim import completion_claim
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.stop.alone import run_alone
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult
 
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     )
     from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import SkipCategory, StopPlan
     from coding_agent_playbook.hook_runtime.stop.suite import SuiteOutcome
     from coding_agent_playbook.metrics_gate.run import MetricsGateResult
@@ -280,7 +280,7 @@ def coverage_diff_gate(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult
 
 def _trusted(repo: RepoInfo, ctx: HandlerContext) -> bool:
     """The user approved this repo's rendered Stop stage list on this machine (§B.4)."""
-    from coding_agent_playbook.hook_runtime._ports import open_trust_store
+    from coding_agent_playbook.hook_runtime.dispatch.ports import open_trust_store
     from coding_agent_playbook.hook_runtime.stop.coordinator import GatePolicy
 
     trust = None if ctx.deps is None else open_trust_store(repo, ctx.deps)

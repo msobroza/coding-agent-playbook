@@ -254,7 +254,7 @@ def _class_tools(classes: Iterable[str]) -> set[str] | None:
 def _named_tools(patterns: Iterable[str]) -> set[str]:
     """The closed-table tools whose native or Claude-shaped name a pattern fullmatches.
 
-    The same test the dispatcher applies (``hook_runtime._selection``), so
+    The same test the dispatcher applies (``hook_runtime.dispatch.selection``), so
     ``Agent`` selects ``task`` and ``mcp__.*`` selects nothing: OpenCode's MCP
     tools are ``<server>_<tool>`` and the shim never forwards them by name.
     """

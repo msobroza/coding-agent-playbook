@@ -444,7 +444,7 @@ forbidden_modules = [
 # The deferred branches (specs/prK-lifecycle-hooks.md §D.1): modules the dispatcher
 # loads only on their branch, pinned per branch by tests/hook_runtime/test_import_budget*.py.
 ignore_imports = [
-    "coding_agent_playbook.hook_runtime.deps -> coding_agent_playbook.grading.**",
+    "coding_agent_playbook.hook_runtime.dispatch.deps -> coding_agent_playbook.grading.**",
     "coding_agent_playbook.hook_runtime.handlers._coverage_report -> coding_agent_playbook.grading.**",
     "coding_agent_playbook.hook_runtime.handlers._coverage_report -> coding_agent_playbook.metrics_gate.**",
     "coding_agent_playbook.hook_runtime.handlers._metrics_pass -> coding_agent_playbook.grading.**",

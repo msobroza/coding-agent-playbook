@@ -27,7 +27,11 @@ from coding_agent_playbook.hook_registrations.stop_gate import (
 )
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.dispatch.policy import effective_on_error
-from coding_agent_playbook.hook_runtime.routing import ASYNC_EVENT, HandlerRoute, handler_route
+from coding_agent_playbook.hook_runtime.dispatch.routing import (
+    ASYNC_EVENT,
+    HandlerRoute,
+    handler_route,
+)
 from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
 from coding_agent_playbook.hooks.resolution.tables import (
     ENGINE_DEADLINE_CAP_MS,
@@ -385,7 +389,7 @@ def _async_members(members: Sequence[RegistrationMember]) -> list[RegistrationMe
 
 
 def member_route(member: RegistrationMember, event: str) -> HandlerRoute:
-    """The route of ``member``'s handler on ``event`` (``hook_runtime.routing``).
+    """The route of ``member``'s handler on ``event`` (``hook_runtime.dispatch.routing``).
 
     Example::
 

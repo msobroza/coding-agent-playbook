@@ -40,8 +40,8 @@ from tests.hook_runtime.handlers.pack_repo import engine_hook, resolve_engine_ho
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from tests.hook_payloads import HookPayloadCase
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 

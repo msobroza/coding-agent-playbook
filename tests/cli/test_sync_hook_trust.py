@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.hook_registrations import stop_gate_table
-from coding_agent_playbook.hook_runtime._external import approval_of
 from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
 from coding_agent_playbook.hook_runtime.config.guard_tables import GuardTables
+from coding_agent_playbook.hook_runtime.dispatch.external import approval_of
 from coding_agent_playbook.hook_runtime.stop.coordinator import GatePolicy
 from coding_agent_playbook.security.trust import TrustStore
 from coding_agent_playbook.sync import pipeline as _sync

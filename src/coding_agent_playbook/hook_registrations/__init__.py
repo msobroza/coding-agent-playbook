@@ -18,7 +18,7 @@ from here, not from the submodules:
   deadline adds (prK-hook-pack.md §E.0.5).
 
 The event, tool-class and support tables live in ``hooks.resolution.tables`` (§A.11); this
-package only reads them. Stdlib-only. Handler routes (``hook_runtime.routing``,
+package only reads them. Stdlib-only. Handler routes (``hook_runtime.dispatch.routing``,
 :func:`member_route`) keep the decision sink out of every registration and put
 local-audit-log's ``post_tool_use`` on the one async registration (OQ-19):
 Claude's ``async: true`` group and the shim ``REG``'s ``async`` pre-filter.

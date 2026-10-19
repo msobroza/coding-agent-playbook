@@ -24,7 +24,7 @@ from tests.hook_runtime.test_import_budget import _DRIFT_FAST_PATH, _forbidden, 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.proc import SubprocessProc
+    from coding_agent_playbook.hook_runtime.dispatch.proc import SubprocessProc
 
 _COORDINATOR = engine_module("coding_agent_playbook.hook_runtime.stop.coordinator")
 _GATE_SCAN = engine_module("coding_agent_playbook.hook_runtime.judges.gate_weakening")

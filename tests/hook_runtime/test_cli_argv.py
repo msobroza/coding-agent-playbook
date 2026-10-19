@@ -28,8 +28,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.proc import SubprocessProc
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.proc import SubprocessProc
 
 #: The §C.2.1 registration command, verbatim (strict mode adds --strict-launch).
 CLAUDE_COMMAND = (

@@ -33,9 +33,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
 
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.handlers._drift import DriftFinding
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.lockfile.model import Lockfile
 
 __all__ = [
@@ -233,8 +233,8 @@ def pending_trust_probe(inputs: BriefingInputs) -> str | None:
     ]
     if not external or inputs.ctx.deps is None:
         return None
-    from coding_agent_playbook.hook_runtime._external import approval_of
-    from coding_agent_playbook.hook_runtime._ports import open_trust_store
+    from coding_agent_playbook.hook_runtime.dispatch.external import approval_of
+    from coding_agent_playbook.hook_runtime.dispatch.ports import open_trust_store
 
     trust = open_trust_store(inputs.repo, inputs.ctx.deps)
     pending = [

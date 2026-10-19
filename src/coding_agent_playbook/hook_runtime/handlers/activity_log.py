@@ -7,7 +7,7 @@ what a line may hold (command structure, masked paths, prompt digests).
 
 ``ASYNC_SAFE = True``: the handler writes no output and decides nothing, so on
 ``post_tool_use`` it runs only in the one extra async ``PostToolUse`` dispatch
-(``hook_runtime.routing``, OQ-19), and a ``Read`` costs no blocking interpreter
+(``hook_runtime.dispatch.routing``, OQ-19), and a ``Read`` costs no blocking interpreter
 start. Its other events (``session_start``, ``user_prompt_submit``,
 ``post_tool_use_failure``, ``session_end``) ride their synchronous
 registrations: OQ-19 allows async for ``PostToolUse`` only, and Claude's
@@ -29,13 +29,13 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._activity_record import activity_record, fitted
 from coding_agent_playbook.hook_runtime.handlers._pii_settings import (
     PII_CONFIG_KEY,
     PII_KEY,
     pii_settings,
 )
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.state.audit_log import append_activity, prune_audit
 
 if TYPE_CHECKING:
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
 
 __all__ = ["ASYNC_SAFE", "CONFIG_SCHEMA", "DEFAULT_RETAIN_DAYS", "activity_log"]
 
