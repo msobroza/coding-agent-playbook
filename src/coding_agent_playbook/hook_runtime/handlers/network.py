@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import ToolClass
 from coding_agent_playbook.hook_runtime.handlers._net_targets import segment_target
@@ -89,11 +90,11 @@ class _HostPolicy:
     max_query: int
 
     @classmethod
-    def of(cls, config: Mapping[str, object]) -> _HostPolicy:
-        hosts = [*_strings(config.get("allowed_hosts")), *_strings(config.get("gateway_hosts"))]
-        cap = config.get("webfetch_max_query_chars")
-        max_query = cap if type(cap) is int and cap >= 0 else _DEFAULT_MAX_QUERY
-        return cls(tuple(dict.fromkeys(hosts)), max_query)
+    def of(cls, config: HookConfig) -> _HostPolicy:
+        allowed = config.strings("allowed_hosts", blanks="drop_blank")
+        gateway = config.strings("gateway_hosts", blanks="drop_blank")
+        max_query = config.integer("webfetch_max_query_chars", _DEFAULT_MAX_QUERY, minimum=0)
+        return cls(tuple(dict.fromkeys((*allowed, *gateway))), max_query)
 
     def allows(self, host: str) -> bool:
         return is_loopback(host) or host_matches(host, self.hosts)
@@ -114,11 +115,12 @@ def network_egress_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResu
         >>> network_egress_guard(bash("curl https://pypi.org"), ctx).decision  # doctest: +SKIP
         <Decision.DENY: 'deny'>
     """
-    mode = ctx.config.get("mode")
+    config = HookConfig(ctx.config, CONFIG_SCHEMA)
+    mode = config.choice("mode", "off")
     tool = ev.tool
     if mode not in MODES[1:] or tool is None:
         return None
-    policy = _HostPolicy.of(ctx.config)
+    policy = _HostPolicy.of(config)
     if tool.tool_class is ToolClass.WEB:
         verdict = _web(tool, policy)
     elif tool.tool_class is ToolClass.SHELL:
@@ -210,9 +212,3 @@ def _remote_lookup(ctx: HandlerContext) -> Callable[[], Remotes]:
         return cache[0]
 
     return load
-
-
-def _strings(value: object) -> list[str]:
-    if not isinstance(value, list | tuple):
-        return []
-    return [item for item in value if isinstance(item, str) and item.strip()]
