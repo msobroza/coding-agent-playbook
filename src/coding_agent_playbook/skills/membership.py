@@ -12,7 +12,7 @@ and passes through unchanged. See specs/prS-skills-context.md section 6.4.3.
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, ClassVar, Final, Protocol
 
 from coding_agent_playbook.artifacts.member_reference import MemberReference
 from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY, render_member_reference
@@ -21,11 +21,24 @@ from coding_agent_playbook.skills.naming import skill_id_of
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
-    from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.types import Rule, Skill
 
 #: The built-in adapters that write skill references, named by the undelivered warning.
 _SKILL_REFERENCE_ADAPTERS: Final = "claude_code, opencode or shared_skills"
+
+
+class MemberRuleDeliverer(Protocol):
+    """The two ``Adapter`` members :func:`undelivered_member_warning` reads.
+
+    A local protocol, typed as ``adapters.base.Adapter`` declares them, so the
+    skills layer never imports the adapters layer above it (engine-layers, SK-1).
+    Every adapter satisfies it structurally. Example::
+
+        undelivered_member_warning([AgentsMdAdapter()], skills)
+    """
+
+    name: str
+    delivers_member_rules: ClassVar[bool]
 
 
 def is_skill_member(rule: Rule) -> bool:
@@ -91,7 +104,9 @@ def member_reference(rule: Rule) -> MemberReference:
     )
 
 
-def undelivered_member_warning(adapters: Iterable[Adapter], skills: Sequence[Skill]) -> str | None:
+def undelivered_member_warning(
+    adapters: Iterable[MemberRuleDeliverer], skills: Sequence[Skill]
+) -> str | None:
     """A ``warning:`` line when member rules are active but no enabled adapter delivers them.
 
     ``None`` when some adapter has ``delivers_member_rules`` (section 6.4.10) or
@@ -125,7 +140,7 @@ def _composed_skill(
     return dataclasses.replace(skill, member_references=tuple(map(member_reference, active)))
 
 
-def _enabled_phrase(adapters: Sequence[Adapter]) -> str:
+def _enabled_phrase(adapters: Sequence[MemberRuleDeliverer]) -> str:
     """``only agents_md is on`` / ``only a, b are on`` / ``no adapter is on``."""
     names = sorted(adapter.name for adapter in adapters)
     if not names:
