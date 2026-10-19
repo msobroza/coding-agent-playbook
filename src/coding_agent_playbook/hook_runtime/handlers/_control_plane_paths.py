@@ -28,17 +28,16 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.hook_runtime.config.protected import protected_paths
 from coding_agent_playbook.hook_runtime.config.reader import TableReader
-from coding_agent_playbook.hook_runtime.escape import settings_files
-from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs
-from coding_agent_playbook.hook_runtime.handlers._control_plane_toml import (
-    DEFAULT_POLICY_KEYS,
+from coding_agent_playbook.hook_runtime.config.schema import (
+    CONTROL_PLANE,
     PolicyKeys,
 )
+from coding_agent_playbook.hook_runtime.escape import settings_files
+from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs
 from coding_agent_playbook.hook_runtime.paths import fold_key
 from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
 
@@ -50,7 +49,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import RepoInfo
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
 
-__all__ = ["CONTROL_PLANE", "ControlPlane", "RouteKind", "load_plane", "route_of"]
+__all__ = ["ControlPlane", "RouteKind", "load_plane", "route_of"]
 
 type RouteKind = Literal[
     "state",
@@ -68,40 +67,6 @@ type RouteKind = Literal[
     "extra",
 ]
 
-#: The engine's control-plane rows (runtime glob grammar; a bare name is an exact
-#: repo-root path). ``toml_*`` are the policy key paths of the config verdicts.
-CONTROL_PLANE: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
-    {
-        "settings": (".claude/settings.json", ".claude/settings.local.json"),
-        "user_settings": ("settings.json", "settings.local.json"),
-        "config": (".coding-agent-playbook.toml",),
-        "local_config": (".coding-agent-playbook.local.toml",),
-        "mcp": (".mcp.json",),
-        "opencode_config": ("opencode.json", "opencode.jsonc"),
-        "precommit": (".pre-commit-config.yaml",),
-        # The engine checkout's hooks live in its catalog (SPEC v0.19).
-        "hook_sources": (
-            "playbook/hooks/",
-            "src/*/resources/hooks/",
-            "catalog/core/hooks/",
-            "catalog/plugins/*/hooks/",
-        ),
-        "plugin_carriers": (
-            ".claude/skills/*/.claude-plugin/",
-            "**/hooks/hooks.json",
-            ".opencode/plugin/",
-            ".opencode/plugins/",
-            ".opencode/tool/",
-            ".opencode/tools/",
-        ),
-        "frontmatter_carriers": (".claude/skills/", ".claude/commands/", ".claude/agents/"),
-        "toml_deny": DEFAULT_POLICY_KEYS.deny,
-        "toml_ask": DEFAULT_POLICY_KEYS.ask,
-        "toml_ask_removals": DEFAULT_POLICY_KEYS.ask_removals,
-        "toml_ask_additions": DEFAULT_POLICY_KEYS.ask_additions,
-        "toml_loosening": DEFAULT_POLICY_KEYS.loosening,
-    }
-)
 
 #: In-repo rows after the hook artifacts, in match order: (route, table key).
 _REPO_ROWS: Final[tuple[tuple[RouteKind, str], ...]] = (

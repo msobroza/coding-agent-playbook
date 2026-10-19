@@ -18,37 +18,20 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.hook_runtime.config.schema import playbook_precommit_ids
 from coding_agent_playbook.hook_runtime.decision import Decision
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
 __all__ = [
-    "PRECOMMIT_ID_RE",
     "frontmatter_hooks_verdict",
     "hooks_block",
-    "playbook_precommit_ids",
     "precommit_verdict",
 ]
 
-#: One hook ``id:`` line (block or ``- id:`` list style) naming a playbook hook.
-PRECOMMIT_ID_RE: Final = re.compile(
-    r"""^[ \t]*(?:-[ \t]+)?id:[ \t]*["']?((?:coding-agent-)?playbook-[A-Za-z0-9_.-]+)""",
-    re.MULTILINE,
-)
 _FRONTMATTER: Final = re.compile(r"\A---[ \t]*\r?\n(.*?)^---[ \t]*\r?$", re.DOTALL | re.MULTILINE)
 _HOOKS_KEY: Final = re.compile(r"""["']?hooks["']?[ \t]*:""")
-
-
-def playbook_precommit_ids(text: str) -> list[str]:
-    """The playbook hook ids ``text`` (a pre-commit config) declares, sorted and unique.
-
-    Example::
-
-        >>> playbook_precommit_ids("- id: playbook-sync-check\\n- id: ruff\\n")
-        ['playbook-sync-check']
-    """
-    return sorted(set(PRECOMMIT_ID_RE.findall(text)))
 
 
 def precommit_verdict(before: str | None, after: str, baseline: Iterable[str] = ()) -> Decision:
