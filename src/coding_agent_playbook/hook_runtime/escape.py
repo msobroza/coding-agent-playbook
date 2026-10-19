@@ -40,7 +40,7 @@ from coding_agent_playbook.hook_runtime.shell.wrapper_policy import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
 
 __all__ = [

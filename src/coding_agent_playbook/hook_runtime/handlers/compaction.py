@@ -12,7 +12,7 @@ Opt-in, Claude only (``PreCompact`` and ``SessionStart`` with source
   those entries from ``transcript_path``, masks secret tokens (and PII when an
   overlay listed detectors in ``pii``), and injects one context item: one
   ``Before compaction the user said: "..."`` line per prompt, each a
-  :func:`~coding_agent_playbook.hook_runtime.caps.quote_data` literal (control
+  :func:`~coding_agent_playbook.hook_runtime.dispatch.caps.quote_data` literal (control
   characters and newlines cannot survive), plus the edited files.
 
 Any surprise in the unversioned transcript fails open: no checkpoint, no
@@ -26,15 +26,15 @@ import re
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.caps import (
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
+from coding_agent_playbook.hook_runtime.dispatch.caps import (
     LineCap,
     clamp_lines,
     clean_text,
     clip,
     quote_data,
 )
-from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.handlers._pii_settings import (
     PII_CONFIG_KEY,
     PII_KEY,
@@ -53,7 +53,7 @@ from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, iso
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.security.pii import PiiConfig
 

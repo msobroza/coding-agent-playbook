@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.caps import clean_text, clip
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.shell.git_command import (
     Uninspectable,
     commit_message_sources,
@@ -28,7 +28,7 @@ from coding_agent_playbook.security.commit_trailers import GitPolicy, commit_msg
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.shell.git_command import GitInvocation
 

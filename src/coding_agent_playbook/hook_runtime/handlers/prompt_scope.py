@@ -26,8 +26,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.caps import quote_data
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.globs import compile_globs
 from coding_agent_playbook.hook_runtime.handlers._targets import (
     file_write_paths,
@@ -39,8 +39,8 @@ from coding_agent_playbook.hook_runtime.state.active_prompt import resolve_activ
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.paths import NormalizedPath
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 

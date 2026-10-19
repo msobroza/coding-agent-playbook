@@ -38,15 +38,15 @@ from typing import TYPE_CHECKING, Final, Literal
 from coding_agent_playbook.generated_output.sentinel import SENTINEL, file_has_sentinel
 from coding_agent_playbook.hook_runtime.config.reader import Malformed, TableReader
 from coding_agent_playbook.hook_runtime.config.schema import LOCKFILE_REL
+from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
 from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs
-from coding_agent_playbook.hook_runtime.paths import fold_key
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
 
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.config.pin import MachinePins
-    from coding_agent_playbook.hook_runtime.paths import NormalizedPath
+    from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
 
 __all__ = [
     "DEFAULT_HOOK_ARTIFACTS",

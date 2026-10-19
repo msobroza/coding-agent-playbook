@@ -15,7 +15,7 @@ import re
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.event import (
+from coding_agent_playbook.hook_runtime.dispatch.event import (
     ContentFragment,
     EventName,
     ShellSource,
@@ -23,13 +23,13 @@ from coding_agent_playbook.hook_runtime.event import (
     ToolClass,
     ToolResponse,
 )
+from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath, normalize_path
 from coding_agent_playbook.hook_runtime.harness.payload import host_path, opt_str
-from coding_agent_playbook.hook_runtime.paths import NormalizedPath, normalize_path
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.harness.payload import Payload
     from coding_agent_playbook.hook_runtime.harness.wire import ParseContext
 

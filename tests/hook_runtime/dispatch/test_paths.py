@@ -16,14 +16,14 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.event import RepoInfo
-from coding_agent_playbook.hook_runtime.globs import compile_globs, glob_to_regex
-from coding_agent_playbook.hook_runtime.paths import (
+from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
+from coding_agent_playbook.hook_runtime.dispatch.paths import (
     NormalizedPath,
     find_repo,
     fold_key,
     normalize_path,
 )
+from coding_agent_playbook.hook_runtime.globs import compile_globs, glob_to_regex
 from coding_agent_playbook.security.trust import git_common_dir
 from tests.import_probe import new_modules_after
 
@@ -366,8 +366,9 @@ def test_event_paths_and_globs_import_only_the_stdlib_and_the_runtime() -> None:
     engine = {name for name in loaded if name.startswith("coding_agent_playbook")}
     assert engine == {
         "coding_agent_playbook.hook_runtime",
-        "coding_agent_playbook.hook_runtime.event",
+        "coding_agent_playbook.hook_runtime.dispatch",
+        "coding_agent_playbook.hook_runtime.dispatch.event",
         "coding_agent_playbook.hook_runtime.globs",
-        "coding_agent_playbook.hook_runtime.paths",
+        "coding_agent_playbook.hook_runtime.dispatch.paths",
     }
     assert not {"unicodedata", "pathlib", "tomllib", "json"} & set(loaded)

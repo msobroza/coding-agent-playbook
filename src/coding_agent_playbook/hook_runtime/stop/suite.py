@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from coding_agent_playbook.hook_runtime.deps import Clock
-    from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.state.store import StateStore
     from coding_agent_playbook.hook_runtime.stop.runner import StageRunner

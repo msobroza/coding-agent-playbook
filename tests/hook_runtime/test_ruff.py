@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from tests.hook_runtime.fakes import FakeHandlerResolver
     from tests.hook_runtime.guard_repo import GuardRepo

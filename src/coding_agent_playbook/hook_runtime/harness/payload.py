@@ -14,7 +14,7 @@ import json
 import os
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.hook_runtime.event import (
+from coding_agent_playbook.hook_runtime.dispatch.event import (
     CanonicalEvent,
     EventName,
     Harness,
@@ -22,9 +22,9 @@ from coding_agent_playbook.hook_runtime.event import (
     ToolCall,
     sanitize_session_id,
 )
+from coding_agent_playbook.hook_runtime.dispatch.paths import normalize_path
+from coding_agent_playbook.hook_runtime.dispatch.policy import is_unattended
 from coding_agent_playbook.hook_runtime.harness.wire import STDIN_CAP_BYTES, ContractFault
-from coding_agent_playbook.hook_runtime.paths import normalize_path
-from coding_agent_playbook.hook_runtime.policy import is_unattended
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps, TrustPort
-    from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
     from coding_agent_playbook.hook_runtime.git.parse import DiffLines
     from coding_agent_playbook.hook_runtime.git.safe_git import (
         AddedLine,

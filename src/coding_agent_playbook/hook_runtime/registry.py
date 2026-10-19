@@ -26,17 +26,17 @@ from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime._event_memo import EventMemo
 from coding_agent_playbook.hook_runtime.config.keys import ConfigKey, ConfigKind, KeyPolicy
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
 
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, HookRecord
-    from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.deps import Clock, ProcPort, RuntimeDeps, TrustPort
+    from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.escape import EscapeHatches
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.state.ledger import Ledger
     from coding_agent_playbook.hook_runtime.state.session import SessionState

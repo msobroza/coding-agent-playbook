@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands.twins._git_scope import open_git
 from coding_agent_playbook.commands.twins._runner import TwinOutcome, run_twin
-from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.judges.notebook_check import (
     NotebookLimits,
     Oversized,

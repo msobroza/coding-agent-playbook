@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.handlers._control_plane_json import (
     load_json_object,
     mcp_verdict,

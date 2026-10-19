@@ -2,7 +2,7 @@
 
 Handlers see one frozen, slotted ``CanonicalEvent`` whatever the harness. The
 runtime may not import ``types`` or ``hooks`` (§D.1), so the enumerations
-here re-declare their sync-side twins; ``tests/hook_runtime/test_event.py`` pins
+here re-declare their sync-side twins; ``tests/hook_runtime/dispatch/test_event.py`` pins
 each one to its single source. Content-bearing fields stay out of ``repr``: the
 decision log stores no content (D-10), and a stray ``repr`` in an internal note
 must not leak any.
@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Final
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.hook_runtime.paths import NormalizedPath
+    from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.shell.parse import ShellCommand, ShellConfig, ShellKind
 
 SESSION_ID_MAX_CHARS: Final = 128

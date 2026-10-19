@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.hook_runtime._prefilter import skips_call
-from coding_agent_playbook.hook_runtime.decision import (
+from coding_agent_playbook.hook_runtime.dispatch.decision import (
     Decision,
     HandlerResult,
     supported_decision,
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime._selection import Selected
     from coding_agent_playbook.hook_runtime.deps import Clock
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext, HandlerFn
 
 __all__ = [

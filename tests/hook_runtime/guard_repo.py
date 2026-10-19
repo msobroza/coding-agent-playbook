@@ -19,14 +19,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL, LOCKFILE_REL
-from coding_agent_playbook.hook_runtime.event import RepoInfo
+from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
 from coding_agent_playbook.hook_runtime.harness.wire import CLAUDE_EVENT_NAMES
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME, StateStore
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from coding_agent_playbook.hook_runtime.event import EventName
+    from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 
 SESSION_ID = "sess-1"
 TOOL_INPUTS: dict[str, dict[str, Any]] = {

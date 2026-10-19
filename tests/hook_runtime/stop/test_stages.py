@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from coding_agent_playbook.grading.scope import CostTier
-from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, EventName, Harness
 from coding_agent_playbook.hook_runtime.stop.stages import (
     STAGE_COSTS,
     STOP_STAGE_ORDER,

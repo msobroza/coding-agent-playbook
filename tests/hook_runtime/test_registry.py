@@ -26,16 +26,16 @@ from coding_agent_playbook.hook_runtime._external import (
 )
 from coding_agent_playbook.hook_runtime._selection import select_hooks
 from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.dispatch import run_event
-from coding_agent_playbook.hook_runtime.escape import EscapeHatches
-from coding_agent_playbook.hook_runtime.event import (
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import (
     CanonicalEvent,
     EventName,
     Harness,
     ToolCall,
     ToolClass,
 )
+from coding_agent_playbook.hook_runtime.dispatch.run import run_event
+from coding_agent_playbook.hook_runtime.escape import EscapeHatches
 from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT
 from coding_agent_playbook.hook_runtime.registry import (
     HANDLER_ATTR,

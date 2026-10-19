@@ -28,10 +28,10 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.event import ToolClass
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
 from coding_agent_playbook.hook_runtime.handlers._net_targets import segment_target
 from coding_agent_playbook.hook_runtime.judges.hosts import host_matches, is_loopback, url_host
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
@@ -39,7 +39,7 @@ from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.handlers._net_targets import NetTarget, Remotes
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 

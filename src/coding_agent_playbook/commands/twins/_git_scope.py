@@ -17,8 +17,8 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
 from coding_agent_playbook.hook_runtime.git.safe_git import SafeGit
-from coding_agent_playbook.hook_runtime.paths import find_repo
 from coding_agent_playbook.hook_runtime.proc import SubprocessProc
 
 if TYPE_CHECKING:

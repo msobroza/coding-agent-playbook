@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, Any, Final, cast
 import pytest
 
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.handlers import pii_prompt_guard as guard
 from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
 from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog

@@ -16,8 +16,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.event import Harness
-from coding_agent_playbook.hook_runtime.policy import is_unattended
+from coding_agent_playbook.hook_runtime.dispatch.event import Harness
+from coding_agent_playbook.hook_runtime.dispatch.policy import is_unattended
 from tests.attendance_env import ATTENDANCE_ENV_VARS, without_attendance_vars
 from tests.import_probe import probe_env
 

@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, session_key
 
 if TYPE_CHECKING:

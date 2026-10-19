@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.config.guard_config import ConfigFault
     from coding_agent_playbook.hook_runtime.config.pin import MachinePins
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
 
 __all__ = ["SEVERITY", "Check", "Severity", "environment_checks", "read_regular_file"]
 

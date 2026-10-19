@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.caps import clean_text, clip, quote_data
+from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip, quote_data
 from coding_agent_playbook.hook_runtime.handlers._metrics_pass import (
     capped,
     is_test_path,
@@ -39,8 +39,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from coding_agent_playbook.grading.types import ScopeDetail
-    from coding_agent_playbook.hook_runtime.decision import HandlerResult
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.handlers._metrics_pass import MetricsPass
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 

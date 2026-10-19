@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.hook_runtime.config.pin import write_machine_pins
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import Harness
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.hook_runtime.git.safe_git import LoggedCommit
 from coding_agent_playbook.hook_runtime.handlers._cz import REWRITE_HINT
 from tests.hook_runtime.fakes import FakeGit

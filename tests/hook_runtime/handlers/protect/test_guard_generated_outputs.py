@@ -17,10 +17,10 @@ import pytest
 
 from coding_agent_playbook.generated_output.sentinel import SENTINEL, sentinel_line
 from coding_agent_playbook.hook_runtime.config.pin import write_machine_pins
-from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.diagnostics.canary import DEFAULT_CANARIES, run_canaries
-from coding_agent_playbook.hook_runtime.event import Harness
-from coding_agent_playbook.hook_runtime.policy import UNATTENDED_ENV_VAR
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import Harness
+from coding_agent_playbook.hook_runtime.dispatch.policy import UNATTENDED_ENV_VAR
 from coding_agent_playbook.hook_runtime.state.store import StateStore
 from tests.hook_runtime.fakes import FakeProc
 from tests.hook_runtime.guard_repo import hook_record

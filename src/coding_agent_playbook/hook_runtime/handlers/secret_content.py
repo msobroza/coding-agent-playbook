@@ -25,10 +25,10 @@ import re
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.event import ToolClass
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
 from coding_agent_playbook.hook_runtime.handlers._secret_policy import (
     classify_path,
     content_rules,
@@ -48,9 +48,13 @@ from coding_agent_playbook.security.secrets import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ContentFragment, ToolCall
+    from coding_agent_playbook.hook_runtime.dispatch.event import (
+        CanonicalEvent,
+        ContentFragment,
+        ToolCall,
+    )
+    from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.git.safe_git import AddedLine
-    from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.parse import ShellCommand
     from coding_agent_playbook.security.secrets import SecretFinding, SecretRule

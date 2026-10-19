@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.config.pin import MachinePins, ToolPin
     from coding_agent_playbook.hook_runtime.deps import ProcPort
-    from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
     from coding_agent_playbook.hook_runtime.stop.stages import SkipCategory
 
 __all__ = ["PinnedStageRunner", "StageRunner", "ToolRun"]

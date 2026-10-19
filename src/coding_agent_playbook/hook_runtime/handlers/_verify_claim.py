@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.caps import clean_text, clip, quote_data
+from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip, quote_data
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult
 from coding_agent_playbook.hook_runtime.stop.tools import py_edit_indexes
 
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
 

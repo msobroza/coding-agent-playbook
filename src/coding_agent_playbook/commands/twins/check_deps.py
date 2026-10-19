@@ -29,7 +29,7 @@ from coding_agent_playbook.commands.twins._git_scope import (
 )
 from coding_agent_playbook.commands.twins._runner import TWIN_ERRORS, TwinOutcome, run_twin
 from coding_agent_playbook.commands.twins.policy import dependency_twin_config
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.judges.dependency_tiers import (
     DependencyPolicy,
     Finding,

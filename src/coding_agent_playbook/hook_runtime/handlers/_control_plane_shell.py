@@ -23,7 +23,7 @@ import posixpath
 import re
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 
 if TYPE_CHECKING:

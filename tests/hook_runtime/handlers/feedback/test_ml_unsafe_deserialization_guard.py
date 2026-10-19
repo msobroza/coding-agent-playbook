@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.guard_config import DetectInputs
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import Harness
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.hook_runtime.handlers.deser import deser_sink_guard
 from coding_agent_playbook.hook_runtime.registry import declaration_of
 from tests.hook_runtime.fakes import FakeGit

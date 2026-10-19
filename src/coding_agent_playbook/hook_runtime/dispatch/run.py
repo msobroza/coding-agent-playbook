@@ -35,8 +35,9 @@ from coding_agent_playbook.hook_runtime._faults import (
 )
 from coding_agent_playbook.hook_runtime._pipeline import Shared, run_configured
 from coding_agent_playbook.hook_runtime._tail import DispatchTrace, Responder
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
 from coding_agent_playbook.hook_runtime.escape import HOOKS_VAR, read_escape_hatches, settings_files
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.harness.wire import (
     STDIN_CAP_BYTES,
     ContractFault,
@@ -44,7 +45,6 @@ from coding_agent_playbook.hook_runtime.harness.wire import (
     ParseContext,
     WireOutput,
 )
-from coding_agent_playbook.hook_runtime.paths import find_repo
 from coding_agent_playbook.hook_runtime.state.session import SessionState
 from coding_agent_playbook.hook_runtime.state.store import StateStore
 from coding_agent_playbook.hook_runtime.watchdog import OutputGate
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.harness.wire import ParseOutcome
 
 __all__ = ["DispatchTrace", "dispatch_event", "read_stdin", "run_event"]
