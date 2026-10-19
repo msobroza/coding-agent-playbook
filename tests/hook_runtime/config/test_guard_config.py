@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.artifacts.hook_schema import HookMatcher
-from coding_agent_playbook.hook_policy.resolved import ResolvedHandler, ResolvedHook
 from coding_agent_playbook.hook_runtime.config.guard_config import (
     GUARD_CONFIG_REL,
     LOCKFILE_REL,
@@ -33,6 +32,7 @@ from coding_agent_playbook.hook_runtime.paths import fold_key
 from coding_agent_playbook.hook_runtime.policy import ENGINE_DEADLINE_CAP_MS
 from coding_agent_playbook.hook_runtime.shell.parse import ShellConfig
 from coding_agent_playbook.hook_runtime.state import StateStore
+from coding_agent_playbook.hooks.resolution.resolved import ResolvedHandler, ResolvedHook
 from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 from tests.engine_modules import engine_module
@@ -501,8 +501,8 @@ def test_config_module_never_imports_tomllib_or_the_lockfile_module() -> None:
 
     assert "tomllib" not in loaded
     assert engine_module("coding_agent_playbook.lockfile") not in loaded
-    hook_policy = engine_module("coding_agent_playbook.hook_policy")
-    assert not [m for m in loaded if m.startswith(hook_policy)]
+    hooks = engine_module("coding_agent_playbook.hooks")
+    assert not [m for m in loaded if m.startswith(hooks)]
 
 
 def test_toml_loader_protocol_accepts_the_spy() -> None:

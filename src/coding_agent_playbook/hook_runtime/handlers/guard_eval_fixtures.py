@@ -24,10 +24,10 @@ from __future__ import annotations
 import posixpath
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS, task_path
 from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.globs import compile_globs
-from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS, task_path
 from coding_agent_playbook.hook_runtime.handlers._targets import (
     file_write_paths,
     shell_write_targets,
@@ -37,9 +37,9 @@ from coding_agent_playbook.hook_runtime.registry import register_hook_handler
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from coding_agent_playbook.artifacts.path_classes import TaskPath
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.globs import GlobSet
-    from coding_agent_playbook.hook_runtime.handlers._eval_paths import TaskPath
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.parse import Segment

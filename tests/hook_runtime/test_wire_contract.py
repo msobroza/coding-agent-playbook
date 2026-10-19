@@ -20,7 +20,6 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.hook_policy import HOOK_SUPPORT, TOOL_CLASS_NAMES
 from coding_agent_playbook.hook_registrations import OPENCODE_REG_EVENTS
 from coding_agent_playbook.hook_registrations._templates import shim_template
 from coding_agent_playbook.hook_runtime.decision import CombinedResult, Decision
@@ -33,6 +32,7 @@ from coding_agent_playbook.hook_runtime.harness.opencode import (
     V1_ARG_ALIASES,
     render_opencode,
 )
+from coding_agent_playbook.hooks.resolution.tables import HOOK_SUPPORT, TOOL_CLASS_NAMES
 from coding_agent_playbook.templates.hook_shims.opencode_wire_port import (
     CAP,
     DEFAULT_REASON,
@@ -285,7 +285,7 @@ def _js_table(name: str) -> dict[str, str]:
     return dict(re.findall(r'(\w+): "([^"]*)"', match.group(1)))
 
 
-def test_shim_tables_match_runtime_parser_and_hook_policy() -> None:
+def test_shim_tables_match_runtime_parser_and_hooks_tables() -> None:
     tool, alias, event = _js_table("TOOL"), _js_table("ALIAS"), _js_table("EVENT")
     column = {name for row in TOOL_CLASS_NAMES.values() for name in row["opencode"]}
 

@@ -90,8 +90,8 @@ class HooksConfig:
     """The ``[hooks]`` table (§B.1); off unless ``enabled`` is written ``true``.
 
     ``adapters`` is ``None`` when unset, meaning ``adapters_enabled ∩ {claude_code,
-    opencode}`` (resolved by ``hook_policy.resolve_effective_hooks``). ``per_hook``
-    holds each ``[hooks.<hook-id>]`` sub-table verbatim: the consumer layer of that
+    opencode}`` (resolved by ``hooks.resolution.effective.resolve_effective_hooks``).
+    ``per_hook`` holds each ``[hooks.<hook-id>]`` sub-table verbatim: the consumer layer of that
     hook's ``handler.config`` (lock K-4), checked against the handler's
     ``CONFIG_SCHEMA`` by validate (H21).
 
@@ -163,7 +163,8 @@ class StopSweepGuardrails:
 
 
 #: Domain -> its dataclass and key shapes; the merge policy of each key is the
-#: handler's own (CONFIG_SCHEMA), applied by hook_policy.resolve_effective_hooks.
+#: handler's own (CONFIG_SCHEMA), applied by
+#: hooks.resolution.effective.resolve_effective_hooks.
 _GUARDRAIL_DOMAINS: Final[Mapping[str, tuple[type[Any], Mapping[str, TableShape]]]] = {
     "secrets": (SecretsGuardrails, {"extra_globs": STRINGS, "allow_paths": STRINGS}),
     "git": (GitGuardrails, {"protected_branches": STRINGS}),

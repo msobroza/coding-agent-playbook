@@ -6,7 +6,8 @@ Deliberately empty: import the defining module (``artifacts.rule``, ``artifacts.
 ``artifacts.hook_schema`` for the HOOK.md key sets and vocabulary,
 ``artifacts.hook_frontmatter`` for ``HookFrontmatter``, ``artifacts.member_reference``
 for a member rule as its Skill delivers it as a Reference, ``artifacts.identity`` for
-the id and template name an artifact is known by). ``hook_policy`` loads the
-stdlib-only ``artifacts.hook_schema`` on its light path, so this package must import
-nothing.
+the id and template name an artifact is known by, ``artifacts.path_classes`` for the
+eval-task and test path classes). ``hooks`` loads the stdlib-only
+``artifacts.hook_schema`` on its light path, and the hook runtime and the grading kernel
+load the stdlib leaf ``artifacts.path_classes``, so this package must import nothing.
 """

@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from coding_agent_playbook.hook_policy import advisory_text, enforcement_line
+from coding_agent_playbook.hooks.enforcement import advisory_text, enforcement_line
 from coding_agent_playbook.renderer import BUILTIN_FORMATS, render_for
 from tests.hook_samples import hook_frontmatter
 

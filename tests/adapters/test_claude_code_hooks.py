@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters.claude_code._destructive_native import (
     DESTRUCTIVE_COMMAND_GUARD,
     destructive_native_rows,
@@ -47,13 +46,14 @@ from coding_agent_playbook.adapters.claude_code.settings.managed_merge import (
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.config.tables.hooks import HooksConfig
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
-from coding_agent_playbook.hook_policy import HOOK_SUPPORT
+from coding_agent_playbook.generated_output.write_guard import UserOwnedFileError
 from coding_agent_playbook.hook_registrations import (
     LAUNCHER_PATH,
     claude_command,
     registration_timeout_s,
     render_claude_launcher,
 )
+from coding_agent_playbook.hooks.resolution.tables import HOOK_SUPPORT
 from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.security.patterns import DESTRUCTIVE_NATIVE_PREFIXES
 from tests.hook_runtime.handlers.pack_repo import install_fixture_overlay, resolve_engine_hooks
@@ -63,7 +63,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 _ON = HooksConfig(enabled=True)
 _BRIEFING = "session-start-playbook-briefing"

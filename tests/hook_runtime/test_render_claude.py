@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.hook_policy import HOOK_EVENTS, TOOL_CLASS_NAMES
 from coding_agent_playbook.hook_runtime.caps import OutputCaps
 from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS, CombinedResult, Decision
 from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, ToolClass
@@ -27,6 +26,7 @@ from coding_agent_playbook.hook_runtime.harness import (
     WireOutput,
 )
 from coding_agent_playbook.hook_runtime.harness.claude import parse_claude, render_claude
+from coding_agent_playbook.hooks.resolution.tables import HOOK_EVENTS, TOOL_CLASS_NAMES
 from tests.engine_modules import engine_module
 from tests.hook_payloads import (
     PROJECT_DIR,
@@ -371,7 +371,7 @@ def test_oversized_stop_message_and_tool_error_are_capped() -> None:
 # --- normalization details ------------------------------------------------------------
 
 
-def test_claude_event_names_match_hook_policy() -> None:
+def test_claude_event_names_match_the_hooks_tables() -> None:
     assert {e.value: name for e, name in CLAUDE_EVENT_NAMES.items()} == {
         event: spec.claude_name for event, spec in HOOK_EVENTS.items()
     }
@@ -386,7 +386,7 @@ def test_claude_event_names_match_hook_policy() -> None:
         if "*" not in name
     ],
 )
-def test_claude_tool_names_classify_as_their_hook_policy_class(tool_class: str, name: str) -> None:
+def test_claude_tool_names_classify_as_their_hooks_tool_class(tool_class: str, name: str) -> None:
     tool_input = {"command": "ls", "file_path": "a.py", "notebook_path": "n.ipynb"}
     ev = _event(_payload(tool_name=name, tool_input=tool_input))
 

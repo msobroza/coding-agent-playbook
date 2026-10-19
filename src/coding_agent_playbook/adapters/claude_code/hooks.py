@@ -8,7 +8,7 @@ opt-in ``permissions.allow`` remediation strings, the native deny rows of the
 §E.4 guards that are on (``_secret_native``, ``_destructive_native``; rows for
 the same pointer are concatenated) and of the §E.5 overlay guards an overlay
 activated (``_overlay_native``), and the committed launcher — written whole, so a
-user file at its path or a symlink on the way is refused (``_owned_files``).
+user file at its path or a symlink on the way is refused (``generated_output.write_guard``).
 Hooks Claude Code cannot enforce go back to the adapter's rules-file path
 (``.claude/rules/coding-agent-playbook.md``, SPEC §10.3.1) and make the adapter
 write the ``playbook-guardrails`` skill; :func:`runs_natively` decides both.
@@ -19,7 +19,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.adapters._owned_files import check_engine_owned, write_engine_owned
 from coding_agent_playbook.adapters.claude_code._destructive_native import destructive_native_rows
 from coding_agent_playbook.adapters.claude_code._overlay_native import (
     network_native_rows,
@@ -32,6 +31,10 @@ from coding_agent_playbook.adapters.claude_code.settings.managed_merge import (
     MergeResult,
     merge_managed_entries,
     write_settings,
+)
+from coding_agent_playbook.generated_output.write_guard import (
+    check_engine_owned,
+    write_engine_owned,
 )
 from coding_agent_playbook.hook_registrations import (
     LAUNCHER_PATH,
@@ -46,8 +49,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.config.tables.hooks import HooksConfig
-    from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hook_registrations import HookRegistration
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 
 __all__ = [
@@ -133,7 +136,7 @@ class ClaudeHookEmitter:
 
         A ``settings.json`` that cannot be merged raises ``SettingsMergeError``;
         a user file at the launcher path (no sentinel line) or a symlink on the
-        way raises :class:`~._owned_files.UserOwnedFileError` and is never
+        way raises :class:`~.write_guard.UserOwnedFileError` and is never
         overwritten. ``playbook sync`` checks both before any adapter writes.
         """
         registrations = self.registrations()

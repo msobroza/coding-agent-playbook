@@ -25,7 +25,6 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, Literal, NotRequired, TypedDict
 
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
-from coding_agent_playbook.hook_policy import HOOK_EVENTS, TOOL_CLASS_NAMES
 from coding_agent_playbook.hook_registrations._templates import (
     SENTINEL_PLACEHOLDER,
     fill_placeholder,
@@ -43,12 +42,13 @@ from coding_agent_playbook.hook_runtime.harness.opencode import (
     NATIVE_TOOL_NAMES,
     OPENCODE_SHIM_REL,
 )
+from coding_agent_playbook.hooks.resolution.tables import HOOK_EVENTS, TOOL_CLASS_NAMES
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
     from coding_agent_playbook.artifacts.hook_schema import HookMatcher
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 __all__ = [
     "OPENCODE_REG_EVENTS",
