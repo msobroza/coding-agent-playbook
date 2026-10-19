@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from coding_agent_playbook.hook_registrations import OpenCodeRegEntry
-    from coding_agent_playbook.hook_runtime.harness import WireOutput
+    from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
 
 type Step = dict[str, Any]
 
