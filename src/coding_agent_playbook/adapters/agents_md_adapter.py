@@ -27,7 +27,7 @@ from coding_agent_playbook.adapters._where_guidance import WhereGuidanceBuffer
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.hook_policy import guardrail_line, guardrails_section
 from coding_agent_playbook.renderer import render_for
-from coding_agent_playbook.skill_membership import is_skill_member
+from coding_agent_playbook.skills.membership import is_skill_member
 
 if TYPE_CHECKING:
     from coding_agent_playbook._typing import Prompt, Rule, Skill

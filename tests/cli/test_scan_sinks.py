@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Final
 import pytest
 
 from coding_agent_playbook.cli import main
-from coding_agent_playbook.commands.scan_sinks import SinkChange, scan_changes, shipped_table
+from coding_agent_playbook.commands.twins.scan_sinks import SinkChange, scan_changes, shipped_table
 
 if TYPE_CHECKING:
     from collections.abc import Callable

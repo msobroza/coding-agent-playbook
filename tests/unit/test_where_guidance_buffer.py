@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from coding_agent_playbook.adapters._where_guidance import WhereGuidanceBuffer
-from coding_agent_playbook.skill_document import WhereEntry, where_guidance_section
+from coding_agent_playbook.skills.document import WhereEntry, where_guidance_section
 from coding_agent_playbook.types import Skill
 from tests.member_skill_samples import sample_member_reference, sample_member_skill
 

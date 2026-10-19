@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
-from coding_agent_playbook.adapters._overlay_native import network_native_rows
+from coding_agent_playbook.adapters.claude_code._overlay_native import network_native_rows
 from coding_agent_playbook.hook_runtime.combine import ASK_DENIED_PREFIX
 from coding_agent_playbook.hook_runtime.config import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.decision import Decision
