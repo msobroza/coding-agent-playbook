@@ -25,6 +25,9 @@ if TYPE_CHECKING:
 
     type Read = Callable[[HookConfig], object]
 
+#: The definitions whose parameters and aliases the config-read guard tracks.
+_Function = ast.FunctionDef | ast.AsyncFunctionDef
+
 _SCHEMA: Final = {
     "enabled": ConfigKey("boolean"),
     "mode": ConfigKey("string", "strictest", ("off", "ask", "enforce")),
@@ -244,7 +247,7 @@ def _is_ctx_config(node: ast.expr) -> bool:
     )
 
 
-def _config_names(function: ast.FunctionDef) -> set[str]:
+def _config_names(function: _Function) -> set[str]:
     """The names holding a handler config in ``function``: a ``config`` parameter or alias."""
     names = {arg.arg for arg in (*function.args.args, *function.args.kwonlyargs)}
     aliases = {
@@ -275,7 +278,7 @@ def _sync_written(key: ast.expr, declared: frozenset[str]) -> bool:
     return bool(spelled) and all(isinstance(k, str) and k not in declared for k in spelled)
 
 
-def _raw_reads(function: ast.FunctionDef) -> Iterator[tuple[int, ast.expr]]:
+def _raw_reads(function: _Function) -> Iterator[tuple[int, ast.expr]]:
     """``(line, key)`` of each raw handler-config read in ``function``."""
     names = _config_names(function)
     for node in (n for n in ast.walk(function) if isinstance(n, ast.expr)):
@@ -286,7 +289,7 @@ def _raw_reads(function: ast.FunctionDef) -> Iterator[tuple[int, ast.expr]]:
 
 def _raw_config_reads(source: str, declared: frozenset[str]) -> list[int]:
     """The lines of ``source`` that read a declared handler-config key without ``HookConfig``."""
-    functions = [f for f in ast.walk(ast.parse(source)) if isinstance(f, ast.FunctionDef)]
+    functions = [f for f in ast.walk(ast.parse(source)) if isinstance(f, _Function)]
     reads = (read for function in functions for read in _raw_reads(function))
     return sorted({line for line, key in reads if not _sync_written(key, declared)})
 
