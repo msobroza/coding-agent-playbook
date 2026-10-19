@@ -323,7 +323,7 @@ coding-agent-playbook/
 │   │   ├── predicate.py                    # applies_if evaluator and filter (Section 6.4)
 │   │   ├── pep503.py                       # PEP 503 package-name normalization
 │   │   └── pyproject_deps.py               # pyproject dependency tables, one parser
-│   ├── validation/                         # the validation rule set: checks, findings, preflight, link_check (§12.6)
+│   ├── validation/                         # the validation rule set: checks, findings, context, preflight, prompts, link_check (§12.6)
 │   ├── renderer.py                         # Jinja2 environment
 │   ├── _sentinel.py                        # SENTINEL, import-light (Section 4.3)
 │   ├── overlays.py                         # overlay resolution

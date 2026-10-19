@@ -1,5 +1,7 @@
-"""`playbook validate` — cross-reference checks (SPEC §12.6).
+"""The validation rule set — cross-reference checks over canonical artifacts (SPEC §12.6).
 
+Behind ``playbook validate`` (the command and its printer stay in
+:mod:`coding_agent_playbook.commands.validate`) and the ``playbook sync`` gate.
 Validates:
 
 - ``applies_if`` predicates use only known fact keys and well-formed values
@@ -36,9 +38,10 @@ Validates:
   §B.5, ``validation._hooks``): a malformed ``HOOK.md`` is a ``FAIL`` line, not a
   traceback (P8c); degraded cells and clamped timeouts are ``warning:`` lines.
 
-All errors aggregate before a single non-zero exit; success prints one line,
-counting rules, prompts and hooks. :func:`collect_validation_findings` is the
-rule set; ``playbook sync`` runs it first (:func:`sync_gate_errors`) and
+All findings aggregate into one :class:`ValidationFindings`;
+:func:`collect_validation_findings` is the rule set and prints nothing.
+``commands.validate.run`` exits non-zero once on any error, and on success
+prints one line, counting rules, prompts and hooks; ``playbook sync`` runs it first (:func:`sync_gate_errors`) and
 refuses to write on any error (prK §P P8b). Without a consumer
 config, validate checks the engine, the checkout's ``src/*/resources/`` and
 ``playbook/``, skipping the consumer-config checks (``validation.context``).
