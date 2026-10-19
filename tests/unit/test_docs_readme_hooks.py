@@ -30,8 +30,8 @@ from coding_agent_playbook.commands.twins.ci import CI_STEPS
 from coding_agent_playbook.config.tables.hooks import parse_guardrails_config, parse_hooks_config
 from coding_agent_playbook.grading.metric import all_metrics
 from coding_agent_playbook.hook_runtime.diagnostics._doctor_opencode import OPENCODE_MIN_VERSION
+from coding_agent_playbook.hook_runtime.dispatch.escape import HATCH_VARS
 from coding_agent_playbook.hook_runtime.dispatch.policy import UNATTENDED_ENV_VAR
-from coding_agent_playbook.hook_runtime.escape import HATCH_VARS
 from coding_agent_playbook.hooks.enforcement import ADAPTER_LABELS, enforcement_targets
 from coding_agent_playbook.hooks.guard_config.compile import GUARD_CONFIG_PATH
 from coding_agent_playbook.hooks.registrations.launcher import LAUNCHER_PATH

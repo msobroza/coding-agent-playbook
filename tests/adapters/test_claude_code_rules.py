@@ -96,7 +96,7 @@ def test_paths_module_is_a_stdlib_leaf() -> None:
     loaded = new_modules_after("import coding_agent_playbook.sync._protect")
 
     assert "coding_agent_playbook.adapters.claude_code.paths" in loaded
-    renderer = engine_module("coding_agent_playbook.renderer")
+    renderer = engine_module("coding_agent_playbook.rendering")
     assert not {"jinja2", "yaml", renderer} & set(loaded)
     assert engine_module("coding_agent_playbook.adapters.claude_code.adapter") not in loaded
 

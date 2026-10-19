@@ -24,14 +24,14 @@ from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.generated_output.output_io import write_output_text
-from coding_agent_playbook.renderer import render_for
+from coding_agent_playbook.rendering.formats import render_for
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
-    from coding_agent_playbook.renderer import RuleRegistry
+    from coding_agent_playbook.rendering.rule_registry import RuleRegistry
 
 
 class ContinueAdapter(Adapter):

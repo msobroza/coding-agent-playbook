@@ -42,7 +42,7 @@ from coding_agent_playbook.hooks.resolution.tables import (
     TOOL_CLASS_NAMES,
 )
 from coding_agent_playbook.metrics_gate.config import MetricConfig
-from coding_agent_playbook.renderer import BUILTIN_FORMATS
+from coding_agent_playbook.rendering.formats import BUILTIN_FORMATS
 
 _ROOT = Path(__file__).resolve().parents[2]
 _SPEC = _ROOT / "SPEC.md"

@@ -15,8 +15,8 @@ import pytest
 
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import Harness
+from coding_agent_playbook.hook_runtime.dispatch.registry import declaration_of
 from coding_agent_playbook.hook_runtime.handlers.deser import deser_sink_guard
-from coding_agent_playbook.hook_runtime.registry import declaration_of
 from coding_agent_playbook.hooks.guard_config.inputs import DetectInputs
 from tests.hook_runtime.fakes import FakeGit
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_rules, resolve_engine_hooks
@@ -25,8 +25,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from tests.hook_payloads import HookPayloadCase
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 

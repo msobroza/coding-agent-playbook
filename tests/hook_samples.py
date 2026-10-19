@@ -267,7 +267,7 @@ SAMPLE_HANDLER_NAMES = ("guard_x", "guard_y", "guard_z")
 _SAMPLE_HANDLERS_SOURCE = '''\
 """Sample hook handlers, registered through the hook_handlers entry-point group."""
 
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 
 EVENTS = [
     "session_start", "user_prompt_submit", "pre_tool_use", "post_tool_use",

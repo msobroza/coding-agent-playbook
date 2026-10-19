@@ -23,7 +23,7 @@ from coding_agent_playbook.hook_runtime.git.range import checked_rev
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.hook_runtime.proc import ProcResult
+    from coding_agent_playbook.hook_runtime.dispatch.proc import ProcResult
 
 __all__ = ["LOG_FORMAT", "LogPort", "LogQueries", "LoggedCommit", "parse_commit_log"]
 

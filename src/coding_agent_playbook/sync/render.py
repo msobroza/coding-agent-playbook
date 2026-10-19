@@ -7,7 +7,7 @@ their ``## Reference rules`` appendix inside ``write_prompt``, after earlier
 files are on disk), and the advisory body of every on hook (resolved
 by ``_hook_outputs``, specs/prK-lifecycle-hooks.md §C.1.3). So a template the Jinja
 sandbox rejects aborts the sync with nothing written and the offending file
-named (:class:`~coding_agent_playbook.renderer.TemplateSecurityError`,
+named (:class:`~coding_agent_playbook.rendering.jinja.TemplateSecurityError`,
 specs/prK-lifecycle-hooks.md §P1).
 
 Skills are composed here too (``skills.membership.compose_skills``, ADR 0001): a
@@ -36,12 +36,12 @@ from coding_agent_playbook.hooks.guardrails_skill import (
     compose_guardrails_skill,
     split_guardrails_skill,
 )
-from coding_agent_playbook.renderer import (
+from coding_agent_playbook.rendering.jinja import (
     TemplateSecurityError,
     build_environment,
     render_sandboxed,
 )
-from coding_agent_playbook.rule_registry import build_prompt_environment
+from coding_agent_playbook.rendering.rule_registry import build_prompt_environment
 from coding_agent_playbook.skills.document import DescriptionOverflowError, emitted_frontmatter
 from coding_agent_playbook.skills.membership import compose_skills, undelivered_member_warning
 from coding_agent_playbook.skills.naming import skill_id_of
@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
-    from coding_agent_playbook.rule_registry import RuleRegistryImpl
+    from coding_agent_playbook.rendering.rule_registry import RuleRegistryImpl
     from coding_agent_playbook.validation.context import SyncContext
 
 
@@ -144,11 +144,11 @@ def render_rule_body(rule: Rule, context: dict[str, object], env: Environment) -
 def render_prompt_body(prompt: Prompt, context: dict[str, object], env: Environment) -> Prompt:
     """Render a prompt's body through Jinja, masking ``input_variables`` so
     the opencode placeholder substitution can still find them (SPEC §9.7 +
-    the ``prompt_opencode_command`` contract in renderer.py)."""
+    the ``prompt_opencode_command`` contract in rendering/formats.py)."""
     if not prompt.is_templated:
         return prompt
     safe_context = dict(context)
-    # Per SPEC §9.7 / renderer's opencode contract: input_variables names
+    # Per SPEC §9.7 / rendering.formats' opencode contract: input_variables names
     # must not appear in the Jinja context, or {{ var }} placeholders get
     # expanded before the format-time substitution maps them to $ARGUMENTS.
     for var in prompt.frontmatter.input_variables or []:

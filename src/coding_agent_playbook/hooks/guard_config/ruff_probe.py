@@ -17,14 +17,14 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final, Literal
 
 from coding_agent_playbook.hook_runtime.config.pin import tool_signature
-from coding_agent_playbook.hook_runtime.proc import ProcTimeout
+from coding_agent_playbook.hook_runtime.dispatch.proc import ProcTimeout
 from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.config.pin import Signature
-    from coding_agent_playbook.hook_runtime.deps import ProcPort
+    from coding_agent_playbook.hook_runtime.dispatch.deps import ProcPort
     from coding_agent_playbook.hook_runtime.state.store import StateStore
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 

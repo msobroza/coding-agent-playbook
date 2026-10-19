@@ -35,9 +35,9 @@ from tests.hook_runtime.guard_repo import GuardRepo, canonical, hook_record
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
 
 _TOOL_EVENTS = {EventName.PRE_TOOL_USE, EventName.POST_TOOL_USE, EventName.POST_TOOL_USE_FAILURE}
 

@@ -31,8 +31,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.detector.facts import Facts
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.dispatch.event import ToolCall
     from tests.hook_payloads import HookPayloadCase
 

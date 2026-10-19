@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.config.model import Config
-    from coding_agent_playbook.renderer import RuleRegistry
+    from coding_agent_playbook.rendering.rule_registry import RuleRegistry
 
 
 def discover_adapters(
