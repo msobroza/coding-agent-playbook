@@ -343,7 +343,7 @@ def test_save_config_table_writes_every_entry_back_verbatim(tmp_path: Path) -> N
 def test_save_config_writes_exactly_config_to_dict(tmp_path: Path) -> None:
     """The ``StateSource`` method writes ``config.to_dict()`` and nothing else —
     ``extra_tables`` (``[links]``/``[metrics]``) included. No command calls it:
-    rewrites go through ``commands/_committed_config`` (§7.2)."""
+    rewrites go through ``config/committed`` (§7.2)."""
     (tmp_path / _PRIMARY_NAME).write_text(CONFIG_WITH_UNMANAGED_TABLES)
     source = FileSystemStateSource(repo_root=tmp_path)
     config = Config.from_dict(source.read_committed_config_table())
