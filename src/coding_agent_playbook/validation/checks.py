@@ -118,7 +118,7 @@ def _applies_if_errors(
 
     ``evaluate_predicate`` returns at the first key that does not hold, so a
     malformed key after it would pass unseen; hook predicates are already
-    checked key by key (hook_policy/contract.py).
+    checked key by key (hooks/contract/contract.py).
 
     Example: ``_applies_if_errors("r.md", {"package_manager": "pipenv"}, {}, root)``
     returns one error naming ``'pipenv'`` and the four allowed managers.

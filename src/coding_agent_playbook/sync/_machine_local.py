@@ -51,9 +51,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hook_runtime.config.pin import PinResult
     from coding_agent_playbook.hook_runtime.deps import ProcPort
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 __all__ = [
     "PINNED_TOOLS",

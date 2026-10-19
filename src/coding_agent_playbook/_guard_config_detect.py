@@ -24,7 +24,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, Protocol, cast
 
-from coding_agent_playbook.hook_policy import APPLICABILITY_GATES, effective_applies_if
+from coding_agent_playbook.hooks.resolution.effective import effective_applies_if
+from coding_agent_playbook.hooks.resolution.resolved import APPLICABILITY_GATES
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, Sequence
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.detector.facts import Facts
-    from coding_agent_playbook.hook_policy import ResolvedHook, SkippedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook, SkippedHook
 
 __all__ = [
     "ApplicabilityRow",
@@ -49,7 +50,7 @@ _FLAGS: Final = ("has_ci", "has_dockerfile", "has_notebooks")
 
 
 class HookView(Protocol):
-    """An effective hook view: ``hook_policy.EffectiveHooks`` or the sync's ``SyncHooks``."""
+    """An effective hook view: ``hooks.resolution.resolved.EffectiveHooks`` or the sync's ``SyncHooks``."""
 
     @property
     def resolved(self) -> Sequence[ResolvedHook]: ...

@@ -56,7 +56,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.harness.manifest import ManifestEntry
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from coding_agent_playbook.renderer import RuleRegistry
 
 #: The single leaf type this adapter emits (skill-shaped leaves for both skills

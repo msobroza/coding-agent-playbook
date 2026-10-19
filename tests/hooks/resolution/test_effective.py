@@ -7,7 +7,7 @@ as ``paths`` (tool events only), ``supports ∩ [hooks] adapters``, the per-even
 ``on_error`` clamp, and the consumer config layers. Handler key policies and the
 guardrails domain come from :class:`FakeHandlerSchemas` (the registry is K2's).
 The ``guard_config.json`` record (``to_json``) is tested in
-``test_hook_policy_resolved.py``.
+``test_resolved.py``.
 """
 
 from __future__ import annotations
@@ -25,15 +25,19 @@ from coding_agent_playbook.config.tables.hooks import (
     parse_guardrails_config,
     parse_hooks_config,
 )
-from coding_agent_playbook.hook_policy import (
-    APPLICABILITY_GATES,
+from coding_agent_playbook.hooks.resolution.effective import (
+    effective_applies_if,
+    resolve_effective_hooks,
+)
+from coding_agent_playbook.hooks.resolution.merge import (
     NO_HANDLER_SCHEMAS,
     ConfigKeySpec,
     ConfigSchemaLookup,
+)
+from coding_agent_playbook.hooks.resolution.resolved import (
+    APPLICABILITY_GATES,
     EffectiveHooks,
     SkippedHook,
-    effective_applies_if,
-    resolve_effective_hooks,
 )
 from tests.fakes import FakeHandlerSchemas
 from tests.hook_samples import sample_hook

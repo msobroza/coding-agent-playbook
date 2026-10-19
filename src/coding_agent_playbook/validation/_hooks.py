@@ -6,13 +6,13 @@
 - H1 (and H2's layout half): each ``HOOK.md`` that did not load, which a
   context built with ``tolerate_hook_errors=True`` records (P8c);
 - H2, H14, H15: the layer overrides the merge refused (``hook_violations``);
-- per hook, every layer's definition: ``hook_policy.classify_hook`` (with the
+- per hook, every layer's definition: ``hooks.contract.contract.classify_hook`` (with the
   handler registry, so H6 checks each builtin's declaration) and the
   H19 body checks (a Jinja syntax error, a ``rule()`` call); H19's links are
   ``validation._links``'s, with ``hooks`` among the link-checked kinds; and a
   warning for an advisory body over :data:`ADVISORY_BODY_LIMIT` (§C.4.2);
 - across hooks, artifacts and the committed config: the ``[hooks]`` /
-  ``[guardrails]`` parse (H21) and ``hook_policy.classify_hook_set``.
+  ``[guardrails]`` parse (H21) and ``hooks.contract.contract_set.classify_hook_set``.
 
 Split out of ``validation/checks.py`` for its size budget; it imports only the
 leaf ``validation.findings``, never ``checks``.
@@ -28,16 +28,11 @@ from coding_agent_playbook.config.files import (
     CONFIG_LOCAL_FILENAME,
 )
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig
-from coding_agent_playbook.hook_policy import (
-    HookCheckContext,
-    HookIssue,
-    HookSetInputs,
-    RegistryCatalog,
-    classify_hook,
-    classify_hook_set,
-    resolve_effective_hooks,
-)
-from coding_agent_playbook.hook_policy._findings import hook_location
+from coding_agent_playbook.hooks.contract.contract import HookCheckContext, classify_hook
+from coding_agent_playbook.hooks.contract.contract_set import HookSetInputs, classify_hook_set
+from coding_agent_playbook.hooks.contract.findings import HookIssue, hook_location
+from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
+from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
 from coding_agent_playbook.validation.findings import (
     RULE_CALL_RE,
     ValidationError,
@@ -50,7 +45,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
     from coding_agent_playbook.config.tables.hooks import HooksConfig
-    from coding_agent_playbook.hook_policy import HandlerCatalog
+    from coding_agent_playbook.hooks.contract.handler_catalog import HandlerCatalog
     from coding_agent_playbook.validation.context import SyncContext
 
 #: Every enabled hook's advisory lands in AGENTS.md (§C.4.2); past this many

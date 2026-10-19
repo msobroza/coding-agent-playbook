@@ -1,11 +1,11 @@
-"""The per-hook trust contract, ``hook_policy.classify_hook`` (specs/prK-lifecycle-hooks.md §B.5).
+"""The per-hook trust contract, ``hooks.contract.contract.classify_hook`` (specs/prK-lifecycle-hooks.md §B.5).
 
 ``classify_hook`` is pure over one ``Hook`` and a ``HookCheckContext``: it judges
 the value domains ``HookFrontmatter.from_mapping`` leaves alone (H2-H13, H17,
 H18), as errors plus the few warnings the spec names (H4, H9, H11). Every
 message names the offending value and the expected shape. H1 (structure) is
 the parser's, H14/H15 the layer merge's, H19 validate's body check and the
-set-level rules ``classify_hook_set``'s (``test_hook_policy_contract_set.py``).
+set-level rules ``classify_hook_set``'s (``test_contract_set.py``).
 """
 
 from __future__ import annotations
@@ -15,7 +15,8 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.artifacts.hook import Hook
-from coding_agent_playbook.hook_policy import HookCheckContext, HookIssue, classify_hook
+from coding_agent_playbook.hooks.contract.contract import HookCheckContext, classify_hook
+from coding_agent_playbook.hooks.contract.findings import HookIssue
 from tests.hook_samples import HOOK_WHERE, sample_hook, write_hook
 
 if TYPE_CHECKING:

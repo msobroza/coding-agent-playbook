@@ -28,14 +28,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.artifacts.hook_schema import HookMatcher
-from coding_agent_playbook.hook_policy.lint_codes import (
+from coding_agent_playbook.hooks.resolution.lint_codes import (
     LINT_CODES_KEY,
     linked_lint_config,
     resolve_lint_codes,
 )
-from coding_agent_playbook.hook_policy.merge import NO_HANDLER_SCHEMAS, merge_config
-from coding_agent_playbook.hook_policy.override_rules import bound_handler
-from coding_agent_playbook.hook_policy.resolved import (
+from coding_agent_playbook.hooks.resolution.merge import NO_HANDLER_SCHEMAS, merge_config
+from coding_agent_playbook.hooks.resolution.override_rules import bound_handler
+from coding_agent_playbook.hooks.resolution.resolved import (
     EffectiveHooks,
     ResolvedHandler,
     ResolvedHook,
@@ -43,7 +43,7 @@ from coding_agent_playbook.hook_policy.resolved import (
     external_argv,
     script_sha256,
 )
-from coding_agent_playbook.hook_policy.tables import HOOK_CAPABLE_ADAPTERS, HOOK_EVENTS
+from coding_agent_playbook.hooks.resolution.tables import HOOK_CAPABLE_ADAPTERS, HOOK_EVENTS
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -54,8 +54,8 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
     from coding_agent_playbook.detector.facts import Facts
-    from coding_agent_playbook.hook_policy.handler_catalog import HandlerCatalog
-    from coding_agent_playbook.hook_policy.merge import ConfigKeySpec, ConfigSchemaLookup
+    from coding_agent_playbook.hooks.contract.handler_catalog import HandlerCatalog
+    from coding_agent_playbook.hooks.resolution.merge import ConfigKeySpec, ConfigSchemaLookup
 
 _OVERLAY_TIER: Final = "overlay"
 
@@ -269,7 +269,7 @@ def effective_applies_if(
 def _predicate_holds(predicate: Mapping[str, Any], inputs: _Inputs) -> bool:
     if not predicate:
         return True
-    # Imported here: detector imports packaging, and importing hook_policy stays stdlib-only.
+    # Imported here: detector imports packaging, and importing hooks stays stdlib-only.
     from coding_agent_playbook.detector.predicate import evaluate_predicate
 
     return evaluate_predicate(dict(predicate), inputs.facts, repo_root=inputs.repo_root)

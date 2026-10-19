@@ -20,12 +20,12 @@ from jinja2.sandbox import SandboxedEnvironment
 
 from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
-from coding_agent_playbook.hook_policy import advisory_block, advisory_text
 from coding_agent_playbook.hook_registrations import (
     DeclaredMember,
     claude_settings_projection,
     declared_stop_budget_s,
 )
+from coding_agent_playbook.hooks.enforcement import advisory_block, advisory_text
 from coding_agent_playbook.prompt_rule_delivery import (
     includes_rules_appendix,
     insert_pointer_block,

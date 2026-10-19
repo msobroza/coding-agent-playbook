@@ -28,7 +28,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final, Literal, Protocol
 
 from coding_agent_playbook.catalog.layers import REPO_LOCAL_SOURCE
-from coding_agent_playbook.hook_policy.override_rules import (
+from coding_agent_playbook.hooks.resolution.override_rules import (
     bound_handler,
     overlay_override_problems,
 )

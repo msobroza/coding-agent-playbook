@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from coding_agent_playbook.hook_policy import HookViolation, merge_hook_layers
+from coding_agent_playbook.hooks.resolution.merge import HookViolation, merge_hook_layers
 from tests.hook_samples import sample_hook
 
 ENGINE = "coding_agent_playbook"

@@ -71,9 +71,10 @@ from coding_agent_playbook.generated_output.write_guard import (
     crosses_symlink,
     write_engine_owned,
 )
-from coding_agent_playbook.hook_policy import HOOK_SUPPORT, guardrail_line, guardrails_section
-from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
 from coding_agent_playbook.hook_registrations import LAUNCHER_PATH
+from coding_agent_playbook.hooks.enforcement import guardrail_line, guardrails_section
+from coding_agent_playbook.hooks.guardrails_skill import has_guardrail_text
+from coding_agent_playbook.hooks.resolution.tables import HOOK_SUPPORT
 from coding_agent_playbook.renderer import render_for
 from coding_agent_playbook.skills.membership import is_skill_member
 
@@ -85,7 +86,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.config.tables.hooks import HooksConfig
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
     from coding_agent_playbook.prompt_rule_delivery import SkillReferenceIndex
 
