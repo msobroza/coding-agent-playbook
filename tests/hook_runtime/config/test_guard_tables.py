@@ -410,6 +410,8 @@ def test_tables_stay_a_read_only_mapping() -> None:
     assert cfg.tables.get("missing") is None
     assert cfg.tables["stop_gate"] == {"max_blocks": 4}
     assert dict(cfg.tables) == {"stop_gate": {"max_blocks": 4}, "x": [1]}  # no runtime key
+    assert len(cfg.tables) == 2
+    assert repr(GuardTables({"x": [1]})) == "GuardTables({'x': [1]})"
     with pytest.raises(TypeError):
         cfg.tables["x"] = []  # type: ignore[index]
 
