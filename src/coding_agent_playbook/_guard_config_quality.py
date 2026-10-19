@@ -71,7 +71,7 @@ def read_quality_lint(repo_root: Path) -> QualityLint:
         >>> read_quality_lint(Path("/no/such/repo"))
         QualityLint(codes=('C901', 'PLR0911', 'PLR0912', 'PLR0913', 'PLR0915'), config={}, preview=False)
     """
-    from coding_agent_playbook.metrics_config import parse_metrics_config
+    from coding_agent_playbook.metrics_gate.config import parse_metrics_config
 
     try:
         with (repo_root / _CONFIG_FILE).open("rb") as handle:
@@ -95,7 +95,7 @@ def quality_hook_config(quality: QualityLint, selection: RuffSelection) -> dict[
         ...                     RuffSelection())["ruff_config"]
         ['lint.pylint.max-args=5']
     """
-    from coding_agent_playbook.metrics_config import ruff_config_flags
+    from coding_agent_playbook.metrics_gate.config import ruff_config_flags
 
     kept = {
         key: value

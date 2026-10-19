@@ -4,7 +4,7 @@
 baseline, optionally runs the suite, and grades everything through one
 :class:`~coding_agent_playbook.evaluators.rubric.Rubric` of metric-backed checks
 (one per gated metric, built by the shared
-:func:`~coding_agent_playbook.evaluators.policy.metric_check` factory). It never
+:func:`~coding_agent_playbook.metrics_gate.policy.metric_check` factory). It never
 prints, never parses argv and never imports the ``cli`` package, argparse or jinja2, so
 the Stop stages can call it in-process; ``commands/metrics.py`` is the thin CLI
 over it and its output is pinned byte for byte by goldens.
@@ -41,7 +41,21 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evaluators._metrics_inputs import (
+from coding_agent_playbook.evaluators.baseline_git import (
+    BaselineGitError,
+    SubprocessBaselineGit,
+    SubprocessGitRunner,
+    changed_paths,
+)
+from coding_agent_playbook.evaluators.check import MeasurementSet
+from coding_agent_playbook.evaluators.execution.project import ProjectHandle
+from coding_agent_playbook.evaluators.metric import execution_metrics, static_metrics
+from coding_agent_playbook.evaluators.parse import parse_module
+from coding_agent_playbook.evaluators.rubric import Rubric
+from coding_agent_playbook.evaluators.tool_runner import MemoToolRunner, subprocess_tool_runner
+from coding_agent_playbook.evaluators.types import EvalContext, ToolSetup
+from coding_agent_playbook.metrics_gate.config import MetricConfig, parse_metrics_config
+from coding_agent_playbook.metrics_gate.inputs import (
     GIT_PREFIX,
     JSON_PREFIX,
     MAX_FILE_BYTES,
@@ -54,32 +68,18 @@ from coding_agent_playbook.evaluators._metrics_inputs import (
     static_baseline,
     verify_git_ref,
 )
-from coding_agent_playbook.evaluators._metrics_suite import (
+from coding_agent_playbook.metrics_gate.policy import metric_check, resolve_metric_selection
+from coding_agent_playbook.metrics_gate.snapshot import (
+    SnapshotError,
+    read_snapshot,
+    write_snapshot,
+)
+from coding_agent_playbook.metrics_gate.suite import (
     ProjectFactory,
     gate_suite,
     run_suites,
     without_diff_based,
 )
-from coding_agent_playbook.evaluators.baseline_git import (
-    BaselineGitError,
-    SubprocessBaselineGit,
-    SubprocessGitRunner,
-    changed_paths,
-)
-from coding_agent_playbook.evaluators.check import MeasurementSet
-from coding_agent_playbook.evaluators.execution.project import ProjectHandle
-from coding_agent_playbook.evaluators.measurement_snapshot import (
-    SnapshotError,
-    read_snapshot,
-    write_snapshot,
-)
-from coding_agent_playbook.evaluators.metric import execution_metrics, static_metrics
-from coding_agent_playbook.evaluators.parse import parse_module
-from coding_agent_playbook.evaluators.policy import metric_check, resolve_metric_selection
-from coding_agent_playbook.evaluators.rubric import Rubric
-from coding_agent_playbook.evaluators.tool_runner import MemoToolRunner, subprocess_tool_runner
-from coding_agent_playbook.evaluators.types import EvalContext, MetricConfig, ToolSetup
-from coding_agent_playbook.metrics_config import parse_metrics_config
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence

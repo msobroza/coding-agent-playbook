@@ -13,16 +13,17 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.evaluators.measurement_snapshot import read_snapshot, write_snapshot
 from coding_agent_playbook.evaluators.metric import static_metrics
-from coding_agent_playbook.evaluators.metrics_gate import (
+from coding_agent_playbook.evaluators.types import Measurement
+from coding_agent_playbook.metrics_gate.config import MetricConfig
+from coding_agent_playbook.metrics_gate.policy import OPT_IN_METRICS
+from coding_agent_playbook.metrics_gate.run import (
     MetricsGateDeps,
     MetricsGateRequest,
     MetricsGateUsageError,
     run_metrics_gate,
 )
-from coding_agent_playbook.evaluators.policy import OPT_IN_METRICS
-from coding_agent_playbook.evaluators.types import Measurement, MetricConfig
+from coding_agent_playbook.metrics_gate.snapshot import read_snapshot, write_snapshot
 from tests.cli.test_metrics import _BASELINE_SOURCE, _CLEAN_SOURCE, _WORSE_SOURCE
 from tests.fakes import FakeBaselineGit, FakeGitRunner, FakeProjectFactory
 

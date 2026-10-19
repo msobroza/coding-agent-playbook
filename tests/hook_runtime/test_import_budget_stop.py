@@ -4,7 +4,7 @@ A real ``dispatch stop`` in a fresh interpreter, with the coordinator and the
 ``drift`` stage hook bound to their builtins: the coordinator and its stage
 planning load, an inactive stage loads nothing of its own, and no forbidden
 module (jinja2, yaml, tomllib without an active stage, the CLI, the
-renderers, ``evaluators``) is imported. K6's §D.1 rows: ``evaluators.metrics_gate``
+renderers, ``evaluators``) is imported. K6's §D.1 rows: ``metrics_gate.run``
 loads only once ``quality-metrics`` measures something, and ``gate_scan`` only
 when ``gate-integrity`` scans or gate-weakening-guard's ``pre_edit`` companion
 judges a test-file edit, never ``tomllib`` on that ``pre_tool_use`` path. The
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 _COORDINATOR = engine_module("coding_agent_playbook.hook_runtime.stop.coordinator")
 _GATE_SCAN = engine_module("coding_agent_playbook.gate_scan")
 _GATE_SCAN_FILES = engine_module("coding_agent_playbook._gate_scan_files")
-_METRICS_GATE = engine_module("coding_agent_playbook.evaluators.metrics_gate")
+_METRICS_GATE = engine_module("coding_agent_playbook.metrics_gate.run")
 
 
 def test_stop_coordinator_imports_no_forbidden_module(
