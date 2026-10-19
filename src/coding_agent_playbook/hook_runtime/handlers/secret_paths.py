@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import ToolClass
 from coding_agent_playbook.hook_runtime.handlers._secret_inodes import (
@@ -119,7 +120,13 @@ def secret_path_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult 
     tool = ev.tool
     if tool is None:
         return None
-    judge = _Judge(ev, ctx, path_policy(ctx.cfg, ctx.config))
+    config = HookConfig(ctx.config, CONFIG_SCHEMA)
+    policy = path_policy(
+        ctx.cfg,
+        extra_globs=config.strings("extra_globs"),
+        allow_paths=config.strings("allow_paths"),
+    )
+    judge = _Judge(ev, ctx, policy)
     hits = judge.shell(tool) if tool.tool_class is ToolClass.SHELL else judge.files(tool)
     return _result(hits, ctx) or _env_context(tool, ctx)
 
