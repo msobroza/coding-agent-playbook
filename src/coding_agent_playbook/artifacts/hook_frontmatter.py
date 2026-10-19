@@ -1,11 +1,11 @@
 """``HookFrontmatter``: the static YAML frontmatter of ``HOOK.md`` (§A.2).
 
 Split out of ``types.py`` for the file-size budget (specs/prS-skills-context.md
-§6.4.1), which leaves ``types`` room to grow. ``types`` re-exports the class, so
-every importer keeps ``from coding_agent_playbook.types import HookFrontmatter``.
+§6.4.1), which leaves ``types`` room to grow; this module is its public home
+(specs/prT-package-layout.md A1 removed the ``types`` re-export).
 
-A leaf module: it depends only on ``_hook_schema``, ``dataclasses`` and ``typing``,
-never on ``types``, so ``types`` can import it without a cycle.
+A leaf module: it depends only on ``artifacts.hook_schema``, ``dataclasses`` and
+``typing``, never on ``types``, so ``types`` can import it without a cycle.
 """
 
 from __future__ import annotations
@@ -14,16 +14,20 @@ import dataclasses
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
 
-from coding_agent_playbook import _hook_schema as schema
+from coding_agent_playbook.artifacts import hook_schema as schema
 
 # The four Literal aliases are imported at run time, not under TYPE_CHECKING, so the
 # field annotations resolve in this module's namespace: typing.get_type_hints(
 # HookFrontmatter) worked while the class lived in types.py, and the move keeps it so.
-from coding_agent_playbook._hook_schema import HookDecision as HookDecision
-from coding_agent_playbook._hook_schema import HookEvent as HookEvent
-from coding_agent_playbook._hook_schema import HookHandler, HookMatcher, HookSchemaError
-from coding_agent_playbook._hook_schema import HookOnError as HookOnError
-from coding_agent_playbook._hook_schema import HookTier as HookTier
+from coding_agent_playbook.artifacts.hook_schema import (
+    HookDecision,
+    HookEvent,
+    HookHandler,
+    HookMatcher,
+    HookOnError,
+    HookSchemaError,
+    HookTier,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

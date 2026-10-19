@@ -303,6 +303,7 @@ coding-agent-playbook/
 │   ├── __init__.py
 │   ├── cli/                                # `playbook` entrypoint: __init__ (main), parser, __main__
 │   ├── types.py                            # Rule, Prompt, Skill, Hook dataclasses (Section 6.6)
+│   ├── artifacts/                          # their stdlib leaves: hook_schema, hook_frontmatter, member_reference
 │   ├── config/                             # the consumer config (Section 7)
 │   │   ├── model.py                        # Config dataclass and the [output] parser
 │   │   ├── schema.py                       # per-file checks, ConfigError
@@ -372,6 +373,7 @@ coding-agent-playbook/
 │           └── config.yaml.j2              # starter .pre-commit-config.yaml (engine wiring, not content; Section 13.2)
 ├── tests/
 │   ├── plugins/                            # bundled-plugin gates (Sections 11.5.1, 11.5.2)
+│   ├── artifacts/                          # test_hook_frontmatter.py
 │   ├── catalog/                            # test_roots.py, test_source.py, ...
 │   ├── detector/                           # test_facts.py, test_predicate.py, ...
 │   ├── unit/
@@ -1154,7 +1156,7 @@ class Skill:
     ...
 
 
-# coding_agent_playbook/_member_reference.py (a stdlib-only leaf types.py imports)
+# coding_agent_playbook/artifacts/member_reference.py (a stdlib-only leaf types.py imports)
 def member_reference_path(rule_id: str) -> str: ...  # "references/<rule_id>.md"
 
 
@@ -1171,6 +1173,7 @@ class MemberReference:  # one member rule, rendered as its skill's references/<r
 
 
 # --- Hook: the fourth emitted kind (Section 6.6.7) ---
+# coding_agent_playbook/artifacts/hook_schema.py (HookSchemaError, HookMatcher, HookHandler)
 class HookSchemaError(ValueError):
     """Field-precise HOOK.md error: carries where / field (dotted path) / value / expected."""
 
@@ -1195,6 +1198,7 @@ class HookHandler:  # exactly one form: builtin, or external command + script
     config: dict[str, Any] = field(default_factory=dict)
 
 
+# coding_agent_playbook/artifacts/hook_frontmatter.py
 @dataclass
 class HookFrontmatter:
     id: str
@@ -1223,6 +1227,7 @@ class HookFrontmatter:
     def to_mapping(self) -> dict: ...  # empty values (an empty summary too) dropped at every level
 
 
+# coding_agent_playbook/types.py
 @dataclass
 class Hook:
     frontmatter: HookFrontmatter
@@ -3460,7 +3465,8 @@ The fix is a small abstraction: route "where do artifacts come from" and "where 
 ```python
 # coding_agent_playbook/catalog/source.py (ArtifactSource) and config/files.py (StateSource)
 from abc import ABC, abstractmethod
-from coding_agent_playbook.types import Rule, Prompt, Skill, Hook, HookSchemaError, EvalTask
+from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
+from coding_agent_playbook.types import Rule, Prompt, Skill, Hook, EvalTask
 from coding_agent_playbook.config.model import Config
 from coding_agent_playbook.config.tables.hooks import PolicyTables
 from coding_agent_playbook.lockfile import Lockfile

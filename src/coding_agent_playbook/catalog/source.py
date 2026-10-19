@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 # A stdlib-only package module, so this stays a light import.
-from coding_agent_playbook._hook_schema import HookSchemaError
+from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
 from coding_agent_playbook.catalog._hook_walk import walk_hook_layer
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
 from coding_agent_playbook.catalog.roots import catalog_layer_root, is_bundled_layer
@@ -293,7 +293,7 @@ class FileSystemArtifactSource(ArtifactSource):
         """Every hook directory of every layer, in :meth:`layer_roots` order (prK §A.5).
 
         Fails loudly, like ``Rule.from_markdown``: raises the first
-        :class:`~coding_agent_playbook.types.HookSchemaError` that
+        :class:`~coding_agent_playbook.artifacts.hook_schema.HookSchemaError` that
         :meth:`collect_hooks` finds.
         """
         hooks, errors = self.collect_hooks()

@@ -1,18 +1,18 @@
 """Structural schema of ``HOOK.md`` frontmatter: key sets, H8 contract keys, typed reads.
 
 Also the vocabulary Literals and the two nested levels (``HookMatcher``,
-``HookHandler``), whose public home is ``coding_agent_playbook.types``.
+``HookHandler``); this module is their public home.
 
-``HookFrontmatter.from_mapping`` (defined in ``_hook_frontmatter``, public home
-``types``) uses this module to enforce H1 (unknown keys at every level, required
-keys, types) and to give the H8 contract keys their own message. It checks
-structure only. Value domains (canonical event names, per-event decisions, the id
-pattern, timeout bounds: H2-H13) are left to ``hook_policy.classify_hook``, so
+``HookFrontmatter.from_mapping`` (defined in ``artifacts.hook_frontmatter``) uses
+this module to enforce H1 (unknown keys at every level, required keys, types) and
+to give the H8 contract keys their own message. It checks structure only. Value
+domains (canonical event names, per-event decisions, the id pattern, timeout
+bounds: H2-H13) are left to ``hook_policy.classify_hook``, so
 ``playbook validate`` can report every problem of a hook at once instead of
 stopping at the first (specs/prK-lifecycle-hooks.md §A.2, §B.5).
 
 Split out of ``types.py`` for the file-size budget. It imports nothing from the
-package, so ``types.py``, ``_hook_frontmatter.py`` and the stdlib-only
+package, so ``types.py``, ``artifacts/hook_frontmatter.py`` and the stdlib-only
 ``hook_policy`` can all import it without a cycle.
 """
 
@@ -124,7 +124,6 @@ class HookSchemaError(ValueError):
     ``field`` is the dotted path of the offending key (``handler.args``,
     ``matcher.pre_tool_use.tools``). ``problem`` overrides the default
     ``expected …, got …`` detail for unknown, missing and contract keys.
-    Re-exported as ``coding_agent_playbook.types.HookSchemaError``.
 
     Example::
 
