@@ -1,9 +1,9 @@
 """``FakeRunner`` — the hermetic, deterministic test driver (PR R1 §1).
 
-The default :class:`~coding_agent_playbook.evals.runner.HarnessRunner` for unit
+The default :class:`~coding_agent_playbook.evals.run.harness_runner.HarnessRunner` for unit
 tests and air-gapped runs: instead of driving a real agent, its
 :meth:`_invoke_agent` applies a caller-supplied **mutation** to the scratch tree
-and returns a canned :class:`~coding_agent_playbook.evals.runner.AgentRun`. No
+and returns a canned :class:`~coding_agent_playbook.evals.run.harness_runner.AgentRun`. No
 network, no CLI, fully reproducible — so the whole runner → scoring pipeline can
 be exercised end-to-end with a known agent "edit".
 
@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evals.runner import AgentRun, HarnessRunner
+from coding_agent_playbook.evals.run.harness_runner import AgentRun, HarnessRunner
 
 if TYPE_CHECKING:
     from collections.abc import Callable

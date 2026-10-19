@@ -79,9 +79,9 @@ filesystem = "coding_agent_playbook.config.files:FileSystemStateSource"
 [project.entry-points."coding_agent_playbook.runners"]
 # The hermetic FakeRunner ships in v1.1 (PR R1); ClaudeCodeRunner lands in R1c
 # and OpenCodeRunner in R3 Track O (opt-in real runners, never exercised in CI).
-fake = "coding_agent_playbook.evals.fake_runner:FakeRunner"
-claude_code = "coding_agent_playbook.evals.claude_code_runner:ClaudeCodeRunner"
-opencode = "coding_agent_playbook.evals.opencode_runner:OpenCodeRunner"
+fake = "coding_agent_playbook.evals.run.fake_runner:FakeRunner"
+claude_code = "coding_agent_playbook.evals.run.claude_code_runner:ClaudeCodeRunner"
+opencode = "coding_agent_playbook.evals.run.opencode_runner:OpenCodeRunner"
 
 [project.entry-points."coding_agent_playbook.judges"]
 # PR R2 — the opt-in LLMJudge shells out to the `claude` CLI (available()-gated,
@@ -276,7 +276,6 @@ exhaustive_ignores = [
     "_guard_config_toolchain",
     "_guard_config_verify",
     "evaluators",
-    "git_env",
     "guard_config",
     "harness",
     "hook_registrations",
@@ -355,7 +354,6 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
     "coding_agent_playbook.generated_output.write_guard",
-    "coding_agent_playbook.git_env",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
     "coding_agent_playbook.hook_registrations",
@@ -425,7 +423,6 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
     "coding_agent_playbook.generated_output.write_guard",
-    "coding_agent_playbook.git_env",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
     "coding_agent_playbook.hook_registrations",
@@ -515,7 +512,6 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
     "coding_agent_playbook.generated_output.write_guard",
-    "coding_agent_playbook.git_env",
     "coding_agent_playbook.guard_config",
     "coding_agent_playbook.harness",
     "coding_agent_playbook.hook_registrations",

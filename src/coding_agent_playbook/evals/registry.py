@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.judge import Judge
-    from coding_agent_playbook.evals.runner import HarnessRunner
+    from coding_agent_playbook.evals.run.harness_runner import HarnessRunner
 
 
 #: Entry-point group runners self-register under (mirrors adapters/sources).

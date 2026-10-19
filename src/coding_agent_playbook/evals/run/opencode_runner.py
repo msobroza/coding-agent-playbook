@@ -1,13 +1,13 @@
 """``OpenCodeRunner`` — a second thin, opt-in real runner (PR R3 Track O).
 
-A :class:`~coding_agent_playbook.evals.runner.HarnessRunner` that drives the
+A :class:`~coding_agent_playbook.evals.run.harness_runner.HarnessRunner` that drives the
 **OpenCode CLI** bound to the task's scratch repo, mirroring the opt-in
 ``ClaudeCodeRunner``: its :meth:`_invoke_agent` spawns the CLI via a plain
 ``subprocess`` arg-list (no shell), captures the combined stdout/stderr as the
-:class:`~coding_agent_playbook.evals.runner.AgentRun` transcript, and records the
+:class:`~coding_agent_playbook.evals.run.harness_runner.AgentRun` transcript, and records the
 process return code. Everything before/after the invocation (materialize →
 render → capture → score) is the fixed
-:meth:`~coding_agent_playbook.evals.runner.HarnessRunner.run_task` template.
+:meth:`~coding_agent_playbook.evals.run.harness_runner.HarnessRunner.run_task` template.
 
 This runner is **opt-in and never exercised in CI**. There is no import of the
 CLI at module top — the only dependency is ``shutil``/``subprocess`` from the
@@ -16,7 +16,7 @@ stdlib, and the executable is discovered at call time. :meth:`available` returns
 cleanly, mirroring the ``radon`` lazy-availability pattern.
 
 Because it feeds a real agent, it sets
-:attr:`~coding_agent_playbook.evals.runner.HarnessRunner.requires_resolved_prompt`
+:attr:`~coding_agent_playbook.evals.run.harness_runner.HarnessRunner.requires_resolved_prompt`
 ``True``: an unresolvable ``prompt_id`` raises
 :class:`~coding_agent_playbook.evals.prompting.PromptResolutionError` rather than
 driving the agent with the FakeRunner's placeholder.
@@ -37,8 +37,8 @@ import shutil
 import subprocess
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evals.agent_env import unattended_agent_env
-from coding_agent_playbook.evals.runner import AgentRun, HarnessRunner
+from coding_agent_playbook.evals.run.agent_env import unattended_agent_env
+from coding_agent_playbook.evals.run.harness_runner import AgentRun, HarnessRunner
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
