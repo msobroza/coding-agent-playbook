@@ -15,10 +15,15 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from coding_agent_playbook.hook_runtime._git_parse import DiffLines
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps, TrustPort
     from coding_agent_playbook.hook_runtime.event import RepoInfo
-    from coding_agent_playbook.hook_runtime.git import AddedLine, Fingerprint, GitPort, LoggedCommit
+    from coding_agent_playbook.hook_runtime.git.parse import DiffLines
+    from coding_agent_playbook.hook_runtime.git.safe_git import (
+        AddedLine,
+        Fingerprint,
+        GitPort,
+        LoggedCommit,
+    )
     from coding_agent_playbook.hook_runtime.globs import GlobSet
     from coding_agent_playbook.hook_runtime.state import StateStore
 
@@ -31,7 +36,7 @@ class LazyGit:
     Example::
 
         >>> git = LazyGit(repo, deps, state=store, secret_paths=cfg.secret_paths)  # doctest: +SKIP
-        >>> git.head_tree()  # the first call imports git.py and spawns git
+        >>> git.head_tree()  # the first call imports git/safe_git.py and spawns git
         '4b825dc6...'
     """
 
@@ -51,7 +56,7 @@ class LazyGit:
 
     def _port(self) -> GitPort:
         if self._git is None:
-            from coding_agent_playbook.hook_runtime._git_memo import MemoGit
+            from coding_agent_playbook.hook_runtime.git.memo import MemoGit
 
             self._git = MemoGit(  # one dispatch, one snapshot: each distinct read spawns once
                 self._repo,

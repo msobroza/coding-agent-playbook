@@ -35,8 +35,8 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS, TEST_PATH_GLOBS
-from coding_agent_playbook.hook_runtime._git_parse import AddedLine, RemovedLine
 from coding_agent_playbook.hook_runtime.caps import clean_text, clip
+from coding_agent_playbook.hook_runtime.git.parse import AddedLine, RemovedLine
 from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs
 from coding_agent_playbook.hook_runtime.judges._gate_weakening_files import (
     TOML_PREFIXES,

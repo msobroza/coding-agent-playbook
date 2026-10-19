@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime._git_parse import AddedLine
 from coding_agent_playbook.hook_runtime.config.guard_config import (
     GUARD_CONFIG_REL,
     GuardConfig,
@@ -22,6 +21,7 @@ from coding_agent_playbook.hook_runtime.config.guard_config import (
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.escape import EscapeHatches
 from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, Harness
+from coding_agent_playbook.hook_runtime.git.parse import AddedLine
 from coding_agent_playbook.hook_runtime.handlers.docstring_nonregression import DocstringsStage
 from coding_agent_playbook.hook_runtime.handlers.quality_metrics import QualityMetricsStage
 from coding_agent_playbook.hook_runtime.registry import HandlerContext, load_builtin

@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Final
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.hook_runtime.git_log import LoggedCommit
+    from coding_agent_playbook.hook_runtime.git.log import LoggedCommit
 
 __all__ = ["MAX_MESSAGES", "CzPlan", "committed_since", "parse_cutover", "plan_cz_checks"]
 

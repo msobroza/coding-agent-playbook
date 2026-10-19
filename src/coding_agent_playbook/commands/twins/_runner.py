@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.git import GitError
+from coding_agent_playbook.hook_runtime.git.safe_git import GitError
 
 if TYPE_CHECKING:
     from collections.abc import Callable

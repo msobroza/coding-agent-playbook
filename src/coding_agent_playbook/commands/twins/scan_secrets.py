@@ -64,7 +64,7 @@ from coding_agent_playbook.security.secrets import (
 if TYPE_CHECKING:
     import argparse
 
-    from coding_agent_playbook.hook_runtime.git import GitPort, SafeGit
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort, SafeGit
     from coding_agent_playbook.security.pii import PiiConfig
 
 __all__ = ["SecretHit", "SecretReport", "load_path_policy", "pii_option", "run", "scan_scope"]

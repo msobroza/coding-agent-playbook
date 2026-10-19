@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ContentFragment, ToolCall
-    from coding_agent_playbook.hook_runtime.git import AddedLine
+    from coding_agent_playbook.hook_runtime.git.safe_git import AddedLine
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.parse import ShellCommand

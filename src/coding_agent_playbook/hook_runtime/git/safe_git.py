@@ -7,7 +7,7 @@ executable; ``diff.external`` and textconv drivers run on ``diff``. An
 unhardened hook git call would turn an edit into code execution, so
 :class:`SafeGit` is the only way the runtime runs git:
 
-- filter drivers are discovered once (``_git_cache``) and neutralized with
+- filter drivers are discovered once (``_cache``) and neutralized with
   ``-c filter.<n>.clean= -c filter.<n>.smudge= -c filter.<n>.process=
   -c filter.<n>.required=false`` (the last one, beyond the spec's three, keeps
   a ``required`` driver from failing the call); if discovery fails, every
@@ -28,21 +28,21 @@ import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal, Protocol
 
-from coding_agent_playbook.hook_runtime._git_argv import (
+from coding_agent_playbook.hook_runtime.git._argv import (
     FSMONITOR,
     child_env,
     first_line,
     subcommand,
     with_diff_flags,
 )
-from coding_agent_playbook.hook_runtime._git_parse import (
+from coding_agent_playbook.hook_runtime.git.log import LoggedCommit, LogPort, LogQueries
+from coding_agent_playbook.hook_runtime.git.parse import (
     AddedLine,
     parse_batch_blob,
     parse_diff_added,
     split_z,
 )
-from coding_agent_playbook.hook_runtime.git_log import LoggedCommit, LogPort, LogQueries
-from coding_agent_playbook.hook_runtime.git_range import PATCH_FLAGS, RangePort, RangeQueries
+from coding_agent_playbook.hook_runtime.git.range import PATCH_FLAGS, RangePort, RangeQueries
 from coding_agent_playbook.hook_runtime.proc import ProcTimeout
 
 if TYPE_CHECKING:
@@ -137,7 +137,7 @@ class SafeGit(RangeQueries, LogQueries):
     holds the discovery caches and the temp index (``None``: no caches, a
     system temp dir, as in CI); ``secret_paths`` and ``max_file_bytes`` decide
     what the fingerprint folds in by stat. The revision queries come from
-    ``git_range.RangeQueries``, the commit log from ``git_log.LogQueries``.
+    ``range.RangeQueries``, the commit log from ``log.LogQueries``.
 
     Example::
 
@@ -228,7 +228,7 @@ class SafeGit(RangeQueries, LogQueries):
     def version(self) -> tuple[int, int, int]:
         """git's version, cached in ``<state>/cache/git-version`` per executable."""
         if self._version is None:
-            from coding_agent_playbook.hook_runtime._git_cache import cached_version
+            from coding_agent_playbook.hook_runtime.git._cache import cached_version
 
             self._version = cached_version(self)
         return self._version
@@ -237,7 +237,7 @@ class SafeGit(RangeQueries, LogQueries):
         if self._filter_error is not None:
             raise self._filter_error
         if self._filter_flags is None:
-            from coding_agent_playbook.hook_runtime._git_cache import filter_flags
+            from coding_agent_playbook.hook_runtime.git._cache import filter_flags
 
             try:
                 self._filter_flags = filter_flags(self)
@@ -286,7 +286,7 @@ class SafeGit(RangeQueries, LogQueries):
 
     def fingerprint(self) -> Fingerprint | None:
         """The working-tree fingerprint, or ``None`` when git cannot give one safely."""
-        from coding_agent_playbook.hook_runtime._git_fingerprint import working_tree_fingerprint
+        from coding_agent_playbook.hook_runtime.git._fingerprint import working_tree_fingerprint
 
         try:
             return working_tree_fingerprint(self)

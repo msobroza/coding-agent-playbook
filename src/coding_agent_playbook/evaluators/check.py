@@ -11,7 +11,7 @@ turns those rows (or, for file/judge checks, ``ctx``) into one
 
 This module holds the **deterministic, metric-backed checks**
 (:class:`ThresholdCheck`, :class:`NonRegressionCheck`); the file checks live in
-:mod:`coding_agent_playbook.evaluators.checks.files`. The per-scope decision here
+:mod:`coding_agent_playbook.evals.checks.files`. The per-scope decision here
 (``to_score``/``_decide``/``_absolute_level``/``_regressed``) is the canonical
 deterministic grading logic.
 """

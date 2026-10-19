@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.hook_runtime._git_fingerprint import _copy_index
-from coding_agent_playbook.hook_runtime.git import (
+from coding_agent_playbook.hook_runtime.git._fingerprint import _copy_index
+from coding_agent_playbook.hook_runtime.git.safe_git import (
     HOT_PATH_TIMEOUT_S,
     STOP_TIMEOUT_S,
     AddedLine,
