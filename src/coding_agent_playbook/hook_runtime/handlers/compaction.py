@@ -150,7 +150,8 @@ def precompact_reinject(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResul
         checkpoint = ctx.session.store.read_json(checkpoint_rel(ev.session_id))
     except StateUnavailable:
         return None
-    max_prompts = HookConfig(ctx.config, CONFIG_SCHEMA).integer(
+    config = HookConfig(ctx.config, CONFIG_SCHEMA)
+    max_prompts = config.integer(
         "max_prompts", DEFAULT_MAX_PROMPTS, minimum=1, maximum=_MAX_PROMPTS_CEILING, above="clamp"
     )
     refs = _refs(checkpoint)[-max_prompts:]
@@ -158,7 +159,7 @@ def precompact_reinject(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResul
         prompts = read_prompts(ev.transcript_path, refs)
     except TranscriptShapeError:
         return None
-    pii = pii_settings(ctx.config)
+    pii = pii_settings(config)
     lines = [SAID + masked_excerpt(text, pii) for text in prompts]
     lines.extend(_files_line(_strings(checkpoint.get("files"))))
     if not lines:

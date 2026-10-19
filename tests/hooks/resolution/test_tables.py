@@ -19,7 +19,7 @@ from coding_agent_playbook.artifacts.hook_schema import (
 )
 from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS
 from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.harness import CLAUDE_EVENT_NAMES
+from coding_agent_playbook.hook_runtime.harness.wire import CLAUDE_EVENT_NAMES
 from coding_agent_playbook.hook_runtime.policy import (
     ENGINE_DEADLINE_CAP_MS as RUNTIME_DEADLINE_CAP_MS,
 )
@@ -224,6 +224,7 @@ def test_hooks_package_imports_only_the_stdlib() -> None:
         "coding_agent_playbook.hook_runtime.decision",
         "coding_agent_playbook.hook_runtime.event",
         "coding_agent_playbook.hook_runtime.harness",
+        "coding_agent_playbook.hook_runtime.harness.wire",
         "coding_agent_playbook.hook_runtime.paths",
         "coding_agent_playbook.hook_runtime.policy",
         "coding_agent_playbook.hook_runtime.registry",

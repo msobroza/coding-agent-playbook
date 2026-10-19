@@ -204,7 +204,7 @@ def _secret_file(
     """The first file ``egress`` sends that the secret-path policy covers, as spelled."""
     if not egress.files:
         return None
-    policy = path_policy(ctx.cfg, {})
+    policy = path_policy(ctx.cfg)
     home = ctx.home or user_home()
     for raw in egress.files:
         path = normalize_path(
