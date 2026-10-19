@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.catalog import bundled_plugins
+from coding_agent_playbook.catalog.roots import bundled_plugins
 from coding_agent_playbook.cli import main
 from tests.plugins.superpowers_expectations import PLUGIN_NAME, write_consumer_repo
 

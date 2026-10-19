@@ -32,10 +32,12 @@ out-of-tree code can import (public old or new path):
 | Old module path | New module path | Moved by |
 | --- | --- | --- |
 | `coding_agent_playbook._canonical_json` | `coding_agent_playbook.lockfile.canonical_json` | N5 |
+| `coding_agent_playbook._layers` | `coding_agent_playbook.catalog.layers` | N3 |
 | `coding_agent_playbook._lock_drift` | `coding_agent_playbook.lockfile.drift` | N5 |
 | `coding_agent_playbook._pep503` | `coding_agent_playbook.detector.pep503` | N4 |
 | `coding_agent_playbook._pyproject_deps` | `coding_agent_playbook.detector.pyproject_deps` | N4 |
 | `coding_agent_playbook._toml` | `coding_agent_playbook.toml_writer` | N1 |
+| `coding_agent_playbook.catalog` | `coding_agent_playbook.catalog.roots` | N3 |
 | `coding_agent_playbook.cli.build_parser` | `coding_agent_playbook.cli.parser.build_parser` | N7 |
 | `coding_agent_playbook.config` | `coding_agent_playbook.config.model` | N2 |
 | `coding_agent_playbook.config.ConfigError` | `coding_agent_playbook.config.schema.ConfigError` | N2 |
@@ -72,8 +74,12 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.lockfile.parse_json_document` | `coding_agent_playbook.lockfile.drift.parse_json_document` | N5 |
 | `coding_agent_playbook.metrics_config` | `coding_agent_playbook.metrics_gate.config` | N22 |
 | `coding_agent_playbook.orchestrator.filter_applies_if` | `coding_agent_playbook.detector.predicate.filter_applies_if` | N4 |
+| `coding_agent_playbook.sources.base` | `coding_agent_playbook.catalog.source` | N3 |
 | `coding_agent_playbook.sources.base.StateSource` | `coding_agent_playbook.config.files.StateSource` | N2 |
+| `coding_agent_playbook.sources.filesystem` | `coding_agent_playbook.catalog.source` | N3 |
+| `coding_agent_playbook.sources.filesystem.ENGINE_PACKAGE` | `coding_agent_playbook.catalog.layers.ENGINE_PACKAGE` | N3 |
 | `coding_agent_playbook.sources.filesystem.FileSystemStateSource` | `coding_agent_playbook.config.files.FileSystemStateSource` | N2 |
+| `coding_agent_playbook.sources.filesystem.REPO_LOCAL_SOURCE` | `coding_agent_playbook.catalog.layers.REPO_LOCAL_SOURCE` | N3 |
 <!-- module-moves:end -->
 
 ## v0.21 — Skills-first context

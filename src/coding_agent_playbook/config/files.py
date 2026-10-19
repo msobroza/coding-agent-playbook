@@ -3,8 +3,8 @@
 ``StateSource`` (SPEC §20.2) is where config and lockfile are read from and written
 to; third-party sources register through the ``coding_agent_playbook.state_sources``
 entry point declared in ``pyproject.toml``. ``FileSystemStateSource`` (SPEC §20.3)
-reads and writes the three TOML files of a consumer repo. Split out of
-``sources/base.py`` and ``sources/filesystem.py``, which keep the artifact side.
+reads and writes the three TOML files of a consumer repo. Split out of the
+artifact source modules; the artifact side is ``catalog/source.py``.
 """
 
 from __future__ import annotations

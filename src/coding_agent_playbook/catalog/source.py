@@ -1,25 +1,28 @@
-"""Filesystem-backed ArtifactSource (SPEC §20.3).
+"""The ArtifactSource ABC and its filesystem implementation (SPEC.md §20.2, §20.3).
 
-This is the v1 implementation. It depends only on stdlib (pathlib,
-importlib.resources, importlib.metadata) plus pyyaml for the frontmatter
-helpers already in types.py. FileSystemStateSource lives in ``config/files.py``.
+Third-party sources register via the ``coding_agent_playbook.artifact_sources``
+entry point declared in ``pyproject.toml``. The filesystem source is the v1
+implementation. It depends only on stdlib (pathlib, importlib.resources,
+importlib.metadata) plus pyyaml for the frontmatter helpers already in types.py.
+The StateSource ABC and FileSystemStateSource live in ``config/files.py``.
 """
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._layers import ENGINE_PACKAGE as ENGINE_PACKAGE
-from coding_agent_playbook._layers import REPO_LOCAL_SOURCE as REPO_LOCAL_SOURCE
-from coding_agent_playbook.catalog import catalog_layer_root, is_bundled_layer
+# A stdlib-only package module, so this stays a light import.
+from coding_agent_playbook._hook_schema import HookSchemaError
+from coding_agent_playbook.catalog._hook_walk import walk_hook_layer
+from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
+from coding_agent_playbook.catalog.roots import catalog_layer_root, is_bundled_layer
 from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
 )
-from coding_agent_playbook.sources._hook_walk import walk_hook_layer
-from coding_agent_playbook.sources.base import ArtifactSource
 from coding_agent_playbook.types import Prompt, Rule, Skill, split_frontmatter
 
 if TYPE_CHECKING:
@@ -27,9 +30,56 @@ if TYPE_CHECKING:
     from typing import TypeVar
 
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.types import Hook, HookSchemaError
+    from coding_agent_playbook.types import Hook
 
     _T = TypeVar("_T")
+
+
+class ArtifactSource(ABC):
+    """Where rules, prompts, skills, hooks, and eval tasks come from."""
+
+    name: str
+
+    @abstractmethod
+    def list_rules(self) -> list[Rule]: ...
+
+    @abstractmethod
+    def list_prompts(self) -> list[Prompt]: ...
+
+    @abstractmethod
+    def list_skills(self) -> list[Skill]: ...
+
+    def list_hooks(self) -> list[Hook]:
+        """Every hook this source ships, raising ``HookSchemaError`` on a malformed one.
+
+        Concrete, returning ``[]``, not abstract: a third-party source written
+        before hooks existed must still instantiate (prK §A.5).
+
+        Example::
+
+            >>> source.list_hooks()  # doctest: +SKIP
+            []
+        """
+        return []
+
+    def collect_hooks(self) -> tuple[list[Hook], list[HookSchemaError]]:
+        """Every well-formed hook plus the errors of malformed ones, never raising.
+
+        What ``playbook validate`` reads, so it can report every malformed hook
+        (prK §P P8c). This default can only record the one error a failing
+        :meth:`list_hooks` raises; a source that sees each hook overrides it.
+
+        Example::
+
+            >>> hooks, errors = source.collect_hooks()  # doctest: +SKIP
+        """
+        try:
+            return self.list_hooks(), []
+        except HookSchemaError as exc:
+            return [], [exc]
+
+    @abstractmethod
+    def list_eval_tasks(self) -> list[EvalTask]: ...
 
 
 def _resource_subdir(package: str, subdir: str) -> Path | None:
@@ -37,7 +87,7 @@ def _resource_subdir(package: str, subdir: str) -> Path | None:
 
     A bundled layer (the engine, or a bundled plugin under either namespace)
     reads ``<subdir>`` from its directory in the catalog root
-    (``catalog.catalog_layer_root``) and is never imported. Every other
+    (``catalog.roots.catalog_layer_root``) and is never imported. Every other
     package resolves ``<package>/resources/<subdir>`` via importlib.resources.
 
     Returns ``None`` if the package is not importable, has no ``resources/``
@@ -143,7 +193,7 @@ def _find_skill_md(skill_dir: Path) -> Path | None:
 
 class FileSystemArtifactSource(ArtifactSource):
     """Walks the engine's catalog (``catalog/core/`` and the enabled
-    ``catalog/plugins/<name>/``, located by the ``catalog`` module), importlib.resources
+    ``catalog/plugins/<name>/``, located by ``catalog.roots``), importlib.resources
     for overlay packages, plus <repo>/playbook/ for repo-local artifacts
     (SPEC §20.3, §11).
 
