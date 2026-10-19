@@ -24,7 +24,7 @@ import pytest
 
 from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
-from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
+from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.claude_code.paths import (
     CLAUDE_CODE_COMPOSITES,

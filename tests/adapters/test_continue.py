@@ -6,7 +6,7 @@ import dataclasses
 from pathlib import Path
 from typing import Any
 
-from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
+from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill

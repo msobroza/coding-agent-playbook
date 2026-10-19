@@ -14,7 +14,7 @@ adapter writes OpenCode's own native outputs:
 - prompts -> ``.opencode/command/<slash>.md`` slash commands;
 - skills  -> ``.opencode/skills/<id>/`` (``SKILL.md`` + ``scripts/`` +
   ``references/``) through the shared
-  :class:`~coding_agent_playbook.adapters._skill_writer.SkillWriter`, so OpenCode
+  :class:`~coding_agent_playbook.adapters.skill_dirs.writer.SkillWriter`, so OpenCode
   no longer depends on the ``claude_code`` adapter being enabled for skills. A
   scoped rule that names a skill (a member rule, ADR 0001) reaches OpenCode
   here, as ``references/<rule-id>.md`` of that skill;
@@ -51,8 +51,8 @@ from coding_agent_playbook._file_identity import FileSet
 from coding_agent_playbook._output_io import write_output_text
 from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters._owned_files import write_engine_owned
-from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.adapters.skill_dirs.writer import SkillWriter
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT
 from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
 from coding_agent_playbook.hook_registrations import (
