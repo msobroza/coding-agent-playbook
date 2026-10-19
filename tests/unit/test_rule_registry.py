@@ -23,6 +23,7 @@ from coding_agent_playbook.prompt_rule_delivery import SkillReference
 from coding_agent_playbook.renderer import TemplateSecurityError, build_environment, render_string
 from coding_agent_playbook.rule_registry import RuleRegistryImpl, build_prompt_environment
 from coding_agent_playbook.types import Rule, RuleFrontmatter
+from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
 
 if TYPE_CHECKING:
@@ -244,6 +245,6 @@ def test_orchestrator_neither_imports_the_registry_back_nor_re_exports_it() -> N
     """``rule_registry`` imports ``template_source`` from the orchestrator (no cycle, no shim)."""
     loaded = new_modules_after("import coding_agent_playbook.orchestrator")
 
-    assert "coding_agent_playbook.rule_registry" not in loaded
+    assert engine_module("coding_agent_playbook.rule_registry") not in loaded
     assert not hasattr(orchestrator, "RuleRegistryImpl")
     assert not hasattr(orchestrator, "build_prompt_environment")
