@@ -46,12 +46,19 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.config.parse_guardrails_config` | `coding_agent_playbook.config.tables.hooks.parse_guardrails_config` | N2 |
 | `coding_agent_playbook.config.parse_hooks_config` | `coding_agent_playbook.config.tables.hooks.parse_hooks_config` | N2 |
 | `coding_agent_playbook.config.parse_links_config` | `coding_agent_playbook.config.tables.links.parse_links_config` | N2 |
-| `coding_agent_playbook.config.parse_metrics_config` | `coding_agent_playbook.metrics_config.parse_metrics_config` | N2 |
+| `coding_agent_playbook.config.parse_metrics_config` | `coding_agent_playbook.metrics_gate.config.parse_metrics_config` | N2 |
 | `coding_agent_playbook.config.required_value` | `coding_agent_playbook.config.schema.required_value` | N2 |
 | `coding_agent_playbook.config_entries` | `coding_agent_playbook.config.entries` | N2 |
 | `coding_agent_playbook.config_schema` | `coding_agent_playbook.config.schema` | N2 |
 | `coding_agent_playbook.detector` | `coding_agent_playbook.detector.facts` | N4 |
 | `coding_agent_playbook.detector.evaluate_predicate` | `coding_agent_playbook.detector.predicate.evaluate_predicate` | N4 |
+| `coding_agent_playbook.evaluators.MetricConfig` | `coding_agent_playbook.metrics_gate.config.MetricConfig` | N22 |
+| `coding_agent_playbook.evaluators._metrics_inputs` | `coding_agent_playbook.metrics_gate.inputs` | N22 |
+| `coding_agent_playbook.evaluators._metrics_suite` | `coding_agent_playbook.metrics_gate.suite` | N22 |
+| `coding_agent_playbook.evaluators.measurement_snapshot` | `coding_agent_playbook.metrics_gate.snapshot` | N22 |
+| `coding_agent_playbook.evaluators.metrics_gate` | `coding_agent_playbook.metrics_gate.run` | N22 |
+| `coding_agent_playbook.evaluators.policy` | `coding_agent_playbook.metrics_gate.policy` | N22 |
+| `coding_agent_playbook.evaluators.types.MetricConfig` | `coding_agent_playbook.metrics_gate.config.MetricConfig` | N22 |
 | `coding_agent_playbook.hooks_config` | `coding_agent_playbook.config.tables.hooks` | N2 |
 | `coding_agent_playbook.links.LinksConfig` | `coding_agent_playbook.config.tables.links.LinksConfig` | N2 |
 | `coding_agent_playbook.lockfile` | `coding_agent_playbook.lockfile.model` | N5 |
@@ -63,6 +70,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.lockfile.drift_entries` | `coding_agent_playbook.lockfile.drift.drift_entries` | N5 |
 | `coding_agent_playbook.lockfile.managed_drift` | `coding_agent_playbook.lockfile.drift.managed_drift` | N5 |
 | `coding_agent_playbook.lockfile.parse_json_document` | `coding_agent_playbook.lockfile.drift.parse_json_document` | N5 |
+| `coding_agent_playbook.metrics_config` | `coding_agent_playbook.metrics_gate.config` | N22 |
 | `coding_agent_playbook.orchestrator.filter_applies_if` | `coding_agent_playbook.detector.predicate.filter_applies_if` | N4 |
 | `coding_agent_playbook.sources.base.StateSource` | `coding_agent_playbook.config.files.StateSource` | N2 |
 | `coding_agent_playbook.sources.filesystem.FileSystemStateSource` | `coding_agent_playbook.config.files.FileSystemStateSource` | N2 |
@@ -1377,7 +1385,7 @@ class MyMetric(Metric):
 > the v0.13 section, step 2).
 
 The default warn/fail bounds and regression tolerance that used to live on the
-metric now live in `evaluators/policy.py::METRIC_DEFAULTS` (for the builtins) and,
+metric now live in `metrics_gate/policy.py::METRIC_DEFAULTS` (for the builtins) and,
 for your metric, are supplied by whoever builds the `Check` — a `[metrics]`
 config override or a `ThresholdCheck(...)` you construct.
 
@@ -1438,7 +1446,7 @@ report = rubric.evaluate(ctx, MeasurementSet(candidate, baseline))
 
 Both return an `EvaluationReport` (`passed`, `composite`, `findings`, `checks`).
 To build the metric-backed checks for a `[metrics]`-style config, reuse the
-shared factory `evaluators/policy.py::metric_check(name, config)` (the same one
+shared factory `metrics_gate/policy.py::metric_check(name, config)` (the same one
 `playbook metrics` and `rubric_for_task` use), so your gate honours identical
 per-metric policy.
 

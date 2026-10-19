@@ -8,7 +8,7 @@ runs every per-file one); which entries ``Config`` owns, and carrying the others
 over when the committed file is rewritten, is ``config.entries``: those entries
 (``[hooks]``, ``[guardrails]``, ``[links]``, ``[metrics]``…) ride along verbatim
 in ``Config.extra_tables``. :func:`parse_metrics_config` lives in
-``metrics_config``, the ``[hooks]`` / ``[guardrails]`` parsers in
+``metrics_gate.config``, the ``[hooks]`` / ``[guardrails]`` parsers in
 ``config.tables.hooks`` and the ``[links]`` parser in ``config.tables.links``.
 """
 

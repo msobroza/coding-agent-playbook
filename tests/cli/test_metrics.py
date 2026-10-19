@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.commands import metrics as _metrics
-from coding_agent_playbook.evaluators.metrics_gate import (
+from coding_agent_playbook.metrics_gate.run import (
     CONFIG_FILENAME,
     MetricsGateDeps,
     build_rubric,
@@ -295,10 +295,11 @@ def test_report_has_per_check_subresults_shape(tmp_path):
     failing ``threshold:cyclomatic_complexity`` check whose subresult flags the
     function scope as ``fail``.
     """
-    from coding_agent_playbook.evaluators import MetricConfig, parse_module
+    from coding_agent_playbook.evaluators import parse_module
     from coding_agent_playbook.evaluators.check import MeasurementSet
     from coding_agent_playbook.evaluators.metric import static_metrics
     from coding_agent_playbook.evaluators.types import EvalContext, ScopeDetail
+    from coding_agent_playbook.metrics_gate.config import MetricConfig
 
     static = static_metrics()
     source = _HIGH_CC_SOURCE

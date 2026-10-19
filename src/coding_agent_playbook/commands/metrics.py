@@ -12,9 +12,9 @@ shell out to the target's ``pytest``; execution is opt-in (side effects/cost) an
 is **not** in the default pre-commit hook.
 
 This module is the thin CLI: it maps argv onto a
-:class:`~coding_agent_playbook.evaluators.metrics_gate.MetricsGateRequest`,
+:class:`~coding_agent_playbook.metrics_gate.run.MetricsGateRequest`,
 renders the result as text or JSON, and picks the exit code. Measuring and
-grading live in :mod:`coding_agent_playbook.evaluators.metrics_gate`, which the
+grading live in :mod:`coding_agent_playbook.metrics_gate.run`, which the
 Stop stages call in-process (prK §F.0.3 item 1).
 
 Usage::
@@ -58,8 +58,8 @@ Usage::
 * **Snapshot** — ``--emit-measurements PATH`` writes the raw candidate
   measurements as JSON, tagged with ``HEAD^{tree}`` when the worktree is clean.
 * **Config** — a ``[metrics]`` table in ``.coding-agent-playbook.toml`` (parsed by
-  :func:`coding_agent_playbook.metrics_config.parse_metrics_config`) seeds the
-  :class:`~coding_agent_playbook.evaluators.types.MetricConfig`; CLI flags
+  :func:`coding_agent_playbook.metrics_gate.config.parse_metrics_config`) seeds the
+  :class:`~coding_agent_playbook.metrics_gate.config.MetricConfig`; CLI flags
   override it. ``[metrics] run_tests`` and ``test_cmd`` are resolved here, in
   the CLI, never by the gate.
 
@@ -83,7 +83,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, clean_head_tree
-from coding_agent_playbook.evaluators.metrics_gate import (
+from coding_agent_playbook.evaluators.types import ScopeDetail
+from coding_agent_playbook.metrics_gate.run import (
     MetricsGateDeps,
     MetricsGateRequest,
     MetricsGateUsageError,
@@ -91,15 +92,15 @@ from coding_agent_playbook.evaluators.metrics_gate import (
     load_metrics_config,
     run_metrics_gate,
 )
-from coding_agent_playbook.evaluators.types import ScopeDetail
 
 if TYPE_CHECKING:
     import argparse
     from collections.abc import Sequence
 
-    from coding_agent_playbook.evaluators import EvaluationReport, MetricConfig
-    from coding_agent_playbook.evaluators.metrics_gate import MetricsGateResult
+    from coding_agent_playbook.evaluators import EvaluationReport
     from coding_agent_playbook.evaluators.types import Mode
+    from coding_agent_playbook.metrics_gate.config import MetricConfig
+    from coding_agent_playbook.metrics_gate.run import MetricsGateResult
 
 
 _VALID_MODES = ("regression", "absolute", "both")
