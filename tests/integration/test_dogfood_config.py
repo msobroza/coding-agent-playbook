@@ -26,7 +26,7 @@ import pytest
 import yaml
 
 from coding_agent_playbook.cli import main
-from coding_agent_playbook.commands._ci_commit_convention import COMMIT_STEP, PR_TITLE_ENV
+from coding_agent_playbook.commands.twins._ci_commit_convention import COMMIT_STEP, PR_TITLE_ENV
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.config.tables.hooks import (
     CommitConventionConfig,

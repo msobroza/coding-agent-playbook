@@ -57,7 +57,6 @@ from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._member_reference import member_reference_path
 from coding_agent_playbook._sentinel import has_sentinel
 from coding_agent_playbook._symlinks import is_dangling_symlink, link_leaving, real_path
 
@@ -79,6 +78,7 @@ from coding_agent_playbook.adapters._agent_skill_rules import has_declared_id as
 from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of as skill_id_of
 from coding_agent_playbook.adapters._prior_output import PriorOutput
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
+from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.harness.emitter import with_sentinel_body
 from coding_agent_playbook.skill_document import emitted_body, emitted_frontmatter
 from coding_agent_playbook.types import format_frontmatter

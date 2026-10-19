@@ -34,12 +34,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, TypeGuard
 
-from coding_agent_playbook._member_reference import member_reference_path
 from coding_agent_playbook.adapters._agent_skill_rules import (
     AGENT_SKILL_NAME_MAX_CHARS,
     AGENT_SKILL_NAME_PATTERN,
     skill_id_of,
 )
+from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.commands._validation import (
     ValidationError,
     ValidationFindings,

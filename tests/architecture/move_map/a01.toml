@@ -1,0 +1,51 @@
+# A1 (#114, specs/prT-package-layout.md 4.19, 7.6): the hook schema, the hook
+# frontmatter and the member reference leave the package root for artifacts/. The
+# types.py re-exports (:27, :30-39) and the ``as`` re-exports of _hook_frontmatter.py
+# are removed (L2): importers name the defining module. Nothing imported the four
+# ``as`` names from _hook_frontmatter, which keeps them as plain imports, so they need
+# no [[names]] row.
+
+[[module]]
+pr = "A1"
+old = "coding_agent_playbook._hook_schema"
+new = "coding_agent_playbook.artifacts.hook_schema"
+
+[[module]]
+pr = "A1"
+old = "coding_agent_playbook._hook_frontmatter"
+new = "coding_agent_playbook.artifacts.hook_frontmatter"
+
+[[module]]
+pr = "A1"
+old = "coding_agent_playbook._member_reference"
+new = "coding_agent_playbook.artifacts.member_reference"
+
+# types.py:30-39. HookSchemaError stays imported by types (Hook.from_markdown raises
+# it), so these rows rewrite it only once A2 deletes types.py; A1 does it by hand.
+[[names]]
+pr = "A1"
+old = "coding_agent_playbook.types"
+new = "coding_agent_playbook.artifacts.hook_schema"
+names = [
+    "HookDecision",
+    "HookEvent",
+    "HookHandler",
+    "HookLauncher",
+    "HookMatcher",
+    "HookOnError",
+    "HookSchemaError",
+    "HookTier",
+    "ToolClass",
+]
+
+# types.py:27, kept as a plain import by types (Hook.frontmatter), so likewise.
+[[names]]
+pr = "A1"
+old = "coding_agent_playbook.types"
+new = "coding_agent_playbook.artifacts.hook_frontmatter"
+names = ["HookFrontmatter"]
+
+[[path]]
+pr = "A1"
+old = "tests/unit/test_hook_frontmatter_module.py"
+new = "tests/artifacts/test_hook_frontmatter.py"

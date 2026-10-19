@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook._member_reference import MemberReference
+from coding_agent_playbook.artifacts.member_reference import MemberReference
 from coding_agent_playbook.skill_document import (
     WhereEntry,
     emitted_body,

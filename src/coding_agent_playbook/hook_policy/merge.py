@@ -36,7 +36,8 @@ from coding_agent_playbook.hook_policy.override_rules import (
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.types import Hook, HookHandler
+    from coding_agent_playbook.artifacts.hook_schema import HookHandler
+    from coding_agent_playbook.types import Hook
 
 #: How a builtin handler's config key merges across layers (§A.6): ``extend``
 #: (deny rows, patterns: union, earlier first, deduped), ``strictest`` (ordered

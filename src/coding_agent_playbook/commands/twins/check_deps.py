@@ -9,7 +9,7 @@ tree, and only NEWLY declared names and indexes count (``judges.manifest_diff``,
 PEP 503 names), so existing dependencies are grandfathered.
 
 The rules are the hook's own (``judges.dependency_tiers``), from its merged config
-whatever ``[hooks]`` says (``_twin_policy``): a name outside the overlay
+whatever ``[hooks]`` says (``policy``): a name outside the overlay
 ``allowlist`` and an index other than ``required_index`` are deny-class; index
 mixing follows ``index_mode``; without an allowlist the new names are listed.
 Output: one ``<path>: <deny|ask> <rule>: <detail>`` line per finding.
@@ -24,8 +24,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.commands._git_base import open_git, resolve_merge_base
-from coding_agent_playbook.commands._twin_policy import dependency_twin_config
+from coding_agent_playbook.commands.twins._git_scope import open_git, resolve_merge_base
+from coding_agent_playbook.commands.twins.policy import dependency_twin_config
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.git import GitError
 from coding_agent_playbook.hook_runtime.judges.dependency_tiers import (
