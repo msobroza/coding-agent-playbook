@@ -11,10 +11,10 @@ in ``tmp_path`` with:
 Synthetic repos are the substrate for the CLI tests (sync round-trip, check
 dump, validate cross-refs, render, etc.). Engine-shipped artifacts are NOT
 copied here: every sync reads the real engine catalog, so the rules in core
-apply and the core skills whose rules apply (``python-coding`` in every
-synthetic repo) are written next to a test's own content. Assert on the test's
-own artifacts, never on a whole skills root. The fixture only seeds repo-local
-content when callers ask for it.
+apply and the core skills whose rules apply (``python-coding`` and
+``python-tooling`` in every synthetic repo) are written next to a test's own
+content. Assert on the test's own artifacts, never on a whole skills root. The
+fixture only seeds repo-local content when callers ask for it.
 """
 
 from __future__ import annotations

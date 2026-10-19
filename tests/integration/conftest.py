@@ -3,6 +3,8 @@
 One module-scoped sync of the probe (specs/prS-skills-context.md 6.8.10): the
 budget, core-skill and Continue-regression tests read the same output, so a
 module pays for one ``playbook init`` and no test can mutate another's tree.
+The uv variant adds only a ``uv.lock``, the one input that turns on the gated
+``python-uv-workflow`` member (spec 9.6.2).
 """
 
 from __future__ import annotations
@@ -18,6 +20,19 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+def _synced_probe(tmp_path_factory: pytest.TempPathFactory, *, uv_lock: bool) -> Path:
+    """A fresh reference probe, with a ``uv.lock`` when ``uv_lock``, after ``playbook init``."""
+    repo = tmp_path_factory.mktemp("reference-probe")
+    write_reference_probe(repo)
+    if uv_lock:
+        (repo / "uv.lock").write_text("version = 1\n", encoding="utf-8")
+    with pytest.MonkeyPatch.context() as patch:
+        config_home = tmp_path_factory.mktemp("xdg-config")
+        apply_hermetic_git_env(patch, ceiling=repo.parent, config_home=config_home)
+        init_and_sync_reference_probe(repo)
+    return repo
+
+
 @pytest.fixture(scope="module")
 def reference_probe_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """The D5 reference probe, synced once per module (hooks on, both bundled plugins).
@@ -28,10 +43,15 @@ def reference_probe_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
         agents_md = (reference_probe_repo / "AGENTS.md").read_text(encoding="utf-8")
     """
-    repo = tmp_path_factory.mktemp("reference-probe")
-    write_reference_probe(repo)
-    with pytest.MonkeyPatch.context() as patch:
-        config_home = tmp_path_factory.mktemp("xdg-config")
-        apply_hermetic_git_env(patch, ceiling=repo.parent, config_home=config_home)
-        init_and_sync_reference_probe(repo)
-    return repo
+    return _synced_probe(tmp_path_factory, uv_lock=False)
+
+
+@pytest.fixture(scope="module")
+def uv_reference_probe_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The reference probe plus a ``uv.lock``, synced once per module; read-only.
+
+    Example::
+
+        skill_md = uv_reference_probe_repo / ".claude/skills/python-tooling/SKILL.md"
+    """
+    return _synced_probe(tmp_path_factory, uv_lock=True)

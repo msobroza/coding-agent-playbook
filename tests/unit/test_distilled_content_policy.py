@@ -24,8 +24,9 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.catalog
 
 #: Recommendations D8 drops: a build backend, three new test dependencies, letting
-#: mypy install packages, and piping a download into a shell. A literal substring
-#: scan, so a prohibition must avoid the token too.
+#: mypy install packages, piping a download into a shell, and silencing a whole
+#: warning category (spec 9.5.1, item 8). A literal substring scan, so a
+#: prohibition must avoid the token too.
 DROPPED_RECOMMENDATIONS: Final = (
     "hatchling",
     "factory_boy",
@@ -33,6 +34,7 @@ DROPPED_RECOMMENDATIONS: Final = (
     "pytest-check",
     "--install-types",
     "| sh",
+    "ignore::DeprecationWarning",
 )
 #: The new rules distilled from python-best-practices; later content PRs extend it.
 PBP_DISTILLED_RULES: Final = frozenset(
@@ -42,6 +44,10 @@ PBP_DISTILLED_RULES: Final = frozenset(
         "python-classes-and-protocols",
         "pytest-test-doubles",
         "pytest-fixtures",
+        "python-static-checks",
+        "pytest-configuration",
+        "python-uv-workflow",
+        "pydantic-boundaries",
     }
 )
 #: A topic that changed owner (spec 9.4.7) -> the one core rule whose body holds it.
