@@ -4,8 +4,8 @@ The engine vendors no TOML writer — it reads with stdlib :mod:`tomllib` and
 emits with small hand-rolled serializers. Two call sites historically hand-rolled
 near-identical scalar/string/key escaping:
 
-* ``sources/filesystem.py`` — the Config/Lockfile document writer, which since
-  v0.18 lives here as :func:`dump_toml` (it was ``filesystem._dump_toml``).
+* ``filesystem._dump_toml`` — the filesystem state source's Config/Lockfile
+  document writer, which since v0.18 lives here as :func:`dump_toml`.
 * ``harness/manifest.py`` — the same scalars/strings *plus* inline tables for
   open-dict fields and quoting of non-identifier keys.
 
@@ -27,7 +27,7 @@ refuses: bare keys were not ASCII-only (``café = 1``), and U+007F was written
 raw. The third crashed on TOML ``tomllib`` accepts: every ``int`` went through
 ``str``, which raises ``ValueError`` past ``sys.get_int_max_str_digits()``
 digits. The fourth wrote TOML ``tomllib`` *misreads*:
-``sources/filesystem.py::_dump_toml`` wrote keys and header parts raw instead of
+the filesystem source's ``_dump_toml`` wrote keys and header parts raw instead of
 through :func:`format_key`, so a key that needs quotes — a dotted dependency name
 in ``[detector_cache]`` (``ruamel.yaml``), a ``[user_choices]`` key such as
 ``"docs.style"`` — was re-read as a nested table. Output bytes change only where
@@ -279,7 +279,7 @@ def _format_inline_value(value: Any) -> str:
     :func:`format_scalar` with inline tables on — only tables nested in arrays
     reach it, since :func:`dump_toml` emits every other table as a ``[header]`` —
     keeping the ``_dump_toml does not support value of type …`` ``TypeError``
-    wording from when the writer was ``sources/filesystem.py::_dump_toml``.
+    wording from when the writer was the filesystem source's ``_dump_toml``.
     """
     return format_scalar(value, allow_inline_table=True, type_error_prefix="_dump_toml")
 
@@ -287,8 +287,8 @@ def _format_inline_value(value: Any) -> str:
 def dump_toml(data: Mapping[str, Any]) -> str:
     """Serialize ``data`` to a TOML document :mod:`tomllib` reads back as the same values.
 
-    The ``.coding-agent-playbook.toml`` and lockfile writer (until v0.18
-    ``sources/filesystem.py::_dump_toml``). Writes
+    The ``.coding-agent-playbook.toml`` and lockfile writer (until v0.18 the
+    filesystem source's ``_dump_toml``). Writes
     ``Config.to_dict()`` / ``Lockfile.to_dict()`` byte-for-byte as before wherever
     the old output parsed back correctly, and — since ``playbook init`` and
     ``playbook check --refresh`` write back committed entries ``Config`` does not

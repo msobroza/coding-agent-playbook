@@ -389,9 +389,10 @@ def _tables(root: Path) -> list[dict[str, Any]]:
     return tables
 
 
-#: ``_serialize`` output for the entries below, captured before ``_toml`` gained
-#: floats/dates and ASCII-only bare keys (branch ``claude/init-local-overrides``,
-#: cut from ``1dd8f74``). The shared primitives changed; these bytes must not.
+#: ``_serialize`` output for the entries below, captured before the shared TOML
+#: writer (``toml_writer``, then named ``_toml``) gained floats/dates and
+#: ASCII-only bare keys (branch ``claude/init-local-overrides``, cut from
+#: ``1dd8f74``). The shared primitives changed; these bytes must not.
 _GOLDEN_MANIFEST = (
     "schema = 1\n"
     "\n"

@@ -443,7 +443,7 @@ _METRICS_TABLE: dict[str, Any] = {
 def test_metrics_table_roundtrip():
     """A realistic ``[metrics]`` (floats, per-metric tables) survives
     ``Config.to_dict`` → ``dump_toml`` → ``tomllib`` unchanged."""
-    from coding_agent_playbook._toml import dump_toml
+    from coding_agent_playbook.toml_writer import dump_toml
 
     config = Config.from_dict({**_MINIMAL, "metrics": copy.deepcopy(_METRICS_TABLE)})
     reread = tomllib.loads(dump_toml(config.to_dict()))

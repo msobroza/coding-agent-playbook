@@ -501,7 +501,6 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
                 "_layers",
                 "_member_reference",
                 "_table_shapes",
-                "_toml",
                 "config",
                 "config_entries",
                 "config_schema",
@@ -510,6 +509,7 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
                 "hooks_config",
                 "metrics_config",
                 "sources",
+                "toml_writer",
                 "types",
             )
         ),

@@ -169,11 +169,12 @@ def _doc_file(
 
 
 def migration_rows(moves: MoveMap, tree: Path) -> Rows:
-    """``(old, current new, PR)`` for every move of a public engine module or name (R-MIGRATION).
+    """``(old, current new, PR)`` for every move whose old or new path is public (R-MIGRATION).
 
-    Only an old public path gets a row (5.3.8: the section is for out-of-tree code,
-    which never imports an underscore module), so N1's ``_toml`` -> ``toml_writer``
-    is not listed, and ``tests.*`` moves never are. Example: with N2's
+    The section is for out-of-tree code (5.3.8). A private module that becomes
+    public is listed too, because it is now a supported import path and its old name was documented (SPEC.md
+    named ``_toml.dump_toml``), so N1's ``_toml`` -> ``toml_writer`` is listed;
+    private-to-private moves and ``tests.*`` moves never are. Example: with N2's
     ``config`` -> ``config.model`` alone, ``migration_rows(moves, repo)`` is
     ``[("coding_agent_playbook.config", "coding_agent_playbook.config.model", "N2")]``.
     """
@@ -181,18 +182,13 @@ def migration_rows(moves: MoveMap, tree: Path) -> Rows:
     def final(dotted: str) -> str:
         return moves.resolve(dotted, tree) or dotted
 
-    rows = [
-        (entry.old, final(entry.new), entry.pr)
-        for entry in moves.modules
-        if _is_public_engine(entry.old)
-    ]
+    rows = [(entry.old, final(entry.new), entry.pr) for entry in moves.modules]
     rows += [
         (f"{entry.old}.{name}", final(f"{entry.new}.{name}"), entry.pr)
         for entry in moves.names
         for name in entry.names
-        if _is_public_engine(f"{entry.old}.{name}")
     ]
-    return sorted(rows)
+    return sorted(row for row in rows if _is_public_engine(row[0]) or _is_public_engine(row[1]))
 
 
 def _is_public_engine(dotted: str) -> bool:
