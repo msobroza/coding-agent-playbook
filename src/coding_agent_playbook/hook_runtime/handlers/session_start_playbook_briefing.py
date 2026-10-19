@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import LineCap, OutputCaps, clamp_lines
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.diagnostics.heartbeat import degraded_line, ok_line
 from coding_agent_playbook.hook_runtime.handlers._briefing_probes import (
     COMPACT_PROBES,
     FULL_PROBES,
@@ -37,7 +38,6 @@ from coding_agent_playbook.hook_runtime.handlers._drift import (
     lockfile_findings,
     read_lockfile,
 )
-from coding_agent_playbook.hook_runtime.heartbeat import degraded_line, ok_line
 from coding_agent_playbook.hook_runtime.registry import register_hook_handler
 
 if TYPE_CHECKING:
@@ -101,7 +101,7 @@ def _heartbeat(inputs: BriefingInputs) -> list[str]:
 
 def _canaries(inputs: BriefingInputs) -> tuple[int, list[str]]:
     """How many enabled guards passed their canary, and the ids of those that did not."""
-    from coding_agent_playbook.hook_runtime.canary import enabled_canaries, run_canaries
+    from coding_agent_playbook.hook_runtime.diagnostics.canary import enabled_canaries, run_canaries
 
     deps = inputs.ctx.deps
     rows = enabled_canaries(inputs.ctx.cfg.hooks)

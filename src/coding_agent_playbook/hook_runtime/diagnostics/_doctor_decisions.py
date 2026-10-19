@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._doctor_checks import Check
+from coding_agent_playbook.hook_runtime.diagnostics._doctor_checks import Check
 from coding_agent_playbook.hook_runtime.state.decision_summary import (
     read_decisions,
     summarize_decisions,

@@ -14,15 +14,15 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.canary import (
+from coding_agent_playbook.hook_runtime.cli import main as cli_main
+from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS, Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.diagnostics.canary import (
     Canary,
     canary_session_id,
     run_canaries,
 )
-from coding_agent_playbook.hook_runtime.cli import main as cli_main
-from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS, Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateArgs, main, run
 from coding_agent_playbook.hook_runtime.event import EventName, Harness
-from coding_agent_playbook.hook_runtime.simulate import SimulateArgs, main, run
 from coding_agent_playbook.hook_runtime.state.store import session_key
 from tests.hook_payloads import load_hook_payload
 from tests.hook_runtime.fakes import FakeHandlerResolver
@@ -317,8 +317,10 @@ def test_canary_session_id_names_the_process() -> None:
 
 #: The committed guard_config the CI ``simulate`` smoke step runs (.github/workflows/ci.yml):
 #: the engine repo has no config of its own, so the step passes this one with ``--config``.
+# N20 moved this file one directory level deeper, into tests/hook_runtime/diagnostics/,
+# so parents[2] (was parents[1]) is still tests/.
 SMOKE_CONFIG: Final = (
-    Path(__file__).resolve().parents[1] / "fixtures" / "hook_guard_config" / "destructive.json"
+    Path(__file__).resolve().parents[2] / "fixtures" / "hook_guard_config" / "destructive.json"
 )
 
 
