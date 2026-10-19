@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 # The stdlib-only paths module, not the adapter: this sync-time module stays free
 # of the renderer (jinja2, yaml), and no adapter import can cycle back here.
-from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_CODE_COMPOSITES
+from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_CODE_COMPOSITES
 from coding_agent_playbook.generated_output.symlinks import real_path
 from coding_agent_playbook.lockfile.model import merge_provenance
 
@@ -221,7 +221,7 @@ def _layer_dir(package: str) -> str | None:
     """The directory holding ``package``'s kind dirs, or ``None`` when it has none."""
     from importlib import resources
 
-    from coding_agent_playbook.catalog import catalog_layer_root, is_bundled_layer
+    from coding_agent_playbook.catalog.roots import catalog_layer_root, is_bundled_layer
 
     if is_bundled_layer(package):
         bundled = catalog_layer_root(package)

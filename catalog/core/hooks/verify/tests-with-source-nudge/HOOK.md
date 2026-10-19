@@ -2,6 +2,7 @@
 id: tests-with-source-nudge
 name: New public API needs a test
 description: The tests-nudge Stop stage; name each new public function, class or method under the source roots that no test mentions.
+summary: When you add a public function, class or method, add a test that exercises it in the same change.
 version: 1
 tier: default
 priority: 40

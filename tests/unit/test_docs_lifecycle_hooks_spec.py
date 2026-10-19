@@ -21,13 +21,14 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook._member_reference import MemberReference
+from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
+from coding_agent_playbook.artifacts.hook_schema import HookHandler, HookMatcher
+from coding_agent_playbook.artifacts.member_reference import MemberReference
 from coding_agent_playbook.config.tables.hooks import (
     COMMIT_CONVENTION_TABLE,
     GuardrailsConfig,
     HooksConfig,
 )
-from coding_agent_playbook.evaluators.types import MetricConfig
 from coding_agent_playbook.harness.manifest import ArtifactKind, ManifestEntry
 from coding_agent_playbook.hook_policy import (
     DEGRADED_EVENTS,
@@ -36,16 +37,9 @@ from coding_agent_playbook.hook_policy import (
     TOOL_CLASS_NAMES,
     KeyPolicy,
 )
+from coding_agent_playbook.metrics_gate.config import MetricConfig
 from coding_agent_playbook.renderer import BUILTIN_FORMATS
-from coding_agent_playbook.types import (
-    Hook,
-    HookFrontmatter,
-    HookHandler,
-    HookMatcher,
-    PromptFrontmatter,
-    RuleFrontmatter,
-    Skill,
-)
+from coding_agent_playbook.types import Hook, PromptFrontmatter, RuleFrontmatter, Skill
 
 _ROOT = Path(__file__).resolve().parents[2]
 _SPEC = _ROOT / "SPEC.md"
@@ -101,6 +95,7 @@ _ENGINE_PATHS = (
     "generated_output/sentinel.py",
     "detector/pep503.py",
     "gate_scan.py",
+    "precommit.py",
     "templates/hook_shims/",
 )
 #: Catalog paths §5.1 must show, under ``catalog/`` (SPEC v0.19: content left the package).

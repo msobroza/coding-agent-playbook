@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.adapters.claude_settings import LAUNCHER_TOKEN
+from coding_agent_playbook.adapters.claude_code.settings.managed_merge import LAUNCHER_TOKEN
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hook_policy import TOOL_CLASS_NAMES
 from coding_agent_playbook.hook_registrations._templates import (
@@ -31,7 +31,7 @@ from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook._hook_schema import HookMatcher
+    from coding_agent_playbook.artifacts.hook_schema import HookMatcher
     from coding_agent_playbook.hook_registrations.plan import HookRegistration, RegistrationMember
 
 __all__ = [

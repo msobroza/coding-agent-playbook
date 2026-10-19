@@ -10,25 +10,17 @@ from __future__ import annotations
 
 import dataclasses
 import sys
-from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from coding_agent_playbook import __version__ as _engine_version
-from coding_agent_playbook.catalog import (
-    ENGINE_PACKAGE,
+from coding_agent_playbook.catalog.roots import (
     canonical_overlay_list,
     canonical_overlay_name,
     catalog_root,
 )
 from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands import sync as _sync
-from coding_agent_playbook.commands._committed_config import (
-    ConfigRewrite,
-    detector_cache_table,
-    plan_committed_update,
-    plan_first_config,
-)
 from coding_agent_playbook.commands._init_adapters import (
     ADAPTER_CHOICES,
     ADAPTERS_QUESTION,
@@ -36,11 +28,16 @@ from coding_agent_playbook.commands._init_adapters import (
     adapters_from_flag,
     adapters_union,
 )
-from coding_agent_playbook.commands._precommit_merge import merge_pre_commit
+from coding_agent_playbook.config.committed import (
+    ConfigRewrite,
+    detector_cache_table,
+    plan_committed_update,
+    plan_first_config,
+)
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.config.model import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.detector.facts import detect
-from coding_agent_playbook.renderer import build_environment, render_artifact_body
+from coding_agent_playbook.precommit import write_pre_commit
 
 if TYPE_CHECKING:
     import argparse
@@ -226,7 +223,7 @@ def _plan_config(state: FileSystemStateSource, repo_root: Path, answers: _Answer
     committed file nor guesses a team-wide one. Last, the planned config with
     the local file merged on top must load (``FileSystemStateSource.preview_config``):
     only init's final sync would otherwise load it, after the committed files
-    were rewritten. Both paths are ``_committed_config``'s, which ``check
+    were rewritten. Both paths are ``config.committed``'s, which ``check
     --refresh`` shares.
     """
     detector_cache = detector_cache_table(detect(repo_root))
@@ -334,118 +331,13 @@ def _append_to_gitignore(repo_root: Path) -> Path:
     return gitignore
 
 
-_PRECOMMIT_TEMPLATE_NAME = "config.yaml.j2"
-
-
-class PrecommitTemplateMissingError(RuntimeError):
-    """The engine's packaged pre-commit template is not where the install put it.
-
-    ``path`` is the template file that was expected. An explicit error, not an
-    ``assert``: ``python -O`` strips asserts, which would turn a broken install
-    into a confusing failure deep inside the renderer.
-    """
-
-    def __init__(self, path: Path) -> None:
-        super().__init__(
-            f"the engine's pre-commit template was not found at {path}; "
-            "reinstall coding-agent-playbook"
-        )
-        self.path = path
-
-
-def precommit_template_dir(templates_root: Path | None = None) -> Path:
-    """Return the directory holding the engine's pre-commit template.
-
-    The template is engine wiring, not playbook content (its hook ids are
-    duplicated in ``_precommit_merge``), so it lives in the package's
-    ``templates/precommit/`` rather than the catalog. ``templates_root``
-    defaults to the engine's ``templates/``; tests pass another root. Raises
-    :class:`PrecommitTemplateMissingError` when the directory or
-    ``config.yaml.j2`` is missing.
-
-    Example::
-
-        >>> (precommit_template_dir() / "config.yaml.j2").is_file()
-        True
-    """
-    if templates_root is None:
-        templates_root = Path(str(resources.files(ENGINE_PACKAGE) / "templates"))
-    template_dir = templates_root / "precommit"
-    if not (template_dir / _PRECOMMIT_TEMPLATE_NAME).is_file():
-        raise PrecommitTemplateMissingError(template_dir / _PRECOMMIT_TEMPLATE_NAME)
-    return template_dir
-
-
-def _render_fresh_pre_commit(
-    *, output_commit: bool = False, commit_trailers: bool = False, commitizen: bool = False
-) -> str:
-    """Render the packaged starter ``.pre-commit-config.yaml`` template.
-
-    The template (``templates/precommit/config.yaml.j2``) is air-gapped: every
-    hook is ``repo: local`` + ``language: system`` so pre-commit never clones a
-    remote hook repo. ``output_commit`` (the ``[output] commit`` policy) selects
-    the playbook hooks: the legacy drift check for ``true``; the post-checkout /
-    post-merge auto-sync plus the staged-output guard for ``false``.
-    ``commit_trailers`` (a trailer row is configured, prK §E.4) adds the
-    ``coding-agent-playbook-commit-trailers`` commit-msg entry and installs that
-    stage; ``commitizen`` (the repo opted into a commitizen convention, prK §F.4.3)
-    adds ``coding-agent-playbook-commit-msg`` (``cz check``) the same way, so a
-    consumer without commitizen never gets a commit hook that cannot run. We
-    still stash an empty facts dict to honour the renderer's helper contract
-    (SPEC §9.4).
-
-    Example::
-
-        >>> "--check-staged" in _render_fresh_pre_commit()
-        True
-    """
-    precommit_dir = precommit_template_dir()
-    template_path = precommit_dir / _PRECOMMIT_TEMPLATE_NAME
-    env = build_environment([precommit_dir])
-    env.globals["_facts"] = {}
-    variables = {
-        "output_commit": output_commit,
-        "commit_trailers": commit_trailers,
-        "commitizen": commitizen,
-    }
-    return render_artifact_body(template_path, variables, env=env)
-
-
-def _write_pre_commit(
-    repo_root: Path, *, output_commit: bool = False
-) -> tuple[Path, tuple[str, ...]]:
-    """Write or merge ``.pre-commit-config.yaml``; return it plus user messages.
-
-    Fresh repo: render the full air-gapped starter (playbook + ruff + mypy
-    hooks). Existing config: merge only our playbook hooks for the
-    ``[output] commit`` policy (``_precommit_merge``: append once, swapping a
-    verbatim pre-v0.16 drift-check hook for the ``commit = false`` pair) — we
-    never inject ruff/mypy into a config the consumer already curates
-    (SPEC §13.3). The merge is intentionally text-based.
-    """
-    target = repo_root / ".pre-commit-config.yaml"
-    if not target.is_file():
-        starter = _render_fresh_pre_commit(
-            output_commit=output_commit,
-            commit_trailers=_has_trailer_rows(repo_root),
-            commitizen=_uses_commitizen(repo_root),
-        )
-        target.write_text(starter, encoding="utf-8")
-        return target, ()
-    content = target.read_text(encoding="utf-8")
-    merged = merge_pre_commit(content, output_commit=output_commit)
-    if merged.content != content:
-        target.write_text(merged.content, encoding="utf-8")
-    return target, merged.messages
-
-
 def _has_trailer_rows(repo_root: Path) -> bool:
     """Whether the committed config sets a commit-trailer row (prK §E.4); ``False`` if unreadable.
 
     The final sync reports a config it cannot read; the starter simply leaves the
     commit-msg entry out (an existing ``.pre-commit-config.yaml`` is never touched).
     """
-    from coding_agent_playbook.commands._twin_policy import commit_trailer_policy
+    from coding_agent_playbook.commands.twins.policy import commit_trailer_policy
 
     try:
         return commit_trailer_policy(repo_root).has_rows
@@ -458,7 +350,7 @@ def _uses_commitizen(repo_root: Path) -> bool:
 
     An unreadable ``pyproject.toml`` or config counts as opted in, as for CI.
     """
-    from coding_agent_playbook.commands._ci_policy import commit_convention_configured
+    from coding_agent_playbook.commands.twins.policy import commit_convention_configured
 
     return commit_convention_configured(repo_root)
 
@@ -561,8 +453,14 @@ def run(args: argparse.Namespace) -> int:
     config = plan.save(state)
     local_path = _write_local_config(repo_root)
     gitignore_path = _append_to_gitignore(repo_root)
-    pre_commit_path, pre_commit_messages = _write_pre_commit(
-        repo_root, output_commit=config.commit_output
+    # The starter switches matter only for a fresh config (a merge ignores them),
+    # so the predicates parse config/pyproject only then, as before the N9 move.
+    fresh_pre_commit = not (repo_root / ".pre-commit-config.yaml").is_file()
+    pre_commit_path, pre_commit_messages = write_pre_commit(
+        repo_root,
+        output_commit=config.commit_output,
+        commit_trailers=fresh_pre_commit and _has_trailer_rows(repo_root),
+        commitizen=fresh_pre_commit and _uses_commitizen(repo_root),
     )
 
     print(f"Wrote {FileSystemStateSource._CONFIG_FILENAME}")

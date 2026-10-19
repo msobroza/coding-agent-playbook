@@ -17,7 +17,7 @@ from typing import Final
 import pytest
 
 from coding_agent_playbook.adapters._claude_hooks import CLAUDE_HEARTBEAT_LINE
-from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_MD_PATH, CLAUDE_RULES_PATH
+from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_MD_PATH, CLAUDE_RULES_PATH
 from coding_agent_playbook.commands._sync_render import render_artifacts
 from coding_agent_playbook.orchestrator import SyncContext
 from coding_agent_playbook.renderer import render_for
@@ -122,13 +122,31 @@ def test_agents_md_without_guardrails_within_1500_words(reference_probe_repo: Pa
     assert words <= AGENTS_MD_MAX_WORDS, f"AGENTS.md before Guardrails is {words} words"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="guardrails become one line each in ticket 17 (spec PR 4), which removes this marker",
-)
 def test_agents_md_within_1500_words(reference_probe_repo: Path) -> None:
+    """The whole file, hooks on: the Guardrails section is one line per hook (D6, E13)."""
     words = _words(_agents_md(reference_probe_repo))
     assert words <= AGENTS_MD_MAX_WORDS, f"AGENTS.md is {words} words"
+
+
+def test_agents_md_guardrails_are_one_line_per_hook_with_an_advisory(
+    reference_probe_repo: Path,
+) -> None:
+    """D6 acceptance (spec 8.10 item 2): no ``###`` block, and the CI-parity line names its checks.
+
+    Counted against Continue's ``30-guardrail-<id>.md`` files, which the probe
+    writes for exactly the on hooks with an advisory.
+    """
+    guardrails = _agents_md(reference_probe_repo).partition(_GUARDRAILS_HEADING)[2]
+    lines = [line for line in guardrails.splitlines() if line.startswith("- `")]
+    rules = reference_probe_repo / ".continue" / "rules"
+    advised = sorted(
+        p.name.removeprefix("30-guardrail-")[:-3] for p in rules.glob("30-guardrail-*")
+    )
+    assert [line[3 : line.index("`", 3)] for line in lines] == advised
+    assert "\n### " not in guardrails
+    [ci_line] = [line for line in lines if line.startswith("- `stop-ci-parity-gate`: ")]
+    for check in ("`ruff check .`", "`ruff format --check .`", "the type checker", "the tests"):
+        assert check in ci_line, ci_line
 
 
 def test_each_core_description_within_300_chars(reference_probe_repo: Path) -> None:

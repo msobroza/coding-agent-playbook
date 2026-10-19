@@ -47,7 +47,7 @@ from coding_agent_playbook.hook_runtime.harness.opencode import (
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
-    from coding_agent_playbook._hook_schema import HookMatcher
+    from coding_agent_playbook.artifacts.hook_schema import HookMatcher
     from coding_agent_playbook.hook_policy import ResolvedHook
 
 __all__ = [

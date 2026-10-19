@@ -2,6 +2,7 @@
 id: stop-diff-sweep
 name: Stop-time secret sweep
 description: The secrets Stop stage; block when the turn's working tree adds a secret token or an untracked credential file, and warn on untracked model or data artifacts and large files.
+summary: Before finishing, make sure the change adds no secret, credential file, model weights or large data to the repository.
 version: 1
 tier: default
 priority: 35

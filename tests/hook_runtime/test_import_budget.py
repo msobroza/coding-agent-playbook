@@ -17,7 +17,7 @@ loads its JSON/TOML/text verdict modules only on their branch, and ``tomllib``
 only for an edit of a ``.toml`` policy file (§D.1's branch-local row). On the
 source-changed branch, ``detector.facts`` and ``detector.predicate`` (and
 ``packaging``) load only after the dependency comparison found a change, and
-``evals.*`` / ``sources.filesystem`` (yaml) only on an ``eval_tasks/*/task.toml``
+``evals.*`` / ``catalog.source`` (yaml) only on an ``eval_tasks/*/task.toml``
 edit; jinja2 never loads. The session-start briefing and the ``drift`` Stop stage
 read the lockfile with ``tomllib`` through ``lockfile`` (the new §D.1 rows): the briefing on every
 start, the stage only once the ledger shows a write it cares about. The
@@ -484,9 +484,9 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
     imported = _imports(real_proc, source_changed, EventName.POST_TOOL_USE, payload)
 
     assert "coding_agent_playbook.evals.validator" in imported
-    assert "yaml" in imported and "coding_agent_playbook.sources.filesystem" in imported
+    assert "yaml" in imported and "coding_agent_playbook.catalog.source" in imported
     # The compile resolves check/gate/metric entry points (importlib.metadata), never
-    # the runner or judge groups; the prompts come from sources.filesystem (yaml).
+    # the runner or judge groups; the prompts come from catalog.source (yaml).
     # evals.validator compiles the task through config and the canonical types:
     # every engine module that branch loads is named, so a new one fails here.
     branch_local = (
@@ -496,15 +496,19 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
         *(
             engine_module(f"{ENGINE}.{name}")
             for name in (
-                "_hook_frontmatter",
-                "_hook_schema",
-                "_layers",
-                "_member_reference",
+                # The package itself until N15 makes artifacts.path_classes a dotted
+                # leaf; FORBIDDEN then names its submodules, and this entry goes.
+                "artifacts",
+                "artifacts.hook_frontmatter",
+                "artifacts.hook_schema",
+                "artifacts.member_reference",
+                "catalog._hook_walk",
+                "catalog.layers",
+                "catalog.source",
                 "config",
                 "evals",
                 "evaluators",
-                "metrics_config",
-                "sources",
+                "metrics_gate",
                 "toml_writer",
                 "types",
             )

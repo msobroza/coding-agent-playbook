@@ -10,7 +10,9 @@ from typing import Any
 
 import pytest
 
-from coding_agent_playbook.types import Hook, HookFrontmatter, HookHandler, HookSchemaError
+from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
+from coding_agent_playbook.artifacts.hook_schema import HookHandler, HookSchemaError
+from coding_agent_playbook.types import Hook
 from tests.hook_samples import (
     GUARD_GENERATED_OUTPUTS_MD,
     HOOK_WHERE,
@@ -113,6 +115,21 @@ def test_to_mapping_drops_empty_values_recursively() -> None:
     assert {"handlers", "applies_if", "linked_rule", "tags"}.isdisjoint(mapping)
     assert (mapping["enabled"], mapping["mandatory"]) == (True, False)
     assert HookFrontmatter.from_mapping(mapping, where=HOOK_WHERE) == fm
+
+
+def test_summary_round_trips_and_an_empty_one_is_dropped(tmp_path: Path) -> None:
+    """D6: a hook without ``summary`` serializes byte-identically to the days before the field."""
+    with_summary = hook_frontmatter(summary="Ask first.")
+    without = hook_frontmatter()
+
+    assert with_summary.to_mapping()["summary"] == "Ask first."
+    assert HookFrontmatter.from_mapping(with_summary.to_mapping(), where=HOOK_WHERE) == with_summary
+    assert "summary" not in without.to_mapping()
+    first = Hook.from_markdown(
+        write_hook_md(tmp_path, GUARD_GENERATED_OUTPUTS_MD), "coding_agent_playbook"
+    )
+    assert "summary" not in first.to_markdown()
+    assert Hook.from_dict(first.to_dict()) == first
 
 
 def test_to_mapping_compacts_per_event_handlers() -> None:

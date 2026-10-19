@@ -57,8 +57,6 @@ from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._member_reference import member_reference_path
-
 # The Agent Skills naming rules live in _agent_skill_rules (file-size budget); this
 # module stays the home callers import them from (commands/validate.py, the tests).
 from coding_agent_playbook.adapters._agent_skill_rules import (
@@ -77,6 +75,7 @@ from coding_agent_playbook.adapters._agent_skill_rules import has_declared_id as
 from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of as skill_id_of
 from coding_agent_playbook.adapters._prior_output import PriorOutput
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
+from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.generated_output.sentinel import has_sentinel
 from coding_agent_playbook.generated_output.symlinks import (
     is_dangling_symlink,

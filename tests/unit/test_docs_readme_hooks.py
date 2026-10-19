@@ -22,24 +22,25 @@ from typing import Any
 import pytest
 import yaml
 
+from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
 from coding_agent_playbook.cli.parser import _SUBCOMMANDS
-from coding_agent_playbook.commands._ci_commit_convention import PR_TITLE_ENV
-from coding_agent_playbook.commands.ci import CI_STEPS
+from coding_agent_playbook.commands.twins._ci_commit_convention import PR_TITLE_ENV
+from coding_agent_playbook.commands.twins.ci import CI_STEPS
 from coding_agent_playbook.config.tables.hooks import parse_guardrails_config, parse_hooks_config
 from coding_agent_playbook.evaluators.metric import all_metrics
-from coding_agent_playbook.evaluators.policy import (
-    METRIC_FAMILIES,
-    OPT_IN_METRICS,
-    resolve_metric_selection,
-)
 from coding_agent_playbook.guard_config import GUARD_CONFIG_PATH
 from coding_agent_playbook.hook_policy.advisory import ADAPTER_LABELS, enforcement_targets
 from coding_agent_playbook.hook_registrations import LAUNCHER_PATH, OPENCODE_SHIM_PATH
 from coding_agent_playbook.hook_runtime._doctor_opencode import OPENCODE_MIN_VERSION
 from coding_agent_playbook.hook_runtime.escape import HATCH_VARS
 from coding_agent_playbook.hook_runtime.policy import UNATTENDED_ENV_VAR
-from coding_agent_playbook.metrics_config import parse_metrics_config
-from coding_agent_playbook.types import HookFrontmatter, split_frontmatter
+from coding_agent_playbook.metrics_gate.config import parse_metrics_config
+from coding_agent_playbook.metrics_gate.policy import (
+    METRIC_FAMILIES,
+    OPT_IN_METRICS,
+    resolve_metric_selection,
+)
+from coding_agent_playbook.types import split_frontmatter
 from tests._catalog import CORE_ROOT
 from tests.unit.test_docs_lifecycle_hooks_cli import _metric_names, _precommit_ids
 from tests.unit.test_docs_lifecycle_hooks_spec import _HOOK_INVARIANTS

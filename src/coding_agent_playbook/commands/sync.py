@@ -67,7 +67,7 @@ from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
 from coding_agent_playbook.adapters._skill_writer import deciding_ownership_against
 from coding_agent_playbook.adapters.base import Adapter
-from coding_agent_playbook.adapters.claude_settings import SettingsMergeError
+from coding_agent_playbook.adapters.claude_code.settings.managed_merge import SettingsMergeError
 from coding_agent_playbook.commands import (
     _output_blockers,
     _sync_hooks,

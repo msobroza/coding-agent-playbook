@@ -15,12 +15,12 @@ from typing import TYPE_CHECKING, Any
 import pytest
 import yaml
 
-from coding_agent_playbook.commands.init import (
+from coding_agent_playbook.catalog.source import _resource_subdir
+from coding_agent_playbook.precommit import (
     PrecommitTemplateMissingError,
-    _render_fresh_pre_commit,
     precommit_template_dir,
+    render_fresh_pre_commit,
 )
-from coding_agent_playbook.sources.filesystem import _resource_subdir
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -55,7 +55,7 @@ def _hooks(parsed: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 @pytest.mark.parametrize("output_commit", [False, True])
 def test_rendered_starter_is_air_gapped_yaml(output_commit: bool) -> None:
-    rendered = _render_fresh_pre_commit(output_commit=output_commit)
+    rendered = render_fresh_pre_commit(output_commit=output_commit)
     assert "https://" not in rendered  # nothing to clone
 
     parsed = yaml.safe_load(rendered)
@@ -74,7 +74,7 @@ def test_rendered_starter_is_air_gapped_yaml(output_commit: bool) -> None:
 def test_default_starter_auto_syncs_and_guards_local_output():
     """[output] commit = false (the default): gitignored output is re-rendered
     after checkout/merge and a pre-commit guard refuses staged output."""
-    parsed = yaml.safe_load(_render_fresh_pre_commit())
+    parsed = yaml.safe_load(render_fresh_pre_commit())
     hooks = _hooks(parsed)
     assert parsed["default_install_hook_types"] == ["pre-commit", "post-checkout", "post-merge"]
     # Every other hook (mypy is always_run) must stay off post-checkout/merge.
@@ -91,7 +91,7 @@ def test_default_starter_auto_syncs_and_guards_local_output():
 
 
 def test_commit_true_starter_keeps_the_legacy_drift_check():
-    parsed = yaml.safe_load(_render_fresh_pre_commit(output_commit=True))
+    parsed = yaml.safe_load(render_fresh_pre_commit(output_commit=True))
     hooks = _hooks(parsed)
     assert hooks["coding-agent-playbook-sync"]["entry"] == "playbook sync --check"
     assert "coding-agent-playbook-autosync" not in hooks
@@ -103,7 +103,7 @@ def test_commit_true_starter_keeps_the_legacy_drift_check():
 @pytest.mark.parametrize("output_commit", [False, True])
 def test_starter_metrics_hook_passes_no_run_tests(output_commit: bool) -> None:
     """prK §F.0.3 item 6: static only, even when ``[metrics] run_tests = true``."""
-    hooks = _hooks(yaml.safe_load(_render_fresh_pre_commit(output_commit=output_commit)))
+    hooks = _hooks(yaml.safe_load(render_fresh_pre_commit(output_commit=output_commit)))
     metrics = hooks["coding-agent-playbook-metrics"]
     assert metrics["entry"] == "playbook metrics --baseline git:HEAD --no-run-tests"
     assert metrics["language"] == "system"
@@ -112,7 +112,7 @@ def test_starter_metrics_hook_passes_no_run_tests(output_commit: bool) -> None:
 @pytest.mark.parametrize("output_commit", [False, True])
 def test_starter_coverage_hook_is_manual_system(output_commit: bool) -> None:
     """prK §F.1.3: the air-gapped twin of ``playbook-coverage``; it runs the suite, so manual."""
-    hooks = _hooks(yaml.safe_load(_render_fresh_pre_commit(output_commit=output_commit)))
+    hooks = _hooks(yaml.safe_load(render_fresh_pre_commit(output_commit=output_commit)))
     coverage = hooks["coding-agent-playbook-coverage"]
     assert coverage["entry"] == "playbook metrics --run-tests --select testing --baseline git:HEAD"
     assert coverage["language"] == "system"
@@ -124,7 +124,7 @@ def test_starter_coverage_hook_is_manual_system(output_commit: bool) -> None:
 @pytest.mark.parametrize("output_commit", [False, True])
 def test_starter_runs_secret_scan(output_commit: bool) -> None:
     """prK §E.4: SPEC §13.2 excludes gitleaks (it clones), so the starter scans with the engine."""
-    hooks = _hooks(yaml.safe_load(_render_fresh_pre_commit(output_commit=output_commit)))
+    hooks = _hooks(yaml.safe_load(render_fresh_pre_commit(output_commit=output_commit)))
     secrets = hooks["coding-agent-playbook-secrets"]
     assert secrets["entry"] == "playbook scan-secrets --staged"
     assert secrets["language"] == "system"
@@ -144,8 +144,8 @@ def test_commit_trailers_entry_only_when_rows_configured(
     output_commit: bool, install_types: list[str]
 ) -> None:
     """prK §E.4: the commit-msg twin and its stage are rendered only with a trailer row."""
-    without = yaml.safe_load(_render_fresh_pre_commit(output_commit=output_commit))
-    rendered = _render_fresh_pre_commit(output_commit=output_commit, commit_trailers=True)
+    without = yaml.safe_load(render_fresh_pre_commit(output_commit=output_commit))
+    rendered = render_fresh_pre_commit(output_commit=output_commit, commit_trailers=True)
     parsed = yaml.safe_load(rendered)
 
     assert "coding-agent-playbook-commit-trailers" not in _hooks(without)
@@ -167,8 +167,8 @@ def test_commit_msg_twin_only_when_commitizen_opted_in(output_commit: bool) -> N
 
     Rendering it unconditionally would break every commit of a consumer without cz.
     """
-    without = yaml.safe_load(_render_fresh_pre_commit(output_commit=output_commit))
-    parsed = yaml.safe_load(_render_fresh_pre_commit(output_commit=output_commit, commitizen=True))
+    without = yaml.safe_load(render_fresh_pre_commit(output_commit=output_commit))
+    parsed = yaml.safe_load(render_fresh_pre_commit(output_commit=output_commit, commitizen=True))
 
     assert "coding-agent-playbook-commit-msg" not in _hooks(without)
     entry = _hooks(parsed)["coding-agent-playbook-commit-msg"]
@@ -190,7 +190,7 @@ def test_default_install_hook_types_includes_commit_msg(
     output_commit: bool, install_types: list[str]
 ) -> None:
     """A plain ``pre-commit install`` installs the commit-msg stage the cz twin runs at."""
-    rendered = _render_fresh_pre_commit(
+    rendered = render_fresh_pre_commit(
         output_commit=output_commit, commitizen=True, commit_trailers=True
     )
     parsed = yaml.safe_load(rendered)

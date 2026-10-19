@@ -11,13 +11,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.types import (
-    Hook,
-    HookFrontmatter,
-    HookHandler,
-    HookMatcher,
-    HookSchemaError,
-)
+from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
+from coding_agent_playbook.artifacts.hook_schema import HookHandler, HookMatcher, HookSchemaError
+from coding_agent_playbook.types import Hook
 from tests.hook_samples import HOOK_WHERE, hook_frontmatter, hook_mapping, write_hook_md
 
 if TYPE_CHECKING:
@@ -49,6 +45,7 @@ priority:
 applies_if:
 linked_rule:
 tags:
+summary:
 ---
 """
 
@@ -99,7 +96,12 @@ def test_from_mapping_keeps_value_domains_for_classify_hook() -> None:
 @pytest.mark.parametrize(
     ("data", "field", "key", "allowed"),
     [
-        (hook_mapping(colour="red"), "colour", "colour", "id, name, description, version, tier"),
+        (
+            hook_mapping(colour="red"),
+            "colour",
+            "colour",
+            "id, name, description, summary, version, tier",
+        ),
         (
             hook_mapping(handler={"builtin": "x", "retries": 3}),
             "handler.retries",
@@ -187,6 +189,55 @@ def test_from_mapping_rejects_a_non_mapping() -> None:
     assert "expected a mapping" in str(error)
 
 
+# --- summary: the one-line guardrail (specs/prS-skills-context.md 8.4.1, 8.6) ---------
+
+_SUMMARY_SHAPE = "a single line of 1-120 characters without '{{' or '{%'"
+
+
+def _summary_error(summary: object) -> HookSchemaError:
+    error = _schema_error(hook_mapping(summary=summary))
+    assert (error.field, error.value, error.expected) == ("summary", summary, _SUMMARY_SHAPE)
+    assert f"summary: expected {_SUMMARY_SHAPE}, got {summary!r}" in str(error)
+    return error
+
+
+def test_summary_longer_than_120_chars_is_a_schema_error() -> None:
+    _summary_error("Never run destructive commands " + "x" * 120)
+
+
+@pytest.mark.parametrize(
+    "summary",
+    ["Ask first.\nThen act.", "Ask first.\n", "Ask\rfirst."],
+    ids=["lf", "trailing", "cr"],
+)
+def test_multiline_summary_is_a_schema_error(summary: str) -> None:
+    _summary_error(summary)
+
+
+@pytest.mark.parametrize("summary", ["Run {{ tool }} first.", "{% if x %}Ask.{% endif %}"])
+def test_templated_summary_is_a_schema_error(summary: str) -> None:
+    _summary_error(summary)
+
+
+@pytest.mark.parametrize("summary", ["   ", 7, ["Ask first."]], ids=["blank", "int", "list"])
+def test_blank_or_non_string_summary_is_a_schema_error(summary: object) -> None:
+    _summary_error(summary)
+
+
+def test_summary_of_120_chars_is_kept_as_written() -> None:
+    summary = "Ask first. " + "y" * 109
+
+    assert len(summary) == 120
+    assert hook_frontmatter(summary=summary).summary == summary
+
+
+def test_absent_blank_or_empty_summary_defaults_to_empty() -> None:
+    """``""`` is the default ``Hook.to_dict`` writes, so it must read back as no summary."""
+    assert hook_frontmatter().summary == ""
+    assert hook_frontmatter(summary=None).summary == ""
+    assert hook_frontmatter(summary="").summary == ""
+
+
 @pytest.mark.parametrize("key", ["type", "url", "async", "updated_input"])
 def test_from_mapping_contract_keys_get_contract_message(key: str) -> None:
     error = _schema_error(hook_mapping(handler={"builtin": "x", key: "v"}))
@@ -213,6 +264,7 @@ def test_blank_yaml_values_coerce_to_defaults(tmp_path: Path) -> None:
 
     assert (fm.version, fm.enabled, fm.mandatory, fm.priority) == (1, True, False, 50)
     assert (fm.handlers, fm.applies_if, fm.tags, fm.linked_rule) == ({}, {}, [], None)
+    assert fm.summary == ""
     assert fm.handler == HookHandler(builtin="guard_x")
     assert fm.matcher == {"pre_tool_use": HookMatcher()}
 

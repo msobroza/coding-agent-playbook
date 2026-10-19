@@ -17,6 +17,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
+from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.tables.hooks import PolicyTables
 from coding_agent_playbook.hook_policy import (
     NO_HANDLER_SCHEMAS,
@@ -27,13 +30,13 @@ from coding_agent_playbook.hook_policy import (
     split_hook_layers,
 )
 from coding_agent_playbook.orchestrator import Collision, OverlayResolver, SyncContext
-from coding_agent_playbook.sources.filesystem import ENGINE_PACKAGE, FileSystemArtifactSource
-from coding_agent_playbook.types import Hook, HookSchemaError
 from tests.fakes import FakeHandlerSchemas
 from tests.hook_samples import sample_hook
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+
+    from coding_agent_playbook.types import Hook
 
 
 def _make_hook(hook_id: str, source: str, **overrides: Any) -> Hook:

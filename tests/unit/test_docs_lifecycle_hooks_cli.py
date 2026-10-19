@@ -33,12 +33,10 @@ from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
 from coding_agent_playbook.cli.parser import _SUBCOMMANDS, build_parser
-from coding_agent_playbook.commands._ci_commit_convention import PR_TITLE_ENV
 from coding_agent_playbook.commands._sync_hooks import HOOKS_NOTICE
 from coding_agent_playbook.commands._validate_context import config_less_notes
-from coding_agent_playbook.commands.ci import CI_STEPS
-from coding_agent_playbook.commands.init import _render_fresh_pre_commit
-from coding_agent_playbook.evaluators.policy import METRIC_FAMILIES, OPT_IN_METRICS
+from coding_agent_playbook.commands.twins._ci_commit_convention import PR_TITLE_ENV
+from coding_agent_playbook.commands.twins.ci import CI_STEPS
 from coding_agent_playbook.hook_registrations import (
     LAUNCHER_PATH,
     OPENCODE_SHIM_PATH,
@@ -49,6 +47,8 @@ from coding_agent_playbook.hook_runtime._doctor_opencode import OPENCODE_MIN_VER
 from coding_agent_playbook.hook_runtime.cli import ASYNC_FLAG, USAGE
 from coding_agent_playbook.hook_runtime.stop.stages import STOP_STAGE_ORDER
 from coding_agent_playbook.lockfile.model import ProvenanceKind
+from coding_agent_playbook.metrics_gate.policy import METRIC_FAMILIES, OPT_IN_METRICS
+from coding_agent_playbook.precommit import render_fresh_pre_commit
 from tests.unit.test_docs_lifecycle_hooks_spec import _spec_section, _spec_text
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -223,7 +223,7 @@ def test_section_13_1_lists_every_shipped_precommit_hook(hook_id: str) -> None:
 def _starter_ids() -> list[str]:
     ids: list[str] = []
     for commit in (False, True):
-        rendered = _render_fresh_pre_commit(
+        rendered = render_fresh_pre_commit(
             output_commit=commit, commit_trailers=True, commitizen=True
         )
         repos = yaml.safe_load(rendered)["repos"]

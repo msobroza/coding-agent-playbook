@@ -23,7 +23,7 @@ sync rendered: nothing is rendered and nothing is spawned here. The order of
    symlink, on a secret path or when it is not a regular file.
 
 Stdlib, ``hook_runtime``, the zero-import ``_sentinel`` and the stdlib-only
-``catalog`` module (a leaf) only (§D.1).
+``catalog.roots`` module (a leaf) only (§D.1).
 """
 
 from __future__ import annotations
@@ -236,10 +236,10 @@ def _resource_roots(ids: Iterable[str], machine: MachinePins | None) -> tuple[st
 def _engine_layer_dir() -> str:
     """This package's ``catalog/core/``, or ``""`` (protects nothing) when the catalog is missing.
 
-    The ``catalog`` module is a stdlib-only leaf (``pathlib``, which the dispatcher
+    The ``catalog.roots`` module is a stdlib-only leaf (``pathlib``, which the dispatcher
     already loads), so the hot path stays import-light (§D.1).
     """
-    from coding_agent_playbook.catalog import (
+    from coding_agent_playbook.catalog.roots import (
         CatalogMissingError,
         engine_layer_root,
     )

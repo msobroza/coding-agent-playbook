@@ -18,6 +18,7 @@ from jinja2 import FileSystemLoader, StrictUndefined
 from jinja2.exceptions import SecurityError
 from jinja2.sandbox import SandboxedEnvironment
 
+from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hook_policy import advisory_block, advisory_text
 from coding_agent_playbook.hook_registrations import (
@@ -30,7 +31,6 @@ from coding_agent_playbook.prompt_rule_delivery import (
     insert_pointer_block,
     skill_pointer_block,
 )
-from coding_agent_playbook.types import HookFrontmatter
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence

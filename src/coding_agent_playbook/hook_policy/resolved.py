@@ -20,14 +20,15 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any, Final, Literal, NamedTuple
 
-from coding_agent_playbook._hook_schema import MATCHER_KEYS
-from coding_agent_playbook.hook_policy.advisory import advisory_text
+from coding_agent_playbook.artifacts.hook_schema import MATCHER_KEYS
+from coding_agent_playbook.hook_policy.advisory import advisory_text, guardrail_summary
 from coding_agent_playbook.hook_policy.tables import HOOK_SCRIPTS_DIR
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from coding_agent_playbook.types import Hook, HookHandler, HookMatcher, Rule
+    from coding_agent_playbook.artifacts.hook_schema import HookHandler, HookMatcher
+    from coding_agent_playbook.types import Hook, Rule
 
 #: ``entry_point`` is a builtin name resolved at sync to an out-of-tree handler of the
 #: ``coding_agent_playbook.hook_handlers`` group (``target`` + ``dist``; in-tree wins).
@@ -103,6 +104,19 @@ class ResolvedHook:
     def name(self) -> str:
         """The human-readable name heading the advisory (the id without a definition)."""
         return self.id if self.definition is None else self.definition.frontmatter.name
+
+    @property
+    def guardrail_text(self) -> str:
+        """The hook's one-line guardrail: its ``summary``, else its body's first sentence (D6).
+
+        Without a definition, the advisory body's first sentence (its body comes
+        first, the enforcement line after it); ``""`` without either. Not serialized.
+
+        Example: ``guardrail_line(hook.id, hook.guardrail_text)``.
+        """
+        if self.definition is not None:
+            return guardrail_summary(self.definition.frontmatter.summary, self.definition.body)
+        return "" if self.advisory is None else guardrail_summary("", self.advisory.body)
 
     @property
     def declared_supports(self) -> tuple[str, ...]:
