@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._activity_record import (
     command_structure,
@@ -22,6 +23,7 @@ from coding_agent_playbook.hook_runtime.handlers._activity_record import (
     flag_name,
 )
 from coding_agent_playbook.hook_runtime.handlers._pii_settings import pii_settings
+from coding_agent_playbook.hook_runtime.handlers.activity_log import CONFIG_SCHEMA
 from coding_agent_playbook.hook_runtime.state.audit_log import (
     MAX_LINE_BYTES,
     encode_jsonl_line,
@@ -172,14 +174,26 @@ def test_prompt_pii_category_counts_only_when_enabled(
 
 @pytest.mark.parametrize("value", [[], ()])
 def test_an_empty_pii_list_leaves_pii_off(value: object) -> None:
-    assert pii_settings({"pii": value}) is None
+    assert pii_settings(HookConfig({"pii": value}, CONFIG_SCHEMA)) is None
 
 
-@pytest.mark.parametrize("value", ["iban", ["iban", 3]])
-def test_a_pii_value_that_is_not_a_list_of_strings_raises_naming_the_key(value: object) -> None:
-    """The failure policy decides (``on_error: open``); validate refuses a non-list ``pii``."""
-    with pytest.raises(ValueError, match=r"'pii' must be a list of strings"):
-        pii_settings({"pii": value})
+@pytest.mark.parametrize("value", ["iban", False, {"iban": True}])
+def test_a_pii_value_that_is_not_a_list_leaves_pii_off(value: object) -> None:
+    """Validate refuses a non-list ``pii``; read anyway, it is the default (off), as before."""
+    assert pii_settings(HookConfig({"pii": value}, CONFIG_SCHEMA)) is None
+
+
+def test_a_pii_list_enables_the_named_detectors() -> None:
+    settings = pii_settings(HookConfig({"pii": ["iban"]}, CONFIG_SCHEMA))
+
+    assert settings is not None
+    assert settings.detectors == ("iban",)
+
+
+def test_pii_settings_reads_through_the_callers_schema() -> None:
+    """A caller whose ``CONFIG_SCHEMA`` forgot ``pii`` fails loudly instead of reading it."""
+    with pytest.raises(KeyError, match="pii"):
+        pii_settings(HookConfig({"pii": ["iban"]}, {}))
 
 
 def test_async_dispatch_writes_empty_stdout(audit: Audit) -> None:

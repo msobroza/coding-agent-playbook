@@ -96,7 +96,7 @@ def activity_log(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult | Non
         secret=ctx.cfg.secret_paths,
         platform=ctx.platform,
         full_commands=config.flag("full_commands", False),
-        pii=pii_settings(ctx.config) if ev.prompt is not None else None,
+        pii=pii_settings(config) if ev.prompt is not None else None,
     )
     append_activity(state, fitted(record), chain=config.flag("chain", False))
     return None

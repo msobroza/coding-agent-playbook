@@ -111,7 +111,7 @@ class SecretsStage:
     def run(self, plan: StopPlan, deadline: float) -> StageResult:
         """Red on a token or credential file (``block``); warn lines otherwise."""
         del plan, deadline  # git and the working tree are read directly; the walk is bounded
-        config = self.ctx.config
+        config = HookConfig(self.ctx.config, CONFIG_SCHEMA)
         report = sweep_tree(self.ctx, self.root, _limits(config), pii=pii_settings(config))
         report.warnings.extend(_deser_lines(self.ctx, self.root, report.changed))
         return _result(report, self.mode)
@@ -161,8 +161,8 @@ def _listed(lines: list[str]) -> list[str]:
     return [*lines[: _LISTED - 1], f"… and {len(lines) - _LISTED + 1} more secret findings"]
 
 
-def _limits(raw: Mapping[str, object]) -> SweepLimits:
-    config, default = HookConfig(raw, CONFIG_SCHEMA), SweepLimits()
+def _limits(config: HookConfig) -> SweepLimits:
+    default = SweepLimits()
     return SweepLimits(
         max_scan_bytes=config.integer("max_scan_bytes", default.max_scan_bytes, minimum=1),
         large_file_mb=config.integer("large_file_mb", default.large_file_mb, minimum=1),

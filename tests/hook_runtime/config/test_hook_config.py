@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import re
+from importlib.util import find_spec
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
@@ -18,7 +19,7 @@ import pytest
 import coding_agent_playbook.hook_runtime as hook_runtime
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.config.keys import ConfigKey
-from coding_agent_playbook.hook_runtime.registry import builtin_handler_modules, load_builtin
+from coding_agent_playbook.hook_runtime.registry import builtin_handler_modules
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -42,6 +43,22 @@ _SCHEMA: Final = {
 _BUILTIN_DIRS: Final = ("handlers", "stop")
 #: Chain files whose raw reads B.13 leaves to the writer-side work ("until #62" in B.7.4).
 _RAW_READS_ALLOWED: Final = frozenset({"ruff_feedback.py", "docstring_nonregression.py"})
+#: ``(file, key)`` raw reads of keys sync writes into a hook's config and no ``CONFIG_SCHEMA``
+#: declares: ``HookConfig`` raises on an undeclared key, and declaring one would let a layer set
+#: it (validate would accept it in a consumer's ``[hooks.<id>]``). Every other raw read fails.
+_SYNC_WRITTEN_READS: Final = frozenset(
+    {
+        # The cut-over date sync copies from [hooks.commit_convention]; validate checks its text.
+        ("commit_convention.py", "cutover_date"),
+        # toolchain declares no schema: sync writes both install hints from the guard config.
+        ("toolchain.py", "install_hint"),
+        ("toolchain.py", "cz_install_hint"),
+        # The slash-command scope table sync compiles from the prompts.
+        ("prompt_scope.py", "scopes"),
+        # skill_nudge's CONFIG_SCHEMA is empty on purpose: sync writes the skill glob table.
+        ("skill_nudge.py", "skills"),
+    }
+)
 #: A list value as a TOML author may spell it, with the item kinds validate lets through.
 _HOSTS: Final = ["pypi.org", "", "  ", 3, None, "mirror.internal"]
 
@@ -272,10 +289,18 @@ def _raw_read_key(node: ast.expr, names: set[str]) -> ast.expr | None:
     return None
 
 
-def _sync_written(key: ast.expr, declared: frozenset[str]) -> bool:
-    """Whether ``key`` names only keys no ``CONFIG_SCHEMA`` declares (HookConfig cannot read them)."""
-    spelled = {n.value for n in ast.walk(key) if isinstance(n, ast.Constant)}
-    return bool(spelled) and all(isinstance(k, str) and k not in declared for k in spelled)
+def _spelled_keys(key: ast.expr) -> frozenset[object]:
+    """The literal keys ``key`` evaluates to (each arm of a conditional); empty when not literal."""
+    if isinstance(key, ast.IfExp):
+        body, orelse = _spelled_keys(key.body), _spelled_keys(key.orelse)
+        return body | orelse if body and orelse else frozenset()
+    return frozenset({key.value}) if isinstance(key, ast.Constant) else frozenset()
+
+
+def _sync_written(key: ast.expr, allowed: frozenset[str]) -> bool:
+    """Whether every key ``key`` can spell is one of the file's ``allowed`` sync-written keys."""
+    spelled = _spelled_keys(key)
+    return bool(spelled) and spelled <= allowed
 
 
 def _raw_reads(function: _Function) -> Iterator[tuple[int, ast.expr]]:
@@ -287,17 +312,36 @@ def _raw_reads(function: _Function) -> Iterator[tuple[int, ast.expr]]:
             yield node.lineno, key
 
 
-def _raw_config_reads(source: str, declared: frozenset[str]) -> list[int]:
-    """The lines of ``source`` that read a declared handler-config key without ``HookConfig``."""
+def _raw_config_reads(source: str, sync_written: frozenset[str]) -> list[int]:
+    """The lines of ``source`` that read a handler-config key without ``HookConfig``.
+
+    A raw read of one of the ``sync_written`` keys (no ``CONFIG_SCHEMA`` declares them) is
+    not counted; any other key, declared or not, is.
+    """
     functions = [f for f in ast.walk(ast.parse(source)) if isinstance(f, _Function)]
     reads = (read for function in functions for read in _raw_reads(function))
-    return sorted({line for line, key in reads if not _sync_written(key, declared)})
+    return sorted({line for line, key in reads if not _sync_written(key, sync_written)})
 
 
-def _declared_config_keys() -> frozenset[str]:
-    """Every key a builtin's ``CONFIG_SCHEMA`` declares."""
-    schemas = (load_builtin(name).config_schema for name in builtin_handler_modules())
-    return frozenset(key for schema in schemas for key in schema)
+def _sync_written_keys(path: Path) -> frozenset[str]:
+    """The sync-written keys ``_SYNC_WRITTEN_READS`` lets the module at ``path`` read raw."""
+    return frozenset(key for name, key in _SYNC_WRITTEN_READS if name == path.name)
+
+
+def _builtin_sources(root: Path) -> list[Path]:
+    """Every module of ``root``'s builtin packages, pack subpackages included, minus the allowlist."""
+    return [
+        path
+        for folder in _BUILTIN_DIRS
+        for path in sorted((root / folder).rglob("*.py"))
+        if path.name not in _RAW_READS_ALLOWED
+    ]
+
+
+def _builtin_handler_files() -> set[Path]:
+    """The source file of every registered in-tree builtin handler."""
+    specs = (find_spec(module) for module in builtin_handler_modules().values())
+    return {Path(spec.origin) for spec in specs if spec is not None and spec.origin is not None}
 
 
 def test_the_config_read_guard_finds_each_raw_read_shape() -> None:
@@ -308,23 +352,50 @@ def test_the_config_read_guard_finds_each_raw_read_shape() -> None:
         "    config = self.ctx.config\n"
         "    c = config.get('mode')\n"
         "    d = ctx.config.get('install_hint')\n"
+        "    g = ctx.config.get('retain_dayz')\n"
+        "    h = ctx.config.get('cz_install_hint' if tool == 'cz' else 'install_hint')\n"
+        "    i = ctx.config.get('install_hint' if tool == 'cz' else 'mode')\n"
         "def helper(config, rows):\n"
         "    e = config.get(KEY)\n"
         "    f = rows.get('mode')\n"
     )
 
-    assert _raw_config_reads(source, frozenset({"mode"})) == [2, 3, 5, 8]
+    allowed = frozenset({"install_hint", "cz_install_hint"})
+
+    assert _raw_config_reads(source, allowed) == [2, 3, 5, 7, 9, 11]
+
+
+def test_the_config_read_guard_walks_pack_subpackages(tmp_path: Path) -> None:
+    for rel in (
+        "handlers/audit/log.py",
+        "handlers/top.py",
+        "handlers/ruff_feedback.py",
+        "stop/x.py",
+    ):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text("", encoding="utf-8")
+
+    found = [path.relative_to(tmp_path).as_posix() for path in _builtin_sources(tmp_path)]
+
+    assert found == ["handlers/audit/log.py", "handlers/top.py", "stop/x.py"]
+
+
+def test_the_config_read_guard_scans_every_registered_builtin() -> None:
+    sources = set(_builtin_sources(Path(hook_runtime.__file__).parent))
+    expected = {path for path in _builtin_handler_files() if path.name not in _RAW_READS_ALLOWED}
+
+    assert expected, "no registered builtin handler module was found"
+    assert expected - sources == set()
 
 
 def test_in_tree_builtins_read_their_config_through_hook_config() -> None:
-    declared = _declared_config_keys()
     root = Path(hook_runtime.__file__).parent
+    sources = _builtin_sources(root)
     offenders = [
         f"{path.relative_to(root)}:{line}"
-        for folder in _BUILTIN_DIRS
-        for path in sorted((root / folder).glob("*.py"))
-        if path.name not in _RAW_READS_ALLOWED
-        for line in _raw_config_reads(path.read_text(encoding="utf-8"), declared)
+        for path in sources
+        for line in _raw_config_reads(path.read_text(encoding="utf-8"), _sync_written_keys(path))
     ]
 
+    assert sources, f"no builtin modules under {_BUILTIN_DIRS} of {root}"
     assert offenders == []

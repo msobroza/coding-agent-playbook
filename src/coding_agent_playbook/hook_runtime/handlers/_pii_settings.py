@@ -11,15 +11,12 @@ PII off pays nothing for it on the prompt path.
 
 from __future__ import annotations
 
-from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.registry import ConfigKey
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
+    from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
     from coding_agent_playbook.security.pii import PiiConfig
 
 __all__ = ["PII_CONFIG_KEY", "PII_KEY", "pii_settings"]
@@ -27,24 +24,24 @@ __all__ = ["PII_CONFIG_KEY", "PII_KEY", "pii_settings"]
 PII_KEY: Final = "pii"
 #: Detector names; ``extend`` because a detector is a deny-table entry (§A.6).
 PII_CONFIG_KEY: Final = ConfigKey("list", "extend")
-#: The schema every PII-observing hook declares ``pii`` with (each lists ``PII_KEY: PII_CONFIG_KEY``).
-_PII_SCHEMA: Final[Mapping[str, ConfigKey]] = MappingProxyType({PII_KEY: PII_CONFIG_KEY})
 
 
-def pii_settings(config: Mapping[str, Any]) -> PiiConfig | None:
+def pii_settings(config: HookConfig) -> PiiConfig | None:
     """The PII scan ``config`` enables, or ``None`` when its ``pii`` list is empty.
 
-    Raises ``ValueError`` naming an unknown detector or a ``pii`` value that is
-    not a list of strings (an internal error for the failure policy: ``on_error: open``).
+    ``config`` is the calling hook's view over its own ``CONFIG_SCHEMA``, which
+    declares ``pii``; a non-list ``pii`` reads as empty (validate refuses it).
+    Raises ``ValueError`` naming an unknown detector (an internal error for
+    the failure policy: ``on_error: open``).
 
     Example::
 
-        >>> pii_settings({"pii": ["iban"]}).detectors  # doctest: +SKIP
+        >>> pii_settings(HookConfig({"pii": ["iban"]}, CONFIG_SCHEMA)).detectors  # doctest: +SKIP
         ('iban',)
-        >>> pii_settings({}) is None
+        >>> pii_settings(HookConfig({}, CONFIG_SCHEMA)) is None  # doctest: +SKIP
         True
     """
-    names = HookConfig(config, _PII_SCHEMA).strings(PII_KEY, blanks="keep", strict=True)
+    names = config.strings(PII_KEY, blanks="keep")
     if not names:
         return None
     from coding_agent_playbook.security.pii import pii_config
