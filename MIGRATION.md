@@ -47,6 +47,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.cli.build_parser` | `coding_agent_playbook.cli.parser.build_parser` | N7 |
 | `coding_agent_playbook.commands._ci_policy` | `coding_agent_playbook.commands.twins.policy` | N8 |
 | `coding_agent_playbook.commands._committed_config` | `coding_agent_playbook.config.committed` | N10 |
+| `coding_agent_playbook.commands._precommit_merge` | `coding_agent_playbook.precommit` | N9 |
 | `coding_agent_playbook.commands._twin_policy` | `coding_agent_playbook.commands.twins.policy` | N8 |
 | `coding_agent_playbook.commands.check_commit_trailers` | `coding_agent_playbook.commands.twins.check_commit_trailers` | N8 |
 | `coding_agent_playbook.commands.check_deps` | `coding_agent_playbook.commands.twins.check_deps` | N8 |
@@ -55,6 +56,8 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.commands.gate_scan` | `coding_agent_playbook.commands.twins.gate_scan` | N8 |
 | `coding_agent_playbook.commands.gate_scan.ScanRange` | `coding_agent_playbook.commands.twins._git_scope.ScanRange` | N8 |
 | `coding_agent_playbook.commands.gate_scan.resolve_range` | `coding_agent_playbook.commands.twins._git_scope.resolve_range` | N8 |
+| `coding_agent_playbook.commands.init.PrecommitTemplateMissingError` | `coding_agent_playbook.precommit.PrecommitTemplateMissingError` | N9 |
+| `coding_agent_playbook.commands.init.precommit_template_dir` | `coding_agent_playbook.precommit.precommit_template_dir` | N9 |
 | `coding_agent_playbook.commands.scan_secrets` | `coding_agent_playbook.commands.twins.scan_secrets` | N8 |
 | `coding_agent_playbook.commands.scan_sinks` | `coding_agent_playbook.commands.twins.scan_sinks` | N8 |
 | `coding_agent_playbook.config` | `coding_agent_playbook.config.model` | N2 |
