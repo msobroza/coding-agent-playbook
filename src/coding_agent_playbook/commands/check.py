@@ -20,8 +20,8 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.adapters._settings_drift import settings_document, stray_launcher_edited
-from coding_agent_playbook.commands import _committed_config
 from coding_agent_playbook.commands._check_hooks import format_hooks_section
+from coding_agent_playbook.config import committed as _committed_config
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.detector.predicate import evaluate_predicate
