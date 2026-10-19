@@ -453,11 +453,14 @@ def run(args: argparse.Namespace) -> int:
     config = plan.save(state)
     local_path = _write_local_config(repo_root)
     gitignore_path = _append_to_gitignore(repo_root)
+    # The starter switches matter only for a fresh config (a merge ignores them),
+    # so the predicates parse config/pyproject only then, as before the N9 move.
+    fresh_pre_commit = not (repo_root / ".pre-commit-config.yaml").is_file()
     pre_commit_path, pre_commit_messages = write_pre_commit(
         repo_root,
         output_commit=config.commit_output,
-        commit_trailers=_has_trailer_rows(repo_root),
-        commitizen=_uses_commitizen(repo_root),
+        commit_trailers=fresh_pre_commit and _has_trailer_rows(repo_root),
+        commitizen=fresh_pre_commit and _uses_commitizen(repo_root),
     )
 
     print(f"Wrote {FileSystemStateSource._CONFIG_FILENAME}")
