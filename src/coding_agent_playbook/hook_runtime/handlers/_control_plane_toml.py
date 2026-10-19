@@ -29,7 +29,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime.config.schema import DEFAULT_POLICY_KEYS, PolicyKeys
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

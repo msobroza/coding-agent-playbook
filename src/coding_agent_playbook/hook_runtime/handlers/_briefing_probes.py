@@ -21,9 +21,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.config.lock_digest import load_toml
 from coding_agent_playbook.hook_runtime.config.reader import read_small_file
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.handlers._control_plane_toml import (
     local_policy_overrides,
 )
@@ -32,7 +32,7 @@ from coding_agent_playbook.hook_runtime.handlers._drift import drift_line
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
 
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.handlers._drift import DriftFinding
     from coding_agent_playbook.hook_runtime.registry import HandlerContext

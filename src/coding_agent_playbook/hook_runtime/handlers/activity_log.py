@@ -28,7 +28,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
-from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._activity_record import activity_record, fitted
 from coding_agent_playbook.hook_runtime.handlers._pii_settings import (
     PII_CONFIG_KEY,
@@ -41,8 +41,8 @@ from coding_agent_playbook.hook_runtime.state.audit_log import append_activity, 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.hook_runtime.decision import HandlerResult
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
 __all__ = ["ASYNC_SAFE", "CONFIG_SCHEMA", "DEFAULT_RETAIN_DAYS", "activity_log"]

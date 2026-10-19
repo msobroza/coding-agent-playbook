@@ -24,9 +24,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.caps import LineCap, OutputCaps, clamp_lines
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.diagnostics.heartbeat import degraded_line, ok_line
+from coding_agent_playbook.hook_runtime.dispatch.caps import LineCap, OutputCaps, clamp_lines
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.handlers._briefing_probes import (
     COMPACT_PROBES,
     FULL_PROBES,
@@ -41,7 +41,7 @@ from coding_agent_playbook.hook_runtime.handlers._drift import (
 from coding_agent_playbook.hook_runtime.registry import register_hook_handler
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.handlers._drift import DriftFinding
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.lockfile.model import Lockfile

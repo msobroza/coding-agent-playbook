@@ -22,7 +22,7 @@ import posixpath
 import re
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
 from coding_agent_playbook.hook_runtime.shell.git_options import config_words, git_args
 

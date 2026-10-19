@@ -15,7 +15,7 @@ import re
 import sys
 from dataclasses import dataclass
 
-from coding_agent_playbook.hook_runtime.event import RepoInfo
+from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
 
 __all__ = ["FOLDING_PLATFORMS", "NormalizedPath", "find_repo", "fold_key", "normalize_path"]
 

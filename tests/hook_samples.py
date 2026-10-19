@@ -15,8 +15,8 @@ from coding_agent_playbook.artifacts.hook import Hook
 from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
 from coding_agent_playbook.artifacts.hook_schema import HookMatcher
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
-from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.policy import effective_on_error
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.policy import effective_on_error
 from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
 from coding_agent_playbook.hooks.resolution.resolved import ResolvedHandler, ResolvedHook
 

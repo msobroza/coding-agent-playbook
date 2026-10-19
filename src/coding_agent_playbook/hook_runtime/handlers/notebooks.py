@@ -23,10 +23,10 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.event import ToolClass
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
 from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths, repo_file
 from coding_agent_playbook.hook_runtime.judges.notebook_cells import cell_index, notebook_cells
 from coding_agent_playbook.hook_runtime.judges.notebook_check import (
@@ -47,7 +47,7 @@ from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResul
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
 
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
 __all__ = [

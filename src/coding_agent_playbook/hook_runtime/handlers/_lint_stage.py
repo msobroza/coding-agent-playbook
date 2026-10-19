@@ -25,8 +25,8 @@ from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.caps import clean_text, clip, quote_data
-from coding_agent_playbook.hook_runtime.paths import fold_key
+from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip, quote_data
+from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
 from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult
 from coding_agent_playbook.hook_runtime.stop.tools import runner_of, seconds_left, stage_command
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from coding_agent_playbook.hook_runtime.deps import Clock
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.state.store import StateStore

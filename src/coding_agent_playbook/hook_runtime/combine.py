@@ -15,15 +15,20 @@ import hashlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal, Protocol
 
-from coding_agent_playbook.hook_runtime.caps import OutputCaps, clamp_lines, clean_text, clip
-from coding_agent_playbook.hook_runtime.decision import (
+from coding_agent_playbook.hook_runtime.dispatch.caps import (
+    OutputCaps,
+    clamp_lines,
+    clean_text,
+    clip,
+)
+from coding_agent_playbook.hook_runtime.dispatch.decision import (
     CombinedResult,
     Decision,
     HandlerResult,
     Outcome,
     supported_decision,
 )
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence

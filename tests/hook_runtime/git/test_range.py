@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.hook_runtime._ports import LazyGit
+from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
 from coding_agent_playbook.hook_runtime.git.parse import (
     AddedLine,
     DiffLines,
@@ -27,7 +28,6 @@ from coding_agent_playbook.hook_runtime.git.parse import (
 )
 from coding_agent_playbook.hook_runtime.git.range import pick_default_branch
 from coding_agent_playbook.hook_runtime.git.safe_git import GitError, SafeGit
-from coding_agent_playbook.hook_runtime.paths import find_repo
 from tests.hook_runtime.fakes import FakeGit, FakeProc
 from tests.hook_runtime.guard_repo import GuardRepo
 

@@ -27,22 +27,22 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.caps import clean_text, clip
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
 from coding_agent_playbook.hook_runtime.handlers._bypass_rules import segment_verdict
 from coding_agent_playbook.hook_runtime.handlers._targets import (
     file_write_paths,
     shell_write_targets,
 )
-from coding_agent_playbook.hook_runtime.paths import fold_key
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo, ToolCall
-    from coding_agent_playbook.hook_runtime.paths import NormalizedPath
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo, ToolCall
+    from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 

@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, Final
 import pytest
 
 from coding_agent_playbook.generated_output.sentinel import SENTINEL, sentinel_line
-from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT
 from tests.engine_modules import (
     ENGINE,
@@ -187,7 +187,7 @@ def test_hot_path_branches_import_no_forbidden_module(
 ) -> None:
     imported = _imports(real_proc, synced, event, synced.payload(event, tool=tool))
 
-    assert "coding_agent_playbook.hook_runtime.dispatch" in imported
+    assert "coding_agent_playbook.hook_runtime.dispatch.run" in imported
     assert _forbidden(imported) == []
 
 

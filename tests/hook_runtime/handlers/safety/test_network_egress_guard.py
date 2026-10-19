@@ -21,9 +21,9 @@ import pytest
 from coding_agent_playbook.adapters.claude_code._overlay_native import network_native_rows
 from coding_agent_playbook.hook_runtime.combine import ASK_DENIED_PREFIX
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import Harness
-from coding_agent_playbook.hook_runtime.policy import UNATTENDED_ENV_VAR
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import Harness
+from coding_agent_playbook.hook_runtime.dispatch.policy import UNATTENDED_ENV_VAR
 from coding_agent_playbook.hook_runtime.registry import load_builtin
 from tests.hook_payloads import load_hook_payload
 from tests.hook_runtime.fakes import FakeGit

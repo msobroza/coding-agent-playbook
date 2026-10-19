@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
 from coding_agent_playbook.hook_runtime.git._fingerprint import _copy_index
 from coding_agent_playbook.hook_runtime.git.safe_git import (
     HOT_PATH_TIMEOUT_S,
@@ -28,14 +29,13 @@ from coding_agent_playbook.hook_runtime.git.safe_git import (
     SafeGit,
 )
 from coding_agent_playbook.hook_runtime.globs import compile_globs
-from coding_agent_playbook.hook_runtime.paths import find_repo
 from coding_agent_playbook.hook_runtime.state.store import StateStore
 from tests.hook_runtime.fakes import FakeProc
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
     from coding_agent_playbook.hook_runtime.proc import SubprocessProc
 
 GIT = "/usr/bin/git"

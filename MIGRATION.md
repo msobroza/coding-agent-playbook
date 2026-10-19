@@ -281,12 +281,16 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime._verify_tag` | `coding_agent_playbook.hook_runtime.stop.verify_tag` | N17 |
 | `coding_agent_playbook.hook_runtime.active_prompt` | `coding_agent_playbook.hook_runtime.state.active_prompt` | N19 |
 | `coding_agent_playbook.hook_runtime.canary` | `coding_agent_playbook.hook_runtime.diagnostics.canary` | N20 |
+| `coding_agent_playbook.hook_runtime.caps` | `coding_agent_playbook.hook_runtime.dispatch.caps` | A10 |
 | `coding_agent_playbook.hook_runtime.config` | `coding_agent_playbook.hook_runtime.config.guard_config` | N16 |
 | `coding_agent_playbook.hook_runtime.config.guard_config.GUARD_CONFIG_REL` | `coding_agent_playbook.hook_runtime.config.schema.GUARD_CONFIG_REL` | GC-1 |
 | `coding_agent_playbook.hook_runtime.config.guard_config.LOCKFILE_REL` | `coding_agent_playbook.hook_runtime.config.schema.LOCKFILE_REL` | GC-1 |
 | `coding_agent_playbook.hook_runtime.config.guard_config.SUPPORTED_SCHEMA_VERSIONS` | `coding_agent_playbook.hook_runtime.config.schema.SUPPORTED_SCHEMA_VERSIONS` | GC-1 |
 | `coding_agent_playbook.hook_runtime.cutover` | `coding_agent_playbook.hook_runtime.judges.commit_cutover` | N14 |
+| `coding_agent_playbook.hook_runtime.decision` | `coding_agent_playbook.hook_runtime.dispatch.decision` | A10 |
+| `coding_agent_playbook.hook_runtime.dispatch` | `coding_agent_playbook.hook_runtime.dispatch.run` | A10 |
 | `coding_agent_playbook.hook_runtime.doctor` | `coding_agent_playbook.hook_runtime.diagnostics.doctor` | N20 |
+| `coding_agent_playbook.hook_runtime.event` | `coding_agent_playbook.hook_runtime.dispatch.event` | A10 |
 | `coding_agent_playbook.hook_runtime.git` | `coding_agent_playbook.hook_runtime.git.safe_git` | N18 |
 | `coding_agent_playbook.hook_runtime.git_log` | `coding_agent_playbook.hook_runtime.git.log` | N18 |
 | `coding_agent_playbook.hook_runtime.git_range` | `coding_agent_playbook.hook_runtime.git.range` | N18 |
@@ -321,7 +325,9 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime.harness._payload` | `coding_agent_playbook.hook_runtime.harness.payload` | N21 |
 | `coding_agent_playbook.hook_runtime.heartbeat` | `coding_agent_playbook.hook_runtime.diagnostics.heartbeat` | N20 |
 | `coding_agent_playbook.hook_runtime.ledger` | `coding_agent_playbook.hook_runtime.state.ledger` | N19 |
+| `coding_agent_playbook.hook_runtime.paths` | `coding_agent_playbook.hook_runtime.dispatch.paths` | A10 |
 | `coding_agent_playbook.hook_runtime.pin` | `coding_agent_playbook.hook_runtime.config.pin` | N16 |
+| `coding_agent_playbook.hook_runtime.policy` | `coding_agent_playbook.hook_runtime.dispatch.policy` | A10 |
 | `coding_agent_playbook.hook_runtime.protected` | `coding_agent_playbook.hook_runtime.config.protected` | N16 |
 | `coding_agent_playbook.hook_runtime.session` | `coding_agent_playbook.hook_runtime.state.session` | N19 |
 | `coding_agent_playbook.hook_runtime.shell` | `coding_agent_playbook.hook_runtime.shell.parse` | N17 |
@@ -393,6 +399,16 @@ rubric and gate registries are
 `coding_agent_playbook.evals.compile.rubric_registry` and
 `coding_agent_playbook.evals.compile.gate_registry`. There is no shim, and the
 entry-point groups do not change.
+<!-- module-moves: end-keep -->
+
+<!-- module-moves: keep -->
+Out-of-tree hook handler authors: the event and decision model moved into the
+`coding_agent_playbook.hook_runtime.dispatch` package, with no shim at the old
+paths. Import `CanonicalEvent` from `coding_agent_playbook.hook_runtime.dispatch.event`
+(was `coding_agent_playbook.hook_runtime.event`), and `HandlerResult` and `Decision`
+from `coding_agent_playbook.hook_runtime.dispatch.decision` (was
+`coding_agent_playbook.hook_runtime.decision`). Hook ids, registry names and the
+`hook_handlers` entry-point group do not change.
 <!-- module-moves: end-keep -->
 
 ## v0.21 — Skills-first context

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.caps import OutputCaps, clean_text, clip
+from coding_agent_playbook.hook_runtime.dispatch.caps import OutputCaps, clean_text, clip
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence

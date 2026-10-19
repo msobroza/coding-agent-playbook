@@ -27,8 +27,8 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.caps import quote_data
-from coding_agent_playbook.hook_runtime.paths import fold_key
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.stop.alone import run_alone
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult
@@ -36,8 +36,8 @@ from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResul
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.hook_runtime.decision import HandlerResult
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.judges.gate_weakening import (
         AddedLine,
         Finding,

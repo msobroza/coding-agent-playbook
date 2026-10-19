@@ -17,13 +17,13 @@ import pytest
 
 from coding_agent_playbook.hook_runtime._ports import LazyGit
 from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
 from coding_agent_playbook.hook_runtime.git.memo import MemoGit
 from coding_agent_playbook.hook_runtime.git.safe_git import GitTimeout, SafeGit
-from coding_agent_playbook.hook_runtime.paths import find_repo
 from tests.hook_runtime.fakes import FakeProc
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
 
 GIT = "/usr/bin/git"
 TREE = b"4b825dc642cb6eb9a060e54bf8d69288fbee4904\n"

@@ -21,7 +21,7 @@ from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME, iso_u
 
 if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
 
 __all__ = ["CHECK_PREFIX", "DEFAULT_SINCE_DAYS", "decision_log_checks"]
 

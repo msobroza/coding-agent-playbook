@@ -43,8 +43,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime._ruff import selector_matches
-from coding_agent_playbook.hook_runtime.caps import OutputCaps, quote_data
-from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.caps import OutputCaps, quote_data
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import (
     POST_EDIT_HOOK_ID,
     accepts_file,

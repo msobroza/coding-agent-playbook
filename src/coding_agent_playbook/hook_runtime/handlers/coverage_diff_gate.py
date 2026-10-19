@@ -27,8 +27,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.caps import clean_text, clip
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
+from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip
 from coding_agent_playbook.hook_runtime.handlers._coverage_report import (
     CoverageGrade,
     coverage_lines,
@@ -46,8 +46,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle, RunArtifacts
-    from coding_agent_playbook.hook_runtime.decision import HandlerResult
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import SkipCategory, StopPlan
     from coding_agent_playbook.hook_runtime.stop.suite import SuiteOutcome

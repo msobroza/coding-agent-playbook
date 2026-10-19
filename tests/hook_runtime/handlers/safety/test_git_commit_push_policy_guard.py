@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.handlers._git_identity import IDENTITY_REASON
 from coding_agent_playbook.hook_runtime.handlers.git_policy import PLACEHOLDER_REASON
 from coding_agent_playbook.hook_runtime.stop.chain import write_last_green

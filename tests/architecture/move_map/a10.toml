@@ -1,0 +1,44 @@
+# A10 (#123, specs/prT-package-layout.md 7.6): the event and decision model
+# (event, decision, paths, caps, policy) joins the new hook_runtime/dispatch/
+# package. dispatch.py moves to dispatch/run.py in the same PR, a same-name
+# conversion: the package directory would shadow the module (7.1.2 rule 12).
+
+[[module]]
+pr = "A10"
+old = "coding_agent_playbook.hook_runtime.dispatch"
+new = "coding_agent_playbook.hook_runtime.dispatch.run"
+
+[[module]]
+pr = "A10"
+old = "coding_agent_playbook.hook_runtime.event"
+new = "coding_agent_playbook.hook_runtime.dispatch.event"
+
+[[module]]
+pr = "A10"
+old = "coding_agent_playbook.hook_runtime.decision"
+new = "coding_agent_playbook.hook_runtime.dispatch.decision"
+
+[[module]]
+pr = "A10"
+old = "coding_agent_playbook.hook_runtime.paths"
+new = "coding_agent_playbook.hook_runtime.dispatch.paths"
+
+[[module]]
+pr = "A10"
+old = "coding_agent_playbook.hook_runtime.caps"
+new = "coding_agent_playbook.hook_runtime.dispatch.caps"
+
+[[module]]
+pr = "A10"
+old = "coding_agent_playbook.hook_runtime.policy"
+new = "coding_agent_playbook.hook_runtime.dispatch.policy"
+
+[[path]]
+pr = "A10"
+old = "tests/hook_runtime/test_event.py"
+new = "tests/hook_runtime/dispatch/test_event.py"
+
+[[path]]
+pr = "A10"
+old = "tests/hook_runtime/test_paths.py"
+new = "tests/hook_runtime/dispatch/test_paths.py"

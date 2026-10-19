@@ -19,9 +19,9 @@ import pytest
 
 from coding_agent_playbook.hook_runtime.config.guard_config import CONFIG_FAULT_REASON
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
-from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.diagnostics.canary import DEFAULT_CANARIES, run_canaries
-from coding_agent_playbook.hook_runtime.event import Harness
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.lockfile.canonical_json import element_sha256
 from tests.hook_runtime.fakes import FakeProc
 from tests.hook_runtime.handlers.pack_repo import PackRepo, rows_of, with_scope
