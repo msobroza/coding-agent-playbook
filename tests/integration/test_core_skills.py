@@ -56,19 +56,31 @@ EXPECTED_MEMBERSHIP: Final[Mapping[str, str]] = {
     "fastapi-app-wiring": "python-tooling",
     "fastapi-error-boundaries": "python-tooling",
     "ml-serialization-security": "ml-data",
+    "ml-data-transforms": "ml-data",
+    "ml-vectorization": "ml-data",
+    "ml-dtypes-and-typing": "ml-data",
+    "ml-reproducibility-and-testing": "ml-data",
 }
 #: Core skill with member rules -> its ``playbook.files`` phrase in "Where guidance lives".
 EXPECTED_WHERE: Final[Mapping[str, str]] = {
     "python-coding": "Any Python file",
     "python-testing": "Test files and conftest.py",
     "python-tooling": "FastAPI apps, routers, dependency providers and error handlers",
-    "ml-data": "Code that loads or saves models, checkpoints or caches",
+    "ml-data": "Model, array and data-frame code",
 }
 CORE_SKILLS: Final = sorted(EXPECTED_WHERE)
 #: python-coding's member count after the python-best-practices distillation (spec 9.6.2, H13).
 PYTHON_CODING_MEMBER_COUNT: Final = 12
 #: python-testing's members after the pytest distillation (spec 9.6.2): pytest plus two.
 PYTHON_TESTING_MEMBERS: Final = ("pytest", "pytest-fixtures", "pytest-test-doubles")
+#: ml-data's members after the array and data-frame distillation (spec 9.6.2), sorted by id.
+ML_DATA_MEMBERS: Final = (
+    "ml-data-transforms",
+    "ml-dtypes-and-typing",
+    "ml-reproducibility-and-testing",
+    "ml-serialization-security",
+    "ml-vectorization",
+)
 
 
 @dataclass(frozen=True)
@@ -87,6 +99,8 @@ class DistilledRuleRow:
 _PY_FILES: Final = ("**/*.py",)
 _TEST_FILES: Final = ("tests/**/*.py", "**/conftest.py")
 _PYTEST_GATE: Final[Mapping[str, object]] = {"has_framework": ["pytest"]}
+_ML_FILES: Final = ("**/*.py", "**/*.ipynb")
+_ML_ARRAY_GATE: Final[Mapping[str, object]] = {"any_ml_stack": ["numpy", "pandas", "polars"]}
 #: Distilled rule id -> its spec 9.6.1 row; ``path`` is relative to ``catalog/core/rules``.
 DISTILLED_RULES: Final[Mapping[str, DistilledRuleRow]] = {
     "python-performance-idioms": DistilledRuleRow(
@@ -133,6 +147,42 @@ DISTILLED_RULES: Final[Mapping[str, DistilledRuleRow]] = {
         _PYTEST_GATE,
         63,
         ("python", "testing", "pytest", "fixtures"),
+    ),
+    "ml-vectorization": DistilledRuleRow(
+        "ml/vectorization.md.j2",
+        "ml-data",
+        "Vectorization",
+        _ML_FILES,
+        _ML_ARRAY_GATE,
+        71,
+        ("ml", "numpy", "pandas", "polars", "performance"),
+    ),
+    "ml-data-transforms": DistilledRuleRow(
+        "ml/data-transforms.md.j2",
+        "ml-data",
+        "Data transforms",
+        _ML_FILES,
+        _ML_ARRAY_GATE,
+        71,
+        ("ml", "pandas", "polars", "numpy"),
+    ),
+    "ml-dtypes-and-typing": DistilledRuleRow(
+        "ml/dtypes-and-typing.md.j2",
+        "ml-data",
+        "Dtypes and typing",
+        _ML_FILES,
+        _ML_ARRAY_GATE,
+        73,
+        ("ml", "dtypes", "typing"),
+    ),
+    "ml-reproducibility-and-testing": DistilledRuleRow(
+        "ml/reproducibility-and-testing.md.j2",
+        "ml-data",
+        "Reproducibility and numeric tests",
+        _ML_FILES,
+        _ML_ARRAY_GATE,
+        73,
+        ("ml", "reproducibility", "testing"),
     ),
 }
 SKILLS_ROOT: Final = CORE_ROOT / "skills"
@@ -311,6 +361,14 @@ def test_python_testing_members() -> None:
     members = sorted(i for i, r in core_rules().items() if r.frontmatter.skill == "python-testing")
     assert tuple(members) == PYTHON_TESTING_MEMBERS, (
         f"python-testing members are {members}; expected {list(PYTHON_TESTING_MEMBERS)}"
+    )
+
+
+def test_ml_data_members() -> None:
+    """Spec 9.6.2: the serialization rule plus the four array and data-frame members."""
+    members = sorted(i for i, r in core_rules().items() if r.frontmatter.skill == "ml-data")
+    assert tuple(members) == ML_DATA_MEMBERS, (
+        f"ml-data members are {members}; expected {list(ML_DATA_MEMBERS)}"
     )
 
 

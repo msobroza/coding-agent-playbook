@@ -42,6 +42,7 @@ HOOK_ID: Final = "skill-nudge"
 LINT_HOOK_ID: Final = "error-handling-lint-feedback"
 APP: Final = "src/app.py"
 TEST_APP: Final = "tests/test_app.py"
+NOTEBOOK: Final = "notebooks/explore.ipynb"
 
 
 def _line(skill_id: str) -> str:
@@ -107,6 +108,23 @@ def test_new_session_nudges_again(
     other = edit(repo, deps(), APP, state=state, session_id="a-later-session")
 
     assert context(other) == SOURCE_LINES
+
+
+def test_notebook_edit_names_ml_data(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path
+) -> None:
+    """Spec 12.2: the ml-data members glob ``**/*.ipynb``, and NotebookEdit reaches the hook."""
+    tool_input = {
+        "notebook_path": str(repo.root / NOTEBOOK),
+        "cell_id": "c1",
+        "new_source": "fees.sum(axis=1)",
+        "edit_mode": "replace",
+    }
+    payload = repo.tool_payload("NotebookEdit", tool_input, event=EventName.POST_TOOL_USE)
+
+    report = repo.simulate(payload, deps(), event=EventName.POST_TOOL_USE, state=state)
+
+    assert context(report) == [_line("ml-data")]
 
 
 def test_file_matching_no_skill_is_silent(
@@ -271,7 +289,7 @@ def test_a_consumer_cannot_set_the_skills_table(
 def test_hook_md_matches_its_pack_row_and_handler(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """8.5.1: default feedback hook, post_tool_use on edit and write, no body, open."""
+    """8.5.1, 12.2: default feedback hook, post_tool_use on edit, write and notebook_edit."""
     hook = engine_hook(HOOK_ID)
     fm = hook.frontmatter
 
@@ -284,7 +302,7 @@ def test_hook_md_matches_its_pack_row_and_handler(
         ["context", "none"],
         "open",
     )
-    assert fm.matcher["post_tool_use"].tools == ["edit", "write"]
+    assert fm.matcher["post_tool_use"].tools == ["edit", "write", "notebook_edit"]
     assert fm.matcher["post_tool_use"].paths == []
     assert fm.handler is not None and fm.handler.builtin == "skill_nudge"
     assert fm.handler.config == {}

@@ -42,6 +42,10 @@ PBP_DISTILLED_RULES: Final = frozenset(
         "python-classes-and-protocols",
         "pytest-test-doubles",
         "pytest-fixtures",
+        "ml-vectorization",
+        "ml-data-transforms",
+        "ml-dtypes-and-typing",
+        "ml-reproducibility-and-testing",
     }
 )
 #: A topic that changed owner (spec 9.4.7) -> the one core rule whose body holds it.
