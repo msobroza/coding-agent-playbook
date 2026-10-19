@@ -50,7 +50,6 @@ from coding_agent_playbook.guard_config import (
     serialize_guard_config,
     write_guard_config,
 )
-from coding_agent_playbook.hook_policy import resolve_effective_hooks
 from coding_agent_playbook.hook_registrations import resolved_deadlines_ms
 from coding_agent_playbook.hook_runtime.config import (
     GUARD_CONFIG_REL,
@@ -62,6 +61,7 @@ from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import CON
 from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
     playbook_precommit_ids,
 )
+from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
 from coding_agent_playbook.lockfile.model import LockEntry, Provenance
 from coding_agent_playbook.security.patterns import (
     SECRET_CONTENT_RULES,
@@ -80,7 +80,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.detector.facts import Facts
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 
 _PROTECT = ProtectInputs(

@@ -26,10 +26,6 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final, Literal, Protocol
 
-from coding_agent_playbook.hook_policy._contract_handlers import handler_slots
-from coding_agent_playbook.hook_policy._findings import error
-from coding_agent_playbook.hook_policy.merge import ConfigKeySpec
-from coding_agent_playbook.hook_policy.tables import HOOK_EVENTS
 from coding_agent_playbook.hook_runtime._config_keys import regex_of
 from coding_agent_playbook.hook_runtime.registry import (
     HandlerResolutionError,
@@ -38,14 +34,18 @@ from coding_agent_playbook.hook_runtime.registry import (
     edited_file_mutation_problem,
     load_builtin,
 )
+from coding_agent_playbook.hooks.contract._contract_handlers import handler_slots
+from coding_agent_playbook.hooks.contract.findings import error
+from coding_agent_playbook.hooks.resolution.merge import ConfigKeySpec
+from coding_agent_playbook.hooks.resolution.tables import HOOK_EVENTS
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping
 
     from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.hook_schema import HookHandler
-    from coding_agent_playbook.hook_policy._findings import Finding
     from coding_agent_playbook.hook_runtime.registry import HandlerDeclaration
+    from coding_agent_playbook.hooks.contract.findings import Finding
 
 __all__ = [
     "ENTRY_POINT_GROUP",

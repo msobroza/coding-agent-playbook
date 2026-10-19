@@ -6,5 +6,5 @@ root and the bundled-plugin names, ``catalog.layers`` for the layer labels,
 ``catalog.resolve`` for the overlay merge ``OverlayResolver``). The hook
 runtime imports the stdlib-only ``catalog.roots`` lazily on the protected-edit
 branch, so loading it must not load ``catalog.source`` (yaml and evals) or
-``catalog.resolve`` (hook_policy).
+``catalog.resolve`` (the hooks package).
 """

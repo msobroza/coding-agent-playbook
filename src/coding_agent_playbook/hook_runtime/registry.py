@@ -12,7 +12,7 @@ checks map and decorators agree), and an out-of-tree handler, resolved at sync
 to ``{"kind": "entry_point", "target": "pkg.mod:attr"}``, is imported directly,
 only when ``pkg`` is in ``[hooks] allow_code_from`` (no ``importlib.metadata``,
 D-12). External scripts run through :mod:`._external`, behind a trust approval.
-Stdlib-only, so sync-time code (``hook_policy``) reads the same declarations.
+Stdlib-only, so sync-time code (the ``hooks`` package) reads the same declarations.
 """
 
 from __future__ import annotations

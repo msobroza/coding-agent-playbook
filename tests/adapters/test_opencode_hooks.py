@@ -23,13 +23,13 @@ import pytest
 from coding_agent_playbook._sentinel import has_sentinel, sentinel_line
 from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
-from coding_agent_playbook.hook_policy import HOOK_SUPPORT
 from coding_agent_playbook.hook_registrations import (
     OPENCODE_SHIM_PATH,
     opencode_reg_json,
     plan_opencode_reg,
     render_opencode_shim,
 )
+from coding_agent_playbook.hooks.resolution.tables import HOOK_SUPPORT
 from coding_agent_playbook.templates.hook_shims.opencode_wire_port import WIRE_BEGIN, WIRE_END
 from tests.fakes import record_opens
 from tests.hook_runtime.handlers.pack_repo import resolve_engine_hooks
@@ -39,7 +39,7 @@ from tests.node_kit import needs_node, run_node
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
 
@@ -93,7 +93,7 @@ def _tagged(name: str) -> str:
 # --- class contract ----------------------------------------------------------------------------
 
 
-def test_hook_support_equals_hook_policy_table() -> None:
+def test_hook_support_equals_the_hooks_table() -> None:
     assert OpenCodeAdapter.hook_support == HOOK_SUPPORT["opencode"]
     assert "pre_compact" not in OpenCodeAdapter.hook_support
 

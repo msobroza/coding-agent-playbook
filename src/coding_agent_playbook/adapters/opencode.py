@@ -53,13 +53,13 @@ from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters._owned_files import write_engine_owned
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.skill_dirs.writer import SkillWriter
-from coding_agent_playbook.hook_policy import HOOK_SUPPORT
-from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
 from coding_agent_playbook.hook_registrations import (
     OPENCODE_SHIM_PATH,
     plan_opencode_reg,
     render_opencode_shim,
 )
+from coding_agent_playbook.hooks.guardrails_skill import has_guardrail_text
+from coding_agent_playbook.hooks.resolution.tables import HOOK_SUPPORT
 from coding_agent_playbook.renderer import render_for
 
 if TYPE_CHECKING:
@@ -68,7 +68,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from coding_agent_playbook.prompt_rule_delivery import SkillReferenceIndex
 
 

@@ -1,7 +1,7 @@
 """The ``guard_config.hooks.<id>`` record, parsed (specs/prK-lifecycle-hooks.md §A.7, §D.8.2).
 
-The schema is exactly ``hook_policy.ResolvedHook.to_json()``; the runtime may
-not import ``hook_policy`` (§D.1), so this module re-reads it field by field
+The schema is exactly ``hooks.resolution.resolved.ResolvedHook.to_json()``; the runtime may
+not import ``hooks`` (§D.1), so this module re-reads it field by field
 and ``test_runtime_config.py`` parses a real ``to_json()`` output to pin the
 two together. Matcher path globs are compiled here, once, folded for the
 platform, so selection never compiles a pattern per event.

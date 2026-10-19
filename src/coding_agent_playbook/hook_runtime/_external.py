@@ -49,7 +49,7 @@ __all__ = [
 ]
 
 EVENT_SCHEMA: Final = "playbook.hook.event/1"
-#: Where sync copies hook scripts; the twin of ``hook_policy.HOOK_SCRIPTS_DIR``.
+#: Where sync copies hook scripts; the twin of ``hooks.resolution.tables.HOOK_SCRIPTS_DIR``.
 HOOK_SCRIPTS_DIR: Final = ".coding-agent-playbook/hooks/scripts"
 _OUTPUT_KEYS: Final = frozenset({"decision", "reason", "context", "user_note"})
 _MAX_SCRIPT_BYTES: Final = 16 * 1024 * 1024
@@ -129,7 +129,7 @@ def _launcher_argv(launcher: str, ctx: ResolveContext) -> tuple[str, ...]:
 def copied_scripts_sha256(record: HookRecord, root: str) -> str | None:
     """The digest the trust store approved, recomputed over the copies under ``root``.
 
-    Mirrors ``hook_policy.resolved.script_sha256``: one script's own sha256, or
+    Mirrors ``hooks.resolution.resolved.script_sha256``: one script's own sha256, or
     one sha256 over every ``scripts/<path>\\0<digest>\\n`` pair; ``None`` when
     a copy is missing, a symlink or not a regular file.
     """

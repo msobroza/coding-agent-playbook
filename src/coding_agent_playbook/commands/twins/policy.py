@@ -62,8 +62,9 @@ def twin_hook_config(
         >>> twin_hook_config(Path("."), "git-commit-push-policy-guard")  # doctest: +SKIP
         {'forbid_trailers': ['Co-Authored-By'], 'allowed_coauthors': [], ...}
     """
-    from coding_agent_playbook.hook_policy import RegistryCatalog, merged_handler_config
-    from coding_agent_playbook.hook_policy.override_rules import bound_handler
+    from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
+    from coding_agent_playbook.hooks.resolution.effective import merged_handler_config
+    from coding_agent_playbook.hooks.resolution.override_rules import bound_handler
     from coding_agent_playbook.validation.context import SyncContext
 
     # An internal policy read: the command that owns the config (sync, init's final

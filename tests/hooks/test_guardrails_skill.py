@@ -10,7 +10,7 @@ has guardrail text (``compose_guardrails_skill``); only the adapters whose
 from __future__ import annotations
 
 from coding_agent_playbook.artifacts.skill import Skill
-from coding_agent_playbook.hook_policy.guardrails_skill import (
+from coding_agent_playbook.hooks.guardrails_skill import (
     GUARDRAILS_SKILL_ID,
     compose_guardrails_skill,
     has_guardrail_text,

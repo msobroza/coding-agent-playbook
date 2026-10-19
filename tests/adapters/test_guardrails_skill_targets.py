@@ -24,7 +24,7 @@ from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.config.tables.hooks import HooksConfig
-from coding_agent_playbook.hook_policy.guardrails_skill import (
+from coding_agent_playbook.hooks.guardrails_skill import (
     GUARDRAILS_SKILL_ID,
     compose_guardrails_skill,
 )
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.adapters.base import Adapter
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 _SKILL_MD = f"{GUARDRAILS_SKILL_ID}/SKILL.md"
 _NATIVE_ROOTS = (".claude/skills", ".opencode/skills", ".agents/skills")

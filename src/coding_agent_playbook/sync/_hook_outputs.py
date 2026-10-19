@@ -1,7 +1,7 @@
 """The hooks half of ``playbook sync`` (specs/prK-lifecycle-hooks.md §C.1.3, §C.1.5, §B.1).
 
 - :func:`resolve_sync_hooks`: the committed ``[hooks]`` / ``[guardrails]``
-  policy and ``hook_policy.resolve_effective_hooks``, the single gating path
+  policy and ``hooks.resolution.effective.resolve_effective_hooks``, the single gating path
   (``filter_applies_if`` is never widened for hooks), with bodies rendered;
 - :func:`write_runtime_outputs`: the sync-level ``guard_config.json`` and the
   copied scripts, into the output root in every mode (so ``--check`` compares
@@ -69,14 +69,11 @@ from coding_agent_playbook.guard_config import (
     resolve_resource_roots,
     write_guard_config,
 )
-from coding_agent_playbook.hook_policy import (
-    HOOK_CAPABLE_ADAPTERS,
-    HOOK_LABELS,
-    RegistryCatalog,
-    adapter_label,
-    resolve_effective_hooks,
-)
 from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH, stop_stage_records
+from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
+from coding_agent_playbook.hooks.enforcement import HOOK_LABELS, adapter_label
+from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
+from coding_agent_playbook.hooks.resolution.tables import HOOK_CAPABLE_ADAPTERS
 from coding_agent_playbook.lockfile.model import Provenance
 from coding_agent_playbook.sync import _machine_local as _sync_hook_local
 from coding_agent_playbook.sync._dispatch import HookDispatch
@@ -95,7 +92,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
-    from coding_agent_playbook.hook_policy import ResolvedHook, SkippedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook, SkippedHook
     from coding_agent_playbook.lockfile.model import Lockfile
     from coding_agent_playbook.sync._dispatch import ProvenanceRecorder
     from coding_agent_playbook.sync._machine_local import SyncHookDeps

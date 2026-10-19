@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.config.tables.hooks import HooksConfig
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 
 
@@ -61,7 +61,7 @@ class Adapter(ABC):
 
     #: Canonical hook event -> the decisions this adapter renders natively. The
     #: empty default means advisory-only: hooks degrade to text (§C.1.1, §C.5.1).
-    #: Built-in hook-capable adapters take their row from ``hook_policy.HOOK_SUPPORT``.
+    #: Built-in hook-capable adapters take their row from ``hooks.resolution.tables.HOOK_SUPPORT``.
     hook_support: ClassVar[Mapping[str, frozenset[str]]] = MappingProxyType({})
 
     #: Repo-relative files this adapter co-owns with the user and the harness

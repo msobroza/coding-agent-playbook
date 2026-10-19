@@ -1,9 +1,20 @@
-"""The advisory projection of a hook body (specs/prK-lifecycle-hooks.md §A.8, §C.4.1).
+"""How a hook reaches each adapter: enforcement labels and the advisory projection.
 
-Every full-text guardrail target (Continue's ``30-guardrail-<id>.md``,
-agent_harness's ``rules/30-guardrail-<id>.md``, a section of the
-``playbook-guardrails`` skill) gets the same text: the rendered body plus **one**
-enforcement line, so advice is never mistaken for enforcement (QC-10).
+The labels (specs/prK-lifecycle-hooks.md §A.8, §C.5.1): ``playbook check`` prints
+one per hook and per enabled adapter, and the sync summary counts it, so a reader
+always sees where a guard is a boundary and where it is only advice (QC-10):
+
+- ``enforced``: every declared event is native on the adapter;
+- ``degraded``: registered there, but weaker (an evidence-only or unreachable
+  event, or a tool class the harness has no tool for);
+- ``advisory``: only the advisory text reaches it;
+- ``—``: nothing is rendered for it (no native event, no advisory text).
+
+The advisory projection of a hook body (§A.8, §C.4.1): every full-text guardrail
+target (Continue's ``30-guardrail-<id>.md``, agent_harness's
+``rules/30-guardrail-<id>.md``, a section of the ``playbook-guardrails`` skill)
+gets the same text: the rendered body plus **one** enforcement line, so advice is
+never mistaken for enforcement (QC-10).
 
 The line is static. It comes from the hook's *declared* ``supports`` crossed
 with the §C.5.1 event reachability (:data:`HOOK_SUPPORT`, :data:`DEGRADED_EVENTS`),
@@ -14,25 +25,35 @@ Always-loaded context gets one line per guardrail instead (D6,
 specs/prS-skills-context.md 8.4.1): AGENTS.md's ``## Guardrails`` section, and
 the Claude Code rules file for a hook Claude Code cannot run, hold
 :func:`guardrails_section` over :func:`guardrail_line` of each hook's
-:func:`guardrail_summary`. Stdlib-only, like the rest of ``hook_policy``.
+:func:`guardrail_summary`. Stdlib-only, like the rest of the sync-time ``hooks``
+package. (A17 concatenated ``labels.py`` and ``advisory.py`` into this module.)
 """
 
 from __future__ import annotations
 
 import re
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.artifacts.hook_schema import GUARDRAIL_SUMMARY_MAX_CHARS
-from coding_agent_playbook.hook_policy.guardrails_skill import GUARDRAILS_SKILL_ID
-from coding_agent_playbook.hook_policy.tables import DEGRADED_EVENTS, HOOK_SUPPORT
+from coding_agent_playbook.hooks.guardrails_skill import GUARDRAILS_SKILL_ID
+from coding_agent_playbook.hooks.resolution.tables import (
+    DEGRADED_EVENTS,
+    HOOK_SUPPORT,
+    TOOL_CLASS_NAMES,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
+
 __all__ = [
     "ADAPTER_LABELS",
     "GUARDRAIL_SUMMARY_MAX_CHARS",
+    "HOOK_LABELS",
+    "HookLabel",
+    "adapter_label",
     "advisory_block",
     "advisory_text",
     "enforcement_line",
@@ -41,6 +62,53 @@ __all__ = [
     "guardrail_summary",
     "guardrails_section",
 ]
+
+HookLabel = Literal["enforced", "degraded", "advisory", "—"]
+#: Every label, in the order a summary lists them.
+HOOK_LABELS: Final[tuple[HookLabel, ...]] = ("enforced", "degraded", "advisory", "—")
+
+_TOOL_EVENTS: Final = frozenset({"pre_tool_use", "post_tool_use", "post_tool_use_failure"})
+
+
+def adapter_label(
+    hook: ResolvedHook,
+    adapter: str,
+    hook_support: Mapping[str, frozenset[str]],
+    *,
+    degraded: Mapping[str, frozenset[str]] = DEGRADED_EVENTS,
+) -> HookLabel:
+    """The label of ``hook`` on ``adapter``, whose class declares ``hook_support``.
+
+    ``hook.supports`` is already narrowed to the adapters that receive hooks
+    (``[hooks] adapters``), so a hook-capable adapter left out of it only gets
+    the advisory text.
+
+    Example::
+
+        >>> adapter_label(hook, "claude_code", ClaudeCodeAdapter.hook_support)  # doctest: +SKIP
+        'enforced'
+    """
+    reachable = [event for event in hook.events if event in hook_support]
+    if adapter in hook.supports and reachable:
+        weak = (
+            len(reachable) < len(hook.events)
+            or any(event in degraded.get(adapter, frozenset()) for event in reachable)
+            or _lacks_a_tool(hook, adapter, reachable)
+        )
+        return "degraded" if weak else "enforced"
+    return "—" if hook.advisory is None else "advisory"
+
+
+def _lacks_a_tool(hook: ResolvedHook, adapter: str, events: list[str]) -> bool:
+    """Whether a tool event matches a tool class the harness has no tool for (§A.2)."""
+    tool_classes = {
+        tool_class
+        for event in events
+        if event in _TOOL_EVENTS and event in hook.matcher
+        for tool_class in hook.matcher[event].tools
+    }
+    return any(not TOOL_CLASS_NAMES.get(name, {}).get(adapter, ()) for name in tool_classes)
+
 
 #: How the enforcement line names each hook-capable adapter.
 ADAPTER_LABELS: Final[Mapping[str, str]] = MappingProxyType(

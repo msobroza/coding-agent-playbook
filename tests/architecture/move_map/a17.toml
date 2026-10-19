@@ -1,0 +1,258 @@
+# A17 (#131, specs/prT-package-layout.md 4.11, 7.6): the sync-time hook policy
+# package becomes the hooks/ package: resolution/ (the layer merge and the effective
+# view), contract/ (the validate trust contract, its private findings module made
+# public), enforcement.py (the adapter labels and the advisory projection,
+# concatenated) and guardrails_skill.py.
+
+# The package itself: a submodule no entry below names follows by prefix, and the
+# docs that name the directory follow the derived path.
+[[module]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy"
+new = "coding_agent_playbook.hooks"
+package = true
+
+[[module]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy.merge"
+new = "coding_agent_playbook.hooks.resolution.merge"
+
+[[module]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy.override_rules"
+new = "coding_agent_playbook.hooks.resolution.override_rules"
+
+[[module]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy.effective"
+new = "coding_agent_playbook.hooks.resolution.effective"
+
+[[module]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy.resolved"
+new = "coding_agent_playbook.hooks.resolution.resolved"
+
+[[module]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy.lint_codes"
+new = "coding_agent_playbook.hooks.resolution.lint_codes"
+
+[[module]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy.tables"
+new = "coding_agent_playbook.hooks.resolution.tables"
+
+[[module]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy.contract"
+new = "coding_agent_playbook.hooks.contract.contract"
+
+[[module]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy.contract_set"
+new = "coding_agent_playbook.hooks.contract.contract_set"
+
+[[module]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy._contract_handlers"
+new = "coding_agent_playbook.hooks.contract._contract_handlers"
+
+[[module]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy.handler_catalog"
+new = "coding_agent_playbook.hooks.contract.handler_catalog"
+
+[[module]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy._findings"
+new = "coding_agent_playbook.hooks.contract.findings"
+
+[[module]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy.labels"
+new = "coding_agent_playbook.hooks.enforcement"
+
+[[module]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy.advisory"
+new = "coding_agent_playbook.hooks.enforcement"
+
+[[module]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy.guardrails_skill"
+new = "coding_agent_playbook.hooks.guardrails_skill"
+
+# The package facade's re-exports, removed (L2): importers name the defining module.
+
+[[names]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy"
+new = "coding_agent_playbook.hooks.contract.findings"
+names = ["HookIssue", "Severity", "did_you_mean"]
+
+[[names]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy"
+new = "coding_agent_playbook.hooks.contract.contract"
+names = ["HookCheckContext", "classify_hook"]
+
+[[names]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy"
+new = "coding_agent_playbook.hooks.contract.contract_set"
+names = ["HookSetInputs", "classify_hook_set"]
+
+[[names]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy"
+new = "coding_agent_playbook.hooks.contract.handler_catalog"
+names = [
+    "CatalogEntry",
+    "HandlerCatalog",
+    "RegistryCatalog",
+    "config_findings",
+    "registry_findings",
+]
+
+[[names]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy"
+new = "coding_agent_playbook.hooks.enforcement"
+names = [
+    "ADAPTER_LABELS",
+    "HOOK_LABELS",
+    "HookLabel",
+    "adapter_label",
+    "advisory_block",
+    "advisory_text",
+    "enforcement_line",
+    "enforcement_targets",
+    "guardrail_line",
+    "guardrail_summary",
+    "guardrails_section",
+]
+
+[[names]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy"
+new = "coding_agent_playbook.hooks.resolution.effective"
+names = ["effective_applies_if", "merged_handler_config", "resolve_effective_hooks"]
+
+[[names]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy"
+new = "coding_agent_playbook.hooks.resolution.lint_codes"
+names = ["LINT_CODES_KEY", "linked_lint_config", "resolve_lint_codes"]
+
+[[names]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy"
+new = "coding_agent_playbook.hooks.resolution.merge"
+names = [
+    "NO_HANDLER_SCHEMAS",
+    "ConfigKeySpec",
+    "ConfigSchemaLookup",
+    "HookLayerMerger",
+    "HookViolation",
+    "KeyPolicy",
+    "merge_config",
+    "merge_hook_layers",
+    "split_hook_layers",
+]
+
+[[names]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy"
+new = "coding_agent_playbook.hooks.resolution.resolved"
+names = [
+    "APPLICABILITY_GATES",
+    "EffectiveHooks",
+    "HandlerKind",
+    "ResolvedHandler",
+    "ResolvedHook",
+    "SkippedHook",
+]
+
+[[names]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy"
+new = "coding_agent_playbook.hooks.resolution.tables"
+names = [
+    "ADVISORY_RULE_PREFIX",
+    "ADVISORY_RULE_PRIORITY",
+    "DEGRADED_EVENTS",
+    "ENGINE_DEADLINE_CAP_MS",
+    "HOOK_CAPABLE_ADAPTERS",
+    "HOOK_EVENTS",
+    "HOOK_SCRIPTS_DIR",
+    "HOOK_SUPPORT",
+    "MATCHER_VALUES",
+    "ON_ERROR_STRENGTH",
+    "TOOL_CLASS_NAMES",
+    "EventSpec",
+]
+
+# Defined in artifacts.hook_schema (from_mapping checks it); hooks.enforcement only
+# imports it, so the facade's importers name the defining module.
+[[names]]
+pr = "A17"
+old = "coding_agent_playbook.hook_policy"
+new = "coding_agent_playbook.artifacts.hook_schema"
+names = ["GUARDRAIL_SUMMARY_MAX_CHARS"]
+
+# The unit tests follow the package into the sync-time tests/hooks/ tree (5.2.2).
+
+[[module]]
+pr = "A17"
+old = "tests.unit.test_hook_policy_merge"
+new = "tests.hooks.resolution.test_merge"
+
+[[module]]
+pr = "A17"
+old = "tests.unit.test_hook_policy_override_rules"
+new = "tests.hooks.resolution.test_override_rules"
+
+[[module]]
+pr = "A17"
+old = "tests.unit.test_hook_policy_effective"
+new = "tests.hooks.resolution.test_effective"
+
+[[module]]
+pr = "A17"
+old = "tests.unit.test_hook_policy_resolved"
+new = "tests.hooks.resolution.test_resolved"
+
+[[module]]
+pr = "A17"
+old = "tests.unit.test_hook_policy_tables"
+new = "tests.hooks.resolution.test_tables"
+
+[[module]]
+pr = "A17"
+old = "tests.unit.test_hook_policy_contract"
+new = "tests.hooks.contract.test_contract"
+
+[[module]]
+pr = "A17"
+old = "tests.unit.test_hook_policy_contract_set"
+new = "tests.hooks.contract.test_contract_set"
+
+[[module]]
+pr = "A17"
+old = "tests.unit.test_hook_policy_handler_catalog"
+new = "tests.hooks.contract.test_handler_catalog"
+
+[[module]]
+pr = "A17"
+old = "tests.unit.test_hook_policy_labels"
+new = "tests.hooks.test_enforcement_labels"
+
+[[module]]
+pr = "A17"
+old = "tests.unit.test_hook_policy_advisory"
+new = "tests.hooks.test_enforcement_guardrails"
+
+[[module]]
+pr = "A17"
+old = "tests.unit.test_hook_policy_guardrails_skill"
+new = "tests.hooks.test_guardrails_skill"

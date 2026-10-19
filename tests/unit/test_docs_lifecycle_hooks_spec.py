@@ -34,12 +34,12 @@ from coding_agent_playbook.config.tables.hooks import (
     HooksConfig,
 )
 from coding_agent_playbook.harness.manifest import ArtifactKind, ManifestEntry
-from coding_agent_playbook.hook_policy import (
+from coding_agent_playbook.hooks.resolution.merge import KeyPolicy
+from coding_agent_playbook.hooks.resolution.tables import (
     DEGRADED_EVENTS,
     HOOK_EVENTS,
     HOOK_SUPPORT,
     TOOL_CLASS_NAMES,
-    KeyPolicy,
 )
 from coding_agent_playbook.metrics_gate.config import MetricConfig
 from coding_agent_playbook.renderer import BUILTIN_FORMATS
@@ -90,7 +90,7 @@ _HOOK_INVARIANTS = (
 #: Engine modules §5.1 must show (each must exist, so the layout cannot name a ghost).
 _ENGINE_PATHS = (
     "hook_runtime/",
-    "hook_policy/",
+    "hooks/",
     "hook_registrations/",
     "security/",
     "guard_config.py",

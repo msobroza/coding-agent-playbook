@@ -10,7 +10,6 @@ import sys
 from pathlib import PurePosixPath
 from typing import get_args
 
-from coding_agent_playbook import hook_policy
 from coding_agent_playbook.artifacts.hook_schema import (
     MATCHER_KEYS,
     HookDecision,
@@ -18,7 +17,14 @@ from coding_agent_playbook.artifacts.hook_schema import (
     HookOnError,
     ToolClass,
 )
-from coding_agent_playbook.hook_policy import (
+from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS
+from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.harness import CLAUDE_EVENT_NAMES
+from coding_agent_playbook.hook_runtime.policy import (
+    ENGINE_DEADLINE_CAP_MS as RUNTIME_DEADLINE_CAP_MS,
+)
+from coding_agent_playbook.hook_runtime.policy import ON_ERROR_ALLOWED
+from coding_agent_playbook.hooks.resolution.tables import (
     ADVISORY_RULE_PREFIX,
     DEGRADED_EVENTS,
     ENGINE_DEADLINE_CAP_MS,
@@ -30,13 +36,6 @@ from coding_agent_playbook.hook_policy import (
     ON_ERROR_STRENGTH,
     TOOL_CLASS_NAMES,
 )
-from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS
-from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.harness import CLAUDE_EVENT_NAMES
-from coding_agent_playbook.hook_runtime.policy import (
-    ENGINE_DEADLINE_CAP_MS as RUNTIME_DEADLINE_CAP_MS,
-)
-from coding_agent_playbook.hook_runtime.policy import ON_ERROR_ALLOWED
 from tests.import_probe import new_modules_after
 
 
@@ -179,25 +178,31 @@ def test_tables_are_read_only() -> None:
     assert not hasattr(HOOK_SUPPORT["opencode"], "__setitem__")
 
 
-def test_package_facade_exports_every_table() -> None:
-    assert set(hook_policy.__all__) >= {
-        "ADVISORY_RULE_PREFIX",
-        "DEGRADED_EVENTS",
-        "EventSpec",
-        "HOOK_CAPABLE_ADAPTERS",
-        "HOOK_EVENTS",
-        "HOOK_SCRIPTS_DIR",
-        "HOOK_SUPPORT",
-        "ON_ERROR_STRENGTH",
-        "TOOL_CLASS_NAMES",
-    }
+#: Every module the sync-time hooks package defines (A17 dissolved the facade that
+#: loaded them all, so the probe names each one).
+_HOOKS_MODULES = (
+    "contract.contract",
+    "contract.contract_set",
+    "contract.findings",
+    "contract.handler_catalog",
+    "enforcement",
+    "guardrails_skill",
+    "resolution.effective",
+    "resolution.lint_codes",
+    "resolution.merge",
+    "resolution.override_rules",
+    "resolution.resolved",
+    "resolution.tables",
+)
 
 
-def test_hook_policy_imports_only_the_stdlib() -> None:
+def test_hooks_package_imports_only_the_stdlib() -> None:
     # Sync-time but stdlib-only (§A.6): no yaml/jinja2, and not artifacts/frontmatter.py,
     # which imports yaml at module top. Since K2 it also reads the import-light runtime
     # tables and handler registry it shares with the dispatcher (one source each).
-    loaded = new_modules_after("import coding_agent_playbook.hook_policy")
+    loaded = new_modules_after(
+        "; ".join(f"import coding_agent_playbook.hooks.{name}" for name in _HOOKS_MODULES)
+    )
 
     ours = [name for name in loaded if name.startswith("coding_agent_playbook")]
     foreign = [
@@ -212,22 +217,6 @@ def test_hook_policy_imports_only_the_stdlib() -> None:
         "coding_agent_playbook.artifacts.hook_schema",
         "coding_agent_playbook.catalog",
         "coding_agent_playbook.catalog.layers",
-        "coding_agent_playbook.hook_policy",
-        "coding_agent_playbook.hook_policy._contract_handlers",
-        "coding_agent_playbook.hook_policy._findings",
-        "coding_agent_playbook.hook_policy.advisory",
-        "coding_agent_playbook.hook_policy.contract",
-        "coding_agent_playbook.hook_policy.contract_set",
-        "coding_agent_playbook.hook_policy.effective",
-        # GUARDRAILS_SKILL_ID, named by the AGENTS.md Guardrails preface (D6)
-        "coding_agent_playbook.hook_policy.guardrails_skill",
-        "coding_agent_playbook.hook_policy.handler_catalog",
-        "coding_agent_playbook.hook_policy.labels",
-        "coding_agent_playbook.hook_policy.lint_codes",  # a linked rule's lint_codes (K7)
-        "coding_agent_playbook.hook_policy.merge",
-        "coding_agent_playbook.hook_policy.override_rules",
-        "coding_agent_playbook.hook_policy.resolved",
-        "coding_agent_playbook.hook_policy.tables",
         "coding_agent_playbook.hook_runtime",
         "coding_agent_playbook.hook_runtime._config_keys",
         "coding_agent_playbook.hook_runtime._event_memo",  # HandlerContext.memo (K7)
@@ -239,12 +228,29 @@ def test_hook_policy_imports_only_the_stdlib() -> None:
         "coding_agent_playbook.hook_runtime.registry",
         # H21's wrapper-prefix rule, one source with the dispatcher's env check
         "coding_agent_playbook.hook_runtime.wrapper_policy",
+        "coding_agent_playbook.hooks",
+        "coding_agent_playbook.hooks.contract",
+        "coding_agent_playbook.hooks.contract._contract_handlers",
+        "coding_agent_playbook.hooks.contract.contract",
+        "coding_agent_playbook.hooks.contract.contract_set",
+        "coding_agent_playbook.hooks.contract.findings",
+        "coding_agent_playbook.hooks.contract.handler_catalog",
+        "coding_agent_playbook.hooks.enforcement",
+        # GUARDRAILS_SKILL_ID, named by the AGENTS.md Guardrails preface (D6)
+        "coding_agent_playbook.hooks.guardrails_skill",
+        "coding_agent_playbook.hooks.resolution",
+        "coding_agent_playbook.hooks.resolution.effective",
+        "coding_agent_playbook.hooks.resolution.lint_codes",  # a linked rule's lint_codes (K7)
+        "coding_agent_playbook.hooks.resolution.merge",
+        "coding_agent_playbook.hooks.resolution.override_rules",
+        "coding_agent_playbook.hooks.resolution.resolved",
+        "coding_agent_playbook.hooks.resolution.tables",
     ]
     assert foreign == []
 
 
 def test_event_decision_and_deadline_tables_have_one_source() -> None:
-    # The runtime owns these tables (§D.3.5, §D.4); hook_policy derives its
+    # The runtime owns these tables (§D.3.5, §D.4); hooks derives its
     # string-keyed views from them, so the two can never drift apart.
     assert list(HOOK_EVENTS) == [event.value for event in EventName]
     for event in EventName:

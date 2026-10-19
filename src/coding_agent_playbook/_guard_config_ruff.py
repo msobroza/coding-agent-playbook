@@ -36,10 +36,10 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hook_runtime.deps import ProcPort
     from coding_agent_playbook.hook_runtime.pin import Signature
     from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 __all__ = [
     "RUFF_CONFIG_FILES",

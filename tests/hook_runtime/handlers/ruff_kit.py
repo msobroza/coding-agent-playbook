@@ -23,9 +23,9 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 
 __all__ = ["context", "edit", "head_git", "pin_ruff", "probed_drops", "value_of"]

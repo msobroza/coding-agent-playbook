@@ -33,7 +33,6 @@ _INITS_WITH_CODE: Final = frozenset(
         "coding_agent_playbook/evaluators/builtins/__init__.py",
         "coding_agent_playbook/evaluators/checks/__init__.py",
         "coding_agent_playbook/evaluators/execution/__init__.py",
-        "coding_agent_playbook/hook_policy/__init__.py",
         "coding_agent_playbook/hook_registrations/__init__.py",
         "coding_agent_playbook/hook_runtime/harness/__init__.py",
     }
