@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime._decision_log import DecisionLog
     from coding_agent_playbook.hook_runtime._execute import Ran
-    from coding_agent_playbook.hook_runtime.config import GuardConfig
+    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.decision import CombinedResult
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall

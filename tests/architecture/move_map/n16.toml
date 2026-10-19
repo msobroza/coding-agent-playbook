@@ -1,0 +1,53 @@
+# N16 (#97, specs/prT-package-layout.md 7.4): guard_config reading becomes the
+# hook_runtime/config/ package. hook_runtime/config.py -> config/guard_config.py is
+# a same-name conversion; the underscore modules become public package members.
+
+[[module]]
+pr = "N16"
+old = "coding_agent_playbook.hook_runtime.config"
+new = "coding_agent_playbook.hook_runtime.config.guard_config"
+
+[[module]]
+pr = "N16"
+old = "coding_agent_playbook.hook_runtime._config_reader"
+new = "coding_agent_playbook.hook_runtime.config.reader"
+
+[[module]]
+pr = "N16"
+old = "coding_agent_playbook.hook_runtime._config_keys"
+new = "coding_agent_playbook.hook_runtime.config.keys"
+
+[[module]]
+pr = "N16"
+old = "coding_agent_playbook.hook_runtime._hook_records"
+new = "coding_agent_playbook.hook_runtime.config.hook_records"
+
+[[module]]
+pr = "N16"
+old = "coding_agent_playbook.hook_runtime._lock_digest"
+new = "coding_agent_playbook.hook_runtime.config.lock_digest"
+
+[[module]]
+pr = "N16"
+old = "coding_agent_playbook.hook_runtime.pin"
+new = "coding_agent_playbook.hook_runtime.config.pin"
+
+[[module]]
+pr = "N16"
+old = "coding_agent_playbook.hook_runtime.protected"
+new = "coding_agent_playbook.hook_runtime.config.protected"
+
+[[path]]
+pr = "N16"
+old = "tests/hook_runtime/test_runtime_config.py"
+new = "tests/hook_runtime/config/test_guard_config.py"
+
+[[path]]
+pr = "N16"
+old = "tests/hook_runtime/test_pin.py"
+new = "tests/hook_runtime/config/test_pin.py"
+
+[[path]]
+pr = "N16"
+old = "tests/hook_runtime/test_protected.py"
+new = "tests/hook_runtime/config/test_protected.py"

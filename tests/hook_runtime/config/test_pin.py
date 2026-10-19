@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.pin import (
+from coding_agent_playbook.hook_runtime.config.pin import (
     INTERPRETER_PIN,
     MACHINE_PINS,
     ensure_interpreter_pin,

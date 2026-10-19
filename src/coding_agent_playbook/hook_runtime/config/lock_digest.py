@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Any, Final, Protocol
 
-from coding_agent_playbook.hook_runtime._config_reader import read_small_file
+from coding_agent_playbook.hook_runtime.config.reader import read_small_file
 from coding_agent_playbook.hook_runtime.state import StateUnavailable
 
 if TYPE_CHECKING:
