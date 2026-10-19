@@ -202,7 +202,7 @@ Eval tasks (Section 6.5) are intentionally **not** part of the sync flow. They l
   - **Engine upgrades never inject executable hooks.** An absent `[hooks]` table, or one without `enabled = true`, means no hook output: no settings entries, launcher, shim or advisory text; `playbook init` asks, and `playbook sync` prints one notice line.
   - **Hook outputs are only `deny | ask | context | none`.** Never `allow`, an input rewrite, or an HTTP, async, prompt or agent handler (validate rules H5 and H8, backed by the dispatcher's closed-key renderers). Only engine builtins may hold the `mutates_edited_file` capability (post-edit formatting).
   - **One registration per harness event**, fanned out in-process, plus at most one async, non-deciding, output-free `PostToolUse` registration for audit-only handlers.
-  - **The hot path is import-light.** The dispatcher imports nothing outside `hook_runtime.*`, `security.*` and the standard library, and starts no subprocess for a call that touches neither git nor a pragma.
+  - **The hot path is import-light.** The dispatcher imports nothing outside `hook_runtime.*`, `security.*`, `artifacts.path_classes` and the standard library, and starts no subprocess for a call that touches neither git nor a pragma.
   - **Exit codes.** The launcher exits 0 or 2 (1 only under `--strict-launch`); `dispatch` exits 0 or 10 (`DENY_EXIT`); a raw 2 is never a deny; the OpenCode shim throws only on exit 10 or a `deny` decision.
   - **Rendered hook outputs are machine-independent.** No absolute path, stat signature or `$HOME` path in any file sync renders; the interpreter and tool pins live under the git dir.
   - **`.local.toml` never carries policy.** `[hooks]`, `[guardrails]`, `[metrics]` and `[hooks.commit_convention]` written there are ignored (§7.2).
@@ -306,7 +306,7 @@ coding-agent-playbook/
 │   │   ├── rule.py, prompt.py, skill.py, hook.py   # one module per artifact
 │   │   ├── frontmatter.py                  # the markdown + YAML frontmatter format they share
 │   │   ├── identity.py                     # artifact_id_of, template_source: the id and template name (stdlib)
-│   │   └── hook_schema.py, hook_frontmatter.py, member_reference.py   # stdlib leaves
+│   │   └── hook_schema.py, hook_frontmatter.py, member_reference.py, path_classes.py   # stdlib leaves
 │   ├── skills/                             # skill composition (§6.3.3): document, membership, naming
 │   ├── config/                             # the consumer config (Section 7)
 │   │   ├── model.py                        # Config dataclass and the [output] parser
@@ -349,9 +349,9 @@ coding-agent-playbook/
 │   │   ├── handlers/                       # builtin hook handlers (@register_hook_handler)
 │   │   ├── harness/                        # per-harness payload parsers and wire renderers
 │   │   ├── judges/                         # the checks a guard hook shares with its guard twin
+│   │   │   └── gate_weakening.py           # added-line suppression/loosening scan (`playbook gate-scan`)
 │   │   └── stop/                           # the Stop stage contract and coordinator
 │   ├── security/                           # secret paths/patterns, PII, trust store, audit log (stdlib)
-│   ├── gate_scan.py                        # added-line suppression/loosening scan (`playbook gate-scan`)
 │   ├── adapters/
 │   │   ├── __init__.py
 │   │   ├── base.py                         # Adapter ABC
@@ -2905,7 +2905,7 @@ The deterministic stages share a 3 s default budget and feed one combined reason
 ```
 playbook gate-scan [--range A..B | --range A...B] [--format text|json] [--repo-root DIR]
 ```
-gate-weakening-guard's off-workstation twin (v0.20); the `gate-integrity` Stop stage calls the same `gate_scan.scan`, so the hook and CI never disagree. It flags added checker suppressions (`# type: ignore`, `# noqa`, `# pragma: no cover`, `# nosec`), skipped or non-strict-xfail tests, `cast(Any, …)`, a new bare `Any` under the source roots, `verify=False` and the self-service escape pragmas, plus loosened checker config, removed pre-commit hooks or workflow steps, and any `.gitleaks.toml` change. A trailing reason comment exempts a suppression (`# type: ignore[attr-defined]  # stub gap`); config loosenings and pragmas always reach the user as notes. `--range A..B` diffs A to B and `--range A...B` their merge base to B; without it the range is `<merge base with the default branch>..HEAD`. The policy is the engine default extended by `[hooks.gate-weakening-guard]` **as committed at the range's base**, so a change cannot loosen the rules it is judged by; `.local.toml` never applies. `--format json` prints the findings as JSON; `--repo-root DIR` scans another checkout. Exit: `0` clean (justified notes only), `1` blocking findings, `2` a usage error, an unresolvable base, a malformed policy table (a base config that does not decode is named with its revision: `error: .coding-agent-playbook.toml at <rev>: invalid TOML: …`) or a git failure.
+gate-weakening-guard's off-workstation twin (v0.20); the `gate-integrity` Stop stage calls the same `hook_runtime.judges.gate_weakening.scan`, so the hook and CI never disagree. It flags added checker suppressions (`# type: ignore`, `# noqa`, `# pragma: no cover`, `# nosec`), skipped or non-strict-xfail tests, `cast(Any, …)`, a new bare `Any` under the source roots, `verify=False` and the self-service escape pragmas, plus loosened checker config, removed pre-commit hooks or workflow steps, and any `.gitleaks.toml` change. A trailing reason comment exempts a suppression (`# type: ignore[attr-defined]  # stub gap`); config loosenings and pragmas always reach the user as notes. `--range A..B` diffs A to B and `--range A...B` their merge base to B; without it the range is `<merge base with the default branch>..HEAD`. The policy is the engine default extended by `[hooks.gate-weakening-guard]` **as committed at the range's base**, so a change cannot loosen the rules it is judged by; `.local.toml` never applies. `--format json` prints the findings as JSON; `--repo-root DIR` scans another checkout. Exit: `0` clean (justified notes only), `1` blocking findings, `2` a usage error, an unresolvable base, a malformed policy table (a base config that does not decode is named with its revision: `error: .coding-agent-playbook.toml at <rev>: invalid TOML: …`) or a git failure.
 ### 12.15 `playbook scan-secrets`
 ```
 playbook scan-secrets [--staged | --range A..B | --worktree | PATH…] [--pii] [--pii-detectors NAMES] [--format text|json] [--repo-root DIR]

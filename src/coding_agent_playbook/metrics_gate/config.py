@@ -14,6 +14,9 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
+# The eval-fixture globs are defined once, for the hooks' ``eval_fixture`` path
+# class, in the stdlib leaf ``artifacts.path_classes`` (it imports only ``re``).
+from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS
 from coding_agent_playbook.evaluators.types import (
     DEFAULT_GIT_TIMEOUT_S,
     DEFAULT_RUFF_FAMILIES,
@@ -21,10 +24,6 @@ from coding_agent_playbook.evaluators.types import (
     RegressionPolicy,
     RuffSettings,
 )
-
-# The eval-fixture globs are defined once, for the hooks' ``eval_fixture`` path
-# class (``_eval_paths`` imports only ``re``); N15 moves them to a stdlib leaf.
-from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
