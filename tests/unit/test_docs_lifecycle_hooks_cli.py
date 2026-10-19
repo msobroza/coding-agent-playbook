@@ -33,11 +33,11 @@ from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
 from coding_agent_playbook.cli.parser import _SUBCOMMANDS, build_parser
-from coding_agent_playbook.commands._ci_commit_convention import PR_TITLE_ENV
 from coding_agent_playbook.commands._sync_hooks import HOOKS_NOTICE
 from coding_agent_playbook.commands._validate_context import config_less_notes
-from coding_agent_playbook.commands.ci import CI_STEPS
 from coding_agent_playbook.commands.init import _render_fresh_pre_commit
+from coding_agent_playbook.commands.twins._ci_commit_convention import PR_TITLE_ENV
+from coding_agent_playbook.commands.twins.ci import CI_STEPS
 from coding_agent_playbook.hook_registrations import (
     LAUNCHER_PATH,
     OPENCODE_SHIM_PATH,
