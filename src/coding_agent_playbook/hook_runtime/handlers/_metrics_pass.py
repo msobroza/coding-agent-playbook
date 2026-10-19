@@ -324,7 +324,7 @@ def metrics_gated(ctx: HandlerContext, root: str) -> bool:
 
 
 def _live_precommit_ids(root: str) -> Iterable[str]:
-    from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
+    from coding_agent_playbook.hook_runtime.config.schema import (
         playbook_precommit_ids,
     )
 

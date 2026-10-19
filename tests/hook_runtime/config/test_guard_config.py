@@ -20,12 +20,11 @@ import pytest
 
 from coding_agent_playbook.artifacts.hook_schema import HookMatcher
 from coding_agent_playbook.hook_runtime.config.guard_config import (
-    GUARD_CONFIG_REL,
-    LOCKFILE_REL,
     ConfigFault,
     GuardConfig,
     load_guard_config,
 )
+from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL, LOCKFILE_REL
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName, RepoInfo
 from coding_agent_playbook.hook_runtime.paths import fold_key
