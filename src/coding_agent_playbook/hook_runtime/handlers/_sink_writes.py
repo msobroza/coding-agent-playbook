@@ -37,7 +37,7 @@ from coding_agent_playbook.hook_runtime.judges.notebook_cells import (
 )
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.hook_runtime.config import GuardConfig
+    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.event import ToolCall
 
 __all__ = ["MAX_FILE_BYTES", "SinkWrite", "notebook_edit_images", "sink_writes"]

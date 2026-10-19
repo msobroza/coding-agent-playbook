@@ -2,7 +2,7 @@
 
 The schema is exactly ``hook_policy.ResolvedHook.to_json()``; the runtime may
 not import ``hook_policy`` (§D.1), so this module re-reads it field by field
-and ``test_runtime_config.py`` parses a real ``to_json()`` output to pin the
+and ``test_guard_config.py`` parses a real ``to_json()`` output to pin the
 two together. Matcher path globs are compiled here, once, folded for the
 platform, so selection never compiles a pattern per event.
 """
@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from coding_agent_playbook.hook_runtime._config_reader import Malformed, TableReader
+from coding_agent_playbook.hook_runtime.config.reader import Malformed, TableReader
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs

@@ -25,7 +25,7 @@ from coding_agent_playbook.hook_runtime._external import (
     parse_external_output,
 )
 from coding_agent_playbook.hook_runtime._selection import select_hooks
-from coding_agent_playbook.hook_runtime.config import GuardConfig, parse_guard_config
+from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch import run_event
 from coding_agent_playbook.hook_runtime.escape import EscapeHatches

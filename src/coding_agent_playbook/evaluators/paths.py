@@ -5,12 +5,12 @@ docstring stage leave it out) and :data:`EVAL_FIXTURE_GLOBS` names the frozen
 eval ``setup/`` trees, the default of ``[metrics] exclude``: intentionally bad
 needle code there must never gate a commit or a Stop.
 
-Both constants are *re-exported*, not redefined. The hooks own the definitions
-(gate-weakening-guard's test classes in ``gate_scan``, the ``eval_fixture`` path
-class in ``_eval_paths``) because the dispatcher hot path must not import this
-module: the ``evaluators`` package root loads the metric registry, which imports
-``importlib.metadata``. Hooks receive the globs through ``guard_config.json``;
-only sync-time and CLI code imports them from here.
+Both constants are *re-exported*, not redefined. The stdlib leaf
+``artifacts.path_classes`` owns the definitions (gate-weakening-guard's test
+classes, the ``eval_fixture`` path class) because the dispatcher hot path must
+not import this module: the ``evaluators`` package root loads the metric
+registry, which imports ``importlib.metadata``. Hooks receive the globs through
+``guard_config.json``; only sync-time and CLI code imports them from here.
 
 :func:`matches_any_glob` reuses the hook glob grammar
 (:mod:`coding_agent_playbook.hook_runtime.globs`), so a glob means the same thing
@@ -23,9 +23,8 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.gate_scan import TEST_PATH_GLOBS
+from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS, TEST_PATH_GLOBS
 from coding_agent_playbook.hook_runtime.globs import compile_globs
-from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

@@ -33,7 +33,7 @@ import functools
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._config_reader import read_small_file
+from coding_agent_playbook.hook_runtime.config.reader import read_small_file
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.edit_preview import preview_after
 from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import load_plane, route_of

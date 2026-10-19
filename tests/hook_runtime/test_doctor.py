@@ -20,9 +20,9 @@ import pytest
 
 from coding_agent_playbook.hook_runtime._doctor_checks import PROBE
 from coding_agent_playbook.hook_runtime.cli import main as cli_main
+from coding_agent_playbook.hook_runtime.config.pin import INTERPRETER_PIN, write_machine_pins
 from coding_agent_playbook.hook_runtime.doctor import Check, exit_code, main, run_doctor
 from coding_agent_playbook.hook_runtime.escape import WRAPPER_PREFIXES_VAR
-from coding_agent_playbook.hook_runtime.pin import INTERPRETER_PIN, write_machine_pins
 from coding_agent_playbook.security.audit import GuardDecisionRecord, append_decision
 from coding_agent_playbook.security.trust import HandlerApproval, sha256_of_json
 from tests.hook_runtime.fakes import FakeProc, FakeTrustStore

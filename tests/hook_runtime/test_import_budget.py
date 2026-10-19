@@ -233,8 +233,8 @@ def test_the_import_probe_reads_the_importtime_report(
     assert {"json", engine_module("coding_agent_playbook.hook_runtime.cli")} <= imported
 
 
-_PROTECTED_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.protected")
-_PIN_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.pin")
+_PROTECTED_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.config.protected")
+_PIN_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.config.pin")
 
 
 @pytest.fixture
@@ -496,9 +496,6 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
         *(
             engine_module(f"{ENGINE}.{name}")
             for name in (
-                # The package itself until N15 makes artifacts.path_classes a dotted
-                # leaf; FORBIDDEN then names its submodules, and this entry goes.
-                "artifacts",
                 "artifacts.frontmatter",
                 "artifacts.hook",
                 "artifacts.hook_frontmatter",

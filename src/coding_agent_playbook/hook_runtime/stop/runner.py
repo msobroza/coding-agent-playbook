@@ -27,9 +27,9 @@ from coding_agent_playbook.hook_runtime.stop.stages import StageResult
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
+    from coding_agent_playbook.hook_runtime.config.pin import MachinePins, ToolPin
     from coding_agent_playbook.hook_runtime.deps import ProcPort
     from coding_agent_playbook.hook_runtime.event import RepoInfo
-    from coding_agent_playbook.hook_runtime.pin import MachinePins, ToolPin
     from coding_agent_playbook.hook_runtime.stop.stages import SkipCategory
 
 __all__ = ["PinnedStageRunner", "StageRunner", "ToolRun"]
@@ -100,7 +100,7 @@ class PinnedStageRunner:
     @classmethod
     def for_repo(cls, proc: ProcPort, repo: RepoInfo) -> PinnedStageRunner:
         """The runner of ``repo``'s worktree: its pins, its root as the working directory."""
-        from coding_agent_playbook.hook_runtime.pin import read_machine_pins
+        from coding_agent_playbook.hook_runtime.config.pin import read_machine_pins
 
         return cls(
             proc, cwd=repo.worktree_root, pins=lambda: read_machine_pins(git_dir=repo.git_dir)

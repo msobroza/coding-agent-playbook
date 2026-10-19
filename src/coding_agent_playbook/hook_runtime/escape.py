@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._config_reader import FileTooLarge, read_small_file
+from coding_agent_playbook.hook_runtime.config.reader import FileTooLarge, read_small_file
 from coding_agent_playbook.hook_runtime.wrapper_policy import WrapperDeclaration, declare_wrappers
 
 if TYPE_CHECKING:

@@ -20,7 +20,7 @@ from coding_agent_playbook.evaluators.execution.junit import JunitSummary
 from coding_agent_playbook.evaluators.execution.project import RunArtifacts
 from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_runtime._git_parse import AddedLine, DiffLines
-from coding_agent_playbook.hook_runtime.config import GUARD_CONFIG_REL
+from coding_agent_playbook.hook_runtime.config.guard_config import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._coverage_report import (
