@@ -26,6 +26,7 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.handlers._egress import EGRESS_ARGV0S, segment_egress
 from coding_agent_playbook.hook_runtime.handlers._secret_policy import (
@@ -175,7 +176,7 @@ def _judge(
     if egress.kind == "gist":
         reason = f"`{egress.command}` publishes files on gist.github.com.\n{_CONFIRM}"
         return Decision.ASK, "gist", reason
-    allowed = [str(h) for h in ctx.config.get("allowed_hosts") or () if isinstance(h, str)]
+    allowed = HookConfig(ctx.config, CONFIG_SCHEMA).strings("allowed_hosts", blanks="keep")
     outside = [host for host in off if not host_matches(host, allowed)]
     if egress.hosts and not outside:
         return None  # loopback or an allowed host
@@ -215,7 +216,7 @@ def _secret_file(
 
 
 def _row_verdicts(segments: Sequence[Segment], ctx: HandlerContext) -> list[_Verdict]:
-    rows = ctx.config.get("extra_rows")
+    rows = HookConfig(ctx.config, CONFIG_SCHEMA).value("extra_rows")
     if not rows:
         return []
     from coding_agent_playbook.hook_runtime.handlers.destructive import extra_row_hits

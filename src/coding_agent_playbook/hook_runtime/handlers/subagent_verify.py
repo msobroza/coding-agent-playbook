@@ -34,6 +34,7 @@ from coding_agent_playbook.hook_runtime.config.guard_tables import (
     DEFAULT_MAX_BLOCKS,
     MAX_BLOCKS_RANGE,
 )
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.git.head_snapshot import head_moved_note
 from coding_agent_playbook.hook_runtime.handlers._lint_stage import LintStage
@@ -154,9 +155,10 @@ def subagent_stop_verify(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResu
         >>> subagent_stop_verify(subagent_stop_after_bad_edit, ctx).decision  # doctest: +SKIP
         <Decision.DENY: 'deny'>
     """
-    if ev.repo is None or ev.stop is None or not _allowed(ev.agent_type, ctx.config):
+    config = HookConfig(ctx.config, CONFIG_SCHEMA)
+    if ev.repo is None or ev.stop is None or not _allowed(ev.agent_type, config):
         return None
-    coordinator = StopCoordinator(_policy(ctx), StopScope(agent_id=ev.agent_id))
+    coordinator = StopCoordinator(_policy(ctx, config), StopScope(agent_id=ev.agent_id))
     if ctx.hatches.gate_off:  # the coordinator says so once per session
         return _result(coordinator.run(ev, _deps(ev.repo, ctx, (), frozenset())), ev, ctx)
     try:
@@ -172,20 +174,19 @@ def subagent_stop_verify(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResu
     return _result(coordinator.run(ev, _deps(ev.repo, ctx, stages, touched)), ev, ctx)
 
 
-def _allowed(agent_type: str | None, config: Mapping[str, Any]) -> bool:
-    """The ``agent_types`` allowlist: empty or absent admits every subagent."""
-    allowed = config.get("agent_types")
-    if not isinstance(allowed, list) or not allowed:
-        return True
-    return agent_type in allowed
+def _allowed(agent_type: str | None, config: HookConfig) -> bool:
+    """The ``agent_types`` allowlist: no str item (or no list) admits every subagent."""
+    allowed = config.strings("agent_types", blanks="keep")
+    return not allowed or agent_type in allowed
 
 
-def _policy(ctx: HandlerContext) -> GatePolicy:
+def _policy(ctx: HandlerContext, config: HookConfig) -> GatePolicy:
     """The parent gate's table (same stage records, same trust digest) with this hook's budget."""
     base = GatePolicy.from_gate(ctx.cfg.tables.stop_gate())
-    blocks = ctx.config.get("max_blocks")
     low, high = MAX_BLOCKS_RANGE
-    budget = min(high, max(low, blocks)) if type(blocks) is int else DEFAULT_MAX_BLOCKS
+    budget = config.integer(
+        "max_blocks", DEFAULT_MAX_BLOCKS, minimum=low, maximum=high, below="clamp", above="clamp"
+    )
     return dataclasses.replace(base, max_blocks=budget)
 
 
@@ -203,8 +204,8 @@ def _scoped_stages(
     ev: CanonicalEvent, ctx: HandlerContext, touched: frozenset[str]
 ) -> tuple[Stage, ...]:
     """The configured stages, built like the parent gate's; lint scoped, exec stages locked."""
-    configured = ctx.config.get("stages")
-    names = configured if isinstance(configured, list) and configured else list(DEFAULT_STAGES)
+    configured = HookConfig(ctx.config, CONFIG_SCHEMA).strings("stages", blanks="keep")
+    names = configured or DEFAULT_STAGES  # no str item (or no list) reads as the default
     stages: list[Stage] = []
     for name in dict.fromkeys(n for n in names if n in SCOPED_STAGES):
         stage = build_stage(name, ev, ctx)
