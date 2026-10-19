@@ -85,7 +85,8 @@ class Adapter(ABC):
     #: lock entries get ``kind = "runtime"`` and no artifact id (§B.6), which tells
     #: guard-generated-outputs there is no source artifact to point an editor at.
     #: Each is written whole at a fixed path, so sync refuses one the user holds
-    #: (:meth:`planned_runtime_outputs`, ``write_guard``) instead of overwriting it.
+    #: (:meth:`planned_runtime_outputs`, ``generated_output.write_guard``) instead
+    #: of overwriting it.
     runtime_outputs: ClassVar[tuple[str, ...]] = ()
 
     @abstractmethod
