@@ -16,6 +16,7 @@ from packaging.version import Version
 from coding_agent_playbook.rendering.jinja import (
     TemplateSecurityError,
     build_environment,
+    jinja_syntax_error,
     render_artifact_body,
     render_sandboxed,
     render_string,
@@ -152,6 +153,23 @@ def test_render_sandboxed_names_the_source_on_a_violation(tmp_path: Path) -> Non
     assert render_sandboxed("{{ x }}", {"x": "ok"}, env=env, source="s") == "ok"
 
 
+def test_jinja_syntax_error_names_the_parse_error() -> None:
+    found = jinja_syntax_error("{% if x %}unclosed\n")
+
+    assert found is not None
+    assert found.startswith("Unexpected end of template.")
+
+
+@pytest.mark.parametrize(
+    "template",
+    ["{{ project_name }} {% if x %}ok{% endif %}\n", '{{ lipsum.__globals__["os"] }}'],
+    ids=["valid", "escape-parses"],
+)
+def test_jinja_syntax_error_is_none_for_a_template_that_parses(template: str) -> None:
+    """Parse only, ``playbook validate``'s check: an escape parses, the sandbox stops it later."""
+    assert jinja_syntax_error(template) is None
+
+
 #: The jinja2 release closing the published sandbox escapes (CVE-2024-56326,
 #: fixed in 3.1.5; CVE-2025-27516, fixed in 3.1.6). Keep in step with the
 #: ``jinja2>=`` floor in ``pyproject.toml`` (SPEC §9.3, §17).
@@ -173,7 +191,7 @@ def test_pyproject_pins_the_jinja_sandbox_floor() -> None:
 
 # --- the package boundary ----------------------------------------------------
 
-_RENDERING_MODULES = ("jinja", "formats", "rule_registry", "prompt_rule_delivery")
+_RENDERING_MODULES = ("jinja", "formats", "rule_registry", "prompt_rule_delivery", "session")
 
 
 def test_rendering_never_imports_the_sync_context() -> None:
@@ -182,6 +200,7 @@ def test_rendering_never_imports_the_sync_context() -> None:
     The sync context (``SyncContext``, ``validation.context``) once supplied
     ``template_source``; ``rendering.rule_registry`` now takes it from the stdlib
     leaf ``artifacts.identity`` (H11), so no rendering module reaches back up.
+    ``rendering.session`` takes the ``Config`` its context reads, never the context.
     """
     loaded = new_modules_after(
         "; ".join(

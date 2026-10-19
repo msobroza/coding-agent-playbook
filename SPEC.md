@@ -335,6 +335,7 @@ coding-agent-playbook/
 │   ├── validation/                         # the validation rule set: checks, findings, context (SyncContext), preflight, prompts, link_check (§12.6)
 │   ├── rendering/                          # the Renderer (Section 9)
 │   │   ├── jinja.py                        # the sandboxed Jinja2 environment (Section 9.3)
+│   │   ├── session.py                      # RenderSession + TemplateContext: one render pass (Section 9.4)
 │   │   ├── formats.py                      # render_for: the per-format post-processing (Section 9.7)
 │   │   ├── rule_registry.py                # RuleRegistry protocol + RuleRegistryImpl (Section 6.2.5)
 │   │   └── prompt_rule_delivery.py         # includes_rules as pointer block or Reference rules appendix
@@ -413,7 +414,7 @@ coding-agent-playbook/
 │   ├── artifacts/                          # test_artifacts.py, test_hook.py, test_hook_frontmatter.py, ...
 │   ├── catalog/                            # test_roots.py, test_source.py, ...
 │   ├── detector/                           # test_facts.py, test_predicate.py, ...
-│   ├── rendering/                          # test_jinja.py, test_formats.py, test_rule_registry.py, ...
+│   ├── rendering/                          # test_jinja.py, test_session.py, test_formats.py, ...
 │   ├── unit/
 │   │   ├── test_overlays.py
 │   │   └── test_eval_tasks.py
@@ -1679,9 +1680,9 @@ env = SandboxedEnvironment(
 ```
 `StrictUndefined` is important: a typo'd `{{ python_versoin }}` should raise, not silently render as empty. Renders are cheap; failure modes should be loud.
 
-The environment is sandboxed because templates are author-controlled *and* agent-writable (`playbook/**/*.md.j2`, overlay `resources/`), and rendering runs inside `playbook sync`, `render`, `init` and the eval runner. Under a plain `Environment`, `{{ lipsum.__globals__["os"] }}` reaches the `os` module; under `SandboxedEnvironment` every such attribute escape raises `SecurityError`. `playbook sync` (every mode) and `playbook render` report it as `error: <file>: template rejected by the Jinja sandbox: <reason>`, naming the source file relative to the repo, and exit 1. `sync` writes nothing: every template — rule and prompt bodies, and each rule a prompt lists in `includes_rules` (pre-rendered, since the Continue and `agent_harness` adapters repeat that render for their appendix inside `write_prompt`) — runs before the first adapter write. It is the mutable sandbox, not `ImmutableSandboxedEnvironment`: blocking the escape does not require rejecting in-template list/dict mutation, which authored templates may use. Every engine construction site is sandboxed, including `playbook validate`'s parse-only syntax check. The sandbox does not bound CPU beyond Jinja's `MAX_RANGE`. Every shipped `.md.j2` renders byte-identically under it. The runtime floor is `jinja2>=3.1.6`: older releases have published sandbox escapes for anyone who controls a template (CVE-2024-56326, an indirect `str.format` call, fixed in 3.1.5; CVE-2025-27516, the `|attr` filter returning the raw `format` method, fixed in 3.1.6), and `tests/rendering/test_jinja.py` pins the floor.
+The environment is sandboxed because templates are author-controlled *and* agent-writable (`playbook/**/*.md.j2`, overlay `resources/`), and rendering runs inside `playbook sync`, `render`, `init` and the eval runner. Under a plain `Environment`, `{{ lipsum.__globals__["os"] }}` reaches the `os` module; under `SandboxedEnvironment` every such attribute escape raises `SecurityError`. `playbook sync` (every mode) and `playbook render` report it as `error: <file>: template rejected by the Jinja sandbox: <reason>`, naming the source file relative to the repo, and exit 1. `sync` writes nothing: every template — rule and prompt bodies, and each rule a prompt lists in `includes_rules` (pre-rendered, since the Continue and `agent_harness` adapters repeat that render for their appendix inside `write_prompt`) — runs before the first adapter write. It is the mutable sandbox, not `ImmutableSandboxedEnvironment`: blocking the escape does not require rejecting in-template list/dict mutation, which authored templates may use. `rendering/jinja.py` is the one engine module that constructs an environment, always sandboxed: render passes get theirs through a `RenderSession` (§9.4), the pre-commit template through `build_environment`, and `playbook validate`'s parse-only syntax check is `jinja_syntax_error` there. The sandbox does not bound CPU beyond Jinja's `MAX_RANGE`. Every shipped `.md.j2` renders byte-identically under it. The runtime floor is `jinja2>=3.1.6`: older releases have published sandbox escapes for anyone who controls a template (CVE-2024-56326, an indirect `str.format` call, fixed in 3.1.5; CVE-2025-27516, the `|attr` filter returning the raw `format` method, fixed in 3.1.6), and `tests/rendering/test_jinja.py` pins the floor.
 ### 9.4 Rendering context
-The context passed to every template render:
+The context passed to every template render (`TemplateContext.as_dict()`, later keys win):
 ```python
 context = {
     # From detector
@@ -1691,15 +1692,13 @@ context = {
     "project_description": ...,
     # From config [user_choices]
     **user_choices,
-    # Engine metadata
+    # Engine metadata: [engine] version, else the installed version
     "engine_version": "0.4.0",
-    "rendered_at": "2026-05-20T10:30:00Z",
-    # Convenience predicates
-    "has_framework": lambda name: name in facts["frameworks"],
-    "has_ml_dep": lambda name: name in facts["ml_stack"],
+    # The eval runner only: the invocation's input_variables
+    **overrides,
 }
 ```
-Rules, prompts and hook bodies all render in this one environment shape (`build_environment(template_search_paths)`).
+The convenience predicates `has_framework(name)` and `has_ml_dep(name)` are environment globals that read the same facts. Every render pass — `playbook sync`, `playbook render` and the eval runner — opens one `RenderSession` (`rendering/session.py`): one sandboxed environment and one rule registry built only from the rules whose `applies_if` holds, so the three cannot deliver different included rules. Rules, prompts and hook bodies all render in it with this context. A prompt rendered for an adapter has its `input_variables` names masked, so the format can still map their placeholders (§9.7); the eval runner renders the prompt with its invocation's values and appends the `## Reference rules` appendix (§15.3). An included rule renders with the facts only. A rule `playbook render <rule-id>` asks for renders whatever its own `applies_if`. An `applies_if` that `playbook validate` would reject stops sync (behind its validate gate) and the eval runner, while `playbook render` reads it as false, as `--show-rules` prints it.
 ### 9.5 The removed `rule()` helper
 Removed in v0.21 (D15). A prompt declares the rules it needs in `includes_rules` (§6.2.5), and the adapters turn that list into a `## Before you start` block or a `## Reference rules` appendix; no template places rule text itself. `{{ rule(...) }}` therefore raises `UndefinedError` in every template, and `playbook validate` names any such call in a prompt, rule or hook body (§12.6).
 ### 9.6 Example: render call

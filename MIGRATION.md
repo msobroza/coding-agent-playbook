@@ -453,6 +453,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.types.format_frontmatter` | `coding_agent_playbook.artifacts.frontmatter.format_frontmatter` | A2 |
 | `coding_agent_playbook.types.split_frontmatter` | `coding_agent_playbook.artifacts.frontmatter.split_frontmatter` | A2 |
 | `coding_agent_playbook.validation.findings.RULE_CALL_RE` | `coding_agent_playbook.rendering.jinja.RULE_CALL_RE` | RS-1 |
+| `coding_agent_playbook.validation.findings.jinja_syntax_error` | `coding_agent_playbook.rendering.jinja.jinja_syntax_error` | RS-2 |
 <!-- module-moves:end -->
 
 <!-- module-moves: keep -->
@@ -486,6 +487,21 @@ paths. Import `CanonicalEvent` from `coding_agent_playbook.hook_runtime.dispatch
 from `coding_agent_playbook.hook_runtime.dispatch.decision` (was
 `coding_agent_playbook.hook_runtime.decision`). Hook ids, registry names and the
 `hook_handlers` entry-point group do not change.
+<!-- module-moves: end-keep -->
+
+<!-- module-moves: keep -->
+Out-of-tree code that renders artifact bodies itself: `playbook sync`,
+`playbook render` and the eval runner now render through one
+`coding_agent_playbook.rendering.session.RenderSession` per pass, and the helpers
+each of them used are gone, with no shim: `build_jinja_context`,
+`render_rule_body`, `render_prompt_body` and `render_hook_body` of
+`coding_agent_playbook.sync.render`, and `build_prompt_environment` of
+`coding_agent_playbook.rendering.rule_registry`. Open a session with
+`RenderSession.open(rules, TemplateContext.for_config(config, facts), repo_root=repo)`:
+it keeps the rules whose `applies_if` holds, and its `render_rules`,
+`render_rule`, `render_prompt`, `render_hook_body`, `with_hook_body` and
+`registry` replace those helpers. Generated output, `playbook render` output and
+eval prompts do not change.
 <!-- module-moves: end-keep -->
 
 Out-of-tree `Metric` authors: at grade time, a threshold or non-regression check

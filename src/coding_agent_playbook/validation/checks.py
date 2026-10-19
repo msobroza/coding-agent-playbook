@@ -65,7 +65,7 @@ from coding_agent_playbook.evals.loader import (
 )
 from coding_agent_playbook.evals.validator import validate_tasks
 from coding_agent_playbook.generated_output.source_files import refused_skill_files
-from coding_agent_playbook.rendering.jinja import RULE_CALL_RE
+from coding_agent_playbook.rendering.jinja import RULE_CALL_RE, jinja_syntax_error
 from coding_agent_playbook.skills.naming import agent_skill_issues, has_declared_id
 from coding_agent_playbook.validation import preflight as _sync_preflight
 from coding_agent_playbook.validation._frontmatter import (
@@ -81,7 +81,6 @@ from coding_agent_playbook.validation._skills import (
 from coding_agent_playbook.validation.findings import (
     ValidationError,
     ValidationFindings,
-    jinja_syntax_error,
     report_validation_warnings,
     skill_label,
 )

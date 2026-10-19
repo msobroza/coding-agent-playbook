@@ -3,13 +3,12 @@
 - :class:`RuleRegistry` — the protocol ``rendering.formats`` renders the
   ``## Reference rules`` appendix through.
 - :class:`RuleRegistryImpl` — concrete ``RuleRegistry`` and
-  ``SkillReferenceIndex`` from ``prompt_rule_delivery``. Built
-  once per sync from the applies_if-filtered rule list: it renders an included
+  ``SkillReferenceIndex`` from ``prompt_rule_delivery``. Built once per render
+  pass by ``rendering.session.RenderSession`` (``sync``, ``render``, the eval
+  runner) from the applies_if-filtered rule list: it renders an included
   rule's text for the ``## Reference rules`` appendix and names the skill
   reference a command's ``## Before you start`` block points at (D15).
 - :func:`skill_reference_of` — the reference that delivers one rule.
-- :func:`build_prompt_environment` — the registry plus the Jinja environment
-  every prompt render (``sync``, ``render``, the eval runner) builds the same way.
 
 Moved out of the sync context module (specs/prS-skills-context.md §7.4.4), then
 given ``reference_for`` for D15.
@@ -24,7 +23,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from coding_agent_playbook.artifacts.identity import template_source
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
-from coding_agent_playbook.rendering.jinja import build_environment, render_sandboxed
+from coding_agent_playbook.rendering.jinja import render_sandboxed
 from coding_agent_playbook.rendering.prompt_rule_delivery import SkillReference
 
 if TYPE_CHECKING:
@@ -53,10 +52,10 @@ class RuleRegistry(Protocol):
 class RuleRegistryImpl:
     """Concrete :class:`RuleRegistry` used by sync, render and the eval runner.
 
-    Built once per sync from the merged + applies_if-filtered rule list. The
-    ``render_for_inclusion`` method returns the inline body for a rule (with
-    ``### {rule.name}`` header) or ``""`` when the rule is filtered out — the
-    silent-omission contract from SPEC §6.2.5.
+    Built once per render session from the merged + applies_if-filtered rule
+    list. The ``render_for_inclusion`` method returns the inline body for a rule
+    (with ``### {rule.name}`` header) or ``""`` when the rule is filtered out —
+    the silent-omission contract from SPEC §6.2.5.
     """
 
     def __init__(self, rules: list[Rule], facts: Facts, env: Environment) -> None:
@@ -115,21 +114,3 @@ def skill_reference_of(rule: Rule) -> SkillReference | None:
     if frontmatter.scope != "scoped" or frontmatter.skill is None:
         return None
     return SkillReference(frontmatter.skill, member_reference_path(frontmatter.id))
-
-
-def build_prompt_environment(
-    rules: list[Rule], facts: Facts
-) -> tuple[RuleRegistryImpl, Environment]:
-    """Build the rule registry and the Jinja environment prompts render in.
-
-    One base environment serves both: there is no ``rule()`` helper (D15), so
-    a prompt and an included rule render alike, and neither can include a
-    rule. It sees ``facts`` for the ``has_framework``/``has_ml_dep`` helpers.
-
-    Example::
-
-        registry, prompt_env = build_prompt_environment(applicable_rules, facts)
-    """
-    env = build_environment([])
-    env.globals["_facts"] = dict(facts)
-    return RuleRegistryImpl(rules, facts, env), env

@@ -124,6 +124,42 @@ def test_src_constructs_no_unsandboxed_jinja_environment() -> None:
     assert offenders == [], f"use jinja2.sandbox.SandboxedEnvironment instead at: {offenders}"
 
 
+def _sandbox_construction_lines(tree: ast.Module) -> list[int]:
+    """Lines of every ``SandboxedEnvironment(...)`` call, whatever the receiver chain."""
+    return [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and (getattr(node.func, "id", None) or getattr(node.func, "attr", None))
+        == "SandboxedEnvironment"
+    ]
+
+
+def test_only_rendering_jinja_builds_an_environment() -> None:
+    """``rendering/jinja.py`` owns the sandbox: every other module asks it for one (AC.3.6).
+
+    Render passes open a ``rendering.session.RenderSession``; ``playbook validate``'s
+    parse-only syntax check is ``rendering.jinja.jinja_syntax_error``.
+    """
+    builders = {
+        path.relative_to(_SRC).as_posix()
+        for path in _engine_modules()
+        if _sandbox_construction_lines(ast.parse(path.read_text(encoding="utf-8")))
+    }
+    assert builders == {"rendering/jinja.py"}
+
+
+def test_sandbox_construction_scan_sees_names_and_attributes() -> None:
+    tree = ast.parse(
+        "import jinja2.sandbox\n"
+        "from jinja2.sandbox import SandboxedEnvironment\n"
+        "a = SandboxedEnvironment()\n"
+        "b = jinja2.sandbox.SandboxedEnvironment(autoescape=False)\n"
+        "c = build_environment([])\n"
+    )
+    assert _sandbox_construction_lines(tree) == [3, 4]
+
+
 def test_guard_flags_plain_constructions_only() -> None:
     tree = ast.parse(
         "from jinja2 import Environment as Env\n"
