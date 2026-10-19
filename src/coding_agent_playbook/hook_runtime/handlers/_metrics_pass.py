@@ -32,8 +32,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook.artifacts.path_globs import fold_key
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip, quote_data
-from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
 from coding_agent_playbook.hook_runtime.dispatch.proc import ProcTimeout
 from coding_agent_playbook.hook_runtime.stop.tools import edited_py
 

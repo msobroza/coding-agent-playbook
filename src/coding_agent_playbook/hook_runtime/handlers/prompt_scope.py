@@ -26,10 +26,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.artifacts.path_globs import compile_globs
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import register_hook_handler
-from coding_agent_playbook.hook_runtime.globs import compile_globs
 from coding_agent_playbook.hook_runtime.handlers._shared.targets import (
     file_write_paths,
     shell_write_targets,

@@ -1,0 +1,14 @@
+# A12 (#125, specs/prT-package-layout.md 7.6): the path-glob grammar becomes the
+# stdlib leaf artifacts/path_globs.py, taking fold_key and FOLDING_PLATFORMS from
+# hook_runtime/dispatch/paths.py, so the grading kernel stops importing hook_runtime.
+
+[[module]]
+pr = "A12"
+old = "coding_agent_playbook.hook_runtime.globs"
+new = "coding_agent_playbook.artifacts.path_globs"
+
+[[names]]
+pr = "A12"
+old = "coding_agent_playbook.hook_runtime.dispatch.paths"
+new = "coding_agent_playbook.artifacts.path_globs"
+names = ["FOLDING_PLATFORMS", "fold_key"]

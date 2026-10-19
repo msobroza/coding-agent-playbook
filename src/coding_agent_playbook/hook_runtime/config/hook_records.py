@@ -14,11 +14,11 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final, Literal
 
+from coding_agent_playbook.artifacts.path_globs import GlobSet, compile_globs
 from coding_agent_playbook.hook_runtime.config.reader import Malformed, TableReader
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.dispatch.policy import OnError, effective_on_error
-from coding_agent_playbook.hook_runtime.globs import GlobSet, compile_globs
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping

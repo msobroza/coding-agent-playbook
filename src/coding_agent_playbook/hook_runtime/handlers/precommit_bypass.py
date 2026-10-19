@@ -27,10 +27,10 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.artifacts.path_globs import fold_key
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._bypass_rules import segment_verdict
 from coding_agent_playbook.hook_runtime.handlers._shared.targets import (
