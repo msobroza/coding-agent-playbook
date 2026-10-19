@@ -25,13 +25,12 @@ import shutil
 import stat
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
+from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
+from coding_agent_playbook.agent_harness.importer import import_harness, write_import
 from coding_agent_playbook.artifacts.hook import Hook
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
-from coding_agent_playbook.commands import import_harness as _import
-from coding_agent_playbook.commands.import_harness import import_harness
 from tests.hook_samples import resolved_from_disk
 
 if TYPE_CHECKING:
@@ -475,7 +474,7 @@ def test_lossless_hook_import_restores_frontmatter_body_exec_bits(tmp_path):
     if os.name == "posix":
         assert copied.stat().st_mode & stat.S_IXUSR
     into = tmp_path / "playbook"
-    _import._write_result(result, into)
+    write_import(result, into)
     written = into / "hooks" / "guard-x" / "HOOK.md.j2"
     reread = Hook.from_markdown(written, "<repo-local>")
     assert (reread.frontmatter, reread.template_body) == (source.frontmatter, source.template_body)

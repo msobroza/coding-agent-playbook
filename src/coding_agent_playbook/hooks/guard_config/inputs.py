@@ -1,34 +1,32 @@
-"""The ``facts`` and ``applicability`` tables of ``guard_config.json`` (specs/prK-hook-pack.md §E.0.5, §E.1).
+"""The value types sync hands the guard_config writer (specs/prK-hook-pack.md §E.0.5, §E.1).
 
-resync-on-detector-input-change decides from data rendered here, so its cheap
-path is one ``tomllib`` read and a set comparison:
+- :class:`DetectInputs`: the detector facts and the :class:`ApplicabilityRow`
+  rows the ``facts`` and ``applicability`` tables render (``_tables_detect``).
+  :func:`applicability_rows` builds the rows: ``{kind, id, applies_if, source,
+  active}`` for every merged rule and prompt and every hook that only
+  applicability keeps off. ``applies_if`` is a list of predicates that must all
+  hold (a hook's own, then its linked rule's; ``[]`` = always) and ``active``
+  whether they held at this sync, so resync-on-detector-input-change can name
+  what a fact change turns on or off without rebuilding a ``SyncContext``
+  (``validation.context`` imports yaml);
+- :class:`ProtectInputs`: the written set as :class:`ProtectedRow` lock rows,
+  the adapters' scan dirs and the layer packages the ``protected`` table
+  renders (``_tables_protect``); sync assembles them (``sync._protect``).
 
-- ``facts``: the detector's dependency names (runtime and dev groups) and the
-  presence flags (``has_dockerfile``, ``has_ci``, ``has_notebooks``), the
-  subset of ``detect()`` a mid-session edit can change, plus the detected
-  ``package_manager`` (dependency-allowlist-guard, §E.4);
-- ``applicability``: ``{kind, id, applies_if, source, active}`` for every
-  merged rule and prompt and every hook that only applicability keeps off.
-  ``applies_if`` is a list of predicates that must all hold (a hook's own,
-  then its linked rule's; ``[]`` = always) and ``active`` whether they held at
-  this sync, so the runtime can name what a fact change turns on or off
-  without rebuilding a ``SyncContext`` (``validation.context`` imports yaml).
-
-Both depend only on the repository (``detect()`` and ``has_file`` read the
-repo, never the machine), so ``sync --check`` byte-compares them. Split out of
-``guard_config`` for the module-size budget.
+All of it depends only on the repository (``detect()`` and ``has_file`` read the
+repo, never the machine), so ``sync --check`` byte-compares what it renders.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Final, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from coding_agent_playbook.hooks.resolution.effective import effective_applies_if
 from coding_agent_playbook.hooks.resolution.resolved import APPLICABILITY_GATES
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Iterable, Mapping, Sequence
+    from collections.abc import Collection, Mapping, Sequence
     from pathlib import Path
 
     from coding_agent_playbook.artifacts.hook import Hook
@@ -41,12 +39,10 @@ __all__ = [
     "ApplicabilityRow",
     "DetectInputs",
     "HookView",
+    "ProtectInputs",
+    "ProtectedRow",
     "applicability_rows",
-    "applicability_table",
-    "facts_table",
 ]
-
-_FLAGS: Final = ("has_ci", "has_dockerfile", "has_notebooks")
 
 
 class HookView(Protocol):
@@ -98,25 +94,6 @@ class DetectInputs:
     applicability: Sequence[ApplicabilityRow] = ()
 
 
-def facts_table(facts: Mapping[str, Any]) -> dict[str, Any]:
-    """The ``facts`` table: sorted dependency names, the presence flags, the package manager.
-
-    Example::
-
-        >>> facts_table({"dependencies": {"torch": ">=2"}})["dependencies"]
-        ['torch']
-    """
-    table: dict[str, Any] = {
-        "dependencies": sorted(facts.get("dependencies", {})),
-        "dev_dependencies": sorted(facts.get("dev_dependencies", {})),
-    }
-    table.update({flag: bool(facts.get(flag, False)) for flag in _FLAGS})
-    manager = facts.get("package_manager")
-    if isinstance(manager, str):  # dependency-allowlist-guard's tier (a), §E.4
-        table["package_manager"] = manager
-    return table
-
-
 def applicability_rows(
     *,
     rules: Sequence[Rule],
@@ -158,17 +135,6 @@ def applicability_rows(
     return rows
 
 
-def applicability_table(rows: Iterable[ApplicabilityRow]) -> list[dict[str, Any]]:
-    """The rendered ``applicability`` list, sorted by ``(kind, id)``.
-
-    Example::
-
-        >>> applicability_table([])
-        []
-    """
-    return [row.to_json() for row in sorted(rows, key=lambda row: (row.kind, row.id))]
-
-
 def _artifact_row(
     kind: str, artifact: Rule | Prompt, facts: Mapping[str, Any], repo_root: Path
 ) -> ApplicabilityRow:
@@ -198,3 +164,52 @@ def _plain(value: Any) -> Any:
     if isinstance(value, list | tuple):
         return [_plain(item) for item in value]
     return value
+
+
+@dataclass(frozen=True)
+class ProtectedRow:
+    """One ``protected.entries`` row: a lock entry's path and provenance (no content hash).
+
+    ``sha256`` is kept only for a scoped row (one managed JSON element).
+
+    Example::
+
+        >>> ProtectedRow("AGENTS.md", "composite").to_json()["kind"]
+        'composite'
+    """
+
+    path: str
+    kind: str
+    artifact_id: str = ""
+    source: str = ""
+    scope: str = ""
+    sha256: str = ""
+
+    def to_json(self) -> dict[str, str]:
+        """The row as rendered: ``sha256`` only when ``scope`` is set."""
+        row = {
+            "path": self.path,
+            "kind": self.kind,
+            "artifact_id": self.artifact_id,
+            "source": self.source,
+            "scope": self.scope,
+        }
+        if self.scope:
+            row["sha256"] = self.sha256
+        return row
+
+
+@dataclass(frozen=True)
+class ProtectInputs:
+    """What the ``protected`` table is rendered from; all of it machine-independent.
+
+    Example::
+
+        ProtectInputs(entries=protected_rows(prov, managed, root),
+                      output_dirs=adapter_output_dirs(adapters, root),
+                      packages=("coding_agent_playbook",))
+    """
+
+    entries: Sequence[ProtectedRow] = ()
+    output_dirs: Sequence[str] = ()
+    packages: Sequence[str] = ()

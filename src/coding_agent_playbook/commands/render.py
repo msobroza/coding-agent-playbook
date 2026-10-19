@@ -14,7 +14,7 @@ from __future__ import annotations
 import dataclasses
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from jinja2.exceptions import UndefinedError
 
@@ -43,6 +43,8 @@ from coding_agent_playbook.validation.context import SyncContext
 if TYPE_CHECKING:
     import argparse
 
+NAME: Final = "render"
+HELP: Final = "render one artifact (SPEC §12.7)"
 
 _RULE_FORMATS = {"continue_rule", "claude_md_section", "agents_md_section"}
 _PROMPT_FORMATS = {"prompt_continue", "prompt_claude_command", "prompt_opencode_command"}
@@ -299,7 +301,23 @@ def _render_artifact(ctx: SyncContext, kind: str, artifact: _Artifact, resolved_
     return _render_prompt(ctx, artifact.to_prompt(), resolved_format)
 
 
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook render <id> [--repo-root R] [--format F] [--show-source]
+    [--show-rules]`` (SPEC §12.7).
+
+    Example::
+
+        >>> configure(argparse.ArgumentParser(prog="playbook render"))  # doctest: +SKIP
+    """
+    parser.add_argument("id", help="artifact id to render")
+    parser.add_argument("--repo-root", help="repo to render against (defaults to cwd)")
+    parser.add_argument("--format", help="format alias or full name")
+    parser.add_argument("--show-source", action="store_true")
+    parser.add_argument("--show-rules", action="store_true")
+
+
 def run(args: argparse.Namespace) -> int:
+    """Print artifact ``args.id`` rendered, or its source or rules; non-zero when it cannot."""
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     artifact_id = args.id
     ctx = SyncContext.from_repo(repo_root)

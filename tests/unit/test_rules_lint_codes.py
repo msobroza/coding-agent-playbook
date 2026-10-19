@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING, Any, Final, cast
 
 import pytest
 
-from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_ import ContinueAdapter
+from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.hooks.resolution.lint_codes import resolve_lint_codes

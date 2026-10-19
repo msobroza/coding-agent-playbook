@@ -595,7 +595,6 @@ def test_stop_drift_stage_loads_the_lockfile_only_when_active(
 _RUFF_PIPELINE: Final = engine_module(
     "coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline"
 )
-_GUARD_CONFIG_RUFF: Final = engine_module("coding_agent_playbook._guard_config_ruff")
 
 
 @pytest.fixture
@@ -632,7 +631,6 @@ def test_python_edit_branch_imports_no_forbidden_module(
     assert _RUFF_PIPELINE in imported  # the post-edit handler ran up to its pin check
     assert _forbidden(imported) == []
     assert "subprocess" not in imported
-    assert _GUARD_CONFIG_RUFF not in imported  # sync-time (tomllib)
 
 
 # --- skill-nudge (specs/prS-skills-context.md 8.5.3) -----------------------------------------

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 # The rule set through its module, so this command binds none of its names: the
 # move map (tests/architecture/move_map/a04.toml) keeps seeing them as moved.
@@ -27,6 +27,19 @@ from coding_agent_playbook.validation.findings import (
 
 if TYPE_CHECKING:
     import argparse
+
+NAME: Final = "validate"
+HELP: Final = "cross-reference checks (SPEC §12.6)"
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook validate [--repo-root R]`` (SPEC §12.6).
+
+    Example::
+
+        >>> configure(argparse.ArgumentParser(prog="playbook validate"))  # doctest: +SKIP
+    """
+    parser.add_argument("--repo-root", help="repo to validate (defaults to cwd)")
 
 
 def run(args: argparse.Namespace) -> int:

@@ -18,7 +18,7 @@ import argparse
 import stat
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
+from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill

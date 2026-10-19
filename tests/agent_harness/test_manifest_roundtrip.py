@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
+from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
+from coding_agent_playbook.agent_harness.importer import import_harness
 from coding_agent_playbook.agent_harness.manifest import (
     ManifestEntry,
     ScriptEntry,
@@ -20,7 +21,6 @@ from coding_agent_playbook.agent_harness.manifest import (
 from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
-from coding_agent_playbook.commands.import_harness import import_harness
 from tests.hook_samples import hook_frontmatter
 from tests.toml_equality import assert_toml_identical
 
