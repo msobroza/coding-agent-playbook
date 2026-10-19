@@ -61,11 +61,11 @@ playbook-hook = "coding_agent_playbook.hook_runtime.cli:main"
 [project.entry-points."coding_agent_playbook.adapters"]
 # Populated by PRs 6–9: continue, claude_code, opencode, agents_md.
 agent_harness = "coding_agent_playbook.adapters.agent_harness_adapter:AgentHarnessAdapter"
-agents_md = "coding_agent_playbook.adapters.agents_md_adapter:AgentsMdAdapter"
+agents_md = "coding_agent_playbook.adapters.agents_md:AgentsMdAdapter"
 claude_code = "coding_agent_playbook.adapters.claude_code_adapter:ClaudeCodeAdapter"
-continue = "coding_agent_playbook.adapters.continue_adapter:ContinueAdapter"
-opencode = "coding_agent_playbook.adapters.opencode_adapter:OpenCodeAdapter"
-shared_skills = "coding_agent_playbook.adapters.shared_skills_adapter:SharedSkillsAdapter"
+continue = "coding_agent_playbook.adapters.continue_:ContinueAdapter"
+opencode = "coding_agent_playbook.adapters.opencode:OpenCodeAdapter"
+shared_skills = "coding_agent_playbook.adapters.shared_skills:SharedSkillsAdapter"
 
 [project.entry-points."coding_agent_playbook.overlays"]
 # Populated by overlay packages (e.g. playbook-rules-bnp). Engine ships none.
@@ -628,15 +628,9 @@ ignore_imports = [
     "coding_agent_playbook.commands._validation -> coding_agent_playbook.adapters._agent_skill_rules",
     "coding_agent_playbook.skill_document -> coding_agent_playbook.adapters._agent_skill_rules",
     "coding_agent_playbook.skill_membership -> coding_agent_playbook.adapters._agent_skill_rules",
-    # A9: becomes adapters/skill_dirs/ownership.py (after #62)
-    "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._prior_output",
     # A7: becomes generated_output/write_guard.py (after #62)
     "coding_agent_playbook.commands._sync_hooks -> coding_agent_playbook.adapters._owned_files",
     "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._owned_files",
-    # A9: becomes adapters/skill_dirs/writer.py (after #62)
-    "coding_agent_playbook.commands._sync_output -> coding_agent_playbook.adapters._skill_writer",
-    "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._skill_writer",
-    "coding_agent_playbook.commands.validate -> coding_agent_playbook.adapters._skill_writer",
     # A7: becomes generated_output/source_files.py (after #62)
     "coding_agent_playbook.commands.validate -> coding_agent_playbook.adapters._skill_sources",
     "coding_agent_playbook.guard_config -> coding_agent_playbook.adapters._skill_sources",

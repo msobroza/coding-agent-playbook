@@ -55,7 +55,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.adapters._skill_sources import refused_skill_files
-from coding_agent_playbook.adapters._skill_writer import agent_skill_issues, has_declared_id
+from coding_agent_playbook.adapters.skill_dirs.writer import agent_skill_issues, has_declared_id
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.commands import _sync_preflight
 from coding_agent_playbook.commands._validate_context import (

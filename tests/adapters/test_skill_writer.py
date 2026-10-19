@@ -11,9 +11,10 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.adapters import _skill_files, _skill_writer
-from coding_agent_playbook.adapters._prior_output import judging_leftovers_with
-from coding_agent_playbook.adapters._skill_writer import (
+from coding_agent_playbook.adapters import _skill_files
+from coding_agent_playbook.adapters.skill_dirs import writer as _skill_writer
+from coding_agent_playbook.adapters.skill_dirs.ownership import judging_leftovers_with
+from coding_agent_playbook.adapters.skill_dirs.writer import (
     SKILL_FILENAME,
     SkillWriter,
     agent_skill_issues,

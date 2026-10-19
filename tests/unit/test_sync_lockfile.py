@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.adapters.base import Adapter
-from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
+from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
 from coding_agent_playbook.commands._sync_lockfile import (
     HookDispatch,
     _skill_write_provenance,

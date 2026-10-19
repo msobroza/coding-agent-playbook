@@ -16,9 +16,9 @@ from typing import TYPE_CHECKING, Any, Final, cast
 import pytest
 
 from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
-from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
+from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
-from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
+from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.commands._validate_frontmatter import lint_codes_problems
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.hook_policy import resolve_lint_codes

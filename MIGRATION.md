@@ -40,9 +40,15 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook._pep503` | `coding_agent_playbook.detector.pep503` | N4 |
 | `coding_agent_playbook._pyproject_deps` | `coding_agent_playbook.detector.pyproject_deps` | N4 |
 | `coding_agent_playbook._toml` | `coding_agent_playbook.toml_writer` | N1 |
+| `coding_agent_playbook.adapters._prior_output` | `coding_agent_playbook.adapters.skill_dirs.ownership` | A9 |
 | `coding_agent_playbook.adapters._settings_drift` | `coding_agent_playbook.adapters.claude_code.settings.drift` | N13 |
+| `coding_agent_playbook.adapters._skill_writer` | `coding_agent_playbook.adapters.skill_dirs.writer` | A9 |
+| `coding_agent_playbook.adapters.agents_md_adapter` | `coding_agent_playbook.adapters.agents_md` | A9 |
 | `coding_agent_playbook.adapters.claude_rule_paths` | `coding_agent_playbook.adapters.claude_code.paths` | N13 |
 | `coding_agent_playbook.adapters.claude_settings` | `coding_agent_playbook.adapters.claude_code.settings.managed_merge` | N13 |
+| `coding_agent_playbook.adapters.continue_adapter` | `coding_agent_playbook.adapters.continue_` | A9 |
+| `coding_agent_playbook.adapters.opencode_adapter` | `coding_agent_playbook.adapters.opencode` | A9 |
+| `coding_agent_playbook.adapters.shared_skills_adapter` | `coding_agent_playbook.adapters.shared_skills` | A9 |
 | `coding_agent_playbook.catalog` | `coding_agent_playbook.catalog.roots` | N3 |
 | `coding_agent_playbook.cli.build_parser` | `coding_agent_playbook.cli.parser.build_parser` | N7 |
 | `coding_agent_playbook.commands._ci_policy` | `coding_agent_playbook.commands.twins.policy` | N8 |

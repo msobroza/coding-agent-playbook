@@ -6,7 +6,7 @@ import dataclasses
 from pathlib import Path
 from typing import Any
 
-from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
+from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.renderer import SENTINEL, render_for, with_sentinel_body
 from coding_agent_playbook.types import (
     Prompt,

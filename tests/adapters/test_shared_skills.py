@@ -14,8 +14,8 @@ import pytest
 
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
-from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
-from coding_agent_playbook.adapters.shared_skills_adapter import (
+from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
+from coding_agent_playbook.adapters.shared_skills import (
     SHARED_SKILLS_ROOT,
     SharedSkillsAdapter,
 )
@@ -34,7 +34,7 @@ from coding_agent_playbook.types import (
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.adapters._skill_writer import SkillWriter
+    from coding_agent_playbook.adapters.skill_dirs.writer import SkillWriter
 
 #: The adapters that write a native skills root through the shared ``SkillWriter``.
 _SKILL_ROOT_ADAPTERS: tuple[type[Adapter], ...] = (

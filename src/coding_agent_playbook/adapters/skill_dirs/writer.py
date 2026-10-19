@@ -76,8 +76,8 @@ from coding_agent_playbook.adapters._agent_skill_rules import (
 )
 from coding_agent_playbook.adapters._agent_skill_rules import has_declared_id as has_declared_id
 from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of as skill_id_of
-from coding_agent_playbook.adapters._prior_output import PriorOutput
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
+from coding_agent_playbook.adapters.skill_dirs.ownership import PriorOutput
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.harness.emitter import with_sentinel_body
 from coding_agent_playbook.skill_document import emitted_body, emitted_frontmatter

@@ -11,9 +11,9 @@ import dataclasses
 from pathlib import Path
 from typing import ClassVar
 
-from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
+from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.base import Adapter
-from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
+from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.commands._sync_render import render_rule_body
 from coding_agent_playbook.renderer import build_environment

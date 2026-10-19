@@ -20,8 +20,8 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from coding_agent_playbook.adapters._skill_writer import agent_skill_issues, render_skill_md
 from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_RULES_PATH
+from coding_agent_playbook.adapters.skill_dirs.writer import agent_skill_issues, render_skill_md
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.files import FileSystemStateSource

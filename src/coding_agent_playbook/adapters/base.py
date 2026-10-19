@@ -72,7 +72,7 @@ class Adapter(ABC):
     shared_outputs: ClassVar[tuple[str, ...]] = ()
 
     #: The repo-relative root this adapter's native Agent-Skills writer
-    #: (``adapters._skill_writer.SkillWriter``) writes ``<root>/<id>/`` under,
+    #: (``adapters.skill_dirs.writer.SkillWriter``) writes ``<root>/<id>/`` under,
     #: such as ``".claude/skills"``; ``None`` (the default) when it writes none.
     #: Inside ``<root>/<id>/`` that writer settles what is in the way itself
     #: (§10.8), so ``sync --check`` explains a missing file there its way (§12.3).

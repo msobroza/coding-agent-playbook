@@ -18,7 +18,7 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
+from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.types import (
     Prompt,
