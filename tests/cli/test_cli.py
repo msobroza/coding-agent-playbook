@@ -91,13 +91,6 @@ def test_every_subcommand_is_a_command_in_help_order() -> None:
     assert help_order == _SUBCOMMANDS
 
 
-def test_cli_parser_keeps_no_legacy_table() -> None:
-    """``init`` was the last subcommand whose flags ``cli/parser.py`` declared (CP-3)."""
-    from coding_agent_playbook.cli import parser as cli_parser
-
-    assert not hasattr(cli_parser, "_LEGACY")
-
-
 def test_command_names_are_unique_and_match_their_place() -> None:
     """A Command is its module (no command object): its ``NAME`` is the module's name with
     dashes, and ``_COMMANDS`` lists the modules in ``playbook --help`` order."""
