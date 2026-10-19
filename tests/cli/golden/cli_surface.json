@@ -1,0 +1,1589 @@
+{
+  "prog": "playbook",
+  "description": "coding-agent-playbook — multi-harness playbook engine.",
+  "actions": [
+    {
+      "action": "_HelpAction",
+      "option_strings": [
+        "-h",
+        "--help"
+      ],
+      "dest": "help",
+      "nargs": 0,
+      "const": null,
+      "default": "==SUPPRESS==",
+      "type": null,
+      "choices": null,
+      "required": false,
+      "help": "show this help message and exit",
+      "metavar": null
+    },
+    {
+      "action": "_VersionAction",
+      "option_strings": [
+        "--version"
+      ],
+      "dest": "version",
+      "nargs": 0,
+      "const": null,
+      "default": "==SUPPRESS==",
+      "type": null,
+      "choices": null,
+      "required": false,
+      "help": "show program's version number and exit",
+      "metavar": null
+    },
+    {
+      "action": "_SubParsersAction",
+      "option_strings": [],
+      "dest": "command",
+      "nargs": "A...",
+      "const": null,
+      "default": null,
+      "type": null,
+      "choices": [
+        "init",
+        "sync",
+        "check",
+        "validate",
+        "render",
+        "eval",
+        "metrics",
+        "import-harness",
+        "validate-harness",
+        "gate-scan",
+        "ci",
+        "scan-sinks",
+        "check-notebooks",
+        "scan-secrets",
+        "check-commit-trailers",
+        "check-deps"
+      ],
+      "required": false,
+      "help": null,
+      "metavar": null
+    }
+  ],
+  "subcommands": [
+    {
+      "name": "init",
+      "help": "bootstrap a fresh repo (SPEC §12.1)",
+      "func": "coding_agent_playbook.commands.init.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo to initialise (defaults to cwd)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--non-interactive"
+          ],
+          "dest": "non_interactive",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": null,
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--name"
+          ],
+          "dest": "name",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "project name (required in non-interactive mode)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--kind"
+          ],
+          "dest": "kind",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "project kind (required in non-interactive mode)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--description"
+          ],
+          "dest": "description",
+          "nargs": null,
+          "const": null,
+          "default": "",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": null,
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--adapters"
+          ],
+          "dest": "adapters",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "comma-separated adapter names (default: claude_code,opencode,shared_skills; add continue to opt in)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--overlays"
+          ],
+          "dest": "overlays",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "comma-separated overlay package names",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--no-hooks"
+          ],
+          "dest": "no_hooks",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "do not enable assistant lifecycle hooks (writes [hooks] enabled = false)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": []
+    },
+    {
+      "name": "sync",
+      "help": "regenerate all artifacts (SPEC §12.2)",
+      "func": "coding_agent_playbook.commands.sync.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo to sync (defaults to cwd)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--check"
+          ],
+          "dest": "check",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "verify against the lockfile without writing (SPEC §12.3)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--check-staged"
+          ],
+          "dest": "check_staged",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "fail if any staged path is generated output; never writes (SPEC §12.3)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": [
+        {
+          "required": false,
+          "dests": [
+            "check",
+            "check_staged"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "check",
+      "help": "diagnostic dump (SPEC §12.4)",
+      "func": "coding_agent_playbook.commands.check.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo to check (defaults to cwd)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--refresh"
+          ],
+          "dest": "refresh",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "re-run detector and persist facts to detector_cache (SPEC §12.5)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": []
+    },
+    {
+      "name": "validate",
+      "help": "cross-reference checks (SPEC §12.6)",
+      "func": "coding_agent_playbook.commands.validate.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo to validate (defaults to cwd)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": []
+    },
+    {
+      "name": "render",
+      "help": "render one artifact (SPEC §12.7)",
+      "func": "coding_agent_playbook.commands.render.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [],
+          "dest": "id",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": true,
+          "help": "artifact id to render",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo to render against (defaults to cwd)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--format"
+          ],
+          "dest": "format",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "format alias or full name",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--show-source"
+          ],
+          "dest": "show_source",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": null,
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--show-rules"
+          ],
+          "dest": "show_rules",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": null,
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": []
+    },
+    {
+      "name": "eval",
+      "help": "eval enumeration + `--run` a task (SPEC §12.8, §15)",
+      "func": "coding_agent_playbook.commands.eval.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo to enumerate eval tasks against (defaults to cwd)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--list"
+          ],
+          "dest": "list",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": null,
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--show"
+          ],
+          "dest": "show",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show one task by id",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [],
+          "dest": "id",
+          "nargs": "?",
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "task id (enumerate, or run with --run)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--run"
+          ],
+          "dest": "run",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "execute the task <id> through a runner and grade it (SPEC §15)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--runner"
+          ],
+          "dest": "runner",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "runner name from the coding_agent_playbook.runners group (default: claude_code; use 'fake' for a hermetic no-op run)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--judge"
+          ],
+          "dest": "judge",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "judge name from the coding_agent_playbook.judges group to score [rubric] criteria (e.g. 'llm'); omit for a deterministic-only run",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--samples"
+          ],
+          "dest": "samples",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": "int",
+          "choices": null,
+          "required": false,
+          "help": "per-criterion judge samples to average (default: 1)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--full-scoring"
+          ],
+          "dest": "full_scoring",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "grade every check even after the gate is lost (disables fail-fast; scores the judge tier regardless of a failing deterministic check)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--format"
+          ],
+          "dest": "format",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": [
+            "text",
+            "json"
+          ],
+          "required": false,
+          "help": "--run output format (default: text)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": [
+        {
+          "required": false,
+          "dests": [
+            "list",
+            "show"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "metrics",
+      "help": "static code-quality gate (cyclomatic complexity, MI, ...) (PR-M)",
+      "func": "coding_agent_playbook.commands.metrics.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [],
+          "dest": "paths",
+          "nargs": "*",
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "Python files or directories to measure (default: the repo's src/ dir)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--baseline"
+          ],
+          "dest": "baseline",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "non-regression baseline: 'git:<ref>', 'json:<path>' (an --emit-measurements snapshot) or a directory path",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--changed"
+          ],
+          "dest": "changed",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "only the *.py files changed against the git: baseline, plus untracked ones",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--select"
+          ],
+          "dest": "select",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "comma-separated metrics or families (quality, docstrings, testing) to measure instead of the default set",
+          "metavar": "NAMES"
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--extend-select"
+          ],
+          "dest": "extend_select",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "comma-separated metrics or families to add; opt-in metrics only by name",
+          "metavar": "NAMES"
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--ignore"
+          ],
+          "dest": "ignore",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "comma-separated metrics or families to leave out",
+          "metavar": "NAMES"
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--emit-measurements"
+          ],
+          "dest": "emit_measurements",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "write the raw candidate measurements as a JSON snapshot (for --baseline json:PATH)",
+          "metavar": "PATH"
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--mode"
+          ],
+          "dest": "mode",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": [
+            "regression",
+            "absolute",
+            "both"
+          ],
+          "required": false,
+          "help": "comparison mode (default: from [metrics] config, else 'regression')",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--strict"
+          ],
+          "dest": "strict",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "promote warnings to gate failures (non-zero exit)",
+          "metavar": null
+        },
+        {
+          "action": "BooleanOptionalAction",
+          "option_strings": [
+            "--run-tests",
+            "--no-run-tests"
+          ],
+          "dest": "run_tests",
+          "nargs": 0,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "also run the execution evaluators (test_pass_rate, coverage): shells out to the target's pytest (opt-in, has side effects); --no-run-tests overrides [metrics] run_tests = true",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--test-cmd"
+          ],
+          "dest": "test_cmd",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "override the test command used by --run-tests (a shell-style string, split with shlex; default: python -m pytest with junit+cov XML)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--format"
+          ],
+          "dest": "format",
+          "nargs": null,
+          "const": null,
+          "default": "text",
+          "type": null,
+          "choices": [
+            "text",
+            "json"
+          ],
+          "required": false,
+          "help": "output format (default: text)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo to measure against (defaults to cwd)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": []
+    },
+    {
+      "name": "import-harness",
+      "help": "import an Agent Harness tree into canonical artifacts",
+      "func": "coding_agent_playbook.commands.import_harness.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [],
+          "dest": "path",
+          "nargs": "?",
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "path to the harness root (contains HARNESS.md)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--into"
+          ],
+          "dest": "into",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "overlay directory to write canonical artifacts into (defaults to ./playbook)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": []
+    },
+    {
+      "name": "validate-harness",
+      "help": "lint an Agent Harness tree (structural checks, harnesses-ref-equivalent)",
+      "func": "coding_agent_playbook.commands.validate_harness.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [],
+          "dest": "path",
+          "nargs": "?",
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "path to the harness root (contains HARNESS.md)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--strict"
+          ],
+          "dest": "strict",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "promote warnings (missing routing file / content description) to errors",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": []
+    },
+    {
+      "name": "gate-scan",
+      "help": "flag gate-weakening changes in a commit range (prK §E.2)",
+      "func": "coding_agent_playbook.commands.twins.gate_scan.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--range"
+          ],
+          "dest": "rev_range",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "A..B, or A...B from their merge base (default: <merge-base>..HEAD)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--format"
+          ],
+          "dest": "format",
+          "nargs": null,
+          "const": null,
+          "default": "text",
+          "type": null,
+          "choices": [
+            "text",
+            "json"
+          ],
+          "required": false,
+          "help": null,
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo to scan (defaults to cwd)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": []
+    },
+    {
+      "name": "ci",
+      "help": "run the CI twins as child processes (prK §F.5)",
+      "func": "coding_agent_playbook.commands.twins.ci.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--base"
+          ],
+          "dest": "base",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "base ref (default: the default branch, origin/HEAD first)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--steps"
+          ],
+          "dest": "steps",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "comma-separated CI_STEPS names (default: every row)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--format"
+          ],
+          "dest": "format",
+          "nargs": null,
+          "const": null,
+          "default": "text",
+          "type": null,
+          "choices": [
+            "text",
+            "json"
+          ],
+          "required": false,
+          "help": null,
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo to check (defaults to cwd)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": []
+    },
+    {
+      "name": "scan-sinks",
+      "help": "flag new unsafe deserialization sinks in a change (prK §E.3)",
+      "func": "coding_agent_playbook.commands.twins.scan_sinks.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--staged"
+          ],
+          "dest": "staged",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "scan the index against HEAD",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--range"
+          ],
+          "dest": "rev_range",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "A..B, or A...B from their merge base (default: <merge-base>..HEAD)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--format"
+          ],
+          "dest": "format",
+          "nargs": null,
+          "const": null,
+          "default": "text",
+          "type": null,
+          "choices": [
+            "text",
+            "json"
+          ],
+          "required": false,
+          "help": null,
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo to scan (defaults to cwd)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": [
+        {
+          "required": false,
+          "dests": [
+            "staged",
+            "rev_range"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "check-notebooks",
+      "help": "fail when notebooks keep cell outputs (prK §E.3)",
+      "func": "coding_agent_playbook.commands.twins.check_notebooks.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [],
+          "dest": "paths",
+          "nargs": "*",
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "notebooks to check (default: every tracked .ipynb file)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo the paths are relative to (defaults to cwd)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": []
+    },
+    {
+      "name": "scan-secrets",
+      "help": "flag secret tokens and credential files, masked (prK §E.4)",
+      "func": "coding_agent_playbook.commands.twins.scan_secrets.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [],
+          "dest": "paths",
+          "nargs": "*",
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "files to scan whole, relative to --repo-root (exclusive of modes)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--staged"
+          ],
+          "dest": "staged",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "scan the index against HEAD",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--range"
+          ],
+          "dest": "rev_range",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "A..B, or A...B from their merge base (default: <merge-base>..HEAD)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--worktree"
+          ],
+          "dest": "worktree",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "scan tracked changes against HEAD and untracked, non-ignored files",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--pii"
+          ],
+          "dest": "pii",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "also flag checksum-validated PII (IBAN, card numbers), masked (prK §E.5)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--pii-detectors"
+          ],
+          "dest": "pii_detectors",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "comma-separated PII detectors (iban, card_pan, fr_nir, us_ssn); implies --pii",
+          "metavar": "NAMES"
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--format"
+          ],
+          "dest": "format",
+          "nargs": null,
+          "const": null,
+          "default": "text",
+          "type": null,
+          "choices": [
+            "text",
+            "json"
+          ],
+          "required": false,
+          "help": null,
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo to scan (defaults to cwd)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": [
+        {
+          "required": false,
+          "dests": [
+            "staged",
+            "rev_range",
+            "worktree"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "check-commit-trailers",
+      "help": "check commit-message trailer rows, CP4xx (prK §E.4)",
+      "func": "coding_agent_playbook.commands.twins.check_commit_trailers.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [],
+          "dest": "msgfile",
+          "nargs": "?",
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "the commit message file (the commit-msg stage passes it)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--range"
+          ],
+          "dest": "rev_range",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "check every commit of A..B, or A...B",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo whose policy applies (defaults to cwd)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": []
+    },
+    {
+      "name": "check-deps",
+      "help": "flag new dependencies and package indexes since a base (prK §E.4)",
+      "func": "coding_agent_playbook.commands.twins.check_deps.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--base"
+          ],
+          "dest": "base",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "base ref (default: the default branch, origin/HEAD first)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo to check (defaults to cwd)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": []
+    }
+  ]
+}
