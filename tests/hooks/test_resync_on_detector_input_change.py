@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-import coding_agent_playbook.detector as detector
+from coding_agent_playbook.detector import facts as detector
 from coding_agent_playbook.guard_config import DetectInputs, applicability_rows
 from coding_agent_playbook.hook_policy import EffectiveHooks
 from coding_agent_playbook.hook_runtime.decision import Decision
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.event import ToolCall
     from coding_agent_playbook.hook_runtime.simulate import SimulateReport

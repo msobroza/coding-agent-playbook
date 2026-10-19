@@ -24,7 +24,7 @@ from tests._budget_probe import reference_probe_facts, render_core_rule
 from tests._catalog import core_rules
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
 
 pytestmark = pytest.mark.catalog
 

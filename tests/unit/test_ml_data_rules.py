@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Final, cast
 
 import pytest
 
-from coding_agent_playbook.orchestrator import filter_applies_if
+from coding_agent_playbook.detector.predicate import filter_applies_if
 from tests._budget_probe import render_core_rule
 from tests._catalog import core_rules
 from tests.unit.test_core_rule_shapes import ML_ARRAY_RULE_IDS, assert_fits_one_reference_read
@@ -23,7 +23,7 @@ from tests.unit.test_core_rule_shapes import ML_ARRAY_RULE_IDS, assert_fits_one_
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
 
 pytestmark = pytest.mark.catalog
 

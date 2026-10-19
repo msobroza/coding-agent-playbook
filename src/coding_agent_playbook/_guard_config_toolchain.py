@@ -24,7 +24,7 @@ import tomllib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook._pyproject_deps import DEV_GROUP_NAMES, parse_dep_name
+from coding_agent_playbook.detector.pyproject_deps import DEV_GROUP_NAMES, parse_dep_name
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

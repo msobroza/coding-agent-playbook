@@ -110,7 +110,7 @@ def check_lint_codes(
     """One error per problem in each rule's ``lint_codes``; ``[]`` when every one is valid.
 
     ``check_predicate`` evaluates one ``when[].applies_if`` the way a rule's own
-    ``applies_if`` is (``detector.evaluate_predicate``), raising on an unknown key.
+    ``applies_if`` is (``detector.predicate.evaluate_predicate``), raising on an unknown key.
 
     Example::
 
