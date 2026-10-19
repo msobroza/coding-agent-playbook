@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.commands import render as _render
-from coding_agent_playbook.commands import sync as _sync
+from coding_agent_playbook.sync import pipeline as _sync
 from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:

@@ -32,15 +32,15 @@ from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import ToolClass
 from coding_agent_playbook.hook_runtime.handlers._data_reads import is_pattern, read_candidates
-from coding_agent_playbook.hook_runtime.handlers._notebook_check import (
+from coding_agent_playbook.hook_runtime.handlers._secret_policy import spelled, strings
+from coding_agent_playbook.hook_runtime.handlers._targets import shell_target
+from coding_agent_playbook.hook_runtime.judges.notebook_check import (
     NOTEBOOK_MAX_BYTES,
     NotebookLimits,
     Oversized,
     check_cells,
     read_notebook,
 )
-from coding_agent_playbook.hook_runtime.handlers._secret_policy import spelled, strings
-from coding_agent_playbook.hook_runtime.handlers._targets import shell_target
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.security.files import user_home
 from coding_agent_playbook.security.paths import PathPolicy

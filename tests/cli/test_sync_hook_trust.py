@@ -13,8 +13,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.commands import sync as _sync
-from coding_agent_playbook.commands._sync_hook_local import (
+from coding_agent_playbook.hook_registrations import stop_gate_table
+from coding_agent_playbook.hook_runtime._external import approval_of
+from coding_agent_playbook.hook_runtime.config import GuardConfig, parse_guard_config
+from coding_agent_playbook.hook_runtime.stop.coordinator import GatePolicy
+from coding_agent_playbook.security.trust import TrustStore
+from coding_agent_playbook.sync import pipeline as _sync
+from coding_agent_playbook.sync._machine_local import (
     RuntimePinWriter,
     approve_pending,
     execution_digest,
@@ -22,12 +27,7 @@ from coding_agent_playbook.commands._sync_hook_local import (
     project_python,
     write_pins,
 )
-from coding_agent_playbook.commands._sync_render import render_artifacts
-from coding_agent_playbook.hook_registrations import stop_gate_table
-from coding_agent_playbook.hook_runtime._external import approval_of
-from coding_agent_playbook.hook_runtime.config import GuardConfig, parse_guard_config
-from coding_agent_playbook.hook_runtime.stop.coordinator import GatePolicy
-from coding_agent_playbook.security.trust import TrustStore
+from coding_agent_playbook.sync.render import render_artifacts
 from coding_agent_playbook.validation.context import SyncContext
 from tests.cli.hook_repo import GUARD_CONFIG, SCRIPT, hook_deps, make_hook_repo, never_ask
 from tests.fakes import FakeGitClient, FakePinWriter

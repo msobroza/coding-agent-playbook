@@ -1,7 +1,7 @@
 """``playbook scan-sinks`` — ml-unsafe-deserialization-guard's off-workstation twin (specs/prK-hook-pack.md §E.3).
 
 Counts the unsafe sink calls a change adds with the guard's own visitor
-(``deser.new_sink_calls``) and the sink table the engine ships in the guard's
+(``judges.sink_scan.new_sink_calls``) and the sink table the engine ships in the guard's
 ``HOOK.md``, so the hook and its twin never disagree on a row:
 
 - ``--staged``: the index against ``HEAD`` (the ``playbook-scan-sinks``
@@ -28,8 +28,8 @@ from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.commands.twins._git_scope import open_git, resolve_range
 from coding_agent_playbook.hook_runtime.git import GitError
-from coding_agent_playbook.hook_runtime.handlers._notebook_cells import notebook_code
-from coding_agent_playbook.hook_runtime.handlers.deser import (
+from coding_agent_playbook.hook_runtime.judges.notebook_cells import notebook_code
+from coding_agent_playbook.hook_runtime.judges.sink_scan import (
     SinkTable,
     new_sink_calls,
     trusted_artifact_line,
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     import argparse
 
     from coding_agent_playbook.hook_runtime.git import GitPort, SafeGit
-    from coding_agent_playbook.hook_runtime.handlers.deser import SinkHit
+    from coding_agent_playbook.hook_runtime.judges.sink_scan import SinkHit
 
 __all__ = ["SinkChange", "SinkFinding", "range_changes", "run", "scan_changes", "shipped_table"]
 

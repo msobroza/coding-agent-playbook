@@ -64,6 +64,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.commands._committed_config` | `coding_agent_playbook.config.committed` | N10 |
 | `coding_agent_playbook.commands._precommit_merge` | `coding_agent_playbook.precommit` | N9 |
 | `coding_agent_playbook.commands._sync_preflight` | `coding_agent_playbook.validation.preflight` | A4 |
+| `coding_agent_playbook.commands._sync_render` | `coding_agent_playbook.sync.render` | A6 |
 | `coding_agent_playbook.commands._twin_policy` | `coding_agent_playbook.commands.twins.policy` | N8 |
 | `coding_agent_playbook.commands._validate_context` | `coding_agent_playbook.validation.context` | A4 |
 | `coding_agent_playbook.commands._validate_prompts` | `coding_agent_playbook.validation.prompts` | A4 |
@@ -79,6 +80,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.commands.init.precommit_template_dir` | `coding_agent_playbook.precommit.precommit_template_dir` | N9 |
 | `coding_agent_playbook.commands.scan_secrets` | `coding_agent_playbook.commands.twins.scan_secrets` | N8 |
 | `coding_agent_playbook.commands.scan_sinks` | `coding_agent_playbook.commands.twins.scan_sinks` | N8 |
+| `coding_agent_playbook.commands.sync.execute` | `coding_agent_playbook.sync.pipeline.execute` | A6 |
 | `coding_agent_playbook.commands.validate.collect_validation_errors` | `coding_agent_playbook.validation.checks.collect_validation_errors` | A4 |
 | `coding_agent_playbook.commands.validate.collect_validation_findings` | `coding_agent_playbook.validation.checks.collect_validation_findings` | A4 |
 | `coding_agent_playbook.commands.validate.sync_gate_errors` | `coding_agent_playbook.validation.checks.sync_gate_errors` | A4 |
@@ -104,6 +106,21 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.evaluators.metrics_gate` | `coding_agent_playbook.metrics_gate.run` | N22 |
 | `coding_agent_playbook.evaluators.policy` | `coding_agent_playbook.metrics_gate.policy` | N22 |
 | `coding_agent_playbook.evaluators.types.MetricConfig` | `coding_agent_playbook.metrics_gate.config.MetricConfig` | N22 |
+| `coding_agent_playbook.git_client` | `coding_agent_playbook.sync.git_client` | A6 |
+| `coding_agent_playbook.hook_runtime._hosts` | `coding_agent_playbook.hook_runtime.judges.hosts` | N14 |
+| `coding_agent_playbook.hook_runtime.cutover` | `coding_agent_playbook.hook_runtime.judges.commit_cutover` | N14 |
+| `coding_agent_playbook.hook_runtime.handlers._cli_words` | `coding_agent_playbook.hook_runtime.judges.cli_words` | N14 |
+| `coding_agent_playbook.hook_runtime.handlers._dependency_tiers` | `coding_agent_playbook.hook_runtime.judges.dependency_tiers` | N14 |
+| `coding_agent_playbook.hook_runtime.handlers._install_cmds` | `coding_agent_playbook.hook_runtime.judges.install_commands` | N14 |
+| `coding_agent_playbook.hook_runtime.handlers._manifest_diff` | `coding_agent_playbook.hook_runtime.judges.manifest_diff` | N14 |
+| `coding_agent_playbook.hook_runtime.handlers._notebook_cells` | `coding_agent_playbook.hook_runtime.judges.notebook_cells` | N14 |
+| `coding_agent_playbook.hook_runtime.handlers._notebook_check` | `coding_agent_playbook.hook_runtime.judges.notebook_check` | N14 |
+| `coding_agent_playbook.hook_runtime.handlers._sink_scan` | `coding_agent_playbook.hook_runtime.judges.sink_scan` | N14 |
+| `coding_agent_playbook.hook_runtime.handlers.deser.PRAGMA` | `coding_agent_playbook.hook_runtime.judges.sink_scan.PRAGMA` | N14 |
+| `coding_agent_playbook.hook_runtime.handlers.deser.SinkHit` | `coding_agent_playbook.hook_runtime.judges.sink_scan.SinkHit` | N14 |
+| `coding_agent_playbook.hook_runtime.handlers.deser.SinkTable` | `coding_agent_playbook.hook_runtime.judges.sink_scan.SinkTable` | N14 |
+| `coding_agent_playbook.hook_runtime.handlers.deser.new_sink_calls` | `coding_agent_playbook.hook_runtime.judges.sink_scan.new_sink_calls` | N14 |
+| `coding_agent_playbook.hook_runtime.handlers.deser.trusted_artifact_line` | `coding_agent_playbook.hook_runtime.judges.sink_scan.trusted_artifact_line` | N14 |
 | `coding_agent_playbook.hooks_config` | `coding_agent_playbook.config.tables.hooks` | N2 |
 | `coding_agent_playbook.links` | `coding_agent_playbook.validation.link_check` | A4 |
 | `coding_agent_playbook.links.LinksConfig` | `coding_agent_playbook.config.tables.links.LinksConfig` | N2 |

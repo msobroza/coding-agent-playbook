@@ -14,7 +14,7 @@ Opt-in, rendered only when the detector found notebooks (``has_notebooks``).
   own Stop binding (:func:`notebook_hygiene_stop`) gives that line as a note.
 
 Stdlib ``json`` only; ``on_error: open``. The check itself is
-``_notebook_check``, shared with ``playbook check-notebooks``.
+``judges.notebook_check``, shared with ``playbook check-notebooks``.
 """
 
 from __future__ import annotations
@@ -26,8 +26,9 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import ToolClass
-from coding_agent_playbook.hook_runtime.handlers._notebook_cells import cell_index, notebook_cells
-from coding_agent_playbook.hook_runtime.handlers._notebook_check import (
+from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths, repo_file
+from coding_agent_playbook.hook_runtime.judges.notebook_cells import cell_index, notebook_cells
+from coding_agent_playbook.hook_runtime.judges.notebook_check import (
     ADVICE,
     DEFAULT_MAX_CELL_OUTPUT_KB,
     NOTEBOOK_MAX_BYTES,
@@ -39,7 +40,6 @@ from coding_agent_playbook.hook_runtime.handlers._notebook_check import (
     read_notebook,
     touched_cells,
 )
-from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths, repo_file
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult, StopPlan
 
