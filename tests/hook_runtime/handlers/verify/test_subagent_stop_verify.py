@@ -202,6 +202,33 @@ def test_agent_type_outside_allowlist_not_dispatched(
     assert inside.trace.combined.decision is Decision.DENY
 
 
+def test_an_agent_types_list_without_strings_admits_every_subagent(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path
+) -> None:
+    """A list holding no str (validate accepts one) is no allowlist: every subagent is verified."""
+    pack_repo.write("a.py", "import os\n")
+    pack_repo.install_pack([GATE_ID, HOOK_ID], per_hook={HOOK_ID: {"agent_types": [1]}})
+    payload = _payload(pack_repo, _edits(pack_repo, tmp_path, "a.py"))
+
+    report = _verify(pack_repo, deps, payload, tmp_path / "state", runner=_ruff(F401))
+
+    assert report.trace.combined.decision is Decision.DENY
+
+
+def test_a_stages_list_without_strings_runs_the_default_stages(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path
+) -> None:
+    """A list holding no str (validate accepts one) names no stage, so ``DEFAULT_STAGES`` run."""
+    pack_repo.write("a.py", "import os\n")
+    pack_repo.install_pack([GATE_ID, HOOK_ID], per_hook={HOOK_ID: {"stages": [1]}})
+    payload = _payload(pack_repo, _edits(pack_repo, tmp_path, "a.py"))
+
+    report = _verify(pack_repo, deps, payload, tmp_path / "state", runner=_ruff(F401))
+
+    assert report.trace.combined.decision is Decision.DENY
+    assert report.trace.combined.user_notes == ()
+
+
 @pytest.mark.parametrize("text", ["not json\n", '{"type": "assistant"}\n[1, 2]\n'])
 def test_unparseable_transcript_fails_open_not_verified(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path, text: str

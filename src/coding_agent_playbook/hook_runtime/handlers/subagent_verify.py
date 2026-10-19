@@ -175,7 +175,7 @@ def subagent_stop_verify(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResu
 
 
 def _allowed(agent_type: str | None, config: HookConfig) -> bool:
-    """The ``agent_types`` allowlist: empty or absent admits every subagent."""
+    """The ``agent_types`` allowlist: no str item (or no list) admits every subagent."""
     allowed = config.strings("agent_types", blanks="keep")
     return not allowed or agent_type in allowed
 
@@ -205,7 +205,7 @@ def _scoped_stages(
 ) -> tuple[Stage, ...]:
     """The configured stages, built like the parent gate's; lint scoped, exec stages locked."""
     configured = HookConfig(ctx.config, CONFIG_SCHEMA).strings("stages", blanks="keep")
-    names = configured or DEFAULT_STAGES
+    names = configured or DEFAULT_STAGES  # no str item (or no list) reads as the default
     stages: list[Stage] = []
     for name in dict.fromkeys(n for n in names if n in SCOPED_STAGES):
         stage = build_stage(name, ev, ctx)
