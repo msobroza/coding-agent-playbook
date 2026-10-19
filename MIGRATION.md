@@ -32,8 +32,11 @@ out-of-tree code can import (public old or new path):
 | Old module path | New module path | Moved by |
 | --- | --- | --- |
 | `coding_agent_playbook._canonical_json` | `coding_agent_playbook.lockfile.canonical_json` | N5 |
+| `coding_agent_playbook._hook_frontmatter` | `coding_agent_playbook.artifacts.hook_frontmatter` | A1 |
+| `coding_agent_playbook._hook_schema` | `coding_agent_playbook.artifacts.hook_schema` | A1 |
 | `coding_agent_playbook._layers` | `coding_agent_playbook.catalog.layers` | N3 |
 | `coding_agent_playbook._lock_drift` | `coding_agent_playbook.lockfile.drift` | N5 |
+| `coding_agent_playbook._member_reference` | `coding_agent_playbook.artifacts.member_reference` | A1 |
 | `coding_agent_playbook._pep503` | `coding_agent_playbook.detector.pep503` | N4 |
 | `coding_agent_playbook._pyproject_deps` | `coding_agent_playbook.detector.pyproject_deps` | N4 |
 | `coding_agent_playbook._toml` | `coding_agent_playbook.toml_writer` | N1 |
@@ -95,6 +98,16 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.sources.filesystem.ENGINE_PACKAGE` | `coding_agent_playbook.catalog.layers.ENGINE_PACKAGE` | N3 |
 | `coding_agent_playbook.sources.filesystem.FileSystemStateSource` | `coding_agent_playbook.config.files.FileSystemStateSource` | N2 |
 | `coding_agent_playbook.sources.filesystem.REPO_LOCAL_SOURCE` | `coding_agent_playbook.catalog.layers.REPO_LOCAL_SOURCE` | N3 |
+| `coding_agent_playbook.types.HookDecision` | `coding_agent_playbook.artifacts.hook_schema.HookDecision` | A1 |
+| `coding_agent_playbook.types.HookEvent` | `coding_agent_playbook.artifacts.hook_schema.HookEvent` | A1 |
+| `coding_agent_playbook.types.HookFrontmatter` | `coding_agent_playbook.artifacts.hook_frontmatter.HookFrontmatter` | A1 |
+| `coding_agent_playbook.types.HookHandler` | `coding_agent_playbook.artifacts.hook_schema.HookHandler` | A1 |
+| `coding_agent_playbook.types.HookLauncher` | `coding_agent_playbook.artifacts.hook_schema.HookLauncher` | A1 |
+| `coding_agent_playbook.types.HookMatcher` | `coding_agent_playbook.artifacts.hook_schema.HookMatcher` | A1 |
+| `coding_agent_playbook.types.HookOnError` | `coding_agent_playbook.artifacts.hook_schema.HookOnError` | A1 |
+| `coding_agent_playbook.types.HookSchemaError` | `coding_agent_playbook.artifacts.hook_schema.HookSchemaError` | A1 |
+| `coding_agent_playbook.types.HookTier` | `coding_agent_playbook.artifacts.hook_schema.HookTier` | A1 |
+| `coding_agent_playbook.types.ToolClass` | `coding_agent_playbook.artifacts.hook_schema.ToolClass` | A1 |
 <!-- module-moves:end -->
 
 ## v0.21 — Skills-first context

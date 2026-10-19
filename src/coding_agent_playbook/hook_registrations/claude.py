@@ -31,7 +31,7 @@ from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook._hook_schema import HookMatcher
+    from coding_agent_playbook.artifacts.hook_schema import HookMatcher
     from coding_agent_playbook.hook_registrations.plan import HookRegistration, RegistrationMember
 
 __all__ = [

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook._hook_schema import MATCHER_KEYS
+from coding_agent_playbook.artifacts.hook_schema import MATCHER_KEYS
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.hook_policy import (
     HOOK_SCRIPTS_DIR,
