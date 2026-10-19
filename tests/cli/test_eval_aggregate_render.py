@@ -1,6 +1,6 @@
 """Renderer tests for the C8 aggregate surface in ``playbook eval --run``.
 
-The text + JSON renderers in :mod:`coding_agent_playbook.commands.eval` surface
+The text + JSON renderers in :mod:`coding_agent_playbook.evals.report_format` surface
 the across-trial aggregate result (``pass@k`` / ``pass^k`` over N trials) when a
 task authored an ``[aggregate]`` block, and omit it otherwise. These drive the
 renderers directly with a synthetic :class:`TaskResult` (no runner / SyncContext)
@@ -9,7 +9,7 @@ so they stay fast and focused on the rendering contract.
 
 from __future__ import annotations
 
-from coding_agent_playbook.commands.eval import _format_result_text, _result_to_dict
+from coding_agent_playbook.evals.report_format import format_task_result_text, task_result_to_dict
 from coding_agent_playbook.evals.runner import TaskResult
 from coding_agent_playbook.evaluators.scope import CostTier, Determinism
 from coding_agent_playbook.evaluators.types import (
@@ -82,18 +82,18 @@ def _plain_result() -> TaskResult:
 
 
 def test_text_render_shows_aggregate_line() -> None:
-    text = _format_result_text(_aggregate_result())
+    text = format_task_result_text(_aggregate_result())
     assert "aggregate: pass_at_k:verdict@5 = 1.000 (PASS)" in text
     assert "5 trials (4/5 passed)" in text
 
 
 def test_text_render_omits_aggregate_when_absent() -> None:
-    text = _format_result_text(_plain_result())
+    text = format_task_result_text(_plain_result())
     assert "aggregate:" not in text
 
 
 def test_json_render_includes_aggregate_block() -> None:
-    payload = _result_to_dict(_aggregate_result())
+    payload = task_result_to_dict(_aggregate_result())
     assert payload["trials"] == 5
     assert payload["trial_verdicts"] == [True, True, True, True, False]
     assert payload["aggregate"]["check_id"] == "pass_at_k:verdict@5"  # type: ignore[index]
@@ -101,7 +101,7 @@ def test_json_render_includes_aggregate_block() -> None:
 
 
 def test_json_render_omits_aggregate_when_absent() -> None:
-    payload = _result_to_dict(_plain_result())
+    payload = task_result_to_dict(_plain_result())
     assert "aggregate" not in payload
     assert "trials" not in payload
 
@@ -139,7 +139,7 @@ def _skipped_aggregate_result() -> TaskResult:
 
 def test_text_render_explains_a_skipped_aggregate_instead_of_failing_it() -> None:
     """A skipped aggregate has no verdict; never print ``(FAIL)`` beside a PASS task."""
-    text = _format_result_text(_skipped_aggregate_result())
+    text = format_task_result_text(_skipped_aggregate_result())
     assert "aggregate: pass_at_k:rubric@2 skipped" in text
     assert "verdict from all 2 trials (2/2 passed)" in text
     assert "(FAIL)" not in text
@@ -194,8 +194,8 @@ def test_uncalibrated_flag_considers_every_trial_not_just_the_reported_one() -> 
         trials=[t0, t1],
         aggregate=_agg_result(1.0, passed=True),
     )
-    assert _result_to_dict(result)["uncalibrated_judge"] is True
-    assert "uncalibrated" in _format_result_text(result)
+    assert task_result_to_dict(result)["uncalibrated_judge"] is True
+    assert "uncalibrated" in format_task_result_text(result)
 
 
 def test_uncalibrated_flag_ignores_a_judged_composer_whose_judged_leaf_skipped() -> None:
@@ -221,4 +221,4 @@ def test_uncalibrated_flag_ignores_a_judged_composer_whose_judged_leaf_skipped()
         transcript="",
         trials=[trial],
     )
-    assert _result_to_dict(result)["uncalibrated_judge"] is False
+    assert task_result_to_dict(result)["uncalibrated_judge"] is False

@@ -217,7 +217,7 @@ def test_plural_helper_uses_singular_for_n_equals_one():
     ``playbook eval --list`` can't reach n=1 on a real repo: the engine ships four
     prompts (PR 13) so the prompt count is never 1 in practice.
     """
-    from coding_agent_playbook.commands.eval import _plural
+    from coding_agent_playbook.commands._eval_enumerate import _plural
 
     assert _plural(0, "prompt") == "0 prompts"
     assert _plural(1, "prompt") == "1 prompt"
@@ -332,7 +332,7 @@ def test_display_source_path_uses_package_prefix_for_engine_tasks(tmp_path):
 
     The label comes from the layer, not from the path: even a bundled task whose
     path holds ``resources/eval_tasks/`` gets no ``resources/`` in its label."""
-    from coding_agent_playbook.commands.eval import _display_source_path
+    from coding_agent_playbook.commands._eval_enumerate import _display_source_path
     from coding_agent_playbook.evals.task import EvalTask
 
     # Synthesize an engine task under the pre-v0.19 layout
@@ -353,7 +353,7 @@ def test_display_source_path_uses_package_prefix_for_engine_tasks(tmp_path):
 def test_display_source_path_uses_package_prefix_for_overlay_tasks(tmp_path):
     """A third-party overlay keeps its real package-relative path,
     ``<package>/resources/eval_tasks/<dir>/``."""
-    from coding_agent_playbook.commands.eval import _display_source_path
+    from coding_agent_playbook.commands._eval_enumerate import _display_source_path
     from coding_agent_playbook.evals.task import EvalTask
 
     task_dir = tmp_path / "playbook_rules_bnp" / "resources" / "eval_tasks" / "pii-scan"
@@ -388,7 +388,7 @@ def test_display_source_path_depends_only_on_layer_and_dir(
 
     No segment of the path is searched for, so an unusual parent layout
     (no ``resources/``, no ``playbook/``) still yields the canonical label."""
-    from coding_agent_playbook.commands.eval import _display_source_path
+    from coding_agent_playbook.commands._eval_enumerate import _display_source_path
     from coding_agent_playbook.evals.task import EvalTask
 
     task_dir = tmp_path.joinpath(*task_dir_parts)
@@ -415,7 +415,7 @@ def test_display_source_path_uses_directory_not_task_id(
     tmp_path: Path, source_package: str, expected: str
 ) -> None:
     """``<dir>`` is the task directory's name; nothing ties ``task.id`` to it."""
-    from coding_agent_playbook.commands.eval import _display_source_path
+    from coding_agent_playbook.commands._eval_enumerate import _display_source_path
     from coding_agent_playbook.evals.task import EvalTask
 
     task_dir = tmp_path / "eval_tasks" / "task-dir"
