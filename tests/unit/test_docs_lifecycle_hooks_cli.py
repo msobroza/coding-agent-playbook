@@ -5,7 +5,7 @@ covers the model, config and architecture rows, and this module the rest: the
 adapter contract (§10), the CLI and the ``playbook-hook`` runtime (§12), the
 pre-commit ids (§13), the lockfile (§14.4), tests (§16), security (§17) and the
 new metrics (§21). Every name a test requires comes from the landed code (the
-``Adapter`` members, ``cli._SUBCOMMANDS`` and the argparse flags, ``CI_STEPS``,
+``Adapter`` members, ``cli.parser._SUBCOMMANDS`` and the argparse flags, ``CI_STEPS``,
 the ``playbook-hook`` usage, ``STOP_STAGE_ORDER``, ``.pre-commit-hooks.yaml``,
 the starter template, the OpenCode floor, the metric families), so a command,
 flag, step, hook id or metric that lands without documentation fails here.
@@ -32,7 +32,7 @@ from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
-from coding_agent_playbook.cli import _SUBCOMMANDS, build_parser
+from coding_agent_playbook.cli.parser import _SUBCOMMANDS, build_parser
 from coding_agent_playbook.commands._ci_commit_convention import PR_TITLE_ENV
 from coding_agent_playbook.commands._sync_hooks import HOOKS_NOTICE
 from coding_agent_playbook.commands._validate_context import config_less_notes

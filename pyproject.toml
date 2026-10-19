@@ -619,7 +619,7 @@ ignore_imports = [
     # N13: becomes adapters/claude_code/settings/drift.py
     "coding_agent_playbook.commands.check -> coding_agent_playbook.adapters._settings_drift",
     # CP-3: init's configure() owns --adapters (after #62)
-    "coding_agent_playbook.cli -> coding_agent_playbook.commands._init_adapters",
+    "coding_agent_playbook.cli.parser -> coding_agent_playbook.commands._init_adapters",
     # N22: becomes metrics_gate/inputs.py
     "coding_agent_playbook.hook_runtime.handlers._metrics_pass -> coding_agent_playbook.evaluators._metrics_inputs",
     # N22: becomes metrics_gate/suite.py
