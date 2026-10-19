@@ -8,7 +8,7 @@ to the body's first sentence, cut at a word boundary to at most
 
 from __future__ import annotations
 
-from coding_agent_playbook.hook_policy import (
+from coding_agent_playbook.hooks.enforcement import (
     GUARDRAIL_SUMMARY_MAX_CHARS,
     guardrail_line,
     guardrail_summary,

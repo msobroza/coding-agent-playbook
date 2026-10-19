@@ -56,7 +56,7 @@ def _allowed(*decisions: Decision) -> frozenset[Decision]:
 
 
 #: The §D.3.5 decision-support matrix: what each event can express. The runtime
-#: twin of ``hook_policy.HOOK_EVENTS[...].decisions`` (a parity test pins them).
+#: twin of ``hooks.resolution.tables.HOOK_EVENTS[...].decisions`` (a parity test pins them).
 EVENT_DECISIONS: Final[Mapping[EventName, frozenset[Decision]]] = MappingProxyType(
     {
         EventName.SESSION_START: _allowed(Decision.CONTEXT),

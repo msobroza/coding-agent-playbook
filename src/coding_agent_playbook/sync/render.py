@@ -17,7 +17,7 @@ same pass as every other rule, and is dropped when none of them passes
 description is composed here once as well, so one that cannot fit 300 characters
 aborts the sync with nothing written (:class:`SkillDescriptionOverflowError`).
 The ``playbook-guardrails`` skill is split off and composed from the on hooks'
-guardrail text (``hook_policy.guardrails_skill``, D6), for the adapters that
+guardrail text (``hooks.guardrails_skill``, D6), for the adapters that
 write it.
 """
 
@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.artifacts.identity import template_source
 from coding_agent_playbook.detector.predicate import filter_applies_if
-from coding_agent_playbook.hook_policy.guardrails_skill import (
+from coding_agent_playbook.hooks.guardrails_skill import (
     compose_guardrails_skill,
     split_guardrails_skill,
 )
@@ -56,7 +56,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
-    from coding_agent_playbook.hook_policy import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from coding_agent_playbook.rule_registry import RuleRegistryImpl
     from coding_agent_playbook.validation.context import SyncContext
 

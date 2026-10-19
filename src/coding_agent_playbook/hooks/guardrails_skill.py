@@ -6,7 +6,7 @@ every adapter receives (:func:`split_guardrails_skill`), composes it with one
 section per on hook that has guardrail text (:func:`compose_guardrails_skill`),
 and hands the result only to the adapters whose ``writes_guardrails_skill``
 says so (specs/prS-skills-context.md 8.4.3). Stdlib-only, like the rest of
-``hook_policy``.
+``hooks``.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
     from coding_agent_playbook.artifacts.skill import Skill
-    from coding_agent_playbook.hook_policy.resolved import ResolvedHook
+    from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 __all__ = [
     "GUARDRAILS_SKILL_ID",

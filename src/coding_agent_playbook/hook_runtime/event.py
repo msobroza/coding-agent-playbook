@@ -1,7 +1,7 @@
 """The canonical event every harness payload is normalized into (specs/prK-lifecycle-hooks.md §D.2.1).
 
 Handlers see one frozen, slotted ``CanonicalEvent`` whatever the harness. The
-runtime may not import ``types`` or ``hook_policy`` (§D.1), so the enumerations
+runtime may not import ``types`` or ``hooks`` (§D.1), so the enumerations
 here re-declare their sync-side twins; ``tests/hook_runtime/test_event.py`` pins
 each one to its single source. Content-bearing fields stay out of ``repr``: the
 decision log stores no content (D-10), and a stray ``repr`` in an internal note

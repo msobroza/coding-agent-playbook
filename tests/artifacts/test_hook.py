@@ -1,7 +1,7 @@
 """Tests for the Hook frontmatter structure: H1 (keys, required, types) and H8.
 
 specs/prK-lifecycle-hooks.md §A.2 (schema) and §A.3 (dataclasses). Value
-domains (H2-H13) are ``hook_policy.classify_hook``'s job and are tested there;
+domains (H2-H13) are ``hooks.contract.contract.classify_hook``'s job and are tested there;
 round trips and the advisory envelope live in test_hook_roundtrip.py.
 """
 

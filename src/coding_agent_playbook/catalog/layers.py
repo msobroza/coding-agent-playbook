@@ -1,6 +1,6 @@
 """The artifact layer labels every ``source_package`` is compared against (SPEC §11).
 
-A module with no imports, so the stdlib-only ``hook_policy`` can tell a
+A module with no imports, so the stdlib-only ``hooks`` package can tell a
 repo-local definition from an overlay's without importing ``catalog.source``
 (and, through it, yaml).
 """

@@ -23,7 +23,7 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Final, get_args
 
 from coding_agent_playbook.artifacts.hook_schema import HookLauncher
-from coding_agent_playbook.hook_policy._findings import Finding, error
+from coding_agent_playbook.hooks.contract.findings import Finding, error
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
