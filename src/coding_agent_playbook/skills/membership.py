@@ -91,7 +91,8 @@ def compose_skills(
 def member_reference(rule: Rule) -> MemberReference:
     """``rule`` (body already rendered) as the reference its skill writes.
 
-    Example: ``member_reference(rendered_typing_rule).filename`` -> ``"python-typing.md"``.
+    Example: for the rendered ``python-typing`` rule, ``member_reference(rule).filename``
+    -> ``"python-typing.md"``.
     """
     fm = rule.frontmatter
     return MemberReference(
