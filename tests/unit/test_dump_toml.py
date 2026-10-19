@@ -26,9 +26,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook._toml import dump_toml as _dump_toml
 from coding_agent_playbook.config import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.lockfile import LockEntry, Lockfile
+from coding_agent_playbook.toml_writer import dump_toml as _dump_toml
 from tests.toml_equality import assert_toml_identical, toml_mismatch
 
 if TYPE_CHECKING:

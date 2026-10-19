@@ -314,6 +314,7 @@ coding-agent-playbook/
 │   ├── _file_identity.py                   # FileSet: stale-vs-written by file identity (§4.2 step 9)
 │   ├── _symlinks.py                        # dangling-link predicates that never raise (§12.2)
 │   ├── _output_io.py                       # generated-file writers that refuse a FIFO/socket/device (§12.2)
+│   ├── toml_writer.py                      # the TOML writer: dump_toml and the shared scalar/key primitives
 │   ├── hook_policy/                        # sync-time: hook layer merge, effective view, validate H1-H21
 │   ├── hook_registrations/                 # per-harness registrations: Claude groups, OpenCode REG + shim
 │   ├── guard_config.py                     # the sync-level guard_config.json (§4.2 step 7)
@@ -3515,7 +3516,7 @@ The sidecar stores the **full canonical reconstruction payload**, not merely "no
 - the original, **un-rendered** canonical source `body` for every kind — the harness leaf is the client-facing *presentation* and may rewrite/inline content (a prompt's `includes_rules` are inlined into its `SKILL.md`), so the recorded body is the authoritative canonical text;
 - `is_templated` for every kind (tracks `.md` vs `.md.j2` origin);
 - for skills, a per-script `executable` boolean (git's single-bit model, not a full octal mode).
-Frontmatter values are written with the shared `_toml` primitives as inline TOML, keeping every type YAML frontmatter yields — strings, booleans, integers, floats, dates and datetimes, nested in arrays and inline tables — so they read back with the same types. Floats and dates are written since v0.18; before, such a value in `applies_if`, `input_variables` or a skill's extra frontmatter stopped `init`/`sync` with `TypeError: manifest TOML does not support value of type float`.
+Frontmatter values are written with the shared `toml_writer` primitives as inline TOML, keeping every type YAML frontmatter yields — strings, booleans, integers, floats, dates and datetimes, nested in arrays and inline tables — so they read back with the same types. Floats and dates are written since v0.18; before, such a value in `applies_if`, `input_variables` or a skill's extra frontmatter stopped `init`/`sync` with `TypeError: manifest TOML does not support value of type float`.
 
 v0.20 adds, with **no schema bump** (an older engine ignores unknown keys and warns-and-skips an unknown kind):
 - **`kind = "hook"`**: one entry per hook, keyed by `.playbook/hooks/<id>/HOOK.md`, holding `name`, the un-rendered `body`, `is_templated`, the canonical frontmatter as the inline table `hook_frontmatter` (`HookFrontmatter.to_mapping()`, floats and all), and a `ScriptEntry(path, executable)` per copied script. `import-harness` rebuilds the hook through `Hook.from_dict` and writes it in the repo-local layout, `<into>/hooks/<id>/HOOK.md` (or `.md.j2`) plus `scripts/`, restoring the scripts' exec bits. The client-facing advisory `rules/30-guardrail-<id>.md` is presentation only and gets no entry, so a lossless import never turns it into a spurious `Rule`;
