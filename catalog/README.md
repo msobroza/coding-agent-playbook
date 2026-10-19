@@ -162,7 +162,7 @@ reads this tree.
 
 The Claude Code launcher and the OpenCode plugin that run the hooks are engine
 wiring, not content: their templates stay in the package, under
-`src/coding_agent_playbook/templates/hook_shims/`.
+`src/coding_agent_playbook/hooks/registrations/templates/`.
 
 ## Add a skill
 

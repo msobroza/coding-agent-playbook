@@ -23,14 +23,17 @@ import pytest
 from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
 from coding_agent_playbook.generated_output.sentinel import has_sentinel, sentinel_line
-from coding_agent_playbook.hook_registrations import (
+from coding_agent_playbook.hooks.registrations.opencode import (
     OPENCODE_SHIM_PATH,
     opencode_reg_json,
     plan_opencode_reg,
     render_opencode_shim,
 )
+from coding_agent_playbook.hooks.registrations.templates.opencode_wire_port import (
+    WIRE_BEGIN,
+    WIRE_END,
+)
 from coding_agent_playbook.hooks.resolution.tables import HOOK_SUPPORT
-from coding_agent_playbook.templates.hook_shims.opencode_wire_port import WIRE_BEGIN, WIRE_END
 from tests.fakes import record_opens
 from tests.hook_runtime.handlers.pack_repo import resolve_engine_hooks
 from tests.hook_samples import resolved_hook

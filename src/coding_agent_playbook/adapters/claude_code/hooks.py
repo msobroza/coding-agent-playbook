@@ -33,20 +33,16 @@ from coding_agent_playbook.adapters.claude_code.settings.managed_merge import (
     merge_managed_entries,
     write_settings,
 )
-from coding_agent_playbook.hook_registrations import (
-    LAUNCHER_PATH,
-    plan_registrations,
-    render_claude_launcher,
-    resolved_deadlines_ms,
-    to_claude_group,
-)
+from coding_agent_playbook.hooks.registrations.claude import render_claude_launcher, to_claude_group
+from coding_agent_playbook.hooks.registrations.launcher import LAUNCHER_PATH
+from coding_agent_playbook.hooks.registrations.plan import plan_registrations, resolved_deadlines_ms
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
     from coding_agent_playbook.config.tables.hooks import HooksConfig
-    from coding_agent_playbook.hook_registrations import HookRegistration
+    from coding_agent_playbook.hooks.registrations.plan import HookRegistration
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 

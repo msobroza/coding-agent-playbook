@@ -21,7 +21,7 @@ from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName
 from coding_agent_playbook.hook_runtime.harness import DENY_EXIT, ParseContext, WireOutput
 from coding_agent_playbook.hook_runtime.harness.opencode import parse_opencode
-from coding_agent_playbook.templates.hook_shims.opencode_wire_port import DEFAULT_REASON
+from coding_agent_playbook.hooks.registrations.templates.opencode_wire_port import DEFAULT_REASON
 from tests.adapters.opencode_shim_kit import (
     RUNTIME_ARGV,
     SESSION,
@@ -40,7 +40,7 @@ from tests.node_kit import needs_node
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.hook_registrations import OpenCodeRegEntry
+    from coding_agent_playbook.hooks.registrations.opencode import OpenCodeRegEntry
 
 pytestmark = [
     pytest.mark.skipif(sys.platform == "win32", reason="POSIX fake dispatcher"),

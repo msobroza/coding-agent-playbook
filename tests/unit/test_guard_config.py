@@ -50,7 +50,6 @@ from coding_agent_playbook.guard_config import (
     serialize_guard_config,
     write_guard_config,
 )
-from coding_agent_playbook.hook_registrations import resolved_deadlines_ms
 from coding_agent_playbook.hook_runtime.config.guard_config import (
     GUARD_CONFIG_REL,
     GuardConfig,
@@ -61,6 +60,7 @@ from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import CON
 from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
     playbook_precommit_ids,
 )
+from coding_agent_playbook.hooks.registrations.plan import resolved_deadlines_ms
 from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
 from coding_agent_playbook.lockfile.model import LockEntry, Provenance
 from coding_agent_playbook.security.patterns import (

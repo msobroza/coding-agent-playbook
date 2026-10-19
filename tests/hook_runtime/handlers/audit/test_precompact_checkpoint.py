@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
-from coding_agent_playbook.hook_registrations import plan_opencode_reg
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._transcript_prompts import (
@@ -34,6 +33,7 @@ from coding_agent_playbook.hook_runtime.handlers.compaction import (
     select_human_prompts,
 )
 from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
+from coding_agent_playbook.hooks.registrations.opencode import plan_opencode_reg
 from tests.hook_runtime.fakes import FakeClock
 from tests.hook_runtime.handlers.pack_repo import engine_hook, resolve_engine_hooks
 

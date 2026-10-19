@@ -71,9 +71,9 @@ from coding_agent_playbook.adapters.claude_code.settings.managed_merge import CL
 from coding_agent_playbook.adapters.skill_dirs.writer import SkillWriter
 from coding_agent_playbook.generated_output.output_io import write_output_bytes, write_output_text
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
-from coding_agent_playbook.hook_registrations import LAUNCHER_PATH
 from coding_agent_playbook.hooks.enforcement import guardrail_line, guardrails_section
 from coding_agent_playbook.hooks.guardrails_skill import has_guardrail_text
+from coding_agent_playbook.hooks.registrations.launcher import LAUNCHER_PATH
 from coding_agent_playbook.hooks.resolution.tables import HOOK_SUPPORT
 from coding_agent_playbook.renderer import render_for
 from coding_agent_playbook.skills.membership import is_skill_member

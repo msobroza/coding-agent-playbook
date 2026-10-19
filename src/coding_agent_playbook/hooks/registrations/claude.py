@@ -11,31 +11,30 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.adapters.claude_code.settings.managed_merge import LAUNCHER_TOKEN
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
-from coding_agent_playbook.hook_registrations._templates import (
+from coding_agent_playbook.hook_runtime.cli import ASYNC_FLAG
+from coding_agent_playbook.hook_runtime.event import Harness
+from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
+from coding_agent_playbook.hooks.registrations._templates import (
     SENTINEL_PLACEHOLDER,
     fill_placeholder,
     shim_template,
 )
-from coding_agent_playbook.hook_registrations.plan import (
+from coding_agent_playbook.hooks.registrations.launcher import LAUNCHER_TOKEN
+from coding_agent_playbook.hooks.registrations.plan import (
     STOP_EVENTS,
     deadlines_ms,
     plan_registrations,
 )
-from coding_agent_playbook.hook_runtime.cli import ASYNC_FLAG
-from coding_agent_playbook.hook_runtime.event import Harness
-from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
 from coding_agent_playbook.hooks.resolution.tables import TOOL_CLASS_NAMES
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from coding_agent_playbook.artifacts.hook_schema import HookMatcher
-    from coding_agent_playbook.hook_registrations.plan import HookRegistration, RegistrationMember
+    from coding_agent_playbook.hooks.registrations.plan import HookRegistration, RegistrationMember
 
 __all__ = [
-    "LAUNCHER_PATH",
     "STOP_STATUS_MESSAGE",
     "STRICT_LAUNCH_FLAG",
     "claude_command",
@@ -45,9 +44,6 @@ __all__ = [
     "to_claude_group",
 ]
 
-#: The committed launcher, repo-relative (§C.2.7); its path token in a handler
-#: ``command`` is the secondary ownership signal of the settings merge (§C.2.3).
-LAUNCHER_PATH: Final = LAUNCHER_TOKEN.lstrip("/")
 #: Makes the launcher exit 1 on a missing pin or a crash (overlay strict mode, OQ-18).
 STRICT_LAUNCH_FLAG: Final = "--strict-launch"
 #: Shown by Claude while the Stop coordinator runs; only stop events carry it.

@@ -1,0 +1,132 @@
+# A18 (#132, specs/prT-package-layout.md 4.11, 7.6): the harness registrations move
+# into the sync-time hooks/ package as hooks/registrations/, with the hook shim
+# templates beside them as package data (H17). The launcher's path and ownership
+# token leave the Claude Code settings plan and the Claude registrations for the
+# stdlib leaf hooks/registrations/launcher.py (H15).
+
+# The package itself: a submodule no entry below names follows by prefix, and the
+# docs that name the directory follow the derived path.
+[[module]]
+pr = "A18"
+old = "coding_agent_playbook.hook_registrations"
+new = "coding_agent_playbook.hooks.registrations"
+package = true
+
+# The test oracle stays beside the template it ports, a namespace package (no
+# __init__.py); the shell and JS templates move with it.
+[[module]]
+pr = "A18"
+old = "coding_agent_playbook.templates.hook_shims.opencode_wire_port"
+new = "coding_agent_playbook.hooks.registrations.templates.opencode_wire_port"
+
+[[path]]
+pr = "A18"
+old = "templates/hook_shims/"
+new = "hooks/registrations/templates/"
+
+# The package facade's re-exports, removed (L2): importers name the defining module.
+
+[[names]]
+pr = "A18"
+old = "coding_agent_playbook.hook_registrations"
+new = "coding_agent_playbook.hooks.registrations.claude"
+names = [
+    "STOP_STATUS_MESSAGE",
+    "STRICT_LAUNCH_FLAG",
+    "claude_command",
+    "claude_settings_projection",
+    "matcher_union",
+    "render_claude_launcher",
+    "to_claude_group",
+]
+
+[[names]]
+pr = "A18"
+old = "coding_agent_playbook.hook_registrations"
+new = "coding_agent_playbook.hooks.registrations.opencode"
+names = [
+    "OPENCODE_REG_EVENTS",
+    "OPENCODE_SHIM_PATH",
+    "OPENCODE_V1_TOOLS",
+    "REG_PLACEHOLDER",
+    "OpenCodeRegEntry",
+    "opencode_reg_json",
+    "plan_opencode_reg",
+    "render_opencode_shim",
+    "to_opencode_reg",
+]
+
+[[names]]
+pr = "A18"
+old = "coding_agent_playbook.hook_registrations"
+new = "coding_agent_playbook.hooks.registrations.plan"
+names = [
+    "BOOTSTRAP_DEADLINE_MS",
+    "STOP_EVENTS",
+    "WATCHDOG_MARGIN_MS",
+    "BoundHandler",
+    "DeclaredMember",
+    "HookRegistration",
+    "RegistrationMember",
+    "RegistrationTimeoutError",
+    "checked_registration_timeout_s",
+    "deadlines_ms",
+    "declared_stop_budget_s",
+    "member_route",
+    "plan_registrations",
+    "registration_timeout_s",
+    "resolved_deadlines_ms",
+]
+
+[[names]]
+pr = "A18"
+old = "coding_agent_playbook.hook_registrations"
+new = "coding_agent_playbook.hooks.registrations.stop_gate"
+names = [
+    "STOP_COORDINATOR_ID",
+    "StageRecord",
+    "coordinator_budget_s",
+    "execution_timeouts_s",
+    "stop_gate_table",
+    "stop_stage_records",
+]
+
+# The launcher's path and token, in the stdlib leaf both the Claude registrations
+# and the Claude Code settings merge import (H15). The settings plan and merge no
+# longer bind the token for others: the plan imports it for its own use only.
+
+[[names]]
+pr = "A18"
+old = "coding_agent_playbook.hook_registrations"
+new = "coding_agent_playbook.hooks.registrations.launcher"
+names = ["LAUNCHER_PATH"]
+
+[[names]]
+pr = "A18"
+old = "coding_agent_playbook.hook_registrations.claude"
+new = "coding_agent_playbook.hooks.registrations.launcher"
+names = ["LAUNCHER_PATH"]
+
+[[names]]
+pr = "A18"
+old = "coding_agent_playbook.adapters.claude_code.settings._plan"
+new = "coding_agent_playbook.hooks.registrations.launcher"
+names = ["LAUNCHER_TOKEN"]
+
+[[names]]
+pr = "A18"
+old = "coding_agent_playbook.adapters.claude_code.settings.managed_merge"
+new = "coding_agent_playbook.hooks.registrations.launcher"
+names = ["LAUNCHER_TOKEN"]
+
+# The unit tests follow the package into the sync-time tests/hooks/ tree (5.2.2).
+
+[[module]]
+pr = "A18"
+old = "tests.unit.test_hook_registrations"
+new = "tests.hooks.registrations.test_registrations"
+
+[[module]]
+pr = "A18"
+old = "tests.unit.test_hook_registrations_opencode"
+new = "tests.hooks.registrations.test_opencode"

@@ -19,24 +19,28 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.artifacts.hook_schema import HookMatcher
-from coding_agent_playbook.hook_registrations import (
+from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
+from coding_agent_playbook.hooks.registrations.claude import (
+    claude_command,
+    claude_settings_projection,
+    matcher_union,
+    to_claude_group,
+)
+from coding_agent_playbook.hooks.registrations.plan import (
     BOOTSTRAP_DEADLINE_MS,
-    STOP_COORDINATOR_ID,
     DeclaredMember,
     HookRegistration,
     RegistrationTimeoutError,
     checked_registration_timeout_s,
-    claude_command,
-    claude_settings_projection,
-    coordinator_budget_s,
     deadlines_ms,
-    matcher_union,
     plan_registrations,
     registration_timeout_s,
     resolved_deadlines_ms,
-    to_claude_group,
 )
-from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
+from coding_agent_playbook.hooks.registrations.stop_gate import (
+    STOP_COORDINATOR_ID,
+    coordinator_budget_s,
+)
 from coding_agent_playbook.hooks.resolution.resolved import ResolvedHandler
 from coding_agent_playbook.hooks.resolution.tables import (
     ENGINE_DEADLINE_CAP_MS,
@@ -503,10 +507,19 @@ def test_claude_settings_projection_empty_when_claude_code_not_supported() -> No
     assert claude_settings_projection([DeclaredMember.from_frontmatter(fm)]) == {"hooks": {}}
 
 
-def test_hook_registrations_imports_only_the_stdlib() -> None:
+_REGISTRATION_MODULES = ("claude", "launcher", "opencode", "plan", "stop_gate")
+
+
+def test_registrations_import_only_the_stdlib() -> None:
     # Sync-time but stdlib-only: no yaml/jinja2, and not the artifacts modules types.py
-    # split into (artifacts/frontmatter.py imports yaml at module top).
-    loaded = new_modules_after("import coding_agent_playbook.hook_registrations")
+    # split into (artifacts/frontmatter.py imports yaml at module top). The package
+    # init is docstring-only (A18), so the probe imports every defining module.
+    loaded = new_modules_after(
+        "; ".join(
+            f"import {engine_module(f'coding_agent_playbook.hooks.registrations.{name}')}"
+            for name in _REGISTRATION_MODULES
+        )
+    )
 
     foreign = [
         name

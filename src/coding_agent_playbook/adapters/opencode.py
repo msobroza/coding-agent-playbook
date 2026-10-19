@@ -53,12 +53,12 @@ from coding_agent_playbook.adapters.skill_dirs.writer import SkillWriter
 from coding_agent_playbook.generated_output.file_identity import FileSet
 from coding_agent_playbook.generated_output.output_io import write_output_text
 from coding_agent_playbook.generated_output.symlinks import real_path
-from coding_agent_playbook.hook_registrations import (
+from coding_agent_playbook.hooks.guardrails_skill import has_guardrail_text
+from coding_agent_playbook.hooks.registrations.opencode import (
     OPENCODE_SHIM_PATH,
     plan_opencode_reg,
     render_opencode_shim,
 )
-from coding_agent_playbook.hooks.guardrails_skill import has_guardrail_text
 from coding_agent_playbook.hooks.resolution.tables import HOOK_SUPPORT
 from coding_agent_playbook.renderer import render_for
 

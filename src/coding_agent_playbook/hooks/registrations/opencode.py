@@ -25,22 +25,22 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, Literal, NotRequired, TypedDict
 
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
-from coding_agent_playbook.hook_registrations._templates import (
+from coding_agent_playbook.hook_runtime.event import Harness
+from coding_agent_playbook.hook_runtime.harness.opencode import (
+    NATIVE_TOOL_NAMES,
+    OPENCODE_SHIM_REL,
+)
+from coding_agent_playbook.hooks.registrations._templates import (
     SENTINEL_PLACEHOLDER,
     fill_placeholder,
     shim_template,
 )
-from coding_agent_playbook.hook_registrations.plan import (
+from coding_agent_playbook.hooks.registrations.plan import (
     BOOTSTRAP_DEADLINE_MS,
     HookRegistration,
     checked_registration_timeout_s,
     plan_registrations,
     resolved_deadlines_ms,
-)
-from coding_agent_playbook.hook_runtime.event import Harness
-from coding_agent_playbook.hook_runtime.harness.opencode import (
-    NATIVE_TOOL_NAMES,
-    OPENCODE_SHIM_REL,
 )
 from coding_agent_playbook.hooks.resolution.tables import HOOK_EVENTS, TOOL_CLASS_NAMES
 
