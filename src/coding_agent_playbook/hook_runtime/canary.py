@@ -24,7 +24,7 @@ import shutil
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.config.guard_config import LOCKFILE_REL
+from coding_agent_playbook.hook_runtime.config.schema import LOCKFILE_REL
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch import dispatch_event
 from coding_agent_playbook.hook_runtime.event import EventName, Harness

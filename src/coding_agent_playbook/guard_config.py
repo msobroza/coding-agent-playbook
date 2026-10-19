@@ -99,9 +99,12 @@ from coding_agent_playbook.hook_registrations import (
     resolved_deadlines_ms,
     stop_gate_table,
 )
-from coding_agent_playbook.hook_runtime.config.guard_config import GUARD_CONFIG_REL
-from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import CONTROL_PLANE
-from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
+from coding_agent_playbook.hook_runtime.config.schema import (
+    CONTROL_PLANE,
+    GUARD_CONFIG_REL,
+    GUARD_CONFIG_SCHEMA,
+    HOOKS_OUTPUT_DIR,
+    PRECOMMIT_CONFIG,
     playbook_precommit_ids,
 )
 from coding_agent_playbook.hook_runtime.judges.notebook_check import NOTEBOOK_MAX_BYTES
@@ -121,8 +124,6 @@ if TYPE_CHECKING:
 
 __all__ = [
     "GUARD_CONFIG_PATH",
-    "GUARD_CONFIG_SCHEMA",
-    "HOOKS_OUTPUT_DIR",
     "HOOK_ARTIFACTS",
     "SYNC_OUTPUT_LOCATIONS",
     "CopiedScripts",
@@ -147,10 +148,6 @@ __all__ = [
 
 #: The one repo-relative path, shared with the runtime that reads it.
 GUARD_CONFIG_PATH: Final = GUARD_CONFIG_REL
-#: ``hook_runtime.config.guard_config.SUPPORTED_SCHEMA_VERSIONS`` must include it.
-GUARD_CONFIG_SCHEMA: Final = 1
-#: guard_config.json plus the copied scripts; protected as a whole tree (§E.1).
-HOOKS_OUTPUT_DIR: Final = ".coding-agent-playbook/hooks/"
 #: Joins the adapters' ``output_locations`` in the leftover policy, so disabling
 #: hooks deletes the pristine sync-level outputs (no adapter declares them).
 SYNC_OUTPUT_LOCATIONS: Final[tuple[str, ...]] = (HOOKS_OUTPUT_DIR,)
@@ -162,8 +159,6 @@ HOOK_ARTIFACTS: Final[tuple[str, ...]] = (
     OPENCODE_SHIM_PATH,
 )
 
-#: The pre-commit config whose playbook hook ids control-plane-guard keeps (§E.1).
-PRECOMMIT_CONFIG: Final = ".pre-commit-config.yaml"
 #: Pre-commit configs are small; a larger one is not scanned.
 _PRECOMMIT_MAX_BYTES: Final = 1024 * 1024
 

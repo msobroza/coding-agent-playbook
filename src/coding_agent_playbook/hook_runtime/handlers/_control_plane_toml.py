@@ -26,17 +26,15 @@ key list the session-start briefing checks ``.local.toml`` against.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook.hook_runtime.config.schema import DEFAULT_POLICY_KEYS, PolicyKeys
 from coding_agent_playbook.hook_runtime.decision import Decision
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
 __all__ = [
-    "DEFAULT_POLICY_KEYS",
-    "PolicyKeys",
     "local_policy_overrides",
     "metrics_loosened",
     "toml_verdict",
@@ -44,28 +42,6 @@ __all__ = [
 
 _ABSENT: Final = object()
 type Path = tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class PolicyKeys:
-    """The dotted policy key paths of each verdict row (the ``control_plane.toml_*`` table rows).
-
-    Example: ``PolicyKeys().deny == ("hooks", "guardrails")``.
-    """
-
-    deny: tuple[str, ...] = ("hooks", "guardrails")
-    ask: tuple[str, ...] = ("adapters_enabled", "detector_cache", "engine.version")
-    ask_removals: tuple[str, ...] = ("overlays_enabled",)
-    ask_additions: tuple[str, ...] = ("links.allowed_domains",)
-    loosening: tuple[str, ...] = ("metrics",)
-
-    @property
-    def every(self) -> tuple[str, ...]:
-        """Every policy key path, in row order."""
-        return (*self.deny, *self.ask, *self.ask_removals, *self.ask_additions, *self.loosening)
-
-
-DEFAULT_POLICY_KEYS: Final = PolicyKeys()
 
 
 def toml_verdict(
