@@ -17,6 +17,6 @@ The references index in this file lists only the references that apply to this r
 
 - A lint or type-check finding, a suppression comment, or ruff or mypy settings: static checks.
 - Test-runner settings, markers, warning filters or coverage thresholds: the test runner's configuration.
-- Adding, removing or upgrading a dependency, the lockfile, or running project commands: the package manager's workflow (uv workflow).
+- Adding, removing or upgrading a dependency, the lockfile, or running project commands: uv workflow.
 - Parsing untrusted input or loading settings into models: Pydantic boundaries.
 - Web apps, routers, dependency providers or error handlers: FastAPI app wiring and FastAPI error boundaries.

@@ -46,7 +46,7 @@ changelog entry is v0.21.
 | Keeping your own scoped rules in `playbook/rules/` or an overlay | Add `skill: <skill-id>` to each before upgrading ("Add skill: to your own scoped rules"). Until then `playbook validate` fails and `playbook sync` refuses to run. |
 | Tooling or prompts that match lint-feedback lines (`rule <id>: …`) | Accept the new `rule <id> (skill <skill>): …` prefix and the ` (rule <id>, skill <skill>)` suffix; the next `playbook sync` turns them on. See "Guardrails and lint feedback point at skills". |
 | A repo with hooks on (the new `skill-nudge` hook) | Nothing: the next `playbook sync` turns it on. To keep it off, add `disable = ["skill-nudge"]` to `[hooks]`. See "Guardrails and lint feedback point at skills". |
-| Any repo with Python code (distilled python-best-practices content) | Nothing but `playbook sync`: `python-coding` gains three references and six change text; with pytest, `python-testing` gains two and `pytest` changes text; and `python-tooling` is now written in every Python repo, with up to four new references and a reworded "Where guidance lives" line. An overlay or repo-local rule with one of the nine new ids now replaces the core rule. See "Distilled python-best-practices content". |
+| Any repo with Python code (distilled python-best-practices content) | Nothing but `playbook sync`: `python-coding` gains three references and six change text; with pytest, `python-testing` gains two and `pytest` changes text; and `python-tooling` is now written in every Python repo, with up to four new references and a new (or, with FastAPI, reworded) "Where guidance lives" line. An overlay or repo-local rule with one of the nine new ids now replaces the core rule. See "Distilled python-best-practices content". |
 
 ### `package_manager` and per-key validation
 
@@ -386,9 +386,10 @@ ideas are written fresh in the catalog's own words. There is nothing to do but
   two new references.
 - **Not changed.** Rule ids, gates and priorities of the existing rules; every
   rule's `lint_codes`, so lint feedback reports exactly what it did before; the
-  always rules. `AGENTS.md` and the Claude Code rules file change only in the
-  `python-tooling` line of "Where guidance lives". `playbook sync --check`
-  reports drift until the repo re-syncs, as for any content upgrade.
+  always rules. `AGENTS.md` and the Claude Code rules file change only in their
+  `python-tooling` line of "Where guidance lives", which is new in a repo
+  without FastAPI and reworded in one with it. `playbook sync --check` reports
+  drift until the repo re-syncs, as for any content upgrade.
 
 ## v0.20 — Assistant lifecycle hooks (PR K)
 
