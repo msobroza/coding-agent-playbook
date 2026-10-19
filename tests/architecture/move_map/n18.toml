@@ -1,0 +1,68 @@
+# N18 (#99, specs/prT-package-layout.md 7.4): SafeGit and its helpers become the
+# hook_runtime/git/ package. hook_runtime/git.py -> git/safe_git.py is a
+# same-name conversion; _git_parse becomes the public git/parse.py.
+
+[[module]]
+pr = "N18"
+old = "coding_agent_playbook.hook_runtime.git"
+new = "coding_agent_playbook.hook_runtime.git.safe_git"
+
+[[module]]
+pr = "N18"
+old = "coding_agent_playbook.hook_runtime._git_argv"
+new = "coding_agent_playbook.hook_runtime.git._argv"
+
+[[module]]
+pr = "N18"
+old = "coding_agent_playbook.hook_runtime._git_cache"
+new = "coding_agent_playbook.hook_runtime.git._cache"
+
+[[module]]
+pr = "N18"
+old = "coding_agent_playbook.hook_runtime._git_fingerprint"
+new = "coding_agent_playbook.hook_runtime.git._fingerprint"
+
+[[module]]
+pr = "N18"
+old = "coding_agent_playbook.hook_runtime._git_memo"
+new = "coding_agent_playbook.hook_runtime.git.memo"
+
+[[module]]
+pr = "N18"
+old = "coding_agent_playbook.hook_runtime._git_parse"
+new = "coding_agent_playbook.hook_runtime.git.parse"
+
+[[module]]
+pr = "N18"
+old = "coding_agent_playbook.hook_runtime.git_log"
+new = "coding_agent_playbook.hook_runtime.git.log"
+
+[[module]]
+pr = "N18"
+old = "coding_agent_playbook.hook_runtime.git_range"
+new = "coding_agent_playbook.hook_runtime.git.range"
+
+[[module]]
+pr = "N18"
+old = "coding_agent_playbook.hook_runtime._head_snapshot"
+new = "coding_agent_playbook.hook_runtime.git.head_snapshot"
+
+[[path]]
+pr = "N18"
+old = "tests/hook_runtime/test_safegit.py"
+new = "tests/hook_runtime/git/test_safe_git.py"
+
+[[path]]
+pr = "N18"
+old = "tests/hook_runtime/test_git_log.py"
+new = "tests/hook_runtime/git/test_log.py"
+
+[[path]]
+pr = "N18"
+old = "tests/hook_runtime/test_git_memo.py"
+new = "tests/hook_runtime/git/test_memo.py"
+
+[[path]]
+pr = "N18"
+old = "tests/hook_runtime/test_git_range.py"
+new = "tests/hook_runtime/git/test_range.py"

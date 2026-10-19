@@ -66,7 +66,7 @@ _FORBIDDEN_LIBRARIES: Final = (
 #: from the package tree, so a new top-level package is forbidden until it joins
 #: ``tests.engine_modules.STDLIB_LEAVES`` on purpose.
 FORBIDDEN: Final = (*_FORBIDDEN_LIBRARIES, *non_leaf_modules("hook_runtime"))
-_GIT_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.git")
+_GIT_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.git.safe_git")
 _IMPORT_LINE: Final = re.compile(r"^import time:\s+\d+ \|\s+\d+ \|\s*(\S+)\s*$")
 
 

@@ -585,10 +585,6 @@ ignore_imports = [
     # handlers/; A16 moves _sink_regex to handlers/feedback/ (apply renames this
     # line); no scheduled PR removes it: the fallback would have to join judges/
     "coding_agent_playbook.hook_runtime.judges.sink_scan -> coding_agent_playbook.hook_runtime.handlers._sink_regex",
-    # N18: becomes hook_runtime/git/parse.py
-    "coding_agent_playbook.commands.twins._secret_scope -> coding_agent_playbook.hook_runtime._git_parse",
-    "coding_agent_playbook.commands.twins.check_notebooks -> coding_agent_playbook.hook_runtime._git_parse",
-    "coding_agent_playbook.commands.twins.scan_sinks -> coding_agent_playbook.hook_runtime._git_parse",
     # N21: becomes hook_runtime/harness/payload.py
     "coding_agent_playbook.hook_runtime.dispatch -> coding_agent_playbook.hook_runtime.harness._payload",
 ]

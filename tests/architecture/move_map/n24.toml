@@ -1,0 +1,71 @@
+# N24 (#104, specs/prT-package-layout.md 4.7, 7.4): the eval-only check families
+# (they read ctx.tree, ctx.artifact or ctx.trials) leave the grading kernel for
+# evals/checks/, and the named gate and rubric registries move beside the task
+# compiler, their only consumer. Both registries keep their entry-point groups (L2).
+
+[[module]]
+pr = "N24"
+old = "coding_agent_playbook.evaluators.checks.files"
+new = "coding_agent_playbook.evals.checks.files"
+
+[[module]]
+pr = "N24"
+old = "coding_agent_playbook.evaluators.checks.answer"
+new = "coding_agent_playbook.evals.checks.answer"
+
+[[module]]
+pr = "N24"
+old = "coding_agent_playbook.evaluators.checks.aggregate"
+new = "coding_agent_playbook.evals.checks.aggregate"
+
+[[module]]
+pr = "N24"
+old = "coding_agent_playbook.evaluators.gates"
+new = "coding_agent_playbook.evals.compile.gate_registry"
+
+[[module]]
+pr = "N24"
+old = "coding_agent_playbook.evaluators.rubrics"
+new = "coding_agent_playbook.evals.compile.rubric_registry"
+
+# The evaluators/checks/__init__.py re-exports of the moved families, removed:
+# importers name the defining module.
+[[names]]
+pr = "N24"
+old = "coding_agent_playbook.evaluators.checks"
+new = "coding_agent_playbook.evals.checks.files"
+names = ["FileContainsCheck", "FileExistsCheck", "FileForbiddenCheck", "FileUnchangedCheck"]
+
+[[names]]
+pr = "N24"
+old = "coding_agent_playbook.evaluators.checks"
+new = "coding_agent_playbook.evals.checks.answer"
+names = ["AnswerMatchesCheck"]
+
+[[names]]
+pr = "N24"
+old = "coding_agent_playbook.evaluators.checks"
+new = "coding_agent_playbook.evals.checks.aggregate"
+names = ["AggregateCheck", "PassAtK", "PassPowK"]
+
+# The evaluators/__init__.py rubric re-exports, removed (L2).
+[[names]]
+pr = "N24"
+old = "coding_agent_playbook.evaluators"
+new = "coding_agent_playbook.evals.compile.rubric_registry"
+names = ["all_rubric_names", "get_rubric", "register_rubric"]
+
+[[path]]
+pr = "N24"
+old = "tests/evaluators/test_answer_check.py"
+new = "tests/evals/test_answer_check.py"
+
+[[path]]
+pr = "N24"
+old = "tests/evaluators/test_gate_registry.py"
+new = "tests/evals/test_gate_registry.py"
+
+[[path]]
+pr = "N24"
+old = "tests/evaluators/test_rubrics_registry.py"
+new = "tests/evals/test_rubric_registry.py"

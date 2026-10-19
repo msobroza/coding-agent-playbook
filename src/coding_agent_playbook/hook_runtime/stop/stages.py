@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.git import Fingerprint
+    from coding_agent_playbook.hook_runtime.git.safe_git import Fingerprint
 
 __all__ = [
     "DEFAULT_BUDGET_S",

@@ -28,7 +28,7 @@ from coding_agent_playbook.hook_runtime.escape import (
     settings_files,
 )
 from coding_agent_playbook.hook_runtime.event import RepoInfo
-from coding_agent_playbook.hook_runtime.git import GitTimeout
+from coding_agent_playbook.hook_runtime.git.safe_git import GitTimeout
 from tests.hook_runtime.fakes import FakeGit
 
 _PROXIES = ("proxy", "proxy run")

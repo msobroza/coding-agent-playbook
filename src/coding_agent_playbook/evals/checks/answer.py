@@ -1,6 +1,6 @@
 """The deterministic ``answer_matches`` check — gate on what the agent *said*.
 
-The file checks in :mod:`coding_agent_playbook.evaluators.checks.files` gate on
+The file checks in :mod:`coding_agent_playbook.evals.checks.files` gate on
 what the agent *did* (the candidate tree). This one gates on the graded
 **artifact** (:attr:`EvalContext.artifact`), which for a review-only task is the
 agent's answer: such a task forbids edits (a ``file_unchanged`` gate), so it

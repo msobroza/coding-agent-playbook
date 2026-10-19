@@ -4,7 +4,7 @@
 passing a fake (``FakeProc``, ``FakeGit``, ``FakeClock``, ``FakeTrustStore``)
 instead of patching a module. The ports are structural ``Protocol``s: K1's
 ``security.trust.TrustStore`` satisfies :class:`TrustPort` without this
-module importing it, and :class:`~coding_agent_playbook.hook_runtime.git.GitPort`
+module importing it, and :class:`~coding_agent_playbook.hook_runtime.git.safe_git.GitPort`
 lives beside its one real implementation, ``SafeGit``.
 
 Import-light: ``threading`` is imported only when a real timer is made.
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.evaluators.execution.project import ProjectHandle
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
-    from coding_agent_playbook.hook_runtime.git import GitPort
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.proc import ProcResult
     from coding_agent_playbook.hook_runtime.registry import HandlerResolver
     from coding_agent_playbook.hook_runtime.state import StateStore

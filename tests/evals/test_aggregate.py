@@ -7,7 +7,7 @@ successes), reduced over a chosen ``over`` axis (``gate`` / ``rubric`` /
 ``verdict``) and graded against an absolute ``warn``/``fail`` floor.
 
 These cover the two estimators on hand-verified ``(n, c, k)`` triples, the
-:class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck` grade
+:class:`~coding_agent_playbook.evals.checks.aggregate.AggregateCheck` grade
 over synthetic trials (the ``over`` selector + threshold → pass/fail), and the
 handle/compile wiring (the ``metric``-alone aggregate handle, ``trials_needed`` =
 ``max(k)``, and the no-aggregate degeneracy ⇒ ``None``/``1``).
@@ -17,14 +17,14 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.evals.compile._handles import build_handles
-from coding_agent_playbook.evals.compile.compiler import compile_task
-from coding_agent_playbook.evaluators.check import MeasurementSet
-from coding_agent_playbook.evaluators.checks.aggregate import (
+from coding_agent_playbook.evals.checks.aggregate import (
     AggregateCheck,
     PassAtK,
     PassPowK,
 )
+from coding_agent_playbook.evals.compile._handles import build_handles
+from coding_agent_playbook.evals.compile.compiler import compile_task
+from coding_agent_playbook.evaluators.check import MeasurementSet
 from coding_agent_playbook.evaluators.checks.compose import AllOf
 from coding_agent_playbook.evaluators.checks.registry import get_check
 from coding_agent_playbook.evaluators.scope import CostTier, Determinism

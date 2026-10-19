@@ -28,7 +28,7 @@ from coding_agent_playbook.security.commit_trailers import commit_msg_violations
 if TYPE_CHECKING:
     import argparse
 
-    from coding_agent_playbook.hook_runtime.git import SafeGit
+    from coding_agent_playbook.hook_runtime.git.safe_git import SafeGit
     from coding_agent_playbook.security.commit_trailers import GitPolicy
 
 __all__ = ["range_messages", "run", "violation_lines"]
@@ -85,7 +85,7 @@ def range_messages(git: SafeGit, text: str) -> list[tuple[str, str]]:
         [('9f2c1a7b3d4e', 'feat: x\\n\\nRefs: AB-1\\n')]
     """
     from coding_agent_playbook.commands.twins._git_scope import resolve_range
-    from coding_agent_playbook.hook_runtime.git_range import checked_rev
+    from coding_agent_playbook.hook_runtime.git.range import checked_rev
 
     span = resolve_range(git, text)
     revs = f"{checked_rev(span.base)}..{checked_rev(span.head)}"
