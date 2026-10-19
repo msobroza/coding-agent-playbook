@@ -25,14 +25,14 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook.hook_runtime.caps import clean_text, clip, quote_data
+from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip, quote_data
 from coding_agent_playbook.hook_runtime.proc import ProcTimeout
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from coding_agent_playbook.hook_runtime.deps import Clock, ProcPort
-    from coding_agent_playbook.hook_runtime.event import RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.judges.commit_cutover import CzPlan
     from coding_agent_playbook.hook_runtime.registry import HandlerContext

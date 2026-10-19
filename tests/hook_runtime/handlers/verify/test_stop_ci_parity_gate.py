@@ -22,8 +22,8 @@ import pytest
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.git.safe_git import Fingerprint
 from coding_agent_playbook.hook_runtime.handlers.stop_drift_and_orphan_gate import DriftStage
 from coding_agent_playbook.hook_runtime.registry import load_builtin

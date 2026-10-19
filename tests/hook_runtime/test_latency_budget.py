@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from tests.hook_runtime.guard_repo import GuardRepo, hook_record
 from tests.import_probe import PROBE_TIMEOUT_S, probe_env
 

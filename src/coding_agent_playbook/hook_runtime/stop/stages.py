@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any, Final, Literal, Protocol
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.git.safe_git import Fingerprint
 
 __all__ = [

@@ -24,8 +24,8 @@ import re
 import sys
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.caps import clean_text, quote_data
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, quote_data
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence

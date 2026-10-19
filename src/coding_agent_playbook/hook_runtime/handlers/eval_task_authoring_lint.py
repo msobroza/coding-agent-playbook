@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.artifacts.path_classes import task_path
-from coding_agent_playbook.hook_runtime.caps import clean_text, quote_data
+from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, quote_data
 from coding_agent_playbook.hook_runtime.handlers._source_changed import (
     DEBOUNCE_S,
     MAX_FAIL_LINES,
@@ -46,8 +46,8 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
-    from coding_agent_playbook.hook_runtime.decision import HandlerResult
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
 __all__ = ["ESCAPE_HINT", "MAX_SHOW_LINES", "eval_task_authoring_lint"]

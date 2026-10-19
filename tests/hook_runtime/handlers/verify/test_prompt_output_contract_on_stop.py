@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.artifacts.prompt import Prompt
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.git.safe_git import Fingerprint
 from coding_agent_playbook.hook_runtime.state.active_prompt import TurnRecord, write_turn_record
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME, StateStore

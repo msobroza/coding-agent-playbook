@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING, Final
 import pytest
 
 from coding_agent_playbook.commands import validate as _validate
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 from coding_agent_playbook.sync import pipeline as _sync
 from tests.cli.hook_repo import CONFIG, GUARD_CONFIG, hook_deps

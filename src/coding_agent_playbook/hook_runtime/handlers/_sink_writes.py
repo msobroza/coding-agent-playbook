@@ -25,8 +25,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
 from coding_agent_playbook.hook_runtime.edit_preview import preview_after
-from coding_agent_playbook.hook_runtime.event import ToolClass
 from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths, repo_file
 from coding_agent_playbook.hook_runtime.judges.notebook_cells import (
     cell_index,
@@ -38,7 +38,7 @@ from coding_agent_playbook.hook_runtime.judges.notebook_cells import (
 
 if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
-    from coding_agent_playbook.hook_runtime.event import ToolCall
+    from coding_agent_playbook.hook_runtime.dispatch.event import ToolCall
 
 __all__ = ["MAX_FILE_BYTES", "SinkWrite", "notebook_edit_images", "sink_writes"]
 

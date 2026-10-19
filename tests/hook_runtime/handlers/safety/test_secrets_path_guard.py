@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import Harness
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.hook_runtime.handlers._secret_inodes import build_inode_index
 from coding_agent_playbook.hook_runtime.handlers.secret_paths import ADVICE, ENV_CONTEXT
 from coding_agent_playbook.security.paths import DEFAULT_PATH_POLICY

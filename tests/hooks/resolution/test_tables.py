@@ -17,13 +17,13 @@ from coding_agent_playbook.artifacts.hook_schema import (
     HookOnError,
     ToolClass,
 )
-from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS
-from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.harness.wire import CLAUDE_EVENT_NAMES
-from coding_agent_playbook.hook_runtime.policy import (
+from coding_agent_playbook.hook_runtime.dispatch.decision import EVENT_DECISIONS
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.policy import (
     ENGINE_DEADLINE_CAP_MS as RUNTIME_DEADLINE_CAP_MS,
 )
-from coding_agent_playbook.hook_runtime.policy import ON_ERROR_ALLOWED
+from coding_agent_playbook.hook_runtime.dispatch.policy import ON_ERROR_ALLOWED
+from coding_agent_playbook.hook_runtime.harness.wire import CLAUDE_EVENT_NAMES
 from coding_agent_playbook.hooks.resolution.tables import (
     ADVISORY_RULE_PREFIX,
     DEGRADED_EVENTS,
@@ -221,12 +221,13 @@ def test_hooks_package_imports_only_the_stdlib() -> None:
         "coding_agent_playbook.hook_runtime._event_memo",  # HandlerContext.memo (K7)
         "coding_agent_playbook.hook_runtime.config",
         "coding_agent_playbook.hook_runtime.config.keys",
-        "coding_agent_playbook.hook_runtime.decision",
-        "coding_agent_playbook.hook_runtime.event",
+        "coding_agent_playbook.hook_runtime.dispatch",
+        "coding_agent_playbook.hook_runtime.dispatch.decision",
+        "coding_agent_playbook.hook_runtime.dispatch.event",
+        "coding_agent_playbook.hook_runtime.dispatch.paths",
+        "coding_agent_playbook.hook_runtime.dispatch.policy",
         "coding_agent_playbook.hook_runtime.harness",
         "coding_agent_playbook.hook_runtime.harness.wire",
-        "coding_agent_playbook.hook_runtime.paths",
-        "coding_agent_playbook.hook_runtime.policy",
         "coding_agent_playbook.hook_runtime.registry",
         "coding_agent_playbook.hook_runtime.shell",
         # H21's wrapper-prefix rule, one source with the dispatcher's env check

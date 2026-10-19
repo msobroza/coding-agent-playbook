@@ -28,12 +28,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.generated_output.sentinel import file_has_sentinel
-from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.config.lock_digest import MAX_LOCK_BYTES, load_toml
 from coding_agent_playbook.hook_runtime.config.protected import protected_paths
 from coding_agent_playbook.hook_runtime.config.reader import read_small_file
 from coding_agent_playbook.hook_runtime.config.schema import LOCKFILE_REL
-from coding_agent_playbook.hook_runtime.paths import fold_key
+from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
 from coding_agent_playbook.lockfile.drift import drift_entries
 from coding_agent_playbook.lockfile.model import Lockfile
 

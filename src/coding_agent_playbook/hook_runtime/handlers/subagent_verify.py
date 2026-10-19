@@ -29,13 +29,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime._agent_transcript import TranscriptError, edited_files
-from coding_agent_playbook.hook_runtime.caps import OutputCaps, quote_data
 from coding_agent_playbook.hook_runtime.config.guard_tables import (
     DEFAULT_MAX_BLOCKS,
     MAX_BLOCKS_RANGE,
 )
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.caps import OutputCaps, quote_data
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.paths import normalize_path
 from coding_agent_playbook.hook_runtime.git.head_snapshot import head_moved_note
 from coding_agent_playbook.hook_runtime.handlers._lint_stage import LintStage
 from coding_agent_playbook.hook_runtime.handlers._verify_claim import completion_claim
@@ -44,7 +45,6 @@ from coding_agent_playbook.hook_runtime.handlers.stop_ci_parity_gate import (
     build_stage,
     trust_opener,
 )
-from coding_agent_playbook.hook_runtime.paths import normalize_path
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
 from coding_agent_playbook.hook_runtime.stop.coordinator import (
@@ -60,7 +60,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from coding_agent_playbook.hook_runtime.deps import Clock
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.state.store import StateStore
     from coding_agent_playbook.hook_runtime.stop.coordinator import StopOutcome

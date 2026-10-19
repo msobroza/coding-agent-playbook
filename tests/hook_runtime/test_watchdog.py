@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.dispatch import run_event
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.run import run_event
 from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT, WireOutput
 from coding_agent_playbook.hook_runtime.registry import HANDLER_ATTR, HandlerDeclaration
 from coding_agent_playbook.hook_runtime.watchdog import OutputGate, Watchdog
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.proc import SubprocessProc
     from coding_agent_playbook.hook_runtime.registry import HandlerContext, HandlerFn
 

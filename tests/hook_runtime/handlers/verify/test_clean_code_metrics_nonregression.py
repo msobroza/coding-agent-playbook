@@ -15,9 +15,9 @@ import pytest
 
 from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, EventName, Harness
 from coding_agent_playbook.hook_runtime.escape import EscapeHatches
-from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, Harness
 from coding_agent_playbook.hook_runtime.git.parse import AddedLine
 from coding_agent_playbook.hook_runtime.handlers.docstring_nonregression import DocstringsStage
 from coding_agent_playbook.hook_runtime.handlers.quality_metrics import QualityMetricsStage

@@ -18,13 +18,13 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.artifacts.hook_schema import ADVISORY_RULE_PREFIX, ADVISORY_RULE_PRIORITY
-from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS
-from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.harness.wire import CLAUDE_EVENT_NAMES
-from coding_agent_playbook.hook_runtime.policy import (
+from coding_agent_playbook.hook_runtime.dispatch.decision import EVENT_DECISIONS
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.policy import (
     ENGINE_DEADLINE_CAP_MS as RUNTIME_DEADLINE_CAP_MS,
 )
-from coding_agent_playbook.hook_runtime.policy import ON_ERROR_ALLOWED
+from coding_agent_playbook.hook_runtime.dispatch.policy import ON_ERROR_ALLOWED
+from coding_agent_playbook.hook_runtime.harness.wire import CLAUDE_EVENT_NAMES
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

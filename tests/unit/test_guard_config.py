@@ -57,7 +57,7 @@ from coding_agent_playbook.hook_runtime.config.schema import (
     GUARD_CONFIG_REL,
     playbook_precommit_ids,
 )
-from coding_agent_playbook.hook_runtime.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
 from coding_agent_playbook.lockfile.model import LockEntry, Provenance
 from coding_agent_playbook.security.patterns import (

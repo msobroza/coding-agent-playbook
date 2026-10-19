@@ -25,8 +25,8 @@ from typing import TYPE_CHECKING, Any, Final
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
-    from coding_agent_playbook.hook_runtime.event import ToolCall
-    from coding_agent_playbook.hook_runtime.paths import NormalizedPath
+    from coding_agent_playbook.hook_runtime.dispatch.event import ToolCall
+    from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
 
 __all__ = ["DEPENDENCIES", "FLAGS", "INSTALL_PROGRAMS", "detector_triggers", "inputs_changed"]
 

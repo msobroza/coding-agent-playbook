@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, EventName
 from coding_agent_playbook.hook_runtime.harness.opencode import parse_opencode
 from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT, ParseContext, WireOutput
 from coding_agent_playbook.templates.hook_shims.opencode_wire_port import DEFAULT_REASON

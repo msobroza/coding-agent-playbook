@@ -19,8 +19,8 @@ from coding_agent_playbook.hook_runtime.diagnostics.heartbeat import (
     degraded_line,
     ok_line,
 )
-from coding_agent_playbook.hook_runtime.dispatch import run_event
-from coding_agent_playbook.hook_runtime.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.run import run_event
 from tests.hook_runtime.guard_repo import hook_record
 
 if TYPE_CHECKING:

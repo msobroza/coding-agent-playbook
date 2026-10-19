@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
 from coding_agent_playbook.hook_runtime.escape import (
     ALLOW_GENERATED_EDIT_VAR,
     GATE_VAR,
@@ -27,7 +28,6 @@ from coding_agent_playbook.hook_runtime.escape import (
     read_escape_hatches,
     settings_files,
 )
-from coding_agent_playbook.hook_runtime.event import RepoInfo
 from coding_agent_playbook.hook_runtime.git.safe_git import GitTimeout
 from tests.hook_runtime.fakes import FakeGit
 

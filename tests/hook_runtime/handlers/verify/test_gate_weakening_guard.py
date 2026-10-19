@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.policy import UNATTENDED_ENV_VAR
 from coding_agent_playbook.hook_runtime.git.parse import AddedLine, DiffLines
 from coding_agent_playbook.hook_runtime.handlers.gate_weakening import FIX_HINT, scan_policy
 from coding_agent_playbook.hook_runtime.judges.gate_weakening import ScanPolicy
-from coding_agent_playbook.hook_runtime.policy import UNATTENDED_ENV_VAR
 from coding_agent_playbook.hook_runtime.registry import load_builtin
 from tests.hook_runtime.handlers.pack_repo import engine_hook
 from tests.hook_runtime.handlers.stop_kit import changed_git, reason_lines, stop, stop_payload

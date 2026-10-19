@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.decision import Decision, supported_decision
-from coding_agent_playbook.hook_runtime.event import (
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, supported_decision
+from coding_agent_playbook.hook_runtime.dispatch.event import (
     CanonicalEvent,
     EventName,
     Harness,
@@ -48,8 +48,8 @@ from coding_agent_playbook.hook_runtime.harness.wire import (
 )
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.hook_runtime.decision import CombinedResult
-    from coding_agent_playbook.hook_runtime.event import ToolCall
+    from coding_agent_playbook.hook_runtime.dispatch.decision import CombinedResult
+    from coding_agent_playbook.hook_runtime.dispatch.event import ToolCall
     from coding_agent_playbook.hook_runtime.harness.payload import Payload
     from coding_agent_playbook.hook_runtime.harness.wire import ParseContext, ParseOutcome
 

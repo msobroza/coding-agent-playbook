@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.hook_runtime._ports import LazyGit
+from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
 from coding_agent_playbook.hook_runtime.git.safe_git import GitError, LoggedCommit, SafeGit
-from coding_agent_playbook.hook_runtime.paths import find_repo
 from tests.hook_runtime.fakes import FakeGit
 from tests.hook_runtime.guard_repo import GuardRepo
 

@@ -30,10 +30,10 @@ from coding_agent_playbook.hook_runtime.config.schema import (
     HOOK_RECORD_KEYS,
     LOCKFILE_REL,
 )
-from coding_agent_playbook.hook_runtime.decision import Decision
-from coding_agent_playbook.hook_runtime.event import EventName, RepoInfo
-from coding_agent_playbook.hook_runtime.paths import fold_key
-from coding_agent_playbook.hook_runtime.policy import ENGINE_DEADLINE_CAP_MS
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, RepoInfo
+from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
+from coding_agent_playbook.hook_runtime.dispatch.policy import ENGINE_DEADLINE_CAP_MS
 from coding_agent_playbook.hook_runtime.shell.parse import ShellConfig
 from coding_agent_playbook.hook_runtime.state.store import StateStore
 from coding_agent_playbook.hooks.resolution.resolved import ResolvedHandler, ResolvedHook
