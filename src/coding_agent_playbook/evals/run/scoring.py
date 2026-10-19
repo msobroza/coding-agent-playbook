@@ -1,16 +1,16 @@
 """Scoring bridge — grade an agent's output through the compiled task.
 
-:func:`score` turns a materialized :class:`~coding_agent_playbook.evals.runner.Baseline`
-and the captured :class:`~coding_agent_playbook.evals.runner.Candidate` into one
+:func:`score` turns a materialized :class:`~coding_agent_playbook.evals.run.harness_runner.Baseline`
+and the captured :class:`~coding_agent_playbook.evals.run.harness_runner.Candidate` into one
 :class:`~coding_agent_playbook.evaluators.types.EvaluationReport`. It sources the
-checks from the task compiler (:mod:`coding_agent_playbook.evals._compile`):
+checks from the task compiler (:mod:`coding_agent_playbook.evals.compile.compiler`):
 the task's ``[gate]``/``[rubric]`` blocks compile (via
 :func:`~coding_agent_playbook.evals.task.compile_eval_task`) into one per-trial
 :class:`~coding_agent_playbook.evaluators.rubric.Rubric` carrying the two named
 layer checks (``id="gate"`` / ``id="rubric"``), and a single
 :meth:`Rubric.evaluate` folds them into the report. The per-trial **verdict** is
 then *derived* from the layer results with skipped-neutral semantics
-(:func:`~coding_agent_playbook.evals._compile.verdict_passed`) and written onto
+(:func:`~coding_agent_playbook.evals.compile.compiler.verdict_passed`) and written onto
 ``report.passed``.
 
 The measurement layer still pre-computes the metric values the metric-backed
@@ -55,7 +55,7 @@ from coding_agent_playbook.evaluators.checks.compose import AllOf, AnyOf, Not
 from coding_agent_playbook.evaluators.execution.project import ProjectHandle
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.evals.runner import Baseline, Candidate
+    from coding_agent_playbook.evals.run.harness_runner import Baseline, Candidate
     from coding_agent_playbook.evals.task import EvalTask
     from coding_agent_playbook.evaluators import JudgeLike, ModuleModel
     from coding_agent_playbook.evaluators.check import Check
@@ -105,9 +105,9 @@ def score(
     default (cost-saving); ``--full-scoring`` flips it off. It is ignored for a
     task whose verdict or aggregate the short-circuit could change (an ``or``
     verdict, a weighted verdict, an aggregate over a skippable layer — see
-    :attr:`~coding_agent_playbook.evals._compile.CompiledTask.short_circuit_safe`).
+    :attr:`~coding_agent_playbook.evals.compile.compiler.CompiledTask.short_circuit_safe`).
     """
-    from coding_agent_playbook.evals._compile import verdict_passed, weighted_verdict
+    from coding_agent_playbook.evals.compile.compiler import verdict_passed, weighted_verdict
     from coding_agent_playbook.evals.task import compile_eval_task
 
     compiled = compile_eval_task(task)

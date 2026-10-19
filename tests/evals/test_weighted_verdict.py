@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.evals._compile import (
+from coding_agent_playbook.evals.compile._expr import parse
+from coding_agent_playbook.evals.compile.compiler import (
     VerdictSpec,
     _layer_score,
     _mean_leaf_scores,
     weighted_verdict,
 )
-from coding_agent_playbook.evals._expr import parse
 from coding_agent_playbook.evaluators.scope import CostTier, Determinism
 from coding_agent_playbook.evaluators.types import (
     CheckResult,

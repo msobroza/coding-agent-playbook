@@ -9,15 +9,15 @@ The defining design choice is that the verdict is **derived, not re-run**. The
 per-trial rubric evaluates **gate once** and **rubric once** - they are its two
 checks. The ``[verdict].trial`` expression (default ``"gate and rubric"``) is a
 boolean function over the two layers' ``passed`` results, evaluated *after* the
-rubric ran via :func:`~coding_agent_playbook.evals._expr.eval_bool` over
+rubric ran via :func:`~coding_agent_playbook.evals.compile._expr.eval_bool` over
 ``{"gate": …, "rubric": …}``. If the verdict were instead a third *check* that
 re-composed gate/rubric, the judge (rubric) and the test suite / file predicates
 (gate) would be invoked **twice** per trial; deriving it from the already-run
 ``CheckResult`` rows keeps each layer single-shot.
 
 Each layer is compiled from its ``[<layer>.bind]`` table (via
-:func:`~coding_agent_playbook.evals._handles.build_handles`) and its ``expr``
-(via :func:`~coding_agent_playbook.evals._expr.compile_expr`), then wrapped in a
+:func:`~coding_agent_playbook.evals.compile._handles.build_handles`) and its ``expr``
+(via :func:`~coding_agent_playbook.evals.compile._expr.compile_expr`), then wrapped in a
 single-child :class:`~coding_agent_playbook.evaluators.checks.compose.AllOf`
 labeled with the layer id so the layer check's ``id`` is **always** ``"gate"`` /
 ``"rubric"`` (a bare single-name ``expr`` compiles to the handle check itself,
@@ -29,7 +29,7 @@ and no ``expr`` is an error - the author must compose them.
 This compiler is what the task pipeline runs:
 :func:`coding_agent_playbook.evals.task.compile_eval_task` calls
 :func:`compile_task` for the validator (trial-compile) and the scoring bridge
-(:mod:`coding_agent_playbook.evals.scoring`), and the runner reads
+(:mod:`coding_agent_playbook.evals.run.scoring`), and the runner reads
 :attr:`CompiledTask.trials_needed` + :attr:`CompiledTask.aggregate` to drive the
 multi-trial ``[aggregate]`` layer (the ``over`` selector flows through
 :func:`over_boolean`).
@@ -40,7 +40,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
-from coding_agent_playbook.evals._expr import (
+from coding_agent_playbook.evals.compile._expr import (
     And,
     Name,
     Node,
@@ -49,7 +49,7 @@ from coding_agent_playbook.evals._expr import (
     names,
     parse,
 )
-from coding_agent_playbook.evals._handles import build_handles
+from coding_agent_playbook.evals.compile._handles import build_handles
 from coding_agent_playbook.evaluators.checks.compose import AllOf
 from coding_agent_playbook.evaluators.rubric import Rubric
 
@@ -139,7 +139,7 @@ class CompiledTask:
         one of two layers, or a weighted verdict, a skipped (neutral) layer can
         flip it — e.g. ``trial = "rubric"`` with a failing gate passed. And (2) no
         ``[aggregate]`` reduces a layer the short-circuit could skip (one costlier
-        than the cheapest layer). :func:`coding_agent_playbook.evals.scoring.score`
+        than the cheapest layer). :func:`coding_agent_playbook.evals.run.scoring.score`
         turns ``fail_fast`` off when this is ``False``.
         """
         return self._verdict_is_full_conjunction() and not self._aggregate_reads_skippable_layer()
@@ -182,8 +182,8 @@ def _compile_layer(
 
     Returns ``None`` when ``bind_table`` is absent or empty - the layer is not
     present. Otherwise builds the handle map
-    (:func:`~coding_agent_playbook.evals._handles.build_handles`) and compiles
-    ``expr`` over it (:func:`~coding_agent_playbook.evals._expr.compile_expr`).
+    (:func:`~coding_agent_playbook.evals.compile._handles.build_handles`) and compiles
+    ``expr`` over it (:func:`~coding_agent_playbook.evals.compile._expr.compile_expr`).
     When ``expr`` is absent the layer defaults to its sole handle's name iff there
     is exactly one handle; with multiple handles and no ``expr`` it raises
     :exc:`ValueError` (the author must compose them).
@@ -248,7 +248,7 @@ def compile_task(
     table builds
     :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
     handles (via the ``metric``-alone fallback in
-    :func:`~coding_agent_playbook.evals._handles._build_one`), and its ``expr``
+    :func:`~coding_agent_playbook.evals.compile._handles._build_one`), and its ``expr``
     composes them - into :attr:`CompiledTask.aggregate` (``None`` when absent).
     :attr:`CompiledTask.trials_needed` is the ``max`` ``k`` over those handles,
     defaulting to **1** with no aggregate so the task runs a single trial.
@@ -360,7 +360,7 @@ def _compile_aggregate(
     aggregate ⇒ the runner runs a single trial). Otherwise builds the
     :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
     handle map (the ``metric``-alone fallback in
-    :func:`~coding_agent_playbook.evals._handles._build_one`), compiles ``expr``
+    :func:`~coding_agent_playbook.evals.compile._handles._build_one`), compiles ``expr``
     over it (defaulting to the sole handle's name for a single-handle layer; a
     multi-handle layer with no ``expr`` is a :exc:`ValueError`), and reads every
     reachable :class:`AggregateCheck`: ``trials_needed`` is the ``max`` of their
@@ -435,7 +435,7 @@ def verdict_passed(report: EvaluationReport, verdict_ast: Node) -> bool:
 def _eval_neutral(node: Node, env: Mapping[str, bool | None]) -> bool | None:
     """Tri-state fold of ``node`` over ``env``: ``True``/``False``/``None`` (neutral).
 
-    A :class:`~coding_agent_playbook.evals._expr.Name` resolves to its tri-state in
+    A :class:`~coding_agent_playbook.evals.compile._expr.Name` resolves to its tri-state in
     ``env`` (an absent name is neutral ``None``). ``And``/``Or`` drop neutral
     children and vote over the rest — an all-neutral ``And`` is ``None`` (vacuously
     fine), an all-neutral ``Or`` is ``None`` (nothing passed yet). ``Not`` over a

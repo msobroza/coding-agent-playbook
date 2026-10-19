@@ -1,6 +1,6 @@
 """End-to-end tests for the eval runner + scoring bridge (hermetic, C7).
 
-Everything runs through :class:`~coding_agent_playbook.evals.fake_runner.FakeRunner`
+Everything runs through :class:`~coding_agent_playbook.evals.run.fake_runner.FakeRunner`
 so there is no network or agent CLI: a fixture lays down a ``setup/`` tree (a long
 function + a passing test), then different fake mutations stand in for an agent's
 edits and we assert the resulting :class:`EvaluationReport`.
@@ -29,15 +29,15 @@ from typing import Any
 
 import pytest
 
-from coding_agent_playbook.evals.fake_runner import FakeRunner, write_files
-from coding_agent_playbook.evals.runner import (
+from coding_agent_playbook.evals.prompting import render_prompt
+from coding_agent_playbook.evals.run.fake_runner import FakeRunner, write_files
+from coding_agent_playbook.evals.run.harness_runner import (
     Baseline,
     Candidate,
     capture,
     materialize,
-    render_prompt,
 )
-from coding_agent_playbook.evals.scoring import score
+from coding_agent_playbook.evals.run.scoring import score
 from coding_agent_playbook.evals.task import EvalTask, TaskInvocation
 from coding_agent_playbook.evaluators import EvaluationReport
 from coding_agent_playbook.evaluators.types import CheckResult, ScopeDetail
@@ -947,7 +947,9 @@ def test_uv_sync_skipped_when_no_pyproject(monkeypatch: pytest.MonkeyPatch, tmp_
         calls.append(list(args))
         return subprocess.CompletedProcess(args, 0, "", "")
 
-    monkeypatch.setattr("coding_agent_playbook.evals.runner.subprocess.run", _capture_run)
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.run.harness_runner.subprocess.run", _capture_run
+    )
 
     task_dir = tmp_path / "task"
     _make_setup(task_dir)  # lays down mod.py + test_mod.py; NO pyproject.toml.
@@ -977,10 +979,12 @@ def test_uv_sync_invoked_when_pyproject_present(
             return subprocess.CompletedProcess(args, 0, "", "")
         return real_run(args, **kwargs)
 
-    monkeypatch.setattr("coding_agent_playbook.evals.runner.subprocess.run", _capture_run)
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.run.harness_runner.subprocess.run", _capture_run
+    )
     # Pretend ``uv`` is on PATH (we never actually shell out to it).
     monkeypatch.setattr(
-        "coding_agent_playbook.evals.runner.shutil.which", lambda _binary: "/fake/uv"
+        "coding_agent_playbook.evals.run.harness_runner.shutil.which", lambda _binary: "/fake/uv"
     )
 
     task_dir = tmp_path / "task"
@@ -1018,9 +1022,11 @@ def test_uv_sync_uses_frozen_when_lock_present(
             return subprocess.CompletedProcess(args, 0, "", "")
         return real_run(args, **kwargs)
 
-    monkeypatch.setattr("coding_agent_playbook.evals.runner.subprocess.run", _capture_run)
     monkeypatch.setattr(
-        "coding_agent_playbook.evals.runner.shutil.which", lambda _binary: "/fake/uv"
+        "coding_agent_playbook.evals.run.harness_runner.subprocess.run", _capture_run
+    )
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.run.harness_runner.shutil.which", lambda _binary: "/fake/uv"
     )
 
     task_dir = tmp_path / "task"
@@ -1043,7 +1049,9 @@ def test_uv_sync_raises_clear_error_when_uv_missing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """A fixture with a ``pyproject.toml`` but no ``uv`` on PATH raises a clear error."""
-    monkeypatch.setattr("coding_agent_playbook.evals.runner.shutil.which", lambda _binary: None)
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.run.harness_runner.shutil.which", lambda _binary: None
+    )
 
     task_dir = tmp_path / "task"
     _make_setup(task_dir)
@@ -1068,9 +1076,11 @@ def test_uv_sync_raises_clear_error_when_sync_fails(
             return subprocess.CompletedProcess(args, 1, "", "lockfile out of sync")
         return real_run(args, **kwargs)
 
-    monkeypatch.setattr("coding_agent_playbook.evals.runner.subprocess.run", _capture_run)
     monkeypatch.setattr(
-        "coding_agent_playbook.evals.runner.shutil.which", lambda _binary: "/fake/uv"
+        "coding_agent_playbook.evals.run.harness_runner.subprocess.run", _capture_run
+    )
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.run.harness_runner.shutil.which", lambda _binary: "/fake/uv"
     )
 
     task_dir = tmp_path / "task"

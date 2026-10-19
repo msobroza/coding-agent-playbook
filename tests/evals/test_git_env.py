@@ -1,8 +1,8 @@
-"""Unit tests for :mod:`coding_agent_playbook.git_env`."""
+"""Unit tests for :mod:`coding_agent_playbook.evals.run.git_env`."""
 
 from __future__ import annotations
 
-from coding_agent_playbook.git_env import REPO_LOCATION_GIT_VARS, without_repo_location
+from coding_agent_playbook.evals.run.git_env import REPO_LOCATION_GIT_VARS, without_repo_location
 
 #: What git exports to a hook in a linked worktree, and what pins a repo's storage.
 _HOOK_EXPORTED = {

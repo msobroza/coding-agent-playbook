@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from coding_agent_playbook.evals.agent_env import UNATTENDED_ENV_VAR as EVALS_UNATTENDED_ENV_VAR
+from coding_agent_playbook.evals.run.agent_env import UNATTENDED_ENV_VAR as EVALS_UNATTENDED_ENV_VAR
 from coding_agent_playbook.hook_runtime.caps import (
     LineCap,
     OutputCaps,

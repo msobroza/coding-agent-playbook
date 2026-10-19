@@ -4,10 +4,10 @@ The :class:`~coding_agent_playbook.evals.judge.Judge` ABC is now **live** (PR R2
 Option A): :meth:`Judge.score_criterion` is the single abstract primitive and
 :meth:`Judge.score` is a concrete batch wrapper over it (no more
 ``NotImplementedError`` placeholder). The
-:class:`~coding_agent_playbook.evals.runner.HarnessRunner` is live (PR R1, Option
+:class:`~coding_agent_playbook.evals.run.harness_runner.HarnessRunner` is live (PR R1, Option
 B): ``run_task`` is a concrete template method, the abstract hook is
 ``_invoke_agent``, and the result model is
-:class:`~coding_agent_playbook.evals.runner.TaskResult` carrying an
+:class:`~coding_agent_playbook.evals.run.harness_runner.TaskResult` carrying an
 :class:`~coding_agent_playbook.evaluators.types.EvaluationReport` (``CheckResult``
 and ``programmatic_checks``/``rubric_scores`` are retired).
 """
@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.evals.judge import Judge
-from coding_agent_playbook.evals.runner import (
+from coding_agent_playbook.evals.run.harness_runner import (
     AgentRun,
     EvalReport,
     HarnessRunner,

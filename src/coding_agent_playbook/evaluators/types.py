@@ -213,7 +213,7 @@ class TrialResult:
     layers); ``verdict`` is the per-trial verdict already derived from those
     layers (skipped-neutral). An :class:`~coding_agent_playbook.evaluators.checks.aggregate.AggregateCheck`
     reads the per-trial boolean off each via
-    :func:`~coding_agent_playbook.evals._compile.over_boolean`.
+    :func:`~coding_agent_playbook.evals.compile.compiler.over_boolean`.
     """
 
     report: EvaluationReport

@@ -14,7 +14,7 @@ from coding_agent_playbook.evaluators.types import CheckResult, ScopeDetail
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from coding_agent_playbook.evals.runner import TaskResult
+    from coding_agent_playbook.evals.run.harness_runner import TaskResult
     from coding_agent_playbook.evaluators.types import TrialResult
 
 #: Printed under a report whose scores include an LLM judge's (SPEC §19 Q12).
