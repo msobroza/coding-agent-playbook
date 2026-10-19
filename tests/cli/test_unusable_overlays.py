@@ -25,8 +25,8 @@ import pytest
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands import check as _check
 from coding_agent_playbook.commands import init as _init
-from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands import validate as _validate
+from coding_agent_playbook.sync import pipeline as _sync
 from coding_agent_playbook.validation.preflight import bundled_plugins
 from tests.conftest import _DEFAULT_CONFIG
 from tests.fakes import FakeGitClient

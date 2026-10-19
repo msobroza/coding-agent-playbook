@@ -14,7 +14,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.commands import sync as _sync
+from coding_agent_playbook.commands import sync as sync_cmd
+from coding_agent_playbook.sync import pipeline as _sync
 from coding_agent_playbook.validation.findings import ValidationError
 from tests.fakes import FakeGitClient
 
@@ -79,7 +80,7 @@ def test_sync_aborts_on_validate_error_and_writes_nothing(
     bad = _write_bad_rule(repo)
     before = _tree_snapshot(repo)
 
-    rc = _sync.run(argparse.Namespace(repo_root=str(repo), check=False))
+    rc = sync_cmd.run(argparse.Namespace(repo_root=str(repo), check=False))
 
     assert rc == 1
     assert _tree_snapshot(repo) == before

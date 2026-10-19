@@ -1,0 +1,135 @@
+# A6 (#119, specs/prT-package-layout.md 4.4, 7.6): the sync pipeline leaves commands/
+# for the sync/ package. commands/sync.py keeps only run and _resolve_repo_root; the
+# pipeline it ran becomes sync/pipeline.py and its two check modes sync/_check_modes.py.
+# _sync_orphans.py and _output_locations.py are concatenated into sync/_leftovers.py
+# (464 lines together, under the 480-line bound of 4.4).
+
+[[module]]
+pr = "A6"
+old = "coding_agent_playbook.commands._sync_render"
+new = "coding_agent_playbook.sync.render"
+
+[[module]]
+pr = "A6"
+old = "coding_agent_playbook.commands._sync_lockfile"
+new = "coding_agent_playbook.sync._dispatch"
+
+[[module]]
+pr = "A6"
+old = "coding_agent_playbook.commands._sync_hooks"
+new = "coding_agent_playbook.sync._hook_outputs"
+
+[[module]]
+pr = "A6"
+old = "coding_agent_playbook.commands._sync_hook_local"
+new = "coding_agent_playbook.sync._machine_local"
+
+[[module]]
+pr = "A6"
+old = "coding_agent_playbook.commands._sync_orphans"
+new = "coding_agent_playbook.sync._leftovers"
+
+[[module]]
+pr = "A6"
+old = "coding_agent_playbook.commands._output_locations"
+new = "coding_agent_playbook.sync._leftovers"
+
+[[module]]
+pr = "A6"
+old = "coding_agent_playbook.commands._sync_output"
+new = "coding_agent_playbook.sync._output_policy"
+
+[[module]]
+pr = "A6"
+old = "coding_agent_playbook.commands._output_blockers"
+new = "coding_agent_playbook.sync._output_blockers"
+
+[[module]]
+pr = "A6"
+old = "coding_agent_playbook.git_client"
+new = "coding_agent_playbook.sync.git_client"
+
+# The split of commands/sync.py: run and _resolve_repo_root stay, the pipeline leaves.
+# The script rewrites module paths, never names: the importers that bind the command
+# module (`from coding_agent_playbook.commands import sync as _sync`) and call execute
+# through it are switched to sync.pipeline by hand.
+[[names]]
+pr = "A6"
+old = "coding_agent_playbook.commands.sync"
+new = "coding_agent_playbook.sync.pipeline"
+names = [
+    "_UNREADABLE_LOCKFILE",
+    "_ABORT_OUTCOME",
+    "_render_into",
+    "_run_sync",
+    "execute",
+    "_environment_ready",
+    "_passes_validation",
+    "_missing_adapters",
+    "_run_write",
+    "_previous_lockfile",
+    "_leftover_policy",
+]
+
+[[names]]
+pr = "A6"
+old = "coding_agent_playbook.commands.sync"
+new = "coding_agent_playbook.sync._check_modes"
+names = [
+    "_rendered_scratch",
+    "_on_real_tree",
+    "_run_check",
+    "_check_lockfile",
+    "_stale_outputs",
+    "_has_legacy_cleanup",
+    "_orphans_sync_removes",
+    "_report_drift",
+    "_block_drift",
+    "_ignore_entries",
+    "_run_check_staged",
+]
+
+[[path]]
+pr = "A6"
+old = "tests/unit/test_sync_lockfile.py"
+new = "tests/sync/test_dispatch.py"
+
+[[path]]
+pr = "A6"
+old = "tests/unit/test_sync_hooks.py"
+new = "tests/sync/test_hook_outputs.py"
+
+[[path]]
+pr = "A6"
+old = "tests/unit/test_sync_output.py"
+new = "tests/sync/test_output_policy.py"
+
+[[path]]
+pr = "A6"
+old = "tests/unit/test_output_blockers.py"
+new = "tests/sync/test_output_blockers.py"
+
+[[path]]
+pr = "A6"
+old = "tests/unit/test_sync_orphans.py"
+new = "tests/sync/test_leftovers.py"
+
+[[path]]
+pr = "A6"
+old = "tests/unit/test_output_locations.py"
+new = "tests/sync/test_output_locations.py"
+
+[[path]]
+pr = "A6"
+old = "tests/unit/test_sync_render_skills.py"
+new = "tests/sync/test_render_skills.py"
+
+[[path]]
+pr = "A6"
+old = "tests/unit/test_render_hook_body.py"
+new = "tests/sync/test_render_hook_body.py"
+
+[[path]]
+pr = "A6"
+old = "tests/unit/test_git_client.py"
+new = "tests/sync/test_git_client.py"

@@ -24,7 +24,6 @@ from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
-from coding_agent_playbook.commands._sync_lockfile import build_lockfile
 from coding_agent_playbook.config.tables.hooks import (
     GuardrailsConfig,
     HooksConfig,
@@ -70,6 +69,7 @@ from coding_agent_playbook.security.patterns import (
     SECRET_RULESET_ID,
     SECRET_RULESET_VERSION,
 )
+from coding_agent_playbook.sync._dispatch import build_lockfile
 from coding_agent_playbook.types import Prompt, PromptFrontmatter, Rule, RuleFrontmatter
 from tests._catalog import CORE_ROOT, plugin_root
 from tests.hook_samples import resolved_from_disk, resolved_hook, sample_hook

@@ -11,7 +11,7 @@ The engine never mutates git state: no ``add``, ``rm``, or ``commit`` — it onl
 prints the command for the user to run. Every failure mode (git missing, not a
 repository, timeout, non-zero exit) degrades to ``None`` = "unknown". A warning
 skips silently on ``None``; a deletion decision treats it as "maybe tracked"
-inside a git work tree (``commands/_sync_orphans.py``) — it fails closed.
+inside a git work tree (``sync/_leftovers.py``) — it fails closed.
 """
 
 from __future__ import annotations

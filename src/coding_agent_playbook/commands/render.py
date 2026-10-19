@@ -18,14 +18,6 @@ from typing import TYPE_CHECKING
 
 from jinja2.exceptions import UndefinedError
 
-from coding_agent_playbook.commands._sync_render import (
-    build_jinja_context,
-    render_hook_body,
-    render_prompt_body,
-    render_rule_body,
-    report_sandbox_violation,
-    report_template_error,
-)
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.orchestrator import SyncContext, artifact_id_of, template_source
 from coding_agent_playbook.renderer import (
@@ -36,6 +28,14 @@ from coding_agent_playbook.renderer import (
     render_for,
 )
 from coding_agent_playbook.rule_registry import build_prompt_environment, skill_reference_of
+from coding_agent_playbook.sync.render import (
+    build_jinja_context,
+    render_hook_body,
+    render_prompt_body,
+    render_rule_body,
+    report_sandbox_violation,
+    report_template_error,
+)
 from coding_agent_playbook.types import Hook, Prompt, Rule, Skill
 
 if TYPE_CHECKING:

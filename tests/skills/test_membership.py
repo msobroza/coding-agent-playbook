@@ -15,7 +15,6 @@ from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.shared_skills_adapter import SharedSkillsAdapter
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
-from coding_agent_playbook.commands._sync_render import render_rule_body
 from coding_agent_playbook.renderer import build_environment
 from coding_agent_playbook.skills.membership import (
     compose_skills,
@@ -25,6 +24,7 @@ from coding_agent_playbook.skills.membership import (
     member_rules_of,
     undelivered_member_warning,
 )
+from coding_agent_playbook.sync.render import render_rule_body
 from coding_agent_playbook.types import Prompt, Rule, RuleFrontmatter, Skill
 from tests.hook_samples import sample_hook
 

@@ -17,7 +17,7 @@ The facts come from running the detector over the task's ``setup/`` tree (the
 same bytes the runner materializes into the scratch repo), overlaid with the
 task's authored mock facts (``[setup] project_kind`` + extra keys).
 
-Mirrors the prompt half of ``commands/_sync_render.py::render_artifacts``
+Mirrors the prompt half of ``sync/render.py::render_artifacts``
 without touching it; the two should converge on one shared helper.
 
 Usage::
@@ -201,7 +201,7 @@ def _task_facts(task: EvalTask) -> Facts:
 def _render_context(task: EvalTask, facts: Facts) -> dict[str, Any]:
     """Facts + project metadata + ``input_variables`` (the invocation wins).
 
-    Mirrors ``commands/_sync_render.py::build_jinja_context``. The project name and
+    Mirrors ``sync/render.py::build_jinja_context``. The project name and
     description come from ``setup/pyproject.toml`` — which the agent can read in
     its working tree anyway — never from the task ``description``, which
     narrates the scenario and would leak it into the prompt.

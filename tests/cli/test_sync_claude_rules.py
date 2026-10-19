@@ -22,8 +22,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook._sentinel import sentinel_line
-from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.sync import pipeline as _sync
 from tests.cli.hook_repo import tree
 from tests.conftest import _DEFAULT_CONFIG
 from tests.fakes import FakeGitClient

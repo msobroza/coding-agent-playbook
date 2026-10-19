@@ -5,7 +5,7 @@ entry its provenance — ``kind``, ``artifact_id``, ``source`` and ``adapter``.
 It is recorded **without changing the adapter return type**: the dispatch
 wraps each ``write_rule``/``write_prompt``/``write_skill``/``finalize`` call
 and tags every path it returns. Orphans the leftover policy keeps
-(``_sync_orphans``) ride along in the new lockfile with their old entries.
+(``_leftovers``) ride along in the new lockfile with their old entries.
 One ``write_skill`` call can produce two kinds of entry: the member references
 of a skill with member rules are ``kind = "rule"`` entries naming their rule
 (specs/prS-skills-context.md section 6.4.11), everything else ``kind = "skill"``.
@@ -29,7 +29,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
-from coding_agent_playbook.commands._sync_output import native_skill_roots
 from coding_agent_playbook.lockfile.model import (
     LockEntry,
     Lockfile,
@@ -39,6 +38,7 @@ from coding_agent_playbook.lockfile.model import (
 )
 from coding_agent_playbook.orchestrator import artifact_id_of
 from coding_agent_playbook.skills.naming import skill_id_of
+from coding_agent_playbook.sync._output_policy import native_skill_roots
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, Sequence
@@ -46,10 +46,10 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.artifacts.member_reference import MemberReference
-    from coding_agent_playbook.commands._sync_hooks import SyncHooks
     from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.lockfile.model import ProvenanceKind
+    from coding_agent_playbook.sync._hook_outputs import SyncHooks
     from coding_agent_playbook.types import Prompt, Rule, Skill
 
 #: 2 = provenance on every entry (specs/prK-lifecycle-hooks.md §P P4, §B.6).
@@ -314,7 +314,7 @@ def build_lockfile(
     that may be committed (§14.4). A path owned element-wise by ``managed``
     scoped entries, or co-owned with the user (``shared``, repo-relative), gets
     no whole-file entry; the scoped entries follow. ``carried`` are the kept
-    orphans (``_sync_orphans``): output an earlier sync wrote that is still
+    orphans (``_leftovers``): output an earlier sync wrote that is still
     engine-owned, so their old entries ride along unchanged (§B.6).
 
     Example::
