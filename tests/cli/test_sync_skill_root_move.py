@@ -57,13 +57,16 @@ _SYNTHETIC_PYTHON_CODING_MEMBERS = (
     "python-typing",
 )
 #: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:
-#: query-db's two, and the core python-coding skill with one reference per active member.
+#: query-db's two, the core python-coding skill with one reference per active member, and
+#: python-tooling with its one ungated member (no framework, no uv.lock).
 _OLD_TREE_FILES = frozenset(
     {
         "query-db/SKILL.md",
         "query-db/scripts/run.py",
         "python-coding/SKILL.md",
         *(f"python-coding/references/{rule_id}.md" for rule_id in _SYNTHETIC_PYTHON_CODING_MEMBERS),
+        "python-tooling/SKILL.md",
+        "python-tooling/references/python-static-checks.md",
     }
 )
 
@@ -131,7 +134,8 @@ def test_first_sync_after_upgrade_moves_pristine_shared_skills_tree(
 
     assert _sync.execute(repo, git=FakeGitClient()) == 0
 
-    # query-db's SKILL.md + run.py, python-coding's SKILL.md + its 8 references: 11.
+    # query-db's SKILL.md + run.py, python-coding's SKILL.md + its 11 references and
+    # python-tooling's SKILL.md + its 1 reference: 16.
     assert re.search(rf", {len(_OLD_TREE_FILES)} removed$", capsys.readouterr().out, re.MULTILINE)
     assert not (repo / _OLD_ROOT).exists()
     moved = repo / _NEW_ROOT / "query-db"

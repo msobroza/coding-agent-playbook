@@ -5,7 +5,7 @@ baseline, optionally runs the suite, and grades everything through one
 :class:`~coding_agent_playbook.evaluators.rubric.Rubric` of metric-backed checks
 (one per gated metric, built by the shared
 :func:`~coding_agent_playbook.evaluators.policy.metric_check` factory). It never
-prints, never parses argv and never imports ``cli.py``, argparse or jinja2, so
+prints, never parses argv and never imports the ``cli`` package, argparse or jinja2, so
 the Stop stages can call it in-process; ``commands/metrics.py`` is the thin CLI
 over it and its output is pinned byte for byte by goldens.
 

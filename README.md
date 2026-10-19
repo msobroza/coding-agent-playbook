@@ -347,10 +347,11 @@ Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
 Not every resource renders everywhere: the detector inspects the repo and each
 artifact's `applies_if` predicate gates it (a FastAPI rule won't ship to a
 non-FastAPI repo; the ML serialization-security rule ships only to repos with an
-ML stack). A skill that owns rules follows them: it is written only when at
-least one of its rules applies. Run `playbook check` to see the detected facts
-and exactly which rules/prompts are active — the fastest way to debug *"why
-isn't my rule appearing?"*
+ML stack; the uv workflow reference ships only to repos the detector sees as uv
+projects, that is with a `uv.lock`). A skill that owns rules follows them: it is
+written only when at least one of its rules applies. Run `playbook check` to see
+the detected facts and exactly which rules/prompts are active — the fastest way
+to debug *"why isn't my rule appearing?"*
 
 ## Skills: one source, every Agent-Skills root
 
@@ -438,7 +439,7 @@ its topic (`skill:` in its frontmatter):
 | --- | --- | --- |
 | `python-coding` | dependency injection, pure core, data shapes, typing, performance idioms, asyncio (Python 3.11+), classes and protocols, error handling, context managers, docstrings, timeouts and retries, idioms | always (most of its rules are ungated) |
 | `python-testing` | `pytest` conventions, test doubles, fixtures | pytest is detected |
-| `python-tooling` | `fastapi-app-wiring`, `fastapi-error-boundaries` | FastAPI is a dependency |
+| `python-tooling` | static checks (ruff and mypy), pytest configuration (with pytest), uv workflow (uv projects), `fastapi-app-wiring` and `fastapi-error-boundaries` (FastAPI), Pydantic boundaries (Pydantic declared) | always (static checks are ungated) |
 | `ml-data` | `ml-serialization-security` | the ML stack includes torch, TensorFlow, JAX, transformers, scikit-learn, XGBoost or LightGBM |
 
 Sync renders each rule that applies as `<skills root>/<skill>/references/<rule-id>.md`
