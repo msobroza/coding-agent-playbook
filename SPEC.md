@@ -349,8 +349,13 @@ coding-agent-playbook/
 │   │   ├── _prior_output.py                # previous lockfile as proof of engine-written files
 │   │   ├── continue_adapter.py
 │   │   ├── claude_code_adapter.py
-│   │   ├── claude_rule_paths.py            # stdlib-only: the rules file and CLAUDE.md stub paths (§10.3.1)
-│   │   ├── claude_settings.py              # managed merge into .claude/settings.json `hooks`
+│   │   ├── claude_code/
+│   │   │   ├── __init__.py
+│   │   │   ├── paths.py                    # stdlib-only: the rules file and CLAUDE.md stub paths (§10.3.1)
+│   │   │   └── settings/
+│   │   │       ├── __init__.py
+│   │   │       ├── managed_merge.py        # managed merge into .claude/settings.json `hooks`
+│   │   │       └── drift.py                # how `playbook check` judges the managed elements
 │   │   ├── opencode_adapter.py
 │   │   ├── shared_skills_adapter.py        # the shared skill root .agents/skills/
 │   │   └── agents_md_adapter.py
@@ -1968,7 +1973,7 @@ Each section is a `claude_md_section` rendering (§9.7): the rules, each byte-id
 
 **Why two files.** OpenCode v1 (anomalyco/opencode v1.19.3, `session/instruction.ts:171-218` via `tool/read.ts:300`) attaches the first `AGENTS.md`/`CLAUDE.md` of each directory between a file its read tool opens and the working directory (§10.6), so with the rules in `.claude/CLAUDE.md`, an OpenCode run at or above the repo root added a second full copy of them when its read tool opened a file under `.claude/` (once per uncompacted session, §10.6), and leaked the Claude-only heartbeat line to OpenCode. Neither OpenCode v1 (1.19.3) nor v2 (dev `24c7f7a`) discovers `.claude/rules/` on its own (v1 looks up files named `AGENTS.md`, `CLAUDE.md` or `CONTEXT.md`; v2 only `AGENTS.md`, and its `.claude/` compatibility reads only `skills/`). Only an `opencode.json` `instructions` entry the user adds, such as `.claude/rules/*.md`, would load it, next to `AGENTS.md`. Claude Code loads `.claude/rules/*.md` files without `paths:` frontmatter "at launch with the same priority as `.claude/CLAUDE.md`" (code.claude.com/docs/en/memory). `.claude/CLAUDE.md` must still exist, rule-free: in Claude Code's default `claude-md-or-agents-md` mode (v2.1.277+) a `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` in the working directory or above it stops Claude from also reading the root `AGENTS.md` natively, while a `.claude/rules/` file does not count and keeps loading alongside `AGENTS.md`, so without the stub Claude would load the rules twice. The stub names no rules file on purpose: OpenCode v1 still attaches it, and a pointer would invite its model to read the rules again. Live-verified on Claude Code 2.1.292 (2026-10-16, `claude -p` witness tokens): with `AGENTS.md`, a header-only `.claude/CLAUDE.md` and a `.claude/rules/` file, Claude loads only the rules file, both at the repo root and when launched from a subdirectory.
 #### 10.3.2 Hooks: the managed `settings.json` merge, the launcher and the pin (v0.20)
-With `[hooks] enabled = true` and `claude_code` among the `[hooks] adapters` (§7.1.1), the adapter enforces hooks natively (`adapters/_claude_hooks.py`, `adapters/claude_settings.py`, `hook_registrations/claude.py`; design `specs/prK-lifecycle-hooks.md` §C.2). Its `finalize` merges the registrations into the co-owned `.claude/settings.json` **first**, so a file it cannot merge stops the sync before this adapter writes anything.
+With `[hooks] enabled = true` and `claude_code` among the `[hooks] adapters` (§7.1.1), the adapter enforces hooks natively (`adapters/_claude_hooks.py`, `adapters/claude_code/settings/managed_merge.py`, `hook_registrations/claude.py`; design `specs/prK-lifecycle-hooks.md` §C.2). Its `finalize` merges the registrations into the co-owned `.claude/settings.json` **first**, so a file it cannot merge stops the sync before this adapter writes anything.
 
 **Registrations.** There is one managed matcher group per Claude event that has an on hook, each holding exactly one `command` handler; the dispatcher fans out to the hooks in-process. `SessionStart` is registered whenever any registration exists (the session bootstrap, the heartbeat briefing, and the launcher's one visible failure channel), and at most one extra `async: true`, non-deciding `PostToolUse` group carries the async-safe handlers (local-audit-log). Handler keys are closed: `type`, `command` and `timeout`, plus `statusMessage` on `Stop` / `SubagentStop`, `onFailure: "block"` only in overlay strict mode, and `async: true` only on that one group — never `if`, `args`, or a handler type other than `command`. The command is the same string on every machine (here for `pre_tool_use`):
 ```text

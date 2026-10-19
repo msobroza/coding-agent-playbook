@@ -6,8 +6,8 @@ recognizes the element at run time by the same hash (specs/prK-hook-pack.md
 §E.1), and the drift check (``lockfile.drift.drift_entries``) finds it at its JSON
 pointer. One definition serves all three, so it lives here, importable by the
 hook runtime, which may not import ``adapters`` (§D.1): ``json`` and
-``hashlib`` only. ``adapters._settings_plan`` imports :func:`canonical_json` and
-:func:`pointer_keys` from here.
+``hashlib`` only. ``adapters.claude_code.settings._plan`` imports
+:func:`canonical_json` and :func:`pointer_keys` from here.
 """
 
 from __future__ import annotations

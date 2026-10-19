@@ -43,14 +43,14 @@ from coding_agent_playbook._guard_config_skills import skill_glob_rows
 from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
 from coding_agent_playbook._output_io import refuse_special_file
 from coding_agent_playbook.adapters._owned_files import check_engine_owned
-from coding_agent_playbook.adapters.claude_code_adapter import (
-    ClaudeCodeAdapter,
-    check_rule_files_writable,
-)
-from coding_agent_playbook.adapters.claude_settings import (
+from coding_agent_playbook.adapters.claude_code.settings.managed_merge import (
     CLAUDE_SETTINGS_PATH,
     decode_settings,
     parse_settings,
+)
+from coding_agent_playbook.adapters.claude_code_adapter import (
+    ClaudeCodeAdapter,
+    check_rule_files_writable,
 )
 from coding_agent_playbook.commands import _sync_hook_local
 from coding_agent_playbook.commands._sync_lockfile import HookDispatch
@@ -88,7 +88,10 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
     from coding_agent_playbook.adapters.base import Adapter
-    from coding_agent_playbook.adapters.claude_settings import MergeResult, SettingsMergeError
+    from coding_agent_playbook.adapters.claude_code.settings.managed_merge import (
+        MergeResult,
+        SettingsMergeError,
+    )
     from coding_agent_playbook.commands._sync_hook_local import SyncHookDeps
     from coding_agent_playbook.commands._sync_lockfile import ProvenanceRecorder
     from coding_agent_playbook.hook_policy import ResolvedHook, SkippedHook

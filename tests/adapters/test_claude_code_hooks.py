@@ -40,8 +40,11 @@ from coding_agent_playbook.adapters._secret_native import (
     SECRETS_PATH_GUARD,
     secret_native_rows,
 )
+from coding_agent_playbook.adapters.claude_code.settings.managed_merge import (
+    CLAUDE_SETTINGS_PATH,
+    SettingsMergeError,
+)
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
-from coding_agent_playbook.adapters.claude_settings import CLAUDE_SETTINGS_PATH, SettingsMergeError
 from coding_agent_playbook.config.tables.hooks import HooksConfig
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT
 from coding_agent_playbook.hook_registrations import (

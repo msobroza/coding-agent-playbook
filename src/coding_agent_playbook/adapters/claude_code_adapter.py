@@ -65,12 +65,12 @@ from coding_agent_playbook.adapters._owned_files import (
 from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters._where_guidance import WhereGuidanceBuffer
 from coding_agent_playbook.adapters.base import Adapter
-from coding_agent_playbook.adapters.claude_rule_paths import (
+from coding_agent_playbook.adapters.claude_code.paths import (
     CLAUDE_CODE_COMPOSITES,
     CLAUDE_MD_PATH,
     CLAUDE_RULES_PATH,
 )
-from coding_agent_playbook.adapters.claude_settings import CLAUDE_SETTINGS_PATH
+from coding_agent_playbook.adapters.claude_code.settings.managed_merge import CLAUDE_SETTINGS_PATH
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT, guardrail_line, guardrails_section
 from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
 from coding_agent_playbook.hook_registrations import LAUNCHER_PATH
@@ -80,7 +80,7 @@ from coding_agent_playbook.skill_membership import is_skill_member
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
-    from coding_agent_playbook.adapters.claude_settings import MergeResult
+    from coding_agent_playbook.adapters.claude_code.settings.managed_merge import MergeResult
     from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
@@ -91,7 +91,7 @@ if TYPE_CHECKING:
 _LAUNCHER_DIR = LAUNCHER_PATH.rsplit("/", 1)[0]
 
 #: The stub is this title's header alone; the rules file opens with the other
-#: (paths and the WHY of the stub: :mod:`.claude_rule_paths`).
+#: (paths and the WHY of the stub: :mod:`.claude_code.paths`).
 _CLAUDE_MD_TITLE: Final = "# CLAUDE.md"
 _RULES_FILE_TITLE: Final = "# Project rules (coding-agent-playbook)"
 
@@ -307,11 +307,12 @@ class ClaudeCodeAdapter(Adapter):
         """Compose the ``.claude/CLAUDE.md`` stub and the rules file, then the hook outputs.
 
         ``settings.json`` is merged first: a file that cannot be merged safely
-        raises :class:`~.claude_settings.SettingsMergeError` before this adapter
-        writes anything. A rules-file path the user holds, or a symlinked stub,
-        raises :class:`~._owned_files.UserOwnedFileError` (``playbook sync``
-        checks both on the real repo before any adapter runs). Returns the
-        paths written; ``settings.json`` only when the merge changed it.
+        raises :class:`~.claude_code.settings.managed_merge.SettingsMergeError`
+        before this adapter writes anything. A rules-file path the user holds,
+        or a symlinked stub, raises :class:`~._owned_files.UserOwnedFileError`
+        (``playbook sync`` checks both on the real repo before any adapter
+        runs). Returns the paths written; ``settings.json`` only when the
+        merge changed it.
 
         Example::
 
