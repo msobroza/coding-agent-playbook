@@ -242,7 +242,10 @@ def test_build_prompt_environment_keeps_rules_from_including_rules() -> None:
 
 
 def test_identity_neither_imports_the_registry_back_nor_re_exports_it() -> None:
-    """``rule_registry`` imports ``template_source`` from ``artifacts.identity`` (no cycle, no shim)."""
+    """``rule_registry`` imports ``template_source`` from ``artifacts.identity``.
+
+    No import cycle back to the registry, and no re-export shim.
+    """
     loaded = new_modules_after("import coding_agent_playbook.artifacts.identity")
 
     assert engine_module("coding_agent_playbook.rule_registry") not in loaded
