@@ -21,19 +21,19 @@ import pytest
 
 from coding_agent_playbook.hook_runtime.event import EventName, RepoInfo, ToolClass
 from coding_agent_playbook.hook_runtime.globs import compile_globs
-from coding_agent_playbook.hook_runtime.ledger import (
+from coding_agent_playbook.hook_runtime.paths import find_repo, normalize_path
+from coding_agent_playbook.hook_runtime.state.ledger import (
     LEDGER_MAX_LINES,
     Ledger,
     mask_path,
     path_categories,
 )
-from coding_agent_playbook.hook_runtime.paths import find_repo, normalize_path
-from coding_agent_playbook.hook_runtime.session import (
+from coding_agent_playbook.hook_runtime.state.session import (
     MAX_ASKED_IDS,
     MAX_DEFERRED_NOTES,
     SessionState,
 )
-from coding_agent_playbook.hook_runtime.state import (
+from coding_agent_playbook.hook_runtime.state.store import (
     STATE_DIR_NAME,
     StateStore,
     StateUnavailable,
@@ -211,7 +211,7 @@ def test_two_processes_appending_200_lines_each_give_400_valid_jsonl(
     store.private_dir("")
     code = (
         "import sys\n"
-        "from coding_agent_playbook.hook_runtime.state import StateStore\n"
+        "from coding_agent_playbook.hook_runtime.state.store import StateStore\n"
         "store = StateStore(sys.argv[1])\n"
         "for i in range(200):\n"
         "    store.append_jsonl('decisions.jsonl', {'w': sys.argv[2], 'i': i, 'pad': 'x' * 900})\n"

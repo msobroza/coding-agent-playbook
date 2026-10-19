@@ -21,7 +21,7 @@ from coding_agent_playbook.hook_runtime.config.pin import write_machine_pins
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import Harness
 from coding_agent_playbook.hook_runtime.policy import UNATTENDED_ENV_VAR
-from coding_agent_playbook.hook_runtime.state import StateStore
+from coding_agent_playbook.hook_runtime.state.store import StateStore
 from tests.hook_runtime.fakes import FakeProc
 from tests.hook_runtime.guard_repo import hook_record
 from tests.hook_runtime.handlers.pack_repo import PackRepo, rows_of, with_scope

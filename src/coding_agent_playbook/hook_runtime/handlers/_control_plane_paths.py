@@ -40,7 +40,7 @@ from coding_agent_playbook.hook_runtime.handlers._control_plane_toml import (
     PolicyKeys,
 )
 from coding_agent_playbook.hook_runtime.paths import fold_key
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping

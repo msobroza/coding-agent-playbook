@@ -25,20 +25,20 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime.active_prompt import resolve_active_prompt
 from coding_agent_playbook.hook_runtime.caps import clean_text, clip, quote_data
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
+from coding_agent_playbook.hook_runtime.state.active_prompt import resolve_active_prompt
 from coding_agent_playbook.hook_runtime.stop.alone import run_alone
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.hook_runtime.active_prompt import ActivePrompt
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.session import SessionState
+    from coding_agent_playbook.hook_runtime.state.active_prompt import ActivePrompt
+    from coding_agent_playbook.hook_runtime.state.session import SessionState
     from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
 
 __all__ = [

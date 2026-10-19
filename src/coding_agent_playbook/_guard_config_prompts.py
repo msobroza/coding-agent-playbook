@@ -12,7 +12,7 @@ from __future__ import annotations
 import copy
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.active_prompt import SCOPE_GUARD_ID
+from coding_agent_playbook.hook_runtime.state.active_prompt import SCOPE_GUARD_ID
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping

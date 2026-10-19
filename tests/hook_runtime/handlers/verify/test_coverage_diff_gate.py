@@ -28,7 +28,7 @@ from coding_agent_playbook.hook_runtime.handlers._coverage_report import (
     ADVICE_LINE,
     NO_SNAPSHOT_LINE,
 )
-from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
+from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 from coding_agent_playbook.hook_runtime.stop.coordinator import GatePolicy
 from coding_agent_playbook.hook_runtime.stop.suite import SuiteUnavailable
 from tests.hook_runtime.fakes import FakeStageRunner, FakeTrustStore

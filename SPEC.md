@@ -357,8 +357,9 @@ coding-agent-playbook/
 │   │   ├── harness/                        # per-harness payload parsers and wire renderers
 │   │   ├── judges/                         # the checks a guard hook shares with its guard twin
 │   │   │   └── gate_weakening.py           # added-line suppression/loosening scan (`playbook gate-scan`)
+│   │   ├── state/                          # runtime state root, session, ledger, active prompt, audit log
 │   │   └── stop/                           # the Stop stage contract and coordinator
-│   ├── security/                           # secret paths/patterns, PII, trust store, audit log (stdlib)
+│   ├── security/                           # secret paths/patterns, PII, trust store (stdlib)
 │   ├── agent_harness/                      # the Agent Harness format round trip: models, leaf_detectors, parser, emitter, manifest
 │   ├── adapters/
 │   │   ├── __init__.py
@@ -3443,7 +3444,7 @@ For BNP, the overlay package ships a rule (`30-bnp-banking-dependencies`) that l
 - **Secret scanning without a download (v0.20).** The engine ships neither gitleaks nor detect-private-key — both need a remote clone, which an air-gapped starter cannot do (§13.2) — and never downloads or runs gitleaks. Its own stdlib scanner stands in for them: the `playbook-secrets` pre-commit hook (`coding-agent-playbook-secrets` in the starter) runs `playbook scan-secrets --staged` on every commit, `playbook ci` scans the branch (§12.11, §12.15), and the in-session guards — secrets-path-guard (agent reads and writes of credential paths), secret-content-guard (tokens in written content and pushed ranges) and stop-diff-sweep — use the same rules (`security.secrets`) and the same path catalog (`security.paths`). Findings are always masked; credential files are judged by path and never read.
 - No log statement in the engine ever logs config values; only structural facts (counts, paths).
 ### 17.4 Audit log
-Every engine log is append-only JSONL written by one module, `security/audit.py` (`append_jsonl`): a line is one `O_APPEND` write of at most 4 KiB, so concurrent writers never interleave; `O_NOFOLLOW` refuses a log swapped for a symlink; files are mode 0600 and rotate by size under a bounded lock that never stalls a tool call. The hook logs live under the per-worktree state root `<git-dir>/playbook-hooks/`, never in the working tree (v0.20):
+Every engine log is append-only JSONL written by one module, `hook_runtime/state/audit_log.py` (`append_jsonl`): a line is one `O_APPEND` write of at most 4 KiB, so concurrent writers never interleave; `O_NOFOLLOW` refuses a log swapped for a symlink; files are mode 0600 and rotate by size under a bounded lock that never stalls a tool call. The hook logs live under the per-worktree state root `<git-dir>/playbook-hooks/`, never in the working tree (v0.20):
 - **guard-decision-log** (`decisions-YYYY-MM.jsonl`, on by default with hooks): one line per deny, ask, warn, override, degraded or escape event, and **no content** — never a command, path, prompt, reason or environment value; the writer refuses any record key outside its fixed set. `playbook-hook doctor` summarizes it (§12.13).
 - **local-audit-log** (`audit-YYYY-MM.jsonl`, an overlay-enabled mechanism): one structure-only activity line per event, with an optional hash chain and `[guardrails.audit] retain_days` retention.
 

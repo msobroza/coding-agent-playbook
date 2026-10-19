@@ -16,8 +16,8 @@ from coding_agent_playbook.hook_runtime.config.pin import parse_machine_pins
 from coding_agent_playbook.hook_runtime.escape import read_escape_hatches
 from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, Harness, StopInfo
 from coding_agent_playbook.hook_runtime.git.safe_git import Fingerprint
-from coding_agent_playbook.hook_runtime.session import SessionState
-from coding_agent_playbook.hook_runtime.state import StateStore
+from coding_agent_playbook.hook_runtime.state.session import SessionState
+from coding_agent_playbook.hook_runtime.state.store import StateStore
 from coding_agent_playbook.hook_runtime.stop.chain import (
     chain_document,
     load_chain,

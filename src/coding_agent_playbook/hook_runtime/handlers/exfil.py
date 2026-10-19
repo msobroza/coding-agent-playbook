@@ -36,7 +36,7 @@ from coding_agent_playbook.hook_runtime.handlers._secret_policy import (
 from coding_agent_playbook.hook_runtime.judges.hosts import host_matches, is_loopback
 from coding_agent_playbook.hook_runtime.paths import normalize_path
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.state import StateUnavailable, session_key
+from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, session_key
 from coding_agent_playbook.security.files import user_home
 
 if TYPE_CHECKING:

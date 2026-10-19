@@ -45,7 +45,7 @@ from coding_agent_playbook.hook_runtime.handlers.stop_ci_parity_gate import (
 )
 from coding_agent_playbook.hook_runtime.paths import normalize_path
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.state import StateUnavailable
+from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
 from coding_agent_playbook.hook_runtime.stop.coordinator import (
     CoordinatorDeps,
     GatePolicy,
@@ -61,7 +61,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.deps import Clock
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.state import StateStore
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
     from coding_agent_playbook.hook_runtime.stop.coordinator import StopOutcome
     from coding_agent_playbook.hook_runtime.stop.stages import Stage, StopPlan
 

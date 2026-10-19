@@ -17,7 +17,7 @@ Opt-in, Claude only (``PreCompact`` and ``SessionStart`` with source
 
 Any surprise in the unversioned transcript fails open: no checkpoint, no
 injection. Stale checkpoints are TTL-pruned at session start with the rest of
-the state root (``_state_sweep``). No LLM, no network, stdlib JSONL only.
+the state root (``state._sweep``). No LLM, no network, stdlib JSONL only.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ from coding_agent_playbook.hook_runtime.handlers._transcript_prompts import (
     tail_lines,
 )
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.state import StateUnavailable, iso_utc, session_key
+from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, iso_utc, session_key
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
