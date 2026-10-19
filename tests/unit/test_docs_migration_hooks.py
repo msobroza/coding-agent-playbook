@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.adapters._claude_hooks import CLAUDE_HEARTBEAT_LINE
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.adapters.claude_code.hooks import CLAUDE_HEARTBEAT_LINE
 from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_RULES_PATH
 from coding_agent_playbook.commands._sync_hooks import HOOKS_NOTICE
 from coding_agent_playbook.commands._sync_lockfile import LOCKFILE_SCHEMA
