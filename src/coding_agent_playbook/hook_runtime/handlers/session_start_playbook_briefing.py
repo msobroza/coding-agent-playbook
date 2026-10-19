@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.handlers._drift import DriftFinding
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.lockfile import Lockfile
+    from coding_agent_playbook.lockfile.model import Lockfile
 
 __all__ = ["BRIEFING_CAP", "session_start_playbook_briefing"]
 

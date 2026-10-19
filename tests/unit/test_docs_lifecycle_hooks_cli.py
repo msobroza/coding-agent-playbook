@@ -48,7 +48,7 @@ from coding_agent_playbook.hook_registrations import (
 from coding_agent_playbook.hook_runtime._doctor_opencode import OPENCODE_MIN_VERSION
 from coding_agent_playbook.hook_runtime.cli import ASYNC_FLAG, USAGE
 from coding_agent_playbook.hook_runtime.stop.stages import STOP_STAGE_ORDER
-from coding_agent_playbook.lockfile import ProvenanceKind
+from coding_agent_playbook.lockfile.model import ProvenanceKind
 from tests.unit.test_docs_lifecycle_hooks_spec import _spec_section, _spec_text
 
 _ROOT = Path(__file__).resolve().parents[2]

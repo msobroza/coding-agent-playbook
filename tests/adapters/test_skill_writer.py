@@ -28,7 +28,7 @@ from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands._output_locations import OutputLocations
 from coding_agent_playbook.commands._sync_orphans import LeftoverPolicy
 from coding_agent_playbook.harness.manifest import read_manifest
-from coding_agent_playbook.lockfile import LockEntry, Lockfile, compute_hash
+from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
 from coding_agent_playbook.orchestrator import installed_output_locations
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource

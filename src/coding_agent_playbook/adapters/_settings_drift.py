@@ -1,9 +1,9 @@
 """How ``playbook check`` judges managed ``settings.json`` elements (specs/prK-lifecycle-hooks.md §C.2.6).
 
 The element match itself (an element of the array at ``<pointer>`` with the
-recorded canonical hash) is ``lockfile.managed_drift``, shared with the hook
+recorded canonical hash) is ``lockfile.drift.managed_drift``, shared with the hook
 runtime. This module adds the two Claude-specific refinements ``playbook
-check`` passes to ``lockfile.drift_entries``:
+check`` passes to ``lockfile.drift.drift_entries``:
 
 - :func:`settings_document`: the strict parser Claude Code itself applies, so
   a file Claude would reject is reported ``unreadable`` with its line and column;
@@ -23,12 +23,13 @@ from coding_agent_playbook.adapters.claude_settings import (
     decode_settings,
     parse_settings,
 )
-from coding_agent_playbook.lockfile import ScopedUnreadable, managed_drift
+from coding_agent_playbook.lockfile.drift import ScopedUnreadable, managed_drift
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from coding_agent_playbook.lockfile import DriftItem, LockEntry
+    from coding_agent_playbook.lockfile.drift import DriftItem
+    from coding_agent_playbook.lockfile.model import LockEntry
 
 __all__ = ["managed_entry_drift", "settings_document", "stray_launcher_edited"]
 

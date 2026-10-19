@@ -14,7 +14,7 @@ import pytest
 from coding_agent_playbook.commands._sync_hooks import opencode_restart_notice
 from coding_agent_playbook.guard_config import GUARD_CONFIG_PATH
 from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH
-from coding_agent_playbook.lockfile import LockEntry, Lockfile
+from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 
 CHANGED = f"! {OPENCODE_SHIM_PATH} changed: restart OpenCode to load it"
 REMOVED = f"! {OPENCODE_SHIM_PATH} removed: restart OpenCode to unload it"
