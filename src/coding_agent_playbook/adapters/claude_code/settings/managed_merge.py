@@ -37,7 +37,6 @@ from coding_agent_playbook.adapters.claude_code.settings._json_spans import (
 )
 from coding_agent_playbook.adapters.claude_code.settings._plan import (
     CLAUDE_SETTINGS_PATH,
-    LAUNCHER_TOKEN,
     MANAGED_STRING_POINTERS,
     DesiredGroup,
     SettingsPlan,
@@ -59,7 +58,6 @@ if TYPE_CHECKING:
 
 __all__ = [
     "CLAUDE_SETTINGS_PATH",
-    "LAUNCHER_TOKEN",
     "MANAGED_STRING_POINTERS",
     "DesiredGroup",
     "FileSettingsIO",
