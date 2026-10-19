@@ -35,7 +35,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.agent_harness.models import (
     ContentFile,
@@ -50,6 +50,9 @@ if TYPE_CHECKING:
     import argparse
 
     from coding_agent_playbook.agent_harness.models import Harness
+
+NAME: Final = "validate-harness"
+HELP: Final = "lint an Agent Harness tree (structural checks, harnesses-ref-equivalent)"
 
 
 @dataclass(frozen=True)
@@ -153,6 +156,21 @@ def _report(errors: list[_Finding], warnings: list[_Finding], *, strict: bool) -
         return 1
     print(f"OK harness validated ({len(warnings)} warning(s))")
     return 0
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook validate-harness [PATH] [--strict]`` (SPEC §12.10).
+
+    Example::
+
+        >>> configure(argparse.ArgumentParser(prog="playbook validate-harness"))  # doctest: +SKIP
+    """
+    parser.add_argument("path", nargs="?", help="path to the harness root (contains HARNESS.md)")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="promote warnings (missing routing file / content description) to errors",
+    )
 
 
 def run(args: argparse.Namespace) -> int:

@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.commands.twins._git_scope import open_git
+from coding_agent_playbook.commands.twins._git_scope import RANGE_FLAG_HELP, open_git
 from coding_agent_playbook.commands.twins._runner import TwinOutcome, run_twin
 from coding_agent_playbook.commands.twins._secret_scope import (
     SecretScope,
@@ -67,7 +67,20 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort, SafeGit
     from coding_agent_playbook.security.pii import PiiConfig
 
-__all__ = ["SecretHit", "SecretReport", "load_path_policy", "pii_option", "run", "scan_scope"]
+__all__ = [
+    "HELP",
+    "NAME",
+    "SecretHit",
+    "SecretReport",
+    "configure",
+    "load_path_policy",
+    "pii_option",
+    "run",
+    "scan_scope",
+]
+
+NAME: Final = "scan-secrets"
+HELP: Final = "flag secret tokens and credential files, masked (prK §E.4)"
 
 #: Larger working-tree files are noted, never read (a CLI may be slow, not unbounded).
 MAX_FILE_BYTES: Final = 32 * 1024 * 1024
@@ -111,6 +124,45 @@ class SecretReport:
     def exit_code(self) -> int:
         """``1`` when anything blocks, else ``0``."""
         return 1 if self.hits else 0
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook scan-secrets [--staged | --range A..B | --worktree | PATHS] [--pii]``.
+
+    SPEC §12.15, prK §E.4 and §E.5.
+
+    Example::
+
+        >>> configure(argparse.ArgumentParser(prog="playbook scan-secrets"))  # doctest: +SKIP
+    """
+    parser.add_argument(
+        "paths", nargs="*", help="files to scan whole, relative to --repo-root (exclusive of modes)"
+    )
+    _add_scope_flags(parser)
+    parser.add_argument(
+        "--pii",
+        action="store_true",
+        help="also flag checksum-validated PII (IBAN, card numbers), masked (prK §E.5)",
+    )
+    parser.add_argument(
+        "--pii-detectors",
+        metavar="NAMES",
+        help="comma-separated PII detectors (iban, card_pan, fr_nir, us_ssn); implies --pii",
+    )
+    parser.add_argument("--format", choices=("text", "json"), default="text")
+    parser.add_argument("--repo-root", help="repo to scan (defaults to cwd)")
+
+
+def _add_scope_flags(parser: argparse.ArgumentParser) -> None:
+    """``--staged``, ``--range`` and ``--worktree``: at most one (PATHS is checked by ``run``)."""
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument("--staged", action="store_true", help="scan the index against HEAD")
+    scope.add_argument("--range", dest="rev_range", help=RANGE_FLAG_HELP)
+    scope.add_argument(
+        "--worktree",
+        action="store_true",
+        help="scan tracked changes against HEAD and untracked, non-ignored files",
+    )
 
 
 def run(args: argparse.Namespace, *, git: SafeGit | None = None) -> int:
