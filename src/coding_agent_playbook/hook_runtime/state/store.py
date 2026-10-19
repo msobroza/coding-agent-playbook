@@ -29,7 +29,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime.deps import SystemClock
+from coding_agent_playbook.hook_runtime.dispatch.deps import SystemClock
 from coding_agent_playbook.hook_runtime.state._files import (
     DIR_MODE,
     FILE_MODE,
@@ -53,7 +53,7 @@ from coding_agent_playbook.hook_runtime.state.audit_log import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
-    from coding_agent_playbook.hook_runtime.deps import Clock
+    from coding_agent_playbook.hook_runtime.dispatch.deps import Clock
     from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
     from coding_agent_playbook.hook_runtime.state._sweep import SweepReport
 

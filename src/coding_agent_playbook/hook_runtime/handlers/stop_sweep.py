@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._pii_settings import (
     PII_CONFIG_KEY,
     PII_KEY,
@@ -43,7 +44,6 @@ from coding_agent_playbook.hook_runtime.handlers._secret_sweep import (
     SweepReport,
     sweep_tree,
 )
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.stop.alone import run_alone
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult
 
@@ -52,8 +52,8 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.judges.sink_scan import SinkTable
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
 
 __all__ = [
@@ -187,7 +187,7 @@ def _deser_lines(ctx: HandlerContext, root: str, changed: list[str]) -> list[str
 
 
 def _file_sinks(ctx: HandlerContext, root: str, rel: str, table: SinkTable) -> list[str]:
-    from coding_agent_playbook.hook_runtime.escape import pragma_at_head
+    from coding_agent_playbook.hook_runtime.dispatch.escape import pragma_at_head
     from coding_agent_playbook.hook_runtime.judges.sink_scan import (
         new_sink_calls,
         trusted_artifact_line,

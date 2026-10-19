@@ -15,9 +15,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.hook_runtime._ports import LazyGit
-from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
 from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
+from coding_agent_playbook.hook_runtime.dispatch.ports import LazyGit
 from coding_agent_playbook.hook_runtime.git.memo import MemoGit
 from coding_agent_playbook.hook_runtime.git.safe_git import GitTimeout, SafeGit
 from tests.hook_runtime.fakes import FakeProc

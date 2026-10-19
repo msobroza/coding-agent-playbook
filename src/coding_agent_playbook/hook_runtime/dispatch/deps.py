@@ -18,7 +18,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, NoReturn, Protocol
 
-from coding_agent_playbook.hook_runtime.proc import SubprocessProc
+from coding_agent_playbook.hook_runtime.dispatch.proc import SubprocessProc
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -26,9 +26,9 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
+    from coding_agent_playbook.hook_runtime.dispatch.proc import ProcResult
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerResolver
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
-    from coding_agent_playbook.hook_runtime.proc import ProcResult
-    from coding_agent_playbook.hook_runtime.registry import HandlerResolver
     from coding_agent_playbook.hook_runtime.state.store import StateStore
     from coding_agent_playbook.hook_runtime.stop.runner import StageRunner
     from coding_agent_playbook.hook_runtime.stop.suite import SuiteSpec

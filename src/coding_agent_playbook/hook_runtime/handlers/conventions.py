@@ -26,13 +26,13 @@ from typing import TYPE_CHECKING, Any, Final
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["CONFIG_SCHEMA", "ConventionRow", "command_convention_guard", "convention_rows"]

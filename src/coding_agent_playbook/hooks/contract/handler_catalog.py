@@ -27,7 +27,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final, Literal, Protocol
 
 from coding_agent_playbook.hook_runtime.config.keys import regex_of
-from coding_agent_playbook.hook_runtime.registry import (
+from coding_agent_playbook.hook_runtime.dispatch.registry import (
     HandlerResolutionError,
     builtin_handler_modules,
     declaration_of,
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.hook_schema import HookHandler
-    from coding_agent_playbook.hook_runtime.registry import HandlerDeclaration
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerDeclaration
     from coding_agent_playbook.hooks.contract.findings import Finding
 
 __all__ = [

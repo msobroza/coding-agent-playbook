@@ -27,17 +27,26 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, BinaryIO
 
-from coding_agent_playbook.hook_runtime._decision_log import DISPATCHER_ID, DecisionLog, LogLine
-from coding_agent_playbook.hook_runtime._faults import (
+from coding_agent_playbook.hook_runtime.dispatch._decision_log import (
+    DISPATCHER_ID,
+    DecisionLog,
+    LogLine,
+)
+from coding_agent_playbook.hook_runtime.dispatch._faults import (
     contract_fault_results,
     degraded_lines,
     fault_event,
 )
-from coding_agent_playbook.hook_runtime._pipeline import Shared, run_configured
-from coding_agent_playbook.hook_runtime._tail import DispatchTrace, Responder
+from coding_agent_playbook.hook_runtime.dispatch._pipeline import Shared, run_configured
+from coding_agent_playbook.hook_runtime.dispatch.escape import (
+    HOOKS_VAR,
+    read_escape_hatches,
+    settings_files,
+)
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
-from coding_agent_playbook.hook_runtime.escape import HOOKS_VAR, read_escape_hatches, settings_files
+from coding_agent_playbook.hook_runtime.dispatch.tail import DispatchTrace, Responder
+from coding_agent_playbook.hook_runtime.dispatch.watchdog import OutputGate
 from coding_agent_playbook.hook_runtime.harness.wire import (
     STDIN_CAP_BYTES,
     ContractFault,
@@ -47,13 +56,12 @@ from coding_agent_playbook.hook_runtime.harness.wire import (
 )
 from coding_agent_playbook.hook_runtime.state.session import SessionState
 from coding_agent_playbook.hook_runtime.state.store import StateStore
-from coding_agent_playbook.hook_runtime.watchdog import OutputGate
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.harness.wire import ParseOutcome
 

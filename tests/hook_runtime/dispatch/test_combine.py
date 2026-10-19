@@ -14,12 +14,6 @@ import json
 import pytest
 
 from coding_agent_playbook.evals.run.agent_env import UNATTENDED_ENV_VAR as EVALS_UNATTENDED_ENV_VAR
-from coding_agent_playbook.hook_runtime.combine import (
-    ASK_DENIED_PREFIX,
-    ASK_WARNED_PREFIX,
-    OPENCODE_ASK_PREFIX,
-    combine,
-)
 from coding_agent_playbook.hook_runtime.dispatch.caps import (
     LineCap,
     OutputCaps,
@@ -27,6 +21,12 @@ from coding_agent_playbook.hook_runtime.dispatch.caps import (
     clean_text,
     clip,
     quote_data,
+)
+from coding_agent_playbook.hook_runtime.dispatch.combine import (
+    ASK_DENIED_PREFIX,
+    ASK_WARNED_PREFIX,
+    OPENCODE_ASK_PREFIX,
+    combine,
 )
 from coding_agent_playbook.hook_runtime.dispatch.decision import (
     EVENT_DECISIONS,
@@ -451,7 +451,7 @@ def test_engine_deadline_caps_match_the_hooks_tables() -> None:
 
 def test_decision_modules_import_only_the_stdlib_and_the_runtime() -> None:
     loaded = new_modules_after(
-        "import coding_agent_playbook.hook_runtime.combine, "
+        "import coding_agent_playbook.hook_runtime.dispatch.combine, "
         "coding_agent_playbook.hook_runtime.dispatch.policy, "
         "coding_agent_playbook.hook_runtime.dispatch.caps"
     )

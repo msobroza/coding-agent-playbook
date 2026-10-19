@@ -35,8 +35,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.proc import ProcResult
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.proc import ProcResult
     from coding_agent_playbook.hooks.registrations.opencode import OpenCodeRegEntry
 
 _OPENCODE = "/opt/bin/opencode"

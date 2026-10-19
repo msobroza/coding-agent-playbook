@@ -361,7 +361,7 @@ coding-agent-playbook/
 │   ├── guard_config.py                     # the sync-level guard_config.json (§4.2 step 7)
 │   ├── hook_runtime/                       # the playbook-hook dispatcher: import-light, never imports cli/
 │   │   ├── diagnostics/                    # playbook-hook doctor and simulate, the canaries, the heartbeat
-│   │   ├── dispatch/                       # the dispatch pipeline and its event, decision and failure-policy model
+│   │   ├── dispatch/                       # the dispatch pipeline, handler registry and selection, event and decision model
 │   │   ├── handlers/                       # builtin hook handlers (@register_hook_handler)
 │   │   ├── harness/                        # per-harness payload parsers and wire renderers
 │   │   ├── judges/                         # the checks a guard hook shares with its guard twin

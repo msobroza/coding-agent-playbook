@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from tests.hook_runtime.fakes import FakeHandlerResolver
     from tests.hook_runtime.guard_repo import GuardRepo
 

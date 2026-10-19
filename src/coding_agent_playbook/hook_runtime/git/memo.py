@@ -5,7 +5,7 @@ asked git its own questions: a default-tier Stop spawned ``rev-parse
 HEAD^{tree}`` and ``ls-files --others`` five times each, ``diff HEAD`` four
 times and the same ``cat-file`` twice (24 git spawns, 11 distinct; review
 finding #4). :class:`MemoGit` keeps the answer of every read-only call for the
-life of the instance, and ``_ports.LazyGit`` builds one per dispatch.
+life of the instance, and ``dispatch.ports.LazyGit`` builds one per dispatch.
 
 - Only the read-only subcommands below are reused, keyed by their full argv,
   stdin and accepted exit codes; a temp-index call (the fingerprint's
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
-    from coding_agent_playbook.hook_runtime.proc import ProcResult
+    from coding_agent_playbook.hook_runtime.dispatch.proc import ProcResult
 
 __all__ = ["MEMOIZED_SUBCOMMANDS", "MemoGit", "memo_key"]
 

@@ -11,7 +11,7 @@ only the modules bound to the current event are imported (no scan; a test
 checks map and decorators agree), and an out-of-tree handler, resolved at sync
 to ``{"kind": "entry_point", "target": "pkg.mod:attr"}``, is imported directly,
 only when ``pkg`` is in ``[hooks] allow_code_from`` (no ``importlib.metadata``,
-D-12). External scripts run through :mod:`._external`, behind a trust approval.
+D-12). External scripts run through :mod:`.external`, behind a trust approval.
 Stdlib-only, so sync-time code (the ``hooks`` package) reads the same declarations.
 """
 
@@ -24,19 +24,24 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime._event_memo import EventMemo
 from coding_agent_playbook.hook_runtime.config.keys import ConfigKey, ConfigKind, KeyPolicy
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.event_memo import EventMemo
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
 
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, HookRecord
-    from coding_agent_playbook.hook_runtime.deps import Clock, ProcPort, RuntimeDeps, TrustPort
     from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
+    from coding_agent_playbook.hook_runtime.dispatch.deps import (
+        Clock,
+        ProcPort,
+        RuntimeDeps,
+        TrustPort,
+    )
+    from coding_agent_playbook.hook_runtime.dispatch.escape import EscapeHatches
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
-    from coding_agent_playbook.hook_runtime.escape import EscapeHatches
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.state.ledger import Ledger
     from coding_agent_playbook.hook_runtime.state.session import SessionState
@@ -398,7 +403,7 @@ def resolve_handler(
         if not isinstance(found, Untrusted):
             _refuse_mutation(declaration_of(found), in_tree=False, event=event)
         return found
-    from coding_agent_playbook.hook_runtime._external import external_handler
+    from coding_agent_playbook.hook_runtime.dispatch.external import external_handler
 
     return external_handler(record, event, ctx)
 

@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, HookRecord
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
 
 __all__ = [
     "POST_EDIT_HOOK_ID",
@@ -324,7 +324,7 @@ def enabled_consumers(ev: CanonicalEvent, ctx: HandlerContext) -> dict[str, Hook
         >>> sorted(enabled_consumers(ev, ctx))  # doctest: +SKIP
         ['error-handling-lint-feedback', 'post-edit-ruff-format']
     """
-    from coding_agent_playbook.hook_runtime._selection import matcher_accepts
+    from coding_agent_playbook.hook_runtime.dispatch.selection import matcher_accepts
 
     found: dict[str, HookRecord] = {}
     for hook_id, record in ctx.cfg.hooks.items():

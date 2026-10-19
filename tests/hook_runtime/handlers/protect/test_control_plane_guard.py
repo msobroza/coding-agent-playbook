@@ -29,8 +29,8 @@ from tests.hook_runtime.handlers.pack_repo import PackRepo, rows_of, with_scope
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from tests.hook_payloads import HookPayloadCase
 
     type Payload = Callable[[str, str, str], HookPayloadCase]

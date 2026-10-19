@@ -15,10 +15,10 @@ from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.dispatch.run import run_event
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext, HandlerFn
     from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext, HandlerFn
     from tests.hook_runtime.guard_repo import GuardRepo
 
 PRE = EventName.PRE_TOOL_USE
