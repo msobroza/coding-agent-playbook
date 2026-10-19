@@ -21,13 +21,11 @@ Exit codes: 0 clean (notes only), 1 a new block sink, 2 a usage or git error.
 from __future__ import annotations
 
 import json
-import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.commands.twins._git_scope import open_git, resolve_range
-from coding_agent_playbook.hook_runtime.git import GitError
+from coding_agent_playbook.commands.twins._runner import TwinOutcome, run_twin
 from coding_agent_playbook.hook_runtime.judges.notebook_cells import notebook_code
 from coding_agent_playbook.hook_runtime.judges.sink_scan import (
     SinkTable,
@@ -37,6 +35,7 @@ from coding_agent_playbook.hook_runtime.judges.sink_scan import (
 
 if TYPE_CHECKING:
     import argparse
+    from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.git import GitPort, SafeGit
     from coding_agent_playbook.hook_runtime.judges.sink_scan import SinkHit
@@ -93,17 +92,15 @@ def run(args: argparse.Namespace, *, git: SafeGit | None = None) -> int:
         >>> run(build_parser().parse_args(["scan-sinks", "--staged"]))  # doctest: +SKIP
         1
     """
-    repo_root = Path(args.repo_root or ".").resolve()
-    try:
-        port = git if git is not None else open_git(repo_root)
-        label, changes = _changes(port, args)
-        findings = scan_changes(changes, shipped_table())
-    except (GitError, ValueError) as exc:  # GitBaseError and a bad --range are ValueErrors
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
+    return run_twin(args.repo_root, lambda root: _outcome(args, root, git))
+
+
+def _outcome(args: argparse.Namespace, repo_root: Path, git: SafeGit | None) -> TwinOutcome:
+    label, changes = _changes(git if git is not None else open_git(repo_root), args)
+    findings = scan_changes(changes, shipped_table())
     code = 1 if any(f.status == "blocking" for f in findings) else 0
-    print(_json(findings, label, code) if args.format == "json" else _text(findings, label))
-    return code
+    text = _json(findings, label, code) if args.format == "json" else _text(findings, label)
+    return TwinOutcome(code, text)
 
 
 def shipped_table() -> SinkTable:

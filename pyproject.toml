@@ -606,6 +606,23 @@ broken_contract_guidance = """
 Import a public module of the owning package, or move the importer inside that package.
 """
 
+[[tool.importlinter.contracts]]
+id = "twins-use-judges"
+name = "A guard twin reaches a guard's judge through hook_runtime.judges, never a handler"
+type = "forbidden"
+source_modules = ["coding_agent_playbook.commands.twins"]
+forbidden_modules = ["coding_agent_playbook.hook_runtime.handlers"]
+# Direct imports only: a twin still reaches handlers through modules outside
+# commands.twins. Until N15: gate_scan, metrics_gate.config and evaluators.paths
+# import handlers._eval_paths. With no scheduled end: judges.sink_scan lazily imports
+# handlers._sink_regex (its regex fallback). The layer and private-modules contracts
+# cover those chains (specs/prT-package-layout.md B.9.2).
+allow_indirect_imports = "true"
+broken_contract_guidance = """
+A twin runs the same judge as its guard hook: import it from hook_runtime.judges, and
+move a judge a handler still holds there first (CONTEXT: Guard twin).
+"""
+
 # --- coverage ---
 
 [tool.coverage.report]
