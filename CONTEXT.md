@@ -122,6 +122,9 @@ _Avoid_: owned file, managed file
 **Lockfile**:
 The engine's record, in a consumer repo, of every generated output it wrote, with its source and content hash; sync uses it to find drift and leftovers.
 
+**Sync**:
+One `playbook sync` run: resolve the catalog, render every adapter's Generated output and write the Lockfile.
+
 ### Checks and grading
 
 **Validation**:

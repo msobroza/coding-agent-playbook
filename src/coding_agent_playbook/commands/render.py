@@ -23,14 +23,6 @@ from coding_agent_playbook.artifacts.identity import artifact_id_of, template_so
 from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.artifacts.skill import Skill
-from coding_agent_playbook.commands._sync_render import (
-    build_jinja_context,
-    render_hook_body,
-    render_prompt_body,
-    render_rule_body,
-    report_sandbox_violation,
-    report_template_error,
-)
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.renderer import (
     BUILTIN_FORMATS,
@@ -40,6 +32,14 @@ from coding_agent_playbook.renderer import (
     render_for,
 )
 from coding_agent_playbook.rule_registry import build_prompt_environment, skill_reference_of
+from coding_agent_playbook.sync.render import (
+    build_jinja_context,
+    render_hook_body,
+    render_prompt_body,
+    render_rule_body,
+    report_sandbox_violation,
+    report_template_error,
+)
 from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:

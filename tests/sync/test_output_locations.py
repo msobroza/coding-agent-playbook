@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.commands._output_locations import OutputLocations
+from coding_agent_playbook.sync._leftovers import OutputLocations
 
 _CLAUDE_SKILLS = ".claude/skills"
 _AGENTS_SKILLS = ".agents/skills"

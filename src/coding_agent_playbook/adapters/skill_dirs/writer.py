@@ -43,7 +43,7 @@ write mode skips.
 
 The writer never deletes stale files. Output an earlier sync left behind in a
 skill dir is settled by the one lockfile-based leftover policy
-(``commands/_sync_orphans.py``, SPEC §4.2 step 9): a file the engine never
+(``sync/_leftovers.py``, SPEC §4.2 step 9): a file the engine never
 wrote is never deleted, even inside an engine-owned dir.
 """
 

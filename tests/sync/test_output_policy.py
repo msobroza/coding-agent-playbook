@@ -1,4 +1,4 @@
-"""Unit tests for the ``playbook sync`` output-policy glue (``commands/_sync_output.py``)."""
+"""Unit tests for the ``playbook sync`` output-policy glue (``sync/_output_policy.py``)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,8 @@ import pytest
 
 from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
-from coding_agent_playbook.commands._sync_output import (
+from coding_agent_playbook.gitignore import BLOCK_START, ignore_entries
+from coding_agent_playbook.sync._output_policy import (
     file_drift,
     gitignore_drift,
     native_skill_roots,
@@ -24,7 +25,6 @@ from coding_agent_playbook.commands._sync_output import (
     warn_tracked_output,
     without_shared,
 )
-from coding_agent_playbook.gitignore import BLOCK_START, ignore_entries
 from tests.fakes import FakeGitClient
 
 

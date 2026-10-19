@@ -22,7 +22,6 @@ from coding_agent_playbook._guard_config_ruff import (
     ruff_drop_codes,
     ruff_table,
 )
-from coding_agent_playbook.commands._sync_hook_local import SyncHookDeps, write_pins
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.guard_config import (
     GuardConfigInputs,
@@ -32,6 +31,7 @@ from coding_agent_playbook.guard_config import (
 from coding_agent_playbook.hook_policy import ResolvedHandler
 from coding_agent_playbook.hook_runtime.config import GuardConfig, parse_guard_config
 from coding_agent_playbook.hook_runtime.state import StateStore
+from coding_agent_playbook.sync._machine_local import SyncHookDeps, write_pins
 from tests.fakes import FakePinWriter
 from tests.hook_runtime.fakes import FakeRuff
 from tests.hook_samples import resolved_hook

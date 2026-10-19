@@ -12,7 +12,7 @@ at ``rev:`` — the post-checkout auto-sync would delete the org rules and shrin
 the managed ``.gitignore`` block on every checkout. So an unusable overlay
 package or bundled plugin is a hard error (non-zero exit, name and reason given,
 nothing written). A missing *adapter* is only warned about: its old output is
-kept and stays ignored (see ``_sync_orphans``), so nothing is lost or published.
+kept and stays ignored (see ``sync._leftovers``), so nothing is lost or published.
 
 :func:`unusable_overlays` is the one overlay check every command shares:
 ``sync`` refuses, ``validate`` fails, ``check`` flags, ``init --overlays`` refuses.

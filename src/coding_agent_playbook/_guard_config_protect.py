@@ -125,7 +125,7 @@ def protected_rows(
 ) -> list[ProtectedRow]:
     """The rows the lockfile will hold for this sync's writes, in lockfile order.
 
-    Mirrors ``commands._sync_lockfile.build_lockfile``: one whole-file row per
+    Mirrors ``sync._dispatch.build_lockfile``: one whole-file row per
     written path (``provenance`` is keyed by resolved path) except the paths
     owned element-wise by ``managed`` or co-owned (``shared``), then the scoped
     rows. Paths are POSIX and relative to the real repo (``repo_root``, which

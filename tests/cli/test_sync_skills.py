@@ -15,9 +15,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.commands import sync as _sync
+from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.lockfile.model import compute_hash
+from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import core_skill_ids
 from tests.fakes import FakeGitClient, pre_gate_validate
 
@@ -92,7 +93,7 @@ def test_sync_writes_skill_to_all_three_roots_byte_identically(tmp_path, make_sy
     repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
     _write_repo_local_skill(repo, "query-db")
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     trees = [_skill_tree(repo / root / "query-db") for root in _SKILL_ROOTS]
     assert trees[0] == trees[1] == trees[2]
@@ -106,14 +107,14 @@ def test_sync_check_reports_no_drift_after_sync_and_flags_edits(
 ):
     repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
     _write_repo_local_skill(repo, "query-db")
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     capsys.readouterr()
 
-    assert _sync.run(_ns(repo, check=True)) == 0
+    assert sync_cmd.run(_ns(repo, check=True)) == 0
     assert "No drift" in capsys.readouterr().out
 
     (repo / ".agents" / "skills" / "query-db" / "scripts" / "run.py").write_text("tampered\n")
-    assert _sync.run(_ns(repo, check=True)) == 1
+    assert sync_cmd.run(_ns(repo, check=True)) == 1
     assert ".agents/skills/query-db/scripts/run.py" in capsys.readouterr().out
 
 
@@ -123,11 +124,11 @@ def test_sync_removes_deleted_skill_from_all_three_roots(tmp_path, make_syntheti
     user_skill = repo / ".claude" / "skills" / "hand-written" / "SKILL.md"
     user_skill.parent.mkdir(parents=True)
     user_skill.write_text("---\nname: hand-written\ndescription: d\n---\nmine\n")
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     shutil.rmtree(source)
     capsys.readouterr()
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     for root in _SKILL_ROOTS:
         assert not (repo / root / "query-db").exists(), root
@@ -146,7 +147,7 @@ def test_sync_without_shared_skills_adapter_writes_no_agents_skills(tmp_path, ma
     repo = make_synthetic_repo(tmp_path)  # default fixture config omits shared_skills
     _write_repo_local_skill(repo, "query-db")
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     assert (repo / ".claude" / "skills" / "query-db" / "SKILL.md").is_file()
     assert (repo / ".opencode" / "skills" / "query-db" / "SKILL.md").is_file()
@@ -179,8 +180,8 @@ def test_sync_never_touches_user_authored_skill_dir_with_colliding_id(
     (user_dir / "notes.md").write_text("notes\n")
     before = _skill_tree(user_dir)
 
-    assert _sync.run(_ns(repo)) == 0
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     assert _skill_tree(user_dir) == before
     captured = capsys.readouterr()
@@ -190,7 +191,7 @@ def test_sync_never_touches_user_authored_skill_dir_with_colliding_id(
         assert (repo / root / "query-db" / "scripts" / "run.py").is_file(), root
     # Check modes decide ownership against the real tree, like write mode:
     # no false drift, and the user's own files are never "generated output".
-    assert _sync.run(_ns(repo, check=True)) == 0
+    assert sync_cmd.run(_ns(repo, check=True)) == 0
     staged = [".opencode/skills/query-db/notes.md", ".opencode/skills/query-db/SKILL.md"]
     assert _sync.execute(repo, check_staged=True, git=FakeGitClient(staged=staged)) == 0
     assert "/.opencode/skills/query-db/" not in (repo / ".gitignore").read_text()
@@ -204,7 +205,7 @@ def test_sync_takes_over_legacy_sentinel_less_claude_skill(tmp_path, make_synthe
     repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
     source = _write_repo_local_skill(repo, "query-db")
     (source / "scripts" / "stale.py").write_text("old\n")
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     (source / "scripts" / "stale.py").unlink()
     legacy_dir = repo / ".claude" / "skills" / "query-db"
     _write_legacy_skill_md(
@@ -212,7 +213,7 @@ def test_sync_takes_over_legacy_sentinel_less_claude_skill(tmp_path, make_synthe
     )
     (legacy_dir / "notes.md").write_text("mine\n")
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     assert not (legacy_dir / "scripts" / "stale.py").exists()
     assert (legacy_dir / "notes.md").read_text() == "mine\n"
@@ -227,24 +228,24 @@ def test_sync_never_reclaims_an_adopted_leftover(tmp_path, make_synthetic_repo, 
     repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
     source = _write_repo_local_skill(repo, "query-db")
     saved = _skill_tree(source)
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     shutil.rmtree(source)
     adopted = repo / ".claude" / "skills" / "query-db"
     (adopted / "SKILL.md").write_text("MY OWN INSTRUCTIONS\n")
     (adopted / "scripts" / "run.py").write_text("print('mine')\n")
-    assert _sync.run(_ns(repo)) == 0  # both kept as edited leftovers
+    assert sync_cmd.run(_ns(repo)) == 0  # both kept as edited leftovers
     before = _skill_tree(adopted)
     for rel, content in saved.items():  # the canonical id comes back
         (source / rel).parent.mkdir(parents=True, exist_ok=True)
         (source / rel).write_bytes(content)
     capsys.readouterr()
 
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
 
     assert _skill_tree(adopted) == before
     assert f"not writing {adopted}" in capsys.readouterr().err
     assert (repo / ".agents" / "skills" / "query-db" / "scripts" / "run.py").is_file()
-    assert _sync.run(_ns(repo, check=True)) == 0
+    assert sync_cmd.run(_ns(repo, check=True)) == 0
 
 
 def test_sync_check_names_the_blocker_of_a_refused_swap(tmp_path, make_synthetic_repo, capsys):
@@ -256,16 +257,16 @@ def test_sync_check_names_the_blocker_of_a_refused_swap(tmp_path, make_synthetic
     source = _write_repo_local_skill(repo, "query-db")
     (source / "references" / "api").mkdir(parents=True)
     (source / "references" / "api" / "v1.md").write_text("nested\n")
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     (repo / ".agents" / "skills" / "query-db" / "references" / "api" / "mine.md").write_text(
         "mine\n"
     )
     shutil.rmtree(source / "references" / "api")
     (source / "references" / "api").write_text("flat\n")
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     capsys.readouterr()
 
-    assert _sync.run(_ns(repo, check=True)) == 1
+    assert sync_cmd.run(_ns(repo, check=True)) == 1
 
     out = capsys.readouterr().out
     assert ".agents/skills/query-db/references/api is in the way" in out
@@ -282,8 +283,8 @@ def test_sync_with_relative_repo_root_keeps_fresh_skill_output(
     monkeypatch.chdir(repo.parent)
     relative = argparse.Namespace(repo_root=repo.name, check=False)
 
-    assert _sync.run(relative) == 0
-    assert _sync.run(relative) == 0
+    assert sync_cmd.run(relative) == 0
+    assert sync_cmd.run(relative) == 0
 
     assert re.search(r", 0 removed$", capsys.readouterr().out, re.MULTILINE)
     for root in _SKILL_ROOTS:
@@ -296,9 +297,9 @@ def test_sync_and_check_survive_read_only_source_script(tmp_path, make_synthetic
     source = _write_repo_local_skill(repo, "query-db")
     (source / "scripts" / "run.py").chmod(0o555)
 
-    assert _sync.run(_ns(repo)) == 0
-    assert _sync.run(_ns(repo)) == 0
-    assert _sync.run(_ns(repo, check=True)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo, check=True)) == 0
 
 
 def test_sync_check_and_sync_handle_reference_folder_becoming_a_file(
@@ -308,14 +309,14 @@ def test_sync_check_and_sync_handle_reference_folder_becoming_a_file(
     source = _write_repo_local_skill(repo, "query-db")
     (source / "references" / "api").mkdir(parents=True)
     (source / "references" / "api" / "v1.md").write_text("nested\n")
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     shutil.rmtree(source / "references" / "api")
     (source / "references" / "api").write_text("flat\n")
     capsys.readouterr()
 
-    assert _sync.run(_ns(repo, check=True)) == 1  # drift reported, no crash
-    assert _sync.run(_ns(repo)) == 0
-    assert _sync.run(_ns(repo, check=True)) == 0
+    assert sync_cmd.run(_ns(repo, check=True)) == 1  # drift reported, no crash
+    assert sync_cmd.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo, check=True)) == 0
 
     for root in _SKILL_ROOTS:
         api = repo / root / "query-db" / "references" / "api"
@@ -347,9 +348,9 @@ def _rename_skill_id_case_and_sync(
     skill_md.write_text(skill_md.read_text().replace("id: Demo", "id: demo"))
     capsys.readouterr()
 
-    assert _sync.run(_ns(repo, check=True)) == 1
+    assert sync_cmd.run(_ns(repo, check=True)) == 1
     capsys.readouterr()
-    assert _sync.run(_ns(repo)) == 0
+    assert sync_cmd.run(_ns(repo)) == 0
     out: str = capsys.readouterr().out
 
     for root in _SKILL_ROOTS:
@@ -360,7 +361,7 @@ def _rename_skill_id_case_and_sync(
     assert not any("/Demo/" in path for path in _lock_paths(repo))
     gitignore = (repo / ".gitignore").read_text()
     assert "/Demo/" not in gitignore
-    assert _sync.run(_ns(repo, check=True)) == 0
+    assert sync_cmd.run(_ns(repo, check=True)) == 0
     return out
 
 

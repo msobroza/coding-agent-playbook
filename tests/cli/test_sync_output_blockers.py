@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.commands import sync as _sync
+from coding_agent_playbook.sync import pipeline as _sync
 from tests.cli.hook_repo import SETTINGS, hook_deps, make_hook_repo
 from tests.conftest import _DEFAULT_CONFIG
 from tests.fakes import FakeGitClient

@@ -22,7 +22,6 @@ from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
-from coding_agent_playbook.commands._sync_render import render_rule_body
 from coding_agent_playbook.renderer import build_environment
 from coding_agent_playbook.skills.membership import (
     MemberRuleDeliverer,
@@ -33,6 +32,7 @@ from coding_agent_playbook.skills.membership import (
     member_rules_of,
     undelivered_member_warning,
 )
+from coding_agent_playbook.sync.render import render_rule_body
 from tests.hook_samples import sample_hook
 
 if TYPE_CHECKING:
