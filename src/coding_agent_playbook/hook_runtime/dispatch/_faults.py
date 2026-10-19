@@ -19,9 +19,9 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._decision_log import DISPATCHER_ID, LogLine
 from coding_agent_playbook.hook_runtime.config.guard_config import CONFIG_FAULT_REASON
 from coding_agent_playbook.hook_runtime.diagnostics.heartbeat import degraded_line
+from coding_agent_playbook.hook_runtime.dispatch._decision_log import DISPATCHER_ID, LogLine
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, EventName
 from coding_agent_playbook.hook_runtime.dispatch.policy import is_unattended

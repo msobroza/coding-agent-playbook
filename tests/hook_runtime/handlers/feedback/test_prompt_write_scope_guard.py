@@ -18,11 +18,11 @@ import pytest
 
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.registry import load_builtin
 from coding_agent_playbook.hook_runtime.handlers.prompt_scope import (
     READ_ONLY_REASON,
     TESTS_ONLY_REASON,
 )
-from coding_agent_playbook.hook_runtime.registry import load_builtin
 from coding_agent_playbook.hook_runtime.state.active_prompt import (
     TurnRecord,
     active_prompt_document,
@@ -38,8 +38,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from tests.hook_payloads import HookPayloadCase
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 

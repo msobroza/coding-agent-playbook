@@ -29,13 +29,13 @@ from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._secret_policy import (
     classify_path,
     content_rules,
     finding_line,
     path_policy,
 )
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.security.files import user_home
 from coding_agent_playbook.security.secrets import (
     MAX_SCAN_BYTES,
@@ -54,8 +54,8 @@ if TYPE_CHECKING:
         ToolCall,
     )
     from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.git.safe_git import AddedLine
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.parse import ShellCommand
     from coding_agent_playbook.security.secrets import SecretFinding, SecretRule
 
@@ -146,7 +146,7 @@ def _write_scan(tool: ToolCall, ctx: HandlerContext, rules: Sequence[SecretRule]
 def _write_verdict(finding: SecretFinding, text: str, rel: str, ctx: HandlerContext) -> Verdict:
     if not finding.pragma:
         return "deny"
-    from coding_agent_playbook.hook_runtime.escape import pragma_at_head
+    from coding_agent_playbook.hook_runtime.dispatch.escape import pragma_at_head
 
     line = _line(text, finding.line)
     return "pass" if line and pragma_at_head(ctx.git, rel, line) else "ask"

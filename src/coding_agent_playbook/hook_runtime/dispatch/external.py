@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.registry import HandlerResolutionError, Untrusted
+from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerResolutionError, Untrusted
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
         EventName,
         ToolCall,
     )
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext, ResolveContext
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext, ResolveContext
     from coding_agent_playbook.security.trust import HandlerApproval
 
 __all__ = [

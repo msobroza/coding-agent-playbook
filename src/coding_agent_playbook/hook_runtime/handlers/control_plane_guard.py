@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.config.reader import read_small_file
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.edit_preview import preview_after
 from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import load_plane, route_of
 from coding_agent_playbook.hook_runtime.handlers._control_plane_shell import (
@@ -43,18 +44,17 @@ from coding_agent_playbook.hook_runtime.handlers._control_plane_shell import (
     names_state_dir,
 )
 from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths, shell_target
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import (
         ControlPlane,
         RouteKind,
     )
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.parse import ShellCommand
 
 __all__ = ["CONFIG_SCHEMA", "REASON", "control_plane_guard"]

@@ -19,7 +19,7 @@ import pytest
 import coding_agent_playbook.hook_runtime as hook_runtime
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.config.keys import ConfigKey
-from coding_agent_playbook.hook_runtime.registry import builtin_handler_modules
+from coding_agent_playbook.hook_runtime.dispatch.registry import builtin_handler_modules
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator

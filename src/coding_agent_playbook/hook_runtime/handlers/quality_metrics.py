@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers._metrics_pass import (
     MAX_FILES,
     METRICS_HOOK_IDS,
@@ -43,7 +44,6 @@ from coding_agent_playbook.hook_runtime.handlers._metrics_pass import (
     shared_pass,
     touched_py,
 )
-from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.stop.alone import run_alone
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult, StopPlan
 
@@ -53,8 +53,8 @@ if TYPE_CHECKING:
     from coding_agent_playbook.grading.types import ScopeDetail
     from coding_agent_playbook.hook_runtime.dispatch.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
+    from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.handlers._metrics_pass import MetricsPass
-    from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
     type Gate = Callable[[Any, Any], Any]  # (MetricsGateRequest, MetricsGateDeps) -> result
 

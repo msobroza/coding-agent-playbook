@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Final, Protocol
 
 from coding_agent_playbook._guard_config_ruff import RuleCache, probe_ruff_rules, ruff_drop_codes
 from coding_agent_playbook.hook_runtime.config import pin
-from coding_agent_playbook.hook_runtime.proc import SubprocessProc
+from coding_agent_playbook.hook_runtime.dispatch.proc import SubprocessProc
 from coding_agent_playbook.hooks.registrations.stop_gate import stop_stage_records
 from coding_agent_playbook.security.trust import (
     HandlerApproval,
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.config.pin import PinResult
-    from coding_agent_playbook.hook_runtime.deps import ProcPort
+    from coding_agent_playbook.hook_runtime.dispatch.deps import ProcPort
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
 __all__ = [
@@ -253,7 +253,7 @@ def _locate(name: str, repo_root: Path, deps: SyncHookDeps) -> str | None:
 def handler_approval(hook: ResolvedHook) -> HandlerApproval | None:
     """The trust entry ``hook``'s external handler needs, as the dispatcher computes it.
 
-    Mirrors ``hook_runtime._external.approval_of``: the first external handler
+    Mirrors ``hook_runtime.dispatch.external.approval_of``: the first external handler
     in event-name order (``guard_config.json`` sorts its keys), the launcher,
     the args after the script, and the script digest. ``None`` without one.
 

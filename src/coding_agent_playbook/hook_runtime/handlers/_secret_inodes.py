@@ -29,7 +29,7 @@ from coding_agent_playbook.security.patterns import WALK_SKIP_DIRS
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
-    from coding_agent_playbook.hook_runtime.deps import Clock
+    from coding_agent_playbook.hook_runtime.dispatch.deps import Clock
     from coding_agent_playbook.hook_runtime.state.store import StateStore
     from coding_agent_playbook.security.paths import PathPolicy
 

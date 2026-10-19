@@ -21,10 +21,10 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
 from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateArgs
 from coding_agent_playbook.hook_runtime.diagnostics.simulate import run as simulate_run
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.state import audit_log as audit
 from coding_agent_playbook.hook_runtime.state.audit_log import (

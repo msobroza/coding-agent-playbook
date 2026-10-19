@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.deps import RuntimeDeps, SystemClock, thread_timer
-from coding_agent_playbook.hook_runtime.proc import (
+from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps, SystemClock, thread_timer
+from coding_agent_playbook.hook_runtime.dispatch.proc import (
     ProcResult,
     ProcTimeout,
     SubprocessProc,
@@ -31,14 +31,14 @@ if TYPE_CHECKING:
 
 
 def test_proc_module_imports_no_subprocess_until_used() -> None:
-    loaded = new_modules_after("import coding_agent_playbook.hook_runtime.proc")
+    loaded = new_modules_after("import coding_agent_playbook.hook_runtime.dispatch.proc")
 
     assert "subprocess" not in loaded
     assert "shutil" not in loaded
 
 
 def test_deps_module_imports_no_thread_or_process_machinery() -> None:
-    loaded = new_modules_after("import coding_agent_playbook.hook_runtime.deps")
+    loaded = new_modules_after("import coding_agent_playbook.hook_runtime.dispatch.deps")
 
     assert not {"subprocess", "shutil", "threading"} & set(loaded)
 
