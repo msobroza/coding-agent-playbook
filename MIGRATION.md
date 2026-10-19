@@ -118,7 +118,15 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.lockfile.parse_json_document` | `coding_agent_playbook.lockfile.drift.parse_json_document` | N5 |
 | `coding_agent_playbook.metrics_config` | `coding_agent_playbook.metrics_gate.config` | N22 |
 | `coding_agent_playbook.metrics_gate.run.CONFIG_FILENAME` | `coding_agent_playbook.config.files.CONFIG_FILENAME` | B2 |
+| `coding_agent_playbook.orchestrator.Collision` | `coding_agent_playbook.catalog.resolve.Collision` | A5 |
+| `coding_agent_playbook.orchestrator.OverlayResolver` | `coding_agent_playbook.catalog.resolve.OverlayResolver` | A5 |
+| `coding_agent_playbook.orchestrator.SyncContext` | `coding_agent_playbook.validation.context.SyncContext` | A5 |
+| `coding_agent_playbook.orchestrator.artifact_id_of` | `coding_agent_playbook.artifacts.identity.artifact_id_of` | A5 |
+| `coding_agent_playbook.orchestrator.discover_adapters` | `coding_agent_playbook.adapters.registry.discover_adapters` | A5 |
+| `coding_agent_playbook.orchestrator.engine_package_of` | `coding_agent_playbook.catalog.source.engine_package_of` | A5 |
 | `coding_agent_playbook.orchestrator.filter_applies_if` | `coding_agent_playbook.detector.predicate.filter_applies_if` | N4 |
+| `coding_agent_playbook.orchestrator.installed_output_locations` | `coding_agent_playbook.adapters.registry.installed_output_locations` | A5 |
+| `coding_agent_playbook.orchestrator.template_source` | `coding_agent_playbook.artifacts.identity.template_source` | A5 |
 | `coding_agent_playbook.skill_document` | `coding_agent_playbook.skills.document` | A3 |
 | `coding_agent_playbook.skill_membership` | `coding_agent_playbook.skills.membership` | A3 |
 | `coding_agent_playbook.sources.base` | `coding_agent_playbook.catalog.source` | N3 |

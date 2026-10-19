@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from jinja2.exceptions import UndefinedError
 
 from coding_agent_playbook.artifacts.hook import Hook
+from coding_agent_playbook.artifacts.identity import artifact_id_of, template_source
 from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.artifacts.skill import Skill
@@ -31,7 +32,6 @@ from coding_agent_playbook.commands._sync_render import (
     report_template_error,
 )
 from coding_agent_playbook.detector.predicate import evaluate_predicate
-from coding_agent_playbook.orchestrator import SyncContext, artifact_id_of, template_source
 from coding_agent_playbook.renderer import (
     BUILTIN_FORMATS,
     FORMAT_ALIASES,
@@ -40,6 +40,7 @@ from coding_agent_playbook.renderer import (
     render_for,
 )
 from coding_agent_playbook.rule_registry import build_prompt_environment, skill_reference_of
+from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
     import argparse

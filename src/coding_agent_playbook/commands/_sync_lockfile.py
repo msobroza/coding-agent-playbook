@@ -28,6 +28,7 @@ import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.artifacts.identity import artifact_id_of
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.commands._sync_output import native_skill_roots
 from coding_agent_playbook.lockfile.model import (
@@ -37,7 +38,6 @@ from coding_agent_playbook.lockfile.model import (
     compute_hash,
     merge_provenance,
 )
-from coding_agent_playbook.orchestrator import artifact_id_of
 from coding_agent_playbook.skills.naming import skill_id_of
 
 if TYPE_CHECKING:

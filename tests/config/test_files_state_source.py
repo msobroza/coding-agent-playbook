@@ -118,7 +118,7 @@ def test_filesystem_state_source_delegates_its_config_half(tmp_path: Path) -> No
     assert source.load_policy_tables().hooks == {"enabled": True}
     source.save_config(source.load_primary_config())
     assert files.load_committed() == source.load_primary_config()
-    # orchestrator.py reads these two (spec B.5.3), so they stay class attributes.
+    # validation/context.py reads these two (spec B.5.3), so they stay class attributes.
     assert (source._CONFIG_FILENAME, source._CONFIG_LOCAL_FILENAME) == (
         ".coding-agent-playbook.toml",
         ".coding-agent-playbook.local.toml",
@@ -176,8 +176,8 @@ def test_entry_point_registers_filesystem_state_source() -> None:
 #: Named dotted, so ``module_moves apply`` follows a move (``engine_module_file``).
 _STATE_SOURCE_USERS = frozenset(
     {
-        # builds the sync context's state source; A5 moves it to validation/context.py
-        engine_module_file("coding_agent_playbook.orchestrator"),
+        # builds the sync context's state source (moved from orchestrator.py by A5)
+        engine_module_file("coding_agent_playbook.validation.context"),
         # reads the lockfile through it
         engine_module_file("coding_agent_playbook.adapters.skill_dirs.ownership"),
     }

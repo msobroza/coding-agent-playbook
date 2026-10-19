@@ -96,7 +96,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.orchestrator import SyncContext
+    from coding_agent_playbook.validation.context import SyncContext
 
 
 def _check_overlays_usable(overlays: Sequence[str]) -> list[ValidationError]:
