@@ -549,6 +549,10 @@ def test_claude_settings_imports_only_the_stdlib() -> None:
         "coding_agent_playbook.generated_output.atomic_io",
         # refuse_special_file before the read: stdlib-only
         "coding_agent_playbook.generated_output.output_io",
+        # the launcher token, a stdlib leaf shared with the Claude registrations (H15)
+        "coding_agent_playbook.hooks",
+        "coding_agent_playbook.hooks.registrations",
+        "coding_agent_playbook.hooks.registrations.launcher",
         "coding_agent_playbook.lockfile",
         "coding_agent_playbook.lockfile.canonical_json",
         "coding_agent_playbook.lockfile.model",

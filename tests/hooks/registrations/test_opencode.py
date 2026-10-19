@@ -17,19 +17,21 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.artifacts.hook_schema import HookMatcher
-from coding_agent_playbook.hook_registrations import (
+from coding_agent_playbook.hook_runtime.harness.opencode import NATIVE_TOOL_NAMES
+from coding_agent_playbook.hooks.registrations.opencode import (
     OPENCODE_REG_EVENTS,
     OPENCODE_V1_TOOLS,
-    STOP_COORDINATOR_ID,
-    HookRegistration,
-    RegistrationTimeoutError,
     opencode_reg_json,
     plan_opencode_reg,
-    plan_registrations,
-    resolved_deadlines_ms,
     to_opencode_reg,
 )
-from coding_agent_playbook.hook_runtime.harness.opencode import NATIVE_TOOL_NAMES
+from coding_agent_playbook.hooks.registrations.plan import (
+    HookRegistration,
+    RegistrationTimeoutError,
+    plan_registrations,
+    resolved_deadlines_ms,
+)
+from coding_agent_playbook.hooks.registrations.stop_gate import STOP_COORDINATOR_ID
 from coding_agent_playbook.hooks.resolution.tables import (
     HOOK_EVENTS,
     HOOK_SUPPORT,

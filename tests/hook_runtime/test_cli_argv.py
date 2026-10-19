@@ -16,11 +16,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.hook_registrations import OPENCODE_REG_EVENTS, claude_command
-from coding_agent_playbook.hook_registrations._templates import shim_template
 from coding_agent_playbook.hook_runtime.cli import DispatchArgs, main, parse_dispatch_argv
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT
+from coding_agent_playbook.hooks.registrations._templates import shim_template
+from coding_agent_playbook.hooks.registrations.claude import claude_command
+from coding_agent_playbook.hooks.registrations.opencode import OPENCODE_REG_EVENTS
 from tests.hook_runtime.guard_repo import GuardRepo, streams
 from tests.import_probe import probe_env
 

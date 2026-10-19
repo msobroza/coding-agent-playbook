@@ -21,12 +21,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH, render_opencode_shim
+from coding_agent_playbook.hooks.registrations.opencode import (
+    OPENCODE_SHIM_PATH,
+    render_opencode_shim,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.hook_registrations import OpenCodeRegEntry
+    from coding_agent_playbook.hooks.registrations.opencode import OpenCodeRegEntry
 
 _ENABLED = bool(shutil.which("opencode")) and os.environ.get("PLAYBOOK_E2E_OPENCODE") == "1"
 _RUN_TIMEOUT_S = 600
