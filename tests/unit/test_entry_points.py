@@ -10,6 +10,8 @@ from typing import Any
 
 import pytest
 
+from coding_agent_playbook.cli import main
+
 _PYPROJECT = Path(__file__).resolve().parents[2] / "pyproject.toml"
 _HOOK_HANDLERS_GROUP = "coding_agent_playbook.hook_handlers"
 
@@ -54,3 +56,13 @@ def test_playbook_hook_script_points_at_the_runtime_cli() -> None:
     assert target == "coding_agent_playbook.hook_runtime.cli:main"
     module, _, attr = target.partition(":")
     assert callable(getattr(importlib.import_module(module), attr))
+
+
+@pytest.mark.parametrize("script", ["playbook", "coding-agent-playbook"])
+def test_console_scripts_load_cli_main(script: str) -> None:
+    # L2 freezes this value: the cli/ package's __init__ must keep exporting main.
+    target = _project_table()["scripts"][script]
+
+    assert target == "coding_agent_playbook.cli:main"
+    (entry_point,) = (ep for ep in metadata.entry_points(group="console_scripts", name=script))
+    assert entry_point.load() is main

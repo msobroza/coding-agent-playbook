@@ -15,6 +15,9 @@ same pass as every other rule, and is dropped when none of them passes
 ``applies_if``; any other skill passes through unchanged. Each composed skill's
 description is composed here once as well, so one that cannot fit 300 characters
 aborts the sync with nothing written (:class:`SkillDescriptionOverflowError`).
+The ``playbook-guardrails`` skill is split off and composed from the on hooks'
+guardrail text (``hook_policy.guardrails_skill``, D6), for the adapters that
+write it.
 """
 
 from __future__ import annotations
@@ -29,6 +32,10 @@ from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of
 from coding_agent_playbook.commands._sync_hooks import SyncHooks, resolve_sync_hooks
 from coding_agent_playbook.detector.predicate import filter_applies_if
+from coding_agent_playbook.hook_policy.guardrails_skill import (
+    compose_guardrails_skill,
+    split_guardrails_skill,
+)
 from coding_agent_playbook.orchestrator import template_source
 from coding_agent_playbook.renderer import (
     TemplateSecurityError,
@@ -60,6 +67,9 @@ class RenderedArtifacts:
     ``hooks`` holds the ``[hooks]`` policy and the on hooks, bodies rendered.
     ``skills`` are composed: each carries its active member rules as
     ``member_references``, while ``rules`` still holds every active rule.
+    ``guardrails_skill`` is the ``playbook-guardrails`` skill composed from the
+    on hooks (``None`` without one), kept out of ``skills`` so only the adapters
+    that write it receive it (D6).
 
     Example::
 
@@ -72,6 +82,7 @@ class RenderedArtifacts:
     skills: list[Skill]
     registry: RuleRegistryImpl
     hooks: SyncHooks = field(default_factory=SyncHooks)
+    guardrails_skill: Skill | None = None
 
 
 class SkillDescriptionOverflowError(ValueError):
@@ -192,7 +203,8 @@ def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
     rendered_prompts = [render_prompt_body(p, base_context, prompt_env) for p in prompts]
     _prerender_inclusions(rendered_prompts, registry)
     hooks = resolve_sync_hooks(ctx, lambda hook: _with_body(hook, base_context, base_env))
-    skills = compose_skills(ctx.skills_resolved, ctx.rules_resolved, rendered_rules)
+    composed = compose_skills(ctx.skills_resolved, ctx.rules_resolved, rendered_rules)
+    skills, authored_guardrails = split_guardrails_skill(composed)
     _check_composed_descriptions(skills)
     _warn_undelivered_members(ctx, skills)
     return RenderedArtifacts(
@@ -201,6 +213,7 @@ def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
         skills=skills,
         registry=registry,
         hooks=hooks,
+        guardrails_skill=compose_guardrails_skill(authored_guardrails, hooks.resolved),
     )
 
 
