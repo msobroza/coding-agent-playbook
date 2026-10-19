@@ -259,7 +259,7 @@ layers = [
     "(grading)",
     "(generated_output)",
     "(artifacts)",
-    "security | (toml_writer) | (_plugin_registry)",
+    "security | toml_writer | (_plugin_registry)",
 ]
 exhaustive = true
 # Top-level modules not yet in their target package: each move PR deletes its
@@ -290,7 +290,6 @@ exhaustive_ignores = [
     "_sentinel",
     "_symlinks",
     "_table_shapes",
-    "_toml",
     "_typing",
     "config_entries",
     "config_schema",
@@ -367,7 +366,6 @@ forbidden_modules = [
     "coding_agent_playbook._output_io",
     "coding_agent_playbook._symlinks",
     "coding_agent_playbook._table_shapes",
-    "coding_agent_playbook._toml",
     "coding_agent_playbook._typing",
     "coding_agent_playbook.adapters",
     "coding_agent_playbook.cli",
@@ -397,6 +395,7 @@ forbidden_modules = [
     "coding_agent_playbook.skill_document",
     "coding_agent_playbook.skill_membership",
     "coding_agent_playbook.sources",
+    "coding_agent_playbook.toml_writer",
     "coding_agent_playbook.types",
     "jinja2",
     "packaging",
@@ -435,7 +434,6 @@ forbidden_modules = [
     "coding_agent_playbook._output_io",
     "coding_agent_playbook._symlinks",
     "coding_agent_playbook._table_shapes",
-    "coding_agent_playbook._toml",
     "coding_agent_playbook._typing",
     "coding_agent_playbook.adapters",
     "coding_agent_playbook.cli",
@@ -464,6 +462,7 @@ forbidden_modules = [
     "coding_agent_playbook.skill_document",
     "coding_agent_playbook.skill_membership",
     "coding_agent_playbook.sources",
+    "coding_agent_playbook.toml_writer",
     "coding_agent_playbook.types",
     "jinja2",
     "packaging",
@@ -521,7 +520,6 @@ forbidden_modules = [
     "coding_agent_playbook._output_io",
     "coding_agent_playbook._symlinks",
     "coding_agent_playbook._table_shapes",
-    "coding_agent_playbook._toml",
     "coding_agent_playbook._typing",
     "coding_agent_playbook.adapters",
     "coding_agent_playbook.cli",
@@ -550,6 +548,7 @@ forbidden_modules = [
     "coding_agent_playbook.skill_document",
     "coding_agent_playbook.skill_membership",
     "coding_agent_playbook.sources",
+    "coding_agent_playbook.toml_writer",
     "coding_agent_playbook.types",
     "jinja2",
     "packaging",
@@ -620,7 +619,7 @@ ignore_imports = [
     # N13: becomes adapters/claude_code/settings/drift.py
     "coding_agent_playbook.commands.check -> coding_agent_playbook.adapters._settings_drift",
     # CP-3: init's configure() owns --adapters (after #62)
-    "coding_agent_playbook.cli -> coding_agent_playbook.commands._init_adapters",
+    "coding_agent_playbook.cli.parser -> coding_agent_playbook.commands._init_adapters",
     # N22: becomes metrics_gate/inputs.py
     "coding_agent_playbook.hook_runtime.handlers._metrics_pass -> coding_agent_playbook.evaluators._metrics_inputs",
     # N22: becomes metrics_gate/suite.py

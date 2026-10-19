@@ -257,7 +257,7 @@ def test_save_config_emits_valid_toml(tmp_path: Path) -> None:
 
 
 def test_dump_toml_rejects_unsupported_scalar() -> None:
-    from coding_agent_playbook._toml import dump_toml as _dump_toml
+    from coding_agent_playbook.toml_writer import dump_toml as _dump_toml
 
     with pytest.raises(TypeError, match=r"does not support value of type"):
         _dump_toml({"weird": object()})
@@ -268,7 +268,7 @@ def test_dump_toml_round_trips_mapping_deeper_than_two_levels() -> None:
     they nest two levels at most). ``playbook init`` now writes the committed
     tables ``Config`` does not manage back verbatim, and those nest deeper
     (``[metrics.thresholds.<metric>]``), so every depth must round-trip."""
-    from coding_agent_playbook._toml import dump_toml as _dump_toml
+    from coding_agent_playbook.toml_writer import dump_toml as _dump_toml
 
     data = {"a": {"b": {"c": {"d": 1, "w": 1.0}}}}
     assert_toml_identical(tomllib.loads(_dump_toml(data)), data)
@@ -568,7 +568,7 @@ def test_list_skills_includes_repo_local_playbook_skills(tmp_path: Path) -> None
 def test_dump_toml_round_trips_nested_dict_in_list_of_tables() -> None:
     """Formerly pinned as a ``TypeError`` (the lockfile's ``[[entries]]`` hold
     scalars only); a preserved user table may hold sub-tables in each element."""
-    from coding_agent_playbook._toml import dump_toml as _dump_toml
+    from coding_agent_playbook.toml_writer import dump_toml as _dump_toml
 
     data = {"items": [{"key": {"deeper": 1, "flag": True}}]}
     assert_toml_identical(tomllib.loads(_dump_toml(data)), data)
@@ -834,8 +834,8 @@ def test_a_misread_committed_table_is_refused_even_when_the_local_file_hides_it(
     and ``check --refresh``, reading the committed file alone, crashed with a
     traceback; teammates without a local file crashed too. Now every read of the
     committed file refuses it, naming it."""
-    from coding_agent_playbook._toml import dump_toml
     from coding_agent_playbook.config import ConfigError
+    from coding_agent_playbook.toml_writer import dump_toml
 
     # The shape replaces the fixture's own entry (a second `project` would not parse).
     (tmp_path / _PRIMARY_NAME).write_text(

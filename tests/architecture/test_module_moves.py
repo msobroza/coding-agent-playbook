@@ -474,7 +474,8 @@ def test_migration_section_lists_public_moves(tmp_path: Path) -> None:
     """
     migration = "# Migration guide\n\n<!-- module-moves:start -->\nold\n<!-- module-moves:end -->\n"
     repo = repo_with(tmp_path, {**N2_TREE, **_WRITER, "MIGRATION.md": migration})
-    # N1's old path `_toml` is private, so out-of-tree code never imported it: no row.
+    # N1's old path `_toml` is private but its new path is public, so it gets a row:
+    # SPEC.md documented `_toml.dump_toml`, and `toml_writer` is now a supported path.
     moves = load_test_map(tmp_path, n01=N1_MAP, n02=N2_MAP, x=unlisted)
 
     assert check(repo, moves) == [
@@ -488,6 +489,7 @@ def test_migration_section_lists_public_moves(tmp_path: Path) -> None:
         " in tests/architecture/move_map/: edit the map, not this table. -->\n"
         "| Old module path | New module path | Moved by |\n"
         "| --- | --- | --- |\n"
+        "| `coding_agent_playbook._toml` | `coding_agent_playbook.toml_writer` | N1 |\n"
         "| `coding_agent_playbook.config` | `coding_agent_playbook.config.model` | N2 |\n"
         "| `coding_agent_playbook.config.ConfigError`"
         " | `coding_agent_playbook.config.schema.ConfigError` | N2 |\n"
