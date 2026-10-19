@@ -36,8 +36,8 @@ from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.harness.manifest import read_manifest
-from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.sync import pipeline as _sync
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import (

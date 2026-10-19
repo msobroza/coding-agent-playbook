@@ -1,0 +1,70 @@
+# N6 (#86, specs/prT-package-layout.md 7.4): the six root generated-output helpers
+# become the generated_output/ package.
+
+[[module]]
+pr = "N6"
+old = "coding_agent_playbook._sentinel"
+new = "coding_agent_playbook.generated_output.sentinel"
+
+[[module]]
+pr = "N6"
+old = "coding_agent_playbook._file_identity"
+new = "coding_agent_playbook.generated_output.file_identity"
+
+[[module]]
+pr = "N6"
+old = "coding_agent_playbook._atomic_io"
+new = "coding_agent_playbook.generated_output.atomic_io"
+
+[[module]]
+pr = "N6"
+old = "coding_agent_playbook._output_io"
+new = "coding_agent_playbook.generated_output.output_io"
+
+[[module]]
+pr = "N6"
+old = "coding_agent_playbook._symlinks"
+new = "coding_agent_playbook.generated_output.symlinks"
+
+[[module]]
+pr = "N6"
+old = "coding_agent_playbook.gitignore"
+new = "coding_agent_playbook.generated_output.gitignore"
+
+# The test-only SENTINEL re-export of renderer.py is gone (L2): importers name
+# generated_output.sentinel.
+[[names]]
+pr = "N6"
+old = "coding_agent_playbook.renderer"
+new = "coding_agent_playbook.generated_output.sentinel"
+names = ["SENTINEL"]
+
+[[path]]
+pr = "N6"
+old = "tests/unit/test_sentinel.py"
+new = "tests/generated_output/test_sentinel.py"
+
+[[path]]
+pr = "N6"
+old = "tests/unit/test_file_identity.py"
+new = "tests/generated_output/test_file_identity.py"
+
+[[path]]
+pr = "N6"
+old = "tests/unit/test_atomic_io.py"
+new = "tests/generated_output/test_atomic_io.py"
+
+[[path]]
+pr = "N6"
+old = "tests/unit/test_output_io.py"
+new = "tests/generated_output/test_output_io.py"
+
+[[path]]
+pr = "N6"
+old = "tests/unit/test_symlinks.py"
+new = "tests/generated_output/test_symlinks.py"
+
+[[path]]
+pr = "N6"
+old = "tests/unit/test_gitignore.py"
+new = "tests/generated_output/test_gitignore.py"

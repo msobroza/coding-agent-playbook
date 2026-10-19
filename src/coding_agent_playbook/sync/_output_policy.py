@@ -25,12 +25,10 @@ import sys
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook._output_io import is_character_device, refuse_special_file
-from coding_agent_playbook._symlinks import link_leaving, real_path
 from coding_agent_playbook.adapters.skill_dirs.writer import swap_blocker
 from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FILENAME
-from coding_agent_playbook.gitignore import (
+from coding_agent_playbook.generated_output.file_identity import FileSet
+from coding_agent_playbook.generated_output.gitignore import (
     GITIGNORE_FILENAME,
     LOCKFILE_NAME,
     apply_managed_block,
@@ -40,6 +38,11 @@ from coding_agent_playbook.gitignore import (
     relative_posix_paths,
     remove_managed_block,
 )
+from coding_agent_playbook.generated_output.output_io import (
+    is_character_device,
+    refuse_special_file,
+)
+from coding_agent_playbook.generated_output.symlinks import link_leaving, real_path
 from coding_agent_playbook.sync._output_blockers import write_blocker
 
 if TYPE_CHECKING:

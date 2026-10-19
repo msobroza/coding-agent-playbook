@@ -1,4 +1,4 @@
-"""Unit tests for spelling-proof file membership (``_file_identity.py``)."""
+"""Unit tests for spelling-proof file membership (``generated_output/file_identity.py``)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._file_identity import FileSet, file_identity
+from coding_agent_playbook.generated_output.file_identity import FileSet, file_identity
 
 if TYPE_CHECKING:
     import pytest

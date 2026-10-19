@@ -40,7 +40,7 @@ retired), it does two jobs:
   user's link dangling. That holds whatever order the adapters declare the two
   roots in, and in either link direction (specs/prS-skills-context.md 5.4.3).
 
-Paths resolve through ``_symlinks.real_path`` (:func:`os.path.realpath`), not
+Paths resolve through ``generated_output.symlinks.real_path`` (:func:`os.path.realpath`), not
 ``Path.resolve()``: on Python 3.12 the latter raises ``RuntimeError`` on a
 symlink loop, so ``OutputLocations`` keeps a looping path as spelled and never
 raises on one. The sync path's other loop-prone resolutions use the same helper
@@ -54,10 +54,10 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._file_identity import FileSet
-from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FILENAME
-from coding_agent_playbook.gitignore import GITIGNORE_FILENAME, LOCKFILE_NAME
+from coding_agent_playbook.generated_output.file_identity import FileSet
+from coding_agent_playbook.generated_output.gitignore import GITIGNORE_FILENAME, LOCKFILE_NAME
+from coding_agent_playbook.generated_output.symlinks import real_path
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence

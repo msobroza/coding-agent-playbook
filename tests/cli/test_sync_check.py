@@ -27,10 +27,10 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.detector.facts import detect
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.lockfile.model import LockEntry, compute_hash
 from coding_agent_playbook.security.files import is_secret_file
 from coding_agent_playbook.sync import _output_policy as _sync_output

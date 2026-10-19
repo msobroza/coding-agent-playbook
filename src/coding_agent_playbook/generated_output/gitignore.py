@@ -29,7 +29,7 @@ import unicodedata
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._atomic_io import atomic_write_bytes
+from coding_agent_playbook.generated_output.atomic_io import atomic_write_bytes
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -38,7 +38,7 @@ GITIGNORE_FILENAME = ".gitignore"
 BLOCK_START = "# >>> coding-agent-playbook (managed — do not edit) >>>"
 BLOCK_END = "# <<< coding-agent-playbook <<<"
 # Mirrors ``FileSystemStateSource._LOCKFILE_FILENAME`` (kept as a literal so this
-# module stays stdlib-only, importing only the ``_atomic_io`` leaf; a unit test
+# module stays stdlib-only, importing only the ``generated_output.atomic_io`` leaf; a unit test
 # pins the two together).
 LOCKFILE_NAME = ".coding-agent-playbook.lock"
 LOCKFILE_ENTRY = f"/{LOCKFILE_NAME}"

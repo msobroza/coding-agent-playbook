@@ -23,13 +23,13 @@ members (a bundled plugin's) is written exactly as authored.
 frontmatter ``name`` is forced to the skill id (= the directory name) and must
 match :data:`~coding_agent_playbook.skills.naming.AGENT_SKILL_NAME_PATTERN`;
 ``description`` must be non-empty. The
-playbook :data:`~coding_agent_playbook._sentinel.SENTINEL` cannot sit on line 1
+playbook :data:`~coding_agent_playbook.generated_output.sentinel.SENTINEL` cannot sit on line 1
 (agent parsers require ``^---`` there), so it is the first body line after the
 closing fence — the same placement as the ``agent_harness`` adapter (§10.7.3).
 
 Ownership is decided **before** any write: ``<root>/<id>/`` is engine-owned iff
 its ``SKILL.md`` carries the sentinel at an anchored position
-(``_sentinel.has_sentinel``: here the first body line, so a ``SKILL.md`` that
+(``generated_output.sentinel.has_sentinel``: here the first body line, so a ``SKILL.md`` that
 only quotes it in prose is the user's), or the previous sync's lockfile lists
 it with unchanged bytes (pre-sentinel engines wrote ``.claude/skills/`` without
 one). A user-authored directory with a colliding id is skipped with a
@@ -58,12 +58,16 @@ from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._sentinel import has_sentinel
-from coding_agent_playbook._symlinks import is_dangling_symlink, link_leaving, real_path
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.adapters.skill_dirs.ownership import PriorOutput
 from coding_agent_playbook.artifacts.frontmatter import format_frontmatter
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
+from coding_agent_playbook.generated_output.sentinel import has_sentinel
+from coding_agent_playbook.generated_output.symlinks import (
+    is_dangling_symlink,
+    link_leaving,
+    real_path,
+)
 from coding_agent_playbook.harness.emitter import with_sentinel_body
 from coding_agent_playbook.skills.document import emitted_body, emitted_frontmatter
 from coding_agent_playbook.skills.naming import skill_id_of
@@ -226,7 +230,7 @@ class SkillWriter:
 def is_engine_owned_skill_dir(skill_dir: Path) -> bool:
     """Return whether ``skill_dir`` is a real dir whose ``SKILL.md`` has the sentinel.
 
-    The sentinel must sit at an anchored position (``_sentinel.has_sentinel``;
+    The sentinel must sit at an anchored position (``generated_output.sentinel.has_sentinel``;
     :func:`render_skill_md` writes it as the first body line), so a hand-written
     ``SKILL.md`` that merely quotes it is never claimed. Binary, undecodable or
     unreadable files never raise: they are user-owned (``False``).

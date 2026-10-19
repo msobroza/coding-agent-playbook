@@ -1,4 +1,4 @@
-"""Dangling-symlink predicates that never raise (``_symlinks.py``).
+"""Dangling-symlink predicates that never raise (``generated_output/symlinks.py``).
 
 Regression (review of the dangling-link fix): ``is_symlink() and not exists()``
 raised ``PermissionError`` for a link under an unreadable directory on Python
@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook._symlinks import (
+from coding_agent_playbook.generated_output.symlinks import (
     is_dangling_symlink,
     link_leaving,
     unresolvable_link_errno,

@@ -1,6 +1,6 @@
 """Tests for the import-light sentinel module (specs/prK-lifecycle-hooks.md §P3).
 
-``_sentinel`` is the single home of the "this file is engine-generated" marker.
+``generated_output.sentinel`` is the single home of the "this file is engine-generated" marker.
 It must stay importable without Jinja or YAML (hook runtimes read it on the hot
 path), and ``has_sentinel`` accepts exactly two anchored positions — line 1, or
 the first body line after a leading YAML frontmatter block — never a substring
@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook import _sentinel, renderer
-from coding_agent_playbook._sentinel import SENTINEL, has_sentinel, sentinel_line
+from coding_agent_playbook.generated_output import sentinel as _sentinel
+from coding_agent_playbook.generated_output.sentinel import SENTINEL, has_sentinel, sentinel_line
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -40,30 +40,28 @@ def _run_fresh_interpreter(code: str) -> str:
     return completed.stdout.strip()
 
 
-def test_renderer_reexports_sentinel() -> None:
-    assert renderer.SENTINEL is _sentinel.SENTINEL
-
-
 def test_sentinel_text_is_the_shipped_code_string() -> None:
     assert SENTINEL == _SHIPPED_SENTINEL
 
 
 def test_sentinel_module_is_import_light() -> None:
     out = _run_fresh_interpreter(
-        "import coding_agent_playbook._sentinel, sys; "
+        "import coding_agent_playbook.generated_output.sentinel, sys; "
         "print('jinja2' in sys.modules, 'yaml' in sys.modules)"
     )
     assert out == "False False"
 
 
 def test_sentinel_module_imports_nothing_at_runtime() -> None:
-    # The package __init__ is loaded first so only _sentinel's own imports count.
+    # The package __init__ is loaded first so only sentinel's own imports count.
     out = _run_fresh_interpreter(
         "import sys, coding_agent_playbook; before = set(sys.modules); "
-        "import coding_agent_playbook._sentinel; "
+        "import coding_agent_playbook.generated_output.sentinel; "
         "print(sorted(set(sys.modules) - before))"
     )
-    assert out == "['coding_agent_playbook._sentinel']"
+    assert out == (
+        "['coding_agent_playbook.generated_output', 'coding_agent_playbook.generated_output.sentinel']"
+    )
 
 
 @pytest.mark.parametrize(

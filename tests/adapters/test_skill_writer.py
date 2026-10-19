@@ -26,9 +26,9 @@ from coding_agent_playbook.adapters.skill_dirs.writer import (
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.harness.manifest import read_manifest
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
-from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.skills.naming import agent_skill_issues, has_declared_id, skill_id_of
 from coding_agent_playbook.sync import pipeline as _sync
 from coding_agent_playbook.sync._leftovers import LeftoverPolicy, OutputLocations

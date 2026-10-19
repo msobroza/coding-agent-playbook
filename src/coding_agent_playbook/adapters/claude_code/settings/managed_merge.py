@@ -22,8 +22,6 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
-from coding_agent_playbook._atomic_io import atomic_write_bytes
-from coding_agent_playbook._output_io import refuse_special_file
 from coding_agent_playbook.adapters.claude_code.settings._json_edits import (
     apply_edits,
     edit_splices,
@@ -48,6 +46,8 @@ from coding_agent_playbook.adapters.claude_code.settings._plan import (
     plan_settings,
     scoped_lock_entry,
 )
+from coding_agent_playbook.generated_output.atomic_io import atomic_write_bytes
+from coding_agent_playbook.generated_output.output_io import refuse_special_file
 from coding_agent_playbook.lockfile.canonical_json import canonical_json
 
 if TYPE_CHECKING:

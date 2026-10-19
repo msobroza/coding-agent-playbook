@@ -31,7 +31,7 @@ from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _reso
 from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.config.tables.links import LinksConfig
-from coding_agent_playbook.renderer import SENTINEL
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.sync import pipeline as _sync
 from coding_agent_playbook.validation._links import check_markdown_links
 from coding_agent_playbook.validation.link_check import extract_markdown_links

@@ -1,4 +1,4 @@
-"""Writes of generated output that refuse a FIFO, socket or device (``_output_io.py``).
+"""Writes of generated output that refuse a FIFO, socket or device (``generated_output/output_io.py``).
 
 Regression: ``mkfifo AGENTS.md`` made write-mode ``playbook sync`` hang forever
 in ``open()``, and a socket there crashed it with ``OSError`` [Errno 102].
@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook._output_io import (
+from coding_agent_playbook.generated_output.output_io import (
     NotRegularFileError,
     copy_output,
     refuse_special_file,
