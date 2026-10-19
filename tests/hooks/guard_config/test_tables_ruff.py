@@ -1,7 +1,8 @@
 """The ``ruff`` table of ``guard_config.json`` (specs/prK-hook-pack.md §E.3).
 
 ``guard_config.json`` gets only the repo's own ruff selection (machine-
-independent); the pinned ruff's rule set is probed apart (``test_ruff_probe``).
+independent); the pinned ruff's rule set is probed apart (``test_ruff_probe``),
+whose sample rule listings the machine-independence test reuses.
 """
 
 from __future__ import annotations
@@ -22,6 +23,10 @@ from coding_agent_playbook.hooks.guard_config.compile import (
     render_guard_config,
     serialize_guard_config,
 )
+from coding_agent_playbook.sync._machine_local import SyncHookDeps, write_pins
+from tests.fakes import FakePinWriter
+from tests.hook_runtime.fakes import FakeRuff
+from tests.hooks.guard_config.test_ruff_probe import RULES_017, RULES_OLD
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -114,6 +119,38 @@ def test_default_selection_fixes_nothing() -> None:
 
 
 # --- machine independence ----------------------------------------------------------------
+
+
+def test_guard_config_ruff_tables_machine_independent(tmp_path: Path) -> None:
+    """Two ruff versions: identical guard_config.json bytes, different machine.json drops."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.ruff.lint]\nselect = ["E", "F", "I", "UP"]\n', encoding="utf-8"
+    )
+    configs: list[bytes] = []
+    drops: list[dict[str, list[str]]] = []
+    for rules in (RULES_017, RULES_OLD):
+        venv_ruff = tmp_path / ".venv" / "bin" / "ruff"
+        venv_ruff.parent.mkdir(parents=True, exist_ok=True)
+        venv_ruff.write_bytes(repr(rules).encode())
+        venv_ruff.chmod(0o755)
+        pins = FakePinWriter()
+        deps = SyncHookDeps(
+            pins=pins, which=lambda _: None, proc=FakeRuff(rules=rules), rule_cache=lambda _: None
+        )
+        write_pins(tmp_path, deps, engine_version="0.2.0", ruff_codes=["B006", "UP045"])
+        inputs = GuardConfigInputs(
+            hooks=[],
+            hooks_config=HooksConfig(enabled=True),
+            guardrails=GuardrailsConfig(),
+            engine_version="0.2.0",
+            ruff=read_project_ruff_selection(tmp_path),
+        )
+        configs.append(serialize_guard_config(render_guard_config(inputs)))
+        drops.append(pins.drops)
+
+    assert configs[0] == configs[1]
+    assert b'"safe_fix_select":["I","UP"]' in configs[0]
+    assert drops == [{}, {"ruff": ["UP045"]}]
 
 
 def test_runtime_reads_the_ruff_table_back() -> None:

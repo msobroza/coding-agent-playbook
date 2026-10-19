@@ -6,7 +6,9 @@ render step ``playbook render`` shares, and ``git_client`` the read-only git
 interface tests replace with a fake. The underscore modules are its steps:
 ``_check_modes`` (``--check`` and ``--check-staged``), ``_dispatch`` (the adapter
 dispatch and the lockfile stamp), ``_hook_outputs`` and ``_machine_local`` (the
-hook outputs and the machine-local hook pins), ``_leftovers`` (what an earlier sync
-left behind), ``_output_policy`` (the ``[output] commit`` policy) and
-``_output_blockers`` (what stands in the way of a write).
+hook outputs and the machine-local hook pins), ``_protect`` (the protected table's
+lock rows and adapter scan dirs) and ``_hook_scripts`` (the copied hook scripts),
+the two adapter-dependent parts of the guard_config writer (GC-D1), ``_leftovers``
+(what an earlier sync left behind), ``_output_policy`` (the ``[output] commit``
+policy) and ``_output_blockers`` (what stands in the way of a write).
 """

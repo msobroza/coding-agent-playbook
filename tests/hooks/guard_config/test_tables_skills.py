@@ -6,8 +6,8 @@ covers an edited file without importing the catalog. Pure functions of the
 rules: no repository needed.
 
 Spec 8.8 puts ``test_skill_nudge_config_is_derived_and_replaces_a_layer_value``
-in ``test_compile.py``; it lives here, next to the table it renders,
-because that file is already far past the 500-line cap.
+in the guard_config writer's main test file; it lives here, next to the table it
+renders, because that file is already far past the 500-line cap.
 """
 
 from __future__ import annotations
