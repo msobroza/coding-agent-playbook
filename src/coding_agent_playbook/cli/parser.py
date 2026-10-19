@@ -5,7 +5,7 @@ and exposes a ``run(args) -> int`` that returns the process exit code. A module
 on the Command protocol (:mod:`._command`) also declares its ``NAME``, ``HELP``
 and flags (``configure``), and :func:`build_parser` walks ``_SUBCOMMANDS`` by
 name: a name in ``_COMMANDS`` gets the module's flags, a name in ``_LEGACY``
-still has them declared here, until its command migrates (CP-1, CP-3, B10).
+still has them declared here, until its command migrates (CP-3, B10).
 
 The dispatch pattern is the standard ``subparser.set_defaults(func=...)``
 idiom: ``coding_agent_playbook.cli.main()`` parses argv with :func:`build_parser`,
@@ -68,7 +68,10 @@ _SUBCOMMANDS: tuple[str, ...] = (
 
 #: The subcommand modules that declare their own flags, in ``_SUBCOMMANDS`` order.
 _COMMANDS: Final[tuple[Command, ...]] = (
+    sync_cmd,
     check_cmd,
+    validate_cmd,
+    render_cmd,
     metrics_cmd,
     import_harness_cmd,
     validate_harness_cmd,
@@ -139,45 +142,6 @@ def _add_init_parser(subcommands: _SubParsers) -> None:
     init_p.set_defaults(func=init_cmd.run)
 
 
-def _add_sync_parser(subcommands: _SubParsers) -> None:
-    """``playbook sync``'s flags (SPEC §12.2, §12.3); CP-1 moves them into its module."""
-    sync_p = subcommands.add_parser("sync", help="regenerate all artifacts (SPEC §12.2)")
-    sync_p.add_argument("--repo-root", help="repo to sync (defaults to cwd)")
-    sync_mode = sync_p.add_mutually_exclusive_group()
-    sync_mode.add_argument(
-        "--check",
-        action="store_true",
-        help="verify against the lockfile without writing (SPEC §12.3)",
-    )
-    # [output] commit = false pre-commit guard: generated output is local-only,
-    # so a commit that stages any of it fails. A no-op under commit = true.
-    sync_mode.add_argument(
-        "--check-staged",
-        dest="check_staged",
-        action="store_true",
-        help="fail if any staged path is generated output; never writes (SPEC §12.3)",
-    )
-    sync_p.set_defaults(func=sync_cmd.run)
-
-
-def _add_validate_parser(subcommands: _SubParsers) -> None:
-    """``playbook validate``'s flags (SPEC §12.6); CP-1 moves them into its module."""
-    validate_p = subcommands.add_parser("validate", help="cross-reference checks (SPEC §12.6)")
-    validate_p.add_argument("--repo-root", help="repo to validate (defaults to cwd)")
-    validate_p.set_defaults(func=validate_cmd.run)
-
-
-def _add_render_parser(subcommands: _SubParsers) -> None:
-    """``playbook render``'s flags (SPEC §12.7); CP-1 moves them into its module."""
-    render_p = subcommands.add_parser("render", help="render one artifact (SPEC §12.7)")
-    render_p.add_argument("id", help="artifact id to render")
-    render_p.add_argument("--repo-root", help="repo to render against (defaults to cwd)")
-    render_p.add_argument("--format", help="format alias or full name")
-    render_p.add_argument("--show-source", action="store_true")
-    render_p.add_argument("--show-rules", action="store_true")
-    render_p.set_defaults(func=render_cmd.run)
-
-
 def _add_eval_parser(subcommands: _SubParsers) -> None:
     """``playbook eval``'s flags (PR 11 enumeration; PR R1d adds --run); B10 moves them."""
     eval_p = subcommands.add_parser(
@@ -237,12 +201,9 @@ def _add_eval_parser(subcommands: _SubParsers) -> None:
 
 
 #: The subcommands whose flags are still declared here, by name; each moves into
-#: its command module and onto ``_COMMANDS`` (B10: eval; CP-1: sync, validate,
-#: render; CP-3: init), and the mapping goes with the last of them.
+#: its command module and onto ``_COMMANDS`` (B10: eval; CP-3: init), and the
+#: mapping goes with the last of them.
 _LEGACY: Final[Mapping[str, Callable[[_SubParsers], None]]] = {
     "init": _add_init_parser,
-    "sync": _add_sync_parser,
-    "validate": _add_validate_parser,
-    "render": _add_render_parser,
     "eval": _add_eval_parser,
 }

@@ -2420,7 +2420,7 @@ coding-agent-playbook = "coding_agent_playbook.cli:main"
 playbook = "coding_agent_playbook.cli:main"
 playbook-hook = "coding_agent_playbook.hook_runtime.cli:main"   # the hook runtime, §12.13 (v0.20)
 ```
-Each subcommand's module declares its flags (`NAME`, `HELP`, `configure`, `run`); `cli` lists them in `_SUBCOMMANDS` order (`cli/parser.py`), and `cli/_command.py` holds the `Command` protocol the modules satisfy structurally, so no command imports `cli`. `init`, `sync`, `validate`, `render` and `eval` still have their flags declared in `cli/parser.py` until they move onto the protocol.
+Each subcommand's module declares its flags (`NAME`, `HELP`, `configure`, `run`); `cli` lists them in `_SUBCOMMANDS` order (`cli/parser.py`), and `cli/_command.py` holds the `Command` protocol the modules satisfy structurally, so no command imports `cli`. `init` and `eval` still have their flags declared in `cli/parser.py` until they move onto the protocol.
 
 **Missing catalog.** Every command that loads the engine's catalog (`init`, `sync` in every mode, `check`, `validate`, `render`, `eval`) locates it through `catalog_root()`, which raises `CatalogMissingError` when it cannot be found. The error carries every path it tried: the wheel's `<package>/_catalog` (which must hold `core/`) and a source checkout's `<repo>/catalog` (used only when the package directory sits under `src/` and `catalog/core` exists). `cli.main` catches it and exits 2, printing this line to stderr, with the two tried paths as `<a>` and `<b>`:
 

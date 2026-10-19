@@ -9,12 +9,32 @@ calls too.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.sync import pipeline
 
 if TYPE_CHECKING:
     import argparse
+
+NAME: Final = "sync"
+HELP: Final = "regenerate all artifacts (SPEC §12.2)"
+
+
+def configure(parser: argparse.ArgumentParser) -> None:
+    """Declare ``playbook sync [--repo-root R] [--check | --check-staged]`` (SPEC §12.3)."""
+    parser.add_argument("--repo-root", help="repo to sync (defaults to cwd)")
+    sync_mode = parser.add_mutually_exclusive_group()
+    sync_mode.add_argument(
+        "--check",
+        action="store_true",
+        help="verify against the lockfile without writing (SPEC §12.3)",
+    )
+    sync_mode.add_argument(
+        "--check-staged",  # the commit = false pre-commit guard (no-op if commit = true)
+        dest="check_staged",
+        action="store_true",
+        help="fail if any staged path is generated output; never writes (SPEC §12.3)",
+    )
 
 
 def _resolve_repo_root(args: argparse.Namespace) -> Path:
