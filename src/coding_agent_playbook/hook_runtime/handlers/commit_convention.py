@@ -33,6 +33,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 
@@ -91,7 +92,7 @@ def _segment(segment: Segment, repo: RepoInfo, ctx: HandlerContext) -> HandlerRe
     if git.subcommand == "commit":
         message = _commit_message(git, segment, repo)
         return None if message is None else _check(ctx, repo, lambda cz: cz.message(message))
-    if git.subcommand == "push" and ctx.config.get("check_push") is True:
+    if git.subcommand == "push" and HookConfig(ctx.config, CONFIG_SCHEMA).flag("check_push", False):
         return _check(ctx, repo, lambda cz: _push(git, cz, ctx))
     return None
 

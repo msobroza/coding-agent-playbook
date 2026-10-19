@@ -189,7 +189,7 @@ def _located(finding: SecretFinding, first: int) -> SecretFinding:
 
 def _secret_path_test(ctx: HandlerContext) -> Callable[[NormalizedPath], bool]:
     """Whether a written path is a credential file (secrets-path-guard's to judge)."""
-    policy, home = path_policy(ctx.cfg, {}), ctx.home or user_home()
+    policy, home = path_policy(ctx.cfg), ctx.home or user_home()
 
     def secret(path: NormalizedPath) -> bool:
         verdict = classify_path(policy, path, home=home, platform=ctx.platform)
@@ -208,7 +208,7 @@ def _push_scan(
         return _Scan()
     git = ctx.git
     upstream = git.upstream()
-    policy, home = path_policy(ctx.cfg, {}), ctx.home or user_home()
+    policy, home = path_policy(ctx.cfg), ctx.home or user_home()
     added = [
         line
         for line in git.unpushed_lines(upstream).added
