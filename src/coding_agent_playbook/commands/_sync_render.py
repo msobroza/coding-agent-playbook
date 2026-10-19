@@ -30,13 +30,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
+from coding_agent_playbook.artifacts.identity import template_source
 from coding_agent_playbook.commands._sync_hooks import SyncHooks, resolve_sync_hooks
 from coding_agent_playbook.detector.predicate import filter_applies_if
 from coding_agent_playbook.hook_policy.guardrails_skill import (
     compose_guardrails_skill,
     split_guardrails_skill,
 )
-from coding_agent_playbook.orchestrator import template_source
 from coding_agent_playbook.renderer import (
     TemplateSecurityError,
     build_environment,
@@ -57,8 +57,8 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.hook_policy import ResolvedHook
-    from coding_agent_playbook.orchestrator import SyncContext
     from coding_agent_playbook.rule_registry import RuleRegistryImpl
+    from coding_agent_playbook.validation.context import SyncContext
 
 
 @dataclass(frozen=True)

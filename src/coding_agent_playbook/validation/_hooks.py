@@ -22,7 +22,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FILENAME
+from coding_agent_playbook.catalog.source import engine_package_of
+from coding_agent_playbook.config.files import (
+    CONFIG_FILENAME,
+    CONFIG_LOCAL_FILENAME,
+)
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig
 from coding_agent_playbook.hook_policy import (
     HookCheckContext,
@@ -34,7 +38,6 @@ from coding_agent_playbook.hook_policy import (
     resolve_effective_hooks,
 )
 from coding_agent_playbook.hook_policy._findings import hook_location
-from coding_agent_playbook.orchestrator import engine_package_of
 from coding_agent_playbook.validation.findings import (
     RULE_CALL_RE,
     ValidationError,
@@ -48,7 +51,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
     from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hook_policy import HandlerCatalog
-    from coding_agent_playbook.orchestrator import SyncContext
+    from coding_agent_playbook.validation.context import SyncContext
 
 #: Every enabled hook's advisory lands in AGENTS.md (§C.4.2); past this many
 #: characters of body, validate warns so the Guardrails section stays lean.

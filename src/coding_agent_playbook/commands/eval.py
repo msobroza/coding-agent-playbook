@@ -54,7 +54,7 @@ from coding_agent_playbook.evals import registry
 from coding_agent_playbook.evals.judge import JudgeError
 from coding_agent_playbook.evals.prompting import PromptResolutionError
 from coding_agent_playbook.evals.report_format import format_task_result_text, task_result_to_dict
-from coding_agent_playbook.orchestrator import SyncContext
+from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
     import argparse

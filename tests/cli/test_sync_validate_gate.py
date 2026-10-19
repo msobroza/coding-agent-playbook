@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from coding_agent_playbook.orchestrator import SyncContext
+    from coding_agent_playbook.validation.context import SyncContext
 
     SyntheticRepoFactory = Callable[..., Path]
 

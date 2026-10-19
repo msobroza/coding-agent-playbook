@@ -64,7 +64,7 @@ def twin_hook_config(
     """
     from coding_agent_playbook.hook_policy import RegistryCatalog, merged_handler_config
     from coding_agent_playbook.hook_policy.override_rules import bound_handler
-    from coding_agent_playbook.orchestrator import SyncContext
+    from coding_agent_playbook.validation.context import SyncContext
 
     # An internal policy read: the command that owns the config (sync, init's final
     # sync) prints the deprecated-overlay warning once (SPEC v0.19), not this helper.

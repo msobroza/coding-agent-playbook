@@ -67,6 +67,7 @@ from coding_agent_playbook._symlinks import real_path
 from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_code.settings.managed_merge import SettingsMergeError
+from coding_agent_playbook.adapters.registry import discover_adapters, installed_output_locations
 from coding_agent_playbook.adapters.skill_dirs.ownership import judging_leftovers_with
 from coding_agent_playbook.adapters.skill_dirs.writer import deciding_ownership_against
 from coding_agent_playbook.commands import (
@@ -92,14 +93,10 @@ from coding_agent_playbook.commands._sync_render import (
 from coding_agent_playbook.git_client import SubprocessGitClient
 from coding_agent_playbook.gitignore import LOCKFILE_NAME, ignore_entries
 from coding_agent_playbook.guard_config import SYNC_OUTPUT_LOCATIONS
-from coding_agent_playbook.orchestrator import (
-    SyncContext,
-    discover_adapters,
-    installed_output_locations,
-)
 from coding_agent_playbook.renderer import TemplateSecurityError
 from coding_agent_playbook.validation import preflight as _sync_preflight
 from coding_agent_playbook.validation.checks import sync_gate_errors
+from coding_agent_playbook.validation.context import SyncContext
 from coding_agent_playbook.validation.findings import report_validation_errors
 from coding_agent_playbook.validation.prompts import check_prompt_rule_calls
 

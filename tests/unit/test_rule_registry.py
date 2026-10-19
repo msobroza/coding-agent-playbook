@@ -5,8 +5,8 @@ Covers the three seams of ``coding_agent_playbook.rule_registry``:
 - :func:`build_prompt_environment` — the registry plus the prompt Jinja
   environment that renders through it, built the same way by ``sync``,
   ``render`` and the eval runner.
-- The module boundary: ``rule_registry`` imports ``template_source`` from the
-  orchestrator, so the orchestrator may neither import it back (a cycle) nor
+- The module boundary: ``rule_registry`` imports ``template_source`` from
+  ``artifacts.identity``, so that module may neither import it back (a cycle) nor
   re-export its names (a shim).
 """
 
@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 import pytest
 from jinja2 import UndefinedError
 
-from coding_agent_playbook import orchestrator
+from coding_agent_playbook.artifacts import identity
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.prompt_rule_delivery import SkillReference
 from coding_agent_playbook.renderer import TemplateSecurityError, build_environment, render_string
@@ -241,10 +241,13 @@ def test_build_prompt_environment_keeps_rules_from_including_rules() -> None:
 # --- module boundary --------------------------------------------------------
 
 
-def test_orchestrator_neither_imports_the_registry_back_nor_re_exports_it() -> None:
-    """``rule_registry`` imports ``template_source`` from the orchestrator (no cycle, no shim)."""
-    loaded = new_modules_after("import coding_agent_playbook.orchestrator")
+def test_identity_neither_imports_the_registry_back_nor_re_exports_it() -> None:
+    """``rule_registry`` imports ``template_source`` from ``artifacts.identity``.
+
+    No import cycle back to the registry, and no re-export shim.
+    """
+    loaded = new_modules_after("import coding_agent_playbook.artifacts.identity")
 
     assert engine_module("coding_agent_playbook.rule_registry") not in loaded
-    assert not hasattr(orchestrator, "RuleRegistryImpl")
-    assert not hasattr(orchestrator, "build_prompt_environment")
+    assert not hasattr(identity, "RuleRegistryImpl")
+    assert not hasattr(identity, "build_prompt_environment")

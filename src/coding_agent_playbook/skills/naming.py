@@ -28,8 +28,8 @@ AGENT_SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 AGENT_SKILL_NAME_MAX_CHARS = 64
 AGENT_SKILL_DESCRIPTION_MAX_CHARS = 1024
 
-#: Fallback id for a skill without an ``id`` key — mirrors the orchestrator's
-#: overlay-merge key and :meth:`Skill.to_prompt`.
+#: Fallback id for a skill without an ``id`` key — mirrors the overlay-merge key
+#: (``artifacts.identity.artifact_id_of``) and :meth:`Skill.to_prompt`.
 _DEFAULT_SKILL_ID = "skill"
 
 
