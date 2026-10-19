@@ -36,7 +36,7 @@ def output_committed(repo_root: Path) -> bool | None:
     """
     if not (repo_root / CONFIG_FILE).is_file():
         return None
-    from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+    from coding_agent_playbook.config.files import FileSystemStateSource
 
     try:
         return FileSystemStateSource(repo_root=repo_root).load_config().commit_output

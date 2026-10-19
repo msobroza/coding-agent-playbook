@@ -27,6 +27,8 @@ from coding_agent_playbook.commands._validation import (
     ValidationError,
     jinja_syntax_error,
 )
+from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.config.tables.hooks import GuardrailsConfig
 from coding_agent_playbook.hook_policy import (
     HookCheckContext,
     HookIssue,
@@ -37,15 +39,13 @@ from coding_agent_playbook.hook_policy import (
     resolve_effective_hooks,
 )
 from coding_agent_playbook.hook_policy._findings import hook_location
-from coding_agent_playbook.hooks_config import GuardrailsConfig
 from coding_agent_playbook.orchestrator import engine_package_of
-from coding_agent_playbook.sources.filesystem import FileSystemStateSource
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
+    from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hook_policy import HandlerCatalog
-    from coding_agent_playbook.hooks_config import HooksConfig
     from coding_agent_playbook.orchestrator import SyncContext
     from coding_agent_playbook.types import Hook, HookSchemaError
 

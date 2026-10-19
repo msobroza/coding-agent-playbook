@@ -11,26 +11,26 @@ from typing import Any
 
 import pytest
 
-from coding_agent_playbook.config import (
-    Config,
-    ConfigError,
-    OutputConfig,
-    ProjectMeta,
-    StorageConfig,
-    parse_metrics_config,
-    parse_output_config,
-)
-from coding_agent_playbook.config_entries import (
+from coding_agent_playbook.config.entries import (
     CONFIG_MANAGED_KEYS,
     CONFIG_MANAGED_TABLE_KEYS,
     copy_toml_value,
     unmanaged_config_entries,
     with_unmanaged_entries,
 )
+from coding_agent_playbook.config.model import (
+    Config,
+    OutputConfig,
+    ProjectMeta,
+    StorageConfig,
+    parse_output_config,
+)
+from coding_agent_playbook.config.schema import ConfigError
 from coding_agent_playbook.evaluators.types import (
     AbsoluteThreshold,
     RegressionPolicy,
 )
+from coding_agent_playbook.metrics_config import parse_metrics_config
 
 
 def test_config_from_dict_minimal():
@@ -280,34 +280,6 @@ def test_ruff_violations_rejects_bad_codes_naming_value(table, message):
     assert str(excinfo.value) == message
 
 
-def test_parse_links_config_empty_uses_strict_default():
-    from coding_agent_playbook.config import parse_links_config
-
-    cfg = parse_links_config({})
-    assert cfg.allowed_domains == ()
-
-
-def test_parse_links_config_lowercases_domains():
-    from coding_agent_playbook.config import parse_links_config
-
-    cfg = parse_links_config({"allowed_domains": ["AgentHarnesses.IO", "example.com"]})
-    assert cfg.allowed_domains == ("agentharnesses.io", "example.com")
-
-
-def test_parse_links_config_rejects_non_list():
-    from coding_agent_playbook.config import parse_links_config
-
-    with pytest.raises(ValueError, match="allowed_domains must be a list of strings"):
-        parse_links_config({"allowed_domains": "example.com"})
-
-
-def test_parse_links_config_rejects_non_string_entry():
-    from coding_agent_playbook.config import parse_links_config
-
-    with pytest.raises(ValueError, match="allowed_domains must be a list of strings"):
-        parse_links_config({"allowed_domains": ["ok.com", 42]})
-
-
 # --------------------------------------------------------------------------- #
 # [output] commit (generated output is gitignored by default)
 # --------------------------------------------------------------------------- #
@@ -357,7 +329,7 @@ def test_output_rejects_non_table():
 def test_output_round_trips_through_toml_dump(tmp_path):
     import tomllib
 
-    from coding_agent_playbook.sources.filesystem import FileSystemStateSource
+    from coding_agent_playbook.config.files import FileSystemStateSource
 
     config = Config(
         schema_version=1,

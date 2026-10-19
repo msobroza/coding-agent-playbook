@@ -32,8 +32,8 @@ from coding_agent_playbook.security.secrets import screen_regex
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
+    from coding_agent_playbook.config.tables.hooks import GuardrailsConfig
     from coding_agent_playbook.hook_policy import ResolvedHook
-    from coding_agent_playbook.hooks_config import GuardrailsConfig
 
 __all__ = ["PATTERN_SOURCES", "extra_pattern_rows", "secret_tables"]
 

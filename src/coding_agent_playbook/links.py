@@ -37,18 +37,6 @@ class MarkdownLink:
     line: int
 
 
-@dataclass(frozen=True)
-class LinksConfig:
-    """Parsed ``[links]`` table of ``.coding-agent-playbook.toml``.
-
-    ``allowed_domains`` is the external-link allowlist (lowercase hostnames;
-    subdomains of an entry are allowed too). Empty — the default — means fully
-    strict: no external links at all.
-    """
-
-    allowed_domains: tuple[str, ...] = ()
-
-
 # Inline links and images: `[text](target)` / `![alt](target)`.
 _INLINE_LINK_RE = re.compile(r"!?\[([^\]]*)\]\(([^)]*)\)")
 # Reference definitions: `[label]: target` — footnotes (`[^1]:`) excluded,

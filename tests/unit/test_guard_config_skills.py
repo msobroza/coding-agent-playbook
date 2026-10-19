@@ -15,8 +15,8 @@ from __future__ import annotations
 from typing import Literal
 
 from coding_agent_playbook._guard_config_skills import SKILL_NUDGE_HOOK_ID, skill_glob_rows
+from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.guard_config import GuardConfigInputs, render_guard_config
-from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.types import Rule, RuleFrontmatter
 from tests.hook_samples import resolved_hook
 

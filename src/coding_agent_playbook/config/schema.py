@@ -5,8 +5,8 @@ each checked on their own, before the SPEC §7.2 merge, so an error names the
 file at fault: the enabled lists (:func:`check_enabled_keys`), the tables
 ``Config`` reads (:func:`check_config_tables`), and, on the merged result, the
 keys ``Config`` has no default for (:func:`required_value`). A leaf module, split
-from ``config.py`` (v0.18), which re-exports every public name here; callers
-keep importing them from ``coding_agent_playbook.config``.
+from ``config.py`` (v0.18; now ``config/model.py``); callers import these names
+from here.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ class ConfigError(ValueError):
     shape the engine is known to misread: the enabled-list mistakes
     :func:`check_enabled_keys` catches, a table ``Config`` reads that is not one
     (:func:`check_config_tables`), a malformed ``[output]``
-    (``config.parse_output_config``), and a missing required key
+    (``config.model.parse_output_config``), and a missing required key
     (``schema_version``, ``[project] name``/``kind``, ``[engine] version``;
     :func:`required_value`). Other unknown keys are still
     ignored. A ``ValueError`` subclass, so existing
@@ -41,7 +41,7 @@ class ConfigError(ValueError):
         >>> raise ConfigError("cfg.toml: the [overlays] table is not read")
         Traceback (most recent call last):
         ...
-        coding_agent_playbook.config_schema.ConfigError: cfg.toml: the [overlays] table is not read
+        coding_agent_playbook.config.schema.ConfigError: cfg.toml: the [overlays] table is not read
     """
 
 
@@ -94,7 +94,7 @@ def check_enabled_keys(data: Mapping[str, object], *, source: str) -> None:
         >>> check_enabled_keys({"adapters": {}}, source="cfg.toml")  # doctest: +ELLIPSIS
         Traceback (most recent call last):
         ...
-        coding_agent_playbook.config_schema.ConfigError: cfg.toml: the [adapters] table is not read ...
+        coding_agent_playbook.config.schema.ConfigError: cfg.toml: the [adapters] table is not read ...
     """
     problems = [
         problem
@@ -254,7 +254,7 @@ def check_config_tables(data: Mapping[str, object], *, source: str) -> None:
     pass unseen while the other file's table replaced it in the §7.2 merge, until
     ``init``/``check --refresh`` read the committed file alone and crashed.
     ``FileSystemStateSource`` runs it on each file before the merge (through
-    ``config.check_config_file``, which also checks ``[output] commit``), so the
+    ``config.model.check_config_file``, which also checks ``[output] commit``), so the
     error names the file at fault. Every non-table is listed in one error.
 
     Example::
@@ -262,7 +262,7 @@ def check_config_tables(data: Mapping[str, object], *, source: str) -> None:
         >>> check_config_tables({"project": "x"}, source="c.toml")  # doctest: +ELLIPSIS
         Traceback (most recent call last):
         ...
-        coding_agent_playbook.config_schema.ConfigError: c.toml: [project] must be a table, ...
+        coding_agent_playbook.config.schema.ConfigError: c.toml: [project] must be a table, ...
     """
     problems = [
         f"{source}: [{key}] must be a table, got {data[key]!r}; {hint}"
@@ -286,7 +286,7 @@ def required_value(data: Mapping[str, Any], path: tuple[str, ...], *, source: st
         >>> required_value({"engine": {}}, ("engine", "version"), source="c.toml")  # doctest: +ELLIPSIS
         Traceback (most recent call last):
         ...
-        coding_agent_playbook.config_schema.ConfigError: c.toml: the required key engine.version ...
+        coding_agent_playbook.config.schema.ConfigError: c.toml: the required key engine.version ...
     """
     value: Any = data
     for key in path:

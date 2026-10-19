@@ -10,10 +10,10 @@ import stat
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.hook_policy import ResolvedHandler, ResolvedHook, resolve_effective_hooks
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.policy import effective_on_error
-from coding_agent_playbook.hooks_config import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.types import Hook, HookFrontmatter, HookMatcher, format_frontmatter
 
 if TYPE_CHECKING:

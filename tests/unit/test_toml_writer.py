@@ -1,6 +1,6 @@
 """Tests for the shared TOML writer primitives (``coding_agent_playbook.toml_writer``).
 
-These pin the behaviour the two call sites (the ``sources/filesystem.py``
+These pin the behaviour the two call sites (the ``config/files.py``
 Config/Lockfile writer and ``harness/manifest.py``) share, so a future change to
 the escape ladder, ``bool``-before-``int`` ordering, key quoting, the float and
 date/time forms (P6), or the ``TypeError`` semantics breaks here rather than

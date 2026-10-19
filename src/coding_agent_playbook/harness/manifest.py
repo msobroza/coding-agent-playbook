@@ -8,7 +8,7 @@ inference (and surfaces the lossiness).
 
 TOML I/O mirrors the project's existing conventions: read with stdlib
 :mod:`tomllib`; write with a small hand-rolled serializer (the engine vendors no
-TOML *writer* — see ``sources/filesystem.py``). The serializer emits one
+TOML *writer* — see ``toml_writer.py``). The serializer emits one
 ``[[artifact]]`` array-of-tables entry per artifact, with nested
 ``[[artifact.script]]`` entries for a skill's (or hook's) scripts and inline
 tables for open-dict fields (``applies_if``, ``extra_frontmatter``,

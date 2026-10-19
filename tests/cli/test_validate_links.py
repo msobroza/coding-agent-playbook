@@ -16,7 +16,7 @@ import pytest
 from coding_agent_playbook.catalog import bundled_plugins
 from coding_agent_playbook.commands import _validate_links
 from coding_agent_playbook.commands import validate as _validate
-from coding_agent_playbook.links import LinksConfig
+from coding_agent_playbook.config.tables.links import LinksConfig
 from coding_agent_playbook.sources.base import ArtifactSource
 from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
 from coding_agent_playbook.types import Prompt, PromptFrontmatter
