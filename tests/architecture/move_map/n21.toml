@@ -1,0 +1,66 @@
+# N21 (#102, specs/prT-package-layout.md 7.4): the wire types leave
+# hook_runtime/harness/__init__.py for harness/wire.py, whose __init__ keeps its
+# docstring only (L5), and the payload helpers dispatch imports become the
+# public harness/payload.py. The harness and stop tests mirror their packages.
+
+# The harness/__init__.py body, moved verbatim: importers name harness.wire.
+[[names]]
+pr = "N21"
+old = "coding_agent_playbook.hook_runtime.harness"
+new = "coding_agent_playbook.hook_runtime.harness.wire"
+names = [
+    "CLAUDE_EVENT_NAMES",
+    "DENY_EXIT",
+    "HARNESS_DENY_EXIT",
+    "STDIN_CAP_BYTES",
+    "ContractFault",
+    "ForeignPayload",
+    "ParseContext",
+    "ParseOutcome",
+    "WireOutput",
+]
+
+[[module]]
+pr = "N21"
+old = "coding_agent_playbook.hook_runtime.harness._payload"
+new = "coding_agent_playbook.hook_runtime.harness.payload"
+
+[[path]]
+pr = "N21"
+old = "tests/hook_runtime/test_render_claude.py"
+new = "tests/hook_runtime/harness/test_render_claude.py"
+
+[[path]]
+pr = "N21"
+old = "tests/hook_runtime/test_render_opencode.py"
+new = "tests/hook_runtime/harness/test_render_opencode.py"
+
+[[path]]
+pr = "N21"
+old = "tests/hook_runtime/test_wire_contract.py"
+new = "tests/hook_runtime/harness/test_wire_contract.py"
+
+[[path]]
+pr = "N21"
+old = "tests/hook_runtime/test_stop_coordinator.py"
+new = "tests/hook_runtime/stop/test_coordinator.py"
+
+[[path]]
+pr = "N21"
+old = "tests/hook_runtime/test_stop_output.py"
+new = "tests/hook_runtime/stop/test_output.py"
+
+[[path]]
+pr = "N21"
+old = "tests/hook_runtime/test_stop_runner.py"
+new = "tests/hook_runtime/stop/test_runner.py"
+
+[[path]]
+pr = "N21"
+old = "tests/hook_runtime/test_stop_stages.py"
+new = "tests/hook_runtime/stop/test_stages.py"
+
+[[path]]
+pr = "N21"
+old = "tests/hook_runtime/test_stop_suite.py"
+new = "tests/hook_runtime/stop/test_suite.py"

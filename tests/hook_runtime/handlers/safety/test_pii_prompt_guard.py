@@ -20,7 +20,7 @@ from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksCon
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.handlers import pii_prompt_guard as guard
-from coding_agent_playbook.hook_runtime.harness import WireOutput
+from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
 from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
 from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks
 from coding_agent_playbook.security.pii import PiiConfig, scan_pii

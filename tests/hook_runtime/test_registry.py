@@ -36,7 +36,7 @@ from coding_agent_playbook.hook_runtime.event import (
     ToolCall,
     ToolClass,
 )
-from coding_agent_playbook.hook_runtime.harness import DENY_EXIT
+from coding_agent_playbook.hook_runtime.harness.wire import DENY_EXIT
 from coding_agent_playbook.hook_runtime.registry import (
     HANDLER_ATTR,
     ConfigKey,

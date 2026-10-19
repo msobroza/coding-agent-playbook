@@ -17,7 +17,8 @@ import pytest
 from coding_agent_playbook.hook_runtime.caps import OutputCaps
 from coding_agent_playbook.hook_runtime.decision import EVENT_DECISIONS, CombinedResult, Decision
 from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, ToolClass
-from coding_agent_playbook.hook_runtime.harness import (
+from coding_agent_playbook.hook_runtime.harness.claude import parse_claude, render_claude
+from coding_agent_playbook.hook_runtime.harness.wire import (
     CLAUDE_EVENT_NAMES,
     DENY_EXIT,
     ContractFault,
@@ -25,7 +26,6 @@ from coding_agent_playbook.hook_runtime.harness import (
     ParseContext,
     WireOutput,
 )
-from coding_agent_playbook.hook_runtime.harness.claude import parse_claude, render_claude
 from coding_agent_playbook.hooks.resolution.tables import HOOK_EVENTS, TOOL_CLASS_NAMES
 from tests.engine_modules import engine_module
 from tests.hook_payloads import (
@@ -436,7 +436,7 @@ def test_an_edit_event_parse_never_loads_the_shell_parser() -> None:
     payload = json.dumps(_payload(tool_name="Edit", tool_input={"file_path": "a.py"}))
     loaded = new_modules_after(
         "from coding_agent_playbook.hook_runtime.harness.claude import parse_claude, render_claude; "
-        "from coding_agent_playbook.hook_runtime.harness import ParseContext; "
+        "from coding_agent_playbook.hook_runtime.harness.wire import ParseContext; "
         "from coding_agent_playbook.hook_runtime.event import EventName; "
         f"parse_claude({payload!r}.encode(), ParseContext(argv_event=EventName.PRE_TOOL_USE, "
         f"env={ENV!r}))"

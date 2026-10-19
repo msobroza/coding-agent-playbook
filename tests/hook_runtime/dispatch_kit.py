@@ -17,7 +17,7 @@ from coding_agent_playbook.hook_runtime.event import EventName, Harness
 if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
-    from coding_agent_playbook.hook_runtime.harness import WireOutput
+    from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
     from coding_agent_playbook.hook_runtime.registry import HandlerContext, HandlerFn
     from tests.hook_runtime.guard_repo import GuardRepo
 

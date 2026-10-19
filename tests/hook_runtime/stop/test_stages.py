@@ -20,7 +20,9 @@ from coding_agent_playbook.hook_runtime.stop.stages import (
     order_stages,
 )
 
-_PACK_SPEC = Path(__file__).parents[2] / "specs" / "prK-hook-pack.md"
+# N21 moved this file one level down, into tests/hook_runtime/stop/, so
+# parents[3] (was parents[2]) is still the repository root.
+_PACK_SPEC = Path(__file__).parents[3] / "specs" / "prK-hook-pack.md"
 _ROW = re.compile(r"^\| (\d+) \| `([a-z-]+)` \| [^|]+\| ([^|]+)\|")
 
 
