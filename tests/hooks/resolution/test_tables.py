@@ -215,6 +215,7 @@ def test_hooks_package_imports_only_the_stdlib() -> None:
     assert ours == [
         "coding_agent_playbook.artifacts",
         "coding_agent_playbook.artifacts.hook_schema",
+        "coding_agent_playbook.artifacts.path_globs",
         "coding_agent_playbook.catalog",
         "coding_agent_playbook.catalog.layers",
         "coding_agent_playbook.hook_runtime",
