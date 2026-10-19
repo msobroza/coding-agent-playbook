@@ -29,9 +29,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime._agent_transcript import TranscriptError, edited_files
-from coding_agent_playbook.hook_runtime._head_snapshot import head_moved_note
 from coding_agent_playbook.hook_runtime.caps import OutputCaps, quote_data
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.git.head_snapshot import head_moved_note
 from coding_agent_playbook.hook_runtime.handlers._lint_stage import LintStage
 from coding_agent_playbook.hook_runtime.handlers._verify_claim import completion_claim
 from coding_agent_playbook.hook_runtime.handlers.stop_ci_parity_gate import (

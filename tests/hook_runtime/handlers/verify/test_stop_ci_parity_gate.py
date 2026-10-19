@@ -24,7 +24,7 @@ from coding_agent_playbook.guard_config import DetectInputs
 from coding_agent_playbook.hook_runtime.config.guard_config import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.decision import Decision
 from coding_agent_playbook.hook_runtime.event import EventName
-from coding_agent_playbook.hook_runtime.git import Fingerprint
+from coding_agent_playbook.hook_runtime.git.safe_git import Fingerprint
 from coding_agent_playbook.hook_runtime.handlers.stop_drift_and_orphan_gate import DriftStage
 from coding_agent_playbook.hook_runtime.registry import load_builtin
 from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME, session_key

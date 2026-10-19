@@ -5,7 +5,7 @@ commit range, and E.4 and F.1 later need the same default branch, so the one
 resolver lives here: ``refs/remotes/origin/HEAD``, then ``main``, then
 ``master`` (remote-tracking first, since CI checkouts have no local branch).
 
-:class:`RangeQueries` is a mixin of ``SafeGit``, split out of ``git.py`` for
+:class:`RangeQueries` is a mixin of ``SafeGit``, split out of ``safe_git.py`` for
 §D.1's 300-line module rule; it calls only ``run`` / ``bare_run``, so every
 query keeps ``SafeGit``'s hardening, and none needs a state directory (CI has
 none). Ref-only queries (``symbolic-ref``, ``for-each-ref``, ``merge-base``)
@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final, Protocol
 
-from coding_agent_playbook.hook_runtime._git_parse import (
+from coding_agent_playbook.hook_runtime.git.parse import (
     DiffLines,
     parse_batch_blob,
     parse_diff_lines,
@@ -275,7 +275,7 @@ def checked_rev(rev: str) -> str:
     """
     if rev and not rev.startswith("-") and not _REV_BREAKERS.intersection(rev):
         return rev
-    from coding_agent_playbook.hook_runtime.git import GitError  # git.py imports this module
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitError  # it imports this module
 
     raise GitError(
         f"refusing revision {rev!r}: expected a branch, tag, sha or rev expression "

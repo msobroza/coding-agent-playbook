@@ -1,6 +1,6 @@
 """The argv and env rules every ``SafeGit`` call follows (specs/prK-lifecycle-hooks.md §D.5.3).
 
-Split from ``git.py`` to keep both under §D.1's 300-line module rule; pure
+Split from ``safe_git.py`` to keep both under §D.1's 300-line module rule; pure
 helpers only. The scrubbed variables are a superset of §D.5.3's list: on top
 of the config-injecting ones, every variable that relocates the repository or
 its object store is dropped, because each ``SafeGit`` call runs at the

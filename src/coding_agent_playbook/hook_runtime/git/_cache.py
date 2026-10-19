@@ -23,12 +23,12 @@ import re
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime._git_parse import parse_version
-from coding_agent_playbook.hook_runtime.git import GitError
+from coding_agent_playbook.hook_runtime.git.parse import parse_version
+from coding_agent_playbook.hook_runtime.git.safe_git import GitError
 from coding_agent_playbook.hook_runtime.state import StateUnavailable
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.hook_runtime.git import SafeGit
+    from coding_agent_playbook.hook_runtime.git.safe_git import SafeGit
 
 __all__ = ["cached_version", "filter_flags"]
 

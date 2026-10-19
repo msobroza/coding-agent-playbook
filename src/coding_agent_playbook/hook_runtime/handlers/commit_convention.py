@@ -150,7 +150,7 @@ def _check(
 
 def _push(git: GitInvocation, cz: CzRunner, ctx: HandlerContext) -> str | None:
     """Check the commits the push publishes past the cut-over; ``None`` when they pass."""
-    from coding_agent_playbook.hook_runtime.git import GitError
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitError
     from coding_agent_playbook.hook_runtime.handlers._cz import push_ranges
     from coding_agent_playbook.hook_runtime.judges.commit_cutover import (
         parse_cutover,

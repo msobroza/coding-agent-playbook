@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.commands.twins._runner import TWIN_ERRORS, TwinOutcome, run_twin
-from coding_agent_playbook.hook_runtime.git import GitError
+from coding_agent_playbook.hook_runtime.git.safe_git import GitError
 
 if TYPE_CHECKING:
     from collections.abc import Callable

@@ -9,7 +9,7 @@ covers exactly the kept commits (``hook_runtime.judges.commit_cutover``). One ``
 call gives every field; it reads no worktree content, and ``SafeGit.run`` adds
 the hardening flags.
 
-:class:`LogQueries` is a mixin of ``SafeGit`` beside ``git_range``'s
+:class:`LogQueries` is a mixin of ``SafeGit`` beside ``range``'s
 ``RangeQueries`` (each stays under §D.1's 300-line module rule).
 """
 
@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Protocol
 
-from coding_agent_playbook.hook_runtime.git_range import checked_rev
+from coding_agent_playbook.hook_runtime.git.range import checked_rev
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

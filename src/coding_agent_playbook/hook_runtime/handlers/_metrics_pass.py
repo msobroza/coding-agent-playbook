@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.tool_runner import ToolRunner
     from coding_agent_playbook.evaluators.types import ScopeDetail, ToolSetup
     from coding_agent_playbook.hook_runtime.deps import Clock, ProcPort
-    from coding_agent_playbook.hook_runtime.git import GitPort
+    from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
 
